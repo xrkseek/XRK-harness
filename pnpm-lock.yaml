@@ -3142,12 +3142,18 @@ importers:
       '@xrkseek/core-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
       '@xrkseek/exec-web':
         specifier: workspace:*
         version: link:../../exec/web
       '@xrkseek/im-gateway-contract':
         specifier: workspace:*
         version: link:../../im-gateway-contract
+      '@xrkseek/llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
       '@xrkseek/policy':
         specifier: workspace:*
         version: link:../../policy
@@ -3229,6 +3235,9 @@ importers:
       '@xrkseek/xrk-llm':
         specifier: workspace:^
         version: link:../xrk-llm
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
       '@xrkseek/xrk-session':
         specifier: workspace:^
         version: link:../xrk-session
@@ -3376,6 +3385,9 @@ importers:
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../xrk-invariants
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
       '@xrkseek/xrk-session':
         specifier: workspace:^
         version: link:../xrk-session
@@ -3425,6 +3437,9 @@ importers:
       '@xrkseek/xrk-llm':
         specifier: workspace:^
         version: link:../xrk-llm
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
       '@xrkseek/xrk-session':
         specifier: workspace:^
         version: link:../xrk-session
@@ -3477,6 +3492,9 @@ importers:
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../xrk-invariants
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
 
   packages/stubs/xrk-host-webserver:
     devDependencies:
@@ -3657,6 +3675,12 @@ importers:
 
   packages/stubs/xrk-pwsh-local: {}
 
+  packages/stubs/xrk-scope:
+    devDependencies:
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
+
   packages/stubs/xrk-session:
     dependencies:
       '@xrkseek/xrk-typert-protocol':
@@ -3675,6 +3699,9 @@ importers:
       '@xrkseek/xrk-llm':
         specifier: workspace:^
         version: link:../xrk-llm
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
 
   packages/stubs/xrk-session-projection:
     dependencies:
@@ -3913,6 +3940,9 @@ importers:
       '@xrkseek/xrk-llm':
         specifier: workspace:^
         version: link:../xrk-llm
+      '@xrkseek/xrk-scope':
+        specifier: workspace:^
+        version: link:../xrk-scope
       '@xrkseek/xrk-session':
         specifier: workspace:^
         version: link:../xrk-session

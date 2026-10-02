@@ -39,6 +39,8 @@ import {
   workspaceUnarchiveSessionValueSchema,
   workspacePinSessionValueSchema,
   workspaceUnpinSessionValueSchema,
+  workspacePinWorkspaceValueSchema,
+  workspaceUnpinWorkspaceValueSchema,
   workspaceCreateValueSchema,
   workspaceDeleteValueSchema,
   workspaceInsertBeforeValueSchema,
@@ -143,6 +145,8 @@ export interface IApiClient {
     unarchiveSession(payload: RequestPayload<'workspace.unarchiveSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.unarchiveSession'>>>
     pinSession(payload: RequestPayload<'workspace.pinSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.pinSession'>>>
     unpinSession(payload: RequestPayload<'workspace.unpinSession'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.unpinSession'>>>
+    pinWorkspace(payload: RequestPayload<'workspace.pinWorkspace'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.pinWorkspace'>>>
+    unpinWorkspace(payload: RequestPayload<'workspace.unpinWorkspace'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.unpinWorkspace'>>>
   }
   skills: {
     list(payload: RequestPayload<'skill.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.list'>>>
@@ -234,6 +238,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.unarchiveSession': workspaceUnarchiveSessionValueSchema,
   'workspace.pinSession': workspacePinSessionValueSchema,
   'workspace.unpinSession': workspaceUnpinSessionValueSchema,
+  'workspace.pinWorkspace': workspacePinWorkspaceValueSchema,
+  'workspace.unpinWorkspace': workspaceUnpinWorkspaceValueSchema,
   'skill.list': skillListValueSchema,
   'agentPreset.list': agentPresetListValueSchema,
   'agentPreset.select': agentPresetSelectValueSchema,
@@ -514,6 +520,8 @@ export abstract class AbstractApiClient implements IApiClient {
     unarchiveSession: (payload, signal) => this.callUnary('workspace.unarchiveSession', payload, signal),
     pinSession: (payload, signal) => this.callUnary('workspace.pinSession', payload, signal),
     unpinSession: (payload, signal) => this.callUnary('workspace.unpinSession', payload, signal),
+    pinWorkspace: (payload, signal) => this.callUnary('workspace.pinWorkspace', payload, signal),
+    unpinWorkspace: (payload, signal) => this.callUnary('workspace.unpinWorkspace', payload, signal),
   }
 
   readonly skills: IApiClient['skills'] = {

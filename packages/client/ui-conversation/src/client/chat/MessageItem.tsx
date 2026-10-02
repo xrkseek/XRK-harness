@@ -3,7 +3,7 @@
 // assistant answers), pending steering (copy only), context injection,
 // compaction marker, retry disclosure, and unknown-surface JSON rows.
 
-import { Fragment, memo, useEffect, useMemo, useState } from 'react'
+import { Fragment, memo, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type {
   ModelRetryNode, PendingSubmission, TurnErrorNode, UserMessageNode,
@@ -17,6 +17,7 @@ import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
+import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -237,7 +238,7 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
   content, renderMessageImages, renderMessageFiles, actions, pending = false, echo = false,
-  referenceLabels = [], previewAttachments, t,
+  referenceLabels = [], previewAttachments, editing = false, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -245,7 +246,7 @@ function UserStyleBubble({
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   /** Optional IconActions (or similar) below the bubble; receives the joined text. */
   actions?: (text: string) => ReactNode
-  /** Whether this is the Host-authoritative pre-admission steering projection. */
+  /** Whether to show the「插队中」badge (Host steering row or local steer echo). */
   pending?: boolean
   /** Whether this is a local submission echo (invisible marker; paints like its durable replacement). */
   echo?: boolean
@@ -253,6 +254,8 @@ function UserStyleBubble({
   referenceLabels?: readonly string[]
   /** Local submission-echo attachments replacing the content-derived attachment sequence. */
   previewAttachments?: readonly PresentedAttachment[]
+  /** Composer is staging an edit of this message. */
+  editing?: boolean
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, attachments: contentAttachments, rest } = contentParts(content)
@@ -265,10 +268,14 @@ function UserStyleBubble({
       className={css.userRow}
       data-pending-steering={pending || undefined}
       data-submission-echo={echo || undefined}
+      data-editing={editing || undefined}
+      aria-current={editing ? 'true' : undefined}
+      aria-describedby={editing ? 'xrk-edit-staging-hint' : undefined}
       data-time-hover-root
     >
       <div className={css.userStack}>
-        {pending && !echo && (
+        {/* Host steering inbox + local steer echoes — both read as「插队中」. */}
+        {pending && (
           <span className={css.pendingSteerBadge} role="status">
             {t('message.pendingSteer')}
           </span>
@@ -410,23 +417,38 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, renderMessageFiles, t,
+  node, editAt, deleteAt, renderMessageImages, renderMessageFiles, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
+  const text = useMemo(() => {
+    const parts: string[] = []
+    for (const block of data.content) {
+      if (block !== null && typeof block === 'object' && 'type' in block && block.type === 'text' && typeof (block as { text?: unknown }).text === 'string') {
+        parts.push((block as { text: string }).text)
+      }
+    }
+    return parts.join('')
+  }, [data.content])
+  const canEdit = text.trim() !== ''
+  const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
+  const editing = editStaging !== null && editStaging.seq === data.seq
   return (
     <UserStyleBubble
       content={data.content}
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
+      editing={editing}
       t={t}
-      actions={text => (
+      actions={copyText => (
         <MessageIconActions
-          text={text}
+          text={copyText}
           time={data.time}
           clock="start"
           className={css.actions}
           t={t}
+          onEdit={canEdit && !editing ? () => { editAt(data.seq, text) } : undefined}
+          onDelete={editing ? undefined : () => { deleteAt(data.seq) }}
         />
       )}
     />

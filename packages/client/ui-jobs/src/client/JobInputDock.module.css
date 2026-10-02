@@ -5,7 +5,7 @@
 .root {
   box-sizing: border-box;
   flex: none;
-  /* Tuck into the stack gap like QueueDock — less empty air above the input. */
+  /* Tuck into the stack gap like QueueDock 閳?less empty air above the input. */
   margin: 0 auto calc(0px - var(--dsh-composer-stack-gap, 6px));
   width: calc(
     100% -
@@ -95,9 +95,12 @@
   list-style: none;
   max-height: 140px;
   overflow-y: auto;
+  /* Capped job list: an overscroll at its bottom must not pull the
+     surrounding dock or the page along with it. */
+  overscroll-behavior: contain;
 }
 
-/* Single-job: the list is the whole card — keep one quiet pad. */
+/* Single-job: the list is the whole card 閳?keep one quiet pad. */
 .body > .list:first-child {
   padding: 4px;
 }

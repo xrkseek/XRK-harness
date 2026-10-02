@@ -3,7 +3,10 @@
 export const NS = 'deliverables'
 
 export const zh = {
-  'produced.label': '产物',
+  'produced.label': '产出',
+  'lanes.created': '产出',
+  'lanes.modified': '改动',
+  'lanes.deleted': '删除',
   'produced.moreOne': '+ 1 个文件',
   'produced.more': '+ {count} 个文件',
   'produced.open': '打开 {name}',
@@ -34,7 +37,10 @@ export const zh = {
 }
 
 export const en: Record<DeliverablesKey, string> = {
-  'produced.label': 'Produced',
+  'produced.label': 'Created',
+  'lanes.created': 'Created',
+  'lanes.modified': 'Modified',
+  'lanes.deleted': 'Deleted',
   'produced.moreOne': '+ 1 file',
   'produced.more': '+ {count} files',
   'produced.open': 'Open {name}',

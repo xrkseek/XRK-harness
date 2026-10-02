@@ -81,6 +81,52 @@ function persist(storage: Pick<Storage, 'setItem' | 'removeItem'> | null = defau
   }
 }
 
+/** Coalesce Overview chrome disk writes (Vercel js-request-idle-callback). */
+let persistTimer: ReturnType<typeof setTimeout> | undefined
+let persistIdleHandle: number | undefined
+
+function schedulePersist(storage: Pick<Storage, 'setItem' | 'removeItem'> | null = defaultStorage()): void {
+  if (storage === null) return
+  const run = (): void => {
+    persistTimer = undefined
+    persistIdleHandle = undefined
+    persist(storage)
+  }
+  if (persistTimer !== undefined) clearTimeout(persistTimer)
+  if (
+    persistIdleHandle !== undefined
+    && typeof cancelIdleCallback === 'function'
+  ) {
+    cancelIdleCallback(persistIdleHandle)
+    persistIdleHandle = undefined
+  }
+  // Prefer idle; always flush within 500ms so a quick tab close still lands.
+  if (typeof requestIdleCallback === 'function') {
+    persistIdleHandle = requestIdleCallback(run, { timeout: 500 })
+    return
+  }
+  persistTimer = setTimeout(run, 120)
+}
+
+function flushPersistNow(storage: Pick<Storage, 'setItem' | 'removeItem'> | null = defaultStorage()): void {
+  if (persistTimer !== undefined) {
+    clearTimeout(persistTimer)
+    persistTimer = undefined
+  }
+  if (
+    persistIdleHandle !== undefined
+    && typeof cancelIdleCallback === 'function'
+  ) {
+    cancelIdleCallback(persistIdleHandle)
+    persistIdleHandle = undefined
+  }
+  persist(storage)
+}
+
+if (typeof addEventListener === 'function') {
+  addEventListener('pagehide', () => { flushPersistNow() })
+}
+
 function ensureHydrated(): void {
   hydrate(defaultStorage())
 }
@@ -90,6 +136,7 @@ export function resetDetailsOpenMemoryForTests(
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null = defaultStorage(),
 ): void {
   bySession.clear()
+  flushPersistNow(storage)
   if (storage !== null) {
     try {
       storage.removeItem(STORAGE_KEY)
@@ -129,7 +176,7 @@ export function rememberDetailsOpen(
     if (oldest === undefined || oldest === sessionId) break
     bySession.delete(oldest)
   }
-  persist(storage)
+  schedulePersist(storage)
 }
 
 /** Persist drag width for the settled Session (open bit unchanged / stays open). */

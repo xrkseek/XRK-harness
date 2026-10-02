@@ -10,10 +10,11 @@ import type {
 } from "@xrkseek/llm";
 import {
   ContextOverflowError,
-  classifyCaughtLlmError,
-  isLlmError,
+  classifyCaughtStreamError,
   throwHttpLlmError,
   UnsupportedContentError,
+  withExtraAbortSignal,
+  withStreamIdleTimeout,
 } from "@xrkseek/llm";
 import type { ChatMessage, MessageContent, ToolCall } from "@xrkseek/protocol";
 import {
@@ -35,6 +36,16 @@ export interface OpenAiResponsesAdapterOptions {
   readonly headers?: Record<string, string>;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  /**
+   * Per-event idle budget for `stream()`: how long the body may stay silent
+   * between two events before the turn fails with `TIMEOUT` (retryable).
+   * Default 300_000 ms (5 min, `DEFAULT_STREAM_IDLE_TIMEOUT_MS`). This is **not** the
+   * overall request budget 鈥?that is
+   * {@link OpenAiResponsesAdapterOptions.timeoutMs}, which wraps the whole
+   * `fetch`. Every event restarts this clock, so a long answer that keeps
+   * streaming is never killed.
+   */
+  readonly idleTimeoutMs?: number;
   readonly enableStream?: boolean;
   readonly inputModalities?: readonly ("text" | "image")[];
   readonly maxRequestImageBytes?: number;
@@ -338,7 +349,11 @@ export function createOpenAiResponsesAdapter(
       input: await toInput(bounded, request.resolveImage, modalities),
       stream,
     };
-    if (options.temperature !== undefined) body.temperature = options.temperature;
+    const temperature =
+      request.temperature !== undefined
+        ? request.temperature
+        : options.temperature;
+    if (temperature !== undefined) body.temperature = temperature;
     if (options.maxTokens !== undefined) body.max_output_tokens = options.maxTokens;
     if (request.tools?.length) {
       body.tools = request.tools.map((t) => ({
@@ -373,9 +388,7 @@ export function createOpenAiResponsesAdapter(
         ...(signal ? { signal } : {}),
       });
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") throw err;
-      if (isLlmError(err)) throw err;
-      classifyCaughtLlmError(err, "openai-responses");
+      classifyCaughtStreamError(err, "openai-responses");
     }
     if (!res.ok) {
       const text = await res.text();
@@ -399,8 +412,24 @@ export function createOpenAiResponsesAdapter(
   };
   if (enableStream) {
     adapter.stream = async function* (request) {
-      const res = await post(request, true);
-      yield* streamResponsesSse(res);
+      // The watchdog can only end the turn; only the request controller can
+      // close the body read it walks away from.
+      const idle = new AbortController();
+      const res = await post(withExtraAbortSignal(request, idle.signal), true);
+      try {
+        yield* withStreamIdleTimeout(streamResponsesSse(res), {
+          label: "openai-responses",
+          ...(request.signal ? { signal: request.signal } : {}),
+          onIdleTimeout: () => idle.abort(),
+          ...(options.idleTimeoutMs !== undefined
+            ? { idleTimeoutMs: options.idleTimeoutMs }
+            : {}),
+        });
+      } catch (err) {
+        // Socket death mid-body (`terminated`) arrives here raw; classify it
+        // so the retry loop sees TRANSPORT instead of UNKNOWN.
+        classifyCaughtStreamError(err, "openai-responses");
+      }
     };
   }
   return adapter;

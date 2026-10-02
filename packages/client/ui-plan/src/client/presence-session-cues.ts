@@ -3,8 +3,9 @@
  * recent tool failures and idle quiet duration.
  *
  * Snapshot identity is stable across unchanged content so
- * `useSyncExternalStore` does not thrash (same habit as change-turns-fallback).
+ * `useSyncExternalStore` does not thrash (same habit as workspace-changes-turns).
  */
+import { createSessionSnapshotCache } from '@xrkseek/client-ui-primitives'
 
 export const PRESENCE_TOOL_ERROR_MS = 45_000
 export const PRESENCE_STANDBY_MS = 45_000
@@ -17,6 +18,9 @@ export type PresenceSessionCues = {
 
 /** Shared empty snapshot — never allocate per getSnapshot call. */
 export const EMPTY_PRESENCE_SESSION_CUES: PresenceSessionCues = { activityAt: 0 }
+
+/** Shared nameless tool-error marker — never allocate `{}` per getSnapshot. */
+const TOOL_ERROR_UNNAMED: { readonly name?: string } = {}
 
 /** Minimal node shape from ConversationSnapshot.nodes (tool-result arm). */
 export type PresenceTimelineNode = {
@@ -40,9 +44,11 @@ export function latestToolErrorCue(
     if (node === undefined || node.kind !== 'tool-result') continue
     if (node.isError !== true) continue
     const at = typeof node.time === 'number' && Number.isFinite(node.time) ? node.time : 0
+    // Missing wall time stays in-window; never stamp `at` with nowMs — that
+    // would thrash useSyncExternalStore fingerprints on every getSnapshot.
     if (at > 0 && nowMs - at > windowMs) return undefined
     return {
-      at: at > 0 ? at : nowMs,
+      at,
       ...(node.call?.name ? { name: node.call.name } : {}),
     }
   }
@@ -59,12 +65,7 @@ export function latestNodeActivityAt(nodes: readonly PresenceTimelineNode[]): nu
   return latest
 }
 
-type PresenceCueCache = {
-  readonly key: string
-  readonly snapshot: PresenceSessionCues
-}
-
-const cueBySession = new Map<string, PresenceCueCache>()
+const cueCache = createSessionSnapshotCache(EMPTY_PRESENCE_SESSION_CUES)
 
 /**
  * Stable presence cues for `useSyncExternalStore` — fingerprint avoids thrash.
@@ -76,21 +77,24 @@ export function presenceSessionCuesSnapshot(
   nowMs: number,
 ): PresenceSessionCues {
   if (nodes === undefined || nodes.length === 0) {
-    cueBySession.delete(sessionId)
+    cueCache.clear(sessionId)
     return EMPTY_PRESENCE_SESSION_CUES
   }
   const err = latestToolErrorCue(nodes, nowMs)
   const activityAt = latestNodeActivityAt(nodes)
-  const key = `${err?.at ?? 0}:${err?.name ?? ''}:${activityAt}:${nodes.length}`
-  const prev = cueBySession.get(sessionId)
-  if (prev !== undefined && prev.key === key) return prev.snapshot
-  const toolError = err
-    ? (err.name ? { name: err.name } : {})
-    : undefined
-  const snapshot: PresenceSessionCues = {
-    activityAt,
-    ...(toolError ? { toolError } : {}),
-  }
-  cueBySession.set(sessionId, { key, snapshot })
-  return snapshot
+  const key = `${err?.at ?? 0}:${err?.name ?? ''}:${activityAt}`
+  return cueCache.get(sessionId, key, () => {
+    const toolError = err
+      ? (err.name ? { name: err.name } : TOOL_ERROR_UNNAMED)
+      : undefined
+    return {
+      activityAt,
+      ...(toolError ? { toolError } : {}),
+    }
+  })
+}
+
+/** Test-only reset. */
+export function resetPresenceSessionCuesCacheForTests(): void {
+  cueCache.clear()
 }

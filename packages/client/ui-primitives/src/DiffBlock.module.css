@@ -49,8 +49,9 @@
 .body {
   padding: 12px 14px;
   font: var(--dsw-font-markdown-code-block);
-  overflow-x: auto;
-  overflow-y: hidden;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 /* Default: no wrapping — a diff is read by its indentation. */
@@ -140,18 +141,18 @@
 
 .splitColumns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
-  overflow: hidden;
-  max-height: calc(var(--dsl-diff-line-height) * 24);
 }
 
 .splitPane {
-  overflow: auto;
-  padding: 4px 8px;
   min-width: 0;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  overscroll-behavior: none;
+  padding: 4px 8px;
 }
 
 .splitPane[data-side='old'] {

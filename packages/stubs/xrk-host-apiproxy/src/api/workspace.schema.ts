@@ -30,6 +30,7 @@ export const workspaceListValueSchema = z.object({
   items: z.array(workspaceViewSchema),
   archivedSessionIds: z.array(sessionIdSchema),
   pinnedSessionIds: z.array(sessionIdSchema),
+  pinnedWorkspaceIds: z.array(workspaceIdSchema).default([]),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.list'>>>
 
 /** workspace.create request payload: the existing directory to adopt. */
@@ -76,6 +77,7 @@ export const workspaceInsertBeforeRequestSchema = z.object({
 /** workspace.insertBefore response value: the complete durable display order. */
 export const workspaceInsertBeforeValueSchema = z.object({
   workspaceIds: z.array(workspaceIdSchema),
+  pinnedWorkspaceIds: z.array(workspaceIdSchema).default([]),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.insertBefore'>>>
 
 /** workspace.insertSessionBefore request payload (anchor omitted = append to end). */
@@ -131,3 +133,25 @@ export const workspaceUnpinSessionRequestSchema = z.object({
 export const workspaceUnpinSessionValueSchema = z.object({
   pinnedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.unpinSession'>>>
+
+/** workspace.pinWorkspace request payload. */
+export const workspacePinWorkspaceRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.pinWorkspace'>>>
+
+/** workspace.pinWorkspace response value. */
+export const workspacePinWorkspaceValueSchema = z.object({
+  pinnedWorkspaceIds: z.array(workspaceIdSchema),
+  workspaceIds: z.array(workspaceIdSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.pinWorkspace'>>>
+
+/** workspace.unpinWorkspace request payload. */
+export const workspaceUnpinWorkspaceRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.unpinWorkspace'>>>
+
+/** workspace.unpinWorkspace response value. */
+export const workspaceUnpinWorkspaceValueSchema = z.object({
+  pinnedWorkspaceIds: z.array(workspaceIdSchema),
+  workspaceIds: z.array(workspaceIdSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.unpinWorkspace'>>>

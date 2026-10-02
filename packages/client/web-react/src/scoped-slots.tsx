@@ -36,6 +36,8 @@ type RenderSlotChainBinding = (key: string, owner: object, opts?: ChainRenderOpt
  * the in-ledger check and throws.
  */
 const renderSlotCache = new WeakMap<StoredEntry, RenderSlotBinding>()
+/** Last crash line for an entry, kept so a dry-cell outlet face can keep the same copy. */
+const entryCrashSummary = new WeakMap<StoredEntry, string>()
 
 function boundRenderSlot(host: SlotRendererHost, entry: StoredEntry): RenderSlotBinding {
   let binding = renderSlotCache.get(entry)
@@ -120,9 +122,9 @@ function bindInjectHooks(face: InjectedProps): InjectedProps {
   if (sources === undefined) return face
   const { hooks: _hooks, ...rest } = face
   const bound: InjectedProps = rest
-  for (const [name, source] of Object.entries(sources as Record<string, HostObservable<unknown>>)) {
+  for (const [name, source] of Object.entries(sources as Record<string, HostObservable<unknown> | undefined>)) {
     const hookName = `use${name[0]?.toUpperCase() ?? ''}${name.slice(1)}`
-    bound[hookName] = observableHook(source)
+    bound[hookName] = maybeObservableHook(source)
   }
   return bound
 }
@@ -150,7 +152,7 @@ function cachedSlotInject(face: object | undefined): BoundSlotInject {
       factories ??= {}
       factories[name] = definition as SlotHookFactory
     } else {
-      props[hookName] = observableHook(definition as HostObservable<unknown>)
+      props[hookName] = maybeObservableHook(definition as HostObservable<unknown> | undefined)
     }
   }
   bound = factories === undefined
@@ -762,6 +764,11 @@ function SlotOutlet({ slotKey, ownerProps, opts }: {
   )
 }
 
+function dryCellSummary(entries: readonly StoredEntry[], id: string | undefined): string | undefined {
+  const hit = entries.find(e => e.options.id === id)
+  return hit === undefined ? undefined : entryCrashSummary.get(hit)
+}
+
 /** Kind dispatch behind the outlet anchor (single/keyed/list/chain, fallbacks, crash faces). */
 function renderOutletContent(
   host: SlotRendererHost,
@@ -795,6 +802,7 @@ function renderOutletContent(
     // resolve at select time, and retiring a crashed elected entry would
     // change the static crash face.
     const onEntryError = (error: unknown) => {
+      entryCrashSummary.set(entry, shortError(error))
       host.reportEntryError(slotKey, entry, error, { abdicate: spec.kind !== 'chain' })
     }
     return spec.scope === 'session'
@@ -935,7 +943,14 @@ function renderOutletContent(
     <>
       {list.map((item, i) => item.entry !== undefined
         ? guarded(item.entry, `e${entryKeyOf(item.entry)}`)
-        : <SlotFailureFace slotKey={slotKey} key={`x${item.id ?? i}`} />)}
+        : (
+          <SlotFailureFace
+            slotKey={slotKey}
+            key={`x${item.id ?? i}`}
+            {...(item.id !== undefined ? { entryId: item.id } : {})}
+            summary={dryCellSummary(entries, item.id)}
+          />
+        ))}
     </>
   )
 }

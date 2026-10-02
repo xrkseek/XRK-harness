@@ -5,7 +5,7 @@ import {
   sessionEventCount,
   withdrawAdmit,
 } from "@xrkseek/core-session";
-import { type SessionEvent } from "@xrkseek/protocol";
+import { type MessageContent, type SessionEvent, flattenText } from "@xrkseek/protocol";
 import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
@@ -28,6 +28,7 @@ import {
   type PromptWirePart,
 } from "../durable-prompt.js";
 import { asRecord, type FaceHandler } from "./types.js";
+import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
 import {
   defaultPermissionPreset,
@@ -161,11 +162,23 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
-  pinInitialPermission(
-    runtime.store,
-    sessionId,
-    defaultPermissionPreset(runtime),
-  );
+  try {
+    pinInitialPermission(
+      runtime.store,
+      sessionId,
+      defaultPermissionPreset(runtime),
+      { autoGate: runtime.permissionAuto },
+    );
+  } catch (err) {
+    runtime.store.delete?.(sessionId);
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
   const boundPreset =
     runtime.sessionAgentPresets.get(sessionId) ??
     canonicalAgentPresetId(resolveDefaultAgentPreset(runtime));
@@ -476,7 +489,9 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,
   });
-  runtime.pendingUserRpc.set(sessionId, echoRpc);
+  // Echo rpcId is stamped on promote (admitRpcMap → pendingUserRpc FIFO), not
+  // here: a prompt-time write raced with in-flight injects and stole the prior
+  // admit's pending slot (stuck local echo / blue waiting chrome).
   runtime.publishQueue(sessionId);
   runtime.drain.wake(sessionId);
 
@@ -509,7 +524,12 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   } catch {
     /* ignore */
   }
-  // 2) Cascade to delegated children (fire-and-forget). A stopped parent
+  // 2) Kill yielded / background shell jobs for this session. Turn abort
+  //    alone leaves them alive (signal was only wired while the tool wait
+  //    owned them), which resurfaces as Stop needing multiple clicks and
+  //    floating "background job finished" toasts.
+  killLiveSessionJobs(runtime.shell, sessionId);
+  // 3) Cascade to delegated children (fire-and-forget). A stopped parent
   //    must not leave orphaned subagents draining: each child cancel is
   //    itself a sessionCancel — optimistic running:false + bounded join —
   //    and the tree walk is depth-bounded by the subagent registry.
@@ -523,7 +543,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
       ).catch(() => undefined);
     }
   }
-  // 3) Bounded drain join: the latch keeps its entry on timeout, so a
+  // 4) Bounded drain join: the latch keeps its entry on timeout, so a
   //    message admitted during teardown still drains once the stuck chain
   //    settles (wake accumulates on the stopping entry).
   await runtime.drain.cancel(sessionId, {
@@ -710,9 +730,16 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   const child = runtime.forkSession(sessionId, cut.cut, preferredChild);
   const seed = readSessionEvents(runtime.store, child.id);
 
-  // Model route from the seed prefix only — never copy the parent's live map
-  // (post-turn selectModel must not leak into the child).
-  const seedModel = modelSelectionFromPrefix(seed);
+  // Turn-cut forks (`atSeq`): seed from the prefix only — a selectModel made
+  // after the cut must not leak into an exploratory branch.
+  // Edit-resubmit forks (`beforeSeq`): prefer the parent's live composer
+  // selection so a recovery switch (broken API key → another route) survives
+  // into the child; fall back to the prefix when the parent never overrode.
+  const parentLive = runtime.sessionModels.get(sessionId);
+  const seedModel =
+    beforeSeq !== undefined
+      ? (parentLive ?? modelSelectionFromPrefix(seed))
+      : modelSelectionFromPrefix(seed);
   if (seedModel) {
     runtime.sessionModels.set(child.id, { ...seedModel });
   }
@@ -730,6 +757,24 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   runtime.watchSession(child.id);
+  // Fork seed may carry Auto — refuse without live Guardian (DSH pinInitial).
+  try {
+    pinInitialPermission(
+      runtime.store,
+      child.id,
+      defaultPermissionPreset(runtime),
+      { autoGate: runtime.permissionAuto },
+    );
+  } catch (err) {
+    runtime.store.delete?.(child.id);
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
   const parentCwd = runtime.sessionCwds.get(sessionId);
   if (parentCwd) runtime.sessionCwds.set(child.id, parentCwd);
   if (prefixHasImageContent(seed)) {
@@ -933,28 +978,74 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
       runtime.drain.wake(sessionId);
     } else if (kind === "edit") {
       const content = (action as { content?: unknown }).content;
-      if (!Array.isArray(content)) {
+      if (!Array.isArray(content) || content.length === 0) {
         return {
           ok: false,
           error: { code: "invalid-payload", message: "edit.content required" },
         };
       }
-      type Part = { type?: string; text?: string };
-      const text = (content as Part[])
-        .filter((x) => x?.type === "text")
-        .map((x) => x.text ?? "")
-        .join("");
-      if (!text.trim()) {
-        return {
-          ok: false,
-          error: { code: "invalid-payload", message: "edit text empty" },
-        };
+      const parts = content as readonly Record<string, unknown>[];
+      const needsDurable = parts.some(
+        (p) =>
+          (p.type === "image" || p.type === "file") &&
+          typeof p.data === "string",
+      );
+      let nextContent: MessageContent;
+      if (needsDurable) {
+        if (!runtime.attachments) {
+          return {
+            ok: false,
+            error: {
+              code: "attachment-unavailable",
+              message: "attachment store not configured",
+            },
+          };
+        }
+        const durable = await durablePromptContent(
+          parts as PromptWirePart[],
+          runtime.attachments,
+        );
+        if (!durable.ok) {
+          return {
+            ok: false,
+            error: { code: durable.code, message: durable.message },
+          };
+        }
+        nextContent = durable.content;
+      } else {
+        // Durable ContentBlock[] (keep existing image/file refs) or text-only.
+        const blocks = parts.filter((p) => typeof p.type === "string");
+        const onlyText = blocks.every((p) => p.type === "text");
+        if (onlyText) {
+          const text = blocks
+            .map((p) => (typeof p.text === "string" ? p.text : ""))
+            .join("");
+          if (!text.trim()) {
+            return {
+              ok: false,
+              error: { code: "invalid-payload", message: "edit text empty" },
+            };
+          }
+          nextContent = text;
+        } else {
+          nextContent = blocks as unknown as MessageContent;
+          const flat = flattenText(nextContent);
+          const hasAtt = blocks.some(
+            (p) => p.type === "image" || p.type === "file",
+          );
+          if (!flat.trim() && !hasAtt) {
+            return {
+              ok: false,
+              error: { code: "invalid-payload", message: "edit content empty" },
+            };
+          }
+        }
       }
       rewritePendingAdmit(
         runtime.store,
         sessionId,
         itemId,
-        text,
+        nextContent,
         target.delivery,
         maps,
       );

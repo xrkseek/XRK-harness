@@ -37,10 +37,29 @@ const EMPTY_VIEW: SessionStatsProjection = {
   decodeTokens: 0,
 };
 
-function isNonEmptyTextChunk(event: SessionEvent): boolean {
+/**
+ * Shortest decode window, in ms, a step must span to be sampled.
+ *
+ * Chunk timestamps are millisecond-resolution and persisted in batched runs, so
+ * a window this short measures write batching rather than model speed. Admitting
+ * one lets a single step dominate the aggregate ratio and report hundreds of
+ * thousands of tok/s; real decode spans are seconds. Mirrored by the client
+ * window fold (`deriveStats`) and its fixture twin.
+ */
+export const MIN_DECODE_SAMPLE_MS = 50;
+
+/**
+ * Whether a chunk opens the step's first-token boundary.
+ *
+ * Every non-empty model output counts — reasoning included. Reasoning is
+ * generated output: `assistant/message.usage.outputTokens` already counts its
+ * tokens, so excluding reasoning chunks from the boundary charges the whole
+ * thinking phase to TTFT while the decode numerator still carries its tokens,
+ * and leaves the decode window covering only the trailing tool-call burst.
+ */
+function isFirstOutputChunk(event: SessionEvent): boolean {
   return (
     event.type === "assistant/chunk" &&
-    event.kind !== "reasoning" &&
     event.kind !== "usage" &&
     event.text.trim().length > 0
   );
@@ -49,9 +68,11 @@ function isNonEmptyTextChunk(event: SessionEvent): boolean {
 /**
  * DSH sessionStats fold over XRK events:
  * `step/end` counts steps; `step/start` → `assistant/message` is llmMs;
- * first non-empty text chunk is TTFT; `tool/call` → `tool/result` by call id.
- * When `assistant/message.usage.outputTokens` is present after TTFT,
- * accumulate decodeMs (first token → message) and decodeTokens.
+ * the first non-empty output chunk (reasoning included) is TTFT;
+ * `tool/call` → `tool/result` by call id.
+ * When `assistant/message.usage.outputTokens` is present after TTFT and the
+ * decode window spans {@link MIN_DECODE_SAMPLE_MS}, accumulate decodeMs
+ * (first token → message) and decodeTokens.
  */
 export function createSessionStatsProjectionUnit(): ProjectionDefinition<
   "sessionStats",
@@ -88,7 +109,7 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
           ) {
             return state;
           }
-          if (open.firstTokenTime !== null || !isNonEmptyTextChunk(event)) {
+          if (open.firstTokenTime !== null || !isFirstOutputChunk(event)) {
             return state;
           }
           return {
@@ -118,16 +139,16 @@ export function createSessionStatsProjectionUnit(): ProjectionDefinition<
               ttftSteps: next.ttftSteps + 1,
             };
             const outputTokens = usageFromSessionEvent(event)?.outputTokens;
+            const decodeMs = event.ts - open.firstTokenTime;
             if (
               typeof outputTokens === "number" &&
               Number.isFinite(outputTokens) &&
-              outputTokens >= 0
+              outputTokens >= 0 &&
+              decodeMs >= MIN_DECODE_SAMPLE_MS
             ) {
               next = {
                 ...next,
-                decodeMs:
-                  next.decodeMs +
-                  Math.max(0, event.ts - open.firstTokenTime),
+                decodeMs: next.decodeMs + decodeMs,
                 decodeTokens: next.decodeTokens + outputTokens,
               };
             }

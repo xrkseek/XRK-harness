@@ -45,5 +45,12 @@ declare module '@xrkseek/cordis' {
   interface Context {
     /** The outward face only; the concrete service stays inside this plugin. */
     conversation: import('./service.ts').IConversation
+    /**
+     * Live conversation UI prefs (tool-row default expand). Written by this
+     * plugin; read by ui-tool ToolCallTree inject.
+     */
+    conversationUiPrefs: {
+      readonly toolsDefaultExpanded: import('@xrkseek/client-runtime/client').SnapshotStore<boolean>
+    }
   }
 }

@@ -40,6 +40,8 @@ export interface ToolResult {
   readonly error?: {
     readonly name: string;
     readonly code: string;
+    /** Optional reviewer / UI detail (e.g. Auto-review deny reason). */
+    readonly reason?: string;
   };
   /**
    * Opaque presentation payload (DSH `output.presentationMeta`).

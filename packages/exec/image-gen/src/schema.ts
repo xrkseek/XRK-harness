@@ -84,7 +84,10 @@ export function buildImageGenToolDescription(caps: ImageGenCapabilities): string
       `(or image_url=attachment:<id> / https; ≤${caps.maxReferenceImages}). ` +
       "Never paste data:image base64 into args (call truncates). " +
       "Chat shows the image; result text gives attachmentId=sha256:… " +
-      "(re-inspect with read_image; not a filesystem path)."
+      "(re-inspect with read_image; not a filesystem path). " +
+      "The id is content-addressed: it deterministically maps to one stored object " +
+      "under `{XRK_HOME}/attachments/v1/objects/` (first 2 hex chars = directory, " +
+      "full sha256 = filename) — derivable from the id alone, no disk hunt."
     );
   }
   return (

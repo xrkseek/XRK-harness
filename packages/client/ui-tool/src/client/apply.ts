@@ -1,6 +1,10 @@
 /** Register the Tool call tree, details renderer, and built-in atomic views. */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
-import type { ClientContext } from '@xrkseek/client-runtime/client'
+import {
+  createSnapshotStore,
+  type ClientContext,
+  type SnapshotStore,
+} from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { ToolCallTree } from './tool/ToolCallTree.tsx'
 import { CONVERSATION_NS as NS } from './locale.ts'
@@ -25,7 +29,18 @@ export const inject = ['slots', 'connection']
  */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
-  const toolInject = () => ({ hooks: { hostDescription: connection.hostDescription } })
+  // Provided by ui-conversation when composed; tests without it stay collapsed.
+  const prefs = ctx.get('conversationUiPrefs') as {
+    toolsDefaultExpanded: SnapshotStore<boolean>
+  } | undefined
+  const toolsDefaultExpanded = prefs?.toolsDefaultExpanded
+    ?? createSnapshotStore(false)
+  const toolInject = () => ({
+    hooks: {
+      hostDescription: connection.hostDescription,
+      toolsDefaultExpanded,
+    },
+  })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'tool-call',

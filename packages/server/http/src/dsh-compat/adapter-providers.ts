@@ -940,6 +940,9 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
             ...(ctx.resolveAutoReviewClassifierProduct
               ? { product: ctx.resolveAutoReviewClassifierProduct() }
               : {}),
+            ...(ctx.approveAutoReviewPending
+              ? { approvePending: ctx.approveAutoReviewPending }
+              : {}),
           }),
       },
     ],

@@ -1,6 +1,6 @@
 /**
  * Turn-scoped produced-file + workspace-changes Definition and readers.
- * Client-only and model-free: mutation `locations` for produced chips;
+ * Client-only and model-free: mutation `locations` / diffs for file lanes;
  * embedded `workspace/changes` summary for the changed-files card.
  */
 import type {
@@ -8,11 +8,22 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import { isAppendSurfaceEvent } from '@xrkseek/client-runtime/client'
 import type { MarkdownFileMentions } from '@xrkseek/client-ui-primitives'
+import { harvestWorkspaceChangesTurns } from '@xrkseek/client-ui-primitives'
 import type { TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
+import {
+  fileLanesForClosing, mutationsFromToolView, type FileLaneOp, type FileLanes,
+} from './file-lanes.ts'
+
+export type { FileLaneOp, FileLanes } from './file-lanes.ts'
+export {
+  fileLanesForClosing, foldFileLanes, lanesFromChangesFiles, mutationsFromToolView, opFromFileDiff,
+} from './file-lanes.ts'
 
 interface ProducedPath {
   readonly seq: number
   readonly path: string
+  /** Present on new folds; omitted on legacy turn data. */
+  readonly op?: FileLaneOp
 }
 
 /** One changed-file row carried on the turn card (from the SessionEvent summary). */
@@ -52,15 +63,6 @@ declare module '@xrkseek/client-runtime/client' {
 interface DeliverablesState extends DeliverablesTurnData {
   readonly turn: number
   readonly calls: ReadonlyMap<string, ToolResultNode['callView']>
-}
-
-function producedPaths(view: ToolResultNode['callView']): readonly string[] {
-  if (view === null) return []
-  if (view.card === 'diff') return (view.locations ?? []).map(location => location.path)
-  if (view.card === 'generic' && view.kind === 'edit') {
-    return (view.locations ?? []).map(location => location.path)
-  }
-  return []
 }
 
 function isChangesWireData(data: unknown): data is {
@@ -103,20 +105,15 @@ function isPresentedWireData(data: unknown): data is {
   return Array.isArray(row.files)
 }
 
-/** Files produced by one Turn data value (paths before the closing seq). */
+/**
+ * Surviving created files before the closing seq (later deletes excluded).
+ * Prefer {@link fileLanesForClosing} when all three lanes are needed.
+ */
 export function producedForClosing(
   data: Readonly<DeliverablesTurnData> | undefined,
   seq = Number.POSITIVE_INFINITY,
 ): readonly string[] {
-  if (data === undefined) return []
-  const paths: string[] = []
-  const seen = new Set<string>()
-  for (const produced of data.produced) {
-    if (produced.seq > seq || seen.has(produced.path)) continue
-    seen.add(produced.path)
-    paths.push(produced.path)
-  }
-  return paths
+  return fileLanesForClosing(data, seq).created
 }
 
 /** Turn-end changes announcement at or before the closing seq. */
@@ -131,8 +128,8 @@ export function changesForClosing(
 
 /**
  * Harvest every turn's embedded `workspace/changes` card from the conversation
- * timeline — Overview fallback when Face `workspaceChanges` projection is empty
- * (reconnect truncate flash / cold seed lag).
+ * timeline — Overview fallback when Face `workspaceChanges` projection is empty.
+ * Canonical harvest lives in ui-primitives (shared with ui-plan).
  */
 export function collectChangesTurnsFromTimeline(timeline: {
   readonly turnOrder: readonly number[]
@@ -141,31 +138,33 @@ export function collectChangesTurnsFromTimeline(timeline: {
     { readonly data: { get(key: 'deliverables'): DeliverablesTurnData | undefined } }
   >
 }): readonly ChangesTurnData[] {
-  const out: ChangesTurnData[] = []
-  for (const turnNum of timeline.turnOrder) {
-    const changes = timeline.turns.get(turnNum)?.data.get('deliverables')?.changes
-    if (changes === undefined || changes.files.length === 0) continue
-    out.push(changes)
-  }
-  return out
+  return harvestWorkspaceChangesTurns(timeline).filter(
+    (row): row is ChangesTurnData => typeof row.cwd === 'string',
+  )
 }
 
 /** Match for the combined turn-tail deliverables entry. */
 export interface DeliverablesMatch {
   readonly changes: ChangesTurnData | null
+  /** @deprecated Prefer {@link DeliverablesMatch.lanes}.created */
   readonly produced: readonly string[]
+  readonly lanes: FileLanes
 }
 
 /**
- * Claim the turn-tail chain when the closing turn announced changes or produced files.
+ * Claim the turn-tail chain when the closing turn announced changes or file lanes.
  */
 export function selectDeliverables(owner: TurnTailOwnerProps): DeliverablesMatch | null {
   const data = owner.turn.data.get('deliverables')
   const changes = changesForClosing(data, owner.seq)
-  const produced = producedForClosing(data, owner.seq)
-  return changes === null && produced.length === 0
+  const lanes = fileLanesForClosing(data, owner.seq)
+  const produced = lanes.created
+  const emptyLanes = lanes.created.length === 0
+    && lanes.modified.length === 0
+    && lanes.deleted.length === 0
+  return changes === null && emptyLanes
     ? null
-    : { changes, produced }
+    : { changes, produced, lanes }
 }
 
 /** @deprecated Prefer {@link selectDeliverables}; kept for produced-only tests. */
@@ -215,10 +214,10 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
       const next = [...context.state.produced]
       const seen = new Set(next.map((row) => row.path))
       for (const file of match.event.data.files) {
-        const path = typeof file.path === 'string' ? file.path.trim() : ''
+        const path = typeof file.path === 'string' ? file.path.trim().replace(/\\/g, '/') : ''
         if (!path || seen.has(path)) continue
         seen.add(path)
-        next.push({ seq: match.event.seq, path })
+        next.push({ seq: match.event.seq, path, op: 'create' })
       }
       return { ...context.state, produced: next }
     }
@@ -234,8 +233,12 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     const result = match.event.data.message.content[0]
     if (result.isError === true) return context.state
     const callId = String(match.event.data.message.source.callId)
-    const additions = producedPaths(context.state.calls.get(callId) ?? null)
-      .map(path => ({ seq: match.event.seq, path }))
+    const resultView = match.view?.for === 'result' ? match.view.view : null
+    const callView = context.state.calls.get(callId) ?? null
+    const additions = [
+      ...mutationsFromToolView(resultView, match.event.seq),
+      ...(resultView?.card === 'diff' ? [] : mutationsFromToolView(callView, match.event.seq)),
+    ]
     return additions.length === 0
       ? context.state
       : { ...context.state, produced: [...context.state.produced, ...additions] }

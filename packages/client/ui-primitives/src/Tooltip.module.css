@@ -7,12 +7,15 @@
 
 .bubble {
   position: fixed;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   /* Fixed-position shrink-to-fit measures only the space from `left` to the
      viewport edge, so anchors near the right edge would wrap early;
-     max-content sizes by the label alone, capped at half the viewport. */
+     max-content sizes by the label alone, capped at half the viewport.
+     The bubble is pushed back in from the edges by a flat EDGE_MARGIN in
+     Tooltip.tsx, so the safe-area pair has to come off the same budget
+     before the cap binds. */
   width: max-content;
-  max-width: 50vw;
+  max-width: min(50vw, calc(100vw - 24px - var(--ds-safe-h)));
   padding: 3px 7px;
   border-radius: 8px;
   background: var(--dsw-alias-tooltip-bg);

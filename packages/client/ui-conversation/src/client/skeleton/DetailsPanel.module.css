@@ -81,6 +81,9 @@
   min-height: 0;
   padding: 12px 16px;
   overflow-y: auto;
+  /* The body is the panel only scroller, so an overscroll at its top/bottom
+     edge must not drag the conversation behind the panel. */
+  overscroll-behavior: contain;
 }
 
 .empty {

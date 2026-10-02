@@ -11,6 +11,7 @@ import {
 import {
   dispatchFaceMethod,
   hostOpenPath,
+  isChildSessionActive,
   isAgentTeamRole,
   lastAssistantBodyText,
   openNativePath,
@@ -123,7 +124,10 @@ export function createSidebarFaceBridgeFromFace(
       for (const link of collectDescendantLinks(face, rootSessionId)) {
         if (link.mode === "fork") continue;
         const childId = link.childSessionId;
-        if (!face.drain.isActive(childId)) continue;
+        // Same predicate as the Overview board: an ACP / app-server child is
+        // busy without a Face drain latch, so a drain-only check dropped it
+        // out of `live` and the task board painted it finished.
+        if (!isChildSessionActive(face, childId)) continue;
         const events = readSessionEvents(face.store, childId);
         live[childId] = liveLineFromSessionEvents(events) ?? {};
       }
@@ -135,7 +139,7 @@ export function createSidebarFaceBridgeFromFace(
       for (const link of collectDescendantLinks(face, rootSessionId)) {
         if (link.mode === "fork") continue;
         if (!face.store.has(link.childSessionId)) continue;
-        const activity = face.drain.isActive(link.childSessionId)
+        const activity = isChildSessionActive(face, link.childSessionId)
           ? ("running" as const)
           : ("inactive" as const);
         const events = readSessionEvents(face.store, link.childSessionId);

@@ -15,6 +15,7 @@ import { estimateImageTokens } from "@xrkseek/attachment";
 import { estimateText } from "./surface-estimate.js";
 import {
   foldImageOffloadMarks,
+  messageHasImageBlocks,
   projectOffloadedImages,
 } from "./image-offload.js";
 
@@ -167,8 +168,22 @@ export const COMPACTION_SUMMARY_TEMPLATE = `Output exactly this Markdown structu
 ## Files
 - [path: why it matters, or "(none)"]`;
 
+function serializeUserContent(content: MessageContent): string {
+  const text = flattenText(content);
+  if (typeof content === "string" || !messageHasImageBlocks(content)) {
+    return text;
+  }
+  // Compaction / summary paths must not pretend the turn was text-only.
+  const n = content.filter((b) => b.type === "image").length;
+  const note =
+    n === 1
+      ? "[image attachment]"
+      : `[${n} image attachments]`;
+  return text.trim() ? `${text}\n${note}` : note;
+}
+
 function serializeMessage(m: ChatMessage): string {
-  if (m.role === "user") return `[User]: ${flattenText(m.content)}`;
+  if (m.role === "user") return `[User]: ${serializeUserContent(m.content)}`;
   if (m.role === "assistant") {
     const parts = [`[Assistant]: ${m.content}`];
     if (m.reasoning?.trim()) {
@@ -195,6 +210,9 @@ function serializeMessage(m: ChatMessage): string {
 
 /**
  * Split conversation into summarized head vs kept recent (from the end).
+ * Image-bearing user turns are omitted from the recent *text* tail — they are
+ * re-projected as live ContentBlocks by {@link retainShadowedImageMessages}
+ * after the window swap (flattenText would drop the pixels).
  */
 export function selectHeadRecent(
   messages: readonly ChatMessage[],
@@ -221,9 +239,17 @@ export function selectHeadRecent(
     split = i;
   }
 
+  const recentLines: string[] = [];
+  for (let i = split; i < messages.length; i++) {
+    const m = messages[i]!;
+    if (m.role === "user" && messageHasImageBlocks(m.content)) continue;
+    const line = serializeMessage(m);
+    if (line) recentLines.push(line);
+  }
+
   return {
     head: lines.slice(0, split).join("\n\n"),
-    recent: lines.slice(split).join("\n\n"),
+    recent: recentLines.join("\n\n"),
     headMessageCount: split,
   };
 }

@@ -561,6 +561,57 @@ export function createPersistentSessionStore(
       return frozen;
     },
 
+    seed(id = newSessionId(), eventsInput: readonly SessionEvent[] = []): SessionRecord {
+      assertWritable();
+      const sid = assertSafeId(id);
+      if (sessionIds.has(sid)) {
+        throw new Error(`session already exists: ${sid}`);
+      }
+      const frozen: SessionEvent[] = [];
+      for (const event of eventsInput) {
+        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+      }
+      // Create + one packed transaction (not N persistEvent flushes). Chunk
+      // runs pack the same way as flushPending so fork seed matches live shape.
+      sessionIds.add(sid);
+      evictResidents(sid);
+      sessions.set(sid, frozen);
+      touchResident(sid);
+      nextSeqBySession.set(sid, 0);
+      insertSession!.run(sid);
+      if (frozen.length === 0) {
+        return { id: sid, events: frozen };
+      }
+      const seqSnapshot = new Map(nextSeqBySession);
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const packed = packChunkRunsForExport(frozen);
+        for (const record of packed) {
+          writeRecord(sid, record);
+        }
+        db.exec("COMMIT");
+      } catch (err) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+          /* already rolled back / closed */
+        }
+        restoreSeqMap(seqSnapshot);
+        sessionIds.delete(sid);
+        sessions.delete(sid);
+        nextSeqBySession.delete(sid);
+        const idx = residentOrder.indexOf(sid);
+        if (idx >= 0) residentOrder.splice(idx, 1);
+        try {
+          db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
+        } catch {
+          /* best-effort undo of the sessions row */
+        }
+        throw err;
+      }
+      return { id: sid, events: frozen };
+    },
+
     list(): readonly string[] {
       return [...sessionIds];
     },

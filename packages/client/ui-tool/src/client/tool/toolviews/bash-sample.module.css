@@ -1,4 +1,4 @@
-/* Bash toolview: same geometry/tokens as ToolRow (figma Bash · description),
+/* Bash toolview: same geometry/tokens as ToolRow (figma Bash 璺?description),
    plus the expand-gated terminal card under the summary line. */
 
 /* Summary line over the terminal card; the summary row keeps its own 24px
@@ -41,6 +41,9 @@
   padding: 12px 16px;
   max-height: 150px;
   overflow-y: auto;
+  /* Same capped IN/OUT scroller as the full tool row, contained for the same
+     reason. */
+  overscroll-behavior: contain;
 }
 
 .ioSection::-webkit-scrollbar-thumb {
@@ -78,7 +81,7 @@
 }
 
 /* ToolRow's unified expand interaction, replicated per the registrant
-   posture: pointer on the expandable row (the icon→chevron hover preview is
+   posture: pointer on the expandable row (the icon閳妽hevron hover preview is
    the affordance, no row fill). */
 .root[data-expandable] {
   cursor: pointer;
@@ -93,7 +96,7 @@
   min-width: 0;
 }
 
-/* Running sweep glare — same deepsuite ShimmerText pattern as ToolRow. */
+/* Running sweep glare 閳?same deepsuite ShimmerText pattern as ToolRow. */
 .root[data-state='running']::after {
   content: '';
   position: absolute;
@@ -133,7 +136,7 @@
 }
 
 /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
-   a down chevron before the row is opened — same overlay as ToolRow. */
+   a down chevron before the row is opened 閳?same overlay as ToolRow. */
 .iconIdle {
   display: inline-flex;
   opacity: 1;
@@ -188,10 +191,10 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* Hover-revealed Inspect pill under the expanded terminal's bottom-left —
+/* Hover-revealed Inspect pill under the expanded terminal's bottom-left 閳?
    ToolRow's .bodyWrap/.inspectButton treatment, replicated per the registrant
    posture: real flow (it reserves its line), revealed by hovering anywhere on
-   the tool call — title row included — or by keyboard focus. */
+   the tool call 閳?title row included 閳?or by keyboard focus. */
 .bodyWrap {
   display: flex;
   flex-direction: column;

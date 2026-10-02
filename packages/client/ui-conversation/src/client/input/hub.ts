@@ -16,6 +16,18 @@ import type { ComposerKeyboard, DraftAttachmentId, SessionInputResolver, Session
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
+import {
+  beginEditStaging,
+  clearEditStaging,
+  getEditStaging,
+  peekEditStagingFor,
+  requestResubmitConfirm,
+  takeEditStagingFor,
+} from '../chat/resubmit-intent.ts'
+import {
+  chatHasEventsAfterSeq,
+  executeResubmitAfterChoice,
+} from '../chat/resubmit-execute.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
@@ -78,6 +90,7 @@ export class InputHub implements SessionInputResolver {
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
       defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
+      tryStagedEditSubmit: () => this.tryStagedEditSubmit(id, shell),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -114,6 +127,7 @@ export class InputHub implements SessionInputResolver {
         this.shells.delete(id)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
         for (const imageId of drafts) conversation?.releaseDraftImage(imageId)
+        if (getEditStaging()?.sessionId === id) clearEditStaging()
       }
     }, 'conversation.input: session shell')
     return shell
@@ -156,10 +170,65 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * Default sink: optimistic clear + prompt. The session is always a real
-   * host entity (materialized when its workspace was picked), so there is
-   * exactly one path; a failed first prompt is an ordinary prompt failure
-   * (banner via promptError, draft restored only while untouched).
+   * Confirm-before-send for a composer-staged past-message edit.
+   * Skips the truncate modal when the loaded window has nothing after that seq.
+   * @returns true when this gesture was consumed (including cancel).
+   */
+  private async tryStagedEditSubmit(
+    sessionId: SessionId,
+    shell: SessionInputShell,
+  ): Promise<boolean> {
+    const staged = peekEditStagingFor(sessionId)
+    if (staged === null) return false
+    const text = shell.snapshot.draft.trim()
+    if (text === '') return false
+    // Slash lines leave edit staging and use the ordinary command path.
+    if (text.startsWith('/')) {
+      clearEditStaging()
+      return false
+    }
+    const session = this.sessions().binding(sessionId)?.session
+    const hasTail = session !== undefined
+      && chatHasEventsAfterSeq(session.getSnapshot(), staged.seq)
+    let choice: 'keep-files' | 'revert-files' = 'keep-files'
+    if (hasTail) {
+      const decided = await requestResubmitConfirm({
+        sessionId,
+        kind: 'edit',
+        seq: staged.seq,
+        text,
+      })
+      if (decided === 'cancel') return true
+      choice = decided
+    }
+    const imageIds = [...shell.snapshot.imageIds]
+    try {
+      clearEditStaging()
+      await executeResubmitAfterChoice(this.sessions(), sessionId, {
+        seq: staged.seq,
+        choice,
+        text,
+      })
+      shell.setDraft('')
+      if (imageIds.length > 0) {
+        const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+        for (const imageId of imageIds) {
+          shell.removeImage(imageId)
+          conversation?.releaseDraftImage(imageId)
+        }
+      }
+      return true
+    } catch (error) {
+      beginEditStaging({ sessionId, seq: staged.seq })
+      const message = error instanceof Error ? error.message : String(error)
+      shell.notify('error', message)
+      return true
+    }
+  }
+
+  /**
+   * Default sink: ordinary prompt. Staged edits are handled by
+   * {@link tryStagedEditSubmit} before enter; residual staging is a safety net.
    */
   private sink(
     session: SessionFace,
@@ -169,7 +238,56 @@ export class InputHub implements SessionInputResolver {
     signal: AbortSignal,
   ): Promise<SubmitOutcome> {
     if (text === '' && imageIds.length === 0) return Promise.resolve({ kind: 'success' })
-    return this.conversation().sendSession(session, text, imageIds, mode, signal)
+    const staged = takeEditStagingFor(session.sessionId)
+    if (staged === null) {
+      return this.conversation().sendSession(session, text, imageIds, mode, signal)
+    }
+    return this.finishEditResubmit(session.sessionId, staged.seq, text, imageIds)
+  }
+
+  /**
+   * Safety-net sink path when staging survived into defaultSink (e.g. image-only).
+   * Confirm only when the loaded window still has later events.
+   */
+  private async finishEditResubmit(
+    sessionId: SessionId,
+    seq: number,
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+  ): Promise<SubmitOutcome> {
+    const session = this.sessions().binding(sessionId)?.session
+    const hasTail = session !== undefined
+      && chatHasEventsAfterSeq(session.getSnapshot(), seq)
+    let choice: 'keep-files' | 'revert-files' = 'keep-files'
+    if (hasTail) {
+      const decided = await requestResubmitConfirm({
+        sessionId,
+        kind: 'edit',
+        seq,
+        text,
+      })
+      if (decided === 'cancel') {
+        beginEditStaging({ sessionId, seq })
+        return { kind: 'error' }
+      }
+      choice = decided
+    }
+    try {
+      await executeResubmitAfterChoice(this.sessions(), sessionId, {
+        seq,
+        choice,
+        text,
+      })
+      if (imageIds.length > 0) {
+        const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+        for (const imageId of imageIds) conversation?.releaseDraftImage(imageId)
+      }
+      return { kind: 'success' }
+    } catch (error) {
+      beginEditStaging({ sessionId, seq })
+      const message = error instanceof Error ? error.message : String(error)
+      return { kind: 'error', text: message }
+    }
   }
 
   /**

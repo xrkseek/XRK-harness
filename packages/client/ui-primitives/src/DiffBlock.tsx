@@ -421,7 +421,7 @@ export function DiffBlock({
                 >
                   {section.pairs.map((pair, i) => (
                     <Fragment key={i}>
-                      {renderSplitSide(pair.left, css.splitEmpty)}
+                      {renderSplitSide(pair.left, css.splitEmpty ?? '')}
                     </Fragment>
                   ))}
                 </div>
@@ -433,7 +433,7 @@ export function DiffBlock({
                 >
                   {section.pairs.map((pair, i) => (
                     <Fragment key={i}>
-                      {renderSplitSide(pair.right, css.splitEmpty)}
+                      {renderSplitSide(pair.right, css.splitEmpty ?? '')}
                     </Fragment>
                   ))}
                 </div>

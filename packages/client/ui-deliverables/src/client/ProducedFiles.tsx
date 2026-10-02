@@ -69,6 +69,10 @@ export interface ProducedFilesInjected {
 /** Matched paths plus the opener, locale, and injected Host capability. */
 export type ProducedFilesProps = Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: readonly string[]
+  /** Row label (defaults to produced.label). */
+  label?: string
+  /** data-* marker for tests / e2e (defaults to produced-files-row). */
+  rowTestId?: string
 } & PropsLocale<typeof NS> & InjectFace<ProducedFilesInjected>
 
 function moreLabel(t: ProducedFilesProps['t'], count: number): string {
@@ -98,7 +102,7 @@ function ProducedFileChip({
       </button>
       {canOpenPath && (
         <Menu
-          className={css.menu}
+          {...(css.menu !== undefined ? { className: css.menu } : {})}
           open={menuOpen}
           portal
           align="end"
@@ -137,6 +141,7 @@ function ProducedFileChip({
  */
 export function ProducedFiles({
   matched: paths, openFile, isLoopback, openNativePath, useHostDescription, t,
+  label, rowTestId = 'produced-files-row',
 }: ProducedFilesProps) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
   const canOpenPath = isLoopback && hostCanOpenPath
@@ -145,6 +150,7 @@ export function ProducedFiles({
   const rowRef = useRef<HTMLDivElement>(null)
   const chipProbes = useRef<Array<HTMLButtonElement | null>>([])
   const moreProbe = useRef<HTMLSpanElement>(null)
+  const rowLabel = label ?? t('produced.label')
 
   useLayoutEffect(() => {
     const row = rowRef.current
@@ -174,13 +180,15 @@ export function ProducedFiles({
     return () => { observer.disconnect() }
   }, [limit, paths, t])
 
+  if (paths.length === 0) return null
+
   const visibleCount = Math.min(shownCount, limit)
   const shown = paths.slice(0, visibleCount)
   const hidden = paths.length - shown.length
   return (
     <div className={css.root}>
-      <span className={css.label}>{t('produced.label')}</span>
-      <div ref={rowRef} className={css.row} data-produced-files-row>
+      <span className={css.label}>{rowLabel}</span>
+      <div ref={rowRef} className={css.row} data-produced-files-row data-file-lane={rowTestId}>
         {shown.map(path => (
           <ProducedFileChip
             key={path}

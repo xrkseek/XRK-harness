@@ -1,0 +1,30 @@
+---
+description: Overview / details soft faces — React #185 红线（publish-on-notify）
+globs: packages/client/ui-plan/**/*,packages/client/ui-primitives/src/workspace-changes-turns.ts,packages/client/ui-primitives/src/stable-session-snapshot.ts
+alwaysApply: false
+xrk-inject: false
+---
+
+# 笔记 · Overview uSES
+
+## 谬误（已踩）
+
+大会话切进 Overview 炸 React #185，`details` **abdicate** 后小会话也像坏了——不是小会话 bug，是槽位已卸。
+
+根因：soft face 的 `getSnapshot` **现场**调 `session.getSnapshot()` / `ensureFresh`。历史灌入时 `markDirty` 在 React 连续两次 uSES 读之间翻 dirty → 两次派生引用不同 → #185。
+
+## 红线
+
+| 做 | 不做 |
+|----|------|
+| **Publish-on-notify**：只在 `subscribe` 回调里读 Session、写入 published；`getSnapshot` 只返回 published；引用未变则不 `listener()` | 在 `getSnapshot` 里 `session.getSnapshot()` / `Date.now()` 派生新对象 |
+| publish 包 try/catch，失败回 EMPTY | 让 throw 窜进 Session notifier 拖垮其它订阅者 |
+| Overview chrome 只记 tab/scroll（`overview-paint`） | soft-cache Face `session.status` / 大 blob |
+| Presence 忙时 `idleMs = 0` | busy 路径里 `Date.now()` `setState` 刷 lastActivityAt |
+| TTL 到期用 timer **再 publish + notify** | 让 `getSnapshot` 悄悄换引用（无 subscribe 通知） |
+
+实现：`createOverviewSessionSoftFaces`（`overview-session-faces.ts`）。同契约：`BootGate` / `ChunkFold`（web-runtime）也是 mutate 时 publish、getSnapshot 只读 published。
+
+## 验证
+
+大会话 ↔ 小会话来回切 Overview；`details` 不 abdicate。改完：`pnpm client:bundle ui-plan` → 拷进 `apps/web/dist/plugins/...`（或完整 `web:assemble`）→ 硬刷新。**不要**另起 `%TEMP%\edge-*-cdp` 当用户浏览器。

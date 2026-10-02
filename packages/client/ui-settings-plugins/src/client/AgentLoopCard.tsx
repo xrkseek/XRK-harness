@@ -220,24 +220,6 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onEdit={(text) => { props.edit('maxActiveSubagents', text) }}
         onReset={() => { props.resetField('maxActiveSubagents') }}
       />
-      <ChoiceField
-        id="plugin-config-agent-loop-guardian-fragments"
-        label={t('agentLoopGuardianFragments')}
-        hint={t('agentLoopGuardianFragmentsHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
-        value={state.guardianFragments.text}
-        overridden={state.guardianFragments.overridden}
-        invalid={state.guardianFragments.invalid}
-        disabled={!state.writable}
-        options={[
-          { value: 'true', label: t('agentLoopGuardianFragmentsOn') },
-          { value: 'false', label: t('agentLoopGuardianFragmentsOff') },
-        ]}
-        onChange={(text) => { props.edit('guardianFragments', text) }}
-        onReset={() => { props.resetField('guardianFragments') }}
-      />
     </PluginCard>
   )
 }

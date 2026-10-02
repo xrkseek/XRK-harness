@@ -413,6 +413,12 @@
       }
       var now = performance.now();
       var prevId = this._def ? this._def.id : null;
+      // Same id: keep blink / spin / sequence in flight. Overview soft-face
+      // ticks and tip-only React updates must not restart transitions (jank).
+      if (prevId === def.id) {
+        if (!o.auto) this._lastActivity = now;
+        return true;
+      }
       this._prevPose = this._lastPose ? clonePose(this._lastPose) : null;
       this._def = def;
       this._emoStart = now;

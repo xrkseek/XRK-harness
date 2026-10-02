@@ -176,7 +176,6 @@ export interface SessionStatusView {
     readonly pipeline: 'none' | 'prune' | 'summary' | 'prune→summary'
     readonly stages: readonly ('prune' | 'summary')[]
     readonly strategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
-    readonly guardian?: boolean
     readonly lastReason?: 'auto' | 'overflow' | 'manual'
     readonly lastShadowedTokens?: number
     readonly pruneCount: number
@@ -549,10 +548,6 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     || strategyRaw === 'off'
       ? strategyRaw
       : undefined
-  const guardian =
-    compactionRaw && typeof compactionRaw === 'object'
-      ? bool((compactionRaw as { guardian?: unknown }).guardian)
-      : undefined
   const spillPathsRaw =
     compactionRaw && typeof compactionRaw === 'object'
     && Array.isArray((compactionRaw as { spillPaths?: unknown }).spillPaths)
@@ -593,7 +588,6 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
             ? ['summary']
             : [],
     ...(strategy ? { strategy } : {}),
-    ...(guardian !== undefined ? { guardian } : {}),
     ...(compactionLastReason ? { lastReason: compactionLastReason } : {}),
     ...(compactionShadowed !== undefined
       ? { lastShadowedTokens: compactionShadowed }

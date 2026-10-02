@@ -117,33 +117,117 @@ export function createSnapshotStore<T>(
 }
 
 /**
+ * Soft ceiling for one localStorage entry. Oversized drafts (paste storms)
+ * would otherwise burn through the origin quota and stall the main thread on
+ * stringify + sync write; prefer a truncated salvage over failing closed.
+ */
+const MAX_PERSIST_CHARS = 256_000
+
+/** Coalesce keystroke-rate drafts into one disk write (INP / main-thread). */
+const PERSIST_DEBOUNCE_MS = 120
+
+/** Live persist controllers keyed by storage name — clearPersisted cancels pending writes. */
+const persistControllers = new Map<string, { cancel: () => void; flush: () => void }>()
+
+/**
+ * Serialize store state for disk. When the payload would exceed
+ * {@link MAX_PERSIST_CHARS} and the root carries a string `draft`, truncate
+ * that field first so selection / view / inspect still survive reload.
+ */
+function serializePersistedState(state: unknown): string {
+  const full = JSON.stringify(state)
+  if (full.length <= MAX_PERSIST_CHARS) return full
+  if (
+    state !== null
+    && typeof state === 'object'
+    && !Array.isArray(state)
+    && 'draft' in state
+    && typeof (state as { draft: unknown }).draft === 'string'
+  ) {
+    const draft = (state as { draft: string }).draft
+    const overhead = full.length - draft.length
+    const keep = Math.max(0, MAX_PERSIST_CHARS - overhead)
+    return JSON.stringify({ ...(state as object), draft: draft.slice(0, keep) })
+  }
+  return full.slice(0, MAX_PERSIST_CHARS)
+}
+
+/**
  * Whole-value JSON persistence to localStorage. Hand-rolled instead of the
  * zustand persist middleware: its write path spreads state into an object
  * (`partialize({ ...get() })`), exploding primitive state (a persisted string
  * draft becomes {0:'h',1:'e',...}) — not fixable via merge/deserialize options
  * because the corruption happens before serialization. Storage failures
  * (quota, private mode) only disable persistence, never break the store.
+ *
+ * Writes are debounced and skip identical payloads so composer draft mirrors
+ * do not pay a synchronous disk write on every keystroke (Vercel
+ * js-cache-storage / client-localstorage-schema habits).
  */
 function attachPersistence<T>(api: StoreApi<T>, name: string): void {
   // Non-browser runs (node e2e booting the client tree) have no localStorage:
   // persistence silently disables — same contract as a storage failure, minus
   // the per-store console noise a ReferenceError would produce.
   if (typeof localStorage === 'undefined') return
+  let lastSerialized: string | null = null
+  let pending: T | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let cancelled = false
+
   try {
     const raw = localStorage.getItem(name)
+    lastSerialized = raw
     if (raw !== null) {
       api.setState(devFreeze(JSON.parse(raw) as T), true)
     }
   } catch (error) {
     console.error(`snapshot store '${name}' rehydration failed:`, error)
   }
-  api.subscribe((state) => {
+
+  const flush = (): void => {
+    timer = undefined
+    if (cancelled || pending === undefined) return
+    const state = pending
+    pending = undefined
     try {
-      localStorage.setItem(name, JSON.stringify(state))
+      const serialized = serializePersistedState(state)
+      if (serialized === lastSerialized) return
+      localStorage.setItem(name, serialized)
+      lastSerialized = serialized
     } catch (error) {
       console.error(`snapshot store '${name}' persistence failed:`, error)
     }
+  }
+
+  const cancel = (): void => {
+    cancelled = true
+    pending = undefined
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    if (persistControllers.get(name)?.cancel === cancel) persistControllers.delete(name)
+  }
+
+  persistControllers.set(name, { cancel, flush })
+
+  api.subscribe((state) => {
+    if (cancelled) return
+    pending = state
+    if (timer !== undefined) return
+    timer = setTimeout(flush, PERSIST_DEBOUNCE_MS)
   })
+
+  // Last keystrokes must land before the tab is discarded.
+  const onPageHide = (): void => { flush() }
+  if (typeof addEventListener === 'function') {
+    addEventListener('pagehide', onPageHide)
+  }
+}
+
+/** Cancel a pending debounced write before removing the storage key. */
+function cancelPersistedWrites(name: string): void {
+  persistControllers.get(name)?.cancel()
 }
 
 /** Deep-freeze wholesale-set state outside production: set() bypasses immer's freeze. */
@@ -230,6 +314,7 @@ export function defineStore<T, A extends ActionsDecl<T>>(
         store,
         clearPersisted: () => {
           if (persistKey === undefined || typeof localStorage === 'undefined') return
+          cancelPersistedWrites(persistKey)
           try {
             localStorage.removeItem(persistKey)
           } catch {

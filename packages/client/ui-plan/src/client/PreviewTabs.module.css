@@ -68,10 +68,14 @@
 
 /* Persistent presence chrome — outside the tab pane so tab switches never remount. */
 .presenceRail {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
   flex: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 10px 12px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
   background:
@@ -82,12 +86,17 @@
     );
 }
 
+.presenceRail[data-collapsed] {
+  gap: 6px;
+  padding: 8px 12px 10px;
+}
+
 .presenceRailHead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  padding: 0 2px;
+  min-width: 0;
+  min-height: 20px;
 }
 
 .presenceRailTitle {
@@ -96,6 +105,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dsw-alias-label-secondary);
+  flex: none;
 }
 
 .presenceRailHint {
@@ -103,6 +113,43 @@
   line-height: 1.2;
   color: var(--dsw-alias-label-tertiary);
   opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.presenceCollapse {
+  box-sizing: border-box;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.presenceCollapse:hover {
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 80%, transparent);
+}
+
+.presenceCollapseIcon {
+  display: block;
+  transition: transform 160ms var(--ds-ease-in-out, ease);
+}
+
+.presenceRail[data-collapsed] .presenceCollapseIcon {
+  transform: rotate(-90deg);
 }
 
 /* Quiet segmented control — single row; scroll when the column is too narrow. */
@@ -184,7 +231,8 @@
 .sectionHeader:focus-visible,
 .spillOpen:focus-visible,
 .teamAction:focus-visible,
-.summaryToggle:focus-visible {
+.summaryToggle:focus-visible,
+.presenceCollapse:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 2px;
 }
@@ -621,11 +669,13 @@
 /* ---- collapsible sections: soft cards ---- */
 
 .section {
+  box-sizing: border-box;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 11px;
   background: var(--dsw-alias-bg-layer-1);
   overflow: hidden;
   min-width: 0;
+  max-width: 100%;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 2.5%, transparent);
   transition: border-color 120ms ease;
 }
@@ -635,10 +685,12 @@
 }
 
 .sectionHeader {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: none;
   background: transparent;

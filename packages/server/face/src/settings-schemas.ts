@@ -171,11 +171,6 @@ const AgentLoopConfig = Schema.object({
     "off",
   ]).default("prune-summary"),
   /**
-   * Thin Guardian review fragment at turn-start (advisory; not an LLM approval
-   * gate). Default on with harness context-fragments.
-   */
-  guardianFragments: Schema.boolean().default(true),
-  /**
    * Spill plain-text tool results over this UTF-8 byte ceiling (DSH spill-policy).
    * `0` disables spill (not recommended). Default 64_000.
    */
@@ -339,6 +334,8 @@ const A2aInboundConfig = Schema.object({
  * Non-empty `XRK_AUTO_REVIEW_CLASSIFIER_URL` remains CI bypass.
  */
 const AutoReviewConfig = Schema.object({
+  /** When true, classify each tool call before execute (ask → Face approval). */
+  enabled: Schema.boolean().default(false),
   /** POST endpoint for verdict JSON; empty = heuristic. */
   classifierUrl: Schema.string().default(""),
 });
@@ -400,6 +397,7 @@ const WorkspaceInjectConfig = Schema.object({
 
 const UiConversationConfig = Schema.object({
   busyEnter: Schema.union(["queue", "steer"]),
+  toolsDefaultExpanded: Schema.boolean().default(false),
 });
 
 /**
@@ -506,7 +504,6 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         keepTokens: 24_000,
         bufferTokens: 4_000,
         compactionStrategy: "prune-summary",
-        guardianFragments: true,
         toolResultMaxInlineBytes: 64_000,
         maxSubagentDepth: 2,
         maxActiveSubagents: 2,
@@ -599,8 +596,8 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "auto-review",
       schema: schemasteryJson(AutoReviewConfig) as FaceSchemaEnvelope,
-      base: { classifierUrl: "" },
-      // Classifier resolves per /auto-review/classify (Host injects product).
+      base: { enabled: false, classifierUrl: "" },
+      // Enable + classifier resolve live (Host tool pre + /auto-review/classify).
       applies: "live",
     },
     {
@@ -639,7 +636,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "ui-conversation",
       schema: schemasteryJson(UiConversationConfig) as FaceSchemaEnvelope,
-      base: { busyEnter: "queue" },
+      base: { busyEnter: "queue", toolsDefaultExpanded: false },
       applies: "live",
     },
     {

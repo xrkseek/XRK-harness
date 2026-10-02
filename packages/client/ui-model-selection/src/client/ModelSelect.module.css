@@ -191,6 +191,9 @@
 .groups {
   min-height: 0;
   overflow-y: auto;
+  /* The grouped model list scrolls under a capped popover; contain keeps an
+     edge overscroll off the conversation behind the trigger. */
+  overscroll-behavior: contain;
 }
 
 .group + .group {
@@ -231,7 +234,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Selection marker is the trailing check, not a fill — matches the Menu
+/* Selection marker is the trailing check, not a fill 閳?matches the Menu
  * primitive's selected treatment. */
 .selected {
   background: transparent;

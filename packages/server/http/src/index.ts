@@ -33,6 +33,13 @@ export {
   describeAutoReviewAccess,
   probeAutoReviewClassifier,
   resolveAutoReviewClassifier,
+  createAutoReviewToolPre,
+  isAutoReviewEnabled,
+  setAutoReviewEnabled,
+  recordAutoReviewAllow,
+  recordAutoReviewDeny,
+  recordAutoReviewFallback,
+  readAutoReviewStats,
   createXrkWalletPort,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
@@ -42,6 +49,8 @@ export {
   type XrkWalletPort,
   type AutoReviewAccessDescription,
   type AutoReviewAccessKind,
+  type AutoReviewToolPreOptions,
+  type AutoReviewStatsSnapshot,
 } from "./dsh-compat/index.js";
 export {
   createSidebarPublicHandler,

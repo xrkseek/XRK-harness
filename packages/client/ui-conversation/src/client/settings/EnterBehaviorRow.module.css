@@ -55,6 +55,44 @@
   flex: none;
 }
 
+.switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.track {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+  transition: background 120ms ease;
+}
+
+.track[data-on] {
+  background: var(--dsw-alias-label-primary);
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-primary, #fff);
+  transition: transform 120ms ease;
+}
+
+.track[data-on] .thumb {
+  transform: translateX(16px);
+}
+
 @media (max-width: 767px) {
   .row {
     flex-direction: column;
@@ -71,6 +109,12 @@
     max-width: 100%;
     min-height: 40px;
     height: 40px;
+    touch-action: manipulation;
+  }
+
+  .switch {
+    align-self: flex-start;
+    min-height: 40px;
     touch-action: manipulation;
   }
 }

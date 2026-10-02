@@ -34,7 +34,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   min-width: 218px;
   max-width: 360px;
 }
@@ -47,7 +47,18 @@
   position: fixed;
   top: auto;
   left: auto;
-  z-index: 1100;
+  z-index: var(--ds-z-surface);
+  /* The JS placement clamps against a flat MARGIN and never reads the
+     insets, so a card anchored near a landscape sensor housing would run
+     under it; the pair sum is what a viewport-clamped card must give back. */
+  max-width: min(360px, calc(100vw - 24px - var(--ds-safe-h)));
+}
+
+/* Same blind spot as the width above: the 24px clamp margin is not the
+   notch, so a tall card scrolls its last rows under the home indicator
+   unless the vertical pair comes off the budget too. */
+.portal.scrollable {
+  max-height: calc(100dvh - 24px - var(--ds-safe-v));
 }
 
 /* Open above the anchor (empty-state workspace chip: figma 122:9481). */
@@ -84,6 +95,10 @@
 
 .scrollable .viewport {
   overflow-y: auto;
+  /* Tall menus scroll in .viewport so a pinned .footer stays visible. Contain
+     stops the reached edge from scrolling the surface the menu was opened
+     over -- on touch that drag otherwise chains into that page. */
+  overscroll-behavior: contain;
 }
 
 /* Pinned rows below the scroll region; l2 hairline (l1 is near-invisible on
@@ -237,7 +252,7 @@
   top: auto;
   bottom: -4px;
   left: calc(100% + 10px);
-  z-index: 101;
+  z-index: var(--ds-z-popover-nested);
   min-width: 163px;
 }
 

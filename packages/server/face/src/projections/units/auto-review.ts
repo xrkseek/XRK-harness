@@ -22,6 +22,25 @@ export interface AutoReviewProjection {
   readonly recent: ReadonlyArray<Record<string, unknown>>;
 }
 
+/**
+ * Live counters from dsh-compat tool-pre / classify / approve
+ * (`~/.xrk/auto-review/stats.json`). Host injects the reader.
+ */
+export interface AutoReviewLiveStats {
+  readonly allows: number;
+  readonly denies: number;
+  readonly verdictsUsed: number;
+  readonly failuresUsed: number;
+  readonly fallbacks: number;
+  readonly neverRejects: number;
+  /** Precomputed mean; `0` when no samples. */
+  readonly avgDurationMs: number;
+  readonly recentDenies: ReadonlyArray<{
+    readonly reviewId: string;
+    readonly toolName: string;
+  }>;
+}
+
 export interface AutoReviewUnitState {
   readonly enabled: boolean;
   readonly allows: number;
@@ -52,22 +71,26 @@ const EMPTY: AutoReviewUnitState = {
   circuit: null,
 };
 
-function view(state: AutoReviewUnitState): AutoReviewProjection {
-  const avgDurationMs =
+function view(
+  state: AutoReviewUnitState,
+  live?: AutoReviewLiveStats,
+): AutoReviewProjection {
+  const foldAvg =
     state.verdictSamples > 0
       ? Math.round(state.totalDurationMs / state.verdictSamples)
       : 0;
   return {
     enabled: state.enabled,
-    verdictsUsed: state.verdictsUsed,
-    failuresUsed: state.failuresUsed,
-    allows: state.allows,
-    denies: state.denies,
-    fallbacks: state.fallbacks,
-    neverRejects: state.neverRejects,
-    avgDurationMs,
-    circuit: state.circuit,
-    recentDenies: state.recentDenies,
+    verdictsUsed: live?.verdictsUsed ?? state.verdictsUsed,
+    failuresUsed: live?.failuresUsed ?? state.failuresUsed,
+    allows: live?.allows ?? state.allows,
+    denies: live?.denies ?? state.denies,
+    fallbacks: live?.fallbacks ?? state.fallbacks,
+    neverRejects: live?.neverRejects ?? state.neverRejects,
+    avgDurationMs: live?.avgDurationMs ?? foldAvg,
+    // Circuit breaker is a later Loop item — never invent a trip here.
+    circuit: null,
+    recentDenies: live?.recentDenies ?? state.recentDenies,
     recent: state.recent,
   };
 }
@@ -87,11 +110,10 @@ function applyCommandArgs(
   return { ...state, recentDenies, allows: state.allows + 1 };
 }
 
-export function createAutoReviewProjectionUnit(): ProjectionDefinition<
-  "autoReview",
-  AutoReviewUnitState,
-  AutoReviewProjection
-> {
+export function createAutoReviewProjectionUnit(options?: {
+  /** Overlay durable tool-pre stats onto wire (Host / dsh-compat store). */
+  readonly readLiveStats?: () => AutoReviewLiveStats | undefined;
+}): ProjectionDefinition<"autoReview", AutoReviewUnitState, AutoReviewProjection> {
   return {
     key: "autoReview",
     stateVersion: 1,
@@ -105,7 +127,7 @@ export function createAutoReviewProjectionUnit(): ProjectionDefinition<
       return state;
     },
     wire: {
-      view,
+      view: (state) => view(state, options?.readLiveStats?.()),
       parse(value: unknown): AutoReviewProjection {
         if (!value || typeof value !== "object") {
           throw new Error("autoReview projection must be an object");
@@ -114,6 +136,8 @@ export function createAutoReviewProjectionUnit(): ProjectionDefinition<
         if (typeof v.enabled !== "boolean") {
           throw new Error("autoReview.enabled must be boolean");
         }
+        // Parse validates the wire shape; do not re-read live stats here.
+        const avg = Number(v.avgDurationMs ?? 0);
         return view({
           enabled: v.enabled,
           allows: Number(v.allows ?? 0),
@@ -122,8 +146,8 @@ export function createAutoReviewProjectionUnit(): ProjectionDefinition<
           neverRejects: Number(v.neverRejects ?? 0),
           verdictsUsed: Number(v.verdictsUsed ?? 0),
           failuresUsed: Number(v.failuresUsed ?? 0),
-          totalDurationMs: Number(v.avgDurationMs ?? 0),
-          verdictSamples: 1,
+          totalDurationMs: avg,
+          verdictSamples: avg > 0 ? 1 : 0,
           recentDenies: Array.isArray(v.recentDenies) ? v.recentDenies : [],
           recent: Array.isArray(v.recent) ? v.recent : [],
           circuit: v.circuit ?? null,

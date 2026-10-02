@@ -109,6 +109,10 @@ export function createReadImageTool(
     description:
       "Read a PNG/JPEG/WebP/GIF from a workspace path OR a Host attachment id " +
       "(sha256:… / attachment:sha256:… from image_generate). " +
+      "An attachment id is content-addressed: it IS the durable address and maps " +
+      "deterministically to one stored object under `{XRK_HOME}/attachments/v1/objects/` " +
+      "(first 2 hex chars = directory, full sha256 = filename) — no disk hunt needed, " +
+      "and the id alone is enough to re-inspect or trace any attachment. " +
       "Large images are normalized before the next model request. " +
       "Optional region [x1,y1,x2,y2] crops in original-image pixels before downscaling " +
       "(full-resolution zoom into small text or fine detail).",
@@ -119,7 +123,8 @@ export function createReadImageTool(
           type: "string",
           description:
             "Workspace-relative image path, or attachment id " +
-            "(sha256:… or attachment:sha256:…).",
+            "(sha256:… or attachment:sha256:…) — the id is the durable, " +
+            "content-addressed handle for tracing/re-inspecting that image.",
         },
         region: {
           type: "array",

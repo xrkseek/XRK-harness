@@ -11,7 +11,9 @@ export const SIDEBAR_PREFS_DEFAULT: Record<string, unknown> = {
   autoOpenJobs: true,
   agentOpenTools: false,
   agentTerminalTools: false,
-  bottomPanelAutoTerminal: true,
+  // Prefer empty bottom chrome; auto-terminal made first file-open look like
+  // a blank bottom panel then a terminal (activePane can be bottomSplits).
+  bottomPanelAutoTerminal: false,
   terminalFontFamily: "",
   terminalFontSize: 13,
   interceptOpenPath: true,

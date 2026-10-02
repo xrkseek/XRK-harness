@@ -436,6 +436,12 @@ const ABSENT_CONNECTION_STATE: HostObservable<string> = {
   subscribe: () => () => {},
 }
 
+/** Handshake phase feed when specs stub only `connectionState` (pre-connect). */
+const ABSENT_CONNECTION_PHASE: HostObservable<undefined> = {
+  getSnapshot: () => undefined,
+  subscribe: () => () => {},
+}
+
 /**
  * Fixture-driven `ISessions` double. The list store, the Agent scopes and the
  * provide channel are the production pieces; only the wire is replaced:
@@ -894,6 +900,7 @@ export class TestWorkspaces implements IWorkspaces {
       items: [],
       archivedSessionIds: [],
       pinnedSessionIds: [],
+      pinnedWorkspaceIds: [],
       state: 'idle',
       phase: 'ready',
       error: null,
@@ -1121,6 +1128,26 @@ export class TestWorkspaces implements IWorkspaces {
     return this.mutatePinned(sessionId, false)
   }
 
+  /**
+   * Pin a workspace row.
+   * @param workspaceId - the workspace to pin.
+   * @returns completion of the published change.
+   */
+  pinWorkspace(workspaceId: WorkspaceId): Promise<void> {
+    this.record('pinWorkspace', [workspaceId])
+    return this.mutatePinnedWorkspace(workspaceId, true)
+  }
+
+  /**
+   * Unpin a workspace row.
+   * @param workspaceId - the workspace to unpin.
+   * @returns completion of the published change.
+   */
+  unpinWorkspace(workspaceId: WorkspaceId): Promise<void> {
+    this.record('unpinWorkspace', [workspaceId])
+    return this.mutatePinnedWorkspace(workspaceId, false)
+  }
+
   /* ---------------------------------------------------------- internals */
 
   /** Record one contract call. */
@@ -1147,8 +1174,29 @@ export class TestWorkspaces implements IWorkspaces {
     return this.update(draft => {
       const ids = draft.pinnedSessionIds as SessionId[]
       const at = ids.indexOf(sessionId)
-      if (pinned && at < 0) ids.push(sessionId)
+      if (pinned && at < 0) ids.unshift(sessionId)
       if (!pinned && at >= 0) ids.splice(at, 1)
+    })
+  }
+
+  /** Add or remove one id in the workspace pin roster; pin also leads items. */
+  private mutatePinnedWorkspace(workspaceId: WorkspaceId, pinned: boolean): Promise<void> {
+    const stub = this.stubs.get(pinned ? 'pinWorkspace' : 'unpinWorkspace')
+    if (stub !== undefined) return stub(workspaceId) as Promise<void>
+    return this.update(draft => {
+      const ids = draft.pinnedWorkspaceIds as WorkspaceId[]
+      const at = ids.indexOf(workspaceId)
+      if (pinned) {
+        if (at >= 0) ids.splice(at, 1)
+        ids.unshift(workspaceId)
+        const itemAt = draft.items.findIndex(item => item.workspaceId === workspaceId)
+        if (itemAt > 0) {
+          const [row] = draft.items.splice(itemAt, 1)
+          if (row !== undefined) draft.items.unshift(row)
+        }
+      } else if (at >= 0) {
+        ids.splice(at, 1)
+      }
     })
   }
 }
@@ -1289,6 +1337,7 @@ export class SlotTestRuntime {
       api: { settings: {} },
       isLoopback: false,
       connectionState: ABSENT_CONNECTION_STATE,
+      connectionPhase: ABSENT_CONNECTION_PHASE,
     })
   }
 
@@ -1306,13 +1355,14 @@ export class SlotTestRuntime {
    * @param value - the service face.
    */
   provide(name: string, value: unknown): void {
-    // hostFace() captures `connection.connectionState` once; a spec's own
-    // connection double is often just an api stub, so guarantee the feed.
+    // hostFace() reads connectionState/connectionPhase on every render; specs
+    // often stub only `api`, so guarantee observable feeds (WeakMap-safe objects).
     if (name === 'connection') {
       const connection = (value ?? {}) as Record<string, unknown>
       value = {
         ...connection,
         connectionState: connection.connectionState ?? ABSENT_CONNECTION_STATE,
+        connectionPhase: connection.connectionPhase ?? ABSENT_CONNECTION_PHASE,
       }
     }
     const reflect = this.ctx.reflect as unknown as {

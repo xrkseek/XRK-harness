@@ -111,6 +111,11 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   /** Submenu opens to the end (right in LTR) by default; flip to start when clipped. */
   const [submenuPlacement, setSubmenuPlacement] = useState<'end' | 'start'>('end')
   const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
+  // Call sites almost always pass a fresh `onClose` closure; keep it out of
+  // effect deps so identity churn cannot re-fire setState and tip React #185.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const wasOpenRef = useRef(open)
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
 
   // Portal mode: fixed-position the list from the anchor rect before paint;
@@ -119,7 +124,10 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   // runs before the parent's, so a wrapper the host positions in its own
   // effect measures stale here — the host callback owns the truth instead.
   useLayoutEffect(() => {
-    if (!open || !portal) { setFixedPos(null); return }
+    if (!open || !portal) {
+      setFixedPos((prev) => (prev === null ? prev : null))
+      return
+    }
     const place = () => {
       let r: DOMRect | null
       if (getAnchorRect !== undefined) {
@@ -156,7 +164,13 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
       if (lh > 0) y = Math.min(Math.max(y, MARGIN), vh - lh - MARGIN)
 
-      setFixedPos({ left: x, top: y })
+      setFixedPos((prev) => (
+        prev !== null
+        && prev.left === x
+        && prev.top === y
+          ? prev
+          : { left: x, top: y }
+      ))
     }
     // First run measures the hidden pre-render (same commit as `open`), so
     // end/top alignment and clamping use real dimensions before anything
@@ -171,9 +185,15 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   }, [open, portal, align, side, getAnchorRect])
 
   useEffect(() => {
+    const wasOpen = wasOpenRef.current
+    wasOpenRef.current = open
     if (!open) {
-      setOpenSubmenuId(null)
-      setSubmenuPlacement('end')
+      // Reset only on open→closed. A closed menu still re-renders when the
+      // owner passes a new `onClose` each time; setState there was React #185.
+      if (wasOpen) {
+        setOpenSubmenuId(null)
+        setSubmenuPlacement('end')
+      }
       return
     }
     const onPointerDown = (e: PointerEvent) => {
@@ -181,10 +201,10 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       // The portaled list is outside the anchor subtree; check both.
       if (rootRef.current?.contains(e.target) === true) return
       if (listRef.current?.contains(e.target) === true) return
-      onClose()
+      onCloseRef.current()
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -192,14 +212,14 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onClose])
+  }, [open])
 
   // Keep nested cards inside the viewport: measure after open and flip to the
   // start side when the default end placement would overflow (file-tree menus
   // sit on the right edge — without this the "Open with" card goes off-screen).
   useLayoutEffect(() => {
     if (!open || openSubmenuId === null) {
-      setSubmenuPlacement('end')
+      setSubmenuPlacement((prev) => (prev === 'end' ? prev : 'end'))
       return
     }
     const list = listRef.current
@@ -213,7 +233,8 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
     const subWidth = Math.max(sub.offsetWidth, 163)
     const spaceEnd = window.innerWidth - wrapRect.right - MARGIN
     const spaceStart = wrapRect.left - MARGIN
-    setSubmenuPlacement(spaceEnd < subWidth && spaceStart > spaceEnd ? 'start' : 'end')
+    const next = spaceEnd < subWidth && spaceStart > spaceEnd ? 'start' : 'end'
+    setSubmenuPlacement((prev) => (prev === next ? prev : next))
   }, [open, openSubmenuId, compact])
 
   // A close from selection/Escape/outside click outruns a pending grace close;

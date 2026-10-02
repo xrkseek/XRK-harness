@@ -175,12 +175,32 @@ export {
 export {
   syncAutoReviewSlashCommand,
   recordAutoReviewDeny,
+  recordAutoReviewAllow,
+  recordAutoReviewFallback,
+  readAutoReviewStats,
+  isAutoReviewEnabled,
+  setAutoReviewEnabled,
+  type AutoReviewStatsSnapshot,
+  type AutoReviewOptions,
 } from "./auto-review-http.js";
 export {
+  AUTO_REVIEW_LEGAL_DECISION_SHAPES,
+  AUTO_REVIEW_POLICY,
+  REVIEW_POLICY,
+  buildAutoReviewReviewSnapshot,
+  buildAutoReviewUserText,
+  classificationFromAutoReviewDecision,
+  classificationFromClassifierBody,
   classifyAutoReview,
+  createLlmStreamAutoReviewReviewer,
+  createSessionLlmAutoReviewClassifier,
   describeAutoReviewAccess,
+  parseAutoReviewDecision,
+  parseAutoReviewDecisionRecord,
   probeAutoReviewClassifier,
+  readAutoReviewStreamText,
   resolveAutoReviewClassifier,
+  throwIfReviewerFinishFailed,
   AUTO_REVIEW_CLASSIFIER_URL,
   AUTO_REVIEW_CLASSIFIER_TOKEN,
 } from "./auto-review-classifier.js";
@@ -190,7 +210,33 @@ export type {
   AutoReviewClassifier,
   AutoReviewClassification,
   AutoReviewClassifierOptions,
+  AutoReviewDecision,
+  AutoReviewPendingAction,
+  AutoReviewReviewSnapshot,
+  AutoReviewRisk,
+  AutoReviewSessionReviewer,
+  AutoReviewVerdict,
 } from "./auto-review-classifier.js";
+export {
+  createAutoReviewToolPre,
+  buildAutoReviewToolPayload,
+  sessionPermissionPresetIsAuto,
+  AUTO_REVIEW_SESSION_PRESET,
+  AUTO_REVIEW_RUN_CODE_NAME,
+  AUTO_REVIEW_DENIED_ERROR_NAME,
+  AUTO_REVIEW_DENIED_CODE,
+  type AutoReviewToolPreOptions,
+} from "./auto-review-tool-pre.js";
+export {
+  filterAutoReviewSessionHistory,
+  autoReviewHistoryEntryText,
+  type AutoReviewFilteredHistory,
+  type AutoReviewHistoryEntry,
+  type AutoReviewHistoryToolCall,
+  type AutoReviewHistoryUserMessage,
+  type AutoReviewSourceRole,
+  type FilterAutoReviewSessionHistoryOptions,
+} from "./auto-review-history.js";
 
 // —— mobile-access Host contract ——
 export {

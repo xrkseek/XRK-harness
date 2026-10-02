@@ -507,6 +507,16 @@ export interface ChatNodeOwnerProps {
    * Face seq (`/rollback seq:N`). Distinct from {@link forkAt} (session lineage).
    */
   restoreAt: (seq: number) => void
+  /**
+   * Edit-resubmit a past user message: confirm truncate (fork beforeSeq) and
+   * optionally workspace revert, then prompt the child with `text`.
+   */
+  editAt: (seq: number, text: string) => void
+  /**
+   * Delete/recall from a past user message: confirm truncate before this seq
+   * (fork beforeSeq) and optionally workspace revert.
+   */
+  deleteAt: (seq: number) => void
   /** Session-authorized durable image loader (tool image cards + message galleries). */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Render a historical image group through the attachment slot. */
@@ -793,9 +803,17 @@ export class PendingApproval {
     return this.wait.payload.toolName
   }
 
-  /** The asker's human-readable WHY (headline when present), forwarded from the carrier payload. */
+  /** The asker's English WHY (headline when displayReason absent), forwarded from the carrier payload. */
   get reason(): string | undefined {
     return this.wait.payload.reason
+  }
+
+  /**
+   * Localized UI prompt map from the host (mux `displayReason`). Prefer over
+   * {@link reason} when present; resolve via locale `resolveText`.
+   */
+  get displayReason(): { readonly en: string; readonly [locale: string]: string } | undefined {
+    return this.wait.payload.displayReason
   }
 
   /** UX category when the host stamped one (network · escalation · tool). */
@@ -839,12 +857,15 @@ export class PendingApproval {
  * Full approval-composer props: the framework runtime share (chain currency +
  * session/global standard kit) plus the chain `matched` share — the entry's
  * selector result, already narrowed to the approval carrier — plus the
- * standard locale seat. No injected share: the carrier plus the domain face
- * above carry the whole behavior surface; the paired command line derives
- * from useSession in-component.
+ * standard locale seat and the injected displayReason resolver.
  */
+export interface ApprovalComposerInjected {
+  /** Resolve mux `displayReason` for the active UI locale. */
+  resolveReason(reason: NonNullable<PendingApproval['displayReason']>): string
+}
+
 export type ApprovalComposerProps =
-  PropsRuntime<'conversation.composer'> & { matched: ApprovalWait } & PropsLocale<'conversation'>
+  PropsRuntime<'conversation.composer'> & { matched: ApprovalWait } & PropsLocale<'conversation'> & InjectFace<ApprovalComposerInjected>
 
 /** In-memory reader position resilient to transcript width reflow. */
 export interface ChatScrollPosition {
@@ -895,6 +916,10 @@ export interface ChatViewInjected {
    * (Face slash `/rollback seq:N`). Does not fork the session.
    */
   restoreAt: (seq: number) => void
+  /** Edit-resubmit confirm → fork before `seq` (+ optional rollback) → prompt. */
+  editAt: (seq: number, text: string) => void
+  /** Delete/recall confirm → fork before `seq` (+ optional rollback). */
+  deleteAt: (seq: number) => void
   /**
    * Prose file-mention vocabulary for one closing message, from the optional
    * {@link ChatFileMentions} service (resolved lazily per call, so composing

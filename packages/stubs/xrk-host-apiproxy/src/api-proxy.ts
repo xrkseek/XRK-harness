@@ -662,6 +662,7 @@ interface PendingApproval {
   toolName: string
   callId?: CallId
   reason?: string
+  displayReason?: { readonly en: string; readonly [locale: string]: string }
   resolve(outcome: ApprovalOutcome): void
 }
 
@@ -676,6 +677,7 @@ function requestedFrame(pending: PendingApproval): RpcRequest<MuxFrame> {
       toolName: pending.toolName,
       ...pending.callId === undefined ? {} : { callId: pending.callId },
       ...pending.reason === undefined ? {} : { reason: pending.reason },
+      ...pending.displayReason === undefined ? {} : { displayReason: pending.displayReason },
     },
   }
 }
@@ -2779,6 +2781,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
           pinnedSessionIds: [] as SessionId[],
+          pinnedWorkspaceIds: [] as WorkspaceId[],
         }))
       },
 
@@ -2847,7 +2850,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             brandWorkspaceId(workspaceId),
             beforeWorkspaceId === undefined ? undefined : brandWorkspaceId(beforeWorkspaceId),
           )
-          return ok(request, { workspaceIds: [...workspaceIds] })
+          return ok(request, {
+            workspaceIds: [...workspaceIds],
+            pinnedWorkspaceIds: [] as WorkspaceId[],
+          })
         } catch (error: unknown) {
           if (!(error instanceof WorkspaceOrderInvalidError)) throw error
           return workspaceNotFound(request, error.workspaceId)
@@ -2912,6 +2918,22 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async unpinSession(request) {
         return ok(request, { pinnedSessionIds: [] as SessionId[] })
+      },
+
+      async pinWorkspace(request) {
+        const workspaceIds = ctx.workspaceRegistry.list().map(workspace => workspace.workspaceId as WorkspaceId)
+        return ok(request, {
+          pinnedWorkspaceIds: [request.payload.workspaceId],
+          workspaceIds,
+        })
+      },
+
+      async unpinWorkspace(request) {
+        const workspaceIds = ctx.workspaceRegistry.list().map(workspace => workspace.workspaceId as WorkspaceId)
+        return ok(request, {
+          pinnedWorkspaceIds: [] as WorkspaceId[],
+          workspaceIds,
+        })
       },
     },
 

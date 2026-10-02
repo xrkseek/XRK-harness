@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+
+/** Stable no-op subscribe for optional faces — never allocate `() => {}` per render. */
+const NOOP_SUBSCRIBE = (_onStoreChange: () => void): (() => void) => () => {}
 import type { KeyboardEvent, ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
@@ -13,6 +16,8 @@ import {
   IconThinkOutline16,
   StateDot,
   TerminalBlock,
+  EMPTY_WORKSPACE_CHANGES_TURNS,
+  stableWorkspaceChangesTurns,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
@@ -32,7 +37,6 @@ import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import {
   OVERVIEW_PAINT_TABS,
   readOverviewScroll,
-  readOverviewSessionUi,
   takeOverviewMountPaint,
   writeOverviewSessionUi,
   type OverviewPaintTab,
@@ -47,9 +51,26 @@ import css from './PreviewTabs.module.css'
  */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
-export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
+/** Persist Overview presence rail collapsed chrome across reloads. */
+const PRESENCE_COLLAPSED_KEY = 'xrk.overview.presenceCollapsed'
 
-const EMPTY_CHANGE_TURNS: readonly OverviewChangesTurn[] = []
+function readPresenceCollapsed(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(PRESENCE_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writePresenceCollapsed(collapsed: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(PRESENCE_COLLAPSED_KEY, collapsed ? '1' : '0')
+  } catch {
+    /* private mode / quota — chrome preference is best-effort */
+  }
+}
+
+export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
 
 /** Injected by ui-plan: close the layout details column; open spill paths; Teams actions. */
 export interface PreviewTabsInjected {
@@ -205,18 +226,22 @@ function SectionCard({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const lastSignalVersion = useRef<number | null>(null)
+  // Depend on primitives — StatusPanel rebuilds `{ open, version }` each paint;
+  // object identity would re-enter the effect every time (React #185 risk).
+  const signalOpen = signal?.open
+  const signalVersion = signal?.version
   useEffect(() => {
-    if (!signal) return
+    if (signalVersion === undefined || signalOpen === undefined) return
     // Skip the mount-time signal so per-card defaultOpen wins; only
     // expand/collapse-all (version bumps) override local state.
     if (lastSignalVersion.current === null) {
-      lastSignalVersion.current = signal.version
+      lastSignalVersion.current = signalVersion
       return
     }
-    if (signal.version === lastSignalVersion.current) return
-    lastSignalVersion.current = signal.version
-    setOpen(signal.open)
-  }, [signal])
+    if (signalVersion === lastSignalVersion.current) return
+    lastSignalVersion.current = signalVersion
+    setOpen(signalOpen)
+  }, [signalOpen, signalVersion])
   const bodyId = `preview-section-${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
   return (
     <section className={css.section} aria-label={label}>
@@ -601,7 +626,6 @@ function StatusJobOutput({
 function StatusPanel({
   status,
   t,
-  useProjection,
   plan,
   office,
   openSpillPath,
@@ -615,7 +639,6 @@ function StatusPanel({
 }: {
   status: SessionStatusView
   t: PreviewTabsProps['t']
-  useProjection: PreviewTabsProps['useProjection']
   plan: PreviewTabLoad['plan']
   office: PreviewTabLoad['office']
   openSpillPath?: PreviewTabsInjected['openSpillPath']
@@ -630,56 +653,24 @@ function StatusPanel({
   const runningJobs = status.jobs.filter((j) => j.status === 'running')
   const liveSubs = status.subagents.live.filter((s) => s.activity === 'running')
   const wiredIm = status.channels.im.filter((c) => c.wired !== 'bridge')
-  const liveTimeline = (useProjection as (key: string) => unknown)(
-    'contextTimeline',
-  ) as LiveContextTimeline | null | undefined
-  const current = liveTimeline?.current ?? status.timeline
-  const liveEvents = Array.isArray(liveTimeline?.events) ? liveTimeline.events : []
-  const requestCount = Array.isArray(liveTimeline?.requests)
-    ? liveTimeline.requests.length
-    : status.timeline.requestCount
-  const eventCount = liveTimeline?.events
-    ? liveTimeline.events.length
-    : status.timeline.eventCount
-  const injectSources = status.timeline.injectSources.length > 0
-    ? status.timeline.injectSources
-    : (() => {
-      const seen = new Set<string>()
-      const out: string[] = []
-      for (const ev of liveEvents) {
-        if (ev.kind !== 'inject') continue
-        const label = injectEventLabel(ev)
-        if (seen.has(label)) continue
-        seen.add(label)
-        out.push(label)
-      }
-      return out
-    })()
-  let lastCompactReason = status.timeline.lastCompactReason
-  let lastShadowedTokens = status.timeline.lastShadowedTokens
-  let spillCount = status.timeline.spillCount
-  let pruneCount = status.timeline.pruneCount
-  if (liveEvents.length > 0) {
-    spillCount = 0
-    pruneCount = 0
-    lastCompactReason = undefined
-    lastShadowedTokens = undefined
-    for (const ev of liveEvents) {
-      if (ev.kind === 'compaction') {
-        lastCompactReason = ev.reason
-        if (typeof ev.shadowedTokenCount === 'number') {
-          lastShadowedTokens = ev.shadowedTokenCount
-        }
-      } else if (ev.kind === 'prune') {
-        pruneCount += 1
-        if (ev.spill) spillCount += 1
-      }
-    }
-  }
+  // Status summary reads Face `session.status.timeline` only. Live
+  // `contextTimeline` projection stays on the Context tab — merging it here
+  // re-entered React #185 when the projection face churned under Status.
+  const current = status.timeline
+  const requestCount = status.timeline.requestCount
+  const eventCount = status.timeline.eventCount
+  const injectSources = status.timeline.injectSources
+  const lastCompactReason = status.timeline.lastCompactReason
+  const lastShadowedTokens = status.timeline.lastShadowedTokens
+  const spillCount = status.timeline.spillCount
+  const pruneCount = status.timeline.pruneCount
   // Mixed defaults: most cards start collapsed — toggle shows Expand all first.
   const [allOpen, setAllOpen] = useState(false)
   const [collapseVersion, setCollapseVersion] = useState(0)
-  const collapseSignal = { open: allOpen, version: collapseVersion }
+  const collapseSignal = useMemo(
+    () => ({ open: allOpen, version: collapseVersion }),
+    [allOpen, collapseVersion],
+  )
   const [teamActionError, setTeamActionError] = useState<Record<string, string>>({})
   const runTeamAction = async (taskId: string, action: () => void | Promise<void>): Promise<void> => {
     setTeamActionError((prev) => {
@@ -1196,14 +1187,6 @@ function StatusPanel({
           )
           : null}
         <div className={css.row}>
-          <span className={css.label}>{t('preview.status.compactionGuardian')}</span>
-          <span>
-            {status.compaction.guardian === false
-              ? t('preview.status.flagOff')
-              : t('preview.status.flagOn')}
-          </span>
-        </div>
-        <div className={css.row}>
           <span className={css.label}>{t('preview.status.compactionPhase')}</span>
           <span data-live={status.compaction.phase === 'busy' || undefined}>
             {status.compaction.phase}
@@ -1463,9 +1446,15 @@ function StatusPanel({
           <span className={css.label}>{t('preview.status.permission')}</span>
           <span
             className={css.valueChip}
-            data-tone={/danger|full-access/i.test(status.permission) ? 'warn' : undefined}
+            data-tone={
+              status.permission === 'auto' || /danger|full-access/i.test(status.permission)
+                ? 'warn'
+                : undefined
+            }
           >
-            {status.permission}
+            {status.permission === 'auto'
+              ? t('preview.status.permission.auto')
+              : status.permission}
           </span>
         </div>
         {plan !== null
@@ -1663,18 +1652,15 @@ export function PreviewTabs({
   const parentId = useSessions((s) => s.byId[sessionId]?.parentId)
   const mountPaint = takeOverviewMountPaint(sessionId, parentId)
   const [tab, setTab] = useState<PreviewTabId>(() => mountPaint?.tab ?? 'status')
+  // Always cold-load Face payloads — never restore cached session.status (large
+  // Sessions re-entering Overview with a soft-restored blob tripped React #185).
   const [loaded, setLoaded] = useState<PreviewTabLoad>(() => (
-    mountPaint?.loaded ?? { plan: null, office: null, status: null }
+    { plan: null, office: null, status: null }
   ))
-  const [ready, setReady] = useState(() => mountPaint?.loaded?.status != null)
-  // Soft hop borrows another Session's paint until this Session's load lands.
-  const [paintSessionId, setPaintSessionId] = useState<string | null>(() => {
-    if (mountPaint?.loaded?.status == null) return null
-    const own = readOverviewSessionUi(sessionId)
-    return own?.loaded?.status != null ? sessionId : '__soft__'
-  })
+  const [ready, setReady] = useState(false)
   const [statusTick, setStatusTick] = useState(0)
   const [boundSessionId, setBoundSessionId] = useState(sessionId)
+  const [presenceCollapsed, setPresenceCollapsed] = useState(readPresenceCollapsed)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
   const scrollRestored = useRef(false)
@@ -1685,14 +1671,9 @@ export function PreviewTabs({
   if (boundSessionId !== sessionId) {
     setBoundSessionId(sessionId)
     setTab(mountPaint?.tab ?? 'status')
-    setLoaded(mountPaint?.loaded ?? { plan: null, office: null, status: null })
-    setReady(mountPaint?.loaded?.status != null)
-    const own = readOverviewSessionUi(sessionId)
-    setPaintSessionId(
-      mountPaint?.loaded?.status == null
-        ? null
-        : own?.loaded?.status != null ? sessionId : '__soft__',
-    )
+    setLoaded({ plan: null, office: null, status: null })
+    setReady(false)
+    setStatusTick(0)
     scrollRestored.current = false
   }
 
@@ -1719,9 +1700,8 @@ export function PreviewTabs({
   ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
-  const softPending = paintSessionId !== null && paintSessionId !== sessionId
-  // Soft hop or cold load — same quiet chrome (top sweep + muted body).
-  const paintPending = softPending || !ready
+  // Cold load — quiet chrome until Face session.status lands.
+  const paintPending = !ready
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
   // state machines (fleet · graph · live · jobs · delivery · teams · compaction)
   // stay in lockstep with Host frames. Fingerprint activity and job status, not
@@ -1774,7 +1754,7 @@ export function PreviewTabs({
     )) ?? false)
 
   const reviewFocus = useSyncExternalStore(
-    (onStoreChange) => changesReview?.subscribe(onStoreChange) ?? (() => {}),
+    changesReview?.subscribe ?? NOOP_SUBSCRIBE,
     () => {
       const next = changesReview?.getSnapshot() ?? null
       return next !== null && next.sessionId === sessionId ? next : null
@@ -1783,7 +1763,7 @@ export function PreviewTabs({
   )
 
   const presenceCue = useSyncExternalStore(
-    (onStoreChange) => presenceCues?.subscribe(onStoreChange) ?? (() => {}),
+    presenceCues?.subscribe ?? NOOP_SUBSCRIBE,
     () => presenceCues?.getSnapshot() ?? EMPTY_PRESENCE_SESSION_CUES,
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
@@ -1819,15 +1799,14 @@ export function PreviewTabs({
     return () => { window.clearInterval(timer) }
   }, [fleetBusy, sessionId])
 
-  // Soft hop keeps prior paint; hard remount starts empty (no blanking flicker).
+  // Cold-load Face plan / office / status for this Session.
   useEffect(() => {
     let alive = true
     void loadPreviewTabs(sessionId).then((next) => {
       if (!alive) return
       setLoaded(next)
       setReady(true)
-      setPaintSessionId(sessionId)
-      writeOverviewSessionUi(sessionId, { parentId, loaded: next })
+      writeOverviewSessionUi(sessionId, { parentId })
     })
     return () => { alive = false }
   }, [sessionId, statusTick, parentId])
@@ -1918,13 +1897,20 @@ export function PreviewTabs({
   const refreshStatus = () => { setStatusTick((n) => n + 1) }
 
   const emptyCopy = ready ? t('preview.unavailable') : t('preview.loading')
-  const projectedTurns = Array.isArray(workspaceChanges) ? workspaceChanges : []
+  const projectedTurns = Array.isArray(workspaceChanges)
+    ? workspaceChanges
+    : EMPTY_WORKSPACE_CHANGES_TURNS
   const fallbackTurns = useSyncExternalStore(
-    (onStoreChange) => changeTurnsFallback?.subscribe(onStoreChange) ?? (() => {}),
-    () => changeTurnsFallback?.getSnapshot() ?? EMPTY_CHANGE_TURNS,
-    () => EMPTY_CHANGE_TURNS,
+    changeTurnsFallback?.subscribe ?? NOOP_SUBSCRIBE,
+    () => changeTurnsFallback?.getSnapshot() ?? EMPTY_WORKSPACE_CHANGES_TURNS,
+    () => EMPTY_WORKSPACE_CHANGES_TURNS,
   )
-  const changeTurns = projectedTurns.length > 0 ? projectedTurns : fallbackTurns
+  // Face projection and timeline harvest both pass through one fingerprint cache
+  // so Overview Changes never sees a fresh array for unchanged content.
+  const changeTurns = stableWorkspaceChangesTurns(
+    sessionId,
+    projectedTurns.length > 0 ? projectedTurns : fallbackTurns,
+  )
 
   return (
     <aside
@@ -2015,11 +2001,31 @@ export function PreviewTabs({
           <div
             className={css.presenceRail}
             data-overview-presence-rail=""
+            data-collapsed={presenceCollapsed ? '' : undefined}
             aria-label={t('preview.status.presence')}
           >
             <div className={css.presenceRailHead}>
               <span className={css.presenceRailTitle}>{t('preview.status.presence')}</span>
-              <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
+              {!presenceCollapsed
+                ? <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
+                : null}
+              <button
+                type="button"
+                className={css.presenceCollapse}
+                aria-expanded={!presenceCollapsed}
+                aria-label={t(presenceCollapsed
+                  ? 'preview.status.presenceExpand'
+                  : 'preview.status.presenceCollapse')}
+                onClick={() => {
+                  setPresenceCollapsed((prev) => {
+                    const next = !prev
+                    writePresenceCollapsed(next)
+                    return next
+                  })
+                }}
+              >
+                <IconChevronDownOutline14 size={14} className={css.presenceCollapseIcon} />
+              </button>
             </div>
             <PresenceBall
               {...(status.presence ? { presence: status.presence } : {})}
@@ -2035,6 +2041,7 @@ export function PreviewTabs({
                 presenceCue.activityAt,
                 status.presence?.updatedAt ?? 0,
               )}
+              compact={presenceCollapsed}
               t={t as (key: string, params?: Record<string, string>) => string}
               loadingLabel={t('preview.status.presenceLoading')}
               errorLabel={t('preview.status.presenceError')}
@@ -2057,7 +2064,6 @@ export function PreviewTabs({
               <StatusPanel
                 status={status}
                 t={t}
-                useProjection={useProjection}
                 plan={plan}
                 office={office}
                 {...(openSpillPath ? { openSpillPath } : {})}

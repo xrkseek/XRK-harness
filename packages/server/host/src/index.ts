@@ -15,6 +15,7 @@ import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { loadPolicyRulesetFile } from "@xrkseek/policy";
 import { flattenText, isHumanUserMessageSource } from "@xrkseek/protocol";
 import {
+  effectiveApprovalPolicy,
   effectiveSandboxMode,
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
@@ -64,6 +65,9 @@ import {
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
   loadSidebarPrefs,
+  createAutoReviewToolPre,
+  isAutoReviewEnabled,
+  setAutoReviewEnabled,
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
@@ -91,6 +95,8 @@ import {
   reconcileManagedProcessPlugins,
   snapshotSessionWorkspace,
   SNAPSHOT_DRAIN_BUDGET_MS,
+  migrateAutoSessionsToFullAccess,
+  approvePendingAutoReview,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -187,11 +193,48 @@ export {
  * AbortError with a readable reason. Used by the session drain snapshot race
  * so a cancellation that interrupts a stuck git/fs call surfaces as a normal
  * AbortError instead of a bare string or DOMException mismatch.
+ *
+ * Must not use `String(reason)` — user stop stores `{ kind: "user" }` on
+ * `signal.reason`, and String(that) is the useless `[object Object]`.
  */
 function hostAbortError(reason?: unknown): Error {
-  const err = new Error(reason === undefined ? "aborted" : String(reason));
+  const err = new Error(formatHostAbortReason(reason));
   err.name = "AbortError";
   return err;
+}
+
+function formatHostAbortReason(reason: unknown): string {
+  if (reason === undefined || reason === null) return "aborted";
+  if (reason instanceof Error) {
+    const message = reason.message.trim();
+    return message.length > 0 ? message : reason.name || "aborted";
+  }
+  if (reason !== null && typeof reason === "object" && "kind" in reason) {
+    const kind = (reason as { kind?: unknown }).kind;
+    if (kind === "user") return "aborted by user";
+    if (kind === "parent") return "aborted by parent";
+    if (kind === "disposed") return "aborted: session disposed";
+    if (kind === "legacy") return "aborted";
+    if (kind === "hook") {
+      const hookReason = (reason as { reason?: unknown }).reason;
+      if (typeof hookReason === "string") {
+        return `aborted by hook: ${hookReason}`;
+      }
+    }
+  }
+  if (typeof reason === "string") {
+    const trimmed = reason.trim();
+    return trimmed.length > 0 ? trimmed : "aborted";
+  }
+  try {
+    const json = JSON.stringify(reason);
+    if (typeof json === "string" && json.length > 0 && json !== "{}") {
+      return json;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "aborted";
 }
 
 function logMcpReconcile(
@@ -409,8 +452,6 @@ export type AgentFactory = (input: {
   };
   /** Face `agent-loop.toolResultMaxInlineBytes` — spill ceiling (`0` disables). */
   toolResultMaxInlineBytes?: number;
-  /** Face `agent-loop.guardianFragments` — thin Guardian turn-start nudge. */
-  guardianFragments?: boolean;
   /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
   /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
@@ -478,6 +519,12 @@ export type AgentFactory = (input: {
    * section so reasoning follows the UI language.
    */
   locale?: "zh" | "en";
+  /**
+   * Auto-review tool pre (Host wires classifier tiers + enable gate).
+   * Session Auto = no sandbox + per-call review — not a context-fragment.
+   * Ask → Face approval via `setApprovalHandler`.
+   */
+  autoReviewPre?: import("@xrkseek/core-tools").PreHandler;
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -1065,7 +1112,6 @@ export function createHostManager(): HostManager {
               | "off";
           };
           toolResultMaxInlineBytes?: number;
-          guardianFragments?: boolean;
           maxSubagentDepth?: number;
           maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
@@ -1228,9 +1274,6 @@ export function createHostManager(): HostManager {
                       pluginSettings.toolResultMaxInlineBytes,
                   }
                 : {}),
-              ...(pluginSettings.guardianFragments !== undefined
-                ? { guardianFragments: pluginSettings.guardianFragments }
-                : {}),
               ...(pluginSettings.locale
                 ? { locale: pluginSettings.locale }
                 : {}),
@@ -1282,6 +1325,56 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
                 : { curatedMemory: getCuratedMemProvider() }),
+              autoReviewPre: createAutoReviewToolPre({
+                xrkHome: resolveXrkHome(),
+                // Master switch (Settings) AND session preset === auto (DSH).
+                isEnabled: () => {
+                  const ar = faceRuntime.settingsNamespaces.view("auto-review")
+                    .value as Record<string, unknown>;
+                  return (
+                    ar.enabled === true ||
+                    isAutoReviewEnabled({ xrkHome: resolveXrkHome() })
+                  );
+                },
+                // Session Auto gate: resolveSessionEvents → folded permission/preset.
+                product: () => {
+                  const ns = faceRuntime.settingsNamespaces.view("auto-review")
+                    .value as Record<string, unknown>;
+                  const classifierUrl =
+                    typeof ns.classifierUrl === "string"
+                      ? ns.classifierUrl.trim()
+                      : "";
+                  const classifierToken =
+                    faceRuntime.credentials
+                      .peek("auto-review.classifier")
+                      ?.trim() ||
+                    process.env.XRK_AUTO_REVIEW_CLASSIFIER_TOKEN?.trim() ||
+                    "";
+                  return {
+                    ...(classifierUrl ? { classifierUrl } : {}),
+                    ...(classifierToken ? { classifierToken } : {}),
+                  };
+                },
+                locale: () => pluginSettings.locale,
+                // Current-session provider/model via Face routing adapter.
+                resolveLlm: () => llmResolverBox.resolve?.(sessionId),
+                resolveCwd: () =>
+                  sessionCwdBox.get?.(sessionId) ??
+                  sessionRoot ??
+                  config.runtime.workspaceRoot,
+                resolveSessionEvents: () =>
+                  readSessionEvents(store, sessionId),
+                // DSH: classifier deny + approval never → final AUTO_REVIEW_DENIED;
+                // under ask (Auto default) → Face defer-ask.
+                resolveDenyAction: () =>
+                  effectiveApprovalPolicy(readSessionEvents(store, sessionId)) ===
+                  "never"
+                    ? "deny"
+                    : "ask",
+                ...(faceRuntime.permissionAuto.lifecycle()
+                  ? { lifecycle: faceRuntime.permissionAuto.lifecycle()! }
+                  : {}),
+              }),
             });
             if (faceBox.approvals) {
               agent.setApprovalHandler(faceBox.approvals.handlerFor(sessionId));
@@ -1384,13 +1477,25 @@ export function createHostManager(): HostManager {
               // Start immediately and pass as beforeTools so it overlaps the
               // LLM; do not await serially before continueTurn (that pinned
               // Queue/Steer chrome on large monorepos).
+              const pendingBefore = agent.pendingAdmits().length;
               const snapP = snapshot();
-              const result = await agent.continueTurn({
-                signal,
-                beforeTools: () => snapP,
-              });
-              await snapP;
-              lastDrainResult.set(sessionId, result);
+              try {
+                const result = await agent.continueTurn({
+                  signal,
+                  beforeTools: () => snapP,
+                });
+                await snapP;
+                lastDrainResult.set(sessionId, result);
+              } catch {
+                await snapP.catch(() => undefined);
+                if (signal.aborted) {
+                  throw hostAbortError(signal.reason);
+                }
+                // One failed turn must not strand later inbox admits (mute-after
+                // truncation). If the inbox did not shrink, stop to avoid a
+                // tight fail loop; abort still exits above.
+                if (agent.pendingAdmits().length >= pendingBefore) break;
+              }
             }
           } finally {
             publishDrainIdle(hub, sessionId, (sid, running) => {
@@ -1748,6 +1853,25 @@ export function createHostManager(): HostManager {
         },
         ...(sharedShell ? { shell: sharedShell } : {}),
       });
+      // Guardian / auto-review Host bridge: publish Auto in the permissions
+      // catalog for the Host lifetime (DSH registerAuto). Dispose migrates live
+      // Auto sessions to Full access and aborts in-flight reviews.
+      const unregisterPermissionAuto = faceRuntime.permissionAuto.registerAuto(
+        () => {
+          /* admit: integration is accepting selections while Host is up */
+        },
+        {
+          migrateAway: () => {
+            migrateAutoSessionsToFullAccess(
+              store,
+              faceRuntime.permissionAuto,
+              sharedPty
+                ? { hasPtyActivity: () => sharedPty.service.hasActivity() }
+                : undefined,
+            );
+          },
+        },
+      );
       // Authorize DSH client settings namespaces so panels do not fail
       // "Host 未授权设置 RPC" when Cordis Host is absent (empty docs).
       for (const ns of DSH_SETTINGS_NAMESPACES) {
@@ -1872,10 +1996,6 @@ export function createHostManager(): HostManager {
           compactionStrategyRaw === "summary-only" ||
           compactionStrategyRaw === "off"
             ? compactionStrategyRaw
-            : undefined;
-        const guardianFragments =
-          typeof loop.guardianFragments === "boolean"
-            ? loop.guardianFragments
             : undefined;
         const toolResultMaxInlineBytes =
           typeof loop.toolResultMaxInlineBytes === "number" &&
@@ -2281,7 +2401,6 @@ export function createHostManager(): HostManager {
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }
             : {}),
-          ...(guardianFragments !== undefined ? { guardianFragments } : {}),
           ...(maxSubagentDepth !== undefined ? { maxSubagentDepth } : {}),
           ...(maxActiveSubagents !== undefined ? { maxActiveSubagents } : {}),
           bashLimits: {
@@ -2310,6 +2429,7 @@ export function createHostManager(): HostManager {
           ...(videoAnalyzeEnv ? { videoAnalyzeEnv } : {}),
           ...(!curatedMemoryEnabled ? { curatedMemory: false as const } : {}),
           ...(localePref ? { locale: localePref } : {}),
+          // Auto-review pre is built per session in resolveAgent (needs resolveLlm).
         };
       };
       {
@@ -2327,8 +2447,17 @@ export function createHostManager(): HostManager {
           void invalidateAgents();
           return;
         }
-        if (event === "settings/document-updated") {
+          if (event === "settings/document-updated") {
           const ns = frame.args[0];
+          if (ns === "auto-review") {
+            const ar = faceRuntime.settingsNamespaces.view("auto-review")
+              .value as Record<string, unknown>;
+            if (typeof ar.enabled === "boolean") {
+              setAutoReviewEnabled({ xrkHome: resolveXrkHome() }, ar.enabled);
+            }
+            // Classifier URL is live; no agent invalidate required.
+            return;
+          }
           if (ns === "cron") {
             const cronNs = faceRuntime.settingsNamespaces.view("cron")
               .value as Record<string, unknown>;
@@ -2419,6 +2548,29 @@ export function createHostManager(): HostManager {
           return {
             ...(classifierUrl ? { classifierUrl } : {}),
             ...(classifierToken ? { classifierToken } : {}),
+          };
+        },
+        approveAutoReviewPending: (args: {
+          readonly index: number;
+          readonly sessionId?: string;
+        }) => {
+          if (!args.sessionId) {
+            return {
+              allowed: false,
+              note: "sessionId required to locate a pending Face approval",
+            };
+          }
+          const outcome = approvePendingAutoReview(
+            faceRuntime.approvals,
+            args.sessionId,
+            args.index,
+          );
+          return {
+            allowed: outcome.kind === "allowed",
+            note: outcome.note,
+            ...(outcome.kind === "allowed"
+              ? { toolName: outcome.toolName }
+              : {}),
           };
         },
         resolveMemoryEmbedProduct: () => {
@@ -2629,6 +2781,7 @@ export function createHostManager(): HostManager {
               agentOpenRegistry.dispose();
               dshUpgrades.close();
               face.close();
+              unregisterPermissionAuto();
               shutdownDshCompatServices();
             },
           };

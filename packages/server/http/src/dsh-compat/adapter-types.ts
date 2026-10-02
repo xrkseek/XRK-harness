@@ -79,6 +79,18 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
       readonly classifierToken?: string;
     };
     /**
+     * Allow the Nth pending Auto-review Face approval (0-based).
+     * Wired by Host from {@link FaceApprovalBroker}.
+     */
+    readonly approveAutoReviewPending?: (args: {
+      readonly index: number;
+      readonly sessionId?: string;
+    }) => {
+      readonly allowed: boolean;
+      readonly note: string;
+      readonly toolName?: string;
+    };
+    /**
      * Face `memory-embed` product + Credentials token for the vector sidecar.
      * Called per noema embedding.search/status so Settings saves apply live.
      */

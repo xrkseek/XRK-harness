@@ -13,6 +13,12 @@ export interface RunToolInput {
   readonly maxRetries?: number;
   /** When set, settle via step snapshot (stale/unknown) instead of live get(). */
   readonly materialization?: ToolMaterialization;
+  /**
+   * Nested Code Mode / PTC dispatch: outer `run_code` call id (DSH
+   * `exec.parent`). Auto-review stamps `ptc-inner` and skips only the outer
+   * transport.
+   */
+  readonly parentCallId?: string;
 }
 
 function isRunToolInput(
@@ -68,6 +74,9 @@ export async function runToolDetailed(
   return runToolPipeline(tool, input.call, input.signal, input.pipeline, {
     ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
     ...(input.maxRetries !== undefined ? { maxRetries: input.maxRetries } : {}),
+    ...(input.parentCallId !== undefined
+      ? { parentCallId: input.parentCallId }
+      : {}),
   });
 }
 

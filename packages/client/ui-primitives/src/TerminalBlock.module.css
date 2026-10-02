@@ -51,6 +51,9 @@
      IN/OUT card's sections) instead of pushing the output off screen. */
   max-height: 150px;
   overflow-y: auto;
+  /* At the cap the drag has to stop here; uncontained it hands off to the
+     transcript sitting behind the card. */
+  overscroll-behavior: contain;
 }
 
 /* Banner scrollbar floats off the card edge like the output's. */
@@ -64,7 +67,7 @@
   margin: 6px;
 }
 
-/* Full-width l2 hairline between the command banner and the body — the same
+/* Full-width l2 hairline between the command banner and the body 閳?the same
    divider the IN/OUT card draws between its sections. A running card is
    banner-only, so it draws none. */
 .block:not([data-running]) .header {
@@ -165,6 +168,10 @@
   font: var(--dsl-terminal-font);
   overflow-x: auto;
   overflow-y: auto;
+  /* The output is the terminal only scroller (vertical cap + horizontal pre),
+     so both axes are contained: an edge drag stops here instead of chaining
+     into the transcript. */
+  overscroll-behavior: contain;
 }
 
 /* Both output scrollbars (vertical cap, horizontal pre overflow) float 2px

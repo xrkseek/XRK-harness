@@ -1,4 +1,4 @@
-/* Tool summary row (figma 122:9479): 24px single line —
+/* Tool summary row (figma 122:9479): 24px single line 閳?
    [16 leading] gap6 [title 14/24] gap8 [2x2 dot] gap8 [summary FILL truncate]. */
 
 .root {
@@ -11,8 +11,8 @@
   overflow: hidden;
 }
 
-/* Running sweep (deepsuite ShimmerText pattern): a fixed-width glare band —
-   theme background at 60% — glides over the row content from off-left to
+/* Running sweep (deepsuite ShimmerText pattern): a fixed-width glare band 閳?
+   theme background at 60% 閳?glides over the row content from off-left to
    off-right, washing glyphs and icon toward the background as it passes.
    ease-out with a 10% end hold gives each pass a beat before the next. */
 .root[data-state='running'] .row::after {
@@ -139,7 +139,7 @@
 /* Hover-revealed jump to the trajectory record: a small pill in real flow
    under the expanded body's bottom-left corner (it reserves its line, so
    revealing never shifts layout); revealed by hovering anywhere on the tool
-   call — title row included — or by keyboard focus. */
+   call 閳?title row included 閳?or by keyboard focus. */
 .inspectButton {
   display: inline-flex;
   align-self: flex-start;
@@ -177,11 +177,15 @@
 .bodyScroll {
   max-height: 260px;
   overflow-y: auto;
+  /* Tool output scrolls inside its own surface so the bar never crosses the
+     rounded card; contain stops an edge overscroll from dragging the log
+     behind it. */
+  overscroll-behavior: contain;
 }
 
 /* Expanded input/output card (figma 1249:35657): the code-block surface and
    radius from the TerminalBlock/CodeBlock family. The card itself is a plain
-   column — the padding and the IN/OUT gutter-label grid live on each section
+   column 閳?the padding and the IN/OUT gutter-label grid live on each section
    so the divider spans the full card width and each section scrolls alone. */
 .ioCard {
   display: flex;
@@ -203,6 +207,9 @@
   padding: 12px 16px;
   max-height: 150px;
   overflow-y: auto;
+  /* IN/OUT sections cap and scroll independently; contain each so a section
+     edge drag cannot chain into the surrounding tool card or the log. */
+  overscroll-behavior: contain;
 }
 
 /* Card-internal scrollbar: a 2px transparent border clips the thumb inward so
@@ -257,7 +264,7 @@
    line-numbered window through ReadBlock, a search card's grouped matches or
    path list through SearchBlock, and a web card's citation/source list through
    WebBlock. All are drawn by the shared primitive, so only the row's
-   indentation is this file's concern — the margin also replaces each
+   indentation is this file's concern 閳?the margin also replaces each
    primitive's own standalone vertical spacing with the flow's row rhythm. */
 .codeBody,
 .terminalBody,
@@ -269,8 +276,8 @@
   margin: 4px 0 4px 4px;
 }
 
-/* The recovery footer for a capped search: the result text (its `Full … stored
-   at …` locator) below the card in the muted tone, since the card holds only the
+/* The recovery footer for a capped search: the result text (its `Full 閳?stored
+   at 閳ヮ泦 locator) below the card in the muted tone, since the card holds only the
    retained rows. Same column indent as the card body. */
 .searchRecovery {
   margin: 4px 0 4px 4px;

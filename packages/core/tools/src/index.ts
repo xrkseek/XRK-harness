@@ -116,6 +116,7 @@ export {
 export {
   isTransientError,
   transientError,
+  type ApprovalDisplayReason,
   type ApprovalHandler,
   type ExecuteAroundHandler,
   type FinalizeHandler,

@@ -493,6 +493,84 @@ export async function workspaceUnpinSessionFace(
   return { ok: true, value: { pinnedSessionIds } };
 }
 
+export async function workspacePinWorkspaceFace(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const workspaceId =
+    typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
+  if (!workspaceId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "workspaceId required" },
+    };
+  }
+  const pinnedWorkspaceIds = runtime.workspaces.pinWorkspace(workspaceId);
+  if (!pinnedWorkspaceIds) {
+    return {
+      ok: false,
+      error: {
+        code: "workspace-not-found",
+        message: `unknown workspaceId: ${workspaceId}`,
+      },
+    };
+  }
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+  const workspaceIds = runtime.workspaces.displayOrder();
+  runtime.bus.publishHost({
+    type: "host/pinned-workspaces-changed",
+    pinnedWorkspaceIds,
+  });
+  runtime.bus.publishHost({
+    type: "host/workspace-order-changed",
+    workspaceIds,
+  });
+  return { ok: true, value: { pinnedWorkspaceIds, workspaceIds } };
+}
+
+export async function workspaceUnpinWorkspaceFace(
+  runtime: FaceRuntime,
+  payload: unknown,
+): Promise<FaceRpcResult<unknown>> {
+  const p =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const workspaceId =
+    typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
+  if (!workspaceId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "workspaceId required" },
+    };
+  }
+  if (!runtime.workspaces.get(workspaceId)) {
+    return {
+      ok: false,
+      error: {
+        code: "workspace-not-found",
+        message: `unknown workspaceId: ${workspaceId}`,
+      },
+    };
+  }
+  const pinnedWorkspaceIds = runtime.workspaces.unpinWorkspace(workspaceId);
+  await persistWorkspaceDoc(runtime, runtime.workspaces);
+  const workspaceIds = runtime.workspaces.displayOrder();
+  runtime.bus.publishHost({
+    type: "host/pinned-workspaces-changed",
+    pinnedWorkspaceIds,
+  });
+  runtime.bus.publishHost({
+    type: "host/workspace-order-changed",
+    workspaceIds,
+  });
+  return { ok: true, value: { pinnedWorkspaceIds, workspaceIds } };
+}
+
 export async function workspaceDeleteFace(
   runtime: FaceRuntime,
   payload: unknown,
@@ -551,23 +629,24 @@ export async function workspaceInsertBeforeFace(
       : {};
   const workspaceId =
     typeof p.workspaceId === "string" ? p.workspaceId.trim() : "";
-  const beforeId =
+  const beforeRaw =
     typeof p.beforeId === "string"
       ? p.beforeId.trim()
       : typeof p.beforeWorkspaceId === "string"
         ? p.beforeWorkspaceId.trim()
         : "";
-  if (!workspaceId || !beforeId) {
+  const beforeId = beforeRaw.length > 0 ? beforeRaw : undefined;
+  if (!workspaceId) {
     return {
       ok: false,
       error: {
         code: "invalid-payload",
-        message: "workspaceId and beforeId required",
+        message: "workspaceId required",
       },
     };
   }
-  const items = runtime.workspaces.insertBefore(workspaceId, beforeId);
-  if (!items) {
+  const moved = runtime.workspaces.insertBefore(workspaceId, beforeId);
+  if (!moved) {
     return {
       ok: false,
       error: {
@@ -577,12 +656,22 @@ export async function workspaceInsertBeforeFace(
     };
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
-  const listed = runtime.workspaces.list(runtime.store.list());
+  const workspaceIds = moved.items.map((w) => w.workspaceId);
   runtime.bus.publishHost({
     type: "host/workspace-order-changed",
-    workspaceIds: listed.items.map((w) => w.workspaceId),
+    workspaceIds,
   });
-  return { ok: true, value: listed };
+  runtime.bus.publishHost({
+    type: "host/pinned-workspaces-changed",
+    pinnedWorkspaceIds: moved.pinnedWorkspaceIds,
+  });
+  return {
+    ok: true,
+    value: {
+      workspaceIds,
+      pinnedWorkspaceIds: moved.pinnedWorkspaceIds,
+    },
+  };
 }
 
 export async function workspaceInsertSessionBeforeFace(

@@ -1,5 +1,5 @@
 /* Official popupSelect shell card: menu-surface tokens (same family as
- * ui-primitives Menu.module.css — figma MenuDropdown r12 / hairline /
+ * ui-primitives Menu.module.css 閳?figma MenuDropdown r12 / hairline /
  * shadow-lv3), anchored by the conversation.input.overlay slot. */
 
 .card {
@@ -8,7 +8,7 @@
   position: absolute;
   bottom: calc(100% + 4px);
   left: 0;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -28,7 +28,6 @@
   border-radius: 12px;
   background: var(--dsw-specific-menu);
   box-shadow: var(--dsw-shadow-lv3);
-  outline: none;
 }
 
 .viewport {
@@ -36,6 +35,9 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  /* The popup scrolls its rows in .viewport under a capped card; an edge
+     overscroll must stay off the page behind the popup. */
+  overscroll-behavior: contain;
 }
 
 .row {
@@ -54,14 +56,34 @@
 }
 
 .label {
-  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.labelText {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.badge {
+  flex: none;
+  align-self: flex-start;
+  margin-top: -1px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 8px;
+  line-height: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
 .detail {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
@@ -90,6 +112,14 @@
   font-size: 13px;
   color: var(--dsw-alias-label-primary);
   outline: none;
+}
+
+/* The card is a popup surface, not a control: it takes focus when the search
+   field inside it does, and a ring on the card would draw a box around the
+   whole menu. The field is the thing the keyboard is actually driving. */
+.search:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, transparent);
 }
 
 .error {

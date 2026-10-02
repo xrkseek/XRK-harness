@@ -5,11 +5,20 @@
 
 .panel {
   position: fixed;
-  z-index: 1100;
+  z-index: var(--ds-z-surface);
   box-sizing: border-box;
   width: max-content;
-  min-width: min(300px, calc(100vw - 24px));
-  max-width: min(440px, calc(100vw - 24px));
+  /* Placement is computed from the anchor rect in JS, so this sheet cannot
+     know which edge it landed near; reserving the pair keeps a landscape
+     notch from cropping the panel it opened from. */
+  min-width: min(300px, calc(100vw - 24px - var(--ds-safe-h)));
+  max-width: min(440px, calc(100vw - 24px - var(--ds-safe-h)));
+  /* vh first as the fallback: a browser without dvh drops the second line
+     entirely, which would leave the panel unbounded next to a bottom sheet. */
+  max-height: calc(100vh - var(--ds-safe-v));
+  max-height: calc(100dvh - var(--ds-safe-v));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
   border: 1px solid var(--dsw-alias-border-inverted);
   border-radius: 12px;

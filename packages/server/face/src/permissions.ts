@@ -12,19 +12,50 @@ import {
   type SessionEvent,
 } from "@xrkseek/protocol";
 import {
+  AUTO_PERMISSION_PRESET,
   FACE_PERMISSION_PRESETS,
   isFacePermissionPreset,
   type FacePermissionPreset,
 } from "./face-schema.js";
+import type { FacePermissionAutoGate } from "./permission-auto.js";
 import type { FaceRuntime } from "./context.js";
 
 export const CUSTOM_PERMISSION_PRESET = "custom" as const;
+
+/** @deprecated Prefer {@link AUTO_PERMISSION_PRESET}; DSH alias. */
+export const AUTO_PRESET = AUTO_PERMISSION_PRESET;
 
 export interface PermissionPresetSpec {
   readonly sandbox: SandboxMode;
   readonly approval: ApprovalPolicy;
   readonly name: string;
   readonly description: string;
+}
+
+/**
+ * Fixed execution bundle for Auto (DSH `AUTO_PRESET_SPEC`): full sandbox with
+ * `ask` so reviewer denials still surface to the user.
+ */
+export const AUTO_PRESET_SPEC: PermissionPresetSpec = {
+  sandbox: "danger-full-access",
+  approval: "ask",
+  // DSH product name; Codex status/permission chrome says "Approve for me".
+  name: "Auto review",
+  description:
+    "Full sandbox access with per-call Auto Review; denials still ask the user.",
+};
+
+/**
+ * User-facing permission line for `/status` and Status chrome (Codex
+ * `Workspace (Approve for me)` class — Auto is a whole preset here).
+ * Machine id stays `auto` on the snapshot; only the display string is remapped.
+ */
+export function formatPermissionStatusLabel(permission: string): string {
+  if (permission === AUTO_PERMISSION_PRESET) {
+    // Codex "Approve for me" + DSH Auto review; explicit no-sandbox / per-call.
+    return "Auto review (Approve for me) · no sandbox · per-call review";
+  }
+  return permission;
 }
 
 export interface PermissionSelectOption {
@@ -65,6 +96,16 @@ export const FACE_PERMISSION_TABLE: Readonly<
   },
 };
 
+/** Resolve a configured table entry or the live Auto bundle. */
+export function resolvePermissionPresetSpec(
+  name: string,
+  autoLive: boolean,
+): PermissionPresetSpec | undefined {
+  if (isFacePermissionPreset(name)) return FACE_PERMISSION_TABLE[name];
+  if (name === AUTO_PERMISSION_PRESET && autoLive) return AUTO_PRESET_SPEC;
+  return undefined;
+}
+
 function optionOf(name: string): PermissionSelectOption {
   if (name === CUSTOM_PERMISSION_PRESET) {
     return {
@@ -72,6 +113,13 @@ function optionOf(name: string): PermissionSelectOption {
       name: "Custom",
       description:
         "Current sandbox and approval settings do not match a preset.",
+    };
+  }
+  if (name === AUTO_PERMISSION_PRESET) {
+    return {
+      value: AUTO_PERMISSION_PRESET,
+      name: AUTO_PRESET_SPEC.name,
+      description: AUTO_PRESET_SPEC.description,
     };
   }
   const spec = FACE_PERMISSION_TABLE[name as FacePermissionPreset];
@@ -96,6 +144,7 @@ function matches(
 /**
  * Derive select currentValue from folded knobs + composition defaults.
  * Defaults match a coding harness (workspace-write + ask).
+ * `auto` appears in options only while Guardian `registerAuto` is live.
  */
 export function derivePermissionSelect(
   state: PermissionKnobState,
@@ -103,13 +152,26 @@ export function derivePermissionSelect(
     readonly sandbox?: SandboxMode;
     readonly approval?: ApprovalPolicy;
   } = {},
+  options: { readonly autoLive?: boolean } = {},
 ): PermissionSelect {
+  const autoLive = options.autoLive === true;
   const sandbox = state.sandbox ?? defaults.sandbox ?? "workspace-write";
   const approval = state.approval ?? defaults.approval ?? "ask";
   let currentValue: string = CUSTOM_PERMISSION_PRESET;
   if (state.preset !== null) {
-    const spec = FACE_PERMISSION_TABLE[state.preset as FacePermissionPreset];
+    const spec = resolvePermissionPresetSpec(state.preset, autoLive);
     if (spec && matches(spec, sandbox, approval)) currentValue = state.preset;
+    // DSH: a stored Auto identity also matches `never` (delegated child pins
+    // reviewer denials as final) while sandbox stays danger-full-access.
+    if (
+      currentValue === CUSTOM_PERMISSION_PRESET &&
+      state.preset === AUTO_PERMISSION_PRESET &&
+      autoLive &&
+      AUTO_PRESET_SPEC.sandbox === sandbox &&
+      approval === "never"
+    ) {
+      currentValue = AUTO_PERMISSION_PRESET;
+    }
   }
   if (currentValue === CUSTOM_PERMISSION_PRESET) {
     for (const name of FACE_PERMISSION_PRESETS) {
@@ -118,10 +180,20 @@ export function derivePermissionSelect(
         break;
       }
     }
+    if (
+      currentValue === CUSTOM_PERMISSION_PRESET &&
+      autoLive &&
+      matches(AUTO_PRESET_SPEC, sandbox, approval)
+    ) {
+      currentValue = AUTO_PERMISSION_PRESET;
+    }
   }
+  const catalog = autoLive
+    ? [...FACE_PERMISSION_PRESETS, AUTO_PERMISSION_PRESET]
+    : [...FACE_PERMISSION_PRESETS];
   return {
     options: [
-      ...FACE_PERMISSION_PRESETS.map((n) => optionOf(n)),
+      ...catalog.map((n) => optionOf(n)),
       ...(currentValue === CUSTOM_PERMISSION_PRESET
         ? [optionOf(CUSTOM_PERMISSION_PRESET)]
         : []),
@@ -132,8 +204,9 @@ export function derivePermissionSelect(
 
 export function permissionSelectFromEvents(
   events: readonly SessionEvent[],
+  options: { readonly autoLive?: boolean } = {},
 ): PermissionSelect {
-  return derivePermissionSelect(foldPermissionKnobs(events));
+  return derivePermissionSelect(foldPermissionKnobs(events), {}, options);
 }
 
 export function defaultPermissionPreset(runtime: FaceRuntime): FacePermissionPreset {
@@ -163,8 +236,21 @@ export function pinInitialPermission(
   store: SessionStore,
   sessionId: string,
   preset: FacePermissionPreset,
+  options?: { readonly autoGate?: FacePermissionAutoGate },
 ): void {
   const events = readSessionEvents(store, sessionId);
+  const knobs = foldPermissionKnobs(events);
+  // DSH: a stored Auto identity requires the live integration + admission
+  // before the session may publish; never rewrite the seed.
+  if (knobs.preset === AUTO_PERMISSION_PRESET) {
+    if (options?.autoGate?.isLive() !== true) {
+      throw new Error(
+        'permission: cannot restore preset "auto" without its active integration',
+      );
+    }
+    options.autoGate.admit();
+    return;
+  }
   if (hasAnyKnob(events)) return;
   const spec = FACE_PERMISSION_TABLE[preset];
   const ts = now();
@@ -186,8 +272,35 @@ export function pinInitialPermission(
 }
 
 /**
- * Switch preset: append changed knobs only. Selecting the effective preset
- * again appends nothing.
+ * Move every live Auto session to Full access (DSH dispose migrateAway).
+ * Called while Auto is still catalog-live but admission is already closed.
+ */
+export function migrateAutoSessionsToFullAccess(
+  store: SessionStore,
+  autoGate: FacePermissionAutoGate,
+  options?: { readonly hasPtyActivity?: () => boolean },
+): void {
+  for (const sessionId of store.list()) {
+    const current = permissionSelectFromEvents(
+      readSessionEvents(store, sessionId),
+      { autoLive: true },
+    ).currentValue;
+    if (current !== AUTO_PERMISSION_PRESET) continue;
+    applyPermissionPreset(store, sessionId, "danger-full-access", {
+      autoGate,
+      ...(options?.hasPtyActivity
+        ? { hasPtyActivity: options.hasPtyActivity }
+        : {}),
+    });
+  }
+}
+
+/**
+ * Switch preset: record identity when the derived current value changes, then
+ * write each changed knob. Auto and Full access share `danger-full-access`
+ * sandbox — the switch still appends `permission/preset` and only the
+ * differing `approval/policy` (DSH shared-bundle switch). Selecting the
+ * effective preset again appends nothing (Auto admission still runs).
  *
  * Optional `hasPtyActivity` fences sandbox mode changes while **Agent**
  * `terminal_*` PTY sessions are open or spawning (CV DSH terminal-bash
@@ -198,57 +311,77 @@ export function applyPermissionPreset(
   store: SessionStore,
   sessionId: string,
   name: string,
-  options?: { readonly hasPtyActivity?: () => boolean },
+  options?: {
+    readonly hasPtyActivity?: () => boolean;
+    readonly autoGate?: FacePermissionAutoGate;
+  },
 ):
   | { readonly ok: true; readonly changed: boolean }
   | { readonly ok: false; readonly message: string } {
-  if (!isFacePermissionPreset(name)) {
+  const autoLive = options?.autoGate?.isLive() === true;
+  const catalog = options?.autoGate?.catalogNames() ?? FACE_PERMISSION_PRESETS;
+  const spec = resolvePermissionPresetSpec(name, autoLive);
+  if (!spec) {
     return {
       ok: false,
-      message: `unknown preset "${name}" (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
+      message: `unknown preset "${name}" (available: ${catalog.join(", ")})`,
     };
+  }
+  if (name === AUTO_PERMISSION_PRESET) {
+    try {
+      options?.autoGate?.admit();
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
   const events = readSessionEvents(store, sessionId);
-  const current = permissionSelectFromEvents(events).currentValue;
-  if (current === name) return { ok: true, changed: false };
-  const spec = FACE_PERMISSION_TABLE[name];
+  const current = permissionSelectFromEvents(events, { autoLive }).currentValue;
   const knobs = foldPermissionKnobs(events);
-  const currentSandbox =
+  // Effective knobs (composition defaults) — same basis as derivePermissionSelect.
+  const effectiveSandbox =
     knobs.sandbox ?? FACE_PERMISSION_TABLE["workspace-write"].sandbox;
+  const effectiveApproval = knobs.approval ?? "ask";
   if (
-    knobs.sandbox !== spec.sandbox &&
+    effectiveSandbox !== spec.sandbox &&
     options?.hasPtyActivity?.() === true
   ) {
-    // Keep wording aligned with `sandboxModeChangeBlockedMessage` in exec-pty
-    // (Face must not depend on node-pty / exec-pty for this leaf).
     return {
       ok: false,
-      message: `cannot change sandbox mode from "${currentSandbox}" to "${spec.sandbox}" while Agent terminal_* sessions are open or being created; wait for creation to settle and close them first`,
+      message: `cannot change sandbox mode from "${effectiveSandbox}" to "${spec.sandbox}" while Agent terminal_* sessions are open or being created; wait for creation to settle and close them first`,
     };
   }
+  // DSH: identity tracks derived current, not the raw last preset event — so
+  // Auto↔Full (shared sandbox) still records the new selection.
+  let changed = false;
   const ts = now();
-  if (knobs.preset !== name) {
+  if (current !== name) {
     store.append(sessionId, {
       type: "permission/preset",
       ts,
       preset: name,
     });
+    changed = true;
   }
-  if (knobs.sandbox !== spec.sandbox) {
+  if (effectiveSandbox !== spec.sandbox) {
     store.append(sessionId, {
       type: "sandbox/mode",
       ts: ts + 1,
       mode: spec.sandbox,
     });
+    changed = true;
   }
-  if (knobs.approval !== spec.approval) {
+  if (effectiveApproval !== spec.approval) {
     store.append(sessionId, {
       type: "approval/policy",
       ts: ts + 2,
       policy: spec.approval,
     });
+    changed = true;
   }
-  return { ok: true, changed: true };
+  return { ok: true, changed };
 }
 
 /**
@@ -284,6 +417,7 @@ export async function applyLivePermissionDefaultPreset(
       ...(runtime.hasPtyActivity
         ? { hasPtyActivity: () => runtime.hasPtyActivity!() }
         : {}),
+      autoGate: runtime.permissionAuto,
     });
     if (applied.ok && applied.changed) {
       await runtime.invalidateAgent?.(sessionId);

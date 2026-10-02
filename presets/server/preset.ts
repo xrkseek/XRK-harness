@@ -60,7 +60,6 @@ export function createServerAgentFactory(
     bashLimits,
     compaction,
     toolResultMaxInlineBytes,
-    guardianFragments,
     webSearch,
     workspaceInject,
     fs,
@@ -79,6 +78,7 @@ export function createServerAgentFactory(
     videoGenEnv,
     curatedMemory,
     locale,
+    autoReviewPre,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -110,6 +110,7 @@ export function createServerAgentFactory(
       ...(fs ? { fs } : {}),
       ...(codeRuntime ? { codeRuntime } : {}),
       ...(options.policy ? { policy: options.policy } : {}),
+      ...(autoReviewPre ? { autoReviewPre } : {}),
       ...(resolveImage ? { resolveImage } : {}),
       ...(attachments ? { attachments } : {}),
       ...(routeAllowsImage ? { routeAllowsImage } : {}),
@@ -126,7 +127,6 @@ export function createServerAgentFactory(
       ...(toolResultMaxInlineBytes !== undefined
         ? { toolResultMaxInlineBytes }
         : {}),
-      ...(guardianFragments !== undefined ? { guardianFragments } : {}),
       ...(webSearch ? { webSearch } : {}),
       ...(workspaceInject !== undefined ? { workspaceInject } : {}),
       ...(sessionTelemetry

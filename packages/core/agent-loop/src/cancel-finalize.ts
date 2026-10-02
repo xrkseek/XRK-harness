@@ -1,15 +1,95 @@
 import type { SessionEvent, ToolCall, TurnEndCancelCause } from "@xrkseek/protocol";
 import { settleDanglingTools, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 
+/**
+ * True when `value` is a durable cancel cause (`{ kind: "user" }` etc.).
+ * `AbortSignal.abort(cause)` stores these plain objects as `signal.reason`;
+ * `throwIfAborted()` then throws them directly — not a DOMException.
+ */
+export function isAgentCancelCause(value: unknown): value is TurnEndCancelCause {
+  if (value === null || typeof value !== "object" || !("kind" in value)) {
+    return false;
+  }
+  const kind = (value as { kind?: unknown }).kind;
+  if (
+    kind === "user" ||
+    kind === "parent" ||
+    kind === "disposed" ||
+    kind === "legacy"
+  ) {
+    return true;
+  }
+  return (
+    kind === "hook" &&
+    typeof (value as { reason?: unknown }).reason === "string"
+  );
+}
+
+/** Human-readable abort copy — never `String({ kind: "user" })` → `[object Object]`. */
+export function formatAbortReason(reason: unknown): string {
+  if (reason === undefined || reason === null) return "aborted";
+  if (reason instanceof Error) {
+    const message = reason.message.trim();
+    return message.length > 0 ? message : reason.name || "aborted";
+  }
+  if (isAgentCancelCause(reason)) {
+    switch (reason.kind) {
+      case "user":
+        return "aborted by user";
+      case "parent":
+        return "aborted by parent";
+      case "disposed":
+        return "aborted: session disposed";
+      case "hook":
+        return `aborted by hook: ${reason.reason}`;
+      case "legacy":
+        return "aborted";
+    }
+  }
+  if (typeof reason === "string") {
+    const trimmed = reason.trim();
+    return trimmed.length > 0 ? trimmed : "aborted";
+  }
+  try {
+    const json = JSON.stringify(reason);
+    if (typeof json === "string" && json.length > 0 && json !== "{}") {
+      return json;
+    }
+  } catch {
+    /* ignore hostile toJSON */
+  }
+  return "aborted";
+}
+
+/**
+ * Cancellation / abort classification for turn finalize.
+ *
+ * Node `AbortSignal.abort({ kind: "user" })` makes `throwIfAborted()` throw the
+ * plain cause object; undici may reject with `Error` named `AbortError` rather
+ * than `DOMException`. The old `instanceof DOMException` gate missed both, so
+ * stop was logged as `turn/end` `error` with message `[object Object]`.
+ */
 export function isAbortError(
   err: unknown,
   signal?: AbortSignal,
 ): boolean {
-  return (
-    err instanceof DOMException &&
-    err.name === "AbortError" &&
-    signal?.aborted === true
-  );
+  if (signal?.aborted === true) {
+    if (err === signal.reason) return true;
+    if (isAgentCancelCause(err)) return true;
+  }
+  const name =
+    err instanceof DOMException || err instanceof Error ? err.name : undefined;
+  if (name === "AbortError") {
+    return signal === undefined || signal.aborted === true;
+  }
+  if (
+    err instanceof Error &&
+    "code" in err &&
+    (err as { code: unknown }).code === "ABORTED"
+  ) {
+    return signal === undefined || signal.aborted === true;
+  }
+  return false;
 }
 
 function parseArgsFragment(raw: string): unknown {

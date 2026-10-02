@@ -39,8 +39,8 @@ export function resolveRetryPolicy(
   return {
     ...DEFAULT_RETRY_POLICY,
     ...option,
-    retryableCodes:
-      option.retryableCodes ?? DEFAULT_RETRY_POLICY.retryableCodes,
+    nonRetryableCodes:
+      option.nonRetryableCodes ?? DEFAULT_RETRY_POLICY.nonRetryableCodes,
   };
 }
 

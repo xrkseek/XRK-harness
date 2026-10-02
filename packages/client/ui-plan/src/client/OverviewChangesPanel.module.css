@@ -167,12 +167,12 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* DiffBlock owns surface; strip outer double-frame + default margin. */
+/* DiffBlock owns the scrollport — do not nest another overflow/max-height here
+   (competing owners clipped Overview Review pan/scroll). */
 .diff {
   min-width: 0;
   margin: 0 !important;
   border-radius: 10px;
-  overflow: hidden;
 }
 
 .openFile {

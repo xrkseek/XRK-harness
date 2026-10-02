@@ -19,6 +19,8 @@ export interface SelectConfirmation {
 export interface SelectOption {
   readonly id: string
   readonly label: string
+  /** Optional short marker rendered as a superscript beside the label. */
+  readonly badge?: string
   readonly detail?: string
   readonly active?: boolean
   /** Optional in-page risk gate owned by the shared popup shell. */

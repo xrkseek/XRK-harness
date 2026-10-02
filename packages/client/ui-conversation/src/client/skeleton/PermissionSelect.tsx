@@ -8,22 +8,25 @@ import type { ComposerBarProps } from '../contract/slots.ts'
 import css from './PermissionSelect.module.css'
 
 const FULL_ACCESS = 'danger-full-access'
+const AUTO_REVIEW = 'auto'
 
 const PRESET_LABEL_KEYS = {
   'read-only': 'access.preset.read-only',
   'workspace-write': 'access.preset.workspace-write',
   [FULL_ACCESS]: 'access.preset.danger-full-access',
+  [AUTO_REVIEW]: 'access.preset.auto',
 } as const
 
 const PRESET_DESC_KEYS = {
   'read-only': 'access.desc.read-only',
   'workspace-write': 'access.desc.workspace-write',
   [FULL_ACCESS]: 'access.desc.danger-full-access',
+  [AUTO_REVIEW]: 'access.desc.auto',
 } as const
 
 /* Shield glyphs (design set 1556): check = read-only, pencil = workspace
-   write, exclamation = full access. currentColor so the trigger and menu
-   rows tint them with their own text color. */
+   write, exclamation = full access, sparkle = auto review. currentColor so
+   the trigger and menu rows tint them with their own text color. */
 
 const shieldOutline = 'M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z'
 
@@ -48,6 +51,15 @@ const permissionGlyphs = {
       <path d={shieldOutline} stroke="currentColor" strokeWidth="1.31831" strokeLinejoin="round" />
       <path d="M9.10094 4.5V8.75939H7.59888V4.5H9.10094Z" fill="currentColor" />
       <path d="M9.10094 9.8114V11.5H7.59888V9.8114H9.10094Z" fill="currentColor" />
+    </svg>
+  ),
+  // Same shield chrome as the built-ins; sparkles mark per-call AI review
+  // (DSH ships Auto without a glyph — we fill the hole for menu parity).
+  [AUTO_REVIEW]: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d={shieldOutline} stroke="currentColor" strokeWidth="1.31831" strokeLinejoin="round" />
+      <path d="M8.205 4.35Q8.55 7.05 11.25 7.4Q8.55 7.75 8.205 10.45Q7.86 7.75 5.16 7.4Q7.86 7.05 8.205 4.35Z" fill="currentColor" />
+      <path d="M11.35 9.15Q11.55 10.55 12.95 10.75Q11.55 10.95 11.35 12.35Q11.15 10.95 9.75 10.75Q11.15 10.55 11.35 9.15Z" fill="currentColor" />
     </svg>
   ),
 } as Record<string, ReactNode>
@@ -119,7 +131,8 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
   const choose = (id: string): void => {
     setOpen(false)
     if (id === value.currentValue) return
-    if (id === FULL_ACCESS) {
+    // Full access and Auto review both need an explicit risk gate (DSH / Codex).
+    if (id === FULL_ACCESS || id === AUTO_REVIEW) {
       setAcknowledged(false)
       setConfirmation(id)
       return
@@ -132,12 +145,14 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
     setConfirmation(null)
   }
 
-  const confirmFullAccess = (): void => {
+  const confirmRiskPreset = (): void => {
     if (locked || !acknowledged || confirmation === null) return
     const id = confirmation
     closeConfirmation()
     submit(id)
   }
+
+  const confirmingAuto = confirmation === AUTO_REVIEW
 
   return (
     <>
@@ -170,16 +185,16 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
       />
       <RiskConfirmation
         open={confirmation !== null}
-        title={t('access.confirm.title')}
-        description={t('access.confirm.description')}
-        acknowledgeLabel={t('access.confirm.acknowledge')}
+        title={t(confirmingAuto ? 'access.confirm.auto.title' : 'access.confirm.title')}
+        description={t(confirmingAuto ? 'access.confirm.auto.description' : 'access.confirm.description')}
+        acknowledgeLabel={t(confirmingAuto ? 'access.confirm.auto.acknowledge' : 'access.confirm.acknowledge')}
         cancelLabel={t('access.confirm.cancel')}
-        confirmLabel={t('access.confirm.enable')}
+        confirmLabel={t(confirmingAuto ? 'access.confirm.auto.enable' : 'access.confirm.enable')}
         acknowledged={acknowledged}
         disabled={locked}
         onAcknowledgedChange={setAcknowledged}
         onCancel={closeConfirmation}
-        onConfirm={confirmFullAccess}
+        onConfirm={confirmRiskPreset}
       />
     </>
   )

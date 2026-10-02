@@ -89,6 +89,14 @@ declare module '@xrkseek/cordis' {
 /** Fallback locale consulted after the active locale misses (also the last-resort initial locale). */
 export const FALLBACK_LOCALE: LocaleId = 'zh'
 
+/**
+ * Package / Host text that may already be localized (DSH LocalizedText).
+ * Plain strings pass through; maps require `en` and may add `zh` (or other ids).
+ */
+export type LocalizedText =
+  | string
+  | { readonly en: string; readonly [locale: string]: string }
+
 /** Shared namespace for shell-level texts. */
 export const COMMON_NS = 'common'
 
@@ -144,6 +152,18 @@ export class LocaleRuntime {
    */
   getLocale(): LocaleSnapshot {
     return this.snapshot
+  }
+
+  /**
+   * Resolve package / Host localized text for the active locale.
+   * Plain strings stay verbatim; maps pick `active` then fall back to `en`
+   * (DSH `locale.resolveText` — does not consult namespace dictionaries).
+   * @param text - literal or `{ en, zh?, … }` map.
+   * @returns the best available translation (empty string allowed).
+   */
+  resolveText(text: LocalizedText): string {
+    if (typeof text === 'string') return text
+    return text[this.snapshot.active] ?? text.en
   }
 
   /**

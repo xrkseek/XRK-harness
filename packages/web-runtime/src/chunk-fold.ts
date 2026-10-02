@@ -44,6 +44,8 @@ export class ChunkFold {
   private partialTurn = "";
   private partialStep = "";
   private readonly listeners = new Set<() => void>();
+  /** Published snapshot — rebuilt before notify (useSyncExternalStore contract). */
+  private published: ChunkFoldSnapshot = { nodes: [], partialText: "" };
 
   push(event: SessionEvent): void {
     switch (event.type) {
@@ -149,6 +151,17 @@ export class ChunkFold {
   }
 
   getSnapshot(): ChunkFoldSnapshot {
+    return this.published;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private publish(): void {
     const nodes = [...this.nodes];
     if (this.partialText) {
       nodes.push({
@@ -159,17 +172,11 @@ export class ChunkFold {
         partial: true,
       });
     }
-    return { nodes, partialText: this.partialText };
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    this.published = { nodes, partialText: this.partialText };
   }
 
   private emit(): void {
+    this.publish();
     for (const l of this.listeners) l();
   }
 }

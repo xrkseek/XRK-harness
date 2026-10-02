@@ -15,6 +15,12 @@ export function displayFailureMessage(failure: unknown): string {
   // Provider AUTH messages may echo a masked or partially preserved credential.
   // Keep the raw diagnostic in the session log, but never project it into UI state.
   if (record.code === 'AUTH') return 'API key is invalid'
-  if (typeof record.message === 'string') return redactSecrets(record.message)
-  return redactSecrets(JSON.stringify(failure))
+  if (typeof record.message === 'string' && record.message !== '[object Object]') {
+    return redactSecrets(record.message)
+  }
+  try {
+    return redactSecrets(JSON.stringify(failure))
+  } catch {
+    return 'turn failed'
+  }
 }

@@ -259,3 +259,32 @@ export function isTokenDelta(chunk: StreamChunk): boolean {
       return false
   }
 }
+
+/**
+ * Shortest decode span, in ms, one step must cover to enter the speed fold.
+ *
+ * Chunk timestamps are millisecond-resolution and reach the log in batched
+ * runs, so a span this short measures write batching rather than model speed.
+ * Admitting one divides a large token count by a near-zero denominator and
+ * reports hundreds of thousands of tok/s. Real decode spans run for seconds.
+ */
+export const MIN_DECODE_SAMPLE_MS = 50
+
+/**
+ * Whether one step's decode span yields a trustworthy throughput sample.
+ *
+ * The whole-log `sessionStats` fold, the client window fold, and the fixture
+ * twin all gate on this, so a figure rendered on one surface can never
+ * contradict the others.
+ * @param outputTokens - the step's reported output tokens, reasoning included
+ *   (null when the step reported no usage).
+ * @param decodeMs - first-token to assembled-message span.
+ * @returns true when the step may be summed into the throughput ratio.
+ */
+export function isDecodableSample(outputTokens: number | null | undefined, decodeMs: number): boolean {
+  return typeof outputTokens === 'number'
+    && Number.isFinite(outputTokens)
+    && outputTokens >= 0
+    && Number.isFinite(decodeMs)
+    && decodeMs >= MIN_DECODE_SAMPLE_MS
+}

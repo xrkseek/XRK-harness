@@ -46,12 +46,26 @@ export function ApprovalPanel(props: ApprovalComposerProps) {
     if (root === undefined) return undefined
     return root.callId === approval.callId && !('kind' in root) ? commandOf(root) : undefined
   })
-  return <ApprovalFlow key={approval.key} pending={approval} t={props.t} {...command === undefined ? {} : { command }} />
+  const localized =
+    approval.displayReason === undefined
+      ? undefined
+      : props.resolveReason(approval.displayReason)
+  return (
+    <ApprovalFlow
+      key={approval.key}
+      pending={approval}
+      t={props.t}
+      {...command === undefined ? {} : { command }}
+      {...localized === undefined ? {} : { localized }}
+    />
+  )
 }
 
-function ApprovalFlow({ pending, command, t }: {
+function ApprovalFlow({ pending, command, localized, t }: {
   pending: PendingApproval
   command?: string
+  /** Resolved displayReason for the active locale (wins over English reason). */
+  localized?: string
   t: ApprovalComposerProps['t']
 }) {
   // Local one-shot latch: the panel leaves only when the resolved frame
@@ -63,7 +77,8 @@ function ApprovalFlow({ pending, command, t }: {
     void pending.answer(outcome).catch(() => { setAnswered(false) })
   }
   const category = pending.category
-  const headline = pending.reason
+  const headline = localized
+    ?? pending.reason
     ?? (category === 'network'
       ? t('approval.network', {
         host: pending.networkHost ?? pending.toolName,

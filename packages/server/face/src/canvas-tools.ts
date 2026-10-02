@@ -93,7 +93,7 @@ export function bindCanvasTools(
   registerTool(tools, {
     name: "canvas_read",
     description:
-      "Read one workspace Canvas document (declarative sections: markdown/table/kpi/series). " +
+      "Read one workspace Canvas document (declarative sections: markdown/table/kpi/callout/series). " +
       "Use anytime — canvases are workspace-locked, not session-locked.",
     parameters: {
       type: "object",
@@ -130,8 +130,11 @@ export function bindCanvasTools(
   registerTool(tools, {
     name: "canvas_upsert",
     description:
-      "Create or replace a workspace Canvas. sections[] kinds: markdown{body}, " +
-      "table{columns,rows}, kpi{items:[{label,value}]}, series{title,points:[{x,y}]}. " +
+      "Create or replace a workspace Canvas. sections[] kinds: markdown|md{body} " +
+      "(CommonMark headings/lists/code/tables in the body string — not a nested md AST), " +
+      "table{columns,rows}, kpi{items:[{label,value,tone?}]}, " +
+      "callout{title?,body,tone?}, series{title,points:[{x,y}],tone?}. " +
+      "tone (optional): neutral|good|warn|bad|accent — colors KPI values, callouts, series bars. " +
       "Do not write Canvas JSON via filesystem tools — use this tool.",
     parameters: {
       type: "object",

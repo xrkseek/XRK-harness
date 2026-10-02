@@ -7,6 +7,7 @@ export const IMAGE_GEN_PROMPT_TEXT = [
   "- Call `image_generate` with a full visual `prompt` (optional `size` / `n`). Edit/i2i when the Provider allows refs.",
   "- Edit refs: pass `reference_attachment_ids` (or `image_url=attachment:<id>` / https). Never paste `data:image/…;base64,…` into tool args — the call truncates (INCOMPLETE_TOOL_CALL).",
   "- Result: chat shows the image; text gives `attachmentId=sha256:…`. That id is the durable address — not a filesystem path.",
+  "- Trace: id is content-addressed and self-locating — `{XRK_HOME}/attachments/v1/objects/<first-2-hex>/<full-sha256>`; derive the path from the id, never hunt disks.",
   "- Re-inspect or zoom: `read_image` with `file_path` set to that id (or `attachment:<id>`). Do not search `~/.xrk` or invent paths.",
   "- Reuse as edit input: `reference_attachment_ids` / `image_url=attachment:<id>`.",
 ].join("\n");

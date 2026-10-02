@@ -65,29 +65,47 @@ Canvas = 工作区级、可跨会话保留的声明式看板，在右侧 **概�
 
 | kind | 字段 | 用途 |
 |------|------|------|
-| `markdown` | `body` | 结论、说明（简洁，别把整段聊天贴进去） |
-| `kpi` | `items[{label,value}]` | 少而醒目的指标 |
+| `markdown` / `md` | `body`（CommonMark 字符串：标题/列表/代码/表） | 结论、说明；**不要**塞嵌套 AST 对象 |
+| `kpi` | `items[{label,value,tone?}]` | 少而醒目的指标；`tone` 给数值着色 |
+| `callout` | `title?` · `body` · `tone?` | 根因 / 警示 / 要点框（左色条；body 也吃 markdown） |
 | `table` | `columns` · `rows` | 对照 / inventory |
-| `series` | `title` · `points[{x,y}]` | 简易趋势（y 为有限数字） |
+| `series` | `title` · `points[{x,y}]` · `tone?` | 简易趋势（y 为有限数字） |
+
+`tone`（可选）：`neutral` · `good` · `warn` · `bad` · `accent`  
+— KPI 数值色、callout 左边条、series 柱色。缺省：KPI=`neutral`，callout=`warn`，series=`accent`。
 
 最小 upsert 形状：
 
 ```json
 {
   "id": "overview",
-  "title": "Overview",
+  "title": "Desktop cold start",
   "sections": [
-    { "kind": "markdown", "body": "## Status\n…" },
-    { "kind": "kpi", "items": [{ "label": "p99", "value": "42ms" }] },
-    { "kind": "table", "columns": ["id", "status"], "rows": [["a", "ok"]] },
-    { "kind": "series", "title": "Daily", "points": [{ "x": "Mon", "y": 3 }] }
+    { "kind": "markdown", "body": "Source: packaged · measured locally" },
+    {
+      "kind": "kpi",
+      "items": [
+        { "label": "Host ready (empty)", "value": "~0.8s", "tone": "good" },
+        { "label": "Host ready (real)", "value": "~6.1s", "tone": "warn" },
+        { "label": "before fix", "value": "~9.5s", "tone": "bad" }
+      ]
+    },
+    {
+      "kind": "callout",
+      "title": "Root cause",
+      "tone": "warn",
+      "body": "Main awaited Host IPC ready before createWindow."
+    },
+    { "kind": "table", "columns": ["Layer", "Before", "After"], "rows": [["open", "await Host", "schedule Host"]] },
+    { "kind": "series", "title": "readyMs", "tone": "accent", "points": [{ "x": "proxy", "y": 656 }] }
   ]
 }
 ```
 
 ### 内容质量
 
-- KPI：`label` 短、`value` 自解释（含单位）
+- KPI：`label` 短、`value` 自解释（含单位）；用 `tone` 表达好/坏，勿堆超过约 6 个
+- callout：一句根因/结论；`title` 短；勿塞整段聊天
 - 表：列名稳定；单元格字符串；别塞超宽自然语言
 - series：点按时间/类别有序；勿造假数据
 - 禁止：`eval`、模型吐 React、播放器内 `fetch`、`.canvas.tsx` / `cursor/canvas`

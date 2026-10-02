@@ -5,6 +5,7 @@
 
 import {
   asContentBlocks,
+  type ChatMessage,
   type ContentBlock,
   type ImageOffloadTarget,
   type MessageContent,
@@ -15,6 +16,18 @@ import type { SessionStore } from "./store.js";
 
 /** Match `@xrkseek/attachment` request bound (DSH rc.8). */
 export const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Max image-bearing user turns to re-surface after a compaction window swap.
+ * Oldest images still yield to {@link ensureDurableImageOffloads} on the wire.
+ */
+export const MAX_RETAINED_SHADOWED_IMAGE_MESSAGES = 8;
+
+/** True when content still carries image blocks (incl. durable offloaded marks). */
+export function messageHasImageBlocks(content: MessageContent): boolean {
+  if (typeof content === "string") return false;
+  return content.some((b) => b.type === "image");
+}
 
 function base64PayloadBytes(bytes: number): number {
   return Math.ceil((bytes * 4) / 3);
@@ -141,6 +154,30 @@ export function planImageOffloadTargets(
   }
   targets.sort((a, b) => a.seq - b.seq);
   return targets;
+}
+
+/**
+ * Re-project image-bearing user turns from the shadowed pre-compaction prefix
+ * so window swap does not drop vision bytes (serializeMessage uses flattenText).
+ * Walks newest-first; caps at {@link MAX_RETAINED_SHADOWED_IMAGE_MESSAGES}.
+ */
+export function retainShadowedImageMessages(
+  events: readonly SessionEvent[],
+  compactIndex: number,
+  maxMessages: number = MAX_RETAINED_SHADOWED_IMAGE_MESSAGES,
+): ChatMessage[] {
+  if (maxMessages <= 0 || compactIndex <= 0) return [];
+  const marks = foldImageOffloadMarks(events);
+  const retained: ChatMessage[] = [];
+  for (let seq = compactIndex - 1; seq >= 0 && retained.length < maxMessages; seq--) {
+    const ev = events[seq]!;
+    if (ev.type !== "user/message") continue;
+    const content = projectOffloadedImages(ev.content, marks.get(seq));
+    if (!messageHasImageBlocks(content)) continue;
+    retained.push({ role: "user", content });
+  }
+  retained.reverse();
+  return retained;
 }
 
 /**

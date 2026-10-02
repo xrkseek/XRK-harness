@@ -47,6 +47,7 @@ export interface WorkspaceApi {
     items: WorkspaceView[]
     archivedSessionIds: SessionId[]
     pinnedSessionIds: SessionId[]
+    pinnedWorkspaceIds: WorkspaceId[]
   }>>
 
   /**
@@ -84,7 +85,10 @@ export interface WorkspaceApi {
   insertBefore(request: RpcRequest<{
     workspaceId: WorkspaceId
     beforeWorkspaceId?: WorkspaceId
-  }>): Promise<RpcResponse<{ workspaceIds: WorkspaceId[] }>>
+  }>): Promise<RpcResponse<{
+    workspaceIds: WorkspaceId[]
+    pinnedWorkspaceIds: WorkspaceId[]
+  }>>
 
   /**
    * Moves an accounted session within its workspace's manual order,
@@ -132,4 +136,18 @@ export interface WorkspaceApi {
    */
   unpinSession(request: RpcRequest<{ sessionId: SessionId }>):
   Promise<RpcResponse<{ pinnedSessionIds: SessionId[] }>>
+
+  /**
+   * Pins one workspace to the front of the registry-global workspace pin
+   * order (newest first). Pinned workspaces lead display order.
+   */
+  pinWorkspace(request: RpcRequest<{ workspaceId: WorkspaceId }>):
+  Promise<RpcResponse<{ pinnedWorkspaceIds: WorkspaceId[]; workspaceIds: WorkspaceId[] }>>
+
+  /**
+   * Drops one workspace from the pin order. Idempotent for an id that is not
+   * pinned. Returns the full updated pin set and display order.
+   */
+  unpinWorkspace(request: RpcRequest<{ workspaceId: WorkspaceId }>):
+  Promise<RpcResponse<{ pinnedWorkspaceIds: WorkspaceId[]; workspaceIds: WorkspaceId[] }>>
 }

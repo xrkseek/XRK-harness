@@ -21,8 +21,32 @@
 
 全局配置与 MCP 走 Host 工具 **`settings_get` / `settings_mutate`**（落点 `~/.xrk`）。细则见家目录 skill **`xrk-capability-attach`**（种子在 `apps/cli/seeds/skills/`）。本目录 skill 仅作工作区覆盖/对照。
 
+## 附件溯源（公开契约）
+
+附件 id（`sha256:<hex>`）是**内容寻址**的：id 即字节 SHA-256，本身就是持久地址，落盘路径**可由 id 直接推导，禁止满盘搜索**：
+
+- 图片原图：`{XRK_HOME}/attachments/v1/objects/<sha256 前 2 位>/<sha256>`
+- 普通文件：`{XRK_HOME}/attachments/v1/files/<sha256 前 2 位>/<sha256>/<原始文件名>`
+- 请求变体缓存（可重建，删了不碰原图）：`{XRK_HOME}/cache/attachments/request-images/`
+
+溯源 / 再看：`read_image file_path=sha256:…` 或 `attachment:sha256:…`（工具内按 id 读回并重新入库）；`image_generate` 结果文本给 `attachmentId=sha256:…`，同样可 `read_image` 溯源。聊天记录里的图/文件引用（含 tool result）走同一套 id → 路径推导；UI 端经 Face `session.attachment` 按会话事件引用授权读取（仅本 session 引用过的 id），base64 展示。具体合同见 `docs/modules/attachment.md`。
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+本仓已建索引（`.codegraph/`）。**定位符号 / 摸清调用链 / 评估改动影响面时，先查 CodeGraph 再 grep+read**：
+一次 `codegraph_explore "<问题或符号名>"` 就返回相关符号的逐行原文 + 调用链（含动态派发）+ 影响面；
+`grep` 摸索在这个 3k 文件的仓里纯属浪费。
+
+- MCP 工具 `codegraph_explore`（已挂 Host Settings）；CLI `codegraph explore / node / callers / impact / sync` 永远可用。
+- 细则见 skill **`codegraph-retrieval`**。
+- 索引缺失时才退回 grep/read；改完文件先 `codegraph sync` 再查。
+
+<!-- CODEGRAPH_END -->
+
 ## 办事流程
 
+0. 检索 / 定位 → **`codegraph-retrieval`**（CodeGraph 图谱先于 grep+read）
 1. 结构 → **`xrk-harness-architecture`**
 2. 挂/改 MCP 或 Settings → **`xrk-capability-attach`**（全局工具）
 3. 工作区 Canvas / 概况看板 → **`xrk-canvas`**（`canvas_*`；磁盘 `{XRK_HOME}/canvases/<workspaceId>/`）

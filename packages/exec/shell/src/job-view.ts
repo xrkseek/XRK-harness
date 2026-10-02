@@ -44,12 +44,38 @@ function statusOf(info: ShellJobViewInput): ShellJobViewStatus {
   return "failed";
 }
 
+/** Cap for the error line carried in the wire `detail` (UI card / completion notice). */
+const FAILED_DETAIL_MAX_CHARS = 160;
+
+/**
+ * First non-blank stderr line, bounded. Bash failures put their real error
+ * here (`npm ERR! code E409`, `Error: …`, first stack frame); the completion
+ * notice and UI card surface this instead of a bare `exit code: N`.
+ */
+function firstErrorLine(stderr: string | undefined): string | undefined {
+  if (stderr === undefined) return undefined;
+  const line = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (line === undefined) return undefined;
+  return line.length > FAILED_DETAIL_MAX_CHARS
+    ? `${line.slice(0, FAILED_DETAIL_MAX_CHARS - 1)}…`
+    : line;
+}
+
 function detailOf(info: ShellJobViewInput): string | undefined {
   if (info.detail !== undefined && info.detail.length > 0) return info.detail;
+  const failed =
+    info.status === "failed" ||
+    (info.exitCode !== undefined && info.exitCode !== null && info.exitCode !== 0);
+  if (failed) {
+    const errorLine = firstErrorLine(info.stderr);
+    if (errorLine !== undefined) return errorLine;
+  }
   if (info.exitCode !== undefined && info.exitCode !== null) {
     return `exit code: ${info.exitCode}`;
   }
-  if (info.status === "failed" && info.stderr) return info.stderr;
   return undefined;
 }
 

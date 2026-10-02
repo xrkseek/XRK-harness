@@ -231,14 +231,17 @@ function mergeSignals(
   );
   if (parts.some((s) => s.aborted)) {
     const ac = new AbortController();
-    ac.abort();
+    // Preserve `{ kind: "user" }` etc. so throwIfAborted / Face cancelCause
+    // stay typed — bare abort() replaces the cause with a DOMException and
+    // downstream String(reason) becomes "[object Object]".
+    const source = parts.find((s) => s.aborted);
+    ac.abort(source?.reason);
     return ac.signal;
   }
   if (parts.length === 1) return parts[0]!;
   const ac = new AbortController();
-  const onAbort = () => ac.abort();
   for (const s of parts) {
-    s.addEventListener("abort", onAbort, { once: true });
+    s.addEventListener("abort", () => ac.abort(s.reason), { once: true });
   }
   return ac.signal;
 }

@@ -1,7 +1,6 @@
 /**
- * Composer submission policy. It owns the live busy-Enter preference and
- * resolves submission gestures into queue/steer delivery modes; Host and
- * Agent keep the actual delivery-window authority.
+ * Composer + chat-tool UI preferences. Owns live busy-Enter and tools-default-
+ * expanded stores; Host and Agent keep delivery-window authority for Enter.
  */
 import {
   createSnapshotStore, type SettingsScope, type SnapshotStore,
@@ -9,21 +8,28 @@ import {
 import type {
   BusyEnterBehavior, ComposerSubmitGesture, InputSubmitMode,
 } from '../contract/composer-submission.ts'
-import { BUSY_ENTER_FIELD, DEFAULT_BUSY_ENTER_BEHAVIOR } from '../../submission-settings.ts'
+import {
+  BUSY_ENTER_FIELD,
+  DEFAULT_BUSY_ENTER_BEHAVIOR,
+  DEFAULT_TOOLS_DEFAULT_EXPANDED,
+  TOOLS_DEFAULT_EXPANDED_FIELD,
+} from '../../submission-settings.ts'
 import type { ConversationSettings } from '../../submission-settings.ts'
 import { resolveSubmitMode } from './resolve-submit-mode.ts'
 
-export { DEFAULT_BUSY_ENTER_BEHAVIOR } from '../../submission-settings.ts'
+export { DEFAULT_BUSY_ENTER_BEHAVIOR, DEFAULT_TOOLS_DEFAULT_EXPANDED } from '../../submission-settings.ts'
 export { resolveSubmitMode } from './resolve-submit-mode.ts'
 
 /**
- * Busy-Enter preference shared by the composer bar inject face and its
- * Settings row: one live store the bar's submission gestures and Send label
- * read, backed by the Host user-settings document when one is composed.
+ * Preference face shared by the composer bar, Settings rows, and (via
+ * `ctx.provide`) ToolCallTree inject: one live store pair backed by the Host
+ * user-settings document when composed.
  */
 export class ComposerSubmissionPolicy {
   /** Reactive preference source for the composer bar and the Settings row. */
   readonly busyEnter: SnapshotStore<BusyEnterBehavior> = createSnapshotStore(DEFAULT_BUSY_ENTER_BEHAVIOR)
+  /** When true, chat tool rows mount expanded. */
+  readonly toolsDefaultExpanded: SnapshotStore<boolean> = createSnapshotStore(DEFAULT_TOOLS_DEFAULT_EXPANDED)
   private readonly host: SettingsScope<ConversationSettings> | undefined
 
   /**
@@ -67,12 +73,33 @@ export class ComposerSubmissionPolicy {
   }
 
   /**
+   * Change whether chat tool rows start expanded.
+   * @param expanded - true → mount open; false → collapsed (default).
+   */
+  setToolsDefaultExpanded(expanded: boolean): void {
+    if (this.toolsDefaultExpanded.getSnapshot() === expanded) return
+    this.toolsDefaultExpanded.set(expanded)
+    void this.host?.set(TOOLS_DEFAULT_EXPANDED_FIELD, expanded)
+  }
+
+  /**
    * Adopt the scope's accepted durable behavior without writing it back.
    * @param host - the constructor-narrowed scope driving this adoption.
    */
   private adopt(host: SettingsScope<ConversationSettings>): void {
     const section = host.getSnapshot().value
-    if (section === undefined || this.busyEnter.getSnapshot() === section.busyEnter) return
-    this.busyEnter.set(section.busyEnter)
+    if (section === undefined) return
+    if (
+      section.busyEnter !== undefined
+      && this.busyEnter.getSnapshot() !== section.busyEnter
+    ) {
+      this.busyEnter.set(section.busyEnter)
+    }
+    if (
+      typeof section.toolsDefaultExpanded === 'boolean'
+      && this.toolsDefaultExpanded.getSnapshot() !== section.toolsDefaultExpanded
+    ) {
+      this.toolsDefaultExpanded.set(section.toolsDefaultExpanded)
+    }
   }
 }

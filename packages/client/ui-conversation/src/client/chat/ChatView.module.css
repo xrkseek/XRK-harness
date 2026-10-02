@@ -64,6 +64,13 @@
    measurement/mount unit for a virtualizer without changing the column gap. */
 .flowItem {
   min-width: 0;
+  /* Defer layout/paint for off-screen transcript rows (Vercel
+     rendering-content-visibility). Intrinsic size is a soft estimate —
+     variable-height tool cards still measure once they enter the viewport.
+     Paint containment clips child outlines that extend outside this box —
+     user-bubble staging rings must use inset outline-offset (MessageItem). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 
 /* A keyed renderer may intentionally decline its row after dispatch (the
@@ -120,6 +127,15 @@
   to {
     background-position: 0 0;
   }
+}
+
+/* The waiting band stays mounted across token/step boundaries; only this
+   rule parks it. `display` is declared here because the author-set
+   `inline-flex` outranks the UA `[hidden]` rule at equal specificity, and
+   `display: none` keeps the flex column gap unchanged while idle. */
+.turnStatus[hidden],
+.turnStatusClock[hidden] {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

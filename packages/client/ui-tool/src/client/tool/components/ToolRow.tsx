@@ -6,7 +6,8 @@
 // one line; every row with body, output, or a card material (terminal, diff,
 // read, search, web, image, files) is expandable; the summary stays inline while open.
 // Media cards (image gallery / file cards) replace IN/OUT when present.
-// Expand state is component-local view state.
+// Expand state is component-local view state; initial open follows Settings
+// `ui-conversation.toolsDefaultExpanded` (ToolDefaultExpandedContext).
 
 import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
@@ -23,6 +24,7 @@ import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-mod
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import { terminalBlockLabels, type TerminalCardModel } from '../models/terminal-card-model.ts'
 import type { ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
+import { useToolDefaultExpanded } from '../tool-default-expanded.ts'
 import css from './ToolRow.module.css'
 
 type MediaRenderSlot = PropsRenderSlots<'tool.call.images' | 'tool.call.files'>['renderSlot']
@@ -140,7 +142,8 @@ export function ToolRow({
   onOpenFile,
   inspect,
 }: ToolRowProps) {
-  const [expanded, setExpanded] = useState(false)
+  const defaultExpanded = useToolDefaultExpanded()
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const terminalBody = terminal ?? null
   const diffBody = diff ?? null
   const readBody = read ?? null

@@ -9,6 +9,7 @@ import {
   createAssistantMessage,
   createToolResultMessage,
   createUserMessage,
+  isDecodableSample,
   isTokenDelta,
 } from '@xrkseek/xrk-llm/message'
 import { CallId } from '@xrkseek/xrk-llm/brand'
@@ -911,9 +912,10 @@ function sessionStatsOf(log: readonly SessionEvent[]): {
           value.ttftMs += Math.max(0, openStep.firstTokenTime - openStep.startTime)
           value.ttftSteps += 1
           const outputTokens = event.data.usage?.outputTokens
-          if (typeof outputTokens === 'number' && Number.isFinite(outputTokens) && outputTokens >= 0) {
-            value.decodeMs += Math.max(0, event.time - openStep.firstTokenTime)
-            value.decodeTokens += outputTokens
+          const decodeMs = event.time - openStep.firstTokenTime
+          if (isDecodableSample(outputTokens, decodeMs)) {
+            value.decodeMs += decodeMs
+            value.decodeTokens += outputTokens ?? 0
           }
         }
         openStep = null
@@ -1689,6 +1691,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   // their workspace accounting slot and only grouping surfaces hide them.
   const archivedSessionIds: SessionId[] = []
   const pinnedSessionIds: SessionId[] = []
+  const pinnedWorkspaceIds: WorkspaceId[] = []
 
   // In-memory browse tree behind the fixture's `browse` picker capability —
   // deterministic content mirroring the design mock so assembled Web tests
@@ -2727,6 +2730,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         items: workspaces.map(w => ({ ...w })),
         archivedSessionIds: [...archivedSessionIds],
         pinnedSessionIds: [...pinnedSessionIds],
+        pinnedWorkspaceIds: [...pinnedWorkspaceIds],
       }),
       create: (request) => {
         const { path } = request.payload
@@ -2781,6 +2785,8 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           })
         }
         workspaces.splice(index, 1)
+        const pinAt = pinnedWorkspaceIds.indexOf(workspaceId)
+        if (pinAt >= 0) pinnedWorkspaceIds.splice(pinAt, 1)
         emitHost({ type: 'host/workspace-removed', workspaceId })
         return ok(request, { deleted: true as const })
       },
@@ -2814,7 +2820,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
             })
           }
         }
-        return ok(request, { workspaceIds: workspaces.map(candidate => candidate.workspaceId) })
+        return ok(request, {
+          workspaceIds: workspaces.map(candidate => candidate.workspaceId),
+          pinnedWorkspaceIds: [...pinnedWorkspaceIds],
+        })
       },
       insertSessionBefore: (request) => {
         const { workspaceId, sessionId, beforeSessionId } = request.payload
@@ -2897,6 +2906,56 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           emitHost({ type: 'host/pinned-sessions-changed', pinnedSessionIds: [...pinnedSessionIds] })
         }
         return ok(request, { pinnedSessionIds: [...pinnedSessionIds] })
+      },
+      pinWorkspace: (request) => {
+        const { workspaceId } = request.payload
+        if (!workspaces.some(workspace => workspace.workspaceId === workspaceId)) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        const without = pinnedWorkspaceIds.filter(id => id !== workspaceId)
+        pinnedWorkspaceIds.length = 0
+        pinnedWorkspaceIds.push(workspaceId, ...without)
+        const pinnedSet = new Set(pinnedWorkspaceIds)
+        const rest = workspaces.filter(workspace => !pinnedSet.has(workspace.workspaceId))
+        const leading = pinnedWorkspaceIds
+          .map(id => workspaces.find(workspace => workspace.workspaceId === id))
+          .filter((workspace): workspace is WorkspaceView => workspace !== undefined)
+        workspaces.length = 0
+        workspaces.push(...leading, ...rest)
+        emitHost({ type: 'host/pinned-workspaces-changed', pinnedWorkspaceIds: [...pinnedWorkspaceIds] })
+        emitHost({
+          type: 'host/workspace-order-changed',
+          workspaceIds: workspaces.map(workspace => workspace.workspaceId),
+        })
+        return ok(request, {
+          pinnedWorkspaceIds: [...pinnedWorkspaceIds],
+          workspaceIds: workspaces.map(workspace => workspace.workspaceId),
+        })
+      },
+      unpinWorkspace: (request) => {
+        const { workspaceId } = request.payload
+        if (!workspaces.some(workspace => workspace.workspaceId === workspaceId)) {
+          return err(request, {
+            code: 'workspace-not-found',
+            message: `no workspace ${workspaceId}`,
+            details: { workspaceId },
+          })
+        }
+        const index = pinnedWorkspaceIds.indexOf(workspaceId)
+        if (index >= 0) pinnedWorkspaceIds.splice(index, 1)
+        emitHost({ type: 'host/pinned-workspaces-changed', pinnedWorkspaceIds: [...pinnedWorkspaceIds] })
+        emitHost({
+          type: 'host/workspace-order-changed',
+          workspaceIds: workspaces.map(workspace => workspace.workspaceId),
+        })
+        return ok(request, {
+          pinnedWorkspaceIds: [...pinnedWorkspaceIds],
+          workspaceIds: workspaces.map(workspace => workspace.workspaceId),
+        })
       },
     },
     agentPresets: {
@@ -3354,6 +3413,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.unarchiveSession': return this.api.workspace.unarchiveSession(request)
       case 'workspace.pinSession': return this.api.workspace.pinSession(request)
       case 'workspace.unpinSession': return this.api.workspace.unpinSession(request)
+      case 'workspace.pinWorkspace': return this.api.workspace.pinWorkspace(request)
+      case 'workspace.unpinWorkspace': return this.api.workspace.unpinWorkspace(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)

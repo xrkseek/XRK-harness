@@ -11,7 +11,10 @@ import { foldPlanMode } from "@xrkseek/protocol";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { FaceRuntime } from "./context.js";
-import { permissionSelectFromEvents } from "./permissions.js";
+import {
+  formatPermissionStatusLabel,
+  permissionSelectFromEvents,
+} from "./permissions.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import {
@@ -239,8 +242,6 @@ export interface SessionStatusCompaction {
    * (compact and turn are mutually exclusive on the same latch).
    */
   readonly phase: "idle" | "busy";
-  /** Thin Guardian fragment registered (Settings `guardianFragments`). */
-  readonly guardian?: boolean;
 }
 
 /** One tool-result spill file surfaced on Status / Context browse. */
@@ -831,50 +832,153 @@ export function buildSessionStatusSnapshot(
 
   const jobs = (runtime.jobViewsFor(sessionId) ?? []).map(jobRow);
 
-  const live: SessionStatusSubagentLive[] = [];
-  for (const link of runtime.subagents.listDelegated(sessionId)) {
-    if (!runtime.store.has(link.childSessionId)) continue;
-    const activity = isChildSessionActive(runtime, link.childSessionId)
-      ? ("running" as const)
-      : ("inactive" as const);
-    const childEvents = readSessionEvents(runtime.store, link.childSessionId);
-    const line = activity === "running" ? liveLineText(childEvents) : {};
-    const pending = listPendingAdmits(childEvents, link.childSessionId);
-    let queued = 0;
-    let steering = 0;
-    for (const admit of pending) {
-      if (admit.delivery === "steer") steering += 1;
-      else queued += 1;
-    }
-    const externalKind = runtime.externalAgents.kind(link.childSessionId);
-    const externalResume = runtime.externalAgents.resumeState(link.childSessionId);
-    live.push({
+  // Whole delegated subtree, not just direct children: a grandchild that is
+  // still draining must not read as "done" behind a parent that already parked
+  // after handing work down. A node counts as running while anything below it
+  // runs, and quotes the deepest live descendant's last line (an idle parent's
+  // own text would be stale).
+  //
+  // Two sources describe that tree and either can be a subset: the registry
+  // holds links in memory, the team graph is a durable sidecar that survives a
+  // stale restart or a lost write. Walk their union — activity comes from
+  // drain / external state, never from link presence, so a node the graph
+  // still lists keeps a real verdict instead of carrying no signal at all.
+  const team = runtime.agentTeams.view(sessionId);
+  const turnActive = runtime.drain.isActive(sessionId);
+  interface DelegatedNode {
+    readonly id: string;
+    readonly mode: string;
+    readonly label?: string;
+  }
+  const childrenOf = new Map<string, DelegatedNode[]>();
+  const addChild = (parent: string, node: DelegatedNode): void => {
+    const bucket = childrenOf.get(parent);
+    if (bucket === undefined) childrenOf.set(parent, [node]);
+    else if (!bucket.some((n) => n.id === node.id)) bucket.push(node);
+  };
+  for (const link of runtime.subagents.entries()) {
+    if (link.mode === "fork") continue;
+    addChild(link.parentSessionId, {
       id: link.childSessionId,
-      activity,
       mode: link.mode,
       ...(link.label ? { label: link.label } : {}),
-      ...(line.text ? { liveText: line.text } : {}),
-      ...(line.tool ? { liveTool: line.tool } : {}),
-      ...(queued > 0 ? { queued } : {}),
-      ...(steering > 0 ? { steering } : {}),
-      ...(externalKind ? { externalKind } : {}),
-      ...(externalResume ? { externalResume } : {}),
     });
   }
+  for (const edge of team.edges) {
+    if (edge.kind !== "delegates") continue;
+    const known = runtime.subagents.get(edge.from, edge.to);
+    const label = known?.label || edge.label;
+    addChild(edge.from, {
+      id: edge.to,
+      mode: known?.mode ?? "delegated",
+      ...(label ? { label } : {}),
+    });
+  }
+  const levels: DelegatedNode[][] = [];
+  const seen = new Set<string>([sessionId]);
+  let frontier = [sessionId];
+  while (frontier.length > 0) {
+    const level: DelegatedNode[] = [];
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const node of childrenOf.get(id) ?? []) {
+        if (seen.has(node.id)) continue;
+        seen.add(node.id);
+        level.push(node);
+        next.push(node.id);
+      }
+    }
+    if (level.length === 0) break;
+    levels.push(level);
+    frontier = next;
+  }
+  // `live` lists this session's own descendants, but the board is also opened
+  // on a child (one-shot preview), where the parent and its siblings sit in
+  // the same tree and still carry their own live signal. Post-order the whole
+  // tree so those nodes get a real verdict, then propagate upward: a node is
+  // running while itself or anything below it runs.
+  const activeSource = new Map<string, string>();
+  const ordered: string[] = [];
+  const walked = new Set<string>([sessionId]);
+  const walk = (id: string): void => {
+    for (const node of childrenOf.get(id) ?? []) {
+      if (walked.has(node.id)) continue;
+      walked.add(node.id);
+      walk(node.id);
+    }
+    ordered.push(id);
+  };
+  walk(sessionId);
+  const childIdSet = new Set<string>();
+  for (const bucket of childrenOf.values()) {
+    for (const node of bucket) childIdSet.add(node.id);
+  }
+  for (const node of team.nodes) {
+    if (!childIdSet.has(node.id)) walk(node.id);
+  }
+  for (const id of ordered) {
+    if (isChildSessionActive(runtime, id)) activeSource.set(id, id);
+    for (const child of childrenOf.get(id) ?? []) {
+      const source = activeSource.get(child.id);
+      if (source) activeSource.set(id, activeSource.get(id) ?? source);
+    }
+  }
 
+  const live: SessionStatusSubagentLive[] = [];
+  for (const level of levels) {
+    for (const node of level) {
+      if (!runtime.store.has(node.id)) continue;
+      const childEvents = readSessionEvents(runtime.store, node.id);
+      const source = activeSource.get(node.id);
+      const activity = source ? ("running" as const) : ("inactive" as const);
+      const line = source
+        ? liveLineText(
+            source === node.id
+              ? childEvents
+              : readSessionEvents(runtime.store, source),
+          )
+        : {};
+      const pending = listPendingAdmits(childEvents, node.id);
+      let queued = 0;
+      let steering = 0;
+      for (const admit of pending) {
+        if (admit.delivery === "steer") steering += 1;
+        else queued += 1;
+      }
+      const externalKind = runtime.externalAgents.kind(node.id);
+      const externalResume = runtime.externalAgents.resumeState(node.id);
+      live.push({
+        id: node.id,
+        activity,
+        mode: node.mode,
+        ...(node.label ? { label: node.label } : {}),
+        ...(line.text ? { liveText: line.text } : {}),
+        ...(line.tool ? { liveTool: line.tool } : {}),
+        ...(queued > 0 ? { queued } : {}),
+        ...(steering > 0 ? { steering } : {}),
+        ...(externalKind ? { externalKind } : {}),
+        ...(externalResume ? { externalResume } : {}),
+      });
+    }
+  }
+
+  // Concurrency caps stay direct-child scoped — they gate this session's slots.
   const quota = resolveSubagentQuota(runtime, sessionId);
 
-  const team = runtime.agentTeams.view(sessionId);
-  const liveById = new Map(live.map((row) => [row.id, row]));
   const graph: SessionStatusGraph = {
     nodes: team.nodes.map((n) => {
-      const liveRow = liveById.get(n.id);
+      // Every node carries a verdict. The root is judged by its own turn and
+      // every other node by its own or a descendant's live state, so no node
+      // reaches a client without one — a missing activity is rendered as
+      // "done" there, which is how a live branch read as completed.
+      const running =
+        n.id === sessionId ? turnActive : activeSource.has(n.id);
       return {
         id: n.id,
         label: n.label,
         ...(n.role ? { role: n.role } : {}),
         ...(n.depth !== undefined ? { depth: n.depth } : {}),
-        ...(liveRow ? { activity: liveRow.activity } : {}),
+        activity: running ? ("running" as const) : ("inactive" as const),
       };
     }),
     edges: team.edges.map((e) => ({
@@ -925,7 +1029,6 @@ export function buildSessionStatusSnapshot(
     pruneCount: eventSummary.pruneCount,
   };
 
-  const turnActive = runtime.drain.isActive(sessionId);
   const pending = listPendingAdmits(events, sessionId);
   let queued = 0;
   let steering = 0;
@@ -945,12 +1048,10 @@ export function buildSessionStatusSnapshot(
     strategyRaw === "off"
       ? strategyRaw
       : "prune-summary";
-  const guardian = loopValue.guardianFragments !== false;
   const compaction: SessionStatusCompaction = {
     pipeline: eventSummary.pipeline,
     stages: eventSummary.stages,
     strategy,
-    guardian,
     ...(eventSummary.lastCompactReason
       ? { lastReason: eventSummary.lastCompactReason }
       : {}),
@@ -1056,7 +1157,12 @@ export function buildSessionStatusSnapshot(
 export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
   const lines: string[] = [
     `badge: ${snap.badge}`,
-    `permission: ${snap.permission}`,
+    `permission: ${formatPermissionStatusLabel(snap.permission)}`,
+    ...(snap.permission === "auto"
+      ? [
+          "auto-review classifiers: heuristic | http | session-llm (URL/env → http; Host LLM → session-llm; else heuristic)",
+        ]
+      : []),
     `plan: ${snap.plan} (toggle with /plan · /plan off)`,
     `theme: ${snap.theme} (/theme light|dark|system)`,
     `model: ${snap.model.provider}/${snap.model.model}`,
@@ -1278,7 +1384,6 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       (snap.compaction.strategy
         ? ` · strategy ${snap.compaction.strategy}`
         : "") +
-      (snap.compaction.guardian ? " · guardian on" : "") +
       (snap.compaction.lastReason
         ? ` · last ${snap.compaction.lastReason}`
         : "") +

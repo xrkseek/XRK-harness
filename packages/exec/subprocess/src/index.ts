@@ -11,6 +11,16 @@ import {
  */
 export const KILL_SETTLE_GRACE_MS = 5_000;
 
+/**
+ * After a natural `exit`, `close` can also be delayed forever by an orphaned
+ * grandchild that still holds the stdout pipe (e.g. `cmd /c "start /b ..."`,
+ * `node server &`, a dev server forked from the command). The child process is
+ * already gone — its `exitCode`/`signal` are final and no new output can be
+ * produced by it — so waiting for `close` would leave background jobs
+ * "running" forever. Force-settle once this grace elapses.
+ */
+export const EXIT_SETTLE_GRACE_MS = 2_000;
+
 export interface SpawnOptions {
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -125,6 +135,7 @@ function startLocal(
   let killed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let graceTimer: ReturnType<typeof setTimeout> | undefined;
+  let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let resolveResult!: (r: SubprocessResult) => void;
   let rejectResult!: (err: Error) => void;
   const resultPromise = new Promise<SubprocessResult>((resolve, reject) => {
@@ -137,6 +148,7 @@ function startLocal(
     settled = true;
     if (timer) clearTimeout(timer);
     if (graceTimer) clearTimeout(graceTimer);
+    if (exitTimer) clearTimeout(exitTimer);
     opts.signal?.removeEventListener("abort", onAbort);
     resolveResult(result);
   };
@@ -148,6 +160,27 @@ function startLocal(
     graceTimer = setTimeout(() => {
       finish({ stdout, stderr, exitCode: null, signal: null, killed: true });
     }, KILL_SETTLE_GRACE_MS);
+  };
+
+  /**
+   * Natural-exit settlement (not a stop request). `child.on("close")` requires
+   * every stdio stream to EOF; an orphaned grandchild that inherited the stdout
+   * pipe keeps it open forever even though the child itself already exited.
+   * Normal descendants drain their pipe within the grace, so this arm path
+   * almost never fires; when it does, the child's `exitCode`/`signal` are final
+   * and we are dropping only trailing bytes from a detached orphan.
+   */
+  const armExitSettleGrace = (code: number | null, signal: NodeJS.Signals | null) => {
+    if (settled || exitTimer !== undefined) return;
+    exitTimer = setTimeout(() => {
+      finish({
+        stdout,
+        stderr,
+        exitCode: code,
+        signal,
+        killed,
+      });
+    }, EXIT_SETTLE_GRACE_MS);
   };
 
   const stopChild = (signal: NodeJS.Signals = "SIGTERM") => {
@@ -189,10 +222,18 @@ function startLocal(
     settled = true;
     if (timer) clearTimeout(timer);
     if (graceTimer) clearTimeout(graceTimer);
+    if (exitTimer) clearTimeout(exitTimer);
     opts.signal?.removeEventListener("abort", onAbort);
     rejectResult(err);
   });
+  child.on("exit", (code, signal) => {
+    // `close` normally fires right after — but an orphaned grandchild still
+    // holding the stdout pipe delays it forever. The child is gone; settle on
+    // the final exit code once the drain grace elapses.
+    armExitSettleGrace(code, signal);
+  });
   child.on("close", (code, signal) => {
+    if (exitTimer) clearTimeout(exitTimer);
     finish({
       stdout,
       stderr,

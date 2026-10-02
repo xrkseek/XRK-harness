@@ -69,16 +69,20 @@ export function createMistakeTracker(options: MistakeTrackerOptions = {}) {
           message: mistakeLimitNotice(input.reason, max),
         };
       }
+      // Reset after stop so the next user message is not immediately blocked
+      // (notice promises "send a new message to continue").
+      consecutive = 0;
       return {
-        consecutive,
+        consecutive: 0,
         atLimit: true,
         action: "stop",
-        message: mistakeLimitNotice(input.reason, consecutive),
+        message: mistakeLimitNotice(input.reason, max),
       };
     },
     /**
      * Turn-boundary feed: all tools failed → record; any success → reset.
-     * No tools → no-op.
+     * Text-only success (no tools) also clears the streak so a clean reply
+     * after API errors does not leave the counter latched at the limit.
      */
     onTurnToolStats(stats: {
       readonly ok: number;
@@ -91,7 +95,7 @@ export function createMistakeTracker(options: MistakeTrackerOptions = {}) {
           ...(stats.details ? { details: stats.details } : {}),
         });
       }
-      if (stats.ok > 0) {
+      if (stats.ok > 0 || (stats.ok === 0 && stats.failed === 0)) {
         this.reset();
       }
       return undefined;

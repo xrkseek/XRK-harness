@@ -8,8 +8,8 @@
  * projection (the same host-computed select the composer chip renders); a
  * pick submits the `/permission <preset>` command line, so both surfaces
  * write through one path and the pushed projection frame is the one
- * confirmation. The Full access row carries the same explicit risk gate as
- * the composer chip; the shared popup shell owns the modal mechanics.
+ * confirmation. The Full access and Auto review rows carry explicit risk gates;
+ * the shared popup shell owns the modal mechanics.
  * The General-settings row separately writes the default preset for sessions
  * created later through the host Settings API.
  */
@@ -31,7 +31,7 @@ import {
   accessEn, accessZh, en, zh,
 } from './locales.ts'
 import {
-  displayPermissionPreset, FULL_ACCESS_PRESET,
+  AUTO_REVIEW_PRESET, displayPermissionPreset, FULL_ACCESS_PRESET,
 } from './presentation.ts'
 import {
   PERMISSION_SETTINGS_NS, PermissionPresetSettingsController, refreshPermissionIfLoaded,
@@ -58,17 +58,22 @@ function optionsOf(value: PermissionSelect, t: (key: string) => string): SelectO
     .filter(option => option.value !== 'custom')
     .map(option => ({
       id: option.value,
-      label: displayPermissionPreset(option.value, option.name, t),
-      ...(option.description !== undefined ? { detail: option.description } : {}),
+      label: option.value === AUTO_REVIEW_PRESET
+        ? t('auto.label')
+        : displayPermissionPreset(option.value, option.name, t),
+      ...(option.value === AUTO_REVIEW_PRESET ? { badge: t('auto.badge') } : {}),
+      ...(option.value === AUTO_REVIEW_PRESET
+        ? { detail: t('auto.description') }
+        : option.description !== undefined ? { detail: option.description } : {}),
       ...(option.value === value.currentValue ? { active: true } : {}),
-      ...(option.value === FULL_ACCESS_PRESET
+      ...(option.value === FULL_ACCESS_PRESET || option.value === AUTO_REVIEW_PRESET
         ? {
           confirmation: {
-            title: t('confirm.title'),
-            description: t('confirm.description'),
-            acknowledgeLabel: t('confirm.acknowledge'),
+            title: t(option.value === AUTO_REVIEW_PRESET ? 'auto.confirm.title' : 'confirm.title'),
+            description: t(option.value === AUTO_REVIEW_PRESET ? 'auto.confirm.description' : 'confirm.description'),
+            acknowledgeLabel: t(option.value === AUTO_REVIEW_PRESET ? 'auto.confirm.acknowledge' : 'confirm.acknowledge'),
             cancelLabel: t('confirm.cancel'),
-            confirmLabel: t('confirm.enable'),
+            confirmLabel: t(option.value === AUTO_REVIEW_PRESET ? 'auto.confirm.enable' : 'confirm.enable'),
           },
         }
         : {}),
@@ -97,6 +102,13 @@ export function apply(ctx: ClientContext): void {
         'confirm.acknowledge': accessZh['confirm.acknowledge'],
         'confirm.cancel': accessZh['confirm.cancel'],
         'confirm.enable': accessZh['confirm.enable'],
+        'auto.label': accessZh['auto.label'],
+        'auto.badge': accessZh['auto.badge'],
+        'auto.description': accessZh['auto.description'],
+        'auto.confirm.title': accessZh['auto.confirm.title'],
+        'auto.confirm.description': accessZh['auto.confirm.description'],
+        'auto.confirm.acknowledge': accessZh['auto.confirm.acknowledge'],
+        'auto.confirm.enable': accessZh['auto.confirm.enable'],
       }),
       ctx.locale.register(ACCESS_NS, 'en', {
         'preset.readOnly': accessEn['preset.readOnly'],
@@ -107,10 +119,17 @@ export function apply(ctx: ClientContext): void {
         'confirm.acknowledge': accessEn['confirm.acknowledge'],
         'confirm.cancel': accessEn['confirm.cancel'],
         'confirm.enable': accessEn['confirm.enable'],
+        'auto.label': accessEn['auto.label'],
+        'auto.badge': accessEn['auto.badge'],
+        'auto.description': accessEn['auto.description'],
+        'auto.confirm.title': accessEn['auto.confirm.title'],
+        'auto.confirm.description': accessEn['auto.confirm.description'],
+        'auto.confirm.acknowledge': accessEn['auto.confirm.acknowledge'],
+        'auto.confirm.enable': accessEn['auto.confirm.enable'],
       }),
     ]
     return () => { for (const dispose of disposers) dispose() }
-  }, 'ui-permission: Full access confirmation dictionaries')
+  }, 'ui-permission: session popup confirmation dictionaries')
   /* jscpd:ignore-end */
   const t = ctx.locale.bind(ACCESS_NS)
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>

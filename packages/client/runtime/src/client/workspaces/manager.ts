@@ -26,6 +26,11 @@ export interface WorkspaceListSnapshot {
    * archive; pinned rows lead their section in the sidebar.
    */
   pinnedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global workspace pin order (newest first). Pinned workspaces
+   * lead the sidebar group list.
+   */
+  pinnedWorkspaceIds: readonly WorkspaceId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
@@ -45,6 +50,7 @@ export class WorkspaceManager {
   // carry the complete set), so deltas never merge — installs replace.
   private archivedSessionIds: readonly SessionId[] = []
   private pinnedSessionIds: readonly SessionId[] = []
+  private pinnedWorkspaceIds: readonly WorkspaceId[] = []
   private state: WorkspaceListSnapshot['state'] = 'idle'
   private phase: WorkspaceListPhase = 'pending'
   private error: RpcError | null = null
@@ -57,8 +63,10 @@ export class WorkspaceManager {
    * mirror of replaying refreshFrames over the item baseline.
    */
   private archivedSupersedesRefresh = false
-  /** Mirror of archivedSupersedesRefresh for the pin set. */
+  /** Mirror of archivedSupersedesRefresh for the session pin set. */
   private pinnedSupersedesRefresh = false
+  /** Mirror of archivedSupersedesRefresh for the workspace pin set. */
+  private pinnedWorkspacesSupersedesRefresh = false
   /** Latest local reorder request; only its unary echo may install order. */
   private orderRequestGeneration = 0
   /** Increments on order frames so a later remote commit outranks an older unary echo. */
@@ -108,6 +116,9 @@ export class WorkspaceManager {
           this.installViews(items)
           if (!this.archivedSupersedesRefresh) this.installArchived(result.value.archivedSessionIds)
           if (!this.pinnedSupersedesRefresh) this.installPinned(result.value.pinnedSessionIds)
+          if (!this.pinnedWorkspacesSupersedesRefresh) {
+            this.installPinnedWorkspaces(result.value.pinnedWorkspaceIds)
+          }
           this.state = 'idle'
           this.phase = 'ready'
         } else {
@@ -123,6 +134,7 @@ export class WorkspaceManager {
         this.refreshFrames = null
         this.archivedSupersedesRefresh = false
         this.pinnedSupersedesRefresh = false
+        this.pinnedWorkspacesSupersedesRefresh = false
         this.inflight = null
         this.notifier.markDirty()
       }
@@ -180,12 +192,12 @@ export class WorkspaceManager {
   async insertBefore(
     workspaceId: WorkspaceId,
     beforeWorkspaceId?: WorkspaceId,
-  ): Promise<RpcResult<{ workspaceIds: WorkspaceId[] }>> {
+  ): Promise<RpcResult<{ workspaceIds: WorkspaceId[]; pinnedWorkspaceIds: WorkspaceId[] }>> {
     const requestGeneration = ++this.orderRequestGeneration
     const frameGeneration = this.orderFrameGeneration
     const localOrder = this.itemViews().map(workspace => workspace.workspaceId)
     this.installOrder(insertIdBefore(localOrder, workspaceId, beforeWorkspaceId))
-    let result: RpcResult<{ workspaceIds: WorkspaceId[] }>
+    let result: RpcResult<{ workspaceIds: WorkspaceId[]; pinnedWorkspaceIds: WorkspaceId[] }>
     try {
       ;({ result } = await this.api.workspace.insertBefore({
         workspaceId,
@@ -201,6 +213,7 @@ export class WorkspaceManager {
     if (result.ok && requestGeneration === this.orderRequestGeneration
       && frameGeneration === this.orderFrameGeneration) {
       this.installOrder(result.value.workspaceIds, true)
+      this.installPinnedWorkspaces(result.value.pinnedWorkspaceIds)
     } else if (!result.ok && requestGeneration === this.orderRequestGeneration
       && frameGeneration === this.orderFrameGeneration) {
       this.installOrder(this.committedOrder)
@@ -284,6 +297,38 @@ export class WorkspaceManager {
   }
 
   /**
+   * Pin one workspace (newest-first); leads the sidebar group list.
+   * @param workspaceId - workspace to pin.
+   */
+  async pinWorkspace(workspaceId: WorkspaceId): Promise<RpcResult<{
+    pinnedWorkspaceIds: WorkspaceId[]
+    workspaceIds: WorkspaceId[]
+  }>> {
+    const { result } = await this.api.workspace.pinWorkspace({ workspaceId })
+    if (result.ok) {
+      this.installPinnedWorkspaces(result.value.pinnedWorkspaceIds)
+      this.installOrder(result.value.workspaceIds, true)
+    }
+    return result
+  }
+
+  /**
+   * Unpin one workspace.
+   * @param workspaceId - workspace to unpin.
+   */
+  async unpinWorkspace(workspaceId: WorkspaceId): Promise<RpcResult<{
+    pinnedWorkspaceIds: WorkspaceId[]
+    workspaceIds: WorkspaceId[]
+  }>> {
+    const { result } = await this.api.workspace.unpinWorkspace({ workspaceId })
+    if (result.ok) {
+      this.installPinnedWorkspaces(result.value.pinnedWorkspaceIds)
+      this.installOrder(result.value.workspaceIds, true)
+    }
+    return result
+  }
+
+  /**
    * Host-frame entry. Non-workspace frames are ignored so the runtime can
    * fan one host stream out to both object managers.
    * @param envelope - host stream envelope.
@@ -300,6 +345,9 @@ export class WorkspaceManager {
     }
     else if (envelope.payload.type === 'host/pinned-sessions-changed') {
       this.installPinned(envelope.payload.pinnedSessionIds)
+    }
+    else if (envelope.payload.type === 'host/pinned-workspaces-changed') {
+      this.installPinnedWorkspaces(envelope.payload.pinnedWorkspaceIds)
     }
   }
 
@@ -350,6 +398,7 @@ export class WorkspaceManager {
       items: this.itemViews(),
       archivedSessionIds: this.archivedSessionIds,
       pinnedSessionIds: this.pinnedSessionIds,
+      pinnedWorkspaceIds: this.pinnedWorkspaceIds,
       state: this.state,
       phase: this.phase,
       error: this.error,
@@ -369,12 +418,22 @@ export class WorkspaceManager {
     this.notifier.markDirty()
   }
 
-  /** Replace the pin order when membership actually changed. */
+  /** Replace the session pin order when membership actually changed. */
   private installPinned(pinnedSessionIds: readonly SessionId[]): void {
     if (this.refreshFrames !== null) this.pinnedSupersedesRefresh = true
     if (pinnedSessionIds.length === this.pinnedSessionIds.length
       && pinnedSessionIds.every((id, index) => id === this.pinnedSessionIds[index])) return
     this.pinnedSessionIds = [...pinnedSessionIds]
+    this.notifier.markDirty()
+  }
+
+  /** Replace the workspace pin order when membership actually changed. */
+  private installPinnedWorkspaces(pinnedWorkspaceIds: readonly WorkspaceId[] | undefined): void {
+    const next = pinnedWorkspaceIds ?? []
+    if (this.refreshFrames !== null) this.pinnedWorkspacesSupersedesRefresh = true
+    if (next.length === this.pinnedWorkspaceIds.length
+      && next.every((id, index) => id === this.pinnedWorkspaceIds[index])) return
+    this.pinnedWorkspaceIds = [...next]
     this.notifier.markDirty()
   }
 
@@ -427,6 +486,9 @@ export class WorkspaceManager {
     this.refreshFrames?.push({ type: 'remove', workspaceId })
     this.removedIds.add(workspaceId)
     this.committedOrder = this.committedOrder.filter(id => id !== workspaceId)
+    if (this.pinnedWorkspaceIds.includes(workspaceId)) {
+      this.pinnedWorkspaceIds = this.pinnedWorkspaceIds.filter(id => id !== workspaceId)
+    }
     const items = this.items.filter(item =>
       item.getSnapshot().view?.workspaceId !== workspaceId)
     if (items.length === this.items.length) {

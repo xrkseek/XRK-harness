@@ -18,7 +18,7 @@ import { Service } from '@xrkseek/cordis'
 import type { Context } from '@xrkseek/cordis'
 import { SlotCore } from '@xrkseek/client-ui-slots'
 import type {
-  LiveSlotNode, LocaleFace, OwnerOf, SlotEntryDef, SlotMap, SlotRenderer, SlotRendererHost,
+  HostObservable, LiveSlotNode, LocaleFace, OwnerOf, SlotEntryDef, SlotMap, SlotRenderer, SlotRendererHost,
   SlotScope, SlotSpec, StoreDecl, StoreFactory, StoredEntry, StoreInstanceLike,
 } from '@xrkseek/client-ui-slots'
 
@@ -47,6 +47,16 @@ export interface RootOwnerProps { children?: never }
 
 /** Instance key for root-scoped store records (session records key by session id, so the literal cannot collide). */
 const ROOT_INSTANCE_KEY = 'root'
+
+/** Idle connection feeds when a handle ships without `connectionState` / `connectionPhase`. */
+const ABSENT_CONNECTION_STATE: HostObservable<string> = {
+  getSnapshot: () => 'connected',
+  subscribe: () => () => {},
+}
+const ABSENT_CONNECTION_PHASE: HostObservable<undefined> = {
+  getSnapshot: () => undefined,
+  subscribe: () => () => {},
+}
 
 /** Canonical type-erased store handle used by the runtime lifecycle map. */
 type EngineStoreHandle = Exclude<StoreDecl, StoreFactory>
@@ -410,6 +420,10 @@ export class SlotRegistry extends Service {
     if (connection === undefined) {
       throw new Error("renderSlot('root') before the connection service mounted — boot order puts connection apply first")
     }
+    // Stable feeds when a stub only ships `api` (tests) or a handle is mid-boot:
+    // `observableHook` WeakMap-keys these objects; `undefined` throws.
+    const connectionState = connection.connectionState ?? ABSENT_CONNECTION_STATE
+    const connectionPhase = connection.connectionPhase ?? ABSENT_CONNECTION_PHASE
     // `locale` is a live getter: the face installs (and, under HMR, swaps)
     // on the locale plugin's own fiber lifetime, while this host object is
     // built once — a captured value would strand renders on a dead face. The
@@ -432,8 +446,8 @@ export class SlotRegistry extends Service {
       },
       workspaces: { list: workspaces.list },
       connection: {
-        state: connection.connectionState,
-        phase: connection.connectionPhase,
+        state: connectionState,
+        phase: connectionPhase,
       },
       get locale() { return service._locale },
     }

@@ -81,7 +81,20 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   update: context => context.state,
   buildViewNode: (context) => {
     if (context.state === undefined) return null
-    return chatNode(context, context.state.kind, context.state.seq, context.state)
+    // DSH chat-visibility: ordinary inject/recall stays model-visible in the
+    // log but off transcript chrome. Tool inventory notices (`notice` /
+    // `catalog`) keep their disclosure row; fragments / instructions / recall
+    // bodies fold onto user bubbles or stay hidden.
+    const hideContextChrome = context.state.kind === 'context'
+      && context.state.form !== 'notice'
+      && context.state.form !== 'catalog'
+    return chatNode(
+      context,
+      context.state.kind,
+      context.state.seq,
+      context.state,
+      hideContextChrome ? { visibility: 'hidden' } : {},
+    )
   },
 }
 

@@ -1,4 +1,4 @@
-/** Face `auto-review` card (Plugins → Advanced): classifier URL + Credentials token. */
+/** Face `auto-review` card (Plugins → Advanced): enable + classifier URL + token. */
 
 import type { IApiClient } from '@xrkseek/client-connection/client'
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
@@ -7,7 +7,9 @@ import {
   textField,
   type CardActions,
   type CardFieldState,
+  type CardFieldSpec,
   type CardShell,
+  type FieldWrite,
 } from './card-form.ts'
 
 /** Face namespace — must match `FACE_PRODUCT_SETTINGS_NAMESPACES`. */
@@ -18,6 +20,7 @@ export const AUTO_REVIEW_CLASSIFIER_TOKEN_REF = 'XRK_AUTO_REVIEW_CLASSIFIER_TOKE
 
 /** Host-served auto-review section. */
 export interface AutoReviewSettings {
+  readonly enabled?: boolean
   readonly classifierUrl?: string
 }
 
@@ -28,6 +31,7 @@ interface CredentialState {
 
 /** What the auto-review card renders. */
 export interface AutoReviewCardState extends CardShell {
+  readonly enabled: CardFieldState
   readonly classifierUrl: CardFieldState
   readonly classifierToken: CardFieldState
   readonly tokenConfigured: boolean
@@ -43,6 +47,19 @@ export interface AutoReviewCardFace extends CardActions {
 
 const TOKEN_FIELD = 'classifierToken'
 
+function enabledField(): CardFieldSpec {
+  return {
+    field: 'enabled',
+    format: (value) => (value === true ? 'true' : 'false'),
+    parse: (text): FieldWrite | undefined => {
+      const trimmed = text.trim() || 'false'
+      if (trimmed === 'true') return { kind: 'set', value: true }
+      if (trimmed === 'false') return { kind: 'set', value: false }
+      return undefined
+    },
+  }
+}
+
 /** Bridges the `auto-review` scope and classifier token credential onto the card. */
 export class AutoReviewCardController {
   private readonly form: CardForm<AutoReviewSettings>
@@ -55,7 +72,7 @@ export class AutoReviewCardController {
   ) {
     this.form = new CardForm(
       scope,
-      [textField('classifierUrl')],
+      [enabledField(), textField('classifierUrl')],
       [{ field: TOKEN_FIELD, write: (text) => this.writeToken(text) }],
     )
     this.store = this.form.bind(() => this.projection())
@@ -65,6 +82,7 @@ export class AutoReviewCardController {
   private projection(): AutoReviewCardState {
     return {
       ...this.form.shell(),
+      enabled: this.form.field('enabled'),
       classifierUrl: this.form.field('classifierUrl'),
       classifierToken: this.form.field(TOKEN_FIELD),
       tokenConfigured: this.key.configured,

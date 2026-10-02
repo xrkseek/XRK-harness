@@ -1,11 +1,15 @@
 /**
- * Per-Session Overview UI memory (tab · per-tab scroll · last paint).
+ * Per-Session Overview UI memory (tab · per-tab scroll).
  * Same habit as community sidebar: leave a Session, come back — chrome is where you left it.
  * Shell width / open lives in the layout store (global); this map is Session-scoped content chrome.
+ *
+ * Deliberately does **not** cache Face `session.status` / plan / office payloads —
+ * large Sessions (tens of thousands of events) made soft-restored `loaded` re-enter
+ * React #185 when switching back into Overview. Tab + scroll are enough; Status
+ * always cold-loads.
  */
 // Leaf import: the client barrel touches `window` (slots); this module is unit-tested in Node.
-import { isSessionLineageHop } from '@xrkseek/client-runtime/client'
-import type { PreviewTabLoad } from './preview-load.ts'
+import { isSessionLineageHop } from '@xrkseek/client-runtime/src/client/sessions/lineage-hop.ts'
 
 export type OverviewPaintTab = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
 
@@ -24,7 +28,6 @@ export type OverviewSessionUi = {
   /** Per-tab body scroll — switching tabs restores that tab's own offset. */
   readonly scrollByTab: Readonly<Partial<Record<OverviewPaintTab, number>>>
   readonly parentId: string | undefined
-  readonly loaded: PreviewTabLoad | null
 }
 
 /** Cap remembered Sessions (LRU). Soft hops only need a short recent window. */
@@ -51,14 +54,12 @@ function pack(
   tab: OverviewPaintTab,
   scrollByTab: Readonly<Partial<Record<OverviewPaintTab, number>>>,
   parentId: string | undefined,
-  loaded: PreviewTabLoad | null,
 ): OverviewSessionUi {
   return {
     tab,
     scrollTop: scrollOf(scrollByTab, tab),
     scrollByTab,
     parentId,
-    loaded,
   }
 }
 
@@ -95,7 +96,6 @@ export type OverviewSessionUiPatch = {
   readonly scrollTop?: number
   readonly scrollByTab?: Readonly<Partial<Record<OverviewPaintTab, number>>>
   readonly parentId?: string | undefined
-  readonly loaded?: PreviewTabLoad | null
 }
 
 /** Merge chrome for one Session (partial patch). */
@@ -119,16 +119,14 @@ export function writeOverviewSessionUi(
       tab,
       scrollByTab,
       patch.parentId !== undefined ? patch.parentId : prev?.parentId,
-      patch.loaded !== undefined ? patch.loaded : (prev?.loaded ?? null),
     ),
   )
 }
 
 /**
- * Initial paint for a Session remount:
- * - own memory wins for tab · scroll · loaded
- * - else parent↔child soft handoff of the previous *loaded* only (no blank flash);
- *   tab/scroll still prefer own memory, else settle at status / 0
+ * Initial chrome for a Session remount:
+ * - own memory wins for tab · scroll
+ * - else parent↔child soft handoff of tab/scroll defaults only (never Face payloads)
  * - else empty (hard)
  */
 export function takeOverviewMountPaint(
@@ -136,15 +134,14 @@ export function takeOverviewMountPaint(
   parentId: string | undefined,
 ): OverviewSessionUi | null {
   const own = bySession.get(sessionId)
-  if (own?.loaded?.status != null) return own
+  if (own !== undefined) return own
 
   const prevId = lastVisited
-  if (prevId === undefined || prevId === sessionId) return own ?? null
+  if (prevId === undefined || prevId === sessionId) return null
   const prev = bySession.get(prevId)
-  if (prev?.loaded?.status == null) return own ?? null
-  if (!isSessionLineageHop(prevId, prev.parentId, sessionId, parentId)) return own ?? null
+  if (prev === undefined) return null
+  if (!isSessionLineageHop(prevId, prev.parentId, sessionId, parentId)) return null
 
-  const tab = own?.tab ?? 'status'
-  const scrollByTab = own?.scrollByTab ?? {}
-  return pack(tab, scrollByTab, parentId, prev.loaded)
+  // Lineage hop: keep parentId stamp; start on status / scroll 0 (do not steal parent tab).
+  return pack('status', {}, parentId)
 }

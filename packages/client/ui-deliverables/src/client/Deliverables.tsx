@@ -1,4 +1,4 @@
-/** Combined turn-tail: changed-files card + produced-files row. */
+/** Combined turn-tail: changed-files card + created / modified / deleted chip rows. */
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { TurnTailOwnerProps } from '@xrkseek/client-ui-conversation/client'
 import { ChangedFiles, type LoadFileDiff } from './ChangedFiles.tsx'
@@ -29,6 +29,13 @@ function Deliverables({
 }: Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: DeliverablesMatch
 } & PropsLocale<typeof NS> & InjectFace<DeliverablesInjected>) {
+  const laneProps = {
+    openFile,
+    t,
+    isLoopback,
+    openNativePath,
+    useHostDescription,
+  } as const
   return <>
     {matched.changes !== null && (
       <ChangedFiles
@@ -45,15 +52,23 @@ function Deliverables({
         t={t}
       />
     )}
-    {matched.produced.length > 0 && (
-      <ProducedFiles
-        matched={matched.produced}
-        openFile={openFile}
-        t={t}
-        isLoopback={isLoopback}
-        openNativePath={openNativePath}
-        useHostDescription={useHostDescription}
-      />
-    )}
+    <ProducedFiles
+      matched={matched.lanes.modified}
+      label={t('lanes.modified')}
+      rowTestId="file-lane-modified"
+      {...laneProps}
+    />
+    <ProducedFiles
+      matched={matched.lanes.deleted}
+      label={t('lanes.deleted')}
+      rowTestId="file-lane-deleted"
+      {...laneProps}
+    />
+    <ProducedFiles
+      matched={matched.lanes.created}
+      label={t('lanes.created')}
+      rowTestId="file-lane-created"
+      {...laneProps}
+    />
   </>
 }

@@ -124,7 +124,6 @@ import {
   appendContextFragments,
   createAdditionalContextFragment,
   createContextFragmentPipeline,
-  createGuardianReviewProvider,
   fragmentsToPrepareContexts,
   type ContextFragmentPipeline,
   type ContextFragmentProvider,
@@ -139,6 +138,7 @@ import {
   type PolicyEngine,
 } from "@xrkseek/policy";
 import {
+  effectiveApprovalPolicy,
   effectiveSandboxMode,
   flattenText,
   isHumanUserMessageSource,
@@ -330,11 +330,6 @@ export interface HarnessCompositionOptions {
   /** Char budget per collect phase (default 8000). */
   readonly contextFragmentBudgetChars?: number;
   /**
-   * Register the thin Guardian review fragment (default on when fragments are
-   * enabled). `false` skips it. Not a full Guardian LLM approval engine.
-   */
-  readonly guardianFragments?: boolean;
-  /**
    * Load `{productDir}/recipes/*.yaml` for `/id …` expand on turns.
    * Default: on when assemble is enabled. `false` skips recipes only;
    * `/skill-name` still expands when assemble is on. string = recipes dir.
@@ -414,6 +409,18 @@ export interface HarnessCompositionOptions {
   readonly shell?: import("@xrkseek/exec-shell").ShellService;
   /** Optional policy engine → `pipeline.onPre(createPolicyToolPre)`. */
   readonly policy?: PolicyEngine;
+  /**
+   * Optional auto-review classifier pre-handler (heuristic | http | session-llm).
+   * Session Auto permission = no sandbox + per-call review.
+   * Host wires `createAutoReviewToolPre` (Settings · slash · HTTP). Ask → Face approval.
+   *
+   * **Order lock (DSH `tools/pre-execute` prepend):** composition always
+   * installs this via {@link ToolPipeline.prependPre}, so it classifies
+   * **before** soft floors registered with `onPre` (hardline · write-path ·
+   * policy · read-only · shell hooks · kind:hooks). Do not switch to `onPre`
+   * — that would run after soft denies and break `defer-ask` + downstream.
+   */
+  readonly autoReviewPre?: import("@xrkseek/core-tools").PreHandler;
   /**
    * Shell hooks (`hooks.json`). Default: load `~/.xrk/hooks.json`
    * then `{workspace}/.xrk/hooks.json`. Supports PreToolUse · PostToolUse ·
@@ -1079,7 +1086,33 @@ export function createHarnessComposition(
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
   });
-  // Fail-closed floors **before** policy (Hermes hardline / security-guidance shape).
+
+  // —— Pre-execute order (locked; do not flip prepend ↔ onPre) ——
+  // 1. identity continue (pipeline ctor)
+  // 2. Auto-review / Guardian  ← prependPre (DSH `{ prepend: true }`)
+  // 3. soft floors via onPre: hardline → write-path → policy → read-only →
+  //    shell PreToolUse → kind:hooks
+  // Auto must stay ahead of soft so `defer-ask` can still be replaced by a
+  // later deny / ask / cancel (DSH next() before ask).
+  if (options.autoReviewPre) {
+    const base = options.autoReviewPre;
+    pipeline.prependPre(async (ctx) => {
+      const outcome = await base(ctx);
+      if (
+        (outcome.action === "ask" || outcome.action === "defer-ask") &&
+        effectiveApprovalPolicy(readSessionEvents(store, sessionId)) === "never"
+      ) {
+        return {
+          action: "deny" as const,
+          reason: outcome.reason,
+          ...(outcome.error !== undefined ? { error: outcome.error } : {}),
+        };
+      }
+      return outcome;
+    });
+  }
+
+  // Soft floors (onPre append) — always after Guardian prepend above.
   pipeline.onPre(createHardlineArgvPre());
   pipeline.onPre(createWritePathSecurityPre());
   if (policyEngine) {
@@ -1414,9 +1447,6 @@ export function createHarnessComposition(
     for (const provider of options.contextFragmentProviders) {
       contextFragments.register(provider);
     }
-  }
-  if (contextFragments && options.guardianFragments !== false) {
-    contextFragments.register(createGuardianReviewProvider());
   }
   if (contextFragments) {
     contextFragments.register({

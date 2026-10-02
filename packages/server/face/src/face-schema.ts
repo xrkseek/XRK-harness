@@ -75,7 +75,7 @@ export function validateFaceFontSize(fontSize: unknown): string | undefined {
   return undefined;
 }
 
-/** Same preset ids as the permission-presets settings row enum. */
+/** Same preset ids as the permission-presets settings row enum (configured table). */
 export const FACE_PERMISSION_PRESETS = [
   "read-only",
   "workspace-write",
@@ -84,6 +84,21 @@ export const FACE_PERMISSION_PRESETS = [
 
 export type FacePermissionPreset = (typeof FACE_PERMISSION_PRESETS)[number];
 
+/**
+ * Settings → Permissions `defaultPreset` choices (future sessions only).
+ * Identical to {@link FACE_PERMISSION_PRESETS}: Auto is session-catalog-only
+ * (DSH: General settings never offer Auto).
+ */
+export const FACE_PERMISSION_SETTINGS_PRESETS = FACE_PERMISSION_PRESETS;
+
+/** Canonical identity of the Auto (per-call review) preset — DSH `AUTO_PRESET`. */
+export const AUTO_PERMISSION_PRESET = "auto" as const;
+
+/**
+ * `defaultPreset` Settings schema — configured presets only (no `auto`).
+ * Current-session Access / `/permission` may still list Auto while Guardian
+ * `registerAuto` is live.
+ */
 export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
   uid: 5,
   refs: {

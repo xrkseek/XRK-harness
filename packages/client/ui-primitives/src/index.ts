@@ -45,6 +45,21 @@ export { DiffBlock, DEFAULT_DIFF_MAX_LINES } from './DiffBlock.tsx'
 export type { DiffBlockProps, DiffHunk, DiffLayout } from './DiffBlock.tsx'
 export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
 export type { CoarseWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
+export {
+  EMPTY_WORKSPACE_CHANGES_TURNS,
+  fingerprintWorkspaceChangesTurns,
+  harvestWorkspaceChangesTurns,
+  resetWorkspaceChangesTurnsCacheForTests,
+  stableWorkspaceChangesTurns,
+  stableWorkspaceChangesTurnsFromTimeline,
+} from './workspace-changes-turns.ts'
+export type {
+  WorkspaceChangesFileRow,
+  WorkspaceChangesTimelineLike,
+  WorkspaceChangesTurnRow,
+} from './workspace-changes-turns.ts'
+export { createSessionSnapshotCache } from './stable-session-snapshot.ts'
+export type { SessionSnapshotCache } from './stable-session-snapshot.ts'
 export { ShortcutsPanel } from './ShortcutsPanel.tsx'
 export type { ShortcutEntry, ShortcutsPanelProps } from './ShortcutsPanel.tsx'
 export { SearchBlock, DEFAULT_SEARCH_MAX_LINES } from './SearchBlock.tsx'

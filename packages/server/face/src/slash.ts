@@ -14,7 +14,6 @@ import {
   collectFacePluginCommands,
   type FacePluginCommand,
 } from "./plugin-inventory.js";
-import { FACE_PERMISSION_PRESETS } from "./face-schema.js";
 import {
   applyPermissionPreset,
   permissionSelectFromEvents,
@@ -27,6 +26,8 @@ import {
   steerPlanMessage,
 } from "./plan-mode.js";
 import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
+import { parseAutoReviewSlashInput } from "./auto-review-slash.js";
+import { approvePendingAutoReview } from "./auto-review-approve.js";
 import { formatMcpInventoryText, settingsMutateFace } from "./settings-credentials.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { selectSessionModel } from "./select-session-model.js";
@@ -298,19 +299,22 @@ export async function executeFaceCommand(
 
   if (parsed.name === "permission") {
     const name = parsed.rawInput.trim();
+    const autoLive = runtime.permissionAuto.isLive();
     if (name === "") {
       const current = permissionSelectFromEvents(
         readSessionEvents(runtime.store, sessionId),
+        { autoLive },
       ).currentValue;
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
-        text: `current permission mode ${current} (available: ${FACE_PERMISSION_PRESETS.join(", ")})`,
+        text: `current permission mode ${current} (available: ${runtime.permissionAuto.catalogNames().join(", ")})`,
       });
     }
     const applied = applyPermissionPreset(runtime.store, sessionId, name, {
       ...(runtime.hasPtyActivity
         ? { hasPtyActivity: () => runtime.hasPtyActivity!() }
         : {}),
+      autoGate: runtime.permissionAuto,
     });
     if (!applied.ok) {
       return appendCommandPair(runtime, sessionId, parsed, {
@@ -454,8 +458,23 @@ export async function executeFaceCommand(
     };
     const current = snap.autoReview;
     const enabledBefore = current?.enabled ?? false;
-    const text = narrateAutoReviewCommand(parsed.rawInput, enabledBefore);
-    runtime.autoReviewSlashPersist?.(parsed.rawInput);
+    const action = parseAutoReviewSlashInput(parsed.rawInput);
+    let text: string;
+    if (action?.kind === "approve") {
+      const outcome = approvePendingAutoReview(
+        runtime.approvals,
+        sessionId,
+        action.index,
+      );
+      runtime.autoReviewSlashPersist?.(parsed.rawInput);
+      text =
+        outcome.kind === "allowed"
+          ? outcome.note
+          : `auto-review approve: ${outcome.note}`;
+    } else {
+      text = narrateAutoReviewCommand(parsed.rawInput, enabledBefore);
+      runtime.autoReviewSlashPersist?.(parsed.rawInput);
+    }
     return appendCommandPair(
       runtime,
       sessionId,

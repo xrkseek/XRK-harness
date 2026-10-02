@@ -30,6 +30,24 @@ function scopedShell(
   return createSessionScopedShell(shell, sessionId);
 }
 
+/**
+ * Stop every live job owned by `sessionId` (best-effort).
+ * Turn abort only cancels work still bound to the current tool signal —
+ * yielded / backgrounded bash keeps running unless we kill here, which is
+ * why Stop had to be clicked repeatedly while toasts kept floating.
+ */
+export function killLiveSessionJobs(
+  shell: ShellService | undefined,
+  sessionId: string,
+): void {
+  const scoped = scopedShell(shell, sessionId);
+  if (!scoped) return;
+  for (const job of scoped.listJobsNow()) {
+    if (job.status !== "running" && job.status !== "stopping") continue;
+    void scoped.killJob(job.id, "session-cancel").catch(() => undefined);
+  }
+}
+
 const jobHostUnavailable = {
   ok: false as const,
   error: {

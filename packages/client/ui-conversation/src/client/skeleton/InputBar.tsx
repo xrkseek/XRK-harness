@@ -13,7 +13,7 @@
  * trigger instead of a parallel tree.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
@@ -31,6 +31,13 @@ import type { Translate } from '@xrkseek/client-ui-slots'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import type { InputNotice } from '../input/contract.ts'
 import { DraftEditor } from '../input/editor/DraftEditor.tsx'
+import {
+  clearEditStaging,
+  getEditStaging,
+  getResubmitIntent,
+  subscribeEditStaging,
+  subscribeResubmitIntent,
+} from '../chat/resubmit-intent.ts'
 import {
   focusDraftEditor, installDraftFilePicker, installDraftKeymap, installDraftWheel,
   keepDraftFocus, revealDraftSelection,
@@ -75,6 +82,31 @@ export const InputBar = memo(function InputBar({
   const subagent = useSession(s => s.subagent) ?? null
   const removed = useSession(s => s.removed) ?? false
   const reconnecting = useConnectionState(state => state === 'reconnecting')
+  const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
+  const resubmitIntent = useSyncExternalStore(subscribeResubmitIntent, getResubmitIntent, getResubmitIntent)
+  const stagingActive = editStaging !== null && sessionId !== undefined && editStaging.sessionId === sessionId
+  // Confirm modal owns the decision; hide the banner so two truncate cues don't stack.
+  const showEditStaging = stagingActive
+    && !(resubmitIntent !== null && resubmitIntent.sessionId === sessionId)
+  const cancelEditStaging = useCallback(() => {
+    clearEditStaging()
+    inputActions?.setDraft('')
+    keyboard?.focus()
+  }, [inputActions, keyboard])
+
+  // Escape exits edit staging (a11y: every transient mode needs a keyboard exit).
+  useEffect(() => {
+    if (!stagingActive) return
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      if (resubmitIntent !== null) return
+      event.preventDefault()
+      cancelEditStaging()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown) }
+  }, [stagingActive, resubmitIntent, cancelEditStaging])
+
   // Plan mode swaps the composer placeholder (the projection is the folded
   // host value; owner-prop placeholders — hero, session-unavailable — win).
   const planActive = useProjection('plan', plan => plan !== undefined && (plan.pending ? !plan.active : plan.active))
@@ -89,6 +121,14 @@ export const InputBar = memo(function InputBar({
     () => input === undefined || draftImages === undefined ? [] : draftImages(input.imageIds),
     [draftImages, input?.imageIds],
   )
+
+  // Empty draft ends staging — no silent "edit mode" with nothing to send.
+  useEffect(() => {
+    if (!stagingActive) return
+    if (draft.trim() !== '') return
+    if (attachments.length > 0) return
+    clearEditStaging()
+  }, [stagingActive, draft, attachments.length])
   const empty = draft.trim() === '' && attachments.length === 0
   const filesNotReady = attachments.some((attachment) => {
     if (attachment.kind !== 'file') return false
@@ -481,8 +521,26 @@ export const InputBar = memo(function InputBar({
           onDone={dismissToast}
         />
       )}
-      {notice?.level === 'info' && (
-        <div className={css.notice} role="status">
+      {showEditStaging && (
+        <div
+          className={css.notice}
+          role="status"
+          aria-live="polite"
+          data-edit-staging
+        >
+          <span id="xrk-edit-staging-hint">{t('message.edit.staging')}</span>
+          <button
+            type="button"
+            className={css.stagingCancel}
+            aria-label={t('message.edit.cancelStaging')}
+            onClick={cancelEditStaging}
+          >
+            {t('message.edit.cancelStaging')}
+          </button>
+        </div>
+      )}
+      {notice?.level === 'info' && !showEditStaging && (
+        <div className={css.notice} role="status" aria-live="polite">
           {notice.text}
         </div>
       )}

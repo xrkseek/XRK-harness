@@ -13,7 +13,7 @@ import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-layout/client'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ApprovalWait, ChatNodeTurnDataInjected, ChatScrollPosition, ChatViewInjected, ComposerBarInjected,
+  ApprovalComposerInjected, ApprovalWait, ChatNodeTurnDataInjected, ChatScrollPosition, ChatViewInjected, ComposerBarInjected,
   ComposerChainProps, ConversationInjected, ConversationSessionHeaderInjected, ConversationSessionInjected,
   DraftFileUploads,
 } from './contract/slots.ts'
@@ -28,8 +28,16 @@ import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
+import { ToolsExpandRow } from './settings/ToolsExpandRow.tsx'
+import type { ToolsExpandRowInjected } from './settings/ToolsExpandRow.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { StatsLine } from './chat/StatsLine.tsx'
+import {
+  beginEditStaging,
+  clearEditStaging,
+  requestResubmitConfirm,
+} from './chat/resubmit-intent.ts'
+import { executeResubmitAfterChoice } from './chat/resubmit-execute.ts'
 import { ApprovalPanel } from './skeleton/ApprovalPanel.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
@@ -45,6 +53,24 @@ import './file-limits-projection.ts'
 // Side-effect: merge Face `turnOutline` into SessionProjectionMap for ChatView.
 import './turn-outline-projection.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
+
+/**
+ * Delete path: confirm immediately, then fork (no re-prompt).
+ */
+async function deleteFromSeq(
+  sessions: ISessions,
+  sessionId: SessionId,
+  seq: number,
+): Promise<void> {
+  clearEditStaging()
+  const choice = await requestResubmitConfirm({
+    sessionId,
+    kind: 'delete',
+    seq,
+  })
+  if (choice === 'cancel') return
+  await executeResubmitAfterChoice(sessions, sessionId, { seq, choice })
+}
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -159,10 +185,52 @@ export function apply(ctx: Context): void {
     }),
   }, EnterBehaviorRow))
 
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'tools-default-expanded',
+    order: 21,
+    locale: NS,
+    inject: (): ToolsExpandRowInjected => ({
+      hooks: { toolsDefaultExpanded: submissionPolicy.toolsDefaultExpanded },
+      setToolsDefaultExpanded: (expanded) => {
+        submissionPolicy.setToolsDefaultExpanded(expanded)
+      },
+    }),
+  }, ToolsExpandRow))
+
+  // Live tool-row expand preference for ui-tool (ToolCallTree inject).
+  ctx.provide('conversationUiPrefs', {
+    toolsDefaultExpanded: submissionPolicy.toolsDefaultExpanded,
+  })
+
   // Chat semantic reader positions by session, surviving view switches and
   // width reflow when the tab ring remounts the view. Deliberately not
   // persisted: a fresh page load keeps the open-jump-to-bottom default.
+  // Insertion order acts as LRU; cap so long-lived shells cannot grow forever.
+  const CHAT_SCROLL_MAX = 48
   const chatScrollPositions = new Map<SessionId, ChatScrollPosition>()
+  const rememberChatScroll = (sessionId: SessionId, position: ChatScrollPosition | null): void => {
+    if (position === null) {
+      chatScrollPositions.delete(sessionId)
+      return
+    }
+    const prev = chatScrollPositions.get(sessionId)
+    if (
+      prev !== undefined
+      && prev.anchorKey === position.anchorKey
+      && prev.anchorTop === position.anchorTop
+      && prev.scrollTop === position.scrollTop
+    ) {
+      return
+    }
+    chatScrollPositions.delete(sessionId)
+    chatScrollPositions.set(sessionId, position)
+    while (chatScrollPositions.size > CHAT_SCROLL_MAX) {
+      const oldest = chatScrollPositions.keys().next().value
+      if (oldest === undefined) break
+      chatScrollPositions.delete(oldest)
+    }
+  }
 
   const viewTabs = (): ViewTab[] => {
     const tabs: ViewTab[] = []
@@ -399,7 +467,15 @@ export function apply(ctx: Context): void {
   // pending — a question is a conversation the model is waiting on, while an
   // approval only blocks one tool call; answering the question first cannot
   // strand the approval (it re-elects the moment the question resolves).
-  slots.register({ name: 'conversation.composer', select: selectApproval, priority: 1, locale: NS }, ApprovalPanel)
+  slots.register({
+    name: 'conversation.composer',
+    select: selectApproval,
+    priority: 1,
+    locale: NS,
+    inject: (): ApprovalComposerInjected => ({
+      resolveReason: (reason) => ctx.locale.resolveText(reason),
+    }),
+  }, ApprovalPanel)
 
   // The chat view: first entry of the ring this package just declared.
   // ChatView owns only the stable ordered Node list. Business renderers are
@@ -433,6 +509,7 @@ export function apply(ctx: Context): void {
             resolved,
             (p) => workspaces.openPath(p),
             (p) => {
+              // type editor → community side workbench (never bottom pane).
               const face = ctx.get('betterSidebar') as {
                 openTab?(seed: { type: string; path?: string }): void
               } | undefined
@@ -450,10 +527,7 @@ export function apply(ctx: Context): void {
           actions.setView('trajectory')
         },
         chatScroll: {
-          save: (position) => {
-            if (position === null) chatScrollPositions.delete(sessionId)
-            else chatScrollPositions.set(sessionId, position)
-          },
+          save: (position) => { rememberChatScroll(sessionId, position) },
           read: () => chatScrollPositions.get(sessionId) ?? null,
         },
         forkAt: (seq) => {
@@ -470,6 +544,16 @@ export function apply(ctx: Context): void {
           void session.command(`/rollback seq:${seq}`).catch(() => {
             // Missing checkpoint / git → slash error text in the transcript.
           })
+        },
+        editAt: (seq, text) => {
+          // Edit = load into composer first; truncate confirm runs on send.
+          const shell = inputHub.shell(sessionId)
+          shell.setDraft(text)
+          beginEditStaging({ sessionId, seq })
+          shell.focus()
+        },
+        deleteAt: (seq) => {
+          void deleteFromSeq(sessions, sessionId, seq).catch(() => undefined)
         },
       }
     },

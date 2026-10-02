@@ -10,6 +10,10 @@
   padding: 28px;
   box-sizing: border-box;
   overflow-y: auto;
+  /* The sheet content is the only scroller (title and footer stay put);
+     contained so a sheet scrolled to its end does not rubber-band the page it
+     covers. */
+  overscroll-behavior: contain;
 }
 
 @supports (height: 100dvh) {
@@ -24,7 +28,6 @@
   line-height: 28px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
-  outline: none;
 }
 
 .body {

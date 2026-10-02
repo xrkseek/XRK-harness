@@ -12,8 +12,10 @@ import css from './ConversationRoot.module.css'
 /** Full props composed from the slot contract. */
 export type ConversationRootProps = ConversationSlotProps
 
-/** localStorage key for the dragged transcript width preference (px). */
-const WIDTH_PREF_KEY = 'dsh.conversation.contentWidth'
+/** Versioned localStorage key for the dragged transcript width preference (px). */
+const WIDTH_PREF_KEY = 'xrk.conversation.contentWidth.v1'
+/** Legacy community key — read once and migrate into {@link WIDTH_PREF_KEY}. */
+const WIDTH_PREF_LEGACY_KEY = 'dsh.conversation.contentWidth'
 /** Floor for a dragged content width; matches the layout center-column minimum. */
 const CONTENT_MIN = 640
 /** Column budget the content must leave free: 88px per side keeps the width
@@ -22,22 +24,71 @@ const CONTENT_MIN = 640
  * way to drag back. */
 const CONTENT_EDGE_BUDGET = 176
 
+/**
+ * In-memory mirror of the width preference. ResizeObserver republishes on
+ * every column tick — a sync localStorage read on each would stall layout
+ * (Vercel js-cache-storage).
+ */
+let widthPreferenceCache: number | null | undefined
+
+/** Parse a stored width string into a positive finite px value. */
+function parseWidthPreference(raw: string | null): number | null {
+  if (raw === null) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
 /** Reads the persisted width preference; durable-storage boundary, so a
  * missing or corrupt value resolves to "no preference". Storage can be
  * disabled by the environment (private mode, sandboxed iframe, policy) —
  * the read must degrade to "no preference" instead of throwing during
- * mount/layout.
+ * mount/layout. Hits the memory cache after the first successful probe.
  * @returns the stored width in px, or null when unset, invalid, or unavailable. */
 function readWidthPreference(): number | null {
-  let raw: string | null
+  if (widthPreferenceCache !== undefined) return widthPreferenceCache
+  let raw: string | null = null
   try {
     raw = localStorage.getItem(WIDTH_PREF_KEY)
+    if (raw === null) {
+      const legacy = localStorage.getItem(WIDTH_PREF_LEGACY_KEY)
+      const migrated = parseWidthPreference(legacy)
+      if (migrated !== null) {
+        try {
+          localStorage.setItem(WIDTH_PREF_KEY, `${migrated}`)
+          localStorage.removeItem(WIDTH_PREF_LEGACY_KEY)
+        } catch {
+          // Migration is best-effort; keep serving the legacy value from cache.
+        }
+        widthPreferenceCache = migrated
+        return migrated
+      }
+    }
   } catch {
+    widthPreferenceCache = null
     return null
   }
-  if (raw === null) return null
-  const value = Number(raw)
-  return Number.isFinite(value) && value > 0 ? value : null
+  widthPreferenceCache = parseWidthPreference(raw)
+  return widthPreferenceCache
+}
+
+/** Persist + cache one committed width preference (quota / private mode soft-fail). */
+function writeWidthPreference(width: number): void {
+  widthPreferenceCache = width
+  try {
+    localStorage.setItem(WIDTH_PREF_KEY, `${width}`)
+    localStorage.removeItem(WIDTH_PREF_LEGACY_KEY)
+  } catch {
+    // Preference stays in-memory for this session; next mount falls back
+    // to the adaptive clamp when storage is unavailable.
+  }
+}
+
+/**
+ * Drop the in-memory width preference mirror. Tests that seed or clear
+ * localStorage between mounts need this; production never calls it.
+ */
+export function clearWidthPreferenceCache(): void {
+  widthPreferenceCache = undefined
 }
 
 /** Resolves the content width the CSS axis would show for a column width.
@@ -244,12 +295,7 @@ export function ConversationRoot({
     if (root === null) return
     // Storage can be disabled by the environment (private mode, sandboxed
     // iframe, policy): a failed persist must not break the drag gesture.
-    try {
-      localStorage.setItem(WIDTH_PREF_KEY, `${resolveContentWidth(root.offsetWidth, width)}`)
-    } catch {
-      // Preference stays in-memory for this session; next mount falls back
-      // to the adaptive clamp.
-    }
+    writeWidthPreference(resolveContentWidth(root.offsetWidth, width))
   }, [])
   const onHandleEnd = useCallback((): void => {
     const root = rootEl.current

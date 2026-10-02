@@ -8,7 +8,7 @@ import type { AssistantTiming } from './conversation.ts'
 
 // The first-token predicate lives beside the StreamChunk type in dsh-llm;
 // re-exported here so Chat Definitions keep their client-runtime import.
-export { isTokenDelta } from '@xrkseek/xrk-llm/message'
+export { isTokenDelta, isDecodableSample, MIN_DECODE_SAMPLE_MS } from '@xrkseek/xrk-llm/message'
 
 /** Pre-finalize timing boundaries for one assistant step (start + first token). */
 export interface AssistantStepMetadata {

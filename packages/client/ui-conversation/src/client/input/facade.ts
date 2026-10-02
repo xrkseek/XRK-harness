@@ -49,6 +49,12 @@ export interface SessionInputDeps {
    * order (the empty-draft accelerated-Enter gesture); absent = unsupported.
    */
   steerQueue?: (() => void) | undefined
+  /**
+   * When the composer has a staged past-message edit, confirm (if needed) and
+   * fork+reprompt without going through the ordinary prompt sink.
+   * @returns true when the staged path handled the gesture (including cancel).
+   */
+  tryStagedEditSubmit?: (() => Promise<boolean>) | undefined
   /** The plain-message sink (send choreography / materialize fork — the hub owns it). */
   defaultSink(
     text: string,
@@ -143,6 +149,8 @@ export class SessionInputShell implements SessionInput {
   /** Revision of the last automatic failure restoration. */
   private failedRestoreRev: number | undefined
   private restoringFailures = false
+  /** Blocks re-entrant Enter while a staged edit confirm is open. */
+  private stagedEditBusy = false
   private imageFlightSeq = 0
   /** Image-only sends retained until admission settles or scope disposal releases their images. */
   private readonly imageFlights = new Map<number, {
@@ -267,6 +275,23 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
+    if (this.stagedEditBusy) return
+    const tryStaged = this.deps.tryStagedEditSubmit
+    if (tryStaged !== undefined) {
+      this.stagedEditBusy = true
+      void tryStaged().then((handled) => {
+        this.stagedEditBusy = false
+        if (!handled) this.submitOrdinary(mode)
+      }, () => {
+        this.stagedEditBusy = false
+      })
+      return
+    }
+    this.submitOrdinary(mode)
+  }
+
+  /** Ordinary prompt / slash enter path (after staged-edit gate). */
+  private submitOrdinary(mode: InputSubmitMode): void {
     if (this.snapshot.draft.trim() === '' && this.imageIds.length > 0) {
       if (this.snapshot.phase === 'plain') {
         const imageIds = [...this.imageIds]

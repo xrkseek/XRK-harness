@@ -3,11 +3,15 @@ import { en } from './locales.ts'
 /** Machine value of the preset that requires an explicit GUI risk gate. */
 export const FULL_ACCESS_PRESET = 'danger-full-access'
 
-/** Known Face / protocol permission preset ids (DSH + Codex three-way). */
+/** Machine value of the experimental current-session Auto review preset. */
+export const AUTO_REVIEW_PRESET = 'auto'
+
+/** Known Face / protocol permission preset ids (DSH + Auto). */
 export const PERMISSION_PRESET_IDS = [
   'read-only',
   'workspace-write',
   'danger-full-access',
+  AUTO_REVIEW_PRESET,
 ] as const
 
 export type PermissionPresetId = (typeof PERMISSION_PRESET_IDS)[number]
@@ -17,17 +21,20 @@ export type PermissionPresetLabelKey =
   | 'preset.readOnly'
   | 'preset.workspaceWrite'
   | 'preset.fullAccess'
+  | 'preset.auto'
 
 const PRESET_LABEL_KEYS = new Map<string, PermissionPresetLabelKey>([
   ['read-only', 'preset.readOnly'],
   ['workspace-write', 'preset.workspaceWrite'],
   [FULL_ACCESS_PRESET, 'preset.fullAccess'],
+  [AUTO_REVIEW_PRESET, 'preset.auto'],
 ])
 
 const DEFAULT_PRESET_LABELS: Record<PermissionPresetLabelKey, string> = {
   'preset.readOnly': en['preset.readOnly'],
   'preset.workspaceWrite': en['preset.workspaceWrite'],
   'preset.fullAccess': en['preset.fullAccess'],
+  'preset.auto': en['preset.auto'],
 }
 
 /**
@@ -64,4 +71,9 @@ export function displayPermissionPreset(
 /** Whether `value` is the Full access preset that needs a risk gate. */
 export function isFullAccessPreset(value: string): boolean {
   return value === FULL_ACCESS_PRESET
+}
+
+/** Whether `value` is the experimental Auto review preset that needs a risk gate. */
+export function isAutoPreset(value: string): boolean {
+  return value === AUTO_REVIEW_PRESET
 }

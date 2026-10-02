@@ -18,7 +18,7 @@ import type { ConversationRuntime } from './conversation-assembler.ts'
 import type { ConversationEventInput, ConversationPublication } from '../contract/conversation.ts'
 import type {
   ChatSnapshot, ComposerPhase, ConversationSnapshot, OpenState, PendingSubmission,
-  PromptError, SessionRequestId,
+  PromptError, QueuedMessage, SessionRequestId,
 } from './conversation.ts'
 import { EMPTY_CHAT_SNAPSHOT } from './conversation.ts'
 import type { PendingInteraction } from './pending.ts'
@@ -103,6 +103,13 @@ export class Session implements SessionFace {
     readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
     retiring: boolean
   }>()
+  /**
+   * RpcIds once observed in a Host `session/queue` snapshot. Used to retire
+   * local queued echoes when Host later drops the row (user remove or claim)
+   * without re-showing a pre-admit dock row. Survives `session/subscribed` mirror reset
+   * so a post-reset baseline that omits the row still settles the echo.
+   */
+  private readonly hostQueuedRpcIds = new Set<string>()
   /** Session-owned business Context engine over the contiguous raw window. */
   private readonly conversation: ConversationNodeAssembler
   private running = false
@@ -210,9 +217,16 @@ export class Session implements SessionFace {
     const requestId = brandRpcId(randomUuid()) as SessionRequestId
     this.pendingSubmissions = [...this.pendingSubmissions, {
       requestId,
-      placement: this.running
-        ? input.mode === 'steer' ? 'steering' : 'queued'
-        : 'transcript',
+      // Optimistic transcript: the click has to be visible immediately and in
+      // exactly one place. Deriving `queued` from the local running bit raced
+      // Host — a queue-mode submit that Host admitted straight into a new turn
+      // never produced a queue row, so the echo sat unrendered in both
+      // ChatView (queued echoes are skipped) and QueueDock (nothing mirrored)
+      // until durable `user/message` retired it. A read-only symptom of that:
+      // "my message vanished, it looks like it is still queued".
+      // `observeSubmissionQueue` demotes it once the Host queue confirms, and
+      // `handoffDroppedQueueSubmissions` promotes it back on FIFO claim.
+      placement: input.mode === 'steer' ? 'steering' : 'transcript',
       time: Date.now(),
       text: input.text,
       attachments: input.attachments,
@@ -338,8 +352,18 @@ export class Session implements SessionFace {
 
   /** Apply one operation to a still-pending queue occurrence. */
   async updateQueue(itemId: MessageId, action: QueueAction): Promise<RpcResult<{ accepted: true }>> {
+    const row = this.queueMirror.snapshot().find(item => item.id === itemId)
     try {
-      return (await this.api.sessions.updateQueue({ sessionId: this.sessionId, itemId, action })).result
+      const result = (await this.api.sessions.updateQueue({
+        sessionId: this.sessionId, itemId, action,
+      })).result
+      // Explicit Host remove: retire the matching local echo now. FIFO claim
+      // empties the queue without this path — that handoff promotes to transcript
+      // until durable user/message (see handoffDroppedQueueSubmissions).
+      if (result.ok && action.kind === 'remove' && row?.rpcId !== undefined) {
+        this.retireFailedSubmission(row.rpcId as SessionRequestId)
+      }
+      return result
     } catch (error) {
       return transportError(error)
     }
@@ -601,6 +625,7 @@ export class Session implements SessionFace {
       case 'session/queue': {
         this.queueMirror.replace(frame.items)
         this.observeSubmissionQueue()
+        this.handoffDroppedQueueSubmissions()
         this.notifier.markDirty()
         return
       }
@@ -822,7 +847,12 @@ export class Session implements SessionFace {
     // Mux-only carriers (Desktop SSE) never see host/session-status; arm/clear
     // running from the durable turn envelope so Stop and queue placement work.
     if (event.type === 'turn/start') this.handleRunning(true)
-    if (event.type === 'turn/end') this.handleRunning(false)
+    if (event.type === 'turn/end') {
+      // Keep Stop / waiting chrome armed while Host still has (or we still
+      // project) follow-up work — clearing here left a false idle between
+      // turn/end and the next turn/start while the inbox drained.
+      if (!this.hasFollowUpWork()) this.handleRunning(false)
+    }
     const queueChanged = this.queueMirror.acceptDurable(event)
     const publication = this.conversation.append({ event, view })
     // After the feed append: schedule echo retirement one frame later so the
@@ -936,13 +966,72 @@ export class Session implements SessionFace {
     this.scheduleObservedRetirement(rpcId as SessionRequestId, attachmentRefsIn(data?.content))
   }
 
-  /** Retire local echoes when their accepted messages appear in the Host queue snapshot. */
+  /**
+   * Align local echo placement with the Host queue row. Do **not** retire on
+   * first admit: retiring there left a hole when `session/subscribed` cleared
+   * the mirror before the next baseline (echo gone, dock empty, short
+   * follow-ups flash out of the transcript). ChatView / QueueDock hand off by
+   * rpcId; durable `user/message` still retires via
+   * {@link observeSubmissionEvent}. Host drops hand off via
+   * {@link handoffDroppedQueueSubmissions}; explicit remove retires in
+   * {@link updateQueue}.
+   */
   private observeSubmissionQueue(): void {
-    if (this.submissionSettlements.size === 0) return
+    const byRpc = new Map<string, QueuedMessage>()
     for (const row of this.queueMirror.snapshot()) {
       if (row.rpcId === undefined) continue
-      this.scheduleObservedRetirement(row.rpcId as SessionRequestId, attachmentRefsIn(row.content))
+      byRpc.set(row.rpcId, row)
+      this.hostQueuedRpcIds.add(row.rpcId)
     }
+    if (this.pendingSubmissions.length === 0 || byRpc.size === 0) return
+    let changed = false
+    const next = this.pendingSubmissions.map((echo) => {
+      const row = byRpc.get(echo.requestId)
+      if (row === undefined) return echo
+      // Host `context` rows are not a client echo surface — treat as queued.
+      const placement: PendingSubmission['placement'] =
+        row.placement === 'steering' ? 'steering' : 'queued'
+      if (echo.placement === placement) return echo
+      changed = true
+      return { ...echo, placement }
+    })
+    if (!changed) return
+    this.pendingSubmissions = next
+  }
+
+  /**
+   * When Host drops a previously-seen queued row (FIFO claim), promote the
+   * local echo to `transcript` so ChatView keeps painting until durable
+   * `user/message` retires it. Do **not** retire here: that left a claim→
+   * durable hole (dock empty + ChatView ignores queued). Explicit user
+   * delete retires via {@link updateQueue}. Pre-admit echoes (never seen
+   * on Host) and `session/subscribed` mirror clears are untouched.
+   */
+  private handoffDroppedQueueSubmissions(): void {
+    if (this.pendingSubmissions.length === 0 || this.hostQueuedRpcIds.size === 0) return
+    const present = new Set<string>()
+    for (const row of this.queueMirror.snapshot()) {
+      if (row.rpcId !== undefined) present.add(row.rpcId)
+    }
+    let changed = false
+    const next = this.pendingSubmissions.map((echo) => {
+      if (echo.placement !== 'queued') return echo
+      if (!this.hostQueuedRpcIds.has(echo.requestId) || present.has(echo.requestId)) {
+        return echo
+      }
+      changed = true
+      return { ...echo, placement: 'transcript' as const }
+    })
+    if (!changed) return
+    this.pendingSubmissions = next
+  }
+
+  /** Host queue or local steer/queue echoes still pending after a turn. */
+  private hasFollowUpWork(): boolean {
+    if (this.queueMirror.snapshot().length > 0) return true
+    return this.pendingSubmissions.some(echo => (
+      echo.placement === 'queued' || echo.placement === 'steering'
+    ))
   }
 
   /**
@@ -973,6 +1062,7 @@ export class Session implements SessionFace {
     /* v8 ignore next -- retiring latches before every schedule, so one settlement never finishes twice. */
     if (settlement === undefined) return
     this.submissionSettlements.delete(requestId)
+    this.hostQueuedRpcIds.delete(requestId)
     this.pendingSubmissions = this.pendingSubmissions.filter(echo => echo.requestId !== requestId)
     this.notifier.markDirty()
     settlement.onRetire?.(retirement)

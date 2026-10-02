@@ -2,6 +2,9 @@
 // and ContextMeter. No React — root vitest can gate these without jsdom.
 
 import type { ConversationSnapshot } from '@xrkseek/client-runtime/client'
+// Stub import: the client barrel touches `window` (slots); this module is
+// unit-tested in Node, so it must not drag the barrel in.
+import { isDecodableSample } from '@xrkseek/xrk-llm/message'
 import type { ContextPressureProjection, TokenUsageProjection } from '@xrkseek/xrk-token-meter/client'
 import { assistantStepReading } from './turn-metrics.ts'
 import { formatCacheHitPercent } from './token-format.ts'
@@ -60,9 +63,9 @@ export function deriveStats(nodes: ConversationSnapshot['nodes']): WindowStats {
       ttftMs += reading.ttftMs
       ttftSteps += 1
     }
-    if (reading.decodeMs !== null && reading.outputTokens !== null) {
+    if (reading.decodeMs !== null && isDecodableSample(reading.outputTokens, reading.decodeMs)) {
       decodeMs += reading.decodeMs
-      decodeTokens += reading.outputTokens
+      decodeTokens += reading.outputTokens ?? 0
     }
   }
   return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens }

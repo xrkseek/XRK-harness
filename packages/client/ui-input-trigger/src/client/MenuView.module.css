@@ -8,7 +8,7 @@
   position: absolute;
   bottom: calc(100% + 4px);
   left: 0;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   min-width: min(260px, 100%);
   /* 537 is the design cap; the 100% clamp keeps the menu inside the composer
      card when a narrow viewport shrinks the card below the cap (the overlay
@@ -36,6 +36,9 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  /* Trigger rows scroll in .viewport under the capped card; keep an edge
+     overscroll off the composer page the menu sits over. */
+  overscroll-behavior: contain;
 }
 
 .item {

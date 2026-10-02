@@ -94,15 +94,19 @@
 
 .menu {
   position: fixed;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   width: 336px;
-  max-width: min(400px, calc(100vw - 32px));
-  max-height: min(560px, calc(100vh - 140px));
+  /* Both JS clamps (menu width and the left/right bounds) are inset-blind, so
+     a lineage tree opened at the screen edge would run under the sensor
+     housing in landscape. */
+  max-width: min(400px, calc(100vw - 32px - var(--ds-safe-h)));
+  max-height: min(560px, calc(100dvh - var(--ds-safe-v) - 140px));
   padding: 4px;
   overflow: auto;
+  overscroll-behavior: contain;
   border-radius: 12px;
   background: var(--dsw-specific-menu);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);

@@ -23,8 +23,13 @@ export class FaceWorkspaceRegistry {
   /** workspaceId → session ids in sidebar order. */
   private readonly sessionOrder = new Map<string, string[]>();
   private readonly archived = new Set<string>();
-  /** Registry-global pin order (newest pin first). Mutually exclusive with archive. */
+  /** Registry-global session pin order (newest pin first). Mutually exclusive with archive. */
   private pinned: string[] = [];
+  /**
+   * Registry-global workspace pin order (newest pin first). Pinned workspaces
+   * lead `list()` / display order; relative unpinned order stays in `order`.
+   */
+  private pinnedWorkspaces: string[] = [];
   private seq = 0;
 
   constructor(root: string) {
@@ -229,31 +234,88 @@ export class FaceWorkspaceRegistry {
     }
     this.workspaces.delete(workspaceId);
     this.sessionOrder.delete(workspaceId);
+    this.pinnedWorkspaces = this.pinnedWorkspaces.filter((id) => id !== workspaceId);
     const idx = this.order.indexOf(workspaceId);
     if (idx >= 0) this.order.splice(idx, 1);
     return { ok: true, movedSessionIds: [...released] };
   }
 
-  /** Reorder workspaces so `workspaceId` sits immediately before `beforeId`. */
+  /**
+   * Pin one workspace to the front of the registry-global workspace pin order
+   * (newest first). Unknown ids leave the set unchanged.
+   */
+  pinWorkspace(workspaceId: string): string[] | undefined {
+    if (!this.workspaces.has(workspaceId)) return undefined;
+    this.pinnedWorkspaces = [
+      workspaceId,
+      ...this.pinnedWorkspaces.filter((id) => id !== workspaceId),
+    ];
+    return [...this.pinnedWorkspaces];
+  }
+
+  /**
+   * Drop one workspace from the pin order. Unknown / unpinned ids resolve
+   * without writing.
+   */
+  unpinWorkspace(workspaceId: string): string[] {
+    this.pinnedWorkspaces = this.pinnedWorkspaces.filter((id) => id !== workspaceId);
+    return [...this.pinnedWorkspaces];
+  }
+
+  /** Display order: pinned workspaces (pin order) then the rest of `order`. */
+  displayOrder(): string[] {
+    const pinned = this.pinnedWorkspaces.filter((id) => this.workspaces.has(id));
+    const pinnedSet = new Set(pinned);
+    const rest = this.order.filter((id) => this.workspaces.has(id) && !pinnedSet.has(id));
+    return [...pinned, ...rest];
+  }
+
+  /**
+   * Reorder workspaces so `workspaceId` sits immediately before `beforeId`
+   * in display order (DOM-insertBefore). Omitted `beforeId` appends.
+   * Crossing the pin/unpinned boundary updates the workspace pin set.
+   */
   insertBefore(
     workspaceId: string,
-    beforeId: string,
-  ): FaceWorkspaceView[] | undefined {
-    if (!this.workspaces.has(workspaceId) || !this.workspaces.has(beforeId)) {
-      return undefined;
+    beforeId?: string,
+  ): { items: FaceWorkspaceView[]; pinnedWorkspaceIds: string[] } | undefined {
+    if (!this.workspaces.has(workspaceId)) return undefined;
+    if (beforeId !== undefined) {
+      if (!this.workspaces.has(beforeId)) return undefined;
+      if (workspaceId === beforeId) {
+        return {
+          items: this.displayOrder().map((id) => this.view(id)!),
+          pinnedWorkspaceIds: [...this.pinnedWorkspaces],
+        };
+      }
     }
-    if (workspaceId === beforeId) {
-      return this.order.map((id) => this.view(id)!);
-    }
-    const from = this.order.indexOf(workspaceId);
-    this.order.splice(from, 1);
-    const to = this.order.indexOf(beforeId);
-    if (to < 0) {
-      this.order.push(workspaceId);
+
+    const prevPinned = this.pinnedWorkspaces.filter((id) => this.workspaces.has(id));
+    const wasPinned = prevPinned.includes(workspaceId);
+    const display = this.displayOrder().filter((id) => id !== workspaceId);
+    const pinBoundary = wasPinned ? prevPinned.length - 1 : prevPinned.length;
+
+    const to =
+      beforeId === undefined ? display.length : display.indexOf(beforeId);
+    if (beforeId !== undefined && to < 0) {
+      display.push(workspaceId);
     } else {
-      this.order.splice(to, 0, workspaceId);
+      display.splice(to < 0 ? display.length : to, 0, workspaceId);
     }
-    return this.order.map((id) => this.view(id)!);
+
+    const newIndex = display.indexOf(workspaceId);
+    const newPinCount = newIndex <= pinBoundary ? pinBoundary + 1 : pinBoundary;
+    this.pinnedWorkspaces = display.slice(0, newPinCount);
+    const pinnedSet = new Set(this.pinnedWorkspaces);
+    const rest = display.filter((id) => !pinnedSet.has(id));
+    // Keep `order` as pinned-then-rest so create/append stays after pins.
+    this.order.length = 0;
+    this.order.push(...this.pinnedWorkspaces, ...rest);
+
+    return {
+      items: display.map((id) => this.view(id)!),
+      pinnedWorkspaceIds: [...this.pinnedWorkspaces],
+    };
   }
 
   /**
@@ -286,8 +348,8 @@ export class FaceWorkspaceRegistry {
     items: FaceWorkspaceView[];
     archivedSessionIds: string[];
     pinnedSessionIds: string[];
+    pinnedWorkspaceIds: string[];
   } {
-    const assigned = new Set<string>();
     const byWs = new Map<string, string[]>();
     for (const id of this.order) {
       const ordered = (this.sessionOrder.get(id) ?? []).filter(
@@ -297,14 +359,15 @@ export class FaceWorkspaceRegistry {
           this.membership.get(sid) === id,
       );
       byWs.set(id, ordered);
-      for (const sid of ordered) assigned.add(sid);
     }
 
-    const items = this.order.map((id) => this.view(id, byWs.get(id) ?? [])!);
+    const display = this.displayOrder();
+    const items = display.map((id) => this.view(id, byWs.get(id) ?? [])!);
     return {
       items,
       archivedSessionIds: [...this.archived],
       pinnedSessionIds: this.pinned.filter((sid) => allSessionIds.includes(sid) || this.membership.has(sid)),
+      pinnedWorkspaceIds: this.pinnedWorkspaces.filter((id) => this.workspaces.has(id)),
     };
   }
 
@@ -347,6 +410,7 @@ export class FaceWorkspaceRegistry {
     sessionOrder: Record<string, string[]>;
     archivedSessionIds: string[];
     pinnedSessionIds: string[];
+    pinnedWorkspaceIds: string[];
   } {
     const entries: Record<
       string,
@@ -376,6 +440,7 @@ export class FaceWorkspaceRegistry {
       sessionOrder,
       archivedSessionIds: [...this.archived],
       pinnedSessionIds: [...this.pinned],
+      pinnedWorkspaceIds: [...this.pinnedWorkspaces],
     };
   }
 
@@ -398,6 +463,7 @@ export class FaceWorkspaceRegistry {
       sessionOrder?: Readonly<Record<string, readonly string[]>>;
       archivedSessionIds?: readonly string[];
       pinnedSessionIds?: readonly string[];
+      pinnedWorkspaceIds?: readonly string[];
     },
     fallbackRoot: string,
   ): void {
@@ -407,6 +473,7 @@ export class FaceWorkspaceRegistry {
     this.membership.clear();
     this.archived.clear();
     this.pinned = [];
+    this.pinnedWorkspaces = [];
     this.seq = Math.max(0, doc.seq);
 
     const root = path.resolve(fallbackRoot);
@@ -499,6 +566,16 @@ export class FaceWorkspaceRegistry {
         if (seen.has(sid) || this.archived.has(sid)) continue;
         seen.add(sid);
         this.pinned.push(sid);
+      }
+    }
+    if (doc.pinnedWorkspaceIds) {
+      const seen = new Set<string>();
+      this.pinnedWorkspaces = [];
+      for (const id of doc.pinnedWorkspaceIds) {
+        if (typeof id !== "string" || id.length === 0) continue;
+        if (seen.has(id) || !this.workspaces.has(id)) continue;
+        seen.add(id);
+        this.pinnedWorkspaces.push(id);
       }
     }
   }

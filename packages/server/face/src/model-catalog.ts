@@ -13,6 +13,16 @@ import {
   resolveProviderBinding,
 } from "./llm-provider-context.js";
 
+/** Selectable reasoning levels for one catalog model (composer ModelSelect). */
+export interface FaceModelReasoning {
+  readonly efforts: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+  }[];
+  readonly defaultEffort?: string;
+}
+
 export interface FaceModelEntry {
   readonly id: string;
   readonly name: string;
@@ -20,7 +30,21 @@ export interface FaceModelEntry {
   readonly contextWindow?: number;
   /** Declared intake modalities (Settings-editable; adapter may still gate). */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /** DeepSeek-style thinking intensity when the route exposes it. */
+  readonly reasoning?: FaceModelReasoning;
 }
+
+/** Wire efforts for official DeepSeek chat (`thinking` / `reasoning_effort`). */
+const DEEPSEEK_REASONING_EFFORTS: FaceModelReasoning["efforts"] = [
+  { id: "off", name: "Off" },
+  { id: "low", name: "Low" },
+  { id: "high", name: "High" },
+  { id: "max", name: "Max" },
+];
+
+const DEEPSEEK_REASONING_IDS = new Set(
+  DEEPSEEK_REASONING_EFFORTS.map((effort) => effort.id),
+);
 
 export interface FaceModelProviderGroup {
   readonly id: string;
@@ -82,17 +106,42 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
   return out;
 }
 
+/** Settings `llm-deepseek.reasoningEffort` when valid; else High. */
+function deepseekReasoning(runtime: FaceRuntime): FaceModelReasoning {
+  const merged = mergedNamespace(runtime, "llm-deepseek");
+  const raw = merged.reasoningEffort;
+  const defaultEffort =
+    typeof raw === "string" && DEEPSEEK_REASONING_IDS.has(raw) ? raw : "high";
+  return {
+    efforts: DEEPSEEK_REASONING_EFFORTS.map((effort) => ({ ...effort })),
+    defaultEffort,
+  };
+}
+
+function withDeepseekReasoning(
+  models: readonly FaceModelEntry[],
+  reasoning: FaceModelReasoning,
+): FaceModelEntry[] {
+  return models.map((model) =>
+    model.reasoning === undefined ? { ...model, reasoning } : model,
+  );
+}
+
 function deepseekModels(runtime: FaceRuntime): FaceModelEntry[] {
   const merged = mergedNamespace(runtime, "llm-deepseek");
+  const reasoning = deepseekReasoning(runtime);
   const fromSettings = asModelRows(merged.models);
-  if (fromSettings.length > 0) return fromSettings;
-  return DEFAULT_DEEPSEEK_MODELS.map((m) => ({
-    id: m.id,
-    name: m.name,
-    ...(m.description ? { description: m.description } : {}),
-    ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
-    ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
-  }));
+  if (fromSettings.length > 0) return withDeepseekReasoning(fromSettings, reasoning);
+  return withDeepseekReasoning(
+    DEFAULT_DEEPSEEK_MODELS.map((m) => ({
+      id: m.id,
+      name: m.name,
+      ...(m.description ? { description: m.description } : {}),
+      ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+      ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
+    })),
+    reasoning,
+  );
 }
 
 function piAiProviderModels(

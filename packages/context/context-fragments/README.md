@@ -8,7 +8,11 @@ Pluggable context-fragment pipeline (Codex-shaped). Layered **apart** from durab
 | `user-message` | With each user / steer prepare | `prepareUserContent` contexts |
 | `post-tool` | After tool settle, before `step/end` | Harness `afterToolResults` → `appendContextFragments` |
 
-Default `createGuardianReviewProvider()` registers turn-start + post-tool (thin advisory; not an LLM Guardian).
+Default providers are pluggable (`createStaticAdditionalContextProvider`,
+`createRecapFragment`). Chat UI hides durable `additional_context` rows.
+Tool pre-review lives on **auto-review** (Settings → Plugins → Advanced):
+classifier tiers heuristic | http | session-llm; session **Auto** = no sandbox +
+per-call review — not chat fragment spam.
 
 ```ts
 import {

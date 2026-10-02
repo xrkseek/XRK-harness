@@ -26,8 +26,6 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
   | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
-  | 'agentLoopGuardianFragments' | 'agentLoopGuardianFragmentsHint'
-  | 'agentLoopGuardianFragmentsOn' | 'agentLoopGuardianFragmentsOff'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
@@ -126,6 +124,8 @@ export type PluginsSettingsLocaleKey =
   | 'sshRemoteKeyPath' | 'sshRemoteKeyPathHint'
   | 'sshRemoteRestartHint'
   | 'autoReviewTitle' | 'autoReviewDescription'
+  | 'autoReviewEnabled' | 'autoReviewEnabledHint'
+  | 'autoReviewEnabledOn' | 'autoReviewEnabledOff'
   | 'autoReviewClassifierUrl' | 'autoReviewClassifierUrlHint'
   | 'autoReviewClassifierToken' | 'autoReviewClassifierTokenHint'
   | 'autoReviewClassifierTokenSet' | 'autoReviewClassifierTokenUnset'
@@ -209,10 +209,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: 'Nesting depth (parent = 0). Default 2 (max 3). Session badges may impose a tighter ceiling (Shallow = 1).',
   agentLoopMaxActiveSubagents: 'Max active subagents',
   agentLoopMaxActiveSubagentsHint: 'Concurrent draining direct children under one parent. Default 2.',
-  agentLoopGuardianFragments: 'Guardian fragments',
-  agentLoopGuardianFragmentsHint: 'Thin advisory Guardian review fragment at turn-start (not an LLM approval gate). Default on.',
-  agentLoopGuardianFragmentsOn: 'On',
-  agentLoopGuardianFragmentsOff: 'Off',
   workspaceInjectTitle: 'Workspace inject',
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
@@ -481,14 +477,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteRestartHint: 'Requires a Host restart to take effect (SSH world is built at spawn).',
   autoReviewTitle: 'Auto-review classifier',
   autoReviewDescription:
-    'Replace the built-in heuristic with an HTTP classifier (POST JSON → verdict/decision). Leave URL empty for heuristic. Non-empty XRK_AUTO_REVIEW_CLASSIFIER_URL still bypasses this card for CI.',
+    'Tool pre-review on the pipeline (not a chat context-fragment). Session permission Auto = no sandbox + per-call review. Classifier tiers: heuristic (default) · http (URL below / XRK_AUTO_REVIEW_CLASSIFIER_URL) · session-llm (Host current model when URL empty). Each call → allow / deny / ask→approval.',
+  autoReviewEnabled: 'Enable auto-review',
+  autoReviewEnabledHint: 'When on, Host classifies tool calls on the pipeline (ask uses the existing approval UI). Also toggled by /auto-review on|off. Pair with session /permission auto for no-sandbox per-call review.',
+  autoReviewEnabledOn: 'On',
+  autoReviewEnabledOff: 'Off',
   autoReviewClassifierUrl: 'Classifier URL',
-  autoReviewClassifierUrlHint: 'http(s) endpoint. Empty keeps the local heuristic.',
+  autoReviewClassifierUrlHint: 'http(s) → http tier. Empty → session-llm when Host has a model, else local heuristic.',
   autoReviewClassifierToken: 'Classifier token',
   autoReviewClassifierTokenHint: 'Optional Bearer; stored in Credentials as XRK_AUTO_REVIEW_CLASSIFIER_TOKEN (not settings.yaml).',
   autoReviewClassifierTokenSet: 'Configured',
   autoReviewClassifierTokenUnset: 'Not set',
-  autoReviewLiveHint: 'Applies on the next classify request (live; no Host restart). xrkh doctor probes with a sample read_file payload.',
+  autoReviewLiveHint: 'Enable and classifier apply on the next tool call / classify (live; no Host restart). xrkh doctor probes heuristic|http|session-llm with a sample read_file payload.',
   memoryEmbedTitle: 'Memory embed sidecar',
   memoryEmbedDescription:
     'Optional external vector HTTP for embedding.search (Qdrant-style /search). Leave URL empty for the embedded host under ~/.xrk/memory-embeddings. Non-empty XRK_MEMORY_EMBED_URL still bypasses this card for CI.',
@@ -580,10 +580,6 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: '嵌套深度（父会话 = 0）。默认 2（上限 3）。会话徽章可再收紧（Shallow = 1）。',
   agentLoopMaxActiveSubagents: '同时存活子代理数',
   agentLoopMaxActiveSubagentsHint: '同一父会话下同时 draining 的直接子代理上限。默认 2。',
-  agentLoopGuardianFragments: 'Guardian 片段',
-  agentLoopGuardianFragmentsHint: '回合开始时注入轻量 Guardian 审阅片段（建议性，不是 LLM 审批闸）。默认开。',
-  agentLoopGuardianFragmentsOn: '开',
-  agentLoopGuardianFragmentsOff: '关',
   workspaceInjectTitle: '工作区注入',
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',
@@ -850,16 +846,20 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteKeyPath: '私钥路径',
   sshRemoteKeyPathHint: '可选本机私钥文件路径（不是密钥内容）。',
   sshRemoteRestartHint: '需重启 Host 后生效（SSH 世界在进程启动时构建）。',
-  autoReviewTitle: 'Auto-review classifier',
+  autoReviewTitle: '自动审查（Auto-review）',
   autoReviewDescription:
-    '用 HTTP classifier 替换内置启发式（POST JSON → verdict/decision）。URL 留空则用启发式。CI 可设非空 XRK_AUTO_REVIEW_CLASSIFIER_URL 旁路本卡。',
+    '工具管线预审（不是聊天 context-fragment）。会话权限 Auto = 无沙箱 + 每次调用评审。分类器三档：启发式（默认）· http（下方 URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· 会话 LLM（URL 空且 Host 有当前模型）。每次调用 → 放行 / 拒绝 / 询问→审批。',
+  autoReviewEnabled: '启用自动审查',
+  autoReviewEnabledHint: '开启后 Host 在工具管线里分类调用（ask 走现有审批 UI）。亦可用 /auto-review on|off。与会话 /permission auto 搭配即「无沙箱 + 每调用评审」。',
+  autoReviewEnabledOn: '开',
+  autoReviewEnabledOff: '关',
   autoReviewClassifierUrl: 'Classifier URL',
-  autoReviewClassifierUrlHint: 'http(s) 端点。留空则继续用本地启发式。',
+  autoReviewClassifierUrlHint: 'http(s) → http 档。留空 → 有会话模型则走会话 LLM，否则本地启发式。',
   autoReviewClassifierToken: 'Classifier token',
   autoReviewClassifierTokenHint: '可选 Bearer；经凭据落盘为 XRK_AUTO_REVIEW_CLASSIFIER_TOKEN（不进 settings.yaml）。',
   autoReviewClassifierTokenSet: '已配置',
   autoReviewClassifierTokenUnset: '未设置',
-  autoReviewLiveHint: '下次 classify 请求即生效（热切换，无需重启 Host）。xrkh doctor 用样例 read_file 探活。',
+  autoReviewLiveHint: '启用与 classifier 在下次工具调用 / classify 即生效（热切换，无需重启 Host）。xrkh doctor 用样例 read_file 探活启发式|http|会话 LLM 三档。',
   memoryEmbedTitle: '向量记忆 sidecar',
   memoryEmbedDescription:
     '可选外接向量 HTTP，供 embedding.search（类 Qdrant：POST /search）。URL 留空则只用 ~/.xrk/memory-embeddings 内嵌索引。CI 可设非空 XRK_MEMORY_EMBED_URL 旁路本卡。',

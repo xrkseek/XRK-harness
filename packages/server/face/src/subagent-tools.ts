@@ -4,6 +4,10 @@ import {
   listPendingAdmits,
   readSessionEvents,
 } from "@xrkseek/core-session";
+import {
+  boundToolResultContent,
+  parseSpillLocator,
+} from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
@@ -240,11 +244,43 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 }
 
 function abortError(reason?: unknown): Error {
-  const err = new Error(
-    reason === undefined ? "aborted" : String(reason),
-  );
+  const err = new Error(formatSubagentAbortReason(reason));
   err.name = "AbortError";
   return err;
+}
+
+function formatSubagentAbortReason(reason: unknown): string {
+  if (reason === undefined || reason === null) return "aborted";
+  if (reason instanceof Error) {
+    const message = reason.message.trim();
+    return message.length > 0 ? message : reason.name || "aborted";
+  }
+  if (reason !== null && typeof reason === "object" && "kind" in reason) {
+    const kind = (reason as { kind?: unknown }).kind;
+    if (kind === "user") return "aborted by user";
+    if (kind === "parent") return "aborted by parent";
+    if (kind === "disposed") return "aborted: session disposed";
+    if (kind === "legacy") return "aborted";
+    if (kind === "hook") {
+      const hookReason = (reason as { reason?: unknown }).reason;
+      if (typeof hookReason === "string") {
+        return `aborted by hook: ${hookReason}`;
+      }
+    }
+  }
+  if (typeof reason === "string") {
+    const trimmed = reason.trim();
+    return trimmed.length > 0 ? trimmed : "aborted";
+  }
+  try {
+    const json = JSON.stringify(reason);
+    if (typeof json === "string" && json.length > 0 && json !== "{}") {
+      return json;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "aborted";
 }
 
 export interface BindSubagentToolsOptions {
@@ -271,6 +307,41 @@ function countActiveChildren(
     if (isChildSessionActive(runtime, link.childSessionId)) n += 1;
   }
   return n;
+}
+
+/**
+ * Inline ceiling for one child's answer before it goes to a file (UTF-8
+ * bytes). Well under the loop-level tool-result ceiling (64_000) so a spilled
+ * answer never spills twice; CJK ≈ 3 bytes/char leaves ~4k chars inline.
+ */
+export const SUBAGENT_ANSWER_INLINE_BYTES = 12_000;
+
+/** Imperative lead so the parent reads the file instead of re-asking. */
+const SPILL_READ_HINT =
+  "The child's full answer is on disk. Read it with read_file (or grep) " +
+  "before you answer — do not re-ask the child to restate it in fewer words.";
+
+/**
+ * Long child answers become a file the parent can read: the tool result keeps a
+ * head/tail preview plus the path (same spill store the loop uses, so the
+ * locator lands under `~/.xrk/spill/tool-outputs` — a Host-readable root).
+ * Short answers pass through untouched.
+ */
+export function boundChildAnswer(
+  parentSessionId: string,
+  childSessionId: string,
+  text: string,
+): string {
+  if (!text || parseSpillLocator(text)) return text;
+  const bound = boundToolResultContent({
+    sessionId: parentSessionId,
+    callId: `subagent-${childSessionId}`,
+    toolName: "subagent",
+    content: text,
+    maxInlineBytes: SUBAGENT_ANSWER_INLINE_BYTES,
+  });
+  const body = typeof bound.content === "string" ? bound.content : text;
+  return bound.spilled ? `${SPILL_READ_HINT}\n\n${body}` : body;
 }
 
 /**
@@ -337,7 +408,9 @@ function createSubagentTool(
       "optional task_id / task_name register the work on the Agent Teams task board. " +
       "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
       "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
-      "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print.",
+      "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print. " +
+      "A long answer is written to a file: the result then carries a read_file path plus a head/tail preview. " +
+      "Read that path (or grep it) to get the full answer — never re-ask the child to restate it in fewer words.",
     parameters: {
       type: "object",
       properties: {
@@ -968,7 +1041,13 @@ function createSubagentTool(
             ? "schema_valid=true"
             : `schema_valid=false\n${(schemaErrors ?? []).map((e) => `- ${e}`).join("\n")}`;
       return {
-        content: [text, schemaLine, extra].filter(Boolean).join("\n"),
+        content: [
+          boundChildAnswer(options.parentSessionId, childId, text),
+          schemaLine,
+          extra,
+        ]
+          .filter(Boolean)
+          .join("\n"),
         ...(schemaValid === false ? { isError: true } : {}),
       };
     },
@@ -1423,7 +1502,8 @@ function createWaitAgentTool(
     description:
       "Wait until listed child subagents become idle (Codex wait_agent targets). " +
       "Returns each child's final status and last assistant text when idle. " +
-      "Prefer longer timeouts (minutes) over busy-polling with list_agents.",
+      "Prefer longer timeouts (minutes) over busy-polling with list_agents. " +
+      "A long answer is written to a file: the result then carries a read_file path plus a head/tail preview — read the path, do not re-ask the child for a shorter version.",
     parameters: {
       type: "object",
       properties: {
@@ -1531,7 +1611,11 @@ function createWaitAgentTool(
             `q=${inbox.queued}`,
             `steer=${inbox.steering}`,
             text
-              ? `answer:\n${text}`
+              ? `answer:\n${boundChildAnswer(
+                  options.parentSessionId,
+                  childId,
+                  text,
+                )}`
               : running
                 ? "(still running)"
                 : "(no assistant text)",

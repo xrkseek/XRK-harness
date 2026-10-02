@@ -77,8 +77,11 @@ export {
   DEFAULT_MAX_REQUEST_IMAGE_BYTES,
   ensureDurableImageOffloads,
   foldImageOffloadMarks,
+  messageHasImageBlocks,
+  MAX_RETAINED_SHADOWED_IMAGE_MESSAGES,
   planImageOffloadTargets,
   projectOffloadedImages,
+  retainShadowedImageMessages,
 } from "./image-offload.js";
 
 import {
@@ -86,6 +89,7 @@ import {
   findLatestCompaction,
   formatCompactionForModel,
 } from "./compaction.js";
+import { retainShadowedImageMessages } from "./image-offload.js";
 
 export {
   estimateAssistantSurface,
@@ -207,6 +211,18 @@ export function createMemorySessionStore(): SessionStore {
       return frozen;
     },
 
+    seed(id = newSessionId(), events = []): SessionRecord {
+      if (sessions.has(id)) {
+        throw new Error(`session already exists: ${id}`);
+      }
+      const frozen: SessionEvent[] = [];
+      for (const event of events) {
+        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+      }
+      sessions.set(id, frozen);
+      return { id, events: frozen };
+    },
+
     list(): readonly string[] {
       return [...sessions.keys()];
     },
@@ -285,6 +301,10 @@ export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
         role: "user",
         content: formatCompactionForModel(compact.event),
       },
+      // Compaction serializes the keep-tail as text (flattenText drops images).
+      // Re-surface recent image-bearing user turns from the shadowed prefix so
+      // long sessions keep vision on the wire after a window swap.
+      ...retainShadowedImageMessages(events, compact.index),
     ];
     // `image/offload.targets.seq` is absolute durable-log index — fold marks
     // from the full log and remap slice-local indices.
@@ -391,6 +411,11 @@ export function forkSession(
     boundaryIndex === undefined ? total : Math.max(0, Math.min(boundaryIndex, total)),
   );
   const prefix = readSessionEvents(store, sourceId, SessionLogOffset(0), end);
+  // Bulk seed: one durable commit (SQLite) and no per-event Face mux when the
+  // store implements seed. Fallback keeps lightweight test doubles working.
+  if (typeof store.seed === "function") {
+    return store.seed(childId, prefix);
+  }
   const child = store.create(childId);
   for (const ev of prefix) {
     store.append(child.id, ev);

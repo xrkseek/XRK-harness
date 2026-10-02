@@ -27,6 +27,11 @@ export interface WorkspaceListState {
    * archive; pinned rows lead their section in the sidebar.
    */
   pinnedSessionIds: readonly SessionId[]
+  /**
+   * Registry-global workspace pin order (newest first). Pinned workspaces
+   * lead the sidebar group list.
+   */
+  pinnedWorkspaceIds: readonly WorkspaceId[]
   state: 'idle' | 'loading' | 'error'
   phase: WorkspaceListPhase
   error: RpcError | null
@@ -71,7 +76,8 @@ export class WorkspaceRuntime implements IWorkspaces {
   constructor(ctx: Context, private readonly api: IApiClient, private readonly sessions: SessionsPort) {
     this.manager = new WorkspaceManager(api)
     this.list = createSnapshotStore<WorkspaceListState>({
-      items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'pending', error: null,
+      items: [], archivedSessionIds: [], pinnedSessionIds: [], pinnedWorkspaceIds: [],
+      state: 'idle', phase: 'pending', error: null,
       baselinesReady: false, recentWorkspaceId: undefined,
     })
     this.manager.subscribe(() => { this.project() })
@@ -337,6 +343,24 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Pin a workspace (newest-first). Leads the sidebar group list.
+   * @param workspaceId - workspace to pin.
+   */
+  async pinWorkspace(workspaceId: WorkspaceId): Promise<void> {
+    const result = await this.manager.pinWorkspace(workspaceId)
+    if (!result.ok) throw new Error(`workspace pin failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
+   * Unpin a workspace.
+   * @param workspaceId - workspace to unpin.
+   */
+  async unpinWorkspace(workspaceId: WorkspaceId): Promise<void> {
+    const result = await this.manager.unpinWorkspace(workspaceId)
+    if (!result.ok) throw new Error(`workspace unpin failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
    * Move a session within its Workspace's manual order (DOM-insertBefore-like).
    * @param workspaceId - owning workspace.
    * @param sessionId - accounted session to move.
@@ -390,6 +414,7 @@ export class WorkspaceRuntime implements IWorkspaces {
       items: workspace.items,
       archivedSessionIds: workspace.archivedSessionIds,
       pinnedSessionIds: workspace.pinnedSessionIds,
+      pinnedWorkspaceIds: workspace.pinnedWorkspaceIds,
       state: workspace.state,
       phase: workspace.phase,
       error: workspace.error,

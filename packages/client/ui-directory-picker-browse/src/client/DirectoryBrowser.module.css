@@ -1,6 +1,6 @@
 /* Directory-browser dialog (figma 813-23126 family). The shared Modal renders
- * headless here — mask, card, Escape only — and this module owns the figma
- * frame: 680×500 card (viewport-clamped; upsized from the figma 600×420),
+ * headless here 閳?mask, card, Escape only 閳?and this module owns the figma
+ * frame: 680鑴?00 card (viewport-clamped; upsized from the figma 600鑴?20),
  * header (title + crumbs, l3 separator),
  * the one-or-two-column Miller content, and the bordered footer. */
 
@@ -87,10 +87,13 @@
   flex: 1 1 0;
   min-height: 0;
   /* 12px of row gap on each side of the divider; the left side reads wider
-   * by the column's trailing 8px scrollbar clearance, which is deliberate —
+   * by the column's trailing 8px scrollbar clearance, which is deliberate 閳?
    * the thumb needs that room, the right pane's rows do not. */
   gap: 12px;
   overflow-x: auto;
+  /* Horizontal breadcrumb strip: contain the inline axis too, or a swipe past
+     the last crumb pans the dialog instead of stopping. */
+  overscroll-behavior: contain;
   scrollbar-width: none;
 }
 
@@ -101,6 +104,9 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
+  /* Same inline containment for the trail: swiping off its end must not pan
+     the page under the dialog. */
+  overscroll-behavior: contain;
   scrollbar-width: none;
 }
 
@@ -213,6 +219,9 @@
   flex: 1 1 0;
   min-width: 256px;
   overflow-y: auto;
+  /* Each pane is its own vertical scroller; contain so an overscroll at one
+     pane edge does not scroll the sibling list or the page behind. */
+  overscroll-behavior: contain;
   /* The themed scrollbar occupies the column's edge (styled scrollbars are
    * classic, gutter-taking ones); the extra clearance keeps the row pills
    * clear of the thumb. */
@@ -307,7 +316,7 @@
  * only appears at all once a scan outlives SLOW_SCAN_DELAY_MS). Right,
  * not left: the truncated/error status rows flow at the bottom LEFT and
  * stay on screen through a scan, with their reserved right padding keeping
- * both legible even on a narrow card. After .status in the cascade — the
+ * both legible even on a narrow card. After .status in the cascade 閳?the
  * element carries both classes and this padding must win the
  * same-specificity race. */
 .loadingFloat {

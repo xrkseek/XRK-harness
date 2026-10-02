@@ -13,6 +13,7 @@ import {
 } from "./output-bound.js";
 import {
   isTransientError,
+  type ApprovalDisplayReason,
   type ApprovalHandler,
   type ExecuteAroundHandler,
   type FinalizeHandler,
@@ -54,19 +55,60 @@ async function runPre(
   ctx: ToolPipelineContext,
   approval: ApprovalHandler | undefined,
 ): Promise<"continue" | "deny"> {
+  // DSH auto-review next(): a deferred ask waits until later pre handlers
+  // finish; downstream deny / ask / cancel replaces it.
+  let deferredAsk:
+    | {
+        readonly reason: string;
+        readonly displayReason?: ApprovalDisplayReason;
+        readonly error?: {
+          readonly name: string;
+          readonly code: string;
+          readonly reason?: string;
+        };
+      }
+    | undefined;
+
   for (const handler of handlers) {
     const outcome: PreOutcome = await handler(ctx);
     if (outcome.action === "continue") {
       ctx.args = outcome.args;
       continue;
     }
+    if (outcome.action === "defer-ask") {
+      deferredAsk = {
+        reason: outcome.reason,
+        ...(outcome.displayReason !== undefined
+          ? { displayReason: outcome.displayReason }
+          : {}),
+        ...(outcome.error !== undefined ? { error: outcome.error } : {}),
+      };
+      continue;
+    }
     if (outcome.action === "deny") {
       ctx.denyReason = outcome.reason;
+      if (outcome.error !== undefined) ctx.denyError = outcome.error;
       return "deny";
     }
-    const ok = approval ? await approval(ctx, outcome.reason) : false;
+    // Immediate ask (or a later handler's ask) wins over any deferred ask.
+    deferredAsk = undefined;
+    const ok = approval
+      ? await approval(ctx, outcome.reason, outcome.displayReason)
+      : false;
     if (!ok) {
       ctx.denyReason = outcome.reason;
+      if (outcome.error !== undefined) ctx.denyError = outcome.error;
+      return "deny";
+    }
+  }
+
+  if (deferredAsk !== undefined) {
+    const ok = approval
+      ? await approval(ctx, deferredAsk.reason, deferredAsk.displayReason)
+      : false;
+    if (!ok) {
+      ctx.denyReason = deferredAsk.reason;
+      if (deferredAsk.error !== undefined) ctx.denyError = deferredAsk.error;
       return "deny";
     }
   }
@@ -132,6 +174,7 @@ async function executeBody(
     const signal = mergeSignals(ctx.signal, options.timeoutMs);
     ctx.metrics.calls += 1;
     const out = await tool.execute(ctx.args, signal, {
+      callId: ctx.call.id,
       emitToolEvent: (type, payload) => emitToolEvent(ctx, type, payload),
       concludeTurn: () => {
         ctx.concludeRequested = true;
@@ -205,6 +248,18 @@ export function createToolPipeline(
         if (idx >= 0) preHandlers.splice(idx, 1);
       };
     },
+    prependPre(handler) {
+      // After the leading identity continue so Guardian / auto-review runs
+      // before soft floors / policy / hooks registered via onPre
+      // (DSH tools/pre-execute `{ prepend: true }`). Multiple prependPre calls
+      // stack at index 1 (newest first); all still precede every onPre soft.
+      const at = Math.min(1, preHandlers.length);
+      preHandlers.splice(at, 0, handler);
+      return () => {
+        const idx = preHandlers.indexOf(handler);
+        if (idx >= 0) preHandlers.splice(idx, 1);
+      };
+    },
     onGuard(guard) {
       guards.push(guard);
       return () => {
@@ -243,6 +298,18 @@ export function createToolPipeline(
         call,
         args: call.arguments,
         ...(signal ? { signal } : {}),
+        ...(runOptions.parentCallId !== undefined
+          ? { parentCallId: runOptions.parentCallId }
+          : {}),
+        ...(tool
+          ? {
+              definition: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+              },
+            }
+          : {}),
         stage: "pre",
         skippedBody: false,
         additionalContexts: [],
@@ -344,7 +411,11 @@ export async function runToolPipeline(
   call: ToolCall,
   signal: AbortSignal | undefined,
   pipeline: ToolPipeline | undefined,
-  options: { timeoutMs?: number; maxRetries?: number } = {},
+  options: {
+    timeoutMs?: number;
+    maxRetries?: number;
+    parentCallId?: string;
+  } = {},
 ): Promise<RunToolOutcome> {
   const pipe = pipeline ?? createToolPipeline();
   return pipe.run(tool, call, signal, options);

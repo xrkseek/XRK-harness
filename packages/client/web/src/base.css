@@ -1,12 +1,16 @@
 /* Shell-owned global base: full-height mount plus the theme token sheets.
- * The five ui-theme sheets are the sole token source (--dsw-*); the shell
+ * The ui-theme sheets are the sole token source (--dsw-*); the shell
  * links them here so tokens exist before any plugin CSS lands. scrollbar.css
- * follows design-platform.css because it reads that sheet's tokens. */
+ * follows design-platform.css because it reads that sheet's tokens, and
+ * interaction.css follows design-platform.css for the same reason. mobile.css
+ * is last: it consumes their tokens and must not be re-ordered below them. */
 @import '@xrkseek/client-ui-theme/styles/base.css';
 @import '@xrkseek/client-ui-theme/styles/design-platform.css';
 @import '@xrkseek/client-ui-theme/styles/scrollbar.css';
 @import '@xrkseek/client-ui-theme/styles/gradient-shadow-text.css';
 @import '@xrkseek/client-ui-theme/styles/shiki.css';
+@import '@xrkseek/client-ui-theme/styles/interaction.css';
+@import '@xrkseek/client-ui-theme/styles/mobile.css';
 
 html,
 body,

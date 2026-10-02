@@ -36,7 +36,10 @@ export { ChangesReviewView } from './ChangesReviewView.tsx'
 export { ChangesReviewController } from './changes-review-controller.ts'
 export { diffHunkFromWorkspaceFileDiff } from './workspace-file-diff-hunk.ts'
 export { DeliverablesTail, selectDeliverables } from './Deliverables.tsx'
-export { producedForClosing, changesForClosing, collectChangesTurnsFromTimeline } from './turn-deliverables.ts'
+export {
+  producedForClosing, changesForClosing, collectChangesTurnsFromTimeline,
+  fileLanesForClosing, foldFileLanes,
+} from './turn-deliverables.ts'
 
 export const inject = [
   'slots', 'locale', 'conversationEvents', 'connection', 'sessions',
@@ -93,11 +96,13 @@ export function apply(ctx: ClientContext): void {
     forClosing(owner) {
       const matched = selectDeliverables(owner)
       if (matched === null) return undefined
-      const paths = matched.produced.length > 0
-        ? matched.produced
+      // Mentions resolve created + modified (deleted paths stay inert).
+      const paths = [...matched.lanes.created, ...matched.lanes.modified]
+      const fallback = paths.length > 0
+        ? paths
         : matched.changes?.files.map(f => f.path) ?? []
-      if (paths.length === 0) return undefined
-      return producedFileMentions(paths, owner.openFile, path => t('produced.open', { name: path }))
+      if (fallback.length === 0) return undefined
+      return producedFileMentions(fallback, owner.openFile, path => t('produced.open', { name: path }))
     },
   }
   ctx.provide('chatFileMentions', mentions)

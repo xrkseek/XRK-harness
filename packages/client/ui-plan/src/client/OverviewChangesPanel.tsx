@@ -3,7 +3,7 @@
  * ChangedFiles card (D-01). Does not import ui-deliverables; shares the
  * DiffHunk transform via ui-primitives.
  */
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   DiffBlock,
   IconChevronDownOutline14,
@@ -27,6 +27,7 @@ export type OverviewChangesFile = {
   readonly oversized?: true
 }
 
+/** Same shape as ui-primitives `WorkspaceChangesTurnRow` (Overview ignores cwd). */
 export type OverviewChangesTurn = {
   readonly seq: number
   readonly turnId: string
@@ -47,6 +48,8 @@ type ChangesReviewFace = {
   getSnapshot: () => Focus | null
   subscribe: (listener: () => void) => () => void
 }
+
+const NOOP_SUBSCRIBE = (_onStoreChange: () => void): (() => void) => () => {}
 
 function Counts({
   added,
@@ -152,7 +155,7 @@ export function OverviewChangesPanel({
   t: PlanTranslate
 }) {
   const focus = useSyncExternalStore(
-    (onStoreChange) => focusFace?.subscribe(onStoreChange) ?? (() => {}),
+    focusFace?.subscribe ?? NOOP_SUBSCRIBE,
     () => {
       const next = focusFace?.getSnapshot() ?? null
       return next !== null && next.sessionId === sessionId ? next : null
@@ -167,6 +170,8 @@ export function OverviewChangesPanel({
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
+  const loadFileDiffRef = useRef(loadFileDiff)
+  loadFileDiffRef.current = loadFileDiff
 
   useEffect(() => {
     if (focus !== null) {
@@ -187,17 +192,20 @@ export function OverviewChangesPanel({
     ? fileIndex
     : 0
   const activeFile = activeTurn?.files[safeIndex]
+  const activeFilePath = activeFile?.path
 
   useEffect(() => {
-    if (activeTurn === undefined || activeFile === undefined) {
+    if (activeTurn === undefined || activeFilePath === undefined) {
       setDiff(undefined)
       setError(undefined)
       return
     }
     const ac = new AbortController()
+    const turnSeq = activeTurn.seq
+    const index = safeIndex
     setDiff(undefined)
     setError(undefined)
-    void loadFileDiff(activeTurn.seq, safeIndex, ac.signal).then(
+    void loadFileDiffRef.current(turnSeq, index, ac.signal).then(
       (value) => {
         if (!ac.signal.aborted) setDiff(value)
       },
@@ -209,7 +217,7 @@ export function OverviewChangesPanel({
       },
     )
     return () => { ac.abort() }
-  }, [activeTurn?.seq, safeIndex, activeFile, loadFileDiff])
+  }, [activeTurn?.seq, safeIndex, activeFilePath])
 
   if (turns.length === 0 || activeTurn === undefined) {
     return <div className={css.empty}>{t('preview.changes.empty')}</div>

@@ -54,6 +54,8 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
+  /** In the registry-global workspace pin set (leads the group list). */
+  pinned: boolean
   /** Total visible sessions in the group. */
   sessionCount: number
   expanded: boolean
@@ -334,6 +336,7 @@ function sessionNode(
  * @param view - local expansion arrays.
  * @param archiveMode - sidebar archive filter (default `hidden`).
  * @param pinnedSessionIds - registry-global pin order (newest first).
+ * @param pinnedWorkspaceIds - registry-global workspace pin order (newest first).
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -343,9 +346,11 @@ export function deriveGroups(
   view: TreeView,
   archiveMode: ArchiveViewMode = 'hidden',
   pinnedSessionIds: readonly SessionId[] = [],
+  pinnedWorkspaceIds: readonly WorkspaceId[] = [],
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const pinned = new Set(pinnedSessionIds)
+  const pinnedWorkspaces = new Set(pinnedWorkspaceIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
   const currentGroup = list.current === undefined
@@ -362,6 +367,7 @@ export function deriveGroups(
       cwd: g.cwd,
       createdAt: g.createdAt,
       label: g.label,
+      pinned: g.workspaceId !== undefined && pinnedWorkspaces.has(g.workspaceId),
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,

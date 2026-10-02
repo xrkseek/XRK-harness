@@ -87,6 +87,11 @@ export type ToolHostInfoInjected = {
   hooks: {
     /** Generation-scoped Host facts; select `info => info?.home`. */
     hostDescription: HostDescriptionSource
+    /**
+     * Settings-backed preference: tool rows mount expanded when true.
+     * Absent compositions stay collapsed (DSH quiet-transcript default).
+     */
+    toolsDefaultExpanded: import('@xrkseek/client-runtime/client').SnapshotStore<boolean>
   }
 }
 

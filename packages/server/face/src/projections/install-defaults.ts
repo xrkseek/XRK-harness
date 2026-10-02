@@ -14,7 +14,10 @@ import { createContextPressureProjectionUnit } from "./units/context-pressure.js
 import { createContextBreakdownProjectionUnit } from "./units/context-breakdown.js";
 import { createContextTimelineProjectionUnit } from "./units/context-timeline.js";
 import { createContextHeadersProjectionUnit } from "./units/context-headers.js";
-import { createAutoReviewProjectionUnit } from "./units/auto-review.js";
+import {
+  createAutoReviewProjectionUnit,
+  type AutoReviewLiveStats,
+} from "./units/auto-review.js";
 import { createCostUsageProjectionUnit } from "./units/cost-usage.js";
 import { createWorkspaceChangesProjectionUnit } from "./units/workspace-changes.js";
 
@@ -29,6 +32,13 @@ export interface InstallDefaultFaceProjectionsOptions {
    * imageLimits while an AttachmentStore is composed.
    */
   readonly fileLimits?: FileAttachmentLimits;
+  /** Guardian Auto catalog live check (permissions projection options). */
+  readonly isAutoLive?: () => boolean;
+  /**
+   * Overlay durable tool-pre / classify counters onto Face `autoReview`
+   * (Host → `readAutoReviewStats`). Circuit stays null until a later Loop.
+   */
+  readonly readAutoReviewLiveStats?: () => AutoReviewLiveStats | undefined;
 }
 
 /** Register Face default projection units. */
@@ -39,7 +49,11 @@ export function installDefaultFaceProjections(
   const offTitle = registry.register(createTitleProjectionUnit());
   const offMeta = registry.register(createSessionListMetadataUnit());
   const offTodos = registry.register(createTodosProjectionUnit());
-  const offPerm = registry.register(createPermissionsProjectionUnit());
+  const offPerm = registry.register(
+    createPermissionsProjectionUnit({
+      ...(options.isAutoLive ? { isAutoLive: options.isAutoLive } : {}),
+    }),
+  );
   const offPlan = registry.register(createPlanProjectionUnit());
   const offStats = registry.register(createSessionStatsProjectionUnit());
   const offTurnOutline = registry.register(createTurnOutlineProjectionUnit());
@@ -48,7 +62,13 @@ export function installDefaultFaceProjections(
   const offBreakdown = registry.register(createContextBreakdownProjectionUnit());
   const offTimeline = registry.register(createContextTimelineProjectionUnit());
   const offHeaders = registry.register(createContextHeadersProjectionUnit());
-  const offAutoReview = registry.register(createAutoReviewProjectionUnit());
+  const offAutoReview = registry.register(
+    createAutoReviewProjectionUnit({
+      ...(options.readAutoReviewLiveStats
+        ? { readLiveStats: options.readAutoReviewLiveStats }
+        : {}),
+    }),
+  );
   const offCostUsage = registry.register(createCostUsageProjectionUnit());
   const offWorkspaceChanges = registry.register(
     createWorkspaceChangesProjectionUnit(),

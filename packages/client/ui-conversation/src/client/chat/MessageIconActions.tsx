@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconRefreshOutline16, Tooltip, writeClipboard,
+  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconEditOutline16,
+  IconRefreshOutline16, IconTrashOutline16, Tooltip, writeClipboard,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -24,6 +25,10 @@ export interface MessageIconActionsProps {
    * omission hides the restore action. Pair with {@link onBranch} on turn tails.
    */
   onRestore?: (() => void) | undefined
+  /** Load this user message into the composer for edit-resubmit. */
+  onEdit?: (() => void) | undefined
+  /** Truncate lineage before this message (fork beforeSeq) — delete/recall. */
+  onDelete?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
@@ -48,7 +53,7 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, onRestore, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, onEdit, onDelete, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
@@ -93,6 +98,20 @@ export function MessageIconActions({
         </button>
       </Tooltip>
       {extraActions}
+      {onEdit !== undefined && (
+        <Tooltip label={t('message.edit')} side="bottom">
+          <button type="button" className={css.action} aria-label={t('message.edit')} onClick={onEdit}>
+            <IconEditOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onDelete !== undefined && (
+        <Tooltip label={t('message.delete')} side="bottom">
+          <button type="button" className={css.action} aria-label={t('message.delete')} onClick={onDelete}>
+            <IconTrashOutline16 />
+          </button>
+        </Tooltip>
+      )}
       {onRestore !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.restoreUnavailable') : t('message.restore')} side="bottom">
           <button

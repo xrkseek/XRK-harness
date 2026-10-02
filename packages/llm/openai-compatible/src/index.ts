@@ -1,17 +1,18 @@
 import {
   offloadRequestImages,
   DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+  REQUEST_IMAGE_OFFLOAD_PLACEHOLDER,
 } from "@xrkseek/attachment";
 import {
   finalizeLlmChatResponse,
   collectLlmStream,
-  classifyCaughtLlmError,
+  classifyCaughtStreamError,
   ContextOverflowError,
-  isLlmError,
   throwHttpLlmError,
+  withExtraAbortSignal,
   withOpenAiFinishReason,
+  withStreamIdleTimeout,
   UnsupportedContentError,
-  UnsupportedReasoningEffortError,
 } from "@xrkseek/llm";
 import type {
   LlmAdapter,
@@ -62,6 +63,15 @@ export interface OpenAiCompatibleOptions {
   /** Inject for tests; default `globalThis.fetch`. */
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  /**
+   * Per-event idle budget for `stream()`: how long the body may stay silent
+   * between two events before the turn fails with `TIMEOUT` (retryable).
+   * Default 300_000 ms (5 min, `DEFAULT_STREAM_IDLE_TIMEOUT_MS`). This is **not** the
+   * overall request budget 鈥?that is {@link OpenAiCompatibleOptions.timeoutMs},
+   * which wraps the whole `fetch`. Every event restarts this clock, so a long
+   * answer that keeps streaming is never killed.
+   */
+  readonly idleTimeoutMs?: number;
   /**
    * When true (default), expose `stream()` for SSE text/reasoning deltas.
    * Set false to keep chat()-only adapters.
@@ -118,7 +128,7 @@ type WireMessage =
         type: "function";
         function: { name: string; arguments: string };
       }[];
-      /** DeepSeek / thinking models — required on prior tool turns. */
+      /** DeepSeek / thinking models 鈥?required on prior tool turns. */
       reasoning_content?: string;
     }
   | {
@@ -154,7 +164,33 @@ async function userContentToWire(
   },
 ): Promise<string | WireContentPart[]> {
   if (typeof content === "string") return content;
-  if (!contentHasImage(content)) return flattenText(content);
+  // Prefer vision parts when any non-offloaded image remains. Offloaded-only
+  // content must still tell the model an image was present (never silent drop).
+  if (!contentHasImage(content)) {
+    const parts: WireContentPart[] = [];
+    for (const block of asContentBlocks(content)) {
+      if (block.type === "text") {
+        if (block.text) parts.push({ type: "text", text: block.text });
+        continue;
+      }
+      if (block.type === "image") {
+        parts.push({
+          type: "text",
+          text: REQUEST_IMAGE_OFFLOAD_PLACEHOLDER,
+        });
+        continue;
+      }
+      if (block.type === "file") {
+        const name = block.attachment.name?.trim() || "file";
+        parts.push({ type: "text", text: `[file attachment: ${name}]` });
+      }
+    }
+    if (parts.length === 0) return flattenText(content);
+    if (parts.every((p) => p.type === "text")) {
+      return parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+    }
+    return parts;
+  }
   if (!resolveImage) {
     throw new UnsupportedContentError(
       "image content requires resolveImage on the LLM request",
@@ -167,6 +203,10 @@ async function userContentToWire(
       continue;
     }
     if (block.type !== "image") continue;
+    if (block.offloaded === true) {
+      parts.push({ type: "text", text: REQUEST_IMAGE_OFFLOAD_PLACEHOLDER });
+      continue;
+    }
     const stored = await resolveImage(block.attachment.attachmentId);
     if (wireImagePart && wireCtx.apiKey.trim()) {
       parts.push(
@@ -436,7 +476,11 @@ async function buildBody(
   };
   const tools = toWireTools(request.tools);
   if (tools) body.tools = tools;
-  if (options.temperature !== undefined) body.temperature = options.temperature;
+  const temperature =
+    request.temperature !== undefined
+      ? request.temperature
+      : options.temperature;
+  if (temperature !== undefined) body.temperature = temperature;
   if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
   if (stream) body.stream_options = { include_usage: true };
   if (options.deepseekThinking) {
@@ -715,16 +759,7 @@ export function createOpenAiCompatibleAdapter(
       }
       return res;
     } catch (err) {
-      if (
-        err instanceof ContextOverflowError ||
-        err instanceof UnsupportedContentError ||
-        err instanceof UnsupportedReasoningEffortError ||
-        isLlmError(err) ||
-        (err instanceof DOMException && err.name === "AbortError")
-      ) {
-        throw err;
-      }
-      classifyCaughtLlmError(err, "openai-compatible");
+      classifyCaughtStreamError(err, "openai-compatible");
     }
   }
 
@@ -745,8 +780,24 @@ export function createOpenAiCompatibleAdapter(
     adapter.stream = async function* (
       request: LlmChatRequest,
     ): AsyncIterable<LlmStreamEvent> {
-      const res = await post(request, true);
-      yield* streamSse(res);
+      // The watchdog can only end the turn; only the request controller can
+      // close the body read it walks away from.
+      const idle = new AbortController();
+      const res = await post(withExtraAbortSignal(request, idle.signal), true);
+      try {
+        yield* withStreamIdleTimeout(streamSse(res), {
+          label: "openai-compatible",
+          ...(request.signal ? { signal: request.signal } : {}),
+          onIdleTimeout: () => idle.abort(),
+          ...(options.idleTimeoutMs !== undefined
+            ? { idleTimeoutMs: options.idleTimeoutMs }
+            : {}),
+        });
+      } catch (err) {
+        // Socket death mid-body (`terminated`) arrives here raw; classify it
+        // so the retry loop sees TRANSPORT instead of UNKNOWN.
+        classifyCaughtStreamError(err, "openai-compatible");
+      }
     };
   }
 

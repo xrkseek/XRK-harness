@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import type { SubprocessHandle, SubprocessService } from "@xrkseek/exec-subprocess";
-import { fitWithSuffix } from "./bytes.js";
+import { fitWithErrorHead, fitWithSuffix } from "./bytes.js";
 import { presentBashCall, presentBashResult } from "./present.js";
 import {
   PWSH_ENCODING_PREAMBLE,
@@ -868,6 +868,18 @@ function faceJobStatus(status: ShellJobStatus): string {
   return status === "exited" ? "completed" : status;
 }
 
+/**
+ * A job whose output is worth error-head retention: explicit failure, killed,
+ * or a non-zero exit (the common bash failure shape, `exited` + code ≠ 0).
+ */
+function jobFailed(
+  snapshot: Pick<ShellJobInfo, "status" | "exitCode">,
+): boolean {
+  if (snapshot.status === "failed" || snapshot.status === "killed") return true;
+  const code = snapshot.exitCode;
+  return code !== undefined && code !== null && code !== 0;
+}
+
 /** Legacy foreground markers for UI exit pills (DSH `[exit code: N]` / `[killed by signal: X]`). */
 function appendLegacyExitMarker(
   content: string,
@@ -896,7 +908,7 @@ function appendLegacyExitMarker(
 
 function formatJobOutput(
   text: string,
-  snapshot: Pick<ShellJobInfo, "status" | "detail" | "outputLimitBytes">,
+  snapshot: Pick<ShellJobInfo, "status" | "detail" | "outputLimitBytes" | "exitCode">,
 ): string {
   const body = text.length > 0 ? text : "(no new output)";
   const content = body.endsWith("\n") ? body.slice(0, -1) : body;
@@ -906,6 +918,10 @@ function formatJobOutput(
   })}`;
   const limit = snapshot.outputLimitBytes;
   if (limit === undefined) return `${content}${trailer}`;
+  if (jobFailed(snapshot)) {
+    // Errors live in the stderr section head; keep it instead of a pure tail.
+    return fitWithErrorHead(content, trailer, limit);
+  }
   return fitWithSuffix(content, trailer, limit);
 }
 
@@ -1069,7 +1085,9 @@ export function createBashTools(
             content = appendLegacyExitMarker(body, snapshot);
           }
           if (maxOutputBytes !== undefined) {
-            content = fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
+            content = jobFailed(snapshot)
+              ? fitWithErrorHead(content, "\n[truncated]", maxOutputBytes)
+              : fitWithSuffix(content, "\n[truncated]", maxOutputBytes);
           }
           return { content };
         } catch (err) {

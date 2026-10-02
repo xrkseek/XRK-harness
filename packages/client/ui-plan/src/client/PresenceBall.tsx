@@ -59,7 +59,7 @@ export type PresenceEmotion = {
 }
 
 type EmotionBallHandle = {
-  setEmotion: (id: string) => void
+  setEmotion: (id: string, opts?: { auto?: boolean }) => void
   setGaze: (nx: number, ny: number) => void
   handleAIMessage: (msg: string | { emotionId: string; tips?: string }) => void
   setActive: (on: boolean) => void
@@ -361,6 +361,7 @@ export function PresenceBall({
   compactionBusy = false,
   toolError,
   activityAt = 0,
+  compact = false,
   t,
   loadingLabel,
   errorLabel,
@@ -386,6 +387,10 @@ export function PresenceBall({
    * opens on an already-quiet session).
    */
   readonly activityAt?: number
+  /**
+   * Compact chip: small stage + one-line label (Overview presence collapsed).
+   */
+  readonly compact?: boolean
   readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
@@ -395,6 +400,7 @@ export function PresenceBall({
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
+  const lastEmotionKeyRef = useRef<string>('')
   const prevEmotionRef = useRef<PresenceEmotion | null>(null)
   const clickIndexRef = useRef(0)
   const [ready, setReady] = useState(false)
@@ -415,26 +421,16 @@ export function PresenceBall({
     || (typeof toolError === 'object' && toolError !== null)
     || Boolean(local)
 
-  // Keep the idle clock honest: live beats + transcript activityAt.
+  // Track transcript / presence beats only — never stamp Date.now() while busy
+  // (that forced a setState on every cue notify and amplified Overview thrash).
   useEffect(() => {
-    const stamp = Math.max(activityAt, sessionBusy ? Date.now() : 0)
+    const stamp = Math.max(activityAt, presence?.updatedAt ?? 0)
     if (stamp <= 0) return
     setLastActivityAt((prev) => (stamp > prev ? stamp : prev))
-  }, [
-    activityAt,
-    sessionBusy,
-    presence?.updatedAt,
-    turnActive,
-    runningJobs,
-    runningSubs,
-    compactionBusy,
-    queued,
-    steering,
-    toolError,
-    local,
-  ])
+  }, [activityAt, presence?.updatedAt])
 
-  const idleMs = Math.max(0, nowMs - lastActivityAt)
+  // Busy means "not idle" without mutating the clock.
+  const idleMs = sessionBusy ? 0 : Math.max(0, nowMs - lastActivityAt)
 
   const emotion = derivePresenceEmotion({
     ...(presence ? { presence } : {}),
@@ -514,22 +510,39 @@ export function PresenceBall({
   useEffect(() => {
     const ball = ballRef.current
     if (!ball || !ready) return
+    // Only push into the WebGL/canvas engine when the *content* of the emotion
+    // changes. `emotion` is a fresh object every React render — depending on it
+    // re-ran setEmotion on every Overview stream tick and reset transitions
+    // (blink / spin / seq), which dropped frames.
     const tip = display.tip
-    if (tip && emotion.source === 'tool') {
-      ball.handleAIMessage({ emotionId: emotion.emotionId, tips: tip })
-    } else {
-      ball.setEmotion(emotion.emotionId)
-    }
-    // Sleep / standby own the quiet clock — do not poke the engine awake.
-    if (!resting) ball.resetIdle?.()
-    const accentKey = `${emotion.source}:${emotion.emotionId}:${emotion.tipKey ?? ''}:${tip ?? ''}`
-    if (accentKey !== lastAccentRef.current) {
+    const emotionKey = `${emotion.source}:${emotion.emotionId}:${emotion.tipKey ?? ''}`
+    const accentKey = `${emotionKey}:${tip ?? ''}`
+    if (accentKey === lastAccentRef.current) return
+    const emotionChanged = emotionKey !== lastEmotionKeyRef.current
+    if (emotionChanged) {
+      if (tip && emotion.source === 'tool') {
+        ball.handleAIMessage({ emotionId: emotion.emotionId, tips: tip })
+      } else {
+        // auto:true — work/ambient rotation must not poke the engine's activity clock
+        ball.setEmotion(emotion.emotionId, { auto: true })
+      }
+      // Sleep / standby own the quiet clock — do not poke the engine awake.
+      if (!resting) ball.resetIdle?.()
       const prev = prevEmotionRef.current
-      lastAccentRef.current = accentKey
       playPresenceAccent(ball, emotion, prev)
       prevEmotionRef.current = emotion
+      lastEmotionKeyRef.current = emotionKey
     }
-  }, [emotion, display.tip, ready, resting])
+    lastAccentRef.current = accentKey
+  }, [
+    emotion.emotionId,
+    emotion.source,
+    emotion.tipKey,
+    emotion.tips,
+    display.tip,
+    ready,
+    resting,
+  ])
 
   // Gaze from the whole window — not just the stage hitbox — so eyes track
   // the cursor anywhere on the product shell relative to the ball center.
@@ -579,6 +592,7 @@ export function PresenceBall({
       className={css.root}
       data-overview-presence=""
       data-source={emotion.source}
+      data-compact={compact ? '' : undefined}
     >
       <button
         type="button"
@@ -595,9 +609,11 @@ export function PresenceBall({
       <div className={css.meta}>
         <div className={css.row}>
           <span className={css.emotion}>{display.name}</span>
-          <span className={css.id}>{emotion.emotionId}</span>
+          {!compact ? <span className={css.id}>{emotion.emotionId}</span> : null}
         </div>
-        {display.tip ? <p className={css.tips}>{display.tip}</p> : null}
+        {display.tip
+          ? <p className={css.tips} title={compact ? display.tip : undefined}>{display.tip}</p>
+          : null}
       </div>
     </div>
   )

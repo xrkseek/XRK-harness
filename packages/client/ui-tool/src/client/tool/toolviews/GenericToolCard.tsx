@@ -17,6 +17,7 @@ import { readCardModel } from '../models/read-card-model.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { localizeAutoReviewDenial } from '../models/auto-review-denial.ts'
 import { webCardModel } from '../models/web-card-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
@@ -42,6 +43,9 @@ export function GenericToolCard({
   toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, t,
 }: GenericToolCardProps) {
   const model = toolRowModel(toolName, block, cwd, home)
+  const autoReview = model.autoReviewDenial === null
+    ? null
+    : localizeAutoReviewDenial(model.autoReviewDenial, t)
   const terminal = terminalCardModel(block, cwd)
   const read = readCardModel(block, cwd, home)
   const diff = diffCardModel(block)
@@ -64,16 +68,16 @@ export function GenericToolCard({
       icon={VARIANT_ICONS[model.variant]}
       title={model.title}
       summary={terminal?.description ?? search?.title ?? model.summary}
-      body={singleFile || hasMedia ? null : model.body}
-      output={hasMedia ? null : model.output}
-      errorSummary={model.errorSummary}
-      terminal={terminal}
-      diff={diff}
-      read={read}
-      search={search}
-      web={web}
-      image={image}
-      files={files}
+      body={singleFile || hasMedia || autoReview !== null ? null : model.body}
+      output={autoReview?.output ?? (hasMedia ? null : model.output)}
+      errorSummary={autoReview?.summary ?? model.errorSummary}
+      terminal={autoReview !== null ? null : terminal}
+      diff={autoReview !== null ? null : diff}
+      read={autoReview !== null ? null : read}
+      search={autoReview !== null ? null : search}
+      web={autoReview !== null ? null : web}
+      image={autoReview !== null ? null : image}
+      files={autoReview !== null ? null : files}
       renderSlot={renderSlot}
       loadImage={loadImage}
       state={state}

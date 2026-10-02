@@ -3,7 +3,7 @@
    viewport bottom inside the centered message column; textarea on top, action
    row below, primary action controls bottom-right. Input width rides the
    column (--dsh-composer-card-max-width = chat content + 32px, 16px per side,
-   is a cap, not a fixed size â€?layout rule: the box shrinks with the center
+   is a cap, not a fixed size é–¿?layout rule: the box shrinks with the center
    column keeping its clearance). Hero variant = the same card centered in the
    empty state; the transition between the two is a position move of one
    component. */
@@ -47,6 +47,28 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stagingCancel {
+  flex: none;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: underline;
+  cursor: pointer;
+  /* WCAG / UX review: ?44px touch target without bloating the banner. */
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 4px;
+  margin: -13px 0;
 }
 
 .card {
@@ -61,7 +83,7 @@
   max-width: var(--dsh-composer-card-max-width);
   padding-top: 10px;
   /* Input stroke: black/0.10 light, white/0.06 dark (figma darkmode note says
-     the input border is one notch weaker than buttons) â€?exactly the
+     the input border is one notch weaker than buttons) é–¿?exactly the
      l2-darkmode-thin pair. Fill: the input surface token (elevated in dark). */
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 22px;
@@ -76,6 +98,18 @@
      (see ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* The draft surface suppresses its own outline because the card above is its
+   visual boundary: a native ring on the inner field would draw a box inside a
+   box. The card answers focus instead é–³?the same contract ui-primitives/Input
+   and QuestionComposer already use, so focus reads identically everywhere.
+   Halo rides box-shadow so it never moves the layout. */
+.card:focus-within {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow:
+    var(--dsw-shadow-lv2),
+    0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent);
 }
 
 /* No-workspace trigger state: dashed l4 stroke marks the card as a pick-a-
@@ -133,6 +167,10 @@
 .scroll {
   max-height: var(--dsh-composer-text-max-height);
   overflow-y: auto;
+  /* Own scrollport: once the draft hits its height cap the gesture must stop
+     here, not hand off to the chat log behind the composer -- Android chains
+     it to the page, iOS rubber-bands it. */
+  overscroll-behavior: contain;
   margin-right: 4px;
 }
 
@@ -298,7 +336,7 @@
   cursor: default;
 }
 
-/* Plan / Read-only / model â€?native <select>, chip-like closed chrome
+/* Plan / Read-only / model é–¿?native <select>, chip-like closed chrome
    (figma ToggleButton: 13/20 medium secondary, 12px chevron). */
 .select {
   max-width: 220px;
@@ -331,7 +369,7 @@
 }
 
 /* Primary send (figma IconButton 34:10465): 34px circle, #3964FE light /
-   #679EFE dark â€?the info-fill pair (500â†?00), NOT button-primary (ink);
+   #679EFE dark é–¿?the info-fill pair (500é–¿?00), NOT button-primary (ink);
    white glyph; empty text = 0.4 opacity. */
 .primary {
   display: grid;
@@ -400,7 +438,7 @@
 }
 
 /* Plain-text reference highlight: a pure range mark over the
-   draft's own glyphs â€?advance untouched, so the two layers cannot drift.
+   draft's own glyphs é–¿?advance untouched, so the two layers cannot drift.
    Chip family colors; clone keeps rounded ends on soft-wrap fragments. */
 .textRef {
   background-color: transparent;

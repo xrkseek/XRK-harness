@@ -1,0 +1,46 @@
+/* Mobile layer: safe-area reservations and the coarse-pointer floor for the
+ * whole shell. The shell loads this AFTER design-platform.css and
+ * interaction.css, because it reads their tokens and outranks nothing.
+ *
+ * The reservations exist because `viewport-fit=cover` (product-web/index.html)
+ * lets the page run under the notch and the home indicator. A fixed sheet that
+ * does not reserve them puts its close button behind the notch and its footer
+ * under the swipe bar. The inset is 0 on desktop, so every rule below is inert
+ * there -- no media query needed to keep the two surfaces in step.
+ *
+ * Shape to copy when you touch a fixed or scrolling sheet:
+ *   padding-top: max(12px, var(--ds-safe-top));
+ *   max-width: calc(100vw - 24px - var(--ds-safe-h));
+ *   max-height: calc(100dvh - var(--ds-safe-top) - var(--ds-safe-bottom));
+ *   overscroll-behavior: contain;
+ * max() keeps the design value as the floor, so an inset can only ever grow
+ * the reservation -- never shrink it below what the sheet was drawn with. */
+
+:root {
+  --ds-safe-top: env(safe-area-inset-top, 0px);
+  --ds-safe-right: env(safe-area-inset-right, 0px);
+  --ds-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ds-safe-left: env(safe-area-inset-left, 0px);
+  /* Pair sums -- what a centred sheet actually has to give back. In portrait
+     both are 0 (notches sit top/bottom); in landscape they are the only thing
+     keeping a full-bleed sheet off the sensor housing. */
+  --ds-safe-h: calc(var(--ds-safe-left) + var(--ds-safe-right));
+  --ds-safe-v: calc(var(--ds-safe-top) + var(--ds-safe-bottom));
+}
+
+/* Coarse pointer: drop the ~300ms double-tap-zoom delay on everything the user
+ * can actually hit. `manipulation` keeps pan and pinch -- only the synthetic
+ * double-tap click is suppressed. Written through :where() so it stays a floor
+ * at zero specificity: a sheet that manages a gesture of its own (drag handles,
+ * swipe-to-dismiss, a pinch viewer) declares its own touch-action and wins. */
+@media (pointer: coarse) {
+  :where(button, [role='button'], a, summary) {
+    touch-action: manipulation;
+  }
+}
+
+/* Deliberately NOT global, and worth saying why: the 44px touch-target floor
+ * (WCAG 2.5.5 / platform HIG) would relayout every desktop icon-button row the
+ * moment a hybrid laptop reports a coarse primary pointer. Sheets raise their
+ * own rows inside a coarse-pointer block -- the pattern
+ * ChangedFiles.module.css already uses -- rather than the shell doing it. */

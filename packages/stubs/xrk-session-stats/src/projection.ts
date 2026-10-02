@@ -24,7 +24,7 @@
  */
 
 import { z } from 'zod'
-import { isTokenDelta } from '@xrkseek/xrk-llm/message'
+import { isDecodableSample, isTokenDelta } from '@xrkseek/xrk-llm/message'
 import type { ProjectionDefinition } from '@xrkseek/xrk-session-projection'
 
 /** Accumulated whole-log figures (the view is exactly these totals). */
@@ -130,9 +130,10 @@ export const sessionStatsProjectionDefinition: ProjectionDefinition<'sessionStat
           next.ttftMs += Math.max(0, open.firstTokenTime - open.startTime)
           next.ttftSteps += 1
           const outputTokens = usageOutputTokens(event.data.usage)
-          if (outputTokens !== null) {
-            next.decodeMs += Math.max(0, event.time - open.firstTokenTime)
-            next.decodeTokens += outputTokens
+          const decodeMs = event.time - open.firstTokenTime
+          if (isDecodableSample(outputTokens, decodeMs)) {
+            next.decodeMs += decodeMs
+            next.decodeTokens += outputTokens ?? 0
           }
         }
         return next

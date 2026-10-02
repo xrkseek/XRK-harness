@@ -13,9 +13,13 @@
 // ChatNodeSeat subscribes to one Node key, so Assistant deltas and Tool
 // lifecycle updates replace only their own row without remounting it.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationTimelineSnapshot } from '@xrkseek/client-runtime/client'
-import type { ChatSnapshot, QueuedMessage } from '@xrkseek/client-runtime/client'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import type {
+  ChatSnapshot,
+  ConversationTimelineSnapshot,
+  PendingSubmission,
+  QueuedMessage,
+} from '@xrkseek/client-runtime/client'
 import {
   formatAttachmentSummary,
   normalizeAttachmentId,
@@ -27,6 +31,12 @@ import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.ts
 import { shouldShowFlowWaiting } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
+import { ResubmitConfirm } from './ResubmitConfirm.tsx'
+import {
+  completeResubmitConfirm,
+  getResubmitIntent,
+  subscribeResubmitIntent,
+} from './resubmit-intent.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems, type TurnRailItem } from './turn-rail-items.ts'
 import { formatRunDuration } from './message-chrome.ts'
@@ -146,15 +156,14 @@ function openFailureMessage(error: unknown, fallback: string): string {
 }
 
 /**
- * Prompt-RPC identities already rendered by durable material: user/steering
- * node sources plus queue occurrences. A submission echo whose identity
- * appears here is hidden in the same render so the echo→durable swap is
- * atomic.
+ * Prompt-RPC identities already rendered by durable user/steering nodes.
+ * Host queue rows are not observed here: queued echoes live in QueueDock, and
+ * steering echoes merge with the Host next-step row until the durable node lands
+ * (DSH pendingInputs handoff).
  */
 function observedRpcIds(
   order: readonly string[],
   nodes: ChatSnapshot['nodes'],
-  queue: readonly QueuedMessage[],
 ): ReadonlySet<string> {
   const observed = new Set<string>()
   for (const key of order) {
@@ -165,11 +174,16 @@ function observedRpcIds(
       | undefined
     if (source?.kind === 'user' && typeof source.rpcId === 'string') observed.add(source.rpcId)
   }
-  for (const row of queue) {
-    if (row.rpcId !== undefined) observed.add(row.rpcId)
-  }
   return observed
 }
+
+/** One flow-tail pending input: local echo or Host-authoritative steering row. */
+type PendingChatInput =
+  | { readonly kind: 'echo'; readonly submission: PendingSubmission }
+  | { readonly kind: 'steer'; readonly item: QueuedMessage }
+
+/** Shared empty tail so an idle flow keeps one stable `pendingInputs` identity. */
+const NO_PENDING_INPUTS: readonly PendingChatInput[] = []
 
 /** ProducedFiles opens the session workspace as `.`. */
 function isFolderOpenPath(path: string): boolean {
@@ -193,40 +207,82 @@ function turnStatusPhrase(
   return t(TURN_STATUS_PHRASES[index]!)
 }
 
+/** Waiting episodes shorter than this stay label-only (no clock). */
+const TURN_STATUS_CLOCK_AFTER_MS = 15_000
+
 /**
  * Flow-tail waiting label (`turnStatus.*`). Yields once tools or a streaming
  * partial are the active surface; step gaps and steer waits keep it visible.
  * The phrase stays stable for the open turn; the clock measures this waiting
- * episode (mount → now), not wall time since `turn/start` — whole-turn duration
- * belongs on the settled Ran-for footer.
+ * episode (visible → now), not wall time since `turn/start` — whole-turn
+ * duration belongs on the settled Ran-for footer.
+ *
+ * Permanently mounted: every token / step boundary flips `visible`, and
+ * remounting on each flip reset the episode clock, swapped the phrase and
+ * re-announced through `aria-live`. A non-waiting episode parks the node with
+ * `hidden` (no layout slot, so the column gap is unchanged), and the per-second
+ * clock text is written straight into the DOM instead of re-rendering the view.
+ * The episode also restarts when the locale seat changes, so the digits are
+ * always formatted by the locale actually on screen.
  */
-function TurnStatus({ startTime, t }: {
+function TurnStatus({ visible, startTime, t }: {
+  /** Whether the flow tail is currently in a waiting vacuum. */
+  visible: boolean
   /** Open turn's `turn/start` time — seeds the waiting phrase only. */
   startTime: number | null
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
 }) {
-  const [mountedAt] = useState(() => Date.now())
-  const [elapsedMs, setElapsedMs] = useState(0)
   const phrase = useMemo(() => turnStatusPhrase(startTime, t), [startTime, t])
+  const clockRef = useRef<HTMLSpanElement | null>(null)
+  const clockShownRef = useRef(false)
+  const elapsedRef = useRef(0)
+  const [clockVisible, setClockVisible] = useState(false)
+  // The clock only exists once this episode is long, so a label-only wait reads
+  // as the bare phrase (its `textContent` feeds copy, tests and the `aria-live`
+  // announcement). Once it is up, the per-second digits go straight to the node
+  // instead of re-rendering this subtree each second.
+  const hideClock = (): void => {
+    if (!clockShownRef.current) return
+    clockShownRef.current = false
+    setClockVisible(false)
+  }
   useEffect(() => {
+    if (!visible) {
+      hideClock()
+      return
+    }
+    const startedAt = Date.now()
+    elapsedRef.current = 0
     const tick = (): void => {
-      setElapsedMs(Math.max(0, Date.now() - mountedAt))
+      const elapsed = Math.max(0, Date.now() - startedAt)
+      elapsedRef.current = elapsed
+      if (elapsed < TURN_STATUS_CLOCK_AFTER_MS) {
+        hideClock()
+        return
+      }
+      if (!clockShownRef.current) {
+        clockShownRef.current = true
+        setClockVisible(true)
+        return
+      }
+      const node = clockRef.current
+      if (node !== null) node.textContent = formatRunDuration(elapsed, t)
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => { clearInterval(id) }
-  }, [mountedAt])
-  // Brief gaps stay label-only; the clock appears once this wait itself is long.
-  const showClock = elapsedMs >= 15_000
+  }, [visible, t])
+  // Fill the node in the same frame it mounts, otherwise the first second shows
+  // an empty clock.
+  useLayoutEffect(() => {
+    const node = clockRef.current
+    if (clockVisible && node !== null) node.textContent = formatRunDuration(elapsedRef.current, t)
+  }, [clockVisible, t])
   return (
-    <div className={css.turnStatus} role="status" aria-live="polite">
+    <div className={css.turnStatus} role="status" aria-live="polite" hidden={!visible}>
       {phrase}
-      {showClock && (
-        <span className={css.turnStatusClock} aria-hidden>
-          {formatRunDuration(elapsedMs, t)}
-        </span>
-      )}
+      {clockVisible && <span ref={clockRef} className={css.turnStatusClock} aria-hidden />}
     </div>
   )
 }
@@ -236,7 +292,7 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt,
+  useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt, editAt, deleteAt,
   fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
@@ -263,6 +319,8 @@ export function ChatView({
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   /** Host attachment id open → lightbox (not better-sidebar). */
   const [attachmentPreview, setAttachmentPreview] = useState<ImageAttachmentRef | null>(null)
+  const resubmitIntent = useSyncExternalStore(subscribeResubmitIntent, getResubmitIntent, getResubmitIntent)
+  const resubmitOpen = resubmitIntent !== null && resubmitIntent.sessionId === sessionId
   // Close/retry must ignore a settlement that started before the latest
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
@@ -319,15 +377,55 @@ export function ChatView({
     [inbox],
   )
   const pendingSubmissions = useSession(s => s.pendingSubmissions)
-  // Submission echoes still awaiting their durable counterpart. `order` is the
-  // recompute trigger: durable user material always arrives as an append.
-  const visibleSubmissions = useMemo(() => {
-    if (pendingSubmissions.length === 0) return pendingSubmissions
-    const observed = observedRpcIds(order, nodeStore, inbox)
-    return pendingSubmissions.filter(submission => (
-      submission.placement !== 'queued' && !observed.has(submission.requestId)
-    ))
-  }, [pendingSubmissions, order, nodeStore, inbox])
+  // One pass over the local echoes: `observed` is the durable user/steering
+  // rpcIds already painted by their own row, `local` is the transcript-paintable
+  // set (queued follow-ups paint in QueueDock) and `localIds` keeps every
+  // non-queued address so a Host steering row can defer to its echo instead of
+  // double-painting. Splitting these used to cost two extra filter passes.
+  const echoBook = useMemo(() => {
+    const local = new Map<string, PendingSubmission>()
+    const localIds = new Set<string>()
+    if (pendingSubmissions.length === 0) return { local, localIds }
+    const observed = observedRpcIds(order, nodeStore)
+    for (const submission of pendingSubmissions) {
+      if (submission.placement === 'queued') continue
+      localIds.add(submission.requestId)
+      if (!observed.has(submission.requestId)) local.set(submission.requestId, submission)
+    }
+    return { local, localIds }
+  }, [pendingSubmissions, order, nodeStore])
+  // Merge Host next-step with local echoes by rpcId so one bubble stays mounted
+  // through admit→claim→durable (prefer echo; steer echoes keep 「插队中」).
+  // Purity matters here: `echoBook` is cached across renders, so consumption is
+  // recorded in a local `consumed` set instead of deleting from the shared map.
+  const pendingInputs = useMemo((): readonly PendingChatInput[] => {
+    const { local, localIds } = echoBook
+    if (local.size === 0 && localIds.size === 0 && pendingSteering.length === 0) {
+      return NO_PENDING_INPUTS
+    }
+    const consumed = new Set<string>()
+    const pending: PendingChatInput[] = []
+    for (const item of pendingSteering) {
+      const rpcId = item.rpcId
+      if (rpcId === undefined) {
+        pending.push({ kind: 'steer', item })
+        continue
+      }
+      const submission = local.get(rpcId)
+      if (submission !== undefined) {
+        consumed.add(rpcId)
+        pending.push({ kind: 'echo', submission })
+        continue
+      }
+      if (localIds.has(rpcId)) continue
+      pending.push({ kind: 'steer', item })
+    }
+    for (const [rpcId, submission] of local) {
+      if (consumed.has(rpcId)) continue
+      pending.push({ kind: 'echo', submission })
+    }
+    return pending
+  }, [pendingSteering, echoBook])
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -372,26 +470,41 @@ export function ChatView({
   const lastNode = lastKey === null ? undefined : nodeStore.get(lastKey)
   // Skip the open-step streaming partial when detecting a durable steer tail:
   // fixtures (and production) keep the partial after a steering node in order,
-  // which would otherwise hide the post-steer waiting line.
-  const lastDurableKey = [...order].reverse().find((key) => {
+  // which would otherwise hide the post-steer waiting line. Walked backwards
+  // with an early exit: the spread+reverse allocated a full copy of the order
+  // on every render, which is the dominant garbage source in a long session.
+  let lastDurableKey: string | null = null
+  for (let i = order.length - 1; i >= 0; i--) {
+    const key = order[i]!
     const node = nodeStore.get(key)
-    if (node === undefined) return false
+    if (node === undefined) continue
     if (node.kind === 'assistant-step' && (node.data as { status?: string }).status === 'running') {
-      return false
+      continue
     }
-    return true
-  }) ?? null
+    lastDurableKey = key
+    break
+  }
   const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
   const showFlowWaiting = shouldShowFlowWaiting({
     running,
     partial,
     runningCallCount,
     timeline,
-    pendingSteerCount: pendingSteering.length,
+    // Steer waits only — transcript echoes must not force the shimmer while
+    // Think/tools are live (that was the blue-label flicker on every send).
+    pendingSteerCount: pendingInputs.filter((input) => (
+      input.kind === 'steer'
+      || (input.kind === 'echo' && input.submission.placement === 'steering')
+    )).length,
     tailKind: lastDurable?.kind,
   })
-  const lastSteeringId = pendingSteering[pendingSteering.length - 1]?.id ?? null
-  const lastSubmissionId = visibleSubmissions[visibleSubmissions.length - 1]?.requestId ?? null
+  const lastPending = pendingInputs[pendingInputs.length - 1]
+  const lastSteeringId = lastPending === undefined
+    ? null
+    : lastPending.kind === 'steer'
+      ? (lastPending.item.rpcId ?? lastPending.item.id)
+      : lastPending.submission.requestId
+  const lastSubmissionId = lastPending?.kind === 'echo' ? lastPending.submission.requestId : null
   const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}:${lastSubmissionId ?? ''}`
 
   const syncActiveTurn = useCallback((): void => {
@@ -598,7 +711,9 @@ export function ChatView({
       return
     }
     atBottomRef.current = isAtBottom
-    setAtBottom(isAtBottom)
+    // Avoid re-rendering ChatView on every wheel tick while the follow chrome
+    // state is unchanged (Vercel rerender-use-ref-transient-values).
+    setAtBottom(current => (current === isAtBottom ? current : isAtBottom))
     const position = isAtBottom ? null : scrollPosition(local, el)
     if (isAtBottom) {
       anchorRef.current = null
@@ -818,6 +933,8 @@ export function ChatView({
               inspectCall={inspectCall}
               forkAt={forkAt}
               restoreAt={restoreAt}
+              editAt={editAt}
+              deleteAt={deleteAt}
               loadImage={loadImage}
               renderMessageImages={renderMessageImages}
               renderMessageFiles={renderMessageFiles}
@@ -829,25 +946,29 @@ export function ChatView({
           {/* No pending placeholders: questions (ui-user-questions) and approvals
               (ApprovalPanel) both take over the composer, so a flow card would
               double-render the same wait. */}
-          {pendingSteering.map(item => (
-            <PendingSteeringBubble
-              key={item.id}
-              content={item.content}
-              renderMessageImages={renderMessageImages}
-              renderMessageFiles={renderMessageFiles}
-              t={t}
-            />
-          ))}
-          {visibleSubmissions.map(submission => (
-            <PendingSubmissionBubble
-              key={submission.requestId}
-              submission={submission}
-              renderMessageImages={renderMessageImages}
-              renderMessageFiles={renderMessageFiles}
-              t={t}
-            />
-          ))}
-          {showFlowWaiting && <TurnStatus startTime={runningTurnStart} t={t} />}
+          {pendingInputs.map((input) => {
+            if (input.kind === 'echo') {
+              return (
+                <PendingSubmissionBubble
+                  key={input.submission.requestId}
+                  submission={input.submission}
+                  renderMessageImages={renderMessageImages}
+                  renderMessageFiles={renderMessageFiles}
+                  t={t}
+                />
+              )
+            }
+            return (
+              <PendingSteeringBubble
+                key={input.item.id}
+                content={input.item.content}
+                renderMessageImages={renderMessageImages}
+                renderMessageFiles={renderMessageFiles}
+                t={t}
+              />
+            )
+          })}
+          <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} t={t} />
         </div>
         {!atBottom && (
           <div className={css.toBottomSlot}>
@@ -881,6 +1002,15 @@ export function ChatView({
           t={t}
         />
       )}
+      <ResubmitConfirm
+        open={resubmitOpen}
+        title={t(resubmitIntent?.kind === 'delete' ? 'message.delete.title' : 'message.resubmit.title')}
+        description={t(resubmitIntent?.kind === 'delete' ? 'message.delete.description' : 'message.resubmit.description')}
+        cancelLabel={t('message.resubmit.cancel')}
+        keepFilesLabel={t('message.resubmit.keepFiles')}
+        revertFilesLabel={t('message.resubmit.revertFiles')}
+        onChoice={completeResubmitConfirm}
+      />
     </div>
   )
 }

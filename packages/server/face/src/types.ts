@@ -79,7 +79,16 @@ export type MuxFrame =
       readonly approvalId: string;
       readonly toolName: string;
       readonly callId?: string;
+      /** English audit reason (session log mirror). */
       readonly reason?: string;
+      /**
+       * Localized UI prompt (en required; zh optional). Product shell resolves
+       * by active locale; omit → fall back to {@link reason}.
+       */
+      readonly displayReason?: {
+        readonly en: string;
+        readonly [locale: string]: string;
+      };
       /** tool · network · escalation (Codex-style UX split). */
       readonly category?: "tool" | "network" | "escalation";
       readonly networkHost?: string;
@@ -179,6 +188,10 @@ export type HostFrame =
   | {
       readonly type: "host/pinned-sessions-changed";
       readonly pinnedSessionIds: readonly string[];
+    }
+  | {
+      readonly type: "host/pinned-workspaces-changed";
+      readonly pinnedWorkspaceIds: readonly string[];
     }
   | {
       /** DSH `host/remote-event` — allowlisted Host events for `ctx.remote.$dispatch`. */

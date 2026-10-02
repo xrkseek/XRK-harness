@@ -29,7 +29,7 @@
 }
 
 /* The citation list: ordered so each source reads as a numbered reference. The
-   whole list — the sources the tool returned, matching what the model saw —
+   whole list 閳?the sources the tool returned, matching what the model saw 閳?
    renders here; a max-height caps the card so a long list scrolls in place
    rather than growing the card unbounded. The height is a design constant of the
    card's geometry, not a deployment choice, so it lives here rather than a plugin
@@ -39,8 +39,8 @@
    overflow: a marker wider than `padding-left` loses its leading digits with no
    way to scroll them back. Markers are right-aligned to the content edge, so the
    padding must fit the widest one the list can produce. `searchMaxResults` is an
-   unbounded positive integer, so the padding is sized in `em` — against this
-   element's own font, the one a marker inherits — to hold a three-digit marker
+   unbounded positive integer, so the padding is sized in `em` 閳?against this
+   element's own font, the one a marker inherits 閳?to hold a three-digit marker
    (`999. ` measures 2.35em in the app font stack) plus the gap the one-digit
    case already had. */
 .sources {
@@ -51,6 +51,9 @@
   gap: 10px;
   max-height: 320px;
   overflow-y: auto;
+  /* Capped source list inside the web card; contain stops an overscroll at
+     either edge from panning the page the card sits on. */
+  overscroll-behavior: contain;
 }
 
 .source {

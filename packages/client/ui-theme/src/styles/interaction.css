@@ -1,0 +1,93 @@
+/* Interaction layer: the motion budget, the focus-ring floor, the elevation
+ * scale, and the browser surfaces no component sheet bothers to theme.
+ *
+ * Scheme-invariant by construction — every colour resolves through the --dsw-*
+ * alias layer, so light and dark stay in step without a second copy. Loaded by
+ * the shell *after* design-platform.css because it reads that sheet's tokens. */
+
+/* ---- Motion budget ------------------------------------------------------
+ * Timing matters more than easing. Feedback that the user is waiting on
+ * should resolve inside 80ms of the input; anything past 500ms is telling them
+ * the interface lost the thread. */
+:root {
+  --ds-motion-instant: 100ms;
+  --ds-motion-fast: 150ms;
+  --ds-motion-base: 250ms;
+  --ds-motion-slow: 400ms;
+  --ds-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ds-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Every sheet animates on a hard-coded duration today, so there is no token to
+ * collapse. A blanket !important is the only lever that reaches them all.
+ * Vestibular disorders affect roughly a third of adults over 40, and the
+ * longest offenders in this codebase run to 2.6s. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Known trade-off, deliberately left open: this also stops the affordances
+     that REPORT progress — the loading spinner, the connection dots, the
+     `data-state='running'` sweep on tool rows — and a stopped spinner reads as
+     a hang. The fix is not a `revert`: on an `!important` declaration that
+     keyword rolls back to the *user* origin, so it would land on the initial
+     value and behave exactly like the blanket above. Exempting those elements
+     means adding the class to their hosts in TSX and narrowing the blanket to
+     `:not(.motion-essential)`, which is a product decision about what the
+     reduced-motion spinner should show — not a CSS call to make here. */
+}
+
+/* ---- Focus ring floor ---------------------------------------------------
+ * :where() keeps specificity at zero, so this is a floor and not an override:
+ * any component sheet that styles :focus-visible still wins. Sheets that write
+ * a bare `outline: none` do NOT get rescued here — that is a local decision to
+ * fix in the sheet, not something the app shell should paper over. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 2px;
+}
+
+/* ---- Elevation scale ----------------------------------------------------
+ * These names describe what the number is *for*; the numbers keep the
+ * magnitude the sheets already rely on, so introducing tokens changes no
+ * stacking order. The gap between popover and scrim is deliberate and wide —
+ * portals (menus opened from inside a dialog) must land above the dialog's own
+ * backdrop, which a tighter "tidy" scale would have silently broken. */
+:root {
+  --ds-z-popover: 100;   /* menus, cards, tooltips, hover cards */
+  --ds-z-scrim: 1000;    /* dimming layer behind a dialog or lightbox */
+  --ds-z-surface: 1100;  /* dialogs, portals, toasts, onboarding covers */
+}
+
+/* A submenu must outrank the list it escapes from. Written as an offset so the
+ * relationship survives a change to the base rung. */
+:root {
+  --ds-z-popover-nested: calc(var(--ds-z-popover) + 1);
+}
+
+/* ---- Browser surfaces ---------------------------------------------------
+ * The parts nobody draws still carry the design. Text selection and the caret
+ * are the two the user meets first, on every single string in the product. */
+::selection {
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent);
+  color: var(--dsw-alias-label-primary);
+}
+
+:where(input, textarea, [contenteditable]) {
+  caret-color: var(--dsw-alias-brand-primary);
+}
+
+/* Links read as links without relying on colour alone, and the offset keeps
+ * the line clear of CJK descenders at small sizes. */
+:where(a):not([class]) {
+  text-decoration-line: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}

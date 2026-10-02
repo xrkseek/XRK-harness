@@ -1,12 +1,13 @@
 /* Workspace browsing region (fills the sidebar shell's hole): section
    header, search capsule, and the scrolling session list. Wide/rail
-   variants ride the shell's fold state through the `wide` owner prop —
+   variants ride the shell's fold state through the `wide` owner prop 閳?
    rail state renders only the two 36x36 icon controls. */
 
 .root {
   --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding);
   --dsh-session-list-scrollbar-width: 8px;
   --dsh-session-list-scrollbar-offset: 2px;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -207,6 +208,15 @@
   transition: opacity 120ms var(--ds-ease-in-out);
 }
 
+/* The field is borderless by design, so the ring cannot ride a border that
+   does not exist 閳?it draws itself instead. opacity/pointer-events keep the
+   collapsed field inert; once expanded this is the only cue that says which
+   control the keyboard is driving. */
+.searchInput:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
+}
+
 .searchExpanded .searchInput {
   margin-left: -2px;
   opacity: 1;
@@ -236,7 +246,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Rail variant (own .rail class from the wide owner prop — the region never
+/* Rail variant (own .rail class from the wide owner prop 閳?the region never
    reads the shell's class names): the two icon controls stack as 36x36
    circles matching the shell's rail rhythm. Both use the rail's shared base
    left anchor so the outer shell can translate the whole region uniformly. */
@@ -335,6 +345,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* The list is the only scrolling region in the browser; an overscroll at
+     its edge stops here instead of dragging the shell. */
+  overscroll-behavior: contain;
   margin-left: -4px;
   margin-right: var(--dsh-session-list-scrollbar-offset);
   padding-left: 4px;
@@ -468,6 +481,13 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Same dialog field family as HeroShell's .modalInput: the resting hairline
+   carries focus by re-tinting, no second ring. */
+.renameInput:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent);
+}
+
 .renameInput:disabled {
   color: var(--dsw-alias-label-dimmed);
 }
@@ -489,9 +509,50 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.forkOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 78%, transparent);
+  pointer-events: all;
+}
+
+.forkSpinner {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 2px solid var(--dsw-alias-border-l2);
+  border-top-color: var(--dsw-alias-state-business-primary);
+  border-radius: 50%;
+  animation: fork-spin 700ms linear infinite;
+}
+
+.forkLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@keyframes fork-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide {
     animation: none;
+  }
+
+  .forkSpinner {
+    animation: none;
+    border-top-color: var(--dsw-alias-border-l2);
+    opacity: 0.7;
   }
 
   .search,
@@ -503,7 +564,7 @@
   }
 }
 
-/* Phone: drawer owns motion — skip the wide remount fade. */
+/* Phone: drawer owns motion 閳?skip the wide remount fade. */
 @media (max-width: 767px) {
   .wide {
     animation: none;

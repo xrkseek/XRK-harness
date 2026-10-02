@@ -9,6 +9,7 @@
 import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
 import { randomUUID } from "node:crypto";
 import type {
+  ApprovalDisplayReason,
   ApprovalHandler,
   ToolPipelineContext,
 } from "@xrkseek/core-tools";
@@ -37,7 +38,13 @@ export interface PendingApprovalItem {
   readonly sessionId: string;
   readonly toolCallId: string;
   readonly toolName: string;
+  /** English audit reason (session `approval/asked` + mux fallback). */
   readonly reason: string;
+  /**
+   * Localized UI prompt (mux only — never written to session audit events).
+   * Product shell resolves by active locale.
+   */
+  readonly displayReason?: ApprovalDisplayReason;
   readonly askedAt: number;
   readonly argsSummary?: string;
   /** UX category: ordinary tool · network · sandbox escalation. */
@@ -120,6 +127,7 @@ export class FaceApprovalBroker {
       readonly kind: string;
       readonly reason: string;
       readonly summary?: string;
+      readonly displayReason?: ApprovalDisplayReason;
     },
     signal?: AbortSignal,
   ): Promise<boolean> {
@@ -135,16 +143,16 @@ export class FaceApprovalBroker {
       args: gate.summary ? { summary: gate.summary } : {},
       ...(signal ? { signal } : {}),
     };
-    return this.request(sessionId, synthetic, gate.reason);
+    return this.request(sessionId, synthetic, gate.reason, gate.displayReason);
   }
 
   /** Pipeline `ApprovalHandler` bound to a session. */
   handlerFor(sessionId: string): ApprovalHandler {
-    return async (ctx, reason) => {
+    return async (ctx, reason, displayReason) => {
       if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
         return true;
       }
-      return this.request(sessionId, ctx, reason);
+      return this.request(sessionId, ctx, reason, displayReason);
     };
   }
 
@@ -152,6 +160,7 @@ export class FaceApprovalBroker {
     sessionId: string,
     ctx: Pick<ToolPipelineContext, "call" | "args" | "signal">,
     reason: string,
+    displayReason?: ApprovalDisplayReason,
   ): Promise<boolean> {
     // Defense in depth: every ask path honors approval/policy never
     // (handlerFor / requestHostGate also check; callers must not bypass).
@@ -195,6 +204,7 @@ export class FaceApprovalBroker {
       reason,
       askedAt,
       category: classified.category,
+      ...(displayReason !== undefined ? { displayReason } : {}),
       ...(classified.network !== undefined
         ? { network: classified.network }
         : {}),
@@ -363,6 +373,9 @@ export function approvalRequestedFrame(
     toolName: item.toolName,
     callId: item.toolCallId,
     reason: item.reason,
+    ...(item.displayReason !== undefined
+      ? { displayReason: item.displayReason }
+      : {}),
     category: item.category,
     ...(item.network
       ? {

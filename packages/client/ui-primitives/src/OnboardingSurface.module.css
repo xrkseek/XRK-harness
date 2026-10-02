@@ -1,9 +1,12 @@
 /* First-run stage: keep the product top bar visible, then let onboarding own
    the complete workspace instead of presenting another settings modal. */
 .onboardingOverlay {
+  /* Stays inset:0 on purpose — the takeover must reach under the notch so
+     nothing of the app behind it shows through. The reservation therefore
+     lives on .onboardingStage below, the layer the step content renders on. */
   position: fixed;
   inset: 0;
-  z-index: 1100;
+  z-index: var(--ds-z-surface);
 }
 
 /* Mask */
@@ -25,5 +28,9 @@
   display: flex;
   justify-content: center;
   overflow: hidden;
+  /* A step's own chrome (close button, footer) would otherwise sit under
+     the notch or the home indicator; padding on the content layer keeps the
+     opaque background full-bleed while the step clears both. */
+  padding: var(--ds-safe-top) var(--ds-safe-right) var(--ds-safe-bottom) var(--ds-safe-left);
   background: var(--dsw-alias-bg-layer-1);
 }

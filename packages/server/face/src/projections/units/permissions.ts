@@ -13,12 +13,11 @@ import {
 
 /**
  * DSH `permissions` projection: fold knob events; view = select options + current.
+ * `auto` is included only while Guardian `registerAuto` reports live.
  */
-export function createPermissionsProjectionUnit(): ProjectionDefinition<
-  "permissions",
-  PermissionKnobState,
-  PermissionSelect
-> {
+export function createPermissionsProjectionUnit(options?: {
+  readonly isAutoLive?: () => boolean;
+}): ProjectionDefinition<"permissions", PermissionKnobState, PermissionSelect> {
   return {
     key: "permissions",
     stateVersion: 1,
@@ -27,7 +26,10 @@ export function createPermissionsProjectionUnit(): ProjectionDefinition<
       return applyPermissionKnobEvent(state, event);
     },
     wire: {
-      view: (state) => derivePermissionSelect(state),
+      view: (state) =>
+        derivePermissionSelect(state, {}, {
+          autoLive: options?.isAutoLive?.() === true,
+        }),
       parse(value: unknown): PermissionSelect {
         if (!value || typeof value !== "object") {
           throw new Error("permissions projection must be PermissionSelect");
@@ -39,7 +41,7 @@ export function createPermissionsProjectionUnit(): ProjectionDefinition<
         if (typeof v.currentValue !== "string" || !Array.isArray(v.options)) {
           throw new Error("permissions projection shape invalid");
         }
-        const options: PermissionSelectOption[] = [];
+        const optionsOut: PermissionSelectOption[] = [];
         for (const row of v.options) {
           if (!row || typeof row !== "object") {
             throw new Error("permissions option invalid");
@@ -48,7 +50,7 @@ export function createPermissionsProjectionUnit(): ProjectionDefinition<
           if (typeof o.value !== "string" || typeof o.name !== "string") {
             throw new Error("permissions option invalid");
           }
-          options.push({
+          optionsOut.push({
             value: o.value,
             name: o.name,
             ...(typeof o.description === "string"
@@ -56,7 +58,7 @@ export function createPermissionsProjectionUnit(): ProjectionDefinition<
               : {}),
           });
         }
-        return { options, currentValue: v.currentValue };
+        return { options: optionsOut, currentValue: v.currentValue };
       },
     },
   };

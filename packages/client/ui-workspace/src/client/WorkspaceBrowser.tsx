@@ -9,7 +9,7 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
@@ -257,6 +257,8 @@ type SessionTreeProps = Pick<
   archivedSessionIds: readonly SessionNode['id'][]
   /** Registry-global pin order (newest first). */
   pinnedSessionIds: readonly SessionNode['id'][]
+  /** Registry-global workspace pin order (newest first). */
+  pinnedWorkspaceIds: readonly WorkspaceId[]
   /** Client-local archive filter. */
   archiveMode: ArchiveViewMode
   /** Open the browser-owned rename dialog for a real Workspace group. */
@@ -269,6 +271,8 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Pin or unpin a session (row menu action). */
   onSessionPinToggle: (sessionId: SessionNode['id'], pinned: boolean) => void
+  /** Pin or unpin a workspace (row menu / pin button). */
+  onWorkspacePinToggle: (workspaceId: WorkspaceId, pinned: boolean) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
   /** Host account home; POSIX Workspace hover paths may display as `~`. */
@@ -277,8 +281,10 @@ type SessionTreeProps = Pick<
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
-  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, pinnedSessionIds, archiveMode,
+  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, pinnedSessionIds,
+  pinnedWorkspaceIds, archiveMode,
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionPinToggle,
+  onWorkspacePinToggle,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
@@ -355,8 +361,8 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }, archiveMode, pinnedSessionIds),
-    [list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds, expandedGroups, sessionOrderByAccount],
+    }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds),
+    [list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds, pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount],
   )
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
@@ -432,6 +438,11 @@ function SessionTree({
               workspaceDropCommitted.current = false
               setWorkspaceDrag({ workspaceId, over: null })
             },
+            hover: (overId: string, half: 'before' | 'after') => {
+              setWorkspaceDrag(active => active === null
+                ? active
+                : { ...active, over: { id: overId as WorkspaceId, half } })
+            },
             end: () => {
               if (workspaceDrag?.over !== null && workspaceDrag?.over !== undefined) {
                 commitWorkspaceDrag(workspaceDrag, workspaceDrag.over)
@@ -465,6 +476,7 @@ function SessionTree({
                 workspaceMarker === 'before' && css.workspaceDropBefore,
                 workspaceMarker === 'after' && css.workspaceDropAfter,
               )}
+              data-workspace-id={workspaceId}
               onDragOver={workspaceDrag === null || hoverWorkspace === undefined
                 ? undefined
                 : (e) => {
@@ -502,6 +514,12 @@ function SessionTree({
                     rename: () => {
                     /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
                       if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
+                    },
+                    pinToggle: () => {
+                    /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                      if (group.workspaceId !== undefined) {
+                        onWorkspacePinToggle(group.workspaceId, group.pinned)
+                      }
                     },
                     delete: () => {
                     /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
@@ -797,6 +815,8 @@ export function WorkspaceBrowser({
   archiveSession,
   pinSession,
   unpinSession,
+  pinWorkspace,
+  unpinWorkspace,
   insertSessionBefore,
   createWorkspace,
   searchSessions,
@@ -810,6 +830,7 @@ export function WorkspaceBrowser({
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
   const pinnedSessionIds = useWorkspaces(state => state.pinnedSessionIds)
+  const pinnedWorkspaceIds = useWorkspaces(state => state.pinnedWorkspaceIds)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -989,6 +1010,22 @@ export function WorkspaceBrowser({
       console.warn('session pin rejected:', reason)
     })
   }
+  const onWorkspacePinToggle = (workspaceId: WorkspaceId, pinned: boolean) => {
+    ;(pinned ? unpinWorkspace : pinWorkspace)(workspaceId).catch((reason: unknown) => {
+      console.warn('workspace pin rejected:', reason)
+    })
+  }
+
+  // Fork can take a while on large logs (Host seed + open). Keep a simple
+  // blocking chrome so the sidebar stays responsive to the eye.
+  const [forking, setForking] = useState(false)
+  const runFork = useCallback((sessionId: SessionId) => {
+    if (forking) return
+    setForking(true)
+    Promise.resolve(forkSession(sessionId)).finally(() => {
+      setForking(false)
+    })
+  }, [forkSession, forking])
 
   // Delete dialog is separate from the row so a successful removal can
   // unmount that row without tearing down the in-flight confirmation state.
@@ -1178,7 +1215,7 @@ export function WorkspaceBrowser({
           : groupBy === 'flat'
             ? (
               <FlatList
-                useSessions={useSessions} open={open} forkSession={forkSession}
+                useSessions={useSessions} open={open} forkSession={runFork}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 onSessionPinToggle={onSessionPinToggle}
                 archivedSessionIds={archivedSessionIds}
@@ -1198,7 +1235,7 @@ export function WorkspaceBrowser({
                 onSessionRename={onSessionRename}
                 onSessionArchive={onSessionArchive}
                 onSessionPinToggle={onSessionPinToggle}
-                forkSession={forkSession}
+                forkSession={runFork}
                 workspaces={workspaces}
                 groupExpansion={groupExpansion}
                 setGroupExpanded={actions.setGroupExpanded}
@@ -1208,6 +1245,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={actions.setSessionOrder}
                 archivedSessionIds={archivedSessionIds}
                 pinnedSessionIds={pinnedSessionIds}
+                pinnedWorkspaceIds={pinnedWorkspaceIds}
                 archiveMode={archiveMode}
                 startSession={startSession}
                 open={open}
@@ -1225,6 +1263,7 @@ export function WorkspaceBrowser({
                   setDeleteTarget({ workspaceId, title })
                   setDeleteError(null)
                 }}
+                onWorkspacePinToggle={onWorkspacePinToggle}
               />
             ))}
       </div>
@@ -1320,6 +1359,12 @@ export function WorkspaceBrowser({
         {deleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
         {deleteError !== null && <div className={css.renameError} role="alert">{deleteError}</div>}
       </Modal>
+      {forking && (
+        <div className={css.forkOverlay} role="status" aria-live="polite" aria-busy="true">
+          <span className={css.forkSpinner} aria-hidden="true" />
+          <span className={css.forkLabel}>{t('fork.pending')}</span>
+        </div>
+      )}
     </div>
   )
 }

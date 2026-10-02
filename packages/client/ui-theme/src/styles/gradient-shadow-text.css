@@ -216,6 +216,11 @@ body {
   --dsw-font-xs-strong-13-font-size: 13px;
   --dsw-font-xs-strong-13-font-style: normal;
 
+  /* Historic name: several call sites still ask for `sm-13` where the sheet
+     now spells it `xs-13`. Both resolve to the same 13px/20px regular. */
+  --dsw-font-sm-13: var(--dsw-font-xs-13);
+  --dsw-font-mono: var(--ds-font-family-code);
+
   --dsw-font-xxs-12: 12px/18px var(--dsw-font-family);
   --dsw-font-xxs-12-font-family: var(--dsw-font-family);
   --dsw-font-xxs-12-font-weight: 400;

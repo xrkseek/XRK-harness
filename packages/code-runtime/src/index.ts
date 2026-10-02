@@ -1,10 +1,26 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Worker } from "node:worker_threads";
 import type {
   ToolDefinition,
+  ToolExecuteExtras,
   ToolPipeline,
   ToolRegistry,
 } from "@xrkseek/core-tools";
 import { runTool } from "@xrkseek/core-tools";
+
+/** Wire name of the Code Mode transport (DSH PTC outer `run_code`). */
+export const RUN_CODE_NAME = "run_code";
+
+/**
+ * Active outer `run_code` call while nested `tools.*` re-enter the pipeline
+ * (DSH `exec.parent` / PTC inner). Auto-review reads {@link parentCallIdOf}.
+ */
+const codeNest = new AsyncLocalStorage<{ readonly parentCallId: string }>();
+
+/** Parent `run_code` call id when inside a nested Code Mode dispatch. */
+export function parentCallIdOf(): string | undefined {
+  return codeNest.getStore()?.parentCallId;
+}
 
 /** Largest delay Node schedules without clamping it to one millisecond. */
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -358,10 +374,10 @@ export function createRegistryCodeToolBridge(
       return registry
         .list()
         .map((t) => t.name)
-        .filter((n) => n !== "run_code");
+        .filter((n) => n !== RUN_CODE_NAME);
     },
     async call(name, args, signal) {
-      if (name === "run_code") {
+      if (name === RUN_CODE_NAME) {
         return {
           content: "nested run_code is not allowed",
           isError: true,
@@ -371,6 +387,7 @@ export function createRegistryCodeToolBridge(
       if (!registry.get(name)) {
         return { content: `unknown tool: ${name}`, isError: true };
       }
+      const parentCallId = parentCallIdOf();
       const result = await runTool({
         registry,
         call: {
@@ -380,6 +397,7 @@ export function createRegistryCodeToolBridge(
         },
         ...(signal ? { signal } : {}),
         ...(options?.pipeline ? { pipeline: options.pipeline } : {}),
+        ...(parentCallId !== undefined ? { parentCallId } : {}),
       });
       return {
         content: flattenToolContent(result.content),
@@ -543,7 +561,7 @@ export function createRunCodeTool(
     ? " Call host tools as `await tools.<name>(args)` (names from the live registry, excluding run_code). Only printed/returned text is program output — curate it. Nested calls re-enter the tool waterfall (in-process AsyncFunction; Worker/SSH snippet runner unused while bridged)."
     : " Isolated worker/SSH snippet only (no nested tools).";
   return {
-    name: "run_code",
+    name: RUN_CODE_NAME,
     description:
       "Run a short JavaScript program (async function body; top-level await/return work)." +
       toolsHint +
@@ -565,42 +583,57 @@ export function createRunCodeTool(
       },
       required: ["source"],
     },
-    async execute(args, signal) {
+    async execute(args, signal, extras?: ToolExecuteExtras) {
       const raw = args as { source?: string; timeoutMs?: number };
       const source = String(raw.source ?? "");
-      try {
-        const out = bridge
-          ? await runCodeWithTools(source, bridge, signal, {
-              ...(raw.timeoutMs !== undefined
-                ? { timeoutMs: raw.timeoutMs }
-                : {}),
-              defaultTimeoutMs: defaultMs,
-              maxTimeoutMs: maxMs,
-              maxOutputBytes: runtime.maxOutputBytes,
-            })
-          : await runtime.run(source, signal, {
-              ...(raw.timeoutMs !== undefined
-                ? { timeoutMs: raw.timeoutMs }
-                : {}),
-            });
-        const truncationNote = out.truncated
-          ? `\n...[output truncated to ${runtime.maxOutputBytes} bytes]`
-          : "";
-        if (out.error) {
+      const runBody = async (): Promise<
+        Awaited<ReturnType<ToolDefinition["execute"]>>
+      > => {
+        try {
+          const out = bridge
+            ? await runCodeWithTools(source, bridge, signal, {
+                ...(raw.timeoutMs !== undefined
+                  ? { timeoutMs: raw.timeoutMs }
+                  : {}),
+                defaultTimeoutMs: defaultMs,
+                maxTimeoutMs: maxMs,
+                maxOutputBytes: runtime.maxOutputBytes,
+              })
+            : await runtime.run(source, signal, {
+                ...(raw.timeoutMs !== undefined
+                  ? { timeoutMs: raw.timeoutMs }
+                  : {}),
+              });
+          const truncationNote = out.truncated
+            ? `\n...[output truncated to ${runtime.maxOutputBytes} bytes]`
+            : "";
+          if (out.error) {
+            return {
+              content: `error: ${out.error}\nstdout:\n${out.stdout}\nstderr:\n${out.stderr}${truncationNote}`,
+              isError: true,
+            };
+          }
           return {
-            content: `error: ${out.error}\nstdout:\n${out.stdout}\nstderr:\n${out.stderr}${truncationNote}`,
-            isError: true,
+            content: [
+              out.stdout,
+              out.stderr ? `stderr:\n${out.stderr}` : "",
+              truncationNote,
+            ]
+              .filter(Boolean)
+              .join("\n"),
           };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { content: message, isError: true };
         }
-        return {
-          content: [out.stdout, out.stderr ? `stderr:\n${out.stderr}` : "", truncationNote]
-            .filter(Boolean)
-            .join("\n"),
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: message, isError: true };
+      };
+      // DSH PTC: nested tools.* see this outer call as parent (Auto-review
+      // skips the transport and reviews each inner once as ptc-inner).
+      const parentCallId = extras?.callId;
+      if (parentCallId !== undefined && bridge) {
+        return codeNest.run({ parentCallId }, runBody);
       }
+      return runBody();
     },
   };
 }

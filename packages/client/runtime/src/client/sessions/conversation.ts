@@ -194,7 +194,7 @@ export interface ToolResultNode {
   callTime: number | null
   content: readonly ContentBlock[]
   isError: boolean
-  error?: { name: string; code: string }
+  error?: { name: string; code: string; reason?: string }
   meta?: unknown
   /** Host-computed render intent from the paired tool/call's wire view; null = generic JSON card (documented default). */
   callView: ToolCallView | null
@@ -320,8 +320,8 @@ export interface QueuedMessage {
   /** Complete content used to render pending steering before it becomes durable. */
   readonly content: readonly ContentBlock[]
   readonly preview: string
-  /** Complete editable text; null when the message contains non-text blocks. */
-  readonly text: string | null
+  /** Editable text portion (image/file blocks are preserved separately on save). */
+  readonly text: string
   /** Prompt RPC identity echoed on the Host queue message source, when present. */
   readonly rpcId?: RpcId
 }

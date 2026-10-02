@@ -63,7 +63,7 @@
 
 /* Scroll region: an agent's justification and its command are unbounded model
    text (a one-line `cd` or a 40-line heredoc), and the seat sits in a
-   fixed-height column — uncapped, a long command pushed the action row past
+   fixed-height column 閳?uncapped, a long command pushed the action row past
    the viewport and the approval could not be answered at all. The strip and
    the action row stay outside, so the buttons are always on screen. */
 .body {
@@ -76,6 +76,9 @@
   box-sizing: border-box;
   max-height: var(--dsh-composer-text-max-height);
   overflow-y: auto;
+  /* The capped diff scrolls here while the approve/deny footer stays put;
+     keep the edge gesture off the chat log underneath. */
+  overscroll-behavior: contain;
   padding: 12px 16px 0;
 }
 

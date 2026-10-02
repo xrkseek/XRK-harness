@@ -185,16 +185,35 @@ export function comboFromEvent(event: KeyboardEvent, apple = isApplePlatform()):
   return parts.join('+')
 }
 
-/** Read overrides from localStorage (corrupt → empty). */
+/** Read overrides from localStorage (corrupt → empty). Cached in memory —
+ * keydown handlers must not pay a sync disk read every chord (Vercel
+ * js-cache-storage). */
+let shortcutOverridesCache: ShellShortcutOverrides | undefined
+
+function isDefaultShortcutStorage(
+  storage: Pick<Storage, 'getItem'> | null,
+): boolean {
+  return storage === (typeof localStorage !== 'undefined' ? localStorage : null)
+}
+
 export function loadShortcutOverrides(
   storage: Pick<Storage, 'getItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
 ): ShellShortcutOverrides {
   if (storage === null) return {}
+  if (shortcutOverridesCache !== undefined && isDefaultShortcutStorage(storage)) {
+    return shortcutOverridesCache
+  }
   try {
     const raw = storage.getItem(SHELL_SHORTCUTS_STORAGE_KEY)
-    if (raw === null || raw === '') return {}
+    if (raw === null || raw === '') {
+      if (isDefaultShortcutStorage(storage)) shortcutOverridesCache = {}
+      return {}
+    }
     const parsed = JSON.parse(raw) as unknown
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      if (isDefaultShortcutStorage(storage)) shortcutOverridesCache = {}
+      return {}
+    }
     const out: Partial<Record<ShellShortcutId, string>> = {}
     for (const def of SHELL_SHORTCUT_DEFS) {
       if (def.fixed) continue
@@ -204,8 +223,10 @@ export function loadShortcutOverrides(
       if (combo === '' || combo === def.defaultCombo) continue
       out[def.id] = combo
     }
+    if (isDefaultShortcutStorage(storage)) shortcutOverridesCache = out
     return out
   } catch {
+    if (isDefaultShortcutStorage(storage)) shortcutOverridesCache = {}
     return {}
   }
 }
@@ -215,13 +236,23 @@ export function saveShortcutOverrides(
   overrides: ShellShortcutOverrides,
   storage: Pick<Storage, 'setItem' | 'removeItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
 ): void {
+  if (isDefaultShortcutStorage(storage)) shortcutOverridesCache = overrides
   if (storage === null) return
-  const keys = Object.keys(overrides)
-  if (keys.length === 0) {
-    storage.removeItem(SHELL_SHORTCUTS_STORAGE_KEY)
-    return
+  try {
+    const keys = Object.keys(overrides)
+    if (keys.length === 0) {
+      storage.removeItem(SHELL_SHORTCUTS_STORAGE_KEY)
+      return
+    }
+    storage.setItem(SHELL_SHORTCUTS_STORAGE_KEY, JSON.stringify(overrides))
+  } catch {
+    // Quota / private mode — in-memory overrides still apply for this tab.
   }
-  storage.setItem(SHELL_SHORTCUTS_STORAGE_KEY, JSON.stringify(overrides))
+}
+
+/** Drop the in-memory shortcut override mirror (tests). */
+export function clearShortcutOverridesCache(): void {
+  shortcutOverridesCache = undefined
 }
 
 /** Effective combo for one id. */

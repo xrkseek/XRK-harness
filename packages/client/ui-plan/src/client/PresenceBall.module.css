@@ -1,13 +1,17 @@
 .root {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 2px 2px 4px;
 }
 
 .stage {
+  box-sizing: border-box;
   position: relative;
   /* Taller than wide so bounce parabolas keep headroom (engine ≈48 SVG units). */
   width: min(100%, 216px);
@@ -71,12 +75,14 @@
 }
 
 .meta {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
   width: 100%;
   max-width: 28ch;
+  min-width: 0;
   text-align: center;
   padding: 0 4px 2px;
 }
@@ -87,6 +93,8 @@
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .emotion {
@@ -128,4 +136,75 @@
   text-align: center;
   pointer-events: none;
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 72%, transparent);
+}
+
+/* Collapsed Overview chip: glanceable ball + mood (single surface, no nested card). */
+.root[data-compact] {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
+}
+
+.root[data-compact] .stage {
+  width: 40px;
+  flex: none;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 10px;
+  box-shadow: none;
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 50% 45%,
+      color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent),
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
+}
+
+.root[data-compact] .mount {
+  left: 4%;
+  right: 4%;
+  top: 6%;
+  bottom: 4%;
+}
+
+.root[data-compact] .meta {
+  flex: 1;
+  align-items: flex-start;
+  text-align: left;
+  max-width: none;
+  gap: 2px;
+  padding: 0;
+}
+
+.root[data-compact] .row {
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.root[data-compact] .emotion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root[data-compact] .tips {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.root[data-compact] .loading,
+.root[data-compact] .error {
+  font-size: 9px;
+  padding: 4px;
 }

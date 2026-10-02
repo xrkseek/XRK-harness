@@ -5,6 +5,7 @@ import {
   listSessionsWithPendingAdmits,
   newSession,
   readSessionEvents,
+  sessionEventCount,
   type PersistentSessionStore,
   type SessionStore,
 } from "@xrkseek/core-session";
@@ -25,6 +26,7 @@ import {
 } from "@xrkseek/protocol";
 import { createFaceBus, type FaceBus } from "./bus.js";
 import type { FaceDrain, FaceDirectoryBackend, FaceRuntime } from "./context.js";
+import { createFacePermissionAutoGate } from "./permission-auto.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 import {
   createFaceListProjectionCache,
@@ -118,6 +120,7 @@ import {
   defaultShellHookPaths,
   loadShellHooksConfig,
 } from "@xrkseek/server-loader";
+import type { AutoReviewLiveStats } from "./projections/units/auto-review.js";
 import {
   applyCostMeterUsageSample,
   usageSampleFromMessage,
@@ -231,6 +234,11 @@ export interface CreateFaceRuntimeOptions {
   readonly inputModalities?: readonly ("text" | "image")[];
   /** Host persists `/auto-review` slash to dsh-compat store (DSH panel HTTP). */
   readonly autoReviewSlashPersist?: (args: string) => void;
+  /**
+   * Overlay durable tool-pre / classify counters onto Face `autoReview`
+   * projection wire (Host → `readAutoReviewStats`). Circuit deferred.
+   */
+  readonly readAutoReviewLiveStats?: () => AutoReviewLiveStats | undefined;
   /** Optional JSON sidecar for parent→child links (sessions directory). */
   readonly subagentPersistPath?: string;
   /** Optional JSON sidecar for Face goals (sessions directory). */
@@ -268,6 +276,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       getEvents: readEvents,
     });
 
+  const permissionAuto = createFacePermissionAutoGate();
+
   if (!options.skipDefaultProjections && !options.projections) {
     installDefaultFaceProjections(projections, {
       ...(options.attachments
@@ -275,6 +285,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             imageLimits: options.attachments.imageLimits,
             fileLimits: options.attachments.fileLimits,
           }
+        : {}),
+      isAutoLive: () => permissionAuto.isLive(),
+      ...(options.readAutoReviewLiveStats
+        ? { readAutoReviewLiveStats: options.readAutoReviewLiveStats }
         : {}),
     });
   }
@@ -293,7 +307,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const rpcAdmitMap = new Map<string, string>();
   const admitRpcMap = new Map<string, string>();
-  const pendingUserRpc = new Map<string, string>();
+  const pendingUserRpc = new Map<string, string[]>();
   const sessionModels = new Map<
     string,
     { provider: string; model: string; reasoningEffort?: string }
@@ -706,14 +720,28 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
     if (next.type === "prompt/promoted") {
       const rpc = admitRpcMap.get(next.admitId);
-      if (rpc) pendingUserRpc.set(id, rpc);
+      if (rpc) {
+        const queue = pendingUserRpc.get(id);
+        if (queue === undefined) pendingUserRpc.set(id, [rpc]);
+        else queue.push(rpc);
+      }
     }
 
-    if (next.type === "user/message" && next.rpcId === undefined) {
-      const rpc = pendingUserRpc.get(id);
+    if (
+      next.type === "user/message"
+      && next.rpcId === undefined
+      && isHumanUserMessageSource(next.source)
+    ) {
+      // Stamp only the human prompt. Durable injects (skill-catalog / agent-
+      // instructions) land before it via beforeUserMessage; consuming the
+      // pending rpcId on those rows left the client echo unmatched forever
+      // (double bubble + stuck waiting chrome). FIFO so a second promote /
+      // prompt during async inject cannot steal the first echo's id.
+      const queue = pendingUserRpc.get(id);
+      const rpc = queue?.shift();
+      if (queue !== undefined && queue.length === 0) pendingUserRpc.delete(id);
       if (rpc) {
         next = { ...next, rpcId: rpc };
-        pendingUserRpc.delete(id);
       }
     }
 
@@ -916,6 +944,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     titles,
     approvals,
     questions,
+    permissionAuto,
     rpcAdmitMap,
     admitRpcMap,
     pendingUserRpc,
@@ -972,10 +1001,19 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       publishJobs(sessionId, { baseline: true });
     },
     forkSession(sourceId, boundaryIndex, childId) {
+      // Seed via store.seed (or originalAppend fallback): skip per-event mux /
+      // title invent while copying a large prefix. Jump the mux watermark once,
+      // then lazy-fold projections from the resident log (buildCell), not N drives.
       replayingLog = true;
+      store.append = originalAppend;
       try {
-        return forkSession(store, sourceId, boundaryIndex, childId);
+        const child = forkSession(store, sourceId, boundaryIndex, childId);
+        const n = sessionEventCount(store, child.id);
+        if (n > 0) seq.ensureAtLeast(child.id, n);
+        void projections.snapshot(child.id);
+        return child;
       } finally {
+        store.append = appendPatched;
         replayingLog = false;
       }
     },

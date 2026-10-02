@@ -5,7 +5,7 @@
  * except workspace Rename/Delete and session Rename/Fork/Pin/Archive; the session
  * and workspace hover cards are suppressed while a menu is open.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
@@ -87,8 +87,15 @@ export interface RowDragProps {
 /** Drag lifecycle owned by a workspace row; its enclosing group owns hit testing. */
 interface WorkspaceRowDragProps {
   start: () => void
+  /** Report the hovered half while a long-press reorder passes over another row. */
+  hover: (workspaceId: string, half: 'before' | 'after') => void
   end: () => void
 }
+
+/** Hold duration before a pointer gesture starts workspace reorder. */
+const WORKSPACE_LONG_PRESS_MS = 420
+/** Pointer movement that cancels a pending long-press (px). */
+const WORKSPACE_LONG_PRESS_MOVE_PX = 10
 
 /** Pointer-position half of a row (insert line above or below). */
 function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' | 'after' {
@@ -114,7 +121,11 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
-  actions?: { rename: () => void; delete: () => void } | undefined
+  actions?: {
+    rename: () => void
+    pinToggle: () => void
+    delete: () => void
+  } | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
@@ -126,25 +137,112 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
+  const [longPressArmed, setLongPressArmed] = useState(false)
+  const suppressClick = useRef(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressOrigin = useRef<{ x: number; y: number } | null>(null)
+  const clearLongPress = (): void => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    longPressOrigin.current = null
+  }
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+    {
+      id: 'pin',
+      label: t(row.pinned ? 'menu.unpinWorkspace' : 'menu.pinWorkspace'),
+      icon: <IconPinOutline16 />,
+    },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
   ]
   const ownRow = (
     <div
-      className={clsx(css.projectRow, menuOpen && css.menuOpen)}
+      className={clsx(
+        css.projectRow,
+        menuOpen && css.menuOpen,
+        row.pinned && css.projectPinned,
+        longPressArmed && css.projectLongPress,
+      )}
       role="treeitem"
       aria-expanded={row.expanded}
-      onClick={onToggle}
+      onClick={(e) => {
+        if (suppressClick.current || longPressArmed) {
+          suppressClick.current = false
+          e.preventDefault()
+          return
+        }
+        onToggle()
+      }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
         : (e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', row.key)
+          clearLongPress()
+          suppressClick.current = true
+          try {
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', row.key)
+          } catch {
+            // jsdom DataTransferPolyfill: effectAllowed may be read-only.
+          }
           drag.start()
         }}
-      onDragEnd={drag?.end}
+      onDragEnd={drag === undefined
+        ? undefined
+        : () => {
+          setLongPressArmed(false)
+          drag.end()
+        }}
+      onPointerDown={drag === undefined
+        ? undefined
+        : (e) => {
+          if (e.button !== 0) return
+          if ((e.target as HTMLElement).closest('button')) return
+          clearLongPress()
+          longPressOrigin.current = { x: e.clientX, y: e.clientY }
+          longPressTimer.current = setTimeout(() => {
+            longPressTimer.current = null
+            suppressClick.current = true
+            setLongPressArmed(true)
+            drag.start()
+          }, WORKSPACE_LONG_PRESS_MS)
+        }}
+      onPointerMove={drag === undefined
+        ? undefined
+        : (e) => {
+          const origin = longPressOrigin.current
+          if (origin !== null && longPressTimer.current !== null) {
+            if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > WORKSPACE_LONG_PRESS_MOVE_PX) {
+              clearLongPress()
+            }
+            return
+          }
+          if (!longPressArmed) return
+          const el = document.elementFromPoint(e.clientX, e.clientY)
+          const section = el?.closest('[data-workspace-id]') as HTMLElement | null
+          const overId = section?.dataset.workspaceId
+          if (overId === undefined || section === null) return
+          const rect = section.getBoundingClientRect()
+          const half = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+          drag.hover(overId, half)
+        }}
+      onPointerUp={() => {
+        const wasArmed = longPressArmed
+        clearLongPress()
+        if (wasArmed) {
+          setLongPressArmed(false)
+          drag?.end()
+        }
+      }}
+      onPointerCancel={() => {
+        clearLongPress()
+        if (longPressArmed) {
+          setLongPressArmed(false)
+          drag?.end()
+        }
+      }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
         {row.expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
@@ -154,35 +252,54 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
+        {row.pinned && (
+          <span className={css.pinBadge} aria-hidden="true">
+            <IconPinOutline16 />
+          </span>
+        )}
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (
-          <Menu
-            open={menuOpen}
-            onClose={() => { setMenuOpen(false) }}
-            items={workspaceMenuItems}
-            onSelect={(id) => {
-              setMenuOpen(false)
-              // Unknown ids leave before the dispatch: a future menu row must
-              // not inherit the destructive branch as an else fallback.
-              /* v8 ignore next -- workspaceMenuItems carries exactly these two rows today. */
-              if (id !== 'rename' && id !== 'delete') return
-              if (id === 'rename') actions.rename()
-              else actions.delete()
-            }}
-            portal
-            closeOnPointerLeave
-            anchor={(
-              <button
-                type="button"
-                className={css.iconButton}
-                aria-label={t('actions.workspace.aria', { name: label })}
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
-              >
-                <IconEllipsisOutline16 />
-              </button>
-            )}
-          />
+          <>
+            <button
+              type="button"
+              className={clsx(css.iconButton, row.pinned && css.pinActive)}
+              aria-label={t(row.pinned ? 'actions.unpinWorkspace.aria' : 'actions.pinWorkspace.aria', { name: label })}
+              onClick={(e) => {
+                e.stopPropagation()
+                actions.pinToggle()
+              }}
+            >
+              <IconPinOutline16 />
+            </button>
+            <Menu
+              open={menuOpen}
+              onClose={() => { setMenuOpen(false) }}
+              items={workspaceMenuItems}
+              onSelect={(id) => {
+                setMenuOpen(false)
+                // Unknown ids leave before the dispatch: a future menu row must
+                // not inherit the destructive branch as an else fallback.
+                /* v8 ignore next -- workspaceMenuItems carries exactly these three rows today. */
+                if (id !== 'rename' && id !== 'pin' && id !== 'delete') return
+                if (id === 'rename') actions.rename()
+                else if (id === 'pin') actions.pinToggle()
+                else actions.delete()
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={(
+                <button
+                  type="button"
+                  className={css.iconButton}
+                  aria-label={t('actions.workspace.aria', { name: label })}
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+                >
+                  <IconEllipsisOutline16 />
+                </button>
+              )}
+            />
+          </>
         )}
         <button
           type="button"
@@ -414,8 +531,12 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
       onDragStart={drag === undefined
         ? undefined
         : (e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', node.id)
+          try {
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', node.id)
+          } catch {
+            // jsdom DataTransferPolyfill: effectAllowed may be read-only.
+          }
           drag.start()
         }}
       onDragEnd={drag?.end}

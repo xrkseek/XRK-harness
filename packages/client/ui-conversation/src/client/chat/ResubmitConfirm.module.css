@@ -1,0 +1,18 @@
+.dialog {
+  max-width: 420px;
+}
+
+.body {
+  padding: 0 4px 8px;
+}
+
+.description {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1.45;
+}
+
+.action {
+  min-width: 0;
+}

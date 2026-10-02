@@ -110,4 +110,15 @@ export interface IWorkspaces {
    * @param sessionId - session to unpin.
    */
   unpinSession(sessionId: SessionId): Promise<void>
+  /**
+   * Pin a workspace to the front of the registry-global workspace pin order
+   * (newest first). Pinned workspaces lead the sidebar group list.
+   * @param workspaceId - workspace to pin.
+   */
+  pinWorkspace(workspaceId: WorkspaceId): Promise<void>
+  /**
+   * Drop a workspace from the registry-global workspace pin order.
+   * @param workspaceId - workspace to unpin.
+   */
+  unpinWorkspace(workspaceId: WorkspaceId): Promise<void>
 }

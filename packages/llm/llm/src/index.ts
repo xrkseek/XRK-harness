@@ -4,6 +4,7 @@ import type {
   ToolCall,
   TokenUsage,
 } from "@xrkseek/protocol";
+import { classifyCaughtLlmError, isLlmError } from "./failure.js";
 
 export interface LlmChatRequest {
   readonly messages: readonly ChatMessage[];
@@ -13,6 +14,11 @@ export interface LlmChatRequest {
     parameters: Record<string, unknown>;
   }[];
   readonly signal?: AbortSignal;
+  /**
+   * Per-request sampling temperature. When set, overrides the adapter factory
+   * default (Auto-review uses `0`).
+   */
+  readonly temperature?: number;
   /**
    * Resolve image attachment bytes for multimodal user content.
    * Required when messages contain image blocks.
@@ -165,11 +171,28 @@ export function toolCallArgsIncomplete(args: unknown): boolean {
 /**
  * Post-provider gate (DSH translate + BlockAssembler): keep/drop, refuse
  * unknown finishes / empty stops / truncated tool JSON outside max-tokens.
+ *
+ * Mysterious truncation: when the stream ends with incomplete tool JSON and
+ * no `length` finish (undefined / `stop`), coerce to `max-tokens` so keep/drop
+ * strips unsafe calls. Throwing here used to fail-close the turn; repeated
+ * API errors then pinned the mistake counter and left the session mute.
+ * A provider that claims `tool-calls` with broken JSON still fail-closes.
  */
 export function finalizeLlmChatResponse(
   response: LlmChatResponse,
 ): LlmChatResponse {
-  const dropped = applyMaxTokensKeepDrop(response);
+  const incomplete =
+    response.toolCalls?.some((c) => toolCallArgsIncomplete(c.arguments)) ===
+    true;
+  const mysteriousTruncation =
+    incomplete &&
+    response.finishReason !== "max-tokens" &&
+    response.finishReason !== "tool-calls" &&
+    response.finishReason !== "error";
+  const working: LlmChatResponse = mysteriousTruncation
+    ? { ...response, finishReason: "max-tokens" }
+    : response;
+  const dropped = applyMaxTokensKeepDrop(working);
   if (dropped.finishReason === "error") {
     throw new ProviderFinishError(
       dropped.finishError?.message ?? "model stopped with an error finish",
@@ -308,6 +331,38 @@ export function isUnsupportedReasoningEffortError(err: unknown): boolean {
   return err instanceof UnsupportedReasoningEffortError;
 }
 
+/**
+ * Classification boundary for every adapter fetch site — `post()` *and* the
+ * `yield*` that reads the response body. Body reads happen outside the
+ * request try/catch, so a socket that dies mid-stream surfaces as a bare
+ * undici `TypeError` (`terminated`, `fetch failed`) with no provider code.
+ * Route anything unclassified through {@link classifyCaughtLlmError}, which
+ * labels it with the adapter id and gives it TRANSPORT / TIMEOUT / ABORTED —
+ * all of which the retry policy retries by default.
+ *
+ * The guard keeps errors that already carry a real classification, because
+ * re-wrapping would discard the code the retry policy blacklists (AUTH,
+ * QUOTA) or the code `agent-loop` writes into `turn/end.reason.error.code`
+ * (`EMPTY_RESPONSE`, `INCOMPLETE_TOOL_CALL`, the provider finish code). It is
+ * also the full set of families an adapter can raise: the last three come from
+ * `finalizeLlmChatResponse` at end-of-stream. A new classified family must be
+ * added here or it will be misreported as a transport failure.
+ */
+export function classifyCaughtStreamError(err: unknown, label: string): never {
+  if (
+    isContextOverflowError(err) ||
+    isUnsupportedContentError(err) ||
+    isUnsupportedReasoningEffortError(err) ||
+    isEmptyResponseError(err) ||
+    isProviderFinishError(err) ||
+    isIncompleteToolCallError(err) ||
+    isLlmError(err)
+  ) {
+    throw err;
+  }
+  classifyCaughtLlmError(err, label);
+}
+
 export {
   CONTEXT_WINDOW_EXCEEDED_CODE,
   EMPTY_RESPONSE_CODE,
@@ -324,8 +379,8 @@ export {
 } from "./failure.js";
 
 export {
+  DEFAULT_NON_RETRYABLE_CODES,
   DEFAULT_RETRY_POLICY,
-  DEFAULT_RETRYABLE_CODES,
   cancellableDelay,
   computeRetryDelayMs,
   failureFromUnknown,
@@ -333,6 +388,14 @@ export {
   type ResolvedRetryPolicy,
   type RetryPolicyMode,
 } from "./retry-policy.js";
+
+export {
+  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+  resolveStreamIdleTimeoutMs,
+  withExtraAbortSignal,
+  withStreamIdleTimeout,
+  type StreamIdleWatchdogOptions,
+} from "./stream-idle-timeout.js";
 
 
 export interface LlmRegistry {

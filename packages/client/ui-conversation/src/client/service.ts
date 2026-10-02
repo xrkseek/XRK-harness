@@ -138,6 +138,27 @@ export class ConversationController extends Service implements IConversation {
   private disposed = false
 
   /**
+   * Soft-cap historical object URLs. A long transcript with many images can
+   * otherwise pin tens of MB of decoded blobs after the user scrolls away —
+   * keep the focused session, revoke the oldest foreign entries first.
+   */
+  private trimImageUrlCache(keepSessionId: SessionId): void {
+    const MAX_ENTRIES = 96
+    if (this.imageUrls.size <= MAX_ENTRIES) return
+    for (const [key, entry] of this.imageUrls) {
+      if (this.imageUrls.size <= MAX_ENTRIES - 16) break
+      if (entry.sessionId === keepSessionId) continue
+      this.imageUrls.delete(key)
+      void entry.pending.then((url) => {
+        if (!this.createdImageUrls.delete(url)) return
+        revokePreview(url)
+      }, () => {
+        // Failed loads own no object URL.
+      })
+    }
+  }
+
+  /**
    * @param ctx - owning root context (the plugin apply context; the service
    * registers itself and follows that fiber's lifetime).
    * @param config - carries the SessionInputResolver and composer-block registry
@@ -396,6 +417,7 @@ export class ConversationController extends Service implements IConversation {
         throw error
       })
     this.imageUrls.set(key, { sessionId, generation, pending })
+    this.trimImageUrlCache(sessionId)
     return pending
   }
 

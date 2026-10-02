@@ -117,6 +117,9 @@
   list-style: none;
   max-height: 180px;
   overflow-y: auto;
+  /* Tasks scroll inside their own 180px cap; without contain an overscroll at
+     the last row falls through to the transcript. */
+  overscroll-behavior: contain;
   border-top: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 65%, transparent);
 }
 

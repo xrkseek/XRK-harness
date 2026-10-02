@@ -63,6 +63,7 @@ import { settleToolBatch, type ToolSettleMode } from "./settle-batch.js";
 import {
   finalizeCancelledTurn,
   isAbortError,
+  isAgentCancelCause,
 } from "./cancel-finalize.js";
 import {
   invokeLlmWithRetry,
@@ -172,7 +173,7 @@ export interface RunTurnInput {
   readonly beforeTools?: () => void | Promise<void>;
   /**
    * After tool/result (+ deferContext) are appended, before `step/end`.
-   * Harness uses this to append `post-tool` context fragments (Guardian).
+   * Harness uses this to append `post-tool` context fragments (not Auto-review).
    */
   readonly afterToolResults?: (ctx: {
     readonly store: SessionStore;
@@ -224,8 +225,9 @@ export interface RunTurnInput {
   readonly toolResultMaxInlineTokens?: number;
   /**
    * Provider request retries within a step (DSH llm-retry).
-   * Default: normal mode, max 5, retryable EMPTY_RESPONSE / RATE_LIMIT /
-   * SERVER / TIMEOUT / TRANSPORT. Pass `false` to disable.
+   * Default: normal mode, max 5, retry everything except the codes in
+   * `nonRetryableCodes` (abort / auth / quota / bad request / context
+   * overflow / deployment-locked capabilities). Pass `false` to disable.
    */
   readonly llmRetry?: false | Partial<ResolvedRetryPolicy>;
   /**
@@ -309,6 +311,12 @@ function commitPendingPlanMode(
 
 function llmAllowsImage(llm: LlmAdapter): boolean {
   return (llm.inputModalities ?? ["text"]).includes("image");
+}
+
+/** True when content carries durable image/file blocks (incl. offloaded images). */
+function contentHasAttachmentBlocks(content: MessageContent): boolean {
+  if (typeof content === "string") return false;
+  return content.some((b) => b.type === "image" || b.type === "file");
 }
 
 function toLlmRequest(
@@ -522,14 +530,17 @@ async function buildModelRequest(input: {
     };
   }
 
-  // Logged history is source of truth. On the first step, drop the trailing
-  // user message so three-layer can place it as skeleton user; later steps
-  // keep full derived history (tools/results already logged).
+  // Logged history is source of truth. On the first step, drop a *text-only*
+  // trailing user message so three-layer can place it as skeleton user; later
+  // steps keep full derived history (tools/results already logged).
+  // Image/file blocks (including offloaded images) must stay in history —
+  // lifting them into skeletonUser would stringify attachments away and the
+  // model would never see the upload.
   let history = derived;
   let skeletonText = "";
   if (input.firstStep && history.length > 0) {
     const last = history[history.length - 1];
-    if (last?.role === "user" && !contentHasImage(last.content)) {
+    if (last?.role === "user" && !contentHasAttachmentBlocks(last.content)) {
       const lastText =
         typeof last.content === "string"
           ? last.content
@@ -1122,9 +1133,10 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       }
     }
 
-    assistantText = response.content;
-    // max-tokens is sticky for the turn; keep/drop already stripped tools.
+    // max-tokens is sticky for the turn; finalize already keep/dropped tools.
+    // Still refuse to execute any leftover toolCalls on that finish.
     const hitMaxTokens = response.finishReason === "max-tokens";
+    assistantText = response.content;
     const shouldAutoContinue =
       hitMaxTokens &&
       input.autoContinueOnMaxTokens === true &&
@@ -1132,18 +1144,18 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     if (hitMaxTokens && !shouldAutoContinue) {
       turnEndReason = { kind: "max-tokens" };
     }
+    const calls = hitMaxTokens ? [] : (response.toolCalls ?? []);
     append(input.store, input.sessionId, {
       type: "assistant/message",
       ts: now(),
       turnId,
       stepId,
       content: response.content,
-      ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
+      ...(calls.length ? { toolCalls: calls } : {}),
       ...(response.reasoning ? { reasoning: response.reasoning } : {}),
       ...(response.usage ? { usage: response.usage } : {}),
     });
 
-    const calls = response.toolCalls ?? [];
     if (calls.length === 0) {
       append(input.store, input.sessionId, {
         type: "step/end",
@@ -1368,7 +1380,10 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
   return { turnId, assistantText, steps, toolOk, toolFailed };
   } catch (err) {
-    if (isAbortError(err, input.signal)) {
+    // User stop / parent cancel: signal is aborted even when the thrown value
+    // is the plain `{ kind: "user" }` reason (throwIfAborted) or an Error
+    // named AbortError with message "[object Object]" from String(cause).
+    if (isAbortError(err, input.signal) || input.signal?.aborted === true) {
       emitWorkspaceChanges();
       finalizeCancelledTurn({
         store: input.store,
@@ -1376,7 +1391,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         turnId,
         ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
         now,
-        cancelCause: parseTurnEndCancelCause(input.signal?.reason),
+        cancelCause: parseTurnEndCancelCause(
+          isAgentCancelCause(err) ? err : input.signal?.reason,
+        ),
       });
     } else if (
       isEmptyResponseError(err) ||
@@ -1393,14 +1410,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           stepId: activeStepId,
         });
       }
-      const code =
-        isProviderFinishError(err) ||
-        isEmptyResponseError(err) ||
-        isIncompleteToolCallError(err) ||
-        isUnsupportedReasoningEffortError(err) ||
-        isLlmError(err)
-          ? (err as { code: string }).code
-          : "ERROR";
+      const code = (err as { code: string }).code;
+      const rawMessage = err instanceof Error ? err.message : undefined;
+      const message =
+        typeof rawMessage === "string" &&
+        rawMessage.length > 0 &&
+        rawMessage !== "[object Object]"
+          ? rawMessage
+          : (() => {
+              try {
+                const json = JSON.stringify(err);
+                if (typeof json === "string" && json.length > 0) return json;
+              } catch {
+                /* ignore */
+              }
+              return "turn failed";
+            })();
       emitWorkspaceChanges();
       append(input.store, input.sessionId, {
         type: "turn/end",
@@ -1409,7 +1434,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         reason: {
           kind: "error",
           error: {
-            message: err instanceof Error ? err.message : String(err),
+            message,
             code,
           },
         },

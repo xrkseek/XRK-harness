@@ -32,6 +32,7 @@ import type {
 } from "./settings-credentials.js";
 import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceQuestionBroker } from "./questions.js";
+import type { FacePermissionAutoGate } from "./permission-auto.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import type { FaceSubagentRegistry } from "./subagent-registry.js";
 import type { ExternalAgentSessionRegistry } from "./external-agent-runtime.js";
@@ -109,8 +110,12 @@ export interface FaceRuntime {
   readonly rpcAdmitMap: Map<string, string>;
   /** admitId → rpcId (reverse for queue / stamp) */
   readonly admitRpcMap: Map<string, string>;
-  /** Next user/message for session should carry this rpcId */
-  readonly pendingUserRpc: Map<string, string>;
+  /**
+   * FIFO of client echo rpcIds awaiting the next human `user/message` stamp.
+   * Promote pushes; human stamp shifts. A single slot was racy when a second
+   * prompt landed between promote and the human row (async inject await).
+   */
+  readonly pendingUserRpc: Map<string, string[]>;
   readonly sessionModels: Map<
     string,
     { provider: string; model: string; reasoningEffort?: string }
@@ -271,6 +276,11 @@ export interface FaceRuntime {
   readonly approvals: FaceApprovalBroker;
   /** DSH user-questions (`question/requested` + `/api/respond`). */
   readonly questions: FaceQuestionBroker;
+  /**
+   * Guardian Auto catalog gate (`registerAuto`). Auto is absent from
+   * permissions options until an integration mounts.
+   */
+  readonly permissionAuto: FacePermissionAutoGate;
   /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
   invalidateAgent?(sessionId: string): void | Promise<void>;
   /**

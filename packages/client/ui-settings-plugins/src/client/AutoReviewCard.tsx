@@ -1,7 +1,7 @@
 /** Auto-review classifier card (Face `auto-review`) on Plugins → Advanced. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { SecretField, ValueField } from './fields.tsx'
+import { SecretField, SelectField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { AutoReviewCardFace } from './auto-review-card-controller.ts'
 import type {} from './advanced-slot-contract.ts'
@@ -18,6 +18,7 @@ export function AutoReviewCard(props: AutoReviewCardProps) {
   const { t } = props
   const state = props.useAutoReviewCard(snapshot => snapshot)
   const disabled = !state.writable
+  const enabled = state.enabled.text === 'true' ? 'true' : 'false'
   return (
     <PluginCard
       t={t}
@@ -27,6 +28,18 @@ export function AutoReviewCard(props: AutoReviewCardProps) {
       onSave={props.save}
       onDiscard={props.discard}
     >
+      <SelectField
+        id="plugin-advanced-auto-review-enabled"
+        label={t('autoReviewEnabled')}
+        hint={t('autoReviewEnabledHint')}
+        disabled={disabled}
+        value={enabled}
+        options={[
+          { value: 'false', label: t('autoReviewEnabledOff') },
+          { value: 'true', label: t('autoReviewEnabledOn') },
+        ]}
+        onChange={(value) => { props.edit('enabled', value) }}
+      />
       <ValueField
         id="plugin-advanced-auto-review-url"
         label={t('autoReviewClassifierUrl')}

@@ -167,8 +167,28 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.pinBadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.projectLongPress {
+  background: var(--dsw-alias-interactive-bg-hover);
+  user-select: none;
+}
+
+.projectRow.projectPinned:not(:hover):not(.menuOpen) .pinBadge {
+  display: inline-flex;
 }
 
 .title {
@@ -190,6 +210,14 @@
   background: var(--dsw-alias-button-elevated-fill);
   color: inherit;
   outline: none;
+}
+
+/* Inline rename sits inside a hover-revealed row, so the row's own hover state
+   is not a focus signal — keyboard users never trigger it. The field has to
+   answer for itself. */
+.renameInput:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, transparent);
 }
 
 .sessionRow .title {
@@ -228,7 +256,8 @@
 .projectRow:hover .rowActions,
 .sessionRow:hover .rowActions,
 .projectRow.menuOpen .rowActions,
-.sessionRow.menuOpen .rowActions {
+.sessionRow.menuOpen .rowActions,
+.projectRow.projectLongPress .rowActions {
   display: inline-flex;
 }
 
@@ -339,6 +368,10 @@
 
 .iconButton:hover {
   color: var(--dsw-alias-label-primary);
+}
+
+.iconButton.pinActive {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 /* Chevrons ride the caption grey (#ADB2B8); the folder glyph stays one step

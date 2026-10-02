@@ -89,7 +89,7 @@ function closingAnchor(context: ConversationNodeContext<TurnTailState>): number 
     if (event.type === 'assistant/message') {
       steps.set(coordinates.step, { streamedText: false, finalized: true })
       if (hasTextAssistant(event)) {
-        anchor = event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup
+        anchor = Math.max(anchor, event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup)
       }
       continue
     }
@@ -98,7 +98,7 @@ function closingAnchor(context: ConversationNodeContext<TurnTailState>): number 
       continue
     }
     if (event.type === 'step/end' && previous.streamedText && !previous.finalized) {
-      anchor = event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.interruptedFollowup
+      anchor = Math.max(anchor, event.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.interruptedFollowup)
     }
   }
   return anchor

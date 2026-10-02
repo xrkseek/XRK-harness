@@ -102,6 +102,9 @@
 .list {
   max-height: 180px;
   overflow-y: auto;
+  /* Queue items scroll in a capped dock; an overscroll past the last item
+     must not scroll the conversation the dock is anchored over. */
+  overscroll-behavior: contain;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -138,6 +141,17 @@
   word-break: break-word;
 }
 
+.pendingRow .attachments {
+  flex-shrink: 1;
+}
+
+.status {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .attachments {
   display: flex;
   flex: none;
@@ -147,10 +161,6 @@
   overflow: hidden;
 }
 
-.pendingRow .attachments {
-  flex-shrink: 1;
-}
-
 .thumb {
   width: 24px;
   height: 24px;
@@ -158,13 +168,6 @@
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 4px;
   background: var(--dsw-alias-bg-base);
-}
-
-.status {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .file {

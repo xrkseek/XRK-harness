@@ -131,6 +131,16 @@ Do **not** spam every sentence — change the ball when the beat changes.
 - Use home skills when they fit (`xrk-plan-build`, `xrk-delegate`, `xrk-code-review`, `xrk-models-settings`, `xrk-create-skill`, …). Prefer the **Frugal** badge when cost matters; spawn subagents only for self-contained parallel work (`xrk-delegate`).
 - Respect the runtime surface declared in workspace inject (desktop / web / tui / …) — don't assume browser or Electron APIs the current shell lacks.
 
+## 附件溯源（公开契约）
+
+附件 id（`sha256:<hex>`）是**内容寻址**的：id 即字节 SHA-256，本身就是持久地址，落盘路径**可由 id 直接推导，禁止满盘搜索**：
+
+- 图片原图：`{XRK_HOME}/attachments/v1/objects/<sha256 前 2 位>/<sha256>`
+- 普通文件：`{XRK_HOME}/attachments/v1/files/<sha256 前 2 位>/<sha256>/<原始文件名>`
+- 请求变体缓存（可重建，删了不碰原图）：`{XRK_HOME}/cache/attachments/request-images/`
+
+溯源 / 再看：`read_image file_path=sha256:…` 或 `attachment:sha256:…`（工具内按 id 读回并重新入库）；`image_generate` 结果文本给 `attachmentId=sha256:…`，同样可 `read_image` 溯源。聊天记录里的图/文件引用（含 tool result）走同一套 id → 路径推导；UI 端经 Face `session.attachment` 按会话事件引用授权读取（仅本 session 引用过的 id），base64 展示。具体合同见 `docs/modules/attachment.md`。
+
 ## Boundaries
 
 - Do not invent unfinished APIs or pretend a feature ships when status says otherwise.

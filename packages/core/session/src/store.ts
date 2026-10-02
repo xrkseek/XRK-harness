@@ -29,6 +29,13 @@ export interface SessionStore {
   has(id: string): boolean;
   append(id: string, event: SessionEvent): SessionEvent;
   /**
+   * Create a session whose log is the given prefix in one shot (fork / restore).
+   * Prefer over create+append loops so durable stores can commit once and Face
+   * can skip per-event mux during seed. Optional on lightweight test doubles —
+   * {@link forkSession} falls back to append when absent.
+   */
+  seed?(id: string | undefined, events: readonly SessionEvent[]): SessionRecord;
+  /**
    * Permanently drop one session log (memory and durable rows when present).
    * Idempotent for an unknown id. Optional on lightweight test doubles.
    */

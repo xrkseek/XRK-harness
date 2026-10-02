@@ -116,9 +116,11 @@ export {
   isValidCanvasId,
   normalizeSections,
   parseCanvasDocument,
+  parseCanvasTone,
   type CanvasDocument,
   type CanvasSection,
   type CanvasSummary,
+  type CanvasTone,
 } from "./canvas-store.js";
 export {
   bindCanvasTools,
@@ -181,16 +183,27 @@ export {
 export {
   FACE_PERMISSION_TABLE,
   CUSTOM_PERMISSION_PRESET,
+  AUTO_PRESET,
+  AUTO_PRESET_SPEC,
   applyPermissionPreset,
   applyLivePermissionDefaultPreset,
   defaultPermissionPreset,
   derivePermissionSelect,
+  formatPermissionStatusLabel,
   permissionSelectFromEvents,
   pinInitialPermission,
+  migrateAutoSessionsToFullAccess,
+  resolvePermissionPresetSpec,
   type PermissionPresetSpec,
   type PermissionSelect,
   type PermissionSelectOption,
 } from "./permissions.js";
+export {
+  createFacePermissionAutoGate,
+  type FacePermissionAutoAdmit,
+  type FacePermissionAutoGate,
+  type FacePermissionAutoLifecycle,
+} from "./permission-auto.js";
 export {
   commitPlanMode,
   narratePlanCommand,
@@ -279,6 +292,8 @@ export {
   workspaceUnarchiveSessionFace,
   workspacePinSessionFace,
   workspaceUnpinSessionFace,
+  workspacePinWorkspaceFace,
+  workspaceUnpinWorkspaceFace,
   workspaceCreateFace,
   workspaceDeleteFace,
   workspaceDescribe,
@@ -503,6 +518,12 @@ export {
   type PendingApprovalItem,
   type PermissionRequestGate,
 } from "./approvals.js";
+export {
+  approvePendingAutoReview,
+  isAutoReviewPendingApproval,
+  listPendingAutoReviewApprovals,
+  type AutoReviewApproveOutcome,
+} from "./auto-review-approve.js";
 export {
   classifyApproval,
   extractNetworkContext,

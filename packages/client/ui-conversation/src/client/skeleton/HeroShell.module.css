@@ -190,8 +190,11 @@
 }
 
 /* Dialog field: 44 tall on the modal's 332 content column, r22, hairline
-   border, pad 14/7, 14/22 wt400 primary text, caption placeholder. Focus
-   keeps the resting border (design shows no focus ring). */
+   border, pad 14/7, 14/22 wt400 primary text, caption placeholder.
+   The design sheet draws no focus ring on this field, but a hairline border
+   that never changes leaves keyboard users with no idea which field is live,
+   so focus re-tints the resting border rather than adding a second ring —
+   the same treatment WorkspaceBrowser's rename field uses. */
 .modalInput {
   box-sizing: border-box;
   width: 100%;
@@ -205,6 +208,11 @@
   font-weight: 400;
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
+}
+
+.modalInput:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 26%, transparent);
 }
 
 .modalInput::placeholder {

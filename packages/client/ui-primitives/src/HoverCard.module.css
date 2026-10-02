@@ -13,9 +13,13 @@
 .card {
   --dsw-hovercard-bg: #2C2C2E;
   position: fixed;
-  z-index: 100;
+  z-index: var(--ds-z-popover);
   box-sizing: border-box;
-  width: 244px;
+  /* The bottom-edge correction in HoverCard.tsx clamps against a flat 8px
+     margin, so a card pinned near a landscape sensor housing would hang
+     into it; the design width stays the cap, the insets are what it gives
+     back. */
+  width: min(244px, calc(100vw - 24px - var(--ds-safe-h)));
   padding: 12px 16px;
   border-radius: 12px;
   background: var(--dsw-hovercard-bg);

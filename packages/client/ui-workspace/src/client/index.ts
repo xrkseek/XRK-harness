@@ -103,12 +103,13 @@ export function apply(ctx: ClientContext): void {
       const result = await session.rename(title)
       if (!result.ok) throw new Error(result.error.message)
     },
-    forkSession: (sessionId) => {
-      ctx.sessions.fork({ sessionId, increaseTitle: true })
-        .then((childId) => { ctx.sessions.open(childId) })
-        .catch(() => {
-          // Fork or child-rename failure keeps the current selection.
-        })
+    forkSession: async (sessionId) => {
+      try {
+        const childId = await ctx.sessions.fork({ sessionId, increaseTitle: true })
+        ctx.sessions.open(childId)
+      } catch {
+        // Fork or child-rename failure keeps the current selection.
+      }
     },
     renameWorkspace: async (workspaceId, title) => { await ctx.workspaces.rename(workspaceId, title) },
     deleteWorkspace: async (workspaceId) => { await ctx.workspaces.delete(workspaceId) },
@@ -118,6 +119,8 @@ export function apply(ctx: ClientContext): void {
     archiveSession: async (sessionId) => { await ctx.workspaces.archiveSession(sessionId) },
     pinSession: async (sessionId) => { await ctx.workspaces.pinSession(sessionId) },
     unpinSession: async (sessionId) => { await ctx.workspaces.unpinSession(sessionId) },
+    pinWorkspace: async (workspaceId) => { await ctx.workspaces.pinWorkspace(workspaceId) },
+    unpinWorkspace: async (workspaceId) => { await ctx.workspaces.unpinWorkspace(workspaceId) },
     insertSessionBefore: async (workspaceId, sessionId, beforeSessionId) => {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },

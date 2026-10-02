@@ -138,6 +138,12 @@
   position: fixed;
   z-index: 3;
   display: inline-flex;
+  /* left/top come from the hovered row's rect (copyPosition in JsonTree.tsx),
+     which reads no insets: on a tree scrolled flush to the edge the button
+     would sit under a landscape sensor housing. Shifting the anchor is the
+     only lever — the box is sized to the button, so a width cap or padding
+     would move nothing. */
+  transform: translateX(calc(-1 * var(--ds-safe-right)));
 }
 
 .copyButton {

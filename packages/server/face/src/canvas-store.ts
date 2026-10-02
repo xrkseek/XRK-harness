@@ -7,6 +7,22 @@ import path from "node:path";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
 
+/** Semantic color for KPI values, callouts, and series bars (report-board tones). */
+export type CanvasTone = "neutral" | "good" | "warn" | "bad" | "accent";
+
+const CANVAS_TONES = new Set<CanvasTone>([
+  "neutral",
+  "good",
+  "warn",
+  "bad",
+  "accent",
+]);
+
+export function parseCanvasTone(raw: unknown): CanvasTone | undefined {
+  if (typeof raw !== "string") return undefined;
+  return CANVAS_TONES.has(raw as CanvasTone) ? (raw as CanvasTone) : undefined;
+}
+
 export type CanvasSection =
   | { readonly kind: "markdown"; readonly body: string }
   | {
@@ -16,12 +32,23 @@ export type CanvasSection =
     }
   | {
       readonly kind: "kpi";
-      readonly items: readonly { readonly label: string; readonly value: string }[];
+      readonly items: readonly {
+        readonly label: string;
+        readonly value: string;
+        readonly tone?: CanvasTone;
+      }[];
+    }
+  | {
+      readonly kind: "callout";
+      readonly body: string;
+      readonly title?: string;
+      readonly tone?: CanvasTone;
     }
   | {
       readonly kind: "series";
       readonly title: string;
       readonly points: readonly { readonly x: string; readonly y: number }[];
+      readonly tone?: CanvasTone;
     };
 
 export interface CanvasDocument {
@@ -83,7 +110,7 @@ function parseSection(raw: unknown): CanvasSection | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const o = raw as Record<string, unknown>;
   const kind = o.kind;
-  if (kind === "markdown") {
+  if (kind === "markdown" || kind === "md") {
     if (typeof o.body !== "string") return undefined;
     return { kind: "markdown", body: o.body.slice(0, MARKDOWN_MAX) };
   }
@@ -103,12 +130,30 @@ function parseSection(raw: unknown): CanvasSection | undefined {
     const items = o.items
       .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
       .slice(0, 32)
-      .map((item) => ({
-        label: String(item.label ?? "").slice(0, 80),
-        value: String(item.value ?? "").slice(0, 120),
-      }))
+      .map((item) => {
+        const tone = parseCanvasTone(item.tone);
+        return {
+          label: String(item.label ?? "").slice(0, 80),
+          value: String(item.value ?? "").slice(0, 120),
+          ...(tone !== undefined ? { tone } : {}),
+        };
+      })
       .filter((item) => item.label.length > 0);
     return { kind: "kpi", items };
+  }
+  if (kind === "callout") {
+    if (typeof o.body !== "string") return undefined;
+    const body = o.body.slice(0, MARKDOWN_MAX);
+    if (!body.trim()) return undefined;
+    const tone = parseCanvasTone(o.tone);
+    const title =
+      typeof o.title === "string" ? o.title.trim().slice(0, 120) : "";
+    return {
+      kind: "callout",
+      body,
+      ...(title ? { title } : {}),
+      ...(tone !== undefined ? { tone } : {}),
+    };
   }
   if (kind === "series") {
     if (typeof o.title !== "string" || !Array.isArray(o.points)) return undefined;
@@ -119,7 +164,13 @@ function parseSection(raw: unknown): CanvasSection | undefined {
         x: String(p.x ?? "").slice(0, 64),
         y: typeof p.y === "number" && Number.isFinite(p.y) ? p.y : 0,
       }));
-    return { kind: "series", title: o.title.slice(0, TITLE_MAX), points };
+    const tone = parseCanvasTone(o.tone);
+    return {
+      kind: "series",
+      title: o.title.slice(0, TITLE_MAX),
+      points,
+      ...(tone !== undefined ? { tone } : {}),
+    };
   }
   return undefined;
 }

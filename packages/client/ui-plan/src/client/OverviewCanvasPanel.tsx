@@ -1,6 +1,7 @@
 /**
  * Overview Canvas: horizontal chip rail to pick a board, then play it.
  * Soft catalog poll never blanks a matching player (no flash).
+ * Report-board layout: hero title, toned KPIs, callouts, bordered tables.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
@@ -9,6 +10,15 @@ import type { TranslateNS } from '@xrkseek/client-ui-slots'
 import css from './OverviewCanvasPanel.module.css'
 
 type PlanTranslate = TranslateNS<'plan'>
+
+export type CanvasTone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent'
+
+const CANVAS_TONES = new Set<CanvasTone>(['neutral', 'good', 'warn', 'bad', 'accent'])
+
+function parseTone(raw: unknown): CanvasTone | undefined {
+  if (typeof raw !== 'string') return undefined
+  return CANVAS_TONES.has(raw as CanvasTone) ? (raw as CanvasTone) : undefined
+}
 
 export type OverviewCanvasSummary = {
   readonly id: string
@@ -26,12 +36,23 @@ export type OverviewCanvasSection =
     }
   | {
       readonly kind: 'kpi'
-      readonly items: readonly { readonly label: string; readonly value: string }[]
+      readonly items: readonly {
+        readonly label: string
+        readonly value: string
+        readonly tone?: CanvasTone
+      }[]
+    }
+  | {
+      readonly kind: 'callout'
+      readonly body: string
+      readonly title?: string
+      readonly tone?: CanvasTone
     }
   | {
       readonly kind: 'series'
       readonly title: string
       readonly points: readonly { readonly x: string; readonly y: number }[]
+      readonly tone?: CanvasTone
     }
 
 export type OverviewCanvasDocument = {
@@ -68,7 +89,7 @@ function parseSections(raw: readonly unknown[]): OverviewCanvasSection[] {
   for (const row of raw) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue
     const o = row as Record<string, unknown>
-    if (o.kind === 'markdown' && typeof o.body === 'string') {
+    if ((o.kind === 'markdown' || o.kind === 'md') && typeof o.body === 'string') {
       out.push({ kind: 'markdown', body: o.body })
       continue
     }
@@ -87,15 +108,31 @@ function parseSections(raw: readonly unknown[]): OverviewCanvasSection[] {
         kind: 'kpi',
         items: o.items
           .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-          .map((item) => ({
-            label: String(item.label ?? ''),
-            value: String(item.value ?? ''),
-          }))
+          .map((item) => {
+            const tone = parseTone(item.tone)
+            return {
+              label: String(item.label ?? ''),
+              value: String(item.value ?? ''),
+              ...(tone !== undefined ? { tone } : {}),
+            }
+          })
           .filter((item) => item.label.length > 0),
       })
       continue
     }
+    if (o.kind === 'callout' && typeof o.body === 'string') {
+      const tone = parseTone(o.tone)
+      const title = typeof o.title === 'string' ? o.title.trim() : ''
+      out.push({
+        kind: 'callout',
+        body: o.body,
+        ...(title ? { title } : {}),
+        ...(tone !== undefined ? { tone } : {}),
+      })
+      continue
+    }
     if (o.kind === 'series' && typeof o.title === 'string' && Array.isArray(o.points)) {
+      const tone = parseTone(o.tone)
       out.push({
         kind: 'series',
         title: o.title,
@@ -105,6 +142,7 @@ function parseSections(raw: readonly unknown[]): OverviewCanvasSection[] {
             x: String(p.x ?? ''),
             y: typeof p.y === 'number' && Number.isFinite(p.y) ? p.y : 0,
           })),
+        ...(tone !== undefined ? { tone } : {}),
       })
     }
   }
@@ -118,14 +156,16 @@ function itemsKey(items: readonly OverviewCanvasSummary[]): string {
 function SeriesChart({
   title,
   points,
+  tone = 'accent',
 }: {
   title: string
   points: readonly { readonly x: string; readonly y: number }[]
+  tone?: CanvasTone
 }) {
   const maxY = Math.max(...points.map((p) => p.y), 1)
   return (
-    <section className={css.section} aria-label={title}>
-      <h3 className={css.sectionTitle}>{title}</h3>
+    <section className={css.block} aria-label={title} data-tone={tone}>
+      <h3 className={css.blockTitle}>{title}</h3>
       {points.length === 0
         ? <p className={css.muted}>—</p>
         : (
@@ -134,6 +174,7 @@ function SeriesChart({
               <div key={`${point.x}:${index}`} className={css.seriesCol} title={`${point.x}: ${point.y}`}>
                 <div
                   className={css.seriesBar}
+                  data-tone={tone}
                   style={{ height: `${Math.max(4, (point.y / maxY) * 100)}%` }}
                 />
                 <span className={css.seriesX}>{point.x}</span>
@@ -152,27 +193,65 @@ function CanvasPlayer({
   doc: OverviewCanvasDocument
   t: PlanTranslate
 }) {
+  const updated = (() => {
+    const ms = Date.parse(doc.updatedAt)
+    if (!Number.isFinite(ms)) return doc.updatedAt
+    try {
+      return new Date(ms).toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return doc.updatedAt
+    }
+  })()
+
   return (
     <article className={css.player} aria-label={doc.title} data-canvas-id={doc.id}>
       <header className={css.playerHeader}>
         <h2 className={css.playerTitle}>{doc.title}</h2>
-        <span className={css.playerMeta}>
+        <p className={css.playerMeta}>
           {t('preview.canvas.revision', { revision: String(doc.revision) })}
-        </span>
+          {' · '}
+          {updated}
+        </p>
       </header>
       {doc.sections.length === 0
         ? <p className={css.muted}>{t('preview.canvas.emptySections')}</p>
         : doc.sections.map((section, index) => {
           if (section.kind === 'markdown') {
             return (
-              <section key={index} className={css.section}>
-                <MarkdownText text={section.body} />
+              <section key={index} className={css.block}>
+                <div className={css.prose}>
+                  <MarkdownText text={section.body} />
+                </div>
               </section>
+            )
+          }
+          if (section.kind === 'callout') {
+            const tone = section.tone ?? 'warn'
+            return (
+              <aside
+                key={index}
+                className={css.callout}
+                data-tone={tone}
+                aria-label={section.title ?? 'callout'}
+              >
+                {section.title
+                  ? <h3 className={css.calloutTitle} data-tone={tone}>{section.title}</h3>
+                  : null}
+                <div className={css.calloutBody}>
+                  <MarkdownText text={section.body} />
+                </div>
+              </aside>
             )
           }
           if (section.kind === 'table') {
             return (
-              <section key={index} className={css.section}>
+              <section key={index} className={css.block}>
                 <div className={css.tableWrap}>
                   <table className={css.table}>
                     <thead>
@@ -198,19 +277,27 @@ function CanvasPlayer({
           }
           if (section.kind === 'kpi') {
             return (
-              <section key={index} className={css.section}>
-                <div className={css.kpiGrid}>
-                  {section.items.map((item) => (
-                    <div key={item.label} className={css.kpiCard}>
+              <section key={index} className={css.kpiGrid} aria-label="KPI">
+                {section.items.map((item) => {
+                  const tone = item.tone ?? 'neutral'
+                  return (
+                    <div key={item.label} className={css.kpiCard} data-tone={tone}>
+                      <span className={css.kpiValue} data-tone={tone}>{item.value}</span>
                       <span className={css.kpiLabel}>{item.label}</span>
-                      <span className={css.kpiValue}>{item.value}</span>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </section>
             )
           }
-          return <SeriesChart key={index} title={section.title} points={section.points} />
+          return (
+            <SeriesChart
+              key={index}
+              title={section.title}
+              points={section.points}
+              tone={section.tone}
+            />
+          )
         })}
     </article>
   )

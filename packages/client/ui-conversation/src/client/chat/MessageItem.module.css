@@ -72,15 +72,45 @@
 }
 
 .pendingSteerBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
+  font-weight: 500;
   line-height: 16px;
   letter-spacing: 0.02em;
-  color: var(--dsw-alias-label-secondary);
 }
 
+.pendingSteerBadge::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+  animation: pendingSteerPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pendingSteerPulse {
+  0%,
+  100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* Inset rings: `.flowItem { content-visibility: auto }` paint-contains
+   children, so a positive outline-offset is clipped on the block axis
+   (sides survive; top/bottom look "pushed away"). Same pattern as QueueDock. */
 .userRow[data-pending-steering] .bubble {
-  outline: 1px dashed color-mix(in srgb, var(--dsw-alias-label-tertiary) 55%, transparent);
-  outline-offset: 1px;
+  outline: 1.5px dashed color-mix(in srgb, var(--dsw-alias-label-secondary) 50%, transparent);
+  outline-offset: -2px;
+}
+
+.userRow[data-editing] .bubble {
+  outline: 1.5px solid color-mix(in srgb, var(--dsw-alias-label-primary) 55%, transparent);
+  outline-offset: -2px;
 }
 
 .bubble {

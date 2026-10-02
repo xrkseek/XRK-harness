@@ -1,6 +1,9 @@
 // Latency/throughput folds shared by the settled turn footer and StatsLine.
 
 import type { AssistantMessageNode, ConversationNode } from '@xrkseek/client-runtime/client'
+// Stub import: the client barrel touches `window` (slots); these folds are
+// unit-tested in Node and must not drag the barrel in.
+import { isDecodableSample } from '@xrkseek/xrk-llm/message'
 
 /** Latency and decode-throughput readings for one turn's footer. */
 export interface TurnMetrics {
@@ -80,9 +83,9 @@ export function deriveTurnMetrics(nodes: readonly ConversationNode[]): Map<numbe
       fold.firstStep = node.step
       fold.firstStepTtftMs = reading.ttftMs
     }
-    if (reading.decodeMs !== null && reading.outputTokens !== null) {
+    if (reading.decodeMs !== null && isDecodableSample(reading.outputTokens, reading.decodeMs)) {
       fold.decodeMs += reading.decodeMs
-      fold.outputTokens += reading.outputTokens
+      fold.outputTokens += reading.outputTokens ?? 0
       fold.sampled = true
     }
   }

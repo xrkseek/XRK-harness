@@ -11,12 +11,13 @@ import type {
 import {
   finalizeLlmChatResponse,
   collectLlmStream,
-  classifyCaughtLlmError,
+  classifyCaughtStreamError,
   ContextOverflowError,
-  isLlmError,
   throwHttpLlmError,
   UnsupportedContentError,
   withAnthropicStopReason,
+  withExtraAbortSignal,
+  withStreamIdleTimeout,
 } from "@xrkseek/llm";
 import type { ChatMessage, MessageContent, ToolCall, TokenUsage } from "@xrkseek/protocol";
 import {
@@ -121,6 +122,15 @@ export interface AnthropicAdapterOptions {
   readonly headers?: Record<string, string>;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  /**
+   * Per-event idle budget for `stream()`: how long the body may stay silent
+   * between two events before the turn fails with `TIMEOUT` (retryable).
+   * Default 300_000 ms (5 min, `DEFAULT_STREAM_IDLE_TIMEOUT_MS`). This is **not** the
+   * overall request budget 鈥?that is {@link AnthropicAdapterOptions.timeoutMs},
+   * which wraps the whole `fetch`. Every event restarts this clock, so a long
+   * answer that keeps streaming is never killed.
+   */
+  readonly idleTimeoutMs?: number;
   readonly enableStream?: boolean;
   readonly inputModalities?: readonly ("text" | "image")[];
   readonly maxRequestImageBytes?: number;
@@ -506,7 +516,11 @@ export function createAnthropicAdapter(
         },
       ];
     }
-    if (options.temperature !== undefined) body.temperature = options.temperature;
+    const temperature =
+      request.temperature !== undefined
+        ? request.temperature
+        : options.temperature;
+    if (temperature !== undefined) body.temperature = temperature;
     if (request.tools?.length) {
       const tools = request.tools.map((t, i) => {
         const def: Record<string, unknown> = {
@@ -514,7 +528,7 @@ export function createAnthropicAdapter(
           description: t.description,
           input_schema: t.parameters,
         };
-        // Cache breakpoint on the last tool — tools block is sorted/stable.
+        // Cache breakpoint on the last tool 鈥?tools block is sorted/stable.
         if (i === request.tools!.length - 1) {
           def.cache_control = EPHEMERAL_CACHE;
         }
@@ -548,9 +562,7 @@ export function createAnthropicAdapter(
         ...(signal ? { signal } : {}),
       });
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") throw err;
-      if (isLlmError(err)) throw err;
-      classifyCaughtLlmError(err, "anthropic");
+      classifyCaughtStreamError(err, "anthropic");
     }
     if (!res.ok) {
       const text = await res.text();
@@ -578,8 +590,24 @@ export function createAnthropicAdapter(
 
   if (enableStream) {
     adapter.stream = async function* (request) {
-      const res = await post(request, true);
-      yield* streamAnthropicSse(res);
+      // The watchdog can only end the turn; only the request controller can
+      // close the body read it walks away from.
+      const idle = new AbortController();
+      const res = await post(withExtraAbortSignal(request, idle.signal), true);
+      try {
+        yield* withStreamIdleTimeout(streamAnthropicSse(res), {
+          label: "anthropic",
+          ...(request.signal ? { signal: request.signal } : {}),
+          onIdleTimeout: () => idle.abort(),
+          ...(options.idleTimeoutMs !== undefined
+            ? { idleTimeoutMs: options.idleTimeoutMs }
+            : {}),
+        });
+      } catch (err) {
+        // Socket death mid-body (`terminated`) arrives here raw; classify it
+        // so the retry loop sees TRANSPORT instead of UNKNOWN.
+        classifyCaughtStreamError(err, "anthropic");
+      }
     };
     // Keep chat() as one-shot JSON (compaction / replay paths).
   }

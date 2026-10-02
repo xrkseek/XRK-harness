@@ -40,17 +40,23 @@
 
 .menu {
   position: fixed;
-  z-index: 1100;
+  z-index: var(--ds-z-surface);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 4px;
   width: 420px;
-  max-width: min(480px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 140px));
+  /* The JS placement clamps to a flat MARGIN and never reads the insets, so
+     a card opened against a screen edge would hang into a landscape notch;
+     the pair is what the fixed menu has to give back. */
+  max-width: min(480px, calc(100vw - 32px - var(--ds-safe-h)));
+  max-height: min(520px, calc(100dvh - var(--ds-safe-v) - 140px));
   margin: 0;
   padding: 6px;
   overflow: auto;
+  /* Fixed sheet over a scrolling page: without contain a fling past the last
+     row keeps scrolling the document behind the open menu. */
+  overscroll-behavior: contain;
   list-style: none;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;

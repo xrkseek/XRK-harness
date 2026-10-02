@@ -13,9 +13,11 @@ function previewOf(content: readonly ContentBlock[]): string {
   return chars.length > QUEUE_PREVIEW_CHARS ? `${chars.slice(0, QUEUE_PREVIEW_CHARS).join('')}…` : flat
 }
 
-function textOf(content: readonly ContentBlock[]): string | null {
-  if (!content.every(block => block.type === 'text')) return null
-  return content.map(block => block.text).join('')
+function textOf(content: readonly ContentBlock[]): string {
+  return content
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .map(block => block.text)
+    .join('')
 }
 
 type QueueItems = Extract<MuxFrame, { type: 'session/queue' }>['items']
