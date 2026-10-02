@@ -8,7 +8,10 @@
  * React #185 when switching back into Overview. Tab + scroll are enough; Status
  * always cold-loads.
  */
-// Leaf import: the client barrel touches `window` (slots); this module is unit-tested in Node.
+// Leaf import: the client barrel touches `window` (slots); this module is unit-tested in Node,
+// and the client lane sits outside the check gate. `lineage-hop.ts` imports nothing and carries
+// no identity or state, so the bundle purity gate inlines it exactly (LEAF_PURE_INLINE in
+// tsdown.client.ts) instead of demanding the barrel.
 import { isSessionLineageHop } from '@xrkseek/client-runtime/src/client/sessions/lineage-hop.ts'
 
 export type OverviewPaintTab = 'status' | 'context' | 'todos' | 'changes' | 'canvas'

@@ -57,6 +57,18 @@ const CONTEXT_INLINE = /^@xrkseek\/xrk-(file-reference|session-reference)(\/|$)/
  */
 const PURE_UTIL_INLINE = /^@xrkseek\/secrets\/redact$/
 
+/**
+ * Dependency-free Workspace leaf reached by a source path instead of the barrel.
+ * `ui-plan`'s Overview paint memory imports `lineage-hop.ts` this way: its unit test
+ * runs in the Node lane (which is what `check` gates), the client barrel reads `window`
+ * for the slots registry, and the client lane is outside the check gate — so the barrel
+ * is not an option there. The predicate imports nothing and holds no identity or state,
+ * so a second inlined copy cannot desync; unlike a runtime value, inlining is exact.
+ * Keep the match exact — widening it to `client-runtime/src/**` would inline a whole
+ * runtime instance, which is precisely what this gate exists to prevent.
+ */
+const LEAF_PURE_INLINE = /^@xrkseek\/client-runtime\/src\/client\/sessions\/lineage-hop\.ts$/
+
 /** Generated descriptor/codec contribution with no shared runtime identity. */
 const GENERATED_REMOTE = /^@xrkseek\/xrk-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 
@@ -359,7 +371,7 @@ function clientConfig(id: string, entry: string): UserConfig {
         if (CLIENT_EXTERNALS.includes(source)) return null // platform module: external wins
         if (VENDORED_LIBRARY.test(source)) return null // vendored library: inline, no shared identity
         if (INLINE_SAFE.test(source) || GENERATED_REMOTE.test(source) || CONTEXT_INLINE.test(source)) return null // wire / context contract: inline is the point
-        if (PURE_UTIL_INLINE.test(source)) return null // dependency-free leaf subpath of a Host package: inline is exact
+        if (PURE_UTIL_INLINE.test(source) || LEAF_PURE_INLINE.test(source)) return null // dependency-free leaf: inline is exact
 
         throw new Error(
           `client bundle purity: "${source}" is not a platform module (CLIENT_EXTERNALS), an inline-safe wire layer, or a generated /remote contribution — `
