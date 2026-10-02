@@ -27,7 +27,7 @@ import {
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
-import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
+import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
 import { shouldShowFlowWaiting } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -180,7 +180,7 @@ function observedRpcIds(
 /** One flow-tail pending input: local echo or Host-authoritative steering row. */
 type PendingChatInput =
   | { readonly kind: 'echo'; readonly submission: PendingSubmission }
-  | { readonly kind: 'steer'; readonly item: QueuedMessage }
+  | { readonly kind: 'steer'; readonly item: QueuedMessage; readonly submission?: PendingSubmission }
 
 /** Shared empty tail so an idle flow keeps one stable `pendingInputs` identity. */
 const NO_PENDING_INPUTS: readonly PendingChatInput[] = []
@@ -379,21 +379,44 @@ export function ChatView({
   const pendingSubmissions = useSession(s => s.pendingSubmissions)
   // One pass over the local echoes: `observed` is the durable user/steering
   // rpcIds already painted by their own row, `local` is the transcript-paintable
-  // set (queued follow-ups paint in QueueDock) and `localIds` keeps every
-  // non-queued address so a Host steering row can defer to its echo instead of
-  // double-painting. Splitting these used to cost two extra filter passes.
+  // set (queued follow-ups paint in QueueDock), `localIds` keeps every
+  // non-queued address, and `previews` keeps every live echo addressable so a
+  // Host steering row can borrow its blob previews after its echo retired.
+  // Splitting these used to cost two extra filter passes.
   const echoBook = useMemo(() => {
     const local = new Map<string, PendingSubmission>()
     const localIds = new Set<string>()
-    if (pendingSubmissions.length === 0) return { local, localIds }
+    const previews = new Map<string, PendingSubmission>()
+    if (pendingSubmissions.length === 0) return { local, localIds, previews }
     const observed = observedRpcIds(order, nodeStore)
     for (const submission of pendingSubmissions) {
       if (submission.placement === 'queued') continue
       localIds.add(submission.requestId)
+      previews.set(submission.requestId, submission)
       if (!observed.has(submission.requestId)) local.set(submission.requestId, submission)
     }
-    return { local, localIds }
+    return { local, localIds, previews }
   }, [pendingSubmissions, order, nodeStore])
+  // A Host steering row outlives its echo: the durable node lands, the echo
+  // retires a frame later, and the row is still mirrored meanwhile. Pending
+  // bubbles must never resolve a durable ref there — before `user/message`
+  // reaches the log that read is unauthorized, and one refusal is pinned as a
+  // failed thumbnail until the row leaves. So hold the echo's blob previews for
+  // exactly the rows the Host is mirroring; they are dropped with the row.
+  const previewMemory = useRef(new Map<string, PendingSubmission>())
+  const steeringPreviews = useMemo(() => {
+    const memory = previewMemory.current
+    const live = new Set<string>()
+    for (const item of pendingSteering) {
+      const rpcId = item.rpcId
+      if (rpcId === undefined) continue
+      live.add(rpcId)
+      const echo = echoBook.previews.get(rpcId)
+      if (echo !== undefined) memory.set(rpcId, echo)
+    }
+    for (const key of [...memory.keys()]) if (!live.has(key)) memory.delete(key)
+    return memory
+  }, [pendingSteering, echoBook])
   // Merge Host next-step with local echoes by rpcId so one bubble stays mounted
   // through admit→claim→durable (prefer echo; steer echoes keep 「插队中」).
   // Purity matters here: `echoBook` is cached across renders, so consumption is
@@ -418,14 +441,19 @@ export function ChatView({
         continue
       }
       if (localIds.has(rpcId)) continue
-      pending.push({ kind: 'steer', item })
+      const preview = steeringPreviews.get(rpcId)
+      pending.push({
+        kind: 'steer',
+        item,
+        ...(preview === undefined ? {} : { submission: preview }),
+      })
     }
     for (const [rpcId, submission] of local) {
       if (consumed.has(rpcId)) continue
       pending.push({ kind: 'echo', submission })
     }
     return pending
-  }, [pendingSteering, echoBook])
+  }, [pendingSteering, echoBook, steeringPreviews])
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -977,6 +1005,9 @@ export function ChatView({
               <PendingSteeringBubble
                 key={input.item.id}
                 content={input.item.content}
+                {...(input.submission === undefined
+                  ? {}
+                  : { previewAttachments: previewAttachmentsOf(input.submission.attachments) })}
                 renderMessageImages={renderMessageImages}
                 renderMessageFiles={renderMessageFiles}
                 t={t}

@@ -193,6 +193,72 @@ describe('queue snapshot intake', () => {
 
     expect(session.getSnapshot().queue).toEqual([])
   })
+
+  it('retires a steering row by prompt rpcId when the durable message gets a fresh id', async () => {
+    const session = makeSession()
+    await session.open()
+    // The Host re-mints the message id on promotion, so the admit id and the
+    // durable id never match: only the prompt rpcId ties the row to its event.
+    session.handleMuxEnvelope(rid('env-promote'), queueFrame([
+      { id: 'admit-77', body: '插队带图', placement: 'steering' },
+    ]))
+    expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['admit-77'])
+
+    session.handleMuxEnvelope(rid('env-promoted'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 0,
+        time: 1_700_000_000_000,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: {
+          id: 'msg-minted',
+          role: 'user',
+          content: text('插队带图'),
+          source: { kind: 'user', rpcId: 'rpc-admit-77' },
+        },
+      },
+    })
+
+    expect(session.getSnapshot().queue).toEqual([])
+  })
+
+  it('keeps attachment block identity across queue publishes', () => {
+    const session = makeSession()
+    const attachment = {
+      attachmentId: 'sha256:aaa',
+      mediaType: 'image/png',
+      bytes: 128,
+      width: 8,
+      height: 9,
+    }
+    const withImage: ContentBlock[] = [{ type: 'image', attachment } as never]
+    session.handleMuxEnvelope(rid('env-img-1'), queueFrame([
+      { id: 's-img', body: '', content: withImage, placement: 'steering' },
+    ]))
+    const first = session.getSnapshot().queue[0]?.content[0]
+
+    // Every queue publish re-spreads the Host block. A fresh object identity
+    // re-arms MessageImage's load effect, dropping the thumbnail back to its
+    // loading state mid-flight.
+    session.handleMuxEnvelope(rid('env-img-2'), queueFrame([
+      { id: 's-img', body: '', content: withImage, placement: 'steering' },
+    ]))
+    expect(session.getSnapshot().queue[0]?.content[0]).toBe(first)
+
+    // A different attachment must not inherit the carried-over block.
+    session.handleMuxEnvelope(rid('env-img-3'), queueFrame([
+      {
+        id: 's-img',
+        body: '',
+        content: [{ type: 'image', attachment: { ...attachment, attachmentId: 'sha256:bbb' } } as never],
+        placement: 'steering',
+      },
+    ]))
+    const swapped = session.getSnapshot().queue[0]?.content[0] as { attachment?: { attachmentId?: string } }
+    expect(swapped.attachment?.attachmentId).toBe('sha256:bbb')
+  })
 })
 
 describe('queue operation transport', () => {

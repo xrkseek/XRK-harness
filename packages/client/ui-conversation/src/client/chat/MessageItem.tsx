@@ -6,7 +6,7 @@
 import { Fragment, memo, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type {
-  ModelRetryNode, PendingSubmission, TurnErrorNode, UserMessageNode,
+  ModelRetryNode, PendingSubmission, PendingSubmissionAttachment, TurnErrorNode, UserMessageNode,
 } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef } from '@xrkseek/xrk-attachment'
 import {
@@ -21,9 +21,36 @@ import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
-type PresentedAttachment =
+export type PresentedAttachment =
   | { readonly type: 'image'; readonly image: MessageImageOwner }
   | { readonly type: 'file'; readonly file: FileAttachmentRef }
+
+/**
+ * Project one local submission echo's attachments into the bubble's rendered
+ * sequence: images become blob previews, files keep their durable card.
+ *
+ * Shared so a Host steering row that has already outlived its echo can still
+ * paint the previews instead of falling back to authorized durable reads.
+ * @param attachments - the echo's attachments, in prompt order.
+ * @returns the presented attachment sequence for {@link UserStyleBubble}.
+ */
+export function previewAttachmentsOf(
+  attachments: readonly PendingSubmissionAttachment[],
+): readonly PresentedAttachment[] {
+  return attachments.map(attachment => attachment.type === 'image'
+    ? {
+      type: 'image',
+      image: {
+        preview: {
+          url: attachment.value.previewUrl,
+          ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
+          ...(attachment.value.width === undefined ? {} : { width: attachment.value.width }),
+          ...(attachment.value.height === undefined ? {} : { height: attachment.value.height }),
+        },
+      },
+    }
+    : { type: 'file', file: attachment.value })
+}
 
 function isFileAttachment(value: unknown): value is FileAttachmentRef {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
@@ -334,8 +361,20 @@ function UserStyleBubble({
  * @param props - Pending message content and conversation translator.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, renderMessageImages, renderMessageFiles, t }: {
+/**
+ * Render one Host-authoritative pending steering item with the same visual
+ * language as its eventual durable transcript node.
+ *
+ * `previewAttachments` carries the local echo's blob previews when that echo is
+ * still alive: a Host row only starts painting after its echo retired or never
+ * had one, and durable refs are unauthorized reads until the message is logged.
+ * @param props - Pending message content and conversation translator.
+ * @returns the pending steering bubble.
+ */
+export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, t }: {
   content: readonly unknown[]
+  /** Local echo previews replacing the content-derived attachment sequence. */
+  previewAttachments?: readonly PresentedAttachment[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   t: ChatViewSlotProps['t']
@@ -343,6 +382,7 @@ export function PendingSteeringBubble({ content, renderMessageImages, renderMess
   return (
     <UserStyleBubble
       content={content}
+      {...(previewAttachments === undefined ? {} : { previewAttachments })}
       renderMessageImages={renderMessageImages}
       {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
       pending
@@ -378,19 +418,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
     [submission.text],
   )
   const previewAttachments = useMemo<readonly PresentedAttachment[]>(
-    () => submission.attachments.map(attachment => attachment.type === 'image'
-      ? {
-        type: 'image',
-        image: {
-          preview: {
-            url: attachment.value.previewUrl,
-            ...(attachment.value.name === undefined ? {} : { name: attachment.value.name }),
-            ...(attachment.value.width === undefined ? {} : { width: attachment.value.width }),
-            ...(attachment.value.height === undefined ? {} : { height: attachment.value.height }),
-          },
-        },
-      }
-      : { type: 'file', file: attachment.value }),
+    () => previewAttachmentsOf(submission.attachments),
     [submission.attachments],
   )
   return (
