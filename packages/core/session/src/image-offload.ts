@@ -1,6 +1,7 @@
 /**
  * Durable image offload: log `image/offload`, project marks in deriveMessages.
  * Selections survive resume and fork with the seeded prefix.
+ * Shadowed (pre-compaction) images are described by id, never re-sent.
  */
 
 import {
@@ -18,10 +19,11 @@ import type { SessionStore } from "./store.js";
 export const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024;
 
 /**
- * Max image-bearing user turns to re-surface after a compaction window swap.
- * Oldest images still yield to {@link ensureDurableImageOffloads} on the wire.
+ * Max shadowed image turns named by id after a compaction window swap.
+ * Ids are text — the bound is there to keep the pointer message short, not to
+ * bound vision payload (no pixels are projected any more).
  */
-export const MAX_RETAINED_SHADOWED_IMAGE_MESSAGES = 8;
+export const MAX_DESCRIBED_SHADOWED_IMAGES = 8;
 
 /** True when content still carries image blocks (incl. durable offloaded marks). */
 export function messageHasImageBlocks(content: MessageContent): boolean {
@@ -157,27 +159,53 @@ export function planImageOffloadTargets(
 }
 
 /**
- * Re-project image-bearing user turns from the shadowed pre-compaction prefix
- * so window swap does not drop vision bytes (serializeMessage uses flattenText).
- * Walks newest-first; caps at {@link MAX_RETAINED_SHADOWED_IMAGE_MESSAGES}.
+ * Shadowed pre-compaction images, described by id instead of re-attached.
+ *
+ * A window swap drops the shadowed prefix to text, and the pixels used to be
+ * re-projected so vision survived. That backfired twice: every subsequent turn
+ * re-sent the same base64 (vision tokens on the wire for a stale screenshot),
+ * and a user message carrying an image *inside the current window* reads to the
+ * model as a fresh paste — which is how a single attachment turned into "the
+ * user pasted this seven times" after repeated compactions. The bytes stay in
+ * the log and in the attachment store, so a single line naming the ids lets the
+ * model pull back exactly what it still needs via `read_image`.
+ *
+ * Returns at most one user message listing ids (newest turn first kept in
+ * chronological order); the original turns themselves are covered by the
+ * compaction summary and recent tail text.
  */
-export function retainShadowedImageMessages(
+export function describeShadowedImages(
   events: readonly SessionEvent[],
   compactIndex: number,
-  maxMessages: number = MAX_RETAINED_SHADOWED_IMAGE_MESSAGES,
+  maxMessages: number = MAX_DESCRIBED_SHADOWED_IMAGES,
 ): ChatMessage[] {
   if (maxMessages <= 0 || compactIndex <= 0) return [];
   const marks = foldImageOffloadMarks(events);
-  const retained: ChatMessage[] = [];
-  for (let seq = compactIndex - 1; seq >= 0 && retained.length < maxMessages; seq--) {
+  const lines: string[] = [];
+  for (let seq = compactIndex - 1; seq >= 0 && lines.length < maxMessages; seq--) {
     const ev = events[seq]!;
     if (ev.type !== "user/message") continue;
     const content = projectOffloadedImages(ev.content, marks.get(seq));
     if (!messageHasImageBlocks(content)) continue;
-    retained.push({ role: "user", content });
+    for (const block of asContentBlocks(content)) {
+      if (block.type !== "image") continue;
+      const a = block.attachment;
+      lines.push(`- ${a.attachmentId} (${a.mediaType} ${a.width}x${a.height})`);
+    }
   }
-  retained.reverse();
-  return retained;
+  if (lines.length === 0) return [];
+  lines.reverse();
+  return [
+    {
+      role: "user",
+      content:
+        "Images sent before this compaction were left behind and are NOT " +
+        "re-attached (re-sending them costs vision tokens on every turn). " +
+        "They are still readable on demand with " +
+        "`read_image file_path=<attachmentId>`:\n" +
+        lines.join("\n"),
+    },
+  ];
 }
 
 /**

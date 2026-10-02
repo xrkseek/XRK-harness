@@ -54,6 +54,7 @@ export {
 export {
   COMPACTION_SUMMARY_TEMPLATE,
   DEFAULT_COMPACTION_BUFFER_TOKENS,
+  DEFAULT_COMPACTION_HEAD_TOKENS,
   DEFAULT_COMPACTION_KEEP_TOKENS,
   DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS,
   buildCompactionPrompt,
@@ -75,13 +76,13 @@ export {
 
 export {
   DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+  describeShadowedImages,
   ensureDurableImageOffloads,
   foldImageOffloadMarks,
   messageHasImageBlocks,
-  MAX_RETAINED_SHADOWED_IMAGE_MESSAGES,
+  MAX_DESCRIBED_SHADOWED_IMAGES,
   planImageOffloadTargets,
   projectOffloadedImages,
-  retainShadowedImageMessages,
 } from "./image-offload.js";
 
 import {
@@ -89,7 +90,7 @@ import {
   findLatestCompaction,
   formatCompactionForModel,
 } from "./compaction.js";
-import { retainShadowedImageMessages } from "./image-offload.js";
+import { describeShadowedImages } from "./image-offload.js";
 
 export {
   estimateAssistantSurface,
@@ -301,10 +302,10 @@ export function deriveMessages(events: readonly SessionEvent[]): ChatMessage[] {
         role: "user",
         content: formatCompactionForModel(compact.event),
       },
-      // Compaction serializes the keep-tail as text (flattenText drops images).
-      // Re-surface recent image-bearing user turns from the shadowed prefix so
-      // long sessions keep vision on the wire after a window swap.
-      ...retainShadowedImageMessages(events, compact.index),
+      // The shadowed prefix is gone from the wire. Name the images it held so
+      // the model can re-read one on demand — re-attaching the bytes would
+      // charge vision tokens every turn and read as a fresh user paste.
+      ...describeShadowedImages(events, compact.index),
     ];
     // `image/offload.targets.seq` is absolute durable-log index — fold marks
     // from the full log and remap slice-local indices.

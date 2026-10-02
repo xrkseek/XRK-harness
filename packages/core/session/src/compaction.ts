@@ -28,6 +28,14 @@ import {
  */
 export const DEFAULT_COMPACTION_KEEP_TOKENS = 24_000;
 export const DEFAULT_COMPACTION_BUFFER_TOKENS = 4_000;
+
+/**
+ * Cap for the summarizer `head`. `keepTokens` bounds the kept *tail* only;
+ * without a head bound the summarizer input grows with the session instead of
+ * with the gap since the last swap, which is how one real session reached
+ * ~178k tokens of prompt against a 24k keep budget.
+ */
+export const DEFAULT_COMPACTION_HEAD_TOKENS = 24_000;
 /** Soft-budget auto-compact attempts before fail-closed (DSH-style remeasure loop). */
 export const DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS = 2;
 
@@ -210,9 +218,11 @@ function serializeMessage(m: ChatMessage): string {
 
 /**
  * Split conversation into summarized head vs kept recent (from the end).
- * Image-bearing user turns are omitted from the recent *text* tail — they are
- * re-projected as live ContentBlocks by {@link retainShadowedImageMessages}
- * after the window swap (flattenText would drop the pixels).
+ * Image-bearing user turns keep their text in the tail; `flattenText` drops
+ * the pixels, so the window swap names those images by id instead (see
+ * {@link describeShadowedImages}). Skipping the turn outright used to be safe
+ * only while the whole turn came back as live ContentBlocks — it silently
+ * dropped the user's instruction along with the screenshot.
  */
 export function selectHeadRecent(
   messages: readonly ChatMessage[],
@@ -242,7 +252,6 @@ export function selectHeadRecent(
   const recentLines: string[] = [];
   for (let i = split; i < messages.length; i++) {
     const m = messages[i]!;
-    if (m.role === "user" && messageHasImageBlocks(m.content)) continue;
     const line = serializeMessage(m);
     if (line) recentLines.push(line);
   }
@@ -264,6 +273,30 @@ export function buildCompactionPrompt(input: {
   return [lead, COMPACTION_SUMMARY_TEMPLATE, input.head]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * Keep the newest `\n\n`-separated blocks of `head` that fit `maxTokens`,
+ * oldest dropped. Anchoring to the newest end keeps the summarizer's view of
+ * recent work contiguous against the kept tail; whatever is dropped is named
+ * so the summary does not read the gap as "nothing happened there".
+ */
+function boundHead(head: string, maxTokens: number): string {
+  if (!head || maxTokens <= 0) return head;
+  const blocks = head.split("\n\n");
+  const kept: string[] = [];
+  let total = 0;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!;
+    const next = total + estimateTokens(block);
+    if (next > maxTokens) break;
+    total = next;
+    kept.push(block);
+  }
+  if (kept.length === blocks.length) return head;
+  kept.reverse();
+  const dropped = blocks.length - kept.length;
+  return `[… ${dropped} older message(s) omitted from this summarizer pass; they are still in the session log …]\n\n${kept.join("\n\n")}`;
 }
 
 export function formatCompactionForModel(
@@ -437,18 +470,35 @@ export function prepareCompactionPayload(
       readonly recent: string;
     }
   | undefined {
-  const full = deriveMessagesUnwindowed(events);
-  const selected = selectHeadRecent(full, keepTokens);
-  const previous = findLatestCompaction(events)?.event;
-
-  if (!selected || (selected.head.length === 0 && previous === undefined)) {
-    return undefined;
-  }
+  const previous = findLatestCompaction(events);
+  // Only what landed since the last window swap is new to the summarizer;
+  // everything older is already represented by `previousSummary` + the tail
+  // text that gets re-fed below. Folding the whole log here made `head` grow
+  // with the session rather than with the gap between compactions (measured:
+  // 106k → 714k chars over 13 rounds, ~178k tokens against a 24k keep budget)
+  // and it re-injected every retired `[Reasoning]:` line — including the
+  // model's own "the user pasted this screenshot N more times" notes, which
+  // is how one attachment became a seven-paste accusation.
+  const offset = previous ? previous.index + 1 : 0;
+  const pending = deriveMessagesUnwindowed(events.slice(offset), {
+    indexOffset: offset,
+    markSource: events,
+  });
+  const selected = selectHeadRecent(pending, keepTokens);
+  const boundedHead = selected
+    ? boundHead(selected.head, DEFAULT_COMPACTION_HEAD_TOKENS)
+    : "";
+  // The previous tail text was summarized *out of* the payload that produced
+  // `summary`, so it still needs one more pass to reach the anchor.
+  const head = [previous?.event.recent, boundedHead]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join("\n\n");
+  if (!head) return undefined;
 
   const prompt = buildCompactionPrompt({
-    ...(previous ? { previousSummary: previous.summary } : {}),
-    head: [previous?.recent, selected.head].filter(Boolean).join("\n\n"),
+    ...(previous ? { previousSummary: previous.event.summary } : {}),
+    head,
   });
 
-  return { prompt, recent: selected.recent };
+  return { prompt, recent: selected?.recent ?? "" };
 }

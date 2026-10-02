@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildCompactionPrompt,
   createMemorySessionStore,
+  DEFAULT_COMPACTION_HEAD_TOKENS,
   deriveMessages,
   deriveMessagesUnwindowed,
   estimateMessagesTokens,
   estimateRequestTokens,
   estimateTokens,
   parseCompactionStrategy,
+  prepareCompactionPayload,
   resolveCompactionStrategy,
   resolveSoftBudgetCeiling,
   selectHeadRecent,
@@ -153,6 +155,144 @@ describe("compaction helpers", () => {
     expect(p).toContain("## Objective");
     expect(p).toContain("history");
   });
+
+  it("keeps an image-bearing user turn's text in the recent tail", () => {
+    const selected = selectHeadRecent(
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "fix-the-flaky-test" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:pic",
+                mediaType: "image/png",
+                bytes: 8,
+                width: 2,
+                height: 2,
+              },
+            },
+          ],
+        },
+      ],
+      8_000,
+    );
+    expect(selected).toBeDefined();
+    expect(selected!.recent).toContain("fix-the-flaky-test");
+    expect(selected!.recent).toContain("[image attachment]");
+  });
+});
+
+describe("prepareCompactionPayload head scope", () => {
+  /** ~1k tokens per turn, so a 600-token keep budget always leaves a head. */
+  const fat = (marker: string) => `${marker} ${"x".repeat(4_000)}`;
+
+  function sessionWithHistory() {
+    const store = createMemorySessionStore();
+    const s = store.create("c-head");
+    store.append(s.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: fat("ancient-history-before-first-swap"),
+    });
+    store.append(s.id, {
+      type: "context/compaction",
+      ts: 2,
+      reason: "auto",
+      summary: "## Objective\n- anchor",
+      recent: "[User]: tail-from-the-previous-round",
+    });
+    store.append(s.id, {
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: fat("fresh-after-the-swap"),
+    });
+    store.append(s.id, {
+      type: "assistant/message",
+      ts: 4,
+      turnId: "t1",
+      stepId: "s1",
+      content: "reply",
+    });
+    return store.get(s.id).events;
+  }
+
+  it("summarizes only what arrived since the previous swap", () => {
+    const payload = prepareCompactionPayload(sessionWithHistory(), 600);
+    expect(payload).toBeDefined();
+    expect(payload!.prompt).toContain("fresh-after-the-swap");
+    // The pre-swap turn already lives in <previous-summary>; re-feeding it
+    // every round is what grew the prompt with the session, not with the gap.
+    expect(payload!.prompt).not.toContain("ancient-history-before-first-swap");
+    expect(payload!.prompt).toContain("anchor");
+    // The previous tail was summarized *out of* the payload that produced
+    // that summary, so it still owes the anchor one pass.
+    expect(payload!.prompt).toContain("tail-from-the-previous-round");
+  });
+
+  it("drops nothing when there is no prior compaction", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("c-first");
+    store.append(s.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: fat("only-history"),
+    });
+    store.append(s.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "first-reply",
+    });
+    const payload = prepareCompactionPayload(store.get(s.id).events, 600);
+    expect(payload).toBeDefined();
+    expect(payload!.prompt).toContain("only-history");
+    expect(payload!.prompt).not.toContain("previous-summary");
+  });
+
+  it("bounds head so the summarizer input cannot grow with the session", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("c-bound");
+    for (let i = 0; i < 40; i++) {
+      store.append(s.id, {
+        type: "user/message",
+        ts: i + 1,
+        turnId: `t${i}`,
+        content: fat(`block-${i} `),
+      });
+    }
+    const payload = prepareCompactionPayload(store.get(s.id).events, 1_000);
+    expect(payload).toBeDefined();
+    // head cap + kept-tail slack + prompt template.
+    expect(estimateTokens(payload!.prompt)).toBeLessThanOrEqual(
+      DEFAULT_COMPACTION_HEAD_TOKENS + 2 * 1_000 + 2_000,
+    );
+    expect(payload!.prompt).toContain("older message(s) omitted");
+    // Newest head block survives; the oldest is what yields. The kept tail
+    // itself never reaches the prompt, so assert on the head side only.
+    expect(payload!.prompt).toContain("block-38");
+    expect(payload!.prompt).not.toContain("block-0 ");
+  });
+
+  it("returns undefined when there is nothing new to summarize", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("c-empty");
+    store.append(s.id, {
+      type: "context/compaction",
+      ts: 1,
+      reason: "auto",
+      summary: "## Objective\n- anchor",
+      recent: "",
+    });
+    expect(
+      prepareCompactionPayload(store.get(s.id).events, 8_000),
+    ).toBeUndefined();
+  });
 });
 
 describe("deriveMessages compaction window", () => {
@@ -201,7 +341,7 @@ describe("deriveMessages compaction window", () => {
     expect(events.filter((e) => e.type === "user/message")).toHaveLength(2);
   });
 
-  it("re-surfaces image blocks from the shadowed prefix after compaction", () => {
+  it("describes shadowed images by id instead of re-attaching them", () => {
     const store = createMemorySessionStore();
     const s = store.create("c-vision");
     const attachment = {
@@ -243,16 +383,73 @@ describe("deriveMessages compaction window", () => {
 
     const windowed = deriveMessages(store.get(s.id).events);
     expect(windowed[0]?.content).toContain("context compacted");
+    // The pixel must NOT come back — re-attaching it charged vision tokens on
+    // every turn and read as a fresh user paste.
     const withImage = windowed.find(
       (m) =>
         m.role === "user" &&
         typeof m.content !== "string" &&
         m.content.some((b) => b.type === "image"),
     );
-    expect(withImage).toBeDefined();
+    expect(withImage).toBeUndefined();
+    const pointer = windowed.find(
+      (m) => typeof m.content === "string" && m.content.includes("sha256:pic"),
+    );
+    expect(pointer).toBeDefined();
+    expect(pointer?.content).toContain("read_image");
     expect(windowed.at(-1)).toEqual({
       role: "user",
       content: "what was in the image?",
     });
+  });
+
+  it("keeps a shadowed image turn's text out of the re-sent bytes across compactions", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("c-vision-repeat");
+    const attachment = {
+      attachmentId: "sha256:only-once",
+      mediaType: "image/png" as const,
+      bytes: 4,
+      width: 1,
+      height: 1,
+    };
+    store.append(s.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: [
+        { type: "text", text: "the one screenshot" },
+        { type: "image", attachment },
+      ],
+    });
+    for (let i = 0; i < 3; i++) {
+      store.append(s.id, {
+        type: "assistant/message",
+        ts: 2 + i * 2,
+        turnId: `t${i}`,
+        stepId: `s${i}`,
+        content: `answer-${i}`,
+      });
+      store.append(s.id, {
+        type: "context/compaction",
+        ts: 3 + i * 2,
+        reason: "auto",
+        summary: `## Objective\n- round ${i}`,
+        recent: "",
+      });
+    }
+
+    const windowed = deriveMessages(store.get(s.id).events);
+    let imageBlocks = 0;
+    for (const m of windowed) {
+      if (typeof m.content === "string") continue;
+      for (const b of m.content) if (b.type === "image") imageBlocks++;
+    }
+    expect(imageBlocks).toBe(0);
+    const named = windowed.filter(
+      (m) => typeof m.content === "string" && m.content.includes("sha256:only-once"),
+    );
+    // Exactly one pointer, no matter how many compactions followed.
+    expect(named).toHaveLength(1);
   });
 });
