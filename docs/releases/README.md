@@ -4,11 +4,11 @@
 
 版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x` · `0.5.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**本版**：`MINOR=5` 正式线以 **v0.5.7** 为当前包号（本机 Desktop 测试包；npm `@latest` 待本版公开发包后接管，发布前仍为 v0.5.6）。`0.4.x` 预览线已于 **v0.4.12** 收口。
+**本版**：`MINOR=5` 正式线以 **v0.5.7** 为当前包号（即将接管 npm `@latest`；发布前仍为 v0.5.6）。`0.4.x` 预览线已于 **v0.4.12** 收口。
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（本机包）**  | [v0.5.7](./v0.5.7.md)                   | `0.5.x` 补丁：消息编辑重发与删除 · 发送队列 steer 与附件 · 产出文件三行 · 工作区置顶 · Canvas callout/tone · 自动审查真正放行 · 流式 idle 看门狗 |
+| **当前（本机包）**  | [v0.5.7](./v0.5.7.md)                   | `0.5.x` 补丁：消息编辑重发与删除 · 发送队列 steer 与附件 · 空白草稿侧栏可见 · 产出文件三行 · 工作区置顶 · Canvas callout/tone · 自动审查真正放行 · 流式 idle 看门狗 · Stop 无重试取消条 |
 | **上一正式补丁**    | [v0.5.6](./v0.5.6.md)                   | `0.5.x` 补丁：会话权限 Auto · 分类器三档 · 中文壳文案 · Settings 自动展开工具 · GenericToolCard 拒绝卡 |
 | **上一预览终态**    | [v0.4.12](./v0.4.12.md)                 | `0.4.x` 收口：Mux 超顶丢帧不掐线 · 心跳 5 miss                          |
 | **上一正式线**      | [v0.3.11](./v0.3.11.md)                 | `MINOR=3`；npm 回退钉（`@0.3.11`）                                   |
@@ -38,11 +38,11 @@
 
 Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x` · `0.5.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**This release**: the `MINOR=5` formal line is at **v0.5.7** as the current package number (Desktop test build; npm `@latest` moves here once this version is published, and is still v0.5.6 until then). The `0.4.x` preview line closed at **v0.4.12**.
+**This release**: the `MINOR=5` formal line is at **v0.5.7** as the current package number (about to take over npm `@latest`; still v0.5.6 until published). The `0.4.x` preview line closed at **v0.4.12**.
 
 | Line                      | Version                                   | Notes                                                                                          |
 | ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Current (local build)** | [v0.5.7](./v0.5.7.md)                     | `0.5.x` patch: edit-and-resend messages · steer + attachments in the queue · created/changed/deleted file lanes · pinnable workspaces · Canvas callout/tone · auto-review really approves · streaming idle watchdog |
+| **Current (local build)** | [v0.5.7](./v0.5.7.md)                     | `0.5.x` patch: edit-and-resend · steer + queue attachments · blank draft stays on sidebar · created/changed/deleted lanes · pinnable workspaces · Canvas callout/tone · auto-review really approves · streaming idle watchdog · no cancelled-retry banner on Stop |
 | **Prior formal patch**    | [v0.5.6](./v0.5.6.md)                     | `0.5.x` patch: session permission Auto · classifier tiers · Chinese shell copy · Settings auto-expand tools · GenericToolCard denial |
 | **Prior preview close**   | [v0.4.12](./v0.4.12.md)                   | `0.4.x` close-out: Mux drop-not-terminate · 5-miss heartbeat                                   |
 | **Previous formal line**  | [v0.3.11](./v0.3.11.md)                   | `MINOR=3`; npm rollback pin (`@0.3.11`)                                                        |
