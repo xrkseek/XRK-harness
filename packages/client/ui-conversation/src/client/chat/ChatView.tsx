@@ -830,12 +830,27 @@ export function ChatView({
         void loadThrough(pending.seq).finally(() => { setJumpSettleTick(tick => tick + 1) })
         return
       }
+      // Repaged at this head and the window still stops short of the Turn, so
+      // the scan below can only match a newer row — landing on the oldest
+      // loaded one parks the reader under the paging button and reports
+      // success. Drop the spinner but keep the jump armed: a page that moves
+      // the head re-enters here and lands for real.
+      setBusyJumpTurn(current => (current === null ? current : null))
+      return
     }
+    let landed = false
     for (const row of local.querySelectorAll<HTMLElement>('[data-chat-turn]')) {
       const turn = Number(row.dataset.chatTurn)
       if (!Number.isSafeInteger(turn) || turn < pending.turn) continue
       landOnRowRef.current(local, el, row, turn)
+      landed = true
       break
+    }
+    // Same for a covered window with no row at or after the Turn: clearing here
+    // would retire the jump without ever moving the reader.
+    if (!landed) {
+      setBusyJumpTurn(current => (current === null ? current : null))
+      return
     }
     pendingJumpRef.current = null
     setBusyJumpTurn(null)
