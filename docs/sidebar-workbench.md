@@ -7,7 +7,7 @@
 | 轨道 | 用途 | 落点 |
 |------|------|------|
 | 流内 `details` | 会话 **Status**（子代理 · jobs · timeline · cost · 通道；与 `/status` 同源）· **改动审阅** · **Canvas**（工作区看板）· 任务 / 上下文 | `@xrkseek/client-ui-plan`（`ctx.changesReview` 由 ui-deliverables 提供；Canvas 经 Face `canvas.list`/`get`） |
-| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.20） |
+| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.22） |
 
 浮动文件/终端工作台由社区插件提供，不在首方壳内置。推荐在 **设置 → 插件** 从目录安装 `xrkh-better-sidebar`（卡片可见，点安装即可）。
 
@@ -16,7 +16,8 @@
 - Host 拥有 `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS（见 [community-plugins](./community-plugins.md) · [http-api](./http-api.md)）。
 - 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` 等），浮动层用 CSS 变量让位 Status 栏。
 - 概况栏开合与宽度按**会话**记住（`localStorage`），刷新后仍在；与 `xrkh-better-sidebar` 工作台状态互不影响。
-- 聊天 / Overview「改动」开文件：有 `ctx.betterSidebar` 时先 `openTab`（可带 path），再 Host `openPath`；未装社区侧栏时只走系统打开。
+- 聊天 / Overview「改动」开文件：有 `ctx.betterSidebar` 时先 `openTab({ type: 'editor', path })`，再 Host `openPath`；未装社区侧栏时只走系统打开。
+- `type: 'editor'` 必须落在**侧栏分栏**（`splits`），不得因 `activePane` 在底栏而撑开底部面板；Host 默认 `bottomPanelAutoTerminal: false`（见 `sidebar-prefs-store`）。
 - 社区插件若占用工作台，应提供 `ctx.betterSidebar`。
 
 ## 边界（首方）
@@ -36,7 +37,7 @@ The product shell splits the right side into two tracks:
 | Track | Role | Owner |
 |-------|------|--------|
 | In-flow `details` | Session **Status** (subagents · jobs · timeline · cost · channels; same as `/status`) · **Changes review** · **Canvas** (workspace boards) · todos / context | `@xrkseek/client-ui-plan` (`ctx.changesReview` from ui-deliverables; Canvas via Face `canvas.list`/`get`) |
-| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.20) |
+| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.22) |
 
 Floating file/terminal chrome is a community plugin, not first-party. Install **`xrkh-better-sidebar`** from **Settings → Plugins** (catalog card; click Install).
 
@@ -45,7 +46,8 @@ Floating file/terminal chrome is a community plugin, not first-party. Install **
 - Host owns `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS (see [community-plugins](./community-plugins.md) · [http-api](./http-api.md)).
 - The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, …); floating chrome offsets with those CSS variables.
 - Overview open bit and width are **per Session** (localStorage) and survive reload; independent of `xrkh-better-sidebar` workbench state.
-- Chat / Overview Changes open-file: when `ctx.betterSidebar` is present, call `openTab` (optional `path`) then Host `openPath`; without the community sidebar, open via the OS only.
+- Chat / Overview Changes open-file: when `ctx.betterSidebar` is present, call `openTab({ type: 'editor', path })` then Host `openPath`; without the community sidebar, open via the OS only.
+- `type: 'editor'` must land on the **side** split tree (`splits`), never expand the bottom panel because `activePane` is a bottom leaf; Host default `bottomPanelAutoTerminal: false` (see `sidebar-prefs-store`).
 - Community workbenches should provide `ctx.betterSidebar`.
 
 ## Boundaries (first-party)

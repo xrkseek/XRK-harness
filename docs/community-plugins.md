@@ -166,7 +166,7 @@ community client.js
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
-标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.20**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。
+标准侧栏包 **`xrkh-better-sidebar`**（`kind: client`，建议 **≥ 0.18.22**）注入 `lib/client.js`。`/sidebar/*` 由 Host `createSidebarPublicHandler` 挂载；插件 host 半包不占用该路径。
 
 概况栏（`details`）默认 **Status**（子代理图 · jobs · live `contextTimeline` · cost · channels），与 `/status` / Face `session.status` 同源。概况栏与侧栏工作台可同时开：壳发布 `LayoutInsets`（`--xrk-layout-inset-*`）。产品切分见 [sidebar-workbench](./sidebar-workbench.md)。
 
@@ -181,6 +181,8 @@ community client.js
 | Face 注入 `sidebarFace` | Host：`openExternal` · jobs · `listSubagentsLive` · rewind `forkSessionAt` | 子代理 / 后台任务 / 外开路径走此桥 |
 
 `subagents.live` 的 wire 形状为嵌套 `tool`：`{ text?; tool?: { name; args } }`（与插件 `LastActivity` / `SidebarSubagentLiveActivity` 一致）。Host 真源：`packages/server/host/src/sidebar-live-line.ts`。
+
+活跃判定走 `isChildSessionActive`（drain latch active **或** 外部代理 acp / app-server 忙），与 Overview 委派图**共用同一谓词**；只判 `drain.isActive` 会让 ACP / app-server 子代理恒显已完成。信号不变量见 [session-latch.md](./session-latch.md)。
 
 预览契约（先类型、后 UI）：`@xrkseek/protocol` 的 `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`；policy 边界 `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect`（见 [policy](./policy.md)）。**Office 状态仍走 `/office`**（`office.connect` 已门禁 mutation），不挂到 `/sidebar`。计划全文读 Face `plan` 投影；侧栏只消费摘要。
 
@@ -436,7 +438,7 @@ If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, the
 
 ## Sidebar plugin contract (Host owns; client UI only)
 
-Standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.20**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path.
+Standard sidebar package **`xrkh-better-sidebar`** (`kind: client`, prefer **≥ 0.18.22**) injects `lib/client.js`. `/sidebar/*` is mounted by Host `createSidebarPublicHandler`; a plugin host half does not occupy that path.
 
 The session **Status** column (`details`) defaults to the subagent graph · jobs · live `contextTimeline` · cost · channels (same source as `/status` / Face `session.status`). Status and the sidebar workbench may stay open together via `LayoutInsets` (`--xrk-layout-inset-*`). Product cut: [sidebar-workbench](./sidebar-workbench.md).
 
@@ -451,6 +453,8 @@ Product Host mounts same-origin `/sidebar/*`, then `attachSidebarPtyUpgrades` fo
 | Face inject `sidebarFace` | `openExternal` · jobs · `listSubagentsLive` · `forkSessionAt` | Subagents / jobs / reveal-path |
 
 `subagents.live` wire: `{ text?; tool?: { name; args } }`. Host: `packages/server/host/src/sidebar-live-line.ts`.
+
+Activity uses `isChildSessionActive` (drain latch active **or** external acp / app-server agent busy) — the **same predicate** as the Overview delegation board. A drain-only check pins every ACP / app-server child to completed. Signal invariants: [session-latch.md](./session-latch.md).
 
 Preview types: `@xrkseek/protocol` `BrowserEmbedProbe` · `SubagentPreviewSummary` · `PlanPreviewSummary` · `OfficePreviewStatus`; policy `host.open` · `sidebar.embed` · `sidebar.fs` · `office.connect` ([policy](./policy.md)). Office status stays on `/office`. Plan bodies come from Face `plan`; sidebar consumes summaries.
 

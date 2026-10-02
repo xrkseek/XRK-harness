@@ -261,7 +261,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `video-analyze` | `mode`（关 / openai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`；`XRK_VIDEO_ANALYZE` 可 CI 旁路；见 [video-analyze.md](./video-analyze.md) |
 | `curated-memory` | `enabled` · `phase2Llm` | **下次 agent 重建**后挂/卸 `memory` 工具与系统提示冻结段；`phase2Llm` 开 Phase2 LLM 巩固；`XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` 可 CI 旁路 |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **下次外部 subagent 回合**解析 spawn；对应 env 非空可 CI 旁路 |
-| `auto-review` | `classifierUrl`（token 走 Credentials） | **下次 classify**；`XRK_AUTO_REVIEW_CLASSIFIER_URL` 可 CI 旁路（Plugins → 高级） |
+| `auto-review` | `enabled` · `classifierUrl`（token 走 Credentials） | **下次工具调用 / classify**；三档 **启发式 · HTTP · 会话 LLM**；会话 `/permission auto` = **无沙箱 + 每调用评审**；`/auto-review` 与 HTTP 面板同源；`XRK_AUTO_REVIEW_CLASSIFIER_URL` 可 CI 旁路（Plugins → 高级）。Host `createAutoReviewToolPre`：`resolveDenyAction` 管评审员 **deny 裁决**（默认 ask→审批）；`onClassifierError: 'ask' \| 'deny'` 管 **技术失败**（默认 **ask**；`deny`=fail-closed `AUTO_REVIEW_DENIED`） |
 | `memory-embed` | `url` · `collection`（token 走 Credentials） | **下次 embedding.search**；`XRK_MEMORY_EMBED_URL` 可 CI 旁路（Plugins → 高级） |
 
 Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
@@ -278,7 +278,7 @@ Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials�
 | `XRK_MEMORY_EMBED_URL` | 外接向量库 HTTP（如 Qdrant）；非空即旁路 Settings「高级」；未设且无产品 URL 则用 embedded host |
 | `XRK_MEMORY_EMBED_TOKEN` | 向量库 API key（可选；亦可经 Settings → Plugins → 高级 / Credentials 落盘） |
 | `XRK_MEMORY_EMBED_COLLECTION` | 集合名（可选；亦可 Settings `memory-embed.collection`） |
-| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | 外接 auto-review classifier（POST JSON，回 `verdict` 或 `decision`）；非空即旁路 Settings「高级」；未设且无产品 URL 则用启发式 |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | 外接 auto-review **http** 档（POST JSON，回 `verdict` 或 `decision`）；非空即旁路 Settings「高级」；未设时 Host 可走 **会话 LLM**，再否则 **启发式** |
 | `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | classifier Bearer（可选；亦可经 Settings → Plugins → 高级 / Credentials 落盘） |
 | `XRK_GENUI_NPM_ALLOWLIST` | 逗号分隔 npm 包，合并进 GenUI component registry |
 | `XRK_TONGFLOW_PYTHON` | 用户 Python 解释器（`/tongflow/scan` · `kind:python` 节点） |
@@ -568,7 +568,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `video-analyze` | `mode` (off / openai) · `baseUrl` · `model` | **Live** on next agent rebuild; key via Credentials `XRK_VIDEO_ANALYZE_OPENAI_KEY`; `XRK_VIDEO_ANALYZE` may CI-bypass; see [video-analyze.md](./video-analyze.md) |
 | `curated-memory` | `enabled` · `phase2Llm` | **Live** on next agent rebuild (mount/unmount `memory` tool + frozen system prompt); `phase2Llm` enables Phase2 LLM consolidation; `XRK_CURATED_MEMORY` / `XRK_CURATED_MEMORY_PHASE2` may CI-bypass |
 | `external-agent` | `acpAgent` · `codexAppServer` · `claudeCode` | **Live** on next external subagent turn; matching env non-empty may CI-bypass |
-| `auto-review` | `classifierUrl` (token via Credentials) | **Live** on next classify; `XRK_AUTO_REVIEW_CLASSIFIER_URL` may CI-bypass (Plugins → Advanced) |
+| `auto-review` | `enabled` · `classifierUrl` (token via Credentials) | **Live** on next tool call / classify; tiers **heuristic · HTTP · session LLM**; session `/permission auto` = **no sandbox + per-call review**; `/auto-review` + HTTP panel share enable; `XRK_AUTO_REVIEW_CLASSIFIER_URL` may CI-bypass (Plugins → Advanced). Host `createAutoReviewToolPre`: `resolveDenyAction` covers reviewer **deny verdicts** (default ask→approval); `onClassifierError: 'ask' \| 'deny'` covers **technical failures** (default **ask**; `deny` = fail-closed `AUTO_REVIEW_DENIED`) |
 | `memory-embed` | `url` · `collection` (token via Credentials) | **Live** on next embedding.search; `XRK_MEMORY_EMBED_URL` may CI-bypass (Plugins → Advanced) |
 
 Tavily / Brave keys: Plugins → Web search card or Settings → Credentials (same slots `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`).
@@ -585,7 +585,7 @@ For [community-plugins.md](./community-plugins.md) clients; the Host core does n
 | `XRK_MEMORY_EMBED_URL` | External vector HTTP (e.g. Qdrant); non-empty bypasses Settings Advanced; embedded host when unset and no product URL |
 | `XRK_MEMORY_EMBED_TOKEN` | Vector API key (optional; also via Settings → Plugins → Advanced / Credentials) |
 | `XRK_MEMORY_EMBED_COLLECTION` | Collection name (optional; also Settings `memory-embed.collection`) |
-| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | External auto-review classifier (POST JSON, `verdict` or `decision`); non-empty bypasses Settings Advanced; heuristic when unset and no product URL |
+| `XRK_AUTO_REVIEW_CLASSIFIER_URL` | External auto-review **http** tier (POST JSON, `verdict` or `decision`); non-empty bypasses Settings Advanced; else Host may use **session LLM**, else **heuristic** |
 | `XRK_AUTO_REVIEW_CLASSIFIER_TOKEN` | Classifier Bearer (optional; also via Settings → Plugins → Advanced / Credentials) |
 | `XRK_GENUI_NPM_ALLOWLIST` | Comma-separated npm packages merged into GenUI registry |
 | `XRK_TONGFLOW_PYTHON` | User Python interpreter (`/tongflow/scan` · `kind:python` nodes) |

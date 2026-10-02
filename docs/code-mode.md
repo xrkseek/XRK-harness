@@ -31,6 +31,7 @@ return "ok";
 
 - 无 bridge：Worker-thread 隔离（或 SSH 远端 Node snippet）
 - 有 bridge：程序与 Host 同进程；隔离边界在各工具自身（sandbox / policy）
+- **Auto-review / PTC**：外层 `run_code` 运输层不评审；程序内每次 `await tools.*` 经同一 pipeline 评审一次（reviewer mode `ptc-inner`，对齐 DSH）
 - 按次超时：默认 **120s**，上限 **600s**；模型可传 `timeoutMs`（正数，超出上限被夹紧；`0` 不是禁用）
 - 输出硬顶：合并 stdout/stderr/返回值 UTF-8 默认 **64MiB**（`maxOutputBytes`）
 - Worker 堆硬顶（无 bridge）：`resourceLimits.maxOldGenerationSizeMb` 默认 **512**
