@@ -48,7 +48,7 @@ describe('buildRenderApp', () => {
     await b.runtime.sessions.setCurrent(undefined)
     expect(document.title).toBe('Product')
     // A session without a durable title keeps the product title.
-    await b.runtime.sessions.add({ id: 's2' })
+    await b.runtime.sessions.add({ id: 's2', summary: { title: undefined } })
     expect(document.title).toBe('Product')
   })
 
