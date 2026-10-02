@@ -45,8 +45,14 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: var(--dsw-alias-link);
+  /* Brand chip: light theme uses dark brand fill + white glyph. Dark theme
+     flips brand-primary to a near-white text/link color — keep that as the
+     fill, but force a dark glyph so the `#` icon stays readable. */
+  background: var(--dsw-alias-brand-primary);
   color: var(--dsw-static-neutral-00);
+}
+:global(body[data-ds-dark-theme]) .tile {
+  color: var(--dsw-static-neutral-bluish-1000);
 }
 .titles {
   display: flex;
