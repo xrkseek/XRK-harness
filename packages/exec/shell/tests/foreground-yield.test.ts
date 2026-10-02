@@ -20,11 +20,12 @@ const FAST = `${NODE_CMD} -e 'console.log("hi")'`;
 // the pwsh -Command wrapper, but the shell's own exit status always does.
 const FAIL = "exit 3";
 
-function makeShell(backend: "pwsh" | "cmd" = "pwsh") {
+/** Omitted backend follows the platform default (pwsh on win32, bash on POSIX). */
+function makeShell(backend?: "pwsh" | "cmd") {
   return createLocalShell({
     subprocess: createLocalSubprocess(),
     maxConcurrentJobs: 8,
-    ...(backend === "cmd" ? { backend: "cmd" as const } : {}),
+    ...(backend ? { backend } : {}),
   });
 }
 
@@ -63,7 +64,8 @@ describe("bash foreground yield semantics", () => {
 
   it("keeps the stderr error head when over-budget output is truncated", async () => {
     // A real script file sidesteps cmd/pwsh quote-stripping so the error text
-    // is deterministic. backend "cmd" keeps the invoke simple on win32.
+    // is deterministic. backend "cmd" keeps the invoke simple on win32, but
+    // `cmd.exe` does not exist elsewhere, so POSIX takes the default shell.
     const dir = mkdtempSync(join(tmpdir(), "xrk-shell-budget-"));
     const scriptPath = join(dir, "noisy.js");
     writeFileSync(
@@ -74,7 +76,7 @@ describe("bash foreground yield semantics", () => {
         "process.exit(1);",
       ].join("\n"),
     );
-    const shell = makeShell("cmd");
+    const shell = makeShell(process.platform === "win32" ? "cmd" : undefined);
     try {
       const bash = bashToolWithBudget(shell, 5_000, 180);
       // No quotes around the path: cmd.exe /c quote-replay mangles a quoted
