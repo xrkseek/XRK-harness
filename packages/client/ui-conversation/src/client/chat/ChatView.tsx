@@ -211,25 +211,53 @@ function turnStatusPhrase(
 const TURN_STATUS_CLOCK_AFTER_MS = 15_000
 
 /**
+ * Wall-clock start of each open turn's waiting episode, keyed by
+ * `sessionId\0turnStartTime`. Lives outside React so switching sessions
+ * (unmount) does not reset the clock — remount resumes from the same start.
+ * Cleared when the turn settles (`startTime` leaves) or a newer open turn
+ * replaces it for that session.
+ */
+const waitingEpisodeStartedAt = new Map<string, number>()
+
+function waitingEpisodeKey(sessionId: string, startTime: number): string {
+  return `${sessionId}\0${startTime}`
+}
+
+/** Drop stale episode starts for a session (settled turn or a newer open turn). */
+function pruneWaitingEpisodes(sessionId: string, keep: string | null): void {
+  const prefix = `${sessionId}\0`
+  for (const key of waitingEpisodeStartedAt.keys()) {
+    if (key.startsWith(prefix) && key !== keep) waitingEpisodeStartedAt.delete(key)
+  }
+}
+
+/** Test seam: wipe every parked waiting-episode clock. */
+export function resetWaitingEpisodeClocksForTests(): void {
+  waitingEpisodeStartedAt.clear()
+}
+
+/**
  * Flow-tail waiting label (`turnStatus.*`). Yields once tools or a streaming
  * partial are the active surface; step gaps and steer waits keep it visible.
  * The phrase stays stable for the open turn; the clock measures this waiting
- * episode (visible → now), not wall time since `turn/start` — whole-turn
- * duration belongs on the settled Ran-for footer.
+ * episode from its first appearance (not wall time since `turn/start` —
+ * whole-turn duration belongs on the settled Ran-for footer). The episode
+ * start is parked in {@link waitingEpisodeStartedAt} so session switches and
+ * mid-turn tool/Think gaps keep counting in the background.
  *
- * Permanently mounted: every token / step boundary flips `visible`, and
- * remounting on each flip reset the episode clock, swapped the phrase and
- * re-announced through `aria-live`. A non-waiting episode parks the node with
- * `hidden` (no layout slot, so the column gap is unchanged), and the per-second
- * clock text is written straight into the DOM instead of re-rendering the view.
- * The episode also restarts when the locale seat changes, so the digits are
- * always formatted by the locale actually on screen.
+ * Permanently mounted: every token / step boundary flips `visible`. A
+ * non-waiting episode parks the node with `hidden` (no layout slot), and the
+ * per-second clock text is written straight into the DOM instead of
+ * re-rendering the view. Locale seat changes reformat the digits already on
+ * screen without restarting the episode.
  */
-function TurnStatus({ visible, startTime, t }: {
+function TurnStatus({ visible, startTime, sessionId, t }: {
   /** Whether the flow tail is currently in a waiting vacuum. */
   visible: boolean
-  /** Open turn's `turn/start` time — seeds the waiting phrase only. */
+  /** Open turn's `turn/start` time — seeds the waiting phrase and episode key. */
   startTime: number | null
+  /** Session that owns this flow — scopes the parked episode clock. */
+  sessionId: string
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
 }) {
@@ -248,14 +276,19 @@ function TurnStatus({ visible, startTime, t }: {
     setClockVisible(false)
   }
   useEffect(() => {
-    if (!visible) {
+    const key = startTime === null ? null : waitingEpisodeKey(sessionId, startTime)
+    pruneWaitingEpisodes(sessionId, key)
+    if (!visible || key === null) {
       hideClock()
       return
     }
-    const startedAt = Date.now()
-    elapsedRef.current = 0
+    let startedAt = waitingEpisodeStartedAt.get(key)
+    if (startedAt === undefined) {
+      startedAt = Date.now()
+      waitingEpisodeStartedAt.set(key, startedAt)
+    }
     const tick = (): void => {
-      const elapsed = Math.max(0, Date.now() - startedAt)
+      const elapsed = Math.max(0, Date.now() - startedAt!)
       elapsedRef.current = elapsed
       if (elapsed < TURN_STATUS_CLOCK_AFTER_MS) {
         hideClock()
@@ -272,7 +305,7 @@ function TurnStatus({ visible, startTime, t }: {
     tick()
     const id = setInterval(tick, 1000)
     return () => { clearInterval(id) }
-  }, [visible, t])
+  }, [visible, startTime, sessionId, t])
   // Fill the node in the same frame it mounts, otherwise the first second shows
   // an empty clock.
   useLayoutEffect(() => {
@@ -1000,7 +1033,7 @@ export function ChatView({
               />
             )
           })}
-          <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} t={t} />
+          <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} sessionId={sessionId} t={t} />
         </div>
         {!atBottom && (
           <div className={css.toBottomSlot}>

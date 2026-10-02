@@ -22,7 +22,7 @@ import type {
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { createChatStore } from '../src/client/stores.ts'
-import { ChatView } from '../src/client/chat/ChatView.tsx'
+import { ChatView, resetWaitingEpisodeClocksForTests } from '../src/client/chat/ChatView.tsx'
 import { zh } from '../src/client/locales.ts'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { CommandNodeView, ManualCompactionNodeView } from '../src/client/chat/CommandNodeView.tsx'
@@ -37,11 +37,13 @@ import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  resetWaitingEpisodeClocksForTests()
 })
 // Keyless create() persists under the bare declared key; clear between cases
 // so one harness's selection cannot rehydrate into the next.
 beforeEach(() => {
   globalThis.localStorage?.clear?.()
+  resetWaitingEpisodeClocksForTests()
 })
 
 function escapeRegExp(value: string): string {
@@ -1031,8 +1033,10 @@ describe('ChatView', () => {
         nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
       })
       const view = render(<h.ChatView {...h.props} />)
-      // Phrase stays turn-stable; the clock measures this wait episode, not
-      // wall time since turn/start (125s into the turn still starts under 15s).
+      // Phrase stays turn-stable; the clock measures the waiting episode from
+      // first show (not wall time since turn/start — 125s into the turn still
+      // starts under 15s). Session switches park that episode start so remount
+      // resumes the same clock.
       const flowStatus = () => view.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
       const status = flowStatus()
       expect(status).toBeDefined()
@@ -1052,6 +1056,33 @@ describe('ChatView', () => {
       expect(flowStatus()?.textContent).toBe(phrase)
       act(() => { vi.advanceTimersByTime(15_000) })
       expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}15秒$`))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resumes the waiting clock after a session switch unmount', () => {
+    vi.useFakeTimers()
+    try {
+      const startTime = Date.now()
+      const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
+      const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
+      const init = {
+        nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
+      }
+      const first = makeHarness(init)
+      const view = render(<first.ChatView {...first.props} />)
+      const flowStatus = () => view.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      act(() => { vi.advanceTimersByTime(20_000) })
+      expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}20秒$`))
+      // Leave the session (ChatView unmounts) while the turn keeps waiting.
+      view.unmount()
+      act(() => { vi.advanceTimersByTime(10_000) })
+      // Come back: same open turn — clock continues (20s + 10s), does not restart.
+      const second = makeHarness(init)
+      const again = render(<second.ChatView {...second.props} />)
+      const resumed = again.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      expect(resumed?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}30秒$`))
     } finally {
       vi.useRealTimers()
     }
