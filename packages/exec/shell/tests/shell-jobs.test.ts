@@ -354,4 +354,39 @@ describe("shell background jobs", () => {
     const again = await kill.execute({ job_id: started.id });
     expect(again.content).toContain("already finished");
   });
+
+  it("keeps at most eight settled jobs for header / job_list inspection", async () => {
+    const shell = createLocalShell({
+      subprocess: createLocalSubprocess(),
+      maxConcurrentJobs: 20,
+    });
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      let resolveDone!: (v: { status: "completed" | "killed" | "failed" }) => void;
+      const done = new Promise<{ status: "completed" | "killed" | "failed" }>(
+        (resolve) => {
+          resolveDone = resolve;
+        },
+      );
+      const started = shell.startManagedJob({
+        kind: "pty-send",
+        label: `job-${i}`,
+        run: () => ({
+          cancel() {},
+          done,
+          readOutput: () => "",
+        }),
+      });
+      ids.push(started.id);
+      resolveDone!({ status: "completed" });
+      await shell.waitJob(started.id, 1_000);
+    }
+    const listed = shell.listJobsNow();
+    expect(listed).toHaveLength(8);
+    // Managed "completed" outcomes are stored as shell `exited`.
+    expect(listed.every((job) => job.status === "exited")).toBe(true);
+    // Oldest four settled entries are dropped; the newest eight remain.
+    expect(listed.map((job) => job.id)).toEqual(ids.slice(-8));
+    await shell.dispose();
+  });
 });

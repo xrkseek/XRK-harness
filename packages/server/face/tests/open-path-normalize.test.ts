@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  installSpawnDetachedForTests,
   isAbsoluteUrl,
   normalizeOpenPath,
+  revealNativePath,
   windowsExplorerPath,
 } from "../src/host-open-path.js";
 
@@ -43,5 +48,51 @@ describe("isAbsoluteUrl", () => {
     expect(isAbsoluteUrl("vscode://file/x")).toBe(true);
     expect(isAbsoluteUrl("C:\\Users\\x\\a.txt")).toBe(false);
     expect(isAbsoluteUrl("/home/u/a.txt")).toBe(false);
+  });
+});
+
+describe("revealNativePath win32", () => {
+  afterEach(() => {
+    installSpawnDetachedForTests(undefined);
+  });
+
+  it("reveals files via cmd start + explorer /select (ShellExecute, visible)", async () => {
+    if (process.platform !== "win32") return;
+    const dir = await mkdtemp(join(tmpdir(), "xrk-reveal-"));
+    const file = join(dir, "a.txt");
+    await writeFile(file, "x");
+    const calls: { command: string; args: readonly string[]; hide?: boolean }[] =
+      [];
+    installSpawnDetachedForTests(async (command, args, options) => {
+      calls.push({
+        command,
+        args,
+        hide: options?.windowsHide,
+      });
+    });
+    await revealNativePath(file.replace(/\\/g, "/"), "win32");
+    expect(calls).toEqual([
+      {
+        command: "cmd.exe",
+        args: ["/c", "start", "", "explorer.exe", `/select,${file}`],
+        hide: false,
+      },
+    ]);
+  });
+
+  it("opens directories via ShellExecute start (not /select)", async () => {
+    if (process.platform !== "win32") return;
+    const dir = await mkdtemp(join(tmpdir(), "xrk-reveal-dir-"));
+    const calls: { command: string; args: readonly string[] }[] = [];
+    installSpawnDetachedForTests(async (command, args) => {
+      calls.push({ command, args });
+    });
+    await revealNativePath(dir, "win32");
+    expect(calls).toEqual([
+      {
+        command: "cmd.exe",
+        args: ["/c", "start", "", windowsExplorerPath(dir)],
+      },
+    ]);
   });
 });

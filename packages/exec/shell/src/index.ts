@@ -286,6 +286,8 @@ function nextKindJobId(counts: Map<string, number>, kind: string): string {
 }
 
 const DEFAULT_MAX_CONCURRENT_JOBS = 10;
+/** Finished jobs kept for job_list / header inspection after live work settles. */
+const DEFAULT_MAX_SETTLED_JOBS = 8;
 
 function resolveSpawnCwd(
   cwd: string | undefined,
@@ -357,7 +359,21 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     }
   }
 
+  function pruneSettled(): void {
+    const settled = [...jobs.entries()]
+      .filter(([, job]) => isTerminalStatus(job.info.status))
+      .sort((left, right) =>
+        (left[1].info.finishedAt ?? left[1].info.startedAt)
+        - (right[1].info.finishedAt ?? right[1].info.startedAt));
+    while (settled.length > DEFAULT_MAX_SETTLED_JOBS) {
+      const oldest = settled.shift();
+      if (oldest === undefined) break;
+      jobs.delete(oldest[0]);
+    }
+  }
+
   function pruneIfNeeded(): void {
+    pruneSettled();
     if (jobs.size <= maxJobs) return;
     const finished = [...jobs.entries()].filter(
       ([, j]) => isTerminalStatus(j.info.status),
@@ -391,6 +407,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     const reported = job.waiters > 0 || next.reported;
     job.info = { ...next, reported };
     job.markSettled();
+    pruneSettled();
     notifyChanged();
   }
 

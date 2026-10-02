@@ -1,7 +1,12 @@
 /**
  * Provider request retry policy (DSH llm-retry normal mode subset).
  */
-import { isLlmError, type LlmError, type LlmFailure } from "./failure.js";
+import {
+  describeUnknownError,
+  isLlmError,
+  type LlmError,
+  type LlmFailure,
+} from "./failure.js";
 
 export type RetryPolicyMode = "normal" | "always";
 
@@ -79,13 +84,12 @@ function errorCode(err: unknown): string | undefined {
 
 export function failureFromUnknown(err: unknown): LlmFailure {
   if (isLlmError(err)) return (err as LlmError).toFailure();
-  if (err instanceof Error) {
-    return {
-      message: err.message,
-      code: errorCode(err) ?? "UNKNOWN",
-    };
-  }
-  return { message: String(err), code: errorCode(err) ?? "UNKNOWN" };
+  // Prefer a real message over `String(plainObject)` → `[object Object]`,
+  // which otherwise lands verbatim in the llm/retry disclosure.
+  return {
+    message: describeUnknownError(err),
+    code: errorCode(err) ?? "UNKNOWN",
+  };
 }
 
 export function isRetryableFailure(

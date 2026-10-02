@@ -148,6 +148,21 @@ describe("deterministic failures are not retried", () => {
 });
 
 describe("retry policy", () => {
+  it("stringifies plain objects instead of [object Object]", () => {
+    expect(failureFromUnknown({ message: "provider blew up", code: "TRANSPORT" })).toMatchObject({
+      message: "provider blew up",
+      code: "TRANSPORT",
+    })
+    expect(failureFromUnknown({ reason: "no sockets" }).message).toBe(
+      JSON.stringify({ reason: "no sockets" }),
+    )
+    const wrapped = new Error("[object Object]")
+    Object.defineProperty(wrapped, "cause", { value: { detail: "upstream reset" } })
+    expect(failureFromUnknown(wrapped).message).toBe(
+      JSON.stringify({ detail: "upstream reset" }),
+    )
+  })
+
   it("retries EMPTY_RESPONSE and RATE_LIMIT", () => {
     expect(
       isRetryableFailure(failureFromUnknown(new EmptyResponseError())),

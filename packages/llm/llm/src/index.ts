@@ -369,6 +369,7 @@ export {
   QUOTA_EXCEEDED_CODE,
   LlmError,
   classifyCaughtLlmError,
+  describeUnknownError,
   httpErrorCode,
   isLlmError,
   isQuotaExceededError,

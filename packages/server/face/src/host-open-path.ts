@@ -179,8 +179,17 @@ export async function revealNativePath(
     } catch {
       // Caller usually validated existence; fall through to /select.
     }
-    // `/select,<path>` — no space after the comma (Explorer quirk).
-    await spawnDetached("explorer.exe", [`/select,${path}`]);
+    // Files: bare `explorer.exe /select,…` CreateProcess is the same class of
+    // no-op as opening a directory with explorer when the desktop shell is
+    // already Explorer (child exits 0, no folder window). Route through
+    // `cmd /c start` (ShellExecute) like openNativePath; windowsHide must be
+    // false or the folder window stays unmapped. `/select,<path>` stays one
+    // argv token — no space after the comma (Explorer quirk).
+    await spawnDetached(
+      "cmd.exe",
+      ["/c", "start", "", "explorer.exe", `/select,${path}`],
+      { windowsHide: false },
+    );
     return;
   }
   const path = normalizeOpenPath(target);

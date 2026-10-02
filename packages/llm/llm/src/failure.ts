@@ -129,6 +129,45 @@ export function throwHttpLlmError(
   );
 }
 
+/**
+ * Human-readable text for an unknown throw. Plain `String(err)` collapses
+ * plain objects to `[object Object]`, which then shows up in the retry
+ * disclosure as `anthropic: [object Object]`. Prefer Error.message, then
+ * `cause`, then JSON, then a stable fallback — never leave the UI with that
+ * opaque token.
+ */
+export function describeUnknownError(err: unknown): string {
+  if (typeof err === "string") {
+    const trimmed = err.trim();
+    return trimmed === "" || trimmed === "[object Object]"
+      ? "unknown error"
+      : trimmed;
+  }
+  if (err instanceof Error) {
+    const message = err.message.trim();
+    if (message !== "" && message !== "[object Object]") return message;
+    if (err.cause !== undefined) {
+      const cause = describeUnknownError(err.cause);
+      if (cause !== "unknown error") return cause;
+    }
+    return err.name.trim() || "Error";
+  }
+  if (err && typeof err === "object") {
+    const record = err as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim() !== "") {
+      return record.message.trim();
+    }
+    try {
+      const json = JSON.stringify(err);
+      if (json !== undefined && json !== "{}" && json !== "null") return json;
+    } catch {
+      /* circular / BigInt — fall through */
+    }
+  }
+  const fallback = String(err);
+  return fallback === "[object Object]" ? "unknown error" : fallback;
+}
+
 /** Classify a caught transport / abort error into LlmError when possible. */
 export function classifyCaughtLlmError(err: unknown, label: string): never {
   if (err instanceof LlmError) throw err;
@@ -138,7 +177,7 @@ export function classifyCaughtLlmError(err: unknown, label: string): never {
   if (err instanceof Error && err.name === "TimeoutError") {
     throw new LlmError(`${label}: timeout`, "TIMEOUT", { cause: err });
   }
-  const message = err instanceof Error ? err.message : String(err);
+  const message = describeUnknownError(err);
   if (/\btimeout\b/i.test(message)) {
     throw new LlmError(`${label}: ${message}`, "TIMEOUT", { cause: err });
   }
