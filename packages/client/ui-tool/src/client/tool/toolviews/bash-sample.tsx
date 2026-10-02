@@ -9,8 +9,8 @@
 // ToolRow's unified interaction: collapsed by default, the whole summary row
 // is the toggle (click / Enter / Space, icon→chevron hover preview; the
 // summary stays inline while open),
-// and the expanded card max-height-scrolls inside its own surface with the
-// full output (maxLines Infinity — no middle collapse). An error row's
+// and the expanded card scrolls only its OUTPUT surface (banner is not a
+// second scrollport; maxLines Infinity — no middle collapse). An error row's
 // collapsed summary is the failure's first line in the error color.
 
 import { useState, type KeyboardEvent } from 'react'

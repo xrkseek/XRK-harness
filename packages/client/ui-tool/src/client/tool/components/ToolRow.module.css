@@ -341,13 +341,13 @@
   --dsl-code-block-content-font: var(--dsw-font-markdown-code-block-small);
 }
 
-/* The terminal card scrolls its OUTPUT inside its own surface (same l1
-   hairline as the IN/OUT card): the banner stays pinned and the scrollbar
-   never rides over it. 224px = the 260px card cap minus the ~36px banner. */
+/* The terminal card scrolls only its OUTPUT (banner is not a scrollport):
+   one scrollbar, wheel works over the whole output surface. Taller than the
+   old 224px cap so long streams need less scrubbing. */
 .terminalBody {
   --dsl-terminal-font: var(--dsw-font-markdown-code-block-small);
   --dsl-terminal-line-height: 18px;
-  --dsl-terminal-output-max-height: 224px;
+  --dsl-terminal-output-max-height: min(50vh, 480px);
   border: 1px solid var(--dsw-alias-border-l1);
 }
 

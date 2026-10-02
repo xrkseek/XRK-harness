@@ -9,13 +9,11 @@
 }
 
 /* Expanded terminal card, matching ToolRow's terminalBody: 4px indent, l1
-   hairline, and the max-height scroll on the card's own OUTPUT (banner stays
-   pinned; 224px = the 260px card cap minus the ~36px banner); the margin
-   replaces the primitive's standalone vertical margin with the flow's. */
+   hairline, single OUTPUT scrollport (banner is not a second scroller). */
 .terminal {
   --dsl-terminal-font: var(--dsw-font-markdown-code-block-small);
   --dsl-terminal-line-height: 18px;
-  --dsl-terminal-output-max-height: 224px;
+  --dsl-terminal-output-max-height: min(50vh, 480px);
   margin: 4px 0 4px 4px;
   border: 1px solid var(--dsw-alias-border-l1);
 }
