@@ -35,6 +35,11 @@ export type DurablePromptResult =
       readonly message: string;
     };
 
+/** Image numbering base for this message: count of images already admitted in the session. */
+export type DurablePromptOptions = {
+  readonly imageStartIndex?: number;
+};
+
 /** True when content has a non-text part or non-whitespace text (attachment-only OK). */
 export function hasPromptContent(parts: readonly PromptWirePart[]): boolean {
   return parts.some(
@@ -68,6 +73,7 @@ function mapAttachmentError(err: AttachmentError): DurablePromptResult {
 export async function durablePromptContent(
   parts: readonly PromptWirePart[],
   attachments: AttachmentStore,
+  options: DurablePromptOptions = {},
 ): Promise<DurablePromptResult> {
   if (parts.length === 0) {
     return { ok: false, code: "invalid-payload", message: "content required" };
@@ -197,14 +203,49 @@ export async function durablePromptContent(
       continue;
     }
     if (p.kind === "image") {
-      blocks.push({ type: "image", attachment: imageRefs[imageIndex++]! });
+      const ref = imageRefs[imageIndex++]!;
+      const imageNo = (options.imageStartIndex ?? 0) + imageIndex;
+      blocks.push({
+        type: "text",
+        text: `[图${imageNo} ${ref.attachmentId}（${ref.width}×${ref.height} ${ref.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${ref.attachmentId} 读取]`,
+      });
+      blocks.push({ type: "image", attachment: ref });
       continue;
     }
-    blocks.push({ type: "file", attachment: fileRefs[fileIndex++]! });
+    const ref = fileRefs[fileIndex++]!;
+    blocks.push({
+      type: "text",
+      text: `[文件附件 ${ref.name}（${ref.attachmentId}）。需内容时用 read_file 按 id 读取]`,
+    });
+    blocks.push({ type: "file", attachment: ref });
   }
 
   if (blocks.length === 0) {
     return { ok: false, code: "invalid-payload", message: "empty content" };
   }
   return { ok: true, content: blocks };
+}
+
+/**
+ * Session-wide image numbering base for the next admit:
+ * count of durable image blocks already present in user/prompt events.
+ * Stable across restarts (derived from the event log, not runtime memory).
+ */
+export function sessionImageStartIndex(
+  events: readonly { type: string; content?: unknown }[],
+): number {
+  let count = 0;
+  for (const ev of events) {
+    if (ev.type !== "user/message" && ev.type !== "prompt/admitted") continue;
+    const content = ev.content;
+    if (typeof content !== "object" || content === null) continue;
+    const blocks = content as readonly { type?: string; attachment?: { attachmentId?: string } }[];
+    if (!Array.isArray(blocks)) continue;
+    for (const block of blocks) {
+      if (block?.type === "image" && typeof block.attachment?.attachmentId === "string") {
+        count += 1;
+      }
+    }
+  }
+  return count;
 }

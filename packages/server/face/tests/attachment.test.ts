@@ -287,4 +287,52 @@ describe("Face session.attachment / image prompt", () => {
     expect(att.result.ok).toBe(false);
     if (!att.result.ok) expect(att.result.error.code).toBe("session-not-found");
   });
+
+  it("numbers images session-wide so later messages continue 图N", async () => {
+    const { runtime, store } = await face({
+      modalities: ["text", "image"],
+      visionRoute: true,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const captionOf = (content: unknown): string =>
+      (Array.isArray(content) ? content : [])
+        .filter(
+          (b): b is { type: string; text: string } =>
+            typeof b === "object" && b !== null && (b as { type?: string }).type === "text",
+        )
+        .map((b) => b.text)
+        .join("\n");
+
+    // First message: one image → 图1.
+    const first = await dispatchFaceMethod(runtime, "session.prompt", "r1", {
+      sessionId,
+      mode: "queue",
+      content: [
+        { type: "text", text: "first" },
+        { type: "image", mediaType: "image/png", data: PNG_B64 },
+      ],
+    });
+    expect(first.result.ok).toBe(true);
+    const firstPending = listPendingAdmits(store.get(sessionId).events, sessionId)[0]!;
+    expect(captionOf(firstPending.content)).toMatch(/图1 /);
+
+    // Second message: two images → 图2, 图3 (session-wide, not restarted).
+    const second = await dispatchFaceMethod(runtime, "session.prompt", "r2", {
+      sessionId,
+      mode: "queue",
+      content: [
+        { type: "image", mediaType: "image/png", data: PNG_B64 },
+        { type: "image", mediaType: "image/png", data: PNG_B64 },
+      ],
+    });
+    expect(second.result.ok).toBe(true);
+    const secondPending = listPendingAdmits(store.get(sessionId).events, sessionId)[1]!;
+    const caption = captionOf(secondPending.content);
+    expect(caption).toMatch(/图2 /);
+    expect(caption).toMatch(/图3 /);
+    expect(caption).not.toMatch(/图1 /);
+  });
 });

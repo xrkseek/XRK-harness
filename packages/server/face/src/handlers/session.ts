@@ -25,6 +25,7 @@ import { parseSearchQuery, searchSessions } from "../session-search.js";
 import {
   durablePromptContent,
   hasPromptContent,
+  sessionImageStartIndex,
   type PromptWirePart,
 } from "../durable-prompt.js";
 import { asRecord, type FaceHandler } from "./types.js";
@@ -457,7 +458,12 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
 
   let admitContent;
   if (hasAttachment) {
-    const durable = await durablePromptContent(parts, runtime.attachments!);
+    const startIndex = sessionImageStartIndex(
+      readSessionEvents(runtime.store, sessionId),
+    );
+    const durable = await durablePromptContent(parts, runtime.attachments!, {
+      imageStartIndex: startIndex,
+    });
     if (!durable.ok) {
       return {
         ok: false,
@@ -1001,9 +1007,13 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
             },
           };
         }
+        const startIndex = sessionImageStartIndex(
+          readSessionEvents(runtime.store, sessionId),
+        );
         const durable = await durablePromptContent(
           parts as PromptWirePart[],
           runtime.attachments,
+          { imageStartIndex: startIndex },
         );
         if (!durable.ok) {
           return {

@@ -133,7 +133,7 @@ function decodeBase64(data: string): Uint8Array {
 }
 
 /** Validate one prompt as a batch before publishing any durable image object. */
-async function durablePromptContent(ctx: Context, content: readonly PromptContentPart[]): Promise<ContentBlock[]> {
+async function durablePromptContent(ctx: Context, content: readonly PromptContentPart[], options: { readonly imageStartIndex?: number } = {}): Promise<ContentBlock[]> {
   if (content.every(part => part.type === 'text')) {
     return content.map(part => ({ type: 'text', text: part.text }))
   }
@@ -156,9 +156,38 @@ async function durablePromptContent(ctx: Context, content: readonly PromptConten
     const attachment = refs[imageIndex++]
     /* v8 ignore next -- each prepared image supplied exactly one saveImages input and therefore one ordered ref. */
     if (attachment === undefined) throw new Error('attachment batch result did not preserve input cardinality')
+    const imageNo = (options.imageStartIndex ?? 0) + imageIndex
+    blocks.push({
+      type: 'text',
+      text: `[图${imageNo} ${attachment.attachmentId}（${attachment.width}×${attachment.height} ${attachment.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${attachment.attachmentId} 读取]`,
+    })
     blocks.push({ type: 'image', attachment })
   }
   return blocks
+}
+
+/** Count durable image blocks in one event content carrier. */
+function countImagesInBlocks(blocks: unknown): number {
+  if (!Array.isArray(blocks)) return 0
+  let count = 0
+  for (const block of blocks) {
+    if (typeof block !== 'object' || block === null || Array.isArray(block)) continue
+    const b = block as { type?: unknown; attachment?: unknown }
+    if (b.type === 'image' && typeof b.attachment === 'object' && b.attachment !== null) count += 1
+  }
+  return count
+}
+
+/** Session-wide image numbering base: count of durable image blocks in user/prompt events. */
+function countImagesInEvents(events: readonly SessionEvent[]): number {
+  let count = 0
+  for (const event of events) {
+    if (event.type !== 'user/message' && event.type !== 'prompt/admitted') continue
+    const data = event.data as { content?: unknown; message?: { content?: unknown } }
+    count += countImagesInBlocks(data.content)
+    if (data.message !== undefined) count += countImagesInBlocks(data.message.content)
+  }
+  return count
 }
 
 /** Search durable content for an image reference, including nested tool results. */
@@ -2454,7 +2483,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 })
               }
             }
-            const durable = await durablePromptContent(ctx, content)
+            const durable = await durablePromptContent(ctx, content, {
+              imageStartIndex: countImagesInEvents(agent.session.events),
+            })
             const message: UserMessage = createUserMessage({ content: durable, source })
             if (mode === 'steer') agent.steer(message)
             else agent.followup(message)
