@@ -163,6 +163,9 @@ function emptyWorkspaces() {
 
 function makeHarness(init?: Partial<ConversationSnapshot>) {
   const { set, source } = makeSource(init)
+  // Projection values ride outside the snapshot; the rail's host outline is
+  // injected here so a jump can target a Turn the loaded window never held.
+  let turnOutline: unknown
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
   const loadOlder = vi.fn()
@@ -282,7 +285,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     useSessions: emptySessions(),
     useWorkspaces: emptyWorkspaces(),
     useConnectionState: bindSnapshotSelector(createSnapshotStore(undefined)),
-    useProjection: (() => undefined),
+    useProjection: (() => turnOutline),
     useInput: (() => { throw new Error('unused') }),
     inputActions: {
       setDraft: () => {},
@@ -315,6 +318,8 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   return {
     set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
     chatScroll, forkAt, restoreAt, setSelection, toolOwners,
+    /** Set before render: the projection has no store to subscribe to. */
+    setTurnOutline: (value: unknown) => { turnOutline = value },
   }
 }
 
@@ -1536,6 +1541,74 @@ describe('ChatView', () => {
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
     act(() => { h.set({ loadingOlder: true }) })
     expect(view.getByText('加载中…')).toBeTruthy()
+  })
+
+  it('keeps an unloaded jump armed when the repage returns the same window head', async () => {
+    const h = makeHarness({
+      nodes: [assistant(50, 'a5', 5), assistant(60, 'a6', 6), assistant(70, 'a7', 7)],
+      hasMore: true,
+    })
+    h.setTurnOutline([{ turn: 2, seq: 20, prompt: '早先的提问', response: '早先的回答' }])
+    const view = render(<h.ChatView {...h.props} />)
+    const mark = (turn: number): HTMLElement => view.getByRole('button', {
+      name: turn < 5 ? `加载并跳转到第 ${turn} 轮` : `跳转到第 ${turn} 轮`,
+    })
+
+    fireEvent.click(mark(2))
+    expect(h.props.loadThrough).toHaveBeenCalledTimes(1)
+    expect(h.props.loadThrough).toHaveBeenCalledWith(20)
+    expect(mark(2).getAttribute('aria-busy')).toBe('true')
+
+    // The page settles without moving the window head, so the Turn still has
+    // no anchor row. Landing anyway would park the reader on the oldest loaded
+    // row — under the paging button — and retire the jump as if it worked.
+    await act(async () => { await Promise.resolve() })
+    expect(h.props.loadThrough).toHaveBeenCalledTimes(2)
+    expect(mark(2).getAttribute('aria-busy')).toBeNull()
+    expect(mark(5).getAttribute('aria-current')).toBeNull()
+  })
+
+  it('lands a still-armed unloaded jump once a later page finally covers the Turn', async () => {
+    const window1 = [assistant(50, 'a5', 5), assistant(60, 'a6', 6)]
+    const h = makeHarness({ nodes: window1, hasMore: true })
+    h.setTurnOutline([{ turn: 2, seq: 20, prompt: '早先的提问', response: '早先的回答' }])
+    const view = render(<h.ChatView {...h.props} />)
+
+    fireEvent.click(view.getByRole('button', { name: '加载并跳转到第 2 轮' }))
+    await act(async () => { await Promise.resolve() })
+    // Still waiting: the Turn owns no anchor row, and the jump must not be
+    // retired — a retired jump can never land again.
+    expect(view.getByRole('button', { name: '跳转到第 5 轮' }).getAttribute('aria-current')).toBeNull()
+
+    // A later page prepends the Turn. The next settle — the plain pull's
+    // loadingOlder flip re-tick — has to carry the jump the rest of the way.
+    // Fresh timing/turn-end maps are what the fixture reads as a new page.
+    act(() => { h.set({ nodes: [assistant(20, 'a2', 2), ...window1], turnTimings: new Map(), turnEnds: new Map() }) })
+    act(() => { h.set({ loadingOlder: true }) })
+    act(() => { h.set({ loadingOlder: false }) })
+    expect(view.getByRole('button', { name: '跳转到第 2 轮' }).getAttribute('aria-current')).toBe('true')
+  })
+
+  it('keeps an uncovered Turn armed when the window already spans its seq', async () => {
+    const window1 = [assistant(50, 'a5', 5), assistant(60, 'a6', 6)]
+    // The outline's seq sits inside the loaded window while its Turn is not
+    // there: nothing to page, and the row the Turn needs does not exist yet.
+    const h = makeHarness({ nodes: window1, hasMore: true })
+    h.setTurnOutline([{ turn: 8, seq: 60, prompt: '缺口里的提问', response: '缺口里的回答' }])
+    const view = render(<h.ChatView {...h.props} />)
+
+    fireEvent.click(view.getByRole('button', { name: '加载并跳转到第 8 轮' }))
+    expect(h.props.loadThrough).toHaveBeenCalledTimes(1)
+    await act(async () => { await Promise.resolve() })
+    // Paging cannot help here, so the scan finds no newer row to land on. The
+    // jump stays armed; retiring it would report success without a landing.
+    expect(view.getByRole('button', { name: '加载并跳转到第 8 轮' }).getAttribute('aria-busy')).toBeNull()
+    expect(h.props.loadThrough).toHaveBeenCalledTimes(1)
+
+    act(() => { h.set({ nodes: [assistant(80, 'a8', 8), ...window1], turnTimings: new Map(), turnEnds: new Map() }) })
+    act(() => { h.set({ loadingOlder: true }) })
+    act(() => { h.set({ loadingOlder: false }) })
+    expect(view.getByRole('button', { name: '跳转到第 8 轮' }).getAttribute('aria-current')).toBe('true')
   })
 
   it('shows open error and loading states', () => {
