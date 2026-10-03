@@ -37,11 +37,16 @@ export interface ILayout {
   /** Close the details panel. */
   closeDetails(): void
   /**
-   * Live shell insets (details / left rail / phone). AppFrame is the sole
-   * publisher; workbench plugins subscribe or read CSS variables from
-   * `layout-insets.ts`.
+   * Live shell insets (details / left rail / bottom strip / phone). AppFrame
+   * publishes columns; workbenches may {@link LayoutController.reserveBottom}.
    */
   readonly insets: LayoutInsetsFace
+  /**
+   * Reserve the floating bottom workbench height (0 = closed). Survives
+   * AppFrame column republish. Plugins that only stamp `--xrkh-workbench-height`
+   * should still call this so `--xrk-layout-inset-bottom` stays in contract.
+   */
+  reserveBottom(height: number): void
 }
 
 /** Cross-plugin panel-action + insets face (ctx.layout). */
@@ -66,14 +71,36 @@ export class LayoutController implements ILayout {
   }
 
   /**
-   * Publish solved column insets (AppFrame only). Updates `insets` and the
-   * document CSS contract. No-op when equal to the last publish.
+   * Publish solved column insets (AppFrame). Omitting `bottom` keeps the last
+   * {@link reserveBottom} value so details/sidebar drags do not wipe the strip.
    */
-  publishInsets(next: LayoutInsets): void {
+  publishInsets(next: {
+    readonly details: number
+    readonly sidebar: number
+    readonly phone: boolean
+    readonly bottom?: number
+  }): void {
     const prev = this.#insets.getSnapshot()
-    if (layoutInsetsEqual(prev, next)) return
-    this.#insets.set(next)
-    applyLayoutInsetsDom(next)
+    const merged: LayoutInsets = {
+      details: next.details,
+      sidebar: next.sidebar,
+      phone: next.phone,
+      bottom: next.bottom ?? prev.bottom,
+    }
+    if (layoutInsetsEqual(prev, merged)) return
+    this.#insets.set(merged)
+    applyLayoutInsetsDom(merged)
+  }
+
+  /** Community / Host bottom workbench height in CSS pixels. */
+  reserveBottom(height: number): void {
+    const prev = this.#insets.getSnapshot()
+    this.publishInsets({
+      details: prev.details,
+      sidebar: prev.sidebar,
+      phone: prev.phone,
+      bottom: Math.max(0, Math.round(height)),
+    })
   }
 
   /** Clear published insets (AppFrame unmount). */

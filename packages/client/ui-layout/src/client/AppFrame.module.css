@@ -46,6 +46,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-bottom: var(--xrk-layout-inset-bottom, var(--xrkh-workbench-height, 0px));
+  box-sizing: border-box;
 }
 
 /* Phone: keep the conversation above collapsed overlay columns that still
@@ -318,4 +320,12 @@
   border-radius: 1px;
   background: currentColor;
   box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
+}
+
+/* Community bottom workbench is portaled, not a descendant of AppFrame.
+   Pin it to the live conversation column via Host LayoutInsets + plugin center stamps. */
+:global([data-dsh-bottom-panel]) {
+  left: var(--xrkh-center-left, var(--xrk-layout-inset-sidebar, 0px));
+  right: var(--xrkh-center-right, var(--xrk-layout-inset-details, 0px));
+  width: auto;
 }

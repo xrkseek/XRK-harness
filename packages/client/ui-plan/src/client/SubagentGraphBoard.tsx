@@ -13,6 +13,8 @@ export interface SubagentGraphNode {
   readonly role?: string
   readonly depth?: number
   readonly activity?: 'running' | 'inactive'
+  /** `provider/model` this child runs on. */
+  readonly model?: string
 }
 
 export interface SubagentGraphEdge {
@@ -29,6 +31,8 @@ export interface SubagentLiveRow {
   readonly mode: string
   readonly liveTool?: string
   readonly liveText?: string
+  /** `provider/model` this child runs on. */
+  readonly model?: string
 }
 
 export interface SubagentGraphBoardProps {
@@ -81,6 +85,7 @@ function mergeGraph(
         label: row.label ?? row.id,
         depth: 1,
         activity: row.activity,
+        ...(row.model ? { model: row.model } : {}),
       })
     }
     return {
@@ -98,6 +103,9 @@ function mergeGraph(
     byId.set(node.id, {
       ...node,
       activity: liveRow?.activity ?? node.activity ?? 'inactive',
+      // Live rows carry the authoritative route (Status resolves it per child);
+      // a graph node alone may predate the child's session.
+      ...(liveRow?.model ? { model: liveRow.model } : {}),
       ...(liveRow?.label && !node.label ? { label: liveRow.label } : {}),
     })
   }
@@ -109,6 +117,7 @@ function mergeGraph(
       label: row.label ?? row.id,
       depth: 1,
       activity: row.activity,
+      ...(row.model ? { model: row.model } : {}),
     })
   }
   if (![...byId.values()].some((n) => (n.depth ?? 1) === 0)) {
@@ -302,7 +311,13 @@ export function SubagentGraphBoard({
               style={{ left: pos.x, top: pos.y, width: NODE_W, height: NODE_H }}
               data-activity={node.activity ?? 'inactive'}
               data-depth={pos.depth}
-              title={`${node.label} · ${meta}`}
+              data-model={node.model}
+              // The node box is a fixed 40px with two lines already, so the
+              // route rides the tooltip and the data attribute rather than
+              // overflowing the card. Drop `data-model` to hide it.
+              title={[node.label, node.role, node.model, meta]
+                .filter(value => value !== undefined && value !== '')
+                .join(' · ')}
               {...(clickable
                 ? {
                   role: 'button' as const,

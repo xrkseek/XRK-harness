@@ -27,7 +27,6 @@ import {
   computeColumns, phoneDrawerWidth, resolveShellTracks,
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
 } from './columns.ts'
-import type { LayoutInsets } from './layout-insets.ts'
 import {
   rememberDetailsOpen,
   selectDetailsOpenMemory,
@@ -59,7 +58,12 @@ function htmlInert(active: boolean): { inert?: '' } {
 /** Injected by ui-layout: publish shell insets for floating workbench plugins. */
 export interface AppFrameInjected {
   /** Push solved insets to `ctx.layout.insets` + the CSS contract. */
-  publishLayoutInsets(insets: LayoutInsets): void
+  publishLayoutInsets(insets: {
+    readonly details: number
+    readonly sidebar: number
+    readonly phone: boolean
+    readonly bottom?: number
+  }): void
   /** Clear published insets on unmount. */
   clearLayoutInsets(): void
 }
@@ -355,17 +359,51 @@ export function AppFrame({
   const colsRef = useRef(solved)
   colsRef.current = solved
 
-  // Publish shell insets for any floating workbench plugin (CSS + ctx.layout.insets).
-  // Coexistence: #root margin-right push already leaves the details strip;
-  // plugins yield chrome via --xrk-layout-inset-* instead of mutual exclusion.
+  // Publish shell insets for floating workbenches. Do not clear on every
+  // column tick — that wiped CSS vars mid-drag so the bottom panel could not
+  // remeasure `--xrkh-center-*` until a sidebar resize. Unmount-only clear.
   useEffect(() => {
     publishLayoutInsets({
       details: detailsCollapsed || phone ? 0 : cols.details,
       sidebar: phone ? 0 : cols.sidebar,
       phone,
     })
-    return () => { clearLayoutInsets() }
-  }, [clearLayoutInsets, cols.details, cols.sidebar, detailsCollapsed, phone, publishLayoutInsets])
+  }, [cols.details, cols.sidebar, detailsCollapsed, phone, publishLayoutInsets])
+
+  useEffect(() => () => { clearLayoutInsets() }, [clearLayoutInsets])
+
+  // Mirror community `--xrkh-workbench-height` into the Host bottom inset so
+  // the conversation column yields instead of sitting under the overlay.
+  useEffect(() => {
+    if (phone) {
+      publishLayoutInsets({
+        details: 0,
+        sidebar: 0,
+        phone: true,
+        bottom: 0,
+      })
+      return
+    }
+    const root = document.documentElement
+    const readPluginBottom = (): number => {
+      const raw = root.style.getPropertyValue('--xrkh-workbench-height').trim()
+        || root.style.getPropertyValue('--dsh-sidebar-height').trim()
+      const n = Number.parseFloat(raw)
+      return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
+    }
+    const sync = (): void => {
+      publishLayoutInsets({
+        details: detailsCollapsed ? 0 : colsRef.current.details,
+        sidebar: colsRef.current.sidebar,
+        phone: false,
+        bottom: readPluginBottom(),
+      })
+    }
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { attributes: true, attributeFilter: ['style'] })
+    return () => { observer.disconnect() }
+  }, [detailsCollapsed, phone, publishLayoutInsets])
 
   // Phone: picking a session (or starting a blank) should tuck the drawer away
   // so the conversation is immediately usable — same expectation as native

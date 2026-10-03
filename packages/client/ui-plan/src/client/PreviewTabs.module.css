@@ -560,6 +560,27 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Leading fleet alert, rendered inline under the health word so a non-ok
+   glance explains itself instead of showing a bare severity label. */
+.summaryAlert {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summaryAlert[data-severity='warn'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.summaryAlert[data-severity='critical'] {
+  color: var(--dsw-alias-danger, var(--dsw-alias-label-primary));
+}
+
 .summaryMeta {
   display: flex;
   flex-wrap: wrap;

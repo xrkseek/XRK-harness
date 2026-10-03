@@ -36,6 +36,7 @@ export interface SessionStatusView {
       readonly label?: string
       readonly activity: 'running' | 'inactive'
       readonly mode: string
+      readonly model?: string
       readonly liveText?: string
       readonly liveTool?: string
       readonly queued?: number
@@ -320,6 +321,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     const mode = str((row as { mode?: unknown }).mode)
     if (!id || (activity !== 'running' && activity !== 'inactive') || !mode) return []
     const label = str((row as { label?: unknown }).label)
+    const model = str((row as { model?: unknown }).model)
     const liveText = str((row as { liveText?: unknown }).liveText)
     const liveTool = str((row as { liveTool?: unknown }).liveTool)
     const queued = num((row as { queued?: unknown }).queued)
@@ -339,6 +341,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       activity,
       mode,
       ...(label ? { label } : {}),
+      ...(model ? { model } : {}),
       ...(liveText ? { liveText } : {}),
       ...(liveTool ? { liveTool } : {}),
       ...(queued !== undefined && queued > 0 ? { queued } : {}),

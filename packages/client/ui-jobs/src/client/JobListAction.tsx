@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobView } from '@xrkseek/client-runtime/client'
-import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutline14, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -44,9 +44,9 @@ function readDetailsInsetPx(): number {
 }
 
 /**
- * Session-header entry point for this session's background jobs. It renders
- * nothing at all until the session has at least one job, so an ordinary
- * conversation never grows a control for a capability it is not using.
+ * Session-header chip for **settled** jobs of this session. Live jobs render
+ * in the composer `JobInputDock` instead, so an open turn does not grow two
+ * ending strips. Hidden when this session has no settled jobs.
  * Expand a row to stream Host `jobs.output` into a TerminalBlock.
  *
  * The open list is portaled to `document.body` (fixed) so the Overview
@@ -63,16 +63,14 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
   const menuRef = useRef<HTMLUListElement>(null)
 
   const rows = useMemo(() => orderedJobs(jobs), [jobs])
-  const liveRows = useMemo(() => rows.filter(isLiveJob), [rows])
   const settledRows = useMemo(() => rows.filter((job) => !isLiveJob(job)), [rows])
-  const liveCount = liveRows.length
-  const now = useJobClock(open && liveCount > 0)
+  const now = useJobClock(false)
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
 
   useEffect(() => {
-    if (jobs.length === 0 && open) setOpen(false)
-  }, [jobs.length, open])
+    if (settledRows.length === 0 && open) setOpen(false)
+  }, [settledRows.length, open])
 
   useEffect(() => {
     if (expandedId !== undefined && !jobs.some((job) => job.id === expandedId)) {
@@ -114,7 +112,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, rows.length, expandedId, liveCount])
+  }, [open, settledRows.length, expandedId])
 
   // Escape while focus is in the portaled list (outside the trigger root).
   useEffect(() => {
@@ -133,12 +131,10 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
     return () => { document.removeEventListener('keydown', onKey) }
   }, [open, expandedId])
 
-  if (jobs.length === 0) return null
+  if (settledRows.length === 0) return null
 
-  const countKey = liveCount > 0
-    ? (liveCount === 1 ? 'count.live.one' : 'count.live.other')
-    : (jobs.length === 1 ? 'count.idle.one' : 'count.idle.other')
-  const countLabel = t(countKey, { count: liveCount > 0 ? liveCount : jobs.length })
+  const countKey = settledRows.length === 1 ? 'count.idle.one' : 'count.idle.other'
+  const countLabel = t(countKey, { count: settledRows.length })
 
   const onRootKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape' || !open) return
@@ -174,18 +170,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
         aria-label={t('list.aria')}
         data-job-list-portal=""
       >
-        {liveRows.length > 0 && settledRows.length > 0
-          ? <li className={css.section} role="presentation">{t('section.live')}</li>
-          : null}
-        {liveRows.length > 0
-          ? <JobRows rows={liveRows} {...rowProps} />
-          : null}
-        {liveRows.length > 0 && settledRows.length > 0
-          ? <li className={css.section} role="presentation">{t('section.settled')}</li>
-          : null}
-        {settledRows.length > 0
-          ? <JobRows rows={settledRows} {...rowProps} />
-          : null}
+        <JobRows rows={settledRows} {...rowProps} />
       </ul>
     )
     : null
@@ -202,7 +187,6 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
           setOpen((current) => !current)
         }}
       >
-        {liveCount > 0 ? <StateDot state="ongoing" className={css.triggerDot} /> : null}
         <span className={css.count}>{countLabel}</span>
         <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />
       </button>

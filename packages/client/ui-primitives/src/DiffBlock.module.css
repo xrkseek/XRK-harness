@@ -52,7 +52,11 @@
   font: var(--dsw-font-markdown-code-block);
   max-height: min(60vh, 28rem);
   overflow: auto;
-  overscroll-behavior: contain;
+  /* Chain into the transcript at the edge: `contain` here made a diff reached
+     mid-transcript a dead zone — the wheel stopped dead at the card edge, so
+     reading further up meant moving the pointer off the card first. Same rule
+     as TerminalBlock `.output` and ToolRow. */
+  overscroll-behavior: auto;
 }
 
 /* Default: no wrapping — a diff is read by its indentation. */
@@ -153,7 +157,7 @@
   min-width: 0;
   max-height: min(60vh, 28rem);
   overflow: auto;
-  overscroll-behavior: none;
+  overscroll-behavior: auto;
   padding: 4px 8px;
 }
 

@@ -3,9 +3,9 @@
  * plugins (right/bottom overlays, not just xrkh-better-sidebar) read so they
  * can sit beside the in-flow AppFrame columns instead of covering them.
  *
- * AppFrame is the sole publisher ({@link publishLayoutInsets}). Plugins:
+ * AppFrame publishes column insets ({@link publishLayoutInsets}). Plugins:
  * - CSS: position against {@link LAYOUT_INSET_CSS} on `document.documentElement`
- * - JS: subscribe to `ctx.layout.insets`
+ * - JS: subscribe to `ctx.layout.insets` or call `ctx.layout.reserveBottom`
  *
  * New reserved regions add optional fields here and matching CSS custom
  * properties — do not invent per-plugin body stamps.
@@ -23,6 +23,11 @@ export interface LayoutInsets {
   readonly details: number
   /** Left `sidebar` rail (compact or open width as rendered). */
   readonly sidebar: number
+  /**
+   * Bottom floating workbench strip (community bottom panel). 0 when closed.
+   * AppFrame publishes 0; plugins call {@link LayoutController.reserveBottom}.
+   */
+  readonly bottom: number
   /** True on the phone shell — floating workbenches should not assume desktop push. */
   readonly phone: boolean
 }
@@ -31,6 +36,7 @@ export interface LayoutInsets {
 export const EMPTY_LAYOUT_INSETS: LayoutInsets = Object.freeze({
   details: 0,
   sidebar: 0,
+  bottom: 0,
   phone: false,
 })
 
@@ -41,6 +47,7 @@ export const EMPTY_LAYOUT_INSETS: LayoutInsets = Object.freeze({
 export const LAYOUT_INSET_CSS = Object.freeze({
   details: '--xrk-layout-inset-details',
   sidebar: '--xrk-layout-inset-sidebar',
+  bottom: '--xrk-layout-inset-bottom',
 } as const)
 
 /**
@@ -63,6 +70,7 @@ export function applyLayoutInsetsDom(insets: LayoutInsets): void {
   const root = document.documentElement
   root.style.setProperty(LAYOUT_INSET_CSS.details, `${Math.max(0, insets.details)}px`)
   root.style.setProperty(LAYOUT_INSET_CSS.sidebar, `${Math.max(0, insets.sidebar)}px`)
+  root.style.setProperty(LAYOUT_INSET_CSS.bottom, `${Math.max(0, insets.bottom)}px`)
   if (insets.details > 0) root.setAttribute(LAYOUT_INSET_ATTR.details, '')
   else root.removeAttribute(LAYOUT_INSET_ATTR.details)
   if (insets.phone) root.setAttribute(LAYOUT_INSET_ATTR.phone, '')
@@ -74,11 +82,15 @@ export function clearLayoutInsetsDom(): void {
   const root = document.documentElement
   root.style.removeProperty(LAYOUT_INSET_CSS.details)
   root.style.removeProperty(LAYOUT_INSET_CSS.sidebar)
+  root.style.removeProperty(LAYOUT_INSET_CSS.bottom)
   root.removeAttribute(LAYOUT_INSET_ATTR.details)
   root.removeAttribute(LAYOUT_INSET_ATTR.phone)
 }
 
 /** True when two inset snapshots are equal for publish short-circuit. */
 export function layoutInsetsEqual(a: LayoutInsets, b: LayoutInsets): boolean {
-  return a.details === b.details && a.sidebar === b.sidebar && a.phone === b.phone
+  return a.details === b.details
+    && a.sidebar === b.sidebar
+    && a.bottom === b.bottom
+    && a.phone === b.phone
 }

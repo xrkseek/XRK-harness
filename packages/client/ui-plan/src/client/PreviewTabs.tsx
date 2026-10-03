@@ -798,6 +798,17 @@ function StatusPanel({
                 <span className={css.summaryHealth}>
                   {t(`preview.status.fleetHealth.${status.fleet.health}`)}
                 </span>
+                {status.fleet.alerts.length > 0
+                  ? (
+                    <span
+                      className={css.summaryAlert}
+                      data-severity={status.fleet.alerts[0]?.severity ?? undefined}
+                      title={status.fleet.alerts[0]?.message ?? undefined}
+                    >
+                      {status.fleet.alerts[0]?.message}
+                    </span>
+                  )
+                  : null}
                 <span className={css.summaryBeat} data-live={summaryBusy || undefined}>
                   {summaryBeat}
                 </span>
@@ -910,6 +921,7 @@ function StatusPanel({
                             {s.activity === 'running'
                               ? t('preview.status.subagentRunning')
                               : t('preview.status.subagentIdle')}
+                            {s.model ? ` · ${s.model}` : ''}
                             {s.liveTool ? ` · tool:${s.liveTool}` : s.liveText ? ` · ${s.liveText}` : ` · ${s.mode}`}
                             {(s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
                               ? ` · ${t('preview.status.subagentQueue')} q=${s.queued ?? 0}/steer=${s.steering ?? 0}`

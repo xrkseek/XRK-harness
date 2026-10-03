@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import type { SessionId, SessionListState, JobView } from '@xrkseek/client-runtime/client'
 import { JobListAction, type JobListActionProps } from '../src/client/JobListAction.tsx'
@@ -32,6 +32,10 @@ function job(over: Partial<JobView> = {}): JobView {
     startedAt: START,
     ...over,
   }
+}
+
+function done(over: Partial<JobView> = {}): JobView {
+  return job({ status: 'completed', finishedAt: START + 1_000, ...over })
 }
 
 function props(
@@ -78,16 +82,23 @@ describe('JobListAction visibility', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('counts only live jobs, and falls back to the total when none are live', () => {
-    const { rerender } = render(<JobListAction {...props([job(), job({ id: 'bash-2' as JobView['id'] })])} />)
-    expect(screen.getByRole('button', { name: '2 个后台任务运行中' })).toBeDefined()
+  it('hides the header chip while only live jobs remain (composer dock owns that strip)', () => {
+    const { container } = render(<JobListAction {...props([job()])} />)
+    expect(container.innerHTML).toBe('')
+  })
 
-    rerender(<JobListAction {...props([job({ status: 'completed', finishedAt: START + 3_000 })])} />)
+  it('keeps the settled chip while live jobs sit in the composer dock', () => {
+    render(<JobListAction {...props([job(), done({ id: 'bash-2' as JobView['id'] })])} />)
     expect(screen.getByRole('button', { name: '1 个后台任务' })).toBeDefined()
   })
 
+  it('counts settled jobs with idle copy', () => {
+    render(<JobListAction {...props([done(), done({ id: 'bash-2' as JobView['id'] })])} />)
+    expect(screen.getByRole('button', { name: '2 个后台任务' })).toBeDefined()
+  })
+
   it('closes and unmounts when the last job disappears while the list is open', () => {
-    const { container, rerender } = render(<JobListAction {...props([job()])} />)
+    const { container, rerender } = render(<JobListAction {...props([done()])} />)
     fireEvent.click(screen.getByRole('button'))
     expect(screen.getByRole('list', { name: zh['list.aria'] })).toBeDefined()
 
@@ -97,17 +108,13 @@ describe('JobListAction visibility', () => {
 })
 
 describe('JobListAction rows', () => {
-  it('orders live jobs by start, then settled jobs newest-first', () => {
+  it('orders settled jobs newest-first', () => {
     render(<JobListAction {...props([
       job({ id: 'bash-3' as JobView['id'], label: 'old done', status: 'completed', startedAt: START, finishedAt: START + 1_000 }),
       job({ id: 'bash-4' as JobView['id'], label: 'new done', status: 'failed', startedAt: START, finishedAt: START + 9_000 }),
-      job({ id: 'bash-2' as JobView['id'], label: 'later live', startedAt: START + 5_000 }),
-      job({ id: 'bash-1' as JobView['id'], label: 'earlier live', startedAt: START }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
     expect(rowCells()).toEqual([
-      ['bash', 'earlier live', '运行中', '0秒'],
-      ['bash', 'later live', '运行中', '0秒'],
       ['bash', 'new done', '已失败', '9秒'],
       ['bash', 'old done', '已完成', '1秒'],
     ])
@@ -130,36 +137,19 @@ describe('JobListAction rows', () => {
     expect(rowCells()[0]?.[2]).toBe('已取消 · signal: SIGTERM')
   })
 
-  it('renders every status word, including the stopping transition', () => {
+  it('renders every settled status word', () => {
     render(<JobListAction {...props([
-      job({ id: 'bash-1' as JobView['id'], label: 'a', status: 'running' }),
-      job({ id: 'bash-2' as JobView['id'], label: 'b', status: 'stopping' }),
       job({ id: 'bash-3' as JobView['id'], label: 'c', status: 'completed', finishedAt: START }),
       job({ id: 'bash-4' as JobView['id'], label: 'd', status: 'killed', finishedAt: START }),
       job({ id: 'bash-5' as JobView['id'], label: 'e', status: 'failed', finishedAt: START }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
     const words = rowCells().map(cells => cells[2])
-    expect(new Set(words)).toEqual(new Set(['运行中', '正在停止', '已完成', '已取消', '已失败']))
+    expect(new Set(words)).toEqual(new Set(['已完成', '已取消', '已失败']))
   })
 })
 
 describe('JobListAction duration', () => {
-  it('advances a live row once per second and freezes a settled one', () => {
-    vi.setSystemTime(START + 1_000)
-    render(<JobListAction {...props([
-      job({ id: 'bash-1' as JobView['id'], label: 'live' }),
-      job({ id: 'bash-2' as JobView['id'], label: 'done', status: 'completed', finishedAt: START + 4_000 }),
-    ])} />)
-    fireEvent.click(screen.getByRole('button'))
-    expect(rowCells()[0]).toContain('1秒')
-    expect(rowCells()[1]).toContain('4秒')
-
-    act(() => { vi.advanceTimersByTime(2_000) })
-    expect(rowCells()[0]).toContain('3秒')
-    expect(rowCells()[1]).toContain('4秒')
-  })
-
   it('shows tenths under ten seconds so sub-second settles are not zero', () => {
     render(<JobListAction {...props([
       job({ id: 'bash-1' as JobView['id'], label: 'fast', status: 'completed', finishedAt: START + 450 }),
@@ -183,12 +173,10 @@ describe('JobListAction duration', () => {
     expect(rowCells().map(cells => cells[3])).toEqual(['2小时3分', '2分5秒', '0秒'])
   })
 
-  it('runs no clock while the list is closed', () => {
+  it('runs no clock for a closed settled list', () => {
     const interval = vi.spyOn(globalThis, 'setInterval')
-    render(<JobListAction {...props([job()])} />)
+    render(<JobListAction {...props([done()])} />)
     expect(interval).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button'))
-    expect(interval).toHaveBeenCalledTimes(1)
   })
 
   it('runs no clock for an open list holding only settled jobs', () => {
@@ -201,8 +189,8 @@ describe('JobListAction duration', () => {
 
 describe('JobListAction dismissal', () => {
   it('closes on Escape and returns focus to the trigger', () => {
-    render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    render(<JobListAction {...props([done()])} />)
+    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
     fireEvent.click(trigger)
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     expect(document.body.querySelector('[data-job-list-portal]')).not.toBeNull()
@@ -214,8 +202,8 @@ describe('JobListAction dismissal', () => {
   })
 
   it('ignores other keys and a closed-list Escape', () => {
-    render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    render(<JobListAction {...props([done()])} />)
+    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
 
@@ -230,10 +218,10 @@ describe('JobListAction dismissal', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
     render(
       <div style={{ position: 'absolute', left: 980, top: 40 }}>
-        <JobListAction {...props([job()])} />
+        <JobListAction {...props([done()])} />
       </div>,
     )
-    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
     // Trigger sits against the Overview edge — end-align would spill into details.
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       x: 980, y: 40, left: 980, top: 40, right: 1100, bottom: 68,
@@ -248,8 +236,8 @@ describe('JobListAction dismissal', () => {
   })
 
   it('closes on an outside pointer press but not on one inside', () => {
-    render(<JobListAction {...props([job()])} />)
-    const trigger = screen.getByRole('button', { name: '1 个后台任务运行中' })
+    render(<JobListAction {...props([done()])} />)
+    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
     fireEvent.click(trigger)
 
     fireEvent.pointerDown(screen.getByRole('list', { name: zh['list.aria'] }))
@@ -257,50 +245,6 @@ describe('JobListAction dismissal', () => {
 
     fireEvent.pointerDown(document.body)
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
-  })
-})
-
-describe('JobListAction actions', () => {
-  it('offers stop for live jobs and routes clicks to killJob after confirm', () => {
-    const killJob = vi.fn()
-    render(<JobListAction {...props([job()], { killJob })} />)
-    fireEvent.click(screen.getByRole('button', { name: '1 个后台任务运行中' }))
-    const stop = within(screen.getByRole('list', { name: zh['list.aria'] }))
-      .getByRole('button', { name: '停止任务 pnpm run build' })
-    fireEvent.click(stop)
-    expect(killJob).not.toHaveBeenCalled()
-    fireEvent.click(within(screen.getByRole('list', { name: zh['list.aria'] }))
-      .getByRole('button', { name: '再按一次确认停止' }))
-    expect(killJob).toHaveBeenCalledWith('bash-1')
-  })
-
-  it('expands a row and polls jobs.output into TerminalBlock', async () => {
-    vi.useRealTimers()
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, value: { text: 'hello from bash\n', truncated: false } }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }))
-    vi.stubGlobal('fetch', fetchImpl)
-    render(<JobListAction {...props([job()])} />)
-    fireEvent.click(screen.getByRole('button', { name: '1 个后台任务运行中' }))
-    fireEvent.click(screen.getByRole('button', { name: '展开 pnpm run build 的输出' }))
-    expect(await screen.findByText('hello from bash')).toBeTruthy()
-    expect(fetchImpl).toHaveBeenCalled()
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('/sidebar/api/jobs.output')
-  })
-
-  it('offers background only for foreground running jobs', () => {
-    const backgroundJob = vi.fn()
-    render(<JobListAction {...props([
-      job({ foreground: true }),
-      job({ id: 'bash-2' as JobView['id'], label: 'plain', foreground: false }),
-    ], { backgroundJob })} />)
-    fireEvent.click(screen.getByRole('button'))
-    const list = within(screen.getByRole('list', { name: zh['list.aria'] }))
-    expect(list.getAllByRole('button', { name: /后台/ })).toHaveLength(1)
-    fireEvent.click(list.getByRole('button', { name: '将任务 pnpm run build 移至后台' }))
-    expect(backgroundJob).toHaveBeenCalledWith('bash-1')
   })
 })
 
