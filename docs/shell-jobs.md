@@ -95,16 +95,16 @@ Harness 登记 `tool:fs-routing` · `tool:shell-routing` · `tool:jobs` 系统�
 
 | 界面 | 行为 |
 |------|------|
-| **何时出现** | 仅当**本会话**至少有一个 job 时，会话标题栏才显示作业控件；全部结束后隐藏 |
-| **触发器** | 如「2 个后台任务运行中」/「1 个后台任务」；有运行中 job 时带**进行中**状态点 |
-| **展开列表** | 每行：**kind** · **label** · **status/detail** · **已运行/耗时**；列表打开时运行中行每秒刷新 |
-| **停止** | `running` / `stopping` 行 → 等同 `job_kill` / RPC `job.kill` |
+| **何时出现** | 本会话有**已结束** job 时，会话标题栏显示历史芯片；**运行中**只在输入区 dock，避免 turn 未结束时两条「运行中」 |
+| **触发器** | 如「1 个后台任务」（已结束）；运行中文案在输入区 dock |
+| **展开列表** | 每行：**kind** · **label** · **status/detail** · **已运行/耗时** |
+| **停止** | `running` / `stopping` 行在输入区 dock → 等同 `job_kill` / RPC `job.kill` |
 | **后台** | 仅 wire **`foreground: true`** 且仍在 `running` 的行（前台 bash yield wait 仍附着）→ 解除 turn 阻塞，进程继续 |
-| **输入区 dock** | 有 live job 时在 composer 上方显示折叠条（`order: 5`），展开后与会话头共用行控件 |
+| **输入区 dock** | 有 live job 时在 composer 上方显示（`order: 5`），承担停止 / 后台 |
 
 排序：运行中按开始时间；已结束按完成时间（新的在上）。
 
-**对话里的前台 bash（30s yield，可配置）：** 非 `background: true` 的 `bash` 默认最多等 **30s**（Codex 上限），超时 tool 结果返回 **job id** 且不杀进程；**turn 可继续**。yield 窗口内会话头与输入区 dock 可对 **foreground** 行点 **后台**；yield 后通常只剩 **停止**。
+**对话里的前台 bash（30s yield，可配置）：** 非 `background: true` 的 `bash` 默认最多等 **30s**（Codex 上限），超时 tool 结果返回 **job id** 且不杀进程；**turn 可继续**。yield 窗口内输入区 dock 可对 **foreground** 行点 **后台**；yield 后通常只剩 **停止**。
 
 **时间线里的 steer 完成通知：** job / 后台子代理 settle 用 **`delivery: steer`**，**不进**输入框排队；在 tool-step / turn 边界 promote 为注入式 `user/message`（非用户手打气泡）。Job 示例：`background job bash-1 … finished … Read its output with job_output.` 后台子代理通知与前台 `subagent` 工具结果**只回传正文**（`assistant/message.content` / text chunk），**不**把子会话 `reasoning` 写入父会话请求。
 
@@ -217,12 +217,12 @@ Copy via `formatJobCompletionNotice`; with `outputLimitBytes`, reserve id prefix
 
 | UI | Behavior |
 |----|----------|
-| **When it appears** | Session header control only when **this session** has at least one job; hidden when the set is empty |
-| **Trigger** | Copy like “2 background jobs running” / “1 background job”; **ongoing** dot while any job is live |
-| **Popover list** | **kind** · **label** · **status/detail** · **elapsed/duration** per row; live rows tick every second while open |
-| **Stop** | On `running` / `stopping` rows → same as model `job_kill` / RPC `job.kill` |
-| **Background** | Only on live `running` rows with wire **`foreground: true`** (foreground bash yield wait still attached) → unblocks the turn, process keeps running |
-| **Input dock** | When any job is live, a collapsible strip above the composer (`order: 5`) mirrors header row actions |
+| **When it appears** | Session header chip only when **this session** has at least one **settled** job; hidden when the set is empty. Live jobs belong to the input dock only |
+| **Trigger** | Copy like “1 background job” / “2 background jobs” (settled). Live copy lives on the input dock |
+| **Popover list** | **kind** · **label** · **status/detail** · **elapsed/duration** per row |
+| **Stop** | On `running` / `stopping` rows → same as model `job_kill` / RPC `job.kill` (input dock) |
+| **Background** | Only on live `running` rows with wire **`foreground: true`** (foreground bash yield wait still attached) → unblocks the turn, process keeps running (input dock) |
+| **Input dock** | When any job is live, a strip above the composer (`order: 5`): one live job paints the action row directly; several share a collapsible header |
 
 Sort: live rows by start time; settled rows newest-first.
 

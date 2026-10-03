@@ -249,6 +249,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | 子代理嵌套深度（默认 2）与同父并发上限（默认 2） |
+| `agent-loop` | `subagentModel` | 委派子代理的统一线路 `provider/model`（可带 `(effort)`）；**留空（默认）跟父会话**；单次 `subagent` 仍可覆盖 |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
 | `session-telemetry` | `mode` · `endpoint` | **重启 Host** 后挂 sink（关 / memory / OTLP）；`XRK_TELEMETRY` 可 CI 旁路 |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **下次 agent 重建**后热切换 confine Provider；helper / bins 仍仅 env；`XRK_SANDBOX_BACKEND` 可 CI 旁路 |
@@ -556,6 +557,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off` |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | Subagent nesting depth (default 2) and concurrent children under one parent (default 2) |
+| `agent-loop` | `subagentModel` | Fleet-wide child route `provider/model` (optional `(effort)`); **empty (default) inherits the parent**; a single `subagent` call may still override |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 | `session-telemetry` | `mode` · `endpoint` | **Host restart** mounts the sink (off / memory / OTLP); `XRK_TELEMETRY` may CI-bypass |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **Live** on next agent rebuild (confine Provider); helper / bins stay env-only; `XRK_SANDBOX_BACKEND` may CI-bypass |

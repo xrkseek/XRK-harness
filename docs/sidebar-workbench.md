@@ -14,10 +14,11 @@
 ## 契约
 
 - Host 拥有 `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS（见 [community-plugins](./community-plugins.md) · [http-api](./http-api.md)）。
-- 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` 等），浮动层用 CSS 变量让位 Status 栏。
+- 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` · `--xrk-layout-inset-sidebar` · `--xrk-layout-inset-bottom`），浮动层用 CSS 变量让位 Status 栏与底栏。概况拖宽只更新 insets，**不清空**已发布的变量。底栏应对齐 `--xrkh-center-left` / `--xrkh-center-right`（或 insets）；社区插件把 `--xrkh-workbench-height` 写到 `documentElement` 时，壳镜像到 `--xrk-layout-inset-bottom`，对话列让出高度。
 - 概况栏开合与宽度按**会话**记住（`localStorage`），刷新后仍在；与 `xrkh-better-sidebar` 工作台状态互不影响。
 - 聊天 / Overview「改动」开文件：有 `ctx.betterSidebar` 时先 `openTab({ type: 'editor', path })`，再 Host `openPath`；未装社区侧栏时只走系统打开。
-- `type: 'editor'` 必须落在**侧栏分栏**（`splits`），不得因 `activePane` 在底栏而撑开底部面板；Host 默认 `bottomPanelAutoTerminal: false`（见 `sidebar-prefs-store`）。
+- `type: 'editor'` 必须落在**侧栏分栏**（`splits`），不得因 `activePane` 在底栏而撑开底部面板；Host 默认 `bottomPanelAutoTerminal: false`（见 `sidebar-prefs-store`）。空底栏分栏打开会得到空白条——由社区工作台填 tab，不是壳崩溃。
+- 社区工作台可调 `ctx.layout.reserveBottom(px)`；未升级的插件仍可靠 `--xrkh-workbench-height`。
 - 社区插件若占用工作台，应提供 `ctx.betterSidebar`。
 
 ## 边界（首方）
@@ -44,10 +45,11 @@ Floating file/terminal chrome is a community plugin, not first-party. Install **
 ## Contract
 
 - Host owns `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS (see [community-plugins](./community-plugins.md) · [http-api](./http-api.md)).
-- The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, …); floating chrome offsets with those CSS variables.
+- The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, `--xrk-layout-inset-sidebar`, `--xrk-layout-inset-bottom`); floating chrome offsets with those CSS variables. Dragging Overview width updates insets **without** clearing them. The bottom strip should follow `--xrkh-center-left` / `--xrkh-center-right` (or the insets). When a community plugin stamps `--xrkh-workbench-height` on `documentElement`, the shell mirrors it to `--xrk-layout-inset-bottom` so the conversation column yields.
 - Overview open bit and width are **per Session** (localStorage) and survive reload; independent of `xrkh-better-sidebar` workbench state.
 - Chat / Overview Changes open-file: when `ctx.betterSidebar` is present, call `openTab({ type: 'editor', path })` then Host `openPath`; without the community sidebar, open via the OS only.
-- `type: 'editor'` must land on the **side** split tree (`splits`), never expand the bottom panel because `activePane` is a bottom leaf; Host default `bottomPanelAutoTerminal: false` (see `sidebar-prefs-store`).
+- `type: 'editor'` must land on the **side** split tree (`splits`), never expand the bottom panel because `activePane` is a bottom leaf; Host default `bottomPanelAutoTerminal: false` (see `sidebar-prefs-store`). Opening an empty bottom split yields a blank strip — the community workbench fills tabs; that is not a Host crash.
+- Community workbenches may call `ctx.layout.reserveBottom(px)`; older plugins can keep writing `--xrkh-workbench-height`.
 - Community workbenches should provide `ctx.betterSidebar`.
 
 ## Boundaries (first-party)

@@ -107,8 +107,8 @@ compaction: {
 |------|------|
 | `compaction.pipeline` | 最近一回合内的分阶：`none` · `prune` · `summary` · `prune→summary`（由已有 prune / compaction 时间线条目折算，**不**另写协议事件） |
 | `compaction.stages` | 同上有序阶段列表 |
-| `compaction.phase` | `idle` / `busy`（agent latch：turn 与 `/compact` 互斥） |
-| `delivery.*` | `turnActive` · 队列/steer 计数 · `compactBlockedByTurn`；忙时队列仍可 FIFO 入队，steer 需活跃 turn |
+| `compaction.phase` | `idle` / `busy`（跟 `delivery.turnActive`；`/compact` 互斥看 `compactBlockedByTurn`） |
+| `delivery.*` | `turnActive`（跟 Stop / 列表，cancel 立刻 false）· 队列/steer 计数 · `compactBlockedByTurn`（drain join 期间仍可 true）；忙时队列仍可 FIFO 入队，steer 需活跃 turn |
 
 Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compaction` **不清** todo 列表；列表跨回合保留，直到下一次 `todo/write`。
 
@@ -239,8 +239,8 @@ Prune alone may clear overflow with **no** `context/compaction` event.
 |------|------|
 | `compaction.pipeline` | Last-turn stage chain: `none` · `prune` · `summary` · `prune→summary` (folded from existing prune / compaction timeline rows — **no** extra protocol events) |
 | `compaction.stages` | Ordered stages for that pipeline |
-| `compaction.phase` | `idle` / `busy` (agent latch: turn and `/compact` are exclusive) |
-| `delivery.*` | `turnActive` · queue/steer counts · `compactBlockedByTurn`; queue still FIFO-accepts while busy; steer needs an active turn |
+| `compaction.phase` | `idle` / `busy` (follows `delivery.turnActive`; `/compact` exclusion is `compactBlockedByTurn`) |
+| `delivery.*` | `turnActive` (follows Stop / the session list; false immediately on cancel) · queue/steer counts · `compactBlockedByTurn` (may stay true during drain join); queue still FIFO-accepts while busy; steer needs an active turn |
 
 Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `context/compaction` do **not** clear the todo list; the list persists across turns until the next `todo/write`.
 

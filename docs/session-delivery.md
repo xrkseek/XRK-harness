@@ -39,7 +39,7 @@
 1. Promote 在两类 **安全边界**：  
    - **turn 入口**（`continueTurn` / drain）：`promoteAdmitsForTurn`  
    - **tool-step 边界**（`runTurn` 第 2+ 步开始前）：`promotePendingSteers`（只 claim steer，不碰 queue）  
-2. **`promoteAdmitsForTurn`**：若有任意 pending steer，**一次 promote 全部 steer**（FIFO among steers），正文用 `\n\n` 合并进 **一条** `user/message` → **一次** `runTurn`。中间夹杂的 queue **仍留 pending**。  
+2. **`promoteAdmitsForTurn`**：若有任意 pending steer，**一次 promote 全部 steer**（FIFO among steers），正文用 `\n\n` 合并进 **一条** `user/message` → **一次** `runTurn`。中间夹杂的 queue **仍留 pending**。Face 在该行写入首条 echo 的 `rpcId` 与其余 `rpcIds`；壳队列与本地回显按这组 id 一次卸掉。已有插队未落地时，composer Enter 继续 `steer`。跨 turn 的 queue 仍 FIFO 一条对人。  
 3. Step 边界 claim 把合并正文追加到 **当前 turn** 的 `user/message`，下一轮模型请求即可看见。  
 4. Abort / soft interrupt 语义见 [session-latch.md](./session-latch.md)；steer ≠ `cancel`。
 
@@ -50,12 +50,14 @@
 - **inbox 真源是 session log**：不建独立 inbox 表，也无集群多写 durable inbox。
 - **不打断在跑的 tool**：用户新输入须等当前 tool settle 完才到 next-step，不 abort 正在执行的 tool body 来插入文本。
 - **steer 不是第二条 HTTP 路径**：Face/HTTP 字段名仍是 `steer`/`queue`，走同一 admit 通道。
-- **`session.cancel` 与 inbox 关系**：`session.cancel` 保留 pending admits；cancel 期间到达的消息（wake）在 teardown settle 后用全新 entry 续跑（见 [session-latch.md](./session-latch.md)），不会滞留在队列里。
+- **`session.cancel` 与 inbox 关系**：`session.cancel` 保留 pending admits；cancel 期间到达的消息（wake）在 teardown settle 后用全新 entry 续跑（见 [session-latch.md](./session-latch.md)），不会滞留在队列里。壳立刻按 `host/session-status running:false` 把列表、Composer Stop、`session.status.delivery.turnActive` 收成空闲；drain 最多再 join 数秒，期间 `/compact` 仍 `compactBlockedByTurn`，工具卡可等到 `tool/result` 才落定。
 - **无「不 wake 的 next-step inject」旗标**；Host 不暴露 `cancel keepInbox`。
 
 **Host 重启恢复**：pending queue/steer 随 `createPersistentSessionStore` 落盘；mux 重连补发 `session/queue`；Face 启动对有 pending 的 session `publishQueue` + `drain.wake`（刚被 `goals.bind` disarm 的 active goal 不 wake，须用户 resume）。冷 session 的 `session.updateQueue` 不依赖进程内 Agent。
 
 **产品壳文案**：**排队** = `delivery: "queue"`（默认，本轮后再答）；**插队** = `delivery: "steer"`（工具/步边界切入当前轮，≠ 停止）。任务「暂停」走 `session.cancel` / 子代理 `interrupt_agent`（`takeover: true` 时任务板标 paused + 人工接管，`send_message` 恢复），不是 inbox soft-pause。
+
+**壳气泡**：本轮仍在跑、人话或子代理回传已作为 steer 发出 → 「插队中」。该轮已闭合（无开放 turn）后，这条（或合并后的）人话成为下一 turn 入口 → 普通用户消息，无额外发送徽章；已结束轮次上的回传不再永远标「插队中」。
 
 ## 5. 相关文档
 
@@ -107,7 +109,7 @@ Default `delivery` is **queue**.
 1. Promote at two **safe boundaries**:  
    - **Turn entry** (`continueTurn` / drain): `promoteAdmitsForTurn`  
    - **Tool-step boundary** (before `runTurn` step 2+): `promotePendingSteers` (claims steers only; does not touch queue)  
-2. **`promoteAdmitsForTurn`**: if any pending steer exists, **promote all steers at once** (FIFO among steers), merge bodies with `\n\n` into **one** `user/message` → **one** `runTurn`. Interleaved queue items **stay pending**.  
+2. **`promoteAdmitsForTurn`**: if any pending steer exists, **promote all steers at once** (FIFO among steers), merge bodies with `\n\n` into **one** `user/message` → **one** `runTurn`. Interleaved queue items **stay pending**. Face stamps the first echo as `rpcId` and the rest as `rpcIds` so the shell retires every local “steering” bubble in one handoff. While a steer is already pending, composer Enter stays `steer`. Queue items on later turns stay one-to-one FIFO.  
 3. Step-boundary claim appends the merged body to the **current turn** `user/message` so the next model request sees it.  
 4. Abort / soft-interrupt semantics: see [session-latch.md](./session-latch.md); steer ≠ `cancel`.
 
@@ -118,12 +120,14 @@ Default `delivery` is **queue**.
 - **Inbox source of truth is the session log**: no separate inbox table, no clustered multi-writer durable inbox.
 - **In-flight tools are not interrupted**: new user input must wait for the current tool to settle before next-step; an executing tool body is not aborted to inject text.
 - **Steer is not a second HTTP path**: Face/HTTP field names remain `steer`/`queue`, through the same admit channel.
-- **`session.cancel` vs inbox**: `session.cancel` keeps pending admits; a message (wake) arriving during the cancel re-drains on a fresh entry once teardown settles (see [session-latch.md](./session-latch.md)) rather than sitting in the queue.
+- **`session.cancel` vs inbox**: `session.cancel` keeps pending admits; a message (wake) arriving during the cancel re-drains on a fresh entry once teardown settles (see [session-latch.md](./session-latch.md)) rather than sitting in the queue. The shell goes idle immediately on `host/session-status running:false` (session list, composer Stop, `session.status.delivery.turnActive`). Drain may still join for a few seconds: `/compact` stays `compactBlockedByTurn`, and tool cards can wait for `tool/result`.
 - **No “next-step inject without wake” flag**; Host does not expose `cancel keepInbox`.
 
 **Host restart recovery**: pending queue/steer survive via `createPersistentSessionStore`; mux reconnect replays `session/queue`; Face boot does `publishQueue` + `drain.wake` for sessions with pending work (skips active goals that `goals.bind` just disarmed — user must resume). Cold `session.updateQueue` does not require a live Agent.
 
 **Product shell copy**: **Queue** = `delivery: "queue"` (default; after this turn); **Steer** = `delivery: "steer"` (inject at the tool/step boundary into the running turn — not Stop). Task “pause” goes through `session.cancel` / subagent `interrupt_agent` (`takeover: true` marks the task board paused + human-owned; `send_message` resumes) — not inbox soft-pause.
+
+**Shell bubbles**: while this turn is still running and a human line or subagent notice was sent as a steer → “Steering…”. After that turn is closed (no open turn), that line (or the merged batch) that opens the next turn is an ordinary user message — no extra sending badge; notices on a finished turn do not stay “Steering…” forever.
 
 ## 5. Related docs
 
