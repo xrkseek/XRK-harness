@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // InputBar behavior over the machine wiring: Enter-send semantics (IME guard,
 // Shift newline, busy Enter policy, Ctrl/Meta steering, repeat suppression), running
 // semantics (input stays free; continuable children keep Send beside Stop), the machine pending lock,
@@ -40,7 +40,7 @@ function snapshotOf(overrides: Partial<ConversationSnapshot> = {}): Conversation
   return {
     sessionId: SID, views: EMPTY_CONVERSATION_VIEWS, chat: EMPTY_CHAT_SNAPSHOT,
     nodes: [], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [],
-    pending: [], queue: [], running: false, composerPhase: 'active', removed: false,
+    pending: [], pendingSubmissions: [], queue: [], running: false, composerPhase: 'active', removed: false,
     openState: 'open', openError: null, hasMore: false, loadingOlder: false,
     promptError: null, blank: false, subagent: null, lastAgentError: null,
     ...overrides,
@@ -223,12 +223,7 @@ function bench(over?: BenchOptions) {
   for (const [level, text] of over?.notify ?? []) shell.notify(level, text)
   const view = render(<InputBar {...props} />)
   const textarea = bindComposerHost(view.container.querySelector('[data-composer-input]')!, shell)
-  const hasPartial = over?.partial !== null && over?.partial !== undefined
-    && over.partial.blocks.some(block =>
-      (block.kind === 'text' || block.kind === 'reasoning') && block.text.trim() !== '')
-  const agentActive = (over?.running === true)
-    || (over?.runningCalls?.length ?? 0) > 0
-    || hasPartial
+  const agentActive = over?.running === true
   const sendableDraft = (over?.draft?.trim() ?? '') !== '' || (over?.attachments?.length ?? 0) > 0
   const primaryStops = agentActive && over?.subagent === undefined && !sendableDraft
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
@@ -720,6 +715,17 @@ describe('Enter semantics', () => {
     expect(steering.sink).not.toHaveBeenCalled()
   })
 
+  it('Enter follows an in-flight steer instead of queuing the next draft', () => {
+    const { textarea, sink } = bench({
+      running: true,
+      busyEnter: 'queue',
+      queue: [{ ...row('s-1'), placement: 'steering' }],
+      draft: '第二条纠偏',
+    })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).toHaveBeenCalledWith('第二条纠偏', [], 'steer', expect.any(AbortSignal))
+  })
+
   it('draft content outranks the queue: accelerated Enter steers the draft only', () => {
     const steerQueue = vi.fn()
     const { textarea, sink } = bench({ running: true, queue: [row('q-1')], draft: '插话', steerQueue })
@@ -835,14 +841,14 @@ describe('running and lock semantics', () => {
     expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
   })
 
-  it('keeps Stop while a streaming partial remains after running clears (empty draft)', () => {
+  it('returns Send when running clears even if a streaming partial remains', () => {
     const { button, stop } = bench({
       running: false,
       partial: { turn: 1, step: 0, blocks: [{ kind: 'text', text: 'still streaming' }] },
     })
-    expect(button.getAttribute('aria-label')).toBe('停止生成')
+    expect(button.getAttribute('aria-label')).toBe('发送消息')
     fireEvent.click(button)
-    expect(stop).toHaveBeenCalledTimes(1)
+    expect(stop).not.toHaveBeenCalled()
   })
 
   it('locks the composer while the wire is reconnecting', () => {

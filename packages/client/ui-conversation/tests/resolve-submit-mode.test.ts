@@ -10,4 +10,11 @@ describe('resolveSubmitMode (gate)', () => {
     expect(resolveSubmitMode('steer', false, 'enter', true)).toBe('queue')
     expect(resolveSubmitMode('steer', true, 'enter', false)).toBe('queue')
   })
+
+  it('keeps Enter in the steer batch while a steer is already pending', () => {
+    expect(resolveSubmitMode('queue', true, 'enter', true, true)).toBe('steer')
+    expect(resolveSubmitMode('queue', true, 'accelerated', true, true)).toBe('queue')
+    expect(resolveSubmitMode('steer', true, 'enter', true, true)).toBe('steer')
+    expect(resolveSubmitMode('steer', true, 'accelerated', true, true)).toBe('queue')
+  })
 })

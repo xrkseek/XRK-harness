@@ -70,6 +70,10 @@ export const InputBar = memo(function InputBar({
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
+  const followSteer = useSession(s =>
+    s.queue.some(row => row.placement === 'steering')
+    || s.pendingSubmissions.some(echo => echo.placement === 'steering'),
+  )
   // Boolean latch — do not select `partial` itself (new identity every chunk).
   const agentActive = useSession(s => isComposerAgentActive({
     running: s.running ?? false,
@@ -132,8 +136,9 @@ export const InputBar = memo(function InputBar({
     const upload = fileUploads?.[attachment.id]
     return upload === undefined || upload.status !== 'ready'
   })
-  // Keep Send↔Stop aligned with an open turn tail: optimistic cancel clears
-  // `running` before partial/tool rows settle (DSH drain-latch posture).
+  // Stop follows Host `running` (optimistic cancel). Tool/partial tails stay
+  // in the transcript until settle; they must not keep the primary as Stop
+  // after the session list has already gone idle.
   // `agentActive` is selected above as one boolean so chunk flushes do not
   // re-render the composer.
   // Transient error banner (machine notices, image-intake rejections, and
@@ -209,9 +214,9 @@ export const InputBar = memo(function InputBar({
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const editorDisabled = removed || (locked && !workspaceTrigger)
   const editable = live && !locked && !machineBusy
-  // Steer / busy-Enter follow Host `running` (open next-step window), not the
-  // drain latch: after cancel, partial/tool tails keep Stop via `agentActive`
-  // but must not advertise chords the Host will reject as steer-unavailable.
+  // Steer / busy-Enter follow Host `running` (open next-step window). After
+  // cancel the primary is Send; do not advertise steer chords the Host will
+  // reject as steer-unavailable.
   // Continuable children share busy-Enter Queue/Steer and whole-queue flush;
   // one-shot stays Queue-only and never exposes interrupt chrome.
   const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
@@ -220,7 +225,7 @@ export const InputBar = memo(function InputBar({
   // Chord hints only when a non-empty draft can actually submit — empty Enter
   // is a no-op; whole-queue flush is Cmd/Ctrl+Enter only.
   const busyEnterHint = running && steeringAvailable && !canSteerQueue && !disabled && !empty
-    ? resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
+    ? resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable, followSteer)
     : null
 
   useEffect(() => {
@@ -380,11 +385,11 @@ export const InputBar = memo(function InputBar({
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter, followSteer,
     intakeFiles: intakeImages, uploadsPending: filesNotReady, showToast, t, canAcceptDrop,
   })
   gate.current = {
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter, followSteer,
     intakeFiles: intakeImages, uploadsPending: filesNotReady, showToast, t, canAcceptDrop,
   }
 
@@ -433,15 +438,14 @@ export const InputBar = memo(function InputBar({
   // button (no pending upload) over a non-empty draft that is neither a
   // claimed command nor a `/` line headed for adjudication — so it never
   // describes a delivery the click cannot or does not perform; every other
-  // state keeps plain Send. `agentActive` covers the post-cancel window where
-  // `running` cleared but the streaming tail has not settled yet. Any
+  // state keeps plain Send. Any
   // addressed child keeps Send primary and exposes Stop independently —
   // including a one-shot child, which otherwise offers no way out while it
   // hangs in a tool (it cannot accept messages, but it can be cancelled, and
   // the host cascades that cancel to the child's own children).
   const primaryStops = agentActive && subagent === null && (empty || blocked !== undefined)
   const interruptible = agentActive && subagent !== null
-  const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
+  const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable, followSteer)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops
     ? t('input.stop')

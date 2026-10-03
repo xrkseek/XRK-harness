@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type {
   ChatSnapshot,
-  ConversationTimelineSnapshot,
   PendingSubmission,
   QueuedMessage,
 } from '@xrkseek/client-runtime/client'
@@ -28,6 +27,7 @@ import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
+import { groupPendingByChrome, hasOpenTurn, pendingInputChrome, runningTurnStartTime, turnsAreSettled } from './pending-input-chrome.ts'
 import { shouldShowFlowWaiting, hasActiveTurnSurface } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -169,10 +169,17 @@ function observedRpcIds(
   for (const key of order) {
     const node = nodes.get(key)
     if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering')) continue
-    const source = (node.data as { readonly source?: unknown }).source as
-      | { readonly kind?: unknown; readonly rpcId?: unknown }
-      | undefined
+    const data = node.data as {
+      readonly source?: { readonly kind?: unknown; readonly rpcId?: unknown }
+      readonly rpcIds?: unknown
+    }
+    const source = data.source
     if (source?.kind === 'user' && typeof source.rpcId === 'string') observed.add(source.rpcId)
+    if (Array.isArray(data.rpcIds)) {
+      for (const id of data.rpcIds) {
+        if (typeof id === 'string' && id.length > 0) observed.add(id)
+      }
+    }
   }
   return observed
 }
@@ -182,20 +189,23 @@ type PendingChatInput =
   | { readonly kind: 'echo'; readonly submission: PendingSubmission }
   | { readonly kind: 'steer'; readonly item: QueuedMessage; readonly submission?: PendingSubmission }
 
+function pendingInputAt(input: PendingChatInput): number | undefined {
+  return input.kind === 'echo' ? input.submission.time : input.submission?.time
+}
+
+function pendingInputContent(input: PendingChatInput): readonly unknown[] {
+  if (input.kind === 'echo') {
+    return input.submission.text === '' ? [] : [{ type: 'text', text: input.submission.text }]
+  }
+  return input.item.content
+}
+
 /** Shared empty tail so an idle flow keeps one stable `pendingInputs` identity. */
 const NO_PENDING_INPUTS: readonly PendingChatInput[] = []
 
 /** ProducedFiles opens the session workspace as `.`. */
 function isFolderOpenPath(path: string): boolean {
   return path === '.'
-}
-
-function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | null {
-  let latest: number | null = null
-  for (const turn of timeline.turns.values()) {
-    if (turn.status === 'open' && turn.start !== undefined) latest = turn.start.time
-  }
-  return latest
 }
 
 function turnStatusPhrase(
@@ -211,25 +221,13 @@ function turnStatusPhrase(
 const TURN_STATUS_CLOCK_AFTER_MS = 15_000
 
 /**
- * Wall-clock start of each open turn's waiting episode, keyed by
- * `sessionId\0turnStartTime`. Lives outside React so switching sessions
- * (unmount) does not reset the clock — remount resumes from the same start.
- * Cleared when the turn settles (`startTime` leaves) or a newer open turn
- * replaces it for that session.
+ * Wall-clock start of the *current* waiting-line appearance, keyed by
+ * sessionId. Lives outside React so a locale-seat change does not reset
+ * the digits. Cleared when the line hides (tools / Think / settled) or
+ * the view unmounts — the next appearance starts at 0, it does not keep
+ * adding through a 10-minute tool loop.
  */
 const waitingEpisodeStartedAt = new Map<string, number>()
-
-function waitingEpisodeKey(sessionId: string, startTime: number): string {
-  return `${sessionId}\0${startTime}`
-}
-
-/** Drop stale episode starts for a session (settled turn or a newer open turn). */
-function pruneWaitingEpisodes(sessionId: string, keep: string | null): void {
-  const prefix = `${sessionId}\0`
-  for (const key of waitingEpisodeStartedAt.keys()) {
-    if (key.startsWith(prefix) && key !== keep) waitingEpisodeStartedAt.delete(key)
-  }
-}
 
 /** Test seam: wipe every parked waiting-episode clock. */
 export function resetWaitingEpisodeClocksForTests(): void {
@@ -239,11 +237,10 @@ export function resetWaitingEpisodeClocksForTests(): void {
 /**
  * Flow-tail waiting label (`turnStatus.*`). Yields once tools or a streaming
  * partial are the active surface; step gaps and steer waits keep it visible.
- * The phrase stays stable for the open turn; the clock measures this waiting
- * episode from its first appearance (not wall time since `turn/start` —
- * whole-turn duration belongs on the settled Ran-for footer). The episode
- * start is parked in {@link waitingEpisodeStartedAt} so session switches and
- * mid-turn tool/Think gaps keep counting in the background.
+ * The phrase stays stable for the open turn; the clock measures this
+ * waiting-line appearance from when it became visible (not wall time since
+ * `turn/start`, and not the sum of earlier vacuums in the same turn).
+ * Whole-turn duration belongs on the settled Ran-for footer.
  *
  * Permanently mounted: every token / step boundary flips `visible`. A
  * non-waiting episode parks the node with `hidden` (no layout slot), and the
@@ -254,7 +251,7 @@ export function resetWaitingEpisodeClocksForTests(): void {
 function TurnStatus({ visible, startTime, sessionId, t }: {
   /** Whether the flow tail is currently in a waiting vacuum. */
   visible: boolean
-  /** Open turn's `turn/start` time — seeds the waiting phrase and episode key. */
+  /** Open turn's `turn/start` time — seeds the waiting phrase. */
   startTime: number | null
   /** Session that owns this flow — scopes the parked episode clock. */
   sessionId: string
@@ -276,16 +273,15 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
     setClockVisible(false)
   }
   useEffect(() => {
-    const key = startTime === null ? null : waitingEpisodeKey(sessionId, startTime)
-    pruneWaitingEpisodes(sessionId, key)
-    if (!visible || key === null) {
+    if (!visible) {
+      waitingEpisodeStartedAt.delete(sessionId)
       hideClock()
       return
     }
-    let startedAt = waitingEpisodeStartedAt.get(key)
+    let startedAt = waitingEpisodeStartedAt.get(sessionId)
     if (startedAt === undefined) {
       startedAt = Date.now()
-      waitingEpisodeStartedAt.set(key, startedAt)
+      waitingEpisodeStartedAt.set(sessionId, startedAt)
     }
     const tick = (): void => {
       const elapsed = Math.max(0, Date.now() - startedAt!)
@@ -305,7 +301,10 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
     tick()
     const id = setInterval(tick, 1000)
     return () => { clearInterval(id) }
-  }, [visible, startTime, sessionId, t])
+  }, [visible, sessionId, t])
+  useEffect(() => () => {
+    waitingEpisodeStartedAt.delete(sessionId)
+  }, [sessionId])
   // Fill the node in the same frame it mounts, otherwise the first second shows
   // an empty clock.
   useLayoutEffect(() => {
@@ -341,6 +340,8 @@ export function ChatView({
   const turnSurfaceActive = useSession(s =>
     hasActiveTurnSurface(s.partial, s.runningCalls.length, s.chat.timeline))
   const runningTurnStart = useSession(s => runningTurnStartTime(s.chat.timeline))
+  const turnOpen = useSession(s => hasOpenTurn(s.chat.timeline))
+  const turnsSettled = useSession(s => turnsAreSettled(s.chat.timeline))
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
@@ -488,6 +489,13 @@ export function ChatView({
     }
     return pending
   }, [pendingSteering, echoBook, steeringPreviews])
+  const pendingGroups = useMemo(
+    () => groupPendingByChrome(pendingInputs, (input) => {
+      if (input.kind === 'echo' && input.submission.placement !== 'steering') return 'send'
+      return pendingInputChrome(running, turnOpen, runningTurnStart, pendingInputAt(input))
+    }),
+    [pendingInputs, running, turnOpen, runningTurnStart],
+  )
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -548,15 +556,17 @@ export function ChatView({
   const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
   // Steer waits only — transcript echoes must not force the shimmer while
   // Think/tools are live (that was the blue-label flicker on every send).
-  const pendingSteerCount = pendingInputs.filter((input) => (
-    input.kind === 'steer'
-    || (input.kind === 'echo' && input.submission.placement === 'steering')
-  )).length
+  const pendingSteerCount = pendingGroups.reduce(
+    (n, group) => n + (group.chrome === 'steer' ? group.items.length : 0),
+    0,
+  )
   const showFlowWaiting = shouldShowFlowWaiting({
     running,
     pendingSteerCount,
     tailKind: lastDurable?.kind,
     turnSurfaceActive,
+    turnOpen,
+    turnsSettled,
   })
   const lastPending = pendingInputs[pendingInputs.length - 1]
   const lastSteeringId = lastPending === undefined
@@ -1008,30 +1018,59 @@ export function ChatView({
           {/* No pending placeholders: questions (ui-user-questions) and approvals
               (ApprovalPanel) both take over the composer, so a flow card would
               double-render the same wait. */}
-          {pendingInputs.map((input) => {
-            if (input.kind === 'echo') {
-              return (
-                <PendingSubmissionBubble
-                  key={input.submission.requestId}
-                  submission={input.submission}
-                  renderMessageImages={renderMessageImages}
-                  renderMessageFiles={renderMessageFiles}
-                  t={t}
-                />
-              )
+          {pendingGroups.flatMap((group) => {
+            const steer = group.chrome === 'steer'
+            if (steer || group.items.length === 1) {
+              return group.items.map((input) => {
+                if (input.kind === 'echo') {
+                  return (
+                    <PendingSubmissionBubble
+                      key={input.submission.requestId}
+                      submission={input.submission}
+                      steer={steer}
+                      renderMessageImages={renderMessageImages}
+                      renderMessageFiles={renderMessageFiles}
+                      t={t}
+                    />
+                  )
+                }
+                return (
+                  <PendingSteeringBubble
+                    key={input.item.id}
+                    content={input.item.content}
+                    steer={steer}
+                    {...(input.submission === undefined
+                      ? {}
+                      : { previewAttachments: previewAttachmentsOf(input.submission.attachments) })}
+                    renderMessageImages={renderMessageImages}
+                    renderMessageFiles={renderMessageFiles}
+                    t={t}
+                  />
+                )
+              })
             }
-            return (
+            const content = group.items.flatMap(pendingInputContent)
+            const preview = group.items.find((input) => input.kind === 'echo' || input.submission !== undefined)
+            const previewAttachments = preview === undefined
+              ? undefined
+              : preview.kind === 'echo'
+                ? previewAttachmentsOf(preview.submission.attachments)
+                : preview.submission === undefined
+                  ? undefined
+                  : previewAttachmentsOf(preview.submission.attachments)
+            const key = group.items.map((input) => (
+              input.kind === 'echo' ? input.submission.requestId : input.item.id
+            )).join('+')
+            return [
               <PendingSteeringBubble
-                key={input.item.id}
-                content={input.item.content}
-                {...(input.submission === undefined
-                  ? {}
-                  : { previewAttachments: previewAttachmentsOf(input.submission.attachments) })}
+                key={key}
+                content={content}
+                {...(previewAttachments === undefined ? {} : { previewAttachments })}
                 renderMessageImages={renderMessageImages}
                 renderMessageFiles={renderMessageFiles}
                 t={t}
-              />
-            )
+              />,
+            ]
           })}
           <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} sessionId={sessionId} t={t} />
         </div>

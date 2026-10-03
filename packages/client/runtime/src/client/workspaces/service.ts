@@ -116,11 +116,22 @@ export class WorkspaceRuntime implements IWorkspaces {
     const sessions = this.sessions.list.getSnapshot()
     for (const id of sessions.ids) {
       const summary = sessions.byId[id]
-      if (summary !== undefined && summary.blank && summary.cwd === workspace.path
+      if (summary === undefined || !summary.blank) continue
+      // Subagent children are catalog-addressed, not New Session blanks —
+      // reusing one keeps the one-shot read-only composer after 「新会话」.
+      if (summary.origin === 'subagent') continue
+      if (summary.cwd === workspace.path
         && workspace.sessionIds.includes(summary.id)
         && !archived.includes(summary.id)) return summary.id
     }
-    const attempt = this.sessions.create({ workspaceId, localCwd: workspace.path })
+    const attempt = this.sessions.create({
+      workspaceId,
+      localCwd: workspace.path,
+      // A New Session opens from wherever the user was: carry that session's
+      // pinned model selection over instead of making them pick again. Read
+      // from the pre-create snapshot, so the new session cannot be its own source.
+      ...(sessions.current === undefined ? {} : { inheritFrom: sessions.current }),
+    })
       .then((sessionId) => {
         // Create RPC and host/workspace-changed are unordered: pin membership
         // locally so the new blank does not land in Ungrouped until the frame.
@@ -193,11 +204,11 @@ export class WorkspaceRuntime implements IWorkspaces {
    */
   startSession(workspaceId?: WorkspaceId): void {
     const workspace = this.list.getSnapshot()
-    const current = this.sessions.list.getSnapshot().current
-    const currentWorkspaceId = current === undefined
-      ? undefined
-      : workspace.items.find(item => item.sessionIds.includes(current))?.workspaceId
-    const target = workspaceId ?? currentWorkspaceId ?? workspace.recentWorkspaceId
+    const sessions = this.sessions.list.getSnapshot()
+    const current = sessions.current
+    const target = workspaceId
+      ?? workspaceIdForNewSession(workspace.items, sessions, current)
+      ?? workspace.recentWorkspaceId
     if (target === undefined) {
       this.sessions.clear()
       return
@@ -422,6 +433,34 @@ export class WorkspaceRuntime implements IWorkspaces {
       recentWorkspaceId: baselinesReady ? recentWorkspace(workspace.items, sessions.byId) : undefined,
     })
   }
+}
+
+/**
+ * New Session from a subagent child belongs on the parent's workspace, not
+ * whatever catalog membership the child picked up (including a mistaken Host
+ * default root).
+ */
+function workspaceIdForNewSession(
+  workspaces: readonly WorkspaceView[],
+  sessions: SessionsPortList,
+  current: SessionId | undefined,
+): WorkspaceId | undefined {
+  if (current === undefined) return undefined
+  let id: SessionId | undefined = current
+  const seen = new Set<SessionId>()
+  while (id !== undefined && !seen.has(id)) {
+    seen.add(id)
+    const summary = sessions.byId[id]
+    if (summary?.origin === 'subagent' && summary.parentId !== undefined) {
+      id = summary.parentId
+      continue
+    }
+    break
+  }
+  const anchor = id ?? current
+  // Membership of the current child must not win: Host often lists the
+  // default workspace first, and the child may sit there by mistake.
+  return workspaces.find(item => item.sessionIds.includes(anchor))?.workspaceId
 }
 
 /** Stable tie-breaking follows Host Workspace order. */

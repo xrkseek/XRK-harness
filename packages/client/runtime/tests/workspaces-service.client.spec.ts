@@ -281,6 +281,56 @@ describe('WorkspaceRuntime', () => {
     await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-fresh-2')
   })
 
+  it('carries the current session into the created session as the model-inherit source', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('source', [sid('s-live')]), workspace('target')] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-live'), updatedAt: 1, running: false, blank: false, cwd: '/w/source' },
+      ] as never[],
+    }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    sessions.open(sid('s-live'))
+
+    // target holds no blank to reuse, so the Host births one — told to copy
+    // the model selection the user pinned on the session they came from.
+    api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-fresh') }))
+    await expect(workspaces.connectWorkspace(wid('target'))).resolves.toBe('s-fresh')
+    expect(api.callsOf('session.create')).toEqual([
+      { workspaceId: 'target', inheritFrom: sid('s-live') },
+    ])
+  })
+
+  it('connectWorkspace does not reuse a blank subagent child', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha', [sid('s-parent'), sid('s-child')])] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-parent'), updatedAt: 1, running: false, blank: false, cwd: '/w/alpha' },
+        {
+          sessionId: sid('s-child'), updatedAt: 2, running: false, blank: true, cwd: '/w/alpha',
+          parentSessionId: sid('s-parent'), origin: 'subagent',
+        },
+      ] as never[],
+    }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-fresh') }))
+    await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-fresh')
+    expect(api.callsOf('session.create')).toEqual([{ workspaceId: 'alpha' }])
+  })
+
   it('a rejected first prompt keeps the blank session eligible for connectWorkspace reuse', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()
@@ -446,6 +496,60 @@ describe('WorkspaceRuntime', () => {
     const clear = vi.spyOn(emptySessions, 'clear')
     emptyWorkspaces.startSession()
     expect(clear).toHaveBeenCalledOnce()
+  })
+
+  it('targets New Session at the parent workspace when the current session is a subagent', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('project', [sid('parent')]),
+        workspace('host-default', [sid('child')]),
+      ] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({ items: [
+      { sessionId: sid('parent'), updatedAt: 1, running: false, blank: false, cwd: '/w/project' },
+      {
+        sessionId: sid('child'), updatedAt: 2, running: false, blank: true, cwd: '/w/host-default',
+        parentSessionId: sid('parent'), origin: 'subagent',
+      },
+    ] as never[] }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    sessions.open(sid('child'))
+    const connect = vi.spyOn(workspaces, 'connectWorkspace').mockReturnValue(new Promise(() => {}))
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenCalledWith(wid('project'))
+  })
+
+  it('does not pick the child workspace when Host lists it before the parent', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [
+        workspace('host-default', [sid('child')]),
+        workspace('project', [sid('parent')]),
+      ] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({ items: [
+      { sessionId: sid('parent'), updatedAt: 1, running: false, blank: false, cwd: '/w/project' },
+      {
+        sessionId: sid('child'), updatedAt: 2, running: false, blank: true, cwd: '/w/host-default',
+        parentSessionId: sid('parent'), origin: 'subagent',
+      },
+    ] as never[] }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    sessions.open(sid('child'))
+    const connect = vi.spyOn(workspaces, 'connectWorkspace').mockReturnValue(new Promise(() => {}))
+    workspaces.startSession()
+    await Promise.resolve()
+    expect(connect).toHaveBeenCalledWith(wid('project'))
   })
 
   it('archives a session, projects the set from the response, list, and frame, and clears only the current one', async () => {

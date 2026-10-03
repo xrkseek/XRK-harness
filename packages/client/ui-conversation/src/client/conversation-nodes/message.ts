@@ -6,7 +6,7 @@ import {
   contextForm, contextProvenance, isAppendSurfaceEvent, isReplacementSurfaceEvent,
 } from '@xrkseek/client-runtime/client'
 import type { InboxState } from './inbox.ts'
-import { chatNode } from './common.ts'
+import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode, contextLocation } from './common.ts'
 
 interface ReferencedUserMessageNode extends UserMessageNode {
   /** Labels cited by the immediately following session-reference context. */
@@ -61,7 +61,18 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
       }
     }
     const claimed = reader.previous<InboxState>('inbox-next-step')?.state.claimed.has(String(event.data.id)) === true
-    return claimed
+    // Claim at turn entry (turn location, no steps yet) is the next send.
+    // Claim on a step, a session-located prepend, or a turn that already has
+    // steps is mid-turn steer (「插队中」).
+    const loc = match.location
+    const turnEntry = loc.kind === 'turn' && loc.turn.steps.length === 0
+    const midTurn = claimed && !turnEntry
+    const rpcIds = Array.isArray((event.data as { rpcIds?: unknown }).rpcIds)
+      ? (event.data as { rpcIds: readonly unknown[] }).rpcIds
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : undefined
+    const echoIds = rpcIds !== undefined && rpcIds.length > 0 ? { rpcIds } : {}
+    return midTurn
       ? {
         kind: 'steering',
         messageId: event.data.id,
@@ -69,6 +80,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         time: event.time,
         content: event.data.content,
         source: event.data.source,
+        ...echoIds,
       }
       : {
         kind: 'user',
@@ -76,6 +88,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         time: event.time,
         content: event.data.content,
         source: event.data.source,
+        ...echoIds,
       }
   },
   update: context => context.state,
@@ -88,10 +101,20 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     const hideContextChrome = context.state.kind === 'context'
       && context.state.form !== 'notice'
       && context.state.form !== 'catalog'
+    const loc = contextLocation(context)
+    // A closed-turn steer belongs after that turn's tail, not between the
+    // answer and the footer.
+    let anchor = context.state.seq
+    if (context.state.kind === 'steering'
+      && (loc.kind === 'turn' || loc.kind === 'step')
+      && loc.turn.status === 'closed'
+      && loc.turn.end !== undefined) {
+      anchor = loc.turn.end.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup
+    }
     return chatNode(
       context,
       context.state.kind,
-      context.state.seq,
+      anchor,
       context.state,
       hideContextChrome ? { visibility: 'hidden' } : {},
     )

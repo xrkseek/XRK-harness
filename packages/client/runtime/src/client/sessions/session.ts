@@ -29,7 +29,7 @@ import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
-import { SessionQueueMirror } from './queue-mirror.ts'
+import { SessionQueueMirror, echoRpcIdsFromUserMessage } from './queue-mirror.ts'
 
 /**
  * Messages requested per history page (open / loadOlder).
@@ -994,13 +994,22 @@ export class Session implements SessionFace {
   private observeSubmissionEvent(event: SessionEvent): void {
     if (this.submissionSettlements.size === 0) return
     if (event.type !== 'user/message') return
-    const data = event.data as { readonly source?: unknown; readonly content?: unknown; readonly rpcId?: unknown } | undefined
-    const source = data?.source as { readonly kind?: unknown; readonly rpcId?: unknown } | undefined
-    const rpcId = (source?.kind === 'user' && typeof source.rpcId === 'string')
-      ? source.rpcId
-      : (typeof data?.rpcId === 'string' ? data.rpcId : undefined)
-    if (rpcId === undefined) return
-    this.scheduleObservedRetirement(rpcId as SessionRequestId, attachmentRefsIn(data?.content))
+    const data = event.data as {
+      readonly source?: unknown
+      readonly content?: unknown
+      readonly rpcId?: unknown
+      readonly rpcIds?: unknown
+    } | undefined
+    const ids = echoRpcIdsFromUserMessage({
+      source: data?.source as { readonly kind?: unknown; readonly rpcId?: unknown } | undefined,
+      rpcId: data?.rpcId,
+      rpcIds: data?.rpcIds,
+    })
+    if (ids.length === 0) return
+    const attachments = attachmentRefsIn(data?.content)
+    for (const id of ids) {
+      this.scheduleObservedRetirement(id as SessionRequestId, attachments)
+    }
   }
 
   /**

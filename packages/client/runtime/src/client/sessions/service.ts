@@ -547,6 +547,8 @@ export class SessionRuntime implements ISessions {
     sessionId?: SessionId
     localCwd?: string
     agentPreset?: string
+    /** Session whose pinned model selection the Host copies onto the new one. */
+    inheritFrom?: SessionId
   } = {}): Promise<SessionId> {
     const staged = opts.agentPreset ?? this.createAgentPresetProvider?.()
     const result = await this.manager.create({

@@ -57,8 +57,15 @@ export class ComposerSubmissionPolicy {
     running: boolean,
     gesture: ComposerSubmitGesture,
     steeringAvailable: boolean,
+    followSteer = false,
   ): InputSubmitMode {
-    return resolveSubmitMode(this.busyEnter.getSnapshot(), running, gesture, steeringAvailable)
+    return resolveSubmitMode(
+      this.busyEnter.getSnapshot(),
+      running,
+      gesture,
+      steeringAvailable,
+      followSteer,
+    )
   }
 
   /**

@@ -549,12 +549,15 @@ export class SessionManager {
       localCwd?: string
       /** Catalog badge to pin at birth (seat staged pick). */
       agentPreset?: string
+      /** Session whose pinned model selection is copied onto the new one. */
+      inheritFrom?: SessionId
     } = {},
   ): Promise<RpcResult<{ sessionId: SessionId; agentPreset?: string }>> {
     try {
       const shared = {
         ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
         ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
+        ...(opts.inheritFrom === undefined ? {} : { inheritFrom: opts.inheritFrom }),
       }
       const payload = opts.workspaceId !== undefined
         ? { workspaceId: opts.workspaceId, ...shared }

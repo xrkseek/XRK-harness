@@ -20,6 +20,29 @@ function textOf(content: readonly ContentBlock[]): string {
     .join('')
 }
 
+type QueueUserMessageData = {
+  readonly id?: unknown
+  readonly source?: { readonly kind?: unknown; readonly rpcId?: unknown }
+  readonly rpcId?: unknown
+  readonly rpcIds?: unknown
+}
+
+/**
+ * Client echo ids on a durable `user/message` (primary `rpcId` plus coalesced
+ * sibling `rpcIds`). Shared by queue handoff and submission retirement.
+ */
+export function echoRpcIdsFromUserMessage(data: QueueUserMessageData): readonly string[] {
+  const source = data.source
+  const primary = (source?.kind === 'user' && typeof source.rpcId === 'string')
+    ? source.rpcId
+    : (typeof data.rpcId === 'string' ? data.rpcId : undefined)
+  const extras = Array.isArray(data.rpcIds)
+    ? data.rpcIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : []
+  if (primary === undefined) return extras
+  return extras.length === 0 ? [primary] : [primary, ...extras.filter(id => id !== primary)]
+}
+
 type QueueItems = Extract<MuxFrame, { type: 'session/queue' }>['items']
 
 /** Authoritative transient queue projection and durable steering handoff. */
@@ -105,22 +128,17 @@ export class SessionQueueMirror {
    */
   acceptDurable(event: SessionEvent): boolean {
     if (event.type !== 'user/message') return false
-    const data = event.data as {
-      readonly id?: unknown
-      readonly source?: { readonly kind?: unknown; readonly rpcId?: unknown }
-      readonly rpcId?: unknown
-    }
-    const source = data.source
-    const rpcId = (source?.kind === 'user' && typeof source.rpcId === 'string')
-      ? source.rpcId
-      : (typeof data.rpcId === 'string' ? data.rpcId : undefined)
-    const index = this.current.findIndex(item => {
-      if (item.placement !== 'steering') return false
-      if (rpcId !== undefined && item.rpcId !== undefined) return item.rpcId === rpcId
-      return item.messageId === data.id
+    const data = event.data as QueueUserMessageData
+    const echoIds = echoRpcIdsFromUserMessage(data)
+    const echoSet = new Set(echoIds)
+    const next = this.current.filter((item) => {
+      if (item.placement !== 'steering') return true
+      if (item.rpcId !== undefined && echoSet.has(item.rpcId)) return false
+      if (echoSet.size === 0) return item.messageId !== data.id
+      return true
     })
-    if (index < 0) return false
-    this.current = this.current.filter((_item, candidate) => candidate !== index)
+    if (next.length === this.current.length) return false
+    this.current = next
     return true
   }
 }

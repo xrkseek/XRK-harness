@@ -81,6 +81,8 @@ export interface UserMessageNode {
   time: number
   content: readonly ContentBlock[]
   source: unknown
+  /** Sibling client echo ids when several steers coalesced into this row. */
+  rpcIds?: readonly string[]
 }
 
 /** Recorded boundaries used to derive assistant latency and throughput. */
@@ -128,6 +130,8 @@ export interface SteeringMessageNode {
   time: number
   content: readonly ContentBlock[]
   source: unknown
+  /** Sibling client echo ids when several steers coalesced into this row. */
+  rpcIds?: readonly string[]
 }
 
 /** A context/system injection surfaced in the flow. */

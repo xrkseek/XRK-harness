@@ -30,9 +30,15 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const owner: TurnTailOwnerProps = { turn, seq: closing?.finalNode.seq ?? data.seq, openFile }
   const tail = renderSlotChain('conversation.chat.turnTail', owner)
   if (closing === null) return tail === null ? null : <div className={css.root}>{tail}</div>
-  const runMs = turn.start === undefined || turn.end === undefined
+  const fromEnds = turn.start === undefined || turn.end === undefined
     ? undefined
     : Math.max(0, turn.end.time - turn.start.time)
+  const fromClosing = turn.start === undefined
+    ? undefined
+    : Math.max(0, closing.time - turn.start.time)
+  const runMs = fromEnds !== undefined && fromEnds > 0
+    ? fromEnds
+    : fromClosing
   // Interruption-frozen partials carry no messageId — copy / branch / usage
   // still render; feedback (needs a durable id) stays off.
   const messageId = closing.finalNode.messageId

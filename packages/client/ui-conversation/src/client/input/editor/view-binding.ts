@@ -14,6 +14,7 @@ interface DraftViewGate {
   running: boolean
   steeringAvailable: boolean
   busyEnter: BusyEnterBehavior
+  followSteer: boolean
   intakeFiles: (files: readonly File[]) => void
   uploadsPending: boolean
   showToast: (text: string) => void
@@ -134,6 +135,7 @@ export function installDraftKeymap(
         g.running,
         accelerated ? 'accelerated' : 'enter',
         g.steeringAvailable,
+        g.followSteer,
       ))
     },
     intakeFiles: (files) => { gate.current.intakeFiles(files) },

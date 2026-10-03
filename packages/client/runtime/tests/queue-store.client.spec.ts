@@ -224,6 +224,36 @@ describe('queue snapshot intake', () => {
     expect(session.getSnapshot().queue).toEqual([])
   })
 
+  it('retires every coalesced steer row from rpcId plus rpcIds', async () => {
+    const session = makeSession()
+    await session.open()
+    session.handleMuxEnvelope(rid('env-batch'), queueFrame([
+      { id: 'admit-a', body: 'A', placement: 'steering' },
+      { id: 'admit-b', body: 'B', placement: 'steering' },
+    ]))
+    expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['admit-a', 'admit-b'])
+
+    session.handleMuxEnvelope(rid('env-merged'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: {
+        seq: 0,
+        time: 1_700_000_000_000,
+        type: 'user/message',
+        surfaceOp: 'append',
+        data: {
+          id: 'msg-merged',
+          role: 'user',
+          content: text('A\n\nB'),
+          source: { kind: 'user', rpcId: 'rpc-admit-a' },
+          rpcIds: ['rpc-admit-b'],
+        },
+      },
+    })
+
+    expect(session.getSnapshot().queue).toEqual([])
+  })
+
   it('keeps attachment block identity across queue publishes', () => {
     const session = makeSession()
     const attachment = {

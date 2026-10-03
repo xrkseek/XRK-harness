@@ -37,18 +37,20 @@ export function hasActiveTurnSurface(
 }
 
 /**
- * Composer Stop latch: Host `running`, in-flight tools, or a visible streaming
- * partial. Selected as one boolean so InputBar does not re-render on every
- * assistant chunk (partial identity changes each animation-frame flush).
+ * Composer Stop follows Host `running` only. Optimistic cancel clears that
+ * bit before in-flight tools / streaming tails settle; keeping Stop on
+ * `runningCalls` / partial made pause look late while the session list was
+ * already idle. Selected as one boolean so InputBar does not re-render on
+ * every assistant chunk (partial identity changes each animation-frame flush).
  */
 export function isComposerAgentActive(input: {
   readonly running: boolean
   readonly runningCallCount: number
   readonly partial: PartialAssistant | null
 }): boolean {
+  void input.runningCallCount
+  void input.partial
   return input.running
-    || input.runningCallCount > 0
-    || hasVisiblePartialContent(input.partial)
 }
 
 /**
@@ -63,6 +65,9 @@ export function shouldShowFlowWaiting(input: {
   readonly pendingSteerCount: number
   readonly tailKind: string | undefined
   readonly turnSurfaceActive: boolean
+  readonly turnOpen?: boolean
+  /** True when the timeline has turns and none of them are still open. */
+  readonly turnsSettled?: boolean
 } | {
   readonly running: boolean
   readonly partial: PartialAssistant | null
@@ -70,9 +75,12 @@ export function shouldShowFlowWaiting(input: {
   readonly timeline: ConversationTimelineSnapshot
   readonly pendingSteerCount: number
   readonly tailKind: string | undefined
+  readonly turnOpen?: boolean
+  readonly turnsSettled?: boolean
 }): boolean {
   if (!input.running) return false
   if (input.pendingSteerCount > 0) return true
+  if (input.turnsSettled) return false
   if (input.tailKind === 'steering') return true
   const surfaceActive = 'turnSurfaceActive' in input
     ? input.turnSurfaceActive

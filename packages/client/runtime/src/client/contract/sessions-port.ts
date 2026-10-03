@@ -17,6 +17,10 @@ export interface SessionsPortSummary {
   blank: boolean
   cwd?: string
   updatedAt: number
+  /** Catalog children are never New Session reuse targets. */
+  origin?: 'subagent' | 'fork'
+  /** Walk to the parent workspace when New Session starts from a child. */
+  parentId?: SessionId
 }
 
 /** Session-list facts sibling domains read: readiness, selection, and the row map. */
@@ -34,10 +38,16 @@ export interface SessionsPort {
   /**
    * Create a session on the host.
    * @param opts - target workspace; `localCwd` seeds the optimistic list
-   *   summary (never sent on the wire — Host rejects workspaceId+cwd).
+   *   summary (never sent on the wire — Host rejects workspaceId+cwd);
+   *   `inheritFrom` makes the Host copy that session's pinned model selection
+   *   onto the new session.
    * @returns the new session id.
    */
-  create(opts: { workspaceId: WorkspaceId; localCwd?: string }): Promise<SessionId>
+  create(opts: {
+    workspaceId: WorkspaceId
+    localCwd?: string
+    inheritFrom?: SessionId
+  }): Promise<SessionId>
   /**
    * Select a session as current.
    * @param id - session id (must exist in the list store).

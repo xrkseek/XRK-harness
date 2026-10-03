@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationTimelineSnapshot, PartialAssistant, StepLocation, TurnLocation } from '@xrkseek/client-runtime/client'
-import { shouldShowFlowWaiting } from '../src/client/chat/flow-waiting.ts'
+import { isComposerAgentActive, shouldShowFlowWaiting } from '../src/client/chat/flow-waiting.ts'
 
 const EMPTY_TIMELINE: ConversationTimelineSnapshot = { turnOrder: [], turns: new Map() }
 
@@ -113,5 +113,32 @@ describe('shouldShowFlowWaiting', () => {
       timeline,
       tailKind: 'steering',
     })).toBe(true)
+  })
+
+  it('hides when running lags after every turn has closed', () => {
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      turnsSettled: true,
+      tailKind: 'steering',
+    })).toBe(false)
+  })
+})
+
+describe('isComposerAgentActive', () => {
+  it('follows Host running only — leftover tools or Think do not keep Stop', () => {
+    expect(isComposerAgentActive({
+      running: true,
+      runningCallCount: 0,
+      partial: null,
+    })).toBe(true)
+    expect(isComposerAgentActive({
+      running: false,
+      runningCallCount: 2,
+      partial: {
+        turn: 1,
+        step: 0,
+        blocks: [{ kind: 'text', text: 'still streaming' }],
+      },
+    })).toBe(false)
   })
 })

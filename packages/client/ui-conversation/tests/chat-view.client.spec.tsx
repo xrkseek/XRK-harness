@@ -396,6 +396,7 @@ describe('Chat node rendering', () => {
     const t = makeTranslate(zh, commonZh)
     expect(formatRunDuration(0, t)).toBe('0秒')
     expect(formatRunDuration(-500, t)).toBe('0秒')
+    expect(formatRunDuration(400, t)).toBe('<1秒')
     expect(formatRunDuration(15_999, t)).toBe('15秒')
     expect(formatRunDuration(125_000, t)).toBe('2分05秒')
   })
@@ -564,6 +565,7 @@ describe('ChatView', () => {
         content: pending.content, source: null,
       }],
       running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
     })
     const view = render(<h.ChatView {...h.props} />)
 
@@ -619,16 +621,92 @@ describe('ChatView', () => {
       pendingSubmissions: [{
         requestId: 'req-local-steer' as RpcId,
         placement: 'steering',
-        time: 1,
+        time: 1_500,
         text: '打断一下',
         attachments: [],
       }],
       running: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
     })
     const view = render(<h.ChatView {...h.props} />)
     const echo = view.getByText('打断一下').closest('[data-submission-echo]')
     expect(echo).not.toBeNull()
     expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('插队中')
+  })
+
+  it('paints yielded steers as idle user bubbles and stacks consecutive sends', () => {
+    const h = makeHarness({
+      pendingSubmissions: [
+        {
+          requestId: 'req-send-a' as RpcId,
+          placement: 'steering',
+          time: 1,
+          text: '第一句',
+          attachments: [],
+        },
+        {
+          requestId: 'req-send-b' as RpcId,
+          placement: 'steering',
+          time: 2,
+          text: '第二句',
+          attachments: [],
+        },
+      ],
+      running: false,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
+    const row = view.getByText('第一句').closest('[class*="userRow"]') as HTMLElement
+    expect(within(row).getByText('第二句')).toBeTruthy()
+  })
+
+  it('does not keep 插队中 on a prior steer after a later turn is running', () => {
+    const h = makeHarness({
+      nodes: [
+        {
+          kind: 'steering',
+          messageId: 'old-steer' as never,
+          seq: 2,
+          time: 2_000,
+          content: [{ type: 'text', text: 'old insert' }],
+          source: null,
+        },
+        assistant(3, 'next turn', 2),
+      ],
+      running: true,
+      turnTimings: new Map([[2, { startTime: 3_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('old insert').closest('[data-pending-steering]')).toBeNull()
+  })
+
+  it('does not keep subagent notices 插队中 after the parent turn has closed', () => {
+    const notice = {
+      kind: 'steering' as const,
+      messageId: 'child-done' as never,
+      seq: 8,
+      time: 8_000,
+      content: [{ type: 'text', text: 'background subagent finished' }],
+      source: null,
+    }
+    const h = makeHarness({
+      nodes: [notice],
+      queue: [{
+        id: 'steer-late' as never,
+        messageId: 'steer-late-msg' as never,
+        placement: 'steering',
+        content: [{ type: 'text', text: 'another child finished' }],
+        preview: 'another child finished',
+        text: 'another child finished',
+      }],
+      running: true,
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 7_000 }]]),
+      turnEnds: new Map([[1, 7]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('background subagent finished').closest('[data-pending-steering]')).toBeNull()
+    expect(view.getByText('another child finished').closest('[data-pending-steering]')).toBeNull()
   })
 
   it('animates only the latest unresolved model retry', () => {
@@ -1055,11 +1133,11 @@ describe('ChatView', () => {
         nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
       })
       const view = render(<h.ChatView {...h.props} />)
-      // Phrase stays turn-stable; the clock measures the waiting episode from
+      // Phrase stays turn-stable; the clock measures this appearance from
       // first show (not wall time since turn/start — 125s into the turn still
-      // starts under 15s). Session switches park that episode start so remount
-      // resumes the same clock.
-      const flowStatus = () => view.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      // starts under 15s). Hiding the line (tools / unmount) starts a new
+      // count the next time it appears.
+      const flowStatus = () => view.queryAllByRole('status').find(el => el.textContent?.startsWith(phrase))
       const status = flowStatus()
       expect(status).toBeDefined()
       expect(status!.textContent).toBe(phrase)
@@ -1083,7 +1161,36 @@ describe('ChatView', () => {
     }
   })
 
-  it('resumes the waiting clock after a session switch unmount', () => {
+  it('restarts the waiting clock each time the line appears', () => {
+    vi.useFakeTimers()
+    try {
+      const startTime = Date.now()
+      const phrase = zh[`turnStatus.${((startTime % 16) + 16) % 16}` as keyof typeof zh]
+      const trigger: UserMessageNode = { ...user(1, 'go'), time: startTime + 1 }
+      const h = makeHarness({
+        nodes: [trigger], turnTimings: new Map([[1, { startTime }]]), running: true,
+      })
+      const view = render(<h.ChatView {...h.props} />)
+      const flowStatus = () => view.queryAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      act(() => { vi.advanceTimersByTime(20_000) })
+      expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}20秒$`))
+      act(() => {
+        h.set({ runningCalls: [runningCall('gap')] })
+      })
+      expect(flowStatus()).toBeUndefined()
+      act(() => { vi.advanceTimersByTime(60_000) })
+      act(() => {
+        h.set({ runningCalls: [] })
+      })
+      expect(flowStatus()?.textContent).toBe(phrase)
+      act(() => { vi.advanceTimersByTime(15_000) })
+      expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}15秒$`))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restarts the waiting clock after unmount', () => {
     vi.useFakeTimers()
     try {
       const startTime = Date.now()
@@ -1094,17 +1201,15 @@ describe('ChatView', () => {
       }
       const first = makeHarness(init)
       const view = render(<first.ChatView {...first.props} />)
-      const flowStatus = () => view.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
+      const flowStatus = () => view.queryAllByRole('status').find(el => el.textContent?.startsWith(phrase))
       act(() => { vi.advanceTimersByTime(20_000) })
       expect(flowStatus()?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}20秒$`))
-      // Leave the session (ChatView unmounts) while the turn keeps waiting.
       view.unmount()
       act(() => { vi.advanceTimersByTime(10_000) })
-      // Come back: same open turn — clock continues (20s + 10s), does not restart.
       const second = makeHarness(init)
       const again = render(<second.ChatView {...second.props} />)
       const resumed = again.getAllByRole('status').find(el => el.textContent?.startsWith(phrase))
-      expect(resumed?.textContent).toMatch(new RegExp(`^${escapeRegExp(phrase)}30秒$`))
+      expect(resumed?.textContent).toBe(phrase)
     } finally {
       vi.useRealTimers()
     }
@@ -1147,7 +1252,8 @@ describe('ChatView', () => {
       partial: { turn: 1, step: 2, blocks: [{ kind: 'reasoning', text: 'old think still mounted' }] },
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getByRole('status').textContent).toBe(zh['turnStatus.0'])
+    const waiting = view.getAllByRole('status').find(el => !el.closest('[data-pending-steering]'))
+    expect(waiting?.textContent).toBe(zh['turnStatus.0'])
   })
 
   it('hides the idle waiting label once streaming Think content is live', () => {

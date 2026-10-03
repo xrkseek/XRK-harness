@@ -6,7 +6,9 @@ import type { Translate } from '@xrkseek/client-ui-slots'
 export type ClockTranslate = Translate<'clock.md' | 'clock.ymd'>
 
 /** The elapsed-duration share of the conversation dictionary. */
-export type RunDurationTranslate = Translate<'duration.seconds' | 'duration.minutes'>
+export type RunDurationTranslate = Translate<
+  'duration.seconds' | 'duration.minutes' | 'duration.subSecond'
+>
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -40,7 +42,9 @@ export function msUntilNextLocalMidnight(ms: number): number {
  * @returns Display string in whole seconds.
  */
 export function formatRunDuration(ms: number, t: RunDurationTranslate): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
+  const clamped = Math.max(0, ms)
+  if (clamped > 0 && clamped < 1000) return t('duration.subSecond')
+  const total = Math.floor(clamped / 1000)
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return minutes > 0

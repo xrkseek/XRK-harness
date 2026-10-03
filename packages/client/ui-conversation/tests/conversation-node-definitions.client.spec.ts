@@ -481,6 +481,37 @@ describe('built-in conversation node Definitions', () => {
     expect(node(snapshot(value), 'user')).toBeUndefined()
   })
 
+  it('classifies a next-step claim at turn entry as a user send, not steering', () => {
+    const follow = textMessage('follow-1', 'next question')
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('assistant-done', 'done'),
+      }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(6, 'turn/start', { turn: 2 }),
+      at(7, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        inserted: [follow],
+      }),
+      at(8, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(9, 'user/message', follow, { surfaceOp: 'append' }),
+    ])
+
+    expect(node(snapshot(value), 'user')?.data).toMatchObject({ kind: 'user' })
+    expect(node(snapshot(value), 'steering')).toBeUndefined()
+  })
+
   it('orders claimed steering after the finalized Turn tail', () => {
     const steering = textMessage('steer-after-answer', 'change direction')
     const value = assembler([

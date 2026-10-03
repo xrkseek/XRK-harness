@@ -18,6 +18,7 @@ import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
+import { durableSteerPending, runningTurnStartTime, hasOpenTurn } from './pending-input-chrome.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -67,6 +68,7 @@ function isFileAttachment(value: unknown): value is FileAttachmentRef {
 
 function contentParts(content: readonly unknown[]): {
   text: string
+  segments: readonly string[]
   attachments: PresentedAttachment[]
   rest: unknown[]
 } {
@@ -84,7 +86,8 @@ function contentParts(content: readonly unknown[]): {
     }
     else rest.push(block)
   }
-  return { text: texts.join(''), attachments, rest }
+  const segments = texts.filter(part => part.length > 0)
+  return { text: texts.join('\n\n'), segments, attachments, rest }
 }
 
 function retrySeconds(milliseconds: number): number {
@@ -262,7 +265,7 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, renderMessageFiles, actions, pending = false, echo = false,
+  content, renderMessageImages, renderMessageFiles, actions, steer = false, echo = false,
   referenceLabels = [], previewAttachments, editing = false, t,
 }: {
   content: readonly unknown[]
@@ -271,8 +274,8 @@ function UserStyleBubble({
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   /** Optional IconActions (or similar) below the bubble; receives the joined text. */
   actions?: (text: string) => ReactNode
-  /** Whether to show the「插队中」badge (Host steering row or local steer echo). */
-  pending?: boolean
+  /** Mid-turn steer only. The next-turn send is ordinary idle chrome. */
+  steer?: boolean
   /** Whether this is a local submission echo (invisible marker; paints like its durable replacement). */
   echo?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
@@ -283,15 +286,16 @@ function UserStyleBubble({
   editing?: boolean
   t: ChatViewSlotProps['t']
 }): ReactNode {
-  const { text, attachments: contentAttachments, rest } = contentParts(content)
+  const { text, segments, attachments: contentAttachments, rest } = contentParts(content)
   const attachments = previewAttachments ?? contentAttachments
   const compactImages = attachments.length > 1
   const truncated = (total: number): string => t('json.truncated', { total })
-  const showBubble = text !== '' || rest.length > 0
+  const bodies = segments.length > 0 ? segments : (text !== '' || rest.length > 0 ? [text] : [])
+  const showBubble = bodies.length > 0 || rest.length > 0
   return (
     <div
       className={css.userRow}
-      data-pending-steering={pending || undefined}
+      data-pending-steering={steer || undefined}
       data-submission-echo={echo || undefined}
       data-editing={editing || undefined}
       aria-current={editing ? 'true' : undefined}
@@ -299,12 +303,11 @@ function UserStyleBubble({
       data-time-hover-root
     >
       <div className={css.userStack}>
-        {/* Host steering inbox + local steer echoes — both read as「插队中」. */}
-        {pending && (
+        {steer ? (
           <span className={css.pendingSteerBadge} role="status">
             {t('message.pendingSteer')}
           </span>
-        )}
+        ) : null}
         {attachments.length > 0 && (
           <div className={css.attachmentRow} data-message-attachments>
             {attachments.map((attachment, index) => attachment.type === 'image'
@@ -338,10 +341,16 @@ function UserStyleBubble({
               ))}
           </div>
         )}
-        {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels)}
-          {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
-        </div>}
+        {showBubble && bodies.map((body, index) => (
+          <div key={index} className={css.bubble}>
+            {projectUserText(body, index === 0 ? referenceLabels : [])}
+            {index === bodies.length - 1
+              ? rest.map((block, i) => (
+                <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />
+              ))
+              : null}
+          </div>
+        ))}
         {referenceLabels.length > 0 && (
           <div className={css.referenceSummary}>
             {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
@@ -356,12 +365,6 @@ function UserStyleBubble({
 /**
  * Render one Host-authoritative pending steering item with the same visual
  * language as its eventual durable transcript node.
- * @param props - Pending message content and conversation translator.
- * @returns the pending steering bubble.
- */
-/**
- * Render one Host-authoritative pending steering item with the same visual
- * language as its eventual durable transcript node.
  *
  * `previewAttachments` carries the local echo's blob previews when that echo is
  * still alive: a Host row only starts painting after its echo retired or never
@@ -369,12 +372,13 @@ function UserStyleBubble({
  * @param props - Pending message content and conversation translator.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, t }: {
+export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, steer = false, t }: {
   content: readonly unknown[]
   /** Local echo previews replacing the content-derived attachment sequence. */
   previewAttachments?: readonly PresentedAttachment[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
+  steer?: boolean
   t: ChatViewSlotProps['t']
 }): ReactNode {
   return (
@@ -383,7 +387,7 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
       {...(previewAttachments === undefined ? {} : { previewAttachments })}
       renderMessageImages={renderMessageImages}
       {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
-      pending
+      steer={steer}
       t={t}
       actions={text => (
         <MessageIconActions
@@ -405,10 +409,11 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
  * @param props - the session snapshot's pending submission and render seats.
  * @returns the echoed user bubble.
  */
-export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, t }: {
+export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, steer = false, t }: {
   submission: PendingSubmission
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
+  steer?: boolean
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const content = useMemo(
@@ -425,7 +430,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
       previewAttachments={previewAttachments}
       renderMessageImages={renderMessageImages}
       {...(renderMessageFiles === undefined ? {} : { renderMessageFiles })}
-      pending={submission.placement === 'steering'}
+      steer={steer}
       echo
       t={t}
       actions={text => (
@@ -446,10 +451,14 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   node, editAt, deleteAt, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
-  const running = useSession(s => s.running)
-  // Durable steering lands before the open turn yields; keep「插队中」until
-  // that turn ends so the badge does not vanish when the Host queue row clears.
-  const pendingSteer = node.kind === 'steering' && running
+  const pendingSteer = useSession(s => durableSteerPending(
+    node.kind,
+    s.running,
+    node.location,
+    data.time,
+    hasOpenTurn(s.chat.timeline),
+    runningTurnStartTime(s.chat.timeline),
+  ))
   const text = useMemo(() => {
     const parts: string[] = []
     for (const block of data.content) {
@@ -468,7 +477,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      pending={pendingSteer}
+      steer={pendingSteer}
       editing={editing}
       t={t}
       actions={copyText => (
