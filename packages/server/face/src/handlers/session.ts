@@ -60,7 +60,10 @@ import {
 import { liveRouteAllowsImageInput } from "../llm-resolve.js";
 import { selectSessionModel } from "../select-session-model.js";
 import { persistWorkspaceDoc } from "../workspace-store.js";
-import { resolveSessionCwd } from "../session-cwd.js";
+import {
+  resolveParentWorkspaceAttach,
+  resolveSessionCwd,
+} from "../session-cwd.js";
 import {
   historyPageIncludesProjections,
   SESSION_LIST_PROJECTION_KEYS,
@@ -102,9 +105,9 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   }
 
-  const inheritCwd =
+  const inheritParent =
     parentSessionId && !p.workspaceId && !p.cwd
-      ? runtime.sessionCwds.get(parentSessionId)
+      ? resolveParentWorkspaceAttach(runtime, parentSessionId)
       : undefined;
   const attach = runtime.workspaces.resolveAttachTarget({
     ...(typeof p.workspaceId === "string"
@@ -112,8 +115,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       : {}),
     ...(typeof p.cwd === "string"
       ? { cwd: p.cwd.trim() }
-      : inheritCwd
-        ? { cwd: inheritCwd }
+      : inheritParent
+        ? inheritParent
         : {}),
   });
   if ("error" in attach) {
@@ -127,7 +130,12 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       ? runtime.ensureSession(p.sessionId.trim())
       : runtime.ensureSession();
   runtime.watchSession(sessionId);
-  runtime.sessionCwds.set(sessionId, attach.cwd);
+  runtime.sessionCwds.set(
+    sessionId,
+    inheritParent
+      ? resolveSessionCwd(runtime, parentSessionId)
+      : attach.cwd,
+  );
   void runtime.invalidateAgent?.(sessionId);
   const workspace =
     attach.workspaceId === undefined
@@ -151,11 +159,29 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     );
   }
 
+  // New Session inherits the model selection of the session it was opened
+  // from, so the composer's pick survives a session switch. Convenience copy,
+  // not a lineage link: an unknown source — or one that never pinned its own
+  // selection — leaves the default resolution in place, and a subagent parent
+  // below still wins as the nearer relation.
+  const inheritFrom =
+    typeof p.inheritFrom === "string" ? p.inheritFrom.trim() : "";
+  if (inheritFrom && inheritFrom !== sessionId) {
+    const inherited = runtime.sessionModels.get(inheritFrom);
+    if (inherited) runtime.sessionModels.set(sessionId, { ...inherited });
+  }
+
   if (parentSessionId) {
-    const parentModel = runtime.sessionModels.get(parentSessionId);
-    if (parentModel) {
-      runtime.sessionModels.set(sessionId, { ...parentModel });
-    }
+    // Freeze the parent's EFFECTIVE route, not just its explicit override. A
+    // parent that never picked a model has no `sessionModels` entry, so copying
+    // only that would leave the child to re-resolve later — and a mid-run
+    // `agent-default-model` edit would silently move the child off the route
+    // its parent was actually on. Resolution is total (it always answers), so
+    // the only cost is one extra live entry per child session.
+    runtime.sessionModels.set(sessionId, {
+      ...(runtime.sessionModels.get(parentSessionId)
+        ?? resolveSessionModelSelection(runtime, parentSessionId)),
+    });
     const label =
       typeof p.label === "string" && p.label.trim()
         ? p.label.trim()
@@ -540,6 +566,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
     sessionId,
     running: false,
   });
+  runtime.markTurnUiIdle(sessionId);
   // Abort the agent turn latch first so in-flight LLM/tool work sees the
   // cancellation immediately; then join the drain body (which shares the
   // same abort signal path via continueTurn).
@@ -554,6 +581,7 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   //    owned them), which resurfaces as Stop needing multiple clicks and
   //    floating "background job finished" toasts.
   killLiveSessionJobs(runtime.shell, sessionId);
+  runtime.publishJobs(sessionId);
   // 3) Cascade to delegated children (fire-and-forget) — **user Stop only**.
   //    A parent turn that completes on its own must NOT cancel background
   //    children (they keep draining and still report natural / abnormal idle).
@@ -809,16 +837,23 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       },
     };
   }
-  const parentCwd = runtime.sessionCwds.get(sessionId);
-  if (parentCwd) runtime.sessionCwds.set(child.id, parentCwd);
+  const parentCwd = resolveSessionCwd(runtime, sessionId);
+  runtime.sessionCwds.set(child.id, parentCwd);
   if (prefixHasImageContent(seed)) {
     runtime.sessionHasImage.add(child.id);
     runtime.sessionImageScanned.add(child.id);
   }
-  const parentWs =
-    runtime.workspaces.workspaceIdOf(sessionId) ??
-    runtime.workspaces.defaultId();
-  const workspace = runtime.workspaces.attachSession(child.id, parentWs);
+  const parentAttach = resolveParentWorkspaceAttach(runtime, sessionId);
+  let parentWs: string | undefined;
+  if ("workspaceId" in parentAttach) {
+    parentWs = parentAttach.workspaceId;
+  } else {
+    const target = runtime.workspaces.resolveAttachTarget(parentAttach);
+    if (!("error" in target)) parentWs = target.workspaceId;
+  }
+  const workspace = parentWs
+    ? runtime.workspaces.attachSession(child.id, parentWs)
+    : undefined;
   const title = runtime.projections.snapshot(sessionId).values.title;
   runtime.subagents.attach({
     parentSessionId: sessionId,

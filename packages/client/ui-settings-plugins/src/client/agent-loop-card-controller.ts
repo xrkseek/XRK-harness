@@ -51,6 +51,28 @@ function compactionStrategyField(): CardFieldSpec {
   }
 }
 
+/** `provider/model` (optionally ` (effort)`) — the shape `/status` prints. */
+const SUBAGENT_MODEL_ROUTE = /^([^/\s]+)\/(\S+?)(?:\s*\(([^)]+)\))?$/
+
+/**
+ * Fleet-wide subagent route. Empty means "inherit the parent" (the default), so
+ * clearing the field is the same gesture as resetting it; a draft that is not
+ * `provider/model` blocks the save instead of being silently dropped.
+ */
+function subagentModelField(): CardFieldSpec {
+  return {
+    field: 'subagentModel',
+    format: (value) => (typeof value === 'string' ? value : ''),
+    parse: (text) => {
+      const trimmed = text.trim()
+      if (trimmed === '') return { kind: 'clear' }
+      return SUBAGENT_MODEL_ROUTE.test(trimmed)
+        ? { kind: 'set', value: trimmed }
+        : undefined
+    },
+  }
+}
+
 /** The agent-loop fields this card edits. */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
@@ -87,6 +109,12 @@ export interface AgentLoopSettings {
   maxSubagentDepth?: number
   /** Max concurrently draining direct children under one parent. */
   maxActiveSubagents?: number
+  /**
+   * Fleet-wide subagent route as `provider/model` (optionally with an
+   * effort in parentheses). Empty / omit → each child inherits its parent's
+   * route at spawn.
+   */
+  subagentModel?: string
 }
 
 /** What the agent-loop card renders. */
@@ -119,6 +147,8 @@ export interface AgentLoopCardState extends CardShell {
   maxSubagentDepth: CardFieldState
   /** Concurrent active subagent cap. */
   maxActiveSubagents: CardFieldState
+  /** Fleet-wide subagent route (`provider/model`); empty inherits the parent. */
+  subagentModel: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -151,6 +181,7 @@ export class AgentLoopCardController {
       numberField('toolResultMaxInlineBytes'),
       numberField('maxSubagentDepth'),
       numberField('maxActiveSubagents'),
+      subagentModelField(),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -172,6 +203,7 @@ export class AgentLoopCardController {
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxSubagentDepth: this.form.field('maxSubagentDepth'),
       maxActiveSubagents: this.form.field('maxActiveSubagents'),
+      subagentModel: this.form.field('subagentModel'),
     }
   }
 

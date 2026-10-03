@@ -425,6 +425,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       name: "apply_edit",
       description:
         "Replace a unique old_content snippet with content (literal substring edit). " +
+        "copy old_content verbatim from this file (exact indentation, no elided lines) — " +
+        "if you did not just read that exact text in this turn, read the file first; " +
         "Use replace_all when the snippet appears more than once. For whole-file overwrite prefer write_file.",
       parameters: {
         type: "object",
@@ -446,7 +448,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
         const p = String(a.path ?? "");
         try {
           if (a.old_content === undefined) {
-            throw new EditWithoutOldError("old_content is required");
+            throw new EditWithoutOldError(
+              "old_content is required: pass the exact text to replace (copy it verbatim from the file you read, including indentation).",
+            );
           }
           await fs.edit(p, String(a.old_content), String(a.content ?? ""), {
             replaceAll: a.replace_all === true,

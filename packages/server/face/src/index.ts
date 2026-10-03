@@ -37,6 +37,7 @@ export { createFaceSeqClock, FaceMuxSeq, type FaceSeqClock } from "./seq.js";
 export {
   type FaceDrain,
   type FaceDirectoryBackend,
+  type FacePendingUserEcho,
   type FaceRuntime,
 } from "./context.js";
 export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
@@ -342,10 +343,12 @@ export {
 export {
   AGENT_TEAM_SPAWN_ROLES,
   applySpawnRoleReminder,
+  applySubagentSpawnPreamble,
   isAgentTeamSpawnRole,
   listSpawnRoleIds,
   parseAgentTeamSpawnRole,
   type AgentTeamSpawnRole,
+  type SubagentSpawnPreambleInput,
 } from "./agent-team-roles.js";
 export {
   AgentTeamTaskBoard,

@@ -308,6 +308,26 @@ export function resolveSessionModelSelection(
   return { provider: "deepseek", model: "deepseek-flash" };
 }
 
+/**
+ * Fleet-wide subagent route from `agent-loop.subagentModel`, spelled
+ * `provider/model` (optionally `provider/model (effort)`). Empty / unset →
+ * undefined, meaning "inherit the parent's resolved selection".
+ */
+export function resolveSubagentModelSetting(
+  runtime: FaceRuntime,
+): FaceModelSelection | undefined {
+  const merged = mergedNamespace(runtime, "agent-loop");
+  const raw = String(merged.subagentModel ?? "").trim();
+  if (!raw) return undefined;
+  const route = raw.match(/^([^/\s]+)\/(\S+?)(?:\s*\(([^)]+)\))?$/);
+  if (!route) return undefined;
+  return {
+    provider: route[1]!,
+    model: route[2]!,
+    ...(route[3]?.trim() ? { reasoningEffort: route[3].trim() } : {}),
+  };
+}
+
 export async function saveAgentDefaultModel(
   runtime: FaceRuntime,
   selection: FaceModelSelection,

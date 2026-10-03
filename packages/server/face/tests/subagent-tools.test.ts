@@ -9,6 +9,7 @@ import {
   bindSubagentTools,
   subagentDepth,
 } from "../src/subagent-tools.js";
+import { FaceSubagentRegistry } from "../src/subagent-registry.js";
 import type { FaceDrain } from "../src/context.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
 
@@ -338,5 +339,133 @@ describe("subagent tools", () => {
     });
     expect(String(out.content)).toContain("结论只有一行。");
     expect(String(out.content)).not.toContain("read_file");
+  });
+
+  it("never reports the parent's own last reply as a seeded child's answer", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-seed-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.sessionAgentPresets.set(child, "harness");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "seeded",
+    });
+
+    // The seeded prefix is the parent's transcript …
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now(),
+      turnId: "parent-turn",
+      stepId: "p1",
+      content: "父会话上一轮的回答",
+    } as never);
+    const seedCut = store.get(child).events.length;
+    runtime.subagents.setSeedEventCount(child, seedCut);
+    // … and the child's real answer follows it.
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now() + 1,
+      turnId: "child-turn",
+      stepId: "c1",
+      content: "子代理真正的结论",
+    } as never);
+
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const out = await tools.get("wait_agent")!.execute({
+      agent_id: child,
+      timeout_ms: 1_000,
+    });
+    const text = String(out.content);
+    expect(text).toContain("子代理真正的结论");
+    expect(text).not.toContain("父会话上一轮的回答");
+  });
+
+  it("refuses a task_id another child already owns", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-taskid-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const first = runtime.ensureSession("child-a");
+    runtime.agentTeamTasks.open({
+      parentSessionId: parent,
+      title: "first",
+      childSessionId: first,
+      taskId: "shared-id",
+    });
+
+    const tools = createToolRegistry();
+    bindSubagentTools(tools, { runtime, parentSessionId: parent });
+    const out = await tools.get("subagent")!.execute({
+      prompt: "second child",
+      task_id: "shared-id",
+    });
+    expect(out.isError).toBe(true);
+    expect(out.content).toMatch(/already bound to child/);
+    // Refused before allocation: no child session was created for it.
+    expect(store.list().sort()).toEqual([parent, first].sort());
+  });
+
+  it("detach drops the link so a discarded spawn leaves no catalog entry", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-detach-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    const child = runtime.ensureSession("child");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    expect(runtime.subagents.listDelegated(parent)).toHaveLength(1);
+    expect(runtime.subagents.detach(child)).toBe(true);
+    expect(runtime.subagents.listDelegated(parent)).toHaveLength(0);
+    expect(runtime.subagents.getByChild(child)).toBeUndefined();
+    // Idempotent: a second detach is a no-op, not a throw.
+    expect(runtime.subagents.detach(child)).toBe(false);
+  });
+
+  it("round-trips the seed boundary through the registry sidecar", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-sa-seed-persist-"));
+    try {
+      const file = path.join(dir, "subagents.json");
+      const first = new FaceSubagentRegistry(file);
+      first.attach({
+        parentSessionId: "p",
+        childSessionId: "c",
+        mode: "continuable",
+        label: "seeded",
+      });
+      first.setSeedEventCount("c", 42);
+      const reloaded = new FaceSubagentRegistry(file);
+      expect(reloaded.getByChild("c")?.seedEventCount).toBe(42);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

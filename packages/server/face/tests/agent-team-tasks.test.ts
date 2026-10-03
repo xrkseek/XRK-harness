@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applySpawnRoleReminder,
+  applySubagentSpawnPreamble,
   parseAgentTeamSpawnRole,
 } from "../src/agent-team-roles.js";
 import {
@@ -24,6 +25,68 @@ describe("agent team spawn roles", () => {
     expect(out.startsWith("ROLE: reviewer.")).toBe(true);
     expect(out).toContain("Do the thing.");
     expect(applySpawnRoleReminder("x", "default")).toBe("x");
+  });
+
+  it("prefixes parent/child identity for every spawn shape", () => {
+    const oneShot = applySubagentSpawnPreamble({
+      prompt: "Review src/foo.ts",
+      parentSessionId: "sess_parent",
+      childSessionId: "sess_child",
+      mode: "one-shot",
+      label: "review",
+      role: "reviewer",
+      inheritContext: false,
+      cwd: "/repo",
+      isolatedWorktree: false,
+    });
+    expect(oneShot).toContain("[subagent identity]");
+    expect(oneShot).toContain("parent_session_id: sess_parent");
+    expect(oneShot).toContain("your_session_id: sess_child");
+    expect(oneShot).toContain("one-shot");
+    expect(oneShot).toContain("ROLE: reviewer.");
+    expect(oneShot).toContain("same as the parent session");
+    expect(oneShot).toContain("Review src/foo.ts");
+    expect(oneShot).not.toMatch(/read AGENTS\.md to discover/i);
+
+    const companion = applySubagentSpawnPreamble({
+      prompt: "You are chat companion Xiao Ai.",
+      parentSessionId: "sess_parent",
+      childSessionId: "sess_ai",
+      mode: "continuable",
+      label: "聊天伙伴小艾",
+      inheritContext: false,
+      cwd: "/repo",
+      isolatedWorktree: false,
+    });
+    expect(companion).toContain("continuable");
+    expect(companion).toContain("role: default");
+    expect(companion).toContain("You are chat companion Xiao Ai.");
+
+    const inherited = applySubagentSpawnPreamble({
+      prompt: "Continue the last completed plan.",
+      parentSessionId: "p",
+      childSessionId: "c",
+      mode: "continuable",
+      label: "forked",
+      inheritContext: true,
+      cwd: "/repo",
+      isolatedWorktree: false,
+    });
+    expect(inherited).toContain("seeded completed parent turns");
+
+    const worktree = applySubagentSpawnPreamble({
+      prompt: "Patch in isolation.",
+      parentSessionId: "p",
+      childSessionId: "c",
+      mode: "one-shot",
+      label: "wt",
+      role: "worker",
+      inheritContext: false,
+      cwd: "/repo/.xrk/worktrees/c",
+      isolatedWorktree: true,
+    });
+    expect(worktree).toContain("isolated git worktree");
+    expect(worktree).toContain("ROLE: worker.");
   });
 });
 

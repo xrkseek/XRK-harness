@@ -13,9 +13,9 @@ import {
   extractJsonCandidate,
 } from "./agent-team-output.js";
 import {
-  DEFAULT_MAX_ACTIVE_CHILDREN,
-  DEFAULT_MAX_DEPTH,
-} from "./presets-catalog.js";
+  resolveSubagentQuota,
+  type SubagentQuotaCaps,
+} from "./subagent-tools.js";
 
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
 const POLL_MS = 50;
@@ -228,21 +228,26 @@ export interface BindRalphToolOptions {
   readonly maxRoundsCeiling?: number;
 }
 
-function countActiveChildren(
-  runtime: FaceRuntime,
-  parentSessionId: string,
-): number {
-  let n = 0;
-  for (const link of runtime.subagents.listDelegated(parentSessionId)) {
-    if (runtime.drain.isActive(link.childSessionId)) n += 1;
-  }
-  return n;
-}
-
 export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
-  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const maxActiveChildren =
-    options.maxActiveChildren ?? DEFAULT_MAX_ACTIVE_CHILDREN;
+  /**
+   * Resolved per round, not frozen at bind time: one SoT with the quota the
+   * subagent tools enforce, so a Settings change lands on the next round.
+   */
+  const caps = (): {
+    readonly maxDepth: number;
+    readonly maxActive: number;
+    readonly active: number;
+  } => {
+    const quota: SubagentQuotaCaps = resolveSubagentQuota(
+      options.runtime,
+      options.parentSessionId,
+    );
+    return {
+      maxDepth: options.maxDepth ?? quota.maxDepth,
+      maxActive: options.maxActiveChildren ?? quota.maxActive,
+      active: quota.active,
+    };
+  };
   const ceiling = Math.min(
     options.maxRoundsCeiling ?? RALPH_HARD_MAX_ROUNDS,
     RALPH_HARD_MAX_ROUNDS,
@@ -289,6 +294,7 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
       }
       const maxRounds = Math.min(requested, ceiling);
       const depth = subagentDepth(options.runtime, options.parentSessionId);
+      const { maxDepth, maxActive: maxActiveChildren } = caps();
       if (depth >= maxDepth) {
         return {
           content: `ralph: max depth ${maxDepth} reached (current depth ${depth})`,
@@ -310,10 +316,7 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
             isError: true,
           };
         }
-        const active = countActiveChildren(
-          options.runtime,
-          options.parentSessionId,
-        );
+        const active = caps().active;
         if (active >= maxActiveChildren) {
           return {
             content: formatTerminal({

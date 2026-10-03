@@ -2,7 +2,7 @@
  * Face bind for agent Host Settings tools (global ~/.xrk — Settings UI path).
  */
 
-import type { ToolRegistry } from "@xrkseek/core-tools";
+import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import {
   createSettingsTools,
   type SettingsPathOp,
@@ -17,6 +17,9 @@ import {
 const AGENT_SETTINGS_NS = new Set(
   FACE_PRODUCT_SETTINGS_NAMESPACES.map((s) => s.ns),
 );
+
+/** The Face-bound instances already installed on a registry (identity guard). */
+const faceBound = new WeakSet<ToolDefinition>();
 
 export function bindSettingsTools(
   tools: ToolRegistry,
@@ -111,8 +114,18 @@ export function bindSettingsTools(
   });
 
   for (const tool of bound) {
+    const prev = tools.get(tool.name);
     // Same identity rule as presence_set — see presence-tools.ts.
-    if (tools.get(tool.name)) continue;
+    if (prev && faceBound.has(prev)) continue;
+    // Replace stub `settings_*` (registered by presets/standing tools with no
+    // Face impl) instead of skipping: getTool() serves the standing registry
+    // first, and its stub returns "unavailable (no Face channel)".
+    if (prev) {
+      faceBound.add(tool);
+      tools.replace(tool);
+      continue;
+    }
+    faceBound.add(tool);
     tools.register(tool);
   }
 }

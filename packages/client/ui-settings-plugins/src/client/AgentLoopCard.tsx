@@ -220,6 +220,18 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onEdit={(text) => { props.edit('maxActiveSubagents', text) }}
         onReset={() => { props.resetField('maxActiveSubagents') }}
       />
+      <ValueField
+        id="plugin-config-agent-loop-subagent-model"
+        label={t('agentLoopSubagentModel')}
+        hint={t('agentLoopSubagentModelHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('agentLoopSubagentModelInvalid')}
+        disabled={!state.writable}
+        {...state.subagentModel}
+        onEdit={(text) => { props.edit('subagentModel', text) }}
+        onReset={() => { props.resetField('subagentModel') }}
+      />
     </PluginCard>
   )
 }

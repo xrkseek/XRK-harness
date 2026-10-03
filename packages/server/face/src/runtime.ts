@@ -25,7 +25,7 @@ import {
   newUserMessageId,
 } from "@xrkseek/protocol";
 import { createFaceBus, type FaceBus } from "./bus.js";
-import type { FaceDrain, FaceDirectoryBackend, FaceRuntime } from "./context.js";
+import type { FaceDrain, FaceDirectoryBackend, FacePendingUserEcho, FaceRuntime } from "./context.js";
 import { createFacePermissionAutoGate } from "./permission-auto.js";
 import { createFaceSeqClock, type FaceSeqClock } from "./seq.js";
 import {
@@ -90,7 +90,7 @@ import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import { hydrateWorkspaceRegistry } from "./workspace-store.js";
-import { FaceSubagentRegistry } from "./subagent-registry.js";
+import { FaceSubagentRegistry, subagentOwnedEvents } from "./subagent-registry.js";
 import { ExternalAgentSessionRegistry, externalAgentHandlesPath } from "./external-agent-runtime.js";
 import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
 import {
@@ -258,6 +258,23 @@ export interface CreateFaceRuntimeOptions {
   readonly shell?: ShellService;
 }
 
+function admittedWasSteer(
+  store: SessionStore,
+  sessionId: string,
+  admitId: string,
+): boolean {
+  try {
+    for (const event of store.get(sessionId).events) {
+      if (event.type === "prompt/admitted" && event.admitId === admitId) {
+        return event.delivery === "steer";
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 /**
  * Builds Face runtime and patches `store.append` in-place so REST + Face share
  * one log; mux receives adapted session/event (+ tool view) and projections.
@@ -308,7 +325,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   const rpcAdmitMap = new Map<string, string>();
   const admitRpcMap = new Map<string, string>();
-  const pendingUserRpc = new Map<string, string[]>();
+  const pendingUserRpc = new Map<string, FacePendingUserEcho[]>();
   const sessionModels = new Map<
     string,
     { provider: string; model: string; reasoningEffort?: string }
@@ -417,6 +434,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       sessionHasImage.delete(sessionId);
       sessionImageScanned.delete(sessionId);
       presence.forget(sessionId);
+      turnUiIdle.delete(sessionId);
       void onResidentEvict.fn?.(sessionId);
     });
   }
@@ -428,6 +446,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   /** Consecutive completion-wakes since the last human-promoted admit. */
   const spentWakes = new Map<string, number>();
   const noticeAdmitIds = new Set<string>();
+  /** Optimistic Stop: Status turnActive false while drain join still held. */
+  const turnUiIdle = new Set<string>();
 
   const hasJobsRegistry = (): boolean =>
     options.jobs !== undefined || rememberedJobs.size > 0;
@@ -537,11 +557,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
 
   /**
    * Mirror job completions: when a continuable child drain goes idle, admit a
-   * steer notice on the parent (+ wake under the same budget).
+   * steer notice on the parent.
    *
    * Steer (not queue) matches Codex `inject_fragment_without_turn`: parent
    * must see child results at the next tool-step / turn boundary while still
    * running — subagent spawn is for fast information, not user-style FIFO.
+   *
+   * Waking an idle parent is required, not optional: an idle parent usually
+   * means it spawned background children and ended its turn, so a queued-only
+   * notice would strand the result until the human happened to type. Codex's
+   * `trigger_turn=false` rides a separate mailbox consumer we do not have.
    */
   const deliverOwnedSubagentCompletion = (childSessionId: string): void => {
     const link = subagents.getByChild(childSessionId);
@@ -559,16 +584,25 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         if (suppressSubagentCompletion.has(childSessionId)) return;
         if (!reportedSubagentIdle.has(childSessionId)) return;
         const idle = !parent.isBusy();
+        // Idle parent still gets woken (under the shared auto-wake budget):
+        // an idle parent here normally means it spawned background children and
+        // ended its turn — queue-only would strand the result until the human
+        // happened to type. Codex's `trigger_turn=false` is NOT portable: it
+        // rides a separate mailbox consumer, we have none.
         const spent = spentWakes.get(parentId) ?? 0;
         const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
         if (followup) spentWakes.set(parentId, spent + 1);
         const events = readEvents(childSessionId);
-        const preview = lastAssistantBodyText(events);
+        // A seeded child's log starts with the parent's transcript: answer
+        // extraction must slice at the fork boundary or the parent's own last
+        // reply is reported as the child's. Mirrors the foreground path.
+        const owned = subagentOwnedEvents(link, events);
+        const preview = lastAssistantBodyText(owned);
         const answer = preview
           ? boundChildAnswer(link.parentSessionId, childSessionId, preview)
           : "";
         const receipt = parent.admit(
-          formatSubagentCompletionNotice(link, events, answer),
+          formatSubagentCompletionNotice(link, owned, answer),
           { delivery: "steer" },
         );
         noticeAdmitIds.add(receipt.admitId);
@@ -577,7 +611,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         let schemaValid: boolean | undefined;
         let schemaErrors: readonly string[] | undefined;
         if (schema) {
-          const checked = validateOutputAgainstSchema(preview, schema);
+          const checked = preview
+            ? validateOutputAgainstSchema(preview, schema)
+            : {
+                valid: false as const,
+                errors: ["child produced no assistant text"],
+              };
           schemaValid = checked.valid;
           schemaErrors = checked.errors;
         }
@@ -589,6 +628,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             ? { schemaErrors }
             : {}),
         });
+        // Idle parent: wake under the auto-turn budget — a spawned child
+        // finishing is exactly the "work this turn was waiting on" case.
+        // Busy parent: wake too, so the steer lands at the next tool-step
+        // boundary. Both wake paths are already steered, never queued.
         if (followup || !idle) options.drain.wake(parentId);
       })
       .catch(() => {
@@ -725,9 +768,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     if (next.type === "prompt/promoted") {
       const rpc = admitRpcMap.get(next.admitId);
       if (rpc) {
+        const steer = admittedWasSteer(store, id, next.admitId);
+        const echo: FacePendingUserEcho = { rpc, steer };
         const queue = pendingUserRpc.get(id);
-        if (queue === undefined) pendingUserRpc.set(id, [rpc]);
-        else queue.push(rpc);
+        if (queue === undefined) pendingUserRpc.set(id, [echo]);
+        else queue.push(echo);
       }
     }
 
@@ -739,13 +784,26 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       // Stamp only the human prompt. Durable injects (skill-catalog / agent-
       // instructions) land before it via beforeUserMessage; consuming the
       // pending rpcId on those rows left the client echo unmatched forever
-      // (double bubble + stuck waiting chrome). FIFO so a second promote /
-      // prompt during async inject cannot steal the first echo's id.
+      // (double bubble + stuck waiting chrome). Consecutive steers drain onto
+      // this row so a coalesced user/message retires every local echo; queue
+      // items stay one-to-one with later turns.
       const queue = pendingUserRpc.get(id);
-      const rpc = queue?.shift();
-      if (queue !== undefined && queue.length === 0) pendingUserRpc.delete(id);
-      if (rpc) {
-        next = { ...next, rpcId: rpc };
+      if (queue !== undefined && queue.length > 0) {
+        let take = 1;
+        if (queue[0]?.steer === true) {
+          while (take < queue.length && queue[take]?.steer === true) take += 1;
+        }
+        const batch = queue.splice(0, take);
+        if (queue.length === 0) pendingUserRpc.delete(id);
+        const primary = batch[0]?.rpc;
+        const rest = batch.slice(1).map((item) => item.rpc);
+        if (primary) {
+          next = {
+            ...next,
+            rpcId: primary,
+            ...(rest.length > 0 ? { rpcIds: rest } : {}),
+          };
+        }
       }
     }
 
@@ -1001,6 +1059,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     jobViewsFor,
     publishJobs,
+    markTurnUiIdle(sessionId) {
+      turnUiIdle.add(sessionId);
+    },
+    isTurnUiIdle(sessionId) {
+      return turnUiIdle.has(sessionId);
+    },
     watchSession(sessionId) {
       publishJobs(sessionId, { baseline: true });
     },
@@ -1023,6 +1087,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     onSessionDrainStatus(sessionId, running) {
       if (running) {
+        turnUiIdle.delete(sessionId);
         subagentIdleEpoch.set(
           sessionId,
           (subagentIdleEpoch.get(sessionId) ?? 0) + 1,
@@ -1033,6 +1098,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         suppressSubagentCompletion.delete(sessionId);
         return;
       }
+      turnUiIdle.delete(sessionId);
       deliverOwnedSubagentCompletion(sessionId);
     },
     suppressOwnedSubagentCompletion,

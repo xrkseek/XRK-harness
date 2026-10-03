@@ -184,6 +184,17 @@ const AgentLoopConfig = Schema.object({
    * Max concurrently draining direct children under one parent.
    */
   maxActiveSubagents: Schema.number().step(1).min(1).max(16).default(2),
+  /**
+   * Fleet-wide route for delegated subagents, as `provider/model` (the shape
+   * `/status` prints, so a route copied from there works verbatim).
+   *
+   * Empty (default) leaves every child on whatever its parent resolved at
+   * spawn — same model as the session that delegated, which is what most
+   * setups want. Set it to pin every child onto a different route (a cheap
+   * model for fan-out reads while the parent stays on a strong one). A `subagent`
+   * call's own `model` / `provider` / `reasoning_effort` args still win.
+   */
+  subagentModel: Schema.string().default(""),
 });
 
 const WebSearchConfig = Schema.object({
@@ -526,6 +537,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         toolResultMaxInlineBytes: 64_000,
         maxSubagentDepth: 2,
         maxActiveSubagents: 2,
+        subagentModel: "",
       },
       applies: "live",
     },

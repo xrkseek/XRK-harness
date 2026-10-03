@@ -26,6 +26,8 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
   | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
+  | 'agentLoopSubagentModel' | 'agentLoopSubagentModelHint'
+  | 'agentLoopSubagentModelInvalid'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
@@ -209,6 +211,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: 'Nesting depth (parent = 0). Default 2 (max 3). Session badges may impose a tighter ceiling (Shallow = 1).',
   agentLoopMaxActiveSubagents: 'Max active subagents',
   agentLoopMaxActiveSubagentsHint: 'Concurrent draining direct children under one parent. Default 2.',
+  agentLoopSubagentModel: 'Subagent model',
+  agentLoopSubagentModelHint: 'Fleet-wide route for delegated subagents, as provider/model (e.g. deepseek/deepseek-flash). Leave empty (default) so every child uses the same model as the parent that spawned it. A subagent call can still override this per call.',
+  agentLoopSubagentModelInvalid: 'Use provider/model, e.g. deepseek/deepseek-flash',
   workspaceInjectTitle: 'Workspace inject',
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
@@ -580,6 +585,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxSubagentDepthHint: '嵌套深度（父会话 = 0）。默认 2（上限 3）。会话徽章可再收紧（Shallow = 1）。',
   agentLoopMaxActiveSubagents: '同时存活子代理数',
   agentLoopMaxActiveSubagentsHint: '同一父会话下同时 draining 的直接子代理上限。默认 2。',
+  agentLoopSubagentModel: '子代理模型',
+  agentLoopSubagentModelHint: '委派子代理的统一线路，写作 provider/model（如 deepseek/deepseek-flash）。留空（默认）则每个子代理与委派它的父会话用同一个模型。单次 subagent 调用仍可覆盖。',
+  agentLoopSubagentModelInvalid: '请写作 provider/model，如 deepseek/deepseek-flash',
   workspaceInjectTitle: '工作区注入',
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',

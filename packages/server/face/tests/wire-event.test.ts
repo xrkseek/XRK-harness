@@ -48,6 +48,53 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("user/message carries sibling echo ids when steers coalesced", () => {
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 10,
+        turnId: "t1",
+        messageId: "umsg_1",
+        content: "a\n\nb",
+        rpcId: "rpc-a",
+        rpcIds: ["rpc-b"],
+      },
+      4,
+    );
+    expect(wire.data).toMatchObject({
+      id: "umsg_1",
+      source: { kind: "user", rpcId: "rpc-a" },
+      rpcIds: ["rpc-b"],
+    });
+  });
+
+  it("llm/retry carries numeric turn and step", () => {
+    const ids = new FaceWireIdMaps();
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "llm/retry",
+        ts: 40,
+        turnId: "t1",
+        stepId: "s1",
+        retryId: "retry_chain",
+        retry: 2,
+        maxRetries: 5,
+        delayMs: 0,
+        mode: "normal",
+        failure: { message: "hang", code: "TIMEOUT" },
+      },
+      9,
+      { sessionId: "sess", ids },
+    );
+    expect(wire.data).toMatchObject({
+      turn: 1,
+      step: 1,
+      retryId: "retry_chain",
+      retry: 2,
+      maxRetries: 5,
+    });
+  });
+
   it("same-turn inject + human without messageId still get distinct wire ids", () => {
     const inject = toFaceWireSessionEvent(
       {

@@ -231,7 +231,13 @@ export function toFaceWireSessionEvent(
 ): FaceWireSessionEvent {
   const time = event.ts;
   switch (event.type) {
-    case "user/message":
+    case "user/message": {
+      const echoIds = [
+        ...(event.rpcId ? [event.rpcId] : []),
+        ...(event.rpcIds ?? []),
+      ];
+      const primaryRpc = echoIds[0];
+      const extraRpc = echoIds.slice(1);
       return {
         type: "user/message",
         seq,
@@ -247,10 +253,13 @@ export function toFaceWireSessionEvent(
             ...(event.source && typeof event.source === "object"
               ? event.source
               : { kind: "user" as const }),
-            ...(event.rpcId ? { rpcId: event.rpcId } : {}),
+            ...(primaryRpc ? { rpcId: primaryRpc } : {}),
           },
+          // Sibling steers coalesced into this row — client retires every echo.
+          ...(extraRpc.length > 0 ? { rpcIds: extraRpc } : {}),
         },
       };
+    }
     case "assistant/chunk":
       return {
         type: "assistant/chunk",
@@ -428,8 +437,26 @@ export function toFaceWireSessionEvent(
     case "plan/mode":
     case "feedback/record":
     case "request/header":
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: stripBase(event),
+        ignorable: true,
+      };
     case "llm/retry":
     case "llm/retry-started":
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: {
+          ...stripBase(event),
+          turn: turnNum(ctx, event.turnId),
+          step: stepNum(ctx, event.turnId, event.stepId),
+        },
+        ignorable: true,
+      };
     case "image/offload":
       return {
         type: event.type,

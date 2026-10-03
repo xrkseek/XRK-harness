@@ -6,6 +6,7 @@ import {
   isChildSessionActive,
   promptExternalContinuable,
 } from "../external-agent-runtime.js";
+import { resolveSessionModelSelection } from "../model-catalog.js";
 
 function parentAvailable(runtime: Parameters<FaceHandler>[0], parentSessionId: string): boolean {
   return runtime.store.has(parentSessionId);
@@ -32,6 +33,18 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
         reason: "unavailable" as const,
       };
     }
+    // The route the child runs on, not the one it was spawned with: a child
+    // created before this field existed has no `sessionModels` entry and still
+    // resolves through the default chain, so reading the effective selection
+    // is what makes the row true rather than merely seeded. An external child
+    // gets none — its CLI owns that choice, and a Face route would be fiction.
+    const external = runtime.externalAgents.kind(link.childSessionId);
+    const route = external
+      ? undefined
+      : (() => {
+          const m = resolveSessionModelSelection(runtime, link.childSessionId);
+          return `${m.provider}/${m.model}`;
+        })();
     const activity = isChildSessionActive(runtime, link.childSessionId)
       ? ("running" as const)
       : ("inactive" as const);
@@ -45,6 +58,7 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
         mode: "one-shot" as const,
         activity,
         hasChildren,
+        ...(route ? { model: route } : {}),
         ...(link.label ? { label: link.label } : {}),
       };
     }
@@ -54,6 +68,7 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
       mode: "continuable" as const,
       activity,
       hasChildren,
+      ...(route ? { model: route } : {}),
       label: link.label || "subagent",
     };
   });

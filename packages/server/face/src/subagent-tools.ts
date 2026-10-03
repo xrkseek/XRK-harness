@@ -12,6 +12,7 @@ import {
   SUBAGENT_ANSWER_INLINE_BYTES,
 } from "./adapt/subagent-answer-bound.js";
 export { boundChildAnswer, SUBAGENT_ANSWER_INLINE_BYTES };
+import { subagentOwnedEvents } from "./subagent-registry.js";
 import {
   DEFAULT_MAX_ACTIVE_CHILDREN,
   DEFAULT_MAX_DEPTH,
@@ -38,7 +39,10 @@ import {
   type SubagentWorktree,
 } from "./subagent-worktree.js";
 import type { ManagedWorktreeLease } from "./managed-worktree.js";
-import { resolveSessionModelSelection } from "./model-catalog.js";
+import {
+  resolveSessionModelSelection,
+  resolveSubagentModelSetting,
+} from "./model-catalog.js";
 import { selectSessionModel } from "./select-session-model.js";
 import {
   appendOutputContract,
@@ -48,8 +52,9 @@ import {
   type OutputSchemaObject,
 } from "./agent-team-output.js";
 import {
-  applySpawnRoleReminder,
+  applySubagentSpawnPreamble,
   parseAgentTeamSpawnRole,
+  rootUserAuthorizationBlock,
   type AgentTeamSpawnRole,
 } from "./agent-team-roles.js";
 import {
@@ -205,7 +210,17 @@ async function waitDrainIdle(
     // for its child would otherwise hang the tool batch forever. The join
     // stays attached in the background — the caller cancels the child right
     // after this rejects, which is what actually drains it.
-    await abortable(run(sessionId), signal);
+    //
+    // The race must also carry the timeout: latch.run() joins until the
+    // child's chain *actually* settles, so a child stuck on a tool that
+    // ignores abort pins the parent's turn for as long as it hangs. The
+    // timeout used to apply only to the polling fallback below — i.e. never
+    // on the Host path, which always has run().
+    await raceDeadline(
+      abortable(run(sessionId), signal),
+      timeoutMs,
+      sessionId,
+    );
     return;
   }
   const deadline = Date.now() + timeoutMs;
@@ -218,6 +233,35 @@ async function waitDrainIdle(
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
+}
+
+/**
+ * Reject once `timeoutMs` elapses, naming the session so the failure reads
+ * like the polling branch's. The wrapped promise keeps running — the caller
+ * cancels the child right after, which is what actually drains it.
+ */
+function raceDeadline<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  sessionId: string,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(`subagent timed out waiting for session ${sessionId}`),
+        ),
+      timeoutMs,
+    );
+  });
+  return Promise.race([
+    promise.finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    }),
+    timedOut,
+  ]);
 }
 
 /** Reject as soon as `signal` aborts; the wrapped promise keeps running. */
@@ -311,8 +355,61 @@ function countActiveChildren(
 }
 
 /**
+ * Undo a half-made spawn. `session.create` / `session.fork` already made the
+ * child durable and registered its link, so any failure between there and a
+ * successful `session.prompt` would otherwise leave an empty session in the
+ * sidebar and a permanent entry in the catalog / quota counts.
+ */
+async function discardUnstartedChild(
+  runtime: FaceRuntime,
+  childSessionId: string,
+): Promise<void> {
+  runtime.subagents.detach(childSessionId);
+  runtime.agentTeams.removeNode(childSessionId);
+  runtime.agentTeamTasks.forgetByChild(childSessionId);
+  runtime.sessionCwds.delete(childSessionId);
+  try {
+    await dispatchFaceMethod(
+      runtime,
+      "session.cancel",
+      `tool-sa-discard-${childSessionId}`,
+      { sessionId: childSessionId, cascade: true },
+    );
+  } catch {
+    /* best effort: the log is dropped either way */
+  }
+  try {
+    runtime.store.delete?.(childSessionId);
+  } catch {
+    /* store without delete / already gone */
+  }
+  await Promise.resolve(runtime.invalidateAgent?.(childSessionId)).catch(
+    () => undefined,
+ );
+}
+
+/**
+ * Reject a caller-supplied `task_id` another child already owns. Checked
+ * *before* the child exists: rebinding the card would misdirect that child's
+ * later idle notice (`completeByChild` keys on childSessionId).
+ */
+function taskIdConflict(
+  runtime: FaceRuntime,
+  taskIdHint: string | undefined,
+): string | undefined {
+  if (!taskIdHint) return undefined;
+  const boundChild = runtime.agentTeamTasks.get(taskIdHint)?.childSessionId;
+  return boundChild
+    ? `subagent: task_id ${taskIdHint} is already bound to child ${boundChild}; use a different task_id`
+    : undefined;
+}
+
+/**
  * Optional LLM target for a freshly created child.
- * `model` alone inherits the parent's current provider; `provider` alone is rejected.
+ *
+ * Precedence: the call's own args → the fleet-wide `agent-loop.subagentModel`
+ * setting → the parent's own route. `model` alone inherits the parent's current
+ * provider; `provider` alone is rejected.
  */
 async function applySubagentModelOverride(
   runtime: FaceRuntime,
@@ -322,13 +419,38 @@ async function applySubagentModelOverride(
     readonly provider?: string;
     readonly model?: string;
     readonly reasoningEffort?: string;
+    /**
+     * True when the child is an external subprocess (ACP / app-server /
+     * claude-code). Its LLM route belongs to that CLI, so a Face-side pin is
+     * not merely ineffective — it is a false record. Skips the pin instead.
+     */
+    readonly skipExternal?: boolean;
   },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const providerRaw = args.provider?.trim() ?? "";
   const modelRaw = args.model?.trim() ?? "";
   const effortRaw = args.reasoningEffort?.trim() ?? "";
-  if (!providerRaw && !modelRaw && !effortRaw) return { ok: true };
-  if (!modelRaw) {
+  // Refuse loudly rather than silently: an explicit model on an external
+  // child would otherwise read as honored when the subprocess ignores it.
+  if (args.skipExternal && (providerRaw || modelRaw || effortRaw)) {
+    return {
+      ok: false,
+      message:
+        "subagent: model / provider / reasoning_effort do not apply to an external runtime " +
+        "(acp / app-server / claude-code) — the child CLI picks its own model. " +
+        "Drop the argument, or use runtime=in-process.",
+    };
+  }
+  // No per-call pin: the setting owns the route, and an empty setting leaves
+  // the child on the parent's selection that `session.create` copied.
+  const fleet =
+    providerRaw || modelRaw || effortRaw
+      ? undefined
+      : resolveSubagentModelSetting(runtime);
+  if (!providerRaw && !modelRaw && !effortRaw && !fleet) return { ok: true };
+  const model = modelRaw || fleet?.model || "";
+  const effort = effortRaw || fleet?.reasoningEffort || "";
+  if (!model) {
     return {
       ok: false,
       message:
@@ -337,12 +459,13 @@ async function applySubagentModelOverride(
   }
   const provider =
     providerRaw
+    || fleet?.provider
     || resolveSessionModelSelection(runtime, args.parentSessionId).provider;
   const selected = await selectSessionModel(runtime, {
     sessionId: args.childSessionId,
     provider,
-    model: modelRaw,
-    ...(effortRaw ? { reasoningEffort: effortRaw } : {}),
+    model,
+    ...(effort ? { reasoningEffort: effort } : {}),
   });
   if (!selected.ok) {
     return {
@@ -356,19 +479,39 @@ async function applySubagentModelOverride(
 function createSubagentTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
-  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const maxActiveChildren =
-    options.maxActiveChildren ?? DEFAULT_MAX_ACTIVE_CHILDREN;
+  /**
+   * Ceilings for one call. Resolved live (not frozen at bind time) so the
+   * numbers `analytics` / `list_agents` report are the numbers spawn
+   * enforces — a Settings change takes effect on the next call instead of
+   * at the next agent rebuild. The bind options are a test-only override.
+   */
+  const caps = (): {
+    maxDepth: number;
+    maxActive: number;
+    active: number;
+  } => {
+    const quota = resolveSubagentQuota(
+      options.runtime,
+      options.parentSessionId,
+    );
+    return {
+      maxDepth: options.maxDepth ?? quota.maxDepth,
+      maxActive: options.maxActiveChildren ?? quota.maxActive,
+      active: quota.active,
+    };
+  };
   return {
     name: "subagent",
     description:
-      "Delegate a self-contained task to a teammate subagent (separate session/context). " +
+      "Delegate a self-contained task to a teammate subagent (separate session, same workspace as this session unless worktree:true). " +
       "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
       "so it does not consume this conversation's context. " +
-      "By default the child cannot see this chat — give a complete standalone prompt. " +
+      "By default the child cannot see this chat — give a complete standalone prompt (paths, goals, constraints, persona). " +
+      "Do not tell the child to read AGENTS.md to discover who it is; Face prepends parent/child session ids, mode, role, and cwd. " +
       "Set inherit_context true to seed the child with this session's completed turns only " +
       "(the current in-flight turn is excluded). " +
-      "By default waits for the result; set run_in_background true to get a durable child id and continue later via send_message. " +
+      "By default waits for the result (one-shot, no later human messages on that child). " +
+      "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
       "Optional role (worker|researcher|reviewer|lead) prefixes a role reminder; " +
       "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
       "optional task_id / task_name register the work on the Agent Teams task board. " +
@@ -389,7 +532,10 @@ function createSubagentTool(
         prompt: {
           type: "string",
           description:
-            "Task for the subagent. When inherit_context is false (default), include paths, goals, and constraints — it does not see this conversation. When inherit_context is true, build on the seeded completed turns.",
+            "Task for the subagent. Put the actual job here (paths, goals, constraints, any persona). " +
+            "When inherit_context is false (default), the child does not see this conversation. " +
+            "When inherit_context is true, build on the seeded completed turns. " +
+            "Face already injects parent/child session ids — do not send the child to AGENTS.md to learn its role.",
         },
         inherit_context: {
           type: "boolean",
@@ -528,6 +674,14 @@ function createSubagentTool(
       }
       if (runtimeKind !== "in-process") {
         const background = a.run_in_background === true;
+        // One cwd for every external branch. `resolveSessionCwd` already
+        // falls back to the workspace root, so the child runs where the
+        // parent runs instead of always at the root (which silently broke
+        // any session that had moved into another workspace).
+        const externalCwd = resolveSessionCwd(
+          options.runtime,
+          options.parentSessionId,
+        );
         if (background && !supportsExternalContinuable(runtimeKind)) {
           return {
             content:
@@ -535,20 +689,28 @@ function createSubagentTool(
             isError: true,
           };
         }
+        if (a.worktree === true) {
+          // Worktree handling lives in the in-process branch below; silently
+          // dropping the flag would have the child edit the parent's own
+          // checkout while the caller believed it was isolated.
+          return {
+            content:
+              "subagent: worktree is only supported for runtime=in-process " +
+              "(an external runtime owns its own working directory).",
+            isError: true,
+          };
+        }
         const depth = subagentDepth(
           options.runtime,
           options.parentSessionId,
         );
+        const { maxDepth, maxActive: maxActiveChildren, active } = caps();
         if (depth >= maxDepth) {
           return {
             content: `subagent: max depth ${maxDepth} reached (current depth ${depth})`,
             isError: true,
           };
         }
-        const active = countActiveChildren(
-          options.runtime,
-          options.parentSessionId,
-        );
         if (active >= maxActiveChildren) {
           return {
             content: `subagent: max active children ${maxActiveChildren} reached (active ${active})`,
@@ -591,12 +753,26 @@ function createSubagentTool(
               ...(typeof a.reasoning_effort === "string"
                 ? { reasoningEffort: a.reasoning_effort }
                 : {}),
+              // An ACP / app-server / claude-code child runs on ITS OWN CLI
+              // config; a Face-side pin cannot reach it. Recording one anyway
+              // made `/status` and `list_agents` report a route the subprocess
+              // never used, so the record is skipped rather than faked.
+              skipExternal: true,
             });
             if (!modelPin.ok) {
+              await discardUnstartedChild(options.runtime, childId);
               return { content: modelPin.message, isError: true };
             }
             const taskTitle =
               String(a.task_name ?? "").trim() || label;
+            const taskIdConflictMsg = taskIdConflict(
+              options.runtime,
+              String(a.task_id ?? "").trim() || undefined,
+            );
+            if (taskIdConflictMsg) {
+              await discardUnstartedChild(options.runtime, childId);
+              return { content: taskIdConflictMsg, isError: true };
+            }
             const task = options.runtime.agentTeamTasks.open({
               parentSessionId: options.parentSessionId,
               title: taskTitle,
@@ -618,11 +794,7 @@ function createSubagentTool(
               runtime: options.runtime,
               faceSessionId: childId,
               kind: runtimeKind,
-              cwd:
-                resolveSessionCwd(
-                  options.runtime,
-                  options.parentSessionId,
-                ) ?? options.runtime.workspaceRoot,
+              cwd: externalCwd,
               prompt,
               background: true,
               ...(signal ? { signal } : {}),
@@ -646,7 +818,7 @@ function createSubagentTool(
           }
           const result = await runExternalAgentTurn({
             kind: runtimeKind,
-            cwd: options.runtime.workspaceRoot,
+            cwd: externalCwd,
             prompt,
             ...(signal ? { signal } : {}),
             ...(options.externalEnv ? { env: options.externalEnv } : {}),
@@ -672,16 +844,13 @@ function createSubagentTool(
         options.runtime,
         options.parentSessionId,
       );
+      const { maxDepth, maxActive: maxActiveChildren, active } = caps();
       if (depth >= maxDepth) {
         return {
           content: `subagent: max depth ${maxDepth} reached (current depth ${depth})`,
           isError: true,
         };
       }
-      const active = countActiveChildren(
-        options.runtime,
-        options.parentSessionId,
-      );
       if (active >= maxActiveChildren) {
         return {
           content: `subagent: max active children ${maxActiveChildren} reached (active ${active})`,
@@ -699,6 +868,14 @@ function createSubagentTool(
         options.runtime,
         options.parentSessionId,
       );
+      const taskTitle = String(a.task_name ?? "").trim() || label;
+      const taskIdHint = String(a.task_id ?? "").trim() || undefined;
+      // Before anything is allocated: reusing a task_id another child owns
+      // must not leave a worktree or a session behind.
+      const taskIdError = taskIdConflict(options.runtime, taskIdHint);
+      if (taskIdError) {
+        return { content: taskIdError, isError: true };
+      }
       let isolated: SubagentWorktree | null = null;
       let managedLease: ManagedWorktreeLease | null = null;
       let worktreeSkip = "";
@@ -728,17 +905,14 @@ function createSubagentTool(
           }
         }
       }
-      let childPrompt = applySpawnRoleReminder(prompt, spawnRole);
+      let taskBody = prompt;
       if (outputSchema) {
-        childPrompt = appendOutputContract(childPrompt, outputSchema);
+        taskBody = appendOutputContract(taskBody, outputSchema);
       }
-      childPrompt = isolated
-        ? `${childPrompt}\n\n${worktreeContextNote(isolated)}`
-        : childPrompt;
+      taskBody = isolated
+        ? `${taskBody}\n\n${worktreeContextNote(isolated)}`
+        : taskBody;
 
-      const taskTitle =
-        String(a.task_name ?? "").trim() || label;
-      const taskIdHint = String(a.task_id ?? "").trim() || undefined;
       const openTask = (childSessionId: string) => {
         const task = options.runtime.agentTeamTasks.open({
           parentSessionId: options.parentSessionId,
@@ -793,19 +967,45 @@ function createSubagentTool(
         }
       };
 
+      /**
+       * Codex `spawn_guard.rs` (RAII): a half-made spawn is torn down on
+       * EVERY exit path, including an unexpected throw. Explicit
+       * `discardUnstartedChild` calls cover the known failure branches; this
+       * flag + finally is the backstop for anything they miss.
+       */
+      let started = false;
+      const discardIfUnstarted = async (): Promise<void> => {
+        if (started || !childId) return;
+        started = true;
+        dropIsolated();
+        await discardUnstartedChild(options.runtime, childId);
+      };
+
       let childId: string;
-      let seedEventCount = 0;
+      /** Fork seed size — bounds the root-evidence slice below. */
+      let seedCut = 0;
       if (inherit) {
-        const forked = await dispatchFaceMethod(
-          options.runtime,
-          "session.fork",
-          `tool-sa-fork-${Date.now()}`,
-          {
-            sessionId: options.parentSessionId,
-            linkMode,
-            label,
-          },
-        );
+        // A transport reject (not an RpcResult error) here would strand the
+        // worktree lease allocated above; catch keeps the cleanup total.
+        let forked;
+        try {
+          forked = await dispatchFaceMethod(
+            options.runtime,
+            "session.fork",
+            `tool-sa-fork-${Date.now()}`,
+            {
+              sessionId: options.parentSessionId,
+              linkMode,
+              label,
+            },
+          );
+        } catch {
+          dropIsolated();
+          return {
+            content: "subagent seed failed: fork request errored",
+            isError: true,
+          };
+        }
         if (!forked.result.ok) {
           // No completed turn yet — fall back to a fresh child (DSH fork omits seed).
           if (forked.result.error.code === "fork-unavailable") {
@@ -840,9 +1040,12 @@ function createSubagentTool(
           childId = String(
             (forked.result.value as { sessionId: string }).sessionId,
           );
-          seedEventCount = Number(
+          // Durable seed boundary: every answer read of this child must
+          // slice from here, or the parent's last reply reads as its answer.
+          seedCut = Number(
             (forked.result.value as { eventCount?: number }).eventCount ?? 0,
           );
+          options.runtime.subagents.setSeedEventCount(childId, seedCut);
         }
       } else {
         const created = await dispatchFaceMethod(
@@ -876,26 +1079,71 @@ function createSubagentTool(
           : {}),
       });
       if (!modelPin.ok) {
-        dropIsolated();
+        await discardIfUnstarted();
         return { content: modelPin.message, isError: true };
       }
       if (isolated) {
         options.runtime.sessionCwds.set(childId, isolated.path);
-        await options.runtime.invalidateAgent?.(childId);
+        // Worktree bind failure must not leak the child: swallow and let the
+        // prompt below decide the spawn's fate (or the catch backstop).
+        await Promise.resolve(options.runtime.invalidateAgent?.(childId)).catch(
+          () => undefined,
+        );
       }
+      const childPrompt = applySubagentSpawnPreamble({
+        prompt: taskBody,
+        parentSessionId: options.parentSessionId,
+        childSessionId: childId,
+        mode: linkMode,
+        label,
+        ...(spawnRole ? { role: spawnRole } : {}),
+        inheritContext: inherit,
+        cwd: isolated?.path ?? parentCwd,
+        isolatedWorktree: isolated !== null,
+        // The human's own asks: a child that only sees the parent's paraphrase
+        // drifts from what was actually authorized (Codex
+        // `control/user_authorization.rs`). A forked child already carries
+        // these in its seeded transcript, so only add them beyond the cut.
+        ...((): { userAuthorization?: string } => {
+          const block = rootUserAuthorizationBlock({
+            parentEvents: readSessionEvents(
+              options.runtime.store,
+              options.parentSessionId,
+            ),
+            ...(seedCut > 0 ? { sinceEventCount: seedCut } : {}),
+          });
+          return block ? { userAuthorization: block } : {};
+        })(),
+      });
       const task = openTask(childId);
       const worktreeLine = reclaimIsolated;
-      const prompted = await dispatchFaceMethod(
-        options.runtime,
-        "session.prompt",
-        `tool-sa-p-${childId}`,
-        {
-          sessionId: childId,
-          mode: "queue",
-          content: [{ type: "text", text: childPrompt }],
-        },
-      );
+      // A transport-level reject (not an RpcResult error) must not leak the
+      // child: the catch backstop tears the half-made spawn down.
+      let prompted: Awaited<ReturnType<typeof dispatchFaceMethod>>;
+      try {
+        prompted = await dispatchFaceMethod(
+          options.runtime,
+          "session.prompt",
+          `tool-sa-p-${childId}`,
+          {
+            sessionId: childId,
+            mode: "queue",
+            content: [{ type: "text", text: childPrompt }],
+          },
+        );
+      } catch (err) {
+        await discardIfUnstarted();
+        const extra = worktreeLine(false);
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [`subagent prompt failed: ${message}`, extra]
+            .filter(Boolean)
+            .join("\n"),
+          isError: true,
+        };
+      }
       if (!prompted.result.ok) {
+        await discardIfUnstarted();
         const extra = worktreeLine(false);
         return {
           content: [`subagent prompt failed: ${prompted.result.error.message}`, extra]
@@ -904,6 +1152,8 @@ function createSubagentTool(
           isError: true,
         };
       }
+      // Spawn accepted — the child is no longer a half-made shell.
+      started = true;
       if (background) {
         return {
           content: [
@@ -946,12 +1196,23 @@ function createSubagentTool(
       }
       const all = readSessionEvents(options.runtime.store, childId);
       // Never return seeded parent assistant text as the child's result.
-      let owned = seedEventCount > 0 ? all.slice(seedEventCount) : all;
+      const link = options.runtime.subagents.getByChild(childId);
+      const readOwned = () =>
+        subagentOwnedEvents(
+          link,
+          readSessionEvents(options.runtime.store, childId),
+        );
+      let owned = subagentOwnedEvents(link, all);
       let text = lastAssistantBodyText(owned);
       let schemaValid: boolean | undefined;
       let schemaErrors: readonly string[] | undefined;
-      if (outputSchema && text) {
-        let checked = validateOutputAgainstSchema(text, outputSchema);
+      if (outputSchema) {
+        // An empty body cannot satisfy the contract either: a silent skip
+        // would hand the parent `ok: true` with an unvalidated (missing)
+        // answer, so treat "no text" as one more schema failure.
+        let checked = text
+          ? validateOutputAgainstSchema(text, outputSchema)
+          : { valid: false as const, errors: ["child produced no assistant text"] };
         if (!checked.valid) {
           const retry = await dispatchFaceMethod(
             options.runtime,
@@ -974,20 +1235,20 @@ function createSubagentTool(
             } catch {
               /* keep first answer */
             }
-            owned = seedEventCount > 0
-              ? readSessionEvents(options.runtime.store, childId).slice(
-                  seedEventCount,
-                )
-              : readSessionEvents(options.runtime.store, childId);
+            owned = readOwned();
             text = lastAssistantBodyText(owned) || text;
-            checked = validateOutputAgainstSchema(text, outputSchema);
+            checked = text
+              ? validateOutputAgainstSchema(text, outputSchema)
+              : { valid: false as const, errors: ["child produced no assistant text"] };
           }
         }
         schemaValid = checked.valid;
         schemaErrors = checked.errors;
       }
       options.runtime.agentTeamTasks.complete(task.id, {
-        ok: true,
+        // An unvalidated answer is not a successful delegation: the task
+        // board must not read `completed` when the contract was skipped.
+        ok: schemaValid !== false,
         ...(text ? { preview: text } : {}),
         ...(schemaValid !== undefined ? { schemaValid } : {}),
         ...(schemaErrors && schemaErrors.length > 0
@@ -1028,7 +1289,7 @@ function createListAgentsTool(
   return {
     name: "list_agents",
     description:
-      "List direct child subagents of this session (id, label, mode, running, inbox queue/steer). " +
+      "List direct child subagents of this session (id, label, mode, running, model, inbox queue/steer). " +
       "Prefaces with depth/active quota. Prefer `analytics` for a fuller quota snapshot.",
     parameters: { type: "object", properties: {} },
     isConcurrencySafe: () => true,
@@ -1053,6 +1314,7 @@ function createListAgentsTool(
           mode?: string;
           activity?: string;
           reason?: string;
+          model?: string;
         }>;
       };
       const entries = value.entries ?? [];
@@ -1080,7 +1342,8 @@ function createListAgentsTool(
           id !== "?"
             ? childInboxCounts(options.runtime, id)
             : { queued: 0, steering: 0 };
-        return `${id}\t${label}\t${mode}\t${activity}\tq=${inbox.queued}\tsteer=${inbox.steering}`;
+        const route = e.model ? `\t${e.model}` : "";
+        return `${id}\t${label}\t${mode}\t${activity}${route}\tq=${inbox.queued}\tsteer=${inbox.steering}`;
       });
       return { content: [header, ...lines].join("\n") };
     },
@@ -1148,7 +1411,8 @@ function createSendMessageTool(
           isError: true,
         };
       }
-      options.runtime.agentTeamTasks.markResumed(childId);
+      // Task-board resume is owned by `subagent.prompt` (the SoT for every
+      // delivery route); calling it again here double-bumped the revision.
       return { content: `sent to ${childId} (${delivery})` };
     },
   };
@@ -1343,7 +1607,6 @@ function createTeamGraphTool(
             results.push(`${peer.id}\tfail\t${prompted.result.error.message}`);
             continue;
           }
-          options.runtime.agentTeamTasks.markResumed(peer.id);
           results.push(`${peer.id}\tok\t${delivery}`);
         }
         return {
@@ -1438,7 +1701,6 @@ function createFollowupTaskTool(
           isError: true,
         };
       }
-      options.runtime.agentTeamTasks.markResumed(childId);
       return { content: `followup_task sent to ${childId} (steer)` };
     },
   };
@@ -1565,11 +1827,15 @@ function createWaitAgentTool(
           : `wait_agent completed (${timeoutMs}ms budget)`,
       ];
       for (const childId of targets) {
+        const link = options.runtime.subagents.getByChild(childId);
         const running = isChildSessionActive(options.runtime, childId);
         const text = running
           ? undefined
           : lastAssistantBodyText(
-              readSessionEvents(options.runtime.store, childId),
+              subagentOwnedEvents(
+                link,
+                readSessionEvents(options.runtime.store, childId),
+              ),
             );
         const inbox = childInboxCounts(options.runtime, childId);
         lines.push(
@@ -1605,7 +1871,8 @@ function createAnalyticsTool(
     name: "analytics",
     description:
       "Local subagent quota and queue snapshot for this session (not cloud telemetry). " +
-      "Shows depth/active caps, free slots, and each child's running state plus inbox queue/steer counts.",
+      "Shows depth/active caps, free slots, and each child's running state, model route, " +
+      "plus inbox queue/steer counts.",
     parameters: { type: "object", properties: {} },
     isConcurrencySafe: () => true,
     async execute() {
@@ -1649,8 +1916,20 @@ function createAnalyticsTool(
             options.runtime,
             link.childSessionId,
           );
+          const externalKind = options.runtime.externalAgents.kind(
+            link.childSessionId,
+          );
+          const route = externalKind
+            ? `external:${externalKind}`
+            : (() => {
+                const m = resolveSessionModelSelection(
+                  options.runtime,
+                  link.childSessionId,
+                );
+                return `${m.provider}/${m.model}`;
+              })();
           lines.push(
-            `  ${link.childSessionId}\t${link.label ?? "subagent"}\t${link.mode}\t${activity}\tq=${inbox.queued}\tsteer=${inbox.steering}`,
+            `  ${link.childSessionId}\t${link.label ?? "subagent"}\t${link.mode}\t${activity}\t${route}\tq=${inbox.queued}\tsteer=${inbox.steering}`,
           );
         }
       }

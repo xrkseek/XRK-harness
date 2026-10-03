@@ -299,7 +299,9 @@ function CatalogRows({
         const label = entry.label ?? entry.id
         const mode = entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const activity = entry.activity === 'running' ? t('activity.running') : t('activity.inactive')
-        const secondary = [summary?.title, mode, activity]
+        // The route is what makes "same model as parent" checkable rather than
+        // assumed; Fleet-wide overrides show up here as a different string.
+        const secondary = [summary?.title, mode, entry.model, activity]
           .filter(value => value !== undefined)
           .join(' · ')
         const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)

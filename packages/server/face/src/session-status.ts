@@ -45,6 +45,8 @@ export interface SessionStatusSubagentLive {
   readonly label?: string;
   readonly activity: "running" | "inactive";
   readonly mode: string;
+  /** Route this child runs on, `provider/model` (same shape `/status` prints). */
+  readonly model?: string;
   readonly liveText?: string;
   readonly liveTool?: string;
   /** Child inbox admits waiting as queue (not yet drained). */
@@ -265,7 +267,7 @@ export interface SessionStatusDelivery {
   readonly turnActive: boolean;
   readonly queued: number;
   readonly steering: number;
-  /** True when the latch is held — `/compact` returns busy. */
+  /** True when the drain latch is still held — `/compact` returns busy. */
   readonly compactBlockedByTurn: boolean;
   /** Admits with delivery=queue still land while the latch is held. */
   readonly queueAcceptedWhileBusy: true;
@@ -565,6 +567,7 @@ function buildFleet(input: {
   readonly live: readonly SessionStatusSubagentLive[];
   readonly quota: SessionStatusSubagentQuota;
   readonly channelAlerts: readonly SessionStatusFleetAlert[];
+  readonly turnActive: boolean;
 }): SessionStatusFleet {
   const runningJobs = input.jobs.filter((j) => j.status === "running").length;
   const runningSubagents = input.live.filter((s) => s.activity === "running").length;
@@ -587,10 +590,19 @@ function buildFleet(input: {
       message: `${queuedInbox} child inbox admit(s) waiting (queue/steer)`,
     });
   }
+  // Depth-at-cap is a lineage fact, not a live fault: once a session has ever
+  // delegated to its badge's max depth, `depth` stays there forever (the
+  // parent→child link survives the child finishing). Raising critical on the
+  // bare comparison would keep an idle session permanently "critical". Only
+  // escalate while there is real pressure — an active child or a queued inbox
+  // — and otherwise report the ceiling as a warn so the operator still sees
+  // that the session is at its depth cap.
   if (input.quota.depth >= input.quota.maxDepth && input.quota.maxDepth > 0) {
+    const underPressure =
+      runningSubagents > 0 || queuedInbox > 0 || input.turnActive;
     alerts.unshift({
       id: "fleet:depth",
-      severity: "critical",
+      severity: underPressure ? "critical" : "warn",
       message: `Delegation depth at cap (${input.quota.depth}/${input.quota.maxDepth})`,
     });
   }
@@ -752,6 +764,7 @@ function summarizeTimelineEvents(
 
 function deliveryNote(input: {
   readonly turnActive: boolean;
+  readonly compactBlockedByTurn: boolean;
   readonly queued: number;
   readonly steering: number;
 }): string {
@@ -765,6 +778,9 @@ function deliveryNote(input: {
         ? ` · steer ${input.steering}`
         : " · steer ok while turn runs";
     return `turn active · compact blocked · ${q}${s}`;
+  }
+  if (input.compactBlockedByTurn) {
+    return "idle · drain settling · compact blocked · queue accepts";
   }
   if (input.queued > 0 || input.steering > 0) {
     return `idle · queue ${input.queued} · steer ${input.steering} (steer needs an active turn)`;
@@ -844,7 +860,8 @@ export function buildSessionStatusSnapshot(
   // drain / external state, never from link presence, so a node the graph
   // still lists keeps a real verdict instead of carrying no signal at all.
   const team = runtime.agentTeams.view(sessionId);
-  const turnActive = runtime.drain.isActive(sessionId);
+  const latchHeld = runtime.drain.isActive(sessionId);
+  const turnActive = latchHeld && !runtime.isTurnUiIdle(sessionId);
   interface DelegatedNode {
     readonly id: string;
     readonly mode: string;
@@ -947,10 +964,16 @@ export function buildSessionStatusSnapshot(
       }
       const externalKind = runtime.externalAgents.kind(node.id);
       const externalResume = runtime.externalAgents.resumeState(node.id);
+      // An external child's model belongs to its own CLI; reporting a Face
+      // route there would be a claim Face cannot back.
+      const childModel = externalKind
+        ? undefined
+        : resolveSessionModelSelection(runtime, node.id);
       live.push({
         id: node.id,
         activity,
         mode: node.mode,
+        ...(childModel ? { model: `${childModel.provider}/${childModel.model}` } : {}),
         ...(node.label ? { label: node.label } : {}),
         ...(line.text ? { liveText: line.text } : {}),
         ...(line.tool ? { liveTool: line.tool } : {}),
@@ -1070,10 +1093,15 @@ export function buildSessionStatusSnapshot(
     turnActive,
     queued,
     steering,
-    compactBlockedByTurn: turnActive,
+    compactBlockedByTurn: latchHeld,
     queueAcceptedWhileBusy: true,
     steerRequiresActiveTurn: true,
-    note: deliveryNote({ turnActive, queued, steering }),
+    note: deliveryNote({
+      turnActive,
+      compactBlockedByTurn: latchHeld,
+      queued,
+      steering,
+    }),
   };
 
   const discover = buildFaceChannelDiscover(runtime.plugins, {
@@ -1104,6 +1132,7 @@ export function buildSessionStatusSnapshot(
     live,
     quota,
     channelAlerts: channelAlertRows,
+    turnActive,
   });
 
   const mem = runtime.curatedMemoryConsolidate;

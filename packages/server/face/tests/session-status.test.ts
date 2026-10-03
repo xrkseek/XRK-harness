@@ -9,6 +9,7 @@ import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   admittingAgentResolve,
   createBareFaceRuntime,
+  idleFaceDrain,
 } from "./helpers/bare-runtime.js";
 
 function bareRuntime(store = createMemorySessionStore()) {
@@ -106,6 +107,57 @@ describe("session status snapshot", () => {
     expect(snap.subagents.quota.slotsFree).toBe(snap.subagents.quota.maxActive);
   });
 
+  it("keeps depth-at-cap at warn when no child is live or queued", async () => {
+    // Depth-at-cap is a lineage fact that outlives the child. A session that
+    // already reached its badge cap must not stay "critical" once nothing is
+    // running: the operator glance would read an idle session as a fault.
+    const store = createMemorySessionStore();
+    let turnActive = false;
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      defaultAgentPreset: "shallow",
+      drain: {
+        ...idleFaceDrain,
+        isActive: () => turnActive,
+      },
+    });
+
+    // `depth` is the subject session's own lineage level (root 0, child 1),
+    // so the cap-scoped session here is the child: Shallow maxDepth 1.
+    const parent = runtime.ensureSession("depth-parent");
+    runtime.sessionAgentPresets.set(parent, "shallow");
+    const child = runtime.ensureSession("depth-child");
+    runtime.sessionAgentPresets.set(child, "shallow");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+
+    // Lineage sits at the cap, but nothing is running → warn, not critical.
+    turnActive = false;
+    const idle = buildSessionStatusSnapshot(runtime, child);
+    expect(idle.subagents.quota.depth).toBe(1);
+    expect(idle.subagents.quota.maxDepth).toBe(1);
+    expect(idle.fleet.alerts.find((a) => a.id === "fleet:depth")?.severity).toBe("warn");
+    expect(idle.fleet.health).not.toBe("critical");
+
+    // Same lineage, now actually working → real pressure → critical.
+    turnActive = true;
+    const busy = buildSessionStatusSnapshot(runtime, child);
+    expect(busy.fleet.alerts.find((a) => a.id === "fleet:depth")?.severity).toBe("critical");
+    expect(busy.fleet.health).toBe("critical");
+
+    // Pressure gone again → falls back to warn.
+    turnActive = false;
+    expect(
+      buildSessionStatusSnapshot(runtime, child).fleet.alerts.find((a) => a.id === "fleet:depth")
+        ?.severity,
+    ).toBe("warn");
+  });
+
   it("folds prune→summary pipeline and delivery mutex into Status", async () => {
     const store = createMemorySessionStore();
     let turnActive = false;
@@ -168,6 +220,47 @@ describe("session status snapshot", () => {
     expect(busy.delivery.compactBlockedByTurn).toBe(true);
     expect(busy.delivery.queueAcceptedWhileBusy).toBe(true);
     expect(formatSessionStatusText(busy)).toContain("compact↔turn exclusive");
+  });
+
+  it("session.cancel idles delivery.turnActive while drain join still holds compact", async () => {
+    const store = createMemorySessionStore();
+    let latch = true;
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return latch;
+        },
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c-idle", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const busy = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(busy.delivery.turnActive).toBe(true);
+    expect(busy.delivery.compactBlockedByTurn).toBe(true);
+
+    const cancel = await dispatchFaceMethod(runtime, "session.cancel", "x-idle", {
+      sessionId,
+    });
+    expect(cancel.result).toEqual({ ok: true, value: { accepted: true } });
+
+    const settling = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(settling.delivery.turnActive).toBe(false);
+    expect(settling.delivery.compactBlockedByTurn).toBe(true);
+    expect(settling.compaction.phase).toBe("idle");
+    expect(settling.delivery.note).toContain("drain settling");
+
+    latch = false;
+    runtime.onSessionDrainStatus(sessionId, false);
+    const idle = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(idle.delivery.turnActive).toBe(false);
+    expect(idle.delivery.compactBlockedByTurn).toBe(false);
+    expect(idle.compaction.phase).toBe("idle");
   });
 
   it("keeps a two-level delegation live while only the grandchild drains", async () => {

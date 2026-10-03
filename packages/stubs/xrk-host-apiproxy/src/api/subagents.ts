@@ -19,6 +19,14 @@ export type SubagentListEntry =
     activity: 'running' | 'inactive'
     /** Whether a direct descendant has durable `origin: 'subagent'`. */
     hasChildren: boolean
+    /**
+     * Route the child actually runs on, `provider/model` — the same shape
+     * `/status` prints and `agent-loop.subagentModel` accepts. Always present
+     * for a child whose session still exists: an unpinned child resolves
+     * through the same default chain its parent did, so there is no "unset"
+     * state worth reporting.
+     */
+    model?: string
   } & (
     | {
       mode: 'one-shot'

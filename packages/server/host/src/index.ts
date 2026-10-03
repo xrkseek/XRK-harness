@@ -86,8 +86,6 @@ import {
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
   effectiveSessionAgentPreset,
-  DEFAULT_MAX_DEPTH,
-  DEFAULT_MAX_ACTIVE_CHILDREN,
   tryHandleFaceHttp,
   isPluginSoftDisabledAt,
   readDisabledPluginIdsAt,
@@ -1386,26 +1384,12 @@ export function createHostManager(): HostManager {
                 config.runtime.preset,
               );
               if (profile.subagents.mode === "on") {
-                const faceDepth =
-                  pluginSettings.maxSubagentDepth ?? DEFAULT_MAX_DEPTH;
-                const faceActive =
-                  pluginSettings.maxActiveSubagents ??
-                  DEFAULT_MAX_ACTIVE_CHILDREN;
-                const presetDepth = profile.subagents.maxDepth;
-                const presetActive = profile.subagents.maxActiveChildren;
-                const maxDepth =
-                  presetDepth !== undefined
-                    ? Math.min(faceDepth, presetDepth)
-                    : faceDepth;
-                const maxActiveChildren =
-                  presetActive !== undefined
-                    ? Math.min(faceActive, presetActive)
-                    : faceActive;
+                // No ceilings passed: the tool resolves them live from
+                // Settings ∩ badge, so what `analytics` reports is what spawn
+                // enforces (freezing them here desynced the two).
                 bindSubagentTools(agent.tools, {
                   runtime: faceBox.runtime,
                   parentSessionId: sessionId,
-                  maxDepth,
-                  maxActiveChildren,
                 });
               }
               bindSessionQueryTools(agent.tools, {

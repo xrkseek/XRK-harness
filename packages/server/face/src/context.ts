@@ -67,6 +67,13 @@ export interface FaceDrain {
   run?(sessionId: string): Promise<void>;
 }
 
+/** Client echo waiting to stamp the next human `user/message`. */
+export interface FacePendingUserEcho {
+  readonly rpc: string;
+  /** True when the matching admit used `delivery: "steer"`. */
+  readonly steer: boolean;
+}
+
 export interface FaceRuntime {
   /** Durable image blobs; omit → image prompt / session.attachment unavailable. */
   readonly attachments?: AttachmentStore;
@@ -111,11 +118,11 @@ export interface FaceRuntime {
   /** admitId → rpcId (reverse for queue / stamp) */
   readonly admitRpcMap: Map<string, string>;
   /**
-   * FIFO of client echo rpcIds awaiting the next human `user/message` stamp.
-   * Promote pushes; human stamp shifts. A single slot was racy when a second
-   * prompt landed between promote and the human row (async inject await).
+   * FIFO of client echo ids awaiting the next human `user/message` stamp.
+   * Consecutive steers drain onto one coalesced row (`rpcId` + `rpcIds`);
+   * queue items stay one-to-one with later human rows.
    */
-  readonly pendingUserRpc: Map<string, string[]>;
+  readonly pendingUserRpc: Map<string, FacePendingUserEcho[]>;
   readonly sessionModels: Map<
     string,
     { provider: string; model: string; reasoningEffort?: string }
@@ -318,6 +325,13 @@ export interface FaceRuntime {
    */
   jobViewsFor(sessionId: string): JobView[] | undefined;
   publishJobs(sessionId: string, opts?: { baseline?: boolean }): void;
+  /**
+   * Stop / cancel published `running:false` while the drain latch may still
+   * be joining. Status `delivery.turnActive` follows this bit so Overview
+   * presence matches the session list; compact still keys off `drain.isActive`.
+   */
+  markTurnUiIdle(sessionId: string): void;
+  isTurnUiIdle(sessionId: string): boolean;
   /**
    * Copy parent log into a new session without inventing title/fallback rows
    * (replay path).

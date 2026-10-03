@@ -19,3 +19,21 @@ export function resolveSessionCwd(
   }
   return path.resolve(runtime.workspaceRoot);
 }
+
+/**
+ * Attach a child session to the parent's workspace — never the Host default
+ * root just because `sessionCwds` is briefly empty.
+ * Prefer durable membership, then a registry row whose path equals the
+ * parent's cwd. Callers pass the result to `resolveAttachTarget` (exactly one
+ * of workspaceId / cwd).
+ */
+export function resolveParentWorkspaceAttach(
+  runtime: FaceRuntime,
+  parentSessionId: string,
+): { workspaceId: string } | { cwd: string } {
+  const parentWs = runtime.workspaces.workspaceIdOf(parentSessionId);
+  if (parentWs && runtime.workspaces.get(parentWs)) {
+    return { workspaceId: parentWs };
+  }
+  return { cwd: resolveSessionCwd(runtime, parentSessionId) };
+}

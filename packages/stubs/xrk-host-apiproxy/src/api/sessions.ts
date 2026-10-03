@@ -309,8 +309,14 @@ export interface SessionsApi {
    * the session header, so a later resume rebuilds the same agent. An unknown
    * id fails with `agent-preset-not-found`, and a preset whose composition
    * cannot be mounted fails with `agent-preset-invalid`.
+   *
+   * `inheritFrom` copies that session's own model selection (provider, model,
+   * reasoning effort) into the new one, so a New Session opened from a session
+   * the user already configured keeps the composer's pick. It is a convenience
+   * copy, not a lineage link: an unknown source, or one that never pinned its
+   * own selection, is ignored and the normal default resolution applies.
    */
-  create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string }>):
+  create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string; inheritFrom?: SessionId }>):
   Promise<RpcResponse<{ sessionId: SessionId; agentPreset?: string }>>
 
   /**

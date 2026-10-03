@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import type { FaceDrain } from "../src/context.js";
+import { resolveSessionCwd } from "../src/session-cwd.js";
 
 function stubAgent(admits: Array<{ delivery: string; content: unknown }> = []): AgentHandle {
   return {
@@ -185,6 +189,44 @@ describe("Face subagent", () => {
         listed.result.value as { entries: { id: string }[] }
       ).entries;
       expect(entries.map((e) => e.id)).toContain(childId);
+    }
+  });
+
+  it("child create inherits parent workspace when sessionCwds is empty", async () => {
+    const hostRoot = mkdtempSync(path.join(tmpdir(), "xrk-host-root-"));
+    const project = mkdtempSync(path.join(tmpdir(), "xrk-parent-proj-"));
+    try {
+      const store = createMemorySessionStore();
+      const runtime = createFaceRuntime({
+        store,
+        workspaceRoot: hostRoot,
+        drain: drain(),
+        resolveAgent: async () => stubAgent(),
+      });
+      const parent = await dispatchFaceMethod(runtime, "session.create", "p", {
+        cwd: project,
+      });
+      expect(parent.result.ok).toBe(true);
+      if (!parent.result.ok) return;
+      const parentId = (parent.result.value as { sessionId: string }).sessionId;
+      const parentWs = runtime.workspaces.workspaceIdOf(parentId);
+      expect(parentWs).toBeTruthy();
+      expect(parentWs).not.toBe(runtime.workspaces.defaultId());
+      runtime.sessionCwds.delete(parentId);
+
+      const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+        parentSessionId: parentId,
+        label: "worker",
+        mode: "one-shot",
+      });
+      expect(child.result.ok).toBe(true);
+      if (!child.result.ok) return;
+      const childId = (child.result.value as { sessionId: string }).sessionId;
+      expect(runtime.workspaces.workspaceIdOf(childId)).toBe(parentWs);
+      expect(resolveSessionCwd(runtime, childId)).toBe(path.resolve(project));
+    } finally {
+      rmSync(hostRoot, { recursive: true, force: true });
+      rmSync(project, { recursive: true, force: true });
     }
   });
 });

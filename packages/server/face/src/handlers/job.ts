@@ -63,6 +63,7 @@ export const jobKill: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!shell) return jobHostUnavailable;
   try {
     const outcome = await shell.killJob(target.jobId);
+    runtime.publishJobs(target.sessionId);
     return { ok: true, value: { outcome } };
   } catch {
     return {

@@ -8,7 +8,7 @@ describe("Face pendingUserRpc stamp", () => {
     const session = newSession(store);
     const runtime = createBareFaceRuntime({ store });
     const echoRpc = "rpc_echo_1";
-    runtime.pendingUserRpc.set(session.id, [echoRpc]);
+    runtime.pendingUserRpc.set(session.id, [{ rpc: echoRpc, steer: false }]);
 
     store.append(session.id, {
       type: "user/message",
@@ -91,6 +91,57 @@ describe("Face pendingUserRpc stamp", () => {
     expect(b?.type).toBe("user/message");
     if (a?.type === "user/message") expect(a.rpcId).toBe("rpc_a");
     if (b?.type === "user/message") expect(b.rpcId).toBe("rpc_b");
+    expect(runtime.pendingUserRpc.has(session.id)).toBe(false);
+  });
+
+  it("coalesced steers stamp every echo id on the single user/message", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const runtime = createBareFaceRuntime({ store });
+    runtime.admitRpcMap.set("admit_a", "rpc_a");
+    runtime.admitRpcMap.set("admit_b", "rpc_b");
+
+    store.append(session.id, {
+      type: "prompt/admitted",
+      ts: 1,
+      admitId: "admit_a",
+      content: "fix A",
+      delivery: "steer",
+    });
+    store.append(session.id, {
+      type: "prompt/admitted",
+      ts: 2,
+      admitId: "admit_b",
+      content: "fix B",
+      delivery: "steer",
+    });
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 3,
+      admitId: "admit_a",
+    });
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: 4,
+      admitId: "admit_b",
+    });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 5,
+      turnId: "t1",
+      messageId: "umsg_merged",
+      content: "fix A\n\nfix B",
+      source: { kind: "user" },
+    });
+
+    const human = store.get(session.id).events.find(
+      (e) => e.type === "user/message" && e.messageId === "umsg_merged",
+    );
+    expect(human?.type).toBe("user/message");
+    if (human?.type === "user/message") {
+      expect(human.rpcId).toBe("rpc_a");
+      expect(human.rpcIds).toEqual(["rpc_b"]);
+    }
     expect(runtime.pendingUserRpc.has(session.id)).toBe(false);
   });
 });

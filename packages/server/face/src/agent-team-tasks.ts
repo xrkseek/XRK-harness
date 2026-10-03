@@ -78,6 +78,21 @@ export class AgentTeamTaskBoard {
     const id = (input.taskId?.trim() || newTaskId()).slice(0, 80);
     const existing = this.tasks.get(id);
     if (existing) {
+      const boundChild = existing.childSessionId;
+      const incomingChild = input.childSessionId?.trim();
+      if (
+        boundChild &&
+        incomingChild &&
+        boundChild !== incomingChild
+      ) {
+        // A caller-supplied `task_id` that already belongs to another child:
+        // silently rebinding would hand the old child's later idle notice to
+        // the new one (`completeByChild` keys on childSessionId). Refuse and
+        // tell the caller to mint a fresh id instead.
+        throw new Error(
+          `task_id ${id} is already bound to child ${boundChild}; use a different task_id for a new child`,
+        );
+      }
       const next: AgentTeamTask = {
         ...existing,
         title: input.title.trim() || existing.title,
@@ -135,6 +150,19 @@ export class AgentTeamTaskBoard {
       if (task.childSessionId === id) return task;
     }
     return undefined;
+  }
+
+  /**
+   * Forget the card bound to one child (a spawn that failed after `open`).
+   * Without this a dead child leaves an `in_progress` card on the board.
+   */
+  forgetByChild(childSessionId: string): boolean {
+    const task = this.findByChild(childSessionId);
+    if (!task) return false;
+    this.tasks.delete(task.id);
+    this.schemas.delete(task.id);
+    this.save();
+    return true;
   }
 
   /** Attach managed worktree lease fields to a Teams task. */
