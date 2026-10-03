@@ -498,6 +498,10 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       const rpcId = optString(value, "rpcId");
       const messageId = optString(value, "messageId");
       const source = parseUserMessageSource(value.source, `${type}.source`);
+      const rpcIdsRaw = value.rpcIds;
+      const rpcIds = Array.isArray(rpcIdsRaw)
+        ? rpcIdsRaw.filter((id): id is string => typeof id === "string" && id.length > 0)
+        : undefined;
       return {
         type,
         ts,
@@ -506,6 +510,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(messageId !== undefined ? { messageId } : {}),
         ...(source !== undefined ? { source } : {}),
         ...(rpcId !== undefined ? { rpcId } : {}),
+        ...(rpcIds !== undefined && rpcIds.length > 0 ? { rpcIds } : {}),
       };
     }
     case "assistant/chunk": {

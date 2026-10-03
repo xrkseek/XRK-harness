@@ -704,6 +704,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     ts: now(),
     turnId,
   });
+  const llmRetryPolicy = resolveRetryPolicy(input.llmRetry);
+  const toolMaxRetries =
+    llmRetryPolicy === false ? 0 : llmRetryPolicy.maxRetries;
   /** Per-tool FileDiff captures; refreshed into `workspace/changes` as tools settle. */
   const turnFileDiffs: FileDiff[] = [];
   const workspaceCwd = input.cwd ?? process.cwd();
@@ -1042,7 +1045,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         stepId,
         now,
         ...(input.signal ? { signal: input.signal } : {}),
-        policy: resolveRetryPolicy(input.llmRetry),
+        policy: llmRetryPolicy,
         provider: input.llm.id,
       });
     } catch (err) {
@@ -1247,6 +1250,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       ...(input.maxParallelToolCalls !== undefined
         ? { maxParallel: input.maxParallelToolCalls }
         : {}),
+      ...(toolMaxRetries > 0 ? { maxRetries: toolMaxRetries } : {}),
     });
 
     // Barrier 2: tool side-events then tool/result in call order.

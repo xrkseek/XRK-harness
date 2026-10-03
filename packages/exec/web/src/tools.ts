@@ -1,4 +1,8 @@
-import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
+import {
+  transientError,
+  type ToolDefinition,
+  type ToolResultContent,
+} from "@xrkseek/core-tools";
 import {
   DEFAULT_FETCH_MAX_OUTPUT_CHARS,
   WEB_SEARCH_MAX_RESULTS,
@@ -37,6 +41,14 @@ function fail(err: unknown): ToolResultContent {
     ? `Error: ${err.message}`
     : `Error: ${err instanceof Error ? err.message : String(err)}`;
   return { content: message, isError: true };
+}
+
+/** Hang / transport errors retry with the agent-loop tool budget (same N as llm hang). */
+function rethrowTransientFetch(err: unknown): never | void {
+  if (!isWebError(err)) return;
+  if (err.code === "WEB_FETCH_TIMEOUT" || err.code === "WEB_PROVIDER_ERROR") {
+    throw transientError(err.message);
+  }
 }
 
 export function createWebTools(
@@ -159,6 +171,7 @@ export function createWebTools(
           meta: fetchMetaFromValue(result, fetchMaxOutputChars),
         };
       } catch (err) {
+        rethrowTransientFetch(err);
         return fail(err);
       }
     },

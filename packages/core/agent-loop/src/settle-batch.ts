@@ -48,6 +48,11 @@ export interface SettleToolBatchInput {
    * Omit / ≤0 → unbounded within the group. Face `agent-loop.maxParallelToolCalls`.
    */
   readonly maxParallel?: number;
+  /**
+   * Transient tool-body retries (same budget as Face `llmRetryMaxRetries`).
+   * Hang/timeout on web_fetch uses this so the fetch actually runs N times.
+   */
+  readonly maxRetries?: number;
 }
 
 export interface SettleToolBatchResult {
@@ -117,6 +122,7 @@ async function settleOne(
     materialization: input.materialization,
     ...(input.signal ? { signal: input.signal } : {}),
     ...(input.pipeline ? { pipeline: input.pipeline } : {}),
+    ...(input.maxRetries !== undefined ? { maxRetries: input.maxRetries } : {}),
   });
 }
 

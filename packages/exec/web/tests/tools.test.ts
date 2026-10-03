@@ -1,3 +1,4 @@
+import { isTransientError } from "@xrkseek/core-tools";
 import { describe, expect, it } from "vitest";
 import {
   createDefaultWebAccess,
@@ -7,6 +8,7 @@ import {
   presentFetchResult,
   presentSearchCall,
   presentSearchResult,
+  WebError,
 } from "../src/index.js";
 
 describe("createWebTools", () => {
@@ -165,5 +167,18 @@ describe("format helpers", () => {
       200_000,
     );
     expect(text).toContain("Content truncated");
+  });
+
+  it("web_fetch timeouts throw transientError for the agent-loop retry budget", async () => {
+    const tools = createWebTools({
+      fetch: {
+        async fetch() {
+          throw new WebError("web fetch timed out", "WEB_FETCH_TIMEOUT");
+        },
+      },
+    });
+    await expect(tools[1]!.execute({ url: "https://example.com/" })).rejects.toSatisfy(
+      (err: unknown) => isTransientError(err),
+    );
   });
 });

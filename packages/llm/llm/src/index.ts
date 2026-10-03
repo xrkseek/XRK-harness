@@ -207,11 +207,17 @@ export function finalizeLlmChatResponse(
       "tool call arguments were truncated or invalid JSON",
     );
   }
+  // Reasoning is thinking, not an answer. A step that streamed reasoning and
+  // then stopped — mid-thought truncation, an upstream that closed the body —
+  // carries no content and no tool call, so from the turn's side it produced
+  // nothing. Counting reasoning here let that through as a *successful* step:
+  // the loop appended `assistant/message` with empty content, broke out of the
+  // step loop, and ended the turn `completed` — no EMPTY_RESPONSE, so the retry
+  // loop never saw a failure and nothing retried. Only visible output counts.
+  // max-tokens may leave a usage-only durable row; do not treat as EMPTY_RESPONSE.
   const empty =
     !dropped.content.trim() &&
-    !dropped.reasoning?.trim() &&
     !(dropped.toolCalls && dropped.toolCalls.length > 0);
-  // max-tokens may leave a usage-only durable row; do not treat as EMPTY_RESPONSE.
   if (
     empty &&
     (dropped.finishReason === "stop" || dropped.finishReason === undefined)

@@ -283,6 +283,40 @@ describe("invokeLlmWithRetry", () => {
     expect(retry).toMatchObject({ failure: { code: "TIMEOUT" } });
   });
 
+  it("reuses one retryId across hang attempts in the same step", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("retry-chain");
+    let calls = 0;
+
+    await invokeLlmWithRetry({
+      invoke: async () => {
+        calls += 1;
+        if (calls < 3) throw new EmptyResponseError();
+        return { content: "ok" };
+      },
+      flushChunk: () => {},
+      store,
+      sessionId: session.id,
+      turnId: "t",
+      stepId: "s",
+      now: () => 1,
+      policy: resolveRetryPolicy({
+        initialDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        maxRetries: 5,
+      }),
+      random: () => 0,
+    });
+
+    const retries = store
+      .get(session.id)
+      .events.filter((e) => e.type === "llm/retry");
+    expect(retries).toHaveLength(2);
+    expect(retries.map((e) => e.retry)).toEqual([1, 2]);
+    expect(retries[0]!.retryId).toBe(retries[1]!.retryId);
+  });
+
   it("resolveRetryPolicy(false) disables", () => {
     expect(resolveRetryPolicy(false)).toBe(false);
   });

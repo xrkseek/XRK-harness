@@ -6,6 +6,7 @@ import {
   classifyCaughtLlmError,
   computeRetryDelayMs,
   failureFromUnknown,
+  finalizeLlmChatResponse,
   httpErrorCode,
   isRetryableFailure,
   parseRetryAfterMs,
@@ -218,5 +219,39 @@ describe("retry policy", () => {
       () => 0.5,
     );
     expect(ms).toBe(DEFAULT_RETRY_POLICY.maxDelayMs);
+  });
+
+  it("treats a reasoning-only stop as EMPTY_RESPONSE, not a silent success", () => {
+    // Repro: the stream carried thinking and then died mid-thought (network
+    // wobble, an upstream that closed the body). Counting reasoning as output
+    // let this through as a successful step — empty assistant/message, turn
+    // ended `completed`, no retry. Reasoning is not an answer.
+    expect(() =>
+      finalizeLlmChatResponse({ content: "", reasoning: "thinking…" }),
+    ).toThrow(EmptyResponseError);
+    // Still retryable, so the step-scoped loop re-issues the request.
+    expect(
+      isRetryableFailure(failureFromUnknown(new EmptyResponseError())),
+    ).toBe(true);
+    // Content or a tool call is a real answer; reasoning alongside it is fine.
+    expect(
+      finalizeLlmChatResponse({ content: "hi", reasoning: "thinking…" }).content,
+    ).toBe("hi");
+    expect(
+      finalizeLlmChatResponse({
+        content: "",
+        reasoning: "thinking…",
+        toolCalls: [{ id: "c1", name: "bash", arguments: {} }],
+      }).toolCalls,
+    ).toHaveLength(1);
+    // A reasoning-only max-tokens stop stays a truncation, not a failure —
+    // auto-continue owns that path.
+    expect(
+      finalizeLlmChatResponse({
+        content: "",
+        reasoning: "thinking…",
+        finishReason: "max-tokens",
+      }).finishReason,
+    ).toBe("max-tokens");
   });
 });

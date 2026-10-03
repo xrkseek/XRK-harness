@@ -183,6 +183,11 @@ export interface UserMessageEvent extends SessionEventBase {
    * Ignored by `deriveMessages` — not model-visible.
    */
   readonly rpcId?: string;
+  /**
+   * Extra client echo ids when several steers coalesce into one `user/message`
+   * (primary remains `rpcId`). Ignored by `deriveMessages`.
+   */
+  readonly rpcIds?: readonly string[];
 }
 
 /** Mint a unique `user/message.messageId` (Face conversation node identity). */

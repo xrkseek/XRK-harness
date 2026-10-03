@@ -18,7 +18,6 @@ import {
 } from "@xrkseek/llm";
 import type { SessionStore } from "@xrkseek/core-session";
 import type { TokenUsage } from "@xrkseek/protocol";
-import type { AssembledRequest } from "@xrkseek/core-system-prompt";
 import { isAbortError } from "./cancel-finalize.js";
 
 export type ChunkSink = (chunk: {
@@ -61,6 +60,9 @@ export async function invokeLlmWithRetry(input: {
 }): Promise<LlmChatResponse> {
   const policy = input.policy;
   let attempt = 0;
+  // One retryId per step chain so the shell paints 1/N → 2/N instead of
+  // starting a new disclosure on every hang.
+  let retryId: string | undefined;
   for (;;) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -94,13 +96,14 @@ export async function invokeLlmWithRetry(input: {
         failure,
         input.random ?? Math.random,
       );
-      const retryId = `retry_${Math.random().toString(36).slice(2, 10)}`;
+      retryId ??= `retry_${Math.random().toString(36).slice(2, 10)}`;
+      const chainId = retryId;
       input.store.append(input.sessionId, {
         type: "llm/retry",
         ts: input.now(),
         turnId: input.turnId,
         stepId: input.stepId,
-        retryId,
+        retryId: chainId,
         retry: attempt,
         ...(policy.mode === "normal"
           ? { maxRetries: policy.maxRetries }
@@ -126,7 +129,7 @@ export async function invokeLlmWithRetry(input: {
         ts: input.now(),
         turnId: input.turnId,
         stepId: input.stepId,
-        retryId,
+        retryId: chainId,
         retry: attempt,
       });
       // Client resetForRetry / foldStepStreamChunks drop the failed attempt surface.
@@ -134,5 +137,4 @@ export async function invokeLlmWithRetry(input: {
   }
 }
 
-// Satisfy unused import lint when AssembledRequest is only for typing elsewhere.
-export type { AssembledRequest };
+
