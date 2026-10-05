@@ -328,6 +328,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   const events = readSessionEvents(runtime.store, sessionId);
+  runtime.wireIds.primeFromLog(sessionId, events);
 
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;

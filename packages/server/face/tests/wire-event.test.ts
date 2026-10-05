@@ -24,6 +24,19 @@ describe("Face DSH wire-event adapt", () => {
     expect(ids.turn("s2", "t-a")).toBe(1);
   });
 
+  it("primeFromLog numbers turns in durable order even after a tail-first glance", () => {
+    const ids = new FaceWireIdMaps();
+    expect(ids.turn("s1", "late")).toBe(1);
+    ids.primeFromLog("s1", [
+      { type: "turn/start", turnId: "first" },
+      { type: "step/start", turnId: "first", stepId: "s1" },
+      { type: "turn/start", turnId: "late" },
+    ]);
+    expect(ids.turn("s1", "first")).toBe(1);
+    expect(ids.turn("s1", "late")).toBe(2);
+    expect(ids.step("s1", "first", "s1")).toBe(1);
+  });
+
   it("user/message carries content blocks + source.kind user", () => {
     const wire = toFaceWireSessionEvent(
       {

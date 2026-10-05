@@ -83,6 +83,37 @@ describe("Face history message-boundary pagination (DSH parity)", () => {
     expect(older.events.some((e) => e.type === "user/message" && e.content === "first")).toBe(true);
   });
 
+  it("does not open a tail page on a later assistant of the same Host turn", () => {
+    const events = [
+      ...plainTurn("t1", "s1", "first", 2),
+      ...plainTurn("t2", "s2", "second", 2),
+    ];
+    const tail = paginateSessionHistory(events, undefined, 1);
+    expect(tail.hasMore).toBe(true);
+    expect(tail.events[0]?.type).toBe("turn/start");
+    expect(tail.events.some((e) => e.type === "user/message" && e.content === "second")).toBe(true);
+    expect(tail.events.some((e) => e.type === "user/message" && e.content === "first")).toBe(false);
+  });
+
+  it("pulls the opener when a multi-step turn is cut on its last assistant", () => {
+    const events: SessionEvent[] = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      { type: "user/message", ts: 2, turnId: "t1", content: "ask" },
+      { type: "step/start", ts: 3, turnId: "t1", stepId: "s1" },
+      { type: "assistant/message", ts: 4, turnId: "t1", stepId: "s1", content: "tooling" },
+      { type: "step/end", ts: 5, turnId: "t1", stepId: "s1" },
+      { type: "step/start", ts: 6, turnId: "t1", stepId: "s2" },
+      { type: "assistant/message", ts: 7, turnId: "t1", stepId: "s2", content: "done" },
+      { type: "step/end", ts: 8, turnId: "t1", stepId: "s2" },
+      { type: "turn/end", ts: 9, turnId: "t1", reason: { kind: "completed" } },
+    ];
+    const page = paginateSessionHistory(events, undefined, 1);
+    expect(page.hasMore).toBe(false);
+    expect(page.events[0]?.type).toBe("turn/start");
+    expect(page.events.some((e) => e.type === "user/message" && e.content === "ask")).toBe(true);
+    expect(page.events.filter((e) => e.type === "assistant/message")).toHaveLength(2);
+  });
+
   it("assistant group start includes step/start and chunks", () => {
     const events = plainTurn("t1", "s1", "hi", 5);
     const assistantIdx = events.findIndex((e) => e.type === "assistant/message");

@@ -421,18 +421,9 @@ describe("createFaceRuntime projection wire", () => {
       ts: 1,
       turnId: "t1",
     });
-    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "", response: "" },
-    ]);
-    expect(
-      mux.some(
-        (f) =>
-          f.type === "session/projection" &&
-          f.key === "turnOutline" &&
-          Array.isArray(f.value) &&
-          (f.value as { turn: number }[])[0]?.turn === 1,
-      ),
-    ).toBe(true);
+    expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual(
+      [],
+    );
 
     const outlineBeforePrompt = mux.filter(
       (f) => f.type === "session/projection" && f.key === "turnOutline",
@@ -444,7 +435,7 @@ describe("createFaceRuntime projection wire", () => {
       content: "ask rail",
     });
     expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "ask rail", response: "" },
+      { turn: 1, seq: 1, round: 1, prompt: "ask rail", response: "" },
     ]);
     expect(
       mux.filter(
@@ -468,7 +459,7 @@ describe("createFaceRuntime projection wire", () => {
       ).length,
     ).toBe(outlineBeforeDraft);
     expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "ask rail", response: "" },
+      { turn: 1, seq: 1, round: 1, prompt: "ask rail", response: "" },
     ]);
 
     store.append(created.id, {
@@ -478,7 +469,7 @@ describe("createFaceRuntime projection wire", () => {
       reason: { kind: "completed" },
     });
     expect(runtime.projections.snapshot(created.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "ask rail", response: "draft body" },
+      { turn: 1, seq: 1, round: 1, prompt: "ask rail", response: "draft body" },
     ]);
     expect(
       mux.some(

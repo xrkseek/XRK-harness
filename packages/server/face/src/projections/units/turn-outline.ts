@@ -2,11 +2,10 @@
  * Whole-log turn outline for the chat rail: every started turn's Face seq and
  * bounded previews, independent of a client's paged event window.
  *
- * `turn/start` anchors each entry — its seq is the loadThrough target so a
- * window paged back through that seq contains the whole turn. Turn numbers
- * follow Face wire id order (first-seen turnId → 1, 2, …). Previews match the
- * rail's loaded-turn clamps; the response commits at `turn/end` from a draft
- * of the newest text-bearing assistant message.
+ * Fold keeps empty Host turns; the published view drops `prompt===''` and
+ * assigns gapless `round` (1-based 轮次). `turn/start` seq is the loadThrough
+ * target. Wire numbers follow first-seen turnId → 1, 2, …. Response commits
+ * at `turn/end` from a draft of the newest text-bearing assistant message.
  */
 import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
 import {
@@ -20,16 +19,44 @@ const PROMPT_PREVIEW_LIMIT = 50;
 /** Response budget: up to three rail-card lines. */
 const RESPONSE_PREVIEW_LIMIT = 120;
 
-/** One started turn's outline facts served on the wire. */
+/** Fold row: every started Host turn, including those with no 轮次 prompt yet. */
+interface TurnOutlineFoldEntry {
+  readonly turn: number;
+  readonly seq: number;
+  readonly prompt: string;
+  readonly response: string;
+}
+
+/** One 轮次 on the wire: a started turn that already has a human opener. */
 export interface TurnOutlineEntry {
   /** Face wire turn number (order of first-seen `turnId`). */
   readonly turn: number;
+  /** Gapless 轮次 (1-based) among published openers. Not Host `turn`. */
+  readonly round: number;
   /** Face seq of this turn's `turn/start` (loadThrough target). */
   readonly seq: number;
-  /** Bounded first-human-prompt preview; `''` until an eligible prompt lands. */
+  /** Bounded first-human-prompt preview. */
   readonly prompt: string;
   /** Bounded final-response preview; `''` until turn/end commits assistant text. */
   readonly response: string;
+}
+
+/** Published ladder: drop Host turns with no opener, then number 轮次. */
+export function publishedTurnOutline(
+  turns: readonly TurnOutlineFoldEntry[],
+): readonly TurnOutlineEntry[] {
+  const out: TurnOutlineEntry[] = [];
+  for (const row of turns) {
+    if (row.prompt === "") continue;
+    out.push({
+      turn: row.turn,
+      seq: row.seq,
+      prompt: row.prompt,
+      response: row.response,
+      round: out.length + 1,
+    });
+  }
+  return out;
 }
 
 /**
@@ -39,7 +66,7 @@ export interface TurnOutlineEntry {
  * "same reference = no downstream").
  */
 export interface TurnOutlineState {
-  readonly turns: readonly TurnOutlineEntry[];
+  readonly turns: readonly TurnOutlineFoldEntry[];
   draft: string;
   /**
    * Every `turnId` that already anchored an entry, in first-seen order. This
@@ -84,7 +111,7 @@ function previewFromString(content: string, limit: number): string {
   return normalized;
 }
 
-function parseEntry(value: unknown): TurnOutlineEntry {
+function parseFoldEntry(value: unknown): TurnOutlineFoldEntry {
   if (!value || typeof value !== "object") {
     throw new Error("turnOutline entry must be an object");
   }
@@ -123,7 +150,7 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "turnOutline",
-    stateVersion: 2,
+    stateVersion: 3,
     // A fresh object per session, never a module-level singleton: `apply`
     // mutates `draft` in place, and every session's fold starts from this.
     // Sharing one instance lets a streaming session's draft bleed into the
@@ -186,24 +213,24 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
       }
     },
     wire: {
-      view: (state) => state.turns,
+      view: (state) => publishedTurnOutline(state.turns),
       parse(value: unknown): readonly TurnOutlineEntry[] {
         if (!Array.isArray(value)) {
           throw new Error("turnOutline projection must be an array");
         }
-        const out: TurnOutlineEntry[] = [];
+        const folded: TurnOutlineFoldEntry[] = [];
         let previous = -1;
         for (const row of value) {
-          const entry = parseEntry(row);
+          const entry = parseFoldEntry(row);
           if (entry.turn <= previous) {
             throw new Error(
               "turnOutline entries must be strictly increasing by turn",
             );
           }
           previous = entry.turn;
-          out.push(entry);
+          folded.push(entry);
         }
-        return out;
+        return publishedTurnOutline(folded);
       },
     },
   };

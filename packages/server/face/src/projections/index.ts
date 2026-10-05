@@ -27,6 +27,7 @@ export {
 } from "./units/session-stats.js";
 export {
   createTurnOutlineProjectionUnit,
+  publishedTurnOutline,
   type TurnOutlineEntry,
   type TurnOutlineState,
 } from "./units/turn-outline.js";

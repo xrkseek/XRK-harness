@@ -49,8 +49,8 @@ export interface FaceProjectionMap {
    */
   readonly fileLimits: FileAttachmentLimits;
   /**
-   * Whole-log turn outline for the chat rail (DSH turnOutline): every started
-   * turn with its `turn/start` Face seq and bounded previews. Paging cannot
+   * Whole-log 轮次 outline for the chat rail: Host turns with a human opener,
+   * `turn/start` Face seq, gapless `round`, and bounded previews. Paging cannot
    * shrink the ladder — unloaded marks jump via loadThrough.
    */
   readonly turnOutline: readonly TurnOutlineEntry[];

@@ -956,6 +956,7 @@ const OUTLINE_RESPONSE_LIMIT = 120
 
 interface FixtureTurnOutlineEntry {
   readonly turn: number
+  readonly round: number
   readonly seq: number
   readonly prompt: string
   readonly response: string
@@ -987,13 +988,13 @@ function outlinePreview(blocks: readonly ContentBlock[], limit: number): string 
 }
 
 /**
- * Fixture parallel of Face `turnOutline`: every started turn with its
- * turn/start seq and bounded previews. Uses the wire `data.turn` number
- * (fixture history samples may start at 0); Face live folds use 1-based
- * FaceWireIdMaps order instead.
+ * Fixture parallel of Face `turnOutline`: published 轮次 only (human opener),
+ * with turn/start seq, gapless `round`, and bounded previews. Uses the wire
+ * `data.turn` number (fixture history samples may start at 0); Face live
+ * folds use 1-based FaceWireIdMaps order instead.
  */
 function turnOutlineOf(log: readonly SessionEvent[]): readonly FixtureTurnOutlineEntry[] {
-  const turns: FixtureTurnOutlineEntry[] = []
+  const turns: Array<Omit<FixtureTurnOutlineEntry, 'round'>> = []
   let draft = ''
   for (const event of log) {
     switch (event.type) {
@@ -1035,7 +1036,12 @@ function turnOutlineOf(log: readonly SessionEvent[]): readonly FixtureTurnOutlin
         break
     }
   }
-  return turns
+  const published: FixtureTurnOutlineEntry[] = []
+  for (const row of turns) {
+    if (row.prompt === '') continue
+    published.push({ ...row, round: published.length + 1 })
+  }
+  return published
 }
 
 interface FixtureRequestContext {

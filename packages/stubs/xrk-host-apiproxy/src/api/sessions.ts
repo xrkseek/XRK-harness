@@ -33,11 +33,11 @@ declare module '@xrkseek/xrk-session-projection/types' {
      */
     imageLimits: ImageAttachmentLimits
     /**
-     * Whole-log turn outline for the chat rail: every started turn with its
-     * `turn/start` Face seq (loadThrough target) and bounded previews.
-     * Independent of a client's paged event window — unloaded marks jump via
-     * loadThrough. Key absence means no outline unit (rail falls back to the
-     * loaded window only).
+     * Whole-log 轮次 ladder for the chat rail: Host turns that already have a
+     * human opener, with `turn/start` Face seq (loadThrough target), gapless
+     * `round`, and bounded previews. Independent of a client's paged window —
+     * unloaded marks jump via loadThrough. Key absence means no outline unit
+     * (rail falls back to the loaded window).
      */
     turnOutline: readonly TurnOutlineEntry[]
     /**
@@ -49,13 +49,15 @@ declare module '@xrkseek/xrk-session-projection/types' {
   }
 }
 
-/** One started turn's outline facts on the wire (Face `turnOutline` view). */
+/** One 轮次 on the wire (Face `turnOutline` view). */
 export interface TurnOutlineEntry {
   /** Face wire turn number (order of first-seen turnId; starts at 1). */
   readonly turn: number
+  /** Gapless 轮次 among published openers (starts at 1). Not Host `turn`. */
+  readonly round: number
   /** Face seq of this turn's `turn/start` (loadThrough target). */
   readonly seq: number
-  /** Bounded first-human-prompt preview; `''` until an eligible prompt lands. */
+  /** Bounded first-human-prompt preview. */
   readonly prompt: string
   /** Bounded final-response preview; `''` until turn/end commits assistant text. */
   readonly response: string

@@ -168,7 +168,7 @@ describe('createFixtureApi', () => {
         sessionStats: {
           turns: 0, steps: 0, llmMs: 0, toolMs: 0, ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0,
         },
-        // Turn-outline unit composed: empty ladder until the first turn/start.
+        // Turn-outline unit composed: empty ladder until the first human opener.
         turnOutline: [],
         imageLimits: {
           maxImageBytes: 5 * 1024 * 1024,
@@ -335,8 +335,8 @@ describe('createFixtureApi', () => {
       frame.type === 'session/projection'
       && frame.key === 'contextBreakdown'
       && (frame.value as { messageTokens?: number }).messageTokens! > 0)).toBe(true)
-    // Live outline: turn/start opens a ladder entry; user/message fills the prompt;
-    // turn/end commits the draft. todos must still ride turn/start (not dropped).
+    // Live outline: user/message publishes the 轮次; turn/end commits the draft.
+    // todos must still ride turn/start (not dropped).
     expect(frames.some(frame =>
       frame.type === 'session/projection'
       && frame.key === 'todos'

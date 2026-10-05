@@ -38,7 +38,9 @@ export function messageGroupStartIndex(
   for (let i = messageIndex - 1; i >= 0; i--) {
     const event = events[i];
     if (event === undefined || MESSAGE_TYPES.has(event.type)) break;
+    if (event.type === "turn/end") break;
     start = i;
+    if (event.type === "turn/start") break;
   }
 
   if (msg.type === "user/message") {
@@ -70,6 +72,28 @@ export function messageGroupStartIndex(
     }
   }
   return start;
+}
+
+/**
+ * Inclusive index of the owning `turn/start` for the event at `fromIndex`.
+ * A message-count cut can land on a later assistant of the same Host turn;
+ * the rail and installWindow need that turn's opener in the page.
+ */
+export function owningTurnStartIndex(
+  events: readonly SessionEvent[],
+  fromIndex: number,
+): number {
+  const origin = events[fromIndex];
+  if (origin === undefined) return fromIndex;
+  const turnId = (origin as { turnId?: string }).turnId;
+  if (typeof turnId !== "string" || turnId.length === 0) return fromIndex;
+  for (let i = fromIndex; i >= 0; i--) {
+    const event = events[i];
+    if (event === undefined) break;
+    if (event.type === "turn/start" && event.turnId === turnId) return i;
+    if (event.type === "turn/start") break;
+  }
+  return fromIndex;
 }
 
 /**
@@ -107,7 +131,7 @@ export function paginateSessionHistory(
     count++;
     const groupStart = messageGroupStartIndex(window, i);
     if (count >= maxMessages) {
-      cutIndex = groupStart;
+      cutIndex = owningTurnStartIndex(window, groupStart);
       break;
     }
   }

@@ -40,6 +40,27 @@ export class FaceWireIdMaps {
   }
 
   /**
+   * Number every turn/step in durable log order. History must call this
+   * before wiring a tail page — otherwise the first `turn/start` in the
+   * window becomes wire `1`, and a later loadOlder assigns the real first
+   * 轮次 a late number (the 0.5.11 opener showing as 第 5 轮).
+   */
+  primeFromLog(sessionId: string, events: readonly { readonly type: string; readonly turnId?: string; readonly stepId?: string }[]): void {
+    this.clear(sessionId);
+    for (const event of events) {
+      if (event.type === "turn/start" && typeof event.turnId === "string") {
+        this.turn(sessionId, event.turnId);
+      } else if (
+        event.type === "step/start"
+        && typeof event.turnId === "string"
+        && typeof event.stepId === "string"
+      ) {
+        this.step(sessionId, event.turnId, event.stepId);
+      }
+    }
+  }
+
+  /**
    * Drop every session-scoped bucket for one session. Called on session
    * eviction so long-running hosts do not retain turn/step counters for
    * evicted sessions (per-session entries would otherwise accumulate forever).

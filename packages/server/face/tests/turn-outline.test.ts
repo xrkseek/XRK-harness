@@ -75,7 +75,7 @@ describe("Face turnOutline projection", () => {
     driveAll(registry, session.id, store);
 
     expect(registry.snapshot(session.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "hello world", response: "hi there" },
+      { turn: 1, seq: 1, round: 1, prompt: "hello world", response: "hi there" },
     ]);
   });
 
@@ -110,7 +110,7 @@ describe("Face turnOutline projection", () => {
     driveAll(registry, session.id, store);
 
     expect(registry.snapshot(session.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "first ask", response: "" },
+      { turn: 1, seq: 1, round: 1, prompt: "first ask", response: "" },
     ]);
   });
 
@@ -132,10 +132,7 @@ describe("Face turnOutline projection", () => {
     store.append(session.id, { type: "turn/start", ts: 3, turnId: "b" });
     driveAll(registry, session.id, store);
 
-    expect(registry.snapshot(session.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "", response: "" },
-      { turn: 2, seq: 3, prompt: "", response: "" },
-    ]);
+    expect(registry.snapshot(session.id).values.turnOutline).toEqual([]);
   });
 
   it("turn numbers match FaceWireIdMaps and seq is the turn/start watermark", () => {
@@ -160,8 +157,7 @@ describe("Face turnOutline projection", () => {
     expect(ids.turn(session.id, "t-a")).toBe(1);
     expect(ids.turn(session.id, "t-b")).toBe(2);
     expect(registry.snapshot(session.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "ask", response: "" },
-      { turn: 2, seq: 3, prompt: "", response: "" },
+      { turn: 1, seq: 1, round: 1, prompt: "ask", response: "" },
     ]);
   });
 
@@ -206,12 +202,12 @@ describe("Face turnOutline projection", () => {
     expect(pushed.filter((row) => row.key === "turnOutline")).toEqual([
       {
         key: "turnOutline",
-        value: [{ turn: 1, seq: 1, prompt: "", response: "" }],
+        value: [],
         seq: 1,
       },
       {
         key: "turnOutline",
-        value: [{ turn: 1, seq: 1, prompt: "ask", response: "" }],
+        value: [{ turn: 1, seq: 1, round: 1, prompt: "ask", response: "" }],
         seq: 2,
       },
     ]);
@@ -225,7 +221,7 @@ describe("Face turnOutline projection", () => {
     registry.drive(session.id, store.get(session.id).events[4]!, 5);
     expect(pushed.filter((row) => row.key === "turnOutline").at(-1)).toEqual({
       key: "turnOutline",
-      value: [{ turn: 1, seq: 1, prompt: "ask", response: "final reply" }],
+      value: [{ turn: 1, seq: 1, round: 1, prompt: "ask", response: "final reply" }],
       seq: 5,
     });
   });
@@ -251,10 +247,7 @@ describe("Face turnOutline projection", () => {
 
     expect(ids.turn(session.id, "t-a")).toBe(1);
     expect(ids.turn(session.id, "t-b")).toBe(2);
-    expect(registry.snapshot(session.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "", response: "" },
-      { turn: 2, seq: 2, prompt: "", response: "" },
-    ]);
+    expect(registry.snapshot(session.id).values.turnOutline).toEqual([]);
   });
 
   it("keeps one session's draft out of a fresh session's outline", () => {
@@ -288,8 +281,35 @@ describe("Face turnOutline projection", () => {
     // response draft from the first session (init returning a shared constant
     // would have leaked it into the new session's fold).
     registry.drive(second.id, { type: "turn/start", ts: 1, turnId: "u1" }, 1);
-    expect(registry.snapshot(second.id).values.turnOutline).toEqual([
-      { turn: 1, seq: 1, prompt: "", response: "" },
+    expect(registry.snapshot(second.id).values.turnOutline).toEqual([]);
+  });
+
+  it("numbers 轮次 only after a human opener, even if an earlier Host turn aborted empty", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createTurnOutlineProjectionUnit());
+
+    store.append(session.id, { type: "turn/start", ts: 1, turnId: "empty" });
+    store.append(session.id, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "empty",
+      reason: { kind: "completed" },
+    });
+    store.append(session.id, { type: "turn/start", ts: 3, turnId: "ask" });
+    store.append(session.id, {
+      type: "user/message",
+      ts: 4,
+      turnId: "ask",
+      content: "real ask",
+    });
+    driveAll(registry, session.id, store);
+
+    expect(registry.snapshot(session.id).values.turnOutline).toEqual([
+      { turn: 2, seq: 3, round: 1, prompt: "real ask", response: "" },
     ]);
   });
 });
