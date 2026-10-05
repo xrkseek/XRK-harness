@@ -167,6 +167,64 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   insertSessionBefore: (workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId) => Promise<void>
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
   createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  /** List workspace 主线 catalog for the session's workspace. */
+  listThreads?: (sessionId: SessionId) => Promise<{
+    readonly threads: readonly WorkspaceThreadRow[]
+    readonly bind: { readonly threadId: string; readonly sideline?: string } | null
+  }>
+  upsertThread?: (sessionId: SessionId, input: {
+    readonly title: string
+    readonly brief?: string
+    readonly id?: string
+    readonly switch?: boolean
+  }) => Promise<void>
+  switchThread?: (sessionId: SessionId, threadId: string) => Promise<void>
+  listTeam?: (sessionId: SessionId) => Promise<readonly AgentTeamMemberRow[]>
+  upsertTeamMember?: (sessionId: SessionId, input: {
+    readonly name: string
+    readonly playbook: string
+    readonly role?: string
+    readonly id?: string
+    readonly appearance?: {
+      readonly shape?: string
+      readonly color?: string
+      readonly kit?: string
+      readonly face?: string
+    }
+    readonly scope?: 'global' | 'workspace'
+    readonly brief?: string
+    readonly inject?: 'subagent' | 'minimal'
+    readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
+  }) => Promise<void>
+  removeTeamMember?: (sessionId: SessionId, memberId: string, scope?: 'global' | 'workspace') => Promise<void>
+  captureTeamMember?: (sessionId: SessionId) => Promise<void>
+  dispatchTeam?: (sessionId: SessionId, memberId: string, task: string) => Promise<void>
+}
+
+export type WorkspaceThreadRow = {
+  readonly id: string
+  readonly title: string
+  readonly brief: string
+  readonly updatedAt: number
+}
+
+export type AgentTeamMemberRow = {
+  readonly id: string
+  readonly name: string
+  readonly playbook: string
+  readonly role: string
+  readonly seed?: true
+  readonly updatedAt: number
+  readonly appearance?: {
+    readonly shape: string
+    readonly color: string
+    readonly kit?: string
+    readonly face?: string
+  }
+  readonly scope?: 'global' | 'workspace'
+  readonly brief?: string
+  readonly inject?: string
+  readonly tools?: { readonly mode: string; readonly names: readonly string[] }
 }
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */

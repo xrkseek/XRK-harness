@@ -180,6 +180,32 @@ describe("preview tab envelopes", () => {
     expect(parsed?.channels.alerts[0]?.id).toBe("im:telegram");
   });
 
+  it("keeps session.status live outcome through parse (parent abort ≠ done)", () => {
+    const withOutcome = {
+      ...sampleStatus,
+      subagents: {
+        ...sampleStatus.subagents,
+        live: [
+          {
+            id: "c1",
+            activity: "inactive" as const,
+            mode: "one-shot",
+            label: "cut off",
+            outcome: { kind: "aborted" as const, cause: "parent" as const, quietMs: 12 },
+          },
+        ],
+      },
+    };
+    const parsed = parseSessionStatus({
+      result: { ok: true, value: withOutcome },
+    });
+    expect(parsed?.subagents.live[0]?.outcome).toEqual({
+      kind: "aborted",
+      cause: "parent",
+      quietMs: 12,
+    });
+  });
+
   it("parses teamTasks externalResume · worktreeId for Status actions", () => {
     const withTeam = {
       ...sampleStatus,

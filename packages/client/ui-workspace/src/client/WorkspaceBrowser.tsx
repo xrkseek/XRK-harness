@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCloseFill14, IconPersonalizationOutline16,
+  Button, IconAgentPresetOutline16, IconCloseFill14, IconPersonalizationOutline16,
   IconProjectAddOutline16, IconSearchOutline16, Menu, Modal, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type {
@@ -26,6 +26,7 @@ import {
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
+import { TeamRoster } from './TeamRoster.tsx'
 import css from './WorkspaceBrowser.module.css'
 
 /**
@@ -199,7 +200,7 @@ function ViewOptionsMenu({
       // be cut off at the header's bounds.
       portal
       anchor={(
-        <Tooltip label={t('viewOptions.label')} side="bottom" delayMs={500}>
+        <Tooltip label={t('viewOptions.label')} side="bottom">
           <button
             type="button"
             className={clsx(css.iconButton, css.wide)}
@@ -825,12 +826,21 @@ export function WorkspaceBrowser({
   useHostDescription,
   renderSlot,
   t,
+  listTeam,
+  upsertTeamMember,
+  removeTeamMember,
+  dispatchTeam,
 }: WorkspaceBrowserProps) {
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
   const pinnedSessionIds = useWorkspaces(state => state.pinnedSessionIds)
   const pinnedWorkspaceIds = useWorkspaces(state => state.pinnedWorkspaceIds)
+  const currentSessionId = useSessions(state => state.current)
+  const teamAvailable = listTeam !== undefined
+    && upsertTeamMember !== undefined
+    && dispatchTeam !== undefined
+  const [teamOpen, setTeamOpen] = useState(false)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -1081,7 +1091,7 @@ export function WorkspaceBrowser({
                 searchInput.current?.focus()
               }}
             >
-              <Tooltip label={t('search')} side="bottom" delayMs={500} disabled={searchExpanded}>
+              <Tooltip label={t('search')} side="bottom" disabled={searchExpanded}>
                 <button
                   type="button"
                   className={css.searchButton}
@@ -1128,6 +1138,18 @@ export function WorkspaceBrowser({
           </div>
         )}
         <div className={clsx(css.headerActions, wide && searchExpanded && css.headerActionsHidden)}>
+          {wide && teamAvailable && (
+            <Tooltip label={t('team.title')} side="bottom">
+              <button
+                type="button"
+                className={css.iconButton}
+                aria-label={t('team.aria')}
+                onClick={() => { setTeamOpen(true) }}
+              >
+                <IconAgentPresetOutline16 size={16} />
+              </button>
+            </Tooltip>
+          )}
           {wide && (
             <ViewOptionsMenu
               groupBy={groupBy}
@@ -1143,7 +1165,7 @@ export function WorkspaceBrowser({
               picking affordance has nothing to offer here: the region hides the
               button rather than leaving a dead one in the header. */}
           {directoryFlowAvailable && (
-            <Tooltip label={t('workspace.add')} side="bottom" delayMs={500}>
+            <Tooltip label={t('workspace.add')} side="bottom">
               <button
                 ref={wsPlusRef}
                 type="button"
@@ -1359,6 +1381,23 @@ export function WorkspaceBrowser({
         {deleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
         {deleteError !== null && <div className={css.renameError} role="alert">{deleteError}</div>}
       </Modal>
+      {teamAvailable && (
+        <TeamRoster
+          open={teamOpen}
+          onClose={() => { setTeamOpen(false) }}
+          sessionId={currentSessionId}
+          t={t}
+          useWorkspaces={useWorkspaces}
+          createWorkspace={createWorkspace}
+          useDirectoryFlow={useDirectoryFlow}
+          renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
+          startSession={startSession}
+          listTeam={listTeam}
+          upsertTeamMember={upsertTeamMember}
+          removeTeamMember={removeTeamMember}
+          dispatchTeam={dispatchTeam}
+        />
+      )}
       {forking && (
         <div className={css.forkOverlay} role="status" aria-live="polite" aria-busy="true">
           <span className={css.forkSpinner} aria-hidden="true" />

@@ -12,6 +12,7 @@
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { HostObservable } from '@xrkseek/client-ui-slots'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
+import type {} from '@xrkseek/xrk-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@xrkseek/client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge (`settings.section`).
@@ -58,7 +59,7 @@ const ARCHIVED_NS = 'settings.archivedSessions' as const
  * neither owner provides a waitable service. apply therefore depends on each
  * slot declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection']
+export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.threads', 'remote.team']
 
 /**
  * Register the browser and picker once their slot declarations are on the
@@ -125,6 +126,48 @@ export function apply(ctx: ClientContext): void {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => ctx.workspaces.create(input),
+    listThreads: async (sessionId) => {
+      const result = await ctx.remote.threads.list({ sessionId })
+      if (!result.ok) throw new Error(result.error.message)
+      return { threads: result.value.threads, bind: result.value.bind }
+    },
+    upsertThread: async (sessionId, input) => {
+      const result = await ctx.remote.threads.upsert({ sessionId, ...input })
+      if (!result.ok) throw new Error(result.error.message)
+      await ctx.sessions.refresh()
+    },
+    switchThread: async (sessionId, id) => {
+      const result = await ctx.remote.threads.switch({ sessionId, id })
+      if (!result.ok) throw new Error(result.error.message)
+      await ctx.sessions.refresh()
+    },
+    listTeam: async (sessionId) => {
+      const result = await ctx.remote.team.list({ sessionId })
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value.members
+    },
+    upsertTeamMember: async (sessionId, input) => {
+      const result = await ctx.remote.team.upsert({ sessionId, ...input })
+      if (!result.ok) throw new Error(result.error.message)
+    },
+    removeTeamMember: async (sessionId, id, scope) => {
+      const result = await ctx.remote.team.remove({
+        sessionId,
+        id,
+        ...(scope ? { scope } : {}),
+      })
+      if (!result.ok) throw new Error(result.error.message)
+    },
+    captureTeamMember: async (sessionId) => {
+      const result = await ctx.remote.team.capture({ sessionId })
+      if (!result.ok) throw new Error(result.error.message)
+    },
+    dispatchTeam: async (sessionId, memberId, task) => {
+      const result = await ctx.remote.team.dispatch({ sessionId, memberId, task })
+      if (!result.ok) throw new Error(result.error.message)
+      await ctx.sessions.refresh()
+      ctx.sessions.open(result.value.childSessionId as typeof sessionId)
+    },
     hooks: {
       directoryFlow: browserFlowSource,
       hostDescription: connection.hostDescription,

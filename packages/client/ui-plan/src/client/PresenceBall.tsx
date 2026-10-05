@@ -8,9 +8,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_KIT,
   DEFAULT_PRESENCE_SHAPE,
+  isPresenceColor,
+  isPresenceKit,
+  isPresenceShape,
   resolvePresencePaint,
   type PresenceColor,
+  type PresenceKit,
   type PresencePaint,
   type PresenceShape,
 } from '../presence-settings.ts'
@@ -34,6 +39,14 @@ function usePresenceShape(): PresenceShape {
     (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
     () => presenceSettingsRuntime?.getShape() ?? DEFAULT_PRESENCE_SHAPE,
     () => DEFAULT_PRESENCE_SHAPE,
+  )
+}
+
+function usePresenceKit(): PresenceKit {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getKit() ?? DEFAULT_PRESENCE_KIT,
+    () => DEFAULT_PRESENCE_KIT,
   )
 }
 
@@ -67,6 +80,8 @@ function usePresencePaint(): PresencePaint {
 
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
+/** Bump when rings.js gains shapes so cached engine scripts reload. */
+const PRESENCE_BALL_REV = '18'
 
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
@@ -120,6 +135,7 @@ type EmotionBallHandle = {
   burst?: (n?: number) => void
   bounce?: () => void
   resetIdle?: () => void
+  setKit?: (kit: string) => void
   destroy: () => void
 }
 
@@ -140,6 +156,7 @@ type EmotionBallNs = {
       color?: string
       eyeColor?: string
       seed?: number
+      kit?: string
     },
   ) => EmotionBallHandle
 }
@@ -172,13 +189,18 @@ let scriptsPromise: Promise<void> | undefined
 
 function loadEmotionBallScripts(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
-  if (window.EmotionBall?.create) return Promise.resolve()
+  if (
+    window.EmotionBall?.create
+    && document.documentElement.dataset.xrkPresenceRev === PRESENCE_BALL_REV
+  ) {
+    return Promise.resolve()
+  }
   if (scriptsPromise) return scriptsPromise
   scriptsPromise = (async () => {
-    for (const name of SCRIPT_ORDER) {
-      const src = `${SCRIPT_BASE}/${name}`
-      // Skip if a prior Overview remount already injected this file.
-      if (document.querySelector(`script[data-xrk-presence="${name}"]`)) continue
+    const names = SCRIPT_ORDER
+    for (const name of names) {
+      const src = `${SCRIPT_BASE}/${name}?v=${PRESENCE_BALL_REV}`
+      document.querySelector(`script[data-xrk-presence="${name}"]`)?.remove()
       await new Promise<void>((resolve, reject) => {
         const el = document.createElement('script')
         el.src = src
@@ -192,6 +214,7 @@ function loadEmotionBallScripts(): Promise<void> {
     if (!window.EmotionBall?.create) {
       throw new Error('EmotionBall SDK missing after script load')
     }
+    document.documentElement.dataset.xrkPresenceRev = PRESENCE_BALL_REV
   })().catch((err) => {
     scriptsPromise = undefined
     throw err
@@ -438,6 +461,8 @@ export function PresenceBall({
   activityAt = 0,
   compact = false,
   density = 'rail',
+  engineActive = true,
+  memberLook,
   t,
   loadingLabel,
   errorLabel,
@@ -474,6 +499,14 @@ export function PresenceBall({
    * chip is out-of-flow so Overview open/close does not reflow chrome).
    */
   readonly density?: 'rail' | 'header'
+  /**
+   * When false, keep the reserved stage (spinner) but do not load / create
+   * EmotionBall. Overview uses this so expand can paint the slot first, then
+   * start the engine after the header dock exits.
+   */
+  readonly engineActive?: boolean
+  /** Child 干员 look — overrides Settings presence so the home ball stays unique. */
+  readonly memberLook?: { readonly shape: string; readonly color: string; readonly kit?: string }
   readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
@@ -481,8 +514,19 @@ export function PresenceBall({
   readonly clickHint?: string
 }) {
   const persona = sessionBallPersona(sessionId ?? 'default')
-  const shape = usePresenceShape()
-  const paint = usePresencePaint()
+  const settingsShape = usePresenceShape()
+  const settingsPaint = usePresencePaint()
+  const settingsKit = usePresenceKit()
+  const dark = useChromeDark()
+  const shape: PresenceShape = memberLook && isPresenceShape(memberLook.shape)
+    ? memberLook.shape
+    : settingsShape
+  const paint: PresencePaint = memberLook && isPresenceColor(memberLook.color)
+    ? resolvePresencePaint(memberLook.color, dark)
+    : settingsPaint
+  const kit: PresenceKit = memberLook && isPresenceKit(memberLook.kit)
+    ? memberLook.kit
+    : (memberLook ? DEFAULT_PRESENCE_KIT : settingsKit)
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
@@ -538,12 +582,13 @@ export function PresenceBall({
 
   // Ambient / work rotation — client lifecycle independent of AI sticky.
   useEffect(() => {
+    if (!engineActive) return
     const id = window.setInterval(() => {
       setPhase((n) => n + 1)
       setNowMs(Date.now())
     }, PHASE_MS)
     return () => { window.clearInterval(id) }
-  }, [])
+  }, [engineActive])
 
   // Expire local pulse.
   useEffect(() => {
@@ -554,7 +599,7 @@ export function PresenceBall({
 
   useEffect(() => {
     const el = mountRef.current
-    if (!el) return
+    if (!el || !engineActive) return
     let cancelled = false
     void loadEmotionBallScripts().then(
       () => {
@@ -576,6 +621,7 @@ export function PresenceBall({
           color: paint.body,
           eyeColor: paint.eyes,
           seed: persona.seed,
+          kit,
         })
         ballRef.current = ball
         setReady(true)
@@ -593,9 +639,10 @@ export function PresenceBall({
       ballRef.current = null
       setReady(false)
     }
-    // Remount when Settings shape/color, chrome scheme, or session seed changes.
+    // Remount when Settings shape/color, chrome scheme, session seed, or engine
+    // gate changes. Emotion id is applied in the follow-up effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shape, paint.body, paint.eyes, persona.seed])
+  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, kit])
 
   useEffect(() => {
     const ball = ballRef.current
@@ -692,7 +739,6 @@ export function PresenceBall({
       <button
         type="button"
         className={css.stage}
-        data-ready={ready ? '' : undefined}
         data-source={emotion.source}
         aria-label={clickHint ?? display.name}
         aria-busy={!ready && !error ? true : undefined}
@@ -700,13 +746,17 @@ export function PresenceBall({
         onClick={onStageActivate}
       >
         <div ref={mountRef} className={css.mount} data-ready={ready ? '' : undefined} aria-hidden />
-        {!ready && !error
-          ? (
-              <div className={css.loading} role="status" aria-label={loadingLabel}>
-                <span className={css.spinner} aria-hidden />
-              </div>
-            )
-          : null}
+        {/* Spinner stays mounted and fades out under the ball. Unmounting it on
+            ready punched an empty frame between the wait and the 280ms fade-in. */}
+        <div
+          className={css.loading}
+          data-hidden={ready || error ? '' : undefined}
+          role="status"
+          aria-label={loadingLabel}
+          aria-hidden={ready || error ? true : undefined}
+        >
+          <span className={css.spinner} aria-hidden />
+        </div>
         {error ? <div className={css.error}>{errorLabel}: {error}</div> : null}
       </button>
       <div className={css.meta}>

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_PRESENCE_COLOR,
   PRESENCE_COLOR_PALETTES,
+  PRESENCE_KITS,
+  PRESENCE_SHAPES,
   resolvePresencePaint,
 } from '../src/presence-settings.ts'
 import {
@@ -196,6 +198,44 @@ describe('sessionBallPersona', () => {
   })
 })
 
+describe('PRESENCE_SHAPES', () => {
+  it('includes extra silhouettes beyond blob/wedge/gem', () => {
+    expect(PRESENCE_SHAPES).toEqual([
+      'blob',
+      'wedge',
+      'gem',
+      'squircle',
+      'drop',
+      'pill',
+      'petal',
+      'loaf',
+      'heart',
+      'star',
+      'hex',
+      'egg',
+      'cloud',
+      'shield',
+    ])
+  })
+})
+
+describe('PRESENCE_KITS', () => {
+  it('covers hats and several glasses styles', () => {
+    expect(PRESENCE_KITS).toEqual([
+      'none',
+      'bow',
+      'cap',
+      'beanie',
+      'visor',
+      'specs',
+      'specs-rect',
+      'specs-cat',
+      'specs-sun',
+      'halo',
+    ])
+  })
+})
+
 describe('resolvePresencePaint', () => {
   it('defaults cream to warm body + dark eyes (not pure white)', () => {
     const paint = resolvePresencePaint(DEFAULT_PRESENCE_COLOR, false)
@@ -215,6 +255,13 @@ describe('resolvePresencePaint', () => {
   it('uses light eyes on slate dark so pupils stay visible', () => {
     const paint = resolvePresencePaint('slate', true)
     expect(paint.eyes.toUpperCase()).toBe('#F0EEE8')
+  })
+
+  it('keeps extra palettes including cocoa dark eyes', () => {
+    expect(resolvePresencePaint('coral', false).body.toUpperCase()).toBe('#F0C8BC')
+    expect(resolvePresencePaint('cocoa', true).eyes.toUpperCase()).toBe('#F0EEE8')
+    expect(resolvePresencePaint('honey', false).body.toUpperCase()).toBe('#E8C46A')
+    expect(resolvePresencePaint('ink', false).eyes.toUpperCase()).toBe('#F0EEE8')
   })
 })
 

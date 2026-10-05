@@ -14,7 +14,7 @@ export const PRESENCE_DOCK_EXIT_MS = PRESENCE_SHELL_MOTION_MS
 export const PRESENCE_DOCK_ENTER_MS = PRESENCE_SHELL_MOTION_MS
 
 /**
- * Delay before mounting the Overview presence rail after Overview opens,
- * so the header dock can finish exiting toward the details column.
+ * Delay before starting the Overview EmotionBall engine after Overview opens,
+ * so the header dock can finish exiting. The reserved rail paints immediately.
  */
 export const PRESENCE_RAIL_HANDOFF_MS = PRESENCE_DOCK_EXIT_MS

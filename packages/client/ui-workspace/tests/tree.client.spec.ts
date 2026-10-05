@@ -92,6 +92,15 @@ describe('deriveGroups', () => {
     expect(strayGroups.map(group => group.key)).toEqual(['first'])
   })
 
+  it('carries sideline captions onto session nodes', () => {
+    const sessions = list({ ...summary('shown', 3), displayTitle: '发版', sideline: '写发行说明' })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['shown'])], noArchive, view(['first']),
+    )
+    expect(groups[0]!.sessions[0]!.title).toBe('发版')
+    expect(groups[0]!.sessions[0]!.sideline).toBe('写发行说明')
+  })
+
   it('keeps a non-current blank session visible when it still holds a draft', () => {
     const current = summary('current', 6)
     const draftedBlank = { ...summary('drafted-blank', 5), blank: true, hasDraft: true }

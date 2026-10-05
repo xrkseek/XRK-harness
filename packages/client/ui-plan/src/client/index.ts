@@ -94,6 +94,7 @@ export function apply(ctx: ClientContext): void {
     presencePrefsBound?.sync(
       presenceSettings.getShape(),
       presenceSettings.getColor(),
+      presenceSettings.getKit(),
       presenceSettings.getRevision(),
     )
   }
@@ -106,6 +107,7 @@ export function apply(ctx: ClientContext): void {
     return {
       setShape: (shape) => { presenceSettings.setShape(shape) },
       setColor: (color) => { presenceSettings.setColor(color) },
+      setKit: (kit) => { presenceSettings.setKit(kit) },
     }
   }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({

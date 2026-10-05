@@ -158,6 +158,7 @@ export function PresenceDock({
             <PresenceBall
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
+              {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
               turnActive={status?.delivery.turnActive ?? parentRunning}
               runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
               runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}

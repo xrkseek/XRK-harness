@@ -293,6 +293,65 @@ describe('PreviewTabs', () => {
     expect(depth).toEqual([])
   })
 
+  it('keeps the presence rail occupying space while session.status is still cold', async () => {
+    // Overview open (frame without the collapsed stamp) + a status that never
+    // lands. The rail must still render: gating it on `status !== null` made it
+    // insert late and shove the whole body down by its own height.
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    document.body.appendChild(frame)
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ok: false })))
+    const { useProjection } = fakeProjections({})
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection,
+          useSessions: useSessionsStub(),
+          openTeamChild: vi.fn(),
+        } as PreviewTabsProps)}
+      />,
+    )
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-presence-rail]')).toBeTruthy()
+    })
+    // Stage is sized by the CSS (aspect-ratio), so the placeholder holds its
+    // full height; the wait shows as a spinner rather than an empty hole.
+    const stage = document.querySelector('[data-overview-presence] .stage, [data-overview-presence-rail] button')
+    expect(stage).toBeTruthy()
+    expect(document.querySelector('[role="status"]')).toBeTruthy()
+    document.querySelector('[data-dsh-frame]')?.remove()
+  })
+
+  it('keeps the presence-rail slot when Overview is collapsed (engine waits)', () => {
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ok: false })))
+    const { useProjection } = fakeProjections({})
+    render(
+      <PreviewTabs
+        {...({
+          sessionId: 's1',
+          closeDetails: vi.fn(),
+          t,
+          useProjection,
+          useSessions: useSessionsStub(),
+          openTeamChild: vi.fn(),
+        } as PreviewTabsProps)}
+      />,
+    )
+    const rail = document.querySelector('[data-overview-presence-rail]')
+    expect(rail).toBeTruthy()
+    expect(rail?.hasAttribute('aria-hidden')).toBe(true)
+    expect(document.querySelector('[data-overview-presence]')).toBeTruthy()
+    expect(document.querySelector('[role="status"]')).toBeTruthy()
+    document.querySelector('[data-dsh-frame]')?.remove()
+  })
+
   it('defaults to Status and shows standing todos after switching tabs', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)

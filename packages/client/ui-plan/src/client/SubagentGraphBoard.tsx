@@ -28,6 +28,18 @@ export interface SubagentLiveRow {
   readonly id: string
   readonly label?: string
   readonly activity: 'running' | 'inactive'
+  /** Last-turn verdict from `session.status` — idle is not always "done". */
+  readonly outcome?: {
+    readonly kind:
+      | 'completed'
+      | 'aborted'
+      | 'error'
+      | 'max-tokens'
+      | 'interrupted'
+      | 'blocked'
+      | 'none'
+    readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+  }
   readonly mode: string
   readonly liveTool?: string
   readonly liveText?: string
@@ -55,8 +67,23 @@ const NODE_H = 40
 const PAD_X = 16
 const PAD_Y = 20
 
-function activityDot(activity: 'running' | 'inactive' | undefined): StateDotState {
-  return activity === 'running' ? 'ongoing' : 'done'
+type LiveOutcomeKind = NonNullable<SubagentLiveRow['outcome']>['kind']
+
+function activityDot(
+  activity: 'running' | 'inactive' | undefined,
+  outcomeKind: LiveOutcomeKind | undefined,
+): StateDotState {
+  if (activity === 'running') return 'ongoing'
+  if (
+    outcomeKind === 'aborted' ||
+    outcomeKind === 'error' ||
+    outcomeKind === 'interrupted' ||
+    outcomeKind === 'max-tokens' ||
+    outcomeKind === 'blocked'
+  ) {
+    return 'error'
+  }
+  return 'done'
 }
 
 function mergeGraph(
@@ -310,6 +337,7 @@ export function SubagentGraphBoard({
               ].filter(Boolean).join(' ')}
               style={{ left: pos.x, top: pos.y, width: NODE_W, height: NODE_H }}
               data-activity={node.activity ?? 'inactive'}
+              data-outcome={liveRow?.outcome?.kind ?? ''}
               data-depth={pos.depth}
               data-model={node.model}
               // The node box is a fixed 40px with two lines already, so the
@@ -332,7 +360,10 @@ export function SubagentGraphBoard({
                 }
                 : {})}
             >
-              <StateDot state={activityDot(node.activity)} size={8} />
+              <StateDot
+                state={activityDot(node.activity, liveRow?.outcome?.kind)}
+                size={8}
+              />
               <div className={css.nodeText}>
                 <span className={css.nodeTitle}>{node.label}</span>
                 <span className={css.nodeMeta}>

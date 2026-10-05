@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   IconCloseOutline16,
   IconRefreshOutline16,
+  Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import css from './DesktopChrome.module.css'
@@ -72,47 +73,51 @@ export function DesktopChrome({ t }: DesktopChromeProps): ReactNode {
         onDoubleClick={() => { void bridge.toggleMaximize() }}
       />
       <div className={css.actions}>
-        <button
-          type="button"
-          className={css.action}
-          aria-label={t('desktop.reload')}
-          title={t('desktop.reload')}
-          onClick={() => { void bridge.reload() }}
-        >
-          <IconRefreshOutline16 size={14} />
-        </button>
+        <Tooltip label={t('desktop.reload')} side="bottom">
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('desktop.reload')}
+            onClick={() => { void bridge.reload() }}
+          >
+            <IconRefreshOutline16 size={14} />
+          </button>
+        </Tooltip>
         {darwin ? null : (
           <>
-            <button
-              type="button"
-              className={css.action}
-              aria-label={t('desktop.minimize')}
-              title={t('desktop.minimize')}
-              onClick={() => { void bridge.minimize() }}
-            >
-              <span className={css.minimizeGlyph} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className={css.action}
-              aria-label={maximized ? t('desktop.restore') : t('desktop.maximize')}
-              title={maximized ? t('desktop.restore') : t('desktop.maximize')}
-              onClick={() => { void bridge.toggleMaximize() }}
-            >
-              <span
-                className={maximized ? css.restoreGlyph : css.maximizeGlyph}
-                aria-hidden
-              />
-            </button>
-            <button
-              type="button"
-              className={`${css.action} ${css.close}`}
-              aria-label={t('desktop.close')}
-              title={t('desktop.close')}
-              onClick={() => { void bridge.close() }}
-            >
-              <IconCloseOutline16 size={14} />
-            </button>
+            <Tooltip label={t('desktop.minimize')} side="bottom">
+              <button
+                type="button"
+                className={css.action}
+                aria-label={t('desktop.minimize')}
+                onClick={() => { void bridge.minimize() }}
+              >
+                <span className={css.minimizeGlyph} aria-hidden />
+              </button>
+            </Tooltip>
+            <Tooltip label={maximized ? t('desktop.restore') : t('desktop.maximize')} side="bottom">
+              <button
+                type="button"
+                className={css.action}
+                aria-label={maximized ? t('desktop.restore') : t('desktop.maximize')}
+                onClick={() => { void bridge.toggleMaximize() }}
+              >
+                <span
+                  className={maximized ? css.restoreGlyph : css.maximizeGlyph}
+                  aria-hidden
+                />
+              </button>
+            </Tooltip>
+            <Tooltip label={t('desktop.close')} side="bottom">
+              <button
+                type="button"
+                className={`${css.action} ${css.close}`}
+                aria-label={t('desktop.close')}
+                onClick={() => { void bridge.close() }}
+              >
+                <IconCloseOutline16 size={14} />
+              </button>
+            </Tooltip>
           </>
         )}
       </div>

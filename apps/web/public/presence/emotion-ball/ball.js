@@ -151,6 +151,9 @@
     var eyeR = buildEye(1);
     bodyG.appendChild(eyeL.node);
     bodyG.appendChild(eyeR.node);
+    var kitG = el('g', { 'pointer-events': 'none' });
+    bodyG.appendChild(kitG);
+    var kitKind = opts.kit || 'none';
     svg.appendChild(bodyG);
 
     var fxFront = el('g', { 'pointer-events': 'none' });
@@ -362,6 +365,90 @@
     /* ---- 状态缓存 ---- */
     var curBodyColor = null;
     var curSketch = -1;
+    var lastYaw = 0;
+    var SPEC_SCALE = 1.42;
+    var SPEC_BRIDGE = 10;
+    var CAT_LENS = 'M-1,0 C-1,-0.82 -0.2,-1.02 0.12,-0.7 C0.82,-1.18 1.18,-0.18 1,0.12 C0.5,0.82 -0.55,0.68 -1,0 Z';
+
+    function parseRgb(hex) {
+      var h = String(hex || '#F3F0EA').replace('#', '');
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      var n = parseInt(h, 16);
+      if (!isFinite(n)) return [243, 240, 234];
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    function kitPalette(body) {
+      var rgb = parseRgb(body);
+      var L = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+      var r = rgb[0], g = rgb[1], b = rgb[2];
+      var warm = r > g + 12 && r > b + 8;
+      var cool = b >= g && b > r + 8;
+      var green = g > r + 8 && g >= b;
+      if (L < 0.32) {
+        return {
+          frame: shade(body, 0.62),
+          lens: 'rgba(255,255,255,0.16)',
+          lensSun: shade(body, 0.1),
+          brim: shade(body, 0.28),
+          crown: shade(body, 0.16),
+          accent: '#E8C46A',
+          bow: '#E8A0B4',
+          knot: '#F0C8D4',
+          halo: '#F0D78A',
+        };
+      }
+      if (warm) {
+        return {
+          frame: '#4A241C',
+          lens: 'rgba(74,36,28,0.11)',
+          lensSun: 'rgba(42,22,16,0.56)',
+          brim: '#2A1814',
+          crown: shade(body, -0.42),
+          accent: shade(body, -0.28),
+          bow: '#D45A7A',
+          knot: '#C44868',
+          halo: '#E8B85A',
+        };
+      }
+      if (cool) {
+        return {
+          frame: '#1E3348',
+          lens: 'rgba(30,70,110,0.12)',
+          lensSun: 'rgba(16,36,56,0.58)',
+          brim: '#152838',
+          crown: shade(body, -0.4),
+          accent: shade(body, -0.22),
+          bow: '#6A90C8',
+          knot: '#3A5A8C',
+          halo: '#C8D8F0',
+        };
+      }
+      if (green) {
+        return {
+          frame: '#243828',
+          lens: 'rgba(36,72,40,0.12)',
+          lensSun: 'rgba(18,40,22,0.55)',
+          brim: '#1A2A1C',
+          crown: shade(body, -0.4),
+          accent: shade(body, -0.22),
+          bow: '#E07090',
+          knot: '#C44868',
+          halo: '#D4E08A',
+        };
+      }
+      return {
+        frame: '#2A2A30',
+        lens: 'rgba(255,255,255,0.16)',
+        lensSun: 'rgba(28,28,32,0.52)',
+        brim: '#1A1A20',
+        crown: shade(body, -0.35),
+        accent: shade(body, -0.22),
+        bow: '#E07090',
+        knot: '#C44868',
+        halo: '#E8C46A',
+      };
+    }
 
     function setBodyColor(color) {
       if (color === curBodyColor) return;
@@ -370,7 +457,252 @@
       stopB.setAttribute('stop-color', color);
       stopC.setAttribute('stop-color', shade(color, -0.12));
       if (curSketch > 0.5) head.style.stroke = 'var(--sketch-ink, ' + shade(color, -0.6) + ')';
+      paintKit();
     }
+
+    function isSpecsKit(kind) {
+      return kind.indexOf('specs') === 0;
+    }
+
+    function clearKit() {
+      while (kitG.firstChild) kitG.removeChild(kitG.firstChild);
+    }
+
+    function paintKit() {
+      if (kitKind === 'none' || !curBodyColor) return;
+      var pal = kitPalette(curBodyColor);
+      var sun = kitKind === 'specs-sun';
+      var nodes = kitG.querySelectorAll('[data-kit-role]');
+      var i;
+      for (i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var role = node.getAttribute('data-kit-role');
+        if (role === 'frame') node.setAttribute('stroke', pal.frame);
+        if (role === 'lens') {
+          node.setAttribute('fill', sun ? pal.lensSun : pal.lens);
+          node.setAttribute('stroke', pal.frame);
+        }
+        if (role === 'brim') node.setAttribute('fill', pal.brim);
+        if (role === 'crown') node.setAttribute('fill', pal.crown);
+        if (role === 'accent') node.setAttribute('fill', pal.accent);
+        if (role === 'bow') node.setAttribute('fill', pal.bow);
+        if (role === 'knot') node.setAttribute('fill', pal.knot);
+        if (role === 'halo') node.setAttribute('stroke', pal.halo);
+        if (role === 'shine') node.setAttribute('stroke', pal.halo);
+      }
+    }
+
+    function addSpecsPair(shape) {
+      var sw = '4.4';
+      if (shape === 'rect') {
+        kitG.appendChild(el('rect', {
+          'data-kit': 'lens-L', 'data-kit-role': 'lens', fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
+        }));
+        kitG.appendChild(el('rect', {
+          'data-kit': 'lens-R', 'data-kit-role': 'lens', fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
+        }));
+      } else if (shape === 'cat') {
+        kitG.appendChild(el('path', {
+          'data-kit': 'lens-L', 'data-kit-role': 'lens', d: CAT_LENS, fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
+        }));
+        kitG.appendChild(el('path', {
+          'data-kit': 'lens-R', 'data-kit-role': 'lens', d: CAT_LENS, fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
+        }));
+      } else {
+        kitG.appendChild(el('ellipse', {
+          'data-kit': 'lens-L', 'data-kit-role': 'lens', fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
+        }));
+        kitG.appendChild(el('ellipse', {
+          'data-kit': 'lens-R', 'data-kit-role': 'lens', fill: palLens(),
+          stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
+        }));
+      }
+      kitG.appendChild(el('path', {
+        'data-kit': 'bridge', 'data-kit-role': 'frame', fill: 'none',
+        stroke: '#2A2A30', 'stroke-width': '3.4', 'stroke-linecap': 'round',
+      }));
+      kitG.appendChild(el('path', {
+        'data-kit': 'temple-L', 'data-kit-role': 'frame', fill: 'none',
+        stroke: '#2A2A30', 'stroke-width': '3.1', 'stroke-linecap': 'round',
+      }));
+      kitG.appendChild(el('path', {
+        'data-kit': 'temple-R', 'data-kit-role': 'frame', fill: 'none',
+        stroke: '#2A2A30', 'stroke-width': '3.1', 'stroke-linecap': 'round',
+      }));
+    }
+
+    function palLens() {
+      return kitKind === 'specs-sun' ? 'rgba(28,28,32,0.52)' : 'rgba(255,255,255,0.16)';
+    }
+
+    function rebuildKit() {
+      clearKit();
+      kitG.removeAttribute('transform');
+      kitG.style.display = '';
+      if (kitKind === 'none') return;
+      if (isSpecsKit(kitKind)) {
+        addSpecsPair(kitKind === 'specs-rect' ? 'rect' : kitKind === 'specs-cat' ? 'cat' : 'round');
+        paintKit();
+        return;
+      }
+      if (kitKind === 'bow') {
+        kitG.appendChild(el('path', {
+          'data-kit-role': 'bow',
+          d: 'M-22-2c0-7 7-12 13-8 4 3 6 7 9 10 3-3 5-7 9-10 6-4 13 1 13 8 0 5-4 8-9 8-4 0-7-2-10-5-3 3-6 5-10 5-5 0-9-3-9-8z',
+        }));
+        kitG.appendChild(el('circle', { 'data-kit-role': 'knot', cx: '0', cy: '1', r: '4.4' }));
+        kitG.appendChild(el('circle', { cx: '-1.2', cy: '-0.4', r: '1.3', fill: '#F4A0B4', opacity: '0.85' }));
+        paintKit();
+        return;
+      }
+      if (kitKind === 'cap') {
+        kitG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '12', rx: '30', ry: '6' }));
+        kitG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M-21 11c0-17 9.5-28 21-28s21 11 21 28H-21z' }));
+        kitG.appendChild(el('path', {
+          fill: 'rgba(255,255,255,0.2)',
+          d: 'M-8 2c2-8 7-12 8-12 2 0 5 3 7 10-5-2-10-2-15 2z',
+        }));
+        paintKit();
+        return;
+      }
+      if (kitKind === 'beanie') {
+        kitG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M-22 14c0-18 10-30 22-30s22 12 22 30H-22z' }));
+        kitG.appendChild(el('rect', { 'data-kit-role': 'brim', x: '-24', y: '10', width: '48', height: '8', rx: '3' }));
+        kitG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-14', r: '4.2' }));
+        paintKit();
+        return;
+      }
+      if (kitKind === 'visor') {
+        kitG.appendChild(el('rect', { 'data-kit-role': 'accent', x: '-22', y: '2', width: '44', height: '6', rx: '2.4' }));
+        kitG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '12', rx: '32', ry: '7' }));
+        paintKit();
+        return;
+      }
+      if (kitKind === 'halo') {
+        kitG.appendChild(el('ellipse', {
+          'data-kit-role': 'halo', cx: '0', cy: '0', rx: '36', ry: '10',
+          fill: 'none', 'stroke-width': '3.4', opacity: '0.92',
+        }));
+        kitG.appendChild(el('ellipse', {
+          'data-kit-role': 'shine', cx: '-8', cy: '-2', rx: '11', ry: '3.2',
+          fill: 'none', 'stroke-width': '1.5', opacity: '0.55',
+        }));
+        paintKit();
+      }
+    }
+
+    function specSize(slot, other) {
+      var rx = Math.max(slot.rx, 6) * SPEC_SCALE;
+      var ry = Math.max(slot.ry, 5) * SPEC_SCALE * 0.9;
+      if (other && slot.on && other.on) {
+        var gap = Math.abs(other.x - slot.x);
+        var maxRx = Math.max(8, (gap - SPEC_BRIDGE) * 0.5);
+        if (rx > maxRx) rx = maxRx;
+      }
+      return { rx: rx, ry: Math.min(ry, rx * 0.92) };
+    }
+
+    function layoutSpecsLens(node, slot, other, side) {
+      if (!node || !slot) return;
+      if (!slot.on) {
+        node.style.display = 'none';
+        return;
+      }
+      node.style.display = '';
+      var sz = specSize(slot, other);
+      var tag = node.tagName.toLowerCase();
+      if (tag === 'ellipse') {
+        node.setAttribute('cx', r2(slot.x));
+        node.setAttribute('cy', r2(slot.y));
+        node.setAttribute('rx', r2(sz.rx));
+        node.setAttribute('ry', r2(sz.ry));
+        return;
+      }
+      if (tag === 'rect') {
+        node.setAttribute('x', r2(slot.x - sz.rx));
+        node.setAttribute('y', r2(slot.y - sz.ry * 0.88));
+        node.setAttribute('width', r2(sz.rx * 2));
+        node.setAttribute('height', r2(sz.ry * 1.76));
+        return;
+      }
+      var sx = side < 0 ? -sz.rx : sz.rx;
+      node.setAttribute('transform',
+        'translate(' + r2(slot.x) + ' ' + r2(slot.y) + ') scale(' + r2(sx) + ' ' + r2(sz.ry) + ')');
+    }
+
+    function layoutKit() {
+      if (kitKind === 'none') return;
+      if (isSpecsKit(kitKind)) {
+        kitG.removeAttribute('transform');
+        kitG.style.display = '';
+        var L = eyeL.slot;
+        var R = eyeR.slot;
+        layoutSpecsLens(kitG.querySelector('[data-kit="lens-L"]'), L, R, -1);
+        layoutSpecsLens(kitG.querySelector('[data-kit="lens-R"]'), R, L, 1);
+        var bridge = kitG.querySelector('[data-kit="bridge"]');
+        var tL = kitG.querySelector('[data-kit="temple-L"]');
+        var tR = kitG.querySelector('[data-kit="temple-R"]');
+        if (bridge && L && R && L.on && R.on) {
+          var lsz = specSize(L, R);
+          var rsz = specSize(R, L);
+          var lx = L.x + lsz.rx * 0.96;
+          var rx = R.x - rsz.rx * 0.96;
+          var my = (L.y + R.y) / 2;
+          if (rx - lx < 2) {
+            bridge.style.display = 'none';
+          } else {
+            bridge.setAttribute('d',
+              'M' + r2(lx) + ' ' + r2(L.y) + ' Q' + r2((lx + rx) / 2) + ' ' + r2(my - 4) + ' ' + r2(rx) + ' ' + r2(R.y));
+            bridge.style.display = '';
+          }
+        } else if (bridge) {
+          bridge.style.display = 'none';
+        }
+        if (tL && L && L.on) {
+          var left = L.x - specSize(L, R).rx;
+          tL.setAttribute('d', 'M' + r2(left) + ' ' + r2(L.y) + ' l-10 3.5');
+          tL.style.display = '';
+        } else if (tL) tL.style.display = 'none';
+        if (tR && R && R.on) {
+          var right = R.x + specSize(R, L).rx;
+          tR.setAttribute('d', 'M' + r2(right) + ' ' + r2(R.y) + ' l10 3.5');
+          tR.style.display = '';
+        } else if (tR) tR.style.display = 'none';
+        return;
+      }
+      var yaw = lastYaw;
+      var cn = Math.cos(yaw);
+      if (cn <= 0.08) {
+        kitG.style.display = 'none';
+        return;
+      }
+      kitG.style.display = '';
+      var yOff = kitKind === 'halo' ? -12 : kitKind === 'visor' ? 16 : kitKind === 'cap' ? 11 : kitKind === 'beanie' ? 8 : 6;
+      var y = silMinY + yOff;
+      var sampleY = Math.min(silMaxY - 4, Math.max(silMinY + 6, y + 14));
+      var band = silAt(sampleY);
+      var hw = Math.max((band[1] - band[0]) / 2, 14);
+      var cx = (band[0] + band[1]) / 2;
+      var x = cx + hw * Math.sin(yaw) * 0.74;
+      var sx = 0.4 + 0.6 * cn;
+      var fit = hw / 54;
+      kitG.setAttribute('transform',
+        'translate(' + r2(x) + ' ' + r2(y) + ') scale(' + r2(fit * sx) + ' ' + r2(fit) + ')' +
+        (kitKind === 'halo' ? ' rotate(-12)' : ''));
+    }
+
+    function setKit(kind) {
+      kitKind = kind || 'none';
+      rebuildKit();
+      layoutKit();
+    }
+
+    rebuildKit();
 
     /* ---- 眼睛：轮廓环形变 + 球面投影 ---- */
     function setEye(eye, pose, k, sketch, yaw) {
@@ -405,12 +737,20 @@
       var cn = Math.cos(total);
       if (cn <= 0.02) {
         eye.node.style.display = 'none';
+        if (eye.slot) eye.slot.on = false;
         return;
       }
       eye.node.style.display = '';
       var ex = cx0 + hw * Math.sin(total) * 0.985;
       var dyN = (ey0 - HEAD_C) / 130;
       var fy = Math.sqrt(1 - dyN * dyN * 0.22);
+      eye.slot = {
+        on: true,
+        x: ex,
+        y: ey0,
+        rx: EYE_HALF * sxBase * cn * 0.72,
+        ry: EYE_HALF * sy * fy * 0.72,
+      };
 
       eye.node.setAttribute('transform',
         'translate(' + r2(ex) + ' ' + r2(ey0) + ')' +
@@ -453,8 +793,10 @@
       }
 
       var yaw = b.yaw || 0;
+      lastYaw = yaw;
       setEye(eyeL, pose.left, 0, sketch, yaw);
       setEye(eyeR, pose.right, 1, sketch, yaw);
+      layoutKit();
 
       if (lite) return;
 
@@ -610,7 +952,7 @@
       if (svg.parentNode) svg.parentNode.removeChild(svg);
     }
 
-    return { svg: svg, applyPose: applyPose, burst: burst, destroy: destroy };
+    return { svg: svg, applyPose: applyPose, burst: burst, setKit: setKit, destroy: destroy };
   }
 
   EB.createBall = createBall;

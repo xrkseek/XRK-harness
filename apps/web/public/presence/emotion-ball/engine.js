@@ -71,6 +71,33 @@
     return rgbToHex(lerp(A[0], B[0], t), lerp(A[1], B[1], t), lerp(A[2], B[2], t));
   }
 
+  /**
+   * Map an authored cream-space body onto Settings paint. Idle cream becomes
+   * the theme fill; blush/anger keep the cream→accent delta on that fill so
+   * ink does not snap to candy pink.
+   */
+  function mapThemeBody(themeBody, poseColor) {
+    var cream = hexToRgb(DEFAULT_BODY.color);
+    var poseRgb = poseColor && String(poseColor).charAt(0) === '#' ? hexToRgb(poseColor) : cream;
+    var d = Math.hypot(poseRgb[0] - cream[0], poseRgb[1] - cream[1], poseRgb[2] - cream[2]);
+    if (d < 22) return themeBody;
+    var theme = hexToRgb(themeBody);
+    var keep = clamp((d - 22) / 280, 0, 0.28);
+    return rgbToHex(
+      lerp(theme[0] + (poseRgb[0] - cream[0]) * 0.92, poseRgb[0], keep),
+      lerp(theme[1] + (poseRgb[1] - cream[1]) * 0.92, poseRgb[1], keep),
+      lerp(theme[2] + (poseRgb[2] - cream[2]) * 0.92, poseRgb[2], keep)
+    );
+  }
+
+  function applyTheme(pose, theme) {
+    var painted = clonePose(pose);
+    painted.body.color = mapThemeBody(theme.body, pose.body.color);
+    if (pose.left.color === DEFAULT_EYE.color) painted.left.color = theme.eyes;
+    if (pose.right.color === DEFAULT_EYE.color) painted.right.color = theme.eyes;
+    return painted;
+  }
+
   /* ---------------- Pose：默认值 / 合并 / 插值 ---------------- */
 
   var DEFAULT_BODY = {
@@ -322,6 +349,7 @@
     this.ball = EB.createBall(el, Object.assign({}, opts, {
       lite: opts.lite != null ? opts.lite : opts.autostart === false
     }));
+    this._kit = opts.kit || 'none';
     /* Deterministic when caller passes seed (per-session companion); else random. */
     this._seed = opts.seed != null && isFinite(Number(opts.seed))
       ? Number(opts.seed)
@@ -496,6 +524,13 @@
 
     resetIdle: function () { this._lastActivity = performance.now(); },
 
+    setKit: function (kit) {
+      this._kit = kit || 'none';
+      if (this.ball.setKit) this.ball.setKit(this._kit);
+      if (!this._active) this.renderStatic();
+      return this;
+    },
+
     /* 注视目标：横向 ±24、纵向 ±15（viewBox 坐标），幅度克制以保持含蓄 */
     setGaze: function (nx, ny) {
       this._gaze.tx = clamp(nx, -1, 1) * 24;
@@ -597,8 +632,8 @@
       this._lastTick = now;
       if (this._idle && !this._touring) this._checkIdle(now);
       var pose = this._compose(now, 0);
-      this.ball.applyPose(pose);
       this._lastPose = pose;
+      this.ball.applyPose(this._theme ? applyTheme(pose, this._theme) : pose);
     },
 
     _checkIdle: function (now) {
@@ -745,13 +780,6 @@
         pose.left.scaleY *= this._eyeScale;
         pose.right.scaleX *= this._eyeScale;
         pose.right.scaleY *= this._eyeScale;
-      }
-
-      /* 实例主题色（baby bot）：体色恒为主题色，眼睛仅覆盖默认黑 */
-      if (this._theme) {
-        pose.body.color = this._theme.body;
-        if (pose.left.color === DEFAULT_EYE.color) pose.left.color = this._theme.eyes;
-        if (pose.right.color === DEFAULT_EYE.color) pose.right.color = this._theme.eyes;
       }
 
       /* 开合度 = 配置基础值 × 眨眼弹簧（弹簧可过冲到 1.08） */

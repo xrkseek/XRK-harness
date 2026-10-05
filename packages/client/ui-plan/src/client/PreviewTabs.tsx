@@ -1675,10 +1675,11 @@ export function PreviewTabs({
   const [statusTick, setStatusTick] = useState(0)
   const [boundSessionId, setBoundSessionId] = useState(sessionId)
   const [presenceCollapsed, setPresenceCollapsed] = useState(readPresenceCollapsed)
-  // Details column stays mounted at width 0 — only paint the ball while open
-  // so the header PresenceDock can own the engine when Overview is closed.
+  // Details column stays mounted at width 0. Keep the presence rail in layout
+  // so expand does not insert a tall ball and shove Status. Engine waits for
+  // the header PresenceDock to exit (one EmotionBall at a time).
   const overviewOpen = useOverviewOpen()
-  const [presenceRailReady, setPresenceRailReady] = useState(() => overviewOpen)
+  const [presenceEngineReady, setPresenceEngineReady] = useState(() => overviewOpen)
   const overviewWasOpen = useRef(overviewOpen)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
@@ -1787,20 +1788,20 @@ export function PreviewTabs({
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
 
-  // Wait for header dock exit before mounting the Overview ball (closed → open).
+  // Slot is already in layout; wait for header dock exit before starting the engine.
   useEffect(() => {
     const wasOpen = overviewWasOpen.current
     overviewWasOpen.current = overviewOpen
     if (!overviewOpen) {
-      setPresenceRailReady(false)
+      setPresenceEngineReady(false)
       return
     }
     if (wasOpen) {
-      setPresenceRailReady(true)
+      setPresenceEngineReady(true)
       return
     }
     const timer = window.setTimeout(() => {
-      setPresenceRailReady(true)
+      setPresenceEngineReady(true)
     }, PRESENCE_RAIL_HANDOFF_MS)
     return () => { window.clearTimeout(timer) }
   }, [overviewOpen])
@@ -2033,61 +2034,61 @@ export function PreviewTabs({
       <div className={css.tools} aria-label={t('preview.status.tools')}>
         {renderSlot('details.status.utilities', {})}
       </div>
-      {overviewOpen && presenceRailReady && status !== null
-        ? (
-          <div
-            className={css.presenceRail}
-            data-overview-presence-rail=""
-            data-collapsed={presenceCollapsed ? '' : undefined}
-            aria-label={t('preview.status.presence')}
+      <div
+        className={css.presenceRail}
+        data-overview-presence-rail=""
+        data-collapsed={presenceCollapsed ? '' : undefined}
+        aria-label={t('preview.status.presence')}
+        aria-hidden={!overviewOpen || undefined}
+        {...(!overviewOpen ? { inert: '' } : {})}
+      >
+        <div className={css.presenceRailHead}>
+          <span className={css.presenceRailTitle}>{t('preview.status.presence')}</span>
+          {!presenceCollapsed
+            ? <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
+            : null}
+          <button
+            type="button"
+            className={css.presenceCollapse}
+            aria-expanded={!presenceCollapsed}
+            aria-label={t(presenceCollapsed
+              ? 'preview.status.presenceExpand'
+              : 'preview.status.presenceCollapse')}
+            onClick={() => {
+              setPresenceCollapsed((prev) => {
+                const next = !prev
+                writePresenceCollapsed(next)
+                return next
+              })
+            }}
           >
-            <div className={css.presenceRailHead}>
-              <span className={css.presenceRailTitle}>{t('preview.status.presence')}</span>
-              {!presenceCollapsed
-                ? <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
-                : null}
-              <button
-                type="button"
-                className={css.presenceCollapse}
-                aria-expanded={!presenceCollapsed}
-                aria-label={t(presenceCollapsed
-                  ? 'preview.status.presenceExpand'
-                  : 'preview.status.presenceCollapse')}
-                onClick={() => {
-                  setPresenceCollapsed((prev) => {
-                    const next = !prev
-                    writePresenceCollapsed(next)
-                    return next
-                  })
-                }}
-              >
-                <IconChevronDownOutline14 size={14} className={css.presenceCollapseIcon} />
-              </button>
-            </div>
-            <PresenceBall
-              sessionId={sessionId}
-              {...(status.presence ? { presence: status.presence } : {})}
-              turnActive={status.delivery.turnActive}
-              runningJobs={status.jobs.filter((j) => j.status === 'running').length}
-              runningSubs={status.subagents.live.filter((s) => s.activity === 'running').length}
-              fleetHealth={status.fleet.health}
-              queued={status.delivery.queued}
-              steering={status.delivery.steering}
-              compactionBusy={status.compaction.phase === 'busy'}
-              {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
-              activityAt={Math.max(
-                presenceCue.activityAt,
-                status.presence?.updatedAt ?? 0,
-              )}
-              compact={presenceCollapsed}
-              t={t as (key: string, params?: Record<string, string>) => string}
-              loadingLabel={t('preview.status.presenceLoading')}
-              errorLabel={t('preview.status.presenceError')}
-              clickHint={t('preview.status.presenceClick')}
-            />
-          </div>
-        )
-        : null}
+            <IconChevronDownOutline14 size={14} className={css.presenceCollapseIcon} />
+          </button>
+        </div>
+        <PresenceBall
+          sessionId={sessionId}
+          {...(status?.presence ? { presence: status.presence } : {})}
+          {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
+          turnActive={status?.delivery.turnActive ?? false}
+          runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
+          runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+          fleetHealth={status?.fleet.health ?? 'ok'}
+          queued={status?.delivery.queued ?? 0}
+          steering={status?.delivery.steering ?? 0}
+          compactionBusy={status?.compaction.phase === 'busy'}
+          {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+          activityAt={Math.max(
+            presenceCue.activityAt,
+            status?.presence?.updatedAt ?? 0,
+          )}
+          compact={presenceCollapsed}
+          engineActive={overviewOpen && presenceEngineReady}
+          t={t as (key: string, params?: Record<string, string>) => string}
+          loadingLabel={t('preview.status.presenceLoading')}
+          errorLabel={t('preview.status.presenceError')}
+          clickHint={t('preview.status.presenceClick')}
+        />
+      </div>
       <div
         ref={bodyRef}
         className={css.body}

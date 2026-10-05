@@ -121,6 +121,10 @@
     visibility 0s linear;
 }
 
+.root:not(.rail) .headerActions {
+  max-width: 96px;
+}
+
 .headerActionsHidden {
   max-width: 0;
   opacity: 0;

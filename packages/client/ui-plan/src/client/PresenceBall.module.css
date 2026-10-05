@@ -13,9 +13,12 @@
 .stage {
   box-sizing: border-box;
   position: relative;
-  /* Taller than wide so bounce parabolas keep headroom (engine ≈48 SVG units). */
+  /* Taller than wide so bounce parabolas keep headroom (engine ≈48 SVG units).
+   * min-height keeps the runway while the details track is width 0 — otherwise
+   * `width: min(100%, 216px)` collapses and expand grows the ball into Status. */
   width: min(100%, 216px);
   aspect-ratio: 4 / 5;
+  min-height: 270px;
   margin: 0;
   padding: 0;
   border-radius: 18px;
@@ -41,6 +44,16 @@
   color: inherit;
   font: inherit;
   text-align: inherit;
+}
+
+.kit {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
 }
 
 .stage:hover {
@@ -138,17 +151,26 @@
   place-items: center;
   font-size: 11px;
   color: var(--dsw-alias-label-secondary);
-  padding: 16px;
   text-align: center;
   pointer-events: none;
+}
+
+.error {
+  padding: 16px;
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 72%, transparent);
 }
 
-/* Quiet wait — no “loading…” copy; spinner only until the engine mounts. */
+/* Quiet wait — no "loading…" copy; spinner only until the engine mounts.
+ * Mounted from the first frame (no enter animation) and faded out under the
+ * ball, so the hand-off from wait to rendered pose is a cross-fade, not a
+ * hole. An enter keyframe here would also pin opacity via fill-mode and
+ * outrank the [data-hidden] fade. */
 .loading {
-  background: transparent;
-  padding: 0;
-  animation: presenceLoadFade 220ms ease-out both;
+  transition: opacity 200ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.loading[data-hidden] {
+  opacity: 0;
 }
 
 .spinner {
@@ -165,18 +187,13 @@
   to { transform: rotate(360deg); }
 }
 
-@keyframes presenceLoadFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .mount {
     transition: none;
   }
 
   .loading {
-    animation: none;
+    transition: none;
   }
 
   .spinner {
@@ -204,6 +221,8 @@
 
 .root[data-compact] .stage {
   width: 40px;
+  height: 40px;
+  min-height: 40px;
   flex: none;
   aspect-ratio: 1;
   border: none;
@@ -270,14 +289,9 @@
   overflow-wrap: normal;
 }
 
-.root[data-compact] .loading,
 .root[data-compact] .error {
   font-size: 9px;
   padding: 4px;
-}
-
-.root[data-compact] .loading {
-  padding: 0;
 }
 
 .root[data-compact] .spinner {
@@ -325,14 +339,9 @@
   line-height: 1.25;
 }
 
-.root[data-compact][data-density='header'] .loading,
 .root[data-compact][data-density='header'] .error {
   font-size: 9px;
   padding: 2px;
-}
-
-.root[data-compact][data-density='header'] .loading {
-  padding: 0;
 }
 
 .root[data-compact][data-density='header'] .spinner {

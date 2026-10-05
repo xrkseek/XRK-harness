@@ -1137,4 +1137,33 @@ describe('WorkspaceBrowser', () => {
     const row = screen.getByText('Needle A').closest('[role="treeitem"]') as HTMLElement
     expect(row.hasAttribute('draggable')).toBe(false)
   })
+
+  it('opens Agent Team above the session list and lists 干员', async () => {
+    const listTeam = vi.fn(async () => [{
+      id: 'mem_seed_worker',
+      name: '施工员',
+      playbook: 'ship',
+      role: 'worker',
+      seed: true as const,
+      updatedAt: 1,
+    }])
+    const startSession = vi.fn()
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
+      startSession,
+      listTeam,
+      upsertTeamMember: vi.fn(async () => {}),
+      dispatchTeam: vi.fn(async () => {}),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    await waitFor(() => {
+      expect(screen.getByText('施工员')).toBeTruthy()
+    })
+    expect(screen.getByRole('button', { name: '选择工作区' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '选择工作区' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Alpha' }))
+    expect(startSession).toHaveBeenCalledWith(wid('alpha'))
+    expect(listTeam).toHaveBeenCalledWith(sid('alpha-s'))
+  })
 })

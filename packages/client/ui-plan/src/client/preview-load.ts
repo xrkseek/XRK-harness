@@ -35,6 +35,22 @@ export interface SessionStatusView {
       readonly id: string
       readonly label?: string
       readonly activity: 'running' | 'inactive'
+      /**
+       * Last-turn verdict. `activity: inactive` is shared by a finished child
+       * and one the parent wait budget cut off.
+       */
+      readonly outcome?: {
+        readonly kind:
+          | 'completed'
+          | 'aborted'
+          | 'error'
+          | 'max-tokens'
+          | 'interrupted'
+          | 'blocked'
+          | 'none'
+        readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+        readonly quietMs?: number
+      }
       readonly mode: string
       readonly model?: string
       readonly liveText?: string
@@ -154,6 +170,12 @@ export interface SessionStatusView {
     readonly source: 'tool'
     readonly updatedAt: number
   }
+  /** Child 干员 ball — not the home Settings presence. */
+  readonly companionBall?: {
+    readonly shape: string
+    readonly color: string
+    readonly kit?: string
+  }
   readonly timeline: {
     readonly total: number
     readonly system: number
@@ -248,6 +270,40 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+const LIVE_OUTCOME_KINDS = new Set([
+  'completed',
+  'aborted',
+  'error',
+  'max-tokens',
+  'interrupted',
+  'blocked',
+  'none',
+])
+const LIVE_ABORT_CAUSES = new Set(['user', 'parent', 'disposed', 'hook', 'legacy'])
+
+function parseLiveOutcome(
+  raw: unknown,
+): SessionStatusView['subagents']['live'][number]['outcome'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const kind = str((raw as { kind?: unknown }).kind)
+  if (!kind || !LIVE_OUTCOME_KINDS.has(kind)) return undefined
+  const causeRaw = str((raw as { cause?: unknown }).cause)
+  const cause =
+    kind === 'aborted' && causeRaw && LIVE_ABORT_CAUSES.has(causeRaw)
+      ? (causeRaw as NonNullable<
+        SessionStatusView['subagents']['live'][number]['outcome']
+      >['cause'])
+      : undefined
+  const quietMs = num((raw as { quietMs?: unknown }).quietMs)
+  return {
+    kind: kind as NonNullable<
+      SessionStatusView['subagents']['live'][number]['outcome']
+    >['kind'],
+    ...(cause ? { cause } : {}),
+    ...(quietMs !== undefined ? { quietMs } : {}),
+  }
+}
+
 /** Plan summary from the sidebar RPC envelope. Null when the body is not that shape. */
 export function parsePlanPreview(body: unknown): PlanPreviewView | null {
   if (!body || typeof body !== 'object') return null
@@ -321,6 +377,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     const mode = str((row as { mode?: unknown }).mode)
     if (!id || (activity !== 'running' && activity !== 'inactive') || !mode) return []
     const label = str((row as { label?: unknown }).label)
+    const outcome = parseLiveOutcome((row as { outcome?: unknown }).outcome)
     const model = str((row as { model?: unknown }).model)
     const liveText = str((row as { liveText?: unknown }).liveText)
     const liveTool = str((row as { liveTool?: unknown }).liveTool)
@@ -340,6 +397,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       id,
       activity,
       mode,
+      ...(outcome ? { outcome } : {}),
       ...(label ? { label } : {}),
       ...(model ? { model } : {}),
       ...(liveText ? { liveText } : {}),

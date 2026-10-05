@@ -162,7 +162,7 @@ function CardDescription({ text }: { text: string }): ReactNode {
   return (
     // Capped near the card's own width: the default half-viewport bubble would
     // spill a description out of the settings dialog and across the app behind it.
-    <Tooltip label={text} side="bottom" delayMs={400} disabled={!truncated} maxWidth={360}>
+    <Tooltip label={text} side="bottom" disabled={!truncated} maxWidth={360}>
       {/* The empty title stops the card body's native tooltip from climbing to
         this span: a cut-off description answers with one bubble, not two. */}
       <span ref={ref} className={css.cardDesc} title="">{text}</span>

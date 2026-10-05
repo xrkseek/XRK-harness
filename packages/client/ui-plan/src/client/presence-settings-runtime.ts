@@ -5,12 +5,16 @@
 import type { SettingsScope } from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_KIT,
   DEFAULT_PRESENCE_SHAPE,
   isPresenceColor,
+  isPresenceKit,
   isPresenceShape,
   PRESENCE_COLOR_FIELD,
+  PRESENCE_KIT_FIELD,
   PRESENCE_SHAPE_FIELD,
   type PresenceColor,
+  type PresenceKit,
   type PresenceSettings,
   type PresenceShape,
 } from '../presence-settings.ts'
@@ -21,6 +25,7 @@ export type PresencePrefsListener = () => void
 export class PresenceSettingsRuntime {
   private shape: PresenceShape = DEFAULT_PRESENCE_SHAPE
   private color: PresenceColor = DEFAULT_PRESENCE_COLOR
+  private kit: PresenceKit = DEFAULT_PRESENCE_KIT
   private revision = 0
   private readonly listeners = new Set<PresencePrefsListener>()
 
@@ -36,6 +41,10 @@ export class PresenceSettingsRuntime {
 
   getColor(): PresenceColor {
     return this.color
+  }
+
+  getKit(): PresenceKit {
+    return this.kit
   }
 
   getRevision(): number {
@@ -60,6 +69,15 @@ export class PresenceSettingsRuntime {
     this.publish()
   }
 
+  setKit(kit: PresenceKit): void {
+    if (!isPresenceKit(kit)) return
+    if (this.kit === kit) return
+    this.kit = kit
+    this.revision += 1
+    void this.host.set(PRESENCE_KIT_FIELD, kit)
+    this.publish()
+  }
+
   subscribe(listener: PresencePrefsListener): () => void {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
@@ -73,9 +91,13 @@ export class PresenceSettingsRuntime {
     const nextColor = isPresenceColor(section?.color)
       ? section.color
       : DEFAULT_PRESENCE_COLOR
-    if (this.shape === nextShape && this.color === nextColor) return
+    const nextKit = isPresenceKit(section?.kit)
+      ? section.kit
+      : DEFAULT_PRESENCE_KIT
+    if (this.shape === nextShape && this.color === nextColor && this.kit === nextKit) return
     this.shape = nextShape
     this.color = nextColor
+    this.kit = nextKit
     this.revision += 1
     this.publish()
   }

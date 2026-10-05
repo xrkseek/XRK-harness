@@ -298,7 +298,25 @@ function CatalogRows({
         const summary = summaries[entry.id]
         const label = entry.label ?? entry.id
         const mode = entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
-        const activity = entry.activity === 'running' ? t('activity.running') : t('activity.inactive')
+        // `inactive` is the live axis; the terminal verdict is what separates a
+        // child that delivered from one a wait budget / Stop cut off. Falling
+        // back to `inactive` keeps pre-`outcome` catalogs rendering as before.
+        const outcomeKind = entry.outcome?.kind
+        const outcomeLabel
+          = outcomeKind === 'completed' ? t('outcome.completed')
+            : outcomeKind === 'aborted'
+              ? entry.outcome?.cause === 'parent' ? t('outcome.abortedByParent')
+                : entry.outcome?.cause === 'user' ? t('outcome.abortedByUser')
+                  : t('outcome.abortedOther')
+              : outcomeKind === 'error' ? t('outcome.error')
+                : outcomeKind === 'interrupted' ? t('outcome.interrupted')
+                  : outcomeKind === 'max-tokens' ? t('outcome.maxTokens')
+                    : outcomeKind === 'blocked' ? t('outcome.blocked')
+                      : outcomeKind === 'none' ? t('outcome.none')
+                        : undefined
+        const activity = entry.activity === 'running'
+          ? t('activity.running')
+          : outcomeLabel ?? t('activity.inactive')
         // The route is what makes "same model as parent" checkable rather than
         // assumed; Fleet-wide overrides show up here as a different string.
         const secondary = [summary?.title, mode, entry.model, activity]
