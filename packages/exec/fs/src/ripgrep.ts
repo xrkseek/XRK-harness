@@ -68,6 +68,11 @@ export class RipgrepUnavailableError extends Error {
   }
 }
 
+/** Reject reasons must be Errors; a `catch` binding is typed `unknown`. */
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 let rgPathMemo: Promise<string> | undefined;
 
 /** DSH `resolveRgPath` — packaged `@vscode/ripgrep`, Electron asar unpack. */
@@ -346,7 +351,13 @@ export async function grepWithRipgrep(
       try {
         hit = parseGrepJsonRecord(line);
       } catch (err) {
-        finish(() => reject(err));
+        finish(() =>
+          reject(
+            new Error(`ripgrep --json parse failed: ${errorText(err)}`, {
+              cause: err,
+            }),
+          ),
+        );
         try {
           child.kill();
         } catch {
