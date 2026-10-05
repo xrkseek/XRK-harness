@@ -248,6 +248,51 @@ describe("FaceAgentRosterStore", () => {
       role: "worker",
       appearance: { shape: "heart", color: "honey", kit: "bow" },
     });
-    expect(kitted?.appearance).toEqual({ shape: "heart", color: "honey", kit: "bow" });
+    expect(kitted?.appearance).toEqual({
+      shape: "heart",
+      color: "honey",
+      kit: "bow",
+      kitHat: "bow",
+    });
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const dressed = store.upsert(GLOBAL_ROSTER_ID, {
+      name: "三层贴图",
+      playbook: "Hat, glasses, and a staff together.",
+      role: "worker",
+      appearance: {
+        shape: "blob",
+        color: "cream",
+        overlayHat: png,
+        overlayGlasses: png,
+        overlayHeld: png,
+      },
+    });
+    expect(dressed?.appearance.overlayHat).toBe(png);
+    expect(dressed?.appearance.overlayGlasses).toBe(png);
+    expect(dressed?.appearance.overlayHeld).toBe(png);
+    expect(dressed?.appearance.face).toBe(png);
+    const stickered = store.upsert(GLOBAL_ROSTER_ID, {
+      name: "共享贴图槽",
+      playbook: "Uses a library sticker on the hat.",
+      role: "worker",
+      appearance: {
+        shape: "blob",
+        color: "cream",
+        kitHat: "sticker:stk_abcdef12",
+        kitGlasses: "specs",
+        kitHeld: "sticker:stk_helditem1",
+      },
+    });
+    expect(stickered?.appearance.kitHat).toBe("sticker:stk_abcdef12");
+    expect(stickered?.appearance.kitGlasses).toBe("specs");
+    expect(stickered?.appearance.kitHeld).toBe("sticker:stk_helditem1");
+    const held = store.upsert(GLOBAL_ROSTER_ID, {
+      name: "手持干员",
+      playbook: "Holds a flower.",
+      role: "worker",
+      appearance: { shape: "blob", color: "cream", kitHeld: "flower" },
+    });
+    expect(held?.appearance.kitHeld).toBe("flower");
   });
 });

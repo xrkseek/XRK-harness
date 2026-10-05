@@ -20,7 +20,15 @@ import {
   MEMBER_COLORS,
   MEMBER_KITS,
   MEMBER_SHAPES,
+  parseOverlayImage,
 } from "./agent-roster-store.js";
+import {
+  GLASSES_BUILTINS,
+  HAT_BUILTINS,
+  HELD_BUILTINS,
+  parseSlotPick,
+  parseStickers,
+} from "./presence-dressing.js";
 import { FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "./presets-catalog.js";
 import {
   isFacePermissionPreset,
@@ -385,6 +393,44 @@ export function validateSettingsNamespace(
       && !MEMBER_KITS.includes(kit as (typeof MEMBER_KITS)[number])
     ) {
       return `unknown presence kit: ${String(kit)}`;
+    }
+    for (const key of ["overlayHat", "overlayGlasses", "overlayHeld"] as const) {
+      const raw = merged[key];
+      if (raw === undefined || raw === "") continue;
+      if (!parseOverlayImage(raw)) {
+        return `invalid presence ${key}`;
+      }
+    }
+    if (merged.stickers !== undefined && merged.stickers !== "") {
+      const rows = parseStickers(merged.stickers);
+      if (typeof merged.stickers === "string") {
+        try {
+          const parsed = JSON.parse(merged.stickers) as unknown;
+          if (Array.isArray(parsed) && parsed.length > rows.length) {
+            return "invalid presence stickers";
+          }
+        } catch {
+          return "invalid presence stickers";
+        }
+      }
+    }
+    if (
+      merged.kitHat !== undefined
+      && parseSlotPick(merged.kitHat, HAT_BUILTINS) === undefined
+    ) {
+      return `unknown presence kitHat: ${String(merged.kitHat)}`;
+    }
+    if (
+      merged.kitGlasses !== undefined
+      && parseSlotPick(merged.kitGlasses, GLASSES_BUILTINS) === undefined
+    ) {
+      return `unknown presence kitGlasses: ${String(merged.kitGlasses)}`;
+    }
+    if (
+      merged.kitHeld !== undefined
+      && parseSlotPick(merged.kitHeld, HELD_BUILTINS) === undefined
+    ) {
+      return `unknown presence kitHeld: ${String(merged.kitHeld)}`;
     }
   }
   if (ns === "ssh-remote") {

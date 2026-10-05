@@ -531,6 +531,14 @@
       return this;
     },
 
+    setDressing: function (hat, glasses, held, heldImage) {
+      if (this.ball.setDressing) {
+        this.ball.setDressing(hat || 'none', glasses || 'none', held || 'none', heldImage || '');
+      }
+      if (!this._active) this.renderStatic();
+      return this;
+    },
+
     /* 注视目标：横向 ±24、纵向 ±15（viewBox 坐标），幅度克制以保持含蓄 */
     setGaze: function (nx, ny) {
       this._gaze.tx = clamp(nx, -1, 1) * 24;

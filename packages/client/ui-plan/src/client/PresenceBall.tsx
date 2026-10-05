@@ -8,17 +8,17 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_PRESENCE_COLOR,
-  DEFAULT_PRESENCE_KIT,
   DEFAULT_PRESENCE_SHAPE,
   isPresenceColor,
-  isPresenceKit,
   isPresenceShape,
+  PRESENCE_HELD_KITS,
   resolvePresencePaint,
+  splitLegacyKit,
   type PresenceColor,
-  type PresenceKit,
   type PresencePaint,
   type PresenceShape,
 } from '../presence-settings.ts'
+import { PresenceKitMark } from './PresenceKitMark.tsx'
 import {
   PRESENCE_SLEEP_MS,
   PRESENCE_STANDBY_MS,
@@ -42,11 +42,51 @@ function usePresenceShape(): PresenceShape {
   )
 }
 
-function usePresenceKit(): PresenceKit {
+function usePresenceEngineHat(): string {
   return useSyncExternalStore(
     (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getKit() ?? DEFAULT_PRESENCE_KIT,
-    () => DEFAULT_PRESENCE_KIT,
+    () => presenceSettingsRuntime?.getEngineHat() ?? 'none',
+    () => 'none',
+  )
+}
+
+function usePresenceEngineGlasses(): string {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getEngineGlasses() ?? 'none',
+    () => 'none',
+  )
+}
+
+function usePresenceEngineHeld(): string {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getEngineHeld() ?? 'none',
+    () => 'none',
+  )
+}
+
+function usePresenceOverlayHat(): string {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getOverlayHat() ?? '',
+    () => '',
+  )
+}
+
+function usePresenceOverlayGlasses(): string {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getOverlayGlasses() ?? '',
+    () => '',
+  )
+}
+
+function usePresenceOverlayHeld(): string {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getOverlayHeld() ?? '',
+    () => '',
   )
 }
 
@@ -81,7 +121,7 @@ function usePresencePaint(): PresencePaint {
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '18'
+const PRESENCE_BALL_REV = '21'
 
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
@@ -136,6 +176,7 @@ type EmotionBallHandle = {
   bounce?: () => void
   resetIdle?: () => void
   setKit?: (kit: string) => void
+  setDressing?: (hat: string, glasses: string, held?: string, heldImage?: string) => void
   destroy: () => void
 }
 
@@ -157,6 +198,10 @@ type EmotionBallNs = {
       eyeColor?: string
       seed?: number
       kit?: string
+      kitHat?: string
+      kitGlasses?: string
+      kitHeld?: string
+      heldImage?: string
     },
   ) => EmotionBallHandle
 }
@@ -509,7 +554,17 @@ export function PresenceBall({
    */
   readonly engineActive?: boolean
   /** Child 干员 look — overrides Settings presence so the home ball stays unique. */
-  readonly memberLook?: { readonly shape: string; readonly color: string; readonly kit?: string }
+  readonly memberLook?: {
+    readonly shape: string
+    readonly color: string
+    readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
+  }
   /** Smaller seat inside the Overview dual-ball pair. */
   readonly pairSeat?: boolean
   /** Dual-ball: 委派方 (`from`) vs 被委派方 (`to`). */
@@ -525,7 +580,12 @@ export function PresenceBall({
   const persona = sessionBallPersona(sessionId ?? 'default')
   const settingsShape = usePresenceShape()
   const settingsPaint = usePresencePaint()
-  const settingsKit = usePresenceKit()
+  const settingsEngineHat = usePresenceEngineHat()
+  const settingsEngineGlasses = usePresenceEngineGlasses()
+  const settingsEngineHeld = usePresenceEngineHeld()
+  const settingsHat = usePresenceOverlayHat()
+  const settingsGlasses = usePresenceOverlayGlasses()
+  const settingsHeld = usePresenceOverlayHeld()
   const dark = useChromeDark()
   const shape: PresenceShape = memberLook && isPresenceShape(memberLook.shape)
     ? memberLook.shape
@@ -533,9 +593,24 @@ export function PresenceBall({
   const paint: PresencePaint = memberLook && isPresenceColor(memberLook.color)
     ? resolvePresencePaint(memberLook.color, dark)
     : settingsPaint
-  const kit: PresenceKit = memberLook && isPresenceKit(memberLook.kit)
-    ? memberLook.kit
-    : (memberLook ? DEFAULT_PRESENCE_KIT : settingsKit)
+  const split = splitLegacyKit(memberLook?.kit)
+  const engineHat = memberLook
+    ? (memberLook.kitHat ?? split.hat)
+    : settingsEngineHat
+  const engineGlasses = memberLook
+    ? (memberLook.kitGlasses ?? split.glasses)
+    : settingsEngineGlasses
+  const engineHeld = memberLook
+    ? (memberLook.kitHeld ?? 'none')
+    : settingsEngineHeld
+  const overlayHat = memberLook ? (memberLook.overlayHat ?? '') : settingsHat
+  const overlayGlasses = memberLook ? (memberLook.overlayGlasses ?? '') : settingsGlasses
+  const overlayHeld = memberLook ? (memberLook.overlayHeld ?? '') : settingsHeld
+  const heldBuiltin = !overlayHeld
+    && engineHeld !== 'none'
+    && (PRESENCE_HELD_KITS as readonly string[]).includes(engineHeld)
+    ? engineHeld
+    : undefined
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
@@ -630,7 +705,10 @@ export function PresenceBall({
           color: paint.body,
           eyeColor: paint.eyes,
           seed: persona.seed,
-          kit,
+          kitHat: engineHat,
+          kitGlasses: engineGlasses,
+          kitHeld: engineHeld,
+          heldImage: overlayHeld,
         })
         ballRef.current = ball
         setReady(true)
@@ -651,7 +729,7 @@ export function PresenceBall({
     // Remount when Settings shape/color, chrome scheme, session seed, or engine
     // gate changes. Emotion id is applied in the follow-up effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, kit])
+  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHeld])
 
   useEffect(() => {
     const ball = ballRef.current
@@ -757,6 +835,10 @@ export function PresenceBall({
         onClick={onStageActivate}
       >
         <div ref={mountRef} className={css.mount} data-ready={ready ? '' : undefined} aria-hidden />
+        <span className={css.dressing} aria-hidden>
+          {overlayHat ? <span className={css.overlayHat} style={{ backgroundImage: `url(${overlayHat})` }} /> : null}
+          {overlayGlasses ? <span className={css.overlayGlasses} style={{ backgroundImage: `url(${overlayGlasses})` }} /> : null}
+        </span>
         {/* Spinner stays mounted and fades out under the ball. Unmounting it on
             ready punched an empty frame between the wait and the 280ms fade-in. */}
         <div

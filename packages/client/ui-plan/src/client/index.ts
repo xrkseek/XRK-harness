@@ -95,6 +95,13 @@ export function apply(ctx: ClientContext): void {
       presenceSettings.getShape(),
       presenceSettings.getColor(),
       presenceSettings.getKit(),
+      presenceSettings.getKitHat(),
+      presenceSettings.getKitGlasses(),
+      presenceSettings.getKitHeld(),
+      presenceSettings.getOverlayHat(),
+      presenceSettings.getOverlayGlasses(),
+      presenceSettings.getOverlayHeld(),
+      presenceSettings.getStickers(),
       presenceSettings.getRevision(),
     )
   }
@@ -107,7 +114,9 @@ export function apply(ctx: ClientContext): void {
     return {
       setShape: (shape) => { presenceSettings.setShape(shape) },
       setColor: (color) => { presenceSettings.setColor(color) },
-      setKit: (kit) => { presenceSettings.setKit(kit) },
+      setSlot: (slot, pick) => { presenceSettings.setSlot(slot, pick) },
+      addSticker: (image, slot) => presenceSettings.addSticker(image, slot),
+      removeSticker: (id) => { presenceSettings.removeSticker(id) },
     }
   }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({

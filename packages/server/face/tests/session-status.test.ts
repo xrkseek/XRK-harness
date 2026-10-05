@@ -350,6 +350,7 @@ describe("session status snapshot", () => {
       shape: "wedge",
       color: "sage",
       kit: "bow",
+      kitHat: "bow",
     });
     expect(buildSessionStatusSnapshot(runtime, untitled).delegate).toEqual({
       parentSessionId: parent,
@@ -402,6 +403,7 @@ describe("session status snapshot", () => {
       shape: "squircle",
       color: "sky",
       kit: "cap",
+      kitHat: "cap",
     });
     expect(leafSnap.delegate).toEqual({
       parentSessionId: mid,

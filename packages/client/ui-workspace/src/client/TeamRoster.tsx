@@ -17,10 +17,28 @@ import {
   CompanionKitMark,
   CompanionShapeGlyph,
   COMPANION_COLORS,
-  COMPANION_KITS,
   COMPANION_SHAPES,
   companionPaint,
 } from './CompanionBall.tsx'
+import {
+  addDressingSticker,
+  removeDressingSticker,
+  useDressingStickers,
+} from './dressing-scope.ts'
+import {
+  FACE_MAX,
+  GLASSES_BUILTINS,
+  HAT_BUILTINS,
+  HELD_BUILTINS,
+  resolveEnginePick,
+  resolveStickerOverlay,
+  splitLegacyKit,
+  stickerIdFromPick,
+  stickerRef,
+  stickersForSlot,
+  type DressingSlot,
+  type DressingSticker,
+} from './dressing-library.ts'
 import css from './TeamRoster.module.css'
 
 type Translate = WorkspaceBrowserProps['t']
@@ -28,15 +46,43 @@ type ToolMode = 'inherit' | 'allow' | 'deny'
 type SpawnRole = 'default' | 'worker' | 'researcher' | 'reviewer' | 'lead'
 
 const ROLES: readonly SpawnRole[] = ['default', 'worker', 'researcher', 'reviewer', 'lead']
-const FACE_MAX = 80_000
 const FILE_TOOLS = 'bash,read,grep,glob'
 
-function appearanceOf(member: AgentTeamMemberRow): { shape: string; color: string; kit: string; face?: string } {
+function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]): {
+  shape: string
+  color: string
+  kitHat: string
+  kitGlasses: string
+  kitHeld: string
+  engineHat: string
+  engineGlasses: string
+  engineHeld: string
+  overlayHat?: string
+  overlayGlasses?: string
+  overlayHeld?: string
+} {
+  const split = splitLegacyKit(member.appearance?.kit)
+  const kitHat = member.appearance?.kitHat ?? split.hat
+  const kitGlasses = member.appearance?.kitGlasses ?? split.glasses
+  const kitHeld = member.appearance?.kitHeld ?? 'none'
+  const hatImg = resolveStickerOverlay(kitHat, stickers)
+    || (stickerIdFromPick(kitHat) ? '' : (member.appearance?.overlayHat ?? member.appearance?.face ?? ''))
+  const glassesImg = resolveStickerOverlay(kitGlasses, stickers)
+    || (stickerIdFromPick(kitGlasses) ? '' : (member.appearance?.overlayGlasses ?? ''))
+  const heldImg = resolveStickerOverlay(kitHeld, stickers)
+    || (stickerIdFromPick(kitHeld) ? '' : (member.appearance?.overlayHeld ?? ''))
   return {
     shape: member.appearance?.shape ?? 'blob',
     color: member.appearance?.color ?? 'cream',
-    kit: member.appearance?.kit ?? 'none',
-    ...(member.appearance?.face ? { face: member.appearance.face } : {}),
+    kitHat,
+    kitGlasses,
+    kitHeld,
+    engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
+    engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
+    engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
+    ...(hatImg ? { overlayHat: hatImg } : {}),
+    ...(glassesImg ? { overlayGlasses: glassesImg } : {}),
+    ...(heldImg ? { overlayHeld: heldImg } : {}),
   }
 }
 
@@ -46,18 +92,20 @@ function splitToolNames(raw: string): string[] {
 
 function MemberBall({
   member,
+  stickers,
   selected,
   disabled,
   seedLabel,
   onSelect,
 }: {
   member: AgentTeamMemberRow
+  stickers: readonly DressingSticker[]
   selected: boolean
   disabled: boolean
   seedLabel: string
   onSelect: () => void
 }) {
-  const look = appearanceOf(member)
+  const look = appearanceOf(member, stickers)
   const title = member.brief ? `${member.name} — ${member.brief}` : member.name
   return (
     <button
@@ -69,7 +117,16 @@ function MemberBall({
       aria-label={title}
       title={title}
     >
-      <CompanionBall shape={look.shape} color={look.color} kit={look.kit} face={look.face} />
+      <CompanionBall
+        shape={look.shape}
+        color={look.color}
+        kitHat={look.engineHat}
+        kitGlasses={look.engineGlasses}
+        kitHeld={look.engineHeld}
+        {...(look.overlayHat ? { overlayHat: look.overlayHat } : {})}
+        {...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {})}
+        {...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {})}
+      />
       <span className={css.ballCaption}>
         <span className={css.ballName}>{member.name}</span>
         {member.catalog === true || member.seed === true
@@ -141,6 +198,7 @@ export function TeamRoster({
   removeTeamMember?: WorkspaceBrowserProps['removeTeamMember']
   dispatchTeam: NonNullable<WorkspaceBrowserProps['dispatchTeam']>
 }) {
+  const stickers = useDressingStickers()
   const workspaces = useWorkspaces(state => state.items)
   const currentWorkspace = useMemo(
     () => sessionId === undefined
@@ -159,8 +217,9 @@ export function TeamRoster({
   const [role, setRole] = useState<SpawnRole>('worker')
   const [shape, setShape] = useState<string>('blob')
   const [color, setColor] = useState<string>('cream')
-  const [kit, setKit] = useState<string>('none')
-  const [face, setFace] = useState<string | undefined>()
+  const [kitHat, setKitHat] = useState('none')
+  const [kitGlasses, setKitGlasses] = useState('none')
+  const [kitHeld, setKitHeld] = useState('none')
   const [scope, setScope] = useState<'global' | 'workspace'>('workspace')
   const [inject, setInject] = useState<'minimal' | 'subagent'>('minimal')
   const [brief, setBrief] = useState('')
@@ -185,14 +244,17 @@ export function TeamRoster({
   }
 
   const loadMember = (member: AgentTeamMemberRow | undefined) => {
-    const look = member ? appearanceOf(member) : { shape: 'blob', color: 'cream', kit: 'none' }
+    const look = member
+      ? appearanceOf(member, stickers)
+      : { shape: 'blob', color: 'cream', kitHat: 'none', kitGlasses: 'none', kitHeld: 'none' }
     setName(member?.name ?? '')
     setPlaybook(member?.playbook ?? '')
     setRole((ROLES.includes(member?.role as SpawnRole) ? member?.role : 'worker') as SpawnRole)
     setShape(look.shape)
     setColor(look.color)
-    setKit(look.kit)
-    setFace(look.face)
+    setKitHat(look.kitHat)
+    setKitGlasses(look.kitGlasses)
+    setKitHeld(look.kitHeld)
     setScope(member?.scope === 'global' ? 'global' : 'workspace')
     setInject(member?.inject === 'subagent' ? 'subagent' : 'minimal')
     setBrief(member?.brief ?? '')
@@ -257,8 +319,12 @@ export function TeamRoster({
         appearance: {
           shape,
           color,
-          kit,
-          ...(face ? { face } : { face: '' }),
+          kit: resolveEnginePick(kitHat, HAT_BUILTINS) !== 'none'
+            ? resolveEnginePick(kitHat, HAT_BUILTINS)
+            : resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
+          kitHat,
+          kitGlasses,
+          kitHeld,
         },
       })
       setSelectedId(saved.id)
@@ -302,6 +368,7 @@ export function TeamRoster({
                     <MemberBall
                       key={member.id}
                       member={member}
+                      stickers={stickers}
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
@@ -368,6 +435,7 @@ export function TeamRoster({
                     <MemberBall
                       key={member.id}
                       member={member}
+                      stickers={stickers}
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
@@ -531,7 +599,16 @@ export function TeamRoster({
                   </div>
                   <div className={css.field}>
                     <span className={css.label}>{t('team.look')}</span>
-                    <CompanionBall shape={shape} color={color} kit={kit} face={face} />
+                    <CompanionBall
+                      shape={shape}
+                      color={color}
+                      kitHat={resolveEnginePick(kitHat, HAT_BUILTINS)}
+                      kitGlasses={resolveEnginePick(kitGlasses, GLASSES_BUILTINS)}
+                      kitHeld={resolveEnginePick(kitHeld, HELD_BUILTINS)}
+                      overlayHat={resolveStickerOverlay(kitHat, stickers)}
+                      overlayGlasses={resolveStickerOverlay(kitGlasses, stickers)}
+                      overlayHeld={resolveStickerOverlay(kitHeld, stickers)}
+                    />
                     <div className={css.picks} role="group" aria-label={t('team.shape')}>
                       {COMPANION_SHAPES.map((id) => (
                         <button
@@ -561,49 +638,86 @@ export function TeamRoster({
                         />
                       ))}
                     </div>
-                    <div className={css.picks} role="group" aria-label={t('team.kit')}>
-                      {COMPANION_KITS.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className={kit === id ? css.pickOn : css.pick}
-                          aria-label={t(`team.kit.${id}` as WorkspaceKey)}
-                          aria-pressed={kit === id}
-                          disabled={busy}
-                          onClick={() => { setKit(id) }}
-                        >
-                          <CompanionKitMark kit={id} className={css.kitGlyph} />
-                        </button>
-                      ))}
-                    </div>
-                    <label className={css.face}>
-                      {t('team.face')}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        disabled={busy}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          e.target.value = ''
-                          if (!file) return
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            const next = String(reader.result ?? '')
-                            if (next.length > FACE_MAX) {
-                              setError(t('team.faceTooBig'))
-                              return
-                            }
-                            setFace(next)
-                          }
-                          reader.readAsDataURL(file)
-                        }}
-                      />
-                    </label>
-                    {face ? (
-                      <Button variant="outline" size="sm" disabled={busy} onClick={() => { setFace(undefined) }}>
-                        {t('team.faceClear')}
-                      </Button>
-                    ) : null}
+                    <p className={css.faceHint}>{t('team.overlayHint')}</p>
+                    {([
+                      ['hat', kitHat, setKitHat, HAT_BUILTINS],
+                      ['glasses', kitGlasses, setKitGlasses, GLASSES_BUILTINS],
+                      ['held', kitHeld, setKitHeld, HELD_BUILTINS],
+                    ] as const).map(([slot, pick, setPick, builtins]) => (
+                      <div key={slot} className={css.picks} role="group" aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}>
+                        {builtins.map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className={pick === id ? css.pickOn : css.pick}
+                            aria-label={t(`team.kit.${id}` as WorkspaceKey)}
+                            aria-pressed={pick === id}
+                            disabled={busy}
+                            onClick={() => { setPick(id) }}
+                          >
+                            <CompanionKitMark kit={id} {...(css.kitGlyph ? { className: css.kitGlyph } : {})} />
+                          </button>
+                        ))}
+                        {stickersForSlot(stickers, slot).map((row) => {
+                          const ref = stickerRef(row.id)
+                          return (
+                            <div key={row.id} className={pick === ref ? css.overlayCubeOn : css.overlayCube}>
+                              <button
+                                type="button"
+                                className={css.pick}
+                                disabled={busy}
+                                aria-pressed={pick === ref}
+                                onClick={() => { setPick(ref) }}
+                              >
+                                <span className={css.overlayThumb} style={{ backgroundImage: `url(${row.image})` }} />
+                              </button>
+                              <button
+                                type="button"
+                                className={css.overlayClear}
+                                disabled={busy}
+                                aria-label={t('team.faceClear')}
+                                onClick={() => {
+                                  removeDressingSticker(row.id)
+                                  if (pick === ref) setPick('none')
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )
+                        })}
+                        <div className={css.overlayAdd}>
+                          <span className={css.overlayEmpty}>+</span>
+                          <input
+                            className={css.overlayFile}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            disabled={busy}
+                            aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ''
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = () => {
+                                const next = String(reader.result ?? '')
+                                if (next.length > FACE_MAX) {
+                                  setError(t('team.faceTooBig'))
+                                  return
+                                }
+                                const id = addDressingSticker(next, slot)
+                                if (!id) {
+                                  setError(t('team.faceTooBig'))
+                                  return
+                                }
+                                setPick(stickerRef(id))
+                              }
+                              reader.readAsDataURL(file)
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-playbook">{t('team.memberPlaybook')}</label>

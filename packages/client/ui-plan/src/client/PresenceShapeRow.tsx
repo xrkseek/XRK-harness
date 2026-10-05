@@ -2,19 +2,25 @@
  * Presence companion prefs row in Settings → General.
  * Feature-owned (ui-plan); shape + color persist via Host `ui-presence`.
  */
+import { useState } from 'react'
 import clsx from 'clsx'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-settings/client'
 import {
   PRESENCE_COLORS,
   PRESENCE_COLOR_PALETTES,
-  PRESENCE_KITS,
+  PRESENCE_GLASSES_KITS,
+  PRESENCE_HAT_KITS,
+  PRESENCE_HELD_KITS,
+  PRESENCE_OVERLAY_MAX,
   PRESENCE_SHAPES,
+  stickerRef,
   type PresenceColor,
-  type PresenceKit,
   type PresenceShape,
+  type PresenceSticker,
 } from '../presence-settings.ts'
 import type { createPresencePrefsRowStore } from './presence-settings-store.ts'
+import type { DressingSlot } from './presence-settings-runtime.ts'
 import { PresenceKitMark } from './PresenceKitMark.tsx'
 import { type PlanKey } from './locales.ts'
 import css from './PresenceShapeRow.module.css'
@@ -23,7 +29,9 @@ import css from './PresenceShapeRow.module.css'
 export interface PresenceShapeRowInjected {
   setShape: (shape: PresenceShape) => void
   setColor: (color: PresenceColor) => void
-  setKit: (kit: PresenceKit) => void
+  setSlot: (slot: DressingSlot, pick: string) => void
+  addSticker: (image: string, slot?: DressingSlot) => string | undefined
+  removeSticker: (id: string) => void
 }
 
 export type PresenceShapeRowComponentProps =
@@ -161,8 +169,102 @@ function ShapeGlyph({ shape }: { readonly shape: PresenceShape }) {
   )
 }
 
-function kitLabel(id: PresenceKit): PlanKey {
-  return `presenceKit.${id}` as PlanKey
+function SlotRow({
+  t,
+  label,
+  hint,
+  builtins,
+  pick,
+  stickers,
+  onPick,
+  onImport,
+  onDelete,
+  onTooBig,
+}: {
+  readonly t: PresenceShapeRowComponentProps['t']
+  readonly label: string
+  readonly hint: string
+  readonly builtins: readonly string[]
+  readonly pick: string
+  readonly stickers: readonly PresenceSticker[]
+  readonly onPick: (next: string) => void
+  readonly onImport: (image: string) => void
+  readonly onDelete: (id: string) => void
+  readonly onTooBig: () => void
+}) {
+  return (
+    <div className={css.slot}>
+      <div className={css.slotHead}>
+        <span className={css.slotLabel}>{label}</span>
+        <span className={css.overlayHint}>{hint}</span>
+      </div>
+      <div className={css.cubeRow}>
+        {builtins.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={clsx(css.overlayCube, pick === id && css.selected)}
+            aria-pressed={pick === id}
+            onClick={() => { onPick(id) }}
+          >
+            <PresenceKitMark kit={id} className={css.glyph ?? ''} />
+            <span className={css.overlayLabel}>{t(`presenceKit.${id}` as PlanKey)}</span>
+          </button>
+        ))}
+        {stickers.map((row) => {
+          const ref = stickerRef(row.id)
+          return (
+            <div key={row.id} className={clsx(css.overlayCube, pick === ref && css.selected)}>
+              <button
+                type="button"
+                className={css.stickerHit}
+                aria-pressed={pick === ref}
+                onClick={() => { onPick(ref) }}
+              >
+                <span className={css.overlayPreview} aria-hidden>
+                  <span className={css.overlayThumb} style={{ backgroundImage: `url(${row.image})` }} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={css.overlayClear}
+                aria-label="删除"
+                onClick={() => { onDelete(row.id) }}
+              >
+                ×
+              </button>
+            </div>
+          )
+        })}
+        <div className={clsx(css.overlayCube, css.overlayAdd)}>
+          <span className={css.overlayPreview} aria-hidden>
+            <span className={css.overlayEmpty}>+</span>
+          </span>
+          <input
+            className={css.overlayFile}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            aria-label={label}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file) return
+              const reader = new FileReader()
+              reader.onload = () => {
+                const next = String(reader.result ?? '')
+                if (next.length > PRESENCE_OVERLAY_MAX) {
+                  onTooBig()
+                  return
+                }
+                onImport(next)
+              }
+              reader.readAsDataURL(file)
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /** Render the presence shape + color row. */
@@ -170,12 +272,20 @@ export function PresenceShapeRow({
   t,
   setShape,
   setColor,
-  setKit,
+  setSlot,
+  addSticker,
+  removeSticker,
   useStore,
 }: PresenceShapeRowComponentProps) {
   const shape = useStore((s) => s.shape)
   const color = useStore((s) => s.color)
-  const kit = useStore((s) => s.kit)
+  const kitHat = useStore((s) => s.kitHat)
+  const kitGlasses = useStore((s) => s.kitGlasses)
+  const kitHeld = useStore((s) => s.kitHeld)
+  const stickers = useStore((s) => s.stickers)
+  const [overlayErr, setOverlayErr] = useState<string | null>(null)
+  const tooBig = t('presenceOverlay.tooBig')
+  const markTooBig = () => { setOverlayErr(tooBig) }
   return (
     <div className={css.group}>
       <div className={css.title}>{t('presenceShape.title')}</div>
@@ -224,20 +334,43 @@ export function PresenceShapeRow({
 
       <div className={css.subtitle}>{t('presenceKit.title')}</div>
       <p className={css.hint}>{t('presenceKit.hint')}</p>
-      <div className={css.cubeRow}>
-        {PRESENCE_KITS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={clsx(css.shapeCube, kit === id && css.selected)}
-            aria-pressed={kit === id}
-            onClick={() => { setKit(id) }}
-          >
-            <PresenceKitMark kit={id} className={css.glyph} />
-            {t(kitLabel(id))}
-          </button>
-        ))}
-      </div>
+      {overlayErr ? <p className={css.hint} role="alert">{overlayErr}</p> : null}
+      <SlotRow
+        t={t}
+        label={t('presenceOverlay.hat')}
+        hint={t('presenceOverlay.hatHint')}
+        builtins={PRESENCE_HAT_KITS}
+        pick={kitHat}
+        stickers={stickers.filter((row) => row.slot === 'hat')}
+        onPick={(next) => { setOverlayErr(null); setSlot('hat', next) }}
+        onImport={(image) => { setOverlayErr(null); addSticker(image, 'hat') }}
+        onDelete={removeSticker}
+        onTooBig={markTooBig}
+      />
+      <SlotRow
+        t={t}
+        label={t('presenceOverlay.glasses')}
+        hint={t('presenceOverlay.glassesHint')}
+        builtins={PRESENCE_GLASSES_KITS}
+        pick={kitGlasses}
+        stickers={stickers.filter((row) => row.slot === 'glasses')}
+        onPick={(next) => { setOverlayErr(null); setSlot('glasses', next) }}
+        onImport={(image) => { setOverlayErr(null); addSticker(image, 'glasses') }}
+        onDelete={removeSticker}
+        onTooBig={markTooBig}
+      />
+      <SlotRow
+        t={t}
+        label={t('presenceOverlay.held')}
+        hint={t('presenceOverlay.heldHint')}
+        builtins={PRESENCE_HELD_KITS}
+        pick={kitHeld}
+        stickers={stickers.filter((row) => row.slot === 'held')}
+        onPick={(next) => { setOverlayErr(null); setSlot('held', next) }}
+        onImport={(image) => { setOverlayErr(null); addSticker(image, 'held') }}
+        onDelete={removeSticker}
+        onTooBig={markTooBig}
+      />
     </div>
   )
 }

@@ -93,6 +93,54 @@
   overflow: visible;
 }
 
+.dressing {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 14%;
+  bottom: 5%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.overlayHat,
+.overlayGlasses,
+.overlayHeld {
+  position: absolute;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.overlayHat {
+  left: 4%;
+  right: 4%;
+  top: -8%;
+  height: 42%;
+  background-position: center top;
+}
+
+.overlayGlasses {
+  left: 12%;
+  right: 12%;
+  top: 30%;
+  height: 26%;
+  background-position: center;
+}
+
+.overlayHeld {
+  left: 46%;
+  right: -6%;
+  top: 38%;
+  bottom: -4%;
+  background-position: right bottom;
+}
+
+.overlayHeld svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .meta {
   box-sizing: border-box;
   display: flex;

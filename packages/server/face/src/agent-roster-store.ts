@@ -14,6 +14,17 @@ import {
   type AgentTeamSpawnRole,
 } from "./agent-team-roles.js";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
+import {
+  GLASSES_BUILTINS,
+  HAT_BUILTINS,
+  HELD_BUILTINS,
+  parseSlotPick,
+  resolveEnginePick,
+  resolveStickerOverlay,
+  splitLegacyKit,
+  stickerIdFromPick,
+  type PresenceSticker,
+} from "./presence-dressing.js";
 
 export const MEMBER_NAME_MAX = 40;
 export const MEMBER_PLAYBOOK_MAX = 8_000;
@@ -81,10 +92,17 @@ export type MemberInject = "subagent" | "minimal";
 export interface MemberAppearance {
   readonly shape: MemberShape;
   readonly color: MemberColor;
-  /** Optional overlay kit (`none` omitted). Face sticker is separate. */
+  /** Optional overlay kit (`none` omitted). PNG overlays are separate. */
   readonly kit?: Exclude<MemberKit, "none">;
-  /** Optional `data:image/...;base64,...` face sticker. */
+  /** @deprecated Use `overlayHat`. Still read as the hat layer. */
   readonly face?: string;
+  readonly overlayHat?: string;
+  readonly overlayGlasses?: string;
+  readonly overlayHeld?: string;
+  /** Slot pick: builtin id or `sticker:<id>`. */
+  readonly kitHat?: string;
+  readonly kitGlasses?: string;
+  readonly kitHeld?: string;
 }
 
 export interface MemberToolPolicy {
@@ -219,7 +237,8 @@ function isMemberKit(value: unknown): value is MemberKit {
   return MEMBER_KITS.includes(value as MemberKit);
 }
 
-function parseFace(raw: unknown): string | undefined {
+/** Transparent PNG/JPEG/WebP/GIF data URL used as a kit overlay (hat / glasses / held). */
+export function parseOverlayImage(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
   const face = raw.trim();
   if (!face || face.length > MEMBER_FACE_MAX) return undefined;
@@ -227,6 +246,17 @@ function parseFace(raw: unknown): string | undefined {
     return undefined;
   }
   return face.replace(/\s+/g, "");
+}
+
+function pickOverlay(
+  base: Record<string, unknown>,
+  key: string,
+  fallback: string | undefined,
+): string | undefined {
+  if (Object.prototype.hasOwnProperty.call(base, key)) {
+    return parseOverlayImage(base[key]);
+  }
+  return fallback;
 }
 
 export function parseMemberAppearance(
@@ -243,15 +273,74 @@ export function parseMemberAppearance(
     ? base.kit
     : fallback.kit;
   const kit = isMemberKit(kitRaw) && kitRaw !== "none" ? kitRaw : undefined;
-  const face =
-    Object.prototype.hasOwnProperty.call(base, "face")
-      ? parseFace(base.face)
-      : fallback.face;
+  const overlayHat =
+    pickOverlay(base, "overlayHat", fallback.overlayHat)
+    ?? (Object.prototype.hasOwnProperty.call(base, "face")
+      ? parseOverlayImage(base.face)
+      : fallback.face);
+  const overlayGlasses = pickOverlay(base, "overlayGlasses", fallback.overlayGlasses);
+  const overlayHeld = pickOverlay(base, "overlayHeld", fallback.overlayHeld);
+  const split = splitLegacyKit(kit);
+  const kitHat = parseSlotPick(base.kitHat ?? fallback.kitHat, HAT_BUILTINS)
+    ?? (split.hat !== "none" ? split.hat : undefined);
+  const kitGlasses = parseSlotPick(base.kitGlasses ?? fallback.kitGlasses, GLASSES_BUILTINS)
+    ?? (split.glasses !== "none" ? split.glasses : undefined);
+  const kitHeld = parseSlotPick(base.kitHeld ?? fallback.kitHeld, HELD_BUILTINS);
   return {
     shape,
     color,
     ...(kit ? { kit } : {}),
-    ...(face ? { face } : {}),
+    ...(kitHat && kitHat !== "none" ? { kitHat } : {}),
+    ...(kitGlasses && kitGlasses !== "none" ? { kitGlasses } : {}),
+    ...(kitHeld && kitHeld !== "none" ? { kitHeld } : {}),
+    ...(overlayHat ? { overlayHat, face: overlayHat } : {}),
+    ...(overlayGlasses ? { overlayGlasses } : {}),
+    ...(overlayHeld ? { overlayHeld } : {}),
+  };
+}
+
+export function appearanceLookWire(
+  look: MemberAppearance,
+  stickers: readonly PresenceSticker[] = [],
+): {
+  readonly shape: string;
+  readonly color: string;
+  readonly kit?: string;
+  readonly kitHat?: string;
+  readonly kitGlasses?: string;
+  readonly kitHeld?: string;
+  readonly overlayHat?: string;
+  readonly overlayGlasses?: string;
+  readonly overlayHeld?: string;
+} {
+  const split = splitLegacyKit(look.kit);
+  const kitHat = look.kitHat ?? split.hat;
+  const kitGlasses = look.kitGlasses ?? split.glasses;
+  const kitHeld = look.kitHeld ?? "none";
+  const hatOverlay = resolveStickerOverlay(kitHat, stickers)
+    ?? (stickerIdFromPick(kitHat) ? undefined : look.overlayHat ?? look.face);
+  const glassesOverlay = resolveStickerOverlay(kitGlasses, stickers)
+    ?? (stickerIdFromPick(kitGlasses) ? undefined : look.overlayGlasses);
+  const heldOverlay = resolveStickerOverlay(kitHeld, stickers)
+    ?? (stickerIdFromPick(kitHeld) ? undefined : look.overlayHeld);
+  const engineHat = resolveEnginePick(kitHat, HAT_BUILTINS);
+  const engineGlasses = resolveEnginePick(kitGlasses, GLASSES_BUILTINS);
+  const engineHeld = resolveEnginePick(kitHeld, HELD_BUILTINS);
+  const kit = engineHat !== "none"
+    ? engineHat
+    : engineGlasses !== "none"
+      ? engineGlasses
+      : look.kit;
+  return {
+    shape: look.shape,
+    color: look.color,
+    ...(kit ? { kit } : {}),
+    ...(engineHat !== "none" ? { kitHat: engineHat } : {}),
+    ...(engineGlasses !== "none" ? { kitGlasses: engineGlasses } : {}),
+    ...(engineHeld !== "none" ? { kitHeld: engineHeld } : {}),
+    ...(hatOverlay ? { overlayHat: hatOverlay } : {}),
+    ...(glassesOverlay ? { overlayGlasses: glassesOverlay } : {}),
+    ...(heldOverlay ? { overlayHeld: heldOverlay } : {}),
   };
 }
 

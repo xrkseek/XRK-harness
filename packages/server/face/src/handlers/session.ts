@@ -18,6 +18,8 @@ import {
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
+import { appearanceLookWire } from "../agent-roster-store.js";
+import { dressingFromPresence } from "../presence-dressing.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import { rewritePendingAdmit } from "../update-queue-rewrite.js";
 import {
@@ -207,11 +209,12 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
         ? {
             memberId: member.id,
             inject: member.inject,
-            appearance: {
-              shape: member.appearance.shape,
-              color: member.appearance.color,
-              ...(member.appearance.kit ? { kit: member.appearance.kit } : {}),
-            },
+            appearance: appearanceLookWire(
+              member.appearance,
+              dressingFromPresence(
+                runtime.settingsNamespaces.view("ui-presence").value as Record<string, unknown>,
+              ).stickers,
+            ),
             ...(member.tools ? { tools: member.tools } : {}),
           }
         : {}),

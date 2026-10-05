@@ -38,6 +38,14 @@ async function bench() {
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
   const hostDescription = { getSnapshot: () => ({ home: '/home/user' }), subscribe: () => () => {} }
   ctx.provide('connection', { hostDescription } as never)
+  ctx.provide('settingsScope', {
+    bind: () => ({
+      load: async () => {},
+      subscribe: () => () => {},
+      getSnapshot: () => ({ value: {} }),
+      set: async () => {},
+    }),
+  } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
@@ -56,7 +64,10 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale', 'connection'])
+    expect(inject).toEqual([
+      'slots', 'sessions', 'workspaces', 'locale', 'connection',
+      'remote', 'remote.threads', 'remote.team', 'settingsScope',
+    ])
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {

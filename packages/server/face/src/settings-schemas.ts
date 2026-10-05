@@ -421,6 +421,13 @@ const UiPresenceConfig = Schema.object({
   shape: Schema.union([...MEMBER_SHAPES]).default("blob"),
   color: Schema.union([...MEMBER_COLORS]).default("cream"),
   kit: Schema.union([...MEMBER_KITS]).default("none"),
+  kitHat: Schema.string().default("none"),
+  kitGlasses: Schema.string().default("none"),
+  kitHeld: Schema.string().default("none"),
+  overlayHat: Schema.string().default(""),
+  overlayGlasses: Schema.string().default(""),
+  overlayHeld: Schema.string().default(""),
+  stickers: Schema.string().default("[]"),
 });
 
 /**
@@ -475,7 +482,18 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "ui-presence",
       schema: schemasteryJson(UiPresenceConfig) as FaceSchemaEnvelope,
-      base: { shape: "blob", color: "cream", kit: "none" },
+      base: {
+        shape: "blob",
+        color: "cream",
+        kit: "none",
+        kitHat: "none",
+        kitGlasses: "none",
+        kitHeld: "none",
+        overlayHat: "",
+        overlayGlasses: "",
+        overlayHeld: "",
+        stickers: "[]",
+      },
       applies: "live",
     },
     {

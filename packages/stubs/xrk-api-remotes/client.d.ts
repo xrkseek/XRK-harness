@@ -303,7 +303,13 @@ declare module '@xrkseek/xrk-typert-protocol' {
             readonly shape: string
             readonly color: string
             readonly kit?: string
+            readonly kitHat?: string
+            readonly kitGlasses?: string
+            readonly kitHeld?: string
             readonly face?: string
+            readonly overlayHat?: string
+            readonly overlayGlasses?: string
+            readonly overlayHeld?: string
           }
           readonly scope?: string
           readonly brief?: string
@@ -322,11 +328,23 @@ declare module '@xrkseek/xrk-typert-protocol' {
           readonly color?: string
           readonly kit?: string
           readonly face?: string
+          readonly overlayHat?: string
+          readonly overlayGlasses?: string
+          readonly overlayHeld?: string
+          readonly kitHat?: string
+          readonly kitGlasses?: string
+          readonly kitHeld?: string
           readonly appearance?: {
             readonly shape?: string
             readonly color?: string
             readonly kit?: string
+            readonly kitHat?: string
+            readonly kitGlasses?: string
+            readonly kitHeld?: string
             readonly face?: string
+            readonly overlayHat?: string
+            readonly overlayGlasses?: string
+            readonly overlayHeld?: string
           }
           readonly scope?: string
           readonly brief?: string

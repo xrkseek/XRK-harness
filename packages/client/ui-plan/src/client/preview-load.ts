@@ -175,11 +175,23 @@ export interface SessionStatusView {
     readonly shape: string
     readonly color: string
     readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
   }
   readonly parentCompanionBall?: {
     readonly shape: string
     readonly color: string
     readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
   }
   readonly parentPresence?: {
     readonly emotionId: string
@@ -292,7 +304,23 @@ function parsePresenceLook(raw: unknown): SessionStatusView['companionBall'] {
   const color = str((raw as { color?: unknown }).color)
   if (!shape || !color) return undefined
   const kit = str((raw as { kit?: unknown }).kit)
-  return { shape, color, ...(kit ? { kit } : {}) }
+  const kitHat = str((raw as { kitHat?: unknown }).kitHat)
+  const kitGlasses = str((raw as { kitGlasses?: unknown }).kitGlasses)
+  const kitHeld = str((raw as { kitHeld?: unknown }).kitHeld)
+  const overlayHat = str((raw as { overlayHat?: unknown }).overlayHat)
+  const overlayGlasses = str((raw as { overlayGlasses?: unknown }).overlayGlasses)
+  const overlayHeld = str((raw as { overlayHeld?: unknown }).overlayHeld)
+  return {
+    shape,
+    color,
+    ...(kit ? { kit } : {}),
+    ...(kitHat ? { kitHat } : {}),
+    ...(kitGlasses ? { kitGlasses } : {}),
+    ...(kitHeld ? { kitHeld } : {}),
+    ...(overlayHat ? { overlayHat } : {}),
+    ...(overlayGlasses ? { overlayGlasses } : {}),
+    ...(overlayHeld ? { overlayHeld } : {}),
+  }
 }
 
 const LIVE_OUTCOME_KINDS = new Set([

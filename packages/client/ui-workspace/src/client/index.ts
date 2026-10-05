@@ -27,6 +27,7 @@ import {
 } from './ArchivedSessionsSection.tsx'
 import { archivedEn, archivedZh, type ArchivedSessionsLocaleKey } from './archived-locales.ts'
 import { en, zh, type WorkspaceKey } from './locales.ts'
+import { bindDressingHost, PRESENCE_NS } from './dressing-scope.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
@@ -59,7 +60,7 @@ const ARCHIVED_NS = 'settings.archivedSessions' as const
  * neither owner provides a waitable service. apply therefore depends on each
  * slot declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.threads', 'remote.team']
+export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.threads', 'remote.team', 'settingsScope']
 
 /**
  * Register the browser and picker once their slot declarations are on the
@@ -73,6 +74,7 @@ export function apply(ctx: ClientContext): void {
     () => ctx.locale.register(ARCHIVED_NS, { zh: archivedZh, en: archivedEn }),
     'ui-workspace: archived-session dictionaries',
   )
+  bindDressingHost(ctx.settingsScope.bind({ namespace: PRESENCE_NS }))
   const connection = ctx.get('connection') as ConnectionHandle
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {

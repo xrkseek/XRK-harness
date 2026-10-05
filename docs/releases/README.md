@@ -8,7 +8,7 @@
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（本机包）**  | [v0.5.12](./v0.5.12.md)                 | `0.5.x` 补丁：全日志轮次编号 · 10 格滑动轨 + 回到底部 · 开场轮不再显示「第 5 轮」 · 流内「第 N 轮」标签 · Stop 只标被截断那步 · 工具步边界认领插队 · 名册自然 id |
+| **当前（本机包）**  | [v0.5.12](./v0.5.12.md)                 | `0.5.x` 补丁：全日志轮次编号 · 10 格滑动轨 · 装扮帽/眼镜/手持分槽 · 手持内置跟球动 · Stop 只标被截断那步 · 工具步边界认领插队 · 名册自然 id |
 | **上一正式补丁**    | [v0.5.11](./v0.5.11.md)                 | `0.5.x` 补丁：角色硬卸工具 · 超时抢救/父中止 · 谱系 outcome · 家人格隔离 · 显式/主动委派 · 插队徽章/撤回 · 单回合轨 · Desktop 不冻流/SSE 看门狗 · 记忆按触碰腾位 · 工具后等待条 |
 | **上一预览终态**    | [v0.4.12](./v0.4.12.md)                 | `0.4.x` 收口：Mux 超顶丢帧不掐线 · 心跳 5 miss                          |
 | **上一正式线**      | [v0.3.11](./v0.3.11.md)                 | `MINOR=3`；npm 回退钉（`@0.3.11`）                                   |
@@ -42,7 +42,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 
 | Line                      | Version                                   | Notes                                                                                          |
 | ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Current (local build)** | [v0.5.12](./v0.5.12.md)                   | `0.5.x` patch: whole-log 轮次 numbering · 10-mark sliding rail + floor tick · opener no longer shows as turn 5 · on-flow turn label · Stop marks only the cut step · steers claimed at the tool-step boundary · roster natural ids |
+| **Current (local build)** | [v0.5.12](./v0.5.12.md)                   | `0.5.x` patch: whole-log 轮次 numbering · 10-mark sliding rail · hat/glasses/held costume slots · held builtins ride the ball · Stop marks only the cut step · steers claimed at the tool-step boundary · roster natural ids |
 | **Prior formal patch**    | [v0.5.11](./v0.5.11.md)                   | `0.5.x` patch: role hard-deny · timeout salvage/parent abort · roster outcome · child skips home persona · explicit/proactive delegation · steer badge/withdraw · one-turn rail · Desktop stream paint/SSE idle watchdog · memory prune by touch · waiting line after send/tools |
 | **Prior preview close**   | [v0.4.12](./v0.4.12.md)                   | `0.4.x` close-out: Mux drop-not-terminate · 5-miss heartbeat                                   |
 | **Previous formal line**  | [v0.3.11](./v0.3.11.md)                   | `MINOR=3`; npm rollback pin (`@0.3.11`)                                                        |

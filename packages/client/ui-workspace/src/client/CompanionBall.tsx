@@ -3,11 +3,12 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import css from './CompanionBall.module.css'
+import { HELD_BUILTINS } from './dressing-library.ts'
 
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '18'
+const PRESENCE_BALL_REV = '21'
 
 export const COMPANION_SHAPES = [
   'blob',
@@ -65,6 +66,11 @@ export const COMPANION_KITS = [
 export type CompanionShape = (typeof COMPANION_SHAPES)[number]
 export type CompanionColor = (typeof COMPANION_COLORS)[number]
 export type CompanionKit = (typeof COMPANION_KITS)[number]
+export type CompanionHeld = (typeof HELD_BUILTINS)[number]
+
+function isHeldBuiltin(value: string): value is Exclude<CompanionHeld, 'none'> {
+  return value !== 'none' && (HELD_BUILTINS as readonly string[]).includes(value)
+}
 
 const PALETTES: Record<CompanionColor, { light: { body: string; eyes: string }; dark: { body: string; eyes: string } }> = {
   cream: { light: { body: '#F3F0EA', eyes: '#1A1A1A' }, dark: { body: '#E4E0D8', eyes: '#1A1A1A' } },
@@ -128,6 +134,10 @@ type EmotionBallNs = {
       color?: string
       eyeColor?: string
       kit?: string
+      kitHat?: string
+      kitGlasses?: string
+      kitHeld?: string
+      heldImage?: string
     },
   ) => EmotionBallHandle
 }
@@ -240,7 +250,7 @@ export function CompanionKitMark({
   kit,
   className,
 }: {
-  readonly kit: CompanionKit
+  readonly kit: CompanionKit | CompanionHeld
   readonly className?: string
 }) {
   const markClass = className ?? css.kit
@@ -322,6 +332,43 @@ export function CompanionKitMark({
       </svg>
     )
   }
+  if (kit === 'flower') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <circle cx="18" cy="14" r="3.2" fill="#F4A0B4" />
+        <circle cx="12.5" cy="17.5" r="3.2" fill="#E07090" />
+        <circle cx="23.5" cy="17.5" r="3.2" fill="#E07090" />
+        <circle cx="15" cy="23" r="3.2" fill="#E07090" />
+        <circle cx="21" cy="23" r="3.2" fill="#E07090" />
+        <circle cx="18" cy="19" r="2.4" fill="#E8C46A" />
+        <path d="M18 22 v8" fill="none" stroke="#6A9A68" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kit === 'tea') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M10 16h14l-1.4 10.5c-.2 1.4-1.4 2.5-2.8 2.5H14.2c-1.4 0-2.6-1.1-2.8-2.5Z" fill="#E8D8C8" stroke="#8A7058" strokeWidth="1.4" />
+        <path d="M24 18.5c3 .4 5 2.2 5 4.2s-2 3.6-5 4" fill="none" stroke="#8A7058" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M14 13c.6-2 2.2-3 4-3 1.6 0 3 .8 3.6 2" fill="none" stroke="#9AB8C0" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kit === 'flag') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M12 8 v20" fill="none" stroke="#5A6068" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M13 9 l14 5-14 5Z" fill="#C44868" />
+      </svg>
+    )
+  }
+  if (kit === 'spark') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#E8C46A" d="M18 7 20.2 15l8 .8-6.2 5.2 1.8 7.8L18 24.4 12.2 28.8l1.8-7.8-6.2-5.2 8-.8z" />
+      </svg>
+    )
+  }
   return (
     <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
       <circle cx="18" cy="18" r="9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" />
@@ -333,6 +380,12 @@ export function CompanionBall({
   shape,
   color,
   kit,
+  kitHat,
+  kitGlasses,
+  kitHeld,
+  overlayHat,
+  overlayGlasses,
+  overlayHeld,
   face,
   empty,
   emotion = '02',
@@ -340,6 +393,13 @@ export function CompanionBall({
   readonly shape: string
   readonly color: string
   readonly kit?: string
+  readonly kitHat?: string
+  readonly kitGlasses?: string
+  readonly kitHeld?: string
+  readonly overlayHat?: string
+  readonly overlayGlasses?: string
+  readonly overlayHeld?: string
+  /** @deprecated hat alias */
   readonly face?: string
   readonly empty?: boolean
   readonly emotion?: string
@@ -347,7 +407,11 @@ export function CompanionBall({
   const dark = useChromeDark()
   const paint = companionPaint(color, dark)
   const resolvedShape = isCompanionShape(shape) ? shape : 'blob'
-  const resolvedKit = kit && isCompanionKit(kit) ? kit : 'none'
+  const resolvedHat = kitHat && isCompanionKit(kitHat) ? kitHat : (kit && !kit.startsWith('specs') && isCompanionKit(kit) ? kit : 'none')
+  const resolvedGlasses = kitGlasses && isCompanionKit(kitGlasses)
+    ? kitGlasses
+    : (kit && kit.startsWith('specs') && isCompanionKit(kit) ? kit : 'none')
+  const heldBuiltin = kitHeld && isHeldBuiltin(kitHeld) ? kitHeld : undefined
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const [ready, setReady] = useState(false)
@@ -368,7 +432,10 @@ export function CompanionBall({
           shape: resolvedShape,
           color: paint.body,
           eyeColor: paint.eyes,
-          kit: resolvedKit,
+          kitHat: resolvedHat,
+          kitGlasses: resolvedGlasses,
+          kitHeld: heldBuiltin ?? 'none',
+          heldImage: overlayHeld ?? '',
         })
         setReady(true)
       },
@@ -382,15 +449,16 @@ export function CompanionBall({
       ballRef.current = null
       setReady(false)
     }
-  }, [empty, emotion, paint.body, paint.eyes, resolvedShape, resolvedKit])
+  }, [empty, emotion, paint.body, paint.eyes, resolvedShape, resolvedHat, resolvedGlasses, heldBuiltin, overlayHeld])
 
   useEffect(() => mount(), [mount])
 
   return (
-    <span className={css.stage} data-empty={empty ? '' : undefined} data-face={face ? '' : undefined}>
+    <span className={css.stage} data-empty={empty ? '' : undefined}>
       {empty ? <span className={css.plus} aria-hidden>+</span> : null}
-      {face ? <span className={css.face} style={{ backgroundImage: `url(${face})` }} aria-hidden /> : null}
       <span ref={mountRef} className={css.mount} data-ready={ready && !empty ? '' : undefined} aria-hidden />
+      {(overlayHat || face) ? <span className={css.overlayHat} style={{ backgroundImage: `url(${overlayHat || face})` }} aria-hidden /> : null}
+      {overlayGlasses ? <span className={css.overlayGlasses} style={{ backgroundImage: `url(${overlayGlasses})` }} aria-hidden /> : null}
     </span>
   )
 }

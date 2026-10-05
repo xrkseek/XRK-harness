@@ -66,6 +66,31 @@ export const PRESENCE_SETTINGS_NAMESPACE = 'ui-presence'
 export const PRESENCE_SHAPE_FIELD = 'shape'
 export const PRESENCE_COLOR_FIELD = 'color'
 export const PRESENCE_KIT_FIELD = 'kit'
+export const PRESENCE_OVERLAY_HAT_FIELD = 'overlayHat'
+export const PRESENCE_OVERLAY_GLASSES_FIELD = 'overlayGlasses'
+export const PRESENCE_OVERLAY_HELD_FIELD = 'overlayHeld'
+export const PRESENCE_STICKERS_FIELD = 'stickers'
+export const PRESENCE_KIT_HAT_FIELD = 'kitHat'
+export const PRESENCE_KIT_GLASSES_FIELD = 'kitGlasses'
+export const PRESENCE_KIT_HELD_FIELD = 'kitHeld'
+/** data URL cap — same as Agent Team MEMBER_FACE_MAX. */
+export const PRESENCE_OVERLAY_MAX = 80_000
+export const PRESENCE_STICKERS_MAX = 24
+export const STICKER_PREFIX = 'sticker:'
+
+export const PRESENCE_HAT_KITS = ['none', 'bow', 'cap', 'beanie', 'visor', 'halo'] as const
+export const PRESENCE_GLASSES_KITS = ['none', 'specs', 'specs-rect', 'specs-cat', 'specs-sun'] as const
+export const PRESENCE_HELD_KITS = ['none', 'flower', 'tea', 'flag', 'spark'] as const
+
+export type PresenceHatKit = (typeof PRESENCE_HAT_KITS)[number]
+export type PresenceGlassesKit = (typeof PRESENCE_GLASSES_KITS)[number]
+export type PresenceHeldKit = (typeof PRESENCE_HELD_KITS)[number]
+
+export type PresenceSticker = {
+  readonly id: string
+  readonly image: string
+  readonly slot: 'hat' | 'glasses' | 'held'
+}
 
 export type PresenceShape = (typeof PRESENCE_SHAPES)[number]
 export type PresenceColor = (typeof PRESENCE_COLORS)[number]
@@ -170,18 +195,49 @@ export const PRESENCE_COLOR_PALETTES: Record<PresenceColor, PresenceColorModes> 
   },
 }
 
+export type PresenceOverlays = {
+  readonly overlayHat?: string
+  readonly overlayGlasses?: string
+  readonly overlayHeld?: string
+}
+
 /** Durable presence section shared by Face schema and the browser scope. */
 export interface PresenceSettings {
   shape: PresenceShape
   color: PresenceColor
   kit: PresenceKit
+  kitHat: string
+  kitGlasses: string
+  kitHeld: string
+  overlayHat: string
+  overlayGlasses: string
+  overlayHeld: string
+  stickers: string
 }
 
 export const PresenceSettingsSchema: z<PresenceSettings> = z.object({
   [PRESENCE_SHAPE_FIELD]: z.union([...PRESENCE_SHAPES]).default(DEFAULT_PRESENCE_SHAPE),
   [PRESENCE_COLOR_FIELD]: z.union([...PRESENCE_COLORS]).default(DEFAULT_PRESENCE_COLOR),
   [PRESENCE_KIT_FIELD]: z.union([...PRESENCE_KITS]).default(DEFAULT_PRESENCE_KIT),
+  [PRESENCE_KIT_HAT_FIELD]: z.string().default('none'),
+  [PRESENCE_KIT_GLASSES_FIELD]: z.string().default('none'),
+  [PRESENCE_KIT_HELD_FIELD]: z.string().default('none'),
+  [PRESENCE_OVERLAY_HAT_FIELD]: z.string().default(''),
+  [PRESENCE_OVERLAY_GLASSES_FIELD]: z.string().default(''),
+  [PRESENCE_OVERLAY_HELD_FIELD]: z.string().default(''),
+  [PRESENCE_STICKERS_FIELD]: z.string().default('[]'),
 })
+
+const OVERLAY_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i
+
+/** Accept a transparent PNG (etc.) overlay, or empty to clear. */
+export function parsePresenceOverlay(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const value = raw.trim().replace(/\s+/g, '')
+  if (!value) return ''
+  if (value.length > PRESENCE_OVERLAY_MAX || !OVERLAY_RE.test(value)) return undefined
+  return value
+}
 
 export function isPresenceShape(value: unknown): value is PresenceShape {
   return PRESENCE_SHAPES.some((shape) => shape === value)
@@ -193,6 +249,67 @@ export function isPresenceColor(value: unknown): value is PresenceColor {
 
 export function isPresenceKit(value: unknown): value is PresenceKit {
   return PRESENCE_KITS.some((kit) => kit === value)
+}
+
+export function splitLegacyKit(kit: string | undefined): { hat: string; glasses: string } {
+  if (!kit || kit === 'none') return { hat: 'none', glasses: 'none' }
+  if (kit.startsWith('specs')) return { hat: 'none', glasses: kit }
+  return { hat: kit, glasses: 'none' }
+}
+
+const STICKER_ID_RE = /^stk_[a-zA-Z0-9]{6,24}$/
+const STICKER_PICK_RE = /^sticker:(stk_[a-zA-Z0-9]{6,24})$/
+
+export function stickerRef(id: string): string {
+  return `${STICKER_PREFIX}${id}`
+}
+
+export function stickerIdFromPick(pick: string): string | undefined {
+  const match = STICKER_PICK_RE.exec(pick)
+  return match?.[1]
+}
+
+export function parseStickers(raw: unknown): PresenceSticker[] {
+  if (Array.isArray(raw)) {
+    return raw.flatMap((row) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return []
+      const id = typeof (row as { id?: unknown }).id === 'string' ? (row as { id: string }).id : ''
+      const image = parsePresenceOverlay((row as { image?: unknown }).image)
+      const slotRaw = (row as { slot?: unknown }).slot
+      const slot = slotRaw === 'glasses' || slotRaw === 'held' || slotRaw === 'hat' ? slotRaw : 'hat'
+      if (!STICKER_ID_RE.test(id) || !image) return []
+      return [{ id, image, slot }]
+    }).slice(0, PRESENCE_STICKERS_MAX)
+  }
+  if (typeof raw !== 'string' || !raw.trim()) return []
+  try {
+    return parseStickers(JSON.parse(raw) as unknown)
+  } catch {
+    return []
+  }
+}
+
+export function encodeStickers(rows: readonly PresenceSticker[]): string {
+  return JSON.stringify(rows)
+}
+
+export function parseSlotPick(raw: unknown, builtins: readonly string[]): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const pick = raw.trim()
+  if (!pick || pick === 'none') return 'none'
+  if (builtins.includes(pick)) return pick
+  if (stickerIdFromPick(pick)) return pick
+  return undefined
+}
+
+export function resolveEnginePick(pick: string, builtins: readonly string[]): string {
+  return builtins.includes(pick) && pick !== 'none' ? pick : 'none'
+}
+
+export function resolveStickerOverlay(pick: string, stickers: readonly PresenceSticker[]): string {
+  const id = stickerIdFromPick(pick)
+  if (!id) return ''
+  return stickers.find((row) => row.id === id)?.image ?? ''
 }
 
 /** Pick body/eye paint for the active chrome scheme. */

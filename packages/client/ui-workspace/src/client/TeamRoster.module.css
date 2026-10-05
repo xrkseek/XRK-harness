@@ -298,6 +298,93 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.faceHint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.overlayRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.overlayCube,
+.overlayCubeOn,
+.overlayAdd {
+  box-sizing: border-box;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.overlayCubeOn {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.overlayAdd {
+  border-style: dashed;
+}
+
+.overlayThumb {
+  width: 18px;
+  height: 18px;
+  display: block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.overlayEmpty {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.overlayLabel {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.overlayHint {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.overlayFile {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.overlayClear {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 14px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
 .dialogWide {
   width: min(880px, 100%);
   max-height: min(88vh, 840px);

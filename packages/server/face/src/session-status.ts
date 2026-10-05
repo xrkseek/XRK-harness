@@ -29,6 +29,8 @@ import type {
   ContextTimelineProjection,
 } from "./projections/units/context-timeline.js";
 import type { AgentTeamTask } from "./agent-team-tasks.js";
+import { appearanceLookWire } from "./agent-roster-store.js";
+import { dressingFromPresence } from "./presence-dressing.js";
 import { costMeterGetState } from "./cost-meter-store.js";
 import { resolveSubagentQuota } from "./subagent-tools.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
@@ -350,12 +352,24 @@ export interface SessionStatusSnapshot {
     readonly shape: string;
     readonly color: string;
     readonly kit?: string;
+    readonly kitHat?: string;
+    readonly kitGlasses?: string;
+    readonly kitHeld?: string;
+    readonly overlayHat?: string;
+    readonly overlayGlasses?: string;
+    readonly overlayHeld?: string;
   };
   /** Parent 干员 look when the parent is itself a child; omit → home Settings ball. */
   readonly parentCompanionBall?: {
     readonly shape: string;
     readonly color: string;
     readonly kit?: string;
+    readonly kitHat?: string;
+    readonly kitGlasses?: string;
+    readonly kitHeld?: string;
+    readonly overlayHat?: string;
+    readonly overlayGlasses?: string;
+    readonly overlayHeld?: string;
   };
   /**
    * Immediate parent's sticky Overview (委派方 copy). Child dual-ball reads this
@@ -880,18 +894,40 @@ function liveLineText(
  */
 function companionBallForChild(
   link:
-    | { readonly appearance?: { readonly shape: string; readonly color: string; readonly kit?: string } }
+    | {
+        readonly appearance?: {
+          readonly shape: string;
+          readonly color: string;
+          readonly kit?: string;
+          readonly kitHat?: string;
+          readonly kitGlasses?: string;
+          readonly kitHeld?: string;
+          readonly overlayHat?: string;
+          readonly overlayGlasses?: string;
+          readonly overlayHeld?: string;
+          readonly face?: string;
+        };
+      }
     | undefined,
+  stickers: ReturnType<typeof dressingFromPresence>["stickers"] = [],
 ): SessionStatusSnapshot["companionBall"] {
   if (!link) return undefined;
   const look = link.appearance;
   const shape = typeof look?.shape === "string" && look.shape ? look.shape : "blob";
   const color = typeof look?.color === "string" && look.color ? look.color : "cream";
-  return {
-    shape,
-    color,
-    ...(typeof look?.kit === "string" && look.kit ? { kit: look.kit } : {}),
-  };
+  return appearanceLookWire({
+    shape: shape as never,
+    color: color as never,
+    ...(typeof look?.kit === "string" && look.kit ? { kit: look.kit as never } : {}),
+    ...(typeof look?.kitHat === "string" && look.kitHat ? { kitHat: look.kitHat } : {}),
+    ...(typeof look?.kitGlasses === "string" && look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
+    ...(typeof look?.kitHeld === "string" && look.kitHeld ? { kitHeld: look.kitHeld } : {}),
+    ...(look?.overlayHat || look?.face
+      ? { overlayHat: look.overlayHat ?? look.face }
+      : {}),
+    ...(look?.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
+    ...(look?.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
+  }, stickers);
 }
 
 /**
@@ -1227,8 +1263,11 @@ export function buildSessionStatusSnapshot(
   const parentLink = childLink
     ? runtime.subagents.getByChild(childLink.parentSessionId)
     : undefined;
-  const companionBall = companionBallForChild(childLink);
-  const parentCompanionBall = companionBallForChild(parentLink);
+  const dressing = dressingFromPresence(
+    runtime.settingsNamespaces.view("ui-presence").value as Record<string, unknown>,
+  );
+  const companionBall = companionBallForChild(childLink, dressing.stickers);
+  const parentCompanionBall = companionBallForChild(parentLink, dressing.stickers);
   const parentPresence = childLink
     ? listedPresence(childLink.parentSessionId)
     : undefined;

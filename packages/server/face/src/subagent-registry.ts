@@ -45,7 +45,17 @@ export interface FaceSubagentLink {
   /** Extra weaken-only tool policy on top of the spawn role. */
   readonly tools?: MemberToolPolicy;
   /** Ball look for this child (not the home Settings presence). */
-  readonly appearance?: { readonly shape: string; readonly color: string; readonly kit?: string };
+  readonly appearance?: {
+    readonly shape: string;
+    readonly color: string;
+    readonly kit?: string;
+    readonly kitHat?: string;
+    readonly kitGlasses?: string;
+    readonly kitHeld?: string;
+    readonly overlayHat?: string;
+    readonly overlayGlasses?: string;
+    readonly overlayHeld?: string;
+  };
 }
 
 type PersistShape = {
@@ -62,6 +72,24 @@ function freezeLink(link: FaceSubagentLink): FaceSubagentLink {
           color: link.appearance.color,
           ...(typeof link.appearance.kit === "string" && link.appearance.kit
             ? { kit: link.appearance.kit }
+            : {}),
+          ...(typeof link.appearance.kitHat === "string" && link.appearance.kitHat
+            ? { kitHat: link.appearance.kitHat }
+            : {}),
+          ...(typeof link.appearance.kitGlasses === "string" && link.appearance.kitGlasses
+            ? { kitGlasses: link.appearance.kitGlasses }
+            : {}),
+          ...(typeof link.appearance.kitHeld === "string" && link.appearance.kitHeld
+            ? { kitHeld: link.appearance.kitHeld }
+            : {}),
+          ...(typeof link.appearance.overlayHat === "string" && link.appearance.overlayHat
+            ? { overlayHat: link.appearance.overlayHat }
+            : {}),
+          ...(typeof link.appearance.overlayGlasses === "string" && link.appearance.overlayGlasses
+            ? { overlayGlasses: link.appearance.overlayGlasses }
+            : {}),
+          ...(typeof link.appearance.overlayHeld === "string" && link.appearance.overlayHeld
+            ? { overlayHeld: link.appearance.overlayHeld }
             : {}),
         }
       : undefined;

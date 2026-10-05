@@ -53,14 +53,48 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.face {
+/* Transparent PNG layers. Hat · glasses · held can all show. Held sits lower-right (no hands). */
+.overlayHat,
+.overlayGlasses,
+.overlayHeld {
   position: absolute;
-  inset: 4px;
-  z-index: 1;
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
   pointer-events: none;
+}
+
+.overlayHat {
+  left: 4%;
+  right: 4%;
+  top: -22%;
+  height: 52%;
+  z-index: 4;
+  background-position: center top;
+}
+
+.overlayGlasses {
+  left: 12%;
+  right: 12%;
+  top: 28%;
+  height: 32%;
+  z-index: 5;
+  background-position: center;
+}
+
+.overlayHeld {
+  left: 42%;
+  right: -18%;
+  top: 36%;
+  bottom: -12%;
+  z-index: 6;
+  background-position: right bottom;
+}
+
+.overlayHeld svg,
+.heldGlyph {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .kit {
@@ -71,8 +105,4 @@
   height: 100%;
   display: block;
   pointer-events: none;
-}
-
-.stage[data-face] .mount {
-  opacity: 0;
 }

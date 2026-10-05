@@ -189,7 +189,13 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
       readonly shape?: string
       readonly color?: string
       readonly kit?: string
+      readonly kitHat?: string
+      readonly kitGlasses?: string
+      readonly kitHeld?: string
       readonly face?: string
+      readonly overlayHat?: string
+      readonly overlayGlasses?: string
+      readonly overlayHeld?: string
     }
     readonly scope?: 'global' | 'workspace'
     readonly brief?: string
@@ -221,7 +227,13 @@ export type AgentTeamMemberRow = {
     readonly shape: string
     readonly color: string
     readonly kit?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
     readonly face?: string
+    readonly overlayHat?: string
+    readonly overlayGlasses?: string
+    readonly overlayHeld?: string
   }
   readonly scope?: 'global' | 'workspace'
   readonly brief?: string

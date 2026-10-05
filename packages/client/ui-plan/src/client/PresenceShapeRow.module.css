@@ -96,6 +96,11 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.colorCube.selected {
+  background: var(--dsw-alias-bg-module-platform);
+  border-color: var(--dsw-static-neutral-bluish-400);
+}
+
 .swatch {
   box-sizing: border-box;
   width: 36px;
@@ -129,4 +134,125 @@
     padding: 12px 6px;
     touch-action: manipulation;
   }
+}
+
+.overlayCube {
+  box-sizing: border-box;
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.overlayAdd {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-style: dashed;
+  background: transparent;
+}
+
+.overlayCube.selected {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l2));
+}
+
+.overlayPreview {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 50% 45%,
+      color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent),
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
+}
+
+.overlayThumb {
+  width: 100%;
+  height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.overlayEmpty {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.overlayLabel {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.overlayHint {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.overlayFile {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.overlayClear {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.slotHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.slotLabel {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.stickerHit {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 100%;
+  cursor: pointer;
 }
