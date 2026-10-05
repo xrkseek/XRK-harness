@@ -33,7 +33,7 @@
 
 ## 并行 settle（`isConcurrencySafe`）
 
-默认 `toolSettle: "parallel"`：step 内多 call **先耐久写齐** `tool/call`，再按分类 settle，**result 日志序固定为 call 序**。Face `agent-loop.toolSettle` 可强制 `serial`。
+默认 `toolSettle: "parallel"`：step 内多 call **先耐久写齐** `tool/call`，再按分类 settle；**每个 body 一结束就写 `tool/result`**（完成序，壳能立刻画卡），**下一轮模型请求仍等整批 settle 完**。`outcomes` 数组仍按 call 序。Face `agent-loop.toolSettle` 可强制 `serial`。
 
 ### 分类
 
@@ -52,8 +52,8 @@
 ```text
 1. Append all tool/call in order     ← barrier (durable first)
 2. settleToolBatch                   ← exclusive barrier + bounded parallel pool
-3. Append tool/result in call order  ← barrier (stable log order)
-4. batch safety/notice + additionalContexts
+3. Append tool/result as each body finishes  ← live log (paired by callId)
+4. After the batch: safety/notice + additionalContexts; next LLM step
 ```
 
 - 池上限：`maxParallelToolCalls`（Face `agent-loop.maxParallelToolCalls`）
@@ -116,7 +116,7 @@ Persistent hydrate `repairOpenTurnEvents`: settle dangling calls already on the 
 
 ## Parallel settle (`isConcurrencySafe`)
 
-Default `toolSettle: "parallel"`: within a step, all `tool/call` rows are durable-written first, then settled by class; **result log order matches call order**. Face `agent-loop.toolSettle` may force `serial`.
+Default `toolSettle: "parallel"`: within a step, all `tool/call` rows are durable-written first, then settled by class; **each `tool/result` is appended as soon as that body finishes** (completion order, so the shell can paint the card) while **the next model request still waits for the whole batch**. The `outcomes` array stays call-ordered. Face `agent-loop.toolSettle` may force `serial`.
 
 ### Classification
 
@@ -135,8 +135,8 @@ In-step LLM retry: Face `agent-loop.llmRetryMaxRetries` (default 5; `0` disables
 ```text
 1. Append all tool/call in order     ← barrier (durable first)
 2. settleToolBatch                   ← exclusive barrier + bounded parallel pool
-3. Append tool/result in call order  ← barrier (stable log order)
-4. batch safety/notice + additionalContexts
+3. Append tool/result as each body finishes  ← live log (paired by callId)
+4. After the batch: safety/notice + additionalContexts; next LLM step
 ```
 
 - Pool cap: `maxParallelToolCalls` (Face `agent-loop.maxParallelToolCalls`)

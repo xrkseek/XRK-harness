@@ -151,7 +151,7 @@ HTTP/WS (attach-http)
 | `tests/approval.test.ts` | ask → respondByRpcId |
 | `tests/questions.test.ts` | question/requested · cancelled · ask_user bind · mux 重连 |
 | `tests/subagent.test.ts` | create-with-parent · list/history/prompt/interrupt · fork 登记 |
-| `tests/fork-policy.test.ts` | turn-cut `atSeq` · 排除后轮输入/模型 · `beforeSeq` 编辑重发优先父会话活选型 · `fork-unavailable` |
+| `tests/fork-policy.test.ts` | turn-cut `atSeq` · 排除后轮输入/模型 · `beforeSeq` 编辑重发优先父会话活选型 · 丢掉开放/`abort` 空回合 · `fork-unavailable` |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added 子会话字段 · workspace-removed / order-changed · fork · `host/remote-event` |
 | `tests/projections.test.ts` | title · list metadata · todos 站立计划（write 后跨 turn/start 保留）· **turnOutline** mux（draft 静默 / turn/end 提交） |
@@ -322,7 +322,7 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/approval.test.ts` | ask → respondByRpcId |
 | `tests/questions.test.ts` | question/requested · cancelled · ask_user bind · mux reconnect |
 | `tests/subagent.test.ts` | create-with-parent · list/history/prompt/interrupt · fork registry |
-| `tests/fork-policy.test.ts` | turn-cut `atSeq` · excludes later input/model · `beforeSeq` edit-resubmit prefers parent live selection · `fork-unavailable` |
+| `tests/fork-policy.test.ts` | turn-cut `atSeq` · excludes later input/model · `beforeSeq` edit-resubmit prefers parent live selection · drops open / abort-only turns · `fork-unavailable` |
 | `tests/workspace.test.ts` | list/create/rename/archive · delete/insert* |
 | `tests/host-frames.test.ts` | session-added child fields · workspace-removed / order-changed · fork · `host/remote-event` |
 | `tests/projections.test.ts` | title · list metadata · todos standing plan (persists across turn/start after write) · **turnOutline** mux (quiet draft / commit at turn/end) |

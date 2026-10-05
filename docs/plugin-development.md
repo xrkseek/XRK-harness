@@ -105,18 +105,16 @@ xrkh restart
 
 ## 工作区喂法（让 Agent 会写插件）
 
-本仓自带 **`.agents/`**（`AGENTS.md` · `context/` · `skills/` · `recipes/`），**无需**模板 sync。会话徽章用 **XRK Harness**（`harness`）。**工作区根即本 monorepo 时**，插件写在 **`extensions/<plugin-id>/`**；Host **只注入** `.agents/AGENTS.md`，**不**灌根维护者 `AGENTS.md`。跨项目人格放 **`~/.agents/`** 或 **`~/.xrk/`**（低优先级，工作区覆盖）。先加载 skill **`xrk-harness-monorepo`**。
+本仓自带 **`.agents/`**（增量 `AGENTS.md` · `context/` · 本仓 skills · 本仓 recipes），**无需**把 CLI seeds 再抄一份。会话徽章用 **XRK Harness**（`harness`）。**工作区根即本 monorepo 时**，插件写在 **`extensions/<plugin-id>/`**；Host 注入工作区 `.agents/AGENTS.md`（**不**灌根维护者 `AGENTS.md`），并叠 `~/.xrk/` 站立种子。跨项目人格与产品默认 skill 在 **`~/.xrk/`**。先加载 skill **`xrk-harness-monorepo`**。
 
 ### 产品 skills（catalog）
 
-`.agents/skills/` 与 `{workspace}/.xrk/skills/` 进入 `<available_skills>`（仅 frontmatter `name` + `description`）：
+工作区 `.agents/skills/` 与 `{workspace}/.xrk/skills/` 进入 `<available_skills>`（仅 frontmatter `name` + `description`）。本仓 **不**把 `apps/cli/seeds/skills` 再放进 `.agents/skills`（否则与 `~/.xrk/skills` 同名灌两份）。
 
-| Skill | 用途 |
-|-------|------|
-| **`xrk-harness-monorepo`** | monorepo 总控 |
-| `xrk-plugin-kind` | kind / MCP / client 选型 |
-| `xrk-plugin-author` | 写插件 |
-| `xrk-plugin-verify` | 安装与验证 |
+| Skill | 落点 | 用途 |
+|-------|------|------|
+| **`xrk-harness-monorepo`** | 本仓 `.agents/skills` | monorepo 总控 |
+| `xrk-plugin-kind` · `xrk-plugin-author` · `xrk-plugin-verify` | CLI seeds → `~/.xrk/skills`（`skill` 工具） | kind / 写插件 / 验证 |
 
 维护者改内核见 [maintainer.md](./maintainer.md)。分层说明：[skills-layers.md](./skills-layers.md)。
 
@@ -259,18 +257,16 @@ Same-name builtins and reserved prompt ids are **not** overridden by plugins.
 
 ## Workspace agent layer (teach agents to author plugins)
 
-This repo ships **`.agents/`** (`AGENTS.md` · `context/` · `skills/` · `recipes/`) — **no** template sync. Use the **XRK Harness** session badge (`harness`). When the workspace root **is this monorepo**, plugins belong under **`extensions/<plugin-id>/`**; Host injects **`.agents/AGENTS.md` only** (skips root maintainer `AGENTS.md`). Global persona lives under **`~/.agents/`** or **`~/.xrk/`** (lower priority; workspace wins). Load skill **`xrk-harness-monorepo`** first.
+This repo ships **`.agents/`** as an overlay (`AGENTS.md` · `context/` · repo-only skills · repo-only recipes) — **do not** copy CLI seeds into it. Use the **XRK Harness** session badge (`harness`). When the workspace root **is this monorepo**, plugins belong under **`extensions/<plugin-id>/`**; Host injects workspace `.agents/AGENTS.md` (skips root maintainer `AGENTS.md`) **on top of** `~/.xrk/` standing seeds. Global persona and default product skills live under **`~/.xrk/`**. Load skill **`xrk-harness-monorepo`** first.
 
 ### Product skills (catalog)
 
-`.agents/skills/` and `{workspace}/.xrk/skills/` enter `<available_skills>` (frontmatter `name` + `description` only):
+Workspace `.agents/skills/` and `{workspace}/.xrk/skills/` enter `<available_skills>` (frontmatter `name` + `description` only). This repo **does not** mirror `apps/cli/seeds/skills` into `.agents/skills` (that would inject the same names twice next to `~/.xrk/skills`).
 
-| Skill | Purpose |
-|-------|---------|
-| **`xrk-harness-monorepo`** | Monorepo router |
-| `xrk-plugin-kind` | Choose kind / MCP / client |
-| `xrk-plugin-author` | Author plugins |
-| `xrk-plugin-verify` | Install & verify |
+| Skill | Lives in | Purpose |
+|-------|----------|---------|
+| **`xrk-harness-monorepo`** | This repo `.agents/skills` | Monorepo router |
+| `xrk-plugin-kind` · `xrk-plugin-author` · `xrk-plugin-verify` | CLI seeds → `~/.xrk/skills` (`skill` tool) | Kind / author / verify |
 
 Maintainer kernel work: [maintainer.md](./maintainer.md). Layering: [skills-layers.md](./skills-layers.md).
 

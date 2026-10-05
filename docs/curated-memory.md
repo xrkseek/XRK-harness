@@ -30,7 +30,9 @@
 
 组合创建时（一次会话一份组合）读这两份文件，渲染进系统提示。本会话之后的 `add` / `replace` / `remove` 只改磁盘，不改已经放进系统提示的那段文字。下一份组合重新从磁盘读取。
 
-条目用 `§` 分隔（前后各一个换行）。`MEMORY.md` 上限 2200 字，`USER.md` 上限 1375 字。超限时单次 `add` 失败；一次 `operations` 批次只按最终结果计字数，失败则整批不写。
+条目用 `§` 分隔（前后各一个换行）。`MEMORY.md` 上限 2200 字，`USER.md` 上限 1375 字。超限时单次 `add` 失败（错误可带 `prune_candidates`：最久未触碰条目，便于先删或压缩）；一次 `operations` 批次只按最终结果计字数，失败则整批不写。
+
+文件后端在同目录维护触碰旁路 **`.usage.json`**（条目哈希 → 最近写入时间）；`list` 可附带 `stale_entries`（年龄证据）。Phase1 字数顶满时的软删按触碰年龄而非文件顺序，并追加 **`.trim-log.jsonl`**（尽力而为，失败不阻断巩固）。
 
 ## 工具
 
@@ -42,7 +44,7 @@
 | `old_text` | `replace` / `remove` 用来定位的唯一子串 |
 | `operations` | 上述写动作的原子列表（不含 `list`） |
 
-`list` 返回目标文件当前磁盘条目（便于 replace/remove 前对齐原文）。没有搜索；磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
+`list` 返回目标文件当前磁盘条目（便于 replace/remove 前对齐原文），并可含 `stale_entries`。没有搜索；磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
 关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host / harness 默认经 `resolveMemoryProvider`（`XRK_MEMORY_PROVIDER=file|http|sqlite`）选后端，工具与 Phase1/2 共用同一 store。
 
@@ -52,7 +54,7 @@
 
 ## 会话结束 Phase1 / Phase2 巩固
 
-会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）走 **leased 流水线**（`runCuratedMemoryConsolidate`）：同会话 archive/stop/dispose **单飞**，避免 Phase1 双写。已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删最旧条目（最多三次）再试写入（不刷新本会话冻结快照）。结果写旁路 `.last-consolidate.json`，并进 Status / `/status` 的 `curatedMemory`（phase1Written · phase2 · provider）。
+会话离开活跃集时（组合 `dispose`、工作区 `workspace.archiveSession`、Host `stop`）走 **leased 流水线**（`runCuratedMemoryConsolidate`）：同会话 archive/stop/dispose **单飞**，避免 Phase1 双写。已在磁盘上覆盖的跳过，漏掉的追加进 `MEMORY.md`。字数顶满时会先软删**最久未触碰**条目（最多三次；有 `.usage.json` 时按触碰年龄，否则回落文件顺序）再试写入（不刷新本会话冻结快照）。结果写旁路 `.last-consolidate.json`，并进 Status / `/status` 的 `curatedMemory`（phase1Written · phase2 · provider）。
 
 | 阶段 | 行为 |
 |------|------|
@@ -105,7 +107,9 @@ When curated memory is enabled, the system prompt **always** includes a policy s
 
 When a composition is created (one composition per session), both files are read and rendered into the system prompt. Later `add` / `replace` / `remove` calls in that session update the files only. They do not change the block already placed in the system prompt. The next composition reads the files again.
 
-Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped at 2200 characters and `USER.md` at 1375. A single `add` fails when it would pass the cap. An `operations` batch checks the character budget on the final result only; a failure writes nothing.
+Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped at 2200 characters and `USER.md` at 1375. A single `add` fails when it would pass the cap (the error may include `prune_candidates` — longest-untouched entries to drop or compress first). An `operations` batch checks the character budget on the final result only; a failure writes nothing.
+
+The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last write time) beside the curated files; `list` may include `stale_entries`. Phase1 soft-trim ranks by touch age (not file order) and appends **`.trim-log.jsonl`** (best-effort; never fails the consolidate pass).
 
 ## Tool
 
@@ -117,7 +121,7 @@ Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped
 | `old_text` | Unique substring locating the entry for `replace` / `remove` |
 | `operations` | Atomic list of write actions (no `list`) |
 
-`list` returns live on-disk entries for the target (use before replace/remove). There is no search. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
+`list` returns live on-disk entries for the target (use before replace/remove) and may include `stale_entries`. There is no search. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
 Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host / harness default through `resolveMemoryProvider` (`XRK_MEMORY_PROVIDER=file|http|sqlite`); tools and Phase1/2 share that store.
 
@@ -139,7 +143,7 @@ After a successful turn, reusable notes in the user's own words (`remember:` / `
 
 ## Session-end Phase1 / Phase2 consolidate
 
-When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), a **leased pipeline** (`runCuratedMemoryConsolidate`) runs: archive/stop/dispose for the same session are **single-flight** so Phase1 cannot double-write. Notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the oldest entries are soft-removed (up to three times) and the add is retried (the frozen session prompt is still unchanged). The result is written to `.last-consolidate.json` and surfaces on Status / `/status` as `curatedMemory` (phase1Written · phase2 · provider).
+When a session leaves the live set (composition `dispose`, `workspace.archiveSession`, Host `stop`), a **leased pipeline** (`runCuratedMemoryConsolidate`) runs: archive/stop/dispose for the same session are **single-flight** so Phase1 cannot double-write. Notes already covered on disk are skipped; leftovers are appended to `MEMORY.md`. If the character cap blocks a new note, the **longest-untouched** entries are soft-removed (up to three times; touch age from `.usage.json`, else file order) and the add is retried (the frozen session prompt is still unchanged). The result is written to `.last-consolidate.json` and surfaces on Status / `/status` as `curatedMemory` (phase1Written · phase2 · provider).
 
 | Stage | Behavior |
 |-------|----------|

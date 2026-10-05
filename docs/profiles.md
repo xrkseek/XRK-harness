@@ -41,13 +41,15 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 |----|-------|--------|------|
 | **minimal** | Minimal | fs + skill + std | 最小，无 shell / 联网（烟测 / `run` 默认） |
 | **shell** | Shell | + bash + PTY | 本机 shell 专注 |
-| **frugal** | Frugal | 完整工具，无子代理 | 控制支出（省钱） |
-| **shallow** | Shallow | 完整工具，一层子代理（徽章深度上限=1；并发见 Settings） | 浅委派 |
-| **harness** | XRK Harness | 完整工具 + 嵌套子代理（Settings 默认 depth/active=2） | 默认产品面 |
+| **frugal** | Frugal | 完整工具，无子代理（`delegation: explicit`，无子代理工具时不生效） | 控制支出（省钱） |
+| **shallow** | Shallow | 完整工具，一层子代理（徽章深度上限=1；并发见 Settings；`delegation: proactive`） | 浅委派 |
+| **harness** | XRK Harness | 完整工具 + 嵌套子代理（Settings 默认 depth/active=2；`delegation: proactive`） | 默认产品面 |
 
 计划模式：斜杠 **`/plan`** / Plan 芯片 / `exit_plan_mode`（与徽章正交）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
 
 子代理**同时存活数**与**委派深度**的运行时上限在 **设置 → 插件 → Agent loop**（`agent-loop.maxActiveSubagents` / `maxSubagentDepth`，默认 **2/2**，深度上限 3）。徽章可再收紧（如 Shallow `maxDepth: 1`）；生效值为 `min(Face, 徽章天花板)`。
+
+徽章 `delegation`（子代理 `mode: on` 时生效）：**`explicit`** = 只在用户 / AGENTS.md / 任务正文要求时 spawn；**`proactive`** = 在上限内可主动并行。系统提示 `tool:subagent` 注入对应一段（见 `subagentRoutingPrompt`）。
 
 实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
@@ -105,7 +107,7 @@ Host vs Session：[host-preset.md](./host-preset.md)。
 | `slashRecipes` | 随 assemble | `.xrk/recipes` |
 | `plugins` | 无 | 进程插件接线 |
 
-Harness 另有：`presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting`。
+Harness 另有：`presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting` · `delegationMode`。
 
 ## CLI
 
@@ -169,13 +171,15 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 |---------------|---------|----------------|----------|
 | **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents | Smoke tests; no shell |
 | **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents off | Local shell focus |
-| **frugal** | Frugal | Full coding tools; **subagents off** (lower bill risk) | Control spend |
-| **shallow** | Shallow | Full tools; subagents **depth ≤1** (badge ceiling; concurrency from Settings) | Light helper tasks |
-| **harness** | **XRK Harness** | Full coding agent; subagents **nested** (Settings defaults depth/active **2**) | Default product surface |
+| **frugal** | Frugal | Full coding tools; **subagents off** (`delegation: explicit`, unused while tools are unbound) | Control spend |
+| **shallow** | Shallow | Full tools; subagents **depth ≤1** (badge ceiling; concurrency from Settings; `delegation: proactive`) | Light helper tasks |
+| **harness** | **XRK Harness** | Full coding agent; subagents **nested** (Settings defaults depth/active **2**; `delegation: proactive`) | Default product surface |
 
 Plan mode is **`/plan`** / Plan chip / `exit_plan_mode` (orthogonal to badges). Legacy id **`plan`** aliases to harness.
 
 Runtime caps for **concurrent live children** and **delegation depth** live under **Settings → Plugins → Agent loop** (`agent-loop.maxActiveSubagents` / `maxSubagentDepth`, defaults **2/2**, depth max 3). Badges may tighten further (e.g. Shallow `maxDepth: 1`); effective = `min(Face, badge ceiling)`.
+
+Badge `delegation` (while subagents `mode: on`): **`explicit`** = spawn only when the user / AGENTS.md / task text asks; **`proactive`** = may fan out within caps. The `tool:subagent` system section injects the matching mode line (`subagentRoutingPrompt`).
 
 Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
@@ -233,7 +237,7 @@ Details: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md]
 | `slashRecipes` | Follows assemble | `.xrk/recipes` |
 | `plugins` | None | Process plugin wiring |
 
-Harness also has: `presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting`.
+Harness also has: `presentation` · `webTools` · `lspTools` · `ptyTools` · `subagentRouting` · `delegationMode`.
 
 ## CLI
 

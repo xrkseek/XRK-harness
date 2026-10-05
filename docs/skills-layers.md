@@ -49,7 +49,7 @@
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
 | 优先级 | 工作区 > 用户主目录；同层内 **`.xrk` 原生优先**：`.xrk` → `.agents` → `.cursor` → `.claude` → `.codex`（**home 层无 `.cursor/skills`**） |
 
-产品默认 playbook 在 **`apps/cli/seeds/`**（`skills/` · `standing/AGENTS.md` · `recipes/` → `xrkh web` 写入 `~/.xrk`）；写法**对标 Cursor** `create-skill`，落点见 **`xrk-create-skill`**。
+产品默认 playbook 在 **`apps/cli/seeds/`**（`skills/` · `standing/AGENTS.md` · `recipes/` → `xrkh web` 写入 `~/.xrk`）；写法**对标 Cursor** `create-skill`，落点见 **`xrk-create-skill`**。本仓 `.agents/skills/` **只**放 overlay，不抄 seeds 同名。
 
 ## 安装 skills（`xrkh skill`）
 
@@ -84,21 +84,14 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 
 ## Harness 源码仓写插件
 
-以本仓库为工作区时，插件写在 **`extensions/<plugin-id>/`**。产品 Agent 读 **`.agents/`**（非仓库根 `AGENTS.md`）。
+以本仓库为工作区时，插件写在 **`extensions/<plugin-id>/`**。产品 Agent 读 **`.agents/`**（非仓库根 `AGENTS.md`），并叠 **`~/.xrk/`** 种子。本仓 `.agents/skills` **只**放增量，不复写 CLI seeds 同名 skill。
 
-| 产品 skill（`.agents/skills/`） | 用途 |
+| 本仓 overlay（`.agents/skills/`） | 用途 |
 |------------|------|
-| **`xrk-capability-attach`** | 挂 MCP / 接外部工具（默认路径） |
-| **`xrk-canvas`** | 工作区 Canvas 看板（`canvas_*` · 概况 Canvas 页签） |
-| **`xrk-models-settings`** | 配模型：手动 ID、获取列表、对话搜索 |
-| **`xrk-create-skill`** | 写 skill / standing（对标 Cursor · Codex 渐进披露） |
-| **`xrk-plan-build`** | Plan → Build（`exit_plan_mode`，同会话） |
-| **`xrk-delegate`** | 子代理何时开、封顶与徽章 |
-| **`xrk-code-review`** | 只读缺陷优先审查（对标 Codex review-agent） |
 | **`xrk-harness-monorepo`** | monorepo 总控 |
-| `xrk-plugin-kind` | kind / MCP / client 选型 |
-| `xrk-plugin-author` | 写插件 |
-| `xrk-plugin-verify` | 安装与验证 |
+| **`xrk-harness-architecture`** | 仓结构地图 |
+
+产品默认剧本（`xrk-capability-attach` · `xrk-plugin-*` · `xrk-delegate` · `xrk-plan-build` 等）只在 **`apps/cli/seeds/skills/`** → `~/.xrk/skills/`，经 `skill` 工具加载。
 
 本仓产品面落点：`extensions/`（对照示例 `example-tools`）。
 
@@ -160,7 +153,7 @@ Optional directories; **never auto-created**. Common files:
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
 | Priority | Workspace > user home; within a layer **`.xrk` native wins**: `.xrk` → `.agents` → `.cursor` → `.claude` → `.codex` (**home layer has no `.cursor/skills`**) |
 
-Default playbooks: **`apps/cli/seeds/`** (`skills/` · `standing/AGENTS.md` · `recipes/`) → `~/.xrk` on `xrkh web`. Same skill shape as Cursor **`create-skill`**; XRK paths in **`xrk-create-skill`**. Workspace overlay: this repo’s `.agents/skills/`.
+Default playbooks: **`apps/cli/seeds/`** (`skills/` · `standing/AGENTS.md` · `recipes/`) → `~/.xrk` on `xrkh web`. Same skill shape as Cursor **`create-skill`**; XRK paths in **`xrk-create-skill`**. This repo’s `.agents/skills/` is overlay-only (no seed-name copies).
 
 ## Installing skills (`xrkh skill`)
 
@@ -195,21 +188,14 @@ Prefer **MCP Settings** before scaffolding a process plugin. Product playbook: s
 
 ## Plugin authoring in this repo
 
-When this repository is the workspace, plugins live under **`extensions/<plugin-id>/`**. The product Agent reads **`.agents/`** (not the repository-root `AGENTS.md`).
+When this repository is the workspace, plugins live under **`extensions/<plugin-id>/`**. The product Agent reads **`.agents/`** (not the repository-root `AGENTS.md`) **on top of** `~/.xrk/` seeds. This repo’s `.agents/skills` is overlay-only — do not copy CLI seed skill names here.
 
-| Product skill (`.agents/skills/`) | Purpose |
+| Overlay (`.agents/skills/`) | Purpose |
 |------------|------|
-| **`xrk-capability-attach`** | Attach MCP / external tools (default path) |
-| **`xrk-canvas`** | Workspace Canvas boards (`canvas_*` · Overview Canvas tab) |
-| **`xrk-models-settings`** | Models: manual ID, provider fetch, chat search |
-| **`xrk-create-skill`** | Author skills / standing (Cursor + Codex progressive disclosure) |
-| **`xrk-plan-build`** | Plan → Build (`exit_plan_mode`, same session) |
-| **`xrk-delegate`** | When to spawn subagents; caps and badges |
-| **`xrk-code-review`** | Read-only defect-first review (Codex review-agent style) |
 | **`xrk-harness-monorepo`** | Monorepo router |
-| `xrk-plugin-kind` | Choose kind / MCP / client |
-| `xrk-plugin-author` | Author plugins |
-| `xrk-plugin-verify` | Install and verify |
+| **`xrk-harness-architecture`** | Repo map |
+
+Default product playbooks (`xrk-capability-attach`, `xrk-plugin-*`, `xrk-delegate`, `xrk-plan-build`, …) live only in **`apps/cli/seeds/skills/`** → `~/.xrk/skills/` and load via the `skill` tool.
 
 Product surface in this repo: `extensions/` (see `example-tools`).
 

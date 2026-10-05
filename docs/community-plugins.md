@@ -484,7 +484,7 @@ TongFlow install: `POST /tongflow/plugins` → `runPluginMutate` (`xrkh plugin a
 
 | DSH official card | XRK landing |
 |-------------------|-------------|
-| Agent Teams | Face `agentTeams` · Status task board · `team_graph` |
+| Agent Teams | Face `agentTeams` · Status task board · `team_graph` · `agentRoster` (`team_list` / `team_save` / `subagent member_id`) |
 | Auto authorization review | Settings Auto-review · `/auto-review` (community `dsh-auto-review` in the table above) |
 | Voice input | Settings → Voice · `voice_transcribe` (SenseVoice local model / wake word not shipped) |
 | Terminal | Sidebar `/sidebar/ws/terminal` · Settings shell |

@@ -2251,6 +2251,9 @@ importers:
       '@xrkseek/cordis':
         specifier: workspace:^
         version: link:../../cordis
+      '@xrkseek/xrk-api-remotes':
+        specifier: workspace:^
+        version: link:../../stubs/xrk-api-remotes
       '@xrkseek/xrk-invariants':
         specifier: workspace:^
         version: link:../../stubs/xrk-invariants

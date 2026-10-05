@@ -15,7 +15,9 @@
 | **全局** | `~/.codex/` · `~/.claude/` · `~/.agents/` · `~/.xrk/` | 低 |
 | **工作区** | `{workspace}/` 下同厂商路径 + `.xrk/` | 高 |
 
-Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。
+Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。节渲染带 `> source: <path>` 溯源行（压缩后仍可辨来源）。
+
+**子代理 audience**：Host 为委派子会话设 `audience: subagent` 时，**跳过**家目录站立人格（`~/.xrk` / `~/.agents` 的 SOUL.md · USER.md · IDENTITY.md · 家 AGENTS.md）。子身份来自 Face spawn 前缀；工作区项目文档与 skills catalog **仍注入**。
 
 **真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）。
 
@@ -93,7 +95,7 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 | 站立可选 `USER.md` | 仅人格草稿 inject；与策展 `memories/USER.md` 分文件，勿混写 |
 | 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
 | 单项目规则（含 Cursor 格式） | `{workspace}/.cursor/rules/*.mdc`（**不是** `~/.cursor/rules`） |
-| 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
+| 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/`（**只写增量**；勿抄 `apps/cli/seeds/`） |
 | 本机私密偏好（不进 git） | `~/.xrk/` 或 `~/.agents/` |
 
 ## API
@@ -158,7 +160,9 @@ Turn-scoped / recomputable ephemeral context uses **[context-fragments](./contex
 | **Global** | `~/.codex/` · `~/.claude/` · `~/.agents/` · `~/.xrk/` | Low |
 | **Workspace** | Same vendor paths under `{workspace}/` + `.xrk/` | High |
 
-Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees.
+Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees. Each rendered section carries a `> source: <path>` provenance line.
+
+**Subagent audience**: when Host sets `audience: subagent` for a delegated child, the **home standing persona** is skipped (`~/.xrk` / `~/.agents` SOUL.md · USER.md · IDENTITY.md · home AGENTS.md). Child identity comes from the Face spawn preamble; workspace project docs and the skills catalog **stay on**.
 
 **Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists).
 
@@ -224,7 +228,7 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 | Standing optional `USER.md` | Persona-draft inject only; separate file from curated `memories/USER.md` |
 | Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |
 | Project rules (including Cursor format) | `{workspace}/.cursor/rules/*.mdc` (**not** `~/.cursor/rules`) |
-| Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` |
+| Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` (**overlay only**; do not copy `apps/cli/seeds/`) |
 | Local private preferences (not in git) | `~/.xrk/` or `~/.agents/` |
 
 ## API

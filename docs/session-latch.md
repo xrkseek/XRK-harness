@@ -47,6 +47,8 @@ isChildSessionActive(runtime, sessionId) // @xrkseek/server-face
 
 `session.status` 的 `subagents.live[].activity`、graph 节点 `activity`、Sidebar 的
 `subagents.live` 与 preview `activity` **共用这一个谓词**。判定只看运行态，**不看注册关系**。
+终态另走 `subagents.live[].outcome`（`describeChildOutcome`）：父代理超时砍掉的子会话
+`activity` 仍是 `inactive`，概况图按 `outcome.kind` 画错误点，不再一律「完成」。
 
 | 不变量 | 含义 |
 |--------|------|
@@ -116,6 +118,9 @@ isChildSessionActive(runtime, sessionId) // @xrkseek/server-face
 `subagents.live[].activity` in `session.status`, graph node `activity`, and the Sidebar's
 `subagents.live` / preview `activity` **all share this one predicate**. The verdict reads runtime
 state only — **never registration bookkeeping**.
+Last-turn fate is a separate axis: `subagents.live[].outcome` (`describeChildOutcome`). A child
+the parent wait budget cut off stays `activity: inactive`; the Overview graph uses `outcome.kind`
+so that node is an error dot, not "done".
 
 | Invariant | Meaning |
 |-----------|---------|
