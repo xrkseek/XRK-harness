@@ -358,6 +358,16 @@ export interface SessionStatusSnapshot {
     readonly kit?: string;
   };
   /**
+   * Immediate parent's sticky Overview (委派方 copy). Child dual-ball reads this
+   * so the home seat does not fall back to ambient 待机.
+   */
+  readonly parentPresence?: {
+    readonly emotionId: string;
+    readonly tips?: string;
+    readonly source: "tool";
+    readonly updatedAt: number;
+  };
+  /**
    * Overview dual-ball. Immediate parent is the 委派方 (root → Settings ball;
    * parent is itself a child → `parentCompanionBall` + `parentLabel`).
    */
@@ -1202,21 +1212,26 @@ export function buildSessionStatusSnapshot(
       }
     : undefined;
 
-  const presenceRow = runtime.presence.get(sessionId);
-  const presence = presenceRow
-    ? {
-        emotionId: presenceRow.emotionId,
-        source: presenceRow.source,
-        updatedAt: presenceRow.updatedAt,
-        ...(presenceRow.tips ? { tips: presenceRow.tips } : {}),
-      }
-    : undefined;
+  const listedPresence = (id: string) => {
+    const row = runtime.presence.get(id);
+    if (!row) return undefined;
+    return {
+      emotionId: row.emotionId,
+      source: row.source,
+      updatedAt: row.updatedAt,
+      ...(row.tips ? { tips: row.tips } : {}),
+    };
+  };
+  const presence = listedPresence(sessionId);
   const childLink = runtime.subagents.getByChild(sessionId);
   const parentLink = childLink
     ? runtime.subagents.getByChild(childLink.parentSessionId)
     : undefined;
   const companionBall = companionBallForChild(childLink);
   const parentCompanionBall = companionBallForChild(parentLink);
+  const parentPresence = childLink
+    ? listedPresence(childLink.parentSessionId)
+    : undefined;
   const delegate = childLink
     ? {
         parentSessionId: childLink.parentSessionId,
@@ -1241,6 +1256,7 @@ export function buildSessionStatusSnapshot(
     billing,
     fleet,
     ...(presence ? { presence } : {}),
+    ...(parentPresence ? { parentPresence } : {}),
     ...(companionBall ? { companionBall } : {}),
     ...(parentCompanionBall ? { parentCompanionBall } : {}),
     ...(delegate ? { delegate } : {}),

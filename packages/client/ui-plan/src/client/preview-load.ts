@@ -181,6 +181,12 @@ export interface SessionStatusView {
     readonly color: string
     readonly kit?: string
   }
+  readonly parentPresence?: {
+    readonly emotionId: string
+    readonly tips?: string
+    readonly source: 'tool'
+    readonly updatedAt: number
+  }
   readonly delegate?: {
     readonly parentSessionId: string
     readonly childLabel: string
@@ -863,6 +869,22 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
 
   const companionBall = parsePresenceLook(v.companionBall)
   const parentCompanionBall = parsePresenceLook(v.parentCompanionBall)
+  const parentPresenceRaw = v.parentPresence
+  let parentPresence: SessionStatusView['parentPresence']
+  if (parentPresenceRaw && typeof parentPresenceRaw === 'object') {
+    const emotionId = str((parentPresenceRaw as { emotionId?: unknown }).emotionId)
+    const updatedAt = num((parentPresenceRaw as { updatedAt?: unknown }).updatedAt)
+    const source = str((parentPresenceRaw as { source?: unknown }).source)
+    if (emotionId && updatedAt !== undefined && source === 'tool') {
+      const tips = str((parentPresenceRaw as { tips?: unknown }).tips)
+      parentPresence = {
+        emotionId,
+        source: 'tool',
+        updatedAt,
+        ...(tips ? { tips } : {}),
+      }
+    }
+  }
   const delegateRaw = v.delegate
   let delegate: SessionStatusView['delegate']
   if (delegateRaw && typeof delegateRaw === 'object') {
@@ -896,6 +918,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     ...(presence ? { presence } : {}),
     ...(companionBall ? { companionBall } : {}),
     ...(parentCompanionBall ? { parentCompanionBall } : {}),
+    ...(parentPresence ? { parentPresence } : {}),
     ...(delegate ? { delegate } : {}),
     timeline,
     compaction,

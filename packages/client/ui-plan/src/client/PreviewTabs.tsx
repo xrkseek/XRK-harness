@@ -2086,6 +2086,7 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
                 {...(status?.parentCompanionBall ? { memberLook: status.parentCompanionBall } : {})}
+                {...(status?.parentPresence ? { presence: status.parentPresence } : {})}
                 pairSeat
                 seat="from"
                 roleLabel={delegateSeatCaption(

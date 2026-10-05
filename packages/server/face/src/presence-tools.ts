@@ -35,15 +35,18 @@ export function bindPresenceTools(
 ): void {
   const { runtime, sessionId } = options;
   const catalogHint = formatPresenceEmotionToolHint();
+  const child = Boolean(runtime.subagents.getByChild(sessionId));
+  const description = child
+    ? "Show this session's Overview emotion + 支线 caption (what you are doing now). Call when mood or work shifts — do not wait to be asked. "
+      + `Prefer the catalog: ${catalogHint}. tips ≤200 chars. emotionId "auto" clears sticky mood.`
+    : "Show this session's 支线: Overview emotion ball + a short caption of what you are doing now "
+      + "(sidebar under the session name). Call when mood or current work shifts — do not wait to be asked. "
+      + `Prefer the full catalog: ${catalogHint}. `
+      + 'tips = 支线 (≤200 chars). Pass emotionId "auto" only to clear sticky mood.';
 
   registerTool(tools, {
     name: "presence_set",
-    description:
-      "Show this session's 支线: Overview emotion ball + a short caption of what you are doing now " +
-      "(sidebar under the session name). The session name stays the first user message until a 主线 " +
-      "is set with thread_upsert (AI-owned pin, not the user's message). Call when mood or current work shifts — do not wait to be asked. " +
-      `Prefer the full catalog: ${catalogHint}. ` +
-      'tips = 支线 (≤200 chars). Pass emotionId "auto" only to clear sticky mood.',
+    description,
     parameters: {
       type: "object",
       properties: {

@@ -356,6 +356,16 @@ describe("session status snapshot", () => {
       childLabel: "untitled",
     });
     expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toBeUndefined();
+    runtime.presence.set(parent, {
+      emotionId: "31",
+      tips: "发版员已接手，我这边只读盘点",
+    });
+    expect(buildSessionStatusSnapshot(runtime, kitted).parentPresence).toMatchObject({
+      emotionId: "31",
+      tips: "发版员已接手，我这边只读盘点",
+      source: "tool",
+    });
+    expect(buildSessionStatusSnapshot(runtime, parent).parentPresence).toBeUndefined();
   });
 
   it("gives nested children dual balls: immediate parent look + own look", async () => {

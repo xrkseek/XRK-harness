@@ -274,6 +274,12 @@ describe("preview tab envelopes", () => {
           ...sampleStatus,
           companionBall: { shape: "squircle", color: "sky", kit: "cap" },
           parentCompanionBall: { shape: "wedge", color: "sage" },
+          parentPresence: {
+            emotionId: "31",
+            source: "tool",
+            updatedAt: 1,
+            tips: "发版员已接手",
+          },
           delegate: {
             parentSessionId: "sess_mid",
             childLabel: "调研员",
@@ -288,6 +294,12 @@ describe("preview tab envelopes", () => {
       kit: "cap",
     });
     expect(parsed?.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
+    expect(parsed?.parentPresence).toEqual({
+      emotionId: "31",
+      source: "tool",
+      updatedAt: 1,
+      tips: "发版员已接手",
+    });
     expect(parsed?.delegate).toEqual({
       parentSessionId: "sess_mid",
       childLabel: "调研员",
