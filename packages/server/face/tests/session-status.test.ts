@@ -312,6 +312,9 @@ describe("session status snapshot", () => {
     expect(snap.subagents.graph.nodes.find((n) => n.id === layer2)?.activity).toBe(
       "running",
     );
+    expect(snap.subagents.graph.nodes.find((n) => n.id === root)?.activity).toBe(
+      "running",
+    );
 
     draining.clear();
     const settled = buildSessionStatusSnapshot(runtime, root);
@@ -562,6 +565,12 @@ describe("session status snapshot", () => {
     expect(activityOf(root)).toBe("running");
     expect(activityOf(first)).toBe("inactive");
     expect(activityOf(third)).toBe("inactive");
+    expect(snap.parentDelivery).toEqual({
+      turnActive: false,
+      queued: 0,
+      steering: 0,
+      runningSubs: 1,
+    });
   });
 
   it("formats Auto permission as Auto review / Approve for me", () => {

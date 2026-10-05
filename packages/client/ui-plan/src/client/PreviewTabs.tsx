@@ -902,8 +902,13 @@ function StatusPanel({
                   ? {
                     onOpenNode: (nodeId: string) => {
                       if (nodeId === status.sessionId) return
+                      const edge = status.subagents.graph.edges.find(
+                        (item) => item.kind === 'delegates' && item.to === nodeId,
+                      )
                       void runTeamAction(nodeId, () => openTeamChild({
-                        parentSessionId: status.sessionId,
+                        parentSessionId: edge?.from
+                          ?? status.delegate?.parentSessionId
+                          ?? status.sessionId,
                         childSessionId: nodeId,
                         mode: 'continuable',
                       }))
@@ -1760,12 +1765,44 @@ export function PreviewTabs({
       (row) => row?.origin === 'subagent' && row.parentId === sessionId && row.running,
     )
   })
+  // Child Overview's 委派方 seat + team graph follow the home session's mux,
+  // not this child's own catalog. Face `delegate.parentSessionId` fills in
+  // before the session-list row carries `parentId`.
+  const homeMuxId = parentId || status?.delegate?.parentSessionId
+  const homeCatalogRev = useSessions((s) => {
+    if (homeMuxId === undefined || homeMuxId === '') return ''
+    const run = s.byId[homeMuxId]?.running ? '1' : '0'
+    const catalog = s.subagentsByParent[homeMuxId]
+    if (catalog === undefined) return run
+    const rows = catalog.entries
+      .filter((entry): entry is Extract<typeof entry, { kind: 'child' }> => entry.kind === 'child')
+      .map((entry) => `${entry.id}:${entry.activity ?? ''}`)
+    return `${run}:${catalog.state}:${catalog.entries.length}:${rows.join(',')}`
+  })
+  const homeTurnActive = useSessions((s) => (
+    homeMuxId !== undefined && homeMuxId !== ''
+      ? (s.byId[homeMuxId]?.running ?? false)
+      : false
+  ))
+  const homeSubsRunning = useSessions((s) => {
+    if (homeMuxId === undefined || homeMuxId === '') return 0
+    const catalog = s.subagentsByParent[homeMuxId]
+    const fromCatalog = catalog?.entries.filter(
+      (entry) => entry.kind === 'child' && entry.activity === 'running',
+    ).length ?? 0
+    const fromRows = Object.values(s.byId).filter(
+      (row) => row?.origin === 'subagent' && row.parentId === homeMuxId && row.running,
+    ).length
+    return Math.max(fromCatalog, fromRows)
+  })
   const jobsBusy = useSessions((s) => {
     const jobs = s.jobsBySession[sessionId] ?? []
     return jobs.some((job) => job.status === 'running' || job.status === 'stopping')
   })
   const fleetBusy = parentRunning
     || childRunning
+    || homeTurnActive
+    || homeSubsRunning > 0
     || jobsBusy
     || (status?.subagents.live.some((row) => row.activity === 'running') ?? false)
     || (status?.jobs.some((job) => (
@@ -1777,9 +1814,40 @@ export function PreviewTabs({
     || ((status?.delivery.queued ?? 0) > 0)
     || ((status?.delivery.steering ?? 0) > 0)
     || (status?.compaction.phase === 'busy')
+    || (status?.parentDelivery?.turnActive ?? false)
+    || ((status?.parentDelivery?.runningSubs ?? 0) > 0)
     || (status?.teamTasks.some((task) => (
       task.status === 'in_progress' || task.status === 'paused' || task.status === 'pending'
     )) ?? false)
+
+  const homeId = status?.delegate?.parentSessionId ?? parentId
+  const fromTurnActive = Boolean(
+    (status?.parentDelivery?.turnActive ?? false)
+    || homeTurnActive
+    || (status?.subagents.graph.nodes.some(
+      (n) => n.id === homeId && n.activity === 'running',
+    ) ?? false),
+  )
+  const fromQueued = status?.parentDelivery?.queued ?? 0
+  const fromSteering = status?.parentDelivery?.steering ?? 0
+  const fromSubs = Math.max(
+    status?.parentDelivery?.runningSubs ?? 0,
+    homeSubsRunning,
+    status?.subagents.graph.nodes.filter((n) => (
+      n.id !== homeId && n.activity === 'running'
+    )).length ?? 0,
+  )
+  const ownTurnActive = Boolean(
+    (status?.delivery.turnActive ?? false)
+    || parentRunning
+    || (status?.subagents.graph.nodes.some(
+      (n) => n.id === sessionId && n.activity === 'running',
+    ) ?? false),
+  )
+  const ownSubs = Math.max(
+    status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0,
+    childRunning ? 1 : 0,
+  )
 
   const reviewFocus = useSyncExternalStore(
     changesReview?.subscribe ?? NOOP_SUBSCRIBE,
@@ -1833,7 +1901,7 @@ export function PreviewTabs({
 
   useEffect(() => {
     setStatusTick((n) => n + 1)
-  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy])
+  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy, homeCatalogRev])
 
   // Soft-poll session.status so presence / delivery / fleet flip without a
   // membership bump (presence_set is sticky outside the turn latch). Presence
@@ -2093,10 +2161,13 @@ export function PreviewTabs({
                   t('preview.status.presenceHome'),
                   status?.delegate?.parentLabel,
                 )}
-                turnActive={false}
+                turnActive={fromTurnActive}
                 runningJobs={0}
-                runningSubs={0}
+                runningSubs={fromSubs}
                 fleetHealth="ok"
+                queued={fromQueued}
+                steering={fromSteering}
+                activityAt={status?.parentPresence?.updatedAt ?? 0}
                 compact={presenceCollapsed}
                 engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
                 t={t as (key: string, params?: Record<string, string>) => string}
@@ -2123,9 +2194,9 @@ export function PreviewTabs({
                   t('preview.status.presenceMember'),
                   status?.delegate?.childLabel,
                 )}
-                turnActive={status?.delivery.turnActive ?? false}
+                turnActive={ownTurnActive}
                 runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-                runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+                runningSubs={ownSubs}
                 fleetHealth={status?.fleet.health ?? 'ok'}
                 queued={status?.delivery.queued ?? 0}
                 steering={status?.delivery.steering ?? 0}
@@ -2148,9 +2219,9 @@ export function PreviewTabs({
             <PresenceBall
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
-              turnActive={status?.delivery.turnActive ?? false}
+              turnActive={ownTurnActive}
               runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-              runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+              runningSubs={ownSubs}
               fleetHealth={status?.fleet.health ?? 'ok'}
               queued={status?.delivery.queued ?? 0}
               steering={status?.delivery.steering ?? 0}

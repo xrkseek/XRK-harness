@@ -77,6 +77,9 @@ export function PresenceDock({
     || ((status?.delivery.queued ?? 0) > 0)
     || ((status?.delivery.steering ?? 0) > 0)
     || (status?.compaction.phase === 'busy')
+    || (status?.subagents.graph.nodes.some((n) => n.activity === 'running') ?? false)
+    || (status?.parentDelivery?.turnActive ?? false)
+    || ((status?.parentDelivery?.runningSubs ?? 0) > 0)
 
   const presenceCue = useSyncExternalStore(
     presenceCues?.subscribe ?? NOOP_SUBSCRIBE,
@@ -159,9 +162,18 @@ export function PresenceDock({
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
               {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
-              turnActive={status?.delivery.turnActive ?? parentRunning}
+              turnActive={
+                (status?.delivery.turnActive ?? false)
+                || parentRunning
+                || (status?.subagents.graph.nodes.some(
+                  (n) => n.id === sessionId && n.activity === 'running',
+                ) ?? false)
+              }
               runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-              runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+              runningSubs={Math.max(
+                status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0,
+                childRunning ? 1 : 0,
+              )}
               fleetHealth={status?.fleet.health ?? 'ok'}
               queued={status?.delivery.queued ?? 0}
               steering={status?.delivery.steering ?? 0}

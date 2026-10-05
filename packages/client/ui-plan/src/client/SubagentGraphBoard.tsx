@@ -104,7 +104,7 @@ function mergeGraph(
       id: sessionId,
       label: rootLabel,
       depth: 0,
-      activity: 'inactive',
+      activity: live.some((row) => row.activity === 'running') ? 'running' : 'inactive',
     })
     for (const row of live) {
       byId.set(row.id, {
@@ -154,8 +154,18 @@ function mergeGraph(
         id: sessionId,
         label: rootLabel,
         depth: 0,
-        activity: 'inactive',
+        activity: live.some((row) => row.activity === 'running') ? 'running' : 'inactive',
       })
+    }
+  }
+  if (
+    live.some((row) => row.activity === 'running')
+    || [...byId.values()].some((n) => n.activity === 'running')
+  ) {
+    for (const [id, node] of byId) {
+      if ((node.depth ?? 1) === 0 && node.activity !== 'running') {
+        byId.set(id, { ...node, activity: 'running' })
+      }
     }
   }
 

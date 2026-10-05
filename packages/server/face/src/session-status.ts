@@ -382,6 +382,17 @@ export interface SessionStatusSnapshot {
     readonly updatedAt: number;
   };
   /**
+   * Immediate parent's live beat for the child dual-ball 委派方 seat.
+   * Mux `running` can lag Face drain; this is the same latch / descendant
+   * walk as the team graph.
+   */
+  readonly parentDelivery?: {
+    readonly turnActive: boolean;
+    readonly queued: number;
+    readonly steering: number;
+    readonly runningSubs: number;
+  };
+  /**
    * Overview dual-ball. Immediate parent is the 委派方 (root → Settings ball;
    * parent is itself a child → `parentCompanionBall` + `parentLabel`).
    */
@@ -1090,12 +1101,12 @@ export function buildSessionStatusSnapshot(
 
   const graph: SessionStatusGraph = {
     nodes: team.nodes.map((n) => {
-      // Every node carries a verdict. The root is judged by its own turn and
-      // every other node by its own or a descendant's live state, so no node
-      // reaches a client without one — a missing activity is rendered as
-      // "done" there, which is how a live branch read as completed.
+      // Every node carries a verdict. The current session's own turn counts,
+      // and so does any descendant still draining — a parked parent waiting
+      // on a live child must not render as the client's "inactive → 已完成"
+      // fallback.
       const running =
-        n.id === sessionId ? turnActive : activeSource.has(n.id);
+        (n.id === sessionId && turnActive) || activeSource.has(n.id);
       return {
         id: n.id,
         label: n.label,
@@ -1268,8 +1279,33 @@ export function buildSessionStatusSnapshot(
   );
   const companionBall = companionBallForChild(childLink, dressing.stickers);
   const parentCompanionBall = companionBallForChild(parentLink, dressing.stickers);
-  const parentPresence = childLink
-    ? listedPresence(childLink.parentSessionId)
+  const homeId =
+    childLink?.parentSessionId ??
+    team.edges.find((e) => e.kind === "delegates" && e.to === sessionId)?.from;
+  const parentPresence = homeId ? listedPresence(homeId) : undefined;
+  const parentDelivery = homeId
+    ? (() => {
+        const parentLatch = runtime.drain.isActive(homeId);
+        const parentTurn = parentLatch && !runtime.isTurnUiIdle(homeId);
+        const parentEvents = runtime.store.has(homeId)
+          ? readSessionEvents(runtime.store, homeId)
+          : [];
+        const parentPending = listPendingAdmits(parentEvents, homeId);
+        let parentQueued = 0;
+        let parentSteering = 0;
+        for (const admit of parentPending) {
+          if (admit.delivery === "steer") parentSteering += 1;
+          else parentQueued += 1;
+        }
+        return {
+          turnActive: parentTurn,
+          queued: parentQueued,
+          steering: parentSteering,
+          runningSubs: (childrenOf.get(homeId) ?? []).filter((n) =>
+            activeSource.has(n.id),
+          ).length,
+        };
+      })()
     : undefined;
   const delegate = childLink
     ? {
@@ -1296,6 +1332,7 @@ export function buildSessionStatusSnapshot(
     fleet,
     ...(presence ? { presence } : {}),
     ...(parentPresence ? { parentPresence } : {}),
+    ...(parentDelivery ? { parentDelivery } : {}),
     ...(companionBall ? { companionBall } : {}),
     ...(parentCompanionBall ? { parentCompanionBall } : {}),
     ...(delegate ? { delegate } : {}),

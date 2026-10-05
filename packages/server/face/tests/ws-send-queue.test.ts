@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createWsSendQueue, type WsQueuedSocket } from "../src/ws-send-queue.js";
+import {
+  createWsSendQueue,
+  muxSendLaneKey,
+  type WsQueuedSocket,
+} from "../src/ws-send-queue.js";
 
 class FakeSocket implements WsQueuedSocket {
   readonly OPEN = 1;
@@ -81,6 +85,41 @@ describe("createWsSendQueue", () => {
     expect(socket.readyState).toBe(socket.OPEN);
     await Promise.resolve();
     expect(socket.sent).toHaveLength(1);
+  });
+
+  it("round-robins frames from different session lanes", async () => {
+    const socket = new FakeSocket();
+    const queue = createWsSendQueue(socket);
+    queue.sendJson({ type: "session/event", sessionId: "a", n: 1 });
+    queue.sendJson({ type: "session/event", sessionId: "a", n: 2 });
+    queue.sendJson({ type: "session/event", sessionId: "b", n: 1 });
+    await Promise.resolve();
+    expect(socket.sent).toEqual([
+      '{"type":"session/event","sessionId":"a","n":1}',
+    ]);
+    socket.ack();
+    await vi.waitFor(() => {
+      expect(socket.sent).toHaveLength(2);
+    });
+    expect(socket.sent[1]).toBe(
+      '{"type":"session/event","sessionId":"b","n":1}',
+    );
+    socket.ack();
+    await vi.waitFor(() => {
+      expect(socket.sent).toHaveLength(3);
+    });
+    expect(socket.sent[2]).toBe(
+      '{"type":"session/event","sessionId":"a","n":2}',
+    );
+  });
+
+  it("uses nested payload.sessionId on server-request envelopes", () => {
+    expect(
+      muxSendLaneKey({
+        type: "server-request",
+        payload: { type: "session/event", sessionId: "sess_x" },
+      }),
+    ).toBe("sess_x");
   });
 
   it("drops a single oversize frame", async () => {

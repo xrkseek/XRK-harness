@@ -199,6 +199,12 @@ export interface SessionStatusView {
     readonly source: 'tool'
     readonly updatedAt: number
   }
+  readonly parentDelivery?: {
+    readonly turnActive: boolean
+    readonly queued: number
+    readonly steering: number
+    readonly runningSubs: number
+  }
   readonly delegate?: {
     readonly parentSessionId: string
     readonly childLabel: string
@@ -913,6 +919,22 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
       }
     }
   }
+  const parentDeliveryRaw = v.parentDelivery
+  let parentDelivery: SessionStatusView['parentDelivery']
+  if (parentDeliveryRaw && typeof parentDeliveryRaw === 'object') {
+    const turnActive = bool((parentDeliveryRaw as { turnActive?: unknown }).turnActive)
+    const queued = num((parentDeliveryRaw as { queued?: unknown }).queued)
+    const steering = num((parentDeliveryRaw as { steering?: unknown }).steering)
+    const runningSubs = num((parentDeliveryRaw as { runningSubs?: unknown }).runningSubs)
+    if (
+      turnActive !== undefined
+      && queued !== undefined
+      && steering !== undefined
+      && runningSubs !== undefined
+    ) {
+      parentDelivery = { turnActive, queued, steering, runningSubs }
+    }
+  }
   const delegateRaw = v.delegate
   let delegate: SessionStatusView['delegate']
   if (delegateRaw && typeof delegateRaw === 'object') {
@@ -947,6 +969,7 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     ...(companionBall ? { companionBall } : {}),
     ...(parentCompanionBall ? { parentCompanionBall } : {}),
     ...(parentPresence ? { parentPresence } : {}),
+    ...(parentDelivery ? { parentDelivery } : {}),
     ...(delegate ? { delegate } : {}),
     timeline,
     compaction,

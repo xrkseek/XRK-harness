@@ -400,8 +400,12 @@ describe("Face settings U2", () => {
       schema: { uid: number; refs: Record<string, { type: string }> };
     };
     expect(permission.value.defaultPreset).toBe("workspace-write");
-    expect(permission.schema.uid).toBe(5);
-    expect(permission.schema.refs["5"]?.type).toBe("object");
+    expect(Array.isArray((permission.value as { extraWritableRoots?: unknown }).extraWritableRoots)).toBe(true);
+    expect(
+      ((permission.value as { extraWritableRoots: string[] }).extraWritableRoots).length,
+    ).toBeGreaterThan(0);
+    expect(permission.schema.uid).toBe(7);
+    expect(permission.schema.refs["7"]?.type).toBe("object");
 
     const locale = (
       desc.result.value as {
@@ -533,8 +537,14 @@ describe("Face settings U2", () => {
     expect(mut.result.value).toMatchObject({
       ns: "permission",
       value: { defaultPreset: "workspace-write" },
-      schema: { uid: 5 },
+      schema: { uid: 7 },
     });
+    // Mutating only defaultPreset must keep schema-base extraWritableRoots
+    // (product home) — old settings.yaml without that key still backfills.
+    const roots = (mut.result.value as { value: { extraWritableRoots?: string[] } })
+      .value.extraWritableRoots;
+    expect(Array.isArray(roots)).toBe(true);
+    expect(roots!.length).toBeGreaterThan(0);
 
     const bad = await dispatchFaceMethod(rt, "settings.mutate", "pb", {
       ns: "permission",
@@ -554,6 +564,30 @@ describe("Face settings U2", () => {
     if (!autoAsDefault.result.ok) {
       expect(autoAsDefault.result.error.code).toBe("settings-rejected");
     }
+  });
+
+  it("old settings.yaml with only defaultPreset still backfills extraWritableRoots", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-perm-roots-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      ["permission:", "  defaultPreset: read-only", ""].join("\n"),
+      "utf8",
+    );
+    const rt = runtime({ productDir: dir });
+    const desc = await dispatchFaceMethod(rt, "settings.describe", "pr0", {});
+    expect(desc.result.ok).toBe(true);
+    if (!desc.result.ok) return;
+    const permission = (
+      desc.result.value as {
+        namespaces: {
+          ns: string;
+          value: { defaultPreset: string; extraWritableRoots?: string[] };
+        }[];
+      }
+    ).namespaces.find((n) => n.ns === "permission");
+    expect(permission?.value.defaultPreset).toBe("read-only");
+    expect(Array.isArray(permission?.value.extraWritableRoots)).toBe(true);
+    expect(permission!.value.extraWritableRoots!.length).toBeGreaterThan(0);
   });
 
   it("permission Settings schema enumerates configured presets only (no auto)", async () => {

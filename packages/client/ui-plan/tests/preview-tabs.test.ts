@@ -280,6 +280,12 @@ describe("preview tab envelopes", () => {
             updatedAt: 1,
             tips: "发版员已接手",
           },
+          parentDelivery: {
+            turnActive: false,
+            queued: 0,
+            steering: 1,
+            runningSubs: 2,
+          },
           delegate: {
             parentSessionId: "sess_mid",
             childLabel: "调研员",
@@ -299,6 +305,12 @@ describe("preview tab envelopes", () => {
       source: "tool",
       updatedAt: 1,
       tips: "发版员已接手",
+    });
+    expect(parsed?.parentDelivery).toEqual({
+      turnActive: false,
+      queued: 0,
+      steering: 1,
+      runningSubs: 2,
     });
     expect(parsed?.delegate).toEqual({
       parentSessionId: "sess_mid",
