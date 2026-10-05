@@ -64,19 +64,22 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 
 | 字段 | 含义 |
 | --- | --- |
-| `turn` | Face wire 轮次号（首次见到的 `turnId` 顺序，从 **1** 起） |
+| `turn` | Face wire 轮次号（**整段日志**首次见到的 `turnId` 顺序，从 **1** 起；跳转键，不是用户看到的第 N 轮）。`session.history` 接线任何一页之前按全日志预分配，尾页先到不得把后出现的 turn 编成 1 |
+| `round` | 已发布 opener 上的无空隙 轮次（从 **1** 起）。空 prompt 的 Host turn 不占号 |
 | `seq` | 该轮 `turn/start` 的 Face seq（`Session.loadThrough(seq)` 目标） |
-| `prompt` | 首条人类提示预览（有界；空串 = 尚未落地） |
+| `prompt` | 首条人类提示预览（有界） |
 | `response` | 终稿回复预览（有界；空串 = 尚未在 `turn/end` 提交） |
 
 推送纪律：
 
 | 事件 | mux `session/projection` · `turnOutline` |
 | --- | --- |
-| `turn/start` | 推：新阶梯项（`prompt`/`response` 为空） |
-| 首条 human `user/message` | 推：填入 `prompt` |
+| `turn/start` | 折叠入空 Host 项；**不**发布 轮次（视图仍是已有 opener 列表，常为 `[]`）。fold 引用变化仍可能推一帧 |
+| 首条 human `user/message` | 推：新 轮次（填 `prompt` + `round`） |
 | `assistant/message` | **不推**（host-only draft；同引用保静默） |
 | `turn/end` | 推：提交 `response` |
+
+壳侧聊天轨合并整段阶梯后，导航器露出最多 **10** 个相机刻度；不在最新一轮时再钉一根第 **11** 格（会话最新一轮，点回底部）。阅读位最长，最新一轮（轨底）中长（正在读最新则只显示长），其余短。
 
 载体：`session.history` **尾页**基线 + live mux。`beforeSeq` 的 loadOlder 页**不**带 `projections`。键类型在 `@xrkseek/xrk-host-apiproxy`（`TurnOutlineEntry`）；壳包镜像 declare-merge 供 tsc emit。
 
@@ -156,19 +159,22 @@ Whole-log turn ladder for the shell chat rail. Clients do **not** rebuild the fu
 
 | Field | Meaning |
 | --- | --- |
-| `turn` | Face wire turn number (order of first-seen `turnId`; starts at **1**) |
+| `turn` | Face wire turn number (order of first-seen `turnId` in the **whole log**; starts at **1**; jump key, not the user-facing 轮次). `session.history` primes those numbers from the full log before wiring any page, so a tail-first open cannot renumber later turns as 1 |
+| `round` | Gapless 轮次 among published openers (starts at **1**). Host turns with no opener do not occupy a number |
 | `seq` | Face seq of that turn's `turn/start` (`Session.loadThrough(seq)` target) |
-| `prompt` | First human-prompt preview (bounded; `''` until landed) |
+| `prompt` | First human-prompt preview (bounded) |
 | `response` | Final response preview (bounded; `''` until committed at `turn/end`) |
 
 Push rules:
 
 | Event | mux `session/projection` · `turnOutline` |
 | --- | --- |
-| `turn/start` | Push: new ladder entry (`prompt`/`response` empty) |
-| First human `user/message` | Push: fill `prompt` |
+| `turn/start` | Fold an empty Host row; **do not** publish a 轮次 (view stays the existing opener list, often `[]`). A fold-reference change may still push a frame |
+| First human `user/message` | Push: new 轮次 (`prompt` + `round`) |
 | `assistant/message` | **No push** (host-only draft; same reference stays quiet) |
 | `turn/end` | Push: commit `response` |
+
+The shell merges the full ladder, then the navigator shows at most **10** camera ticks and, when the reader is not on the newest 轮次, pins an **11th** floor tick (session newest; click returns to the bottom). The reading mark is longest; the floor (newest) is medium unless it is also the reading mark; every other mark stays short.
 
 Carriers: `session.history` **tail** baseline + live mux. loadOlder pages with `beforeSeq` omit the whole `projections` block. Wire type: `@xrkseek/xrk-host-apiproxy` (`TurnOutlineEntry`); shell packages mirror declare-merge for tsc emit.
 

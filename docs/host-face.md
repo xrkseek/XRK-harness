@@ -136,7 +136,7 @@ Wire：`session/queue` 带完整 `message` 块；`prompt/*` → mux/history `age
 
 投影默认含 `todos`（`todo/write` 站立计划；跨回合保留至下次 `todo/write`）、`permissions` · `plan` · **`turnOutline`**。有 AttachmentStore 时再登记 **`imageLimits`**（壳侧 InputBar 摄入预检：`maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`；boot 常量，只靠 history 尾页 / 列表基线携带，**不**推 `session/projection` 变更帧；无仓则键缺席）。投影驱动见 `@xrkseek/session-projection`（状态/视图分离；[session-projection.md](./modules/session-projection.md)）。
 
-**`turnOutline`**：整段日志轮次阶梯（`turn` · `seq` · `prompt` · `response`）。`seq` 是该轮 `turn/start` 的 Face seq，供壳侧 rail 对未加载轮次调用 `Session.loadThrough(seq)`。`turn/start` 与首条 human `user/message` 推变更帧；draft-only `assistant/message` **不**推；`turn/end` 才提交 `response`。字段与推送表见 [session-projection.md](./modules/session-projection.md)「Face 默认键：`turnOutline`」。
+**`turnOutline`**：整段日志轮次阶梯（`turn` · `round` · `seq` · `prompt` · `response`）。`turn` 是跳转用的 Host wire 号；`round` 是用户看到的第 N 轮（整段日志，不随分页重编号）。`seq` 是该轮 `turn/start` 的 Face seq，供壳侧 rail 对未加载轮次调用 `Session.loadThrough(seq)`。`turn/start` 不发布空 轮次；首条 human `user/message` 推变更帧；draft-only `assistant/message` **不**推；`turn/end` 才提交 `response`。壳轨最多 10 个相机刻度，不在最新一轮时再钉第 11 格回到底部。字段与推送表见 [session-projection.md](./modules/session-projection.md)「Face 默认键：`turnOutline`」。
 
 ### Host MCP
 
@@ -314,7 +314,7 @@ Tool cards: mux/history `view` comes from the tool’s own `presentCall` / `pres
 
 Default projections include `todos` (`todo/write` standing plan; persists across turns until the next `todo/write`), `permissions` · `plan` · **`turnOutline`**. With an AttachmentStore, also register **`imageLimits`** (shell InputBar ingest precheck: `maxImageBytes` / `maxImagesPerMessage` / `maxMessageImageBytes` / `maxImagePixels` / `mediaTypes`; boot constants carried only on history tail / list baseline, **no** `session/projection` change frames; key absent without a store). Projection driver: `@xrkseek/session-projection` (state/view split; [session-projection.md](./modules/session-projection.md)).
 
-**`turnOutline`**: whole-log turn ladder (`turn` · `seq` · `prompt` · `response`). `seq` is that turn’s `turn/start` Face seq so the shell rail can call `Session.loadThrough(seq)` for unloaded marks. `turn/start` and the first human `user/message` push change frames; draft-only `assistant/message` does **not**; `turn/end` commits `response`. Field and push tables: [session-projection.md](./modules/session-projection.md) “Face default key: `turnOutline`”.
+**`turnOutline`**: whole-log turn ladder (`turn` · `round` · `seq` · `prompt` · `response`). `turn` is the Host wire jump key; `round` is the user-facing 轮次 (whole log, never re-indexed by the loaded page). `seq` is that turn’s `turn/start` Face seq so the shell rail can call `Session.loadThrough(seq)` for unloaded marks. `turn/start` does not publish an empty 轮次; the first human `user/message` pushes a change frame; draft-only `assistant/message` does **not**; `turn/end` commits `response`. The shell rail shows at most 10 camera ticks, plus an 11th floor tick (session newest) when the reader is not on the tail. Field and push tables: [session-projection.md](./modules/session-projection.md) “Face default key: `turnOutline`”.
 
 ### Host MCP
 
