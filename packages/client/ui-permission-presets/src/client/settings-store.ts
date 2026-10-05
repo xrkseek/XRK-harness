@@ -33,6 +33,7 @@ export interface PermissionSettingsState {
   writable: boolean
   currentValue: string
   options: readonly PermissionDefaultOption[]
+  extraWritableRoots: readonly string[]
   revision: number
 }
 
@@ -88,6 +89,7 @@ export class PermissionPresetSettingsController {
     writable: false,
     currentValue: '',
     options: [],
+    extraWritableRoots: [],
     revision: 0,
   })
 
@@ -158,6 +160,35 @@ export class PermissionPresetSettingsController {
     }
   }
 
+  /**
+   * Persist the explicit extra file-write allowlist.
+   * @param roots - absolute directories; empty clears the allowlist.
+   * @returns nothing; {@link store} carries success or failure.
+   */
+  async saveRoots(roots: readonly string[]): Promise<void> {
+    const view = this.view
+    const state = this.store.getSnapshot()
+    if (view === undefined || !state.writable) return
+    const generation = ++this.generation
+    this.store.update((draft) => {
+      draft.status = 'saving'
+      draft.error = null
+    })
+    try {
+      const response = await this.api.settings.mutate({
+        ns: PERMISSION_SETTINGS_NS,
+        ops: [{ op: 'set', path: ['extraWritableRoots'], value: [...roots] }],
+        expectedRevision: view.revision,
+      })
+      if (generation !== this.generation) return
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      this.accept(response.result.value, true)
+    } catch (error) {
+      if (generation !== this.generation) return
+      this.fail(error)
+    }
+  }
+
   /** Stop in-flight responses from publishing after plugin disposal. */
   dispose(): void {
     this.generation += 1
@@ -167,12 +198,17 @@ export class PermissionPresetSettingsController {
   private accept(view: SettingsNamespaceView, writable: boolean): void {
     const resolved = permissionDefaultOf(view)
     this.view = view
+    const value = (view.value as { extraWritableRoots?: unknown } | null)?.extraWritableRoots
+    const roots = Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : []
     this.store.update((state) => {
       state.status = 'ready'
       state.error = null
       state.writable = writable
       state.currentValue = resolved.currentValue
       state.options = resolved.options
+      state.extraWritableRoots = roots
       state.revision = view.revision
     })
   }

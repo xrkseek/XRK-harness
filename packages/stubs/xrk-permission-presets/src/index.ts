@@ -134,6 +134,13 @@ function foldKnobs(events: readonly SessionEvent[]): KnobState {
 export interface PermissionSettings {
   /** Preset pinned into a newly created session. */
   defaultPreset: string
+  /**
+   * Explicit absolute directories the file tools may WRITE by absolute path,
+   * in addition to the workspace root. Empty by default — a preset alone
+   * never widens the write surface; only this allowlist does. Symlink escape
+   * is denied and relative paths always resolve under the workspace root.
+   */
+  extraWritableRoots: readonly string[]
 }
 
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -198,7 +205,7 @@ export class PermissionPresetService extends Service {
       throw new Error('permission: composed sandbox and approval defaults match no preset; configure defaultPreset explicitly')
     }
     this.resolve(defaultPreset)
-    const baseSettings: PermissionSettings = { defaultPreset }
+    const baseSettings: PermissionSettings = { defaultPreset, extraWritableRoots: [] }
     this.defaultSettings = () => baseSettings
     const presetChoices = this.names.map((name) => {
       const choice = z.const(name)
@@ -207,6 +214,7 @@ export class PermissionPresetService extends Service {
     })
     const settingsSchema: z<PermissionSettings> = z.object({
       defaultPreset: z.union(presetChoices).required(),
+      extraWritableRoots: z.array(z.string()).default([]),
     })
     installSettingsSection(ctx, PERMISSION_SETTINGS_NAMESPACE, settingsSchema, baseSettings, {
       setSource: (current) => {

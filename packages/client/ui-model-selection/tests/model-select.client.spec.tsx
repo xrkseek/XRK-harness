@@ -112,7 +112,7 @@ describe('ModelSelect reasoning effort', () => {
       .toEqual(['默认', 'Standard'])
   })
 
-  it('prompts for a selection when the current model is no longer advertised', () => {
+  it('keeps an unadvertised current route on the trigger instead of prompting from scratch', () => {
     const directory = createSnapshotStore(state({
       current: { provider: 'deepseek-official', model: 'removed-model' },
     }))
@@ -126,12 +126,12 @@ describe('ModelSelect reasoning effort', () => {
       t={t}
     />)
 
-    const trigger = screen.getByRole('button', { name: '选择模型' })
-    expect(trigger.textContent).toContain('选择模型')
+    const trigger = screen.getByRole('button', { name: '选择模型，当前 removed-model' })
+    expect(trigger.textContent).toContain('removed-model')
     fireEvent.click(trigger)
     expect(screen.queryByRole('menuitem', { name: /思考强度/ })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
-    expect(screen.queryByText('removed-model')).toBeNull()
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['DeepSeek Chat'])
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek Chat' })).toBeTruthy()
   })
 

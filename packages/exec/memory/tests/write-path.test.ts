@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -5,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   ENTRY_DELIMITER,
   MEMORY_CHAR_LIMIT,
+  TRIM_LOG_FILE,
+  USAGE_SIDECAR_FILE,
   consolidateCuratedMemoryPhase1,
   consolidateCuratedMemoryPhase2,
   createCuratedMemoryStore,
@@ -174,5 +177,34 @@ describe("consolidateCuratedMemoryPhase1", () => {
     const entries = await Promise.resolve(store.listEntries("memory"));
     expect(entries.some((e) => e.includes("release train"))).toBe(true);
     expect(entries).not.toContain(oldest);
+  });
+
+  it("soft-trims the longest-untouched entry, not the first one, and logs it", async () => {
+    const dir = tempDir();
+    const stale = `stale bootstrap note here${"x".repeat(2130)}`;
+    const fresh = "y".repeat(40);
+    const store = createCuratedMemoryStore({ dir });
+    expect((await Promise.resolve(store.add("memory", stale))).success).toBe(true);
+    expect((await Promise.resolve(store.add("memory", fresh))).success).toBe(true);
+
+    const usageFile = path.join(dir, USAGE_SIDECAR_FILE);
+    const usage = JSON.parse(readFileSync(usageFile, "utf8")) as {
+      entries: Record<string, number>;
+    };
+    usage.entries[createHash("sha256").update(stale).digest("hex").slice(0, 16)] =
+      Date.now() - 90 * 86_400_000;
+    writeFileSync(usageFile, JSON.stringify(usage), "utf8");
+
+    const result = await consolidateCuratedMemoryPhase1(store, {
+      userTexts: ["remember: keep the sandbox release on friday mornings"],
+    });
+    expect(result.written).toEqual(["keep the sandbox release on friday mornings"]);
+    const entries = await Promise.resolve(store.listEntries("memory"));
+    expect(entries).toContain(fresh);
+    expect(entries.some((e) => e.includes("stale bootstrap note"))).toBe(false);
+
+    const trimLog = readFileSync(path.join(dir, TRIM_LOG_FILE), "utf8");
+    expect(trimLog).toContain("stale bootstrap note here");
+    expect(trimLog).toContain("char-cap soft trim");
   });
 });

@@ -158,6 +158,14 @@ function copyPlugins(packages, uiSrc) {
   return { copied, missing };
 }
 
+function copyPresenceAssets() {
+  const src = path.join(ROOT, "apps", "web", "public", "presence");
+  const dest = path.join(DIST, "presence");
+  if (!existsSync(src)) return;
+  cpSync(src, dest, { recursive: true });
+  process.stdout.write("presence assets\n");
+}
+
 function brandPlugins() {
   const models = path.join(
     DIST,
@@ -203,6 +211,7 @@ function main() {
   }
 
   const { copied } = copyPlugins(packages, UI_SRC);
+  copyPresenceAssets();
   brandPlugins();
   const boot = buildBoot(packages);
   writeFileSync(path.join(DIST, "boot.json"), `${JSON.stringify(boot, null, 2)}\n`);

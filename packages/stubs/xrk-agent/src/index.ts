@@ -5,7 +5,7 @@
  * @module @xrkseek/xrk-agent
  */
 
-import { Context, FiberState, getTraceable, Service, symbols } from '@xrkseek/cordis'
+import { Context, getTraceable, Service, symbols } from '@xrkseek/cordis'
 import type { Fiber } from '@xrkseek/cordis'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { isPromise } from 'node:util/types'
@@ -287,7 +287,8 @@ export class AgentRegistry extends Service {
     // unwinds with this service's fiber.
     ctx.accessor('agent', { get: () => undefined })
     ctx.on('internal/status', (fiber) => {
-      if (fiber.state === FiberState.UNLOADING && this.hasLifecycleAncestor(fiber)) {
+      // FiberState is an ambient const enum; isolatedModules cannot read UNLOADING.
+      if (fiber.state === 5 && this.hasLifecycleAncestor(fiber)) {
         this.closeInitiators()
       }
     })

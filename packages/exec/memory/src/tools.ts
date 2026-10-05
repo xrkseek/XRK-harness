@@ -61,7 +61,9 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
       + "Do NOT store session WIP or todo checklists — use `todo_write` for those. "
       + "Actions: add, replace, remove, list, or one atomic `operations` batch. "
       + "replace/remove need `old_text` (a unique substring). "
-      + "Writes hit disk immediately; do not change this session's system prompt.",
+      + "Writes hit disk immediately; do not change this session's system prompt. "
+      + "When the char cap blocks a write the error carries `prune_candidates` — the "
+      + "longest-untouched entries, i.e. the ones to drop or compress first.",
     parameters: {
       type: "object",
       properties: {
@@ -122,12 +124,27 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
       const action = String(args.action ?? "");
       if (action === "list") {
         const entries = await Promise.resolve(store.listEntries(target));
+        const aged = store.staleEntries
+          ? await Promise.resolve(store.staleEntries(target, 5))
+          : [];
         return {
           content: JSON.stringify({
             success: true,
             target,
             entry_count: entries.length,
             current_entries: entries,
+            ...(aged.length > 0
+              ? {
+                  stale_entries: aged.map((item) => ({
+                    entry:
+                      item.entry.length > 140
+                        ? `${item.entry.slice(0, 140)}...`
+                        : item.entry,
+                    age_days: item.ageDays,
+                    tracked: item.tracked,
+                  })),
+                }
+              : {}),
           }),
         };
       }

@@ -85,6 +85,19 @@ const FACE_REMOTES: FaceRemoteSpec = {
     list: 'args',
     get: 'args',
   },
+    threads: {
+    list: 'args',
+    upsert: 'args',
+    switch: 'args',
+    remove: 'args',
+  },
+  team: {
+    list: 'args',
+    upsert: 'args',
+    remove: 'args',
+    capture: 'args',
+    dispatch: 'args',
+  },
 }
 
 /** Required service: the Face Client Remote contribution mount. */

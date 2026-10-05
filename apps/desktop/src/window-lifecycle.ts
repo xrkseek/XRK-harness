@@ -41,6 +41,13 @@ export const DESKTOP_WEB_PREFERENCES = {
   contextIsolation: true,
   sandbox: true,
   webSecurity: true,
+  // Desktop is not a background browser tab: a minimized / occluded window must
+  // keep its animation clock. Chromium's default throttling marks the page hidden
+  // there, which suspends requestAnimationFrame and freezes frame-batched UI
+  // (streaming replies stop painting until a reload). Desktop also streams agent
+  // turns while the user is elsewhere, so the retained visibility state is the
+  // point — not a power tradeoff taken lightly, but a correctness one.
+  backgroundThrottling: false,
 } as const;
 
 export interface DesktopShellWindow {

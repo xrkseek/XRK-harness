@@ -35,6 +35,49 @@ export function resolveWithinRoot(root: string, userPath: string): string {
 }
 
 /**
+ * Resolve a user path under `root`, plus `extraWritableRoots` when the caller
+ * opted into a wider write surface (e.g. a "full access" preset with an
+ * explicit allowlist). Relative paths always resolve under the primary root;
+ * absolute paths that stay inside `root` win; otherwise they are allowed only
+ * when they land inside one of the extra roots — lexically and after symlink
+ * resolution (same containment posture as `resolveUnderHostRoots`, but for
+ * WRITE-intent surfaces). `extraWritableRoots` empty behaves exactly like
+ * `resolveWithinRoot`.
+ */
+export function resolveWritablePath(
+  root: string,
+  extraWritableRoots: readonly string[],
+  userPath: string,
+): string {
+  const rootAbs = path.resolve(root);
+  const targetAbs = path.isAbsolute(userPath)
+    ? path.resolve(userPath)
+    : path.resolve(rootAbs, userPath);
+  if (isLexicallyInside(rootAbs, targetAbs)) return targetAbs;
+  if (extraWritableRoots.length === 0 || !path.isAbsolute(userPath)) {
+    throw new PathEscapeError(`path escapes workspace root: ${userPath}`);
+  }
+  for (const extraRoot of extraWritableRoots) {
+    const extraAbs = path.resolve(extraRoot);
+    if (!isLexicallyInside(extraAbs, targetAbs)) continue;
+    // Same symlink posture as the host-readable roots: the real target must
+    // stay inside the granted root.
+    let realRoot: string;
+    try {
+      realRoot = realpathSync(extraAbs);
+    } catch {
+      return targetAbs; // root not created yet — lexical match is enough
+    }
+    const realTarget = realpathExisting(targetAbs);
+    if (isLexicallyInside(realRoot, realTarget)) return targetAbs;
+    throw new PathEscapeError(
+      `path escapes extra writable root via symlink: ${userPath}`,
+    );
+  }
+  throw new PathEscapeError(`path escapes workspace root: ${userPath}`);
+}
+
+/**
  * Realpath of the deepest existing ancestor of `abs` (the path itself when
  * present). Used so a symlink under a host root cannot point at sibling home
  * files outside that root.

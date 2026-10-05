@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createGzip } from "node:zlib";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 const MIME: Record<string, string> = {
@@ -19,6 +20,18 @@ const MIME: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+const COMPRESSIBLE = new Set([
+  ".js",
+  ".mjs",
+  ".css",
+  ".json",
+  ".svg",
+  ".map",
+  ".txt",
+  ".html",
+  ".webmanifest",
+]);
+
 export interface WebStaticOptions {
   /** Absolute or cwd-relative dist root (e.g. apps/web/dist). */
   readonly root: string;
@@ -30,6 +43,13 @@ export interface WebStaticOptions {
 
 function contentType(filePath: string): string {
   return MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
+}
+
+function acceptGzip(req: IncomingMessage): boolean {
+  const raw = req.headers["accept-encoding"];
+  if (raw === undefined) return false;
+  const value = Array.isArray(raw) ? raw.join(",") : raw;
+  return /(?:^|,)\s*gzip(?:\s|;|,|$)/i.test(value);
 }
 
 /**
@@ -147,11 +167,24 @@ export async function tryServeWebStatic(
   }
 
   const size = statSync(filePath).size;
-  res.writeHead(200, {
+  const ext = path.extname(filePath).toLowerCase();
+  const gzip = acceptGzip(req) && COMPRESSIBLE.has(ext);
+  const headers: Record<string, string | number> = {
     ...extraHeaders,
     "content-type": contentType(filePath),
-    "content-length": size,
-  });
+  };
+  if (gzip) {
+    const vary = extraHeaders.vary;
+    headers.vary = vary === undefined || vary === ""
+      ? "Accept-Encoding"
+      : vary.includes("Accept-Encoding")
+        ? vary
+        : `${vary}, Accept-Encoding`;
+    headers["content-encoding"] = "gzip";
+  } else {
+    headers["content-length"] = size;
+  }
+  res.writeHead(200, headers);
   if (method === "HEAD") {
     res.end();
     return true;
@@ -159,8 +192,15 @@ export async function tryServeWebStatic(
   await new Promise<void>((resolve, reject) => {
     const stream = createReadStream(filePath);
     stream.on("error", reject);
-    stream.on("end", () => resolve());
-    stream.pipe(res);
+    if (!gzip) {
+      stream.on("end", () => resolve());
+      stream.pipe(res);
+      return;
+    }
+    const compressed = createGzip();
+    compressed.on("error", reject);
+    compressed.on("end", () => resolve());
+    stream.pipe(compressed).pipe(res);
   });
   return true;
 }

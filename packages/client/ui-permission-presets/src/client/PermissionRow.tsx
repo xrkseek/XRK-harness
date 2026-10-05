@@ -4,11 +4,11 @@
  * control.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconChevronDownOutline14, Menu, RiskConfirmation,
+  IconChevronDownOutline14, IconCloseFill14, Menu, RiskConfirmation,
 } from '@xrkseek/client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
 import type { PermissionSettingsKey } from './locales.ts'
@@ -25,6 +25,8 @@ export interface PermissionRowInjected {
   load: () => Promise<void>
   /** Persist one advertised preset. */
   select: (preset: string) => Promise<void>
+  /** Persist the explicit extra file-write allowlist (empty clears it). */
+  saveRoots: (roots: readonly string[]) => Promise<void>
 }
 
 /** Full component props. */
@@ -33,12 +35,106 @@ export type PermissionRowProps =
   & PropsLocale<'settings.permission'>
   & InjectFace<PermissionRowInjected>
 
+/** Split a compose field into unique absolute-looking path tokens. */
+export function parseRootPaths(raw: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const entry of raw.split(/[,;\n]/u)) {
+    const path = entry.trim()
+    if (path === '' || seen.has(path)) continue
+    seen.add(path)
+    out.push(path)
+  }
+  return out
+}
+
+function mergeRoots(current: readonly string[], incoming: readonly string[]): string[] {
+  const seen = new Set(current)
+  const next = [...current]
+  for (const path of incoming) {
+    if (seen.has(path)) continue
+    seen.add(path)
+    next.push(path)
+  }
+  return next
+}
+
+/** Chip list + one-path compose; each add/remove persists immediately. */
+function ExtraWritableRootsInput({ value, disabled, t, save }: {
+  value: readonly string[]
+  disabled: boolean
+  t: PermissionRowProps['t']
+  save: (roots: readonly string[]) => Promise<void>
+}): ReactNode {
+  const [draft, setDraft] = useState('')
+  const addFromDraft = (): void => {
+    const parsed = parseRootPaths(draft)
+    if (parsed.length === 0) return
+    const next = mergeRoots(value, parsed)
+    setDraft('')
+    if (next.length === value.length) return
+    void save(next)
+  }
+  const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault()
+    addFromDraft()
+  }
+  return (
+    <div className={css.roots}>
+      <label className={css.rootsTitle} htmlFor="xrk-permission-extra-roots">
+        {t('roots.label')}
+      </label>
+      {value.length > 0
+        ? (
+          <ul className={css.chips} aria-label={t('roots.label')}>
+            {value.map((root) => (
+              <li key={root} className={css.chip}>
+                <span className={css.chipPath} title={root}>{root}</span>
+                <button
+                  type="button"
+                  className={css.chipRemove}
+                  aria-label={`${t('roots.remove')}: ${root}`}
+                  disabled={disabled}
+                  onClick={() => { void save(value.filter((entry) => entry !== root)) }}
+                >
+                  <IconCloseFill14 size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+        : null}
+      <form className={css.compose} onSubmit={onSubmit}>
+        <input
+          id="xrk-permission-extra-roots"
+          className={css.rootsInput}
+          type="text"
+          value={draft}
+          placeholder={t('roots.placeholder')}
+          disabled={disabled}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => { setDraft(event.target.value) }}
+        />
+        <button
+          type="submit"
+          className={css.rootsAdd}
+          disabled={disabled || draft.trim() === ''}
+        >
+          {t('roots.add')}
+        </button>
+      </form>
+      <p className={css.rootsHint}>{t('roots.hint')}</p>
+    </div>
+  )
+}
+
 /**
  * Render the new-session Permission default selector.
  * @param props - composed slot props.
  * @returns the row, or null when the host does not expose permission settings.
  */
-export function PermissionRow({ load, select, usePermission, t }: PermissionRowProps) {
+export function PermissionRow({ load, select, saveRoots, usePermission, t }: PermissionRowProps) {
   const state = usePermission(snapshot => snapshot)
   const [open, setOpen] = useState(false)
   const [confirmingFullAccess, setConfirmingFullAccess] = useState(false)
@@ -69,6 +165,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
         <div className={css.rowText}>
           <div className={css.title}>{t('title')}</div>
           <div className={css.desc} role={state.error === null ? undefined : 'alert'}>{description}</div>
+          <div className={css.boundaryNote}>{t('boundary')}</div>
         </div>
         <Menu
           open={open}
@@ -105,6 +202,12 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
           )}
         />
       </div>
+      <ExtraWritableRootsInput
+        value={state.extraWritableRoots}
+        disabled={busy || !state.writable}
+        t={t}
+        save={saveRoots}
+      />
       <RiskConfirmation
         open={confirmingFullAccess}
         title={t('confirm.title')}

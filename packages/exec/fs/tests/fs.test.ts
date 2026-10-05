@@ -9,6 +9,7 @@ import {
   createFsTools,
   matchGlob,
   resolveWithinRoot,
+  resolveWritablePath,
 } from "../src/index.js";
 
 describe("FsService", () => {
@@ -24,6 +25,51 @@ describe("FsService", () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
     const inside = path.join(root, "nested", "a.txt");
     expect(resolveWithinRoot(root, inside)).toBe(path.resolve(inside));
+  });
+
+  it("resolveWritablePath denies escapes without extra roots", () => {
+    // A tmpdir PARENT would be lexically outside any child root — pick a child.
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws");
+    expect(() => resolveWritablePath(root, [], path.join(base, "x.txt"))).toThrow(
+      PathEscapeError,
+    );
+    expect(() => resolveWritablePath(root, [], "../outside.txt")).toThrow(
+      PathEscapeError,
+    );
+  });
+
+  it("resolveWritablePath allows absolute paths inside a granted extra root", () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws");
+    const extra = path.join(base, "extra-root");
+    const inside = path.join(extra, "nested", "a.txt");
+    expect(resolveWritablePath(root, [extra], inside)).toBe(path.resolve(inside));
+  });
+
+  it("resolveWritablePath still denies outside every granted root", () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws");
+    const extra = path.join(base, "extra-root");
+    const sibling = path.join(base, "sibling", "a.txt");
+    expect(() =>
+      resolveWritablePath(root, [extra], sibling),
+    ).toThrow(PathEscapeError);
+  });
+
+  it("extra writable roots are readable too (write+read on the same grant)", async () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws");
+    const extra = path.join(base, "extra-root");
+    const fs = createFsLocalProvider({ root, extraWritableRoots: [extra] });
+    const outside = path.join(extra, "note.txt");
+    // Writing outside the workspace is allowed, and the read-back resolves.
+    await fs.write(outside, "shared note");
+    expect((await fs.read(outside)).content).toBe("shared note");
+    // Without the grant, both directions fail.
+    const locked = createFsLocalProvider({ root });
+    await expect(locked.write(outside, "nope")).rejects.toBeInstanceOf(PathEscapeError);
+    await expect(locked.read(outside)).rejects.toBeInstanceOf(PathEscapeError);
   });
 
   it("reads/writes and emits intents", async () => {

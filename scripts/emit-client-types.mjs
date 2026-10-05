@@ -17,6 +17,8 @@ import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_SRC = path.join(ROOT, "packages", "client");
 const OMIT = PRODUCT_BOOT_OMIT;
+/** Typed by other client plugins but not themselves `xrk.client` boot entries. */
+const TYPES_DEPS = ["ui-primitives", "ui-slots"];
 
 function readPkg(dir) {
   const pj = path.join(dir, "package.json");
@@ -42,8 +44,11 @@ function listTargets(filter) {
     if (!ent.isDirectory()) continue;
     const dir = path.join(CLIENT_SRC, ent.name);
     const pkg = readPkg(dir);
-    if (!pkg?.xrk?.client || typeof pkg.name !== "string") continue;
+    if (!pkg || typeof pkg.name !== "string") continue;
     if (OMIT.has(pkg.name)) continue;
+    const isBoot = Boolean(pkg.xrk?.client);
+    const isDep = TYPES_DEPS.includes(ent.name);
+    if (!isBoot && !isDep) continue;
     if (
       filter.length &&
       !filter.includes(ent.name) &&
@@ -51,8 +56,9 @@ function listTargets(filter) {
     ) {
       continue;
     }
-    wanted.push({ name: ent.name, dir, pkg });
+    wanted.push({ name: ent.name, dir, pkg, dep: isDep && !isBoot });
   }
+  wanted.sort((a, b) => Number(b.dep) - Number(a.dep) || a.name.localeCompare(b.name));
   return wanted;
 }
 
@@ -80,7 +86,9 @@ function main() {
       stdio: "inherit",
     });
     const entry = path.join(dir, "lib", "types", "client", "index.js");
-    if (!existsSync(entry)) {
+    const typesEntry = path.join(dir, "lib", "types", "index.d.ts");
+    const clientEntry = path.join(dir, "lib", "types", "client", "index.d.ts");
+    if (!existsSync(entry) && !existsSync(typesEntry) && !existsSync(clientEntry)) {
       process.stderr.write(`  missing ${path.relative(ROOT, entry)}\n`);
       failed.push(pkg.name);
       continue;

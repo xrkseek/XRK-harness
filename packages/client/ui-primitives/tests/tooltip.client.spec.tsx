@@ -55,7 +55,7 @@ describe('Tooltip', () => {
 
   it('shows the bubble to the right on hover and hides it on leave', () => {
     render(
-      <Tooltip label="Open sidebar">
+      <Tooltip label="Open sidebar" delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -74,7 +74,7 @@ describe('Tooltip', () => {
 
   it('supports bottom placement and the focus/blur channel', () => {
     render(
-      <Tooltip label="Below" side="bottom">
+      <Tooltip label="Below" side="bottom" delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -97,7 +97,7 @@ describe('Tooltip', () => {
 
   it('caps the bubble width where the label would otherwise slab across the surface', () => {
     render(
-      <Tooltip label="A description long enough to need a cap" side="bottom" maxWidth={360}>
+      <Tooltip label="A description long enough to need a cap" side="bottom" maxWidth={360} delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -111,7 +111,7 @@ describe('Tooltip', () => {
     const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(rect(900, 1100))
     try {
       render(
-        <Tooltip label="Wide" side="bottom">
+        <Tooltip label="Wide" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -133,7 +133,7 @@ describe('Tooltip', () => {
     })
     try {
       const view = render(
-        <Tooltip label="Wide" side="bottom">
+        <Tooltip label="Wide" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -141,7 +141,7 @@ describe('Tooltip', () => {
       expect(screen.getByRole('tooltip').style.left).toBe('862px')
 
       view.rerender(
-        <Tooltip label="Short" side="bottom">
+        <Tooltip label="Short" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -160,7 +160,7 @@ describe('Tooltip', () => {
     const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(rect(-20, 80))
     try {
       render(
-        <Tooltip label="Wide" side="bottom">
+        <Tooltip label="Wide" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -188,7 +188,7 @@ describe('Tooltip', () => {
     const spy = placed(700, 720, 20)
     try {
       render(
-        <Tooltip label="Above" side="top">
+        <Tooltip label="Above" side="top" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -210,7 +210,7 @@ describe('Tooltip', () => {
     const spy = placed(600, 700, 300)
     try {
       render(
-        <Tooltip label="Tall" side="bottom">
+        <Tooltip label="Tall" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -227,7 +227,7 @@ describe('Tooltip', () => {
     const spy = placed(10, 40, 100)
     try {
       render(
-        <Tooltip label="Tall" side="top">
+        <Tooltip label="Tall" side="top" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -246,7 +246,7 @@ describe('Tooltip', () => {
     const spy = placed(300, 400, 900)
     try {
       render(
-        <Tooltip label="Huge" side="bottom">
+        <Tooltip label="Huge" side="bottom" delayMs={0}>
           <button type="button">anchor</button>
         </Tooltip>,
       )
@@ -260,27 +260,30 @@ describe('Tooltip', () => {
   it('chains the anchor\'s own handlers ahead of the tooltip\'s', () => {
     const onMouseEnter = vi.fn()
     const onMouseLeave = vi.fn()
+    const onPointerDown = vi.fn()
     const onFocus = vi.fn()
     const onBlur = vi.fn()
     render(
-      <Tooltip label="Chained">
-        <button type="button" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocus={onFocus} onBlur={onBlur}>anchor</button>
+      <Tooltip label="Chained" delayMs={0}>
+        <button type="button" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onPointerDown={onPointerDown} onFocus={onFocus} onBlur={onBlur}>anchor</button>
       </Tooltip>,
     )
     const anchor = screen.getByText('anchor')
     fireEvent.mouseEnter(anchor)
     fireEvent.mouseLeave(anchor)
+    fireEvent.pointerDown(anchor)
     fireEvent.focus(anchor)
     fireEvent.blur(anchor)
     expect(onMouseEnter).toHaveBeenCalledOnce()
     expect(onMouseLeave).toHaveBeenCalledOnce()
+    expect(onPointerDown).toHaveBeenCalledOnce()
     expect(onFocus).toHaveBeenCalledOnce()
     expect(onBlur).toHaveBeenCalledOnce()
   })
 
   it('suppresses the bubble while disabled without remounting the anchor', () => {
     const { rerender } = render(
-      <Tooltip label="Rail" disabled>
+      <Tooltip label="Rail" disabled delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -288,7 +291,7 @@ describe('Tooltip', () => {
     fireEvent.mouseEnter(anchor)
     expect(screen.queryByRole('tooltip')).toBeNull()
     rerender(
-      <Tooltip label="Rail">
+      <Tooltip label="Rail" delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -300,7 +303,7 @@ describe('Tooltip', () => {
 
   it('mouse leave hides the bubble immediately, even while the anchor stays focused', () => {
     render(
-      <Tooltip label="Sticky">
+      <Tooltip label="Sticky" delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -322,7 +325,7 @@ describe('Tooltip', () => {
     const objectRef = { current: null as HTMLButtonElement | null }
     const callbackRef = vi.fn()
     const { rerender } = render(
-      <Tooltip label="Add">
+      <Tooltip label="Add" delayMs={0}>
         <button type="button" ref={objectRef}>anchor</button>
       </Tooltip>,
     )
@@ -331,7 +334,7 @@ describe('Tooltip', () => {
     fireEvent.mouseEnter(screen.getByText('anchor'))
     expect(screen.getByRole('tooltip')).toBeTruthy()
     rerender(
-      <Tooltip label="Add">
+      <Tooltip label="Add" delayMs={0}>
         <button type="button" ref={callbackRef}>anchor</button>
       </Tooltip>,
     )
@@ -340,7 +343,7 @@ describe('Tooltip', () => {
 
   it('drops an already-visible bubble when disabled flips mid-hover', () => {
     const { rerender } = render(
-      <Tooltip label="Rail">
+      <Tooltip label="Rail" delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
@@ -348,10 +351,48 @@ describe('Tooltip', () => {
     expect(screen.getByRole('tooltip')).toBeTruthy()
     // e.g. clicking a rail control expands the sidebar: no mouseleave fires.
     rerender(
-      <Tooltip label="Rail" disabled>
+      <Tooltip label="Rail" disabled delayMs={0}>
         <button type="button">anchor</button>
       </Tooltip>,
     )
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('hides on pointer down and stays hidden until the pointer moves', () => {
+    render(
+      <Tooltip label="Add workspace" delayMs={0}>
+        <button type="button">anchor</button>
+      </Tooltip>,
+    )
+    const anchor = screen.getByText('anchor')
+    fireEvent.mouseEnter(anchor)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.pointerDown(anchor, { clientX: 0, clientY: 0 })
+    fireEvent.focus(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.mouseLeave(anchor)
+    fireEvent.mouseEnter(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.pointerMove(document, { clientX: 10, clientY: 0 })
+    fireEvent.mouseLeave(anchor)
+    fireEvent.mouseEnter(anchor)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+  })
+
+  it('hides when a later overlay pointer-down lands outside the anchor', () => {
+    render(
+      <>
+        <Tooltip label="Add workspace" delayMs={0}>
+          <button type="button">anchor</button>
+        </Tooltip>
+        <button type="button">overlay</button>
+      </>,
+    )
+    fireEvent.mouseEnter(screen.getByText('anchor'))
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.pointerDown(screen.getByText('overlay'), { clientX: 0, clientY: 0 })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.mouseEnter(screen.getByText('anchor'))
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })

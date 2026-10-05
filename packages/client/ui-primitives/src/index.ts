@@ -31,7 +31,7 @@ export { FileTypeIcon, classifyFileType, fileExtension } from './FileTypeIcon.ts
 export type {
   CodeFileType, FileType, FileTypeIconProps, FileTypeKind, FileTypeProjectContext,
 } from './FileTypeIcon.tsx'
-export { Tooltip } from './Tooltip.tsx'
+export { Tooltip, TOOLTIP_HOVER_DELAY_MS } from './Tooltip.tsx'
 export type { TooltipSide } from './Tooltip.tsx'
 export { Toast } from './Toast.tsx'
 export { fileSizeText } from './file-size.ts'

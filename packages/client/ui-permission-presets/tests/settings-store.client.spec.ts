@@ -140,6 +140,47 @@ describe('permission settings store', () => {
     })
   })
 
+  it('loads and writes extraWritableRoots allowlist', async () => {
+    const describe = vi.fn(() => Promise.resolve(ok({
+      writable: true,
+      hasDocument: false,
+      namespaces: [{
+        ...view('read-only', 4),
+        value: { defaultPreset: 'read-only', extraWritableRoots: ['C:\\one', 'C:\\two'] },
+      }],
+    })))
+    const mutate = vi.fn(() => Promise.resolve(ok(
+      {
+        ...view('read-only', 5),
+        value: {
+          defaultPreset: 'read-only',
+          extraWritableRoots: ['D:\\shared'],
+        },
+      },
+    )))
+    const controller = new PermissionPresetSettingsController({
+      settings: { describe, mutate } as never,
+    })
+    await controller.load()
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'ready',
+      extraWritableRoots: ['C:\\one', 'C:\\two'],
+      revision: 4,
+    })
+
+    await controller.saveRoots(['D:\\shared'])
+    expect(mutate).toHaveBeenCalledWith({
+      ns: 'permission',
+      ops: [{ op: 'set', path: ['extraWritableRoots'], value: ['D:\\shared'] }],
+      expectedRevision: 4,
+    })
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'ready',
+      extraWritableRoots: ['D:\\shared'],
+      revision: 5,
+    })
+  })
+
   it('hides the row when the namespace is absent and contains write failures', async () => {
     const describe = vi.fn(() => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: [] })))
     const controller = new PermissionPresetSettingsController({

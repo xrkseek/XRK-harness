@@ -2,12 +2,14 @@
  * Curated memory files (MEMORY.md / USER.md). Snapshot is frozen at construction
  * (session start). Later writes update disk only.
  */
+import { createHash } from "node:crypto";
 import {
   closeSync,
   mkdirSync,
   openSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -17,6 +19,8 @@ import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 export const ENTRY_DELIMITER = "\n§\n";
 export const MEMORY_CHAR_LIMIT = 2200;
 export const USER_CHAR_LIMIT = 1375;
+/** Sidecar beside MEMORY.md/USER.md: entry hash -> epoch ms of its last tracked write. */
+export const USAGE_SIDECAR_FILE = ".usage.json";
 
 const HEADERS = {
   memory:
@@ -45,6 +49,17 @@ export interface CuratedMemoryWriteResult {
   readonly current_entries?: readonly string[];
   readonly note?: string;
   readonly drift_backup?: string;
+  /** Longest-untouched entries; safe candidates when the char cap blocks a write. */
+  readonly prune_candidates?: readonly string[];
+}
+
+/** One entry plus its age evidence. `tracked: false` = file-mtime fallback only. */
+export interface MemoryEntryAge {
+  readonly entry: string;
+  /** Epoch ms of the last tracked write; falls back to file mtime when unknown. */
+  readonly lastTouchedAt: number;
+  readonly ageDays: number | null;
+  readonly tracked: boolean;
 }
 
 /** File providers return sync; HTTP providers may return Promises. */
@@ -75,6 +90,15 @@ export interface CuratedMemoryStore {
     target: CuratedMemoryTarget,
     operations: readonly CuratedMemoryOperation[],
   ): MaybeAsync<CuratedMemoryWriteResult>;
+  /**
+   * Entries by staleness (longest untouched first), so a full memory file trims
+   * facts nobody maintains instead of whatever happens to sit first in the file.
+   * Optional: pluggable providers (http/sqlite) need not carry the sidecar.
+   */
+  staleEntries?(
+    target: CuratedMemoryTarget,
+    limit?: number,
+  ): MaybeAsync<readonly MemoryEntryAge[]>;
 }
 
 export interface CreateCuratedMemoryStoreOptions {
@@ -171,6 +195,76 @@ function writeAtomic(file: string, text: string): void {
   }
 }
 
+interface UsageSidecarShape {
+  readonly entries?: Record<string, number>;
+}
+
+/** Content hash keeps the sidecar small and survives renames of the file. */
+function entryKey(entry: string): string {
+  return createHash("sha256").update(entry).digest("hex").slice(0, 16);
+}
+
+function readUsage(file: string): Record<string, number> {
+  const { raw, ok } = readRaw(file);
+  if (!ok || !raw.trim()) return {};
+  let parsed: UsageSidecarShape;
+  try {
+    parsed = JSON.parse(raw) as UsageSidecarShape;
+  } catch {
+    return {};
+  }
+  const entries = parsed.entries;
+  if (!entries || typeof entries !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function writeUsage(file: string, entries: Record<string, number>): void {
+  try {
+    writeAtomic(file, `${JSON.stringify({ version: 1, entries }, null, 2)}\n`);
+  } catch {
+    /* usage tracking is advisory: never fail a memory write over it */
+  }
+}
+
+function fileMtimeMs(file: string): number {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Oldest-touched first. Stable sort, so a memory file with no usage history
+ * degrades to the old "trim whatever is first" behavior instead of guessing.
+ */
+function rankByStaleness(
+  entries: readonly string[],
+  usage: Record<string, number>,
+  fallbackAt: number,
+  now: number,
+): MemoryEntryAge[] {
+  const ranked = entries.map((entry) => {
+    const hit = usage[entryKey(entry)];
+    const known = typeof hit === "number" && hit > 0;
+    const lastTouchedAt = known ? hit : fallbackAt;
+    return {
+      entry,
+      lastTouchedAt,
+      ageDays: lastTouchedAt > 0 ? Math.floor((now - lastTouchedAt) / 86_400_000) : null,
+      tracked: known,
+    };
+  });
+  ranked.sort((a, b) => a.lastTouchedAt - b.lastTouchedAt);
+  return ranked;
+}
+
 function withFileLock<T>(lockPath: string, fn: () => T): T {
   mkdirSync(path.dirname(lockPath), { recursive: true });
   const start = Date.now();
@@ -213,11 +307,13 @@ function failWithEntries(
   target: CuratedMemoryTarget,
   entries: readonly string[],
   message: string,
+  pruneCandidates?: readonly string[],
 ): CuratedMemoryWriteResult {
   return fail(message, {
     target,
     current_entries: entries,
     usage: `${charCount(entries).toLocaleString("en-US")}/${limitFor(target).toLocaleString("en-US")}`,
+    ...(pruneCandidates && pruneCandidates.length > 0 ? { prune_candidates: pruneCandidates } : {}),
   });
 }
 
@@ -239,7 +335,7 @@ function saved(
 }
 
 type Step =
-  | { kind: "write"; entries: string[]; message: string }
+  | { kind: "write"; entries: string[]; message: string; touched?: readonly string[] }
   | { kind: "done"; result: CuratedMemoryWriteResult };
 
 function findMatch(
@@ -265,6 +361,7 @@ export function createCuratedMemoryStore(
   const dir = explicit
     ? path.resolve(explicit)
     : path.join(resolveXrkHome(options.env ?? process.env), "memories");
+  const usagePath = path.join(dir, USAGE_SIDECAR_FILE);
   const snapshot: Record<CuratedMemoryTarget, string> = {
     memory: "",
     user: "",
@@ -273,6 +370,26 @@ export function createCuratedMemoryStore(
     const { raw, ok } = readRaw(fileFor(dir, target));
     const entries = ok ? dedupe(parseEntries(raw)) : [];
     snapshot[target] = renderBlock(target, entries);
+  }
+
+  function rankedEntries(target: CuratedMemoryTarget): MemoryEntryAge[] {
+    const file = fileFor(dir, target);
+    const { raw, ok } = readRaw(file);
+    if (!ok) return [];
+    return rankByStaleness(
+      dedupe(parseEntries(raw)),
+      readUsage(usagePath),
+      fileMtimeMs(file),
+      Date.now(),
+    );
+  }
+
+  function pruneCandidates(target: CuratedMemoryTarget, limit: number): string[] {
+    return rankedEntries(target)
+      .slice(0, limit)
+      .map((item) =>
+        item.entry.length > 140 ? `${item.entry.slice(0, 140)}...` : item.entry,
+      );
   }
 
   function mutate(target: CuratedMemoryTarget, apply: (entries: string[], limit: number) => Step) {
@@ -300,6 +417,12 @@ export function createCuratedMemoryStore(
       const step = apply(entries, limitFor(target));
       if (step.kind === "done") return step.result;
       writeAtomic(file, step.entries.join(ENTRY_DELIMITER));
+      if (step.touched && step.touched.length > 0) {
+        const usage = readUsage(usagePath);
+        const at = Date.now();
+        for (const entry of step.touched) usage[entryKey(entry)] = at;
+        writeUsage(usagePath, usage);
+      }
       return saved(target, step.message, step.entries);
     });
   }
@@ -349,6 +472,7 @@ export function createCuratedMemoryStore(
             target,
             entries,
             `Replacement would put memory at ${charCount(replaced).toLocaleString("en-US")}/${limit.toLocaleString("en-US")} chars.`,
+            pruneCandidates(target, 3),
           ),
         };
       }
@@ -356,6 +480,7 @@ export function createCuratedMemoryStore(
         kind: "write",
         entries: replaced,
         message: replacement === null ? "Entry removed." : "Entry replaced.",
+        ...(replacement === null ? {} : { touched: [replacement] }),
       };
     });
   }
@@ -372,6 +497,10 @@ export function createCuratedMemoryStore(
       const { raw, ok } = readRaw(fileFor(dir, target));
       if (!ok) return [];
       return dedupe(parseEntries(raw));
+    },
+    staleEntries(target, limit = 0) {
+      const ranked = rankedEntries(target);
+      return limit > 0 ? ranked.slice(0, limit) : ranked;
     },
     add(target, content) {
       const text = content.trim();
@@ -390,10 +519,16 @@ export function createCuratedMemoryStore(
               target,
               entries,
               `Memory at ${charCount(entries).toLocaleString("en-US")}/${limit.toLocaleString("en-US")} chars. Adding this entry would exceed the limit. remove or replace stale entries, then retry.`,
+              pruneCandidates(target, 3),
             ),
           };
         }
-        return { kind: "write", entries: [...entries, text], message: "Entry added." };
+        return {
+          kind: "write",
+          entries: [...entries, text],
+          message: "Entry added.",
+          touched: [text],
+        };
       });
     },
     replace(target, oldText, content) {
@@ -406,6 +541,7 @@ export function createCuratedMemoryStore(
       if (operations.length === 0) return fail("operations list is empty.");
       return mutate(target, (entries, limit) => {
         const working = [...entries];
+        const touched: string[] = [];
         for (let i = 0; i < operations.length; i += 1) {
           const op = operations[i] ?? {};
           const act = String(op.action ?? "");
@@ -419,7 +555,10 @@ export function createCuratedMemoryStore(
                 result: failWithEntries(target, entries, `${pos}: content is required. Nothing was applied.`),
               };
             }
-            if (!working.includes(content)) working.push(content);
+            if (!working.includes(content)) {
+              working.push(content);
+              touched.push(content);
+            }
             continue;
           }
           if (act !== "replace" && act !== "remove") {
@@ -470,6 +609,7 @@ export function createCuratedMemoryStore(
             };
           }
           working.splice(found.index, 1, ...(act === "replace" ? [content] : []));
+          if (act === "replace") touched.push(content);
         }
         if (entries.length > 0 && working.length === 0) {
           return {
@@ -489,6 +629,7 @@ export function createCuratedMemoryStore(
               target,
               entries,
               `After applying all ${operations.length} operations, memory would be at ${total.toLocaleString("en-US")}/${limit.toLocaleString("en-US")} chars. Nothing was applied.`,
+              pruneCandidates(target, 3),
             ),
           };
         }
@@ -496,6 +637,7 @@ export function createCuratedMemoryStore(
           kind: "write",
           entries: working,
           message: `Applied ${operations.length} operation(s).`,
+          ...(touched.length > 0 ? { touched } : {}),
         };
       });
     },

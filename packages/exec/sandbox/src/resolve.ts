@@ -2,6 +2,7 @@
  * Resolve a SandboxService stack from Host options / env.
  * Tools keep the same Definition; only the Provider chain changes.
  */
+import path from "node:path";
 import {
   createDenyListSandbox,
   createPermissiveSandbox,
@@ -68,6 +69,13 @@ export interface ResolveSandboxOptions {
   /** Windows network egress (default false). */
   readonly windowsNetwork?: boolean;
   readonly windowsExtraArgs?: readonly string[];
+  /**
+   * Extra roots the shell `cwd` may land in besides `workspaceRoot`
+   * (mirrors the fs layer `extraWritableRoots` allowlist). Only honored when
+   * the backend actually jails cwd — workspace / windows backends. Empty
+   * (default) keeps the single-root jail.
+   */
+  readonly extraWritableRoots?: readonly string[];
 }
 
 /** Parse a Face `sandbox` namespace value. */
@@ -132,6 +140,9 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
     options.backend ??
     (product ? product.backend : undefined) ??
     backendFromEnv(env);
+  const writableRoots = (options.extraWritableRoots ?? []).map((r) =>
+    path.resolve(r),
+  );
   const deny = createDenyListSandbox({
     inner: createPermissiveSandbox(),
   });
@@ -228,6 +239,7 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
       helper,
       ...(modeRaw !== undefined ? { mode: modeRaw } : {}),
       networkAccess: networkRaw === "bridge" || networkRaw === "on",
+      ...(writableRoots.length ? { writableRoots } : {}),
       ...(options.windowsExtraArgs ? { extraArgs: options.windowsExtraArgs } : {}),
       inner: deny,
     });
@@ -244,6 +256,7 @@ export function createSandboxStack(options: ResolveSandboxOptions): SandboxServi
   }
   return createWorkspaceSandbox({
     root: options.workspaceRoot,
+    ...(writableRoots.length ? { extraRoots: writableRoots } : {}),
     inner: core,
   });
 }

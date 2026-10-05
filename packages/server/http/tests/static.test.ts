@@ -1,6 +1,8 @@
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import {
   applyXrkProductBootPolicy,
@@ -241,6 +243,31 @@ describe("http webStatic", () => {
     const asset = await fetch(`${base}/assets/app.js`);
     expect(asset.status).toBe(200);
     expect(await asset.text()).toBe("console.log(1)");
+
+    const gzipped = await new Promise<{
+      status: number
+      encoding: string | undefined
+      body: Buffer
+    }>((resolve, reject) => {
+      const req = httpRequest(`${base}/assets/app.js`, {
+        headers: { "accept-encoding": "gzip" },
+      }, (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (chunk: Buffer) => { chunks.push(chunk) })
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            encoding: res.headers["content-encoding"],
+            body: Buffer.concat(chunks),
+          })
+        })
+      })
+      req.on("error", reject)
+      req.end()
+    })
+    expect(gzipped.status).toBe(200)
+    expect(gzipped.encoding).toBe("gzip")
+    expect(gunzipSync(gzipped.body).toString("utf8")).toBe("console.log(1)")
 
     // API still auth
     const unauth = await fetch(`${base}/api/host.describe`, {

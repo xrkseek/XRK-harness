@@ -3,6 +3,8 @@
  * Durable user notes only. Disk writes do not refresh the frozen prompt.
  * Not a vector store and not the Mnemon document library.
  */
+import { appendFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { redactSecrets } from "@xrkseek/secrets";
 import type { CuratedMemoryStore } from "./store.js";
 
@@ -10,6 +12,35 @@ const MAX_NOTES_PER_TURN = 3;
 const MAX_NOTES_PER_SESSION_END = 12;
 const MAX_NOTES_PHASE2 = 8;
 const MAX_NOTE_CHARS = 280;
+
+/** Append-only recovery log for entries dropped by the char-cap soft trim. */
+export const TRIM_LOG_FILE = ".trim-log.jsonl";
+
+function appendTrimLog(dir: string, entry: string, reason: string): void {
+  try {
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(
+      path.join(dir, TRIM_LOG_FILE),
+      `${JSON.stringify({ at: Date.now(), entry, reason })}\n`,
+      "utf8",
+    );
+  } catch {
+    /* recovery log is best-effort: never fail a consolidate pass over it */
+  }
+}
+
+/**
+ * Entry to drop when the cap blocks a new fact: the longest untouched one.
+ * Providers without the usage sidecar fall back to file order (pre-existing).
+ */
+async function oldestEntry(store: CuratedMemoryStore): Promise<string | undefined> {
+  if (store.staleEntries) {
+    const ranked = await Promise.resolve(store.staleEntries("memory", 1));
+    return ranked[0]?.entry;
+  }
+  const live = await Promise.resolve(store.listEntries("memory"));
+  return live[0];
+}
 
 const EXPLICIT =
   /^(?:remember|memory|note|记住|备注)\s*[:：]\s*(.+)$/i;
@@ -142,11 +173,11 @@ async function appendNotesWithSoftTrim(
       softTrimAttempts < 3
     ) {
       softTrimAttempts += 1;
-      const live = await Promise.resolve(store.listEntries("memory"));
-      if (live.length === 0) break;
-      const oldest = live[0]!;
+      const oldest = await oldestEntry(store);
+      if (!oldest) break;
       const removed = await Promise.resolve(store.remove("memory", oldest));
       if (!removed.success) break;
+      appendTrimLog(store.dir, oldest, "char-cap soft trim (phase1 note write)");
       result = await Promise.resolve(store.add("memory", note));
     }
     if (!result.success) break;

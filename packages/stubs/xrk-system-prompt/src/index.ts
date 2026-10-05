@@ -42,6 +42,26 @@ export interface AssembledPrompt {
   readonly sections: readonly PromptSection[]
   /** `sections` joined with a blank line — the text handed to the model. */
   readonly text: string
+  /** Optional route variables filled by model-selection. */
+  readonly variables?: Record<string, string>
+}
+
+/** Context passed through `system-prompt/assemble`. */
+export interface AssembleContext {
+  readonly signal?: AbortSignal
+}
+
+declare module '@xrkseek/cordis' {
+  interface Context {
+    systemPrompt: SystemPromptService
+  }
+  interface Events {
+    'system-prompt/assemble'(
+      assembly: unknown,
+      context: AssembleContext,
+      next: () => Promise<AssembledPrompt>,
+    ): Promise<AssembledPrompt>
+  }
 }
 
 /** Plugin config. */

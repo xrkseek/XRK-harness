@@ -11,10 +11,10 @@
  * AppWebEntry.run(), module face first, then plugin face: parse
  * `window.__XRK_BOOT__` into the two-view BootManifest (wire boundary)
  * → build the module system over the module-view rows → render the loading
- * page → prefetch every `immediately` row in parallel with mounting the
+ * page → start every graph-row script fetch in parallel with mounting the
  * vendored cordis Loader (`internal` contract injection BEFORE any entry exists —
  * the bare-import fallback in tree.import must never run in a browser) →
- * await the prefetch tier, THEN adopt the modules entry and create one
+ * await only the `immediately` factories, THEN adopt the modules entry and create one
  * loader entry per plugin-view row plus the shell-own app-shell assembly
  * entry → loader.await() + a full fiber sweep (all ACTIVE, else fail
  * listing who/what/which service) → wait for Desktop Host Fetch (when
@@ -26,7 +26,9 @@
  * Entry creation waits for the whole immediately tier: materialization runs
  * synchronous cross-package require edges (e.g. locale → runtime/client) that
  * fiber inject waiting cannot protect — a bundle's factory must be
- * registered before any dependent entry materializes. Per-row prefetch
+ * registered before any dependent entry materializes. Non-immediate rows
+ * still prefetch in the same wave so large later bundles (conversation)
+ * download while those factories register. Per-row prefetch
  * failures still resolve silently (the create-side import reloads and
  * owns the loud failure), so the barrier never turns one bad bundle into a
  * boot-wide fail-fast.
@@ -186,10 +188,10 @@ export class AppWebEntry {
       />,
     )
 
-    // The immediately tier prefetches in parallel with Loader mounting;
-    // runPluginBoot awaits it before creating entries (see module comment:
-    // cross-package synchronous require edges need every immediately-tier
-    // factory registered before any materialization).
+    // All graph rows start fetching now; runPluginBoot only awaits the
+    // immediately-tier factories before creating entries (see module comment:
+    // cross-package synchronous require edges need those factories
+    // registered before any materialization).
     const prefetching = this.prefetchImmediateTier()
     this.ctx = new Context()
     try {
@@ -331,17 +333,22 @@ export class AppWebEntry {
     )
   }
 
-  /** Prefetch the immediately tier (factory registration only; failures defer to the import path). */
+  /**
+   * Prefetch every graph-row script. Await only the immediately tier
+   * (factory registration); the rest overlap that wait on the network.
+   * Failures defer to the import path.
+   */
   private async prefetchImmediateTier(): Promise<void> {
-    const immediate = this.manifest.plugins.filter((row) => row.immediately)
-  /** @xrkseek/* platform rows first — community DSH bundles remap onto these ids. */
-    const platform = immediate.filter((row) => row.id.startsWith('@xrkseek/'))
-    const community = immediate.filter((row) => !row.id.startsWith('@xrkseek/'))
     const prefetch = (row: BootPluginRow) =>
       this.modules.prefetch(row.id).catch(() => {
         // Import reloads and reports this loudly per entry; swallowing
         // here keeps one failing prefetch from masking the others.
       })
+    for (const row of this.manifest.plugins) void prefetch(row)
+    const immediate = this.manifest.plugins.filter((row) => row.immediately)
+    /** @xrkseek/* platform rows first — community DSH bundles remap onto these ids. */
+    const platform = immediate.filter((row) => row.id.startsWith('@xrkseek/'))
+    const community = immediate.filter((row) => !row.id.startsWith('@xrkseek/'))
     await Promise.all(platform.map(prefetch))
     await Promise.all(community.map(prefetch))
   }
@@ -378,8 +385,8 @@ export class AppWebEntry {
     // must then skip it).
     const rows = [MODULES_ID, ...this.manifest.plugins.map(row => row.id).filter(id => id !== MODULES_ID), APP_SHELL_ID]
     // Entry creation order carries no semantics (fiber inject waiting owns
-    // activation order); creating concurrently lets non-prefetched bundle
-    // loads parallelize. The app-shell assembly entry is appended by the
+    // activation order); creating concurrently lets any still-arriving
+    // bundles finish in parallel. The app-shell assembly entry is appended by the
     // kernel: it is shell-own code (host graph rows are all plugin bundles),
     // and mounting the assembly is not a composition decision — it rides the
     // same entry lifecycle so the sweep and status cover it uniformly.

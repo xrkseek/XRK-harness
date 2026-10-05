@@ -9,6 +9,8 @@ declare module "electron" {
     contextIsolation?: boolean;
     sandbox?: boolean;
     webSecurity?: boolean;
+    /** Retain the page's visibility state (and its animation clock) while backgrounded. */
+    backgroundThrottling?: boolean;
   }
 
   export interface BrowserWindowConstructorOptions {

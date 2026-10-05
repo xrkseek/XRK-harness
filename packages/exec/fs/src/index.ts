@@ -20,6 +20,7 @@ import { formatReadWindow } from "./read-window.js";
 import {
   PathEscapeError,
   resolveUnderHostRoots,
+  resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
 import {
@@ -52,6 +53,7 @@ export {
   PathEscapeError,
   isLexicallyInside,
   resolveUnderHostRoots,
+  resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
 export {
@@ -209,6 +211,14 @@ export interface FsLocalOptions {
   readonly root: string;
   readonly defaultMaxBytes?: number;
   /**
+   * Absolute directories whose files may be WRITTEN by absolute path, in
+   * addition to `root`. Deliberately opt-in (a "full access" preset with an
+   * explicit allowlist) and never implied by any preset alone — without it,
+   * writes stay confined to the workspace root. Symlink escape is denied
+   * (lexical + realpath), and relative paths always resolve under `root`.
+   */
+  readonly extraWritableRoots?: readonly string[];
+  /**
    * Absolute host directories whose files may be read by absolute path.
    * Host whitelist: `{XRK_HOME}/attachments/v1` and `{XRK_HOME}/spill` only —
    * never the whole product home. Containment is lexical + realpath (symlink
@@ -220,6 +230,7 @@ export interface FsLocalOptions {
 function resolveReadablePath(
   root: string,
   hostReadableRoots: readonly string[],
+  writableRoots: readonly string[],
   userPath: string,
 ): string {
   try {
@@ -228,9 +239,13 @@ function resolveReadablePath(
     if (!(error instanceof PathEscapeError) || !path.isAbsolute(userPath)) {
       throw error;
     }
-    if (hostReadableRoots.length === 0) throw error;
+    // A configured extra writable root is readable too — the user granted the
+    // agent that directory for file work; denying the read-back would make it
+    // write-only and useless. Containment is the same lexical + realpath gate.
+    const readableRoots = [...hostReadableRoots, ...writableRoots];
+    if (readableRoots.length === 0) throw error;
     try {
-      return resolveUnderHostRoots(hostReadableRoots, userPath);
+      return resolveUnderHostRoots(readableRoots, userPath);
     } catch {
       throw error;
     }
@@ -240,6 +255,9 @@ function resolveReadablePath(
 /** Provider — local disk bound to workspace root. */
 export function createFsLocalProvider(options: FsLocalOptions): FsService {
   const root = path.resolve(options.root);
+  const extraWritableRoots = (options.extraWritableRoots ?? []).map((r) =>
+    path.resolve(r),
+  );
   const hostReadableRoots = (options.hostReadableRoots ?? []).map((r) =>
     path.resolve(r),
   );
@@ -256,17 +274,17 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
   return {
     root,
     resolvePath(userPath) {
-      return resolveReadablePath(root, hostReadableRoots, userPath);
+      return resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
     },
     async read(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
+      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
       const buf = await fsReadFile(abs);
       return textFromReadBuffer(buf, userPath, maxBytes);
     },
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
+      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
       const buf = await fsReadFile(abs);
       if (buf.byteLength > maxBytes) {
         throw new Error(
@@ -277,7 +295,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async write(userPath, content) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
       await mkdir(path.dirname(abs), { recursive: true });
       await writeFile(abs, content, "utf8");
     },
@@ -286,7 +304,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
         throw new EditWithoutOldError("edit requires oldContent");
       }
       emit("fs/write-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
       const raw = await fsReadFile(abs, "utf8");
       const endings = detectLineEndings(raw);
       const currentLf = normalizeLineEndings(raw);
@@ -310,7 +328,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async remove(userPath) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
       const st = await fsStat(abs);
       if (st.isDirectory()) {
         throw new Error(`cannot delete directory via apply_patch: ${userPath}`);
@@ -318,7 +336,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       await rm(abs);
     },
     async stat(userPath) {
-      const abs = resolveReadablePath(root, hostReadableRoots, userPath);
+      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
       const st = await fsStat(abs);
       return {
         size: st.size,
@@ -328,7 +346,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async mkdir(userPath) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWithinRoot(root, userPath);
+      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
       await mkdir(abs, { recursive: true });
     },
     async glob(pattern, options) {

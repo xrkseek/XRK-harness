@@ -4,12 +4,14 @@ export {
   ENTRY_DELIMITER,
   MEMORY_CHAR_LIMIT,
   USER_CHAR_LIMIT,
+  USAGE_SIDECAR_FILE,
   type CreateCuratedMemoryStoreOptions,
   type CuratedMemoryAction,
   type CuratedMemoryOperation,
   type CuratedMemoryStore,
   type CuratedMemoryTarget,
   type CuratedMemoryWriteResult,
+  type MemoryEntryAge,
   type MaybeAsync,
 } from "./store.js";
 export type {
@@ -55,6 +57,7 @@ export {
   buildPhase2ExtractPrompt,
   parsePhase2Notes,
   noteCoveredByEntries,
+  TRIM_LOG_FILE,
   type TurnNoteInput,
   type TurnNoteWriteResult,
   type SessionEndConsolidateInput,

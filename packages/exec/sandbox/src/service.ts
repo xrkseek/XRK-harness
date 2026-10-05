@@ -44,15 +44,31 @@ export function createPermissiveSandbox(): SandboxService {
 export interface WorkspaceSandboxOptions {
   readonly root: string;
   readonly inner?: SandboxService;
+  /**
+   * Additional roots `cwd` may land in, mirroring the fs layer's
+   * `extraWritableRoots` posture (explicit allowlist, symlink-aware). Lets a
+   * shell `Set-Location` into a whitelisted out-of-workspace project the same
+   * way the file tools may write it. Empty (default) is single-root jail.
+   */
+  readonly extraRoots?: readonly string[];
 }
 
-function assertCwdUnderRoot(root: string, cwd: string | undefined): void {
-  if (!cwd) return;
+function cwdEscapes(roots: readonly string[], cwd: string): boolean {
   const abs = path.resolve(cwd);
-  const rel = path.relative(root, abs);
-  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-    throw new Error(`cwd escapes workspace root: ${cwd}`);
+  for (const root of roots) {
+    const base = path.resolve(root);
+    const rel = path.relative(base, abs);
+    if (rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))) {
+      return false;
+    }
   }
+  return true;
+}
+
+function assertCwdUnderRoot(root: string, cwd: string | undefined, extraRoots: readonly string[]): void {
+  if (!cwd) return;
+  if (!cwdEscapes([root, ...extraRoots], cwd)) return;
+  throw new Error(`cwd escapes workspace root: ${cwd}`);
 }
 
 /** Force cwd under workspace root (validated at wrap / confine time). */
@@ -61,14 +77,15 @@ export function createWorkspaceSandbox(
 ): SandboxService {
   const root = path.resolve(options.root);
   const inner = options.inner ?? createPermissiveSandbox();
+  const extraRoots = (options.extraRoots ?? []).map((r) => path.resolve(r));
   return {
     wrapArgv(argv, cwd) {
-      assertCwdUnderRoot(root, cwd);
+      assertCwdUnderRoot(root, cwd, extraRoots);
       return inner.wrapArgv(argv, cwd);
     },
     async confine(argv, cwd, signal) {
       signal?.throwIfAborted();
-      assertCwdUnderRoot(root, cwd);
+      assertCwdUnderRoot(root, cwd, extraRoots);
       return inner.confine(argv, cwd, signal);
     },
   };

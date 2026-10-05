@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import type { SettingsNamespaceView } from '@xrkseek/xrk-api-remotes/client'
-import { PermissionRow, type PermissionRowProps } from '../src/client/PermissionRow.tsx'
+import { PermissionRow, type PermissionRowProps, parseRootPaths } from '../src/client/PermissionRow.tsx'
 import { en } from '../src/client/locales.ts'
 import { PermissionPresetSettingsController } from '../src/client/settings-store.ts'
 
@@ -20,11 +20,15 @@ const SCHEMA = {
   },
 }
 
-function view(defaultPreset: string, revision = 0): SettingsNamespaceView {
+function view(
+  defaultPreset: string,
+  revision = 0,
+  extraWritableRoots: readonly string[] = [],
+): SettingsNamespaceView {
   return {
     ns: 'permission',
     schema: SCHEMA,
-    value: { defaultPreset },
+    value: { defaultPreset, extraWritableRoots },
     base: { defaultPreset: 'read-only' },
     applies: 'live',
     secrets: [],
@@ -49,6 +53,7 @@ function mount(controller: PermissionPresetSettingsController) {
       {...runtime}
       load={() => controller.load()}
       select={preset => controller.select(preset)}
+      saveRoots={roots => controller.saveRoots(roots)}
       usePermission={bindSnapshotSelector(controller.store)}
       t={t}
     />,
@@ -153,5 +158,43 @@ describe('PermissionRow', () => {
     fireEvent.click(button)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Workspace Write' }))
     expect((await screen.findByRole('alert')).textContent).toBe('changed elsewhere')
+  })
+
+  it('parses compose text into unique trimmed paths', () => {
+    expect(parseRootPaths('  C:\\one; C:\\one, /tmp/two\n /tmp/two ')).toEqual([
+      'C:\\one',
+      '/tmp/two',
+    ])
+  })
+
+  it('adds and removes extra writable roots immediately', async () => {
+    const mutate = vi.fn((body: { ops: { value: unknown }[] }) => {
+      const roots = body.ops[0]?.value as string[]
+      return Promise.resolve(ok(view('read-only', 1, roots)))
+    })
+    const controller = new PermissionPresetSettingsController({
+      settings: {
+        describe: () => Promise.resolve(ok({
+          writable: true,
+          hasDocument: false,
+          namespaces: [view('read-only', 0, ['C:\\one'])],
+        })),
+        mutate,
+      } as never,
+    })
+    mount(controller)
+    expect(await screen.findByTitle('C:\\one')).toBeTruthy()
+    const field = await screen.findByPlaceholderText('Paste or type an absolute path')
+    fireEvent.change(field, { target: { value: 'D:\\shared' } })
+    fireEvent.submit(field.closest('form')!)
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    expect(mutate.mock.calls[0]?.[0]).toMatchObject({
+      ops: [{ op: 'set', path: ['extraWritableRoots'], value: ['C:\\one', 'D:\\shared'] }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove: C:\\one' }))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(2) })
+    expect(mutate.mock.calls[1]?.[0]).toMatchObject({
+      ops: [{ op: 'set', path: ['extraWritableRoots'], value: ['D:\\shared'] }],
+    })
   })
 })

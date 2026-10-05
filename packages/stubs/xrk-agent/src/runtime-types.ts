@@ -17,6 +17,8 @@ declare module '@xrkseek/xrk-system-prompt' {
   interface AssembleContext {
     /** Agent for this assembly; absent on diagnostics. When present, `scope` must identify the same agent. */
     agent?: Agent
+    /** Same agent as `agent`, when assembly is agent-scoped. */
+    scope?: Agent
   }
 }
 

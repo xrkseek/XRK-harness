@@ -1,13 +1,3 @@
-import { runDoctor } from "./commands/doctor.js";
-import { runDumpConfig } from "./commands/dump-config.js";
-import { runMcp } from "./commands/mcp.js";
-import { runPlugin } from "./commands/plugin.js";
-import { runSkill } from "./commands/skill.js";
-import { runAcp } from "./commands/acp.js";
-import { runCommand } from "./commands/run.js";
-import { runRestart } from "./commands/restart.js";
-import { runServe } from "./commands/serve.js";
-import { runTui } from "./commands/tui.js";
 import { helpText, parseArgs } from "./parse-args.js";
 import { jsonFlagRequested, writeJsonError } from "./json-stream.js";
 import { readCliVersion } from "./product-paths.js";
@@ -81,33 +71,57 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   declareRuntimeSurface(args.command);
 
   try {
+    // Command modules are loaded lazily: bare `--version` / `--help` /
+    // parse errors are answered before any command module (and its
+    // `@xrkseek/server-*` dependency tree) is compiled. Commands that do
+    // host an agent runtime (`serve`, `run`, `acp`) still pay the full tree,
+    // but only when actually invoked.
     switch (args.command) {
-      case "run":
+      case "run": {
+        const { runCommand } = await import("./commands/run.js");
         return await runCommand(args);
+      }
       case "doctor": {
+        const { runDoctor } = await import("./commands/doctor.js");
         const result = await runDoctor(args.workspace);
         for (const c of result.checks) {
           process.stdout.write(`${c.ok ? "ok" : "FAIL"}  ${c.name}: ${c.detail}\n`);
         }
         return result.ok ? 0 : 1;
       }
-      case "dump-config":
+      case "dump-config": {
+        const { runDumpConfig } = await import("./commands/dump-config.js");
         await runDumpConfig(args);
         return 0;
-      case "serve":
+      }
+      case "serve": {
+        const { runServe } = await import("./commands/serve.js");
         return await runServe(args);
-      case "restart":
+      }
+      case "restart": {
+        const { runRestart } = await import("./commands/restart.js");
         return await runRestart(args);
-      case "plugin":
+      }
+      case "plugin": {
+        const { runPlugin } = await import("./commands/plugin.js");
         return await runPlugin(args.pluginArgv);
-      case "skill":
+      }
+      case "skill": {
+        const { runSkill } = await import("./commands/skill.js");
         return await runSkill(args.skillArgv);
-      case "mcp":
+      }
+      case "mcp": {
+        const { runMcp } = await import("./commands/mcp.js");
         return await runMcp(args.mcpArgv);
-      case "acp":
+      }
+      case "acp": {
+        const { runAcp } = await import("./commands/acp.js");
         return await runAcp(args);
-      case "tui":
+      }
+      case "tui": {
+        const { runTui } = await import("./commands/tui.js");
         return await runTui(args);
+      }
       default:
         process.stdout.write(helpText());
         return 0;

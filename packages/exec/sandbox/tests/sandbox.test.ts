@@ -33,6 +33,40 @@ describe("sandbox", () => {
     expect(() => s.wrapArgv(["echo"], "/")).toThrow(/escapes/);
   });
 
+  it("workspace sandbox allows cwd under an extra root", () => {
+    const root = path.resolve("/tmp/xrk-ws-root");
+    const extra = path.resolve("/tmp/xrk-ws-extra");
+    const s = createWorkspaceSandbox({ root, extraRoots: [extra] });
+    expect(s.wrapArgv(["echo"], extra)).toEqual(["echo"]);
+    expect(s.wrapArgv(["echo"], path.join(extra, "sub"))).toEqual(["echo"]);
+    // sibling of an extra root stays jailed — prefix match is not enough
+    expect(() => s.wrapArgv(["echo"], `${extra}-evil`)).toThrow(/escapes/);
+    expect(() => s.wrapArgv(["echo"], path.resolve("/tmp"))).toThrow(/escapes/);
+  });
+
+  it("workspace sandbox treats non-ASCII roots and cwd as plain paths", () => {
+    const root = path.resolve("C:/Users/dev/Desktop/主仓库/项目");
+    const extra = path.resolve("E:/新建文件夹/Documents/Desktop/hjw/bead-generator");
+    const s = createWorkspaceSandbox({ root, extraRoots: [extra] });
+    expect(s.wrapArgv(["echo"], extra)).toEqual(["echo"]);
+    expect(s.wrapArgv(["echo"], path.join(root, "docs"))).toEqual(["echo"]);
+    // other drive, not whitelisted → still refused (encoding was never the variable)
+    expect(() => s.wrapArgv(["echo"], "E:/plain/ascii")).toThrow(/escapes/);
+  });
+
+  it("createSandboxStack threads extra roots into the workspace jail", async () => {
+    const root = path.resolve("/tmp/xrk-stack-root");
+    const extra = path.resolve("/tmp/xrk-stack-extra");
+    const s = createSandboxStack({
+      workspaceRoot: root,
+      backend: "workspace",
+      extraWritableRoots: [extra],
+      env: {},
+    });
+    await expect(s.confine(["echo"], extra)).resolves.toEqual(["echo"]);
+    expect(() => s.wrapArgv(["echo"], path.resolve("/tmp"))).toThrow(/escapes/);
+  });
+
   it("guard denies bash when deny list hits", async () => {
     const guard = createSandboxWrapGuard(
       createDenyListSandbox({

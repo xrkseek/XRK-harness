@@ -228,6 +228,133 @@ declare module '@xrkseek/xrk-typert-protocol' {
         } | null
       }>>
     }
+    threads: {
+      list: (
+        args: { readonly sessionId?: SessionId; readonly agentId?: SessionId },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly threads: readonly {
+          readonly id: string
+          readonly title: string
+          readonly brief: string
+          readonly updatedAt: number
+        }[]
+        readonly bind: { readonly threadId: string; readonly sideline?: string } | null
+      }>>
+      upsert: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+          readonly id?: string
+          readonly title: string
+          readonly brief?: string
+          readonly switch?: boolean
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly thread: {
+          readonly id: string
+          readonly title: string
+          readonly brief: string
+          readonly updatedAt: number
+        }
+      }>>
+      switch: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+          readonly id: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly bind: { readonly threadId: string; readonly sideline?: string }
+      }>>
+      remove: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly agentId?: SessionId
+          readonly id: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly deleted: true
+        readonly id: string
+      }>>
+    }
+    team: {
+      list: (
+        args: { readonly sessionId?: SessionId; readonly agentId?: SessionId },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly members: readonly {
+          readonly id: string
+          readonly name: string
+          readonly playbook: string
+          readonly role: string
+          readonly seed?: true
+          readonly updatedAt: number
+          readonly appearance?: {
+            readonly shape: string
+            readonly color: string
+            readonly kit?: string
+            readonly face?: string
+          }
+          readonly scope?: string
+          readonly brief?: string
+          readonly inject?: string
+          readonly tools?: { readonly mode: string; readonly names: readonly string[] }
+        }[]
+      }>>
+      upsert: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly name: string
+          readonly playbook: string
+          readonly role?: string
+          readonly id?: string
+          readonly shape?: string
+          readonly color?: string
+          readonly kit?: string
+          readonly face?: string
+          readonly appearance?: {
+            readonly shape?: string
+            readonly color?: string
+            readonly kit?: string
+            readonly face?: string
+          }
+          readonly scope?: string
+          readonly brief?: string
+          readonly inject?: string
+          readonly tools?: { readonly mode: string; readonly names: readonly string[] } | null
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{ readonly workspaceId: string; readonly member: unknown }>>
+      remove: (
+        args: { readonly sessionId?: SessionId; readonly id: string; readonly scope?: string },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{ readonly workspaceId: string; readonly deleted: true; readonly id: string }>>
+      capture: (
+        args: { readonly sessionId?: SessionId; readonly name?: string },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{ readonly workspaceId: string; readonly member: unknown }>>
+      dispatch: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly memberId: string
+          readonly task: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly memberId: string
+        readonly childSessionId: string
+      }>>
+    }
   }
 }
 

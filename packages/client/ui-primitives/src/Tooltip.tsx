@@ -1,7 +1,4 @@
 // Hover/focus label bubble (figma tooltip pill: dark plate, white text).
-// TODO: interaction is a placeholder (horizontal overflow clamps and a
-// vertical collision flips the bubble to the other side, but there is no
-// arrow) — visuals and behavior get a proper pass later.
 // The anchor is the child element itself (cloneElement, no wrapper node), so
 // attaching a tooltip never changes the anchor's layout context. The bubble is
 // position:fixed and coordinates come from the anchor's rect at show time, so
@@ -9,8 +6,13 @@
 // without a portal.
 
 import { cloneElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { FocusEventHandler, MouseEventHandler, MutableRefObject, ReactElement, Ref } from 'react'
+import type {
+  FocusEventHandler, MouseEventHandler, MutableRefObject, ReactElement, Ref,
+} from 'react'
 import css from './Tooltip.module.css'
+
+/** Shared hover dwell for icon chrome (keyboard focus stays immediate). */
+export const TOOLTIP_HOVER_DELAY_MS = 400
 
 /** Bubble placement relative to the anchor. */
 export type TooltipSide = 'right' | 'bottom' | 'top'
@@ -30,7 +32,7 @@ type TooltipLabel = string | (() => string)
  * Attach a hover/focus tooltip to an anchor element.
  * @param props.label - bubble text, or a resolver evaluated only while the bubble is visible.
  * @param props.side - placement relative to the anchor (default 'right').
- * @param props.delayMs - hover delay in milliseconds; keyboard focus remains immediate.
+ * @param props.delayMs - hover delay in milliseconds (default {@link TOOLTIP_HOVER_DELAY_MS}); keyboard focus remains immediate.
  * @param props.disabled - suppress the bubble while true; the anchor renders identically so
  * toggling never remounts it (which would cut its CSS transitions).
  * @param props.maxWidth - bubble width cap in pixels, for labels long enough that the default
@@ -38,7 +40,7 @@ type TooltipLabel = string | (() => string)
  * @param props.children - a single anchor element; its own ref (callback or object) is forwarded alongside the tooltip's.
  * @returns the cloned anchor plus a fixed-position bubble while hovered/focused.
  */
-export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, maxWidth, children }: { label: TooltipLabel; side?: TooltipSide; delayMs?: number; disabled?: boolean; maxWidth?: number; children: ReactElement<AnchorProps> }) {
+export function Tooltip({ label, side = 'right', delayMs = TOOLTIP_HOVER_DELAY_MS, disabled = false, maxWidth, children }: { label: TooltipLabel; side?: TooltipSide; delayMs?: number; disabled?: boolean; maxWidth?: number; children: ReactElement<AnchorProps> }) {
   const anchor = useRef<HTMLElement | null>(null)
   // React 18 keeps the element's ref outside props; forward it so wrapping an
   // anchor in Tooltip never silently severs the owner's ref.
@@ -99,25 +101,58 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
   // Hover and focus are independent triggers: the bubble hides only after
   // BOTH clear (hovering away from a focused anchor must not drop it).
   const triggers = useRef({ hover: false, focus: false })
+  // Any pointer-down (this icon, a modal, a native chooser) drops the bubble.
+  // Closing the overlay often synthesizes mouseenter while the cursor never
+  // moved — ignore hover until the pointer actually travels.
+  const holdOffHover = useRef(false)
+  const holdOffAt = useRef({ x: 0, y: 0 })
 
-  // Disabling mid-hover (e.g. clicking a rail control expands the sidebar)
-  // must drop an already-visible bubble: no mouseleave fires.
   const cancelShow = useCallback(() => {
     if (showTimer.current === null) return
     clearTimeout(showTimer.current)
     showTimer.current = null
   }, [])
+  const dismiss = useCallback(() => {
+    cancelShow()
+    triggers.current = { hover: false, focus: false }
+    setPos(null)
+  }, [cancelShow])
   useEffect(() => {
     if (disabled) {
-      cancelShow()
-      triggers.current = { hover: false, focus: false }
-      setPos(null)
+      holdOffHover.current = false
+      dismiss()
     }
     return cancelShow
-  }, [cancelShow, disabled])
+  }, [cancelShow, disabled, dismiss])
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      holdOffHover.current = true
+      holdOffAt.current = { x: event.clientX, y: event.clientY }
+      dismiss()
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      if (!holdOffHover.current) return
+      const dx = event.clientX - holdOffAt.current.x
+      const dy = event.clientY - holdOffAt.current.y
+      if (dx * dx + dy * dy >= 36) holdOffHover.current = false
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('pointermove', onPointerMove, { passive: true })
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('blur', dismiss)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('blur', dismiss)
+    }
+  }, [dismiss])
 
   const show = () => {
-    if (disabled) return
+    if (disabled || holdOffHover.current) return
     const el = anchor.current
     /* v8 ignore next -- the ref is attached by event time: events fire on the cloned anchor. */
     if (el === null) return
@@ -128,6 +163,7 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
     setPos({ x: side === 'right' ? r.right + 10 : r.left + r.width / 2, top: r.top, bottom: r.bottom })
   }
   const showAfterHoverDelay = () => {
+    if (holdOffHover.current) return
     cancelShow()
     if (delayMs <= 0) {
       show()
@@ -147,10 +183,29 @@ export function Tooltip({ label, side = 'right', delayMs = 0, disabled = false, 
     <>
       {cloneElement(children, {
         ref: mergedRef,
-        onMouseEnter: (e) => { children.props.onMouseEnter?.(e); triggers.current.hover = true; showAfterHoverDelay() },
-        onMouseLeave: (e) => { children.props.onMouseLeave?.(e); triggers.current.hover = false; cancelShow(); setPos(null) },
-        onFocus: (e) => { children.props.onFocus?.(e); triggers.current.focus = true; cancelShow(); show() },
-        onBlur: (e) => { children.props.onBlur?.(e); triggers.current.focus = false; hide() },
+        onMouseEnter: (e) => {
+          children.props.onMouseEnter?.(e)
+          triggers.current.hover = true
+          showAfterHoverDelay()
+        },
+        onMouseLeave: (e) => {
+          children.props.onMouseLeave?.(e)
+          triggers.current.hover = false
+          cancelShow()
+          setPos(null)
+        },
+        onFocus: (e) => {
+          children.props.onFocus?.(e)
+          triggers.current.focus = true
+          if (holdOffHover.current) return
+          cancelShow()
+          show()
+        },
+        onBlur: (e) => {
+          children.props.onBlur?.(e)
+          triggers.current.focus = false
+          hide()
+        },
       })}
       {pos !== null && (
         <span

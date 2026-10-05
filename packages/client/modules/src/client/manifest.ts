@@ -43,9 +43,11 @@ declare module '@xrkseek/cordis' {
 /**
  * One composed client entry pushed by the host (a graph row). Wire
  * single source: the host node half (package root) produces this same shape.
- * `immediately` marks stage-one prefetch; `inject` is informational graph
- * metadata (the authoritative edges live in each package's `xrk.client`
- * declaration and reach fibers through entry creation).
+ * `immediately` is the stage-one factory barrier (entry creation waits for
+ * these scripts); the shell still prefetches every graph row in parallel.
+ * `inject` is informational graph metadata (the authoritative edges live in
+ * each package's `xrk.client` declaration and reach fibers through entry
+ * creation).
  */
 export interface WebBootEntry {
   /** Entry name == package name. */
@@ -56,7 +58,7 @@ export interface WebBootEntry {
   rev: string
   /** Package-name dependency edges, informational (preflight display / HMR diffing). */
   inject?: string[]
-  /** Stage-one prefetch mark: load the script for factory registration during module-face boot. */
+  /** Stage-one factory barrier: wait for this script before materializing entries. */
   immediately?: boolean
 }
 

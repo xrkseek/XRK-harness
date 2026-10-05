@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,10 +10,24 @@ import {
   CURATED_MEMORY_PROMPT_TEXT,
   defaultCuratedMemoryDir,
   ENTRY_DELIMITER,
+  USAGE_SIDECAR_FILE,
 } from "../src/index.js";
 
 function tempDir(): string {
   return mkdtempSync(path.join(tmpdir(), "xrk-memory-"));
+}
+
+function usageKey(entry: string): string {
+  return createHash("sha256").update(entry).digest("hex").slice(0, 16);
+}
+
+function ageEntry(dir: string, entry: string, days: number): void {
+  const file = path.join(dir, USAGE_SIDECAR_FILE);
+  const usage = JSON.parse(readFileSync(file, "utf8")) as {
+    entries: Record<string, number>;
+  };
+  usage.entries[usageKey(entry)] = Date.now() - days * 86_400_000;
+  writeFileSync(file, JSON.stringify(usage), "utf8");
 }
 
 describe("curated memory store", () => {
@@ -110,6 +125,56 @@ describe("curated memory isolation policy", () => {
     const [tool] = createCuratedMemoryTools(createCuratedMemoryStore({ dir: tempDir() }));
     expect(tool!.description).toMatch(/todo_write/);
     expect(tool!.description).toMatch(/Do NOT store session WIP/i);
+  });
+});
+
+describe("memory hygiene (usage sidecar)", () => {
+  it("ranks the longest-untouched entry first and offers it as a prune candidate", () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({ dir });
+    const stale = "proxy is 127.0.0.1:7897 on this box";
+    const fresh = "vitest filter goes after the file path";
+    expect(store.add("memory", stale).success).toBe(true);
+    expect(store.add("memory", fresh).success).toBe(true);
+    ageEntry(dir, stale, 40);
+
+    const ranked = store.staleEntries?.("memory");
+    expect(ranked?.[0]?.entry).toBe(stale);
+    expect(ranked?.[0]?.tracked).toBe(true);
+    expect(ranked?.[0]?.ageDays).toBeGreaterThanOrEqual(40);
+
+    const blocked = store.add("memory", "x".repeat(2400));
+    expect(blocked.success).toBe(false);
+    expect(blocked.prune_candidates?.[0]).toBe(stale);
+  });
+
+  it("falls back to file order when no entry has been tracked", () => {
+    const dir = tempDir();
+    writeFileSync(
+      path.join(dir, "MEMORY.md"),
+      `first fact${ENTRY_DELIMITER}second fact`,
+      "utf8",
+    );
+    const store = createCuratedMemoryStore({ dir });
+    expect(store.staleEntries?.("memory").map((item) => item.entry)).toEqual([
+      "first fact",
+      "second fact",
+    ]);
+  });
+
+  it("surfaces stale entries through the memory tool list", async () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({ dir });
+    const stale = "npm tarball uploads need the default fetch timeout";
+    store.add("memory", stale);
+    ageEntry(dir, stale, 12);
+    const [tool] = createCuratedMemoryTools(store);
+    const listed = await tool!.execute({ action: "list", target: "memory" });
+    const payload = JSON.parse(String(listed.content)) as {
+      stale_entries?: { entry: string; age_days: number | null }[];
+    };
+    expect(payload.stale_entries?.[0]?.entry).toBe(stale);
+    expect(payload.stale_entries?.[0]?.age_days).toBeGreaterThanOrEqual(12);
   });
 });
 

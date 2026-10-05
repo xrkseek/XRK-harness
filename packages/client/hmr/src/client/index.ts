@@ -4,7 +4,7 @@
  * Listens on the host's system SSE channel (`GET /plugins/events`); on a
  * `rebuilt` frame it reloads the entry's bundle and swaps the cordis
  * fiber in place. Every graph entry is a plugin bundle
- * — `immediately` rows differ only in stage-one prefetch (a boot
+ * — `immediately` rows are the boot factory barrier (a boot
  * optimization), so all rostered plugin packages share these reload semantics;
  * normal packages (react family, cordis, shell, pure libs) are not entries
  * and shell changes still mean a page reload. Cascade is zero-touch:
