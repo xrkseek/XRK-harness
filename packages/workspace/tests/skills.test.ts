@@ -53,6 +53,7 @@ Do the ping.
       },
     ]);
     expect(formatSkillCatalog(listed)).toContain("**office-ping**");
+    expect(formatSkillCatalog(listed)).not.toContain("spawn that member_id");
     const loaded = await loadSkill({ productDir: product, name: "office-ping" });
     expect(loaded?.content).toContain("Do the ping.");
     expect(parseSkillMarkdown("---\nname: x\n---\n# Hi", "x").content).toBe(

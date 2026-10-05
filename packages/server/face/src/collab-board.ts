@@ -6,6 +6,8 @@ import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { formatRosterCatalog } from "./agent-roster-store.js";
 import { listWorkspaceThreadCatalog } from "./session-thread-tools.js";
+import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
+import { resolveAgentPresetProfile } from "./presets-catalog.js";
 
 /** Parent 主线 rows whose thread was updated in the last day. */
 export const COLLAB_BOARD_THREAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -29,12 +31,17 @@ export function formatCollabBoardText(input: {
   readonly membersCatalog: string;
   readonly threads: readonly CollabBoardThreadRow[];
   readonly now?: number;
+  /** False for Frugal / badges with `subagents.mode === "off"`. */
+  readonly canSpawn?: boolean;
 }): string {
   const now = input.now ?? Date.now();
   const cutoff = now - COLLAB_BOARD_THREAD_WINDOW_MS;
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
+  const canSpawn = input.canSpawn !== false;
   const lines = [
-    "Agent Team — spawn `subagent` with member_id when a listed name or brief fits the user ask. Playbooks stay on the member; seed AGENTS.md / skills stay on standing inject (do not paste them here).",
+    canSpawn
+      ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits. Standing skills are for that member after spawn. Playbooks stay on the member."
+      : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here). Members:",
     input.membersCatalog,
     "",
     "主线 (parent sessions, last 24h) — `thread_message` the peer's session_id; reply returns here. Do not thread_switch to send mail (that moves *this* session onto their pin). Not a subagent.",
@@ -72,11 +79,15 @@ export function formatCollabBoard(
 ): string {
   if (runtime.subagents.getByChild(sessionId)) return "";
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
+  const canSpawn =
+    resolveAgentPresetProfile(effectiveSessionAgentPreset(runtime, sessionId))
+      .subagents.mode === "on";
   return formatCollabBoardText({
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
     ),
     threads: listWorkspaceThreadCatalog(runtime, workspaceId, sessionId),
+    canSpawn,
     now,
   });
 }

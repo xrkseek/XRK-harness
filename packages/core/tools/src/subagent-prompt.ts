@@ -42,7 +42,7 @@ export function subagentRoutingPrompt(
     "  - Need this conversation: `inherit_context: true` (in-process only).",
     "  - Isolated git tree: `worktree: true` (same repo, separate checkout).",
     "  - Child profile: prefer Agent Team `member_id` from the turn-start collab board (and `subagent` / `team_list`) so the child gets that member's tools, inject, and playbook. Seed AGENTS.md and skills stay on standing inject — do not paste them into the child prompt. Bare `role` worker | researcher | reviewer | lead is only the fallback. Publish a repeatable profile with `team_save` from this chat.",
-    "- Match the live catalog by name and brief. If a member's job fits the user ask, `subagent` with that `member_id` this turn. Do not load their skill and do the job yourself. Tiny asks with no catalog match stay with you. `presence_set` may run in parallel.",
+    "- Match the live catalog by name and brief when this session has subagent tools. If a member fits, `subagent` with that `member_id` this turn. Do not Skill-load a standing skill that covers the same job. Frugal has no subagent tools — Skill-load here. Tiny asks with no catalog match stay with you. `presence_set` may run in parallel.",
     "- Sibling parent sessions talk with `thread_message` (session_id from the collab board; reply comes back here). Do not `thread_switch` to send mail. That is not a subagent.",
     "- `team_graph` reads/edits the collaboration graph (delegates + peer): view · neighbors · link/unlink · role · announce to peers.",
     "- `wait_agent` blocks until listed children are idle (or timeout) and returns their last answer — prefer longer timeouts over tight loops.",

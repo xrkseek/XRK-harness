@@ -32,7 +32,7 @@ describe("formatCollabBoardText", () => {
       ],
     });
     expect(text).toContain("mem_68a69c0a9fdc4b53");
-    expect(text).toContain("standing inject");
+    expect(text).toContain("spawn `subagent`");
     expect(text).toContain("thread_message");
     expect(text).toContain("Do not thread_switch to send mail");
     expect(text).toContain("th_fresh");
@@ -51,5 +51,17 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("(none)");
     expect(text).toContain("no Agent Team members yet");
+  });
+
+  it("tells Frugal badges to Skill-load instead of spawn", () => {
+    const text = formatCollabBoardText({
+      now: 1_700_000_000_000,
+      canSpawn: false,
+      membersCatalog: "- mem_x 发版员",
+      threads: [],
+    });
+    expect(text).toContain("no subagent tools");
+    expect(text).toContain("Skill-load");
+    expect(text).not.toContain("spawn `subagent`");
   });
 });

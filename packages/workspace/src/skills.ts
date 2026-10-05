@@ -404,4 +404,4 @@ export function renderSkillContent(skill: SkillDefinition): string {
 }
 
 export const SKILL_TOOL_GUIDANCE =
-  "Use the skill tool to load the full instructions for an available skill listed in the Skills catalog. Call it with the exact skill name before acting on a task that names or clearly matches that skill.";
+  "Use the skill tool to load the full instructions for an available skill listed in the Skills catalog. Call it with the exact skill name before acting on a task that names or clearly matches that skill. Sessions with subagent tools: if the Agent Team board lists a fitting member, spawn that member_id instead. Frugal and other no-subagent badges: load the skill and do the job here.";

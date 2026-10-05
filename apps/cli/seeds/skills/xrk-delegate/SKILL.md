@@ -11,7 +11,7 @@ description: >-
 每个子代理 = **一整段模型会话**，默认与父会话**同一工作区**。默认自己做；只有任务独立、会污染本会话上下文时才 `subagent`。
 
 ```
-- [ ] 1. 看会话徽章：Frugal = 无子代理；Shallow = depth≤1；Harness = 可嵌套
+- [ ] 1. 看会话徽章：Frugal / minimal / shell = 无子代理（名册命中也用 Skills，不要 spawn）；Shallow = depth≤1；Harness = 可嵌套
 - [ ] 2. `team_list`（或看 `subagent` 工具描述里的名册）选 `member_id`；没有合适干员再用 `role`
 - [ ] 3. 写完整 standalone `prompt`（路径、验收、约束）；短 `description`。人设已在干员 playbook 里就不要再抄一遍
 - [ ] 4. 选形状：默认前台 one-shot；续聊 / 陪聊必须 `run_in_background: true`
