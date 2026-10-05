@@ -84,6 +84,36 @@ describe('TurnNavigator', () => {
     expect(second.className).not.toMatch(/Active/)
   })
 
+  it('keeps the floor tick medium for the session newest while reading an older 轮次', () => {
+    const camera: readonly TurnRailItem[] = [
+      ...Array.from({ length: 10 }, (_, index) => ({
+        turn: index + 10,
+        round: index + 10,
+        prompt: `ask ${String(index + 10)}`,
+        response: '',
+        anchor: { kind: 'loaded' as const, key: `u${String(index + 10)}` },
+      })),
+      {
+        turn: 30,
+        round: 30,
+        prompt: 'newest',
+        response: '',
+        anchor: { kind: 'unloaded' as const, seq: 300 },
+      },
+    ]
+    const view = render(
+      <TurnNavigator items={camera} activeTurn={19} busyTurn={null} onNavigate={vi.fn()} t={t} />,
+    )
+    const reading = view.getByRole('button', { name: '跳转到第 19 轮' })
+    const floor = view.getByRole('button', { name: '加载并跳转到第 30 轮' })
+    expect(view.getAllByRole('button')).toHaveLength(11)
+    expect(reading.className).toMatch(/Active/)
+    expect(reading.className).not.toMatch(/Chat/)
+    expect(floor.className).toMatch(/Chat/)
+    expect(floor.className).not.toMatch(/Active/)
+    expect(floor.getAttribute('aria-current')).toBeNull()
+  })
+
   it('keeps a fixed pitch ladder that can scroll when many turns overflow the frame', () => {
     const many: readonly TurnRailItem[] = Array.from({ length: 40 }, (_, index) => ({
       turn: index + 1,

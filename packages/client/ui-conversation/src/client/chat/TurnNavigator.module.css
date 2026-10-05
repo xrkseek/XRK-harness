@@ -34,14 +34,17 @@
   --turn-preview-height: 100px;
 
   position: absolute;
-  /* Just inside the content's right edge — left of the hover width-line /
-     col-resize strip so marks stay clickable. Do not pin to the composer.
-     Centre the frame in the visible transcript band. */
+  /* Sit just inside the right width-handle strip (inner edge at
+     content + --dsh-chat-width-handle-inset). `translateX(-100%)` parks the
+     32px frame; the extra 14px slides ticks toward the handle glow and off
+     the transcript. The handle paints at z-index 8 so drag still wins the
+     overlap. Do not pin to the composer. Centre the frame in the band. */
   top: calc(var(--turn-rail-band) / 2);
   left: calc(
     50%
     + var(--dsh-chat-content-width, 0px) / 2
-    - 8px
+    + var(--dsh-chat-width-handle-inset, 24px)
+    + 14px
   );
   right: auto;
   width: 32px;
@@ -55,7 +58,7 @@
   );
   cursor: pointer;
   pointer-events: auto;
-  transform: translate(-50%, -50%);
+  transform: translate(-100%, -50%);
   transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -138,41 +141,37 @@
   pointer-events: none;
 }
 
-/* Three lengths, all centred on the spine / width-line:
-   rest 8px, live chat tip (newest, when not reading) 12px, reading 20px.
-   Hover/focus of another turn may grow to 16px but never past reading. */
+/* Three lengths, centred on the spine. Hover/focus never adds a fourth
+   width — the preview card carries pointing, the ticks stay rest / tip / reading. */
 .mark::before {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 8px;
-  height: 3px;
+  width: 6px;
+  height: 2px;
   border-radius: 2px;
   background: var(--dsw-alias-label-tertiary);
   content: '';
   transform: translate(-50%, -50%);
   transition:
     width 140ms cubic-bezier(0.2, 0, 0, 1),
+    height 140ms cubic-bezier(0.2, 0, 0, 1),
     background-color 140ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Unloaded (paged out of the window) stays short and dimmed — the ladder
    must not change length under paging. */
 .markUnloaded::before {
-  width: 8px;
+  width: 6px;
   opacity: 0.55;
 }
 
-/* Live chat tip (newest) while the reader is on an older turn. */
+/* Session newest — always the floor tick; medium whether the turn is live or idle. */
 .markChat::before {
   width: 12px;
+  height: 3px;
   background: var(--dsw-alias-label-secondary);
   opacity: 1;
-}
-
-.markPreview::before {
-  width: 16px;
-  background: var(--dsw-alias-label-secondary);
 }
 
 .markBusy::before {
@@ -182,21 +181,14 @@
 /* Reading position — uniquely longest. Coincides with the chat tip when
    the transcript is at the floor. */
 .markActive::before {
-  width: 20px;
+  width: 22px;
   height: 4px;
   background: var(--dsw-alias-label-primary);
   opacity: 1;
 }
 
-/* Keyboard focus of a non-current tick stays under the reading length. */
-.mark:focus-visible::before {
-  width: 16px;
-  background: var(--dsw-alias-state-business-primary);
-}
-
-.markActive:focus-visible::before,
-.markActive.markPreview::before {
-  width: 20px;
+.markActive:focus-visible::before {
+  width: 22px;
 }
 
 .mark:focus-visible {

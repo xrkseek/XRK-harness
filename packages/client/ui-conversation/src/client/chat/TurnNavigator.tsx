@@ -17,6 +17,8 @@ interface TurnNavigatorProps {
 
 /** Fixed pitch between neighbouring marks; overflow scrolls inside the frame. */
 const TURN_SPACING_PX = 10
+/** Extra pitch before a pinned newest that is not the next 轮次 of the camera. */
+const FLOOR_SKIP_PX = 8
 /** Rail padding above the first mark and below the last one, per end. */
 const RAIL_INSET_PX = 6
 /** Fade band the mask reserves at a scrollable end. */
@@ -32,16 +34,25 @@ type TurnFrameStyle = CSSProperties & {
   readonly '--turn-scroll-top': string
 }
 
-function itemPosition(index: number): TurnPositionStyle {
-  return { '--turn-natural-position': `${String(index * TURN_SPACING_PX)}px` }
+function itemPosition(index: number, floorSkip: number, lastIndex: number): TurnPositionStyle {
+  const extra = index === lastIndex ? floorSkip : 0
+  return { '--turn-natural-position': `${String(index * TURN_SPACING_PX + extra)}px` }
 }
 
-function frameStyle(count: number, scrollTop: number): TurnFrameStyle {
+function frameStyle(count: number, scrollTop: number, floorSkip: number): TurnFrameStyle {
   return {
-    '--turn-natural-height': `${String((count - 1) * TURN_SPACING_PX + 2 * RAIL_INSET_PX)}px`,
+    '--turn-natural-height': `${String((count - 1) * TURN_SPACING_PX + floorSkip + 2 * RAIL_INSET_PX)}px`,
     '--turn-rail-inset': `${String(RAIL_INSET_PX)}px`,
     '--turn-scroll-top': `${String(scrollTop)}px`,
   }
+}
+
+function floorSkipPx(items: readonly TurnRailItem[]): number {
+  if (items.length < 2) return 0
+  const last = items[items.length - 1]
+  const prev = items[items.length - 2]
+  if (last === undefined || prev === undefined) return 0
+  return last.round > prev.round + 1 ? FLOOR_SKIP_PX : 0
 }
 
 function itemAtPointer(
@@ -49,10 +60,16 @@ function itemAtPointer(
   frame: HTMLElement,
   scrollTop: number,
   clientY: number,
+  floorSkip: number,
 ): TurnRailItem | undefined {
+  const lastIndex = items.length - 1
+  if (lastIndex < 0) return undefined
   const rect = frame.getBoundingClientRect()
   const offset = clientY - rect.top + scrollTop - RAIL_INSET_PX
-  const index = Math.max(0, Math.min(items.length - 1, Math.round(offset / TURN_SPACING_PX)))
+  const lastPos = lastIndex * TURN_SPACING_PX + floorSkip
+  const prevPos = lastIndex === 0 ? 0 : (lastIndex - 1) * TURN_SPACING_PX
+  if (offset >= (prevPos + lastPos) / 2) return items[lastIndex]
+  const index = Math.max(0, Math.min(lastIndex, Math.round(offset / TURN_SPACING_PX)))
   return items[index]
 }
 
@@ -134,7 +151,8 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
     const scroller = scrollerRef.current
     const index = items.findIndex(item => item.turn === activeTurn)
     if (scroller === null || index < 0 || pointerInsideRef.current) return
-    const markTop = index * TURN_SPACING_PX + RAIL_INSET_PX
+    const extra = index === items.length - 1 ? floorSkipPx(items) : 0
+    const markTop = index * TURN_SPACING_PX + extra + RAIL_INSET_PX
     const viewTop = scroller.scrollTop
     const viewHeight = scroller.clientHeight
     if (viewHeight <= 0 || (markTop >= viewTop + FADE_PX && markTop <= viewTop + viewHeight - FADE_PX)) return
@@ -153,6 +171,8 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
   // indicator there, and an absent rail reads as a broken control rather than
   // as "nothing to navigate".
   if (items.length === 0) return null
+  const skip = floorSkipPx(items)
+  const lastIndex = items.length - 1
   const previewIndex = items.findIndex(item => item.turn === previewTurn)
   const preview = previewIndex < 0 ? undefined : items[previewIndex]
   const activeIndex = items.findIndex(item => item.turn === activeTurn)
@@ -160,16 +180,16 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
   // (preview turn while pointing, otherwise the active turn).
   const clusterIndex = previewIndex >= 0 ? previewIndex : activeIndex
   const clusterItem = clusterIndex < 0 ? undefined : items[clusterIndex]
-  const clusterPosition = clusterIndex < 0 ? undefined : itemPosition(clusterIndex)
+  const clusterPosition = clusterIndex < 0 ? undefined : itemPosition(clusterIndex, skip, lastIndex)
 
   const previewAtPointer = (event: PointerEvent<HTMLElement>): void => {
     const scrollTop = scrollerRef.current?.scrollTop ?? 0
-    setPreviewTurn(itemAtPointer(items, event.currentTarget, scrollTop, event.clientY)?.turn ?? null)
+    setPreviewTurn(itemAtPointer(items, event.currentTarget, scrollTop, event.clientY, skip)?.turn ?? null)
   }
 
   const navigateAtPointer = (event: MouseEvent<HTMLElement>): void => {
     const scrollTop = scrollerRef.current?.scrollTop ?? 0
-    const item = itemAtPointer(items, event.currentTarget, scrollTop, event.clientY)
+    const item = itemAtPointer(items, event.currentTarget, scrollTop, event.clientY, skip)
     if (item !== undefined) onNavigate(item)
   }
 
@@ -180,7 +200,7 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
     <div className={css.slot}>
       <nav
         className={css.frame}
-        style={frameStyle(items.length, scrollState.top)}
+        style={frameStyle(items.length, scrollState.top, skip)}
         aria-label={t('chat.turnNavigation.label')}
         onClick={navigateAtPointer}
         onPointerMove={previewAtPointer}
@@ -198,19 +218,19 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
           <div className={css.marks}>
             <div className={css.spine} aria-hidden />
             {items.map((item, index) => {
-              const latest = index === items.length - 1
+              const floor = index === items.length - 1
               const reading = item.turn === activeTurn
               const showingPreview = item.turn === previewTurn
               const classes = [css.mark]
               if (item.anchor.kind === 'unloaded') classes.push(css.markUnloaded)
-              // Longest = where you are (reading). Medium = the live chat tip
-              // (newest) when you are elsewhere. Everything else stays short.
+              // Long = reading. Medium = session newest (always the floor tick,
+              // running or idle). Reading the newest is long only. Rest stay short.
               if (reading) classes.push(css.markActive)
-              else if (latest) classes.push(css.markChat)
+              else if (floor) classes.push(css.markChat)
               else if (showingPreview) classes.push(css.markPreview)
               if (item.turn === busyTurn) classes.push(css.markBusy)
               return (
-                <div key={item.turn} className={css.markPosition} style={itemPosition(index)}>
+                <div key={item.turn} className={css.markPosition} style={itemPosition(index, skip, lastIndex)}>
                   <button
                     type="button"
                     className={classes.join(' ')}

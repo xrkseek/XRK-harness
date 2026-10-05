@@ -11,9 +11,8 @@ import type { TurnOutlineEntry } from '@xrkseek/xrk-host-apiproxy/api'
 declare module '@xrkseek/xrk-session-projection/types' {
   interface SessionProjectionMap {
     /**
-     * Whole-log turn outline: every started turn with its turn/start Face seq
-     * and bounded previews. Key absence means no outline (rail falls back to
-     * the loaded window only).
+     * Whole-log 轮次 outline: Host turns that already have a human opener,
+     * with turn/start Face seq, gapless `round`, and bounded previews.
      */
     turnOutline: readonly TurnOutlineEntry[]
   }

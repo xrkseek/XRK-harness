@@ -38,7 +38,7 @@
   --dsh-composer-dock-inset: 8px;
   /* Right-side width handle: strip starts this far outside the content column.
      The hover glow sits `--dsh-chat-width-line-in-strip` into that strip; the
-     turn rail centres its ticks on the same glow axis. */
+     turn rail's right edge meets the strip's inner edge. */
   --dsh-chat-width-handle-inset: 24px;
   --dsh-chat-width-line-in-strip: 16px;
   --dsh-chat-width-line-thickness: 3px;

@@ -69,6 +69,14 @@
   min-width: 0;
 }
 
+.roundLabel {
+  margin: 0 0 4px;
+  text-align: end;
+  font: var(--dsw-font-xs-13);
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* A keyed renderer may intentionally decline its row after dispatch (the
    completed-turn tail does this when it owns neither actions nor extensions).
    An empty flex item must not consume the column gap. */

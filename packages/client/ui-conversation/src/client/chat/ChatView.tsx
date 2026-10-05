@@ -44,7 +44,7 @@ import {
   subscribeResubmitIntent,
 } from './resubmit-intent.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
-import { mergeTurnRailItems, type TurnRailItem } from './turn-rail-items.ts'
+import { mergeTurnRailItems, slideTurnRailWindow, type TurnRailItem } from './turn-rail-items.ts'
 import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
@@ -398,11 +398,18 @@ export function ChatView({
   const nodeStore = useSession(s => s.chat.nodes)
   const turnNavigationItems = useSession(s => s.chat.navigation.items())
   const turnOutline = useProjection('turnOutline')
-  const windowTurns = useSession(s => s.chat.timeline.turnOrder)
-  const railItems = useMemo(
-    () => mergeTurnRailItems(turnNavigationItems, turnOutline, windowTurns),
-    [turnNavigationItems, turnOutline, windowTurns],
-  )
+  const timeline = useSession(s => s.chat.timeline)
+  const railItems = useMemo(() => {
+    const windowTurnStarts = timeline.turnOrder.filter(
+      turn => timeline.turns.get(turn)?.start !== undefined,
+    )
+    return mergeTurnRailItems(turnNavigationItems, turnOutline, windowTurnStarts)
+  }, [turnNavigationItems, turnOutline, timeline])
+  const roundByTurn = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const item of railItems) map.set(item.turn, item.round)
+    return map
+  }, [railItems])
   const inbox = useSession(s => s.queue)
   // Stable during token deltas — seats observe node content themselves.
   const runningCallCount = useSession(s => s.runningCalls.length)
@@ -662,6 +669,10 @@ export function ChatView({
   const [activeTurn, setActiveTurn] = useState<number | null>(
     () => turnNavigationItems.at(-1)?.turn ?? null,
   )
+  const railWindow = useMemo(
+    () => slideTurnRailWindow(railItems, activeTurn),
+    [railItems, activeTurn],
+  )
   /** Last position delivered or written on the main thread. */
   const observedTopRef = useRef(0)
   /** Paging anchor: semantic row/position at click, updated by reader scrolls
@@ -719,6 +730,9 @@ export function ChatView({
     const next = resolveActiveTurn({
       readingTurn: turnAtLine(local, readingLineY(el)),
       offeredTurns: railItems.map(item => item.turn),
+      loadedTurns: railItems.flatMap(item => (
+        item.anchor.kind === 'loaded' ? [item.turn] : []
+      )),
       atFlowFloor: isAtFlowFloor(local, el, FOLLOW_THRESHOLD),
     })
     setActiveTurn(current => current === next ? current : next)
@@ -1095,6 +1109,7 @@ export function ChatView({
     useSession,
     selectedCallId,
     cwd,
+    roundByTurn,
     openFile: requestOpenFile,
     inspectCall,
     forkAt,
@@ -1173,7 +1188,7 @@ export function ChatView({
     <div className={css.root}>
       <div ref={listRef} className={css.scroll}>
         <TurnNavigator
-          items={railItems}
+          items={railWindow}
           activeTurn={activeTurn}
           busyTurn={busyJumpTurn}
           onNavigate={navigateToTurn}

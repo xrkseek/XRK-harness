@@ -10,6 +10,8 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly useSession: ChatViewSlotProps['useSession']
   readonly renderSlot: ChatViewSlotProps['renderSlot']
   readonly t: ChatViewSlotProps['t']
+  /** Whole-log 轮次 by Host turn; only the opener row paints a label. */
+  readonly roundByTurn: ReadonlyMap<number, number>
 }
 
 type RoutedChatNodeOwner = {
@@ -18,8 +20,8 @@ type RoutedChatNodeOwner = {
 
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer, loadImage,
-  renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
+  nodeKey, selectedCallId, cwd, roundByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer,
+  loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
   const routedNode = node as ChatNode | undefined
@@ -63,6 +65,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // materializes a tall ChangedFiles card in one paint, and content-visibility
   // auto/skip has left a second ghost copy of that card in Chromium.
   const live = postStreamLive || routedNode.kind === 'turn-tail'
+  const round = turn === undefined ? undefined : roundByTurn.get(turn)
   return (
     <div
       className={css.flowItem}
@@ -70,8 +73,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-flow-key={routedNode.key}
       data-chat-flow-kind={routedNode.kind}
       data-chat-turn={turn}
+      data-chat-round={round}
       data-live={live || undefined}
     >
+      {routedNode.kind === 'user' && round !== undefined ? (
+        <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: round })}</div>
+      ) : null}
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,
         hookContext: nodeKey,

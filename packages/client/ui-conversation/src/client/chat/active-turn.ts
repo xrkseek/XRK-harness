@@ -1,21 +1,27 @@
 /**
  * Which rail mark is "here": the Turn covering the reading line, except at
- * the flow floor (last message against the composer) which always owns the
- * newest offered Turn. Defaulting a missed hit to Turn 1 made a bottom
- * viewport claim it was still the opening round.
+ * the flow floor (last message against the composer) which owns the newest
+ * **loaded** Turn. Outline-only marks are not on the transcript: pinning the
+ * floor to the newest offered tick labelled a tail page's first bubble as
+ * 第 N 轮 of the whole log.
  */
 
 export function resolveActiveTurn(input: {
   readonly readingTurn: number | null
   readonly offeredTurns: readonly number[]
+  /** Host turns that currently have a transcript row. Outline-only marks omitted. */
+  readonly loadedTurns?: readonly number[]
   readonly atFlowFloor: boolean
 }): number | null {
   const offered = input.offeredTurns
   if (offered.length === 0) return null
-  const newest = offered[offered.length - 1]!
-  if (input.atFlowFloor) return newest
-  if (input.readingTurn === null) return offered[0]!
-  let next = offered[0]!
+  const loaded = input.loadedTurns !== undefined && input.loadedTurns.length > 0
+    ? input.loadedTurns
+    : offered
+  const newestLoaded = loaded[loaded.length - 1]!
+  if (input.atFlowFloor) return newestLoaded
+  if (input.readingTurn === null) return loaded[0]!
+  let next = loaded[0]!
   for (const turn of offered) {
     if (turn > input.readingTurn) break
     next = turn
