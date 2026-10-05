@@ -30,7 +30,29 @@ export const DEFAULT_FILE_SEARCH_MAX_RESULTS = 20
 /** Default maximum entries retained in one workspace search index. */
 export const DEFAULT_FILE_SEARCH_MAX_ENTRIES = 10_000
 /** Directory basenames omitted from traversal unless the deployment overrides them. */
-export const DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES = ['.git', 'node_modules'] as const
+export const DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES = [
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+  '.parcel-cache',
+  '.vite',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'target',
+  '.idea',
+  '.gradle',
+  '.codegraph',
+  '.scratch-opus',
+  'Pods',
+] as const
 
 /** Resolved limits and exclusions for one workspace index. */
 export interface FileSearchConfig {

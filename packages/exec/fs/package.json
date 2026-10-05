@@ -14,8 +14,10 @@
     "README.md"
   ],
   "dependencies": {
+    "@vscode/ripgrep": "^1.18.0",
     "@xrkseek/attachment": "workspace:*",
     "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*",
     "@xrkseek/protocol": "workspace:*"
   },
   "license": "MIT",

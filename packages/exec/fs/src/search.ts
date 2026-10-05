@@ -1,5 +1,6 @@
 import { readdir, readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import path from "node:path";
+import { scheduler } from "node:timers/promises";
 import { resolveWithinRoot } from "./paths.js";
 
 export interface FsGlobOptions {
@@ -20,6 +21,38 @@ export interface FsGrepOptions {
   readonly maxResults?: number;
   readonly caseInsensitive?: boolean;
 }
+
+/** Skip heavy / generated trees so grep/glob stay interactive on monorepos. */
+export const FS_SEARCH_SKIP_DIR_NAMES = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".cache",
+  ".parcel-cache",
+  ".vite",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "target",
+  ".idea",
+  ".gradle",
+  ".codegraph",
+  ".scratch-opus",
+  "Pods",
+]);
+
+/** Soft walk ceiling (still high enough for late-sorted paths). */
+export const FS_SEARCH_WALK_CAP = 100_000;
+/** Skip individual files larger than this for content grep. */
+export const FS_GREP_MAX_FILE_BYTES = 1_000_000;
+/** Yield the event loop this often while walking / grepping. */
+const YIELD_EVERY = 48;
 
 /** Convert a posix-ish glob to a RegExp. Supports * and ** segments. */
 export function globToRegExp(pattern: string): RegExp {
@@ -64,40 +97,62 @@ export function matchGlob(relPosix: string, pattern: string): boolean {
   return globToRegExp(pattern).test(rel);
 }
 
-async function walkFiles(
+type WalkVisitor = (relPosix: string) => boolean | void | Promise<boolean | void>;
+
+/**
+ * Depth-first walk under `absDir`. Skips junk dir basenames. Invokes `visit`
+ * for each file (posix path relative to `rootAbs`). Stop when visit returns
+ * false or `cap` files have been visited. Yields periodically so Host LLM /
+ * mux work can interleave.
+ */
+export async function walkFilesUnder(
   absDir: string,
   rootAbs: string,
-  out: string[],
-  cap: number,
+  visit: WalkVisitor,
+  cap: number = FS_SEARCH_WALK_CAP,
 ): Promise<void> {
-  if (out.length >= cap) return;
-  let entries;
-  try {
-    entries = await readdir(absDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const ent of entries) {
-    if (out.length >= cap) return;
-    if (ent.name === ".git" || ent.name === "node_modules") continue;
-    const abs = path.join(absDir, ent.name);
-    if (ent.isDirectory()) {
-      await walkFiles(abs, rootAbs, out, cap);
-      continue;
+  let visited = 0;
+  let sinceYield = 0;
+
+  const walk = async (dir: string): Promise<boolean> => {
+    if (visited >= cap) return false;
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return true;
     }
-    if (ent.isFile()) {
+    for (const ent of entries) {
+      if (visited >= cap) return false;
+      if (ent.isDirectory()) {
+        if (FS_SEARCH_SKIP_DIR_NAMES.has(ent.name)) continue;
+        const abs = path.join(dir, ent.name);
+        if (!(await walk(abs))) return false;
+        continue;
+      }
+      if (!ent.isFile()) continue;
+      const abs = path.join(dir, ent.name);
       const rel = path.relative(rootAbs, abs).replace(/\\/g, "/");
-      out.push(rel);
+      visited += 1;
+      sinceYield += 1;
+      if (sinceYield >= YIELD_EVERY) {
+        sinceYield = 0;
+        await scheduler.yield();
+      }
+      const cont = await visit(rel);
+      if (cont === false) return false;
     }
-  }
+    return true;
+  };
+
+  await walk(absDir);
 }
 
 /**
- * Collect files under `root` matching `pattern` (posix paths relative to root).
- * Walks with a generous traversal cap so later-sorted paths aren't missed;
- * only the returned list is cut at `maxResults`.
+ * In-process glob walk (fallback when packaged ripgrep is unavailable).
+ * Matches during the walk and stops at `maxResults`.
  */
-export async function globUnderRoot(
+export async function globWalkUnderRoot(
   root: string,
   pattern: string,
   options?: FsGlobOptions,
@@ -107,25 +162,64 @@ export async function globUnderRoot(
   if (!pattern || typeof pattern !== "string") {
     throw new Error("glob pattern required");
   }
-  const all: string[] = [];
-  // Walk cap decoupled from maxResults: a 200-result request must still see
-  // every file (the old Math.max(maxResults*4, 2000) truncated the walk at
-  // 2000 entries, silently dropping later paths like README.md).
-  await walkFiles(rootAbs, rootAbs, all, 100_000);
   const matched: string[] = [];
-  for (const rel of all) {
-    if (matchGlob(rel, pattern)) {
-      matched.push(rel);
-      if (matched.length >= maxResults) break;
-    }
-  }
+  await walkFilesUnder(rootAbs, rootAbs, (rel) => {
+    if (!matchGlob(rel, pattern)) return;
+    matched.push(rel);
+    if (matched.length >= maxResults) return false;
+  });
   return matched;
 }
 
 /**
- * Search file contents under root for a JS RegExp `pattern` string.
+ * Collect files under `root` matching `pattern` (posix paths relative to root).
+ * Prefers packaged ripgrep (`@vscode/ripgrep`, Codex / pi / DSH); falls back
+ * to {@link globWalkUnderRoot} when the binary is missing. Set `XRK_FS_SEARCH=js`
+ * to force the walk.
  */
-export async function grepUnderRoot(
+export async function globUnderRoot(
+  root: string,
+  pattern: string,
+  options?: FsGlobOptions,
+): Promise<readonly string[]> {
+  if (!pattern || typeof pattern !== "string") {
+    throw new Error("glob pattern required");
+  }
+  const { preferJsSearch, RipgrepUnavailableError, globWithRipgrep } =
+    await import("./ripgrep.js");
+  if (!preferJsSearch()) {
+    try {
+      return await globWithRipgrep(root, pattern, options);
+    } catch (err) {
+      if (!(err instanceof RipgrepUnavailableError)) throw err;
+    }
+  }
+  return globWalkUnderRoot(root, pattern, options);
+}
+
+/** Line scan without allocating a full `split` array (hot for large files). */
+export function forEachLine(
+  text: string,
+  fn: (line: string, lineNo: number) => boolean,
+): void {
+  let start = 0;
+  let lineNo = 1;
+  while (start <= text.length) {
+    let end = text.indexOf("\n", start);
+    if (end < 0) end = text.length;
+    let line = text.slice(start, end);
+    if (line.endsWith("\r")) line = line.slice(0, -1);
+    if (!fn(line, lineNo)) return;
+    if (end === text.length) break;
+    start = end + 1;
+    lineNo += 1;
+  }
+}
+
+/**
+ * In-process content search (fallback when packaged ripgrep is unavailable).
+ */
+export async function grepWalkUnderRoot(
   root: string,
   pattern: string,
   options?: FsGrepOptions,
@@ -148,7 +242,44 @@ export async function grepUnderRoot(
     throw new Error(`invalid grep pattern: ${message}`, { cause: err });
   }
 
-  let files: string[] = [];
+  const hits: FsGrepHit[] = [];
+
+  const scanFile = async (rel: string): Promise<boolean> => {
+    if (fileGlob && !matchGlob(rel, fileGlob)) return true;
+    const abs = resolveWithinRoot(rootAbs, rel);
+    let st;
+    try {
+      st = await fsStat(abs);
+    } catch {
+      return true;
+    }
+    if (!st.isFile() || st.size > FS_GREP_MAX_FILE_BYTES) return true;
+    let text: string;
+    try {
+      const buf = await fsReadFile(abs);
+      if (buf.byteLength > FS_GREP_MAX_FILE_BYTES) return true;
+      // Cheap binary reject before UTF-8 decode of the whole buffer.
+      const sample = buf.subarray(0, Math.min(buf.byteLength, 8192));
+      if (sample.includes(0)) return true;
+      text = buf.toString("utf8");
+    } catch {
+      return true;
+    }
+    forEachLine(text, (line, lineNo) => {
+      re.lastIndex = 0;
+      if (re.test(line)) {
+        hits.push({
+          path: rel,
+          line: lineNo,
+          text: line.length > 400 ? `${line.slice(0, 400)}…` : line,
+        });
+        if (hits.length >= maxResults) return false;
+      }
+      return true;
+    });
+    return hits.length < maxResults;
+  };
+
   const scopeAbs =
     scope === "." || scope === ""
       ? rootAbs
@@ -157,44 +288,38 @@ export async function grepUnderRoot(
   const st = await fsStat(scopeAbs);
   if (st.isFile()) {
     const rel = path.relative(rootAbs, scopeAbs).replace(/\\/g, "/");
-    files = [rel];
-  } else if (st.isDirectory()) {
-    const gathered: string[] = [];
-    // Walk cap decoupled from maxResults: same truncation fix as globUnderRoot.
-    await walkFiles(scopeAbs, rootAbs, gathered, 100_000);
-    files = gathered;
+    await scanFile(rel);
+    return hits;
   }
+  if (!st.isDirectory()) return hits;
 
-  if (fileGlob) {
-    files = files.filter((f) => matchGlob(f, fileGlob));
-  }
-
-  const hits: FsGrepHit[] = [];
-  for (const rel of files) {
-    if (hits.length >= maxResults) break;
-    const abs = resolveWithinRoot(rootAbs, rel);
-    let text: string;
-    try {
-      const buf = await fsReadFile(abs);
-      if (buf.byteLength > 1_000_000) continue;
-      text = buf.toString("utf8");
-    } catch {
-      continue;
-    }
-    if (text.includes("\0")) continue;
-    const lines = text.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i += 1) {
-      if (hits.length >= maxResults) break;
-      const line = lines[i] ?? "";
-      re.lastIndex = 0;
-      if (re.test(line)) {
-        hits.push({
-          path: rel,
-          line: i + 1,
-          text: line.length > 400 ? `${line.slice(0, 400)}…` : line,
-        });
-      }
-    }
-  }
+  await walkFilesUnder(scopeAbs, rootAbs, async (rel) => {
+    if (!(await scanFile(rel))) return false;
+  });
   return hits;
+}
+
+/**
+ * Search file contents under root. Prefers packaged ripgrep (`--json`);
+ * falls back to {@link grepWalkUnderRoot} when the binary is missing.
+ * Set `XRK_FS_SEARCH=js` to force the walk.
+ */
+export async function grepUnderRoot(
+  root: string,
+  pattern: string,
+  options?: FsGrepOptions,
+): Promise<readonly FsGrepHit[]> {
+  if (!pattern || typeof pattern !== "string") {
+    throw new Error("grep pattern required");
+  }
+  const { preferJsSearch, RipgrepUnavailableError, grepWithRipgrep } =
+    await import("./ripgrep.js");
+  if (!preferJsSearch()) {
+    try {
+      return await grepWithRipgrep(root, pattern, options);
+    } catch (err) {
+      if (!(err instanceof RipgrepUnavailableError)) throw err;
+    }
+  }
+  return grepWalkUnderRoot(root, pattern, options);
 }

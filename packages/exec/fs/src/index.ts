@@ -1,5 +1,6 @@
 import {
   mkdir,
+  open as fsOpen,
   readFile as fsReadFile,
   rm,
   stat as fsStat,
@@ -15,7 +16,7 @@ import {
   stripCarriageReturn,
   EditAmbiguousError,
 } from "./edit-text.js";
-import { textFromReadBuffer } from "./document-extract.js";
+import { isDocumentExtractPath, textFromReadBuffer } from "./document-extract.js";
 import { formatReadWindow } from "./read-window.js";
 import {
   PathEscapeError,
@@ -92,12 +93,32 @@ export {
   type ReadImageFs,
 } from "./read-image.js";
 export {
+  FS_GREP_MAX_FILE_BYTES,
+  FS_SEARCH_SKIP_DIR_NAMES,
+  FS_SEARCH_WALK_CAP,
+  forEachLine,
   globToRegExp,
+  globWalkUnderRoot,
+  grepWalkUnderRoot,
   matchGlob,
   type FsGlobOptions,
   type FsGrepHit,
   type FsGrepOptions,
 } from "./search.js";
+export {
+  FS_GLOB_HEAVY_EXCLUDES,
+  FS_GLOB_VCS_EXCLUDES,
+  FS_SEARCH_RAW_OUTPUT_MAX_BYTES,
+  FS_SEARCH_TIMEOUT_MS,
+  RipgrepUnavailableError,
+  buildGlobCommand,
+  buildGrepCommand,
+  clearRgPathCache,
+  parseGrepJsonRecord,
+  parseGrepMatches,
+  preferJsSearch,
+  resolveRgPath,
+} from "./ripgrep.js";
 export {
   langFromPath,
   presentEditCall,
@@ -212,17 +233,14 @@ export interface FsLocalOptions {
   readonly defaultMaxBytes?: number;
   /**
    * Absolute directories whose files may be WRITTEN by absolute path, in
-   * addition to `root`. Deliberately opt-in (a "full access" preset with an
-   * explicit allowlist) and never implied by any preset alone — without it,
-   * writes stay confined to the workspace root. Symlink escape is denied
-   * (lexical + realpath), and relative paths always resolve under `root`.
+   * addition to `root` (Settings `permission.extraWritableRoots`). Relative
+   * paths always resolve under `root`. Symlink escape denied.
    */
   readonly extraWritableRoots?: readonly string[];
   /**
-   * Absolute host directories whose files may be read by absolute path.
-   * Host whitelist: `{XRK_HOME}/attachments/v1` and `{XRK_HOME}/spill` only —
-   * never the whole product home. Containment is lexical + realpath (symlink
-   * escape denied). Writes still require the workspace root.
+   * Absolute host directories whose files may be read by absolute path
+   * (`hostReadableRoots`). Host default is product home (`{XRK_HOME}`).
+   * Containment is lexical + realpath (symlink escape denied).
    */
   readonly hostReadableRoots?: readonly string[];
 }
@@ -279,19 +297,47 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     async read(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
       const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
-      const buf = await fsReadFile(abs);
-      return textFromReadBuffer(buf, userPath, maxBytes);
+      // Office/notebook extractors need the whole package; plain text reads
+      // only the leading maxBytes so a multi-MB source file cannot stall Host.
+      if (isDocumentExtractPath(userPath)) {
+        const buf = await fsReadFile(abs);
+        return textFromReadBuffer(buf, userPath, maxBytes);
+      }
+      const fh = await fsOpen(abs, "r");
+      try {
+        const st = await fh.stat();
+        if (st.size === 0) return { content: "" };
+        const want = Math.min(st.size, maxBytes);
+        const buf = Buffer.allocUnsafe(want);
+        const { bytesRead } = await fh.read(buf, 0, want, 0);
+        const slice = buf.subarray(0, bytesRead);
+        const out = textFromReadBuffer(slice, userPath, maxBytes);
+        if (st.size > maxBytes) {
+          return { content: out.content, truncated: true };
+        }
+        return out;
+      } finally {
+        await fh.close();
+      }
     },
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
       const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
-      const buf = await fsReadFile(abs);
-      if (buf.byteLength > maxBytes) {
-        throw new Error(
-          `file exceeds read byte limit (${buf.byteLength} > ${maxBytes})`,
-        );
+      const fh = await fsOpen(abs, "r");
+      try {
+        const st = await fh.stat();
+        if (st.size > maxBytes) {
+          throw new Error(
+            `file exceeds read byte limit (${st.size} > ${maxBytes})`,
+          );
+        }
+        if (st.size === 0) return new Uint8Array();
+        const buf = Buffer.allocUnsafe(st.size);
+        const { bytesRead } = await fh.read(buf, 0, st.size, 0);
+        return new Uint8Array(buf.subarray(0, bytesRead));
+      } finally {
+        await fh.close();
       }
-      return new Uint8Array(buf);
     },
     async write(userPath, content) {
       emit("fs/write-intent", userPath);
@@ -372,7 +418,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       description:
         "Read a UTF-8 file with 1-based line numbers (`N|line`). " +
         "PDF, DOCX, XLSX, and ipynb are converted to text inside this tool. " +
-        "Use offset/limit for large files. Path may be workspace-relative or absolute under the workspace root.",
+        "Use offset/limit for large files. Path may be workspace-relative, " +
+        "absolute under the workspace, or absolute under host-readable roots " +
+        "(product home `{XRK_HOME}` by default — spill, attachments, memories).",
       parameters: {
         type: "object",
         properties: {
@@ -416,7 +464,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "write_file",
       description:
-        "Create or fully overwrite a UTF-8 file. Read the path in this turn first (write-intent).",
+        "Create or fully overwrite a UTF-8 file. Read the path in this turn first (write-intent). " +
+        "Workspace-relative paths stay under the workspace; absolute paths may use " +
+        "Settings → Permissions → extra writable roots (defaults include product home).",
       parameters: {
         type: "object",
         properties: {
@@ -443,9 +493,10 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       name: "apply_edit",
       description:
         "Replace a unique old_content snippet with content (literal substring edit). " +
-        "copy old_content verbatim from this file (exact indentation, no elided lines) — " +
-        "if you did not just read that exact text in this turn, read the file first; " +
-        "Use replace_all when the snippet appears more than once. For whole-file overwrite prefer write_file.",
+        "Copy old_content verbatim from the file (exact indentation, no elided lines) — " +
+        "if you did not just read that exact text in this turn, read the file first. " +
+        "Use replace_all when the snippet appears more than once; prefer write_file for whole-file overwrite. " +
+        "Absolute paths may use Settings → Permissions → extra writable roots (defaults include product home).",
       parameters: {
         type: "object",
         properties: {
@@ -487,7 +538,8 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
       description:
         "Apply a multi-file Codex-format patch (`*** Begin Patch` … `*** End Patch`). " +
         "Use for large or multi-file edits; `apply_edit` for a single unique snippet. " +
-        "Update/Delete paths must be read in this turn first (write-intent).",
+        "Update/Delete paths must be read in this turn first (write-intent). " +
+        "Absolute paths may use Settings → Permissions → extra writable roots (defaults include product home).",
       parameters: {
         type: "object",
         properties: {
@@ -543,8 +595,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "glob",
       description:
-        "List workspace-relative file paths matching a glob. " +
-        "`*.ts` matches basenames at any depth; use `**/*.ts` or a path prefix for directory scoping.",
+        "List workspace-relative paths matching a glob (ripgrep --files, mtime order). " +
+        "Respects .gitignore; skips node_modules/dist/VCS. " +
+        "`*.ts` matches basenames; use `**/*.ts` or a path prefix to scope.",
       parameters: {
         type: "object",
         properties: {
@@ -589,8 +642,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
     {
       name: "grep",
       description:
-        "Search UTF-8 files with a JS RegExp (path:line:text). " +
-        "Optional path scopes a file/dir; glob filters file names (e.g. **/*.ts). Default cap ~200 hits.",
+        "Search file contents with ripgrep (path:line:text). Respects .gitignore; " +
+        "skips node_modules/dist/VCS. Optional path scopes a file/dir; glob filters names (e.g. **/*.ts). " +
+        "Default cap ~100 hits.",
       parameters: {
         type: "object",
         properties: {

@@ -163,6 +163,34 @@ describe("FsService", () => {
     ]);
   });
 
+  it("skips generated trees (dist/node_modules) during glob/grep", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await mkdir(path.join(root, "dist"), { recursive: true });
+    await mkdir(path.join(root, "node_modules", "pkg"), { recursive: true });
+    await writeFile(path.join(root, "src", "hit.ts"), "const KEEP = 1;\n", "utf8");
+    await writeFile(path.join(root, "dist", "hit.ts"), "const KEEP = 2;\n", "utf8");
+    await writeFile(
+      path.join(root, "node_modules", "pkg", "hit.ts"),
+      "const KEEP = 3;\n",
+      "utf8",
+    );
+    const fs = createFsLocalProvider({ root });
+    expect(await fs.glob("**/*.ts")).toEqual(["src/hit.ts"]);
+    expect(await fs.grep("KEEP")).toEqual([
+      { path: "src/hit.ts", line: 1, text: "const KEEP = 1;" },
+    ]);
+  });
+
+  it("read caps bytes without loading the whole file into the tool result", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-"));
+    const fs = createFsLocalProvider({ root, defaultMaxBytes: 32 });
+    await fs.write("big.txt", "a".repeat(10_000));
+    const out = await fs.read("big.txt");
+    expect(out.truncated).toBe(true);
+    expect(Buffer.byteLength(out.content)).toBeLessThanOrEqual(32);
+  });
+
   it("glob and grep stay inside the workspace", async () => {
     expect(matchGlob("src/a.ts", "**/*.ts")).toBe(true);
     expect(matchGlob("a.ts", "**/*.ts")).toBe(true);
@@ -185,13 +213,15 @@ describe("FsService", () => {
     await writeFile(path.join(deep, "zz-target.md"), "target\n", "utf8");
 
     const fs = createFsLocalProvider({ root });
-    expect(await fs.glob("*.txt")).toEqual(["readme.txt"]);
+    // Packaged rg `--glob=*.txt` matches any depth; pin the root file by name.
+    expect(await fs.glob("readme.txt")).toEqual(["readme.txt"]);
     expect(await fs.glob("bulk/*.md")).toEqual(["bulk/zz-target.md"]);
     expect(await fs.grep("target", { path: "bulk" })).toEqual([
       { path: "bulk/zz-target.md", line: 1, text: "target" },
     ]);
     expect(await fs.glob("**/*.ts")).toEqual(["src/a.ts"]);
-    expect(await fs.glob("*.txt")).toEqual(["readme.txt"]);
+    expect((await fs.glob("*.txt")).length).toBeGreaterThan(1);
+    expect(await fs.glob("*.txt")).toContain("readme.txt");
 
     const hits = await fs.grep("findme");
     expect(hits).toEqual([
@@ -230,6 +260,19 @@ describe("FsService", () => {
     const fs = createFsLocalProvider({ root, hostReadableRoots: [host] });
     expect((await fs.read(alias)).content).toBe("from-attachment\n");
     await expect(fs.write(alias, "nope")).rejects.toThrow(PathEscapeError);
+  });
+
+  it("extraWritableRoots unlock absolute writes; still readable via same root", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-ws-"));
+    const home = await mkdtemp(path.join(tmpdir(), "xrk-fs-home-"));
+    const target = path.join(home, "spill", "note.txt");
+    const fs = createFsLocalProvider({
+      root,
+      hostReadableRoots: [home],
+      extraWritableRoots: [home],
+    });
+    await fs.write(target, "home-ok\n");
+    expect((await fs.read(target)).content).toBe("home-ok\n");
   });
 
   it("hostReadableRoots deny sibling home files and symlink escape from spill", async () => {
