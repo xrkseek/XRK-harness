@@ -96,6 +96,7 @@ import {
   applyRosterToolPolicy,
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
+  createCollabBoardFragmentProvider,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -549,6 +550,13 @@ export type AgentFactory = (input: {
    * Ask → Face approval via `setApprovalHandler`.
    */
   autoReviewPre?: import("@xrkseek/core-tools").PreHandler;
+  /**
+   * Turn-start fragments (Agent Team catalog + last-day 主线).
+   * Seed AGENTS.md / skills stay on workspace inject.
+   */
+  contextFragmentProviders?: ReturnType<
+    typeof createCollabBoardFragmentProvider
+  >[];
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -1430,6 +1438,13 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
                 : { curatedMemory: getCuratedMemProvider() }),
+              ...(faceBox.runtime
+                ? {
+                    contextFragmentProviders: [
+                      createCollabBoardFragmentProvider(faceBox.runtime),
+                    ],
+                  }
+                : {}),
               autoReviewPre: createAutoReviewToolPre({
                 xrkHome: resolveXrkHome(),
                 // Master switch (Settings) AND session preset === auto (DSH).

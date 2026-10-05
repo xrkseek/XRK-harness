@@ -81,6 +81,7 @@ export function createServerAgentFactory(
     curatedMemory,
     locale,
     autoReviewPre,
+    contextFragmentProviders,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -151,6 +152,9 @@ export function createServerAgentFactory(
       ...(videoGenEnv ? { videoGenEnv } : {}),
       ...(curatedMemory === false ? { curatedMemory: false as const } : {}),
       ...(locale ? { locale } : {}),
+      ...(contextFragmentProviders
+        ? { contextFragmentProviders }
+        : {}),
     });
     return composition.createAgent();
   };
