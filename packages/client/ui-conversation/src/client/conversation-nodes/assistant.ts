@@ -147,12 +147,25 @@ function turnLocationEndedAsStop(location: ConversationLocation | undefined): bo
   return turnEndedAsStop(location.turn.end)
 }
 
+/**
+ * Stop closed this Turn — but only the step Stop actually cut may claim it.
+ * A turn-level abort reason is shared by every Step in the turn, so honoring
+ * it wholesale stamps 「已停止」 on each earlier (normally finished) step;
+ * the tail keeps the turn-level marker (TurnTailNodeView) for the rest.
+ */
+function stoppedAtThisStep(location: ConversationLocation | undefined, step: number): boolean {
+  if (!turnLocationEndedAsStop(location) || location === undefined) return false
+  if (location.kind !== 'turn' && location.kind !== 'step') return false
+  const last = location.turn.steps.at(-1)
+  return last === undefined || last.step === step
+}
+
 function finalNode(
   state: AssistantState,
   context: ConversationNodeContext<AssistantState>,
 ): AssistantMessageNode | undefined {
   const location = context.start?.location ?? context.matches.at(-1)?.location
-  const stopped = turnLocationEndedAsStop(location)
+  const stopped = stoppedAtThisStep(location, state.step)
   const final = state.final
   if (final?.event.type === 'assistant/message') {
     const event = final.event

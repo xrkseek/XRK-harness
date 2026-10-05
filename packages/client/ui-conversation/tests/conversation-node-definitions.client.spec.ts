@@ -281,6 +281,27 @@ describe('built-in conversation node Definitions', () => {
     })
     expect(node(snapshot(stopInterruptedKind), 'turn-tail')).toBeDefined()
 
+    // Stop after a multi-step turn: the turn-level abort reason belongs to the
+    // step it actually cut — earlier finished steps stay settled.
+    const stopAfterMultiStep = snapshot(assembler([
+      at(100, 'turn/start', { turn: 11 }),
+      at(101, 'step/start', { turn: 11, step: 1 }),
+      at(102, 'assistant/message', {
+        turn: 11, step: 1, message: assistantMessage('assistant-step-one', '先做一步'),
+      }, { surfaceOp: 'append' }),
+      at(103, 'step/end', { turn: 11, step: 1 }),
+      at(104, 'step/start', { turn: 11, step: 2 }),
+      at(105, 'assistant/message', {
+        turn: 11, step: 2, message: assistantMessage('assistant-step-two', '再一步'),
+      }, { surfaceOp: 'append' }),
+      at(106, 'step/end', { turn: 11, step: 2 }),
+      at(107, 'turn/end', { turn: 11, reason: { kind: 'aborted', reason: { kind: 'user' } } }),
+    ]))
+    const multiSteps = [...stopAfterMultiStep.nodes.values()]
+      .filter(candidate => candidate.kind === 'assistant-step')
+    expect(multiSteps.map(candidate => (candidate.data as AssistantChatData).status))
+      .toEqual(['settled', 'interrupted'])
+
     const emptyAbort = assembler([
       at(70, 'turn/start', { turn: 9 }),
       at(71, 'turn/end', {
