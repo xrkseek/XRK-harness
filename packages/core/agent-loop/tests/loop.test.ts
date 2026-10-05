@@ -260,7 +260,7 @@ describe("runTurn", () => {
     expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
   });
 
-  it("claims pending steers between tool steps", async () => {
+  it("holds pending steers until the turn ends; does not inject between tool steps", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     const tools = createToolRegistry();
@@ -269,7 +269,7 @@ describe("runTurn", () => {
       description: "mark",
       parameters: { type: "object" },
       async execute() {
-        admitPrompt(store, session.id, "redirect mid-turn", {
+        admitPrompt(store, session.id, "redirect after turn", {
           delivery: "steer",
         });
         admitPrompt(store, session.id, "queued-later");
@@ -281,7 +281,7 @@ describe("runTurn", () => {
         content: "",
         toolCalls: [{ id: "c1", name: "mark", arguments: {} }],
       },
-      { content: "got redirect" },
+      { content: "same-turn close" },
     ]);
 
     const result = await runTurn({
@@ -292,19 +292,23 @@ describe("runTurn", () => {
       tools,
     });
 
-    expect(result.assistantText).toBe("got redirect");
+    expect(result.assistantText).toBe("same-turn close");
     const msgs = deriveMessages(store.get(session.id).events);
     expect(msgs.map((m) => m.role)).toEqual([
       "user",
       "assistant",
       "tool",
-      "user",
       "assistant",
     ]);
-    expect(msgs[3]?.content).toBe("redirect mid-turn");
     expect(
-      listPendingAdmits(store.get(session.id).events).map((p) => p.content),
-    ).toEqual(["queued-later"]);
+      listPendingAdmits(store.get(session.id).events).map((p) => ({
+        content: p.content,
+        delivery: p.delivery,
+      })),
+    ).toEqual([
+      { content: "redirect after turn", delivery: "steer" },
+      { content: "queued-later", delivery: "queue" },
+    ]);
   });
 
   it("passbacks reasoning on every reasoned assistant when calling LLM again (rc.8)", async () => {

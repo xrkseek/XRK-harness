@@ -94,6 +94,21 @@ interface PendingEvent {
   readonly event: SessionEvent;
 }
 
+/**
+ * Non-chunk events accumulate in `pending` until one of these forces a flush:
+ * - a durability boundary event arrives (`user/message`, `turn/*`,
+ *   `command/*`, `prompt/*` — user inputs / lifecycle edges that must not
+ *   be lost on crash; crash repair relies on them to close open turns),
+ * - the pending queue crosses this ceiling (model-output bursts inside one
+ *   very long turn), or
+ * - an explicit `flush()` (host drain idle / close / search / evict).
+ * Model-interior events (`assistant/*`, `step/*`, `tool/*`, `llm/*`) batch:
+ * a crash loses at most this window of model output, and
+ * `repairOpenTurnEvents` still closes the turn on reload. User input is
+ * never batched, so no user-visible state is lost.
+ */
+const MICRO_BATCH_MAX_PENDING = 64;
+
 function assertSafeId(id: string): string {
   if (!ID_RE.test(id)) {
     throw new Error(`unsafe session id for sqlite store: ${id}`);
@@ -443,9 +458,23 @@ export function createPersistentSessionStore(
     writeRecord(id, frozen);
   };
 
+  /**
+   * Events that must be durable before `append` returns — user input and
+   * turn lifecycle edges. Crash repair (`repairOpenTurnEvents`) closes every
+   * `turn/start` that never got a `turn/end`, but it can only settle what
+   * reached disk; a queued user message would be silently lost, and a missing
+   * `turn/start` would open a turn the repair pass cannot see.
+   */
+  const isDurabilityBoundary = (frozen: SessionEvent): boolean =>
+    frozen.type === "user/message" ||
+    frozen.type === "turn/start" ||
+    frozen.type === "turn/end" ||
+    frozen.type.startsWith("command/") ||
+    frozen.type.startsWith("prompt/");
+
   const persistEvent = (id: string, frozen: SessionEvent): void => {
     pending.push({ sessionId: id, event: frozen });
-    if (frozen.type !== "assistant/chunk") {
+    if (isDurabilityBoundary(frozen) || pending.length >= MICRO_BATCH_MAX_PENDING) {
       flushPending();
     }
   };

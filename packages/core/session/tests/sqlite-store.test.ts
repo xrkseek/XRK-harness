@@ -118,14 +118,13 @@ describe("createPersistentSessionStore", () => {
 
     expect(() =>
       store.append(s, {
-        type: "assistant/message",
+        type: "turn/end",
         ts: 2,
         turnId: "t",
-        stepId: "s",
-        content: "x",
+        reason: { kind: "completed" },
       }),
     ).toThrow();
-    // Failed append must not stick in the resident log.
+    // Failed flush must not stick in the resident log or the pending queue.
     expect(store.get(s).events).toHaveLength(1);
 
     expect(() => store.close()).toThrow();

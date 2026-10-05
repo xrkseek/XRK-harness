@@ -6,11 +6,13 @@
  *   - exclusive calls are barriers (drain pool, run alone)
  *   - later calls are reclassified before start (registry hot-reload safe)
  *
- * Innovation vs OpenCode FiberSet (completion-order publish):
+ * Innovation vs a completion-order-only scheduler:
  *   1) append every tool/call (barrier — caller)
  *   2) settle bodies with exclusive barriers + bounded parallel pools
- *   3) append tool/result in **call order** (caller)
- * so the durable log stays reconstructible and order-stable.
+ *   3) caller may append tool/result as each body finishes (`onOutcome`);
+ *      the next model step still waits for the whole batch
+ * so the durable log is reconstructible (paired by callId) and the shell
+ * can paint a finished card while siblings still run.
  *
  * Cancel (DSH): already-started calls finish or `ABORTED`; never-started calls
  * receive synthetic `ABORTED_BEFORE_DISPATCH` outcomes — no throw mid-batch.
@@ -53,6 +55,12 @@ export interface SettleToolBatchInput {
    * Hang/timeout on web_fetch uses this so the fetch actually runs N times.
    */
   readonly maxRetries?: number;
+  /**
+   * Invoked as soon as one call has a final outcome (completion order).
+   * `callIndex` is the index in `calls`. The returned `outcomes` array stays
+   * in call order. The next LLM step still waits for this function to return.
+   */
+  readonly onOutcome?: (outcome: RunToolOutcome, callIndex: number) => void;
 }
 
 export interface SettleToolBatchResult {
@@ -126,6 +134,14 @@ async function settleOne(
   });
 }
 
+function noteOutcome(
+  input: SettleToolBatchInput,
+  callIndex: number,
+  outcome: RunToolOutcome,
+): void {
+  input.onOutcome?.(outcome, callIndex);
+}
+
 function parallelCap(input: SettleToolBatchInput): number {
   if (
     typeof input.maxParallel === "number" &&
@@ -144,6 +160,7 @@ function parallelCap(input: SettleToolBatchInput): number {
 async function settleParallelGroup(
   input: SettleToolBatchInput,
   group: readonly ToolCall[],
+  indexOffset: number,
 ): Promise<{
   readonly outcomes: RunToolOutcome[];
   readonly consumed: number;
@@ -166,12 +183,15 @@ async function settleParallelGroup(
         if (isAbortSettlementCode(outcome.result.error?.code)) {
           aborted = true;
         }
+        noteOutcome(input, indexOffset + index, outcome);
         return index;
       },
       (err: unknown) => {
         if (isAbortError(err)) {
           aborted = true;
-          outcomes[index] = abortedAfterStartOutcome(call);
+          const outcome = abortedAfterStartOutcome(call);
+          outcomes[index] = outcome;
+          noteOutcome(input, indexOffset + index, outcome);
           return index;
         }
         failure ??= err;
@@ -220,7 +240,9 @@ async function settleParallelGroup(
     aborted = true;
     for (let i = 0; i < group.length; i++) {
       if (outcomes[i] === undefined) {
-        outcomes[i] = abortedBeforeDispatchOutcome(group[i]!);
+        const outcome = abortedBeforeDispatchOutcome(group[i]!);
+        outcomes[i] = outcome;
+        noteOutcome(input, indexOffset + i, outcome);
       }
     }
     return {
@@ -259,7 +281,9 @@ export async function settleToolBatch(
     for (const call of input.calls) {
       if (aborted || input.signal?.aborted) {
         aborted = true;
-        outcomes.push(abortedBeforeDispatchOutcome(call));
+        const outcome = abortedBeforeDispatchOutcome(call);
+        outcomes.push(outcome);
+        noteOutcome(input, outcomes.length - 1, outcome);
         continue;
       }
       const outcome = await settleOne(input, call);
@@ -267,6 +291,7 @@ export async function settleToolBatch(
         aborted = true;
       }
       outcomes.push(outcome);
+      noteOutcome(input, outcomes.length - 1, outcome);
     }
     return { outcomes, mode, aborted };
   }
@@ -279,6 +304,7 @@ export async function settleToolBatch(
       aborted = true;
       for (let i = next; i < input.calls.length; i++) {
         outcomes.push(abortedBeforeDispatchOutcome(input.calls[i]!));
+        noteOutcome(input, i, outcomes[outcomes.length - 1]!);
       }
       break;
     }
@@ -290,6 +316,7 @@ export async function settleToolBatch(
         aborted = true;
       }
       outcomes.push(outcome);
+      noteOutcome(input, next, outcome);
       next += 1;
       continue;
     }
@@ -298,7 +325,7 @@ export async function settleToolBatch(
       outcomes: groupOut,
       consumed,
       aborted: groupAborted,
-    } = await settleParallelGroup(input, group);
+    } = await settleParallelGroup(input, group, next);
     outcomes.push(...groupOut);
     next += consumed;
     if (groupAborted) aborted = true;

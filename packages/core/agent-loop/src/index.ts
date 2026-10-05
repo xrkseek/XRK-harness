@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, promotePendingSteers, pruneOversizedToolResults, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, pruneOversizedToolResults, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -11,6 +11,7 @@ import {
 import {
   materializeTools,
   type FileDiff,
+  type RunToolOutcome,
   type ToolPipeline,
   type ToolRegistry,
 } from "@xrkseek/core-tools";
@@ -198,7 +199,8 @@ export interface RunTurnInput {
   readonly now?: () => number;
   /**
    * How to settle multiple tool calls in one step.
-   * Default `parallel`: call-barrier → concurrent settle → ordered results.
+   * Default `parallel`: call-barrier → concurrent settle → result as each
+   * body finishes; next LLM step still waits for the batch.
    * Use `serial` for strict one-at-a-time (e.g. heavy write tools).
    */
   readonly toolSettle?: ToolSettleMode;
@@ -243,8 +245,8 @@ export interface RunTurnInput {
   }) => void | Promise<void>;
   /**
    * Face cross-session `@session` prepare: rewrite mention tokens and return
-   * zero-or-more context rows to append immediately after the human message
-   * (and after mid-turn steers). Omit → no prepare.
+   * zero-or-more context rows to append immediately after the human message.
+   * Omit → no prepare.
    */
   readonly prepareUserContent?: (ctx: {
     readonly content: MessageContent;
@@ -787,48 +789,10 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       throw new DOMException("aborted", "AbortError");
     }
     steps += 1;
-    // Step-boundary steer (session-delivery): claim pending steers before
-    // the next model request so mid-turn redirects do not wait for turn end.
-    // Queues stay pending until continueTurn / drain idle.
-    if (steps > 1) {
-      const steers = promotePendingSteers(input.store, input.sessionId, {
-        now,
-      });
-      if (steers) {
-        let steerContent = steers.content;
-        let steerContexts: readonly {
-          readonly content: MessageContent;
-          readonly source?: UserMessageSource;
-        }[] = [];
-        if (input.prepareUserContent) {
-          const prepared = await input.prepareUserContent({
-            content: steers.content,
-            text: steers.text,
-            ...(input.signal ? { signal: input.signal } : {}),
-          });
-          steerContent = prepared.content;
-          steerContexts = prepared.contexts;
-        }
-        append(input.store, input.sessionId, {
-          type: "user/message",
-          ts: now(),
-          turnId,
-          messageId: newUserMessageId(),
-          content: steerContent,
-          source: { kind: "user" },
-        });
-        for (const ctx of steerContexts) {
-          append(input.store, input.sessionId, {
-            type: "user/message",
-            ts: now(),
-            turnId,
-            messageId: newUserMessageId(),
-            content: ctx.content,
-            ...(ctx.source ? { source: ctx.source } : {}),
-          });
-        }
-      }
-    }
+    // Steer waits for this Host turn to end (`continueTurn` / drain
+    // `promoteAdmitsForTurn`). Injecting at the tool-step boundary made the
+    // line a same-turn LLM request, so the shell never had a stable 「插队中」
+    // wait, then kept the badge after Think had already started.
     commitPendingPlanMode(input.store, input.sessionId, now);
     const stepId = id("step");
     activeStepId = stepId;
@@ -1240,25 +1204,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       await input.beforeTools();
     }
 
-    const { outcomes, aborted: settleAborted } = await settleToolBatch({
-      calls,
-      registry: input.tools,
-      materialization: table!,
-      mode: input.toolSettle ?? "parallel",
-      ...(input.signal ? { signal: input.signal } : {}),
-      ...(input.pipeline ? { pipeline: input.pipeline } : {}),
-      ...(input.maxParallelToolCalls !== undefined
-        ? { maxParallel: input.maxParallelToolCalls }
-        : {}),
-      ...(toolMaxRetries > 0 ? { maxRetries: toolMaxRetries } : {}),
-    });
-
-    // Barrier 2: tool side-events then tool/result in call order.
-    for (let i = 0; i < calls.length; i++) {
-      const outcome = outcomes[i]!;
+    const publishSettledTool = (outcome: RunToolOutcome, callIndex: number): void => {
       for (const te of outcome.toolEvents) {
         if (!TOOL_EMITTABLE_EVENT_TYPES.includes(te.type as SessionEvent["type"])) continue;
-        // Turn/call identity is Host-owned; tool payloads carry only data.
         const payload =
           te.type === "deliverables/presented"
             ? {
@@ -1306,7 +1254,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         stepId,
         result: settledResult,
       });
-      const call = calls[i]!;
+      const call = calls[callIndex]!;
       turnFileDiffs.push(
         ...fileDiffsFromToolPresenters({
           name: settledResult.name,
@@ -1319,10 +1267,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       else toolOk += 1;
       batchContexts.push(...outcome.additionalContexts);
       batchSafety.push(...outcome.safetyNotices);
-    }
+      emitWorkspaceChanges();
+    };
 
-    // Live Overview / deliverables: same-turn replace as each tool batch settles.
-    emitWorkspaceChanges();
+    const { aborted: settleAborted, outcomes } = await settleToolBatch({
+      calls,
+      registry: input.tools,
+      materialization: table!,
+      mode: input.toolSettle ?? "parallel",
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.pipeline ? { pipeline: input.pipeline } : {}),
+      ...(input.maxParallelToolCalls !== undefined
+        ? { maxParallel: input.maxParallelToolCalls }
+        : {}),
+      ...(toolMaxRetries > 0 ? { maxRetries: toolMaxRetries } : {}),
+      onOutcome: publishSettledTool,
+    });
 
     if (settleAborted || input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");

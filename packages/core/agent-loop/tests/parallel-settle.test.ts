@@ -66,6 +66,47 @@ describe("settleToolBatch", () => {
     expect(elapsed).toBeLessThan(100);
   });
 
+  it("notifies onOutcome in completion order while outcomes stay call-ordered", async () => {
+    const tools = createToolRegistry();
+    tools.register({
+      name: "slow",
+      description: "slow",
+      parameters: {},
+      isConcurrencySafe: () => true,
+      async execute() {
+        await delay(40);
+        return { content: "slow-done" };
+      },
+    });
+    tools.register({
+      name: "fast",
+      description: "fast",
+      parameters: {},
+      isConcurrencySafe: () => true,
+      async execute() {
+        await delay(5);
+        return { content: "fast-done" };
+      },
+    });
+    const materialization = materializeTools(tools);
+    const seen: string[] = [];
+    const { outcomes } = await settleToolBatch({
+      calls: [
+        { id: "1", name: "slow", arguments: {} },
+        { id: "2", name: "fast", arguments: {} },
+      ],
+      registry: tools,
+      materialization,
+      mode: "parallel",
+      onOutcome: (outcome) => { seen.push(outcome.result.content) },
+    });
+    expect(seen).toEqual(["fast-done", "slow-done"]);
+    expect(outcomes.map((o) => o.result.content)).toEqual([
+      "slow-done",
+      "fast-done",
+    ]);
+  });
+
   it("serial runs one after another", async () => {
     const tools = createToolRegistry();
     const order: string[] = [];
@@ -189,7 +230,7 @@ describe("settleToolBatch", () => {
 });
 
 describe("runTurn parallel settle", () => {
-  it("appends all calls before any result; results follow call order", async () => {
+  it("appends all calls before any result; results land as each body finishes", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     const tools = createToolRegistry();
@@ -247,7 +288,9 @@ describe("runTurn parallel settle", () => {
 
     const msgs = deriveMessages(store.get(session.id).events);
     const toolMsgs = msgs.filter((m) => m.role === "tool");
-    expect(toolMsgs.map((m) => m.content)).toEqual(["S", "F"]);
+    expect(toolMsgs.map((m) => m.content)).toEqual(["F", "S"]);
+    const results = store.get(session.id).events.filter((e) => e.type === "tool/result");
+    expect(results.map((e) => e.type === "tool/result" ? e.result.content : "")).toEqual(["F", "S"]);
   });
 });
 
