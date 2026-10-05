@@ -141,7 +141,7 @@ export function apply(ctx: ClientContext): void {
   const controller = new PermissionPresetSettingsController(connection.api)
   const load = (): Promise<void> => controller.load()
   const select = (preset: string): Promise<void> => controller.select(preset)
-  const saveRoots = (roots: readonly string[]): Promise<void> => controller.saveRoots(roots)
+  const saveRoots = (roots: readonly string[]): Promise<boolean> => controller.saveRoots(roots)
   const injected = (): PermissionRowInjected => ({
     hooks: { permission: controller.store },
     load,

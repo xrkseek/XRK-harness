@@ -115,6 +115,7 @@ import {
   JOBS_PROMPT_TEXT,
 } from "@xrkseek/exec-shell";
 import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import { defaultSpillDir } from "@xrkseek/server-config";
 import {
   createRegistryCodeToolBridge,
   createRunCodeTool,
@@ -471,17 +472,16 @@ export interface HarnessCompositionOptions {
   /** Host: AttachmentStore.fileHostPath → absolute path for uploaded files. */
   readonly resolveFilePath?: Parameters<typeof createAgent>[0]["resolveFilePath"];
   /**
-   * Absolute host directories `read_file` may open outside the workspace
-   * (attachment alias root). Writes remain workspace-bound.
+   * Absolute host directories `read_file` may open outside the workspace.
+   * Host / composition default is product home (`{XRK_HOME}` — spill,
+   * attachments, memories). Writes use `extraWritableRoots`.
    */
   readonly hostReadableRoots?: readonly string[];
   /**
    * Absolute directories the file tools may WRITE by absolute path, in
-   * addition to the workspace root. Deliberately opt-in: only a caller that
-   * composes an explicit allowlist (e.g. a "full access" preset with
-   * `extraWritableRoots` configured) ever widens the write surface; no preset
-   * implies it. Symlink escape stays denied, and relative paths always
-   * resolve under the workspace root.
+   * addition to the workspace root. Host fills this from Settings
+   * `permission.extraWritableRoots` (base includes product home). Symlink
+   * escape stays denied; relative paths always resolve under the workspace.
    */
   readonly extraWritableRoots?: readonly string[];
   /** Durable image store — enables `read_image` when set. */
@@ -649,16 +649,18 @@ function wrapStoreForLifecycleWebhooks(
 export function createHarnessComposition(
   options: HarnessCompositionOptions,
 ): HarnessComposition {
+  const productHome = resolveProductHome();
   const fs =
     options.fs ??
     createFsLocalProvider({
       root: options.workspaceRoot,
-      ...(options.extraWritableRoots?.length
-        ? { extraWritableRoots: options.extraWritableRoots }
-        : {}),
-      ...(options.hostReadableRoots?.length
-        ? { hostReadableRoots: options.hostReadableRoots }
-        : {}),
+      // Same options Host wires: product home is readable/writable by absolute path.
+      hostReadableRoots: options.hostReadableRoots?.length
+        ? options.hostReadableRoots
+        : [productHome],
+      extraWritableRoots: options.extraWritableRoots?.length
+        ? options.extraWritableRoots
+        : [productHome],
     });
   const sharedShell = options.shell;
   const baseStore = options.sessionStore ?? createMemorySessionStore();
@@ -811,6 +813,7 @@ export function createHarnessComposition(
     createLocalShell({
       subprocess: createLocalSubprocess(),
       defaultCwd: options.workspaceRoot,
+      spillDir: defaultSpillDir(),
       ...(shouldConfineSandbox(sandboxMode)
         ? {
             prepareArgv: (
@@ -827,8 +830,8 @@ export function createHarnessComposition(
     options.workspaceInject,
     options.workspaceDisplayTitle,
   );
-  const productDir =
-    injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
+  // Product standing lives under `{XRK_HOME}` — never mkdir `.xrk` in the workspace.
+  const productDir = injectOpts.productDir ?? resolveProductHome();
 
   const tools = createToolRegistry();
   for (const tool of createFsTools(fs)) tools.register(tool);
@@ -1450,9 +1453,7 @@ export function createHarnessComposition(
 
   const workspace = createWorkspaceInjector({
     root: injectOpts.root,
-    ...(injectOpts.productDir !== undefined
-      ? { productDir: injectOpts.productDir }
-      : {}),
+    productDir,
     ...(injectOpts.audience !== undefined
       ? { audience: injectOpts.audience }
       : {}),
@@ -1514,8 +1515,7 @@ export function createHarnessComposition(
         shouldInject(options.assemble, options.workspaceInject);
       const wireBeforeUserMessage =
         injectOn || contextFragments !== undefined;
-      const productDir =
-        injectOpts.productDir ?? path.join(injectOpts.root, ".xrk");
+      const productDir = injectOpts.productDir ?? resolveProductHome();
       let recipes: Awaited<ReturnType<typeof loadOfficeRecipes>> = [];
       if (useAssemble && options.slashRecipes !== false) {
         if (typeof options.slashRecipes === "string") {

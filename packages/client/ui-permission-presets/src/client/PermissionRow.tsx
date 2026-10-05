@@ -4,7 +4,7 @@
  * control.
  */
 
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { memo, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
@@ -26,7 +26,7 @@ export interface PermissionRowInjected {
   /** Persist one advertised preset. */
   select: (preset: string) => Promise<void>
   /** Persist the explicit extra file-write allowlist (empty clears it). */
-  saveRoots: (roots: readonly string[]) => Promise<void>
+  saveRoots: (roots: readonly string[]) => Promise<boolean>
 }
 
 /** Full component props. */
@@ -59,28 +59,48 @@ function mergeRoots(current: readonly string[], incoming: readonly string[]): st
   return next
 }
 
+function sameStringList(a: readonly string[], b: readonly string[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 /** Chip list + one-path compose; each add/remove persists immediately. */
-function ExtraWritableRootsInput({ value, disabled, t, save }: {
+const ExtraWritableRootsInput = memo(function ExtraWritableRootsInput({
+  value,
+  disabled,
+  t,
+  save,
+}: {
   value: readonly string[]
   disabled: boolean
   t: PermissionRowProps['t']
-  save: (roots: readonly string[]) => Promise<void>
+  save: (roots: readonly string[]) => Promise<boolean>
 }): ReactNode {
   const [draft, setDraft] = useState('')
   const addFromDraft = (): void => {
     const parsed = parseRootPaths(draft)
     if (parsed.length === 0) return
     const next = mergeRoots(value, parsed)
+    if (next.length === value.length) {
+      setDraft('')
+      return
+    }
+    const pending = draft
     setDraft('')
-    if (next.length === value.length) return
-    void save(next)
+    void save(next).then((ok) => {
+      if (!ok) setDraft(pending)
+    })
   }
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
     addFromDraft()
   }
   return (
-    <div className={css.roots}>
+    <div className={css.roots} aria-busy={disabled || undefined}>
       <label className={css.rootsTitle} htmlFor="xrk-permission-extra-roots">
         {t('roots.label')}
       </label>
@@ -114,6 +134,7 @@ function ExtraWritableRootsInput({ value, disabled, t, save }: {
           disabled={disabled}
           autoComplete="off"
           spellCheck={false}
+          enterKeyHint="done"
           onChange={(event) => { setDraft(event.target.value) }}
         />
         <button
@@ -127,7 +148,7 @@ function ExtraWritableRootsInput({ value, disabled, t, save }: {
       <p className={css.rootsHint}>{t('roots.hint')}</p>
     </div>
   )
-}
+})
 
 /**
  * Render the new-session Permission default selector.
@@ -135,7 +156,15 @@ function ExtraWritableRootsInput({ value, disabled, t, save }: {
  * @returns the row, or null when the host does not expose permission settings.
  */
 export function PermissionRow({ load, select, saveRoots, usePermission, t }: PermissionRowProps) {
-  const state = usePermission(snapshot => snapshot)
+  const status = usePermission(snapshot => snapshot.status)
+  const writable = usePermission(snapshot => snapshot.writable)
+  const error = usePermission(snapshot => snapshot.error)
+  const currentValue = usePermission(snapshot => snapshot.currentValue)
+  const options = usePermission(snapshot => snapshot.options)
+  const extraWritableRoots = usePermission(
+    snapshot => snapshot.extraWritableRoots,
+    sameStringList,
+  )
   const [open, setOpen] = useState(false)
   const [confirmingFullAccess, setConfirmingFullAccess] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
@@ -145,39 +174,39 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
   }, [load])
 
   useEffect(() => {
-    if (state.writable && state.status !== 'unavailable') return
+    if (writable && status !== 'unavailable') return
     setOpen(false)
     setAcknowledged(false)
     setConfirmingFullAccess(false)
-  }, [state.status, state.writable])
+  }, [status, writable])
 
-  if (state.status === 'unavailable') return null
-  const selected = state.options.find(option => option.id === state.currentValue)
-  const busy = state.status === 'loading' || state.status === 'saving' || confirmingFullAccess
+  if (status === 'unavailable') return null
+  const selected = options.find(option => option.id === currentValue)
+  const busy = status === 'loading' || status === 'saving' || confirmingFullAccess
   const label = selected === undefined
     ? (busy ? t('loading') : t('unavailable'))
     : displayPermissionPreset(selected.id, selected.label, t)
-  const description: string = state.error ?? t('description')
+  const description: string = error ?? t('description')
 
   return (
     <>
-      <div className={css.row}>
+      <div className={css.row} aria-busy={busy || undefined}>
         <div className={css.rowText}>
           <div className={css.title}>{t('title')}</div>
-          <div className={css.desc} role={state.error === null ? undefined : 'alert'}>{description}</div>
+          <div className={css.desc} role={error === null ? undefined : 'alert'}>{description}</div>
           <div className={css.boundaryNote}>{t('boundary')}</div>
         </div>
         <Menu
           open={open}
           onClose={() => { setOpen(false) }}
-          items={state.options.map(option => ({
+          items={options.map(option => ({
             id: option.id,
             label: displayPermissionPreset(option.id, option.label, t),
           }))}
-          selectedId={state.currentValue}
+          selectedId={currentValue}
           onSelect={(id) => {
             setOpen(false)
-            if (id === state.currentValue) return
+            if (id === currentValue) return
             if (id === FULL_ACCESS_PRESET) {
               setAcknowledged(false)
               setConfirmingFullAccess(true)
@@ -193,7 +222,7 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
               className={css.selector}
               aria-haspopup="menu"
               aria-expanded={open}
-              disabled={busy || !state.writable || state.options.length === 0}
+              disabled={busy || !writable || options.length === 0}
               onClick={() => { setOpen(value => !value) }}
             >
               {label}
@@ -203,8 +232,8 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
         />
       </div>
       <ExtraWritableRootsInput
-        value={state.extraWritableRoots}
-        disabled={busy || !state.writable}
+        value={extraWritableRoots}
+        disabled={busy || !writable}
         t={t}
         save={saveRoots}
       />
@@ -216,7 +245,7 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
         cancelLabel={t('confirm.cancel')}
         confirmLabel={t('confirm.enable')}
         acknowledged={acknowledged}
-        disabled={!state.writable || state.status === 'saving'}
+        disabled={!writable || status === 'saving'}
         onAcknowledgedChange={setAcknowledged}
         onCancel={() => {
           setAcknowledged(false)

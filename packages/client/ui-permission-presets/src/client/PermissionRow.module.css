@@ -21,6 +21,7 @@
   font-weight: 400;
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
+  text-wrap: pretty;
 }
 
 .desc {
@@ -28,6 +29,7 @@
   font-weight: 400;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  text-wrap: pretty;
 }
 
 .boundaryNote {
@@ -35,7 +37,7 @@
   font-weight: 400;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
-  opacity: 0.85;
+  text-wrap: pretty;
 }
 
 .roots {
@@ -59,6 +61,7 @@
   font-weight: 400;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  text-wrap: pretty;
 }
 
 .chips {
@@ -91,9 +94,11 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .chipRemove {
+  position: relative;
   box-sizing: border-box;
   flex: none;
   display: inline-flex;
@@ -108,11 +113,32 @@
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: color, background-color, transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+/* Dense-desktop hit target ≥40px without growing the visible chip control. */
+.chipRemove::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
 }
 
 .chipRemove:hover:not(:disabled) {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.chipRemove:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.chipRemove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary, var(--dsw-alias-interactive-primary));
 }
 
 .chipRemove:disabled {
@@ -140,6 +166,9 @@
   font-size: 13px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary);
+  transition-property: border-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 .rootsInput::placeholder {
@@ -149,6 +178,7 @@
 .rootsInput:focus-visible {
   outline: none;
   border-color: var(--dsw-alias-brand-primary, var(--dsw-alias-interactive-primary));
+  box-shadow: 0 0 0 1px var(--dsw-alias-brand-primary, var(--dsw-alias-interactive-primary));
 }
 
 .rootsInput:disabled {
@@ -169,10 +199,24 @@
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color, transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 .rootsAdd:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rootsAdd:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.rootsAdd:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary, var(--dsw-alias-interactive-primary));
 }
 
 .rootsAdd:disabled {
@@ -194,10 +238,24 @@
   line-height: 22px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 .selector:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.selector:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.selector:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary, var(--dsw-alias-interactive-primary));
 }
 
 .selector:disabled {
@@ -206,6 +264,39 @@
 
 .chevron {
   flex: none;
+  transition-property: transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.selector[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chipRemove,
+  .rootsInput,
+  .rootsAdd,
+  .selector,
+  .chevron {
+    transition: none;
+  }
+
+  .chipRemove:active:not(:disabled),
+  .rootsAdd:active:not(:disabled),
+  .selector:active:not(:disabled) {
+    transform: none;
+  }
+
+  .selector[aria-expanded='true'] .chevron {
+    transform: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .chipRemove::before {
+    inset: -11px;
+  }
 }
 
 @media (max-width: 767px) {
@@ -224,7 +315,6 @@
     max-width: 100%;
     min-height: 40px;
     height: 40px;
-    touch-action: manipulation;
   }
 
   .compose {
@@ -235,6 +325,5 @@
   .rootsAdd {
     min-height: 40px;
     height: 40px;
-    touch-action: manipulation;
   }
 }

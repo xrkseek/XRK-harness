@@ -45,8 +45,7 @@ export function defaultPluginsDir(
 
 /**
  * `{home}/spill` — tool-result / session-reference / pipeline tool-output
- * persist root. Host lists this directory (not all of `{home}`) in
- * `hostReadableRoots`.
+ * persist root. Covered when Host lists `{XRK_HOME}` in `hostReadableRoots`.
  */
 export function defaultSpillDir(
   env: NodeJS.ProcessEnv = process.env,

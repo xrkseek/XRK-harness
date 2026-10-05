@@ -168,7 +168,7 @@ describe('permission settings store', () => {
       revision: 4,
     })
 
-    await controller.saveRoots(['D:\\shared'])
+    await expect(controller.saveRoots(['D:\\shared'])).resolves.toBe(true)
     expect(mutate).toHaveBeenCalledWith({
       ns: 'permission',
       ops: [{ op: 'set', path: ['extraWritableRoots'], value: ['D:\\shared'] }],
@@ -204,6 +204,7 @@ describe('permission settings store', () => {
     await failing.load()
     await failing.select('workspace-write')
     expect(failing.store.getSnapshot()).toMatchObject({ status: 'error', error: 'stale' })
+    await expect(failing.saveRoots(['D:\\shared'])).resolves.toBe(false)
   })
 
   it('contains read failures, no-ops without a writable view, and ignores stale responses', async () => {

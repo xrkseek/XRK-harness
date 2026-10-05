@@ -28,6 +28,7 @@
     "@xrkseek/exec-lsp": "workspace:*",
     "@xrkseek/exec-pty": "workspace:*",
     "@xrkseek/exec-sandbox": "workspace:*",
+    "@xrkseek/server-config": "workspace:*",
     "@xrkseek/server-cron": "workspace:*",
     "@xrkseek/exec-shell": "workspace:*",
     "@xrkseek/exec-subprocess": "workspace:*",

@@ -128,7 +128,7 @@ describe('ui-permission browser plugin', () => {
     expect(again.find(option => option.id === 'workspace-write')?.active).toBe(true)
     expect(again.find(option => option.id === 'read-only')?.detail).toBe('Reads only.')
     expect(again.find(option => option.id === 'auto')?.detail)
-      .toBe('Run without a sandbox after an experimental same-model review of every native tool call and PTC inner call.')
+      .toBe('No sandbox + per-call review (experimental): every native tool and PTC inner call is reviewed by heuristic / HTTP / session-LLM before run.')
     // Built-ins use product labels; Auto review keeps the DSH product name.
     expect(again.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access', 'Auto review'])
     expect(again.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({

@@ -1,6 +1,6 @@
 import type { AgentHandle, AgentRunResult } from "@xrkseek/core-agent";
 import type { LlmAdapter } from "@xrkseek/llm";
-import { createLocalAttachmentStore, resolveLocalAttachmentsRoot } from "@xrkseek/attachment-local";
+import { createLocalAttachmentStore } from "@xrkseek/attachment-local";
 import {
   createMemorySessionStore,
   createPersistentSessionStore,
@@ -26,7 +26,13 @@ import {
 } from "@xrkseek/exec-memory";
 import { runSkillCurator } from "@xrkseek/workspace";
 import { resolveSecretStore } from "@xrkseek/secrets";
-import { hostSettingsPath, defaultSpillDir, resolveXrkHome, type HostConfig } from "@xrkseek/server-config";
+import {
+  hostSettingsPath,
+  defaultSpillDir,
+  expandHomePath,
+  resolveXrkHome,
+  type HostConfig,
+} from "@xrkseek/server-config";
 import { installOutboundHttpProxy } from "./http-proxy.js";
 import { mountInvariantsFailFast } from "./invariants-fail-fast.js";
 import { watchPolicyFile } from "./policy-file-watch.js";
@@ -390,18 +396,17 @@ export type AgentFactory = (input: {
   /** Shared attachment store for tools + vision. */
   attachments?: import("@xrkseek/attachment").AttachmentStore;
   /**
-   * Extra absolute roots the model may `read_file`.
-   * Whitelist only: attachment alias tree and `{XRK_HOME}/spill` — not all of
-   * product home. Symlink escape out of a listed root is denied.
+   * Extra absolute roots the model may `read_file` / `stat`.
+   * Host default: product home (`{XRK_HOME}` — covers attachments, spill,
+   * memories). Symlink escape out of a listed root is denied.
    */
   hostReadableRoots?: readonly string[];
   /**
    * Extra absolute roots the file tools may WRITE by absolute path, in
-   * addition to the workspace root. Empty by default — the write surface only
-   * widens when the deployment composes an explicit allowlist (a "full
-   * access" preset with configured `extraWritableRoots`), never because a
-   * preset was merely selected. Symlink escape out of a listed root is denied,
-   * and relative paths always resolve under the workspace root.
+   * addition to the workspace root. Host fills this from Settings
+   * `permission.extraWritableRoots` (default includes `{XRK_HOME}`).
+   * Symlink escape out of a listed root is denied; relative paths always
+   * resolve under the workspace root.
    */
   extraWritableRoots?: readonly string[];
   /** Live route image gate for `read_image`. */
@@ -794,7 +799,6 @@ export function createHostManager(): HostManager {
       const attachments = createLocalAttachmentStore({
         xrkHome: resolveXrkHome(),
       });
-      const attachmentsRoot = resolveLocalAttachmentsRoot(resolveXrkHome());
       /** Filled after Face boot — MCP image gate reads live Registry modalities. */
       const faceForModality: { current?: FaceRuntime } = {};
       const mcpImageAdmission = {
@@ -988,7 +992,7 @@ export function createHostManager(): HostManager {
           .filter((entry): entry is string => typeof entry === "string")
           .map((entry) => entry.trim())
           .filter((entry) => entry !== "")
-          .map((entry) => path.resolve(entry));
+          .map((entry) => path.resolve(expandHomePath(entry)));
         // Deduplicate while preserving user-declared order (cosmetic).
         return [...new Set(cleaned)];
       };
@@ -1011,6 +1015,8 @@ export function createHostManager(): HostManager {
                   ? envWorld.subprocess
                   : createLocalSubprocess(),
               defaultCwd: config.runtime.workspaceRoot,
+              // Same dir as hostReadableRoots — job_output spill paths are tool-readable.
+              spillDir: defaultSpillDir(),
               // Host-wide shared registry — sandbox confine resolves lazily so
               // Face settings + per-session sandboxMode are read at spawn time,
               // not at shell creation (faceBox.runtime arrives later). This is
@@ -1026,10 +1032,12 @@ export function createHostManager(): HostManager {
                     unknown
                   >;
                 },
-                // One allowlist, two consumers: the same roots the fs tools may
-                // write by absolute path also unlock `bash` / `terminal_send`
-                // cwd, so the shell no longer fails on a whitelisted project.
-                readExtraWritableRoots: readPermissionExtraWritableRoots,
+                // Same allowlist as fs tools (Settings base / Host fallback
+                // includes product home) so bash cwd may enter those roots.
+                readExtraWritableRoots: () => {
+                  const roots = readPermissionExtraWritableRoots();
+                  return roots.length > 0 ? roots : [resolveXrkHome()];
+                },
                 readSandboxMode: (sessionId) =>
                   effectiveSandboxMode(
                     sessionId
@@ -1239,13 +1247,16 @@ export function createHostManager(): HostManager {
           config.runtime.preset;
         const wsId = faceRuntime.workspaces.workspaceIdOf(sessionId);
         const wsRow = wsId ? faceRuntime.workspaces.get(wsId) : undefined;
-        // Wider file-write surface: an explicit allowlist carried by the
-        // `permission` settings namespace, read live so a settings change
-        // applies to the next agent resolve (agentCache keys on sessionId, so
-        // an already-bound agent keeps its composition until invalidated).
-        // Empty is the default — file writes stay workspace-bound unless a
-        // deployment configured roots here.
+        // Settings `permission.extraWritableRoots` (schema base includes
+        // product home). Re-read live so the next agent resolve picks up
+        // changes; agentCache keys on sessionId so a bound agent keeps its
+        // composition until invalidated. Empty → fall back to `{XRK_HOME}`
+        // (same default as Settings base / harness composition).
         const permissionExtraWritableRoots = readPermissionExtraWritableRoots();
+        const extraWritableRoots =
+          permissionExtraWritableRoots.length > 0
+            ? permissionExtraWritableRoots
+            : [resolveXrkHome()];
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -1273,19 +1284,9 @@ export function createHostManager(): HostManager {
                 : {}),
               plugins: loader.list(),
               attachments,
-              // Spill subtree + attachments only — never resolveXrkHome().
-              hostReadableRoots: [
-                attachmentsRoot,
-                defaultSpillDir(),
-              ],
-              // Wider write surface is a per-deployment setting, not something
-              // any preset implies: the `permission` namespace carries an
-              // explicit allowlist (extraWritableRoots) that only a
-              // permission-aware composition opts into. Absent the setting, the
-              // array is empty and file writes stay workspace-bound.
-              ...(permissionExtraWritableRoots.length
-                ? { extraWritableRoots: permissionExtraWritableRoots }
-                : {}),
+              // Existing fs options — product home covers spill / attachments / memories.
+              hostReadableRoots: [resolveXrkHome()],
+              extraWritableRoots,
               routeAllowsImage: () =>
                 faceForModality.current
                   ? liveRouteAllowsImageInput(faceForModality.current, sessionId)

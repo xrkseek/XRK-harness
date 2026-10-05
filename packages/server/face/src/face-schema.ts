@@ -100,7 +100,7 @@ export const AUTO_PERMISSION_PRESET = "auto" as const;
  * `registerAuto` is live.
  */
 export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
-  uid: 5,
+  uid: 7,
   refs: {
     1: {
       type: "const",
@@ -118,7 +118,18 @@ export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
       value: "danger-full-access",
     },
     4: { type: "union", list: [1, 2, 3] },
-    5: { type: "object", dict: { defaultPreset: 4 } },
+    5: {
+      type: "string",
+      meta: {
+        description:
+          "Absolute extra writable root. Schema base defaults to product home (`{XRK_HOME}`); relative paths stay under the workspace.",
+      },
+    },
+    6: { type: "array", inner: 5 },
+    7: {
+      type: "object",
+      dict: { defaultPreset: 4, extraWritableRoots: 6 },
+    },
   },
 };
 

@@ -2,6 +2,7 @@
  * DSH-aligned settings namespace schemas + composition bases for Face `settings.describe`.
  */
 import Schema from "@xrkseek/schemastery";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import type { FaceSchemaEnvelope } from "./face-schema.js";
 import {
   FACE_LOCALE_SCHEMA,
@@ -17,6 +18,17 @@ import {
   MEMBER_KITS,
   MEMBER_SHAPES,
 } from "./agent-roster-store.js";
+
+/** Product home is the default extra-writable root (Settings → Permissions). */
+function permissionSettingsBase(): {
+  defaultPreset: "workspace-write";
+  extraWritableRoots: string[];
+} {
+  return {
+    defaultPreset: "workspace-write",
+    extraWritableRoots: [resolveXrkHome()],
+  };
+}
 
 /** Wire protocols the models settings UI may offer (custom / gateway routes). */
 const PI_AI_PROTOCOLS = [
@@ -499,7 +511,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "permission",
       schema: FACE_PERMISSION_SCHEMA,
-      base: { defaultPreset: "workspace-write" },
+      base: permissionSettingsBase(),
       applies: "live",
     },
     {

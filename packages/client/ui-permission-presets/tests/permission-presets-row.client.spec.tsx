@@ -184,7 +184,7 @@ describe('PermissionRow', () => {
     })
     mount(controller)
     expect(await screen.findByTitle('C:\\one')).toBeTruthy()
-    const field = await screen.findByPlaceholderText('Paste or type an absolute path')
+    const field = await screen.findByPlaceholderText('Absolute path (defaults include ~/.xrk)')
     fireEvent.change(field, { target: { value: 'D:\\shared' } })
     fireEvent.submit(field.closest('form')!)
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
@@ -196,5 +196,34 @@ describe('PermissionRow', () => {
     expect(mutate.mock.calls[1]?.[0]).toMatchObject({
       ops: [{ op: 'set', path: ['extraWritableRoots'], value: ['D:\\shared'] }],
     })
+  })
+
+  it('restores the compose draft when saving a root fails', async () => {
+    const mutate = vi.fn(() => Promise.resolve({
+      rpcId: 'test',
+      result: {
+        ok: false as const,
+        error: { code: 'settings-conflict', message: 'stale', details: {} },
+      },
+    }))
+    const controller = new PermissionPresetSettingsController({
+      settings: {
+        describe: () => Promise.resolve(ok({
+          writable: true,
+          hasDocument: false,
+          namespaces: [view('read-only', 0, [])],
+        })),
+        mutate,
+      } as never,
+    })
+    mount(controller)
+    const field = await screen.findByPlaceholderText('Absolute path (defaults include ~/.xrk)')
+    fireEvent.change(field, { target: { value: 'D:\\shared' } })
+    fireEvent.submit(field.closest('form')!)
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    await waitFor(() => {
+      expect((field as HTMLInputElement).value).toBe('D:\\shared')
+    })
+    expect(screen.getByRole('alert').textContent).toContain('stale')
   })
 })

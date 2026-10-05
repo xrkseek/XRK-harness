@@ -163,12 +163,12 @@ export class PermissionPresetSettingsController {
   /**
    * Persist the explicit extra file-write allowlist.
    * @param roots - absolute directories; empty clears the allowlist.
-   * @returns nothing; {@link store} carries success or failure.
+   * @returns whether the mutate succeeded.
    */
-  async saveRoots(roots: readonly string[]): Promise<void> {
+  async saveRoots(roots: readonly string[]): Promise<boolean> {
     const view = this.view
     const state = this.store.getSnapshot()
-    if (view === undefined || !state.writable) return
+    if (view === undefined || !state.writable) return false
     const generation = ++this.generation
     this.store.update((draft) => {
       draft.status = 'saving'
@@ -180,12 +180,14 @@ export class PermissionPresetSettingsController {
         ops: [{ op: 'set', path: ['extraWritableRoots'], value: [...roots] }],
         expectedRevision: view.revision,
       })
-      if (generation !== this.generation) return
+      if (generation !== this.generation) return false
       if (!response.result.ok) throw new Error(response.result.error.message)
       this.accept(response.result.value, true)
+      return true
     } catch (error) {
-      if (generation !== this.generation) return
+      if (generation !== this.generation) return false
       this.fail(error)
+      return false
     }
   }
 
