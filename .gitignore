@@ -58,6 +58,13 @@ apps/cli/product-web/
 .tmp-*.mjs
 .tmp-*/
 
+# Ad-hoc scratch trees at the repo root (artwork / promo / side experiments;
+# they carry their own README and must never leak into a release)
+/.scratch-opus/
+/tmp-*
+/repo.json
+/xrk-harness-promo.html
+
 # extensions/: deny-by-default; only committed samples are tracked
 /extensions/*
 !/extensions/example-tools/
