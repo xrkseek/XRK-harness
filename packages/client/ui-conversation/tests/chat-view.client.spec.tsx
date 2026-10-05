@@ -1271,6 +1271,24 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
   })
 
+  it('Stop after assistant text plus tools still shows 已停止 on the turn-tail', () => {
+    const h = makeHarness({
+      chat: chatSnapshotFixture({
+        nodes: [
+          user(1, 'hi'),
+          assistant(2, 'looking at git'),
+          toolResult(3, 'bash-1', 'bash'),
+        ],
+        turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
+        turnEnds: new Map([[1, 4]]),
+        turnEndReasons: new Map([[1, { kind: 'aborted' }]]),
+      }),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByText('已停止').length).toBeGreaterThan(0)
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
+  })
+
   it('turn/end interrupted matches aborted Stop chrome on a child session', () => {
     const thinkOnly: AssistantMessageNode = {
       kind: 'assistant',

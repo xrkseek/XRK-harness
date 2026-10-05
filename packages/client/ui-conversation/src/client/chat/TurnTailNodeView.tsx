@@ -48,16 +48,14 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const tail = renderSlotChain('conversation.chat.turnTail', owner)
   const runMs = turnEndRunMs(turn, closing?.time ?? data.time)
   const stopped = turnEndedAsStop(turn.end)
-  // AssistantMarkdown already paints 「已停止」 on interrupted steps; only
-  // emit the marker here when Stop left no assistant chrome at all.
   const assistantAlreadyStopped = turn.steps.some((step) => {
     const assistant = step.data.get('assistant-step') as
       | { readonly status?: string; readonly finalNode?: { readonly interrupted?: boolean } }
       | undefined
     return assistant?.status === 'interrupted' || assistant?.finalNode?.interrupted === true
   })
+  const showStopped = stopped && !assistantAlreadyStopped
   if (closing === null) {
-    const showStopped = stopped && !assistantAlreadyStopped
     if (tail === null && runMs === undefined && !showStopped && data.tokenUsage === undefined) {
       return null
     }
@@ -100,6 +98,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   return (
     <div className={css.root} data-turn-tail={data.turn} data-time-hover-root>
       {tail}
+      {showStopped ? <span className={css.stopped} role="status">{t('message.stopped')}</span> : null}
       <MessageIconActions
         text={assistantText(closing.blocks)}
         time={closing.time}
