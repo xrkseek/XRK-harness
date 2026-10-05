@@ -94,6 +94,84 @@
   padding: 8px 12px 10px;
 }
 
+.delegatePair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 2px 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.delegatePair:not([data-collapsed]) {
+  min-height: 212px;
+}
+
+.presenceRail[data-delegate]:not([data-collapsed]) {
+  min-height: 258px;
+}
+
+.delegatePair[data-collapsed] {
+  align-items: center;
+}
+
+.delegateArrow {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 52px;
+  padding-bottom: 36px;
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.delegatePair[data-collapsed] .delegateArrow {
+  width: 36px;
+  padding-bottom: 0;
+}
+
+.delegateArrow svg {
+  width: 48px;
+  height: 28px;
+  overflow: visible;
+}
+
+.delegateArrow path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 5 7;
+  animation: delegateFlow 1.4s linear infinite;
+}
+
+.delegateArrow polygon {
+  fill: currentColor;
+}
+
+.delegateCaption {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@keyframes delegateFlow {
+  to { stroke-dashoffset: -24; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delegateArrow path {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
+
 .presenceRailHead {
   display: flex;
   align-items: center;

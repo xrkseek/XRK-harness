@@ -463,6 +463,9 @@ export function PresenceBall({
   density = 'rail',
   engineActive = true,
   memberLook,
+  pairSeat = false,
+  seat,
+  roleLabel,
   t,
   loadingLabel,
   errorLabel,
@@ -507,6 +510,12 @@ export function PresenceBall({
   readonly engineActive?: boolean
   /** Child 干员 look — overrides Settings presence so the home ball stays unique. */
   readonly memberLook?: { readonly shape: string; readonly color: string; readonly kit?: string }
+  /** Smaller seat inside the Overview dual-ball pair. */
+  readonly pairSeat?: boolean
+  /** Dual-ball: 委派方 (`from`) vs 被委派方 (`to`). */
+  readonly seat?: 'from' | 'to'
+  /** Caption under the ball (委派方 / 被委派方 · name). */
+  readonly roleLabel?: string
   readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
@@ -735,6 +744,8 @@ export function PresenceBall({
       data-source={emotion.source}
       data-compact={compact ? '' : undefined}
       data-density={compact ? density : undefined}
+      data-pair={pairSeat ? '' : undefined}
+      data-seat={seat}
     >
       <button
         type="button"
@@ -760,9 +771,12 @@ export function PresenceBall({
         {error ? <div className={css.error}>{errorLabel}: {error}</div> : null}
       </button>
       <div className={css.meta}>
+        {roleLabel
+          ? <span className={css.role}>{roleLabel}</span>
+          : null}
         <div className={css.row}>
           <span className={css.emotion}>{display.name}</span>
-          {!compact ? <span className={css.id}>{emotion.emotionId}</span> : null}
+          {!compact && !pairSeat ? <span className={css.id}>{emotion.emotionId}</span> : null}
         </div>
         {display.tip
           ? <p className={css.tips} title={compact ? display.tip : undefined}>{display.tip}</p>

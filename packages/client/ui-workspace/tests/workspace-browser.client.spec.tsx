@@ -1153,7 +1153,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
       startSession,
       listTeam,
-      upsertTeamMember: vi.fn(async () => {}),
+      upsertTeamMember: vi.fn(async () => ({ id: 'mem_seed_worker' })),
       dispatchTeam: vi.fn(async () => {}),
     })
     fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
@@ -1165,5 +1165,67 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Alpha' }))
     expect(startSession).toHaveBeenCalledWith(wid('alpha'))
     expect(listTeam).toHaveBeenCalledWith(sid('alpha-s'))
+  })
+
+  it('opens a global draft from the global 新建 ball', async () => {
+    const listTeam = vi.fn(async () => [{
+      id: 'mem_seed_worker',
+      name: '施工员',
+      playbook: 'ship',
+      role: 'worker',
+      scope: 'global' as const,
+      catalog: true as const,
+      updatedAt: 1,
+    }])
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
+      startSession: vi.fn(),
+      listTeam,
+      upsertTeamMember: vi.fn(async () => ({ id: 'mem_new' })),
+      dispatchTeam: vi.fn(async () => {}),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '新建全局干员' })).toBeTruthy()
+    })
+    expect(screen.getByRole('button', { name: '新建工作区干员' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '新建全局干员' }))
+    expect(screen.getByRole('button', { name: '全局', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: '名称' })).toBeTruthy()
+  })
+
+  it('forks a built-in catalog member into a new workspace draft', async () => {
+    const listTeam = vi.fn(async () => [{
+      id: 'mem_seed_worker',
+      name: '施工员',
+      playbook: 'ship',
+      role: 'worker',
+      scope: 'global' as const,
+      catalog: true as const,
+      seed: true as const,
+      updatedAt: 1,
+    }])
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
+      startSession: vi.fn(),
+      listTeam,
+      upsertTeamMember: vi.fn(async () => ({ id: 'mem_fork' })),
+      dispatchTeam: vi.fn(async () => {}),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '施工员' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '施工员' }))
+    expect(screen.getByText('预置干员不能改。要定制请以它为基底新建。')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '以该预置为基底新建' }))
+    expect(screen.getByRole('button', { name: '工作区', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
+    const name = screen.getByRole('textbox', { name: '名称' }) as HTMLInputElement
+    expect(name.value).toBe('施工员')
+    expect(name.disabled).toBe(false)
   })
 })

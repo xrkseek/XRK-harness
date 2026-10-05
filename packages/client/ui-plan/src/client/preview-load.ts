@@ -176,6 +176,16 @@ export interface SessionStatusView {
     readonly color: string
     readonly kit?: string
   }
+  readonly parentCompanionBall?: {
+    readonly shape: string
+    readonly color: string
+    readonly kit?: string
+  }
+  readonly delegate?: {
+    readonly parentSessionId: string
+    readonly childLabel: string
+    readonly parentLabel?: string
+  }
   readonly timeline: {
     readonly total: number
     readonly system: number
@@ -268,6 +278,15 @@ function str(value: unknown): string | undefined {
 
 function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function parsePresenceLook(raw: unknown): SessionStatusView['companionBall'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const shape = str((raw as { shape?: unknown }).shape)
+  const color = str((raw as { color?: unknown }).color)
+  if (!shape || !color) return undefined
+  const kit = str((raw as { kit?: unknown }).kit)
+  return { shape, color, ...(kit ? { kit } : {}) }
 }
 
 const LIVE_OUTCOME_KINDS = new Set([
@@ -842,6 +861,23 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     }
   }
 
+  const companionBall = parsePresenceLook(v.companionBall)
+  const parentCompanionBall = parsePresenceLook(v.parentCompanionBall)
+  const delegateRaw = v.delegate
+  let delegate: SessionStatusView['delegate']
+  if (delegateRaw && typeof delegateRaw === 'object') {
+    const parentSessionId = str((delegateRaw as { parentSessionId?: unknown }).parentSessionId)
+    const childLabel = str((delegateRaw as { childLabel?: unknown }).childLabel)
+    const parentLabel = str((delegateRaw as { parentLabel?: unknown }).parentLabel)
+    if (parentSessionId && childLabel) {
+      delegate = {
+        parentSessionId,
+        childLabel,
+        ...(parentLabel ? { parentLabel } : {}),
+      }
+    }
+  }
+
   return {
     sessionId,
     badge,
@@ -858,6 +894,9 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     billing,
     fleet,
     ...(presence ? { presence } : {}),
+    ...(companionBall ? { companionBall } : {}),
+    ...(parentCompanionBall ? { parentCompanionBall } : {}),
+    ...(delegate ? { delegate } : {}),
     timeline,
     compaction,
     delivery,

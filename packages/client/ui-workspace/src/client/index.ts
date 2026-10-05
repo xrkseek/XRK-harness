@@ -149,6 +149,12 @@ export function apply(ctx: ClientContext): void {
     upsertTeamMember: async (sessionId, input) => {
       const result = await ctx.remote.team.upsert({ sessionId, ...input })
       if (!result.ok) throw new Error(result.error.message)
+      const member = result.value.member
+      const id = member && typeof member === 'object'
+        ? String((member as { id?: unknown }).id ?? '')
+        : ''
+      if (!id) throw new Error('team.upsert missing member id')
+      return { id }
     },
     removeTeamMember: async (sessionId, id, scope) => {
       const result = await ctx.remote.team.remove({

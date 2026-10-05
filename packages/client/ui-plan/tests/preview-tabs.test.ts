@@ -266,6 +266,35 @@ describe("preview tab envelopes", () => {
     ]);
   });
 
+  it("parses nested delegate dual balls", () => {
+    const parsed = parseSessionStatus({
+      result: {
+        ok: true,
+        value: {
+          ...sampleStatus,
+          companionBall: { shape: "squircle", color: "sky", kit: "cap" },
+          parentCompanionBall: { shape: "wedge", color: "sage" },
+          delegate: {
+            parentSessionId: "sess_mid",
+            childLabel: "调研员",
+            parentLabel: "发版员",
+          },
+        },
+      },
+    });
+    expect(parsed?.companionBall).toEqual({
+      shape: "squircle",
+      color: "sky",
+      kit: "cap",
+    });
+    expect(parsed?.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
+    expect(parsed?.delegate).toEqual({
+      parentSessionId: "sess_mid",
+      childLabel: "调研员",
+      parentLabel: "发版员",
+    });
+  });
+
   it("loads plan · office · status and keeps tabs when one request fails", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

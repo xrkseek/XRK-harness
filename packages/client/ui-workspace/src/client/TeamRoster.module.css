@@ -8,8 +8,8 @@
 .layout {
   display: grid;
   grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-  align-items: start;
-  min-height: 420px;
+  align-items: stretch;
+  min-height: min(72vh, 680px);
   gap: 0;
 }
 
@@ -25,10 +25,14 @@
 .pane {
   min-width: 0;
   padding-left: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .editorEmpty {
-  margin: 48px 8px 0;
+  margin: 0;
+  padding-top: 48px;
+  flex: 1;
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
@@ -225,6 +229,14 @@
   margin-top: 8px;
 }
 
+.editorLock {
+  display: contents;
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
 .picks {
   display: flex;
   flex-wrap: wrap;
@@ -292,6 +304,7 @@
 }
 
 .sheet {
+  min-height: min(76vh, 720px);
   max-height: min(76vh, 760px);
   overflow: auto;
 }

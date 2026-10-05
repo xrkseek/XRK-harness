@@ -195,7 +195,7 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly brief?: string
     readonly inject?: 'subagent' | 'minimal'
     readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
-  }) => Promise<void>
+  }) => Promise<{ readonly id: string }>
   removeTeamMember?: (sessionId: SessionId, memberId: string, scope?: 'global' | 'workspace') => Promise<void>
   captureTeamMember?: (sessionId: SessionId) => Promise<void>
   dispatchTeam?: (sessionId: SessionId, memberId: string, task: string) => Promise<void>
@@ -214,6 +214,8 @@ export type AgentTeamMemberRow = {
   readonly playbook: string
   readonly role: string
   readonly seed?: true
+  /** Product catalog 干员 (`mem_seed_*`), independent of the unedited `seed` flag. */
+  readonly catalog?: true
   readonly updatedAt: number
   readonly appearance?: {
     readonly shape: string

@@ -72,8 +72,42 @@ function MemberBall({
       <CompanionBall shape={look.shape} color={look.color} kit={look.kit} face={look.face} />
       <span className={css.ballCaption}>
         <span className={css.ballName}>{member.name}</span>
-        {member.seed === true ? <span className={css.seed}>{seedLabel}</span> : null}
+        {member.catalog === true || member.seed === true
+          ? <span className={css.seed}>{seedLabel}</span>
+          : null}
       </span>
+    </button>
+  )
+}
+
+function isDraftMemberId(id: string | null): id is 'new-global' | 'new-workspace' {
+  return id === 'new-global' || id === 'new-workspace'
+}
+
+function NewMemberBall({
+  selected,
+  disabled,
+  caption,
+  label,
+  onSelect,
+}: {
+  selected: boolean
+  disabled: boolean
+  caption: string
+  label: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={selected ? css.ballCardOn : css.ballCard}
+      disabled={disabled}
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={label}
+    >
+      <CompanionBall shape="blob" color="cream" empty />
+      <span className={css.ballName}>{caption}</span>
     </button>
   )
 }
@@ -119,7 +153,7 @@ export function TeamRoster({
   const [members, setMembers] = useState<readonly AgentTeamMemberRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
+  const [selectedId, setSelectedId] = useState<string | 'new-global' | 'new-workspace' | null>(null)
   const [name, setName] = useState('')
   const [playbook, setPlaybook] = useState('')
   const [role, setRole] = useState<SpawnRole>('worker')
@@ -134,12 +168,13 @@ export function TeamRoster({
   const [toolsNames, setToolsNames] = useState('')
   const [task, setTask] = useState('')
 
-  const selected = selectedId && selectedId !== 'new'
+  const selected = selectedId && !isDraftMemberId(selectedId)
     ? members.find(row => row.id === selectedId)
     : undefined
   const globalMembers = members.filter(row => row.scope === 'global')
   const workspaceMembers = members.filter(row => row.scope !== 'global')
-  const catalogSeed = selected?.seed === true && selected.scope === 'global'
+  const catalogSeed = selected?.catalog === true
+    && selected.scope === 'global'
   const canDelete = selected !== undefined
     && removeTeamMember !== undefined
     && !catalogSeed
@@ -201,6 +236,7 @@ export function TeamRoster({
 
   const persistMember = () => {
     if (sessionId === undefined || busy || name.trim() === '' || playbook.trim() === '' || selectedId === null) return
+    if (catalogSeed) return
     void run(async () => {
       const names = splitToolNames(toolsNames)
       const tools =
@@ -209,7 +245,7 @@ export function TeamRoster({
           : names.length > 0
             ? { mode: toolsMode, names }
             : null
-      await upsertTeamMember(sessionId, {
+      const saved = await upsertTeamMember(sessionId, {
         name: name.trim(),
         playbook: playbook.trim(),
         role,
@@ -225,7 +261,7 @@ export function TeamRoster({
           ...(face ? { face } : { face: '' }),
         },
       })
-      setSelectedId(null)
+      setSelectedId(saved.id)
     })
   }
 
@@ -275,6 +311,17 @@ export function TeamRoster({
                       }}
                     />
                   ))}
+                  <NewMemberBall
+                    selected={selectedId === 'new-global'}
+                    disabled={busy}
+                    caption={t('team.memberNew')}
+                    label={t('team.memberNewGlobal')}
+                    onSelect={() => {
+                      setSelectedId('new-global')
+                      loadMember(undefined)
+                      setScope('global')
+                    }}
+                  />
                 </div>
                 <p className={css.subhead}>{t('team.workspace')}</p>
                 <div className={css.workspaceBar}>
@@ -330,18 +377,17 @@ export function TeamRoster({
                       }}
                     />
                   ))}
-                  <button
-                    type="button"
-                    className={selectedId === 'new' ? css.ballCardOn : css.ballCard}
+                  <NewMemberBall
+                    selected={selectedId === 'new-workspace'}
                     disabled={busy}
-                    onClick={() => {
-                      setSelectedId('new')
+                    caption={t('team.memberNew')}
+                    label={t('team.memberNewWorkspace')}
+                    onSelect={() => {
+                      setSelectedId('new-workspace')
                       loadMember(undefined)
+                      setScope('workspace')
                     }}
-                  >
-                    <CompanionBall shape="blob" color="cream" empty />
-                    <span className={css.ballName}>{t('team.memberNew')}</span>
-                  </button>
+                  />
                 </div>
               </section>
             </aside>
@@ -351,6 +397,10 @@ export function TeamRoster({
                 <p className={css.editorEmpty}>{t('team.editorEmpty')}</p>
               ) : (
                 <div className={css.editor}>
+                  {catalogSeed ? (
+                    <p className={css.fieldHint}>{t('team.catalogHint')}</p>
+                  ) : null}
+                  <fieldset className={css.editorLock} disabled={busy || catalogSeed}>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-member-name">{t('team.memberName')}</label>
                     <input
@@ -567,14 +617,28 @@ export function TeamRoster({
                       onChange={(e) => { setPlaybook(e.target.value) }}
                     />
                   </div>
+                  </fieldset>
                   <div className={css.row}>
-                    <Button
-                      variant="primary"
-                      disabled={busy || name.trim() === '' || playbook.trim() === ''}
-                      onClick={() => { persistMember() }}
-                    >
-                      {saveLabel}
-                    </Button>
+                    {catalogSeed ? (
+                      <Button
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => {
+                          setSelectedId('new-workspace')
+                          setScope('workspace')
+                        }}
+                      >
+                        {t('team.cloneFrom')}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        disabled={busy || name.trim() === '' || playbook.trim() === ''}
+                        onClick={() => { persistMember() }}
+                      >
+                        {saveLabel}
+                      </Button>
+                    )}
                     {canDelete && (
                       <Button
                         variant="outline"
@@ -602,7 +666,7 @@ export function TeamRoster({
                         value={task}
                         placeholder={t('team.taskPlaceholder')}
                         disabled={busy}
-                        rows={2}
+                        rows={5}
                         onChange={(e) => { setTask(e.target.value) }}
                       />
                       <Button

@@ -72,6 +72,12 @@ function writePresenceCollapsed(collapsed: boolean): void {
   }
 }
 
+function delegateSeatCaption(role: string, name: string | undefined): string {
+  const n = name?.trim()
+  if (!n || n === 'untitled') return role
+  return `${role} · ${n}`
+}
+
 export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
 
 /** Injected by ui-plan: close the layout details column; open spill paths; Teams actions. */
@@ -1664,6 +1670,7 @@ export function PreviewTabs({
   renderSlot = (() => null) as PreviewTabsProps['renderSlot'],
 }: PreviewTabsProps) {
   const parentId = useSessions((s) => s.byId[sessionId]?.parentId)
+  const sessionOrigin = useSessions((s) => s.byId[sessionId]?.origin)
   const mountPaint = takeOverviewMountPaint(sessionId, parentId)
   const [tab, setTab] = useState<PreviewTabId>(() => mountPaint?.tab ?? 'status')
   // Always cold-load Face payloads — never restore cached session.status (large
@@ -1720,6 +1727,7 @@ export function PreviewTabs({
   ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
+  const delegatedOverview = sessionOrigin === 'subagent' || Boolean(status?.companionBall)
   // Cold load — quiet chrome until Face session.status lands.
   const paintPending = !ready
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
@@ -2038,6 +2046,7 @@ export function PreviewTabs({
         className={css.presenceRail}
         data-overview-presence-rail=""
         data-collapsed={presenceCollapsed ? '' : undefined}
+        data-delegate={delegatedOverview ? '' : undefined}
         aria-label={t('preview.status.presence')}
         aria-hidden={!overviewOpen || undefined}
         {...(!overviewOpen ? { inert: '' } : {})}
@@ -2065,29 +2074,99 @@ export function PreviewTabs({
             <IconChevronDownOutline14 size={14} className={css.presenceCollapseIcon} />
           </button>
         </div>
-        <PresenceBall
-          sessionId={sessionId}
-          {...(status?.presence ? { presence: status.presence } : {})}
-          {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
-          turnActive={status?.delivery.turnActive ?? false}
-          runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-          runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
-          fleetHealth={status?.fleet.health ?? 'ok'}
-          queued={status?.delivery.queued ?? 0}
-          steering={status?.delivery.steering ?? 0}
-          compactionBusy={status?.compaction.phase === 'busy'}
-          {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
-          activityAt={Math.max(
-            presenceCue.activityAt,
-            status?.presence?.updatedAt ?? 0,
+        {delegatedOverview
+          ? (
+            <div
+              className={css.delegatePair}
+              data-collapsed={presenceCollapsed ? '' : undefined}
+              data-pending={!status?.companionBall ? '' : undefined}
+              role="group"
+              aria-label={`${delegateSeatCaption(t('preview.status.presenceHome'), status?.delegate?.parentLabel)} ${t('preview.status.presenceDelegate')} ${delegateSeatCaption(t('preview.status.presenceMember'), status?.delegate?.childLabel)}`}
+            >
+              <PresenceBall
+                sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
+                {...(status?.parentCompanionBall ? { memberLook: status.parentCompanionBall } : {})}
+                pairSeat
+                seat="from"
+                roleLabel={delegateSeatCaption(
+                  t('preview.status.presenceHome'),
+                  status?.delegate?.parentLabel,
+                )}
+                turnActive={false}
+                runningJobs={0}
+                runningSubs={0}
+                fleetHealth="ok"
+                compact={presenceCollapsed}
+                engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
+                t={t as (key: string, params?: Record<string, string>) => string}
+                loadingLabel={t('preview.status.presenceLoading')}
+                errorLabel={t('preview.status.presenceError')}
+                clickHint={t('preview.status.presenceClick')}
+              />
+              <div className={css.delegateArrow} aria-hidden>
+                <svg viewBox="0 0 48 28">
+                  <path d="M2 16C12 16 16 6 24 6s12 10 22 10" />
+                  <polygon points="40,11 47,16 40,21" />
+                </svg>
+                {!presenceCollapsed
+                  ? <span className={css.delegateCaption}>{t('preview.status.presenceDelegate')}</span>
+                  : null}
+              </div>
+              <PresenceBall
+                sessionId={sessionId}
+                {...(status?.presence ? { presence: status.presence } : {})}
+                {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
+                pairSeat
+                seat="to"
+                roleLabel={delegateSeatCaption(
+                  t('preview.status.presenceMember'),
+                  status?.delegate?.childLabel,
+                )}
+                turnActive={status?.delivery.turnActive ?? false}
+                runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
+                runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+                fleetHealth={status?.fleet.health ?? 'ok'}
+                queued={status?.delivery.queued ?? 0}
+                steering={status?.delivery.steering ?? 0}
+                compactionBusy={status?.compaction.phase === 'busy'}
+                {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+                activityAt={Math.max(
+                  presenceCue.activityAt,
+                  status?.presence?.updatedAt ?? 0,
+                )}
+                compact={presenceCollapsed}
+                engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
+                t={t as (key: string, params?: Record<string, string>) => string}
+                loadingLabel={t('preview.status.presenceLoading')}
+                errorLabel={t('preview.status.presenceError')}
+                clickHint={t('preview.status.presenceClick')}
+              />
+            </div>
+          )
+          : (
+            <PresenceBall
+              sessionId={sessionId}
+              {...(status?.presence ? { presence: status.presence } : {})}
+              turnActive={status?.delivery.turnActive ?? false}
+              runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
+              runningSubs={status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0}
+              fleetHealth={status?.fleet.health ?? 'ok'}
+              queued={status?.delivery.queued ?? 0}
+              steering={status?.delivery.steering ?? 0}
+              compactionBusy={status?.compaction.phase === 'busy'}
+              {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+              activityAt={Math.max(
+                presenceCue.activityAt,
+                status?.presence?.updatedAt ?? 0,
+              )}
+              compact={presenceCollapsed}
+              engineActive={overviewOpen && presenceEngineReady}
+              t={t as (key: string, params?: Record<string, string>) => string}
+              loadingLabel={t('preview.status.presenceLoading')}
+              errorLabel={t('preview.status.presenceError')}
+              clickHint={t('preview.status.presenceClick')}
+            />
           )}
-          compact={presenceCollapsed}
-          engineActive={overviewOpen && presenceEngineReady}
-          t={t as (key: string, params?: Record<string, string>) => string}
-          loadingLabel={t('preview.status.presenceLoading')}
-          errorLabel={t('preview.status.presenceError')}
-          clickHint={t('preview.status.presenceClick')}
-        />
       </div>
       <div
         ref={bodyRef}
