@@ -711,11 +711,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         runtime: runtimeBox.current!,
         sessionId,
       });
-      bindSessionThreadTools(agent.tools, {
-        runtime: runtimeBox.current!,
-        sessionId,
-      });
       const childLink = runtimeBox.current!.subagents.getByChild(sessionId);
+      if (!childLink) {
+        bindSessionThreadTools(agent.tools, {
+          runtime: runtimeBox.current!,
+          sessionId,
+        });
+      }
       if (!childLink || childLink.role === "lead") {
         bindAgentRosterTools(agent.tools, {
           runtime: runtimeBox.current!,

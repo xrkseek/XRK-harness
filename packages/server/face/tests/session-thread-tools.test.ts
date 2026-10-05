@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { newSession } from "@xrkseek/core-session";
+import {
+  createMemorySessionStore,
+  listPendingAdmits,
+  newSession,
+  readSessionEvents,
+} from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { bindSessionThreadTools } from "../src/session-thread-tools.js";
 import type { HostFrame } from "../src/types.js";
-import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
+import {
+  admittingAgentResolve,
+  createBareFaceRuntime,
+} from "./helpers/bare-runtime.js";
 
 function collectHost(runtime: ReturnType<typeof createBareFaceRuntime>): HostFrame[] {
   const frames: HostFrame[] = [];
@@ -118,5 +126,40 @@ describe("thread_* tools", () => {
       sessionId,
       bound: false,
     });
+  });
+
+  it("delivers thread_message as steer, not Settings queue", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    newSession(store);
+    newSession(store);
+    const [a, b] = store.list();
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    const ws = runtime.workspaces.defaultId();
+    runtime.workspaces.attachSession(a!, ws);
+    runtime.workspaces.attachSession(b!, ws);
+
+    const toolsA = createToolRegistry();
+    bindSessionThreadTools(toolsA, { runtime, sessionId: a! });
+    const toolsB = createToolRegistry();
+    bindSessionThreadTools(toolsB, { runtime, sessionId: b! });
+    expect((await toolsA.get("thread_upsert")!.execute({ title: "发信方" })).isError).toBeFalsy();
+    expect((await toolsB.get("thread_upsert")!.execute({ title: "收信方" })).isError).toBeFalsy();
+
+    const sent = await toolsA.get("thread_message")!.execute({
+      session_id: b,
+      message: "hello peer",
+      wait: false,
+    });
+    expect(sent.isError).toBeFalsy();
+    expect(String(sent.content)).toContain("steer");
+    const pending = listPendingAdmits(readSessionEvents(store, b!), b!);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.delivery).toBe("steer");
+    expect(String(pending[0]?.content)).toContain("hello peer");
   });
 });

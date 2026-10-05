@@ -28,6 +28,9 @@ describe("FaceSessionThreadStore", () => {
     expect(store.list("ws_b")).toHaveLength(1);
     expect(store.switchTo("ws_a", "sess_1", a!.id)?.threadId).toBe(a!.id);
     expect(store.bindOf("ws_a", "sess_1")?.threadId).toBe(a!.id);
+    expect(store.unbind("ws_a", "sess_1")).toBe(true);
+    expect(store.bindOf("ws_a", "sess_1")).toBeUndefined();
+    expect(store.list("ws_a")).toHaveLength(1);
     expect(store.bindOf("ws_b", "sess_1")).toBeUndefined();
   });
 

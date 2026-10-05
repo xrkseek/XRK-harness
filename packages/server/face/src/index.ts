@@ -138,6 +138,7 @@ export {
   MEMBER_FILE_TOOLS,
   applyRosterToolPolicy,
   formatRosterCatalog,
+  catalogMemberWriteProblem,
   type AgentRosterMember,
   type ListedRosterMember,
   type MemberToolPolicy,
@@ -149,8 +150,19 @@ export {
 } from "./canvas-tools.js";
 export {
   bindSessionThreadTools,
+  listWorkspaceThreadCatalog,
   type BindSessionThreadToolsOptions,
 } from "./session-thread-tools.js";
+export {
+  formatPeerCollabPrompt,
+  peerThreadMessageProblem,
+} from "./session-thread-message.js";
+export {
+  COLLAB_BOARD_THREAD_WINDOW_MS,
+  createCollabBoardFragmentProvider,
+  formatCollabBoard,
+  formatCollabBoardText,
+} from "./collab-board.js";
 export {
   bindAgentRosterTools,
   type BindAgentRosterToolsOptions,

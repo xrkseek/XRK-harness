@@ -218,7 +218,16 @@ describe("face dispatch", () => {
     const names = (
       team.result.value as { members: { name: string }[] }
     ).members.map((member) => member.name);
-    expect(names).toEqual(["调研员", "施工员", "审稿员", "调度员"]);
+    expect(names).toEqual([
+      "调研员",
+      "施工员",
+      "审稿员",
+      "调度员",
+      "探网员",
+      "文书员",
+      "排障员",
+      "测员",
+    ]);
   });
 
   it("prompt returns before slow turn finishes", async () => {

@@ -108,7 +108,44 @@ export interface AgentRosterMember {
 
 export type ListedRosterMember = AgentRosterMember & {
   readonly scope: RosterScope;
+  /** Catalog example id (`mem_seed_*`), even after the user edits and `seed` drops. */
+  readonly catalog?: true;
 };
+
+const CATALOG_SEED_MEMBER_IDS = new Set([
+  "mem_seed_researcher",
+  "mem_seed_worker",
+  "mem_seed_reviewer",
+  "mem_seed_lead",
+  "mem_seed_scout",
+  "mem_seed_docs",
+  "mem_seed_fixer",
+  "mem_seed_tester",
+]);
+
+export function isCatalogSeedMemberId(id: string): boolean {
+  return CATALOG_SEED_MEMBER_IDS.has(id);
+}
+
+/** Built-in catalog ids cannot be updated or deleted; mint a new id to fork. */
+export function catalogMemberWriteProblem(raw: unknown): string | undefined {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return undefined;
+  const id = normalizeMemberId(trimmed);
+  if (!id || !isCatalogSeedMemberId(id)) return undefined;
+  return `catalog member ${id} is built-in; omit id to mint a new role from that template`;
+}
+
+function listedMember(
+  row: AgentRosterMember,
+  scope: RosterScope,
+): ListedRosterMember {
+  return {
+    ...row,
+    scope,
+    ...(isCatalogSeedMemberId(row.id) ? { catalog: true as const } : {}),
+  };
+}
 
 interface PersistShape {
   readonly version: 1;
@@ -281,6 +318,7 @@ export function rosterPublicFields(row: ListedRosterMember) {
     brief: row.brief,
     inject: row.inject,
     seed: row.seed === true,
+    catalog: row.catalog === true,
     appearance: row.appearance,
     ...(row.tools ? { tools: row.tools } : {}),
   };
@@ -299,22 +337,10 @@ export function formatRosterCatalog(
           : pub.tools?.mode === "deny"
             ? ` deny=${pub.tools.names.join(",")}`
             : "";
-      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}`;
+      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${pub.catalog ? " · catalog" : ""}`;
     })
     .join("\n")
     .slice(0, 2_400);
-}
-
-function sameSeedBody(a: AgentRosterMember, b: AgentRosterMember): boolean {
-  return (
-    a.name === b.name &&
-    a.role === b.role &&
-    a.brief === b.brief &&
-    a.inject === b.inject &&
-    a.playbook === b.playbook &&
-    JSON.stringify(a.appearance) === JSON.stringify(b.appearance) &&
-    JSON.stringify(a.tools ?? null) === JSON.stringify(b.tools ?? null)
-  );
 }
 
 export function mergeGlobalSeedMembers(
@@ -325,18 +351,8 @@ export function mergeGlobalSeedMembers(
   const leftover = new Map(existing.map((row) => [row.id, row]));
   const members: AgentRosterMember[] = [];
   for (const seed of catalog) {
-    const prev = leftover.get(seed.id);
     leftover.delete(seed.id);
-    if (!prev) {
-      members.push(seed);
-      continue;
-    }
-    if (prev.seed === true) {
-      const next: AgentRosterMember = { ...seed, updatedAt: prev.updatedAt };
-      members.push(sameSeedBody(prev, next) ? prev : next);
-    } else {
-      members.push(prev);
-    }
+    members.push(seed);
   }
   for (const rest of leftover.values()) {
     if (rest.seed === true) continue;
@@ -401,7 +417,57 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       playbook:
         "You are the workspace lead. Break work into clear sub-tasks, coordinate teammates, " +
         "and keep a short status of blockers and next steps. " +
-        "When a specialist fits, spawn with subagent member_id from team_list rather than restating tools or playbook.",
+        "When a specialist fits, spawn with subagent member_id from the live catalog rather than restating tools or playbook.",
+    },
+    {
+      id: "mem_seed_scout",
+      name: "探网员",
+      role: "researcher",
+      appearance: { shape: "wedge", color: "peach" },
+      seed: true,
+      updatedAt: now,
+      inject: "minimal",
+      brief: "查网上公开事实，给出链接与日期。",
+      playbook:
+        "You are the web scout. Use web_search and web_fetch for public facts. " +
+        "Cite URLs and dates. Do not edit the repo. Prefer primary sources over commentary.",
+    },
+    {
+      id: "mem_seed_docs",
+      name: "文书员",
+      role: "worker",
+      appearance: { shape: "squircle", color: "butter" },
+      seed: true,
+      updatedAt: now,
+      inject: "minimal",
+      brief: "写诚实说明书与发行说明，不编未做能力。",
+      playbook:
+        "You are the docs writer. Revise textbook docs in this repo. Follow docs/audiences.md. " +
+        "Do not invent APIs. Match existing tone. Use standing skills when they apply; do not paste them.",
+    },
+    {
+      id: "mem_seed_fixer",
+      name: "排障员",
+      role: "worker",
+      appearance: { shape: "gem", color: "coral" },
+      seed: true,
+      updatedAt: now,
+      inject: "minimal",
+      brief: "复现故障、定位、修，并给出证据。",
+      playbook:
+        "You are the debugger. Reproduce, isolate, then fix. Show failing evidence before the change. Stay in the given scope.",
+    },
+    {
+      id: "mem_seed_tester",
+      name: "测员",
+      role: "worker",
+      appearance: { shape: "pill", color: "sage" },
+      seed: true,
+      updatedAt: now,
+      inject: "minimal",
+      brief: "跑相关测试，报告失败与最小复现。",
+      playbook:
+        "You are the tester. Run the relevant tests. Report failures with the command and output. Do not skip failing tests.",
     },
   ];
 }
@@ -482,8 +548,10 @@ export class FaceAgentRosterStore {
         if (merged.changed) this.save(workspaceId, doc);
         return doc;
       }
-      const doc: PersistShape = { version: 1, members };
+      const kept = members.filter((row) => !isCatalogSeedMemberId(row.id));
+      const doc: PersistShape = { version: 1, members: kept };
       this.cache.set(workspaceId, doc);
+      if (kept.length !== members.length) this.save(workspaceId, doc);
       return doc;
     } catch {
       const doc = this.emptyOrSeed(workspaceId);
@@ -507,11 +575,11 @@ export class FaceAgentRosterStore {
   listVisible(workspaceId: string): readonly ListedRosterMember[] {
     const byId = new Map<string, ListedRosterMember>();
     for (const row of this.list(GLOBAL_ROSTER_ID)) {
-      byId.set(row.id, { ...row, scope: "global" });
+      byId.set(row.id, listedMember(row, "global"));
     }
     if (workspaceId !== GLOBAL_ROSTER_ID) {
       for (const row of this.list(workspaceId)) {
-        byId.set(row.id, { ...row, scope: "workspace" });
+        byId.set(row.id, listedMember(row, "workspace"));
       }
     }
     return [...byId.values()];
@@ -519,9 +587,14 @@ export class FaceAgentRosterStore {
 
   get(workspaceId: string, memberId: string): ListedRosterMember | undefined {
     const local = this.list(workspaceId).find((row) => row.id === memberId);
-    if (local) return { ...local, scope: workspaceId === GLOBAL_ROSTER_ID ? "global" : "workspace" };
+    if (local) {
+      return listedMember(
+        local,
+        workspaceId === GLOBAL_ROSTER_ID ? "global" : "workspace",
+      );
+    }
     const global = this.list(GLOBAL_ROSTER_ID).find((row) => row.id === memberId);
-    return global ? { ...global, scope: "global" } : undefined;
+    return global ? listedMember(global, "global") : undefined;
   }
 
   upsert(
@@ -550,6 +623,7 @@ export class FaceAgentRosterStore {
     const tools =
       input.tools === null ? undefined : parseMemberToolPolicy(input.tools);
     if (rawId && !id) return undefined; // illegal id — callers ask memberIdProblem() first
+    if (id && isCatalogSeedMemberId(id)) return undefined;
     if (id) {
       const index = doc.members.findIndex((row) => row.id === id);
       const prev = index === -1 ? undefined : doc.members[index];
@@ -619,6 +693,7 @@ export class FaceAgentRosterStore {
   }
 
   remove(workspaceId: string, memberId: string): boolean {
+    if (isCatalogSeedMemberId(memberId)) return false;
     const doc = this.load(workspaceId);
     const members = doc.members.filter((row) => row.id !== memberId);
     if (members.length === doc.members.length) return false;

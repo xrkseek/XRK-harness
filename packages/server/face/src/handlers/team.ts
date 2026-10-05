@@ -11,6 +11,7 @@ import {
 } from "../agent-team-roles.js";
 import {
   memberIdProblem,
+  catalogMemberWriteProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
@@ -142,6 +143,10 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   if (idProblem) {
     return { ok: false, error: { code: "invalid-payload", message: idProblem } };
   }
+  const catalogProblem = catalogMemberWriteProblem(args.id);
+  if (catalogProblem) {
+    return { ok: false, error: { code: "invalid-payload", message: catalogProblem } };
+  }
   const roleRaw = typeof args.role === "string" ? args.role : "worker";
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);
@@ -199,6 +204,10 @@ export const teamRemove: FaceHandler = async (runtime, _rpcId, payload) => {
   if (missing) return missing;
   const args = remoteArgs(payload);
   const id = String(args.id ?? "").trim();
+  const catalogProblem = catalogMemberWriteProblem(id);
+  if (catalogProblem) {
+    return { ok: false, error: { code: "invalid-payload", message: catalogProblem } };
+  }
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);
   const workspaceId = scope === "global" ? "global" : canvasId;

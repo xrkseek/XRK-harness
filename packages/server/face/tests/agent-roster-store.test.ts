@@ -43,9 +43,22 @@ describe("FaceAgentRosterStore", () => {
   it("seeds global base roles, workspace starts empty", () => {
     const store = new FaceAgentRosterStore(home());
     const names = store.list(GLOBAL_ROSTER_ID).map((row) => row.name);
-    expect(names).toEqual(["调研员", "施工员", "审稿员", "调度员"]);
+    expect(names).toEqual([
+      "调研员",
+      "施工员",
+      "审稿员",
+      "调度员",
+      "探网员",
+      "文书员",
+      "排障员",
+      "测员",
+    ]);
     expect(store.list("ws")).toEqual([]);
     expect(store.listVisible("ws").map((row) => row.scope)).toEqual([
+      "global",
+      "global",
+      "global",
+      "global",
       "global",
       "global",
       "global",
@@ -66,26 +79,28 @@ describe("FaceAgentRosterStore", () => {
     expect(store.listVisible("ws").some((row) => row.name === "夜间发版")).toBe(true);
   });
 
-  it("promotes a workspace overlay to global", () => {
+  it("refuses writes to built-in catalog ids", () => {
     const store = new FaceAgentRosterStore(home());
-    const overlay = store.upsert("ws", {
-      id: "mem_seed_worker",
-      name: "施工·本仓",
-      playbook: "Workspace overlay playbook.",
-      role: "worker",
-    });
-    expect(overlay?.id).toBe("mem_seed_worker");
-    expect(store.get("ws", "mem_seed_worker")?.scope).toBe("workspace");
-    const promoted = store.upsertAtScope("ws", "global", {
-      id: "mem_seed_worker",
-      name: "施工员",
-      playbook: "Promoted playbook.",
-      role: "worker",
-    });
-    expect(promoted?.name).toBe("施工员");
+    expect(
+      store.upsert("ws", {
+        id: "mem_seed_worker",
+        name: "施工·本仓",
+        playbook: "Workspace overlay playbook.",
+        role: "worker",
+      }),
+    ).toBeUndefined();
     expect(store.get("ws", "mem_seed_worker")?.scope).toBe("global");
-    expect(store.get("ws", "mem_seed_worker")?.playbook).toContain("Promoted");
+    expect(store.get("ws", "mem_seed_worker")?.seed).toBe(true);
     expect(store.list("ws")).toEqual([]);
+    expect(
+      store.upsertAtScope("ws", "global", {
+        id: "mem_seed_worker",
+        name: "施工员",
+        playbook: "Promoted playbook.",
+        role: "worker",
+      }),
+    ).toBeUndefined();
+    expect(store.remove(GLOBAL_ROSTER_ID, "mem_seed_worker")).toBe(false);
   });
 
   it("keeps an allow-list weaker than the parent role, case-insensitive", () => {
@@ -173,20 +188,45 @@ describe("FaceAgentRosterStore", () => {
     expect(ids).toContain("mem_seed_lead");
   });
 
-  it("drops seed on user upsert so later catalog refresh keeps the edit", () => {
+  it("restores catalog body even if a leftover edit dropped seed", () => {
     const dir = home();
     const store = new FaceAgentRosterStore(dir);
-    store.upsert(GLOBAL_ROSTER_ID, {
-      id: "mem_seed_researcher",
-      name: "调研员",
-      playbook: "Custom researcher playbook kept by the user.",
-      role: "researcher",
-    });
-    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.seed).toBeUndefined();
+    expect(
+      store.upsert(GLOBAL_ROSTER_ID, {
+        id: "mem_seed_researcher",
+        name: "调研员",
+        playbook: "Custom researcher playbook kept by the user.",
+        role: "researcher",
+      }),
+    ).toBeUndefined();
+    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
+      "workspace researcher",
+    );
+    mkdirSync(path.join(dir, "agent-rosters"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "agent-rosters", "global.json"),
+      JSON.stringify({
+        version: 1,
+        members: [
+          {
+            id: "mem_seed_researcher",
+            name: "调研员",
+            role: "researcher",
+            playbook: "Custom researcher playbook kept by the user.",
+            updatedAt: 1,
+            inject: "minimal",
+          },
+        ],
+      }),
+    );
     const again = new FaceAgentRosterStore(dir);
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "Custom researcher",
+      "workspace researcher",
     );
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.seed).toBe(true);
+    expect(
+      again.listVisible("ws").find((row) => row.id === "mem_seed_researcher")?.catalog,
+    ).toBe(true);
   });
 
   it("keeps extra body shapes and palettes on upsert", () => {

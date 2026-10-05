@@ -318,6 +318,89 @@ describe("session status snapshot", () => {
     expect(settled.subagents.live.every((s) => s.activity === "inactive")).toBe(true);
   });
 
+  it("gives untitled children a default companion ball so Settings kit does not leak", async () => {
+    const runtime = bareRuntime();
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(runtime, "session.create", requestId, {});
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const parent = await create("c-home");
+    const untitled = await create("c-untitled");
+    const kitted = await create("c-kitted");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: untitled,
+      mode: "continuable",
+      label: "untitled",
+    });
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: kitted,
+      mode: "continuable",
+      label: "发版员",
+      appearance: { shape: "wedge", color: "sage", kit: "bow" },
+    });
+    expect(buildSessionStatusSnapshot(runtime, parent).companionBall).toBeUndefined();
+    expect(buildSessionStatusSnapshot(runtime, untitled).companionBall).toEqual({
+      shape: "blob",
+      color: "cream",
+    });
+    expect(buildSessionStatusSnapshot(runtime, kitted).companionBall).toEqual({
+      shape: "wedge",
+      color: "sage",
+      kit: "bow",
+    });
+    expect(buildSessionStatusSnapshot(runtime, untitled).delegate).toEqual({
+      parentSessionId: parent,
+      childLabel: "untitled",
+    });
+    expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toBeUndefined();
+  });
+
+  it("gives nested children dual balls: immediate parent look + own look", async () => {
+    const runtime = bareRuntime();
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(runtime, "session.create", requestId, {});
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const home = await create("c-home");
+    const mid = await create("c-mid");
+    const leaf = await create("c-leaf");
+    runtime.subagents.attach({
+      parentSessionId: home,
+      childSessionId: mid,
+      mode: "continuable",
+      label: "发版员",
+      appearance: { shape: "wedge", color: "sage" },
+    });
+    runtime.subagents.attach({
+      parentSessionId: mid,
+      childSessionId: leaf,
+      mode: "continuable",
+      label: "调研员",
+      appearance: { shape: "squircle", color: "sky", kit: "cap" },
+    });
+    const midSnap = buildSessionStatusSnapshot(runtime, mid);
+    expect(midSnap.parentCompanionBall).toBeUndefined();
+    expect(midSnap.companionBall).toEqual({ shape: "wedge", color: "sage" });
+    expect(midSnap.delegate).toEqual({ parentSessionId: home, childLabel: "发版员" });
+    const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
+    expect(leafSnap.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
+    expect(leafSnap.companionBall).toEqual({
+      shape: "squircle",
+      color: "sky",
+      kit: "cap",
+    });
+    expect(leafSnap.delegate).toEqual({
+      parentSessionId: mid,
+      childLabel: "调研员",
+      parentLabel: "发版员",
+    });
+    expect(formatSessionStatusText(leafSnap)).toContain("delegate: 发版员 → 调研员");
+  });
+
   it("attaches last-turn outcome so a parent abort is not a finished child", async () => {
     const store = createMemorySessionStore();
     const runtime = createBareFaceRuntime({

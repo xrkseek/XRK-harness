@@ -8,6 +8,7 @@ import { isAgentTeamSpawnRole } from "./agent-team-roles.js";
 import {
   formatRosterCatalog,
   memberIdProblem,
+  catalogMemberWriteProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
@@ -41,9 +42,9 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_list",
     description:
-      "List Agent Team members (global + this workspace). A member is the child's " +
-      "tools, inject, and playbook — the same three surfaces the parent edits via " +
-      "preset / .xrk / the user message. Short catalog only. Spawn with subagent member_id.",
+      "List Agent Team members (global + this workspace). The same short catalog is " +
+      "injected at turn-start. A member is the child's tools, inject, and playbook. " +
+      "Seed AGENTS.md / skills stay on standing inject. Spawn with subagent member_id.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     isConcurrencySafe: () => true,
     presentCall: () => ({
@@ -69,7 +70,8 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_save",
     description:
-      "Publish a child profile onto Agent Team (tools + inject + playbook). " +
+      "Publish a user-owned child profile onto Agent Team (tools + inject + playbook). " +
+      "Built-in catalog ids (mem_seed_*) cannot be updated — omit id to mint a new role, copying fields from a catalog member if you want that template. " +
       "Use after a repeatable process (release, review, deploy) so later `subagent member_id` " +
       "does not rediscover it. from_session=true fills name/playbook from this chat. " +
       "scope global|workspace. inject minimal (skip home persona + skill catalog) | subagent. " +
@@ -81,8 +83,8 @@ export function bindAgentRosterTools(
         id: {
           type: "string",
           description:
-            "mem_ then [A-Za-z0-9][A-Za-z0-9._-]*, max 64 chars (e.g. mem_xrk-releaseer). " +
-            "Omit to mint one. Reuse a previous id to update that member.",
+            "mem_ then [A-Za-z0-9][A-Za-z0-9._-]*, max 64 chars. " +
+            "Omit to mint one. Reuse a previous user-owned id to update that member. Catalog mem_seed_* ids are read-only.",
         },
         name: { type: "string" },
         playbook: {
@@ -129,6 +131,8 @@ export function bindAgentRosterTools(
       const a = readArgs(args);
       const idProblem = memberIdProblem(a.id);
       if (idProblem) return { content: `team_save: ${idProblem}`, isError: true };
+      const catalogProblem = catalogMemberWriteProblem(a.id);
+      if (catalogProblem) return { content: `team_save: ${catalogProblem}`, isError: true };
       const captured = a.from_session === true
         ? captureSessionPlaybook(runtime, sessionId)
         : undefined;

@@ -216,6 +216,10 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
           }
         : {}),
     });
+    runtime.sessionThreads.unbind(
+      canvasWorkspaceIdForSession(runtime, parentSessionId),
+      sessionId,
+    );
   }
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
@@ -552,16 +556,12 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   runtime.watchSession(sessionId);
 
   if (mode === "queue") {
-    const workspaceKey = canvasWorkspaceIdForSession(runtime, sessionId);
-    const parent = runtime.subagents.getByChild(sessionId);
-    if (parent) {
-      const parentBind = runtime.sessionThreads.bindOf(
-        workspaceKey,
-        parent.parentSessionId,
+    const child = runtime.subagents.getByChild(sessionId);
+    if (child) {
+      runtime.sessionThreads.unbind(
+        canvasWorkspaceIdForSession(runtime, sessionId),
+        sessionId,
       );
-      if (parentBind) {
-        runtime.sessionThreads.switchTo(workspaceKey, sessionId, parentBind.threadId);
-      }
     }
   }
 

@@ -560,7 +560,8 @@ function createSubagentTool(
     "whatever answer it already wrote is salvaged into this result and the child id stays readable " +
     "(session_read / followup_task), so prefer run_in_background for genuinely long work instead of retrying blind. " +
     "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
-    "Prefer Agent Team member_id (catalog on this tool and team_list) over restating playbook or tools; " +
+    "Prefer Agent Team member_id from the turn-start collab board (and this tool / team_list) over restating playbook, skills, or AGENTS.md; " +
+    "match the live catalog by name and brief — if a member fits the user ask, spawn that member_id this turn instead of doing the job yourself; " +
     "optional role (worker|researcher|reviewer|lead) is only the fallback when no member fits; " +
     "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
     "optional task_id / task_name register the work on the Agent Teams task board. " +

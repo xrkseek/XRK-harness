@@ -2,14 +2,26 @@
  * Model-facing thread_* / sideline_set — workspace 主线 catalog + session 支线.
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
+import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
+import { dispatchFaceMethod } from "./dispatch.js";
+import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
+import { isChildSessionActive } from "./external-agent-runtime.js";
+import {
+  formatPeerCollabPrompt,
+  peerThreadMessageProblem,
+} from "./session-thread-message.js";
 import {
   publishSessionThread,
   publishSessionThreads,
   sessionIdsOnThread,
 } from "./session-thread-publish.js";
 import { SIDELINE_MAX } from "./session-thread-store.js";
+
+const PEER_WAIT_DEFAULT_MS = 10 * 60 * 1000;
+const PEER_WAIT_MIN_MS = 1_000;
+const PEER_POLL_MS = 300;
 
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
@@ -40,7 +52,7 @@ function sidelineOf(
  * Catalog rows for this workspace only: 主线 entries plus parent sessions
  * already attached. Unbound sessions (first-message sidebar titles) stay out.
  */
-function listCatalog(
+export function listWorkspaceThreadCatalog(
   runtime: FaceRuntime,
   workspaceId: string,
   selfId: string,
@@ -89,11 +101,13 @@ export function bindSessionThreadTools(
     description:
       "List this workspace's 主线 catalog only (not other workspaces). " +
       "A 主线 is an AI-owned collaboration pin: what this parent session is for, so sibling " +
-      "parent sessions in the same workspace can notice it, join it, or read it. " +
+      "parent sessions in the same workspace can notice it, read it, or thread_message a session on it. " +
       "It is not the user's message text. Do not mint from a greeting, a one-shot question, or a steer. " +
       "When this session becomes a lasting mission, call thread_upsert yourself — do not wait to be asked. " +
       "Each row lists parent sessions already attached. Unbound sessions do not appear. " +
-      "Sessions do not have a live chat bus; discover via this list, then session_search / session_read. " +
+      "Message a sibling with thread_message session_id (their assistant reply comes back here). " +
+      "Keep this session's 主线. Do not thread_switch just to talk — switch only when this chat should share that pin (sidebar name changes). " +
+      "That is not a subagent. Use session_search / session_read only to recall history. " +
       "Host may inject with session.prompt. Use thread_upsert / thread_delete yourself — never copy the user verbatim.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     isConcurrencySafe: () => true,
@@ -108,7 +122,7 @@ export function bindSessionThreadTools(
       return {
         content: JSON.stringify({
           workspaceId,
-          threads: listCatalog(runtime, workspaceId, sessionId),
+          threads: listWorkspaceThreadCatalog(runtime, workspaceId, sessionId),
           bind: runtime.sessionThreads.bindOf(workspaceId, sessionId) ?? null,
         }),
       };
@@ -171,8 +185,9 @@ export function bindSessionThreadTools(
   registerTool(tools, {
     name: "thread_switch",
     description:
-      "Attach this parent session to an existing workspace 主线 (same pin as a peer). " +
-      "Use after thread_list finds a matching 主线 instead of minting a duplicate.",
+      "Rebind this parent session onto an existing workspace 主线. The sidebar title becomes that pin. " +
+      "Use after thread_list when this chat should share a peer's pin instead of minting a duplicate. " +
+      "Not a step before thread_message — mailing a sibling does not move this session.",
     parameters: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -188,12 +203,22 @@ export function bindSessionThreadTools(
     execute: async (args) => {
       const id = String(readArgs(args).id ?? "").trim();
       const workspaceId = ws();
+      const previousThreadId =
+        runtime.sessionThreads.bindOf(workspaceId, sessionId)?.threadId;
       const bind = runtime.sessionThreads.switchTo(workspaceId, sessionId, id);
       if (!bind) {
         return { content: "thread_switch: unknown 主线 id", isError: true };
       }
       publishSessionThread(runtime, workspaceId, sessionId);
-      return { content: JSON.stringify({ workspaceId, bind }) };
+      return {
+        content: JSON.stringify({
+          workspaceId,
+          bind,
+          ...(previousThreadId && previousThreadId !== bind.threadId
+            ? { previousThreadId }
+            : {}),
+        }),
+      };
     },
   });
 
@@ -224,6 +249,152 @@ export function bindSessionThreadTools(
       }
       publishSessionThreads(runtime, workspaceId, affected);
       return { content: JSON.stringify({ workspaceId, deleted: true, id }) };
+    },
+  });
+
+  registerTool(tools, {
+    name: "thread_message",
+    description:
+      "Talk to another parent session_id that already has its own 主线 (may be a different pin). " +
+      "Do not thread_switch first — this call does not change either session's bind. " +
+      "Not a subagent: the peer keeps its own chat. Face wakes that session as steer (next tool-step / turn boundary), not Settings busyEnter queue. wait=true (default) " +
+      "returns its next assistant message here. Children use send_message / followup_task instead.",
+    parameters: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "Target parent session id from thread_list / the collab board.",
+        },
+        message: { type: "string", description: "What the peer should do or answer." },
+        wait: {
+          type: "boolean",
+          description: "If true (default), wait for the peer's assistant reply.",
+        },
+        timeout_ms: {
+          type: "number",
+          description: `Wait budget in ms (default ${PEER_WAIT_DEFAULT_MS}; min ${PEER_WAIT_MIN_MS}).`,
+        },
+      },
+      required: ["session_id", "message"],
+      additionalProperties: false,
+    },
+    presentCall: (args) => ({
+      card: "generic",
+      title: "thread_message",
+      kind: "execute",
+      rawInput: args,
+    }),
+    execute: async (args, signal) => {
+      const a = readArgs(args);
+      const targetId = String(a.session_id ?? "").trim();
+      const message = String(a.message ?? "").trim();
+      const workspaceId = ws();
+      const problem = peerThreadMessageProblem({
+        selfId: sessionId,
+        targetId,
+        selfBound: Boolean(runtime.sessionThreads.bindOf(workspaceId, sessionId)),
+        targetBound: Boolean(runtime.sessionThreads.bindOf(workspaceId, targetId)),
+        targetIsChild: Boolean(runtime.subagents.getByChild(targetId)),
+      });
+      if (problem) return { content: problem, isError: true };
+      if (!message) {
+        return { content: "thread_message requires message", isError: true };
+      }
+      const selfThread = runtime.sessionThreads.bindOf(workspaceId, sessionId);
+      const fromTitle = selfThread
+        ? runtime.sessionThreads.get(workspaceId, selfThread.threadId)?.title
+        : undefined;
+      const rpcId = `tool-th-msg-${sessionId}-${targetId}`;
+      const seqAtSend = readSessionEvents(runtime.store, targetId).length;
+      const prompted = await dispatchFaceMethod(
+        runtime,
+        "session.prompt",
+        rpcId,
+        {
+          sessionId: targetId,
+          mode: "steer",
+          content: [
+            {
+              type: "text",
+              text: formatPeerCollabPrompt({
+                fromSessionId: sessionId,
+                ...(fromTitle ? { fromThreadTitle: fromTitle } : {}),
+                message,
+              }),
+            },
+          ],
+        },
+      );
+      if (!prompted.result.ok) {
+        return { content: prompted.result.error.message, isError: true };
+      }
+      const wait = a.wait !== false;
+      if (!wait) {
+        return { content: `delivered to ${targetId} (steer)` };
+      }
+      let timeoutMs = PEER_WAIT_DEFAULT_MS;
+      if (typeof a.timeout_ms === "number" && Number.isFinite(a.timeout_ms)) {
+        timeoutMs = Math.min(
+          PEER_WAIT_DEFAULT_MS,
+          Math.max(PEER_WAIT_MIN_MS, Math.floor(a.timeout_ms)),
+        );
+      }
+      const deadline = Date.now() + timeoutMs;
+      const stillRunning = () => isChildSessionActive(runtime, targetId);
+      while (stillRunning() || Date.now() < deadline) {
+        if (signal?.aborted) {
+          throw new DOMException("aborted", "AbortError");
+        }
+        if (!stillRunning()) {
+          const events = readSessionEvents(runtime.store, targetId);
+          if (events.length > seqAtSend) {
+            const reply = lastAssistantBodyText(events.slice(seqAtSend)).trim();
+            if (reply) {
+              return {
+                content: `reply from ${targetId}:\n${reply}`,
+              };
+            }
+            if (Date.now() > deadline) break;
+          }
+        }
+        if (Date.now() > deadline) break;
+        const remaining = Math.max(0, deadline - Date.now());
+        if (
+          stillRunning() &&
+          runtime.drain.run &&
+          !runtime.externalAgents.has(targetId)
+        ) {
+          try {
+            await Promise.race([
+              runtime.drain.run(targetId),
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("wait slice")),
+                  Math.min(PEER_POLL_MS * 20, remaining),
+                ),
+              ),
+            ]);
+          } catch {
+            /* keep polling */
+          }
+        } else {
+          await new Promise((r) =>
+            setTimeout(r, Math.min(PEER_POLL_MS, remaining)),
+          );
+        }
+      }
+      const events = readSessionEvents(runtime.store, targetId);
+      const reply = lastAssistantBodyText(events.slice(seqAtSend)).trim();
+      if (reply) {
+        return { content: `reply from ${targetId}:\n${reply}` };
+      }
+      return {
+        content: stillRunning()
+          ? `thread_message: ${targetId} still running after ${timeoutMs}ms`
+          : `thread_message: ${targetId} idle with no assistant reply`,
+        isError: true,
+      };
     },
   });
 

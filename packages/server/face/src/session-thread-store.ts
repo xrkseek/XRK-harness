@@ -213,6 +213,16 @@ export class FaceSessionThreadStore {
     return next;
   }
 
+  /** Child sessions stay off the 主线 catalog. */
+  unbind(workspaceId: string, sessionId: string): boolean {
+    const doc = this.load(workspaceId);
+    if (!(sessionId in doc.sessions)) return false;
+    const sessions = { ...doc.sessions };
+    delete sessions[sessionId];
+    this.save(workspaceId, { ...doc, sessions });
+    return true;
+  }
+
   /** Drop a 主线 and every session bind pointing at it. */
   remove(workspaceId: string, threadId: string): boolean {
     const doc = this.load(workspaceId);

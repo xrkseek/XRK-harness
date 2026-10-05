@@ -345,11 +345,26 @@ export interface SessionStatusSnapshot {
     readonly source: "tool";
     readonly updatedAt: number;
   };
-  /** Child 干员 shape/color so Overview is not the home Settings ball. */
+  /** Child ball look. Always set for subagent sessions so Settings 装扮 cannot leak. */
   readonly companionBall?: {
     readonly shape: string;
     readonly color: string;
     readonly kit?: string;
+  };
+  /** Parent 干员 look when the parent is itself a child; omit → home Settings ball. */
+  readonly parentCompanionBall?: {
+    readonly shape: string;
+    readonly color: string;
+    readonly kit?: string;
+  };
+  /**
+   * Overview dual-ball. Immediate parent is the 委派方 (root → Settings ball;
+   * parent is itself a child → `parentCompanionBall` + `parentLabel`).
+   */
+  readonly delegate?: {
+    readonly parentSessionId: string;
+    readonly childLabel: string;
+    readonly parentLabel?: string;
   };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
@@ -849,6 +864,27 @@ function liveLineText(
 }
 
 /**
+ * Child Overview ball. A child with no roster look still gets a default
+ * blob/cream (no kit) so the client does not fall back to home Settings
+ * (shape / color / 装扮).
+ */
+function companionBallForChild(
+  link:
+    | { readonly appearance?: { readonly shape: string; readonly color: string; readonly kit?: string } }
+    | undefined,
+): SessionStatusSnapshot["companionBall"] {
+  if (!link) return undefined;
+  const look = link.appearance;
+  const shape = typeof look?.shape === "string" && look.shape ? look.shape : "blob";
+  const color = typeof look?.color === "string" && look.color ? look.color : "cream";
+  return {
+    shape,
+    color,
+    ...(typeof look?.kit === "string" && look.kit ? { kit: look.kit } : {}),
+  };
+}
+
+/**
  * Build the Status snapshot for one session.
  * Same facts feed `/status` text and Face `session.status`.
  */
@@ -1175,15 +1211,19 @@ export function buildSessionStatusSnapshot(
         ...(presenceRow.tips ? { tips: presenceRow.tips } : {}),
       }
     : undefined;
-  const childLook = runtime.subagents.getByChild(sessionId)?.appearance;
-  const companionBall =
-    childLook && typeof childLook.shape === "string" && typeof childLook.color === "string"
-      ? {
-          shape: childLook.shape,
-          color: childLook.color,
-          ...(typeof childLook.kit === "string" && childLook.kit ? { kit: childLook.kit } : {}),
-        }
-      : undefined;
+  const childLink = runtime.subagents.getByChild(sessionId);
+  const parentLink = childLink
+    ? runtime.subagents.getByChild(childLink.parentSessionId)
+    : undefined;
+  const companionBall = companionBallForChild(childLink);
+  const parentCompanionBall = companionBallForChild(parentLink);
+  const delegate = childLink
+    ? {
+        parentSessionId: childLink.parentSessionId,
+        childLabel: childLink.label,
+        ...(parentLink?.label ? { parentLabel: parentLink.label } : {}),
+      }
+    : undefined;
 
   return {
     sessionId,
@@ -1202,6 +1242,8 @@ export function buildSessionStatusSnapshot(
     fleet,
     ...(presence ? { presence } : {}),
     ...(companionBall ? { companionBall } : {}),
+    ...(parentCompanionBall ? { parentCompanionBall } : {}),
+    ...(delegate ? { delegate } : {}),
     timeline,
     compaction,
     delivery,
@@ -1235,6 +1277,13 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
     );
   } else {
     lines.push("presence: (auto — Overview derives from delivery/fleet)");
+  }
+
+  if (snap.delegate) {
+    const from = snap.delegate.parentLabel ?? snap.delegate.parentSessionId;
+    lines.push(
+      `delegate: ${from} → ${snap.delegate.childLabel} (${snap.delegate.parentSessionId})`,
+    );
   }
 
   const runningJobs = snap.jobs.filter((j) => j.status === "running");
