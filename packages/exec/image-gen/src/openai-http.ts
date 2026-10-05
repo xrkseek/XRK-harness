@@ -12,6 +12,7 @@ import type {
   ImageGenSourceImage,
 } from "./types.js";
 import { ImageGenError } from "./types.js";
+import { sniffImageMime } from "./mime.js";
 
 export interface OpenAiImageGenOptions {
   readonly apiKey: string;
@@ -50,9 +51,10 @@ function parseOpenAiImageRows(
   }
   return rows.map((row) => {
     if (row.b64_json) {
+      const bytes = Uint8Array.from(Buffer.from(row.b64_json, "base64"));
       return {
-        bytes: Uint8Array.from(Buffer.from(row.b64_json, "base64")),
-        mimeType: "image/png" as const,
+        bytes,
+        mimeType: sniffImageMime(bytes),
         ...(row.revised_prompt ? { revisedPrompt: row.revised_prompt } : {}),
         ...(row.url ? { url: row.url } : {}),
       };

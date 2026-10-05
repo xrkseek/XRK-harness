@@ -11,6 +11,7 @@ import type {
   ImageGenSourceImage,
 } from "./types.js";
 import { ImageGenError } from "./types.js";
+import { sniffImageMime } from "./mime.js";
 
 export interface OpenRouterImageGenOptions {
   readonly apiKey: string;
@@ -59,16 +60,13 @@ async function downloadImage(
       "IMAGE_GEN_BACKEND",
     );
   }
-  const ab = await res.arrayBuffer();
-  const ct = (res.headers.get("content-type") ?? "image/png")
-    .split(";")[0]
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const ct = res.headers
+    .get("content-type")
+    ?.split(";")[0]
     ?.trim()
     .toLowerCase();
-  const mimeType =
-    ct === "image/jpeg" || ct === "image/webp" || ct === "image/png"
-      ? ct
-      : ("image/png" as const);
-  return { bytes: new Uint8Array(ab), mimeType };
+  return { bytes, mimeType: sniffImageMime(bytes, ct) };
 }
 
 export function createOpenRouterImageGenProvider(
@@ -144,9 +142,10 @@ export function createOpenRouterImageGenProvider(
       const images = [];
       for (const row of rows) {
         if (row.b64_json) {
+          const bytes = Uint8Array.from(Buffer.from(row.b64_json, "base64"));
           images.push({
-            bytes: Uint8Array.from(Buffer.from(row.b64_json, "base64")),
-            mimeType: "image/png" as const,
+            bytes,
+            mimeType: sniffImageMime(bytes),
             ...(row.url ? { url: row.url } : {}),
           });
           continue;

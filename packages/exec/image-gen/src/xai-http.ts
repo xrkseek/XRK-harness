@@ -11,6 +11,7 @@ import type {
   ImageGenSourceImage,
 } from "./types.js";
 import { ImageGenError } from "./types.js";
+import { sniffImageMime } from "./mime.js";
 
 export interface XaiImageGenOptions {
   readonly apiKey: string;
@@ -64,9 +65,10 @@ function parseImageRows(
   return Promise.all(
     rows.map(async (row) => {
       if (row.b64_json) {
+        const bytes = Uint8Array.from(Buffer.from(row.b64_json, "base64"));
         return {
-          bytes: Uint8Array.from(Buffer.from(row.b64_json, "base64")),
-          mimeType: "image/png" as const,
+          bytes,
+          mimeType: sniffImageMime(bytes),
           ...(row.revised_prompt ? { revisedPrompt: row.revised_prompt } : {}),
           ...(row.url ? { url: row.url } : {}),
         };
@@ -79,10 +81,10 @@ function parseImageRows(
             "IMAGE_GEN_BACKEND",
           );
         }
-        const ab = await res.arrayBuffer();
+        const bytes = new Uint8Array(await res.arrayBuffer());
         return {
-          bytes: new Uint8Array(ab),
-          mimeType: "image/png" as const,
+          bytes,
+          mimeType: sniffImageMime(bytes),
           url: row.url,
           ...(row.revised_prompt ? { revisedPrompt: row.revised_prompt } : {}),
         };

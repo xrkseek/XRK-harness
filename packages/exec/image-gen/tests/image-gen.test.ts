@@ -408,8 +408,64 @@ describe("exec-image-gen", () => {
     const { FAL_IMAGE_MODELS } = await import("../src/catalog.js");
     expect(FAL_IMAGE_MODELS.length).toBeGreaterThanOrEqual(20);
   });
+
+  it("declares the media type the bytes actually carry", async () => {
+    // Relay gateways put WebP bodies inside an OpenAI-shaped b64_json.
+    // Declaring "image/png" there survives the Provider but dies at attachment
+    // admission as IMAGE_TYPE_MISMATCH — a valid image rejected over our own
+    // mislabel, which is how "supports image editing" quietly stops being true.
+    const webp = webpHeader();
+    const svc = createOpenAiImageGenProvider({
+      apiKey: "sk-test",
+      fetchImpl: async () =>
+        Response.json({
+          data: [{ b64_json: Buffer.from(webp).toString("base64") }],
+        }),
+    });
+    const out = await svc.generate({ prompt: "cat" });
+    expect(out.images[0]!.mimeType).toBe("image/webp");
+    expect(out.images[0]!.bytes).toEqual(webp);
+  });
+
+  it("trusts bytes over a declared type on both seams", async () => {
+    const webp = webpHeader();
+    const b64 = Buffer.from(webp).toString("base64");
+
+    // Inbound: a data: URL that claims to be a PNG.
+    const refs = await resolveImageGenReferenceImages({
+      imageUrl: `data:image/png;base64,${b64}`,
+      maxReferenceImages: 4,
+    });
+    expect(refs[0]!.mimeType).toBe("image/webp");
+
+    // Outbound: a CDN answering octet-stream for a WebP body.
+    const { createXaiImageGenProvider } = await import("../src/xai-http.js");
+    const svc = createXaiImageGenProvider({
+      apiKey: "xai-test",
+      fetchImpl: async (input) => {
+        if (String(input).includes("/images/")) {
+          return Response.json({ data: [{ url: "https://cdn.example/a" }] });
+        }
+        return new Response(Buffer.from(webp), {
+          headers: { "content-type": "application/octet-stream" },
+        });
+      },
+    });
+    const out = await svc.generate({ prompt: "cat" });
+    expect(out.images[0]!.mimeType).toBe("image/webp");
+  });
 });
 
 function textCaps() {
   return IMAGE_GEN_CAPABILITIES_TEXT_ONLY;
+}
+
+/**
+ * RIFF....WEBP signature. Long enough for the sniffing seam, which reads the
+ * header and never decodes the raster.
+ */
+function webpHeader(): Uint8Array {
+  return Uint8Array.from([
+    0x52, 0x49, 0x46, 0x46, 0x06, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+  ]);
 }

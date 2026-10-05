@@ -11,6 +11,7 @@ import type {
   ImageGenSourceImage,
 } from "./types.js";
 import { ImageGenError } from "./types.js";
+import { sniffImageMime } from "./mime.js";
 
 export interface KreaImageGenOptions {
   readonly apiKey: string;
@@ -171,12 +172,12 @@ export function createKreaImageGenProvider(
               "IMAGE_GEN_BACKEND",
             );
           }
-          const ab = await imgRes.arrayBuffer();
+          const bytes = new Uint8Array(await imgRes.arrayBuffer());
           return {
             images: [
               {
-                bytes: new Uint8Array(ab),
-                mimeType: "image/png",
+                bytes,
+                mimeType: sniffImageMime(bytes),
                 url,
               },
             ],

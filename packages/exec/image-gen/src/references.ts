@@ -5,30 +5,9 @@
 
 import type { AttachmentStore } from "@xrkseek/attachment";
 import { ImageGenError, type ImageGenSourceImage } from "./types.js";
+import { sniffImageMime } from "./mime.js";
 
 const ATTACHMENT_PREFIX = "attachment:";
-
-function sniffMime(
-  bytes: Uint8Array,
-  hint?: string,
-): ImageGenSourceImage["mimeType"] {
-  if (hint === "image/jpeg" || hint === "image/png" || hint === "image/webp") {
-    return hint;
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (
-    bytes.length >= 12 &&
-    bytes[0] === 0x52 &&
-    bytes[1] === 0x49 &&
-    bytes[2] === 0x46 &&
-    bytes[3] === 0x46
-  ) {
-    return "image/webp";
-  }
-  return "image/png";
-}
 
 /** Inline data URLs larger than this truncate model tool JSON (INCOMPLETE_TOOL_CALL). */
 const MAX_DATA_URL_CHARS = 8_192;
@@ -58,7 +37,7 @@ function parseDataUrl(url: string): ImageGenSourceImage {
   }
   return {
     bytes,
-    mimeType: sniffMime(bytes, mimeHint),
+    mimeType: sniffImageMime(bytes, mimeHint),
     label: "data-url",
   };
 }
@@ -114,7 +93,7 @@ async function fetchHttpImage(
   const ct = res.headers.get("content-type")?.split(";")[0]?.trim();
   return {
     bytes: buf,
-    mimeType: sniffMime(buf, ct),
+    mimeType: sniffImageMime(buf, ct),
     label: parsed.pathname.split("/").pop() || "http-image",
   };
 }
@@ -126,7 +105,7 @@ async function loadAttachment(
   const stored = await attachments.readImage(id);
   return {
     bytes: stored.data,
-    mimeType: sniffMime(stored.data, stored.ref.mediaType),
+    mimeType: sniffImageMime(stored.data, stored.ref.mediaType),
     label: id,
   };
 }
