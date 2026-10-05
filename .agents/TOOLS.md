@@ -10,5 +10,5 @@
 
 - MCP：Save 后本进程 remount（文件真源）；开 **允许连接** 才会真正挂工具；policy deny → **park**。
 - 进程插件：`xrkh plugin add` 后必须 **`xrkh restart`**（或停再起 `web`）。
-- 剧本：skill **`xrk-capability-attach`**（默认）· **`xrk-plugin-kind`** · **`xrk-plugin-author`** · **`xrk-plugin-verify`** · **`xrk-plan-build`** · **`xrk-delegate`** · **`xrk-code-review`**。
-- 子代理：见 **`xrk-delegate`** 与 `.agents/context/subagents.md`；Frugal 徽章关闭 spawn。
+- 剧本：家目录种子 skill（`skill` 加载）**`xrk-capability-attach`** · **`xrk-plugin-kind`** · **`xrk-plugin-author`** · **`xrk-plugin-verify`** · **`xrk-plan-build`** · **`xrk-delegate`** · **`xrk-code-review`**。本仓 `.agents/skills` 不复写这些名字。
+- 子代理：见家目录 **`xrk-delegate`** 与 `.agents/context/subagents.md`；Frugal 徽章关闭 spawn。

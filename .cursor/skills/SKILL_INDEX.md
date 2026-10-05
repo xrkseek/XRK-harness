@@ -6,7 +6,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | 读者 | 放哪 | 写什么 |
 |------|------|--------|
 | **Coding Agent** | `.cursor/skills/xrk-*` · `AGENTS.md` | 改 loader / preset / Face / extensions |
-| **产品 Agent** | `.agents/skills/*` · `~/.agents/skills/*` | 写插件、验证、kind 选型 |
+| **产品 Agent** | 本仓 overlay `.agents/skills/*`；产品默认 `~/.xrk/skills/*`（CLI seeds） | 写插件、验证、kind 选型 |
 | **契约** | `docs/*` | 行为真源；skill 只索引 |
 
 ## 一眼锁定（任务 → Skill）
@@ -47,23 +47,19 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | `xrk-docs-audience` | 教科书身份与双语 |
 | `xrk-release-notes` | `docs/releases/**` 文体 |
 
-## 产品向技能（仓库 `.agents/skills/`）
+## 产品向技能
 
-| Skill | 触发语（写在 description 里） |
-|-------|------------------------------|
-| **`xrk-harness-monorepo`** | harness 源码仓作工作区、写 extensions 插件、monorepo 总控 |
-| **`xrk-harness-architecture`** | 本仓架构总览 |
-| **`xrk-plugin-author`** | 写插件、脚手架、`xrk.plugin.json`、`createPlugin` |
-| **`xrk-plugin-kind`** | 选 kind、tools 还是 prompt、要不要 MCP |
-| **`xrk-plugin-verify`** | `plugin add`、`restart`、工具是否可见 |
-| **`xrk-create-skill`** | 写 skill（对标 Cursor create-skill） |
-| **`xrk-models-settings`** | 配模型、手动 ID、获取列表、对话搜索 |
-| **`xrk-capability-attach`** | 挂/改 MCP · Settings · 外观（settings_mutate） |
-| **`xrk-plan-build`** | Plan → Build、`exit_plan_mode`、先计划 |
-| **`xrk-delegate`** | 子代理委派、Frugal/Shallow、并行 |
-| **`xrk-code-review`** | 只读审 diff（Codex review 风格） |
+本仓 `.agents/skills/` **只**增量。跨工作区剧本在 `apps/cli/seeds/skills/` → `~/.xrk/skills/`。
 
-会话徽章用 **XRK Harness**（`harness`）或 **Frugal**（省钱）；全局人格可放 `~/.agents/`。见 [`.agents/README.md`](../../.agents/README.md)。
+| Skill | 落点 | 触发语 |
+|-------|------|--------|
+| **`xrk-harness-monorepo`** | 本仓 overlay | harness 源码仓作工作区、写 extensions 插件、monorepo 总控 |
+| **`xrk-harness-architecture`** | 本仓 overlay | 本仓架构总览 |
+| **`xrk-plugin-author`** · **`xrk-plugin-kind`** · **`xrk-plugin-verify`** | CLI seeds | 写插件 / 选型 / 验证 |
+| **`xrk-create-skill`** · **`xrk-models-settings`** · **`xrk-capability-attach`** | CLI seeds | 写 skill / 配模型 / 挂 MCP |
+| **`xrk-plan-build`** · **`xrk-delegate`** · **`xrk-code-review`** | CLI seeds | Plan→Build / 委派 / 只读审 diff |
+
+会话徽章用 **XRK Harness**（`harness`）或 **Frugal**（省钱）；全局人格可放 `~/.xrk/`。见 [`.agents/README.md`](../../.agents/README.md)。
 
 ## 与 XRK-AGT 对照
 

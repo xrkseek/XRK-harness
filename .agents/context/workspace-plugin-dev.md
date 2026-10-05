@@ -15,7 +15,7 @@
 |------|------|----------|
 | `extensions/example-tools` · `example-channel` · `dsh-compat` | 金样 / 内置适配（主仓白名单，可提交） | 对照只读；改金样需维护者意图 |
 | `extensions/<其他 id>/` | 第三方 / 本地工作树（主仓默认 ignore） | **写入**；勿 `git add` 进 XRK-harness |
-| `.agents/skills/` | 架构 + 插件 coach（catalog 自动扫） | 只读 |
+| `.agents/skills/` | 本仓增量（架构 / CodeGraph）；通用插件 coach 在 `~/.xrk/skills` | 只读 |
 | `docs/` | 契约（含「插件开发边界」） | 只读 |
 | `packages/` · `apps/` · `presets/` | 内核 | **勿写** |
 

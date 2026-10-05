@@ -1,8 +1,7 @@
 ---
 name: xrk-workspace-skills
 description: >-
-  编写 Harness 产品 skill / 对照 Cursor create-skill·create-rule。新增或改
-  .agents/skills、seeds、recipes 时使用。
+  编写 Harness 产品 skill。新增或改 `apps/cli/seeds` 与本仓 **增量** `.agents/skills` 时使用。
 disable-model-invocation: true
 user-invocable: false
 ---
@@ -32,25 +31,25 @@ user-invocable: false
 | 维护笔记 | `.cursor/skills/xrk-*` | 不进产品 catalog |
 | 产品 skill | `.xrk/skills` · `.agents/skills` | 仅 `name` + `description` |
 
-## 双写真源（改流程必同步）
+## 真源（禁止双写）
 
 | 受众 | 路径 |
 |------|------|
-| 用户主目录 | `apps/cli/seeds/skills/<name>/` → `~/.xrk/skills/` |
-| 本仓教练 | `.agents/skills/<name>/` |
+| 用户主目录（任意工作区） | **只** `apps/cli/seeds/skills/<name>/` → `~/.xrk/skills/` |
+| 本仓作工作区增量 | `.agents/skills/<name>/` — **仅**本仓独有（如 `xrk-harness-monorepo`）；**禁止**再抄一份 seed 同名 skill |
 
 UI 按钮名以 `packages/client/*/src/client/locales.ts` 为准。
 
 ## recipes
 
-`.agents/recipes/*.yaml` = 斜杠固定 prompt，**指向 skill 名**；不与 skill 同 id。
+通用斜杠 → `apps/cli/seeds/recipes/`。本仓 `.agents/recipes/*.yaml` **只**放本仓独有（如 `/plugin-scaffold`），不与 seed 同 id。
 
 ## 新增 checklist
 
-1. seeds + `.agents` 各一份（正文宜相同、宜短）
+1. 跨工作区剧本：**只**写 `apps/cli/seeds/`，不要同步进 `.agents/`
 2. `name` = 目录名；description 含触发语
-3. [SKILL_INDEX.md](../SKILL_INDEX.md) · [docs/skills-layers.md](../../../docs/skills-layers.md) · `.agents/AGENTS.md` 路由表
-4. 改 Settings 可见流程 → rule [`xrk-client-face-ui`](../../rules/xrk-client-face-ui.mdc)
+3. [SKILL_INDEX.md](../SKILL_INDEX.md) · [docs/skills-layers.md](../../../docs/skills-layers.md)
+4. 改 Settings 可见流程 → rule [`xrk-client-face-ui`](../../rules/xrk-client-face-ui.mdc)（产品 skill 只改 seeds）
 
 ## 陷阱
 

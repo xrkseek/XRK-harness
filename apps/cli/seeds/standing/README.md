@@ -7,4 +7,4 @@
 
 **When seeds run:** every Host establish — `xrkh web` / `serve` / `restart`, and Desktop Host boot (`@xrkseek/harness-desktop-host`). Bundle lives in `@xrkseek/harness-cli/seeds/` (shipped with CLI and with the Desktop host tree).
 
-Workspace overlays (`.agents/AGENTS.md` · `.agents/SOUL.md`) still win for project-specific voice.
+Workspace overlays (`.agents/AGENTS.md` · `.agents/SOUL.md`) still win for **project-specific** voice. Do **not** copy this standing file (or `seeds/skills`) into a workspace `.agents/` — Host already injects `~/.xrk/` plus the overlay.

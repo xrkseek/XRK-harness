@@ -17,6 +17,6 @@ xrk-inject: false
 
 - 文案只在 **`locales.ts`**（en/zh 同键）
 - 长列表：本地 filter，勿重查 API
-- 改可见流程：同步 `.agents/skills` + `apps/cli/seeds/skills`（见 **`xrk-workspace-skills`**）
+- 改可见流程：只改 `apps/cli/seeds/skills`（见 **`xrk-workspace-skills`**）；不要再抄进本仓 `.agents/skills`
 
 改完：`pnpm client:bundle` · `pnpm web:assemble` · 硬刷新。

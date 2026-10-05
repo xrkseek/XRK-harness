@@ -1,8 +1,0 @@
-id: mcp-attach
-title: 挂载 / 改 MCP
-description: 对照种子；真源 apps/cli/seeds/recipes/mcp-attach.yaml
-prompt: |
-  Follow home skill **xrk-capability-attach** (seeded under ~/.xrk): settings_get / settings_mutate ns=mcp.
-instructions: |
-  Prefer CLI seeds as product truth. This recipe is workspace overlay only.
-parameters: []

@@ -1,7 +1,7 @@
 # AGENTS.md — 产品工作区（写插件）
 
-> **Host 注入**：本文件在 `.agents/AGENTS.md`；**仅当本仓作工作区**时注入，并**替代**根维护者 `AGENTS.md`。  
-> 打开桌面等其它工作区时，产品 Agent 读的是 **`~/.xrk/AGENTS.md`**（由 `apps/cli/seeds/standing/` 种子），不是本文件。
+> **Host 注入**：本文件仅当**本仓作工作区**时注入，并**替代**根维护者 `AGENTS.md`。  
+> 全局站立（语气、主线、presence、附件溯源、能力挂载）只在 **`~/.xrk/AGENTS.md`**（`apps/cli/seeds/standing/`）。**不要**在本文件复写那份正文。
 
 ## 角色
 
@@ -17,19 +17,7 @@
 
 插件沙箱：**`extensions/<plugin-id>/`**。
 
-## 能力挂载（备忘）
-
-全局配置与 MCP 走 Host 工具 **`settings_get` / `settings_mutate`**（落点 `~/.xrk`）。细则见家目录 skill **`xrk-capability-attach`**（种子在 `apps/cli/seeds/skills/`）。本目录 skill 仅作工作区覆盖/对照。
-
-## 附件溯源（公开契约）
-
-附件 id（`sha256:<hex>`）是**内容寻址**的：id 即字节 SHA-256，本身就是持久地址，落盘路径**可由 id 直接推导，禁止满盘搜索**：
-
-- 图片原图：`{XRK_HOME}/attachments/v1/objects/<sha256 前 2 位>/<sha256>`
-- 普通文件：`{XRK_HOME}/attachments/v1/files/<sha256 前 2 位>/<sha256>/<原始文件名>`
-- 请求变体缓存（可重建，删了不碰原图）：`{XRK_HOME}/cache/attachments/request-images/`
-
-溯源 / 再看：`read_image file_path=sha256:…` 或 `attachment:sha256:…`（工具内按 id 读回并重新入库）；`image_generate` 结果文本给 `attachmentId=sha256:…`，同样可 `read_image` 溯源。聊天记录里的图/文件引用（含 tool result）走同一套 id → 路径推导；UI 端经 Face `session.attachment` 按会话事件引用授权读取（仅本 session 引用过的 id），base64 展示。具体合同见 `docs/modules/attachment.md`。
+产品默认 skill / recipes 在 **`~/.xrk/skills`** · **`~/.xrk/recipes`**（CLI seeds）。本目录 **`.agents/skills`** 只放本仓增量（架构、CodeGraph、发版链等），**不要**再抄一份 `xrk-delegate` / `xrk-plugin-author` 等同名剧本。需要那些流程时用 **`skill` 工具**加载家目录种子。
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph
@@ -44,17 +32,13 @@
 
 <!-- CODEGRAPH_END -->
 
-## 办事流程
+## 办事流程（本仓增量）
 
-0. 检索 / 定位 → **`codegraph-retrieval`**（CodeGraph 图谱先于 grep+read）
+0. 检索 / 定位 → **`codegraph-retrieval`**
 1. 结构 → **`xrk-harness-architecture`**
-2. 挂/改 MCP 或 Settings → **`xrk-capability-attach`**（全局工具）
-3. 工作区 Canvas / 概况看板 → **`xrk-canvas`**（`canvas_*`；磁盘 `{XRK_HOME}/canvases/<workspaceId>/`）
-3. 配模型 → **`xrk-models-settings`**
-4. 先计划 → **`/plan`** · **`xrk-plan-build`** · `exit_plan_mode`
-5. 委派 → **`xrk-delegate`**
-6. 审 diff → **`xrk-code-review`**
-7. 写插件 → **`xrk-harness-monorepo`** → **`xrk-plugin-author`**
-8. 验证 → **`xrk-plugin-verify`**
+2. 写插件 → **`xrk-harness-monorepo`**（再 `skill` 加载家目录 **`xrk-plugin-author`** / **`xrk-plugin-verify`**）
+3. 斜杠脚手架 → **`/plugin-scaffold`**
+
+全局 Plan / 委派 / 主线 / Canvas / MCP 挂载：见家目录站立 `AGENTS.md` 与对应种子 skill。
 
 细则：`.agents/context/` · `docs/plugin-development.md`

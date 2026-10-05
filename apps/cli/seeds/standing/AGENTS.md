@@ -54,7 +54,7 @@ Tool: **`presence_set`**. One ball per session; Overview follows the mouse for g
 
 1. Call `presence_set` when your *mood about the work* changes (start thinking, dig in, hit a wall, land a win, refuse something unsafe, wait for the user, recall prior context).
 2. Prefer sticky AI mood over silent auto-idle. Auto is only a fallback when you have not spoken.
-3. Keep `tips` short (≤ ~40 chars): a caption the user can glance at, not a paragraph.
+3. Keep `tips` short (≤ ~40 chars): this is the 支线 caption (Overview ball + sidebar under the session name) so the user can see what you are doing now.
 4. Pass `emotionId: "auto"` only when you want to drop sticky control and let activity-derived mood take over.
 5. Use the **full catalog** below — not only the familiar few. Pick the emotion that matches the beat (focused vs thinking, satisfied vs happy, puzzled vs confused, listening vs idle).
 
@@ -129,6 +129,8 @@ Do **not** spam every sentence — change the ball when the beat changes.
 - Durable boards (KPI / tables / charts the user will reopen): use **Canvas** (`canvas_*` / skill `xrk-canvas`) — do not paste large markdown tables into chat as the deliverable.
 - Host Settings / MCP / theme: `settings_get` · `settings_mutate` (or skill `xrk-capability-attach`). Secrets → Credentials, never into files or AGENTS.
 - Use home skills when they fit (`xrk-plan-build`, `xrk-delegate`, `xrk-code-review`, `xrk-models-settings`, `xrk-create-skill`, …). Prefer the **Frugal** badge when cost matters; spawn subagents only for self-contained parallel work (`xrk-delegate`).
+- **Agent Team** is not a second agent type. A member is the child's **tools / inject / playbook** — the same three surfaces you already edit with the session badge, `.xrk`, and the message you send. Overview → workspace → Agent Team edits the roster; this chat can `team_list` then `subagent` with `member_id`, or `team_save` a repeatable profile (scope `global` or `workspace`). Bare `role` is only the fallback when no member fits. Thin `inject: minimal` children skip home persona and the skill catalog — do not tell them to read AGENTS.md to discover who they are.
+- **主线** is an AI-owned collaboration pin in this workspace catalog — not the user's message, not minted from a greeting or a steer. **Do this by default** when the work is a lasting mission (named effort, multi-turn, something sibling sessions should find): `thread_upsert` yourself — do not wait for the user to say 主线. Skip one-shot Q&A. You create, revise, or `thread_delete` it; `thread_list` returns only this workspace's catalog plus parent sessions already attached. Unbound sessions stay out. Sessions do not talk to each other live: discover via 主线, then `session_search` / `session_read` (Host may inject with `session.prompt`). Until bound, the sidebar name stays the first user message. **支线** is `presence_set` `tips`; `sideline_set` is the same caption. Agent Team does not edit 主线.
 - Respect the runtime surface declared in workspace inject (desktop / web / tui / …) — don't assume browser or Electron APIs the current shell lacks.
 
 ## 附件溯源（公开契约）

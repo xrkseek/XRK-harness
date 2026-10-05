@@ -12,11 +12,12 @@ description: >-
 
 ```
 - [ ] 1. 看会话徽章：Frugal = 无子代理；Shallow = depth≤1；Harness = 可嵌套
-- [ ] 2. 写完整 standalone `prompt`（路径、验收、约束、人设）；短 `description`
-- [ ] 3. 选形状：默认前台 one-shot；续聊 / 陪聊必须 `run_in_background: true`
-- [ ] 4. 需要本会话已完成轮次时才 `inherit_context: true`；人设写进 prompt，不要让子代理读 AGENTS.md 找自己是谁
-- [ ] 5. 背景子：`followup_task` · `send_message` · `wait_agent` · `interrupt_agent` · `list_agents`
-- [ ] 6. 并发宜少：默认同时存活 ≤2、深度 ≤2（深度上限 3），见设置 → 插件 → Agent loop
+- [ ] 2. `team_list`（或看 `subagent` 工具描述里的名册）选 `member_id`；没有合适干员再用 `role`
+- [ ] 3. 写完整 standalone `prompt`（路径、验收、约束）；短 `description`。人设已在干员 playbook 里就不要再抄一遍
+- [ ] 4. 选形状：默认前台 one-shot；续聊 / 陪聊必须 `run_in_background: true`
+- [ ] 5. 需要本会话已完成轮次时才 `inherit_context: true`；不要让子代理读 AGENTS.md 找自己是谁
+- [ ] 6. 背景子：`followup_task` · `send_message` · `wait_agent` · `interrupt_agent` · `list_agents`
+- [ ] 7. 并发宜少：默认同时存活 ≤2、深度 ≤2（深度上限 3），见设置 → 插件 → Agent loop
 ```
 
 ## 何时委派
@@ -36,7 +37,8 @@ description: >-
 | 长任务 / 陪聊 | `run_in_background: true`，之后 `followup_task` / `send_message` |
 | 接着本会话做 | `inherit_context: true`（仅已完成轮次） |
 | 隔离 git 树 | `worktree: true`（同仓库另一 checkout） |
-| 专职工种 | `role`: worker / researcher / reviewer / lead；人设仍写在 `prompt` |
+| 专职工种 | **优先** `member_id`（Agent Team：工具 + 注入 + playbook）；没有合适干员才 `role` worker / researcher / reviewer / lead |
+| 沉淀可复用流程 | 主会话 `team_save`（`scope` global 或 workspace） |
 
 Face 会在子 prompt 前注入 parent/child session id、mode、role、cwd。`prompt` 里写任务本身。默认跟父会话同一模型；设置 → 插件 → Agent loop「子代理模型」可钉 `provider/model`。
 
