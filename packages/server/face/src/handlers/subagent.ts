@@ -7,6 +7,8 @@ import {
   promptExternalContinuable,
 } from "../external-agent-runtime.js";
 import { resolveSessionModelSelection } from "../model-catalog.js";
+import { describeChildOutcome } from "../adapt/subagent-notice.js";
+import { readSessionEvents } from "@xrkseek/core-session";
 
 function parentAvailable(runtime: Parameters<FaceHandler>[0], parentSessionId: string): boolean {
   return runtime.store.has(parentSessionId);
@@ -48,6 +50,9 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
     const activity = isChildSessionActive(runtime, link.childSessionId)
       ? ("running" as const)
       : ("inactive" as const);
+    const outcome = describeChildOutcome(
+      readSessionEvents(runtime.store, link.childSessionId),
+    );
     const hasChildren = runtime.subagents.hasDelegatedChildren(
       link.childSessionId,
     );
@@ -57,6 +62,7 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
         id: link.childSessionId,
         mode: "one-shot" as const,
         activity,
+        outcome,
         hasChildren,
         ...(route ? { model: route } : {}),
         ...(link.label ? { label: link.label } : {}),
@@ -67,6 +73,7 @@ export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
       id: link.childSessionId,
       mode: "continuable" as const,
       activity,
+      outcome,
       hasChildren,
       ...(route ? { model: route } : {}),
       label: link.label || "subagent",

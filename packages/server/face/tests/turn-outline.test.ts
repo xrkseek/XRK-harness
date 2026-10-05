@@ -229,4 +229,67 @@ describe("Face turnOutline projection", () => {
       seq: 5,
     });
   });
+
+  it("dedups a repeated turnId anywhere in the log, not just adjacent", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createTurnOutlineProjectionUnit());
+    const ids = new FaceWireIdMaps();
+
+    // t-a starts; t-b starts; then a stray t-a turn/start replays after
+    // history paging. The wire numbers it 1 again (FaceWireIdMaps caches by
+    // first seen) — the outline must not mint a third entry for it, or the
+    // rail would show a phantom turn and the ladder would drift from the
+    // transcript on every replay.
+    store.append(session.id, { type: "turn/start", ts: 1, turnId: "t-a" });
+    store.append(session.id, { type: "turn/start", ts: 3, turnId: "t-b" });
+    store.append(session.id, { type: "turn/start", ts: 5, turnId: "t-a" });
+    driveAll(registry, session.id, store);
+
+    expect(ids.turn(session.id, "t-a")).toBe(1);
+    expect(ids.turn(session.id, "t-b")).toBe(2);
+    expect(registry.snapshot(session.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "", response: "" },
+      { turn: 2, seq: 2, prompt: "", response: "" },
+    ]);
+  });
+
+  it("keeps one session's draft out of a fresh session's outline", () => {
+    const store = createMemorySessionStore();
+    const first = newSession(store);
+    const second = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createTurnOutlineProjectionUnit());
+
+    // First session streams an assistant reply mid-turn, leaving a draft.
+    const events: Parameters<typeof registry.drive>[1][] = [];
+    const drive = (event: Parameters<typeof registry.drive>[1], seq: number) => {
+      registry.drive(first.id, event, seq);
+    };
+    drive({ type: "turn/start", ts: 1, turnId: "t1" }, 1);
+    drive(
+      {
+        type: "assistant/message",
+        ts: 2,
+        turnId: "t1",
+        stepId: "s1",
+        content: "streaming reply",
+      },
+      2,
+    );
+    void events;
+
+    // Second session starts clean: its outline must not pre-carry turn 1's
+    // response draft from the first session (init returning a shared constant
+    // would have leaked it into the new session's fold).
+    registry.drive(second.id, { type: "turn/start", ts: 1, turnId: "u1" }, 1);
+    expect(registry.snapshot(second.id).values.turnOutline).toEqual([
+      { turn: 1, seq: 1, prompt: "", response: "" },
+    ]);
+  });
 });

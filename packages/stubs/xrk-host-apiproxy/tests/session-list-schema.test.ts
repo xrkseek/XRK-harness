@@ -54,8 +54,24 @@ describe("session.list wire schema", () => {
         "sess_ok2",
       ]);
       expect(warn).toHaveBeenCalled();
-    } finally {
+    }     finally {
       warn.mockRestore();
     }
+  });
+
+  it("keeps optional mainline and sideline fields", () => {
+    const parsed = sessionListValueSchema.parse({
+      items: [
+        row({
+          sessionId: "sess_ml",
+          mainline: "发版",
+          mainlineId: "th_abc",
+          sideline: "写发行说明",
+        }),
+      ],
+    });
+    expect(parsed.items[0]?.mainline).toBe("发版");
+    expect(parsed.items[0]?.mainlineId).toBe("th_abc");
+    expect(parsed.items[0]?.sideline).toBe("写发行说明");
   });
 });

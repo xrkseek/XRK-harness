@@ -14,6 +14,7 @@ import { resolveSessionCwd } from "./session-cwd.js";
 import { canOpenNativePath } from "./host-open-path.js";
 import { fullyQualified } from "./host-directory.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
+import { sessionCancel } from "./handlers/session.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -385,6 +386,12 @@ export async function workspaceArchiveSessionFace(
     };
   }
   const result = runtime.workspaces.archiveSession(sessionId);
+  // Archive is the sidebar “put this away” path after edit-fork; stop the
+  // original turn so a leftover drain does not keep writing behind the child.
+  await sessionCancel(runtime, `archive-${sessionId}`, {
+    sessionId,
+    cascade: true,
+  });
   try {
     await runtime.onSessionFinalize?.(sessionId);
   } catch {

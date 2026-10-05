@@ -253,6 +253,12 @@ export interface SessionSummary {
    * the deployment currently defaults to.
    */
   agentPreset?: string
+  /** Workspace 主线 title this session is attached to; list rows prefer it over `title`. */
+  mainline?: string
+  /** Workspace 主线 id (`th_*`). */
+  mainlineId?: string
+  /** Per-session 支线: current work, not a 轮次. */
+  sideline?: string
   /**
    * Client-local: the blank New Session still holds an unsent composer draft.
    * Never produced by Face list; the manager sets it from Session.setDraft so

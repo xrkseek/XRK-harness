@@ -158,6 +158,16 @@ export type HostFrame =
       readonly running: boolean;
     }
   | {
+      /** Live 主线 / 支线 chrome after thread_* / sideline mutations. */
+      readonly type: "host/session-thread";
+      readonly sessionId: string;
+      /** False clears mainline fields (session unbound or 主线 deleted). */
+      readonly bound: boolean;
+      readonly mainline?: string;
+      readonly mainlineId?: string;
+      readonly sideline?: string;
+    }
+  | {
       readonly type: "host/agent-error";
       readonly sessionId: string;
       readonly message: string;

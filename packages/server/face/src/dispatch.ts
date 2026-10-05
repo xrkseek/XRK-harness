@@ -138,6 +138,10 @@ import {
 } from "./handlers/references.js";
 import { changesFileDiff } from "./handlers/changes.js";
 import { canvasGet, canvasList } from "./handlers/canvas.js";
+import {
+  threadsList, threadsUpsert, threadsSwitch, threadsRemove,
+  teamList, teamUpsert, teamRemove, teamCapture, teamDispatch,
+} from "./handlers/team.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
   "host.describe": hostDescribe,
@@ -275,6 +279,24 @@ const HANDLERS: Record<string, FaceHandler> = {
   "canvas/list": canvasList,
   "canvas.get": canvasGet,
   "canvas/get": canvasGet,
+  "threads/list": threadsList,
+  "threads.list": threadsList,
+  "threads/upsert": threadsUpsert,
+  "threads.upsert": threadsUpsert,
+  "threads/switch": threadsSwitch,
+  "threads.switch": threadsSwitch,
+  "threads/remove": threadsRemove,
+  "threads.remove": threadsRemove,
+  "team/list": teamList,
+  "team.list": teamList,
+  "team/upsert": teamUpsert,
+  "team.upsert": teamUpsert,
+  "team/remove": teamRemove,
+  "team.remove": teamRemove,
+  "team/capture": teamCapture,
+  "team.capture": teamCapture,
+  "team/dispatch": teamDispatch,
+  "team.dispatch": teamDispatch,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

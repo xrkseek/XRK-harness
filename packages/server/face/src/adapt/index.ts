@@ -14,6 +14,7 @@ export {
   FACE_USAGE_ROUTE_PLACEHOLDER,
   providerModelKey,
   routeFromRequestHeader,
+  lastRequestHeaderSelection,
   type FaceModelRoute,
 } from "./model-route.js";
 export {

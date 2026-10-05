@@ -93,6 +93,7 @@ import {
   reconcileManagedProcessPlugins,
   snapshotSessionWorkspace,
   SNAPSHOT_DRAIN_BUDGET_MS,
+  applyRosterToolPolicy,
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
   type FaceApprovalBroker,
@@ -319,25 +320,33 @@ export function createHostShellPrepareArgv(options: {
   readonly workspaceRoot: string;
   readonly readSandboxSettings: () => Record<string, unknown> | undefined;
   readonly readSandboxMode: (sessionId: string | undefined) => import("@xrkseek/protocol").SandboxMode;
+  /**
+   * Live extra writable roots (`permission.extraWritableRoots`) — the same
+   * allowlist the fs tools use, so `bash` / `terminal_send` may cd into a
+   * whitelisted out-of-workspace project instead of failing `cwd escapes`.
+   */
+  readonly readExtraWritableRoots?: () => readonly string[];
   readonly remoteExecution: boolean;
   readonly env: NodeJS.ProcessEnv;
 }): NonNullable<
   Parameters<typeof createLocalShell>[0]["prepareArgv"]
 > {
   let cachedStack: SandboxService | undefined;
-  let cachedProductKey = "";
+  let cachedStackKey = "";
   return async (argv, cwd, signal, ctx) => {
     const settings = options.readSandboxSettings();
     const product = parseSandboxProduct(settings);
-    const productKey = JSON.stringify(product ?? null);
-    if (!cachedStack || cachedProductKey !== productKey) {
+    const extraRoots = options.readExtraWritableRoots?.() ?? [];
+    const stackKey = `${JSON.stringify(product ?? null)}|${JSON.stringify(extraRoots)}`;
+    if (!cachedStack || cachedStackKey !== stackKey) {
       cachedStack = createSandboxStack({
         workspaceRoot: options.workspaceRoot,
+        ...(extraRoots.length ? { extraWritableRoots: extraRoots } : {}),
         ...(product ? { product } : {}),
         env: options.env,
         ...(options.remoteExecution ? { remoteExecution: true } : {}),
       });
-      cachedProductKey = productKey;
+      cachedStackKey = stackKey;
     }
     // Per-session unlock: `danger-full-access` runs bash untouched.
     const mode = options.readSandboxMode(ctx?.ownerSessionId);
@@ -385,6 +394,15 @@ export type AgentFactory = (input: {
    * product home. Symlink escape out of a listed root is denied.
    */
   hostReadableRoots?: readonly string[];
+  /**
+   * Extra absolute roots the file tools may WRITE by absolute path, in
+   * addition to the workspace root. Empty by default — the write surface only
+   * widens when the deployment composes an explicit allowlist (a "full
+   * access" preset with configured `extraWritableRoots`), never because a
+   * preset was merely selected. Symlink escape out of a listed root is denied,
+   * and relative paths always resolve under the workspace root.
+   */
+  extraWritableRoots?: readonly string[];
   /** Live route image gate for `read_image`. */
   routeAllowsImage?: () => boolean;
   /**
@@ -453,7 +471,15 @@ export type AgentFactory = (input: {
   /** Merged Face web-search + vault keys for `createDefaultWebAccess({ search })`. */
   webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
   /** Face `workspace-inject.injectMaxChars` — rules/skills inject budget. */
-  workspaceInject?: { readonly maxChars?: number };
+  workspaceInject?: {
+    readonly maxChars?: number;
+    /**
+     * `subagent` drops the home persona layer (SOUL.md / USER.md / home
+     * AGENTS.md) — delegated children get their identity from the spawn
+     * preamble, while workspace rules and the skills catalog stay on.
+     */
+    readonly audience?: "user" | "subagent" | "minimal";
+  };
   /**
    * Face `session-telemetry` product (Settings SoT).
    * `XRK_TELEMETRY` env still bypasses for CI.
@@ -929,6 +955,36 @@ export function createHostManager(): HostManager {
         );
       });
 
+      /**
+       * Read the explicit extra file-write roots carried by the `permission`
+       * settings namespace. Live (re-read per agent resolve and per shell
+       * spawn), tolerant of a missing runtime / namespace / field, and
+       * sanitized to absolute paths: a malformed setting must widen nothing,
+       * never crash agent spawn. Shared by the fs tools AND the shared shell
+       * sandbox so both honor one allowlist.
+       */
+      const readPermissionExtraWritableRoots = (): readonly string[] => {
+        const rt = faceBox.runtime;
+        if (!rt) return [];
+        let view: { value?: unknown } | undefined;
+        try {
+          view = rt.settingsNamespaces.view("permission");
+        } catch {
+          return []; // namespace not registered in this composition
+        }
+        const value = view?.value;
+        if (!value || typeof value !== "object") return [];
+        const roots = (value as { extraWritableRoots?: unknown }).extraWritableRoots;
+        if (!Array.isArray(roots)) return [];
+        const cleaned = roots
+          .filter((entry): entry is string => typeof entry === "string")
+          .map((entry) => entry.trim())
+          .filter((entry) => entry !== "")
+          .map((entry) => path.resolve(entry));
+        // Deduplicate while preserving user-declared order (cosmetic).
+        return [...new Set(cleaned)];
+      };
+
       const sharedPty =
         !sshWorld &&
         (config.runtime.preset === "harness" ||
@@ -962,6 +1018,10 @@ export function createHostManager(): HostManager {
                     unknown
                   >;
                 },
+                // One allowlist, two consumers: the same roots the fs tools may
+                // write by absolute path also unlock `bash` / `terminal_send`
+                // cwd, so the shell no longer fails on a whitelisted project.
+                readExtraWritableRoots: readPermissionExtraWritableRoots,
                 readSandboxMode: (sessionId) =>
                   effectiveSandboxMode(
                     sessionId
@@ -1113,7 +1173,10 @@ export function createHostManager(): HostManager {
           maxSubagentDepth?: number;
           maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
-          workspaceInject?: { readonly maxChars?: number };
+          workspaceInject?: {
+            readonly maxChars?: number;
+            readonly audience?: "user" | "subagent" | "minimal";
+          };
           sessionTelemetry?: import("@xrkseek/session-telemetry").SessionTelemetryProductConfig;
           sandbox?: import("@xrkseek/exec-sandbox").SandboxProductConfig;
           computerUseProduct?: import("@xrkseek/exec-computer-use").ComputerUseProductConfig;
@@ -1168,6 +1231,13 @@ export function createHostManager(): HostManager {
           config.runtime.preset;
         const wsId = faceRuntime.workspaces.workspaceIdOf(sessionId);
         const wsRow = wsId ? faceRuntime.workspaces.get(wsId) : undefined;
+        // Wider file-write surface: an explicit allowlist carried by the
+        // `permission` settings namespace, read live so a settings change
+        // applies to the next agent resolve (agentCache keys on sessionId, so
+        // an already-bound agent keeps its composition until invalidated).
+        // Empty is the default — file writes stay workspace-bound unless a
+        // deployment configured roots here.
+        const permissionExtraWritableRoots = readPermissionExtraWritableRoots();
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -1177,6 +1247,22 @@ export function createHostManager(): HostManager {
               store,
               workspaceRoot: sessionRoot,
               ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
+              // A delegated child must not inherit the *parent-facing* standing
+              // persona (SOUL.md / ~/.xrk AGENTS.md "you are the user's agent,
+              // do small asks yourself"). Its identity arrives in the spawn
+              // preamble; workspace project docs still apply. Codex splits the
+              // same way in `session/multi_agents.rs`.
+              ...(parentSessionId
+                ? {
+                    workspaceInject: {
+                      audience:
+                        faceBox.runtime?.subagents.getByChild(sessionId)
+                          ?.inject === "subagent"
+                          ? ("subagent" as const)
+                          : ("minimal" as const),
+                    },
+                  }
+                : {}),
               plugins: loader.list(),
               attachments,
               // Spill subtree + attachments only — never resolveXrkHome().
@@ -1184,6 +1270,14 @@ export function createHostManager(): HostManager {
                 attachmentsRoot,
                 defaultSpillDir(),
               ],
+              // Wider write surface is a per-deployment setting, not something
+              // any preset implies: the `permission` namespace carries an
+              // explicit allowlist (extraWritableRoots) that only a
+              // permission-aware composition opts into. Absent the setting, the
+              // array is empty and file writes stay workspace-bound.
+              ...(permissionExtraWritableRoots.length
+                ? { extraWritableRoots: permissionExtraWritableRoots }
+                : {}),
               routeAllowsImage: () =>
                 faceForModality.current
                   ? liveRouteAllowsImageInput(faceForModality.current, sessionId)
@@ -1278,8 +1372,21 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
                 : {}),
-              ...(pluginSettings.workspaceInject
-                ? { workspaceInject: pluginSettings.workspaceInject }
+              ...(pluginSettings.workspaceInject || parentSessionId
+                ? {
+                    workspaceInject: {
+                      ...(pluginSettings.workspaceInject ?? {}),
+                      ...(parentSessionId
+                        ? {
+                            audience:
+                              faceBox.runtime?.subagents.getByChild(sessionId)
+                                ?.inject === "subagent"
+                                ? ("subagent" as const)
+                                : ("minimal" as const),
+                          }
+                        : {}),
+                    },
+                  }
                 : {}),
               ...(pluginSettings.sessionTelemetry
                 ? { sessionTelemetry: pluginSettings.sessionTelemetry }
@@ -1431,6 +1538,18 @@ export function createHostManager(): HostManager {
                   },
                 });
               }
+            }
+            // Role deny projection (Codex `role.rs`: a role may only weaken).
+            // A subagent with role=reviewer/researcher must not carry write /
+            // shell / web / delegation tools even though the preset allows
+            // them: the reminder text is advisory, this is the hard cut.
+            const roleLink = faceBox.runtime?.subagents?.getByChild(sessionId);
+            if (roleLink && agent.tools) {
+              applyRosterToolPolicy(
+                agent.tools,
+                roleLink.role,
+                roleLink.tools,
+              );
             }
             return agent;
           },
@@ -2471,8 +2590,14 @@ export function createHostManager(): HostManager {
           }
         }
       });
-      lineage.parentOf = (sessionId) =>
-        faceRuntime.subagents.getByChild(sessionId)?.parentSessionId;
+      // Tool-delegated children nest under the parent compose scope. UI/rewind
+      // forks (`mode: "fork"`) stay root `agent:{id}` scopes — nesting them
+      // under a live parent races dispose while the child's create() awaits.
+      lineage.parentOf = (sessionId) => {
+        const link = faceRuntime.subagents.getByChild(sessionId);
+        if (!link || link.mode === "fork") return undefined;
+        return link.parentSessionId;
+      };
       notifyMcpOverlay = () => {
         refreshFacePlugins();
         if (lastMcpReconcileOverlay) {

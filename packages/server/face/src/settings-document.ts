@@ -16,6 +16,11 @@ import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
   schemaEnvelopeOf,
 } from "./settings-schemas.js";
+import {
+  MEMBER_COLORS,
+  MEMBER_KITS,
+  MEMBER_SHAPES,
+} from "./agent-roster-store.js";
 import { FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "./presets-catalog.js";
 import {
   isFacePermissionPreset,
@@ -362,24 +367,24 @@ export function validateSettingsNamespace(
   if (ns === "ui-presence") {
     const shape = merged.shape;
     if (
-      shape !== undefined &&
-      shape !== "blob" &&
-      shape !== "wedge" &&
-      shape !== "gem"
+      shape !== undefined
+      && !MEMBER_SHAPES.includes(shape as (typeof MEMBER_SHAPES)[number])
     ) {
       return `unknown presence shape: ${String(shape)}`;
     }
     const color = merged.color;
     if (
-      color !== undefined &&
-      color !== "cream" &&
-      color !== "mist" &&
-      color !== "peach" &&
-      color !== "sage" &&
-      color !== "lilac" &&
-      color !== "slate"
+      color !== undefined
+      && !MEMBER_COLORS.includes(color as (typeof MEMBER_COLORS)[number])
     ) {
       return `unknown presence color: ${String(color)}`;
+    }
+    const kit = merged.kit;
+    if (
+      kit !== undefined
+      && !MEMBER_KITS.includes(kit as (typeof MEMBER_KITS)[number])
+    ) {
+      return `unknown presence kit: ${String(kit)}`;
     }
   }
   if (ns === "ssh-remote") {

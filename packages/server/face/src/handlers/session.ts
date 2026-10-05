@@ -17,6 +17,7 @@ import {
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
+import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import { rewritePendingAdmit } from "../update-queue-rewrite.js";
 import {
@@ -54,16 +55,23 @@ import {
 } from "../fork-cut.js";
 import {
   buildFaceModelCatalog,
+  pinInheritedSessionModel,
   resolveSessionModelSelection,
   routeServed,
 } from "../model-catalog.js";
 import { liveRouteAllowsImageInput } from "../llm-resolve.js";
 import { selectSessionModel } from "../select-session-model.js";
+import {
+  clearSessionModelSelection,
+  sessionModelsPath,
+} from "../session-model-store.js";
+import { resolveXrkHome } from "@xrkseek/server-config";
 import { persistWorkspaceDoc } from "../workspace-store.js";
 import {
   resolveParentWorkspaceAttach,
   resolveSessionCwd,
 } from "../session-cwd.js";
+import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import {
   historyPageIncludesProjections,
   SESSION_LIST_PROJECTION_KEYS,
@@ -159,38 +167,54 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     );
   }
 
-  // New Session inherits the model selection of the session it was opened
-  // from, so the composer's pick survives a session switch. Convenience copy,
-  // not a lineage link: an unknown source — or one that never pinned its own
-  // selection — leaves the default resolution in place, and a subagent parent
-  // below still wins as the nearer relation.
+  // New Session inherits the source's *effective* route (pin or default
+  // resolution), so Status and the composer agree. In-memory only — not
+  // `session-models.json`. Unknown source: leave the default chain. A
+  // subagent parent below still wins as the nearer relation.
   const inheritFrom =
     typeof p.inheritFrom === "string" ? p.inheritFrom.trim() : "";
   if (inheritFrom && inheritFrom !== sessionId) {
-    const inherited = runtime.sessionModels.get(inheritFrom);
-    if (inherited) runtime.sessionModels.set(sessionId, { ...inherited });
+    pinInheritedSessionModel(runtime, inheritFrom, sessionId);
   }
 
   if (parentSessionId) {
-    // Freeze the parent's EFFECTIVE route, not just its explicit override. A
-    // parent that never picked a model has no `sessionModels` entry, so copying
-    // only that would leave the child to re-resolve later — and a mid-run
-    // `agent-default-model` edit would silently move the child off the route
-    // its parent was actually on. Resolution is total (it always answers), so
-    // the only cost is one extra live entry per child session.
-    runtime.sessionModels.set(sessionId, {
-      ...(runtime.sessionModels.get(parentSessionId)
-        ?? resolveSessionModelSelection(runtime, parentSessionId)),
-    });
+    // Freeze the parent's effective route. Resolution is total, so a parent
+    // that never picked still pins what it was actually on.
+    pinInheritedSessionModel(runtime, parentSessionId, sessionId);
     const label =
       typeof p.label === "string" && p.label.trim()
         ? p.label.trim()
         : "subagent";
+    const memberId =
+      typeof p.memberId === "string" ? p.memberId.trim() : "";
+    const member = memberId
+      ? runtime.agentRoster.get(
+          canvasWorkspaceIdForSession(runtime, parentSessionId),
+          memberId,
+        )
+      : undefined;
     runtime.subagents.attach({
       parentSessionId,
       childSessionId: sessionId,
       mode: p.mode === "one-shot" ? "one-shot" : "continuable",
-      label,
+      label: member?.name || label,
+      ...(isAgentTeamSpawnRole(p.role)
+        ? { role: p.role }
+        : member?.role && member.role !== "default"
+          ? { role: member.role }
+          : {}),
+      ...(member
+        ? {
+            memberId: member.id,
+            inject: member.inject,
+            appearance: {
+              shape: member.appearance.shape,
+              color: member.appearance.color,
+              ...(member.appearance.kit ? { kit: member.appearance.kit } : {}),
+            },
+            ...(member.tools ? { tools: member.tools } : {}),
+          }
+        : {}),
     });
   }
   const bound =
@@ -262,6 +286,12 @@ export const sessionList: FaceHandler = async (runtime) => {
     const wsRow = wsId ? runtime.workspaces.get(wsId) : undefined;
     const agentPreset = effectiveSessionAgentPreset(runtime, sessionId);
     const lineage = runtime.subagents.getByChild(sessionId);
+    const workspaceKey = canvasWorkspaceIdForSession(runtime, sessionId);
+    const bind = runtime.sessionThreads.bindOf(workspaceKey, sessionId);
+    const thread = bind
+      ? runtime.sessionThreads.get(workspaceKey, bind.threadId)
+      : undefined;
+    const sideline = bind?.sideline ?? runtime.presence.get(sessionId)?.tips;
     return {
       sessionId,
       updatedAt,
@@ -280,6 +310,8 @@ export const sessionList: FaceHandler = async (runtime) => {
           }
         : {}),
       title: snap?.values.title ?? null,
+      ...(thread ? { mainline: thread.title, mainlineId: thread.id } : {}),
+      ...(sideline ? { sideline } : {}),
       ...(snap ? { projections: snapshotWireBlock(snap) } : {}),
     };
   });
@@ -517,6 +549,21 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   }
 
   runtime.watchSession(sessionId);
+
+  if (mode === "queue") {
+    const workspaceKey = canvasWorkspaceIdForSession(runtime, sessionId);
+    const parent = runtime.subagents.getByChild(sessionId);
+    if (parent) {
+      const parentBind = runtime.sessionThreads.bindOf(
+        workspaceKey,
+        parent.parentSessionId,
+      );
+      if (parentBind) {
+        runtime.sessionThreads.switchTo(workspaceKey, sessionId, parentBind.threadId);
+      }
+    }
+  }
+
   const agent = await runtime.resolveAgent(sessionId);
   const admitId = `admit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const echoRpc =
@@ -681,6 +728,14 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.wireIds.clear(sessionId);
   runtime.inboxWire.clear(sessionId);
   runtime.sessionModels.delete(sessionId);
+  try {
+    clearSessionModelSelection(
+      sessionModelsPath(runtime.productDir?.trim() || resolveXrkHome()),
+      sessionId,
+    );
+  } catch {
+    /* sidecar best-effort */
+  }
   runtime.sessionCwds.delete(sessionId);
   runtime.sessionHasImage.delete(sessionId);
   runtime.sessionImageScanned.delete(sessionId);
@@ -867,6 +922,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
           : linkMode === "fork"
             ? "fork"
             : "subagent",
+    ...(isAgentTeamSpawnRole(p.role) ? { role: p.role } : {}),
   });
   publishSessionAdded(runtime, child.id);
   if (workspace) {

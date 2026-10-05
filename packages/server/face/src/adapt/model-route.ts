@@ -45,11 +45,35 @@ export function providerModelKey(route: FaceModelRoute): string {
 
 export function routeFromRequestHeader(event: {
   readonly type: string;
-  readonly header?: { readonly config?: { readonly provider?: string; readonly model?: string } };
+  readonly header?: {
+    readonly config?: {
+      readonly provider?: string;
+      readonly model?: string;
+      readonly reasoningEffort?: string;
+    };
+  };
 }): FaceModelRoute | undefined {
   if (event.type !== "request/header") return undefined;
   const provider = event.header?.config?.provider?.trim();
   const model = event.header?.config?.model?.trim();
   if (!provider || !model) return undefined;
   return { provider, model };
+}
+
+/** Latest `request/header` route in a log prefix (ignores live Face maps). */
+export function lastRequestHeaderSelection(
+  events: readonly Parameters<typeof routeFromRequestHeader>[0][],
+): (FaceModelRoute & { reasoningEffort?: string }) | undefined {
+  let last: (FaceModelRoute & { reasoningEffort?: string }) | undefined;
+  for (const event of events) {
+    const route = routeFromRequestHeader(event);
+    if (!route) continue;
+    const effort = event.header?.config?.reasoningEffort?.trim();
+    last = {
+      provider: route.provider,
+      model: route.model,
+      ...(effort ? { reasoningEffort: effort } : {}),
+    };
+  }
+  return last;
 }

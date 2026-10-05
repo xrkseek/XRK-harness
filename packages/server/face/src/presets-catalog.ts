@@ -38,6 +38,18 @@ export interface AgentToolFlags {
   readonly pty: boolean;
 }
 
+/**
+ * When a session may spawn subagents without the user asking for it
+ * (Codex `multi_agent.rs`: two mutually exclusive mode instructions, chosen
+ * per session rather than hardcoded into one prompt).
+ *
+ * - `explicit` — spawn only when the user, AGENTS.md, or the task itself asks
+ *   for delegation. "Go deeper / investigate more" is NOT authorization.
+ * - `proactive` — spawning is an approved strategy; spawn when it actually
+ *   helps. Depth and concurrency caps still apply.
+ */
+export type DelegationMode = "explicit" | "proactive";
+
 export interface AgentPresetProfile {
   readonly id: CatalogAgentPresetId;
   readonly composition: AgentToolComposition;
@@ -45,6 +57,11 @@ export interface AgentPresetProfile {
   readonly subagents: AgentSubagentPolicy;
   /** Skip harness `tool:subagent` routing prompt when subagents are off. */
   readonly subagentRouting: boolean;
+  /**
+   * Delegation posture while `subagents.mode === "on"` (badge with subagents
+   * off never spawns, so the value is unused there).
+   */
+  readonly delegation: DelegationMode;
   /**
    * Seed `plan/mode` active on session.create.
    * Prefer `/plan` for collaboration mode; badges keep this false.
@@ -86,6 +103,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
       tools: MINIMAL_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
+      delegation: "explicit",
       planModeDefault: false,
     },
   },
@@ -100,6 +118,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
       tools: SHELL_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
+      delegation: "explicit",
       planModeDefault: false,
     },
   },
@@ -114,6 +133,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
       tools: FULL_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
+      delegation: "explicit",
       planModeDefault: false,
     },
   },
@@ -131,6 +151,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
         maxDepth: 1,
       },
       subagentRouting: true,
+      delegation: "proactive",
       planModeDefault: false,
     },
   },
@@ -147,6 +168,7 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
         mode: "on",
       },
       subagentRouting: true,
+      delegation: "proactive",
       planModeDefault: false,
     },
   },

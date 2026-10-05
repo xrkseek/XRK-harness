@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createMemorySessionStore } from "@xrkseek/core-session";
+import { createMemorySessionStore, readSessionEvents } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { createFaceRuntime } from "../src/runtime.js";
 import {
   bindSubagentTools,
+  childOwnedEvents,
+  childResumeHint,
   subagentDepth,
 } from "../src/subagent-tools.js";
+import {
+  formatChildOutcome,
+  lastAssistantBodyText,
+  lastModelRetryNotice,
+} from "../src/adapt/subagent-notice.js";
 import { FaceSubagentRegistry } from "../src/subagent-registry.js";
 import type { FaceDrain } from "../src/context.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
@@ -250,6 +257,7 @@ describe("subagent tools", () => {
     expect(props.model).toBeTruthy();
     expect(props.reasoning_effort).toBeTruthy();
     expect(def.description).toMatch(/provider \/ model/);
+    expect(def.dynamicSchema?.()?.description).toContain("mem_seed_researcher");
   });
 
   it("spills an oversized child answer to a file the parent can read", async () => {
@@ -467,5 +475,204 @@ describe("subagent tools", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("round-trips the spawn role so tool projection survives a restart", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-sa-role-persist-"));
+    try {
+      const file = path.join(dir, "subagents.json");
+      const first = new FaceSubagentRegistry(file);
+      first.attach({
+        parentSessionId: "p",
+        childSessionId: "c",
+        mode: "one-shot",
+        label: "review",
+        role: "reviewer",
+      });
+      expect(new FaceSubagentRegistry(file).getByChild("c")?.role).toBe(
+        "reviewer",
+      );
+
+      // A corrupt / unknown persisted role degrades to "no projection"
+      // instead of throwing at registry load.
+      const bad = path.join(dir, "bad.json");
+      writeFileSync(
+        bad,
+        JSON.stringify({
+          links: [
+            {
+              parentSessionId: "p",
+              childSessionId: "x",
+              mode: "one-shot",
+              label: "x",
+              role: "wizard",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      expect(new FaceSubagentRegistry(bad).getByChild("x")?.role).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("salvages a timed-out child's answer and names the resume verbs", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-salvage-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.sessionAgentPresets.set(child, "harness");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    // Seeded parent prefix plus the child's own answer: only the latter counts.
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now(),
+      turnId: "parent-turn",
+      stepId: "p1",
+      content: "父会话上一轮的回答",
+    } as never);
+    runtime.subagents.setSeedEventCount(child, store.get(child).events.length);
+    store.append(child, {
+      type: "assistant/message",
+      ts: Date.now() + 1,
+      turnId: "child-turn",
+      stepId: "c1",
+      content: "子代理在超时前写完的结论",
+    } as never);
+
+    expect(lastAssistantBodyText(childOwnedEvents(runtime, child))).toBe(
+      "子代理在超时前写完的结论",
+    );
+
+    const hint = childResumeHint(child);
+    expect(hint).toContain("session_read");
+    expect(hint).toContain("followup_task");
+    expect(hint).toContain("wait_agent");
+    expect(hint).toContain(child);
+
+    // A child that never answered has nothing to salvage: cancel stays right.
+    const mute = runtime.ensureSession("mute");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: mute,
+      mode: "continuable",
+      label: "m",
+    });
+    expect(lastAssistantBodyText(childOwnedEvents(runtime, mute))).toBe("");
+  });
+
+  it("tells a rate-limited child apart from a wedged one", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-retry-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const child = runtime.ensureSession("child");
+    runtime.sessionAgentPresets.set(child, "harness");
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    store.append(child, {
+      type: "llm/retry",
+      ts: Date.now(),
+      turnId: "t1",
+      stepId: "s1",
+      retryId: "r1",
+      retry: 3,
+      maxRetries: 5,
+      delayMs: 12_000,
+      mode: "normal",
+      failure: { message: "rate limited", code: "RATE_LIMIT", status: 429 },
+      provider: "test-provider",
+    } as never);
+
+    const notice = lastModelRetryNotice(childOwnedEvents(runtime, child));
+    expect(notice).toContain("3/5");
+    expect(notice).toContain("RATE_LIMIT");
+    expect(notice).toContain("status 429");
+    expect(notice).toContain("12s backoff");
+
+    // Once the backoff elapsed the retry is history, not a live diagnosis.
+    store.append(child, {
+      type: "llm/retry-started",
+      ts: Date.now() + 1,
+      turnId: "t1",
+      stepId: "s1",
+      retryId: "r1",
+      retry: 3,
+    } as never);
+    expect(lastModelRetryNotice(childOwnedEvents(runtime, child))).toBeUndefined();
+  });
+
+  it("separates a finished child from one the parent wait cut off", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-outcome-")),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+      defaultAgentPreset: "harness",
+    });
+    const parent = runtime.ensureSession("parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    const done = runtime.ensureSession("done");
+    const killed = runtime.ensureSession("killed");
+    const open = runtime.ensureSession("open");
+
+    const now = 1_800_000_000_000;
+    store.append(done, {
+      type: "turn/end",
+      ts: now - 5_000,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    } as never);
+    store.append(killed, {
+      type: "turn/end",
+      ts: now - 120_000,
+      turnId: "t2",
+      reason: { kind: "aborted", reason: { kind: "parent" } },
+    } as never);
+    store.append(open, {
+      type: "assistant/chunk",
+      ts: now - 30_000,
+      turnId: "t3",
+      stepId: "s1",
+      kind: "text",
+      text: "still working",
+    } as never);
+
+    expect(formatChildOutcome(readSessionEvents(store, done), now)).toMatch(
+      /^finished/,
+    );
+    expect(formatChildOutcome(readSessionEvents(store, killed), now)).toBe(
+      "aborted by parent · last event 2m ago",
+    );
+    expect(formatChildOutcome(readSessionEvents(store, open), now)).toBe(
+      "turn still open · last event 30s ago",
+    );
   });
 });

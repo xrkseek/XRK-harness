@@ -41,15 +41,15 @@ export interface TurnOutlineEntry {
 export interface TurnOutlineState {
   readonly turns: readonly TurnOutlineEntry[];
   draft: string;
-  /** Last `turn/start` turnId — retries keep the standing entry. */
-  readonly lastTurnId: string | null;
+  /**
+   * Every `turnId` that already anchored an entry, in first-seen order. This
+   * must mirror {@link FaceWireIdMaps.turn}'s dedup scope — the whole log, not
+   * just the previous event — or the outline's numbering drifts off the wire
+   * numbers the client timeline is keyed by, and the rail grows marks for
+   * turns the transcript does not have.
+   */
+  readonly seenTurnIds: readonly string[];
 }
-
-const EMPTY_OUTLINE: TurnOutlineState = {
-  turns: [],
-  draft: "",
-  lastTurnId: null,
-};
 
 /** Space-join text, collapse whitespace, cap at `limit` with a trailing ellipsis. */
 function previewFromBlocks(content: MessageContent, limit: number): string {
@@ -123,20 +123,27 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "turnOutline",
-    stateVersion: 1,
-    init: () => EMPTY_OUTLINE,
+    stateVersion: 2,
+    // A fresh object per session, never a module-level singleton: `apply`
+    // mutates `draft` in place, and every session's fold starts from this.
+    // Sharing one instance lets a streaming session's draft bleed into the
+    // next session's first `user/message`, which forwards the field.
+    init: () => ({ turns: [], draft: "", seenTurnIds: [] }),
     apply(state, event: SessionEvent, seq: number): TurnOutlineState {
       switch (event.type) {
         case "turn/start": {
-          if (state.lastTurnId === event.turnId) return state;
-          const turn = (state.turns.at(-1)?.turn ?? 0) + 1;
+          // Whole-log dedup, matching FaceWireIdMaps.turn(): a turnId that
+          // already anchored an entry keeps it, so numbering stays "first seen
+          // wins" however far apart the repeats are.
+          if (state.seenTurnIds.includes(event.turnId)) return state;
+          const turn = state.turns.length + 1;
           return {
             turns: [
               ...state.turns,
               { turn, seq, prompt: "", response: "" },
             ],
             draft: "",
-            lastTurnId: event.turnId,
+            seenTurnIds: [...state.seenTurnIds, event.turnId],
           };
         }
         case "user/message": {
@@ -148,7 +155,7 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
           return {
             turns: [...state.turns.slice(0, -1), { ...last, prompt }],
             draft: state.draft,
-            lastTurnId: state.lastTurnId,
+            seenTurnIds: state.seenTurnIds,
           };
         }
         case "assistant/message": {
@@ -171,7 +178,7 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
               { ...last, response: state.draft },
             ],
             draft: "",
-            lastTurnId: state.lastTurnId,
+            seenTurnIds: state.seenTurnIds,
           };
         }
         default:

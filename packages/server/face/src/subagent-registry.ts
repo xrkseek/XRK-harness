@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
+import { isAgentTeamSpawnRole, type AgentTeamSpawnRole } from "./agent-team-roles.js";
+import type { MemberInject, MemberToolPolicy } from "./agent-roster-store.js";
 
 export type SubagentMode = "one-shot" | "continuable" | "fork";
 
@@ -31,11 +33,62 @@ export interface FaceSubagentLink {
    * child's answer. Omitted / 0 = no seed (fresh child).
    */
   readonly seedEventCount?: number;
+  /**
+   * Spawn role template. Persisted so Host `resolveAgent` can apply the
+   * role's deny-only tool projection even after a restart.
+   */
+  readonly role?: AgentTeamSpawnRole;
+  /** 干员 id when this child was dispatched from the roster. */
+  readonly memberId?: string;
+  /** Child inject thickness. Default for 干员 is `minimal`. */
+  readonly inject?: MemberInject;
+  /** Extra weaken-only tool policy on top of the spawn role. */
+  readonly tools?: MemberToolPolicy;
+  /** Ball look for this child (not the home Settings presence). */
+  readonly appearance?: { readonly shape: string; readonly color: string; readonly kit?: string };
 }
 
 type PersistShape = {
   readonly links: FaceSubagentLink[];
 };
+
+function freezeLink(link: FaceSubagentLink): FaceSubagentLink {
+  const appearance =
+    link.appearance &&
+    typeof link.appearance.shape === "string" &&
+    typeof link.appearance.color === "string"
+      ? {
+          shape: link.appearance.shape,
+          color: link.appearance.color,
+          ...(typeof link.appearance.kit === "string" && link.appearance.kit
+            ? { kit: link.appearance.kit }
+            : {}),
+        }
+      : undefined;
+  const tools = link.tools;
+  return {
+    parentSessionId: link.parentSessionId,
+    childSessionId: link.childSessionId,
+    mode: link.mode,
+    label: link.label,
+    ...(isAgentTeamSpawnRole(link.role) ? { role: link.role } : {}),
+    ...(typeof link.seedEventCount === "number" &&
+    Number.isSafeInteger(link.seedEventCount) &&
+    link.seedEventCount > 0
+      ? { seedEventCount: link.seedEventCount }
+      : {}),
+    ...(typeof link.memberId === "string" && link.memberId.trim()
+      ? { memberId: link.memberId.trim() }
+      : {}),
+    ...(link.inject === "subagent" || link.inject === "minimal"
+      ? { inject: link.inject }
+      : {}),
+    ...(tools && (tools.mode === "allow" || tools.mode === "deny") && tools.names.length > 0
+      ? { tools: { mode: tools.mode, names: [...tools.names] } }
+      : {}),
+    ...(appearance ? { appearance } : {}),
+  };
+}
 
 /**
  * Parent → direct children. Optional JSON sidecar for JSONL session dir.
@@ -102,17 +155,7 @@ export class FaceSubagentRegistry {
       }
       return existing;
     }
-    const frozen: FaceSubagentLink = {
-      parentSessionId: link.parentSessionId,
-      childSessionId: link.childSessionId,
-      mode: link.mode,
-      label: link.label,
-      ...(typeof link.seedEventCount === "number" &&
-      Number.isSafeInteger(link.seedEventCount) &&
-      link.seedEventCount > 0
-        ? { seedEventCount: link.seedEventCount }
-        : {}),
-    };
+    const frozen: FaceSubagentLink = freezeLink(link);
     const bucket = this.byParent.get(link.parentSessionId) ?? [];
     bucket.push(frozen);
     this.byParent.set(link.parentSessionId, bucket);
@@ -196,13 +239,20 @@ export class FaceSubagentRegistry {
           row.seedEventCount > 0
             ? row.seedEventCount
             : undefined;
-        const frozen: FaceSubagentLink = {
+        const frozen: FaceSubagentLink = freezeLink({
           parentSessionId,
           childSessionId,
           mode,
           label,
+          ...(isAgentTeamSpawnRole(row.role) ? { role: row.role } : {}),
           ...(seedEventCount !== undefined ? { seedEventCount } : {}),
-        };
+          ...(typeof row.memberId === "string" ? { memberId: row.memberId } : {}),
+          ...(row.inject === "subagent" || row.inject === "minimal"
+            ? { inject: row.inject }
+            : {}),
+          ...(row.tools ? { tools: row.tools } : {}),
+          ...(row.appearance ? { appearance: row.appearance } : {}),
+        });
         const bucket = this.byParent.get(parentSessionId) ?? [];
         bucket.push(frozen);
         this.byParent.set(parentSessionId, bucket);

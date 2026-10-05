@@ -10,6 +10,19 @@ import type { SessionId } from '@xrkseek/xrk-session/types'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 import type { HistoryEntry, SessionProjectionsBlock } from './sessions.ts'
 
+/**
+ * How a child's last turn ended, structurally (mirrors Face's
+ * `describeChildOutcome`). `activity` is the live axis; this is the terminal
+ * one, so "stopped by the parent" never renders as "done".
+ */
+export interface SubagentOutcome {
+  kind: 'completed' | 'aborted' | 'error' | 'max-tokens' | 'interrupted' | 'blocked' | 'none'
+  /** Only for `kind: 'aborted'`: who cut the turn off. */
+  cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+  /** Ms since the child's last log event. */
+  quietMs?: number
+}
+
 /** Complete durable direct-child catalog row. */
 export type SubagentListEntry =
   | {
@@ -17,6 +30,13 @@ export type SubagentListEntry =
     id: SessionId
     /** Whether the child Agent driver is running at the Host sampling boundary. */
     activity: 'running' | 'inactive'
+    /**
+     * How the child's last turn ended. `activity: 'inactive'` alone cannot say
+     * whether the child delivered or was cut off — the wait budget, a human
+     * Stop and a crash all land on the same word, so a roster built from it
+     * renders a kill as a completion.
+     */
+    outcome?: SubagentOutcome
     /** Whether a direct descendant has durable `origin: 'subagent'`. */
     hasChildren: boolean
     /**

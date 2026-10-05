@@ -6,7 +6,6 @@
 import {
   flattenText,
   isHumanUserMessageSource,
-  type MessageContent,
   type SessionEvent,
 } from "@xrkseek/protocol";
 
@@ -41,6 +40,13 @@ interface RoleTemplate {
   readonly id: AgentTeamSpawnRole;
   /** Short reminder prepended to the child prompt. */
   readonly reminder: string;
+  /**
+   * Tools this role may never call. **Deny-only** (mirrors Codex `role.rs`:
+   * a role may customize or weaken a subagent, never strengthen it). Applied
+   * at Agent-handle build time in Host `resolveAgent`; without it a reviewer
+   * would still hold write/bash/web tools and "do not edit" is just a prompt.
+   */
+  readonly deniedTools?: readonly string[];
 }
 
 const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
@@ -53,16 +59,65 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
     reminder:
       "ROLE: worker. Execute the assigned task precisely. Prefer concrete edits and evidence over planning. Ask only when blocked. " +
       "You are not the only agent editing this codebase: stay inside the scope you were given and never revert another agent's or the user's changes.",
+    // A worker implements; spawning more subagents is the lead's job.
+    deniedTools: ["subagent", "ralph", "team_graph"],
   },
   researcher: {
     id: "researcher",
     reminder:
       "ROLE: researcher. Gather facts with read/search tools. Prefer citations (paths · symbols · quotes). Do not make durable edits unless the task explicitly requires them.",
+    // Read-only by construction: no edits, no shell, no delegation.
+    deniedTools: [
+      "apply_edit",
+      "apply_patch",
+      "write_file",
+      "bash",
+      "terminal_open",
+      "terminal_send",
+      "terminal_read",
+      "terminal_list",
+      "terminal_close",
+      "terminal_signal",
+      "subagent",
+      "ralph",
+      "team_graph",
+      "send_message",
+      "followup_task",
+      "interrupt_agent",
+      "wait_agent",
+      "list_agents",
+      "analytics",
+    ],
   },
   reviewer: {
     id: "reviewer",
     reminder:
       "ROLE: reviewer. Critique risks, regressions, and missing tests. Prefer findings with severity and file references. Do not implement fixes unless asked.",
+    // Review must never mutate: no writes, no shell, no network (offline
+    // evidence only), no delegation, no self-spawn.
+    deniedTools: [
+      "apply_edit",
+      "apply_patch",
+      "write_file",
+      "bash",
+      "terminal_open",
+      "terminal_send",
+      "terminal_read",
+      "terminal_list",
+      "terminal_close",
+      "terminal_signal",
+      "web_search",
+      "web_fetch",
+      "subagent",
+      "ralph",
+      "team_graph",
+      "send_message",
+      "followup_task",
+      "interrupt_agent",
+      "wait_agent",
+      "list_agents",
+      "analytics",
+    ],
   },
   lead: {
     id: "lead",
@@ -107,6 +162,10 @@ export interface SubagentSpawnPreambleInput {
   readonly isolatedWorktree: boolean;
   /** Bounded root-evidence block (see {@link rootUserAuthorizationBlock}). */
   readonly userAuthorization?: string;
+  /** Named 干员 this child was spawned as. */
+  readonly memberId?: string;
+  /** Inject thickness from the 干员 record. */
+  readonly inject?: "subagent" | "minimal";
 }
 
 /**
@@ -136,6 +195,12 @@ export function applySubagentSpawnPreamble(
     `- mode: ${modeLine}`,
     `- label: ${input.label.trim() || "subagent"}`,
     `- role: ${role}`,
+    ...(input.memberId
+      ? [
+          `- member_id: ${input.memberId}`,
+          `- inject: ${input.inject === "subagent" ? "subagent" : "minimal"}`,
+        ]
+      : []),
     `- inherit_context: ${inheritLine}`,
     `- workspace_cwd: ${input.cwd}`,
     `- workspace: ${workspaceLine}`,
@@ -154,6 +219,14 @@ export function applySubagentSpawnPreamble(
 
 export function listSpawnRoleIds(): readonly AgentTeamSpawnRole[] {
   return AGENT_TEAM_SPAWN_ROLES;
+}
+
+/** Tools denied for one role (empty for default / lead). */
+export function roleDeniedTools(
+  role: AgentTeamSpawnRole | undefined,
+): readonly string[] {
+  if (!role || role === "default" || role === "lead") return [];
+  return TEMPLATES[role].deniedTools ?? [];
 }
 
 /** Bounded root-evidence ceiling (mirrors Codex `MAX_ROOT_MESSAGES`). */
@@ -187,7 +260,7 @@ export function rootUserAuthorizationBlock(input: {
     const ev = input.parentEvents[i]!;
     if (ev.type !== "user/message") continue;
     if (!isHumanUserMessageSource(ev.source)) continue;
-    const text = flattenText(ev.content as MessageContent).trim();
+    const text = flattenText(ev.content).trim();
     if (!text) continue;
     out.push(
       text.length > MAX_USER_AUTHORIZATION_CHARS

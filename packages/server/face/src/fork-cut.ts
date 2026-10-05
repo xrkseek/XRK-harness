@@ -6,10 +6,11 @@
 
 import {
   contentHasImage,
+  isHumanUserMessageSource,
   type MessageContent,
   type SessionEvent,
 } from "@xrkseek/protocol";
-import { routeFromRequestHeader } from "./adapt/model-route.js";
+import { lastRequestHeaderSelection } from "./adapt/model-route.js";
 import type { FaceModelSelection } from "./model-catalog.js";
 
 export type ForkCutOk = {
@@ -27,10 +28,70 @@ export type ForkCutFail = {
 };
 
 /**
+ * Exclusive `beforeSeq` cut, then drop a trailing open / human-less turn.
+ * Edit-resubmit uses `beforeSeq = userSeq - 1`; `turn/start` sits before the
+ * user row, so a raw offset would seed an open turn and the child's next
+ * prompt would `repairOpenTurn` it into a ghost 「已停止」.
+ */
+function trimBeforeSeqCut(
+  events: readonly SessionEvent[],
+  rawCut: number,
+): number {
+  const end = Math.min(Math.max(0, rawCut), events.length);
+  type TurnAcc = {
+    start: number;
+    end?: number;
+    hasHuman: boolean;
+    started: boolean;
+  };
+  const byId = new Map<string, TurnAcc>();
+  const order: string[] = [];
+  const accFor = (turnId: string, index: number): TurnAcc => {
+    let acc = byId.get(turnId);
+    if (acc === undefined) {
+      acc = { start: index, hasHuman: false, started: false };
+      byId.set(turnId, acc);
+      order.push(turnId);
+    }
+    return acc;
+  };
+  for (let i = 0; i < end; i++) {
+    const event = events[i];
+    if (event === undefined || !("turnId" in event)) continue;
+    const turnId = event.turnId;
+    if (typeof turnId !== "string" || turnId.length === 0) continue;
+    const acc = accFor(turnId, i);
+    if (event.type === "turn/start") {
+      acc.started = true;
+      acc.start = i;
+    }
+    if (
+      event.type === "user/message" &&
+      isHumanUserMessageSource(event.source)
+    ) {
+      acc.hasHuman = true;
+    }
+    if (event.type === "turn/end") acc.end = i;
+  }
+
+  let cut = 0;
+  let sawStart = false;
+  for (const turnId of order) {
+    const acc = byId.get(turnId);
+    if (acc === undefined || !acc.started) continue;
+    sawStart = true;
+    if (acc.end === undefined || !acc.hasHuman) return acc.start;
+    cut = acc.end + 1;
+  }
+  return sawStart ? cut : end;
+}
+
+/**
  * Wire history seq is 1-based (`index + 1`), matching `session.history`.
  * `atSeq` anchors the first `turn/end` at or after that seq; omitted /
- * past-end anchors use the last completed turn. Legacy `beforeSeq` is a raw
- * exclusive offset (no turn mapping) for older callers.
+ * past-end anchors use the last completed turn. `beforeSeq` is an exclusive
+ * offset; the seed then keeps only completed turns that contain a human
+ * `user/message` (open / abort-only turns stay out).
  */
 export function resolveForkCut(
   events: readonly SessionEvent[],
@@ -66,7 +127,7 @@ export function resolveForkCut(
   if (atSeq === undefined && beforeSeq !== undefined) {
     return {
       ok: true,
-      cut: Math.min(beforeSeq, events.length),
+      cut: trimBeforeSeqCut(events, beforeSeq),
       beforeSeq,
     };
   }
@@ -119,19 +180,7 @@ export function resolveForkCut(
 export function modelSelectionFromPrefix(
   events: readonly SessionEvent[],
 ): FaceModelSelection | undefined {
-  let last: FaceModelSelection | undefined;
-  for (const event of events) {
-    if (event.type !== "request/header") continue;
-    const route = routeFromRequestHeader(event);
-    if (!route) continue;
-    const effort = event.header?.config?.reasoningEffort?.trim();
-    last = {
-      provider: route.provider,
-      model: route.model,
-      ...(effort ? { reasoningEffort: effort } : {}),
-    };
-  }
-  return last;
+  return lastRequestHeaderSelection(events);
 }
 
 export function prefixHasImageContent(

@@ -124,10 +124,37 @@ export {
   type CanvasTone,
 } from "./canvas-store.js";
 export {
+  FaceSessionThreadStore,
+  threadsRoot,
+  type SessionThreadBind,
+  type WorkspaceThread,
+} from "./session-thread-store.js";
+export {
+  FaceAgentRosterStore,
+  rosterRoot,
+  seedGlobalRosterMembers,
+  mergeGlobalSeedMembers,
+  GLOBAL_ROSTER_ID,
+  MEMBER_FILE_TOOLS,
+  applyRosterToolPolicy,
+  formatRosterCatalog,
+  type AgentRosterMember,
+  type ListedRosterMember,
+  type MemberToolPolicy,
+} from "./agent-roster-store.js";
+export {
   bindCanvasTools,
   canvasWorkspaceIdForSession,
   type BindCanvasToolsOptions,
 } from "./canvas-tools.js";
+export {
+  bindSessionThreadTools,
+  type BindSessionThreadToolsOptions,
+} from "./session-thread-tools.js";
+export {
+  bindAgentRosterTools,
+  type BindAgentRosterToolsOptions,
+} from "./agent-roster-tools.js";
 export {
   FacePresenceStore,
   type SessionPresenceState,

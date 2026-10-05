@@ -136,6 +136,14 @@ export type HostFrame =
   }
   | { type: 'host/session-removed'; sessionId: SessionId }
   | { type: 'host/session-status'; sessionId: SessionId; running: boolean }
+  | {
+    type: 'host/session-thread'
+    sessionId: SessionId
+    bound: boolean
+    mainline?: string
+    mainlineId?: string
+    sideline?: string
+  }
   | { type: 'host/agent-error'; sessionId: SessionId; message: string }
   | { type: 'host/workspace-changed'; workspace: WorkspaceView }
   | { type: 'host/workspace-removed'; workspaceId: WorkspaceView['workspaceId'] }

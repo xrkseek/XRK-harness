@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   rootUserAuthorizationBlock,
+  roleDeniedTools,
 } from "../src/agent-team-roles.js";
 
 function user(text: string, source?: { kind: "user" | "inject" }): SessionEvent {
@@ -65,5 +66,46 @@ describe("rootUserAuthorizationBlock", () => {
       rootUserAuthorizationBlock({ parentEvents: [user("x", { kind: "inject" })] }),
     ).toBeUndefined();
     expect(rootUserAuthorizationBlock({ parentEvents: [] })).toBeUndefined();
+  });
+
+  it("denies write/shell/web/delegation tools for reviewer", () => {
+    const denied = roleDeniedTools("reviewer");
+    for (const name of [
+      "apply_edit",
+      "apply_patch",
+      "write_file",
+      "bash",
+      "web_search",
+      "web_fetch",
+      "subagent",
+      "send_message",
+    ]) {
+      expect(denied).toContain(name);
+    }
+    // A reviewer still reads.
+    expect(denied).not.toContain("read_file");
+    expect(denied).not.toContain("grep");
+  });
+
+  it("denies writes but keeps web for researcher", () => {
+    const denied = roleDeniedTools("researcher");
+    expect(denied).toContain("apply_patch");
+    expect(denied).toContain("bash");
+    // Researcher is a read+search role, so web stays.
+    expect(denied).not.toContain("web_search");
+    expect(denied).not.toContain("web_fetch");
+  });
+
+  it("denies delegation for worker but keeps write tools", () => {
+    const denied = roleDeniedTools("worker");
+    expect(denied).toContain("subagent");
+    expect(denied).not.toContain("apply_patch");
+    expect(denied).not.toContain("bash");
+  });
+
+  it("default and lead deny nothing", () => {
+    expect(roleDeniedTools(undefined)).toEqual([]);
+    expect(roleDeniedTools("default")).toEqual([]);
+    expect(roleDeniedTools("lead")).toEqual([]);
   });
 });

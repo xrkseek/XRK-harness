@@ -85,6 +85,8 @@ import { bindSettingsTools } from "./settings-agent-tools.js";
 import { bindSessionQueryTools } from "./session-query-tools.js";
 import { bindGoalTools } from "./goal-tools.js";
 import { bindCanvasTools } from "./canvas-tools.js";
+import { bindSessionThreadTools } from "./session-thread-tools.js";
+import { bindAgentRosterTools } from "./agent-roster-tools.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
@@ -104,6 +106,8 @@ import {
 import { FaceMessageFeedbackStore } from "./message-feedback.js";
 import { FaceGoalStore } from "./goal-store.js";
 import { FaceCanvasStore } from "./canvas-store.js";
+import { FaceSessionThreadStore } from "./session-thread-store.js";
+import { FaceAgentRosterStore } from "./agent-roster-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
 import { configureCostMeterHome } from "./cost-meter-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
@@ -401,6 +405,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const messageFeedback = new FaceMessageFeedbackStore();
   const goals = new FaceGoalStore(options.goalPersistPath);
   const canvases = new FaceCanvasStore(productHome);
+  const sessionThreads = new FaceSessionThreadStore(productHome);
+  const agentRoster = new FaceAgentRosterStore(productHome);
   const presence = new FacePresenceStore();
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
@@ -705,6 +711,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         runtime: runtimeBox.current!,
         sessionId,
       });
+      bindSessionThreadTools(agent.tools, {
+        runtime: runtimeBox.current!,
+        sessionId,
+      });
+      const childLink = runtimeBox.current!.subagents.getByChild(sessionId);
+      if (!childLink || childLink.role === "lead") {
+        bindAgentRosterTools(agent.tools, {
+          runtime: runtimeBox.current!,
+          sessionId,
+        });
+      }
       bindPresenceTools(agent.tools, {
         runtime: runtimeBox.current!,
         sessionId,
@@ -1027,6 +1044,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : {}),
     goals,
     canvases,
+    sessionThreads,
+    agentRoster,
     presence,
     wireIds,
     inboxWire,

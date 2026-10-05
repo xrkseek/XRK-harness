@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import type { FaceRuntime } from "../src/context.js";
-import type { FaceModelSelection } from "../src/model-catalog.js";
+import { resolveSessionModelSelection, type FaceModelSelection } from "../src/model-catalog.js";
 
 const SOURCE_MODEL: FaceModelSelection = {
   provider: "openrouter",
@@ -33,7 +33,7 @@ describe("session.create model inheritance", () => {
     expect(inherited).not.toBe(runtime.sessionModels.get("sess-src"));
   });
 
-  it("ignores an unknown source and a source that pinned nothing", async () => {
+  it("copies the source session's effective route when nothing was pinned", async () => {
     const runtime = createBareFaceRuntime();
     runtime.store.create("sess-plain");
 
@@ -41,7 +41,9 @@ describe("session.create model inheritance", () => {
     const fromPlain = await create(runtime, { inheritFrom: "sess-plain" });
 
     expect(runtime.sessionModels.has(fromGhost)).toBe(false);
-    expect(runtime.sessionModels.has(fromPlain)).toBe(false);
+    expect(runtime.sessionModels.get(fromPlain)).toEqual(
+      resolveSessionModelSelection(runtime, "sess-plain"),
+    );
   });
 
   it("keeps the subagent parent's selection when both name a source", async () => {

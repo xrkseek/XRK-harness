@@ -63,7 +63,12 @@ export {
   fsNotObservedDenyError,
   runGuards,
 } from "./guards.js";
-export { SUBAGENT_ROUTING_PROMPT_TEXT } from "./subagent-prompt.js";
+export {
+  SUBAGENT_ROUTING_PROMPT_TEXT,
+  delegationModeLine,
+  subagentRoutingPrompt,
+  type DelegationRoutingMode,
+} from "./subagent-prompt.js";
 export { SESSION_QUERY_ROUTING_PROMPT_TEXT } from "./session-query-prompt.js";
 export {
   applyToolDynamicSchema,

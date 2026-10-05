@@ -100,5 +100,16 @@ describe("session status presence", () => {
       }),
     );
     expect(formatSessionStatusText(after)).toContain("presence: 40 (searching)");
+
+    const listed = await dispatchFaceMethod(runtime, "session.list", "sl-side", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) throw new Error("list");
+    const row = (
+      listed.result.value as {
+        items: { sessionId: string; sideline?: string; mainline?: string }[];
+      }
+    ).items.find((item) => item.sessionId === sessionId);
+    expect(row?.sideline).toBe("searching");
+    expect(row?.mainline).toBeUndefined();
   });
 });

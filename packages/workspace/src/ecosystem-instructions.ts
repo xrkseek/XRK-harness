@@ -39,6 +39,14 @@ export interface CollectEcosystemInstructionsOptions {
   readonly includeUserHome?: boolean;
   /** Test override for user-home root (default `os.homedir()`). */
   readonly homeDir?: string;
+  /**
+   * `subagent` skips the standing persona layer (home SOUL.md / USER.md /
+   * IDENTITY.md / home AGENTS.md). Delegated children get their identity from
+   * the spawn preamble; what they still need is the project docs describing
+   * the codebase — which come from the workspace layer and stay on.
+   */
+  readonly audience?: "user" | "subagent" | "minimal";
+  readonly includeSkills?: boolean;
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -375,8 +383,10 @@ export async function collectEcosystemInstructions(
   const sections: InstructionSection[] = [];
   const seen = new Set<string>();
   const includeUserHome = options.includeUserHome !== false;
+  const isSubagent =
+    options.audience === "subagent" || options.audience === "minimal";
 
-  if (includeUserHome) {
+  if (includeUserHome && !isSubagent) {
     const home = path.resolve(options.homeDir ?? homedir());
     await pushConventionLayer(
       sections,
@@ -435,7 +445,13 @@ export async function collectEcosystemInstructions(
 export function sectionsToInstructionBlocks(
   sections: readonly InstructionSection[],
 ): string[] {
-  return sections.map((s) => `## ${s.path}\n${s.body}`);
+  // Provenance: every section names its source path so the model can tell a
+  // project doc from a persona doc even after compaction drops the headers
+  // (Codex `agents_md.rs` keeps the same lineage).
+  return sections.map(
+    (s) =>
+      `## ${s.path}\n> source: ${s.path}\n${s.body}`,
+  );
 }
 
 export function sectionsToInstructionChanges(

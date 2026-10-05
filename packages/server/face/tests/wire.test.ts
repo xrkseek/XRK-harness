@@ -12,6 +12,8 @@ describe("face wire paths", () => {
     expect(faceMethodFromPath("/api/commands/execute")).toBe("commands/execute");
     expect(faceMethodFromPath("/api/canvas/list")).toBe("canvas/list");
     expect(faceMethodFromPath("/api/canvas/get")).toBe("canvas/get");
+    expect(faceMethodFromPath("/api/threads/list")).toBe("threads/list");
+    expect(faceMethodFromPath("/api/team/list")).toBe("team/list");
     expect(isFaceRespondPath("/api/respond")).toBe(true);
     expect(isFaceRespondPath("/api/session.prompt")).toBe(false);
   });

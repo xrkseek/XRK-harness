@@ -272,6 +272,22 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
 const DEFAULT_TIMEOUT_MS = 30_000
 
+/**
+ * Host downlink keepalive cadence (the Face SSE writer emits `: keepalive` on
+ * this interval). Kept here as a documented mirror of the server constant:
+ * the client only needs it to explain a watchdog rejection.
+ */
+const SSE_KEEPALIVE_INTERVAL_MS = 15_000
+
+/**
+ * Idle deadline for one downlink read. Generous against the keepalive cadence
+ * above (three missed heartbeats) so a busy host or a slow machine never trips
+ * it, while still converting a half-open socket from "silently stale forever"
+ * into a reconnect. Not user-paced and not a unary deadline: this only ever
+ * measures silence on a channel that is supposed to speak every 15s.
+ */
+const SSE_IDLE_TIMEOUT_MS = SSE_KEEPALIVE_INTERVAL_MS * 3
+
 /** Whether a unary call uses the transport health deadline or only caller/connection cancellation. */
 type UnaryTimeoutPolicy = 'default' | 'caller-signal-only'
 
@@ -423,6 +439,16 @@ export abstract class AbstractApiClient implements IApiClient {
    * body is readable — the stream-established signal, before any frame arrives. A frame that fails
    * either parse level is reported and skipped (one corrupt frame must not kill the stream; the
    * client's gap detection covers whatever the frame carried).
+   *
+   * Idle timeout: a DOWNLINK is only dead if even its keepalive comment stops
+   * arriving (the server writes `: keepalive` every {@link SSE_KEEPALIVE_INTERVAL_MS};
+   * a comment line carries no `data: ` prefix, so the framing loop below consumes
+   * it without yielding). A `reader.read()` that never settles — half-open
+   * custom-protocol socket, wedged proxy — used to hang here forever, so the
+   * client neither resynced nor showed an outage. Each read therefore races a
+   * deadline; a missed one throws and lets the caller's reconnect logic rebuild
+   * the generation. The timer is CLEARED on every byte, so an actively
+   * streaming turn never approaches it.
    */
   protected async *readSse<F extends MuxFrame | HostFrame>(
     path: string,
@@ -438,7 +464,7 @@ export abstract class AbstractApiClient implements IApiClient {
     let buffer = ''
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        const { done, value } = await this.readWithIdleDeadline(reader, path, signal)
         if (done) return
         buffer += decoder.decode(value, { stream: true })
         let boundary: number
@@ -462,6 +488,41 @@ export abstract class AbstractApiClient implements IApiClient {
       }
     } finally {
       await reader.cancel().catch(() => undefined)
+    }
+  }
+
+  /**
+   * One `reader.read()` bounded by the downlink idle deadline. Rejects when no
+   * byte arrives in time — including when no keepalive is configured upstream,
+   * which is the conservative direction (a needless reconnect beats a silent
+   * client). An already-aborted signal skips the race entirely.
+   */
+  private async readWithIdleDeadline(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    path: string,
+    signal: AbortSignal,
+  ): Promise<ReadableStreamReadResult<Uint8Array>> {
+    const read = reader.read()
+    // An aborted fetch body rejects the pending read on its own; racing a
+    // deadline on top would only duplicate that teardown path.
+    if (signal.aborted) return read
+    // The read outlives a lost race (the body stays wedged until the caller's
+    // finally cancels it). Terminalize its rejection here so the late failure
+     // never surfaces as an unhandled rejection.
+    read.catch(() => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const settled = new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(
+          `downlink idle for ${SSE_IDLE_TIMEOUT_MS}ms on ${path}: expected a keepalive every ${SSE_KEEPALIVE_INTERVAL_MS}ms`,
+        ))
+      }, SSE_IDLE_TIMEOUT_MS)
+      read.then(resolve, reject)
+    })
+    try {
+      return await settled
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
     }
   }
 

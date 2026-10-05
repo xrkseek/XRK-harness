@@ -3,10 +3,12 @@
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
+import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import {
   formatPresenceEmotionToolHint,
   isKnownPresenceEmotionId,
 } from "./presence-emotions.js";
+import { publishSessionThread } from "./session-thread-publish.js";
 
 export interface BindPresenceToolsOptions {
   readonly runtime: FaceRuntime;
@@ -37,11 +39,11 @@ export function bindPresenceTools(
   registerTool(tools, {
     name: "presence_set",
     description:
-      "Set this session's Overview emotion ball. Call naturally when your mood " +
-      "about the work shifts — do not wait for the user to ask. Prefer the full " +
-      `catalog (not only a few favorites): ${catalogHint}. ` +
-      'Optional short tips (caption). Pass emotionId "auto" only to clear sticky ' +
-      "mood and let activity-derived emotion take over.",
+      "Show this session's 支线: Overview emotion ball + a short caption of what you are doing now " +
+      "(sidebar under the session name). The session name stays the first user message until a 主线 " +
+      "is set with thread_upsert (AI-owned pin, not the user's message). Call when mood or current work shifts — do not wait to be asked. " +
+      `Prefer the full catalog: ${catalogHint}. ` +
+      'tips = 支线 (≤200 chars). Pass emotionId "auto" only to clear sticky mood.',
     parameters: {
       type: "object",
       properties: {
@@ -52,7 +54,7 @@ export function bindPresenceTools(
         },
         tips: {
           type: "string",
-          description: "Optional short caption shown under the ball (≤200 chars).",
+          description: "支线 caption: what you are doing now (Overview + sidebar, ≤200 chars).",
         },
       },
       required: ["emotionId"],
@@ -97,6 +99,13 @@ export function bindPresenceTools(
         emotionId: rawId,
         ...(tips ? { tips } : {}),
       });
+      if (tips) {
+        const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
+        if (runtime.sessionThreads.bindOf(workspaceId, sessionId)) {
+          runtime.sessionThreads.setSideline(workspaceId, sessionId, tips);
+        }
+        publishSessionThread(runtime, workspaceId, sessionId);
+      }
       return {
         content: JSON.stringify({
           sessionId,

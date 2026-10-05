@@ -39,6 +39,8 @@ export const FACE_REMOTE_NAMESPACES = new Set([
   "sessionReferenceResolver",
   "changes",
   "canvas",
+  "threads",
+  "team",
 ]);
 
 const REMOTE_NS = /^[A-Za-z][A-Za-z0-9_-]*$/;

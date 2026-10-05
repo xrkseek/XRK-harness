@@ -499,6 +499,22 @@ describe("Face settings U2", () => {
     expect(rt.uiSettings.theme).toBe("light");
   });
 
+  it("ui-presence mutate accepts extra body shapes", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-presence-shape-"));
+    const rt = runtime({ productDir: dir, hostPublic: true });
+    await dispatchFaceMethod(rt, "settings.describe", "ps0", {});
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "ps1", {
+      ns: "ui-presence",
+      ops: [{ op: "set", path: ["shape"], value: "squircle" }],
+    });
+    expect(mut.result.ok).toBe(true);
+    if (!mut.result.ok) return;
+    expect(mut.result.value).toMatchObject({
+      ns: "ui-presence",
+      value: { shape: "squircle", color: "cream", kit: "none" },
+    });
+  });
+
   it("permission mutate keeps schemastery envelope; rejects unknown preset", async () => {
     const rt = runtime();
     await dispatchFaceMethod(rt, "settings.describe", "pd", {});

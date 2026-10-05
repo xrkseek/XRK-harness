@@ -77,3 +77,18 @@ export function saveSessionModelSelection(
   const body: PersistShape = { version: VERSION, selections };
   atomicWrite(filePath, `${JSON.stringify(body, null, 2)}\n`);
 }
+
+/** Drop one session override from the sidecar (durable session delete). */
+export function clearSessionModelSelection(
+  filePath: string,
+  sessionId: string,
+): void {
+  const id = sessionId.trim();
+  if (!id) return;
+  const map = loadSessionModelSelections(filePath);
+  if (!map.delete(id)) return;
+  const selections: Record<string, FaceModelSelection> = {};
+  for (const [k, v] of map) selections[k] = v;
+  const body: PersistShape = { version: VERSION, selections };
+  atomicWrite(filePath, `${JSON.stringify(body, null, 2)}\n`);
+}

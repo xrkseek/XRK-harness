@@ -9,6 +9,27 @@ import {
 } from './sessions.schema.ts'
 import type { SubagentListEntry } from './subagents.ts'
 
+/** Last-turn verdict on a catalog row (`activity` is the live axis). */
+const subagentOutcomeSchema = z.object({
+  kind: z.union([
+    z.literal('completed'),
+    z.literal('aborted'),
+    z.literal('error'),
+    z.literal('max-tokens'),
+    z.literal('interrupted'),
+    z.literal('blocked'),
+    z.literal('none'),
+  ]),
+  cause: z.union([
+    z.literal('user'),
+    z.literal('parent'),
+    z.literal('disposed'),
+    z.literal('hook'),
+    z.literal('legacy'),
+  ]).optional(),
+  quietMs: z.number().nonnegative().optional(),
+})
+
 /** Healthy and diagnostic durable catalog rows. */
 export const subagentListEntrySchema = z.union([
   z.object({
@@ -16,6 +37,7 @@ export const subagentListEntrySchema = z.union([
     id: sessionIdSchema,
     mode: z.literal('one-shot'),
     activity: z.union([z.literal('running'), z.literal('inactive')]),
+    outcome: subagentOutcomeSchema.optional(),
     hasChildren: z.boolean(),
     model: z.string().optional(),
     label: z.string().optional(),
@@ -25,6 +47,7 @@ export const subagentListEntrySchema = z.union([
     id: sessionIdSchema,
     mode: z.literal('continuable'),
     activity: z.union([z.literal('running'), z.literal('inactive')]),
+    outcome: subagentOutcomeSchema.optional(),
     hasChildren: z.boolean(),
     model: z.string().optional(),
     label: z.string(),

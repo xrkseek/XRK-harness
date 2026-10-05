@@ -2,9 +2,11 @@
  * Model catalog + shared default selection (DSH `agent-default-model` parity).
  */
 import type { BrandEntry } from "@xrkseek/llm-registry";
+import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { DEFAULT_DEEPSEEK_MODELS } from "./settings-schemas.js";
 import { mergeLayers, persistSettingsDocument } from "./settings-document.js";
+import { lastRequestHeaderSelection } from "./adapt/model-route.js";
 import {
   listDeclaredPiAiProviders,
   piAiProviderProfile,
@@ -264,13 +266,24 @@ export function resolveAgentDefaultModel(
   };
 }
 
-/** Resolve current selection: session override → saved default → first routable catalog row. */
+/**
+ * Resolve current selection: session override → last `request/header` in the
+ * log → saved Settings default → first routable catalog row.
+ * Catalog / default must not replace a route the session already ran.
+ */
 export function resolveSessionModelSelection(
   runtime: FaceRuntime,
   sessionId: string,
 ): FaceModelSelection {
   const override = runtime.sessionModels.get(sessionId);
   if (override) return override;
+
+  if (sessionId && runtime.store.has(sessionId)) {
+    const fromLog = lastRequestHeaderSelection(
+      readSessionEvents(runtime.store, sessionId),
+    );
+    if (fromLog) return fromLog;
+  }
 
   const saved = resolveAgentDefaultModel(runtime);
   if (saved) {
@@ -306,6 +319,24 @@ export function resolveSessionModelSelection(
   const deepseek = deepseekModels(runtime)[0];
   if (deepseek) return { provider: "deepseek", model: deepseek.id };
   return { provider: "deepseek", model: "deepseek-flash" };
+}
+
+/**
+ * Copy the source session's effective route onto `toId` (in-memory only).
+ * New Session uses this so a conversation that never called `selectModel`
+ * still lands the composer on the same provider/model Status already shows.
+ */
+export function pinInheritedSessionModel(
+  runtime: FaceRuntime,
+  fromId: string,
+  toId: string,
+): boolean {
+  if (!fromId || fromId === toId) return false;
+  if (!runtime.store.has(fromId) || !runtime.store.has(toId)) return false;
+  runtime.sessionModels.set(toId, {
+    ...resolveSessionModelSelection(runtime, fromId),
+  });
+  return true;
 }
 
 /**

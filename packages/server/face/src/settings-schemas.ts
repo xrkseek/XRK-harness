@@ -12,6 +12,11 @@ import {
   FACE_FONT_SIZE_DEFAULT,
 } from "./face-schema.js";
 import { HOST_CLI_PRESET_IDS } from "./presets-catalog.js";
+import {
+  MEMBER_COLORS,
+  MEMBER_KITS,
+  MEMBER_SHAPES,
+} from "./agent-roster-store.js";
 
 /** Wire protocols the models settings UI may offer (custom / gateway routes). */
 const PI_AI_PROTOCOLS = [
@@ -413,15 +418,9 @@ const UiConversationConfig = Schema.object({
 
 /** Companion body shape + named palette in session header / Status rail (client ui-plan). */
 const UiPresenceConfig = Schema.object({
-  shape: Schema.union(["blob", "wedge", "gem"]).default("blob"),
-  color: Schema.union([
-    "cream",
-    "mist",
-    "peach",
-    "sage",
-    "lilac",
-    "slate",
-  ]).default("cream"),
+  shape: Schema.union([...MEMBER_SHAPES]).default("blob"),
+  color: Schema.union([...MEMBER_COLORS]).default("cream"),
+  kit: Schema.union([...MEMBER_KITS]).default("none"),
 });
 
 /**
@@ -476,7 +475,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "ui-presence",
       schema: schemasteryJson(UiPresenceConfig) as FaceSchemaEnvelope,
-      base: { shape: "blob", color: "cream" },
+      base: { shape: "blob", color: "cream", kit: "none" },
       applies: "live",
     },
     {

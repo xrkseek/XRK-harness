@@ -134,6 +134,49 @@ describe("resolveForkCut", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("fork-unavailable");
   });
+
+  it("beforeSeq drops the open turn whose turn/start sits before the user row", () => {
+    const events = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      { type: "user/message", ts: 2, turnId: "t1", content: "hello" },
+      { type: "turn/end", ts: 3, turnId: "t1", reason: { kind: "completed" } },
+    ] as const;
+    // Edit the first user message: exclusive offset is the user row (seq 2 → 1).
+    expect(resolveForkCut(events, { beforeSeq: 1 })).toEqual({
+      ok: true,
+      cut: 0,
+      beforeSeq: 1,
+    });
+  });
+
+  it("beforeSeq keeps a prior completed human turn and drops a later abort-only turn", () => {
+    const events = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      { type: "user/message", ts: 2, turnId: "t1", content: "a" },
+      { type: "turn/end", ts: 3, turnId: "t1", reason: { kind: "completed" } },
+      { type: "turn/start", ts: 4, turnId: "t2" },
+      { type: "turn/end", ts: 5, turnId: "t2", reason: { kind: "interrupted" } },
+      { type: "turn/start", ts: 6, turnId: "t3" },
+      { type: "user/message", ts: 7, turnId: "t3", content: "edit me" },
+    ] as const;
+    expect(resolveForkCut(events, { beforeSeq: 6 })).toEqual({
+      ok: true,
+      cut: 3,
+      beforeSeq: 6,
+    });
+  });
+
+  it("beforeSeq on an unframed prefix stays a raw exclusive offset", () => {
+    const events = [
+      { type: "user/message", ts: 1, turnId: "t1", content: "one" },
+      { type: "assistant/message", ts: 2, turnId: "t1", stepId: "s1", content: "two" },
+    ] as const;
+    expect(resolveForkCut(events, { beforeSeq: 1 })).toEqual({
+      ok: true,
+      cut: 1,
+      beforeSeq: 1,
+    });
+  });
 });
 
 describe("Face session.fork", () => {

@@ -87,6 +87,22 @@ describe("agent team spawn roles", () => {
     });
     expect(worktree).toContain("isolated git worktree");
     expect(worktree).toContain("ROLE: worker.");
+
+    const member = applySubagentSpawnPreamble({
+      prompt: "Ship v0.5.11",
+      parentSessionId: "p",
+      childSessionId: "c",
+      mode: "continuable",
+      label: "发版干员",
+      role: "worker",
+      inheritContext: false,
+      cwd: "/repo",
+      isolatedWorktree: false,
+      memberId: "mem_seed_release",
+      inject: "minimal",
+    });
+    expect(member).toContain("member_id: mem_seed_release");
+    expect(member).toContain("inject: minimal");
   });
 });
 

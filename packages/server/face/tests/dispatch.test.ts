@@ -182,6 +182,45 @@ describe("face dispatch", () => {
     }
   });
 
+  it("threads and team remotes bind a 主线 and list seeded 干员", async () => {
+    const { runtime } = await harness();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c-team", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) throw new Error("fail");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const upsert = await dispatchFaceMethod(runtime, "threads/upsert", "th1", {
+      sessionId,
+      title: "发版",
+      brief: "0.5.11 发版主线",
+    });
+    expect(upsert.result.ok).toBe(true);
+    if (!upsert.result.ok) throw new Error("upsert fail");
+    const threadId = (
+      upsert.result.value as { thread: { id: string; title: string } }
+    ).thread.id;
+    expect(threadId.startsWith("th_")).toBe(true);
+
+    const listed = await dispatchFaceMethod(runtime, "session.list", "sl-ml", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) throw new Error("list fail");
+    const row = (
+      listed.result.value as {
+        items: { sessionId: string; mainline?: string; mainlineId?: string }[];
+      }
+    ).items.find((item) => item.sessionId === sessionId);
+    expect(row?.mainline).toBe("发版");
+    expect(row?.mainlineId).toBe(threadId);
+
+    const team = await dispatchFaceMethod(runtime, "team/list", "tm1", { sessionId });
+    expect(team.result.ok).toBe(true);
+    if (!team.result.ok) throw new Error("team fail");
+    const names = (
+      team.result.value as { members: { name: string }[] }
+    ).members.map((member) => member.name);
+    expect(names).toEqual(["调研员", "施工员", "审稿员", "调度员"]);
+  });
+
   it("prompt returns before slow turn finishes", async () => {
     const store = createMemorySessionStore();
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-slow-"));

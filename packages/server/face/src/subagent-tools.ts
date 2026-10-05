@@ -1,12 +1,17 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { SUBAGENT_ROUTING_PROMPT_TEXT } from "@xrkseek/core-tools";
+import type { SessionEvent } from "@xrkseek/protocol";
 import {
   listPendingAdmits,
   readSessionEvents,
 } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
-import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
+import {
+  formatChildOutcome,
+  lastAssistantBodyText,
+  lastModelRetryNotice,
+} from "./adapt/subagent-notice.js";
 import {
   boundChildAnswer,
   SUBAGENT_ANSWER_INLINE_BYTES,
@@ -20,6 +25,8 @@ import {
 } from "./presets-catalog.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveSessionCwd } from "./session-cwd.js";
+import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
+import { formatRosterCatalog } from "./agent-roster-store.js";
 import {
   ExternalAgentError,
   parseExternalAgentKind,
@@ -223,16 +230,20 @@ async function waitDrainIdle(
     );
     return;
   }
-  const deadline = Date.now() + timeoutMs;
-  while (runtime.drain.isActive(sessionId)) {
-    if (signal?.aborted) {
-      throw new DOMException("aborted", "AbortError");
-    }
-    if (Date.now() > deadline) {
-      throw new Error(`subagent timed out waiting for session ${sessionId}`);
-    }
-    await new Promise((r) => setTimeout(r, POLL_MS));
-  }
+  // Same deadline semantics as the hub.run branch above — one throw site, one
+  // message, so a caller (or a log grep) cannot tell the two paths apart.
+  await raceDeadline(
+    (async () => {
+      while (runtime.drain.isActive(sessionId)) {
+        if (signal?.aborted) {
+          throw new DOMException("aborted", "AbortError");
+        }
+        await new Promise((r) => setTimeout(r, POLL_MS));
+      }
+    })(),
+    timeoutMs,
+    sessionId,
+  );
 }
 
 /**
@@ -294,6 +305,34 @@ function abortError(reason?: unknown): Error {
   return err;
 }
 
+/**
+ * How a parent gets work back out of a child that outlived the foreground
+ * wait. One place on purpose: background spawn, timeout salvage and failure
+ * replies must not drift apart, or a parent learns the recovery verbs only
+ * on the happy path.
+ */
+export function childResumeHint(childId: string): string {
+  return (
+    `Child session \`${childId}\` is not gone: \`wait_agent\` keeps waiting for it, ` +
+    `\`session_read\` replays its history, \`session_trace\` shows its lineage, ` +
+    `\`list_agents\` its state, and \`followup_task\` wakes a new turn on it. Read it ` +
+    `before spawning a replacement so the new task does not repeat work it already did.`
+  );
+}
+
+/**
+ * The slice of a child's log the parent owns: seeded parent text never counts.
+ * One read, two projections (`lastAssistantBodyText` for the salvaged answer,
+ * `lastModelRetryNotice` for what its model request was doing).
+ */
+export function childOwnedEvents(
+  runtime: Pick<FaceRuntime, "store" | "subagents">,
+  childId: string,
+): readonly SessionEvent[] {
+  const link = runtime.subagents.getByChild(childId);
+  return subagentOwnedEvents(link, readSessionEvents(runtime.store, childId));
+}
+
 function formatSubagentAbortReason(reason: unknown): string {
   if (reason === undefined || reason === null) return "aborted";
   if (reason instanceof Error) {
@@ -341,6 +380,13 @@ export interface BindSubagentToolsOptions {
   readonly externalSpawn?: ExternalSpawn;
   /** Override env for external launch resolution (tests). */
   readonly externalEnv?: NodeJS.ProcessEnv;
+  /**
+   * Foreground wait budget in ms (default {@link FOREGROUND_WAIT_MS}, 10 min).
+   * A child that outruns it is not discarded — its answer is salvaged and the
+   * parent gets the resume verbs — but the budget itself has to be raisable
+   * for legitimately long research children.
+   */
+  readonly foregroundWaitMs?: number;
 }
 
 function countActiveChildren(
@@ -500,28 +546,47 @@ function createSubagentTool(
       active: quota.active,
     };
   };
+  const foregroundWaitMs = options.foregroundWaitMs ?? FOREGROUND_WAIT_MS;
+  const description =
+    "Delegate a self-contained task to a teammate subagent (separate session, same workspace as this session unless worktree:true). " +
+    "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
+    "so it does not consume this conversation's context. " +
+    "By default the child cannot see this chat — give a complete standalone prompt (paths, goals, constraints, persona). " +
+    "Do not tell the child to read AGENTS.md to discover who it is; Face prepends parent/child session ids, mode, role, and cwd. " +
+    "Set inherit_context true to seed the child with this session's completed turns only " +
+    "(the current in-flight turn is excluded). " +
+    "By default waits for the result (one-shot, no later human messages on that child). " +
+    "That foreground wait is bounded (10 min by default): on expiry the child is NOT discarded — " +
+    "whatever answer it already wrote is salvaged into this result and the child id stays readable " +
+    "(session_read / followup_task), so prefer run_in_background for genuinely long work instead of retrying blind. " +
+    "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
+    "Prefer Agent Team member_id (catalog on this tool and team_list) over restating playbook or tools; " +
+    "optional role (worker|researcher|reviewer|lead) is only the fallback when no member fits; " +
+    "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
+    "optional task_id / task_name register the work on the Agent Teams task board. " +
+    "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
+    "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
+    "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print. " +
+    "The child's answer is returned inline in this tool result when short. " +
+    "Only when the UTF-8 body exceeds ~12KB does Face spill it under ~/.xrk/spill/tool-outputs/ " +
+    "and replace the body with a path + head/tail preview — then read_file that path. " +
+    "An empty or missing tool-outputs directory means nothing spilled; the full answer is already in this result (or the session event log), not on disk.";
   return {
     name: "subagent",
-    description:
-      "Delegate a self-contained task to a teammate subagent (separate session, same workspace as this session unless worktree:true). " +
-      "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
-      "so it does not consume this conversation's context. " +
-      "By default the child cannot see this chat — give a complete standalone prompt (paths, goals, constraints, persona). " +
-      "Do not tell the child to read AGENTS.md to discover who it is; Face prepends parent/child session ids, mode, role, and cwd. " +
-      "Set inherit_context true to seed the child with this session's completed turns only " +
-      "(the current in-flight turn is excluded). " +
-      "By default waits for the result (one-shot, no later human messages on that child). " +
-      "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
-      "Optional role (worker|researcher|reviewer|lead) prefixes a role reminder; " +
-      "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
-      "optional task_id / task_name register the work on the Agent Teams task board. " +
-      "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
-      "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
-      "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print. " +
-      "The child's answer is returned inline in this tool result when short. " +
-      "Only when the UTF-8 body exceeds ~12KB does Face spill it under ~/.xrk/spill/tool-outputs/ " +
-      "and replace the body with a path + head/tail preview — then read_file that path. " +
-      "An empty or missing tool-outputs directory means nothing spilled; the full answer is already in this result (or the session event log), not on disk.",
+    description,
+    dynamicSchema: () => {
+      const ws = canvasWorkspaceIdForSession(
+        options.runtime,
+        options.parentSessionId,
+      );
+      const catalog = formatRosterCatalog(
+        options.runtime.agentRoster.listVisible(ws),
+      );
+      return {
+        description:
+          `${description}\n\nPrefer member_id from this Agent Team catalog:\n${catalog}`,
+      };
+    },
     parameters: {
       type: "object",
       properties: {
@@ -541,6 +606,11 @@ function createSubagentTool(
           type: "boolean",
           description:
             "If true, seed the child with this session's completed-turn prefix (open turn excluded). Default false. Ignored for external runtimes.",
+        },
+        member_id: {
+          type: "string",
+          description:
+            "Agent Team member id. Face applies that member's tools, inject, and playbook — the same three surfaces the parent already edits. Prefer this over restating those in prompt.",
         },
         run_in_background: {
           type: "boolean",
@@ -619,6 +689,7 @@ function createSubagentTool(
         worktree?: boolean;
         role?: string;
         agent_type?: string;
+        member_id?: string;
         task_id?: string;
         task_name?: string;
         output_schema?: unknown;
@@ -640,10 +711,11 @@ function createSubagentTool(
           isError: true,
         };
       }
-      const prompt = String(a.prompt ?? "").trim();
-      if (!prompt) {
+      const promptBare = String(a.prompt ?? "").trim();
+      if (!promptBare) {
         return { content: "subagent: empty prompt", isError: true };
       }
+      let prompt = promptBare;
       const roleRaw = a.role ?? a.agent_type;
       let spawnRole: AgentTeamSpawnRole | undefined;
       if (roleRaw !== undefined && String(roleRaw).trim()) {
@@ -656,6 +728,28 @@ function createSubagentTool(
           };
         }
       }
+      const memberId = String(a.member_id ?? "").trim();
+      let rosterMember:
+        | ReturnType<typeof options.runtime.agentRoster.get>
+        | undefined;
+      if (memberId) {
+        const workspaceId = canvasWorkspaceIdForSession(
+          options.runtime,
+          options.parentSessionId,
+        );
+        rosterMember = options.runtime.agentRoster.get(workspaceId, memberId);
+        if (!rosterMember) {
+          return {
+            content: `subagent: unknown member_id "${memberId}" (team_list first)`,
+            isError: true,
+          };
+        }
+        prompt = `${rosterMember.playbook.trim()}\n\nTASK:\n${promptBare}`;
+        if (spawnRole === undefined && rosterMember.role !== "default") {
+          spawnRole = rosterMember.role;
+        }
+      }
+      const memberSpawn = memberId ? { memberId } : {};
       const schemaCoerce = coerceOutputSchema(a.output_schema);
       if (schemaCoerce.error) {
         return {
@@ -734,6 +828,10 @@ function createSubagentTool(
                 parentSessionId: options.parentSessionId,
                 label,
                 mode: "continuable",
+                ...memberSpawn,
+                ...(spawnRole && spawnRole !== "default"
+                  ? { role: spawnRole }
+                  : {}),
               },
             );
             if (!created.result.ok) {
@@ -997,6 +1095,9 @@ function createSubagentTool(
               sessionId: options.parentSessionId,
               linkMode,
               label,
+              ...(spawnRole && spawnRole !== "default"
+                ? { role: spawnRole }
+                : {}),
             },
           );
         } catch {
@@ -1017,6 +1118,10 @@ function createSubagentTool(
                 parentSessionId: options.parentSessionId,
                 label,
                 mode: linkMode,
+                ...memberSpawn,
+                ...(spawnRole && spawnRole !== "default"
+                  ? { role: spawnRole }
+                  : {}),
               },
             );
             if (!created.result.ok) {
@@ -1056,6 +1161,10 @@ function createSubagentTool(
             parentSessionId: options.parentSessionId,
             label,
             mode: linkMode,
+            ...memberSpawn,
+            ...(spawnRole && spawnRole !== "default"
+              ? { role: spawnRole }
+              : {}),
           },
         );
         if (!created.result.ok) {
@@ -1100,6 +1209,9 @@ function createSubagentTool(
         inheritContext: inherit,
         cwd: isolated?.path ?? parentCwd,
         isolatedWorktree: isolated !== null,
+        ...(rosterMember
+          ? { memberId: rosterMember.id, inject: rosterMember.inject }
+          : {}),
         // The human's own asks: a child that only sees the parent's paraphrase
         // drifts from what was actually authorized (Codex
         // `control/user_authorization.rs`). A forked child already carries
@@ -1166,7 +1278,8 @@ function createSubagentTool(
             outputSchema
               ? "OUTPUT CONTRACT attached; result will be schema-checked on idle."
               : undefined,
-            "Use followup_task to wake a new task, send_message (delivery queue|steer) to continue, wait_agent for results, interrupt_agent (takeover true to pause for human) to stop, list_agents / analytics for quota.",
+            childResumeHint(childId),
+            "Use followup_task to wake a new task, send_message (delivery queue|steer) to continue, wait_agent for results, interrupt_agent (takeover true to pause for human) to stop, analytics for quota.",
             "Keep working; do not busy-poll.",
             worktreeLine(true) || undefined,
           ]
@@ -1175,22 +1288,48 @@ function createSubagentTool(
         };
       }
       try {
-        await waitDrainIdle(options.runtime, childId, signal);
+        await waitDrainIdle(options.runtime, childId, signal, foregroundWaitMs);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await dispatchFaceMethod(
-          options.runtime,
-          "session.cancel",
-          `tool-sa-c-${childId}`,
-          { sessionId: childId },
-        ).catch(() => undefined);
+        const timedOut = /timed out waiting/i.test(message);
+        // Salvage before cancelling: `session.cancel` drops the chain, so a
+        // child that had already written its answer would bill the parent for
+        // nothing. A child that produced nothing is stuck, so it still gets
+        // cancelled instead of left dangling.
+        const owned = childOwnedEvents(options.runtime, childId);
+        const salvaged = lastAssistantBodyText(owned);
+        const retrying = timedOut
+          ? lastModelRetryNotice(owned)
+          : undefined;
+        if (!salvaged) {
+          await dispatchFaceMethod(
+            options.runtime,
+            "session.cancel",
+            `tool-sa-c-${childId}`,
+            // `parent`, not the default `user`: a parent that gave up waiting
+            // is not a human hitting Stop. The old default stamped
+            // turn/end `reason: user`, so every timed-out child read as "stopped
+            // by the user" in the child log and in the completion notice.
+            { sessionId: childId, cause: { kind: "parent" } },
+          ).catch(() => undefined);
+        }
         options.runtime.agentTeamTasks.complete(task.id, {
           ok: false,
           preview: message,
         });
         const extra = worktreeLine(false);
         return {
-          content: [`subagent failed: ${message}`, extra].filter(Boolean).join("\n"),
+          content: [
+            salvaged
+              ? `${message}, but the child finished work before the wait expired — its last answer is salvaged below.`
+              : `subagent failed: ${message}`,
+            salvaged || undefined,
+            timedOut ? childResumeHint(childId) : undefined,
+            retrying,
+            extra,
+          ]
+            .filter(Boolean)
+            .join("\n"),
           isError: true,
         };
       }
@@ -1289,7 +1428,8 @@ function createListAgentsTool(
   return {
     name: "list_agents",
     description:
-      "List direct child subagents of this session (id, label, mode, running, model, inbox queue/steer). " +
+      "List direct child subagents of this session (id, label, mode, running, model, inbox queue/steer, " +
+      "and how each child's last turn actually ended — finished vs aborted by parent/user vs error, with idle age). " +
       "Prefaces with depth/active quota. Prefer `analytics` for a fuller quota snapshot.",
     parameters: { type: "object", properties: {} },
     isConcurrencySafe: () => true,
@@ -1343,7 +1483,16 @@ function createListAgentsTool(
             ? childInboxCounts(options.runtime, id)
             : { queued: 0, steering: 0 };
         const route = e.model ? `\t${e.model}` : "";
-        return `${id}\t${label}\t${mode}\t${activity}${route}\tq=${inbox.queued}\tsteer=${inbox.steering}`;
+        // `idle` alone reads the same for a child that finished and one the
+        // parent's wait budget cut off; the outcome line is what separates
+        // "delivered" from "killed".
+        const outcome =
+          id === "?" || e.kind === "diagnostic"
+            ? ""
+            : `\t${formatChildOutcome(
+                readSessionEvents(options.runtime.store, id),
+              )}`;
+        return `${id}\t${label}\t${mode}\t${activity}${route}${outcome}\tq=${inbox.queued}\tsteer=${inbox.steering}`;
       });
       return { content: [header, ...lines].join("\n") };
     },

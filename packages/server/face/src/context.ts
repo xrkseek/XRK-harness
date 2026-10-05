@@ -164,6 +164,10 @@ export interface FaceRuntime {
   readonly goals: FaceGoalStore;
   /** Workspace-scoped Canvas documents (`{XRK_HOME}/canvases/<workspaceId>/`). */
   readonly canvases: FaceCanvasStore;
+  /** Workspace 主线 catalog + per-session 支线. */
+  readonly sessionThreads: import("./session-thread-store.js").FaceSessionThreadStore;
+  /** Workspace Agent Team 干员 roster. */
+  readonly agentRoster: import("./agent-roster-store.js").FaceAgentRosterStore;
   /** Per-session Overview emotion-ball sticky state (`presence_set`). */
   readonly presence: FacePresenceStore;
   /** Session-scoped turn/step numbers for DSH wire events. */

@@ -67,6 +67,9 @@ export const sessionSummarySchema = z.object({
   origin: sessionOriginSchema,
   cwd: z.string().optional(),
   agentPreset: z.string().optional(),
+  mainline: z.string().optional(),
+  mainlineId: z.string().optional(),
+  sideline: z.string().optional(),
   projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),
 }) as unknown as z.ZodType<Wire<SessionSummary>>
 

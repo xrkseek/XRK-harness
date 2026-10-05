@@ -44,6 +44,82 @@ describe("ecosystem instruction inject", () => {
     );
   });
 
+  it("skips the home standing persona for a subagent audience but keeps workspace docs", async () => {
+    const fs = await import("node:fs/promises");
+    const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-sub-"));
+    const home = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-home-"));
+    const homeProduct = path.join(home, ".xrk");
+    await mkdir(homeProduct, { recursive: true });
+    await writeFile(
+      path.join(homeProduct, "AGENTS.md"),
+      "# Home persona\nYou are the user's agent. Small asks: do them yourself.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "AGENTS.md"),
+      "# Repo rules\nRun pnpm check before shipping.",
+      "utf8",
+    );
+
+    // User audience keeps both layers.
+    const userOut = await createWorkspaceInjector({
+      root,
+      homeDir: home,
+    }).inject();
+    expect(userOut.instructionBlocks.join("\n")).toContain(
+      "Small asks: do them yourself",
+    );
+
+    // Subagent audience drops the persona, keeps the project docs.
+    const subOut = await createWorkspaceInjector({
+      root,
+      homeDir: home,
+      audience: "subagent",
+    }).inject();
+    const joined = subOut.instructionBlocks.join("\n");
+    expect(joined).not.toContain("Small asks: do them yourself");
+    expect(joined).toContain("Run pnpm check before shipping");
+  });
+
+  it("minimal audience skips home persona like subagent", async () => {
+    const fs = await import("node:fs/promises");
+    const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-min-"));
+    const home = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-min-home-"));
+    const homeProduct = path.join(home, ".xrk");
+    await mkdir(homeProduct, { recursive: true });
+    await writeFile(
+      path.join(homeProduct, "AGENTS.md"),
+      "# Home persona\nYou are the user's agent. Small asks: do them yourself.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "AGENTS.md"),
+      "# Repo rules\nRun pnpm check before shipping.",
+      "utf8",
+    );
+    const out = await createWorkspaceInjector({
+      root,
+      homeDir: home,
+      audience: "minimal",
+    }).inject();
+    const joined = out.instructionBlocks.join("\n");
+    expect(joined).not.toContain("Small asks: do them yourself");
+    expect(joined).toContain("Run pnpm check before shipping");
+  });
+
+  it("tags every instruction section with its source path", async () => {
+    const root = await import("node:fs/promises").then((fs) =>
+      fs.mkdtemp(path.join(tmpdir(), "xrk-eco-prov-")),
+    );
+    await writeFile(path.join(root, "AGENTS.md"), "# Repo", "utf8");
+    const out = await createWorkspaceInjector({ root }).inject();
+    const agentsBlock = out.instructionBlocks.find((b) =>
+      b.startsWith("## AGENTS.md"),
+    );
+    expect(agentsBlock).toBeTruthy();
+    expect(agentsBlock).toContain("> source: AGENTS.md");
+  });
+
   it("skips .cursor/rules/*.mdc with xrk-inject: false", async () => {
     const root = await import("node:fs/promises").then((fs) =>
       fs.mkdtemp(path.join(tmpdir(), "xrk-eco3-")),

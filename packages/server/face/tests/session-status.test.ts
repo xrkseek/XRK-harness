@@ -318,6 +318,47 @@ describe("session status snapshot", () => {
     expect(settled.subagents.live.every((s) => s.activity === "inactive")).toBe(true);
   });
 
+  it("attaches last-turn outcome so a parent abort is not a finished child", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const create = async (requestId: string): Promise<string> => {
+      const created = await dispatchFaceMethod(
+        runtime,
+        "session.create",
+        requestId,
+        {},
+      );
+      if (!created.result.ok) throw new Error("create");
+      return (created.result.value as { sessionId: string }).sessionId;
+    };
+    const root = await create("c-out-p");
+    const child = await create("c-out-c");
+    runtime.subagents.attach({
+      parentSessionId: root,
+      childSessionId: child,
+      mode: "one-shot",
+      label: "cut off",
+    });
+    store.append(child, { type: "turn/start", ts: 1, turnId: "t-cut" });
+    store.append(child, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t-cut",
+      reason: { kind: "aborted", reason: { kind: "parent" } },
+    });
+
+    const snap = buildSessionStatusSnapshot(runtime, root);
+    expect(snap.subagents.live[0]?.activity).toBe("inactive");
+    expect(snap.subagents.live[0]?.outcome).toMatchObject({
+      kind: "aborted",
+      cause: "parent",
+    });
+    expect(formatSessionStatusText(snap)).toContain("aborted by parent");
+  });
+
   it("keeps graph-only delegation nodes live when the registry lost the link", async () => {
     const store = createMemorySessionStore();
     const draining = new Set<string>();

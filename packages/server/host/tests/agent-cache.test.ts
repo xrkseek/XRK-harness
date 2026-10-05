@@ -95,6 +95,37 @@ describe("createHostAgentCache", () => {
     await cache.dispose();
   });
 
+  it("recreates after a disposed scope instead of returning a stale agent", async () => {
+    const cache = createHostAgentCache([]);
+    const first = fakeAgent();
+    await cache.resolve("c", async () => first, { parentSessionId: "p" });
+    // Parent was never resolved — child opened under hostScope. Invalidate drops it.
+    await cache.invalidate("c");
+    expect(first.aborted).toBe(true);
+
+    const second = fakeAgent();
+    const create = vi.fn(async () => second);
+    const again = await cache.resolve("c", create, { parentSessionId: "p" });
+    expect(again).toBe(second);
+    expect(create).toHaveBeenCalledTimes(1);
+    await cache.dispose();
+  });
+
+  it("falls back to hostScope when the parent is already disposed", async () => {
+    const cache = createHostAgentCache([]);
+    const parent = fakeAgent();
+    await cache.resolve("p", async () => parent);
+    await cache.invalidate("p");
+    expect(parent.aborted).toBe(true);
+
+    const child = fakeAgent();
+    const create = vi.fn(async () => child);
+    const resolved = await cache.resolve("c", create, { parentSessionId: "p" });
+    expect(resolved).toBe(child);
+    expect(create).toHaveBeenCalledTimes(1);
+    await cache.dispose();
+  });
+
   it("dispose aborts agents before withdrawing host.plugins", async () => {
     const cache = createHostAgentCache([]);
     const agent = fakeAgent();

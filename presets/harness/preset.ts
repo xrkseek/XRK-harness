@@ -17,7 +17,7 @@ import {
   createToolRegistry,
   createWriteIntentGuard,
   extractPathArg,
-  SUBAGENT_ROUTING_PROMPT_TEXT,
+  subagentRoutingPrompt,
   SESSION_QUERY_ROUTING_PROMPT_TEXT,
   type ToolDefinition,
   type ToolPipeline,
@@ -475,6 +475,15 @@ export interface HarnessCompositionOptions {
    * (attachment alias root). Writes remain workspace-bound.
    */
   readonly hostReadableRoots?: readonly string[];
+  /**
+   * Absolute directories the file tools may WRITE by absolute path, in
+   * addition to the workspace root. Deliberately opt-in: only a caller that
+   * composes an explicit allowlist (e.g. a "full access" preset with
+   * `extraWritableRoots` configured) ever widens the write surface; no preset
+   * implies it. Symlink escape stays denied, and relative paths always
+   * resolve under the workspace root.
+   */
+  readonly extraWritableRoots?: readonly string[];
   /** Durable image store — enables `read_image` when set. */
   readonly attachments?: AttachmentStore;
   /** Gate `read_image` on live route image modality (Host). */
@@ -523,6 +532,13 @@ export interface HarnessCompositionOptions {
    * Frugal / no-subagent session badges set false (Host still gates bindSubagentTools).
    */
   readonly subagentRouting?: boolean;
+  /**
+   * Delegation posture for the routing prompt: `explicit` = spawn only when
+   * asked; `proactive` = spawning is an approved strategy. From the session
+   * badge's `delegation` field (Codex `multi_agent.rs` keeps these as two
+   * mutually exclusive mode messages rather than one blended prompt).
+   */
+  readonly delegationMode?: "explicit" | "proactive";
 }
 
 export interface HarnessComposition {
@@ -637,6 +653,9 @@ export function createHarnessComposition(
     options.fs ??
     createFsLocalProvider({
       root: options.workspaceRoot,
+      ...(options.extraWritableRoots?.length
+        ? { extraWritableRoots: options.extraWritableRoots }
+        : {}),
       ...(options.hostReadableRoots?.length
         ? { hostReadableRoots: options.hostReadableRoots }
         : {}),
@@ -775,6 +794,11 @@ export function createHarnessComposition(
         : {}),
       ...(options.sandboxProduct !== undefined
         ? { product: options.sandboxProduct }
+        : {}),
+      // Same allowlist as the fs tools: `bash` cwd may land in a whitelisted
+      // out-of-workspace project (empty default = single-root jail).
+      ...(options.extraWritableRoots?.length
+        ? { extraWritableRoots: options.extraWritableRoots }
         : {}),
       ...(options.remoteExecution ? { remoteExecution: true } : {}),
     });
@@ -1391,7 +1415,7 @@ export function createHarnessComposition(
       order: 107,
       // Bound on the live agent after createAgent (Host); keep section when
       // composition opts in — do not require names on the freeze-time registry.
-      content: () => SUBAGENT_ROUTING_PROMPT_TEXT,
+      content: () => subagentRoutingPrompt(options.delegationMode ?? "proactive"),
     });
   }
   prompts.register({
@@ -1428,6 +1452,9 @@ export function createHarnessComposition(
     root: injectOpts.root,
     ...(injectOpts.productDir !== undefined
       ? { productDir: injectOpts.productDir }
+      : {}),
+    ...(injectOpts.audience !== undefined
+      ? { audience: injectOpts.audience }
       : {}),
   });
 

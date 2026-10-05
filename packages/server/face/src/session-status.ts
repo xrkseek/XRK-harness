@@ -33,6 +33,11 @@ import { costMeterGetState } from "./cost-meter-store.js";
 import { resolveSubagentQuota } from "./subagent-tools.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
+import {
+  describeChildOutcome,
+  formatDescribedChildOutcome,
+  type ChildOutcome,
+} from "./adapt/subagent-notice.js";
 
 export interface SessionStatusJobRow {
   readonly id: string;
@@ -44,6 +49,12 @@ export interface SessionStatusSubagentLive {
   readonly id: string;
   readonly label?: string;
   readonly activity: "running" | "inactive";
+  /**
+   * How this child's last turn ended. `activity: inactive` is shared by a
+   * finished child and one the parent's wait budget cut off — the graph
+   * used to paint both as "done".
+   */
+  readonly outcome?: ChildOutcome;
   readonly mode: string;
   /** Route this child runs on, `provider/model` (same shape `/status` prints). */
   readonly model?: string;
@@ -333,6 +344,12 @@ export interface SessionStatusSnapshot {
     readonly tips?: string;
     readonly source: "tool";
     readonly updatedAt: number;
+  };
+  /** Child 干员 shape/color so Overview is not the home Settings ball. */
+  readonly companionBall?: {
+    readonly shape: string;
+    readonly color: string;
+    readonly kit?: string;
   };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
@@ -972,6 +989,7 @@ export function buildSessionStatusSnapshot(
       live.push({
         id: node.id,
         activity,
+        outcome: describeChildOutcome(childEvents),
         mode: node.mode,
         ...(childModel ? { model: `${childModel.provider}/${childModel.model}` } : {}),
         ...(node.label ? { label: node.label } : {}),
@@ -1157,6 +1175,15 @@ export function buildSessionStatusSnapshot(
         ...(presenceRow.tips ? { tips: presenceRow.tips } : {}),
       }
     : undefined;
+  const childLook = runtime.subagents.getByChild(sessionId)?.appearance;
+  const companionBall =
+    childLook && typeof childLook.shape === "string" && typeof childLook.color === "string"
+      ? {
+          shape: childLook.shape,
+          color: childLook.color,
+          ...(typeof childLook.kit === "string" && childLook.kit ? { kit: childLook.kit } : {}),
+        }
+      : undefined;
 
   return {
     sessionId,
@@ -1174,6 +1201,7 @@ export function buildSessionStatusSnapshot(
     billing,
     fleet,
     ...(presence ? { presence } : {}),
+    ...(companionBall ? { companionBall } : {}),
     timeline,
     compaction,
     delivery,
@@ -1269,15 +1297,21 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
         s.activity !== "running" &&
         (s.externalResume === "cold" ||
           (s.queued ?? 0) > 0 ||
-          (s.steering ?? 0) > 0),
+          (s.steering ?? 0) > 0 ||
+          (s.outcome !== undefined &&
+            s.outcome.kind !== "completed" &&
+            s.outcome.kind !== "none")),
     )
     .slice(0, 4)) {
     const ext =
       sub.externalKind
         ? ` · ext:${sub.externalKind}${sub.externalResume ? `/${sub.externalResume}` : ""}`
         : "";
+    const verdict = sub.outcome
+      ? formatDescribedChildOutcome(sub.outcome)
+      : "idle";
     lines.push(
-      `  - ${sub.label ?? sub.id} [idle · q=${sub.queued ?? 0}/steer=${sub.steering ?? 0}]${ext}`,
+      `  - ${sub.label ?? sub.id} [idle · ${verdict} · q=${sub.queued ?? 0}/steer=${sub.steering ?? 0}]${ext}`,
     );
   }
 

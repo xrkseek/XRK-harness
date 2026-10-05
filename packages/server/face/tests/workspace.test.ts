@@ -726,4 +726,46 @@ describe("Face workspace U2", () => {
       hostFrames.some((f) => f.type === "host/archived-sessions-changed"),
     ).toBe(true);
   });
+
+  it("workspace.archiveSession cancels the session turn", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-arch-stop-"));
+    const store = createMemorySessionStore();
+    let aborted = 0;
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () =>
+        ({
+          admit: () => {
+            throw new Error("unused");
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {
+            aborted += 1;
+          },
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const sess = await dispatchFaceMethod(runtime, "session.create", "as1", {});
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const archived = await dispatchFaceMethod(
+      runtime,
+      "workspace.archiveSession",
+      "as2",
+      { sessionId },
+    );
+    expect(archived.result.ok).toBe(true);
+    expect(aborted).toBeGreaterThan(0);
+    expect(runtime.workspaces.isArchived(sessionId)).toBe(true);
+    expect(store.has(sessionId)).toBe(true);
+  });
 });

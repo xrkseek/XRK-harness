@@ -59,6 +59,13 @@ export interface WorkspaceInjectorOptions {
    * hundreds of home skills do not re-enter every turn.
    */
   readonly includeUserHomeSkills?: boolean;
+  /**
+   * `subagent` skips the home persona layer (SOUL.md / USER.md / home
+   * AGENTS.md): a delegated child gets its identity from the spawn preamble,
+   * while workspace rules and the skills catalog stay on.
+   * `minimal` is the 干员 default: same persona skip, no skill catalog.
+   */
+  readonly audience?: "user" | "subagent" | "minimal";
   /** Test override for user-home root. */
   readonly homeDir?: string;
 }
@@ -82,6 +89,9 @@ export function createWorkspaceInjector(
   const fingerprintOptions = () => ({
     root,
     productDir,
+    ...(options.audience !== undefined
+      ? { audience: options.audience }
+      : {}),
     ...(options.includeUserHome !== undefined
       ? { includeUserHome: options.includeUserHome }
       : {}),
@@ -120,6 +130,9 @@ export function createWorkspaceInjector(
         root,
         productDir,
         budget,
+        ...(options.audience !== undefined
+          ? { audience: options.audience }
+          : {}),
         ...(options.includeUserHome !== undefined
           ? { includeUserHome: options.includeUserHome }
           : {}),
@@ -129,14 +142,18 @@ export function createWorkspaceInjector(
       const changes = sectionsToInstructionChanges(sections);
 
       // Standing catalog = workspace skills only unless opted in (Codex).
-      const includeHomeSkills = options.includeUserHomeSkills === true;
-      const skillDirs = await resolveSkillDirs({
+      const skipSkills = options.audience === "minimal";
+      const includeHomeSkills =
+        !skipSkills && options.includeUserHomeSkills === true;
+      const skillDirs = skipSkills
+        ? []
+        : await resolveSkillDirs({
         workspaceRoot: root,
         productDir,
         includeUserHome: includeHomeSkills,
         ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
       });
-      const skills = await listSkills({ skillDirs });
+      const skills = skipSkills ? [] : await listSkills({ skillDirs });
       const skillCatalog = buildSkillCatalogPayload(skills, budget);
       const skillBlock = formatSkillCatalog(skills);
 
@@ -314,6 +331,15 @@ export interface ResolveWorkspaceInjectOptions {
    * Defaults to `XRK_SURFACE`; omitted = no `## Runtime surface` paragraph.
    */
   readonly surface?: RuntimeSurface;
+  /**
+   * Who this inject is for. `user` (default) gets the full standing persona
+   * (home SOUL.md / USER.md / IDENTITY.md / home AGENTS.md). `subagent` skips
+   * that persona layer — a delegated child's identity is its spawn preamble,
+   * not the parent's "you are the user's agent" standing docs — but keeps the
+   * workspace project docs that describe the codebase it is working on.
+   * `minimal` also skips the skill catalog (干员 default).
+   */
+  readonly audience?: "user" | "subagent" | "minimal";
 }
 
 export interface ResolvedWorkspaceInject {
