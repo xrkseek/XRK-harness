@@ -4,7 +4,7 @@
 
 对齐 [ADR-0003](./adr/0003-session-long-loop-short.md)：admit ≠ execute。pending 用事件 `prompt/admitted` / `prompt/promoted`（无独立 inbox 表）。
 
-插话 vs 排队见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**，否则 promote 一条 queue。HTTP `POST .../admit` 透传 `delivery`。
+插话 vs 排队见 [session-delivery.md](./session-delivery.md)。默认 `admit` = **queue（FIFO）**；可带 `delivery: "steer"`。空 `continueTurn` 走 `promoteAdmitsForTurn`：**全部 pending steer 合并进一轮**，否则 promote 一条 queue。进行中 `runTurn` 在工具步边界另走 `promotePendingSteers`。HTTP `POST .../admit` 透传 `delivery`。
 
 ## 产品语义
 
@@ -51,7 +51,7 @@ user/message     →  由 runTurn 写入（模型可见）
 
 Aligned with [ADR-0003](./adr/0003-session-long-loop-short.md): admit ≠ execute. Pending work uses events `prompt/admitted` / `prompt/promoted` (no separate inbox table).
 
-Steer vs queue: [session-delivery.md](./session-delivery.md). Default `admit` is **queue (FIFO)**; optional `delivery: "steer"`. Empty `continueTurn` uses `promoteAdmitsForTurn`: **all pending steers merge into one turn**, otherwise one queue item is promoted. HTTP `POST .../admit` passes through `delivery`.
+Steer vs queue: [session-delivery.md](./session-delivery.md). Default `admit` is **queue (FIFO)**; optional `delivery: "steer"`. Empty `continueTurn` uses `promoteAdmitsForTurn`: **all pending steers merge into one turn**, otherwise one queue item is promoted. An in-flight `runTurn` also claims steers at the tool-step boundary via `promotePendingSteers`. HTTP `POST .../admit` passes through `delivery`.
 
 ## Product semantics
 
