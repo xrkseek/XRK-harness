@@ -51,7 +51,7 @@ describe('EnterBehaviorRow', () => {
     mount()
     expect(screen.getByText('Send behavior while busy')).toBeDefined()
     expect(screen.getByText(
-      'While the agent is running: Queue = answer after this turn; Steer = inject at the next tool/step boundary (not Stop). Enter and Send use the selected behavior; Cmd/Ctrl+Enter uses the other',
+      'While the agent is running: Queue = answer after this turn; Steer = answer right after this turn ends (ahead of queue, not Stop). Enter and Send use the selected behavior; Cmd/Ctrl+Enter uses the other',
     )).toBeDefined()
     expect(screen.getByRole('button', { name: /Queue/ }).getAttribute('aria-expanded')).toBe('false')
   })
