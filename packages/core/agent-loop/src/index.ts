@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, pruneOversizedToolResults, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -788,11 +788,26 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
     }
+    // After the first step's tools settle, claim pending steers (not
+    // queues) so the next `chat()` sees them. Skip the opening step —
+    // `continueTurn({ text })` must not steal inbox steers into that
+    // request. Queues wait for drain idle.
+    if (steps > 0) {
+      const steered = promotePendingSteers(input.store, input.sessionId, {
+        now,
+      });
+      if (steered) {
+        append(input.store, input.sessionId, {
+          type: "user/message",
+          ts: now(),
+          turnId,
+          messageId: newUserMessageId(),
+          content: steered.content,
+          source: { kind: "user" },
+        });
+      }
+    }
     steps += 1;
-    // Steer waits for this Host turn to end (`continueTurn` / drain
-    // `promoteAdmitsForTurn`). Injecting at the tool-step boundary made the
-    // line a same-turn LLM request, so the shell never had a stable 「插队中」
-    // wait, then kept the badge after Think had already started.
     commitPendingPlanMode(input.store, input.sessionId, now);
     const stepId = id("step");
     activeStepId = stepId;

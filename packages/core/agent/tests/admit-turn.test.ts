@@ -156,6 +156,61 @@ describe("continueTurn + admit", () => {
     expect(users).toEqual([{ role: "user", content: "start" }]);
   });
 
+  it("promotes a steer after the in-flight tool, before the next LLM step", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("s-mid-steer");
+    const tools = createToolRegistry();
+    let releaseTool!: () => void;
+    const toolGate = new Promise<void>((r) => {
+      releaseTool = r;
+    });
+    let midPending = -1;
+    let agent!: ReturnType<typeof createAgent>;
+
+    tools.register({
+      name: "hold",
+      description: "hold",
+      parameters: { type: "object" },
+      async execute() {
+        agent.admit("course-correct", { delivery: "steer" });
+        agent.admit("queued-later");
+        midPending = agent.pendingAdmits().length;
+        await toolGate;
+        return { content: "held" };
+      },
+    });
+
+    agent = createAgent({
+      sessionId: session.id,
+      store,
+      llm: createReplayAdapter([
+        {
+          content: "",
+          toolCalls: [{ id: "c1", name: "hold", arguments: {} }],
+        },
+        { content: "done" },
+      ]),
+      tools,
+      safety: false,
+    });
+
+    agent.admit("start");
+    const turnP = agent.continueTurn();
+    await waitFor(() => midPending >= 0);
+    expect(midPending).toBe(2);
+    releaseTool();
+    await turnP;
+
+    expect(agent.pendingAdmits().map((p) => p.content)).toEqual(["queued-later"]);
+    const users = deriveMessages(store.get(session.id).events).filter(
+      (m) => m.role === "user",
+    );
+    expect(users).toEqual([
+      { role: "user", content: "start" },
+      { role: "user", content: "course-correct" },
+    ]);
+  });
+
   it("drain hub promotes one queue per continueTurn until empty", async () => {
     const store = createMemorySessionStore();
     const session = store.create("s-drain");

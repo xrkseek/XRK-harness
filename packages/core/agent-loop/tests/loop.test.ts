@@ -260,7 +260,7 @@ describe("runTurn", () => {
     expect(roles).toEqual(["user", "assistant", "tool", "assistant"]);
   });
 
-  it("holds pending steers until the turn ends; does not inject between tool steps", async () => {
+  it("promotes mid-turn steers before the next LLM step; leaves queues", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     const tools = createToolRegistry();
@@ -269,7 +269,7 @@ describe("runTurn", () => {
       description: "mark",
       parameters: { type: "object" },
       async execute() {
-        admitPrompt(store, session.id, "redirect after turn", {
+        admitPrompt(store, session.id, "redirect after tools", {
           delivery: "steer",
         });
         admitPrompt(store, session.id, "queued-later");
@@ -298,15 +298,18 @@ describe("runTurn", () => {
       "user",
       "assistant",
       "tool",
+      "user",
       "assistant",
     ]);
+    expect(
+      msgs.filter((m) => m.role === "user").map((m) => m.content),
+    ).toEqual(["start", "redirect after tools"]);
     expect(
       listPendingAdmits(store.get(session.id).events).map((p) => ({
         content: p.content,
         delivery: p.delivery,
       })),
     ).toEqual([
-      { content: "redirect after turn", delivery: "steer" },
       { content: "queued-later", delivery: "queue" },
     ]);
   });
