@@ -118,6 +118,27 @@ interface PersistShape {
 const ID_RE = /^mem_[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 const TOOL_NAME_RE = /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/;
 
+/**
+ * `mem_`-prefixed id, or `undefined` when none was given (caller mints one).
+ * A natural id (`xrk-releaseer`) gets the prefix rather than being dropped;
+ * what still cannot match is the caller's bug — ask {@link memberIdProblem}
+ * instead of silently handing back a different id.
+ */
+export function normalizeMemberId(raw: unknown): string | undefined {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return undefined;
+  if (ID_RE.test(trimmed)) return trimmed;
+  const prefixed = `mem_${trimmed}`;
+  return ID_RE.test(prefixed) ? prefixed : undefined;
+}
+
+/** Non-empty when a supplied id can never be valid — surface it, don't blame name/playbook. */
+export function memberIdProblem(raw: unknown): string | undefined {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed || normalizeMemberId(trimmed)) return undefined;
+  return `invalid id "${trimmed}": expected mem_ then [A-Za-z0-9][A-Za-z0-9._-]* (max 64 chars); omit id to mint one`;
+}
+
 /** Default allow-list for a file-only 干员 (release / inspect). */
 export const MEMBER_FILE_TOOLS = ["bash", "read", "grep", "glob"] as const;
 
@@ -522,13 +543,14 @@ export class FaceAgentRosterStore {
     const role = input.role ?? "default";
     const doc = this.load(workspaceId);
     const now = Date.now();
-    const id = input.id?.trim();
+    const rawId = input.id?.trim() ?? "";
+    const id = normalizeMemberId(rawId);
     const fallback: MemberAppearance = { shape: "blob", color: "cream" };
     const inject = parseMemberInject(input.inject, "minimal");
     const tools =
       input.tools === null ? undefined : parseMemberToolPolicy(input.tools);
+    if (rawId && !id) return undefined; // illegal id — callers ask memberIdProblem() first
     if (id) {
-      if (!ID_RE.test(id)) return undefined;
       const index = doc.members.findIndex((row) => row.id === id);
       const prev = index === -1 ? undefined : doc.members[index];
       const appearance = parseMemberAppearance(

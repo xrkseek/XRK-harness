@@ -10,6 +10,7 @@ import {
   rootUserAuthorizationBlock,
 } from "../agent-team-roles.js";
 import {
+  memberIdProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
@@ -137,6 +138,10 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const missing = requireSession(runtime, sessionId);
   if (missing) return missing;
   const args = remoteArgs(payload);
+  const idProblem = memberIdProblem(args.id);
+  if (idProblem) {
+    return { ok: false, error: { code: "invalid-payload", message: idProblem } };
+  }
   const roleRaw = typeof args.role === "string" ? args.role : "worker";
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);

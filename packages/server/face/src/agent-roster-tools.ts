@@ -7,6 +7,7 @@ import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { isAgentTeamSpawnRole } from "./agent-team-roles.js";
 import {
   formatRosterCatalog,
+  memberIdProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
@@ -77,7 +78,12 @@ export function bindAgentRosterTools(
     parameters: {
       type: "object",
       properties: {
-        id: { type: "string" },
+        id: {
+          type: "string",
+          description:
+            "mem_ then [A-Za-z0-9][A-Za-z0-9._-]*, max 64 chars (e.g. mem_xrk-releaseer). " +
+            "Omit to mint one. Reuse a previous id to update that member.",
+        },
         name: { type: "string" },
         playbook: {
           type: "string",
@@ -121,6 +127,8 @@ export function bindAgentRosterTools(
     }),
     execute: async (args) => {
       const a = readArgs(args);
+      const idProblem = memberIdProblem(a.id);
+      if (idProblem) return { content: `team_save: ${idProblem}`, isError: true };
       const captured = a.from_session === true
         ? captureSessionPlaybook(runtime, sessionId)
         : undefined;

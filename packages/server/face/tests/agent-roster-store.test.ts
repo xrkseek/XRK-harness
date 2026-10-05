@@ -6,6 +6,7 @@ import {
   FaceAgentRosterStore,
   GLOBAL_ROSTER_ID,
   applyRosterToolPolicy,
+  memberIdProblem,
 } from "../src/agent-roster-store.js";
 
 describe("FaceAgentRosterStore", () => {
@@ -21,6 +22,23 @@ describe("FaceAgentRosterStore", () => {
     dirs.push(dir);
     return dir;
   }
+
+  it("accepts a natural id by adding the mem_ prefix, and says so when it cannot", () => {
+    const store = new FaceAgentRosterStore(home());
+    const member = store.upsert("ws", {
+      id: "xrk-releaseer",
+      name: "发版员",
+      playbook: "Ship the release chain.",
+      role: "worker",
+    });
+    expect(member?.id).toBe("mem_xrk-releaseer");
+    expect(memberIdProblem("xrk-releaseer")).toBeUndefined();
+    expect(memberIdProblem(undefined)).toBeUndefined();
+    // Never silently mint a different id behind a caller-supplied one.
+    expect(store.upsert("ws", { id: "../../etc", name: "坏 id", playbook: "x" })).toBeUndefined();
+    expect(store.upsert("ws", { name: "坏 id", playbook: "x" })?.id.startsWith("mem_")).toBe(true);
+    expect(memberIdProblem("../../etc")).toContain("invalid id");
+  });
 
   it("seeds global base roles, workspace starts empty", () => {
     const store = new FaceAgentRosterStore(home());
