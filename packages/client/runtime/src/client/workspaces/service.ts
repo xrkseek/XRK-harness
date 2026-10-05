@@ -114,6 +114,8 @@ export class WorkspaceRuntime implements IWorkspaces {
     // no grouping surface can show, so New Session mints a fresh one instead.
     const archived = this.list.getSnapshot().archivedSessionIds
     const sessions = this.sessions.list.getSnapshot()
+    const currentId = sessions.current
+    const currentRow = currentId === undefined ? undefined : sessions.byId[currentId]
     for (const id of sessions.ids) {
       const summary = sessions.byId[id]
       if (summary === undefined || !summary.blank) continue
@@ -122,13 +124,26 @@ export class WorkspaceRuntime implements IWorkspaces {
       if (summary.origin === 'subagent') continue
       if (summary.cwd === workspace.path
         && workspace.sessionIds.includes(summary.id)
-        && !archived.includes(summary.id)) return summary.id
+        && !archived.includes(summary.id)) {
+        // A leftover empty composer must not swallow New Session from a live
+        // chat: that blank never received inheritFrom, so the trigger stays
+        // 「选择模型」 while Status on the source still shows the route.
+        if (
+          currentId !== undefined
+          && currentId !== summary.id
+          && currentRow !== undefined
+          && !currentRow.blank
+        ) {
+          continue
+        }
+        return summary.id
+      }
     }
     const attempt = this.sessions.create({
       workspaceId,
       localCwd: workspace.path,
       // A New Session opens from wherever the user was: carry that session's
-      // pinned model selection over instead of making them pick again. Read
+      // effective model route over instead of making them pick again. Read
       // from the pre-create snapshot, so the new session cannot be its own source.
       ...(sessions.current === undefined ? {} : { inheritFrom: sessions.current }),
     })

@@ -29,6 +29,8 @@ export interface MessageIconActionsProps {
   onEdit?: (() => void) | undefined
   /** Truncate lineage before this message (fork beforeSeq) — delete/recall. */
   onDelete?: (() => void) | undefined
+  /** Withdraw a still-pending mid-turn steer (Host inbox remove). */
+  onWithdraw?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
@@ -53,7 +55,7 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, onRestore, onEdit, onDelete, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, onEdit, onDelete, onWithdraw, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
@@ -102,6 +104,13 @@ export function MessageIconActions({
         <Tooltip label={t('message.edit')} side="bottom">
           <button type="button" className={css.action} aria-label={t('message.edit')} onClick={onEdit}>
             <IconEditOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onWithdraw !== undefined && (
+        <Tooltip label={t('message.withdrawSteer')} side="bottom">
+          <button type="button" className={css.action} aria-label={t('message.withdrawSteer')} onClick={onWithdraw}>
+            <IconTrashOutline16 />
           </button>
         </Tooltip>
       )}

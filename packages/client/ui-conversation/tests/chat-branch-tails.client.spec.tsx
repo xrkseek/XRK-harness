@@ -11,7 +11,7 @@ import { bindSnapshotSelector } from '@xrkseek/client-test-runtime'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type {
-  ChatConversationViewNode, ConversationNode,
+  ChatConversationViewNode, ConversationNode, ConversationSnapshot,
 } from '@xrkseek/client-runtime/client'
 import type { ChatNodeViewProps } from '../src/client/contract/slots.ts'
 import {
@@ -44,6 +44,16 @@ afterEach(() => {
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 const renderMessageFiles = (): null => null
+
+const idleChat = {
+  running: false,
+  queue: [],
+  chat: { timeline: { turnOrder: [], turns: new Map() } },
+} as unknown as ConversationSnapshot
+
+function idleUseSession<T>(select: (snapshot: ConversationSnapshot) => T): T {
+  return select(idleChat)
+}
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 interface MessageItemProps {
@@ -69,7 +79,10 @@ function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) 
         ? { ...node, referenceLabels }
         : node,
   }
-  const props = { node: viewNode, t: translate, renderMessageImages, renderMessageFiles } as ChatNodeViewProps
+  const props = {
+    node: viewNode, t: translate, renderMessageImages, renderMessageFiles,
+    useSession: idleUseSession, withdrawSteer: () => {},
+  } as ChatNodeViewProps
   switch (node.kind) {
     case 'user':
     case 'steering':
@@ -124,6 +137,8 @@ describe('MessageItem arms', () => {
             },
           },
           t,
+          useSession: idleUseSession,
+          withdrawSteer: () => {},
           renderMessageImages: () => null,
           // Prefer the attachment-plugin card; null still hits the inline fallback.
           renderMessageFiles: ({ files }: { files: readonly { attachment: { name: string } }[] }) => (
@@ -172,6 +187,8 @@ describe('MessageItem arms', () => {
             },
           },
           t,
+          useSession: idleUseSession,
+          withdrawSteer: () => {},
           renderMessageImages: () => null,
           renderMessageFiles: () => null,
         } as ChatNodeViewProps<'user'>)}
@@ -220,20 +237,44 @@ describe('MessageItem arms', () => {
     expect(view.getByText('引用会话 · Research notes')).toBeTruthy()
   })
 
-  it('renders no-extension paths as files and leaves sentence punctuation outside the reference', () => {
+  it('paints path-shape references and leaves sentence punctuation outside the reference', () => {
     const view = render(
       <MessageItem t={t} node={{
         kind: 'user',
         seq: 1,
         time: 1_000,
-        content: [{ type: 'text', text: 'Read @Dockerfile and @src/README.md, please.' }] as never,
+        content: [{ type: 'text', text: 'Read @Dockerfile, then @"Dockerfile" and @src/README.md, then @"docs/a note.md" and @docs/ here.' }] as never,
         source: null,
-      }} />,
+      }} />
     )
     const files = [...view.container.querySelectorAll('[data-ref-chip="file"]')]
-    expect(files.map(file => file.textContent)).toEqual(['Dockerfile', 'README.md'])
+    expect(files.map(file => file.textContent)).toEqual(['Dockerfile', 'README.md', 'a note.md'])
     expect(files.every(file => file.querySelector('svg') !== null)).toBe(true)
-    expect(view.container.textContent).toContain('README.md, please.')
+    // The trailing-slash form the file explorer's @ button appends paints too.
+    const folders = [...view.container.querySelectorAll('[data-ref-chip="folder"]')]
+    expect(folders.map(folder => folder.textContent)).toEqual(['docs'])
+    expect(view.container.textContent).toContain('README.md, then')
+    // A bare `@word` carries no path shape: prose, never a reference chip —
+    // quoting it is what makes it a reference (and what the explorer sends).
+    expect(view.container.textContent).toContain('@Dockerfile, then')
+  })
+
+  it('paints word-closed slash commands and leaves prose paths as plain text', () => {
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'user',
+        seq: 1,
+        time: 1_000,
+        content: [{ type: 'text', text: 'Call /api/usage-summary, ping @anthropic, then run /plan-build now.' }] as never,
+        source: null,
+      }} />
+    )
+    const skills = [...view.container.querySelectorAll('[data-ref-chip="skill"]')]
+    expect(skills.map(skill => skill.textContent)).toEqual(['/plan-build'])
+    // Nothing is dropped, only left unpainted.
+    expect(view.container.textContent).toContain('/api/usage-summary')
+    expect(view.container.textContent).toContain('@anthropic')
+    expect(view.container.textContent).toContain('then run /plan-build now.')
   })
 
   it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {

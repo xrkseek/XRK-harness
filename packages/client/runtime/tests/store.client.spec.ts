@@ -33,55 +33,14 @@ describe('createSnapshotStore', () => {
     expect(seen).toEqual([2, 3])
   })
 
-  it('coalesces a frame of updates into one notification in raf mode', () => {
-    const frame: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-      frame.push(cb)
-      return frame.length
-    })
-    const store = createSnapshotStore(init(), { flush: 'raf' })
-    const spy = vi.fn()
-    store.subscribe(spy)
-    store.update((d) => { d.a.n = 2 })
-    store.update((d) => { d.a.n = 3 })
-    store.update((d) => { d.b.list.push('y') })
-    expect(spy).not.toHaveBeenCalled()
-    expect(frame).toHaveLength(1)
-    frame.shift()!(0)
-    expect(spy).toHaveBeenCalledTimes(1)
-    expect(store.getSnapshot().a.n).toBe(3)
-    // Next frame batches independently.
-    store.update((d) => { d.a.n = 4 })
-    expect(frame).toHaveLength(1)
-    frame.shift()!(0)
-    expect(spy).toHaveBeenCalledTimes(2)
-  })
-
-  it('falls back to microtask batching in raf mode without requestAnimationFrame', async () => {
-    vi.stubGlobal('requestAnimationFrame', undefined)
-    const store = createSnapshotStore(init(), { flush: 'raf' })
-    const spy = vi.fn()
-    store.subscribe(spy)
-    store.update((d) => { d.a.n = 2 })
-    store.update((d) => { d.a.n = 3 })
-    expect(spy).not.toHaveBeenCalled()
-    await Promise.resolve()
-    expect(spy).toHaveBeenCalledTimes(1)
-  })
-
-  it('unsubscribes raf-mode listeners', () => {
-    const frame: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-      frame.push(cb)
-      return frame.length
-    })
-    const store = createSnapshotStore(init(), { flush: 'raf' })
+  it('unsubscribes listeners', () => {
+    const store = createSnapshotStore(init())
     const spy = vi.fn()
     const off = store.subscribe(spy)
     store.update((d) => { d.a.n = 2 })
     off()
-    frame.shift()!(0)
-    expect(spy).not.toHaveBeenCalled()
+    store.update((d) => { d.a.n = 3 })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('replaces state wholesale via set and freezes it outside production', () => {

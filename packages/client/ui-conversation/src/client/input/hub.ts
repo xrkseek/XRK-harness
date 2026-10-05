@@ -25,7 +25,7 @@ import {
   takeEditStagingFor,
 } from '../chat/resubmit-intent.ts'
 import {
-  chatHasEventsAfterSeq,
+  editResubmitNeedsConfirm,
   executeResubmitAfterChoice,
 } from '../chat/resubmit-execute.ts'
 
@@ -84,13 +84,13 @@ export class InputHub implements SessionInputResolver {
     const existing = this.shells.get(binding.sessionId)
     if (existing !== undefined) return existing
     const { sessionId: id, session, ctx: actx } = binding
-    const shell = new SessionInputShell({
+    const shell: SessionInputShell = new SessionInputShell({
       actx,
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
       defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
-      tryStagedEditSubmit: () => this.tryStagedEditSubmit(id, shell),
+      tryStagedEditSubmit: (): Promise<boolean> => this.tryStagedEditSubmit(id, shell),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -171,7 +171,8 @@ export class InputHub implements SessionInputResolver {
 
   /**
    * Confirm-before-send for a composer-staged past-message edit.
-   * Skips the truncate modal when the loaded window has nothing after that seq.
+   * Skips the truncate modal only when idle and the loaded window has nothing
+   * after that seq (a live turn still asks — inject / pre-token has no nodes yet).
    * @returns true when this gesture was consumed (including cancel).
    */
   private async tryStagedEditSubmit(
@@ -187,20 +188,8 @@ export class InputHub implements SessionInputResolver {
       clearEditStaging()
       return false
     }
-    const session = this.sessions().binding(sessionId)?.session
-    const hasTail = session !== undefined
-      && chatHasEventsAfterSeq(session.getSnapshot(), staged.seq)
-    let choice: 'keep-files' | 'revert-files' = 'keep-files'
-    if (hasTail) {
-      const decided = await requestResubmitConfirm({
-        sessionId,
-        kind: 'edit',
-        seq: staged.seq,
-        text,
-      })
-      if (decided === 'cancel') return true
-      choice = decided
-    }
+    const choice = await this.decideEditResubmitChoice(sessionId, staged.seq, text)
+    if (choice === 'cancel') return true
     const imageIds = [...shell.snapshot.imageIds]
     try {
       clearEditStaging()
@@ -210,13 +199,7 @@ export class InputHub implements SessionInputResolver {
         text,
       })
       shell.setDraft('')
-      if (imageIds.length > 0) {
-        const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-        for (const imageId of imageIds) {
-          shell.removeImage(imageId)
-          conversation?.releaseDraftImage(imageId)
-        }
-      }
+      this.releaseDraftImages(shell, imageIds)
       return true
     } catch (error) {
       beginEditStaging({ sessionId, seq: staged.seq })
@@ -247,7 +230,7 @@ export class InputHub implements SessionInputResolver {
 
   /**
    * Safety-net sink path when staging survived into defaultSink (e.g. image-only).
-   * Confirm only when the loaded window still has later events.
+   * Shares confirm + execute with {@link tryStagedEditSubmit}.
    */
   private async finishEditResubmit(
     sessionId: SessionId,
@@ -255,22 +238,10 @@ export class InputHub implements SessionInputResolver {
     text: string,
     imageIds: readonly DraftAttachmentId[],
   ): Promise<SubmitOutcome> {
-    const session = this.sessions().binding(sessionId)?.session
-    const hasTail = session !== undefined
-      && chatHasEventsAfterSeq(session.getSnapshot(), seq)
-    let choice: 'keep-files' | 'revert-files' = 'keep-files'
-    if (hasTail) {
-      const decided = await requestResubmitConfirm({
-        sessionId,
-        kind: 'edit',
-        seq,
-        text,
-      })
-      if (decided === 'cancel') {
-        beginEditStaging({ sessionId, seq })
-        return { kind: 'error' }
-      }
-      choice = decided
+    const choice = await this.decideEditResubmitChoice(sessionId, seq, text)
+    if (choice === 'cancel') {
+      beginEditStaging({ sessionId, seq })
+      return { kind: 'error' }
     }
     try {
       await executeResubmitAfterChoice(this.sessions(), sessionId, {
@@ -278,15 +249,36 @@ export class InputHub implements SessionInputResolver {
         choice,
         text,
       })
-      if (imageIds.length > 0) {
-        const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
-        for (const imageId of imageIds) conversation?.releaseDraftImage(imageId)
-      }
+      this.releaseDraftImages(undefined, imageIds)
       return { kind: 'success' }
     } catch (error) {
       beginEditStaging({ sessionId, seq })
       const message = error instanceof Error ? error.message : String(error)
       return { kind: 'error', text: message }
+    }
+  }
+
+  /** Open the truncate/revert modal when the edit would drop a tail or a live turn. */
+  private async decideEditResubmitChoice(
+    sessionId: SessionId,
+    seq: number,
+    text: string,
+  ): Promise<'cancel' | 'keep-files' | 'revert-files'> {
+    const snapshot = this.sessions().binding(sessionId)?.session?.getSnapshot()
+    if (!editResubmitNeedsConfirm(snapshot, seq)) return 'keep-files'
+    return requestResubmitConfirm({ sessionId, kind: 'edit', seq, text })
+  }
+
+  /** Drop draft image previews after a successful edit-resubmit. */
+  private releaseDraftImages(
+    shell: SessionInputShell | undefined,
+    imageIds: readonly DraftAttachmentId[],
+  ): void {
+    if (imageIds.length === 0) return
+    const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
+    for (const imageId of imageIds) {
+      shell?.removeImage(imageId)
+      conversation?.releaseDraftImage(imageId)
     }
   }
 

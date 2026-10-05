@@ -476,7 +476,7 @@ export class ConversationController extends Service implements IConversation {
         return 'steer-queued'
       }
       if (
-        action.kind === 'steer'
+        (action.kind === 'steer' || action.kind === 'remove')
         && result.error.code === 'queue-item-not-found'
       ) {
         return 'ok'

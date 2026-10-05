@@ -36,6 +36,17 @@
   --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
   --dsh-composer-side-clearance: 16px;
   --dsh-composer-dock-inset: 8px;
+  /* Right-side width handle: strip starts this far outside the content column.
+     The hover glow sits `--dsh-chat-width-line-in-strip` into that strip; the
+     turn rail centres its ticks on the same glow axis. */
+  --dsh-chat-width-handle-inset: 24px;
+  --dsh-chat-width-line-in-strip: 16px;
+  --dsh-chat-width-line-thickness: 3px;
+  --dsh-chat-width-line-from-content: calc(
+    var(--dsh-chat-width-handle-inset)
+    + var(--dsh-chat-width-line-in-strip)
+    + var(--dsh-chat-width-line-thickness) / 2
+  );
 }
 
 .header {
@@ -287,17 +298,17 @@
   z-index: 8;
   width: min(
     40px,
-    calc((100% - var(--dsh-chat-content-width)) / 2 - 24px - 24px)
+    calc((100% - var(--dsh-chat-content-width)) / 2 - var(--dsh-chat-width-handle-inset) - 24px)
   );
   cursor: col-resize;
 }
 
 .widthHandle[data-side='left'] {
-  right: calc(50% + var(--dsh-chat-content-width) / 2 + 24px);
+  right: calc(50% + var(--dsh-chat-content-width) / 2 + var(--dsh-chat-width-handle-inset));
 }
 
 .widthHandle[data-side='right'] {
-  left: calc(50% + var(--dsh-chat-content-width) / 2 + 24px);
+  left: calc(50% + var(--dsh-chat-content-width) / 2 + var(--dsh-chat-width-handle-inset));
 }
 
 /* The glow: a short 3px bar riding the pointer's Y, inset 16px outward from
@@ -310,7 +321,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: var(--dsh-chat-width-line-thickness);
   border-radius: 3px;
   background: linear-gradient(
     to bottom,
@@ -324,11 +335,11 @@
 }
 
 .widthHandle[data-side='left']::after {
-  right: 16px;
+  right: var(--dsh-chat-width-line-in-strip);
 }
 
 .widthHandle[data-side='right']::after {
-  left: 16px;
+  left: var(--dsh-chat-width-line-in-strip);
 }
 
 .widthHandle:hover::after,
@@ -343,11 +354,13 @@
 }
 
 /* Overlay sibling of the scrollport: the turn ladder portals here so it is
-   not a sticky overflowing child of the transcript (that paints twice). */
+   not a sticky overflowing child of the transcript (that paints twice).
+   Above the width handles (z-index 8): host is pointer-events none so resize
+   still works outside the rail frame; the frame itself is pointer-events auto. */
 .turnRailHost {
   position: absolute;
   inset: 0;
-  z-index: 7;
+  z-index: 9;
   pointer-events: none;
   /* Same inline-size query the transcript used so the rail still hides under 900px. */
   container-type: inline-size;

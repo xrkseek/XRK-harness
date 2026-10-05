@@ -128,4 +128,68 @@ describe('Notifier', () => {
     notifier.notifyNow()
     expect(calls).toBe(1)
   })
+
+  it('one throwing listener does not rob the rest of the round', () => {
+    const order: string[] = []
+    const notifier = new Notifier(() => order.push('rebuild'))
+    notifier.subscribe(() => { order.push('before'); throw new Error('bad subscriber') })
+    notifier.subscribe(() => { order.push('after') })
+    const errors: unknown[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(args[0])
+    })
+    notifier.notifyNow()
+    expect(order).toEqual(['rebuild', 'before', 'after'])
+    expect(errors).toHaveLength(1)
+    spy.mockRestore()
+  })
+
+  it('re-arms a frame publication the suspended animation clock never delivered', () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    let notifications = 0
+    const notifier = new Notifier(() => undefined)
+    notifier.subscribe(() => { notifications++ })
+
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(1)
+    now.mockReturnValue(1_100)
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(1) // inside the frame window: still one batch
+    now.mockReturnValue(1_400)
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(2) // stalled: re-armed instead of swallowed
+
+    frames[1]!(0)
+    expect(notifications).toBe(1)
+    frames[0]!(0) // superseded: retired by the generation bump
+    expect(notifications).toBe(1)
+    now.mockRestore()
+  })
+
+  it('drains a publication stranded by a hidden window on the wake edge', async () => {
+    // The wake listener binds once per document, so this case needs a fresh
+    // module instance — the lane's own jsdom document is already bound by
+    // whichever frame case ran first.
+    vi.resetModules()
+    const listeners = new Map<string, () => void>()
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: (type: string, listener: () => void) => { listeners.set(type, listener) },
+    })
+    vi.stubGlobal('requestAnimationFrame', () => 1) // armed, never delivered
+    const { Notifier: FreshNotifier } = await import('../src/client/sessions/notifier.ts')
+    let notifications = 0
+    const notifier = new FreshNotifier(() => undefined)
+    notifier.subscribe(() => { notifications++ })
+
+    notifier.markFrameDirty()
+    expect(notifications).toBe(0)
+    listeners.get('visibilitychange')!()
+    expect(notifications).toBe(1)
+  })
 })

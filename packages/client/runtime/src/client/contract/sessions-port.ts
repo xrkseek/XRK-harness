@@ -39,8 +39,8 @@ export interface SessionsPort {
    * Create a session on the host.
    * @param opts - target workspace; `localCwd` seeds the optimistic list
    *   summary (never sent on the wire — Host rejects workspaceId+cwd);
-   *   `inheritFrom` makes the Host copy that session's pinned model selection
-   *   onto the new session.
+   *   `inheritFrom` makes the Host copy that session's effective model
+   *   selection onto the new session.
    * @returns the new session id.
    */
   create(opts: {

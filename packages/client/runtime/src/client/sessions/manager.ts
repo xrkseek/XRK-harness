@@ -77,6 +77,15 @@ type SessionListMutation =
   | { kind: 'engaged'; sessionId: SessionId }
   /** Local composer draft bit: blank New Session rows with unsent text stay visible. */
   | { kind: 'draft'; sessionId: SessionId; hasDraft: boolean }
+  /** Live 主线 / 支线 chrome from host/session-thread. */
+  | {
+    kind: 'thread'
+    sessionId: SessionId
+    bound: boolean
+    mainline?: string
+    mainlineId?: string
+    sideline?: string
+  }
 
 
 /** Stable identity of a frame retained until an uninstantiated Session can consume it. */
@@ -910,6 +919,17 @@ export class SessionManager {
         }
         return
       }
+      case 'host/session-thread': {
+        this.recordMutation({
+          kind: 'thread',
+          sessionId: frame.sessionId,
+          bound: frame.bound,
+          ...(frame.mainline !== undefined ? { mainline: frame.mainline } : {}),
+          ...(frame.mainlineId !== undefined ? { mainlineId: frame.mainlineId } : {}),
+          ...(frame.sideline !== undefined ? { sideline: frame.sideline } : {}),
+        })
+        return
+      }
       case 'host/session-status': {
         this.recordMutation({ kind: 'status', sessionId: frame.sessionId, running: frame.running })
         this.sessions.get(frame.sessionId)?.handleRunning(frame.running)
@@ -1167,6 +1187,8 @@ export class SessionManager {
         && prev.blank === entry.blank && prev.agentPreset === entry.agentPreset
         && prev.parentSessionId === entry.parentSessionId && prev.cwd === entry.cwd
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
+        && prev.mainline === entry.mainline && prev.mainlineId === entry.mainlineId
+        && prev.sideline === entry.sideline
         && prev.pendingInteraction === entry.pendingInteraction
         && prev.projectionValues === entry.projectionValues
         && prev.completed === entry.completed && prev.hasDraft === entry.hasDraft
@@ -1247,6 +1269,25 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
         && summary.hasDraft !== mutation.hasDraft
         ? { ...summary, hasDraft: mutation.hasDraft }
         : summary)
+    case 'thread': {
+      return summaries.map((summary) => {
+        if (summary.sessionId !== mutation.sessionId) return summary
+        if (!mutation.bound) {
+          const next: SessionSummary = { ...summary }
+          delete next.mainline
+          delete next.mainlineId
+          if (mutation.sideline !== undefined) next.sideline = mutation.sideline
+          else delete next.sideline
+          return next
+        }
+        return {
+          ...summary,
+          ...(mutation.mainline !== undefined ? { mainline: mutation.mainline } : {}),
+          ...(mutation.mainlineId !== undefined ? { mainlineId: mutation.mainlineId } : {}),
+          ...(mutation.sideline !== undefined ? { sideline: mutation.sideline } : {}),
+        }
+      })
+    }
   }
 }
 

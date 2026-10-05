@@ -319,7 +319,7 @@ export interface QueuedMessage {
   readonly id: MessageId
   /** Stable message identity used for transient-to-durable steering handoff. */
   readonly messageId: MessageId
-  /** Agent-resolved placement; only queued rows accept queue mutations. */
+  /** Agent-resolved placement; queued and steering rows accept edit/remove. */
   readonly placement: 'queued' | 'steering' | 'context'
   /** Complete content used to render pending steering before it becomes durable. */
   readonly content: readonly ContentBlock[]

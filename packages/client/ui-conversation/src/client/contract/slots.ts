@@ -517,6 +517,8 @@ export interface ChatNodeOwnerProps {
    * (fork beforeSeq) and optionally workspace revert.
    */
   deleteAt: (seq: number) => void
+  /** Withdraw one still-pending next-step steer (`session.updateQueue` remove). */
+  withdrawSteer: (itemId: MessageId) => void
   /** Session-authorized durable image loader (tool image cards + message galleries). */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Render a historical image group through the attachment slot. */
@@ -920,6 +922,8 @@ export interface ChatViewInjected {
   editAt: (seq: number, text: string) => void
   /** Delete/recall confirm → fork before `seq` (+ optional rollback). */
   deleteAt: (seq: number) => void
+  /** Withdraw one still-pending next-step steer (Host `updateQueue` remove). */
+  withdrawSteer: (itemId: MessageId) => void
   /**
    * Prose file-mention vocabulary for one closing message, from the optional
    * {@link ChatFileMentions} service (resolved lazily per call, so composing

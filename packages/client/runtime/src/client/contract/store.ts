@@ -51,60 +51,30 @@ export function shallowEqual(a: unknown, b: unknown): boolean {
   return shallow(a, b)
 }
 
-/** Batches subscriber notification into one flush per animation frame. */
-function rafBatch(notify: () => void): () => void {
-  // Fall back to microtask batching where rAF is absent (node unit tests);
-  // both preserve the N-changes=1-notification contract within a tick.
-  const schedule: (fn: () => void) => void =
-    typeof requestAnimationFrame === 'function'
-      ? (fn) => { requestAnimationFrame(() => { fn() }) }
-      : (fn) => { queueMicrotask(fn) }
-  let scheduled = false
-  return () => {
-    if (scheduled) return
-    scheduled = true
-    schedule(() => {
-      scheduled = false
-      notify()
-    })
-  }
-}
-
 /**
- * Create a snapshot store.
- *
- * Flush default is 'sync' (controlled inputs need same-tick echo); frame-driven
- * stores opt into 'raf', where a frame's worth of updates coalesces into one
- * notification. Known raf-mode tradeoff: a component mounting mid-frame reads
- * fresh state while existing subscribers hear it next flush — transient
- * frame-level skew, same nature as the object layer's microtask batching.
+ * Create a snapshot store. Notification is synchronous per write: controlled
+ * inputs (the composer draft) need same-tick echo or React rolls the DOM back
+ * and the caret jumps to the end. Frame-coalesced flushing was removed here —
+ * no caller ever opted in, and a frame-batched store is exactly the shape that
+ * goes permanently silent while the window is hidden (rAF suspended). The
+ * object layer (Notifier) keeps its frame cadence, and that is where the stall
+ * and wake recovery lives.
  *
  * @param init - initial state.
- * @param opts - flush mode and opt-in persistence (localStorage, keyed by name).
+ * @param opts - opt-in persistence (localStorage, keyed by name).
  * @returns the store.
  */
 export function createSnapshotStore<T>(
-  init: T, opts?: { flush?: 'raf' | 'sync'; persist?: { name: string } }): SnapshotStore<T> {
+  init: T, opts?: { persist?: { name: string } }): SnapshotStore<T> {
   // Immer enters through produce() in update() below (identical semantics to
   // the immer middleware without its setState-signature mutator generics).
   const withSelector = subscribeWithSelector(() => init)
   const api: StoreApi<T> = createStore<T>()(withSelector)
   if (opts?.persist) attachPersistence(api, opts.persist.name)
 
-  let subscribe = (fn: () => void) => api.subscribe(fn)
-  if (opts?.flush === 'raf') {
-    const listeners = new Set<() => void>()
-    const flush = rafBatch(() => { for (const fn of [...listeners]) fn() })
-    api.subscribe(flush)
-    subscribe = (fn: () => void) => {
-      listeners.add(fn)
-      return () => { listeners.delete(fn) }
-    }
-  }
-
   return {
     getSnapshot: () => api.getState(),
-    subscribe: fn => subscribe(fn),
+    subscribe: fn => api.subscribe(fn),
     update: (mutator) => {
       // Immer's produce (not setState's partial-merge path) so scalar and
       // array roots replace correctly; produce also freezes in dev.
@@ -230,12 +200,22 @@ function cancelPersistedWrites(name: string): void {
   persistControllers.get(name)?.cancel()
 }
 
-/** Deep-freeze wholesale-set state outside production: set() bypasses immer's freeze. */
+/**
+ * Deep-freeze wholesale-set state in development: set() bypasses immer's freeze.
+ *
+ * The probe is deliberately INVERTED — `NODE_ENV === 'production'` never holds in
+ * the browser bundle: `globalThis.process` does not exist in a Desktop renderer
+ * (sandbox + contextIsolation), and the bundler only rewrites the bare
+ * `process.env.NODE_ENV` literal, not this optional-chained member chain. Testing
+ * `!== 'production'` therefore ran a full recursive freeze per write in PRODUCTION
+ * too, on the main thread — for a long session that is a whole-tree walk per
+ * keystroke-rate store write. Only an explicit dev/test signal pays for it now.
+ */
 function devFreeze<T>(value: T): T {
   // Client tsc programs omit Node typings; bundlers still replace this shape.
   const nodeEnv = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
     .process?.env?.NODE_ENV
-  if (nodeEnv === 'production') return value
+  if (nodeEnv === undefined || nodeEnv === 'production') return value
   deepFreeze(value)
   return value
 }

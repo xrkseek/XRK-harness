@@ -53,37 +53,71 @@ export function isComposerAgentActive(input: {
   return input.running
 }
 
+function isPostToolVacuum(tailKind: string | undefined): boolean {
+  return tailKind === 'tool-call' || tailKind === 'tool-result'
+}
+
+function isHumanTail(tailKind: string | undefined): boolean {
+  return tailKind === 'user' || tailKind === 'steering'
+}
+
+function surfaceActiveOf(input: {
+  readonly turnSurfaceActive: boolean
+} | {
+  readonly partial: PartialAssistant | null
+  readonly runningCallCount: number
+  readonly timeline: ConversationTimelineSnapshot
+}): boolean {
+  return 'turnSurfaceActive' in input
+    ? input.turnSurfaceActive
+    : hasActiveTurnSurface(input.partial, input.runningCallCount, input.timeline)
+}
+
+/** Host is still going, but the user already has the finished answer on screen. */
+function settledIdle(input: {
+  readonly turnsSettled?: boolean
+  readonly pendingSendCount?: number
+  readonly tailKind: string | undefined
+}): boolean {
+  if (input.turnsSettled !== true) return false
+  if ((input.pendingSendCount ?? 0) > 0) return false
+  if (isPostToolVacuum(input.tailKind)) return false
+  return !isHumanTail(input.tailKind)
+}
+
 /**
- * Flow-tail waiting (`turnStatus.*`), DSH-aligned with drain `running` + live surface:
- * show in vacuum (pre-Think, step gap, steer queue/tail); hide during tools or live Think.
- *
- * Prefer the precomputed `turnSurfaceActive` latch when callers already selected
- * it (avoids re-deriving from a per-chunk `partial` identity in ChatView).
+ * Flow-tail waiting (`turnStatus.*`): the user is waiting and the flow shows
+ * no new agent follow-up (pre-Think, tool finished, just sent). Hide while
+ * they can watch tools or live Think/text, and hide Host running-lag after
+ * a closed turn with nothing new from the human.
  */
 export function shouldShowFlowWaiting(input: {
   readonly running: boolean
-  readonly pendingSteerCount: number
   readonly tailKind: string | undefined
-  readonly turnSurfaceActive: boolean
-  readonly turnOpen?: boolean
-  /** True when the timeline has turns and none of them are still open. */
+  readonly runningCallCount?: number
+  readonly skippedTrailingRunningStep?: boolean
   readonly turnsSettled?: boolean
+  readonly pendingSendCount?: number
+  readonly turnSurfaceActive: boolean
 } | {
   readonly running: boolean
   readonly partial: PartialAssistant | null
   readonly runningCallCount: number
   readonly timeline: ConversationTimelineSnapshot
-  readonly pendingSteerCount: number
   readonly tailKind: string | undefined
-  readonly turnOpen?: boolean
+  readonly skippedTrailingRunningStep?: boolean
   readonly turnsSettled?: boolean
+  readonly pendingSendCount?: number
 }): boolean {
   if (!input.running) return false
-  if (input.pendingSteerCount > 0) return true
-  if (input.turnsSettled) return false
-  if (input.tailKind === 'steering') return true
-  const surfaceActive = 'turnSurfaceActive' in input
-    ? input.turnSurfaceActive
-    : hasActiveTurnSurface(input.partial, input.runningCallCount, input.timeline)
+  if ((input.runningCallCount ?? 0) > 0) return false
+  const surfaceActive = surfaceActiveOf(input)
+  // Running assistant-step after the last durable row is live Think/text.
+  if (input.skippedTrailingRunningStep === true && surfaceActive) return false
+  if (settledIdle(input)) return false
+  // Leftover Think above a settled tool, or a human line at the tail, is not
+  // new agent work — the user is staring at a gap.
+  if (isPostToolVacuum(input.tailKind) && input.skippedTrailingRunningStep !== true) return true
+  if (isHumanTail(input.tailKind)) return true
   return !surfaceActive
 }

@@ -60,18 +60,32 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         form: contextForm(event.data.source),
       }
     }
-    const claimed = reader.previous<InboxState>('inbox-next-step')?.state.claimed.has(String(event.data.id)) === true
-    // Claim at turn entry (turn location, no steps yet) is the next send.
-    // Claim on a step, a session-located prepend, or a turn that already has
-    // steps is mid-turn steer (「插队中」).
+    const inboxClaim = reader.previous<InboxState>('inbox-next-step')?.state.claimed
+    // The transient inbox row is keyed by `admitId`, while this durable row
+    // answers to a freshly minted `messageId` plus the echoed prompt rpcId(s)
+    // the Host stamped on promote. Consult every durable identity: a claim
+    // matched on `id` alone is empty in production (admitId ≠ `umsg_<uuid>`)
+    // and silently degrades a mid-turn steer to an ordinary user message.
+    const raw = event.data as { readonly rpcIds?: unknown; readonly source?: { readonly rpcId?: unknown } }
+    const rpcIds = Array.isArray(raw.rpcIds)
+      ? (raw.rpcIds as readonly unknown[]).filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : []
+    const sourceRpc = raw.source
+    const durableIds = [
+      String(event.data.id),
+      ...rpcIds,
+      ...(typeof sourceRpc?.rpcId === 'string' ? [sourceRpc.rpcId] : []),
+    ]
+    const claimed = inboxClaim !== undefined && durableIds.some(id => inboxClaim.has(id))
+    // A claimed next-step at a brand-new turn (no step has started) is the
+    // send that opens the next request. Same-turn claims after a prior step
+    // — including the post-`step/end` vacuum whose Location is `turn` —
+    // stay steering so Chat can park 「权衡方案中」 above 「插队中」.
     const loc = match.location
-    const turnEntry = loc.kind === 'turn' && loc.turn.steps.length === 0
-    const midTurn = claimed && !turnEntry
-    const rpcIds = Array.isArray((event.data as { rpcIds?: unknown }).rpcIds)
-      ? (event.data as { rpcIds: readonly unknown[] }).rpcIds
-        .filter((id): id is string => typeof id === 'string' && id.length > 0)
-      : undefined
-    const echoIds = rpcIds !== undefined && rpcIds.length > 0 ? { rpcIds } : {}
+    const turnOpening = loc.kind === 'turn'
+      && !loc.turn.steps.some(step => step.start !== undefined)
+    const midTurn = claimed && !turnOpening
+    const echoIds = rpcIds.length > 0 ? { rpcIds } : {}
     return midTurn
       ? {
         kind: 'steering',
@@ -102,13 +116,15 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
       && context.state.form !== 'notice'
       && context.state.form !== 'catalog'
     const loc = contextLocation(context)
-    // A closed-turn steer belongs after that turn's tail, not between the
-    // answer and the footer.
+    // A closed-turn steer that landed after the turn closed belongs after
+    // that turn's tail. Keep event seq otherwise: a steer that opened the
+    // next request must not jump past the assistant that answered it.
     let anchor = context.state.seq
     if (context.state.kind === 'steering'
       && (loc.kind === 'turn' || loc.kind === 'step')
       && loc.turn.status === 'closed'
-      && loc.turn.end !== undefined) {
+      && loc.turn.end !== undefined
+      && context.state.seq >= loc.turn.end.seq) {
       anchor = loc.turn.end.seq + CHAT_SYNTHETIC_SEQ_OFFSETS.finalizedFollowup
     }
     return chatNode(

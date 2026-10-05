@@ -36,7 +36,6 @@ function base(partial: PartialAssistant | null = null) {
     partial,
     runningCallCount: 0,
     timeline: EMPTY_TIMELINE,
-    pendingSteerCount: 0,
     tailKind: undefined as string | undefined,
   }
 }
@@ -93,7 +92,7 @@ describe('shouldShowFlowWaiting', () => {
     expect(shouldShowFlowWaiting({ ...base(partial), timeline })).toBe(true)
   })
 
-  it('shows while steer is pending or at the flow tail', () => {
+  it('hides while the user can still watch live Think, even with a human tail', () => {
     const partial: PartialAssistant = {
       turn: 1,
       step: 0,
@@ -106,12 +105,29 @@ describe('shouldShowFlowWaiting', () => {
     expect(shouldShowFlowWaiting({
       ...base(partial),
       timeline,
-      pendingSteerCount: 1,
-    })).toBe(true)
+      skippedTrailingRunningStep: true,
+      tailKind: 'steering',
+    })).toBe(false)
+  })
+
+  it('shows after a human line at the tail when nothing new is streaming', () => {
+    const partial: PartialAssistant = {
+      turn: 1,
+      step: 0,
+      blocks: [{ kind: 'reasoning', text: 'old think still mounted' }],
+    }
+    const timeline: ConversationTimelineSnapshot = {
+      turnOrder: [1],
+      turns: new Map([[1, turn([openStep(0)])]]),
+    }
     expect(shouldShowFlowWaiting({
       ...base(partial),
       timeline,
       tailKind: 'steering',
+    })).toBe(true)
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      tailKind: 'user',
     })).toBe(true)
   })
 
@@ -119,7 +135,78 @@ describe('shouldShowFlowWaiting', () => {
     expect(shouldShowFlowWaiting({
       ...base(),
       turnsSettled: true,
-      tailKind: 'steering',
+      tailKind: 'turn-tail',
+    })).toBe(false)
+  })
+
+  it('still shows a tool vacuum after the owning turn has closed', () => {
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      turnsSettled: true,
+      tailKind: 'tool-result',
+    })).toBe(true)
+  })
+
+  it('shows after send before the next turn opens (settled timeline, new user tail)', () => {
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      turnsSettled: true,
+      tailKind: 'user',
+    })).toBe(true)
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      turnsSettled: true,
+      tailKind: 'turn-tail',
+      pendingSendCount: 1,
+    })).toBe(true)
+  })
+
+  it('shows after a settled tool even when leftover Think is still on the open step', () => {
+    const partial: PartialAssistant = {
+      turn: 1,
+      step: 0,
+      blocks: [{ kind: 'reasoning', text: 'plan then call bash' }],
+    }
+    const timeline: ConversationTimelineSnapshot = {
+      turnOrder: [1],
+      turns: new Map([[1, turn([openStep(0)])]]),
+    }
+    expect(shouldShowFlowWaiting({
+      ...base(partial),
+      timeline,
+      tailKind: 'tool-result',
+    })).toBe(true)
+    expect(shouldShowFlowWaiting({
+      running: true,
+      tailKind: 'tool-result',
+      turnSurfaceActive: true,
+      runningCallCount: 0,
+    })).toBe(true)
+  })
+
+  it('hides when a trailing running step follows a settled tool (live Think after tools)', () => {
+    const partial: PartialAssistant = {
+      turn: 1,
+      step: 1,
+      blocks: [{ kind: 'reasoning', text: 'next layer' }],
+    }
+    const timeline: ConversationTimelineSnapshot = {
+      turnOrder: [1],
+      turns: new Map([[1, turn([closedStep(0), openStep(1)])]]),
+    }
+    expect(shouldShowFlowWaiting({
+      ...base(partial),
+      timeline,
+      tailKind: 'tool-call',
+      skippedTrailingRunningStep: true,
+    })).toBe(false)
+  })
+
+  it('still hides during an in-flight tool even when the tail is a tool row', () => {
+    expect(shouldShowFlowWaiting({
+      ...base(),
+      runningCallCount: 1,
+      tailKind: 'tool-call',
     })).toBe(false)
   })
 })

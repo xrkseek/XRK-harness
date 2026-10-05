@@ -14,7 +14,11 @@ import {
   requestResubmitConfirm,
   takeEditStagingFor,
 } from '../src/client/chat/resubmit-intent.ts'
-import { chatHasEventsAfterSeq } from '../src/client/chat/resubmit-execute.ts'
+import {
+  chatHasEventsAfterSeq,
+  editResubmitNeedsConfirm,
+  editResubmitSourceIsLive,
+} from '../src/client/chat/resubmit-execute.ts'
 
 afterEach(() => {
   clearEditStaging()
@@ -54,6 +58,60 @@ describe('chatHasEventsAfterSeq', () => {
     } as unknown as ConversationSnapshot
     expect(chatHasEventsAfterSeq(snapshot, 4)).toBe(false)
     expect(chatHasEventsAfterSeq(snapshot, 3)).toBe(true)
+  })
+
+  it('treats a later node as tail even when only anchorSeq is present', () => {
+    const snapshot = {
+      chat: {
+        order: ['user', 'tool'],
+        nodes: new Map([
+          ['user', { anchorSeq: 2, data: { seq: 2 } }],
+          ['tool', { anchorSeq: 5, data: {} }],
+        ]),
+      },
+    } as unknown as ConversationSnapshot
+    expect(chatHasEventsAfterSeq(snapshot, 2)).toBe(true)
+  })
+})
+
+describe('editResubmitNeedsConfirm', () => {
+  const idleTail = {
+    running: false,
+    runningCalls: [] as const,
+    partial: null,
+    chat: {
+      order: ['a'],
+      nodes: new Map([['a', { anchorSeq: 1, data: { seq: 1 } }]]),
+    },
+  }
+
+  it('asks while running even with no later chat nodes', () => {
+    expect(editResubmitNeedsConfirm({
+      ...idleTail, running: true,
+    } as unknown as ConversationSnapshot, 1)).toBe(true)
+  })
+
+  it('asks while a tool call is live even if Host running lagged off', () => {
+    expect(editResubmitNeedsConfirm({
+      ...idleTail,
+      runningCalls: [{ callId: 'c1', name: 'bash' }],
+    } as unknown as ConversationSnapshot, 1)).toBe(true)
+  })
+
+  it('asks while a streaming partial is visible', () => {
+    expect(editResubmitNeedsConfirm({
+      ...idleTail,
+      partial: { turn: 1, step: 0, blocks: [{ kind: 'reasoning', text: '…' }] },
+    } as unknown as ConversationSnapshot, 1)).toBe(true)
+  })
+
+  it('skips when idle and the edited message is the tail', () => {
+    expect(editResubmitNeedsConfirm(
+      idleTail as unknown as ConversationSnapshot, 1,
+    )).toBe(false)
+    expect(editResubmitSourceIsLive(
+      idleTail as unknown as ConversationSnapshot,
+    )).toBe(false)
   })
 })
 

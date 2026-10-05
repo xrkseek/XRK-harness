@@ -94,15 +94,20 @@ function pushPathRef(
   if (appearance === 'file') {
     const quoted = token.startsWith('@"') && token.endsWith('"')
     const inner = quoted ? token.slice(2, -1) : token.slice(1)
-    // Closed `@"dir/"` is owned by the folder scanner; bare `@name` (no slash,
-    // no extension) stays lexicon-only. Root `@README.md` paints as a file.
+    // A quoted path is an explicit "this is a path" — only the explorer's
+    // @ button and a pasted Windows path produce one — so `@"Dockerfile"`
+    // names a file as surely as `@src/app.ts` does, extension or not. Bare
+    // tokens keep the shape heuristics: a trailing slash belongs to the folder
+    // scan, and `@name` (no slash, no extension) stays lexicon-only.
     if (inner.endsWith('/')) return
-    if (!inner.includes('/') && !leafHasExtension(inner)) return
-    // Unquoted path still being typed at EOL (no extension yet) must not
-    // keep painting subsequent keystrokes blue (`@dir/name` + `11`).
-    // Complete directories from the sidebar use the trailing-slash grammar
-    // (`@dir/name/`) owned by the folder scanner.
-    if (!quoted && end === draftLength && !leafHasExtension(inner)) return
+    if (!quoted) {
+      if (!inner.includes('/') && !leafHasExtension(inner)) return
+      // Unquoted path still being typed at EOL (no extension yet) must not
+      // keep painting subsequent keystrokes blue (`@dir/name` + `11`).
+      // Complete directories from the sidebar use the trailing-slash grammar
+      // (`@dir/name/`) owned by the folder scanner.
+      if (end === draftLength && !leafHasExtension(inner)) return
+    }
   }
   out.push({ start, end, trigger: '@', appearance })
 }
@@ -117,7 +122,7 @@ function pushPathRef(
  * @returns matched ranges in draft order.
  */
 export function scanTextRefs(
-  draft: string, lexicon: ReadonlyMap<'/' | '@', readonly string[]>,
+  draft: string, lexicon: ReadonlyMap<'/' | '@', readonly string[]> = EMPTY_LEXICON,
 ): TextRefRange[] {
   if (draft === '') return []
   const out: TextRefRange[] = []

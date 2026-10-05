@@ -66,3 +66,17 @@ export function chatNode<Kind extends ChatNodeKind>(
 export function coordinate(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 }
+
+/**
+ * User Stop / soft cancel closed this Turn (`turn/end` aborted|interrupted).
+ * Shared by assistant projection (「已停止」 on the step) and turn-tail
+ * (fallback marker when Stop left no assistant chrome).
+ */
+export function turnEndedAsStop(end: {
+  readonly type?: string
+  readonly data?: { readonly reason?: { readonly kind?: string } }
+} | undefined): boolean {
+  if (end?.type !== 'turn/end') return false
+  const kind = end.data?.reason?.kind
+  return kind === 'aborted' || kind === 'interrupted'
+}

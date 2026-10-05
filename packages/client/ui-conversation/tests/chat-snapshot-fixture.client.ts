@@ -138,6 +138,8 @@ export function chatSnapshotFixture(input: {
   readonly runningCalls?: readonly RunningToolCall[]
   readonly turnTimings?: LegacyConversationSlice['turnTimings']
   readonly turnEnds?: LegacyConversationSlice['turnEnds']
+  /** Host `turn/end` reason; omitted turns default to completed. */
+  readonly turnEndReasons?: ReadonlyMap<number, { readonly kind: string }>
 } = {}, previous?: ChatSnapshot): ChatSnapshot {
   const legacy: LegacyConversationSlice = {
     nodes: input.nodes ?? EMPTY,
@@ -159,20 +161,48 @@ export function chatSnapshotFixture(input: {
     const endSeq = legacy.turnEnds.get(turn)
     const data = new FixtureTurnDataStore()
     turnData.set(turn, data)
+    const hadStep = legacy.nodes.some(node =>
+      'turn' in node && typeof node.turn === 'number' && node.turn === turn
+      && (node.kind === 'assistant' || node.kind === 'tool-result' || node.kind === 'model-retry'))
+      || (legacy.partial !== null && legacy.partial.turn === turn)
+      || legacy.runningCalls.some(call => call.turn === turn)
     turns.set(turn, {
       turn,
       start: timing === undefined ? undefined : {
         type: 'turn/start', seq: Math.max(0, (endSeq ?? 1) - 1), time: timing.startTime, turn,
       } as never,
       end: timing?.endTime === undefined || endSeq === undefined ? undefined : {
-        type: 'turn/end', seq: endSeq, time: timing.endTime, turn, reason: 'completed',
+        type: 'turn/end',
+        seq: endSeq,
+        time: timing.endTime,
+        turn,
+        data: {
+          turn,
+          reason: input.turnEndReasons?.get(turn) ?? { kind: 'completed' },
+        },
       } as never,
       status: endSeq === undefined ? 'open' : 'closed',
-      steps: EMPTY,
+      steps: hadStep
+        ? [{
+          turn,
+          step: 1,
+          start: {
+            type: 'step/start', seq: 0, time: timing?.startTime ?? 0, turn, step: 1,
+          } as never,
+          end: undefined,
+          status: endSeq === undefined ? 'open' as const : 'closed' as const,
+          data,
+        }]
+        : EMPTY,
       data,
     })
   }
   const linkedCompactions = new Set<CompactionSummaryNode>()
+  for (const node of legacy.nodes) {
+    if (node.kind !== 'assistant') continue
+    const store = turnData.get(node.turn) as { set(key: string, value: unknown): void } | undefined
+    store?.set('assistant-step', assistantData(node))
+  }
   const nodes = legacy.nodes.flatMap((node): ChatConversationViewNode[] => {
     if (node.kind === 'command' && node.name === 'compact') {
       const sourceSeq = node.outcome?.kind === 'success' ? node.outcome.sourceEventSeq : undefined

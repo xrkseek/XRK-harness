@@ -13,12 +13,15 @@ import {
   fileExtension, FileTypeIcon, fileSizeText, JsonBlock, MessageText, StateDot,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, MessageImageOwner } from '../contract/slots.ts'
-import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
+import { ReferenceIcon, type ReferenceIconKind } from '../reference/ReferenceIcon.tsx'
+import { scanTextRefs } from '../input/decorations.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
-import { durableSteerPending, runningTurnStartTime, hasOpenTurn } from './pending-input-chrome.ts'
+import {
+  collectUserShapedSeqs, durableSteerPending, hasAgentWorkBefore, latestTurnNumber,
+} from './pending-input-chrome.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -199,61 +202,66 @@ function TurnMaxTokensItem({ t }: {
  * Display projection of reference forms in a user bubble (free geometry — no
  * textarea alignment constraint here); everything else stays plain text. The
  * logged model text remains the single truth; this is presentation only.
- * Plain-text `/name` / `@name` word-boundary tokens decorate (the sent text
- * IS the reference — the bubble uses the same plainest token
- * scan as the composer, minus the lexicon: sent tokens were validated at
- * compose time, so shape alone decorates).
+ *
+ * The chip grammar is the composer's own, so a bubble never paints a
+ * reference the composer would not: an `@` token must carry path shape
+ * (quoted path, nested path, or a leaf with an extension) — a bare `@word`
+ * stays prose, which is what keeps `@someone` and `@anthropic` out. Slash
+ * tokens reuse the composer trigger shape with the lexicon dropped (a sent
+ * log has none), and the trailing boundary is what keeps prose paths out:
+ * `/command args` paints, `/api/dashboard`, `/plan.md`, and `// note` do not.
  */
+
+const SLASH_CHIP_RE = /(^|\s)(\/[\w-]+)(?=\s|$)/gu
+
+/** Sentence punctuation a shape match may have swallowed (`@README.md,`). */
+const TRAILING_PUNCT_RE = /[.,;:!?，。；：！？]+$/u
+
 function projectUserText(text: string, sessionLabels: readonly string[]): ReactNode {
-  const ranges: { start: number; end: number; label: string; kind: 'session' | 'plain' }[] = []
+  const ranges: { start: number; end: number; label: string; appearance?: ReferenceIconKind }[] = []
   for (const rawLabel of [...new Set(sessionLabels)].sort((a, b) => b.length - a.length)) {
     const label = `@${rawLabel}`
     let start = text.indexOf(label)
     while (start >= 0) {
-      ranges.push({ start, end: start + label.length, label, kind: 'session' })
+      ranges.push({ start, end: start + label.length, label, appearance: 'session' })
       start = text.indexOf(label, start + label.length)
     }
   }
-  const re = /(^|\s)(\/[\w-]+|@"[^"\n]+"|@[^\s]+)/gu
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    const tokenStart = m.index + (m[1]?.length ?? 0)
-    const rawLabel = m[2] ?? ''
-    const label = rawLabel.startsWith('@"')
-      ? rawLabel
-      : rawLabel.replace(/[.,;:!?，。；：！？]+$/gu, '')
+  for (const range of scanTextRefs(text)) {
+    const label = text.slice(range.start, range.end).replace(TRAILING_PUNCT_RE, '')
     if (label.length <= 1) continue
-    ranges.push({ start: tokenStart, end: tokenStart + label.length, label, kind: 'plain' })
+    ranges.push({ start: range.start, end: range.start + label.length, label, appearance: range.appearance })
+  }
+  SLASH_CHIP_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = SLASH_CHIP_RE.exec(text)) !== null) {
+    const label = m[2] ?? ''
+    ranges.push({ start: m.index + (m[1]?.length ?? 0), end: m.index + m[0].length, label })
   }
   ranges.sort((a, b) => a.start - b.start
-    || (a.kind === b.kind ? b.end - a.end : a.kind === 'session' ? -1 : 1))
+    || (a.appearance === b.appearance ? b.end - a.end : a.appearance === 'session' ? -1 : 1))
   const parts: ReactNode[] = []
   let cursor = 0
   for (const range of ranges) {
     if (range.start < cursor) continue
-    const { start: tokenStart, end, label, kind } = range
+    const { start: tokenStart, end, label, appearance } = range
     if (tokenStart > cursor) parts.push(<MessageText key={cursor} text={text.slice(cursor, tokenStart)} />)
-    const referenceKind = kind === 'session'
-      ? 'session'
-      : label.startsWith('@')
-        ? label.endsWith('/') ? 'folder' : 'file'
-        : undefined
-    const displayLabel = referenceKind === undefined
+    const displayLabel = appearance === undefined
       ? label
-      : referenceKind === 'session'
+      : appearance === 'session'
         ? label.slice(1)
         : label.slice(1).replace(/^"|"$/gu, '').split(/[\\/]/u).filter(Boolean).at(-1) ?? label.slice(1)
     parts.push(
       <span
         key={tokenStart}
         className={css.refChip}
-        data-ref-chip={referenceKind ?? 'skill'}
+        data-ref-chip={appearance ?? 'skill'}
         title={label}
       >
-        {referenceKind !== undefined && (
-          <ReferenceIcon kind={referenceKind} size={16} className={css.refIcon} />
+        {appearance !== undefined && (
+          <ReferenceIcon kind={appearance} size={16} className={css.refIcon} />
         )}
-        {displayLabel}
+        <span className={css.refLabel}>{displayLabel}</span>
       </span>,
     )
     cursor = end
@@ -372,13 +380,14 @@ function UserStyleBubble({
  * @param props - Pending message content and conversation translator.
  * @returns the pending steering bubble.
  */
-export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, steer = false, t }: {
+export function PendingSteeringBubble({ content, previewAttachments, renderMessageImages, renderMessageFiles, steer = false, onWithdraw, t }: {
   content: readonly unknown[]
   /** Local echo previews replacing the content-derived attachment sequence. */
   previewAttachments?: readonly PresentedAttachment[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   steer?: boolean
+  onWithdraw?: (() => void) | undefined
   t: ChatViewSlotProps['t']
 }): ReactNode {
   return (
@@ -395,6 +404,7 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
           clock="start"
           className={css.actions}
           t={t}
+          onWithdraw={onWithdraw}
         />
       )}
     />
@@ -409,11 +419,12 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
  * @param props - the session snapshot's pending submission and render seats.
  * @returns the echoed user bubble.
  */
-export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, steer = false, t }: {
+export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, steer = false, onWithdraw, t }: {
   submission: PendingSubmission
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   steer?: boolean
+  onWithdraw?: (() => void) | undefined
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const content = useMemo(
@@ -440,6 +451,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
           clock="start"
           className={css.actions}
           t={t}
+          onWithdraw={onWithdraw}
         />
       )}
     />
@@ -448,17 +460,34 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, editAt, deleteAt, renderMessageImages, renderMessageFiles, useSession, t,
+  node, editAt, deleteAt, withdrawSteer, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
-  const pendingSteer = useSession(s => durableSteerPending(
-    node.kind,
-    s.running,
-    node.location,
-    data.time,
-    hasOpenTurn(s.chat.timeline),
-    runningTurnStartTime(s.chat.timeline),
-  ))
+  const pendingAdmitId = useSession((s) => {
+    const rpcId = data.source !== null && typeof data.source === 'object' && 'rpcId' in data.source
+      ? data.source.rpcId
+      : undefined
+    const messageId = 'messageId' in data ? data.messageId : undefined
+    return s.queue.find(row => row.placement === 'steering' && (
+      (typeof rpcId === 'string' && row.rpcId === rpcId)
+      || (typeof messageId === 'string' && (row.messageId === messageId || row.id === messageId))
+    ))?.id
+  })
+  const pendingSteer = useSession(s => {
+    if (!s.running) return false
+    const latestTurn = latestTurnNumber(s.chat.timeline)
+    const ids = collectUserShapedSeqs(s.chat.nodes.values(), latestTurn)
+    const id = data.seq
+    return durableSteerPending(
+      node.kind,
+      node.location,
+      id,
+      true,
+      ids,
+      hasAgentWorkBefore(s.chat.nodes.values(), id, latestTurn),
+      latestTurn,
+    )
+  })
   const text = useMemo(() => {
     const parts: string[] = []
     for (const block of data.content) {
@@ -477,7 +506,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      steer={pendingSteer}
+      steer={pendingSteer || pendingAdmitId !== undefined}
       editing={editing}
       t={t}
       actions={copyText => (
@@ -487,8 +516,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           clock="start"
           className={css.actions}
           t={t}
-          onEdit={canEdit && !editing ? () => { editAt(data.seq, text) } : undefined}
-          onDelete={editing ? undefined : () => { deleteAt(data.seq) }}
+          onEdit={pendingSteer || pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
+          onDelete={pendingSteer || pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
+          onWithdraw={pendingAdmitId === undefined ? undefined : () => { withdrawSteer(pendingAdmitId) }}
         />
       )}
     />

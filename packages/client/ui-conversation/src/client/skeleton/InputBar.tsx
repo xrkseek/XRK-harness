@@ -39,6 +39,7 @@ import {
   subscribeResubmitIntent,
 } from '../chat/resubmit-intent.ts'
 import { isComposerAgentActive } from '../chat/flow-waiting.ts'
+import { composerDeliveryBusy, collectUserShapedSeqs, latestTurnNumber } from '../chat/pending-input-chrome.ts'
 import {
   focusDraftEditor, installDraftFilePicker, installDraftKeymap, installDraftWheel,
   keepDraftFocus, revealDraftSelection,
@@ -69,11 +70,12 @@ export const InputBar = memo(function InputBar({
   const fileUploads = useFileUploads(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
-  const running = useSession(s => s.running) ?? false
-  const followSteer = useSession(s =>
-    s.queue.some(row => row.placement === 'steering')
-    || s.pendingSubmissions.some(echo => echo.placement === 'steering'),
-  )
+  // Delivery / 插队 follow Host `running` only (same latch as Stop). Tools
+  // still draining after cancel must not keep busy-Enter / 插队中 painted.
+  const deliveryBusy = useSession(s => composerDeliveryBusy(
+    s.running ?? false,
+    collectUserShapedSeqs([...s.chat.nodes.values()], latestTurnNumber(s.chat.timeline)),
+  ))
   // Boolean latch — do not select `partial` itself (new identity every chunk).
   const agentActive = useSession(s => isComposerAgentActive({
     running: s.running ?? false,
@@ -92,7 +94,10 @@ export const InputBar = memo(function InputBar({
   const cancelEditStaging = useCallback(() => {
     clearEditStaging()
     inputActions?.setDraft('')
-    keyboard?.focus()
+    const ed = keyboard?.editor
+    if (!ed) return
+    ed.getRootElement()?.focus({ preventScroll: true })
+    ed.focus()
   }, [inputActions, keyboard])
 
   // Escape exits edit staging (a11y: every transient mode needs a keyboard exit).
@@ -123,13 +128,8 @@ export const InputBar = memo(function InputBar({
     [draftImages, input?.imageIds],
   )
 
-  // Empty draft ends staging — no silent "edit mode" with nothing to send.
-  useEffect(() => {
-    if (!stagingActive) return
-    if (draft.trim() !== '') return
-    if (attachments.length > 0) return
-    clearEditStaging()
-  }, [stagingActive, draft, attachments.length])
+  // Emptying the draft keeps edit staging (rewrite from scratch). Exit via
+  // Escape or the staging cancel control — not by deleting the seeded text.
   const empty = draft.trim() === '' && attachments.length === 0
   const filesNotReady = attachments.some((attachment) => {
     if (attachment.kind !== 'file') return false
@@ -214,18 +214,18 @@ export const InputBar = memo(function InputBar({
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const editorDisabled = removed || (locked && !workspaceTrigger)
   const editable = live && !locked && !machineBusy
-  // Steer / busy-Enter follow Host `running` (open next-step window). After
-  // cancel the primary is Send; do not advertise steer chords the Host will
-  // reject as steer-unavailable.
+  // Steer / busy-Enter follow Host `running`. After cancel the primary is
+  // Send; do not advertise steer chords the Host will reject as steer-unavailable.
   // Continuable children share busy-Enter Queue/Steer and whole-queue flush;
-  // one-shot stays Queue-only and never exposes interrupt chrome.
+  // one-shot stays Queue-only. One-shot still gets a side Stop while running
+  // (cannot message/steer, but can cancel a hung tool).
   const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
-  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && steeringAvailable
+  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && deliveryBusy && steeringAvailable
     && (input?.queue.some(row => row.placement === 'queued') ?? false)
   // Chord hints only when a non-empty draft can actually submit — empty Enter
   // is a no-op; whole-queue flush is Cmd/Ctrl+Enter only.
-  const busyEnterHint = running && steeringAvailable && !canSteerQueue && !disabled && !empty
-    ? resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable, followSteer)
+  const busyEnterHint = deliveryBusy && steeringAvailable && !canSteerQueue && !disabled && !empty
+    ? resolveSubmitMode(busyEnter, deliveryBusy, 'enter', steeringAvailable)
     : null
 
   useEffect(() => {
@@ -385,11 +385,11 @@ export const InputBar = memo(function InputBar({
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter, followSteer,
+    locked, machineBusy, canSteerQueue, running: deliveryBusy, steeringAvailable, busyEnter,
     intakeFiles: intakeImages, uploadsPending: filesNotReady, showToast, t, canAcceptDrop,
   })
   gate.current = {
-    locked, machineBusy, canSteerQueue, running, steeringAvailable, busyEnter, followSteer,
+    locked, machineBusy, canSteerQueue, running: deliveryBusy, steeringAvailable, busyEnter,
     intakeFiles: intakeImages, uploadsPending: filesNotReady, showToast, t, canAcceptDrop,
   }
 
@@ -445,16 +445,16 @@ export const InputBar = memo(function InputBar({
   // the host cascades that cancel to the child's own children).
   const primaryStops = agentActive && subagent === null && (empty || blocked !== undefined)
   const interruptible = agentActive && subagent !== null
-  const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable, followSteer)
+  const primarySubmitMode = resolveSubmitMode(busyEnter, deliveryBusy, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops
     ? t('input.stop')
-    : running && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
+    : deliveryBusy && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
       ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
       : t('input.send')
   const primaryHint = primaryStops
     ? t('input.stop')
-    : running && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
+    : deliveryBusy && steeringAvailable && !disabled && !filesNotReady && plainMessageDraft
       ? t(primarySubmitMode === 'steer' ? 'input.send.steer.hint' : 'input.send.queue.hint')
       : t('input.send')
   const onPrimary = (): void => {
@@ -601,7 +601,7 @@ export const InputBar = memo(function InputBar({
         />
         <div className={css.row}>
           <div className={css.tools}>
-            <Tooltip label={t('input.commands')} side="top" delayMs={500}>
+            <Tooltip label={t('input.commands')} side="top">
               <button
                 type="button"
                 className={css.add}
@@ -634,7 +634,7 @@ export const InputBar = memo(function InputBar({
             {renderSlot('conversation.input.model', { locked: modelSeatLocked })}
             <ContextMeter useProjection={useProjection} t={t} />
             {interruptible && (
-              <Tooltip label={t('input.stop')} side="top" delayMs={500}>
+              <Tooltip label={t('input.stop')} side="top">
                 <button
                   type="button"
                   className={css.primary}
@@ -649,7 +649,7 @@ export const InputBar = memo(function InputBar({
                 </button>
               </Tooltip>
             )}
-            <Tooltip label={primaryHint} side="top" delayMs={500}>
+            <Tooltip label={primaryHint} side="top">
               <button
                 type="button"
                 className={css.primary}

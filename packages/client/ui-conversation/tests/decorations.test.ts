@@ -39,6 +39,14 @@ describe('decorations: scanTextRefs', () => {
     ])
   })
 
+  it('treats a quoted path as an explicit file reference, extension or not', () => {
+    expect(scanTextRefs('look at @"Dockerfile" please', new Map())).toEqual([
+      { start: 8, end: 21, trigger: '@', appearance: 'file' },
+    ])
+    // The bare twin stays prose: only quoting says "this is a path".
+    expect(scanTextRefs('look at @Dockerfile please', new Map())).toEqual([])
+  })
+
   it('does not keep painting an unfinished unquoted path while typing at EOL', () => {
     expect(scanTextRefs('@extensions/dsh-compat', new Map())).toEqual([])
     expect(scanTextRefs('@extensions/dsh-compat11', new Map())).toEqual([])

@@ -307,6 +307,30 @@ describe('WorkspaceRuntime', () => {
     ])
   })
 
+  it('does not reuse a leftover blank when New Session starts from a live chat', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha', [sid('s-live'), sid('s-blank')])] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        { sessionId: sid('s-live'), updatedAt: 3, running: false, blank: false, cwd: '/w/alpha' },
+        { sessionId: sid('s-blank'), updatedAt: 2, running: false, blank: true, cwd: '/w/alpha' },
+      ] as never[],
+    }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+    sessions.open(sid('s-live'))
+    api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-fresh') }))
+    await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-fresh')
+    expect(api.callsOf('session.create')).toEqual([
+      { workspaceId: 'alpha', inheritFrom: sid('s-live') },
+    ])
+  })
+
   it('connectWorkspace does not reuse a blank subagent child', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()

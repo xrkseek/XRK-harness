@@ -562,6 +562,9 @@ export function apply(ctx: Context): void {
         deleteAt: (seq) => {
           void deleteFromSeq(sessions, sessionId, seq).catch(() => undefined)
         },
+        withdrawSteer: (itemId) => {
+          void scoped.updateQueue(itemId, { kind: 'remove' }).catch(() => undefined)
+        },
       }
     },
   }, ChatView)

@@ -6,6 +6,24 @@ import type { InboxTarget } from '@xrkseek/xrk-agent/types'
 
 interface InboxIdentity {
   readonly id: string
+  /** Prompt echo id (Face `user/message` stamps it on promote). */
+  readonly source?: { readonly rpcId?: unknown }
+}
+
+/**
+ * Durable-identity keys for one transient inbox occurrence.
+ *
+ * The Host queue row is keyed by `admitId`, but the promoted `user/message`
+ * carries a freshly minted `messageId` (`umsg_<uuid>`) and echoes the *prompt
+ * rpcId* instead. Matching on `id` alone therefore never recognized a steer
+ * claim, so a durable steering row always rendered as an ordinary user
+ * message. Both keys must index the claimed set.
+ */
+function identityKeys(identity: InboxIdentity): readonly string[] {
+  const rpcId = identity.source?.rpcId
+  return typeof rpcId === 'string' && rpcId !== '' && rpcId !== identity.id
+    ? [identity.id, rpcId]
+    : [identity.id]
 }
 
 interface InboxSplice {
@@ -29,9 +47,17 @@ function applySplice(
   const pending = [...(previous?.state.pending ?? [])]
   const claimed = new Set(previous?.state.claimed ?? [])
   const removed = pending.splice(splice.start, splice.removedCount ?? 0, ...splice.inserted)
-  for (const identity of splice.inserted) claimed.delete(identity.id)
+  for (const identity of splice.inserted) {
+    for (const key of identityKeys(identity)) claimed.delete(key)
+  }
   if (splice.target === 'next-step' && splice.outcome !== 'canceled') {
-    for (const identity of removed) claimed.add(identity.id)
+    // Index the claim under every durable key: the Host queue row answers to
+    // `admitId`, the promoted `user/message` to its minted `messageId` /
+    // echoed prompt rpcId. A claim keyed under only one of them is invisible
+    // to the message classifier and silently degrades to an ordinary send.
+    for (const identity of removed) {
+      for (const key of identityKeys(identity)) claimed.add(key)
+    }
   }
   return { pending, claimed }
 }

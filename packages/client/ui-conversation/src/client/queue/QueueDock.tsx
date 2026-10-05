@@ -516,7 +516,7 @@ function HostQueueRow({
                     event.currentTarget.value = ''
                   }}
                 />
-                <Tooltip label={t('queue.edit.attach')} side="bottom" delayMs={500}>
+                <Tooltip label={t('queue.edit.attach')} side="bottom">
                   <button
                     type="button"
                     className={css.action}
@@ -529,7 +529,7 @@ function HostQueueRow({
                     <IconPaperclipOutline16 size={14} />
                   </button>
                 </Tooltip>
-                <Tooltip label={t('queue.save')} side="bottom" delayMs={500}>
+                <Tooltip label={t('queue.save')} side="bottom">
                   <button
                     type="button"
                     className={css.action}
@@ -540,7 +540,7 @@ function HostQueueRow({
                     <IconCheckOutline16 size={14} />
                   </button>
                 </Tooltip>
-                <Tooltip label={t('queue.cancelEdit')} side="bottom" delayMs={500}>
+                <Tooltip label={t('queue.cancelEdit')} side="bottom">
                   <button
                     type="button"
                     className={css.action}
@@ -555,7 +555,7 @@ function HostQueueRow({
             )
             : (
               <>
-                <Tooltip label={t('queue.edit')} side="bottom" delayMs={500}>
+                <Tooltip label={t('queue.edit')} side="bottom">
                   <button
                     type="button"
                     className={css.action}
@@ -568,7 +568,7 @@ function HostQueueRow({
                     <IconEditOutline16 size={14} />
                   </button>
                 </Tooltip>
-                <Tooltip label={t('queue.remove')} side="bottom" delayMs={500}>
+                <Tooltip label={t('queue.remove')} side="bottom">
                   <button
                     type="button"
                     className={css.action}
@@ -588,13 +588,11 @@ function HostQueueRow({
                 <Tooltip
                   label={running ? t('queue.steer.hint') : t('queue.steer.unavailable')}
                   side="bottom"
-                  delayMs={500}
                 >
                   <button
                     type="button"
                     className={css.action}
                     aria-label={t('queue.steer')}
-                    title={running ? undefined : t('queue.steer.unavailable')}
                     disabled={busy !== null || !running}
                     onClick={() => {
                       void applyAction(

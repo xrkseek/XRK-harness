@@ -52,6 +52,11 @@ export interface SessionSummary {
    * session actually runs rather than the deployment's current default.
    */
   agentPreset?: string
+  /** Workspace 主线 label; {@link displayTitle} prefers this when present. */
+  mainline?: string
+  mainlineId?: string
+  /** Per-session 支线 caption (current work). */
+  sideline?: string
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent' | 'fork'
@@ -172,10 +177,16 @@ export function workspaceTitleOf(cwd: string): string {
 }
 
 /**
- * Display title projection: durable title, project directory basename, then
- * the raw id.
+ * Display title: 主线 when bound, else durable title (first user message),
+ * then project directory basename, then the raw id.
  */
-function displayTitleOf(title: string | undefined, cwd: string | undefined, id: SessionId): string {
+function displayTitleOf(
+  title: string | undefined,
+  cwd: string | undefined,
+  id: SessionId,
+  mainline?: string,
+): string {
+  if (mainline !== undefined && mainline !== '') return mainline
   if (title !== undefined) return title
   if (cwd !== undefined && cwd !== '') {
     const base = workspaceTitleOf(cwd)
@@ -751,7 +762,7 @@ export class SessionRuntime implements ISessions {
       ids.push(entry.sessionId)
       byId[entry.sessionId] = {
         id: entry.sessionId,
-        displayTitle: displayTitleOf(entry.title, entry.cwd, entry.sessionId),
+        displayTitle: displayTitleOf(entry.title, entry.cwd, entry.sessionId, entry.mainline),
         running: entry.running,
         ...(entry.completed ? { completed: true } : {}),
         blank: entry.blank,
@@ -768,6 +779,9 @@ export class SessionRuntime implements ISessions {
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
         ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
         ...(entry.agentPreset !== undefined ? { agentPreset: entry.agentPreset } : {}),
+        ...(entry.mainline !== undefined ? { mainline: entry.mainline } : {}),
+        ...(entry.mainlineId !== undefined ? { mainlineId: entry.mainlineId } : {}),
+        ...(entry.sideline !== undefined ? { sideline: entry.sideline } : {}),
       }
     }
     if (current !== undefined && currentAddress !== undefined) {

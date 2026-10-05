@@ -23,6 +23,10 @@ import type { DraftAttachmentId } from '../src/client/input/contract.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
+import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
+import {
+  collectUserShapedSeqs, composerDeliveryBusy, latestTurnNumber,
+} from '../src/client/chat/pending-input-chrome.ts'
 
 afterEach(cleanup)
 
@@ -78,6 +82,7 @@ interface BenchOptions {
   /** Streaming partial; keeps Stop when `running` already cleared after cancel. */
   partial?: ConversationSnapshot['partial']
   runningCalls?: ConversationSnapshot['runningCalls']
+  chat?: ConversationSnapshot['chat']
   /** Coarse wire state; `reconnecting` locks the composer. */
   connectionState?: 'connected' | 'reconnecting' | undefined
   subagent?: Exclude<ConversationSnapshot['subagent'], null>
@@ -126,6 +131,25 @@ function bench(over?: BenchOptions) {
     running: over?.running ?? false,
     partial: over?.partial ?? null,
     runningCalls: over?.runningCalls ?? [],
+    ...(over?.chat !== undefined
+      ? { chat: over.chat }
+      : over?.running === true
+        ? {
+          chat: chatSnapshotFixture({
+            nodes: [
+              {
+                kind: 'user', seq: 1, time: 1_000,
+                content: [{ type: 'text', text: 'opener' }], source: null,
+              },
+              {
+                kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1,
+                blocks: [{ kind: 'text', text: 'working' }],
+              },
+            ],
+            turnTimings: new Map([[1, { startTime: 1_000 }]]),
+          }),
+        }
+        : {}),
     subagent: over?.subagent ?? null,
     removed: over?.disabled ?? false,
     promptError: over?.promptError ?? null,
@@ -230,10 +254,15 @@ function bench(over?: BenchOptions) {
   const composerLocked = over?.disabled === true || over?.inert === true
     || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
   const plainMessageDraft = sendableDraft && !(over?.draft?.trimStart().startsWith('/') ?? false)
+  const snap = session.getSnapshot()
+  const deliveryBusy = composerDeliveryBusy(
+    snap.running,
+    collectUserShapedSeqs([...snap.chat.nodes.values()], latestTurnNumber(snap.chat.timeline)),
+  )
   const primaryLabel = primaryStops
     ? '停止生成'
-    : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插队（本轮内）' : '排队（本轮后）')
+    : deliveryBusy && steeringAvailable && !composerLocked && plainMessageDraft
+      ? (over.busyEnter === 'steer' ? '插队（本轮结束后）' : '排队（本轮后）')
       : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(
     `button[aria-label="${primaryLabel}"]`,
@@ -518,14 +547,14 @@ describe('image draft rail', () => {
 describe('Enter semantics', () => {
   it('advertises the empty-draft whole-queue steering gesture when it is available', () => {
     const { textarea } = bench({ running: true, queue: [row('q-1')], steerQueue: vi.fn() })
-    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
+    expect(textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
     // Preference does not move whole-queue flush onto plain Enter.
     expect(bench({
       running: true,
       queue: [row('q-1')],
       busyEnter: 'steer',
       steerQueue: vi.fn(),
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
   })
 
   it('advertises queue vs steer chords while the agent is running with a draftable composer', () => {
@@ -550,7 +579,7 @@ describe('Enter semantics', () => {
         parentAvailable: true,
       },
     // Continuable children share whole-queue flush, so the steer hint wins.
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
     expect(bench({
       running: true,
       queue: [row('q-1')],
@@ -576,7 +605,7 @@ describe('Enter semantics', () => {
       running: true,
       queue: [row('q-1')],
       plan: { active: true, pending: false },
-    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 插队发送全部排队消息')
+    }).textarea.getAttribute('data-placeholder')).toBe('Cmd/Ctrl+Enter 将全部排队改为插队（本轮结束后立刻答）')
   })
 
   it('an open command menu withholds the whole-queue steering gesture', () => {
@@ -715,15 +744,16 @@ describe('Enter semantics', () => {
     expect(steering.sink).not.toHaveBeenCalled()
   })
 
-  it('Enter follows an in-flight steer instead of queuing the next draft', () => {
-    const { textarea, sink } = bench({
+  it('Enter still queues while a steer is already pending when Settings is 排队', () => {
+    const { textarea, sink, button } = bench({
       running: true,
       busyEnter: 'queue',
       queue: [{ ...row('s-1'), placement: 'steering' }],
-      draft: '第二条纠偏',
+      draft: '哇',
     })
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('第二条纠偏', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('哇', [], 'queue', expect.any(AbortSignal))
   })
 
   it('draft content outranks the queue: accelerated Enter steers the draft only', () => {
@@ -827,16 +857,53 @@ describe('running and lock semantics', () => {
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
-    expect(button.getAttribute('aria-label')).toBe('插队（本轮内）')
+    expect(button.getAttribute('aria-label')).toBe('插队（本轮结束后）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
+  })
+
+  it('Send after Stop is idle even if the previous Turn has not closed', () => {
+    const { button, sink } = bench({
+      running: false,
+      draft: '停了再发',
+      chat: chatSnapshotFixture({ turnTimings: new Map([[1, { startTime: 1 }]]) }),
+    })
+    expect(button.getAttribute('aria-label')).toBe('发送消息')
+    fireEvent.click(button)
+    expect(sink).toHaveBeenCalledWith('停了再发', [], 'queue', expect.any(AbortSignal))
+  })
+
+  it('Send during inject before any user row is a normal opener', () => {
+    const { button, sink } = bench({
+      running: true,
+      draft: '在干嘛',
+      chat: chatSnapshotFixture({ turnTimings: new Map([[1, { startTime: 1 }]]) }),
+    })
+    expect(button.getAttribute('aria-label')).toBe('发送消息')
+    fireEvent.click(button)
+    expect(sink).toHaveBeenCalledWith('在干嘛', [], 'queue', expect.any(AbortSignal))
+  })
+
+  it('Send is busy after an opener that precedes turn/start', () => {
+    const { button } = bench({
+      running: true,
+      draft: '111',
+      chat: chatSnapshotFixture({
+        nodes: [{
+          kind: 'user', seq: 1, time: 500,
+          content: [{ type: 'text', text: '在干嘛' }], source: null,
+        }],
+        turnTimings: new Map([[1, { startTime: 2_000 }]]),
+      }),
+    })
+    expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
   })
 
   it('running Send relabels when the busy-state preference changes live', () => {
     const { button, busyEnter, sink } = bench({ running: true, draft: '跟随设置' })
     expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
     act(() => { busyEnter.set('steer') })
-    expect(button.getAttribute('aria-label')).toBe('插队（本轮内）')
+    expect(button.getAttribute('aria-label')).toBe('插队（本轮结束后）')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
   })
@@ -984,6 +1051,26 @@ describe('running and lock semantics', () => {
     const accelerated = bench({ running: true, busyEnter: 'steer', draft: 'accelerated', subagent })
     fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
     expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'queue', expect.any(AbortSignal))
+  })
+
+  it('after Stop, draining tools do not keep busy-Enter labels', () => {
+    const { button, interruptButton } = bench({
+      running: false,
+      draft: 'follow-up',
+      runningCalls: [{
+        callId: 'c1', name: 'bash', argsRaw: '{}', turn: 1, step: 1, time: 1_000,
+        callView: null, subCalls: [],
+      }],
+      chat: chatSnapshotFixture({
+        nodes: [{
+          kind: 'user', seq: 1, time: 1_000,
+          content: [{ type: 'text', text: 'opener' }], source: null,
+        }],
+        turnTimings: new Map([[1, { startTime: 1_000 }]]),
+      }),
+    })
+    expect(interruptButton).toBeNull()
+    expect(button.getAttribute('aria-label')).toBe('发送消息')
   })
 
   it('keeps both running one-shot Enter gestures on Queue transport', () => {

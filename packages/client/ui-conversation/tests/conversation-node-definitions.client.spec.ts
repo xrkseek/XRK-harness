@@ -232,6 +232,88 @@ describe('built-in conversation node Definitions', () => {
     expect(interruptedToolOnly?.visibility).toBe('visible')
     expect(interruptedToolOnly?.data).toMatchObject({ status: 'interrupted' })
 
+    // Stop after a tool-only finalize: Host already wrote assistant/message
+    // without `interrupted`, then turn/end aborted. Still paint 「已停止」.
+    const stopAfterToolValue = assembler([
+      at(60, 'turn/start', { turn: 7 }),
+      at(61, 'step/start', { turn: 7, step: 1 }),
+      at(62, 'assistant/message', {
+        turn: 7,
+        step: 1,
+        message: {
+          ...assistantMessage('assistant-tool-stop', ''),
+          content: [
+            { type: 'reasoning', text: '用户只发了一个测试' },
+            { type: 'tool-call', id: 'call-stop', name: 'presence_set', arguments: '{}' },
+          ],
+        },
+      }, { surfaceOp: 'append' }),
+      at(63, 'step/end', { turn: 7, step: 1 }),
+      at(64, 'turn/end', {
+        turn: 7,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
+    ])
+    const stopAfterTool = node(snapshot(stopAfterToolValue), 'assistant-step')
+    expect(stopAfterTool?.data).toMatchObject({ status: 'interrupted' })
+    expect((stopAfterTool?.data as AssistantChatData).finalNode?.interrupted).toBe(true)
+    expect(node(snapshot(stopAfterToolValue), 'turn-tail')).toBeDefined()
+
+    const stopInterruptedKind = assembler([
+      at(65, 'turn/start', { turn: 8 }),
+      at(66, 'step/start', { turn: 8, step: 1 }),
+      at(67, 'assistant/message', {
+        turn: 8,
+        step: 1,
+        message: {
+          ...assistantMessage('assistant-tool-interrupted', ''),
+          content: [{ type: 'tool-call', id: 'call-int', name: 'read', arguments: '{}' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(68, 'step/end', { turn: 8, step: 1 }),
+      at(69, 'turn/end', {
+        turn: 8,
+        reason: { kind: 'interrupted', reason: { kind: 'user' } },
+      }),
+    ])
+    expect(node(snapshot(stopInterruptedKind), 'assistant-step')?.data).toMatchObject({
+      status: 'interrupted',
+    })
+    expect(node(snapshot(stopInterruptedKind), 'turn-tail')).toBeDefined()
+
+    const emptyAbort = assembler([
+      at(70, 'turn/start', { turn: 9 }),
+      at(71, 'turn/end', {
+        turn: 9,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
+    ])
+    expect(node(snapshot(emptyAbort), 'assistant-step')).toBeUndefined()
+    expect(node(snapshot(emptyAbort), 'turn-tail')).toBeDefined()
+
+    const errorAfterTool = assembler([
+      at(72, 'turn/start', { turn: 10 }),
+      at(73, 'step/start', { turn: 10, step: 1 }),
+      at(74, 'assistant/message', {
+        turn: 10,
+        step: 1,
+        message: {
+          ...assistantMessage('assistant-tool-error', ''),
+          content: [{ type: 'tool-call', id: 'call-err', name: 'read', arguments: '{}' }],
+        },
+      }, { surfaceOp: 'append' }),
+      at(75, 'step/end', { turn: 10, step: 1 }),
+      at(76, 'turn/end', {
+        turn: 10,
+        reason: { kind: 'error', error: { code: 'TRANSPORT', message: 'failed' } },
+      }),
+    ])
+    const errorToolStep = node(snapshot(errorAfterTool), 'assistant-step')
+    expect(errorToolStep?.data).not.toMatchObject({ status: 'interrupted' })
+    expect((errorToolStep?.data as AssistantChatData | undefined)?.finalNode?.interrupted).not.toBe(true)
+    expect(node(snapshot(errorAfterTool), 'turn-error')).toBeDefined()
+    expect(node(snapshot(errorAfterTool), 'turn-tail')).toBeDefined()
+
     const retryTimingValue = assembler([
       at(50, 'turn/start', { turn: 6 }),
       at(51, 'step/start', { turn: 6, step: 1 }),
@@ -512,36 +594,156 @@ describe('built-in conversation node Definitions', () => {
     expect(node(snapshot(value), 'steering')).toBeUndefined()
   })
 
-  it('orders claimed steering after the finalized Turn tail', () => {
-    const steering = textMessage('steer-after-answer', 'change direction')
+  it('classifies a same-turn claim after a closed step as steering', () => {
+    const follow = {
+      ...textMessage('steer-next-step', 'change direction'),
+      source: { kind: 'user', rpcId: 'req-steer-bound' },
+    }
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
       at(3, 'assistant/message', {
         turn: 1,
         step: 1,
-        message: assistantMessage('assistant-before-steering', 'initial answer'),
+        message: assistantMessage('assistant-tooling', 'running a tool'),
       }, { surfaceOp: 'append' }),
-      at(4, 'agent/inbox/spliced', {
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'agent/inbox/spliced', {
         target: 'next-step',
         start: 0,
-        inserted: [steering],
+        inserted: [follow],
       }),
-      at(5, 'agent/inbox/spliced', {
+      at(6, 'agent/inbox/spliced', {
         target: 'next-step',
         start: 0,
         removedCount: 1,
         inserted: [],
       }),
-      at(6, 'user/message', steering, { surfaceOp: 'append' }),
-      at(7, 'step/end', { turn: 1, step: 1 }),
-      at(8, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(7, 'user/message', follow, { surfaceOp: 'append' }),
+      at(8, 'step/start', { turn: 1, step: 2 }),
+    ])
+
+    expect(node(snapshot(value), 'user')).toBeUndefined()
+    expect(node(snapshot(value), 'steering')?.data).toMatchObject({
+      kind: 'steering',
+      messageId: 'steer-next-step',
+    })
+  })
+
+  it('classifies a promoted steer by echoed rpcId when the durable id is freshly minted', () => {
+    // Production shape: the transient next-step row is keyed by `admitId`,
+    // while the promoted `user/message` carries a fresh `umsg_<uuid>` and the
+    // Host-stamped prompt rpcId. Matching the claim on `data.id` alone finds
+    // nothing here, so the steer silently rendered as an ordinary send.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        inserted: [{
+          id: 'admit_steer-1',
+          role: 'user',
+          content: [{ type: 'text', text: 'change direction' }],
+          source: { kind: 'user', rpcId: 'req-steer-1' },
+        }],
+      }),
+      at(4, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(5, 'user/message', {
+        id: 'umsg_2f0c9a1e',
+        role: 'user',
+        content: [{ type: 'text', text: 'change direction' }],
+        source: { kind: 'user', rpcId: 'req-steer-1' },
+      }, { surfaceOp: 'append' }),
+    ])
+
+    expect(node(snapshot(value), 'user')).toBeUndefined()
+    expect(node(snapshot(value), 'steering')?.data).toMatchObject({
+      kind: 'steering',
+      messageId: 'umsg_2f0c9a1e',
+    })
+  })
+
+  it('keeps an unclaimed next-turn admit an ordinary user send', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'agent/inbox/spliced', {
+        target: 'next-turn',
+        start: 0,
+        inserted: [{
+          id: 'admit_queue-1',
+          role: 'user',
+          content: [{ type: 'text', text: 'next question' }],
+          source: { kind: 'user', rpcId: 'req-queue-1' },
+        }],
+      }),
+      at(4, 'agent/inbox/spliced', {
+        target: 'next-turn',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(5, 'user/message', {
+        id: 'umsg_queue-1',
+        role: 'user',
+        content: [{ type: 'text', text: 'next question' }],
+        source: { kind: 'user', rpcId: 'req-queue-1' },
+      }, { surfaceOp: 'append' }),
+    ])
+
+    expect(node(snapshot(value), 'user')?.data).toMatchObject({ kind: 'user' })
+    expect(node(snapshot(value), 'steering')).toBeUndefined()
+  })
+
+  it('keeps a closed-turn steer in event order when it landed before turn/end', () => {
+    const steering = textMessage('steer-before-end', '喵喵')
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('opener-1', '在干嘛'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('assistant-turn-1', 'thinking'),
+      }, { surfaceOp: 'append' }),
+      at(5, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        inserted: [steering],
+      }),
+      at(6, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(7, 'user/message', steering, { surfaceOp: 'append' }),
+      at(8, 'step/end', { turn: 1, step: 1 }),
+      at(9, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(10, 'turn/start', { turn: 2 }),
+      at(11, 'step/start', { turn: 2, step: 1 }),
+      at(12, 'assistant/message', {
+        turn: 2,
+        step: 1,
+        message: assistantMessage('assistant-turn-2', 'reply to 喵喵'),
+      }, { surfaceOp: 'append' }),
+      at(13, 'step/end', { turn: 2, step: 1 }),
+      at(14, 'turn/end', { turn: 2, reason: { kind: 'completed' } }),
     ])
 
     const current = snapshot(value)
     const steeringNode = node(current, 'steering')
+    const second = current.nodes.values().find(candidate => candidate.kind === 'assistant-step'
+      && (candidate.data as { readonly turn?: number }).turn === 2)
     expect(steeringNode).toBeDefined()
-    expect(current.locations.getTurn(1).at(-1)).toBe(steeringNode?.key)
+    expect(steeringNode?.anchorSeq).toBe(7)
+    expect(second?.anchorSeq).toBeGreaterThan(steeringNode?.anchorSeq ?? Number.POSITIVE_INFINITY)
   })
 
   it('classifies appended producer context from durable source metadata', () => {
@@ -1009,6 +1211,7 @@ describe('built-in conversation node Definitions', () => {
       message: 'failed',
       code: 'TRANSPORT',
     })
+    expect(node(snapshot(value), 'turn-tail')).toBeDefined()
   })
 
   it('keeps a single turn-tail when Stop cancels an in-flight llm/retry after file diffs', () => {
@@ -1326,5 +1529,48 @@ describe('built-in conversation node Definitions', () => {
     ])
     const items = snapshot(value).navigation.items()
     expect(items[0]?.prompt.length).toBe(160)
+  })
+
+  it('does not project a Host turn as a 轮次 when it only has 插话', () => {
+    const steer = textMessage('steer-only', 'nudge')
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('user-1', 'open'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'ok' },
+      }),
+      at(5, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        inserted: [steer],
+      }),
+      at(6, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(7, 'user/message', steer, { surfaceOp: 'append' }),
+      at(8, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(9, 'turn/start', { turn: 2 }),
+      at(10, 'step/start', { turn: 2, step: 1 }),
+      at(11, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        inserted: [textMessage('steer-next', 'again')],
+      }),
+      at(12, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+      }),
+      at(13, 'user/message', textMessage('steer-next', 'again'), { surfaceOp: 'append' }),
+    ])
+    expect(snapshot(value).nodes.values().filter(candidate => candidate.kind === 'steering')).toHaveLength(2)
+    expect(snapshot(value).navigation.items().map(item => item.turn)).toEqual([1])
   })
 })

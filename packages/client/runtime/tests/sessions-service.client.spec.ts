@@ -36,6 +36,8 @@ type FeedRow = {
   running?: boolean
   blank?: boolean
   agentPreset?: string
+  mainline?: string
+  sideline?: string
 }
 
 async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
@@ -46,6 +48,8 @@ async function feedList(b: Bench, rows: FeedRow[]): Promise<void> {
       ...(r.parentId !== undefined ? { parentSessionId: sid(r.parentId) } : {}),
       ...(r.origin !== undefined ? { origin: r.origin } : {}),
       ...(r.agentPreset !== undefined ? { agentPreset: r.agentPreset } : {}),
+      ...(r.mainline !== undefined ? { mainline: r.mainline } : {}),
+      ...(r.sideline !== undefined ? { sideline: r.sideline } : {}),
     })),
   }) as never)
   await b.svc.refresh()
@@ -70,6 +74,69 @@ describe('list store projection', () => {
       displayTitle: 's2', parentId: 's1', origin: 'subagent', running: true,
     })
     expect(state.byId[sid('s2')]?.title).toBeUndefined()
+  })
+
+  it('keeps the first-message title until a 主线 is set, then prefers 主线', async () => {
+    const b = bench()
+    b.svc.handleMuxEnvelope({
+      rpcId: 'title' as never,
+      payload: { type: 'session/projection', sessionId: sid('s1'), key: 'title', value: '你看看还有必要修吗', seq: 2 } as never,
+    })
+    await feedList(b, [{ id: 's1', sideline: '梳理调用链' }])
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]).toMatchObject({
+      title: '你看看还有必要修吗',
+      displayTitle: '你看看还有必要修吗',
+      sideline: '梳理调用链',
+    })
+    await feedList(b, [{ id: 's1', mainline: '修发行说明', sideline: '梳理调用链' }])
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]).toMatchObject({
+      title: '你看看还有必要修吗',
+      displayTitle: '修发行说明',
+      mainline: '修发行说明',
+      sideline: '梳理调用链',
+    })
+  })
+
+  it('applies host/session-thread so displayTitle follows a live 主线 upsert', async () => {
+    const b = bench()
+    b.svc.handleMuxEnvelope({
+      rpcId: 'title' as never,
+      payload: { type: 'session/projection', sessionId: sid('s1'), key: 'title', value: '设置主线我爱你', seq: 2 } as never,
+    })
+    await feedList(b, [{ id: 's1' }])
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]?.displayTitle).toBe('设置主线我爱你')
+
+    b.svc.handleHostEnvelope({
+      rpcId: 'th1' as never,
+      payload: {
+        type: 'host/session-thread',
+        sessionId: sid('s1'),
+        bound: true,
+        mainline: '被讨厌的 AI 售后部',
+        mainlineId: 'th_abc',
+      } as never,
+    })
+    await Promise.resolve()
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]).toMatchObject({
+      title: '设置主线我爱你',
+      displayTitle: '被讨厌的 AI 售后部',
+      mainline: '被讨厌的 AI 售后部',
+      mainlineId: 'th_abc',
+    })
+
+    b.svc.handleHostEnvelope({
+      rpcId: 'th2' as never,
+      payload: {
+        type: 'host/session-thread',
+        sessionId: sid('s1'),
+        bound: false,
+      } as never,
+    })
+    await Promise.resolve()
+    const after = b.svc.list.getSnapshot().byId[sid('s1')]
+    expect(after?.displayTitle).toBe('设置主线我爱你')
+    expect(after?.mainline).toBeUndefined()
+    expect(after?.mainlineId).toBeUndefined()
   })
 
   it('reprojects a blank session whose composition switched and nothing else moved', async () => {

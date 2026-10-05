@@ -7,3 +7,14 @@
 .actions {
   margin-left: -6px;
 }
+
+/* Same quiet marker as AssistantMarkdown.stopped — Stop / cut with no text. */
+.stopped {
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+}

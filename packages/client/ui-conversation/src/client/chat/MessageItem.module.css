@@ -83,6 +83,7 @@
   font-weight: 500;
   line-height: 16px;
   letter-spacing: 0.02em;
+  contain: layout style;
 }
 
 .pendingSteerBadge::before {
@@ -91,13 +92,13 @@
   border-radius: 50%;
   background: currentColor;
   content: '';
-  animation: pendingSteerPulse 1.4s ease-in-out infinite;
+  animation: pendingSteerPulse 1.2s ease-in-out infinite;
 }
 
 @keyframes pendingSteerPulse {
   0%,
-  100% { opacity: 0.35; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 
 /* Inset rings: `.flowItem { content-visibility: auto }` paint-contains
@@ -371,12 +372,15 @@
 }
 
 /* Inline references use domain glyphs and business-color text without another
-   container inside the user bubble. */
+   container inside the user bubble. The bubble is capped by `.userStack`
+   (525px / 82%) and does not clip, so a long path or command label has to
+   yield here or it paints past the rounded fill. */
 .refChip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin: 0 2px;
+  max-width: 100%;
   color: var(--dsw-alias-state-business-primary);
   font-weight: 500;
   white-space: nowrap;
@@ -385,4 +389,12 @@
 
 .refIcon {
   flex: none;
+}
+
+/* Shrinkable middle: the icon keeps its size, the label takes the ellipsis. */
+.refLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

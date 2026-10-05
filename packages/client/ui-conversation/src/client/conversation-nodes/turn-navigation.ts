@@ -48,11 +48,11 @@ export function sameTurnNavigationItem(
 }
 
 /**
- * Project one loaded Turn into its rail item.
- * @param turn - Turn number the item addresses.
- * @param locations - live Location index supplying the Turn's node keys.
- * @param nodes - live Chat node store.
- * @returns the item, or undefined when the Turn has no visible loaded node.
+ * Project one loaded Host turn into a 轮次 rail item.
+ *
+ * 轮次 is not Host `turn`. A 轮次 exists only when this turn has an opening
+ * `user` message. 插话 (`steering`) never opens a 轮次, even if it is the
+ * only human row in that Host turn.
  */
 export function turnNavigationItem(
   turn: number,
@@ -63,13 +63,12 @@ export function turnNavigationItem(
     .map(key => nodes.get(key))
     .filter((node): node is ChatNode => node !== undefined && node.visibility === 'visible')
   const user = loaded.find(node => node.kind === 'user')
-  const anchor = user ?? loaded[0]
-  if (anchor === undefined) return undefined
+  if (user === undefined) return undefined
   const response = loaded.findLast(node => responseText(node) !== '')
   return {
     turn,
-    anchorKey: anchor.key,
-    prompt: user === undefined ? '' : promptText(user),
+    anchorKey: user.key,
+    prompt: promptText(user),
     response: response === undefined ? '' : responseText(response),
   }
 }

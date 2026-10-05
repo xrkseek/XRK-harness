@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // ConversationController scope addressing over the runtime's real scope tag:
 // TestSessions mints tagged scopes through the production createScope, so the
 // service's scopeOf/binding path runs against production resolution (no local
@@ -103,8 +103,7 @@ describe('ConversationController', () => {
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: { code: 'queue-item-not-found', message: 'claimed', details: {} },
     } as never)
-    await expect(b.scoped.updateQueue('item-3' as never, { kind: 'remove' }))
-      .rejects.toThrow('conversation.updateQueue failed: queue-item-not-found: claimed')
+    await expect(b.scoped.updateQueue('item-3' as never, { kind: 'remove' })).resolves.toBe('ok')
     await b.runtime.dispose()
   })
 

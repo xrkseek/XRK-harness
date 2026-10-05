@@ -120,7 +120,7 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
   useEffect(syncScrollState, [items.length])
 
   useLayoutEffect(() => {
-    if (items.length < 2) {
+    if (items.length === 0) {
       setRailHost(undefined)
       return
     }
@@ -148,10 +148,19 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
     syncScrollState()
   }, [activeTurn, items])
 
-  if (items.length < 2) return null
+  // One turn still gets the rail: a single-turn session was the "why does some
+  // of my sessions have no rail" report — the mark doubles as the running-turn
+  // indicator there, and an absent rail reads as a broken control rather than
+  // as "nothing to navigate".
+  if (items.length === 0) return null
   const previewIndex = items.findIndex(item => item.turn === previewTurn)
   const preview = previewIndex < 0 ? undefined : items[previewIndex]
-  const previewPosition = previewIndex < 0 ? undefined : itemPosition(previewIndex)
+  const activeIndex = items.findIndex(item => item.turn === activeTurn)
+  // Hover basket and the turn badge share one cluster, centred on that tick
+  // (preview turn while pointing, otherwise the active turn).
+  const clusterIndex = previewIndex >= 0 ? previewIndex : activeIndex
+  const clusterItem = clusterIndex < 0 ? undefined : items[clusterIndex]
+  const clusterPosition = clusterIndex < 0 ? undefined : itemPosition(clusterIndex)
 
   const previewAtPointer = (event: PointerEvent<HTMLElement>): void => {
     const scrollTop = scrollerRef.current?.scrollTop ?? 0
@@ -187,12 +196,17 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
           onScroll={() => { syncScrollState() }}
         >
           <div className={css.marks}>
+            <div className={css.spine} aria-hidden />
             {items.map((item, index) => {
-              const active = item.turn === activeTurn
+              const latest = index === items.length - 1
+              const reading = item.turn === activeTurn
               const showingPreview = item.turn === previewTurn
               const classes = [css.mark]
               if (item.anchor.kind === 'unloaded') classes.push(css.markUnloaded)
-              if (active) classes.push(css.markActive)
+              // Longest = where you are (reading). Medium = the live chat tip
+              // (newest) when you are elsewhere. Everything else stays short.
+              if (reading) classes.push(css.markActive)
+              else if (latest) classes.push(css.markChat)
               else if (showingPreview) classes.push(css.markPreview)
               if (item.turn === busyTurn) classes.push(css.markBusy)
               return (
@@ -202,9 +216,9 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
                     className={classes.join(' ')}
                     aria-label={t(
                       item.anchor.kind === 'loaded' ? 'chat.turnNavigation.jump' : 'chat.turnNavigation.jumpLoad',
-                      { turn: item.turn },
+                      { turn: item.round },
                     )}
-                    aria-current={active ? 'true' : undefined}
+                    aria-current={reading ? 'true' : undefined}
                     aria-busy={item.turn === busyTurn ? 'true' : undefined}
                     aria-describedby={showingPreview ? previewId : undefined}
                     onClick={(event) => {
@@ -219,12 +233,19 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
             })}
           </div>
         </div>
-        {preview !== undefined && previewPosition !== undefined && (
-          <div id={previewId} role="tooltip" className={css.preview} style={previewPosition}>
-            <div className={css.previewPrompt}>
-              {preview.prompt || t('chat.turnNavigation.turn', { turn: preview.turn })}
-            </div>
-            {preview.response !== '' && <div className={css.previewResponse}>{preview.response}</div>}
+        {clusterItem !== undefined && clusterPosition !== undefined && (
+          <div className={css.cluster} style={clusterPosition}>
+            {preview !== undefined && (
+              <div id={previewId} role="tooltip" className={css.preview}>
+                <div className={css.previewPrompt}>
+                  {preview.prompt || t('chat.turnNavigation.turn', { turn: preview.round })}
+                </div>
+                {preview.response !== '' && <div className={css.previewResponse}>{preview.response}</div>}
+              </div>
+            )}
+            <span className={css.turnNumber} aria-hidden>
+              {t('chat.turnNavigation.turn', { turn: clusterItem.round })}
+            </span>
           </div>
         )}
       </nav>

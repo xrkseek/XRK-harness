@@ -227,7 +227,7 @@ export function ConversationRoot({
     seatObserver.current = null
     const scroller = seat?.parentElement ?? null
     if (seat === null || scroller === null) return
-    seatObserver.current = new ResizeObserver(() => {
+    const publishBand = (): void => {
       const composer = `${seat.offsetHeight}px`
       const viewport = `${scroller.clientHeight}px`
       scroller.style.setProperty('--dsh-composer-height', composer)
@@ -239,9 +239,15 @@ export function ConversationRoot({
         bandHost.style.setProperty('--dsh-composer-height', composer)
         bandHost.style.setProperty('--dsh-conversation-viewport-height', viewport)
       }
-    })
+    }
+    seatObserver.current = new ResizeObserver(publishBand)
     seatObserver.current.observe(seat)
     seatObserver.current.observe(scroller)
+    // Publish synchronously instead of waiting for the observer's first
+    // callback: it lands a frame late, and everything positioned off the band
+    // (the turn rail, ChatView's back-to-bottom control) would paint that
+    // frame against the 100dvh fallback — low by the header's height.
+    publishBand()
   }, [])
 
   // Publishes the column's live width as --dsh-conversation-column-width so

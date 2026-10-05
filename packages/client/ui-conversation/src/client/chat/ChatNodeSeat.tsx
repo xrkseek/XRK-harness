@@ -18,7 +18,7 @@ type RoutedChatNodeOwner = {
 
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, loadImage,
+  nodeKey, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer, loadImage,
   renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
@@ -34,12 +34,13 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       restoreAt,
       editAt,
       deleteAt,
+      withdrawSteer,
       loadImage,
       renderMessageImages,
       renderMessageFiles,
       fileMentions,
     }, [
-    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, loadImage,
+    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer, loadImage,
     renderMessageImages, renderMessageFiles, fileMentions,
   ])
   const streamingAssistant = routedNode?.kind === 'assistant-step'
@@ -49,9 +50,11 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const postStreamLive = usePostStreamLive(streamingAssistant === true)
   if (routedNode === undefined || owner === null) return null
   const location = routedNode.location
-  const turn = location.kind === 'turn' || location.kind === 'step'
-    ? location.turn.turn
-    : undefined
+  const turn = routedNode.kind === 'steering'
+    ? undefined
+    : location.kind === 'turn' || location.kind === 'step'
+      ? location.turn.turn
+      : undefined
   // Runtime dispatch owns the correlation: every Node's discriminant is the
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.

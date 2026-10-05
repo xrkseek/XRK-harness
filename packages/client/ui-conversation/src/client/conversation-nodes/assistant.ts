@@ -8,7 +8,7 @@ import {
 } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-llm-retry/types'
 import type { AssistantChatData } from '../contract/chat-nodes.ts'
-import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode } from './common.ts'
+import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode, turnEndedAsStop } from './common.ts'
 
 declare module '@xrkseek/client-ui-conversation/client' {
   interface ChatNodeDataMap {
@@ -142,10 +142,17 @@ function closedBoundary(location: ConversationLocation): { seq: number; time: nu
   return undefined
 }
 
+function turnLocationEndedAsStop(location: ConversationLocation | undefined): boolean {
+  if (location === undefined || (location.kind !== 'turn' && location.kind !== 'step')) return false
+  return turnEndedAsStop(location.turn.end)
+}
+
 function finalNode(
   state: AssistantState,
   context: ConversationNodeContext<AssistantState>,
 ): AssistantMessageNode | undefined {
+  const location = context.start?.location ?? context.matches.at(-1)?.location
+  const stopped = turnLocationEndedAsStop(location)
   const final = state.final
   if (final?.event.type === 'assistant/message') {
     const event = final.event
@@ -164,11 +171,11 @@ function finalNode(
         completedTime: event.time,
       },
       // Host may finalize a cancelled stream as assistant/message with the
-      // interrupted bit set (prefix kept); surface that as status interrupted.
-      ...(event.data.interrupted === true ? { interrupted: true as const } : {}),
+      // interrupted bit set (prefix kept); Stop after a tool-only finalize
+      // omits that bit — turn/end aborted still paints 「已停止」.
+      ...(event.data.interrupted === true || stopped ? { interrupted: true as const } : {}),
     }
   }
-  const location = context.start?.location ?? context.matches.at(-1)?.location
   const boundary = location === undefined ? undefined : closedBoundary(location)
   const blocks = compactBlocks(state.blocks)
   if (boundary === undefined || !hasInterruptionEvidence(blocks)) return undefined

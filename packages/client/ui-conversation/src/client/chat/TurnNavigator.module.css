@@ -26,7 +26,7 @@
 .frame {
   /* The band a reader actually sees: the scrollport minus the sticky composer
      stack covering its floor. ConversationRoot publishes both measurements on
-     the scrollport; the fallbacks carry the first paint before its observer
+     the overlay host; the fallbacks carry the first paint before its observer
      fires. */
   --turn-rail-band: calc(
     var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px)
@@ -34,28 +34,28 @@
   --turn-preview-height: 100px;
 
   position: absolute;
-  /* Bottom-anchored to the band: the ladder grows upward from the reading
-     head, so the newest mark sits on the newest turn instead of floating in
-     the vertical middle of a long transcript. */
-  top: var(--turn-rail-band);
-  /* Overlay / column gutter: the host is the conversation body, so this is
-     the same axis as the width handles — not the padded transcript edge. */
-  right: max(
-    12px,
-    calc((100% - var(--dsh-chat-content-width)) / 2 - 16px)
+  /* Just inside the content's right edge — left of the hover width-line /
+     col-resize strip so marks stay clickable. Do not pin to the composer.
+     Centre the frame in the visible transcript band. */
+  top: calc(var(--turn-rail-band) / 2);
+  left: calc(
+    50%
+    + var(--dsh-chat-content-width, 0px) / 2
+    - 8px
   );
-  width: 28px;
+  right: auto;
+  width: 32px;
   /* Fixed-pitch marks never compress: a ladder taller than the band scrolls
      inside this frame instead of pushing marks under the composer or above
      the scrollport. */
   height: min(
     var(--turn-natural-height),
-    max(0px, calc(var(--turn-rail-band) - 64px)),
+    max(0px, calc(var(--turn-rail-band) - 48px)),
     420px
   );
   cursor: pointer;
   pointer-events: auto;
-  transform: translateY(-100%);
+  transform: translate(-50%, -50%);
   transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -96,14 +96,32 @@
   height: var(--turn-natural-height);
 }
 
+/* The spine the marks hang off. Without it a lone column of ticks reads as
+   stray dashes; a continuous hairline makes the gutter a navigation rail.
+   Centred in the frame so every tick length grows on the width-line. */
+.spine {
+  position: absolute;
+  top: 0;
+  right: auto;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-border-l4);
+  opacity: 0.7;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+/* Oldest at the top of the ladder, newest at the floor. Positions are a
+   function of index alone so appending a turn does not slide older ticks. */
 .markPosition {
   position: absolute;
-  top: calc(var(--turn-natural-position) + var(--turn-rail-inset));
+  top: calc(var(--turn-natural-position) + var(--turn-rail-inset) - 5px);
   right: 0;
   left: 0;
+  bottom: auto;
   height: 10px;
-  transform: translateY(-50%);
-  transition: top 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   animation: xrk-turn-mark-enter 150ms ease-out;
 }
 
@@ -111,10 +129,7 @@
    destination that paints one tick — never a mouse target of its own. */
 .mark {
   position: absolute;
-  /* As wide as the longest tick, right-aligned with it: the focus ring below
-     then wraps the tick instead of the rail's full pointer column. */
-  inset: 0 0 0 auto;
-  width: 20px;
+  inset: 0;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -123,45 +138,65 @@
   pointer-events: none;
 }
 
+/* Three lengths, all centred on the spine / width-line:
+   rest 8px, live chat tip (newest, when not reading) 12px, reading 20px.
+   Hover/focus of another turn may grow to 16px but never past reading. */
 .mark::before {
   position: absolute;
   top: 50%;
-  right: 0;
-  width: 12px;
-  height: 2px;
+  left: 50%;
+  width: 8px;
+  height: 3px;
   border-radius: 2px;
-  background: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-label-tertiary);
   content: '';
-  transform: translateY(-50%);
-  transition: width 140ms ease, background-color 140ms ease;
+  transform: translate(-50%, -50%);
+  transition:
+    width 140ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Ordered before hover/active so those states keep their stronger tick. */
+/* Unloaded (paged out of the window) stays short and dimmed — the ladder
+   must not change length under paging. */
 .markUnloaded::before {
   width: 8px;
-  opacity: 0.6;
+  opacity: 0.55;
+}
+
+/* Live chat tip (newest) while the reader is on an older turn. */
+.markChat::before {
+  width: 12px;
+  background: var(--dsw-alias-label-secondary);
+  opacity: 1;
 }
 
 .markPreview::before {
-  width: 18px;
-  background: var(--dsw-alias-label-tertiary);
+  width: 16px;
+  background: var(--dsw-alias-label-secondary);
 }
 
 .markBusy::before {
   animation: xrk-turn-mark-busy 1s ease-in-out infinite;
 }
 
+/* Reading position — uniquely longest. Coincides with the chat tip when
+   the transcript is at the floor. */
 .markActive::before {
   width: 20px;
+  height: 4px;
   background: var(--dsw-alias-label-primary);
+  opacity: 1;
 }
 
-/* Keyboard focus outranks both resting states: the tick takes the brand color
-   the rest of the rail never uses, and a hairline ring keeps it legible
-   against a busy transcript. */
+/* Keyboard focus of a non-current tick stays under the reading length. */
 .mark:focus-visible::before {
-  width: 20px;
+  width: 16px;
   background: var(--dsw-alias-state-business-primary);
+}
+
+.markActive:focus-visible::before,
+.markActive.markPreview::before {
+  width: 20px;
 }
 
 .mark:focus-visible {
@@ -169,33 +204,48 @@
   outline-offset: 2px;
 }
 
-.preview {
+/* Persistent "which turn am I" + hover basket: one cluster left of the
+   ticks, vertically centred on the same mark. Number sits against the card
+   (row-reverse: badge toward the rail). */
+.cluster {
   position: absolute;
-  /* Centered on its mark. Mark positions live in the scrolled ladder, so the
-     frame-level preview subtracts the scroller's offset, then holds clear of
-     both frame ends. */
-  top: clamp(
-    0px,
-    calc(
-      var(--turn-natural-position) + var(--turn-rail-inset)
-      - var(--turn-scroll-top, 0px) - var(--turn-preview-height) / 2
-    ),
-    calc(100% - var(--turn-preview-height))
+  top: calc(
+    var(--turn-natural-position) + var(--turn-rail-inset) - var(--turn-scroll-top, 0px)
   );
-  right: calc(100% + 10px);
+  right: calc(100% + 6px);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.turnNumber {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.preview {
   box-sizing: border-box;
   width: min(300px, calc(100cqw - 120px));
   max-height: var(--turn-preview-height);
   overflow: hidden;
   padding: 10px 12px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-1);
-  box-shadow: var(--dsw-shadow-lv2);
-  pointer-events: none;
+  box-shadow: var(--dsw-shadow-lv3);
   animation: xrk-turn-preview-enter 120ms ease-out;
-  transition: top 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .previewPrompt,
@@ -239,12 +289,15 @@
   }
 }
 
+/* .markPosition keeps its entry fade here — that animation is the only cue
+   that a tick was just added, so it still has to degrade to an instant paint. */
 @media (prefers-reduced-motion: reduce) {
   .frame,
   .scroller,
   .markPosition,
   .mark::before,
   .markBusy::before,
+  .cluster,
   .preview {
     transition: none;
     animation: none;
