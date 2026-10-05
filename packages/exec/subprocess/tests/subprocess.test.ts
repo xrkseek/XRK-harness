@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createLocalSubprocess,
+  SUBPROCESS_CAPTURE_MAX_BYTES,
   taskkillProcessTree,
 } from "../src/index.js";
 
@@ -126,6 +127,49 @@ describe("createLocalSubprocess", () => {
     expect(result.exitCode).toBe(3);
     expect(result.killed).toBe(false);
   });
+
+  it("caps retained stdout from a flood (spill off by default)", async () => {
+    const subprocess = createLocalSubprocess();
+    const result = await subprocess.spawn([
+      NODE,
+      "-e",
+      "process.stdout.write('a'.repeat(400000));",
+    ]);
+    expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(
+      SUBPROCESS_CAPTURE_MAX_BYTES,
+    );
+    expect(result.stdout).toContain("[output truncated]");
+    expect(result.stdoutTruncated).toBe(true);
+    expect(result.stdoutSpillPath).toBeUndefined();
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("spill:true retains a complete-stream file", async () => {
+    const subprocess = createLocalSubprocess();
+    const result = await subprocess.spawn(
+      [NODE, "-e", "process.stdout.write('b'.repeat(400000));"],
+      { spill: true },
+    );
+    expect(result.stdout).toContain("[output truncated]");
+    expect(result.stdoutSpillPath).toBeTruthy();
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("interleaves setImmediate while stdout is flooding", async () => {
+    let turns = 0;
+    const spin = () => {
+      turns += 1;
+      if (turns < 200) setImmediate(spin);
+    };
+    setImmediate(spin);
+    const subprocess = createLocalSubprocess();
+    await subprocess.spawn([
+      NODE,
+      "-e",
+      "for (let i = 0; i < 400; i++) process.stdout.write('x'.repeat(8192));",
+    ]);
+    expect(turns).toBeGreaterThan(10);
+  }, 20_000);
 
   it("hides the taskkill helper window (stdio ignore + windowsHide)", () => {
     const run = vi.fn();

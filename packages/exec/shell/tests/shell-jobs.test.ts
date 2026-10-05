@@ -1,5 +1,8 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createLocalSubprocess } from "@xrkseek/exec-subprocess";
+import { createLocalSubprocess, SUBPROCESS_CAPTURE_MAX_BYTES } from "@xrkseek/exec-subprocess";
 import { createBashTools, createLocalShell, createSessionScopedShell, toJobView } from "../src/index.js";
 
 function sleepCmd(ms: number): string {
@@ -88,6 +91,32 @@ describe("shell background jobs", () => {
       kind: "bash",
     });
     off();
+  });
+
+  it("caps live bash stdout so a flood cannot grow unbounded", async () => {
+    const spillDir = await mkdtemp(path.join(tmpdir(), "xrk-job-spill-"));
+    const shell = createLocalShell({
+      subprocess: createLocalSubprocess(),
+      // Default backend (pwsh on win32) — cmd.exe treats `(…)` as block syntax
+      // and would swallow a `node -e "….repeat(…)"` flood script.
+      backend: process.platform === "win32" ? "pwsh" : "bash",
+      spillDir,
+    });
+    // Avoid bare parentheses for the rare caller that still uses cmd.
+    const flood =
+      "node -e \"process.stdout.write(Buffer.alloc(400000, 97).toString())\"";
+    const started = await shell.startJob(flood);
+    await shell.waitJob(started.id, 15_000);
+    const out = shell.readJobOutput(started.id);
+    expect(out).toContain("[output truncated]");
+    expect(out).toContain("[some output was dropped from memory; full output:");
+    const job = shell.listJobsNow().find((j) => j.id === started.id);
+    expect(job?.stdoutSpillPath).toBeTruthy();
+    expect(job?.stdoutSpillPath?.startsWith(spillDir)).toBe(true);
+    // In-memory body stays near the 256KiB tail; spill notice adds a path line.
+    expect(Buffer.byteLength(out)).toBeLessThan(
+      SUBPROCESS_CAPTURE_MAX_BYTES + 512,
+    );
   });
 
   it("startManagedJob tracks pty-send; kill + readJobOutput work", async () => {

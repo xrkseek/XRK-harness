@@ -1,6 +1,13 @@
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
-import type { SubprocessHandle, SubprocessService } from "@xrkseek/exec-subprocess";
+import {
+  appendUtf8TailCap,
+  prepareSpillBinding,
+  StreamTailCollector,
+  SUBPROCESS_CAPTURE_MAX_BYTES,
+  type SubprocessHandle,
+  type SubprocessService,
+} from "@xrkseek/exec-subprocess";
 import { fitWithErrorHead, fitWithSuffix } from "./bytes.js";
 import { presentBashCall, presentBashResult } from "./present.js";
 import {
@@ -41,6 +48,13 @@ export interface ShellJobInfo {
   readonly signal?: NodeJS.Signals | null;
   readonly stdout?: string;
   readonly stderr?: string;
+  /**
+   * Complete-stream spill files when the in-memory 256KiB tail dropped the head
+   * (DSH OutputCollector). Omitted from Face wire JobView; surfaced in
+   * `job_output` text when truncated.
+   */
+  readonly stdoutSpillPath?: string;
+  readonly stderrSpillPath?: string;
   /** Managed-job producer detail (DSH JobOutcome.detail). */
   readonly detail?: string;
   /** Epoch ms when the job reached a terminal status; absent while live/stopping. */
@@ -187,6 +201,12 @@ export interface ShellLocalOptions {
     signal: AbortSignal | undefined,
     ctx?: { readonly ownerSessionId?: string },
   ) => Promise<readonly string[]>;
+  /**
+   * Directory for subprocess spill files on overflow (prefer Host
+   * `{XRK_HOME}/spill` so paths stay inside `hostReadableRoots`). When set,
+   * bash jobs enable spill; omit for in-memory tail only.
+   */
+  readonly spillDir?: string;
 }
 
 /**
@@ -309,6 +329,9 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
   const backend = options.backend ?? defaultBackend();
   const pwshPath = resolvePwshPath(options.pwshPath);
   const defaultCwd = options.defaultCwd?.trim() || undefined;
+  const spillDir = options.spillDir?.trim() || undefined;
+  const spillOpts =
+    spillDir !== undefined ? prepareSpillBinding({ spillDir }) : undefined;
   const maxJobs = options.maxJobs ?? 64;
   const maxConcurrent = options.maxConcurrentJobs ?? DEFAULT_MAX_CONCURRENT_JOBS;
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) {
@@ -359,6 +382,14 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     }
   }
 
+  function dropJob(id: string): void {
+    const job = jobs.get(id);
+    if (job === undefined) return;
+    StreamTailCollector.unlinkSpill(job.info.stdoutSpillPath);
+    StreamTailCollector.unlinkSpill(job.info.stderrSpillPath);
+    jobs.delete(id);
+  }
+
   function pruneSettled(): void {
     const settled = [...jobs.entries()]
       .filter(([, job]) => isTerminalStatus(job.info.status))
@@ -368,7 +399,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     while (settled.length > DEFAULT_MAX_SETTLED_JOBS) {
       const oldest = settled.shift();
       if (oldest === undefined) break;
-      jobs.delete(oldest[0]);
+      dropJob(oldest[0]);
     }
   }
 
@@ -380,7 +411,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     );
     for (const [id] of finished) {
       if (jobs.size <= maxJobs) break;
-      jobs.delete(id);
+      dropJob(id);
     }
   }
 
@@ -430,7 +461,10 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     const job = jobs.get(id);
     if (!job || isTerminalStatus(job.info.status)) return;
     const prev = job.info[channel] ?? "";
-    job.info = { ...job.info, [channel]: prev + chunk };
+    job.info = {
+      ...job.info,
+      [channel]: appendUtf8TailCap(prev, chunk, SUBPROCESS_CAPTURE_MAX_BYTES),
+    };
     scheduleOutputNotify();
   }
 
@@ -469,6 +503,12 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
             : {}),
           stdout: r.stdout,
           stderr: r.stderr,
+          ...(r.stdoutSpillPath !== undefined
+            ? { stdoutSpillPath: r.stdoutSpillPath }
+            : {}),
+          ...(r.stderrSpillPath !== undefined
+            ? { stderrSpillPath: r.stderrSpillPath }
+            : {}),
           finishedAt: Date.now(),
         });
       })
@@ -513,6 +553,8 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
         ...(spawnCwd ? { cwd: spawnCwd } : {}),
         // Remaining budget lives on `deadline` — do not restart timeoutMs.
         ...(deadline ? { signal: deadline } : {}),
+        // Opt-in spill under `{XRK_HOME}/spill` (readable); default off elsewhere.
+        ...(spillOpts !== undefined ? { spill: spillOpts } : { spill: false }),
         onStdout: (chunk) => {
           appendLiveOutput(id, "stdout", chunk);
         },
@@ -647,6 +689,13 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
         body += `[stderr]\n${err}`;
       }
       if (body.length === 0) body = "(no output)";
+      const spills = [
+        job.info.stdoutSpillPath,
+        job.info.stderrSpillPath,
+      ].filter((p): p is string => typeof p === "string" && p.length > 0);
+      if (spills.length > 0) {
+        body += `\n[some output was dropped from memory; full output: ${spills.join(", ")}]`;
+      }
       return body;
     },
 
@@ -763,7 +812,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
         }
       }
       await Promise.all(all.map((j) => j.settled));
-      jobs.clear();
+      for (const id of [...jobs.keys()]) dropJob(id);
       notifyChanged();
     },
   };
@@ -1139,7 +1188,9 @@ export function createBashTools(
     {
       name: "job_output",
       description:
-        "Read a background job. Stream jobs return only output since the previous read. Every response ends with `[status: ...]`. Reads are non-blocking unless `wait: true`.",
+        "Read a background job. Stream jobs return only output since the previous read. " +
+        "Every response ends with `[status: ...]`. Reads are non-blocking unless `wait: true`. " +
+        "If the body notes a spill file under product home, use read_file on that absolute path for the full log.",
       parameters: {
         type: "object",
         properties: {

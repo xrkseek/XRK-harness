@@ -3,6 +3,27 @@ import {
   spawnSync,
   type ChildProcess,
 } from "node:child_process";
+import os from "node:os";
+import {
+  prepareSpillBinding,
+  StreamTailCollector,
+  SUBPROCESS_CAPTURE_MAX_BYTES,
+  type SpillOptions,
+} from "./capture.js";
+
+export {
+  appendUtf8TailCap,
+  prepareSpillBinding,
+  privateSpillDir,
+  StreamTailCollector,
+  SUBPROCESS_CAPTURE_MAX_BYTES,
+  SUBPROCESS_SPILL_MAX_BYTES,
+} from "./capture.js";
+export type {
+  CollectedOutput,
+  SpillFailureReporter,
+  SpillOptions,
+} from "./capture.js";
 
 /**
  * After a stop request (abort / timeout / kill), `close` can be delayed forever
@@ -30,6 +51,22 @@ export interface SpawnOptions {
   readonly onStdout?: (chunk: string) => void;
   /** Live stderr chunks (UTF-8). */
   readonly onStderr?: (chunk: string) => void;
+  /**
+   * Spill overflow beyond the in-memory tail to a private file (DSH
+   * OutputCollector). **Default off** — sync `writeSync` on the Host event
+   * loop would otherwise stall LLM/mux during every flood (including
+   * `rg --files`). Pass `true` / {@link prepareSpillBinding} for shell jobs
+   * that need full-stream recovery under `{XRK_HOME}/spill`.
+   */
+  readonly spill?: boolean | SpillOptions;
+}
+
+function resolveSpillOptions(
+  spill: SpawnOptions["spill"],
+): SpillOptions | undefined {
+  if (spill === undefined || spill === false) return undefined;
+  if (spill === true) return prepareSpillBinding();
+  return spill;
 }
 
 export interface SubprocessResult {
@@ -38,6 +75,14 @@ export interface SubprocessResult {
   readonly exitCode: number | null;
   readonly signal: NodeJS.Signals | null;
   readonly killed: boolean;
+  /** True when stdout exceeded {@link SUBPROCESS_CAPTURE_MAX_BYTES}. */
+  readonly stdoutTruncated?: boolean;
+  /** True when stderr exceeded {@link SUBPROCESS_CAPTURE_MAX_BYTES}. */
+  readonly stderrTruncated?: boolean;
+  /** Complete stdout spill path when overflow was retained on disk. */
+  readonly stdoutSpillPath?: string;
+  /** Complete stderr spill path when overflow was retained on disk. */
+  readonly stderrSpillPath?: string;
 }
 
 /**
@@ -128,9 +173,28 @@ function startLocal(
     // pipe would make any stdin-reading command block forever without EOF.
     stdio: ["ignore", "pipe", "pipe"],
   });
+  // Best-effort: keep Host LLM/mux turns ahead of CPU-bound grandchildren
+  // (OCR batches, compilers). Children typically inherit this class.
+  if (child.pid !== undefined && child.pid > 0) {
+    try {
+      const below = os.constants.priority?.PRIORITY_BELOW_NORMAL;
+      if (typeof below === "number") os.setPriority(child.pid, below);
+    } catch {
+      // ignore: missing rights / pid already gone
+    }
+  }
 
-  let stdout = "";
-  let stderr = "";
+  const spillOpts = resolveSpillOptions(opts.spill);
+  const stdoutCol = new StreamTailCollector(
+    SUBPROCESS_CAPTURE_MAX_BYTES,
+    "stdout",
+    spillOpts,
+  );
+  const stderrCol = new StreamTailCollector(
+    SUBPROCESS_CAPTURE_MAX_BYTES,
+    "stderr",
+    spillOpts,
+  );
   let settled = false;
   let killed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -143,14 +207,31 @@ function startLocal(
     rejectResult = reject;
   });
 
-  const finish = (result: SubprocessResult) => {
+  /** Finalize collectors at most once — exit-grace and `close` can both fire. */
+  const settleWith = (
+    exitCode: number | null,
+    signal: NodeJS.Signals | null,
+    wasKilled: boolean,
+  ): void => {
     if (settled) return;
     settled = true;
     if (timer) clearTimeout(timer);
     if (graceTimer) clearTimeout(graceTimer);
     if (exitTimer) clearTimeout(exitTimer);
     opts.signal?.removeEventListener("abort", onAbort);
-    resolveResult(result);
+    const out = stdoutCol.finalize();
+    const err = stderrCol.finalize();
+    resolveResult({
+      stdout: out.text,
+      stderr: err.text,
+      exitCode,
+      signal,
+      killed: wasKilled,
+      ...(out.truncated ? { stdoutTruncated: true } : {}),
+      ...(err.truncated ? { stderrTruncated: true } : {}),
+      ...(out.spillPath !== undefined ? { stdoutSpillPath: out.spillPath } : {}),
+      ...(err.spillPath !== undefined ? { stderrSpillPath: err.spillPath } : {}),
+    });
   };
 
   // Orphaned grandchildren can keep the stdout pipe open forever, so a stop
@@ -158,7 +239,7 @@ function startLocal(
   const armSettleGrace = () => {
     if (settled || graceTimer !== undefined) return;
     graceTimer = setTimeout(() => {
-      finish({ stdout, stderr, exitCode: null, signal: null, killed: true });
+      settleWith(null, null, true);
     }, KILL_SETTLE_GRACE_MS);
   };
 
@@ -173,13 +254,7 @@ function startLocal(
   const armExitSettleGrace = (code: number | null, signal: NodeJS.Signals | null) => {
     if (settled || exitTimer !== undefined) return;
     exitTimer = setTimeout(() => {
-      finish({
-        stdout,
-        stderr,
-        exitCode: code,
-        signal,
-        killed,
-      });
+      settleWith(code, signal, killed);
     }, EXIT_SETTLE_GRACE_MS);
   };
 
@@ -209,13 +284,23 @@ function startLocal(
 
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
+  // Pause after each data event so a flood cannot occupy a whole I/O phase
+  // (other sessions' LLM streams / WS Ping share this event loop).
+  const yieldPipe = (stream: NodeJS.ReadableStream): void => {
+    stream.pause();
+    setImmediate(() => {
+      if (!settled) stream.resume();
+    });
+  };
   child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
+    stdoutCol.push(chunk);
     opts.onStdout?.(chunk);
+    yieldPipe(child.stdout);
   });
   child.stderr.on("data", (chunk: string) => {
-    stderr += chunk;
+    stderrCol.push(chunk);
     opts.onStderr?.(chunk);
+    yieldPipe(child.stderr);
   });
   child.on("error", (err) => {
     if (settled) return;
@@ -224,6 +309,8 @@ function startLocal(
     if (graceTimer) clearTimeout(graceTimer);
     if (exitTimer) clearTimeout(exitTimer);
     opts.signal?.removeEventListener("abort", onAbort);
+    stdoutCol.seal();
+    stderrCol.seal();
     rejectResult(err);
   });
   child.on("exit", (code, signal) => {
@@ -234,13 +321,7 @@ function startLocal(
   });
   child.on("close", (code, signal) => {
     if (exitTimer) clearTimeout(exitTimer);
-    finish({
-      stdout,
-      stderr,
-      exitCode: code,
-      signal,
-      killed,
-    });
+    settleWith(code, signal, killed);
   });
 
   return {
