@@ -39,6 +39,8 @@ Harness：`createHarnessComposition({ contextFragmentProviders, contextFragmentB
 
 Chat 壳对 `fragmentKind: "additional_context"` 使用 `visibility: "hidden"`：模型仍从 session 日志可见，**不**再展开成「上下文注入」行。
 
+Host 在 **turn-start** 注册 `collab-board`：当前工作区 **Agent Team 短目录**（`member_id`）加上 **过去 24 小时内更新过的主线及其已挂主会话 id**。seed 的 AGENTS.md / skills 仍走 workspace inject，不进此 fragment。子会话不注入。模型用 `subagent member_id` 委派，不要把 playbook 再贴一遍。
+
 **工具预审（Auto-review）**不走 fragment 刷屏：会话 `/permission auto` = **无沙箱 + 每调用评审**；Host 将 Settings / `/auto-review` 接到 `createAutoReviewToolPre`（分类器三档：启发式 · HTTP · 会话 LLM；deny 裁决默认 ask→审批；**技术失败**默认 `onClassifierError:'ask'`，可设 `'deny'` fail-closed）。见 [configuration.md](./configuration.md) · [status.md](./status.md)。
 
 ## 范围
@@ -89,6 +91,8 @@ Budget: per-phase char ceiling (default **8000**); higher `priority` wins; bodie
 Harness: `createHarnessComposition({ contextFragmentProviders, contextFragmentBudgetChars, locale? })`; `contextFragments: false` disables.
 
 The chat shell marks `fragmentKind: "additional_context"` as `visibility: "hidden"`: still model-visible from the session log, **not** rendered as expandable 「上下文注入」 rows.
+
+Host registers **`collab-board`** at **turn-start**: the workspace **Agent Team catalog** (`member_id`) plus **parent sessions bound to a 主线 updated in the last 24 hours**. Seed AGENTS.md / skills stay on workspace inject and are not copied into the fragment. Delegated children skip it. Spawn with `subagent member_id`; do not paste playbooks.
 
 **Tool pre-review (Auto-review)** is not fragment spam: session `/permission auto` = **no sandbox + per-call review**; Host wires Settings / `/auto-review` to `createAutoReviewToolPre` (classifier tiers: heuristic · HTTP · session LLM; deny verdicts default ask→approval; **technical failures** default `onClassifierError:'ask'`, or `'deny'` fail-closed). See [configuration.md](./configuration.md) · [status.md](./status.md).
 
