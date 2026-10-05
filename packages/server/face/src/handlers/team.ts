@@ -152,7 +152,7 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const hasAppearance =
     appearanceArg &&
     typeof appearanceArg === "object" &&
-    Object.keys(appearanceArg as object).length > 0;
+    Object.keys(appearanceArg).length > 0;
   const toolsRaw =
     args.tools && typeof args.tools === "object" ? args.tools : undefined;
   const tools = parseMemberToolPolicy(toolsRaw);
