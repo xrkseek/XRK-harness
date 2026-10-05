@@ -19,9 +19,6 @@ import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { getEditStaging, subscribeEditStaging } from './resubmit-intent.ts'
-import {
-  collectUserShapedSeqs, durableSteerPending, hasAgentWorkBefore, latestTurnNumber,
-} from './pending-input-chrome.ts'
 import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
@@ -473,21 +470,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       || (typeof messageId === 'string' && (row.messageId === messageId || row.id === messageId))
     ))?.id
   })
-  const pendingSteer = useSession(s => {
-    if (!s.running) return false
-    const latestTurn = latestTurnNumber(s.chat.timeline)
-    const ids = collectUserShapedSeqs(s.chat.nodes.values(), latestTurn)
-    const id = data.seq
-    return durableSteerPending(
-      node.kind,
-      node.location,
-      id,
-      true,
-      ids,
-      hasAgentWorkBefore(s.chat.nodes.values(), id, latestTurn),
-      latestTurn,
-    )
-  })
   const text = useMemo(() => {
     const parts: string[] = []
     for (const block of data.content) {
@@ -506,7 +488,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      steer={pendingSteer || pendingAdmitId !== undefined}
+      steer={pendingAdmitId !== undefined}
       editing={editing}
       t={t}
       actions={copyText => (
@@ -516,8 +498,8 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           clock="start"
           className={css.actions}
           t={t}
-          onEdit={pendingSteer || pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
-          onDelete={pendingSteer || pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
+          onEdit={pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
+          onDelete={pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
           onWithdraw={pendingAdmitId === undefined ? undefined : () => { withdrawSteer(pendingAdmitId) }}
         />
       )}
