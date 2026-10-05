@@ -34,5 +34,11 @@ describe("subagent routing prompt", () => {
     expect(prompt).toContain("critical path");
     expect(prompt).toContain("disjoint scopes");
     expect(prompt).toContain("member_id");
+    expect(prompt).toContain("Match the live catalog");
+    expect(prompt).toContain("thread_message");
+    expect(prompt).toContain("Do not `thread_switch` to send mail");
+    expect(prompt).toContain("standing inject");
+    expect(prompt).toContain("only when no catalog member fits");
+    expect(prompt).not.toContain("发版");
   });
 });

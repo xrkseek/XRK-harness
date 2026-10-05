@@ -41,13 +41,15 @@ export function subagentRoutingPrompt(
     "  - Background continuable (`run_in_background: true`): chat companion or long task. Continue with `followup_task` (new task + turn) / `send_message` (queue; delivery=steer only for a mid-turn nudge) / `wait_agent` / `interrupt_agent`.",
     "  - Need this conversation: `inherit_context: true` (in-process only).",
     "  - Isolated git tree: `worktree: true` (same repo, separate checkout).",
-    "  - Child profile: prefer Agent Team `member_id` (live catalog on `subagent` / `team_list`) so the child gets that member's tools, inject, and playbook. Bare `role` worker | researcher | reviewer | lead is only the fallback. Publish a repeatable profile with `team_save` from this chat.",
+    "  - Child profile: prefer Agent Team `member_id` from the turn-start collab board (and `subagent` / `team_list`) so the child gets that member's tools, inject, and playbook. Seed AGENTS.md and skills stay on standing inject — do not paste them into the child prompt. Bare `role` worker | researcher | reviewer | lead is only the fallback. Publish a repeatable profile with `team_save` from this chat.",
+    "- Match the live catalog by name and brief. If a member's job fits the user ask, `subagent` with that `member_id` this turn. Do not load their skill and do the job yourself. Tiny asks with no catalog match stay with you. `presence_set` may run in parallel.",
+    "- Sibling parent sessions talk with `thread_message` (session_id from the collab board; reply comes back here). Do not `thread_switch` to send mail. That is not a subagent.",
     "- `team_graph` reads/edits the collaboration graph (delegates + peer): view · neighbors · link/unlink · role · announce to peers.",
     "- `wait_agent` blocks until listed children are idle (or timeout) and returns their last answer — prefer longer timeouts over tight loops.",
     "- `analytics` shows depth/active quota and per-child queue/steer backlog before spawning more work.",
     "- Default `runtime` is in-process (Face child). Set `runtime` to `acp` / `app-server` / `claude-code` for an external subprocess (needs local binary / Settings). `acp` / `app-server` support `run_in_background` + the same followup/wait/interrupt tools; `claude-code` stays one-shot print.",
     "- Use `ralph` only when the human explicitly asks for a Ralph / fresh-agent loop toward one immutable objective (each round is a new child; handoff is structured JSON). Prefer `subagent` for ordinary delegation.",
-    "- Prefer a few independent children over deep nesting; respect depth and active-child caps. Prefer doing small work yourself — **Frugal** has no subagent tools; **Shallow** allows depth 1 only.",
+    "- Prefer a few independent children over deep nesting; respect depth and active-child caps. Prefer doing small work yourself **only when no catalog member fits** — **Frugal** has no subagent tools; **Shallow** allows depth 1 only.",
     delegationModeLine(mode),
   ].join("\n");
 }

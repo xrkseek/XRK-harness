@@ -297,6 +297,7 @@ declare module '@xrkseek/xrk-typert-protocol' {
           readonly playbook: string
           readonly role: string
           readonly seed?: true
+          readonly catalog?: true
           readonly updatedAt: number
           readonly appearance?: {
             readonly shape: string
