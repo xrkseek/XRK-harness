@@ -16,7 +16,7 @@
 | Write-intent | `createWriteIntentGuard` | 默认 `apply_edit` 须先 `read_file` |
 | Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`；`xrkh doctor` 探测 helper |
 | Hardline argv / 写路径提示 | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness 在 **policy 前** fail-closed deny（根擦除 / 敏感路径）；内容 pattern 默认结果后提示 |
-| Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | 相对路径与 workspace 内绝对路径均可；`hostReadableRoots` 仅白名单子树（attachments · spill），realpath 拒符号链接逃出到 home 其它文件 |
+| Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | 相对路径与 workspace 内绝对路径均可；`hostReadableRoots` 默认 `{XRK_HOME}`；`extraWritableRoots` 默认含产品家目录；realpath 拒符号链接逃出所列根 |
 | Web URL 卫生 | `exec-web` `assertHttpUrl` + allowlist | 仅 http(s)、拒凭据；字面量私网；可选 `XRK_WEB_FETCH_ALLOWLIST` + 审计环；**无** DNS 再绑定 |
 | LSP 路径 | `exec-lsp` `resolveWithinRoot` | 查询文件必须落在 `workspaceRoot` 内 |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd 必须落在 `workspaceRoot` 内；拒绝对 shell `SIGKILL` |
@@ -76,7 +76,7 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Write-intent | `createWriteIntentGuard` | Default: `apply_edit` requires prior `read_file` |
 | Sandbox argv | `exec-sandbox` + guard | Workspace / Docker / bwrap / windows via `createSandboxStack`; `xrkh doctor` probes helpers |
 | Hardline argv / write-path guidance | `createHardlineArgvPre` + `createWritePathSecurityPre/Post` | harness registers **before** policy — fail-closed deny (root wipe / sensitive paths); content patterns append advisory by default |
-| Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | Relative and workspace-absolute paths OK; `hostReadableRoots` is a subtree whitelist (attachments · spill) with realpath denial of symlink escape into other home files |
+| Path jail | `exec-fs` `resolveWithinRoot` · `resolveUnderHostRoots` | Relative and workspace-absolute paths OK; `hostReadableRoots` defaults to `{XRK_HOME}`; `extraWritableRoots` defaults include product home; realpath denies symlink escape out of listed roots |
 | Web URL hygiene | `exec-web` `assertHttpUrl` + allowlist | http(s) only, no credentials; literal private hosts; optional `XRK_WEB_FETCH_ALLOWLIST` + audit ring; **no** DNS rebinding check |
 | LSP paths | `exec-lsp` `resolveWithinRoot` | Query files must stay under `workspaceRoot` |
 | PTY cwd | `exec-pty` `resolvePtyCwd` | cwd must stay under `workspaceRoot`; rejects `SIGKILL` on the shell itself |

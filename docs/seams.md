@@ -6,7 +6,7 @@
 
 | 层 | 职责 | 示例（fs） |
 |----|------|------------|
-| **Definition** | 稳定接口 | `FsService`（read/write/edit/stat/mkdir/**glob/grep**） |
+| **Definition** | 稳定接口 | `FsService`（read/write/edit/stat/mkdir/**glob/grep**）；绝对路径可读 `hostReadableRoots`（Host 默认 `{XRK_HOME}`），可写 `extraWritableRoots`（Settings 默认含产品家目录） |
 | **Provider** | 具体后端 | `createFsLocalProvider({ root })` |
 | **Consumer** | 工具 / Agent | `createFsTools(fs)` — 不直接 `import "node:fs"` |
 
@@ -16,7 +16,7 @@ const tools = createFsTools(stubFs); // Swap Provider; tool schema stays unchang
 
 例外（对齐 Hermes `dynamic_schema_overrides`）：生成类 Consumer（`image_generate` · `video_generate`）可按 Provider `capabilities()` 门控参数面。工具登记 `ToolDefinition.dynamicSchema`；`materializeTools` 在每步 LLM catalog 快照时合并覆盖（抛错则保留静态字段）。Host 在 Settings / Credentials 变更时 `invalidateAgents` 重建 composition；同一 Agent 生命周期内 live `capabilities()` 变化也会在下一次 materialize 反映到 schema。
 
-内置搜索（无 shell `rg`）：`fs.glob` / `fs.grep` → 工具名 `glob` / `grep`。`read_file` 对 `.pdf` / `.docx` / `.xlsx` / `.ipynb` 在 `read` 内转成文本（扫描版 PDF 无文本层时明确说明），不另开工具名。Office→PDF 是侧栏预览的独立 Provider（`/sidebar/file?preview=pdf`），不走 `read`。
+内置搜索：`fs.glob` / `fs.grep` → 工具名 `glob` / `grep`。默认走打包的 **`@vscode/ripgrep`**（Codex / pi / DSH 同形：plain argv · `--json` / `--files` · 无 shell）；缺失二进制时回退 JS 遍历（跳过 `node_modules` / `dist` / `.git` 等，并 `scheduler.yield`）。`XRK_FS_SEARCH=js` 可强制走回退。`read_file` 普通文本按 `maxBytes` 前缀读盘（不整文件进内存）；对 `.pdf` / `.docx` / `.xlsx` / `.ipynb` 在 `read` 内转成文本（扫描版 PDF 无文本层时明确说明），不另开工具名。Office→PDF 是侧栏预览的独立 Provider（`/sidebar/file?preview=pdf`），不走 `read`。
 
 Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿名 HTTP + Tavily/Brave（有密钥）或 **parallel-free → duckduckgo**；Consumer `createWebTools` + `createBrowserTools`。规格：[web-tools.md](./web-tools.md)。
 
@@ -83,7 +83,7 @@ Shell `startJob` 在 prepare（confine）之前武装超时，准备时间计入
 
 | Layer | Role | Example (fs) |
 |-------|------|--------------|
-| **Definition** | Stable interface | `FsService` (read/write/edit/stat/mkdir/**glob/grep**) |
+| **Definition** | Stable interface | `FsService` (read/write/edit/stat/mkdir/**glob/grep**); absolute reads via `hostReadableRoots` (Host default `{XRK_HOME}`), absolute writes via `extraWritableRoots` (Settings default includes product home) |
 | **Provider** | Concrete backend | `createFsLocalProvider({ root })` |
 | **Consumer** | Tools / agents | `createFsTools(fs)` — do not import `node:fs` directly |
 
@@ -93,7 +93,7 @@ const tools = createFsTools(stubFs); // Swap Provider; tool schema stays unchang
 
 Exception (Hermes `dynamic_schema_overrides`): generation Consumers (`image_generate` · `video_generate`) may gate parameters from Provider `capabilities()`. Tools register `ToolDefinition.dynamicSchema`; `materializeTools` merges overrides into each LLM catalog snapshot (throws → keep static fields). Host `invalidateAgents` on Settings / Credentials rebuilds composition; live `capabilities()` changes also surface on the next materialize within the same Agent lifetime.
 
-Built-in search (no shell `rg`): `fs.glob` / `fs.grep` → tool names `glob` / `grep`. `read_file` converts `.pdf` / `.docx` / `.xlsx` / `.ipynb` to text inside `read` (scanned PDFs with no text layer say so); no extra tool name. Office→PDF is a separate sidebar preview Provider (`/sidebar/file?preview=pdf`), not `read`.
+Built-in search: `fs.glob` / `fs.grep` → tool names `glob` / `grep`. Default backend is packaged **`@vscode/ripgrep`** (Codex / pi / DSH shape: plain argv · `--json` / `--files` · no shell). If the binary is missing, falls back to the in-process walk (skips `node_modules` / `dist` / `.git`, yields on the event loop). Set `XRK_FS_SEARCH=js` to force the walk. Plain `read_file` reads only the leading `maxBytes` from disk (not the whole file into memory); `.pdf` / `.docx` / `.xlsx` / `.ipynb` still convert inside `read` (scanned PDFs with no text layer say so); no extra tool name. Office→PDF is a separate sidebar preview Provider (`/sidebar/file?preview=pdf`), not `read`.
 
 Web: `@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`; Provider anonymous HTTP + Tavily/Brave (when keyed) or **parallel-free → duckduckgo**; Consumer `createWebTools` + `createBrowserTools` + optional `createBrowserVaultTools` (opaque Face credential handles). Spec: [web-tools.md](./web-tools.md).
 

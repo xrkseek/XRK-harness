@@ -72,7 +72,7 @@ createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 - 完整正文在产品 home（默认 `~/.xrk/spill/tool-outputs/…`），不进 session 事件、不写入工作区
 - 一次超限工具结果只对应一个全文路径
 - 磁盘：单文件最多 **8 MiB**（超出则截断并在文件末尾标明）；整个 `~/.xrk/spill` 最多 **256 MiB**，且超过 **7 天** 的文件在下次落盘时删除。先按年龄删，仍超总量则从最旧的文件继续删。不跟随符号链接
-- Host `hostReadableRoots` 白名单为 `{XRK_HOME}/spill` 与 attachments 子树；`read_file` 对绝对路径做 realpath 校验，禁止经 spill 符号链接读出 home 内其它文件
+- Host `hostReadableRoots` 默认为产品家目录 `{XRK_HOME}`（含 spill / attachments / memories）；`read_file` 对绝对路径做 realpath 校验，禁止经符号链接逃出该根
 
 ---
 
@@ -150,4 +150,4 @@ Foreground / background child answers returned to the parent go through `boundCh
 - Full body stays under product home (default `~/.xrk/spill/tool-outputs/…`) and does not enter session events or the workspace tree
 - One oversized tool result has one full-body path
 - Disk: one file at most **8 MiB** (cut, with a marker at the end); the whole `~/.xrk/spill` tree at most **256 MiB**, and files older than **7 days** are removed on the next spill write. Age first, then oldest files until the total fits. Symlinks are not followed
-- Host `hostReadableRoots` whitelists `{XRK_HOME}/spill` and the attachments subtree; `read_file` realpath-checks absolute paths so a spill symlink cannot expose other home files
+- Host `hostReadableRoots` defaults to product home `{XRK_HOME}` (spill / attachments / memories); `read_file` realpath-checks absolute paths so a symlink cannot escape that root

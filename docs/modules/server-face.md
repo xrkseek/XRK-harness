@@ -49,7 +49,7 @@ HTTP/WS (attach-http)
 | `handlers/` | 按域 handler | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
 | `attach-http.ts` | HTTP 挂载 + WS · mux 重连基线 · Ping 心跳 · send 队列 | pending 补 queue / 审批 / 提问；冷会话跳过 full hydrate；`ws-heartbeat` 默认 2s / 5 miss；`ws-send-queue` 超顶丢帧不掐线 |
 | `ws-heartbeat.ts` | mux/host Ping/Pong 看门狗 | 半开连接 terminate（`FACE_WS_HEARTBEAT_MAX_MISSED`） |
-| `ws-send-queue.ts` | mux/host JSON 串行写出 + 软顶 | 超顶 / 单帧过大丢帧；写失败停入队 |
+| `ws-send-queue.ts` | mux/host JSON 串行写出 + 软顶 | 超顶 / 单帧过大丢帧；写失败停入队；带 `sessionId` 的帧按会话车道 round-robin，避免一路刷屏卡住其它会话 |
 | `bus.ts` | mux/host 订阅扇出 | `publishMux(frame, rpcId?)` 审批用稳定 id |
 | `seq.ts` | `FaceMuxSeq` · `FaceSeqClock`（1-based） | **不是** Session `SessionSeq`；见 [session-log.md](../session-log.md) |
 
@@ -220,7 +220,7 @@ HTTP/WS (attach-http)
 | `handlers/` | Domain handlers | `session` · `host` · `catalog` · `remotes` · `cordis-stub` · `session-added` |
 | `attach-http.ts` | HTTP mount + WS · mux reconnect baseline · Ping heartbeats · send queue | Pending fills queue / approvals / questions; cold sessions skip full hydrate; `ws-heartbeat` default 2s / 5 miss; `ws-send-queue` drops over budget (no terminate) |
 | `ws-heartbeat.ts` | mux/host Ping/Pong watchdog | Terminate half-open peers (`FACE_WS_HEARTBEAT_MAX_MISSED`) |
-| `ws-send-queue.ts` | mux/host serialized JSON writes + soft caps | Drop over-budget / oversize frames; stop enqueue on write error |
+| `ws-send-queue.ts` | mux/host serialized JSON writes + soft caps | Drop over-budget / oversize frames; stop enqueue on write error; frames with `sessionId` drain round-robin per session so one burst cannot stall the others |
 | `bus.ts` | mux/host fan-out | `publishMux(frame, rpcId?)` uses stable ids for approvals |
 | `seq.ts` | `FaceMuxSeq` · `FaceSeqClock` (1-based) | **Not** Session `SessionSeq`; see [session-log.md](../session-log.md) |
 

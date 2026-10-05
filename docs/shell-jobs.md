@@ -38,6 +38,10 @@ Host（harness/server）共享一份 root registry；composition 用 `createSess
 | 行为 | 说明 |
 |------|------|
 | `stdin: 'ignore'` | 一次性 shell 无 stdin 管道；读 stdin 的命令立即 EOF |
+| 捕获上限 `SUBPROCESS_CAPTURE_MAX_BYTES`（256KiB 尾） | stdout/stderr 在 Host 内只留尾；超顶加 `[output truncated]`，避免后台刷屏拖死事件循环 |
+| Spill（DSH OutputCollector） | **默认关**（避免每个 spawn 的 `writeSync` 堵事件循环）。Host / harness 给 shell 配 `spillDir: {XRK_HOME}/spill`；`hostReadableRoots` 默认为产品家目录，故 `job_output` 路径可用 `read_file`；超顶落盘上限 `SUBPROCESS_SPILL_MAX_BYTES`（默认 20MiB）；job 裁剪 / `dispose` 时删除 |
+| 每块 `pause` + `setImmediate(resume)` | 让其它会话的 LLM 流 / WS Ping 插队 |
+| 子进程 `PRIORITY_BELOW_NORMAL`（尽力） | CPU 密集孙进程（OCR 等）不压过 Host |
 | `KILL_SETTLE_GRACE_MS`（5s） | kill 后强制结算，避免 stop 键挂死 |
 | win32 `taskkill /T /F` | 树杀，避免孤儿子进程占住 stdout 管道 |
 
@@ -160,6 +164,10 @@ Host (harness/server) shares one root registry; compositions use `createSessionS
 | Behavior | Notes |
 |----------|-------|
 | `stdin: 'ignore'` | One-shot shells have no stdin pipe; stdin-reading commands get immediate EOF |
+| Capture cap `SUBPROCESS_CAPTURE_MAX_BYTES` (256KiB tail) | Host keeps only a UTF-8 tail of stdout/stderr; overflow prepends `[output truncated]` so a background flood cannot stall the event loop |
+| Spill (DSH OutputCollector) | **Off by default** (avoids `writeSync` on every spawn). Host / harness pass `spillDir: {XRK_HOME}/spill`; `hostReadableRoots` defaults to product home so `job_output` paths are `read_file`-able; overflow cap `SUBPROCESS_SPILL_MAX_BYTES` (default 20MiB); prune / `dispose` deletes spill files |
+| Per-chunk `pause` + `setImmediate(resume)` | Lets other sessions' LLM streams / WS Ping run |
+| Child `PRIORITY_BELOW_NORMAL` (best-effort) | CPU-heavy grandchildren (OCR, …) do not outrank the Host |
 | `KILL_SETTLE_GRACE_MS` (5s) | Force-settle after kill so Stop cannot hang the turn |
 | win32 `taskkill /T /F` | Tree-kill so orphaned children cannot hold stdout pipes |
 
