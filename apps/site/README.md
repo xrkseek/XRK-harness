@@ -8,7 +8,7 @@ Cloudflare **Worker**（不是 Pages 静态站）：`GET /` 在边缘拉 AGT 目
 npx wrangler deploy --config apps/site/wrangler.toml
 ```
 
-控制台选 **Workers**，项目名 `xrk-harness-download`。改 origin 用 `wrangler.toml` 的 `HARNESS_ORIGIN`。干员名册与 `seedGlobalRosterMembers` 对齐。
+控制台选 **Workers**，项目名 `xrk-harness`（`wrangler.toml` 的 `name`）。构建根目录设 `apps/site`。改 origin 用 `HARNESS_ORIGIN`。干员名册与 `seedGlobalRosterMembers` 对齐。
 
 ---
 
@@ -21,3 +21,5 @@ Cloudflare **Worker** (not a static Pages site). `GET /` fetches the AGT catalog
 ```bash
 npx wrangler deploy --config apps/site/wrangler.toml
 ```
+
+In the dashboard pick **Workers**, project name `xrk-harness` (the `name` in `wrangler.toml`). Set the build root to `apps/site`. Change origin with `HARNESS_ORIGIN`.

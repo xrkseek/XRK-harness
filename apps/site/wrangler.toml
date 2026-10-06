@@ -1,4 +1,4 @@
-name = "xrk-harness-download"
+name = "xrk-harness"
 main = "src/worker.js"
 compatibility_date = "2026-10-06"
 
