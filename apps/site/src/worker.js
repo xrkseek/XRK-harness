@@ -356,6 +356,7 @@ function renderPage(catalog, env, zh) {
           <p class="rail-k">${escapeHtml(t.team)}</p>
           <p class="quota">${escapeHtml(t.quota)}</p>
           <div class="roster">${roster}</div>
+          <div class="rail-end">
           <p class="who" id="pick-name">${escapeHtml(firstName)}</p>
           <p id="pick-brief">${escapeHtml(firstBrief)}</p>
           <button type="button" class="btn" id="delegate-btn">${escapeHtml(t.assign)}</button>
@@ -369,6 +370,7 @@ function renderPage(catalog, env, zh) {
             <span>${escapeHtml(t.branch)}</span>
           </button>
           <button type="button" class="ghost new-sess" id="new-sess">${escapeHtml(t.newSession)}</button>
+          </div>
         </aside>
         <div class="pane">
           <div class="chrome">
@@ -421,7 +423,6 @@ function renderPage(catalog, env, zh) {
             <dl class="meta">
               <div><dt>${escapeHtml(t.home)}</dt><dd>XRK-harness</dd></div>
               <div><dt>${escapeHtml(t.team)}</dt><dd id="ov-member">${escapeHtml(firstName)}</dd></div>
-              <div><dt>${escapeHtml(t.quota)}</dt><dd class="nums">2 / 2</dd></div>
             </dl>
           </div>
           <div data-ov-panel="graph" hidden>

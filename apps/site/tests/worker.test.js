@@ -38,6 +38,7 @@ test("renders product shell, roster, github, and windows download", async () => 
   assert.match(html, /工作区/);
   assert.match(html, /新建会话/);
   assert.match(html, /class="deskbar"/);
+  assert.match(html, /class="rail-end"/);
   assert.match(html, /class="hero-ball"/);
   assert.match(html, /class="orbit"/);
   assert.match(html, /蓝圈/);
