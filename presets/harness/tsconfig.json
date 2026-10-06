@@ -27,6 +27,7 @@
     { "path": "../../packages/exec/sandbox" },
     { "path": "../../packages/exec/shell" },
     { "path": "../../packages/exec/subprocess" },
+    { "path": "../../packages/server/config" },
     { "path": "../../packages/llm/llm" },
     { "path": "../../packages/llm/replay" },
     { "path": "../../packages/policy" },

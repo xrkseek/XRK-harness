@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../attachment" },
     { "path": "../../core/tools" },
+    { "path": "../subprocess" },
     { "path": "../../protocol" }
   ]
 }
