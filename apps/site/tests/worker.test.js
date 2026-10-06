@@ -95,11 +95,11 @@ test("mac stays listed even if the live catalog marks it available", async () =>
 test("installer paths redirect off the Worker", async () => {
   const res = await worker.fetch(
     new Request("https://example.test/api/harness/download/win-x64"),
-    { HARNESS_ORIGIN: "http://103.236.89.174:6969" },
+    { HARNESS_ORIGIN: "https://xrk.siphot.com" },
   );
   assert.equal(res.status, 302);
   assert.equal(
     res.headers.get("location"),
-    "http://103.236.89.174:6969/api/harness/download/win-x64",
+    "https://xrk.siphot.com/api/harness/download/win-x64",
   );
 });

@@ -8,4 +8,4 @@ binding = "ASSETS"
 run_worker_first = true
 
 [vars]
-HARNESS_ORIGIN = "http://103.236.89.174:6969"
+HARNESS_ORIGIN = "https://xrk.siphot.com"

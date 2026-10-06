@@ -1,10 +1,10 @@
 /**
  * Cloudflare Worker product page.
- * Installer bytes stay on AGT :6969.
+ * Installer bytes redirect to HARNESS_ORIGIN (HTTPS front for AGT :6969).
  */
 import fallbackCatalog from "../releases.json" with { type: "json" };
 
-const DEFAULT_ORIGIN = "http://103.236.89.174:6969";
+const DEFAULT_ORIGIN = "https://xrk.siphot.com";
 const GITHUB = "https://github.com/xrkseek/XRK-harness";
 const NPM = "https://www.npmjs.com/package/@xrkseek/harness-cli";
 const DOCS = `${GITHUB}/blob/main/docs/getting-started.md`;
