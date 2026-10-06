@@ -5,9 +5,9 @@
   "products": [
     {
       "target": "win-x64",
-      "available": false,
-      "version": "0.5.13",
-      "filename": "xrk-harness-0.5.13-win-x64-unsigned.exe",
+      "available": true,
+      "version": "0.5.14",
+      "filename": "xrk-harness-0.5.14-win-x64.exe",
       "feed": "/api/harness/desktop/win-x64/nightly.yml",
       "download": "/api/harness/download/win-x64"
     },
