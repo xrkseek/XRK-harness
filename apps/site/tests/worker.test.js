@@ -31,11 +31,17 @@ test("renders product shell, roster, github, and windows download", async () => 
   assert.match(html, /id="delegate-btn"/);
   assert.match(html, /概况/);
   assert.match(html, /委派图/);
+  assert.match(html, /命令/);
+  assert.match(html, /只读/);
+  assert.match(html, /class="primary is-idle"/);
   assert.match(html, /停止生成/);
   assert.match(html, /工作区/);
   assert.match(html, /新建会话/);
   assert.match(html, /class="deskbar"/);
-  assert.match(html, /class="skip"/);
+  assert.match(html, /class="hero-ball"/);
+  assert.match(html, /class="orbit"/);
+  assert.match(html, /蓝圈/);
+  assert.match(html, /工作台/);
   assert.match(html, /xrkh web/);
   assert.match(html, /2 \/ 2/);
   assert.doesNotMatch(html, /download\/mac-/);
@@ -49,6 +55,9 @@ test("english query and mac stay unavailable", async () => {
   assert.match(html, /macOS Apple Silicon/);
   assert.match(html, /Host cold start/);
   assert.match(html, /Grow toward the sun/);
+  assert.match(html, /Send message/);
+  assert.match(html, /Commands/);
+  assert.match(html, /Read only/);
   assert.match(html, /Queue \(after this turn\)/);
 });
 

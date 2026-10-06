@@ -88,14 +88,20 @@ function bubble(text, badge, kind) {
   return `<div class="${row}"><div class="bubble"><p>${text}</p></div>${mark}</div>`;
 }
 
+const SEND_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z"/></svg>';
+const STOP_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor"/></svg>';
+
+function paintPrimary(sendBtn, label, mode) {
+  sendBtn.setAttribute("aria-label", label);
+  sendBtn.classList.toggle("is-idle", mode === "idle");
+  sendBtn.innerHTML = mode === "stop" ? STOP_ICON : SEND_ICON;
+}
+
 function setBusy(on, labels) {
-  const stop = document.getElementById("stop-btn");
   const sendBtn = document.getElementById("send-btn");
   const draft = document.getElementById("draft");
-  if (stop) stop.hidden = !on;
   if (!sendBtn || !labels) return;
-  sendBtn.textContent = on ? labels.queue : labels.send;
-  sendBtn.setAttribute("aria-label", sendBtn.textContent);
+  paintPrimary(sendBtn, on ? labels.stop : labels.send, on ? "stop" : "idle");
   if (draft) draft.placeholder = on ? labels.phBusy : labels.ph;
 }
 
@@ -130,9 +136,8 @@ function runDesk() {
   const tag = document.getElementById("thread-tag");
   if (!desk || !thread || !sendBtn || !draft) return;
   const d = desk.dataset;
-  const labels = { send: d.send, queue: d.queue, ph: d.ph, phBusy: d.phBusy };
+  const labels = { send: d.send, queue: d.queue, ph: d.ph, phBusy: d.phBusy, stop: d.stop };
   let timer = 0;
-  let paused = false;
   let beat = 0;
 
   function pickTitle() {
@@ -153,7 +158,6 @@ function runDesk() {
     () => {
       thread.innerHTML = bubble(d.opener, d.sending);
       setBusy(false, labels);
-      sendBtn.textContent = d.send;
       showScene(0);
     },
     () => {
@@ -178,8 +182,7 @@ function runDesk() {
         `<p class="wait" role="status">${d.waiting}</p>` +
         bubble(d.steerMsg, d.steering) +
         `<button type="button" class="ghost" disabled>${d.withdraw}</button>`;
-      sendBtn.textContent = d.steer;
-      sendBtn.setAttribute("aria-label", d.steer);
+      paintPrimary(sendBtn, d.steer, "armed");
       showOv("graph");
       showScene(2);
     },
@@ -210,30 +213,15 @@ function runDesk() {
   ];
 
   function tick() {
-    if (paused) {
-      timer = window.setTimeout(tick, 400);
-      return;
-    }
     frames[beat]();
     beat = (beat + 1) % frames.length;
     timer = window.setTimeout(tick, beat === 1 ? 900 : 2600);
   }
 
-  desk.addEventListener("pointerenter", () => { paused = true; });
-  desk.addEventListener("pointerleave", () => { paused = false; });
   document.querySelectorAll("[data-scene-dot]").forEach((btn) => {
     btn.addEventListener("click", () => {
       beat = Number(btn.dataset.sceneDot) || 0;
       frames[Math.min(beat, frames.length - 1)]();
-    });
-  });
-  document.querySelectorAll("[data-session]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("[data-session]").forEach((el) => {
-        el.classList.toggle("on", el === btn);
-        el.setAttribute("aria-pressed", el === btn ? "true" : "false");
-      });
-      pickTitle();
     });
   });
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

@@ -28,8 +28,8 @@ const LABELS = {
     lead: "会话是真源。干员可委派。设置里改模型与 MCP。桌面目前只提供 Windows x64。",
     tagline: "向阳而生，驭光而行",
     skip: "跳到干员",
-    play: "点一名干员",
-    playHint: "同一套 EmotionBall。点干员委派。对话区按产品脚本走发送、排队、插队；概况栏跟着切。",
+    play: "工作台",
+    playHint: "画面只播、不能点。点右上角或下方的球换干员。",
     you: "你",
     assign: "委派",
     assigned: "已委派",
@@ -70,6 +70,9 @@ const LABELS = {
     plan: "计划",
     changes: "改动",
     newSession: "新建会话",
+    commands: "命令",
+    access: "只读",
+    model: "模型",
     light: "浅色",
     dark: "深色",
     system: "系统",
@@ -93,8 +96,8 @@ const LABELS = {
     lead: "Sessions are the source of truth. Operators take delegated work. Models and MCP live in Settings. Desktop ships for Windows x64 only.",
     tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to operators",
-    play: "Pick an operator",
-    playHint: "Same EmotionBall engine. Delegate on pick. The thread scripts send, queue, and steer; Overview follows.",
+    play: "Workbench",
+    playHint: "The demo plays by itself. Pick an operator on the hero balls or the row below.",
     you: "You",
     assign: "Delegate",
     assigned: "Delegated",
@@ -135,6 +138,9 @@ const LABELS = {
     plan: "Plan",
     changes: "Changes",
     newSession: "New session",
+    commands: "Commands",
+    access: "Read only",
+    model: "Model",
     light: "Light",
     dark: "Dark",
     system: "System",
@@ -158,15 +164,15 @@ const LABELS = {
 
 const FLOW = {
   zh: [
-    ["发送", "空闲时按钮是「发送消息」。回显先标发送中，再进入本轮。"],
-    ["排队", "本轮还在跑：Enter 把消息放进输入区排队，等本轮结束后再答。"],
-    ["插队", "插队等本轮结束后立刻答，不等于停止，优先于排队。气泡标插队中，可撤回。"],
+    ["发送", "空闲时右下角蓝圈是发送（无障碍名「发送消息」）。用户气泡先标「发送中」，再进入本轮。"],
+    ["排队", "本轮还在跑：蓝圈变成停止。Enter 把下一句放进排队条，等本轮结束后再答。"],
+    ["插队", "插队等本轮结束后立刻答，不等于停止，优先于排队。气泡标「插队中」，可撤回。"],
     ["主线 / 支线", "工作区主线钉侧栏标题。支线是分叉会话，不是藏起来的子代理。"],
     ["委派", "subagent(member_id) 把活交给预置干员。球在侧栏可见。配额默认 2 / 2。"],
   ],
   en: [
-    ["Send", "Idle send is “Send message”. The echo shows Sending, then the turn starts."],
-    ["Queue", "While a turn is live, Enter parks the follow-up in the input dock until this turn ends."],
+    ["Send", "Idle send is the blue circle (accessible name “Send message”). The user bubble shows Sending, then the turn starts."],
+    ["Queue", "While a turn is live the circle becomes Stop. Enter parks the next line in the queue dock until this turn ends."],
     ["Steer", "Steer answers right after this turn — not Stop, ahead of queue. The bubble shows Steering; it can be withdrawn."],
     ["Main / branch", "The workspace thread pins the sidebar title. A branch is an ordinary fork, not a hidden subagent."],
     ["Delegate", "subagent(member_id) hands work to a seeded operator. The ball stays visible. Quota defaults to 2 / 2."],
@@ -256,6 +262,11 @@ function renderPage(catalog, env, zh) {
       : `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`;
     return `<article class="row"><div><h2>${escapeHtml(label)}</h2><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
   }).join("");
+  const orbit = SEEDS.map((m, index) => {
+    const title = zh ? m.name : m.nameEn;
+    const brief = zh ? m.brief : m.briefEn;
+    return `<button type="button" class="orbit-ball" data-member="${escapeHtml(m.id)}" data-name="${escapeHtml(title)}" data-brief="${escapeHtml(brief)}" aria-label="${escapeHtml(title)}" aria-pressed="${index === 0 ? "true" : "false"}">${ballMount(m)}</button>`;
+  }).join("");
   const scenes = (zh ? FLOW.zh : FLOW.en).map(([title, body], i) =>
     `<article class="scene${i === 0 ? " on" : ""}" data-scene="${i}" ${i === 0 ? "" : "hidden"}>
       <h3>${escapeHtml(title)}</h3>
@@ -308,9 +319,12 @@ function renderPage(catalog, env, zh) {
         <p class="lead">${escapeHtml(t.lead)}</p>
         <div class="cta">${cta}<a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
-      <div class="pair" aria-hidden="true">
-        ${ballMount(SEEDS[0], "lg")}
-        ${ballMount(SEEDS[1], "lg")}
+      <div class="pair">
+        ${SEEDS.slice(0, 2).map((m, i) => {
+          const title = zh ? m.name : m.nameEn;
+          const brief = zh ? m.brief : m.briefEn;
+          return `<button type="button" class="hero-ball" data-member="${escapeHtml(m.id)}" data-name="${escapeHtml(title)}" data-brief="${escapeHtml(brief)}" aria-label="${escapeHtml(title)}" aria-pressed="${i === 0 ? "true" : "false"}">${ballMount(m, "lg")}</button>`;
+        }).join("")}
       </div>
     </section>
     <section class="play" id="play">
@@ -358,6 +372,7 @@ function renderPage(catalog, env, zh) {
         </aside>
         <div class="pane">
           <div class="chrome">
+            ${ballMount(SEEDS[0], "sm")}
             <strong id="thread-title">${escapeHtml(t.trunkTitle)}</strong>
             <span id="thread-tag">${escapeHtml(t.trunk)}</span>
           </div>
@@ -370,10 +385,23 @@ function renderPage(catalog, env, zh) {
           </div>
           <form class="composer" id="composer">
             <textarea id="draft" rows="2" placeholder="${escapeHtml(t.placeholder)}" aria-label="${escapeHtml(t.placeholder)}"></textarea>
-            <div class="tools">
-              <span class="slash" aria-hidden="true">${escapeHtml(t.slash)}</span>
-              <button type="button" class="ghost" id="stop-btn" hidden>${escapeHtml(t.stop)}</button>
-              <button type="button" class="btn" id="send-btn" aria-label="${escapeHtml(t.send)}">${escapeHtml(t.send)}</button>
+            <div class="crow">
+              <div class="ctools">
+                <button type="button" class="add" aria-label="${escapeHtml(t.commands)}" disabled>
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </button>
+                <span class="cselect">${escapeHtml(t.access)}</span>
+                <span class="cselect">${escapeHtml(t.plan)}</span>
+              </div>
+              <div class="ctrail">
+                <span class="cselect">${escapeHtml(t.model)}</span>
+                <span class="meter" aria-hidden="true">
+                  <svg viewBox="0 0 18 18" width="18" height="18"><circle class="track" cx="9" cy="9" r="6"/><circle class="fill" cx="9" cy="9" r="6" transform="rotate(-90 9 9)"/></svg>
+                </span>
+                <button type="button" class="primary is-idle" id="send-btn" aria-label="${escapeHtml(t.send)}">
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z"/></svg>
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -423,6 +451,7 @@ function renderPage(catalog, env, zh) {
     <section class="reel" id="flow" aria-label="${escapeHtml(t.flow)}">
       <h2>${escapeHtml(t.flow)}</h2>
       <div class="film" data-reel>${scenes}</div>
+      <div class="orbit">${orbit}</div>
       <div class="dots">${dots}</div>
     </section>
     <section class="download" id="download">
