@@ -26,9 +26,10 @@ const TARGET_KEY = { "win-x64": "win", "mac-arm64": "macArm", "mac-x64": "macInt
 const LABELS = {
   zh: {
     lead: "会话是真源。干员可委派。设置里改模型与 MCP。桌面目前只提供 Windows x64。",
+    tagline: "向阳而生，驭光而行",
     skip: "跳到干员",
     play: "点一名干员",
-    playHint: "球与产品同一套 EmotionBall。点选委派；下面的对话按产品脚本演示发送、排队、插队。",
+    playHint: "同一套 EmotionBall。点干员委派。对话区按产品脚本走发送、排队、插队；概况栏跟着切。",
     you: "你",
     assign: "委派",
     assigned: "已委派",
@@ -53,7 +54,22 @@ const LABELS = {
     steerMsg: "先看 nightly.yml。",
     toolOut: "bash · node -v → v26.10.0",
     reply: "安装包目录已核。配额 2 / 2。",
-    lang: "EN",
+    sessions: "会话",
+    team: "Agent Team",
+    overview: "概况",
+    graph: "委派图",
+    tasks: "任务",
+    stop: "停止生成",
+    slash: "/",
+    home: "委派方",
+    running: "运行中",
+    merge: "合回主仓",
+    openChild: "打开子会话",
+    seed: "预置",
+    workspace: "工作区",
+    plan: "计划",
+    changes: "改动",
+    newSession: "新建会话",
     light: "浅色",
     dark: "深色",
     system: "系统",
@@ -71,12 +87,14 @@ const LABELS = {
     copy: "复制",
     copied: "已复制",
     mit: "MIT",
+    lang: "EN",
   },
   en: {
     lead: "Sessions are the source of truth. Operators take delegated work. Models and MCP live in Settings. Desktop ships for Windows x64 only.",
+    tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to operators",
     play: "Pick an operator",
-    playHint: "Same EmotionBall engine as the product. Delegate on pick. The thread below scripts send, queue, and steer.",
+    playHint: "Same EmotionBall engine. Delegate on pick. The thread scripts send, queue, and steer; Overview follows.",
     you: "You",
     assign: "Delegate",
     assigned: "Delegated",
@@ -101,7 +119,22 @@ const LABELS = {
     steerMsg: "Read nightly.yml first.",
     toolOut: "bash · node -v → v26.10.0",
     reply: "Installer catalog checked. Quota 2 / 2.",
-    lang: "中文",
+    sessions: "Sessions",
+    team: "Agent Team",
+    overview: "Overview",
+    graph: "Delegation graph",
+    tasks: "Tasks",
+    stop: "Stop generating",
+    slash: "/",
+    home: "Delegator",
+    running: "running",
+    merge: "Merge to main",
+    openChild: "Open child",
+    seed: "seed",
+    workspace: "Workspace",
+    plan: "Plan",
+    changes: "Changes",
+    newSession: "New session",
     light: "Light",
     dark: "Dark",
     system: "System",
@@ -119,6 +152,7 @@ const LABELS = {
     copy: "Copy",
     copied: "Copied",
     mit: "MIT",
+    lang: "中文",
   },
 };
 
@@ -270,7 +304,7 @@ function renderPage(catalog, env, zh) {
   <main class="page">
     <section class="hero">
       <div>
-        <h1>向阳而生，驭光而行</h1>
+        <h1>${escapeHtml(t.tagline)}</h1>
         <p class="lead">${escapeHtml(t.lead)}</p>
         <div class="cta">${cta}<a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
@@ -282,7 +316,6 @@ function renderPage(catalog, env, zh) {
     <section class="play" id="play">
       <h2>${escapeHtml(t.play)}</h2>
       <p class="hint">${escapeHtml(t.playHint)}</p>
-      <div class="roster">${roster}</div>
       <div class="shell" id="desk"
         data-send="${escapeHtml(t.send)}"
         data-queue="${escapeHtml(t.sendQueue)}"
@@ -301,9 +334,18 @@ function renderPage(catalog, env, zh) {
         data-tool="${escapeHtml(t.toolOut)}"
         data-reply="${escapeHtml(t.reply)}"
         data-assigned="${escapeHtml(t.assigned)}"
+        data-stop="${escapeHtml(t.stop)}"
       >
+        <div class="deskbar" aria-hidden="true">XRK Harness</div>
         <aside class="rail">
+          <p class="ws">${escapeHtml(t.workspace)} · XRK-harness</p>
+          <p class="rail-k">${escapeHtml(t.team)}</p>
           <p class="quota">${escapeHtml(t.quota)}</p>
+          <div class="roster">${roster}</div>
+          <p class="who" id="pick-name">${escapeHtml(firstName)}</p>
+          <p id="pick-brief">${escapeHtml(firstBrief)}</p>
+          <button type="button" class="btn" id="delegate-btn">${escapeHtml(t.assign)}</button>
+          <p class="rail-k">${escapeHtml(t.sessions)}</p>
           <button type="button" class="sess on" data-session="trunk" aria-pressed="true">
             <strong>${escapeHtml(t.trunkTitle)}</strong>
             <span>${escapeHtml(t.trunk)}</span>
@@ -312,13 +354,15 @@ function renderPage(catalog, env, zh) {
             <strong>${escapeHtml(t.branchTitle)}</strong>
             <span>${escapeHtml(t.branch)}</span>
           </button>
-          <p class="who" id="pick-name">${escapeHtml(firstName)}</p>
-          <p id="pick-brief">${escapeHtml(firstBrief)}</p>
-          <button type="button" class="btn" id="delegate-btn">${escapeHtml(t.assign)}</button>
+          <button type="button" class="ghost new-sess" id="new-sess">${escapeHtml(t.newSession)}</button>
         </aside>
         <div class="pane">
+          <div class="chrome">
+            <strong id="thread-title">${escapeHtml(t.trunkTitle)}</strong>
+            <span id="thread-tag">${escapeHtml(t.trunk)}</span>
+          </div>
           <div class="thread" id="thread">
-            <div class="bubble"><span class="who">${escapeHtml(t.you)}</span><p>${escapeHtml(t.opener)}</p></div>
+            <div class="userRow"><div class="bubble"><p>${escapeHtml(t.opener)}</p></div></div>
           </div>
           <div class="qdock" id="qdock" hidden>
             <p class="qhead" id="qcount">${escapeHtml(t.queueCount)}</p>
@@ -326,9 +370,54 @@ function renderPage(catalog, env, zh) {
           </div>
           <form class="composer" id="composer">
             <textarea id="draft" rows="2" placeholder="${escapeHtml(t.placeholder)}" aria-label="${escapeHtml(t.placeholder)}"></textarea>
-            <button type="button" class="btn" id="send-btn" aria-label="${escapeHtml(t.send)}">${escapeHtml(t.send)}</button>
+            <div class="tools">
+              <span class="slash" aria-hidden="true">${escapeHtml(t.slash)}</span>
+              <button type="button" class="ghost" id="stop-btn" hidden>${escapeHtml(t.stop)}</button>
+              <button type="button" class="btn" id="send-btn" aria-label="${escapeHtml(t.send)}">${escapeHtml(t.send)}</button>
+            </div>
           </form>
         </div>
+        <aside class="overview">
+          <div class="seg" role="tablist">
+            <button type="button" class="on" data-ov="status">${escapeHtml(t.overview)}</button>
+            <button type="button" data-ov="graph">${escapeHtml(t.graph)}</button>
+            <button type="button" data-ov="tasks">${escapeHtml(t.tasks)}</button>
+            <button type="button" data-ov="plan">${escapeHtml(t.plan)}</button>
+            <button type="button" data-ov="changes">${escapeHtml(t.changes)}</button>
+          </div>
+          <div data-ov-panel="status">
+            <div class="ov-home">
+              ${ballMount(SEEDS[3], "sm")}
+              <p>XRK-harness</p>
+            </div>
+            <dl class="meta">
+              <div><dt>${escapeHtml(t.home)}</dt><dd>XRK-harness</dd></div>
+              <div><dt>${escapeHtml(t.team)}</dt><dd id="ov-member">${escapeHtml(firstName)}</dd></div>
+              <div><dt>${escapeHtml(t.quota)}</dt><dd class="nums">2 / 2</dd></div>
+            </dl>
+          </div>
+          <div data-ov-panel="graph" hidden>
+            <ol class="graph">
+              <li>${escapeHtml(t.home)} · XRK-harness</li>
+              <li id="graph-child">${escapeHtml(t.running)} · ${escapeHtml(firstName)}</li>
+            </ol>
+          </div>
+          <div data-ov-panel="tasks" hidden>
+            <article class="task">
+              <strong id="task-name">${escapeHtml(firstName)}</strong>
+              <span class="seed">${escapeHtml(t.running)}</span>
+              <p id="task-brief">${escapeHtml(firstBrief)}</p>
+              <span class="btn" aria-disabled="true">${escapeHtml(t.openChild)}</span>
+              <span class="btn btn-outline" aria-disabled="true">${escapeHtml(t.merge)}</span>
+            </article>
+          </div>
+          <div data-ov-panel="plan" hidden>
+            <p class="hint">${escapeHtml(zh ? "本轮还没有计划条目。概况里有才会写。" : "No plan items until Overview writes them.")}</p>
+          </div>
+          <div data-ov-panel="changes" hidden>
+            <p class="hint">${escapeHtml(zh ? "改动面板跟仓库 diff，空会话不编造文件。" : "Changes follow the repo diff. An empty session invents none.")}</p>
+          </div>
+        </aside>
       </div>
     </section>
     <section class="reel" id="flow" aria-label="${escapeHtml(t.flow)}">

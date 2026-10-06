@@ -70,13 +70,42 @@ function selectMember(id) {
   });
   const name = document.getElementById("pick-name");
   const brief = document.getElementById("pick-brief");
+  const ov = document.getElementById("ov-member");
+  const graph = document.getElementById("graph-child");
+  const taskName = document.getElementById("task-name");
+  const taskBrief = document.getElementById("task-brief");
   if (name) name.textContent = card.dataset.name || "";
   if (brief) brief.textContent = card.dataset.brief || "";
+  if (ov) ov.textContent = card.dataset.name || "";
+  if (graph) graph.textContent = `${document.getElementById("desk")?.dataset.assigned || ""} · ${card.dataset.name || ""}`;
+  if (taskName) taskName.textContent = card.dataset.name || "";
+  if (taskBrief) taskBrief.textContent = card.dataset.brief || "";
 }
 
-function bubble(who, text, badge) {
+function bubble(text, badge, kind) {
+  const row = kind === "asst" ? "asstRow" : "userRow";
   const mark = badge ? `<span class="badge">${badge}</span>` : "";
-  return `<div class="bubble"><span class="who">${who}</span><p>${text}</p>${mark}</div>`;
+  return `<div class="${row}"><div class="bubble"><p>${text}</p></div>${mark}</div>`;
+}
+
+function setBusy(on, labels) {
+  const stop = document.getElementById("stop-btn");
+  const sendBtn = document.getElementById("send-btn");
+  const draft = document.getElementById("draft");
+  if (stop) stop.hidden = !on;
+  if (!sendBtn || !labels) return;
+  sendBtn.textContent = on ? labels.queue : labels.send;
+  sendBtn.setAttribute("aria-label", sendBtn.textContent);
+  if (draft) draft.placeholder = on ? labels.phBusy : labels.ph;
+}
+
+function showOv(id) {
+  document.querySelectorAll("[data-ov]").forEach((btn) => {
+    btn.classList.toggle("on", btn.dataset.ov === id);
+  });
+  document.querySelectorAll("[data-ov-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.ovPanel !== id;
+  });
 }
 
 function showScene(i) {
@@ -97,75 +126,85 @@ function runDesk() {
   const qbadge = document.getElementById("qbadge");
   const sendBtn = document.getElementById("send-btn");
   const draft = document.getElementById("draft");
+  const title = document.getElementById("thread-title");
+  const tag = document.getElementById("thread-tag");
   if (!desk || !thread || !sendBtn || !draft) return;
   const d = desk.dataset;
-  const you = d.you || "";
+  const labels = { send: d.send, queue: d.queue, ph: d.ph, phBusy: d.phBusy };
   let timer = 0;
   let paused = false;
   let beat = 0;
 
+  function pickTitle() {
+    const on = document.querySelector("[data-session].on");
+    if (title && on) title.textContent = on.querySelector("strong")?.textContent || "";
+    if (tag && on) tag.textContent = on.querySelector("span")?.textContent || "";
+  }
+
   const frames = [
     () => {
-      thread.innerHTML = bubble(you, d.opener);
-      qdock.hidden = true;
-      sendBtn.textContent = d.send;
-      sendBtn.setAttribute("aria-label", d.send);
-      draft.placeholder = d.ph;
+      thread.innerHTML = bubble(d.opener);
+      if (qdock) qdock.hidden = true;
+      setBusy(false, labels);
+      showOv("status");
+      pickTitle();
       showScene(0);
     },
     () => {
-      thread.innerHTML = bubble(you, d.opener, d.sending);
+      thread.innerHTML = bubble(d.opener, d.sending);
+      setBusy(false, labels);
       sendBtn.textContent = d.send;
       showScene(0);
     },
     () => {
       thread.innerHTML =
-        bubble(you, d.opener) +
+        bubble(d.opener) +
         `<p class="wait" role="status">${d.waiting}</p>` +
         `<div class="tool"><p>${d.tool}</p></div>`;
-      sendBtn.textContent = d.queue;
-      sendBtn.setAttribute("aria-label", d.queue);
-      draft.placeholder = d.phBusy;
+      setBusy(true, labels);
+      showOv("status");
       showScene(1);
     },
     () => {
-      qdock.hidden = false;
-      qbadge.textContent = d.sending;
-      sendBtn.textContent = d.queue;
+      if (qdock) qdock.hidden = false;
+      if (qbadge) qbadge.textContent = d.sending;
+      setBusy(true, labels);
       showScene(1);
     },
     () => {
-      qbadge.textContent = d.queue;
+      if (qbadge) qbadge.textContent = d.steer;
       thread.innerHTML =
-        bubble(you, d.opener) +
+        bubble(d.opener) +
         `<p class="wait" role="status">${d.waiting}</p>` +
-        bubble(you, d.steerMsg, d.steering) +
+        bubble(d.steerMsg, d.steering) +
         `<button type="button" class="ghost" disabled>${d.withdraw}</button>`;
       sendBtn.textContent = d.steer;
       sendBtn.setAttribute("aria-label", d.steer);
+      showOv("graph");
       showScene(2);
     },
     () => {
-      qdock.hidden = true;
+      if (qdock) qdock.hidden = true;
       thread.innerHTML =
-        bubble(you, d.opener) +
+        bubble(d.opener) +
         `<div class="tool"><p>${d.tool}</p></div>` +
-        bubble(you, d.steerMsg) +
-        bubble(you, d.queued) +
-        `<div class="bubble"><span class="who">${document.getElementById("pick-name")?.textContent || ""}</span><p>${d.reply}</p></div>`;
-      sendBtn.textContent = d.send;
-      sendBtn.setAttribute("aria-label", d.send);
-      draft.placeholder = d.ph;
+        bubble(d.steerMsg) +
+        bubble(d.queued) +
+        bubble(d.reply, "", "asst");
+      setBusy(false, labels);
+      showOv("tasks");
       showScene(3);
     },
     () => {
       document.querySelector('[data-session="branch"]')?.classList.add("on");
       document.querySelector('[data-session="trunk"]')?.classList.remove("on");
+      pickTitle();
       showScene(4);
     },
     () => {
       document.querySelector('[data-session="trunk"]')?.classList.add("on");
       document.querySelector('[data-session="branch"]')?.classList.remove("on");
+      pickTitle();
       showScene(0);
     },
   ];
@@ -194,6 +233,7 @@ function runDesk() {
         el.classList.toggle("on", el === btn);
         el.setAttribute("aria-pressed", el === btn ? "true" : "false");
       });
+      pickTitle();
     });
   });
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -216,6 +256,10 @@ document.querySelectorAll("[data-member]").forEach((btn) => {
   btn.addEventListener("click", () => selectMember(btn.dataset.member || ""));
 });
 
+document.querySelectorAll("[data-ov]").forEach((btn) => {
+  btn.addEventListener("click", () => showOv(btn.dataset.ov || "status"));
+});
+
 const delegateBtn = document.getElementById("delegate-btn");
 if (delegateBtn) {
   delegateBtn.addEventListener("click", () => {
@@ -225,8 +269,9 @@ if (delegateBtn) {
     if (!card || !thread || !desk) return;
     thread.insertAdjacentHTML(
       "beforeend",
-      bubble(card.dataset.name || "", `${desk.dataset.assigned} · ${card.dataset.brief || ""}`),
+      bubble(`${desk.dataset.assigned} · ${card.dataset.brief || ""}`, "", "asst"),
     );
+    showOv("tasks");
   });
 }
 
