@@ -26,6 +26,9 @@ export function createElectronBuilderConfig(
     resolveDesktopMacOSSigningEnvironment,
     resolveDesktopWindowsSigningEnvironment,
   } = requireFromApp("./dist/desktop-signing-environment.js");
+  const { isDesktopUnsignedUpdateRequested } = requireFromApp(
+    "./dist/desktop-auto-update-environment.js",
+  );
   const {
     assertDesktopWindowsSigningReady,
     createDesktopWindowsTokenSigner,
@@ -90,9 +93,11 @@ export function createElectronBuilderConfig(
     (env.XRK_DESKTOP_AUTO_UPDATE_ENV?.trim() || "test") === "production"
       ? env.XRK_DESKTOP_UPDATE_ORIGIN?.trim()
       : env.XRK_DESKTOP_UPDATE_TEST_ORIGIN?.trim();
-  // Unsigned Windows builds must not embed a feed (matches dsh: update disabled when UNSIGNED=1).
+  // Unsigned builds omit the feed unless XRK_DESKTOP_UNSIGNED_UPDATE=1 (test origin).
   const updateUrl =
-    unsigned || !updateOrigin || updateOrigin.length === 0
+    (unsigned && !isDesktopUnsignedUpdateRequested(env)) ||
+    !updateOrigin ||
+    updateOrigin.length === 0
       ? undefined
       : `${updateOrigin.replace(/\/+$/u, "")}/desktop/${targetName}`;
 
@@ -193,6 +198,13 @@ export function createElectronBuilderConfig(
         "",
       ].join("\n");
       writeFileSync(join(resourcesDir, "app-update.yml"), yml, "utf8");
+      if (unsigned) {
+        writeFileSync(
+          join(resourcesDir, "unsigned-update.json"),
+          `${JSON.stringify({ verifyUpdateCodeSignature: false })}\n`,
+          "utf8",
+        );
+      }
     },
     mac: {
       category: "public.app-category.developer-tools",

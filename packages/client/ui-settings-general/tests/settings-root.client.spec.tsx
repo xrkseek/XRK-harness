@@ -9,6 +9,7 @@ import { en, type SettingsKey } from '../src/client/locales.ts'
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
 })
 
 type Row = { id: string; order: number; label: string }
@@ -25,7 +26,15 @@ const SEAT_CONTENT: Record<string, string> = {
 type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
 type ConnectionPhaseSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionPhase']>[0]>[0]
 
-const t: SettingsRootComponentProps['t'] = (key) => en[key as SettingsKey]
+const t: SettingsRootComponentProps['t'] = (key, params) => {
+  let text: string = en[key as SettingsKey]
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.replaceAll(`{${name}}`, String(value))
+    }
+  }
+  return text
+}
 
 function mount(options: {
   wide?: boolean
@@ -206,6 +215,23 @@ describe('SettingsRoot trigger', () => {
   it('keeps the reconnect indicator out of the collapsed rail', () => {
     mount({ wide: false, connectionState: 'reconnecting' })
     expect(screen.queryByRole('button', { name: 'Connecting, restart now' })).toBeNull()
+  })
+
+  it('shows the Desktop update chip in the Host reconnect slot, then yields to reconnect chrome', async () => {
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check: vi.fn(),
+        snapshot: async () => ({ phase: 'available' as const, version: '0.5.14' }),
+        install: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    }
+    const mounted = mount()
+    expect(await screen.findByRole('button', { name: 'Update 0.5.14' })).toBeTruthy()
+    mounted.setConnectionState('reconnecting')
+    expect(screen.queryByRole('button', { name: 'Update 0.5.14' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Connecting, restart now' })).toBeTruthy()
   })
 })
 

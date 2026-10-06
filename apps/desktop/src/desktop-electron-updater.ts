@@ -10,6 +10,8 @@ export interface DesktopElectronUpdaterOptions {
   readonly channel?: "nightly";
   readonly allowPrerelease?: boolean;
   readonly allowDowngrade?: boolean;
+  /** Windows: unsigned test feeds must skip Authenticode publisher checks. */
+  readonly verifyUpdateCodeSignature?: boolean;
 }
 
 /**
@@ -26,6 +28,9 @@ export function configureDesktopElectronUpdater(
   updater.channel = options.channel ?? "nightly";
   updater.allowPrerelease = options.allowPrerelease ?? true;
   updater.allowDowngrade = options.allowDowngrade ?? false;
+  if (options.verifyUpdateCodeSignature === false) {
+    updater.verifyUpdateCodeSignature = false;
+  }
   return {
     get autoDownload() {
       return updater.autoDownload as boolean;
@@ -53,6 +58,16 @@ export function configureDesktopElectronUpdater(
     downloadUpdate: async () => updater.downloadUpdate(),
     quitAndInstall: (isSilent?: boolean, isForceRunAfter?: boolean) => {
       updater.quitAndInstall(isSilent ?? false, isForceRunAfter ?? true);
+    },
+    onDownloadProgress: (listener: (percent: number) => void) => {
+      const handle = (info: { percent?: number }): void => {
+        const raw = typeof info?.percent === "number" ? info.percent : 0;
+        listener(raw);
+      };
+      updater.on("download-progress", handle);
+      return () => {
+        updater.off("download-progress", handle);
+      };
     },
   };
 }

@@ -7,6 +7,15 @@ import type { DesktopPackageTargetName } from "./package-targets.js";
 
 export const DESKTOP_AUTO_UPDATE_ENV = "XRK_DESKTOP_AUTO_UPDATE_ENV" as const;
 
+/** Opt-in: embed generic feed on unsigned Windows test builds (AGT / local origin). */
+export const DESKTOP_UNSIGNED_UPDATE_ENV = "XRK_DESKTOP_UNSIGNED_UPDATE" as const;
+
+export function isDesktopUnsignedUpdateRequested(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env[DESKTOP_UNSIGNED_UPDATE_ENV]?.trim() === "1";
+}
+
 export type DesktopAutoUpdateChannel = "test" | "production";
 
 export interface DesktopAutoUpdateConfig {

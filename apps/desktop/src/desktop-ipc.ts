@@ -32,6 +32,10 @@ export interface DesktopIpcWindow {
 export interface RegisterDesktopIpcOptions {
   /** Electron `app.getLocale()` (or test stub). */
   getLocale: () => string;
+  /** Electron `app.getVersion()` (or test stub). */
+  getAppVersion?: () => string;
+  /** Latest coordinator state without hitting the feed. */
+  getUpdateState?: () => DesktopUpdateState;
   /**
    * Update check / install. Prefer wiring {@link DesktopUpdateCoordinator}
    * (electron-updater port). Default: idle / not configured.
@@ -71,6 +75,12 @@ export function registerDesktopIpcHandlers(
 ): void {
   ipcMain.handle(DESKTOP_IPC.localeGet, (): DesktopLocale => {
     return resolveDesktopLocale(options.getLocale());
+  });
+  ipcMain.handle(DESKTOP_IPC.appVersion, (): string => {
+    return options.getAppVersion?.() ?? "";
+  });
+  ipcMain.handle(DESKTOP_IPC.updatesSnapshot, (): DesktopUpdateState => {
+    return options.getUpdateState?.() ?? idleUpdate;
   });
   ipcMain.handle(DESKTOP_IPC.updatesCheck, async (): Promise<DesktopUpdateState> => {
     if (options.checkUpdates) return options.checkUpdates();

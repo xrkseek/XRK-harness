@@ -5,6 +5,7 @@ import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+import { DesktopReleaseFooter } from '../src/client/DesktopReleaseFooter.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from '../src/client/settings-document-store.ts'
@@ -38,6 +39,83 @@ describe('chrome content', () => {
     render(<CloseLabel {...kit} t={t} />)
     expect(screen.getByText('Settings')).toBeTruthy()
     expect(screen.getByText('Close')).toBeTruthy()
+  })
+})
+
+describe('DesktopReleaseFooter', () => {
+  const interpolate: TriggerContentProps['t'] = (key, params) => {
+    let text = (en as Record<string, string>)[key] ?? key
+    if (params) {
+      for (const [name, value] of Object.entries(params)) {
+        text = text.replaceAll(`{${name}}`, String(value))
+      }
+    }
+    return text
+  }
+
+  afterEach(() => {
+    delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
+  })
+
+  it('hides on web when the Desktop bridge is absent', () => {
+    const { container } = render(<DesktopReleaseFooter t={interpolate} />)
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('uses the Host reconnect chip for an available update', async () => {
+    const check = vi.fn(async () => ({ phase: 'available' as const, version: '0.5.14' }))
+    const snapshot = vi.fn(async () => ({ phase: 'available' as const, version: '0.5.14' }))
+    const install = vi.fn(async () => undefined)
+    const subscribe = vi.fn(() => () => undefined)
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: { check, snapshot, install, subscribe },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    const available = await screen.findByRole('button', { name: 'Update 0.5.14' })
+    expect(available.className).toContain('warning')
+    fireEvent.click(available)
+    expect(check).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Software update' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Install and restart' }))
+    expect(install).toHaveBeenCalledOnce()
+  })
+
+  it('shows the installed version as a status chip when no update is waiting', async () => {
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check: vi.fn(),
+        snapshot: async () => ({ phase: 'idle' as const }),
+        install: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'v0.5.13' })).toBeTruthy()
+    })
+  })
+
+  it('shows download progress in the in-app dialog', async () => {
+    let push: ((state: { phase: 'installing'; version: string; percent: number }) => void) | undefined
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check: vi.fn(),
+        snapshot: async () => ({ phase: 'available' as const, version: '0.5.14' }),
+        install: vi.fn(async () => undefined),
+        subscribe: (listener: (state: { phase: 'installing'; version: string; percent: number }) => void) => {
+          push = listener
+          return () => undefined
+        },
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Update 0.5.14' }))
+    push?.({ phase: 'installing', version: '0.5.14', percent: 42 })
+    const bar = await screen.findByRole('progressbar', { name: '42%' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('42')
   })
 })
 

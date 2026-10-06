@@ -110,6 +110,7 @@ describe("DesktopUpdateCoordinator", () => {
     await expect(coordinator.install()).resolves.toEqual({
       phase: "ready",
       version: "1.1.0",
+      percent: 100,
     });
     expect(downloadUpdate).toHaveBeenCalledOnce();
     expect(beforeRestart).toHaveBeenCalledOnce();
@@ -122,6 +123,52 @@ describe("DesktopUpdateCoordinator", () => {
     ]);
     expect(updater.autoDownload).toBe(false);
     expect(updater.autoInstallOnAppQuit).toBe(false);
+  });
+
+  it("publishes download percent while installing", async () => {
+    const states: DesktopUpdateState[] = [];
+    let progress: ((percent: number) => void) | undefined;
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({
+        isUpdateAvailable: true,
+        updateInfo: { version: "1.1.0" },
+      })),
+      downloadUpdate: vi.fn(async () => {
+        progress?.(10);
+        progress?.(10);
+        progress?.(55);
+      }),
+      quitAndInstall: vi.fn(),
+      onDownloadProgress: (listener: (percent: number) => void) => {
+        progress = listener;
+        return () => {
+          progress = undefined;
+        };
+      },
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => {
+        states.push(state);
+        return state;
+      },
+      updater,
+      enabled: () => true,
+    });
+    await coordinator.check();
+    await coordinator.install();
+    expect(states).toContainEqual({
+      phase: "available",
+      version: "1.1.0",
+      percent: 10,
+    });
+    expect(states).toContainEqual({
+      phase: "available",
+      version: "1.1.0",
+      percent: 55,
+    });
+    expect(states.filter((row) => row.percent === 10)).toHaveLength(1);
   });
 
   it("queues install behind an in-flight check", async () => {
@@ -162,6 +209,7 @@ describe("DesktopUpdateCoordinator", () => {
     await expect(install).resolves.toEqual({
       phase: "ready",
       version: "2.0.0",
+      percent: 100,
     });
   });
 

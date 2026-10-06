@@ -23,6 +23,8 @@ export interface DesktopAppUpdater {
   } | null>;
   downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
+  /** electron-updater `download-progress`; omit in tests that skip percent. */
+  onDownloadProgress?(listener: (percent: number) => void): () => void;
 }
 
 export interface DesktopUpdateCoordinatorOptions {
@@ -76,6 +78,7 @@ export class DesktopUpdateCoordinator {
   private current: DesktopUpdateState = { phase: "idle" };
   private checkOperation: Promise<DesktopUpdateState> | undefined;
   private installOperation: Promise<DesktopUpdateState> | undefined;
+  private downloadOperation: Promise<void> | undefined;
   private readonly publishState: (
     state: DesktopUpdateState,
   ) => DesktopUpdateState;
@@ -86,6 +89,7 @@ export class DesktopUpdateCoordinator {
   private readonly resolveUpdateUnit:
     | ((availableVersion: string) => DesktopRelease)
     | undefined;
+  private lastPercent = -1;
 
   constructor(options: DesktopUpdateCoordinatorOptions) {
     this.publishState = options.publish;
@@ -96,6 +100,23 @@ export class DesktopUpdateCoordinator {
     this.resolveUpdateUnit = options.resolveUpdateUnit;
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = false;
+    this.updater.onDownloadProgress?.((percent) => {
+      const rounded = Math.round(Math.min(100, Math.max(0, percent)));
+      if (rounded === this.lastPercent) return;
+      this.lastPercent = rounded;
+      if (this.current.phase !== "installing" && this.current.phase !== "available") {
+        return;
+      }
+      this.publish({
+        phase: this.current.phase,
+        ...(this.availableVersion !== undefined
+          ? { version: this.availableVersion }
+          : this.current.version !== undefined
+            ? { version: this.current.version }
+            : {}),
+        percent: rounded,
+      });
+    });
   }
 
   /** Latest observable state for schedule / UI. */
@@ -125,12 +146,20 @@ export class DesktopUpdateCoordinator {
   async install(): Promise<DesktopUpdateState> {
     if (this.installOperation !== undefined) return this.installOperation;
     this.installOperation = (async () => {
-      await this.checkOperation;
+      if (this.availableVersion === undefined) {
+        await this.checkOperation;
+      }
       return this.doInstall();
     })().finally(() => {
       this.installOperation = undefined;
     });
     return this.installOperation;
+  }
+
+  private startDownload(): Promise<void> {
+    if (this.downloadOperation !== undefined) return this.downloadOperation;
+    this.downloadOperation = this.updater.downloadUpdate().then(() => undefined);
+    return this.downloadOperation;
   }
 
   private async doCheck(): Promise<DesktopUpdateState> {
@@ -157,9 +186,26 @@ export class DesktopUpdateCoordinator {
             ? false
             : desktopVersionIsNewer(version, this.currentVersion());
       this.availableVersion = newer ? version : undefined;
-      return this.availableVersion === undefined
-        ? this.publish({ phase: "idle" })
-        : this.publish({ phase: "available", version: this.availableVersion });
+      if (this.availableVersion === undefined) {
+        this.downloadOperation = undefined;
+        return this.publish({ phase: "idle" });
+      }
+      const available = this.publish({
+        phase: "available",
+        version: this.availableVersion,
+        ...(this.lastPercent > 0 ? { percent: this.lastPercent } : {}),
+      });
+      void this.startDownload().catch((error: unknown) => {
+        this.downloadOperation = undefined;
+        this.publish({
+          phase: "error",
+          ...(this.availableVersion !== undefined
+            ? { version: this.availableVersion }
+            : {}),
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return available;
     } catch (error) {
       this.availableVersion = undefined;
       return this.publish({
@@ -190,11 +236,17 @@ export class DesktopUpdateCoordinator {
         );
       }
     }
-    this.publish({ phase: "installing", version });
+    this.publish({
+      phase: "installing",
+      version,
+      percent: Math.max(0, this.lastPercent),
+    });
     try {
-      await this.updater.downloadUpdate();
+      await this.startDownload();
       this.availableVersion = undefined;
-      const ready = this.publish({ phase: "ready", version });
+      this.downloadOperation = undefined;
+      this.lastPercent = 100;
+      const ready = this.publish({ phase: "ready", version, percent: 100 });
       await this.beforeRestart();
       this.updater.quitAndInstall(false, true);
       return ready;

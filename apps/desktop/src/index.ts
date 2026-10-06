@@ -92,9 +92,11 @@ export {
 } from "./windows-sign.js";
 export {
   DESKTOP_AUTO_UPDATE_ENV,
+  DESKTOP_UNSIGNED_UPDATE_ENV,
   desktopElectronBuilderPublish,
   desktopPackageCompleteFilename,
   desktopUpdateMetadataFilename,
+  isDesktopUnsignedUpdateRequested,
   renderDesktopAppUpdateYml,
   resolveDesktopAutoUpdateChannel,
   resolveDesktopAutoUpdateConfig,

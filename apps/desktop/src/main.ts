@@ -7,6 +7,7 @@
  */
 
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   app,
@@ -311,7 +312,12 @@ async function bootstrapDesktopUpdates(): Promise<void> {
       forceEnable: process.env.XRK_DESKTOP_UPDATE_FORCE === "1",
     });
 
-  const electronUpdater = await tryCreateDesktopElectronUpdater();
+  const unsignedFeed = existsSync(
+    path.join(process.resourcesPath, "unsigned-update.json"),
+  );
+  const electronUpdater = await tryCreateDesktopElectronUpdater(
+    unsignedFeed ? { verifyUpdateCodeSignature: false } : {},
+  );
   let coordinator: DesktopUpdateCoordinator | undefined;
   let schedule: DesktopUpdateSchedule | undefined;
 
@@ -344,10 +350,13 @@ async function bootstrapDesktopUpdates(): Promise<void> {
 
   registerDesktopIpcHandlers(ipcMain, {
     getLocale: () => app.getLocale(),
+    getAppVersion: () => app.getVersion(),
+    getUpdateState: () => coordinator?.state ?? { phase: "idle" },
     checkUpdates: async () => {
       if (coordinator === undefined) return { phase: "idle" };
-      if (schedule !== undefined) return schedule.check(true, true);
-      return coordinator.check(true);
+      return schedule !== undefined
+        ? schedule.check(true, true)
+        : coordinator.check(true);
     },
     installUpdate: async () => {
       if (coordinator === undefined) {

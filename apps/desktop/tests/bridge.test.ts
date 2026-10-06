@@ -90,6 +90,9 @@ describe("desktop preload bridge", () => {
       },
       {
         getLocale: () => "zh-CN",
+        getAppVersion: () => "0.5.14",
+        getUpdateState: () =>
+          ({ phase: "available", version: "0.0.1" }) satisfies DesktopUpdateState,
         checkUpdates: async () =>
           ({ phase: "available", version: "0.0.1" }) satisfies DesktopUpdateState,
       },
@@ -118,9 +121,14 @@ describe("desktop preload bridge", () => {
     const locale = await api.locale();
     expect(locale.id).toBe("zh-CN");
     expect(locale.messages.checkUpdatesMenu).toContain("检查更新");
+    expect(await api.version()).toBe("0.5.14");
 
     const state = await api.updates.check();
     expect(state).toEqual({ phase: "available", version: "0.0.1" });
+    expect(await api.updates.snapshot()).toEqual({
+      phase: "available",
+      version: "0.0.1",
+    });
 
     const seen: DesktopUpdateState[] = [];
     const unsubscribe = api.updates.subscribe((next) => {

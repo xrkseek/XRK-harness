@@ -6,11 +6,14 @@ declare module "electron-updater" {
     channel: string;
     allowPrerelease: boolean;
     allowDowngrade: boolean;
+    verifyUpdateCodeSignature?: boolean;
     checkForUpdates(): Promise<{
       updateInfo?: { version?: string };
       isUpdateAvailable?: boolean;
     } | null>;
     downloadUpdate(): Promise<unknown>;
     quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
+    on(event: "download-progress", listener: (info: { percent?: number }) => void): void;
+    off(event: "download-progress", listener: (info: { percent?: number }) => void): void;
   };
 }

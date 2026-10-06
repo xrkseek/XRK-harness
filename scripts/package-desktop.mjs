@@ -371,14 +371,14 @@ const platform = target.name.startsWith("mac-") ? "darwin" : "win32";
 const arch = target.name.endsWith("arm64") ? "arm64" : "x64";
 let update;
 try {
-  // Unsigned builds never embed a feed; skip package-complete for release upload.
-  update = unsigned
-    ? undefined
-    : autoUpdate.resolveDesktopAutoUpdateConfig(
-        packageEnvironment,
-        platform,
-        arch,
-      );
+  update =
+    unsigned && !autoUpdate.isDesktopUnsignedUpdateRequested(packageEnvironment)
+      ? undefined
+      : autoUpdate.resolveDesktopAutoUpdateConfig(
+          packageEnvironment,
+          platform,
+          arch,
+        );
 } catch {
   update = undefined;
 }
@@ -401,7 +401,7 @@ if (update !== undefined) {
         version,
         environment: update.channel,
         publicUrl: update.publicUrl,
-        signed: true,
+        signed: !unsigned,
         completedAt: new Date().toISOString(),
       },
       null,
@@ -416,7 +416,7 @@ if (update !== undefined) {
 } else {
   process.stdout.write(
     unsigned
-      ? `package-desktop: unsigned build — no update feed / package-complete (dsh parity)\n`
+      ? `package-desktop: unsigned build — no update feed / package-complete (set XRK_DESKTOP_UNSIGNED_UPDATE=1 to embed a test feed)\n`
       : `package-desktop: no update origin configured; skip package-complete ` +
           `(set XRK_DESKTOP_UPDATE_TEST_ORIGIN or XRK_DESKTOP_UPDATE_ORIGIN for upload)\n`,
   );

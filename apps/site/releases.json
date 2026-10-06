@@ -1,0 +1,27 @@
+{
+  "product": "XRK Harness",
+  "slogan": "向阳而生，驭光而行",
+  "cli": "npm i -g @xrkseek/harness-cli",
+  "products": [
+    {
+      "target": "win-x64",
+      "available": false,
+      "version": "0.5.13",
+      "filename": "xrk-harness-0.5.13-win-x64-unsigned.exe",
+      "feed": "/api/harness/desktop/win-x64/nightly.yml",
+      "download": "/api/harness/download/win-x64"
+    },
+    {
+      "target": "mac-arm64",
+      "available": false,
+      "feed": "/api/harness/desktop/mac-arm64/nightly.yml",
+      "download": "/api/harness/download/mac-arm64"
+    },
+    {
+      "target": "mac-x64",
+      "available": false,
+      "feed": "/api/harness/desktop/mac-x64/nightly.yml",
+      "download": "/api/harness/download/mac-x64"
+    }
+  ]
+}

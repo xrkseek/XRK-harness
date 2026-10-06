@@ -9,7 +9,7 @@ import { parseEnv } from "node:util";
 import { resolveDesktopAppRoot } from "./build-paths.js";
 
 const SHARED_SETTING =
-  /^(?:XRK_DESKTOP_(?:UNSIGNED|AUTO_UPDATE_ENV|UPDATE_(?:TEST_)?ORIGIN|UPLOAD_(?:TEST_)?(?:BUCKET|SECRET_ID|SECRET_KEY)))$/u;
+  /^(?:XRK_DESKTOP_(?:UNSIGNED(?:_UPDATE)?|AUTO_UPDATE_ENV|UPDATE_(?:TEST_)?ORIGIN|UPLOAD_(?:TEST_)?(?:BUCKET|SECRET_ID|SECRET_KEY)))$/u;
 const WINDOWS_SETTING =
   /^XRK_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u;
 const MACOS_SETTING =
@@ -17,8 +17,9 @@ const MACOS_SETTING =
 /** Secrets / feed / upload — stripped from ambient when a dotenv file owns the release surface. */
 const AMBIENT_RELEASE_SETTING =
   /^(?:XRK_DESKTOP_(?:AUTO_UPDATE_ENV|UPDATE_.*|UPLOAD_.*|WINDOWS_.*|MACOS_.*)|(?:WIN_)?CSC_.*)$/iu;
-/** Packaging mode flag — not a secret; ambient CLI (`XRK_DESKTOP_UNSIGNED=1`) wins over the file. */
+/** Packaging mode flags — not secrets; ambient CLI wins over the file. */
 const DESKTOP_UNSIGNED_ENV = "XRK_DESKTOP_UNSIGNED";
+const DESKTOP_UNSIGNED_UPDATE_ENV = "XRK_DESKTOP_UNSIGNED_UPDATE";
 const FILE_SETTINGS = [
   "XRK_DESKTOP_WINDOWS_CER_FILE",
   "XRK_DESKTOP_WINDOWS_SIGNTOOL",
@@ -99,9 +100,16 @@ export function loadDesktopPackageEnvironment(
     ),
     ...settings,
   };
-  // CLI / CI packaging mode overrides the file (UNSIGNED is not a secret).
+  // CLI / CI packaging mode overrides the file (UNSIGNED* are not secrets).
   if (ambientUnsigned !== undefined && String(ambientUnsigned).trim() !== "") {
     merged[DESKTOP_UNSIGNED_ENV] = ambientUnsigned;
+  }
+  const ambientUnsignedUpdate = environment[DESKTOP_UNSIGNED_UPDATE_ENV];
+  if (
+    ambientUnsignedUpdate !== undefined &&
+    String(ambientUnsignedUpdate).trim() !== ""
+  ) {
+    merged[DESKTOP_UNSIGNED_UPDATE_ENV] = ambientUnsignedUpdate;
   }
   return merged;
 }

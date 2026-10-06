@@ -26,6 +26,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **Face wire ↔ client Zod / session.list** | rule `xrk-face-client-wire` |
 | Session / meter / compaction | `xrk-meter-session` |
 | **Desktop / Web 事件载波**（host SSE · MCP/子代理实时） | `xrk-desktop-events` · rule `xrk-desktop-events` · [host-face](../../docs/host-face.md) |
+| **Desktop 测包 / 自动更新源 / 发新版上 AGT** | 本仓 `.agents/skills/xrk-desktop-update-feed` · 发包链 `xrk-release-chain` |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
 | Node ≥26 / 门禁 | rule `xrk-node26` |
@@ -42,6 +43,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-workspace-skills`** | 产品 skill 写法 · frontmatter |
 | `xrk-meter-session` | Meter / compaction / TokenUsage |
 | **`xrk-desktop-events`** | Web vs Desktop mux/host 载波；禁 stub host SSE |
+| **`xrk-desktop-update-feed`**（`.agents/skills`） | 未签名测包、AGT `data/harness-download`、N-1 装 / N 喂；发新版必上传 |
 | rule `xrk-face-client-wire` | Face 发射字段与 apiproxy Zod 同批扩展；list 按行容错 |
 | rule `xrk-desktop-events` | Desktop 必须开 `xrk-app://stream` host SSE |
 | `xrk-docs-audience` | 教科书身份与双语 |

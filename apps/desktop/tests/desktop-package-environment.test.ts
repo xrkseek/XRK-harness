@@ -70,6 +70,34 @@ describe("desktop package environment", () => {
     expect(() => assertDesktopPackageSigningFiles(loaded)).not.toThrow();
   });
 
+  it("loads UNSIGNED_UPDATE from dotenv and lets ambient CLI win", () => {
+    const appRoot = mkdtempSync(join(tmpdir(), "xrk-desktop-env-feed-"));
+    tempDirs.push(appRoot);
+    writeFileSync(
+      join(appRoot, ".env.windows"),
+      [
+        "XRK_DESKTOP_UNSIGNED=1",
+        "XRK_DESKTOP_UNSIGNED_UPDATE=1",
+        "XRK_DESKTOP_AUTO_UPDATE_ENV=test",
+        "XRK_DESKTOP_UPDATE_TEST_ORIGIN=http://127.0.0.1:6969/api/harness",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const fromFile = loadDesktopPackageEnvironment(
+      "win32",
+      { PATH: "/bin" },
+      appRoot,
+    );
+    expect(fromFile.XRK_DESKTOP_UNSIGNED_UPDATE).toBe("1");
+    const fromCli = loadDesktopPackageEnvironment(
+      "win32",
+      { PATH: "/bin", XRK_DESKTOP_UNSIGNED_UPDATE: "1" },
+      appRoot,
+    );
+    expect(fromCli.XRK_DESKTOP_UNSIGNED_UPDATE).toBe("1");
+  });
+
   it("keeps file UNSIGNED when ambient omits it", () => {
     const appRoot = mkdtempSync(join(tmpdir(), "xrk-desktop-env-unsigned-"));
     tempDirs.push(appRoot);

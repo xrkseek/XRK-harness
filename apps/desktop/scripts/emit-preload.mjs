@@ -21,8 +21,10 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const DESKTOP_IPC = {
   localeGet: "xrk-desktop:locale-get",
+  appVersion: "xrk-desktop:app-version",
   updatesCheck: "xrk-desktop:updates-check",
   updatesInstall: "xrk-desktop:updates-install",
+  updatesSnapshot: "xrk-desktop:updates-snapshot",
   updatesState: "xrk-desktop:updates-state",
   windowMinimize: "xrk-desktop:window-minimize",
   windowMaximizeToggle: "xrk-desktop:window-maximize-toggle",
@@ -42,8 +44,10 @@ const api = {
   protocolVersion: DESKTOP_BRIDGE_PROTOCOL_VERSION,
   platform: process.platform,
   locale: () => ipcRenderer.invoke(DESKTOP_IPC.localeGet),
+  version: () => ipcRenderer.invoke(DESKTOP_IPC.appVersion),
   updates: {
     check: () => ipcRenderer.invoke(DESKTOP_IPC.updatesCheck),
+    snapshot: () => ipcRenderer.invoke(DESKTOP_IPC.updatesSnapshot),
     install: async () => {
       await ipcRenderer.invoke(DESKTOP_IPC.updatesInstall);
     },

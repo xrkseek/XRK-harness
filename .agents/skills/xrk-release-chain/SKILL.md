@@ -5,6 +5,7 @@ description: >-
   大 tarball 上传不能用分离进程、E409/E403 处理、文档中英成对四处一起改。
   还含整条流水线顺序与「push 必须先于 release，否则 tag 落在旧 HEAD」这个坑。
   跑 release、npm publish、发 GitHub release、委派发版或修发布文档时使用。
+  桌面包打完要上 AGT 更新源时叠 skill `xrk-desktop-update-feed`。
 ---
 
 # XRK-harness 发包链（副作用清单）
@@ -102,10 +103,12 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
 - 产物 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/` 下
   `xrk-harness-<ver>-win-x64-unsigned.exe`（~315 MB）+ `.exe.blockmap`；
   **同名同版本直接覆盖**旧包，这是重打补丁包的预期结果。
-- 完成判据：日志尾 `package-desktop: unsigned build — no update feed / package-complete`
-  （前面还有 `smoke packaged Host loopback Face` 与 `restore workspace node_modules`），
+- 完成判据：日志尾 `package-desktop: wrote … package-complete-*.json`（测试源开启时）
+  或 `unsigned build — no update feed / package-complete`（未开 `UNSIGNED_UPDATE`），
+  前面还有 `smoke packaged Host loopback Face` 与 `restore workspace node_modules`，
   且 `win-unpacked/resources/` 下 `host` / `web` / `runtime` 都是本轮时间。
-- `pnpm upload:desktop`（更新频道）是凭据门控的公开动作，**没明确要求别跑**。
+- **发新桌面版必须上 AGT 更新源**：`upload:desktop` + SSH 同步。步骤、VPS 路径、测
+  N-1→N 见 skill **`xrk-desktop-update-feed`**。不要 `C:\xrk-h` junction。
 
 ## Pitfalls
 

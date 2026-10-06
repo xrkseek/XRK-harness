@@ -32,9 +32,12 @@ export function createXrkDesktopBridgeApi(
     protocolVersion: DESKTOP_BRIDGE_PROTOCOL_VERSION,
     platform,
     locale: () => ipc.invoke(DESKTOP_IPC.localeGet) as Promise<DesktopLocale>,
+    version: () => ipc.invoke(DESKTOP_IPC.appVersion) as Promise<string>,
     updates: {
       check: () =>
         ipc.invoke(DESKTOP_IPC.updatesCheck) as Promise<DesktopUpdateState>,
+      snapshot: () =>
+        ipc.invoke(DESKTOP_IPC.updatesSnapshot) as Promise<DesktopUpdateState>,
       install: async () => {
         await ipc.invoke(DESKTOP_IPC.updatesInstall);
       },

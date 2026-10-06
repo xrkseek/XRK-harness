@@ -75,7 +75,8 @@ pnpm --filter @xrkseek/harness-desktop clean:build
 | `XRK_DESKTOP_TARGET` | 显式打包目标：`win-x64` \| `mac-arm64` \| `mac-x64` |
 | `XRK_DESKTOP_TARGET_PLATFORM` / `XRK_DESKTOP_TARGET_ARCH` | 推导目标时的平台/CPU 覆盖 |
 | `XRK_DESKTOP_PACKAGE=1` | 真正调用 electron-builder（默认仅校验流水线） |
-| `XRK_DESKTOP_UNSIGNED=1` | 未签名 Windows NSIS（产物名 `-unsigned`；不嵌 `app-update.yml`；仅 win-x64） |
+| `XRK_DESKTOP_UNSIGNED=1` | 未签名 Windows NSIS（产物名 `-unsigned`；默认不嵌 `app-update.yml`；仅 win-x64） |
+| `XRK_DESKTOP_UNSIGNED_UPDATE=1` | 未签名仍写入 test 更新源（须同时有 `XRK_DESKTOP_UPDATE_TEST_ORIGIN`；壳内关闭签名校验） |
 | `XRK_DESKTOP_WINDOWS_*` | Windows 真签（须齐：`CER_FILE` · `SIGNTOOL` · `TOKEN_PIN` · `KEY_CONTAINER`）。本地填 `.env.windows`（自 example 复制） |
 | `XRK_DESKTOP_MACOS_IDENTITY` / `APPLE_ID*` / `TEAM_ID` | macOS 签名；Apple-id 三件齐则 notarize（`.env.macos`） |
 | `XRK_DESKTOP_AUTO_UPDATE_ENV` | `test` \| `production`（默认 test） |
@@ -173,7 +174,8 @@ Related unit tests (`apps/desktop/tests`): single-instance · host-protocol · h
 | `XRK_DESKTOP_TARGET` | Explicit packaging target: `win-x64` \| `mac-arm64` \| `mac-x64` |
 | `XRK_DESKTOP_TARGET_PLATFORM` / `XRK_DESKTOP_TARGET_ARCH` | Platform/CPU override when deriving the target |
 | `XRK_DESKTOP_PACKAGE=1` | Invoke electron-builder (default is pipeline check only) |
-| `XRK_DESKTOP_UNSIGNED=1` | Unsigned Windows NSIS (`-unsigned` artifact name; no `app-update.yml`; win-x64 only; CLI wins over dotenv) |
+| `XRK_DESKTOP_UNSIGNED=1` | Unsigned Windows NSIS (`-unsigned` artifact name; no `app-update.yml` by default; win-x64 only; CLI wins over dotenv) |
+| `XRK_DESKTOP_UNSIGNED_UPDATE=1` | Embed the test feed on unsigned builds (`XRK_DESKTOP_UPDATE_TEST_ORIGIN`; disables Authenticode verify) |
 | `XRK_DESKTOP_WINDOWS_*` | Windows token signing (`CER_FILE` · `SIGNTOOL` · `TOKEN_PIN` · `KEY_CONTAINER`). Fill `.env.windows` (from example) |
 | `XRK_DESKTOP_MACOS_IDENTITY` / `APPLE_ID*` / `TEAM_ID` | macOS signing; notarize when Apple-id trio present (`.env.macos`) |
 | `XRK_DESKTOP_AUTO_UPDATE_ENV` | `test` \| `production` (default test) |

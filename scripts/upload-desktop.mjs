@@ -55,6 +55,22 @@ function ensureDesktopDist() {
 
 ensureDesktopDist();
 const requireFromDesktop = createRequire(path.join(APP_ROOT, "package.json"));
+const packageEnvMod = requireFromDesktop("./dist/desktop-package-environment.js");
+try {
+  const loaded = packageEnvMod.tryLoadDesktopPackageEnvironment(
+    process.platform === "darwin" ? "darwin" : "win32",
+    process.env,
+    APP_ROOT,
+  );
+  if (loaded !== undefined) {
+    Object.assign(process.env, loaded);
+  }
+} catch (error) {
+  process.stderr.write(
+    `upload-desktop: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(2);
+}
 const {
   resolveDesktopPackageTarget,
 } = requireFromDesktop("./dist/package-targets.js");

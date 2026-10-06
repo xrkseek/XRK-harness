@@ -5,8 +5,10 @@ import type { DesktopLocale } from "./locale.js";
 /** IPC channel names private to the desktop application bundle. */
 export const DESKTOP_IPC = {
   localeGet: "xrk-desktop:locale-get",
+  appVersion: "xrk-desktop:app-version",
   updatesCheck: "xrk-desktop:updates-check",
   updatesInstall: "xrk-desktop:updates-install",
+  updatesSnapshot: "xrk-desktop:updates-snapshot",
   updatesState: "xrk-desktop:updates-state",
   windowMinimize: "xrk-desktop:window-minimize",
   windowMaximizeToggle: "xrk-desktop:window-maximize-toggle",
@@ -40,6 +42,8 @@ export interface DesktopUpdateState {
     | "error";
   readonly version?: string;
   readonly message?: string;
+  /** Download percent 0–100 while `phase` is `installing`. */
+  readonly percent?: number;
 }
 
 /**
@@ -66,8 +70,11 @@ export interface XrkDesktopApi {
   /** Host OS for chrome layout (`darwin` → native traffic lights). */
   readonly platform: NodeJS.Platform;
   locale(): Promise<DesktopLocale>;
+  /** Packaged Desktop release (`app.getVersion()`). */
+  version(): Promise<string>;
   readonly updates: {
     check(): Promise<DesktopUpdateState>;
+    snapshot(): Promise<DesktopUpdateState>;
     install(): Promise<void>;
     subscribe(listener: (state: DesktopUpdateState) => void): () => void;
   };

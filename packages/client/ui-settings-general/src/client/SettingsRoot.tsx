@@ -48,6 +48,8 @@ import {
 
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 
+import { DesktopReleaseFooter } from './DesktopReleaseFooter.tsx'
+
 import css from './SettingsRoot.module.css'
 
 
@@ -470,6 +472,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           onReconnect={reconnect}
 
         />
+
+        {wide && connectionIndicator === undefined ? <DesktopReleaseFooter t={t} /> : null}
 
       </div>
 

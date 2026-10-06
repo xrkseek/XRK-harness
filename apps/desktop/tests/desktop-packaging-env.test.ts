@@ -10,7 +10,9 @@ import {
 } from "../src/app-update-config.js";
 import {
   DESKTOP_AUTO_UPDATE_ENV,
+  DESKTOP_UNSIGNED_UPDATE_ENV,
   desktopElectronBuilderPublish,
+  isDesktopUnsignedUpdateRequested,
   renderDesktopAppUpdateYml,
   resolveDesktopAutoUpdateConfig,
 } from "../src/desktop-auto-update-environment.js";
@@ -284,6 +286,10 @@ describe("desktop auto-update environment", () => {
     ]);
     expect(desktopElectronBuilderPublish(undefined)).toBeNull();
     expect(renderDesktopAppUpdateYml(update!)).toContain("provider: generic");
+    expect(isDesktopUnsignedUpdateRequested({})).toBe(false);
+    expect(
+      isDesktopUnsignedUpdateRequested({ [DESKTOP_UNSIGNED_UPDATE_ENV]: "1" }),
+    ).toBe(true);
   });
 
   it("writes app-update.yml and gates feed enablement", () => {
