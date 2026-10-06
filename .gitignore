@@ -36,6 +36,9 @@ __pycache__/
 # Accidental cwd dump when harness home resolves to repo root
 /workspaces.json
 
+# Machine overlay for product skills (test origin, VPS paths, SSH helper)
+.agents/skills/**/local.md
+
 # Desktop unpackaged build / isolated development home (ADR-0008)
 apps/desktop/.desktop-build/
 apps/desktop/.env.windows

@@ -1,14 +1,16 @@
 ---
 name: xrk-desktop-update-feed
 description: >-
-  XRK-Harness Desktop 未签名测包、electron-updater 测试源、AGT harness-download
-  落盘路径与发新版必上传。测自动更新（本机低版本装、服务器高版本喂）、
-  package:desktop / upload:desktop、把 exe 放到桌面、SSH 同步 VPS 时使用。
+  XRK-Harness Desktop 未签名测包、electron-updater 测试源、harness-download
+  落盘与发新版必上传。测自动更新（本机低版本装、服务器高版本喂）、
+  package:desktop / upload:desktop、把 exe 放到桌面时使用。
 ---
 
-# Desktop 测试更新源（AGT）
+# Desktop 测试更新源
 
-发 **新桌面版必须上服务器更新源**。只打本机 exe、不 PUT 到 AGT，装旧版的人拉不到更新。
+发 **新桌面版必须上测试更新源**。只打本机 exe、不 PUT，装旧版的人拉不到更新。
+
+机相关落点（测试 origin、VPS 数据根、SSH 同步命令）写同目录 **`local.md`**，已 gitignore，**不入库**。缺 `local.md` 时只认 env `XRK_DESKTOP_UPDATE_TEST_ORIGIN`。
 
 ## When to Use
 
@@ -18,43 +20,34 @@ description: >-
 
 ## 公开面（测试频道）
 
-Origin（无尾斜杠）：`http://103.236.89.174:6969/api/harness`
+Origin（无尾斜杠）来自 `local.md` 或 `XRK_DESKTOP_UPDATE_TEST_ORIGIN`。路径：
 
-| 用途 | URL |
-|------|-----|
-| 目录 | `GET /api/harness/releases` |
-| 该平台最新安装包 | `GET /api/harness/download/win-x64` |
-| 更新 YAML | `GET /api/harness/desktop/win-x64/nightly.yml`（另有 `latest.yml`） |
-| exe / blockmap | `GET /api/harness/desktop/bin/win-x64/<file>` |
+| 用途 | 相对 origin |
+|------|-------------|
+| 目录 | `GET /releases` |
+| 该平台最新安装包 | `GET /download/win-x64` |
+| 更新 YAML | `GET /desktop/win-x64/nightly.yml`（另有 `latest.yml`） |
+| exe / blockmap | `GET /desktop/bin/win-x64/<file>` |
 
 `app-update.yml` generic `url` = origin + `/desktop/win-x64`。
 
-Cloudflare 页：`apps/site`（`downloadOrigin` 同上）。字节不走 CF。
+Cloudflare 页：`apps/site`。安装包字节不走 CF。
 
-AGT：`harness-download-Core`（本地源码仓旁 `XRK-AGT/core/harness-download-Core/`）。监听 **0.0.0.0:6969**。改 Core 后 `pnpm build` 并重启 AGT。
+AGT：`harness-download-Core`。监听 **0.0.0.0:6969**。改 Core 后 `pnpm build` 并重启 AGT。
 
 ## 服务器落盘
 
-VPS 仓库：`/root/cs/XRK-AGT`  
-数据根：`/root/cs/XRK-AGT/data/harness-download/`（Core `paths.data/harness-download`）
-
-与本机 `apps/desktop/.desktop-build/upload-mirror/test/` **同构**：
+与本机 `apps/desktop/.desktop-build/upload-mirror/test/` **同构**（数据根见 `local.md`）：
 
 ```text
-data/harness-download/
+harness-download/
   desktop/win-x64/nightly.yml
   desktop/win-x64/latest.yml
-  desktop/bin/win-x64/xrk-harness-<ver>-win-x64-unsigned.exe
+  desktop/bin/win-x64/xrk-harness-<ver>-win-x64.exe
   desktop/bin/win-x64/*.blockmap
 ```
 
-SSH 同步（密码只在本机 `~/.cursor/mcp.json`，**禁止**写进 skill / git / 回复）：
-
-```text
-python %USERPROFILE%\.cursor\xrk-ssh-put-dir.py <ascii-local-mirror> /root/cs/XRK-AGT/data/harness-download
-```
-
-`<ascii-local-mirror>` 用 subst 盘符下的 `apps/desktop/.desktop-build/upload-mirror/test`，不要把中文 `主仓库` 写进 PowerShell 字面量。
+公开安装包文件名不要带 `unsigned`。SSH 同步命令只写在 `local.md`。密码不入库、不回显。
 
 ## 本机 env
 
@@ -63,25 +56,14 @@ python %USERPROFILE%\.cursor\xrk-ssh-put-dir.py <ascii-local-mirror> /root/cs/XR
 - `XRK_DESKTOP_UNSIGNED=1`
 - `XRK_DESKTOP_UNSIGNED_UPDATE=1`（未签名包才写入更新源；否则 updater 不检查）
 - `XRK_DESKTOP_AUTO_UPDATE_ENV=test`
-- `XRK_DESKTOP_UPDATE_TEST_ORIGIN=http://103.236.89.174:6969/api/harness`
+- `XRK_DESKTOP_UPDATE_TEST_ORIGIN`（测试源 origin）
 - upload dummy：`XRK_DESKTOP_UPLOAD_TEST_BUCKET` / `SECRET_ID` / `SECRET_KEY`（本机 filesystem mirror 仍要求这三项有值）
 
-## 打包（NSIS + 中文路径）
+## 打包（NSIS + 非 ASCII 路径）
 
-仓库在 `...\Desktop\主仓库\XRK-harness`。NSIS 不能往非 ASCII 路径写 exe。
+NSIS 不能往非 ASCII 路径写 exe。不要在盘符根做 `mklink /J` 展开整仓。用临时盘符 `subst`（占用就换字母），cwd 用仓库根、命令里只有 ASCII。完成后 `subst <盘符>: /d`。产物复制到用户桌面，不要另建残留安装目录。
 
-**不要** `mklink /J C:\xrk-h`（资源管理器会在 C 盘根展开整棵仓）。用临时盘符：
-
-```text
-# cwd = 仓库根（工具 working_directory），命令里只有 ASCII
-subst X: .
-# 完成后
-subst X: /d
-```
-
-`X:` 占用就换字母。产物复制到 `%USERPROFILE%\Desktop\`，不要在 `C:\` 另建 `xrk-install` 一类残留目录。
-
-从 `X:\`：
+从 subst 盘符：
 
 ```text
 XRK_DESKTOP_PACKAGE=1
@@ -97,13 +79,15 @@ pnpm package:desktop
 产物：`apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`  
 `xrk-harness-<ver>-win-x64-unsigned.exe` + `.blockmap` + `nightly.yml` + `package-complete-win-x64.json`
 
+Cursor 若锁住旧 `win-unpacked/resources/app.asar`（electron-builder `EBUSY`），打包和 `upload:desktop` 都设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=unsigned-artifacts-<ver>` 换输出目录。打完上传后删掉多余 `unsigned-artifacts-*` 与 `upload-chunks/`。
+
 ## 发新版（必上传）
 
 1. `apps/desktop/package.json` 已是要发布的版本 **N**
 2. `pnpm package:desktop`（上节）
 3. `XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → 写本机 mirror
-4. `xrk-ssh-put-dir.py` 把 `upload-mirror/test` 同步到 `/root/cs/XRK-AGT/data/harness-download`
-5. `GET .../desktop/win-x64/nightly.yml` 的 `version:` 必须是 **N**（先于本机安装包）
+4. 按 `local.md` 把 `upload-mirror/test` 同步到更新源数据根
+5. `GET …/desktop/win-x64/nightly.yml` 的 `version:` 必须是 **N**（先于本机安装包）
 6. 安装包复制到桌面（可选）
 
 **不要**把刚打的低版本测包再 upload，否则源会被降级。
@@ -126,4 +110,4 @@ pnpm package:desktop
 - 同版本重打会覆盖 `unsigned-artifacts` 里同名 exe，以及 `nightly.yml`。先上传 N 再打 N-1。
 - `pnpm install` restore 会在 package 末尾跑；别中途清 `node_modules`。
 - Node 必须 ≥26，不要用 Cursor helper `node.exe`。
-- 密钥、SSH 密码不入库、不回显。
+- 密钥、SSH 密码、VPS 路径、本机盘符不入库、不回显。
