@@ -18,21 +18,20 @@ test("renders product shell, roster, github, and windows download", async () => 
   assert.match(html, /data-theme-id="dark"/);
   assert.match(html, /xrk-harness-0\.5\.14-win-x64\.exe/);
   assert.match(html, /http:\/\/127\.0\.0\.1:9\/api\/harness\/download\/win-x64/);
-  assert.match(html, /目前不支持桌面安装包/);
-  assert.match(html, /id="demo"/);
+  assert.match(html, /目前不提供桌面安装包/);
+  assert.match(html, /id="play"/);
+  assert.match(html, /data-ball/);
+  assert.match(html, /presence\/emotion-ball\/engine\.js/);
   assert.match(html, /发版 0\.5\.14/);
   assert.match(html, /修 Host 冷启动/);
-  assert.match(html, /data-session="trunk"/);
-  assert.match(html, /data-session="branch"/);
-  assert.match(html, /委派图/);
-  assert.match(html, /Agent Teams 任务/);
-  assert.match(html, /合回主仓/);
+  assert.match(html, /发送消息/);
+  assert.match(html, /排队（本轮后）/);
+  assert.match(html, /插队（本轮结束后）/);
+  assert.match(html, /插队中/);
   assert.match(html, /id="delegate-btn"/);
   assert.match(html, /class="skip"/);
   assert.match(html, /xrkh web/);
   assert.match(html, /2 \/ 2/);
-  assert.match(html, /data-ov-tab="plan"/);
-  assert.match(html, /data-ov-tab="context"/);
   assert.doesNotMatch(html, /download\/mac-/);
 });
 
@@ -43,7 +42,8 @@ test("english query and mac stay unavailable", async () => {
   assert.doesNotMatch(html, />调研员</);
   assert.match(html, /macOS Apple Silicon/);
   assert.match(html, /Host cold start/);
-  assert.match(html, /Delegation graph/);
+  assert.match(html, /Send message/);
+  assert.match(html, /Queue \(after this turn\)/);
 });
 
 test("mac stays listed even if the live catalog marks it available", async () => {
