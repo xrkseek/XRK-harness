@@ -63,9 +63,9 @@ function applyTheme(pref) {
 }
 
 function selectMember(id) {
-  const card = document.querySelector(`[data-member="${id}"]`);
+  const card = document.querySelector(`.roster .ball[data-member="${id}"]`);
   if (!card) return;
-  document.querySelectorAll("[data-member]").forEach((btn) => {
+  document.querySelectorAll(".roster .ball").forEach((btn) => {
     btn.setAttribute("aria-pressed", btn === card ? "true" : "false");
   });
   const name = document.getElementById("pick-name");
@@ -232,6 +232,47 @@ function runDesk() {
   return () => window.clearTimeout(timer);
 }
 
+function applyGaze(clientX, clientY) {
+  document.querySelectorAll(".hero-ball .stage").forEach((stage) => {
+    const ball = stage.querySelector("[data-ball]")?._ball;
+    if (!ball || !ball.setGaze) return;
+    const rect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const nx = (clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+    const ny = (clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+    ball.setGaze(Math.max(-1, Math.min(1, nx)), Math.max(-1, Math.min(1, ny)));
+  });
+}
+
+/** Same click tour as Overview PresenceBall (`CLICK_IDS`). */
+const CLICK_IDS = ["10", "13", "03", "33", "14", "11", "19", "07"];
+
+function playBall(btn) {
+  const mount = btn.querySelector("[data-ball]");
+  const ball = mount && mount._ball;
+  if (!ball) return;
+  const i = Number(btn.dataset.clickIndex || 0);
+  const id = CLICK_IDS[i % CLICK_IDS.length];
+  btn.dataset.clickIndex = String(i + 1);
+  if (ball.setEmotion) ball.setEmotion(id);
+  if (ball.bounce) ball.bounce();
+  if (ball.resetIdle) ball.resetIdle();
+}
+
+function bindPlayBalls() {
+  document.querySelectorAll("[data-play-ball]").forEach((btn) => {
+    btn.addEventListener("click", () => playBall(btn));
+  });
+  window.addEventListener("pointermove", (event) => {
+    applyGaze(event.clientX, event.clientY);
+  }, { passive: true });
+  window.addEventListener("blur", () => {
+    document.querySelectorAll(".hero-ball [data-ball]").forEach((el) => {
+      if (el._ball && el._ball.setGaze) el._ball.setGaze(0, 0);
+    });
+  });
+}
+
 document.querySelectorAll("[data-theme-id]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const id = btn.dataset.themeId || "system";
@@ -240,7 +281,7 @@ document.querySelectorAll("[data-theme-id]").forEach((btn) => {
   });
 });
 
-document.querySelectorAll("[data-member]").forEach((btn) => {
+document.querySelectorAll(".roster .ball").forEach((btn) => {
   btn.addEventListener("click", () => selectMember(btn.dataset.member || ""));
 });
 
@@ -251,7 +292,7 @@ document.querySelectorAll("[data-ov]").forEach((btn) => {
 const delegateBtn = document.getElementById("delegate-btn");
 if (delegateBtn) {
   delegateBtn.addEventListener("click", () => {
-    const card = document.querySelector("[data-member][aria-pressed='true']");
+    const card = document.querySelector(".roster .ball[aria-pressed='true']");
     const thread = document.getElementById("thread");
     const desk = document.getElementById("desk");
     if (!card || !thread || !desk) return;
@@ -285,11 +326,12 @@ applyTheme(preference());
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (preference() === "system") applyTheme("system");
 });
-const first = document.querySelector("[data-member]");
+const first = document.querySelector(".roster .ball");
 if (first) selectMember(first.dataset.member || "");
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => { mountBalls(); runDesk(); });
+  document.addEventListener("DOMContentLoaded", () => { mountBalls(); bindPlayBalls(); runDesk(); });
 } else {
   mountBalls();
+  bindPlayBalls();
   runDesk();
 }

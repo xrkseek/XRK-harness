@@ -29,8 +29,9 @@ const LABELS = {
     tagline: "向阳而生，驭光而行",
     skip: "跳到干员",
     play: "工作台",
-    playHint: "画面只播、不能点。点右上角或下方的球换干员。",
+    playHint: "工作台只播、不能点。右上角和下方的球跟概况里一样：点一下弹跳并换表情，不改预览。",
     you: "你",
+    clickPlay: "点击互动",
     assign: "委派",
     assigned: "已委派",
     quota: "配额 2 / 2",
@@ -97,8 +98,9 @@ const LABELS = {
     tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to operators",
     play: "Workbench",
-    playHint: "The demo plays by itself. Pick an operator on the hero balls or the row below.",
+    playHint: "The demo plays by itself. Hero and row balls bounce and change expression on click, like Overview — they do not steer the workbench.",
     you: "You",
+    clickPlay: "Click to play",
     assign: "Delegate",
     assigned: "Delegated",
     quota: "quota 2 / 2",
@@ -262,11 +264,8 @@ function renderPage(catalog, env, zh) {
       : `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`;
     return `<article class="row"><div><h2>${escapeHtml(label)}</h2><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
   }).join("");
-  const orbit = SEEDS.map((m, index) => {
-    const title = zh ? m.name : m.nameEn;
-    const brief = zh ? m.brief : m.briefEn;
-    return `<button type="button" class="orbit-ball" data-member="${escapeHtml(m.id)}" data-name="${escapeHtml(title)}" data-brief="${escapeHtml(brief)}" aria-label="${escapeHtml(title)}" aria-pressed="${index === 0 ? "true" : "false"}">${ballMount(m)}</button>`;
-  }).join("");
+  const orbit = SEEDS.map((m) =>
+    `<button type="button" class="orbit-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m)}</button>`).join("");
   const scenes = (zh ? FLOW.zh : FLOW.en).map(([title, body], i) =>
     `<article class="scene${i === 0 ? " on" : ""}" data-scene="${i}" ${i === 0 ? "" : "hidden"}>
       <h3>${escapeHtml(title)}</h3>
@@ -320,11 +319,8 @@ function renderPage(catalog, env, zh) {
         <div class="cta">${cta}<a class="btn btn-outline" href="${GITHUB}">${escapeHtml(t.github)}</a></div>
       </div>
       <div class="pair">
-        ${SEEDS.slice(0, 2).map((m, i) => {
-          const title = zh ? m.name : m.nameEn;
-          const brief = zh ? m.brief : m.briefEn;
-          return `<button type="button" class="hero-ball" data-member="${escapeHtml(m.id)}" data-name="${escapeHtml(title)}" data-brief="${escapeHtml(brief)}" aria-label="${escapeHtml(title)}" aria-pressed="${i === 0 ? "true" : "false"}">${ballMount(m, "lg")}</button>`;
-        }).join("")}
+        ${SEEDS.slice(0, 2).map((m) =>
+          `<button type="button" class="hero-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m, "lg")}</button>`).join("")}
       </div>
     </section>
     <section class="play" id="play">

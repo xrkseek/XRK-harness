@@ -40,6 +40,10 @@ test("renders product shell, roster, github, and windows download", async () => 
   assert.match(html, /class="deskbar"/);
   assert.match(html, /class="rail-end"/);
   assert.match(html, /class="hero-ball"/);
+  assert.match(html, /data-play-ball/);
+  assert.match(html, /点击互动/);
+  assert.doesNotMatch(html, /class="hero-ball"[^>]*data-member/);
+  assert.doesNotMatch(html, /换干员/);
   assert.match(html, /class="orbit"/);
   assert.match(html, /蓝圈/);
   assert.match(html, /工作台/);

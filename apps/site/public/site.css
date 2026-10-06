@@ -182,9 +182,6 @@ html[data-theme="dark"] .btn:hover { filter: brightness(0.94); }
 }
 .hero-ball:hover .stage { transform: translateY(-4px); }
 .hero-ball:active .stage { transform: scale(0.94); }
-.hero-ball[aria-pressed="true"] .stage {
-  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--send) 35%, transparent));
-}
 .stage {
   position: relative;
   width: 40px;
@@ -563,12 +560,12 @@ html[data-theme="dark"] .composer { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
 .task p { margin: 6px 0 8px; color: var(--muted); font-size: 12px; }
 .seed { font-size: 11px; color: var(--tertiary); }
 .reel { margin-top: 20px; }
-.film { min-height: 4.5rem; }
+.film { min-height: 0; }
 .orbit {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 .orbit-ball {
   padding: 4px;
@@ -578,9 +575,6 @@ html[data-theme="dark"] .composer { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
   cursor: pointer;
 }
 .orbit-ball:hover .stage { transform: translateY(-3px); }
-.orbit-ball[aria-pressed="true"] .stage {
-  filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--send) 30%, transparent));
-}
 .scene h3 { margin: 0 0 6px; font-size: 14px; }
 .scene p { margin: 0; color: var(--muted); max-width: 40rem; line-height: 20px; }
 .dots { display: flex; gap: 8px; margin-top: 10px; }
