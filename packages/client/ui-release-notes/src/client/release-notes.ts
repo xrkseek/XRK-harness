@@ -65,6 +65,20 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.16',
+    date: '2026-10-08',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Desktop 更新：发现新版本仍自动预下载并显示进度，但「安装并重启」仅在下载完成后可点。',
+        en: 'Desktop updates still prefetch with a progress meter, but Install and restart stays disabled until the download is ready.',
+      },
+    ],
+  },
+  {
     version: '0.5.15',
     date: '2026-10-08',
     title: {

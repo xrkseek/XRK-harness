@@ -15,8 +15,20 @@ description: >-
 ## When to Use
 
 - `pnpm package:desktop` / `pnpm upload:desktop` / 桌面包放到桌面
-- 用户说测自动更新、打低版本、服务器喂高版本
+- 用户说测自动更新、打低版本、服务器喂高版本、升 Desktop 补丁版
 - 改 `XRK_DESKTOP_UPDATE_*`、`harness-download-Core`、Cloudflare 下载页 origin
+
+## 产品内更新 UX（壳逻辑）
+
+`DesktopUpdateCoordinator` + Settings `DesktopReleaseFooter`：
+
+1. 发现新版本 → phase `available`，**立刻预下载**（进度条可动）。
+2. 下载成功 → phase `ready`（percent 100）。
+3. **「安装并重启」仅 `ready` 可点**；`available` / 下载中禁用。
+4. 用户点安装 → phase `installing` → `quitAndInstall`。
+5. 预下载失败 → phase `error`（勿在失败态仍开安装按钮）。
+
+改这段行为后必须升 Desktop 壳版本再打包上传，旧安装包里没有新 UI 逻辑。
 
 ## 公开面（测试频道）
 
@@ -31,13 +43,11 @@ Origin（无尾斜杠）来自 `local.md` 或 `XRK_DESKTOP_UPDATE_TEST_ORIGIN`�
 
 `app-update.yml` generic `url` = origin + `/desktop/win-x64`。
 
-Cloudflare 页：`apps/site`。安装包字节不走 CF。
+Cloudflare 页：`apps/site`（`releases.json` 作 fallback；运行时优先拉 origin `/releases`）。安装包字节不走 CF。
 
-AGT：`harness-download-Core`。监听 **0.0.0.0:6969**。改 Core 后 `pnpm build` 并重启 AGT。
+AGT：`harness-download-Core`。监听 **0.0.0.0:6969**。目录扫描 `nightly.yml` → 公开 catalog；**无**单独 catalog.json 时以 yml 为准。
 
 ## 服务器落盘
-
-与本机 `apps/desktop/.desktop-build/upload-mirror/test/` **同构**（数据根见 `local.md`）：
 
 ```text
 harness-download/
@@ -47,23 +57,21 @@ harness-download/
   desktop/bin/win-x64/*.blockmap
 ```
 
-公开安装包文件名不要带 `unsigned`。SSH 同步命令只写在 `local.md`。密码不入库、不回显。
+**公开文件名不要带 `unsigned`**（本机产物可带 `-unsigned`，上传前改名）。
 
 ## 本机 env
 
 `apps/desktop/.env.windows`（gitignore）：
 
 - `XRK_DESKTOP_UNSIGNED=1`
-- `XRK_DESKTOP_UNSIGNED_UPDATE=1`（未签名包才写入更新源；否则 updater 不检查）
+- `XRK_DESKTOP_UNSIGNED_UPDATE=1`（未签名包才写入更新源；壳内关 Authenticode 校验）
 - `XRK_DESKTOP_AUTO_UPDATE_ENV=test`
 - `XRK_DESKTOP_UPDATE_TEST_ORIGIN`（测试源 origin）
-- upload dummy：`XRK_DESKTOP_UPLOAD_TEST_BUCKET` / `SECRET_ID` / `SECRET_KEY`（本机 filesystem mirror 仍要求这三项有值）
+- upload dummy：`XRK_DESKTOP_UPLOAD_TEST_BUCKET` / `SECRET_ID` / `SECRET_KEY`
 
 ## 打包（NSIS + 非 ASCII 路径）
 
-NSIS 不能往非 ASCII 路径写 exe。不要在盘符根做 `mklink /J` 展开整仓。用临时盘符 `subst`（占用就换字母），cwd 用仓库根、命令里只有 ASCII。完成后 `subst <盘符>: /d`。产物复制到用户桌面，不要另建残留安装目录。
-
-从 subst 盘符：
+NSIS 不能往非 ASCII 路径写 exe。用临时盘符 `subst`（占用就换字母），cwd 仓库根、命令只含 ASCII。完成后 `subst <盘符>: /d`。产物可复制到用户桌面。
 
 ```text
 XRK_DESKTOP_PACKAGE=1
@@ -79,35 +87,66 @@ pnpm package:desktop
 产物：`apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`  
 `xrk-harness-<ver>-win-x64-unsigned.exe` + `.blockmap` + `nightly.yml` + `package-complete-win-x64.json`
 
-Cursor 若锁住旧 `win-unpacked/resources/app.asar`（electron-builder `EBUSY`），打包和 `upload:desktop` 都设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=unsigned-artifacts-<ver>` 换输出目录。打完上传后删掉多余 `unsigned-artifacts-*` 与 `upload-chunks/`。
+Cursor 锁住 `app.asar`（`EBUSY`）时设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=unsigned-artifacts-<ver>`。
 
-## 发新版（必上传）
+## 发新版 · 标准流程（必按序）
 
-1. `apps/desktop/package.json` 已是要发布的版本 **N**
-2. `pnpm package:desktop`（上节）
-3. `XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → 写本机 mirror
-4. 按 `local.md` 把 `upload-mirror/test` 同步到更新源数据根
-5. `GET …/desktop/win-x64/nightly.yml` 的 `version:` 必须是 **N**（先于本机安装包）
-6. 安装包复制到桌面（可选）
+版本 **N** 已写进 `apps/desktop/package.json`（并与 cli/sdk / `docs/releases/vN.md` 对齐）。
+
+### A. 打包
+
+1. `subst` 到 ASCII 盘符 → 上节 env → `pnpm package:desktop`
+2. 判据：日志有 `package-complete-*.json`；exe 体积约 300MB+
+
+### B. 本机 mirror（可选）
+
+`XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → `upload-mirror/test/`  
+（yml 里可能仍指向 `-unsigned` 文件名；上服务器前以 C 节为准改名。）
+
+### C. 上服务器（改名 + **先 yml 后 exe**）
+
+不要整目录盲传旧版大 exe。只推本版：
+
+1. 本地 stage：
+   - `…/bin/win-x64/xrk-harness-N-win-x64.exe` ← 从 `*-unsigned.exe` **复制改名**
+   - 同名 `.blockmap`
+   - `nightly.yml` / `latest.yml`：`version: N`，`url`/`path` 为  
+     `{origin}/desktop/bin/win-x64/xrk-harness-N-win-x64.exe`（绝对 URL，与既有 0.5.14 一致）
+2. **先** SSH/SFTP 上传两个 yml（用户可立刻看到有更新）
+3. **再** 上传 exe + blockmap（校验远端 `stat` 大小 == 本地）
+4. 删远端残留的半截文件 / 误传的 `*-unsigned.exe`（若有）
+5. 核对：
+   - `GET …/desktop/win-x64/nightly.yml` → `version: N`
+   - `HEAD …/desktop/bin/win-x64/xrk-harness-N-win-x64.exe` → 200 + 完整 Content-Length
+   - `GET …/releases` → win-x64 `version`/`filename` 为 N（AGT 扫 yml）
+
+SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
+
+### D. 官网
+
+- `apps/site/releases.json` 的 win-x64 `version`/`filename` 改为 N
+- Worker 演示文案里的版本号可顺手改
+- `npx wrangler deploy --config apps/site/wrangler.toml`（需 `CLOUDFLARE_API_TOKEN`）
+- 无 token 时：下载按钮仍走 origin `/releases`（AGT 已是 N 即可用）；fallback JSON 等下次能 deploy 再对齐
+
+### E. 桌面副本（可选）
+
+把改名后的 `xrk-harness-N-win-x64.exe` 拷到用户桌面。
 
 **不要**把刚打的低版本测包再 upload，否则源会被降级。
 
-## 测自动更新
-
-目标：本机装 **N-1**，源上是 **N**，Settings 底栏 Host 重连槽出现更新芯片。
+## 测自动更新（N-1 → N）
 
 1. 先按「发新版」把 **N** 推上服务器并确认 `nightly.yml`
-2. 把 `apps/desktop/package.json` **临时**改成 **N-1**（只改这一处版本）
-3. 再 `package:desktop`（带 `UNSIGNED_UPDATE=1`，这样 N-1 里才有 Settings 更新条 + feed）
-4. **禁止** upload 这一包
-5. 把 N-1 的 exe 拷到桌面，把 `package.json` **改回 N**
-6. 用户：卸掉更高版本（若已装）→ 装桌面上的 N-1 → 打开 → 底栏 Settings 旁，无 Host 重连条时应看到版本 /「有更新」→ 点芯片打开产品内更新对话框（进度条 + 安装并重启）
-
-旧 N-1 安装包若没有更新条、也没有 Application 菜单「检查更新」，无法在 UI 里验证。
+2. `package.json` **临时**改成 **N-1** → 再 `package:desktop`（`UNSIGNED_UPDATE=1`）
+3. **禁止** upload N-1
+4. N-1 exe 拷桌面，`package.json` **改回 N**
+5. 卸高版本 → 装 N-1 → 打开 → 底栏「有更新」→ 对话框：进度中安装按钮禁用 → 完成后可点 → 安装并重启到 N
 
 ## Pitfalls
 
-- 同版本重打会覆盖 `unsigned-artifacts` 里同名 exe，以及 `nightly.yml`。先上传 N 再打 N-1。
-- `pnpm install` restore 会在 package 末尾跑；别中途清 `node_modules`。
-- Node 必须 ≥26，不要用 Cursor helper `node.exe`。
+- 先传整包 mirror 会先灌旧版几百 MB，yml 迟到——**先 yml 后本版 exe**。
+- 半截 exe（传断）必须删掉再传；`HEAD` Content-Length 必须等于 yml `size`。
+- 同版本重打覆盖同名产物与 `nightly.yml`。
+- Node ≥26；不用 Cursor helper `node.exe`。
 - 密钥、SSH 密码、VPS 路径、本机盘符不入库、不回显。
