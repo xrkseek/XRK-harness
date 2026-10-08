@@ -112,13 +112,14 @@ Cursor 锁住 `app.asar`（`EBUSY`）时设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=
    - 同名 `.blockmap`
    - `nightly.yml` / `latest.yml`：`version: N`，`url`/`path` 为  
      `{origin}/desktop/bin/win-x64/xrk-harness-N-win-x64.exe`（绝对 URL，与既有 0.5.14 一致）
-2. **先** SSH/SFTP 上传两个 yml（用户可立刻看到有更新）
-3. **再** 上传 exe + blockmap（校验远端 `stat` 大小 == 本地）
-4. 删远端残留的半截文件 / 误传的 `*-unsigned.exe`（若有）
-5. 核对：
+2. **先传完整 exe + blockmap**（校验远端 `stat` 大小 == 本地；`HEAD` Content-Length 对齐）
+3. **再** 上传两个 yml（避免用户在半截包上开始下载 → `sha512 checksum mismatch`）
+4. 若必须先改 yml：在 exe 传完前不要让用户点更新；传断必须 `rm` 半截文件再重传
+5. 删远端残留的半截 / 误传的 `*-unsigned.exe`
+6. 核对：
+   - `HEAD …/bin/…/xrk-harness-N-win-x64.exe` → 200 + **完整** Content-Length（= yml `size`）
+   - `GET …/releases` → `available:true` 且 version=N
    - `GET …/desktop/win-x64/nightly.yml` → `version: N`
-   - `HEAD …/desktop/bin/win-x64/xrk-harness-N-win-x64.exe` → 200 + 完整 Content-Length
-   - `GET …/releases` → win-x64 `version`/`filename` 为 N（AGT 扫 yml）
 
 SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 
