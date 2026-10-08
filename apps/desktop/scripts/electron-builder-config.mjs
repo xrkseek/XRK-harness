@@ -84,8 +84,14 @@ export function createElectronBuilderConfig(
     : undefined;
 
   const buildRoot = join(APP_ROOT, ".desktop-build", "targets", targetName);
+  const unsignedLeaf = env.XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR?.trim();
   const artifacts = unsigned
-    ? join(buildRoot, "unsigned-artifacts")
+    ? join(
+        buildRoot,
+        unsignedLeaf && /^[A-Za-z0-9._-]+$/.test(unsignedLeaf)
+          ? unsignedLeaf
+          : "unsigned-artifacts",
+      )
     : join(buildRoot, "artifacts");
   mkdirSync(artifacts, { recursive: true });
 

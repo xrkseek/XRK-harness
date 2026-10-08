@@ -19,18 +19,18 @@ Face 仍是 **mux + host** 双总线；壳只换物理载波：
 | 壳 | Unary | mux | host |
 |----|-------|-----|------|
 | Web（http/https） | `fetch` 同源 | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
-| Desktop（loopback） | `fetch` → `http://127.0.0.1:<port>` | WebSocket（同 origin；与 `xrkh web` 同构） | WebSocket（同 origin） |
+| Desktop（`xrk-app:`） | `fetch` → `xrk-app://app`（桥到回环 Host） | SSE → `xrk-app://stream` | SSE → `xrk-app://stream` |
 
-Desktop 产品页在 Host IPC `ready`（含 `origin`）后由 Electron `loadURL` 到 **`127.0.0.1` 回环**（ADR-0008 / DSH Desktop）；`xrk-app://` 仅作启动闪屏 / 静态壳。不再经 Electron 分帧 Face 管道（Win32 ConPTY 会继承那些 HANDLE）。host 帧含 `host/session-added` · `host/session-status` · `host/remote-event`（如 `settings/document-updated`）；壳经 `ctx.remote.$dispatch` 驱动 Settings / MCP 徽章与子代理顶栏·Overview。
+Desktop **Host listen** 仍是 **`127.0.0.1` 回环**（ADR-0008 / DSH Desktop）；产品页全程留在 **`xrk-app://`**，Face / 侧栏经主进程 Host Fetch 桥转发（无 loopback `loadURL` 重挂，开屏 Host→插件同一文档）。不再经 Electron 分帧 Face 管道（Win32 ConPTY 会继承那些 HANDLE）。host 帧含 `host/session-added` · `host/session-status` · `host/remote-event`（如 `settings/document-updated`）；壳经 `ctx.remote.$dispatch` 驱动 Settings / MCP 徽章与子代理顶栏·Overview。
 
 ### Desktop 启动与 Face 绑定
 
 | 阶段 | 行为 |
 |------|------|
-| 首屏 | 注册 `xrk-app://` 后立刻开窗；闪屏 / 静态资源走打包 Web 盘（不阻塞 Host） |
-| Host IPC `ready` 后 | `loadURL(http://127.0.0.1:<port>/index.html?…)`；Face / 侧栏 / 社区 HTTP 走同源 Host listen |
+| 首屏 | 注册 `xrk-app://` 后立刻开窗；产品 `index.html` + HARNESS 开屏走打包 Web 盘（不阻塞 Host） |
+| Host IPC `ready` 后 | 主进程把 Host Fetch 挂进 `xrk-app://`；`whenHostReady` 放行 Face；**不** remount 文档 |
 
-产品页落在 Host 伺服的 Web dist 上（与 `xrkh web` 同路径语义）。`xrk-app://` 协议处理器仍可服务闪屏与 overlay 探测资源。
+打包 Web 根与 Host `XRK_WEB_DIST` 同版；静态首屏来自盘，Face / 侧栏 / 社区 HTTP 走桥接后的回环 listen。
 
 ### 产品壳静态边界
 
@@ -79,7 +79,7 @@ mux / host 升级后的套接字由 Host 发 **Ping** 控制帧（默认间隔 *
 
 每会话 mux 帧序号由 `FaceSeqClock` / `FaceMuxSeq` 发出（1-based；`last` 在尚未 `next` 时为 `0`）。**独立于** Session 日志的 `SessionSeq` / `SessionLogOffset`（见 [session-log.md](./session-log.md)）。history / `turnOutline.seq` 对齐的是 Face mux 时钟，不是日志下标的另一套命名。
 
-`session.history` 回放时用 `ensureAtLeast(sessionId, maxSeq)` 一次跳齐水位，避免按 `next` 空转 O(maxSeq)。history 页只为当页事件建 seq 映射（`startIndex + i`），不为整本日志建 `Map`。
+`session.history` 回放时用 `ensureAtLeast(sessionId, maxSeq)` 一次跳齐水位，避免按 `next` 空转 O(maxSeq)。history 页只为**原始分页切片**上的事件建绝对 seq（`raw.startIndex + i`，与全日志下标对齐）；随后 `dropSupersededStreamDeltas` / 字符预算裁切可以删行，但**不得**按裁切后数组下标重编号——否则更早页尾 seq 对不上当前窗 `baseSeq`，客户端会清掉 `hasMore`（「加载更早」/ 轮次轨失效）。不为整本日志建 `Map`。
 
 含图会话：append `user/message` / `prompt/admitted` 若带图，记入 `sessionHasImage`；`session.selectModel` 换无图模型时 O(1) 拒绝（冷会话首次 miss 扫一次后写入 `sessionImageScanned`）。日志读取统一走 `readSessionEvents`（见 [session-log.md](./session-log.md)）。
 
@@ -197,18 +197,18 @@ Face still exposes **mux + host** buses; only the physical carrier changes per s
 | Shell | Unary | mux | host |
 |-------|-------|-----|------|
 | Web (http/https) | same-origin `fetch` | WebSocket `/api/events.mux` | WebSocket `/api/events.host` |
-| Desktop (loopback) | `fetch` → `http://127.0.0.1:<port>` | WebSocket (same origin; same as `xrkh web`) | WebSocket (same origin) |
+| Desktop (`xrk-app:`) | `fetch` → `xrk-app://app` (bridged to loopback Host) | SSE → `xrk-app://stream` | SSE → `xrk-app://stream` |
 
-After Host IPC `ready` (includes `origin`), Electron `loadURL`s the product onto **`127.0.0.1` loopback** (ADR-0008 / DSH Desktop). `xrk-app://` remains splash / static shell only. Framed Electron Face pipes are retired (Win32 ConPTY inherited those HANDLEs). Host frames include `host/session-added`, `host/session-status`, and `host/remote-event` (e.g. `settings/document-updated`); the shell fans those through `ctx.remote.$dispatch` into Settings / MCP badges and the subagent header · Overview.
+Desktop **Host listen** remains **`127.0.0.1` loopback** (ADR-0008 / DSH Desktop); the product page **stays on `xrk-app://`** for the whole session, with Face / sidebar forwarded through the main-process Host Fetch bridge (no loopback `loadURL` remount — one splash document for Host → plugins). Framed Electron Face pipes are retired (Win32 ConPTY inherited those HANDLEs). Host frames include `host/session-added`, `host/session-status`, and `host/remote-event` (e.g. `settings/document-updated`); the shell fans those through `ctx.remote.$dispatch` into Settings / MCP badges and the subagent header · Overview.
 
 ### Desktop bring-up and Face attach
 
 | Phase | Behavior |
 |-------|----------|
-| First paint | Register `xrk-app://`, then open the window; splash / static from the packaged Web root (Host does not block) |
-| After Host IPC `ready` | `loadURL(http://127.0.0.1:<port>/index.html?…)`; Face / sidebar / community HTTP ride the same-origin Host listen |
+| First paint | Register `xrk-app://`, then open the window; product `index.html` + HARNESS splash from the packaged Web root (Host does not block) |
+| After Host IPC `ready` | Main wires Host Fetch into `xrk-app://`; `whenHostReady` releases Face; **no** document remount |
 
-The product page is served from the Host web dist (same path semantics as `xrkh web`). The `xrk-app://` protocol handler may still serve splash and overlay probe assets.
+Packaged Web root and Host `XRK_WEB_DIST` share the same release; static first paint is from disk, Face / sidebar / community HTTP ride the bridged loopback listen.
 
 ### Product-shell static boundary
 
@@ -257,7 +257,7 @@ After mux / host upgrade, the Host sends **Ping** control frames (default interv
 
 Per-session mux frame numbers come from `FaceSeqClock` / `FaceMuxSeq` (1-based; `last` is `0` before any `next`). They are **independent of** Session log `SessionSeq` / `SessionLogOffset` (see [session-log.md](./session-log.md)). History / `turnOutline.seq` align with the Face mux clock, not a second name for log indices.
 
-`session.history` replay uses `ensureAtLeast(sessionId, maxSeq)` to jump the watermark once instead of spinning `next` O(maxSeq). The history page builds seq maps only for page events (`startIndex + i`), not a `Map` over the full log.
+`session.history` replay uses `ensureAtLeast(sessionId, maxSeq)` to jump the watermark once instead of spinning `next` O(maxSeq). The history page stamps **absolute** seq from the raw paginate slice (`raw.startIndex + i`, aligned with the full log); later `dropSupersededStreamDeltas` / char-budget trim may drop rows but **must not** renumber survivors by the trimmed array index — otherwise the older page’s tail seq no longer meets the window `baseSeq` and the client clears `hasMore` (“Load earlier” / turn-rail jumps fail). Do not build a `Map` over the full log.
 
 Image-bearing sessions: appending `user/message` / `prompt/admitted` with images records `sessionHasImage`; `session.selectModel` rejects a text-only model in O(1) (a cold miss scans once, then marks `sessionImageScanned`). Log reads go through `readSessionEvents` (see [session-log.md](./session-log.md)).
 

@@ -181,6 +181,7 @@ export {
   DESKTOP_BUILD_DIR_NAME,
   resolveDesktopDevelopmentLayout,
   resolveDesktopHarnessHome,
+  resolveDesktopHostCompileCacheDir,
   resolveDesktopPaths,
   type DesktopDevelopmentLayout,
   type DesktopPaths,

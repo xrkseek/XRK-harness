@@ -75,6 +75,14 @@ export function resolveDesktopPaths(
 }
 
 /**
+ * Directory for Host child's `NODE_COMPILE_CACHE` (Node ≥22).
+ * Second+ launches skip re-parsing the Host ESM graph.
+ */
+export function resolveDesktopHostCompileCacheDir(xrkHome: string): string {
+  return path.join(path.resolve(xrkHome), "cache", "desktop-host-compile");
+}
+
+/**
  * Development projection roots under the desktop package.
  * Default home is `.desktop-build/development/home`. Explicit `XRK_HOME` (or aliases) overrides.
  */

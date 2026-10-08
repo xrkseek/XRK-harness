@@ -48,6 +48,12 @@ describe("desktop custom protocol", () => {
     expect(
       desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, { platform: "win32" }),
     ).toContain("dsh-desktop-platform=win32");
+    expect(
+      desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, {
+        platform: "win32",
+        colorScheme: "dark",
+      }),
+    ).toContain("dsh-desktop-color-scheme=dark");
     expect(desktopSplashUrl()).toMatch(
       /^xrk-app:\/\/app\/desktop-splash\.html\?.*dsh-desktop-mode=advanced/,
     );

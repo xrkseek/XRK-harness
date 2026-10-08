@@ -6,6 +6,7 @@ import {
   DESKTOP_BUILD_DIR_NAME,
   resolveDesktopDevelopmentLayout,
   resolveDesktopHarnessHome,
+  resolveDesktopHostCompileCacheDir,
   resolveDesktopPaths,
 } from "../src/paths.js";
 
@@ -22,6 +23,13 @@ describe("resolveDesktopPaths", () => {
     expect(paths.root).toBe(path.join(home, "desktop"));
     expect(paths.lock).toBe(path.join(home, "desktop", "lock"));
     expect(paths.pnpm.store).toBe(path.join(home, "desktop", "pnpm", "store"));
+  });
+
+  it("places Host compile cache under {XRK_HOME}/cache", () => {
+    const home = fixtureRoot("tmp", "xrk-desktop-paths-home");
+    expect(resolveDesktopHostCompileCacheDir(home)).toBe(
+      path.join(home, "cache", "desktop-host-compile"),
+    );
   });
 });
 

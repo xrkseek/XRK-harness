@@ -71,7 +71,9 @@ export function declareDesktopRuntimeSurface(
  * Spawn the standard Host composition listening on 127.0.0.1 (ephemeral port).
  * Declares native path capabilities (`XRK_NATIVE_OPEN`) and runtime surface
  * (`XRK_SURFACE=desktop`) so Face / inject match the Electron shell.
- * Establishes `{XRK_HOME}` seeds (same pass as `xrkh web` / `serve`).
+ * Establishes `{XRK_HOME}` seeds: awaited on CLI-style boots; on
+ * `XRK_SURFACE=desktop` they run in the background so loopback listen is not
+ * blocked by hashing the seed tree.
  */
 export async function bootXrkDesktopHost(options: {
   readonly projectDir: string;
@@ -81,10 +83,16 @@ export async function bootXrkDesktopHost(options: {
   declareDesktopNativeOpenCapabilities();
   declareDesktopRuntimeSurface();
 
-  // Same product establish as CLI serve — update Desktop → open → seeds land.
   const home = resolveXrkHome();
-  await establishProductHomeSeeds(home, (msg) => {
+  // Do not block loopback listen on hashing/copying skill seeds.
+  // CLI `serve` still awaits establish so the first prompt sees a complete home.
+  void establishProductHomeSeeds(home, (msg) => {
     process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${msg}\n`);
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `${DESKTOP_HOST_PACKAGE_NAME} warn: home seeds: ${message}\n`,
+    );
   });
 
   const webDist =

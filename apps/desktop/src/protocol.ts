@@ -158,8 +158,9 @@ export function attachDesktopNavigationGuard(
 export const DESKTOP_TITLEBAR_INSET_PX = 36
 
 /**
- * Lightweight Desktop first-paint splash (static dual-ring + chrome; no React).
- * Host ready then remounts onto {@link desktopLoopbackIndexUrl}.
+ * Optional static dual-ring HTML (no React) — kept for probes / offline demos.
+ * Product bring-up uses {@link desktopAppIndexUrl} so Host + plugins share one
+ * React splash (no `loadURL` remount seam).
  * `colorScheme` paints dark/light before Host injectBootTheme exists.
  */
 export function desktopSplashUrl(
@@ -184,15 +185,19 @@ export function desktopSplashUrl(
 }
 
 /**
- * Primary product URL for the main window (custom-protocol splash / legacy).
+ * Primary product URL — stays on `xrk-app://` for the whole session.
+ * Packaged `index.html` paints the HARNESS splash immediately; Face rides the
+ * Host Fetch bridge once main wires `fetchApp` (no loopback remount).
  * Stamps `dsh-desktop-*` query params so community workbenches
  * (`xrkh-better-sidebar`) yield the custom titlebar via their public contract.
+ * Optional `colorScheme` covers the gap when Host theme inject is absent.
  */
 export function desktopAppIndexUrl(
   scheme: string = DESKTOP_PROTOCOL_SCHEME,
   options?: {
     readonly platform?: NodeJS.Platform
     readonly titlebarInset?: number
+    readonly colorScheme?: "light" | "dark"
   },
 ): string {
   const platform = options?.platform ?? process.platform
@@ -202,14 +207,17 @@ export function desktopAppIndexUrl(
     "dsh-desktop-platform": platform,
     "dsh-desktop-titlebar-inset": String(inset),
   })
+  if (options?.colorScheme !== undefined) {
+    params.set("dsh-desktop-color-scheme", options.colorScheme)
+  }
   return `${scheme}://app/index.html?${params.toString()}`
 }
 
 /**
- * Product UI URL on the Host loopback origin (DSH Desktop posture).
+ * Loopback product URL helper (Host-served index). Product shell no longer
+ * remounts here — Face is proxied through `xrk-app://` + Host Fetch.
+ * Kept for smoke / diagnostics that hit the listen origin directly.
  * Same `dsh-desktop-*` query stamps as {@link desktopAppIndexUrl}.
- * Optional `colorScheme` covers the gap when Host theme inject is absent
- * (index.html fallback script + AppRoot dark CSS).
  */
 export function desktopLoopbackIndexUrl(
   origin: string,

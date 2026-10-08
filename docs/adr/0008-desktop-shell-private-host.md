@@ -4,13 +4,13 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Updated:** 2026-09-29
+- **Updated:** 2026-10-08
 - **Tags:** desktop, electron, host, packaging, auto-update
 - **Related:** [ADR-0001](./0001-typescript-only-host.md) · [ADR-0002](./0002-no-embed-upstream.md) · [status.md](../status.md) · [apps/desktop/README.md](../../apps/desktop/README.md)
 
 ## 背景
 
-XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在壳与 Host 交互上的长处，落点以本仓契约与代码为准。打包流水线对标 deepseek-harness `electron-builder`（unsigned 闸门 · 凭据签名 · generic 更新源 · build 时 `--publish never`）。Desktop Face 载波对标 **DSH Desktop**（`127.0.0.1` 回环），避免 Electron 分帧管道与 Win32 ConPTY 的 HANDLE 继承冲突。
+XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在壳与 Host 交互上的长处，落点以本仓契约与代码为准。打包流水线对标 deepseek-harness `electron-builder`（unsigned 闸门 · 凭据签名 · generic 更新源 · build 时 `--publish never`）。Desktop Host **listen** 对标 **DSH Desktop**（`127.0.0.1` 回环）；渲染进程留在 `xrk-app://` 经 Fetch 桥接 Face，避免 Electron 分帧管道与 Win32 ConPTY 的 HANDLE 继承冲突，并保持开屏单文档无缝。
 
 产品入口今日为 Web（`xrkh web` / `serve`）与 CLI（`@xrkseek/harness-cli`）。Electron 桌面载体由 workspace **`apps/desktop`**（`@xrkseek/harness-desktop`，**`private: true`**）与 **`apps/desktop-host`**（`@xrkseek/harness-desktop-host`，**private**）承载。
 
@@ -22,7 +22,7 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 
 | 部件 | 职责 | 落点 |
 | --- | --- | --- |
-| **Electron 壳** | 窗口 · 单实例锁 · `xrk-app://` 闪屏 · loopback `loadURL` · 窄 preload · 更新协调 | `apps/desktop` |
+| **Electron 壳** | 窗口 · 单实例锁 · `xrk-app://` 产品页（全程）· Host Fetch 桥 · 窄 preload · 更新协调 | `apps/desktop` |
 | **私有 Desktop Host** | 上游 Node 子进程；组合本仓 Host / Face / 已组装 Web；**listen `127.0.0.1` only**；**无** Cordis boot | `apps/desktop-host` |
 | **产品数据** | 会话 · 设置 · 凭据 · 工作区 | `~/.xrk`（`XRK_HOME`） |
 | **Desktop 可执行图** | profile · lock · `node_modules` · 内置 Node/pnpm store | `~/.xrk/profiles/desktop` · `~/.xrk/desktop/…` |
@@ -36,11 +36,11 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 | 通道 | 决策 |
 | --- | --- |
 | 产品 Web listen | **Desktop：仅 `127.0.0.1` 回环**（与 DSH Desktop 同构；**不**绑 `0.0.0.0` / 不暴露局域网） |
-| 自定义协议 | **`xrk-app://`** — 可选 splash / 静态过渡；**产品 UI 以 Host 回环 origin 为准** |
+| 自定义协议 | **`xrk-app://`** — **产品 UI 全程**；Face / 侧栏经 Host Fetch 桥到回环 listen（无 loopback `loadURL` 重挂，开屏无缝） |
 | 分帧字节管道 | **退役**（曾为 Face 主数据面；Windows ConPTY 会继承 Electron 管道 HANDLE 并切断 Host） |
 | Node IPC | **仅** ready（含 `origin`）/ fatal / shutdown 等生命周期信号 |
 
-规则：Desktop Face = 回环 HTTP，与 `xrkh web` 同一 compose/Face 语义，仅载体不同；**禁止**把 Host 绑到非 loopback。CLI / `xrkh web` 仍可 listen 或按既有配置。
+规则：Desktop Host **listen** 仅回环；渲染进程留在 `xrk-app://`，Face 语义与 `xrkh web` 相同、载波为自定义协议 Fetch/SSE。**禁止**把 Host 绑到非 loopback。CLI / `xrkh web` 仍可 listen 或按既有配置。
 
 ### 渲染安全
 
@@ -93,6 +93,8 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 ---
 
 > **Updated 2026-09-29**：Desktop Face 从 Electron 分帧管道改为 **`127.0.0.1` 回环 HTTP**（对标 dataelement/dsh-desktop）。管道方案下 Win32 ConPTY 会继承 Face/IPC HANDLE，一开终端就切断 Host。
+>
+> **Updated 2026-10-08**：产品页全程留在 **`xrk-app://`**；Host ready 后只挂 Fetch 桥，不再 `loadURL` 到回环（Host + 插件同一开屏文档）。
 
 ---
 
@@ -102,7 +104,7 @@ XRK-Harness 为自研产品栈；设计吸收 Codex 与业界 agent harness 在�
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Updated:** 2026-09-29
+- **Updated:** 2026-10-08
 - **Tags:** desktop, electron, host, packaging, auto-update
 - **Related:** [ADR-0001](./0001-typescript-only-host.md) · [ADR-0002](./0002-no-embed-upstream.md) · [status.md](../status.md) · [apps/desktop/README.md](../../apps/desktop/README.md)
 
@@ -112,19 +114,19 @@ XRK-Harness is an independently developed stack. Packaging follows deepseek-harn
 
 Product entries today are Web (`xrkh web` / `serve`) and CLI. The Electron carrier lives in **`apps/desktop`** and **`apps/desktop-host`** (both private).
 
-## Decision (packaging + Face carrier 2026-09-29)
+## Decision (packaging + Face carrier 2026-09-29; shell document 2026-10-08)
 
 - Release matrix **`win-x64` / `mac-arm64` / `mac-x64`** packaging pipeline is **open** (`pnpm package:desktop`; produce with `XRK_DESKTOP_PACKAGE=1`). `mac-x64` may build on Apple Silicon (Rosetta) or Intel Mac. `win-arm64` / `linux-*` remain deferred.
 - Default product entry remains **CLI/Web**; installer is never day-1 `xrkh` entry.
 - Unsigned Windows via `XRK_DESKTOP_UNSIGNED=1`; signing/notarize when `XRK_DESKTOP_WINDOWS_*` / `XRK_DESKTOP_MACOS_*` present.
 - Auto-update MVP: full-package + generic provider (`app-update.yml`; **omitted for unsigned**); Main wires `DesktopUpdateCoordinator` + schedule + application-menu check; `pnpm upload:desktop` validates artifacts + `package-complete-*.json` and mirrors to a local filesystem transport (live COS HTTPS PUT remains phase 2); `pnpm clean:desktop` clears artifacts/mirrors.
 - `installerShipped=true` once the update upload CI path exists; day-1 entry stays `cli-web`.
-- **Desktop Face carrier: `http://127.0.0.1:<ephemeral>`** (DSH Desktop posture). Node IPC carries only lifecycle (`ready` includes `origin`). Framed Electron Face pipes are retired — Win32 ConPTY inherited those HANDLEs and killed Host on first terminal open.
+- **Desktop Host listen: `http://127.0.0.1:<ephemeral>`** (DSH Desktop posture). Renderer **stays on `xrk-app://`** for the whole session; Face / sidebar / community HTTP ride the Host Fetch bridge after IPC `ready` (no loopback `loadURL` remount — one splash for Host + plugins). Node IPC carries only lifecycle (`ready` includes `origin`). Framed Electron Face pipes are retired — Win32 ConPTY inherited those HANDLEs and killed Host on first terminal open.
 - `isDesktopProductReady()` means packaging + update-upload pipeline ready.
 - Builder identity lives in one `DESKTOP_BUILDER_CONFIG` (no draft alias); upload credentials stay scrubbed from package-prep subprocesses.
 
 ## Consequences
 
-- status tracks packaging + update-upload; Desktop Face is loopback-only.
+- status tracks packaging + update-upload; Desktop Host listen is loopback-only; product shell document is `xrk-app://`.
 - See Chinese section above for composition / transport / security decisions.
 - Implementation must keep: loopback-only listen · IPC lifecycle-only · CLI refuses desktop profile · same release identity · default entry is not the installer.

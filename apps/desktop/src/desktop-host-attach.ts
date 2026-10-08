@@ -1,7 +1,8 @@
 /**
  * Schedule Desktop Host bring-up without blocking first paint (VS Code / Chrome).
- * Main paints splash on `xrk-app://`; IPC `ready` (with loopback `origin`) then
- * lets main `loadURL` the Host Face (DSH posture — no Face framed pipes).
+ * Main keeps the product on `xrk-app://` (one React splash); IPC `ready`
+ * (loopback `origin`) wires Host Fetch into the custom protocol — no
+ * `loadURL` remount onto loopback (seamless Host → plugin boot).
  *
  * Also owns the main-process ready flag that preload `whenHostReady` awaits so
  * Face connect does not burn into retry:backoff before the origin is live.
@@ -20,7 +21,7 @@ export type DesktopHostPhase = "starting" | "attaching" | "ready";
  * Does not await — callers return so Electron can create/show the window.
  *
  * Phase order for splash: `starting` at schedule → `attaching` on child spawn
- * (via `hooks.onSpawned`) → `ready` when main `loadURL`s the loopback origin.
+ * (via `hooks.onSpawned`) → `ready` when main wires Host Fetch + marks ready.
  *
  * When {@link ScheduleDesktopHostFetchAttachOptions.restartMaxAttempts} > 0,
  * an unexpected Host exit clears the ready gate (`detach`) and reschedules

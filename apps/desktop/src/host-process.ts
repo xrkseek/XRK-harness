@@ -1,7 +1,8 @@
 /**
  * Upstream-Node Desktop Host child: lifecycle IPC + loopback Face Fetch (ADR-0008).
  *
- * DSH Desktop posture — Host listens on 127.0.0.1; Electron loads that origin.
+ * DSH Desktop posture — Host listens on 127.0.0.1; Electron proxies Face
+ * through `xrk-app://` Fetch (renderer stays on the custom protocol).
  * No Electron framed Face pipes (Win32 ConPTY must not inherit them).
  */
 
@@ -42,7 +43,7 @@ export interface DesktopHostProcessOptions {
 export interface DesktopHostReady {
   readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION;
   readonly hostVersion: string;
-  /** Loopback Face origin for `BrowserWindow.loadURL`. */
+  /** Loopback Face origin (Host listen; shell Fetch bridge target). */
   readonly origin: string;
 }
 

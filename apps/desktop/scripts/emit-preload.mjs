@@ -166,8 +166,8 @@ function subscribeHostPhase(listener) {
   };
 }
 
-// Desktop owns the private Host. Product Face is loopback HTTP after ready;
-// xrk-app:// is splash/static. whenHostReady gates Face connect until origin is live.
+// Desktop owns the private Host. Product UI stays on xrk-app://; Face is
+// proxied to the loopback Host after ready. whenHostReady gates Face connect.
 contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
   ownsHost: true,
   whenHostReady,

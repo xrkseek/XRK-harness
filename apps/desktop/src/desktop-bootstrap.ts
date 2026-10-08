@@ -49,6 +49,11 @@ export function startDesktopMain(
     getWindowCount: () => number;
     /** Runs after `whenReady`, before the first window load (e.g. `protocol.handle`). */
     onReady?: () => void | Promise<void>;
+    /**
+     * Runs as soon as this process owns the single-instance lock, *before*
+     * `whenReady`. Use to spawn Desktop Host so it overlaps Chromium init.
+     */
+    onInstanceOwned?: () => void;
   },
 ): boolean {
   let mainWindow: DesktopShellWindow | undefined;
@@ -78,6 +83,7 @@ export function startDesktopMain(
 
   const owns = claimDesktopSingleInstance(application, focusPrimary);
   if (!owns) return false;
+  options.onInstanceOwned?.();
 
   void application.whenReady().then(async () => {
     await options.onReady?.();

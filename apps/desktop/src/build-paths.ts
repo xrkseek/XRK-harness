@@ -80,7 +80,14 @@ export function desktopTargetBuildPaths(
     packageSet: path.join(root, "package-set"),
     seed: path.join(root, "seed"),
     artifacts: path.join(root, "artifacts"),
-    unsignedArtifacts: path.join(root, "unsigned-artifacts"),
+    unsignedArtifacts: path.join(
+      root,
+      /^[A-Za-z0-9._-]+$/.test(
+        process.env.XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR?.trim() ?? "",
+      )
+        ? process.env.XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR!.trim()
+        : "unsigned-artifacts",
+    ),
   };
 }
 

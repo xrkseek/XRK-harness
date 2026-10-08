@@ -3,7 +3,8 @@
  *
  * Wires: single-instance · window lifecycle · private Host on **127.0.0.1
  * loopback** (DSH Desktop posture) · narrow preload · update coordinator.
- * `xrk-app://` remains for splash / static until Host ready.
+ * Product UI stays on `xrk-app://` for the whole session; Host Fetch is
+ * bridged into the custom protocol after IPC `ready` (no loopback remount).
  */
 
 import path from "node:path";
@@ -38,8 +39,7 @@ import {
 } from "./boot-appearance.js";
 import {
   attachDesktopNavigationGuard,
-  desktopSplashUrl,
-  desktopLoopbackIndexUrl,
+  desktopAppIndexUrl,
   DESKTOP_PROTOCOL_PRIVILEGES,
   DESKTOP_PROTOCOL_SCHEME,
   handleDesktopProtocolRequest,
@@ -72,7 +72,10 @@ import {
   resolvePackagedDesktopHostRuntime,
   resolveUnpackagedDesktopHostRuntime,
 } from "./host-runtime.js";
-import { resolveDesktopHarnessHome } from "./paths.js";
+import {
+  resolveDesktopHarnessHome,
+  resolveDesktopHostCompileCacheDir,
+} from "./paths.js";
 
 /** Sandboxed preload must be CommonJS (`emit-preload.mjs` → `preload-app.cjs`). */
 const PRELOAD_APP = fileURLToPath(
@@ -144,20 +147,30 @@ function broadcastUpdate(state: DesktopUpdateState): DesktopUpdateState {
   return publishDesktopUpdateState(BrowserWindow.getAllWindows(), state);
 }
 
-function loadAllWindowsOnHostOrigin(origin: string): void {
-  const url = desktopLoopbackIndexUrl(origin, {
-    platform: process.platform,
-    colorScheme: resolveBootColorScheme(),
-  });
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (window.isDestroyed()) continue;
-    void window.loadURL(url);
-  }
+/**
+ * Host Fetch bridge for `xrk-app://` (set after IPC `ready`, cleared on
+ * detach / quit). Product HTML stays on packaged disk; Face / sidebar /
+ * community HTTP forward here.
+ */
+let desktopHostFetchApp:
+  | ((request: Request) => Promise<Response>)
+  | undefined;
+
+/** Product index on `xrk-app://` — one document for Host + plugin splash. */
+function loadProductShell(window: BrowserWindow): void {
+  void window.loadURL(
+    desktopAppIndexUrl(DESKTOP_PROTOCOL_SCHEME, {
+      platform: process.platform,
+      colorScheme: resolveBootColorScheme(),
+    }),
+  );
 }
 
 let desktopHost: DesktopHostProcess | undefined;
 /** Set on will-quit so Host exit does not auto-restart into a dying app. */
 let desktopQuitting = false;
+let updateCoordinator: DesktopUpdateCoordinator | undefined;
+let updateSchedule: DesktopUpdateSchedule | undefined;
 
 async function startDesktopHostCarrier(
   webRoot: string,
@@ -182,6 +195,7 @@ async function startDesktopHostCarrier(
         // Bundled harness-cli — Settings plugin mutate never falls back to PATH.
         XRK_HARNESS_BIN: runtime.harnessCliBin,
         XRK_SURFACE: "desktop",
+        NODE_COMPILE_CACHE: resolveDesktopHostCompileCacheDir(xrkHome),
       },
       ...(hooks.onSpawned !== undefined ? { onSpawned: hooks.onSpawned } : {}),
     });
@@ -200,24 +214,68 @@ async function startDesktopHostCarrier(
   }
 }
 
+let desktopWebRoot: string | undefined;
+
+function liveHostWindows(): Electron.WebContents[] {
+  return BrowserWindow.getAllWindows()
+    .filter((win) => !win.isDestroyed())
+    .map((win) => win.webContents);
+}
+
+function beginDesktopHostBringUp(webRoot: string): void {
+  resetDesktopHostFetchReady();
+  scheduleDesktopHostFetchAttach({
+    start: (hooks) => startDesktopHostCarrier(webRoot, hooks),
+    onPhase: (phase) => {
+      publishDesktopHostPhase(phase, DESKTOP_IPC.hostPhase, liveHostWindows());
+    },
+    attach: (host) => {
+      const origin = host.faceOrigin;
+      if (origin === undefined) {
+        publishDesktopHostFailed(
+          DESKTOP_IPC.hostFailed,
+          liveHostWindows(),
+          "Desktop Host ready without loopback origin",
+        );
+        return;
+      }
+      // Keep the existing `xrk-app://` document — wire Fetch, then mark ready
+      // so the same React splash continues into plugin / Face boot.
+      desktopHostFetchApp = (request) => host.fetch(request);
+      markDesktopHostFetchReady(
+        DESKTOP_IPC.hostReady,
+        DESKTOP_IPC.hostPhase,
+        liveHostWindows(),
+      );
+    },
+    detach: () => {
+      desktopHostFetchApp = undefined;
+      desktopHost = undefined;
+    },
+    restartMaxAttempts: 5,
+    restartDelayMs: 750,
+    shouldAbortRestart: () => desktopQuitting,
+    onFailed: (error) => {
+      publishDesktopHostFailed(
+        DESKTOP_IPC.hostFailed,
+        liveHostWindows(),
+        error.message,
+      );
+    },
+  });
+}
+
 const ownsDesktopInstance = startDesktopMain(app, {
   createWindow: () => createMainBrowserWindow(),
   loadPrimary: (window) => {
-    // Static dual-ring + chrome — do not boot React/plugins before Host is ready.
-    // Stamp color scheme so splash matches Settings dark/light (not OS alone).
-    void (window as BrowserWindow).loadURL(
-      desktopSplashUrl(DESKTOP_PROTOCOL_SCHEME, {
-        platform: process.platform,
-        colorScheme: resolveBootColorScheme(),
-      }),
-    );
+    // React HARNESS splash from packaged webRoot — Host Fetch attaches later
+    // without remounting (seamless Host → plugins → Face).
+    loadProductShell(window as BrowserWindow);
   },
   getWindowCount: () => BrowserWindow.getAllWindows().length,
-  onReady: async () => {
-    await bootstrapDesktopUpdates();
-    let webRoot: string;
+  onInstanceOwned: () => {
     try {
-      webRoot = resolveDesktopWebRoot({
+      desktopWebRoot = resolveDesktopWebRoot({
         isPackaged: app.isPackaged,
         appPath: app.getAppPath(),
         resourcesPath: process.resourcesPath,
@@ -231,70 +289,34 @@ const ownsDesktopInstance = startDesktopMain(app, {
       app.quit();
       return;
     }
-
-    // Keep `xrk-app://` for splash / overlay assets while Host starts.
+    beginDesktopHostBringUp(desktopWebRoot);
+  },
+  onReady: () => {
+    const webRoot = desktopWebRoot;
+    if (webRoot === undefined) return;
     const xrkHome = resolveDesktopHarnessHome({
       isPackaged: app.isPackaged,
       desktopAppRoot: DESKTOP_APP_ROOT,
     });
-    // Always point at the overlay path — missing dir is a soft 404 until install.
     const overlayRoot = path.join(xrkHome, "plugins", "web");
     protocol.handle(DESKTOP_PROTOCOL_SCHEME, (request) =>
       handleDesktopProtocolRequest(request, {
         webRoot,
         overlayRoot,
+        ...(desktopHostFetchApp !== undefined
+          ? { fetchApp: desktopHostFetchApp }
+          : {}),
       }),
     );
-
-    resetDesktopHostFetchReady();
-    const liveWindows = (): Electron.WebContents[] =>
-      BrowserWindow.getAllWindows()
-        .filter((win) => !win.isDestroyed())
-        .map((win) => win.webContents);
-    scheduleDesktopHostFetchAttach({
-      start: (hooks) => startDesktopHostCarrier(webRoot, hooks),
-      onPhase: (phase) => {
-        publishDesktopHostPhase(phase, DESKTOP_IPC.hostPhase, liveWindows());
-      },
-      attach: (host) => {
-        const origin = host.faceOrigin;
-        if (origin === undefined) {
-          publishDesktopHostFailed(
-            DESKTOP_IPC.hostFailed,
-            liveWindows(),
-            "Desktop Host ready without loopback origin",
-          );
-          return;
-        }
-        // Ready before loadURL so the remounted page's whenHostReady resolves
-        // on first invoke (no Host tip ladder on the second boot).
-        markDesktopHostFetchReady(
-          DESKTOP_IPC.hostReady,
-          DESKTOP_IPC.hostPhase,
-          liveWindows(),
-        );
-        loadAllWindowsOnHostOrigin(origin);
-      },
-      detach: () => {
-        desktopHost = undefined;
-      },
-      restartMaxAttempts: 5,
-      restartDelayMs: 750,
-      shouldAbortRestart: () => desktopQuitting,
-      onFailed: (error) => {
-        publishDesktopHostFailed(
-          DESKTOP_IPC.hostFailed,
-          liveWindows(),
-          error.message,
-        );
-      },
-    });
+    registerDesktopShellIpc();
+    void bootstrapDesktopUpdates();
   },
 });
 
 app.on("will-quit", () => {
   desktopQuitting = true;
   const host = desktopHost;
+  desktopHostFetchApp = undefined;
   desktopHost = undefined;
   resetDesktopHostFetchReady();
   if (host !== undefined) {
@@ -304,65 +326,22 @@ app.on("will-quit", () => {
   }
 });
 
-async function bootstrapDesktopUpdates(): Promise<void> {
-  const feedEnabled = (): boolean =>
-    isDesktopUpdateFeedEnabled({
-      isPackaged: app.isPackaged,
-      resourcesPath: process.resourcesPath,
-      forceEnable: process.env.XRK_DESKTOP_UPDATE_FORCE === "1",
-    });
-
-  const unsignedFeed = existsSync(
-    path.join(process.resourcesPath, "unsigned-update.json"),
-  );
-  const electronUpdater = await tryCreateDesktopElectronUpdater(
-    unsignedFeed ? { verifyUpdateCodeSignature: false } : {},
-  );
-  let coordinator: DesktopUpdateCoordinator | undefined;
-  let schedule: DesktopUpdateSchedule | undefined;
-
-  if (electronUpdater !== undefined) {
-    coordinator = new DesktopUpdateCoordinator({
-      publish: broadcastUpdate,
-      updater: electronUpdater,
-      enabled: feedEnabled,
-      currentVersion: () => app.getVersion(),
-      beforeRestart: async () => {
-        const host = desktopHost;
-        desktopHost = undefined;
-        if (host !== undefined) await host.stop();
-      },
-    });
-    if (feedEnabled()) {
-      try {
-        schedule = new DesktopUpdateSchedule(
-          coordinator,
-          resolveDesktopUpdateScheduleConfig(process.env),
-        );
-        void schedule.check(false, true).catch((error: unknown) => {
-          console.error(error);
-        });
-      } catch (error) {
-        console.error(error);
-      }
-    }
-  }
-
+function registerDesktopShellIpc(): void {
   registerDesktopIpcHandlers(ipcMain, {
     getLocale: () => app.getLocale(),
     getAppVersion: () => app.getVersion(),
-    getUpdateState: () => coordinator?.state ?? { phase: "idle" },
+    getUpdateState: () => updateCoordinator?.state ?? { phase: "idle" },
     checkUpdates: async () => {
-      if (coordinator === undefined) return { phase: "idle" };
-      return schedule !== undefined
-        ? schedule.check(true, true)
-        : coordinator.check(true);
+      if (updateCoordinator === undefined) return { phase: "idle" };
+      return updateSchedule !== undefined
+        ? updateSchedule.check(true, true)
+        : updateCoordinator.check(true);
     },
     installUpdate: async () => {
-      if (coordinator === undefined) {
+      if (updateCoordinator === undefined) {
         throw new Error("xrk desktop: update install is not configured");
       }
-      await coordinator.install();
+      await updateCoordinator.install();
     },
     windowFromEvent: (event) => {
       const sender = (event as { sender?: Parameters<
@@ -381,9 +360,9 @@ async function bootstrapDesktopUpdates(): Promise<void> {
     menu: Menu,
     getLocale: () => app.getLocale(),
     onCheckUpdates: () => {
-      if (coordinator === undefined) return;
-      const active = coordinator;
-      const activeSchedule = schedule;
+      if (updateCoordinator === undefined) return;
+      const active = updateCoordinator;
+      const activeSchedule = updateSchedule;
       void runDesktopManualUpdateCheck({
         coordinator: active,
         check: () =>
@@ -399,6 +378,49 @@ async function bootstrapDesktopUpdates(): Promise<void> {
     },
     platform: process.platform,
   });
+}
+
+async function bootstrapDesktopUpdates(): Promise<void> {
+  const feedEnabled = (): boolean =>
+    isDesktopUpdateFeedEnabled({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      forceEnable: process.env.XRK_DESKTOP_UPDATE_FORCE === "1",
+    });
+
+  const unsignedFeed = existsSync(
+    path.join(process.resourcesPath, "unsigned-update.json"),
+  );
+  const electronUpdater = await tryCreateDesktopElectronUpdater(
+    unsignedFeed ? { verifyUpdateCodeSignature: false } : {},
+  );
+
+  if (electronUpdater !== undefined) {
+    updateCoordinator = new DesktopUpdateCoordinator({
+      publish: broadcastUpdate,
+      updater: electronUpdater,
+      enabled: feedEnabled,
+      currentVersion: () => app.getVersion(),
+      beforeRestart: async () => {
+        const host = desktopHost;
+        desktopHost = undefined;
+        if (host !== undefined) await host.stop();
+      },
+    });
+    if (feedEnabled()) {
+      try {
+        updateSchedule = new DesktopUpdateSchedule(
+          updateCoordinator,
+          resolveDesktopUpdateScheduleConfig(process.env),
+        );
+        void updateSchedule.check(false, true).catch((error: unknown) => {
+          console.error(error);
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }
 }
 
 export { ownsDesktopInstance };

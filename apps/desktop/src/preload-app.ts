@@ -111,7 +111,7 @@ function subscribeHostPhase(listener: (phase: HostPhase) => void): () => void {
 
 // Desktop owns the private Host — client treats this as the privileged surface
 // (canOpenPath / pickDirectory UI gates on isLoopback ∧ host.canOpenPath).
-// Product UI loads Host loopback HTTP after ready; xrk-app:// is splash/static.
+// Product UI stays on xrk-app://; Face is proxied to the loopback Host after ready.
 contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
   ownsHost: true,
   whenHostReady,

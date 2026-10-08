@@ -16,7 +16,7 @@ export const DESKTOP_IPC = {
   windowIsMaximized: "xrk-desktop:window-is-maximized",
   windowMaximized: "xrk-desktop:window-maximized",
   windowReload: "xrk-desktop:window-reload",
-  /** True once Desktop Host Fetch is attached to `xrk-app://` (Face ready). */
+  /** True once Desktop Host Fetch is wired into `xrk-app://` (Face ready). */
   hostReadyGet: "xrk-desktop:host-ready-get",
   /** Push when Host Fetch attaches (renderer may await before Face connect). */
   hostReady: "xrk-desktop:host-ready",
