@@ -13,6 +13,7 @@ import {
 } from 'lexical'
 import type { Occurrence } from '../../contract/draft-editor.ts'
 import { $isReferenceChipNode } from './chip-node.tsx'
+import { $isPastedTextNode } from './pasted-text-node.tsx'
 
 /** The detect-projection stand-in for one chip (object replacement character). */
 export const ATOMIC_CHAR = '￼'
@@ -74,6 +75,27 @@ export function $composerLayout(): ComposerLayout {
     clipboard += clipboardPiece
   }
 
+  /**
+   * A folded paste is atomic in the detect projection (one U+FFFC, so trigger
+   * scanning and TokenSpan coordinates never see the body) but transparent in
+   * the clipboard projection (its full text, so persistence, the InputState
+   * draft, submit, and native copy all keep working unchanged).
+   */
+  const pushPasted = (node: LexicalNode): void => {
+    const segment: ComposerSegment = {
+      kind: 'chip',
+      node,
+      detectStart: detect.length,
+      detectLength: 1,
+      clipboardStart: clipboard.length,
+      clipboardLength: node.getTextContent().length,
+    }
+    segments.push(segment)
+    byKey.set(node.getKey(), segment)
+    detect += ATOMIC_CHAR
+    clipboard += node.getTextContent()
+  }
+
   const walkElement = (element: ElementNode): void => {
     const start = detect.length
     const kids = element.getChildren()
@@ -81,6 +103,8 @@ export function $composerLayout(): ComposerLayout {
     for (const kid of kids) {
       if ($isReferenceChipNode(kid)) {
         pushLeaf('chip', kid, ATOMIC_CHAR, kid.getTextContent())
+      } else if ($isPastedTextNode(kid)) {
+        pushPasted(kid)
       } else if ($isTextNode(kid)) {
         const text = kid.getTextContent()
         pushLeaf('text', kid, text, text)

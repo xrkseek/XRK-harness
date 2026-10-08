@@ -11,12 +11,14 @@ import { mergeRegister } from '@lexical/utils'
 import type { Occurrence, ReferenceInsert } from '../../contract/draft-editor.ts'
 import { registerReferenceActivation } from './reference-activation.ts'
 import { ReferenceChipNode, $createReferenceChipNode } from './chip-node.tsx'
+import { PastedTextNode, $createPastedTextNode } from './pasted-text-node.tsx'
 import { refreshClaimDecoration, registerClaimDecoration } from './claim-decor.ts'
 import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './text-ref.ts'
 import type { EditorProjection } from './projection.ts'
 import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from './projection.ts'
 import { $replaceDetectSpanWithNodes, $replaceDetectSpanWithText } from './span-map.ts'
 import type { DetectSpan } from './span-map.ts'
+import { planPastedFold } from './pasted-fold.ts'
 
 type Lexicon = ReadonlyMap<'/' | '@', readonly string[]>
 
@@ -55,7 +57,7 @@ export class DraftEditorRuntime {
   constructor(private readonly deps: DraftEditorRuntimeDeps) {
     this.editor = createEditor({
       namespace: 'xrk-composer',
-      nodes: [ReferenceChipNode, TextRefNode],
+      nodes: [ReferenceChipNode, TextRefNode, PastedTextNode],
       onError: (error) => { throw error },
     })
   }
@@ -143,18 +145,34 @@ export class DraftEditorRuntime {
    * Replace the whole draft (persisted-draft seed and programmatic writes).
    * Placeholder-sanitized; newlines split paragraphs; the caret lands at the
    * end. Merged into history so a seed is not an undoable step of its own.
+   *
+   * Over-long runs are re-folded into PastedTextNodes rather than literal
+   * text, so a draft that was folded on the way in stays folded when it is
+   * re-seeded from the store (refresh, session switch) — the fold is derived
+   * from the text, not remembered from the gesture.
    * @param text - the full next draft.
    */
   setDraft(text: string): void {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
-    if (clean === this.projection.clipboardText) return
+    // Compare against the live editor, not the last refreshProjection snapshot —
+    // callers often wipe then re-seed (`setDraft(''); setDraft(persisted)`)
+    // without an intervening refresh; a stale clipboardText would no-op the seed
+    // and drop the fold.
+    const live = this.editor.getEditorState().read(() => $composerLayout().clipboardText)
+    if (clean === live) return
     this.editor.update(() => {
       const root = $getRoot()
       root.clear()
-      for (const line of clean.split('\n')) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        root.append(paragraph)
+      for (const part of planPastedFold(clean)) {
+        if (part.kind === 'fold') {
+          root.append($createParagraphNode().append($createPastedTextNode(part.text)))
+          continue
+        }
+        for (const line of part.text.split('\n')) {
+          const paragraph = $createParagraphNode()
+          if (line !== '') paragraph.append($createTextNode(line))
+          root.append(paragraph)
+        }
       }
       root.selectEnd()
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
@@ -165,22 +183,39 @@ export class DraftEditorRuntime {
    * (placeholder-sanitized). The paste event's own default is suppressed by
    * the caller; PASTE_TAG makes the paste its own history boundary, so one
    * undo never removes both the paste and typing inside the merge window.
+   *
+   * Over-long runs fold into PastedTextNodes instead of literal text: the
+   * fold keeps the body out of contenteditable (where Chromium would pay a
+   * layout per character, again on every keystroke) while the clipboard
+   * projection still hands the full text to persistence, submit, and copy.
    * @param text - pasted plain text.
    */
   paste(text: string): void {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === '') return
     this.applyEdit(() => {
-      const selection = $getSelection()
-      if ($isRangeSelection(selection)) {
-        selection.insertText(clean)
-        return
-      }
       // No selection yet (never-focused surface): land at the document end,
       // growing the first paragraph when the tree is empty.
-      const root = $getRoot()
-      if (root.getChildrenSize() === 0) root.append($createParagraphNode())
-      root.selectEnd().insertText(clean)
+      let selection = $getSelection()
+      if (!$isRangeSelection(selection)) {
+        const root = $getRoot()
+        if (root.getChildrenSize() === 0) root.append($createParagraphNode())
+        selection = root.selectEnd()
+      }
+      if (!$isRangeSelection(selection)) {
+        $getRoot().selectEnd().insertText(clean)
+        return
+      }
+      const parts = planPastedFold(clean)
+      for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index]!
+        // Parts are runs joined by '\n', so the separator between two runs
+        // belongs to neither — emit it here or each fold junction silently
+        // swallows one newline.
+        if (index > 0) selection.insertText('\n')
+        if (part.kind === 'fold') selection.insertNodes([$createPastedTextNode(part.text)])
+        else selection.insertText(part.text)
+      }
     }, PASTE_TAG)
   }
 
@@ -275,9 +310,23 @@ export class DraftEditorRuntime {
           }
         }
       }
+      /**
+       * Over-long runs fold exactly as an interactive paste would, so a
+       * restored draft cannot reintroduce a wall of literal text into the
+       * contenteditable after a failed submit.
+       */
+      const appendExternal = (text: string): void => {
+        for (const part of planPastedFold(text)) {
+          if (part.kind === 'fold') {
+            paragraph.append($createPastedTextNode(part.text))
+            continue
+          }
+          appendText(part.text)
+        }
+      }
       let cursor = 0
       for (const occurrence of occurrences) {
-        appendText(draft.slice(cursor, occurrence.offset))
+        appendExternal(draft.slice(cursor, occurrence.offset))
         paragraph.append(new ReferenceChipNode({
           source: occurrence.source,
           ref: occurrence.ref,
@@ -287,7 +336,7 @@ export class DraftEditorRuntime {
         }, occurrence.invalid === true))
         cursor = occurrence.offset + occurrence.length
       }
-      appendText(draft.slice(cursor))
+      appendExternal(draft.slice(cursor))
       root.selectEnd()
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
   }

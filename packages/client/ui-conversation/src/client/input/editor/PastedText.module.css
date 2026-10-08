@@ -1,0 +1,16 @@
+/* Folded-paste metrics: one truncated summary line inside the composer line. */
+
+.summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 240px;
+  color: var(--dsw-alias-state-business-primary);
+  user-select: none;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
