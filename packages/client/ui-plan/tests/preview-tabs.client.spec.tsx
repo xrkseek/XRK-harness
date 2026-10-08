@@ -8,18 +8,21 @@ import { zh } from '../src/client/locales.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsProps } from '../src/client/PreviewTabs.tsx'
 import { parseOfficePreview, parsePlanPreview, parseSessionStatus } from '../src/client/preview-load.ts'
 import { resetOverviewSessionUiForTests } from '../src/client/overview-paint.ts'
+import { resetOverviewLoadCacheForTests } from '../src/client/overview-load-cache.ts'
 
 /** Matches ui-layout `LAYOUT_INSET_ATTR.details` (no cross-plugin value import). */
 const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
 
 beforeEach(() => {
   resetOverviewSessionUiForTests()
+  resetOverviewLoadCacheForTests()
 })
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   resetOverviewSessionUiForTests()
+  resetOverviewLoadCacheForTests()
 })
 
 const t = makeTranslate(zh, commonZh)

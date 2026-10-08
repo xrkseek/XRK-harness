@@ -15,6 +15,12 @@ export interface SubagentGraphNode {
   readonly activity?: 'running' | 'inactive'
   /** `provider/model` this child runs on. */
   readonly model?: string
+  /**
+   * Last-turn fate carried by the graph node itself. `live` only lists this
+   * session's own descendants, so on a board opened from a child the sibling
+   * and parent rows exist here and nowhere else.
+   */
+  readonly outcome?: LiveOutcome
 }
 
 export interface SubagentGraphEdge {
@@ -24,22 +30,25 @@ export interface SubagentGraphEdge {
   readonly label?: string
 }
 
+/** Last-turn verdict shape shared by graph nodes and `live` rows. */
+export interface LiveOutcome {
+  readonly kind:
+    | 'completed'
+    | 'aborted'
+    | 'error'
+    | 'max-tokens'
+    | 'interrupted'
+    | 'blocked'
+    | 'none'
+  readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+}
+
 export interface SubagentLiveRow {
   readonly id: string
   readonly label?: string
   readonly activity: 'running' | 'inactive'
   /** Last-turn verdict from `session.status` — idle is not always "done". */
-  readonly outcome?: {
-    readonly kind:
-      | 'completed'
-      | 'aborted'
-      | 'error'
-      | 'max-tokens'
-      | 'interrupted'
-      | 'blocked'
-      | 'none'
-    readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
-  }
+  readonly outcome?: LiveOutcome
   readonly mode: string
   readonly liveTool?: string
   readonly liveText?: string
@@ -67,7 +76,7 @@ const NODE_H = 40
 const PAD_X = 16
 const PAD_Y = 20
 
-type LiveOutcomeKind = NonNullable<SubagentLiveRow['outcome']>['kind']
+type LiveOutcomeKind = LiveOutcome['kind']
 
 function activityDot(
   activity: 'running' | 'inactive' | undefined,
@@ -84,6 +93,26 @@ function activityDot(
     return 'error'
   }
   return 'done'
+}
+
+/** Verdict for one node: its own terminal axis first, then any `live` row. */
+function outcomeOf(
+  node: SubagentGraphNode,
+  liveRow: SubagentLiveRow | undefined,
+): LiveOutcome | undefined {
+  return node.outcome ?? liveRow?.outcome
+}
+
+/** Meta caption for an abnormal terminal verdict. */
+function abnormalLabel(kind: LiveOutcomeKind): string {
+  switch (kind) {
+    case 'aborted': return 'aborted'
+    case 'error': return 'error'
+    case 'interrupted': return 'interrupted'
+    case 'max-tokens': return 'max tokens'
+    case 'blocked': return 'blocked'
+    default: return kind
+  }
 }
 
 function mergeGraph(
@@ -330,13 +359,18 @@ export function SubagentGraphBoard({
           if (!pos) return null
           const liveRow = liveById.get(node.id)
           const running = node.activity === 'running'
+          const outcome = outcomeOf(node, liveRow)
           const meta = running
             ? (liveRow?.liveTool
               ? `tool:${liveRow.liveTool}`
               : liveRow?.liveText
                 ? liveRow.liveText
                 : runningLabel)
-            : idleLabel
+            // An abnormal terminal verdict must not print "done" under an
+            // error dot — the second line would contradict the first.
+            : (outcome !== undefined && outcome.kind !== 'completed' && outcome.kind !== 'none'
+              ? abnormalLabel(outcome.kind)
+              : idleLabel)
           const clickable = onOpenNode !== undefined && node.id !== sessionId
           return (
             <div
@@ -347,7 +381,7 @@ export function SubagentGraphBoard({
               ].filter(Boolean).join(' ')}
               style={{ left: pos.x, top: pos.y, width: NODE_W, height: NODE_H }}
               data-activity={node.activity ?? 'inactive'}
-              data-outcome={liveRow?.outcome?.kind ?? ''}
+              data-outcome={outcome?.kind ?? ''}
               data-depth={pos.depth}
               data-model={node.model}
               // The node box is a fixed 40px with two lines already, so the
@@ -371,7 +405,7 @@ export function SubagentGraphBoard({
                 : {})}
             >
               <StateDot
-                state={activityDot(node.activity, liveRow?.outcome?.kind)}
+                state={activityDot(node.activity, outcome?.kind)}
                 size={8}
               />
               <div className={css.nodeText}>

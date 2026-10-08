@@ -14,7 +14,8 @@
 }
 
 /* Soft-hop / reload — quiet top sweep, not a spinner. */
-.root[data-pending]::before {
+.root[data-pending]::before,
+.root[data-refreshing]::before {
   content: '';
   position: absolute;
   top: 0;
@@ -34,6 +35,11 @@
   background-repeat: no-repeat;
   animation: overviewPendingSweep 1.15s ease-in-out infinite;
   opacity: 0.7;
+}
+
+/* Soft-refresh keeps prior Status painted — quieter sweep than cold pending. */
+.root[data-refreshing]:not([data-pending])::before {
+  opacity: 0.4;
 }
 
 @keyframes overviewPendingSweep {
@@ -1480,6 +1486,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .root[data-pending]::before,
+  .root[data-refreshing]::before,
   .pane,
   .sectionBody:not([hidden]),
   .presenceRail {

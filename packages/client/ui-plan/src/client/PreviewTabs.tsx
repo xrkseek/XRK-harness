@@ -43,8 +43,15 @@ import {
   writeOverviewSessionUi,
   type OverviewPaintTab,
 } from './overview-paint.ts'
+import {
+  readOverviewLoadCache,
+  writeOverviewLoadCache,
+} from './overview-load-cache.ts'
+import { overviewStatusPollMs } from './overview-status-poll.ts'
 import { EMPTY_PRESENCE_SESSION_CUES } from './presence-session-cues.ts'
 import css from './PreviewTabs.module.css'
+
+export { overviewStatusPollMs } from './overview-status-poll.ts'
 
 /**
  * Matches `LAYOUT_INSET_ATTR.details` from ui-layout's public insets contract.
@@ -754,7 +761,7 @@ function StatusPanel({
   const summaryActivity: SummaryStat[] = []
   if (runningJobs.length > 0) {
     summaryActivity.push({
-      key: `jobs-${runningJobs.length}`,
+      key: 'jobs',
       hot: true,
       value: String(runningJobs.length),
       label: t('preview.summary.jobs'),
@@ -762,7 +769,7 @@ function StatusPanel({
   }
   if (showSubagentSurface && liveSubs.length > 0) {
     summaryActivity.push({
-      key: `subs-${liveSubs.length}`,
+      key: 'subs',
       hot: true,
       value: String(liveSubs.length),
       label: t('preview.summary.subs'),
@@ -770,16 +777,17 @@ function StatusPanel({
   }
   if (turnActive || queued > 0 || steering > 0) {
     summaryActivity.push({
-      key: `queue-${turnActive}-${queued}-${steering}`,
+      key: 'queue',
       hot: true,
       value: turnActive ? '1' : String(queued + steering),
       label: turnActive ? t('preview.summary.turn') : t('preview.summary.queue'),
     })
   }
+  // Stable keys so value updates do not remount <b> (looked like a jump from 0).
   const summaryStats: SummaryStat[] = [
     ...summaryActivity.slice(0, 2),
     {
-      key: `tok-${current.total}`,
+      key: 'tok',
       value: current.total.toLocaleString(),
       label: t('preview.summary.tokens'),
     },
@@ -1678,13 +1686,14 @@ export function PreviewTabs({
   const sessionOrigin = useSessions((s) => s.byId[sessionId]?.origin)
   const mountPaint = takeOverviewMountPaint(sessionId, parentId)
   const [tab, setTab] = useState<PreviewTabId>(() => mountPaint?.tab ?? 'status')
-  // Always cold-load Face payloads — never restore cached session.status (large
-  // Sessions re-entering Overview with a soft-restored blob tripped React #185).
+  // Stale-while-revalidate: paint last Face load for this Session immediately;
+  // always re-fetch. Do not put Face reads inside soft-face getSnapshot (#185).
   const [loaded, setLoaded] = useState<PreviewTabLoad>(() => (
-    { plan: null, office: null, status: null }
+    readOverviewLoadCache(sessionId) ?? { plan: null, office: null, status: null }
   ))
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(() => readOverviewLoadCache(sessionId)?.status != null)
   const [statusTick, setStatusTick] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
   const [boundSessionId, setBoundSessionId] = useState(sessionId)
   const [presenceCollapsed, setPresenceCollapsed] = useState(readPresenceCollapsed)
   // Details column stays mounted at width 0. Keep the presence rail in layout
@@ -1698,14 +1707,24 @@ export function PreviewTabs({
   const scrollRestored = useRef(false)
   const tabRef = useRef(tab)
   tabRef.current = tab
+  /** Coalesce soft-poll / catalog bumps onto one in-flight Face load. */
+  const statusLoadInFlight = useRef(false)
+  const statusLoadQueued = useRef(false)
+  const statusLastLatencyMs = useRef(0)
+  const fleetBusyRef = useRef(false)
 
   // Same instance, new Session (details slot may keep the tree): adopt remembered chrome.
   if (boundSessionId !== sessionId) {
     setBoundSessionId(sessionId)
     setTab(mountPaint?.tab ?? 'status')
-    setLoaded({ plan: null, office: null, status: null })
-    setReady(false)
+    const cached = readOverviewLoadCache(sessionId)
+    setLoaded(cached ?? { plan: null, office: null, status: null })
+    setReady(cached?.status != null)
+    setRefreshing(false)
     setStatusTick(0)
+    statusLoadInFlight.current = false
+    statusLoadQueued.current = false
+    statusLastLatencyMs.current = 0
     scrollRestored.current = false
   }
 
@@ -1733,8 +1752,8 @@ export function PreviewTabs({
   const office = loaded.office
   const status = loaded.status
   const delegatedOverview = sessionOrigin === 'subagent' || Boolean(status?.companionBall)
-  // Cold load — quiet chrome until Face session.status lands.
-  const paintPending = !ready
+  // Cold empty only — keep prior Status on screen while soft-refreshing.
+  const paintPending = !ready && status === null
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
   // state machines (fleet · graph · live · jobs · delivery · teams · compaction)
   // stay in lockstep with Host frames. Fingerprint activity and job status, not
@@ -1819,6 +1838,7 @@ export function PreviewTabs({
     || (status?.teamTasks.some((task) => (
       task.status === 'in_progress' || task.status === 'paused' || task.status === 'pending'
     )) ?? false)
+  fleetBusyRef.current = fleetBusy
 
   const homeId = status?.delegate?.parentSessionId ?? parentId
   const fromTurnActive = Boolean(
@@ -1906,23 +1926,77 @@ export function PreviewTabs({
   // Soft-poll session.status so presence / delivery / fleet flip without a
   // membership bump (presence_set is sticky outside the turn latch). Presence
   // rail is always mounted across tabs, so poll even when Status is not selected.
+  // Adaptive delay: idle / slow Host stretches the tick so heavy sessions do
+  // not pile Face work on the renderer while history is still settling.
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setStatusTick((n) => n + 1)
-    }, fleetBusy ? 1_200 : 2_500)
-    return () => { window.clearInterval(timer) }
-  }, [fleetBusy, sessionId])
+    let cancelled = false
+    let timer: number | undefined
+    const schedule = (): void => {
+      const delay = overviewStatusPollMs(fleetBusyRef.current, statusLastLatencyMs.current)
+      timer = window.setTimeout(() => {
+        if (cancelled) return
+        setStatusTick((n) => n + 1)
+        schedule()
+      }, delay)
+    }
+    schedule()
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [sessionId])
 
-  // Cold-load Face plan / office / status for this Session.
+  // Load / soft-refresh Face plan · office · status (keep prior paint on tick).
+  // Coalesce: catalog bumps during an in-flight load queue one follow-up instead
+  // of stacking concurrent Face hydrates for the same Session.
   useEffect(() => {
     let alive = true
-    void loadPreviewTabs(sessionId).then((next) => {
+    const run = (): void => {
       if (!alive) return
-      setLoaded(next)
-      setReady(true)
-      writeOverviewSessionUi(sessionId, { parentId })
-    })
-    return () => { alive = false }
+      if (statusLoadInFlight.current) {
+        statusLoadQueued.current = true
+        return
+      }
+      statusLoadInFlight.current = true
+      const hadStatus = readOverviewLoadCache(sessionId)?.status != null
+        || loaded.status != null
+      if (hadStatus) setRefreshing(true)
+      const started = performance.now()
+      void loadPreviewTabs(sessionId).then((next) => {
+        statusLastLatencyMs.current = performance.now() - started
+        statusLoadInFlight.current = false
+        if (!alive) {
+          statusLoadQueued.current = false
+          return
+        }
+        setLoaded((prev) => {
+          const merged: PreviewTabLoad = {
+            plan: next.plan ?? prev.plan,
+            office: next.office ?? prev.office,
+            status: next.status ?? prev.status,
+          }
+          writeOverviewLoadCache(sessionId, merged)
+          return merged
+        })
+        if (next.status != null || hadStatus) setReady(true)
+        setRefreshing(false)
+        writeOverviewSessionUi(sessionId, { parentId })
+        if (statusLoadQueued.current) {
+          statusLoadQueued.current = false
+          run()
+        }
+      }, () => {
+        statusLastLatencyMs.current = performance.now() - started
+        statusLoadInFlight.current = false
+        statusLoadQueued.current = false
+        if (alive) setRefreshing(false)
+      })
+    }
+    run()
+    return () => {
+      alive = false
+      setRefreshing(false)
+    }
   }, [sessionId, statusTick, parentId])
 
   // Persist scroll for the active tab before the next Session/tab restores.
@@ -2033,6 +2107,7 @@ export function PreviewTabs({
       data-xrk-overview=""
       data-xrk-status=""
       data-pending={paintPending || undefined}
+      data-refreshing={(!paintPending && refreshing) || undefined}
     >
       <div className={css.header}>
         <div

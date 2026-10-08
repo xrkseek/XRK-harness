@@ -17,6 +17,7 @@ import {
   type PresenceSessionCues,
 } from './presence-session-cues.ts'
 import { loadSessionStatus, type SessionStatusView } from './preview-load.ts'
+import { overviewStatusPollMs } from './overview-status-poll.ts'
 import css from './PresenceDock.module.css'
 
 const NOOP_SUBSCRIBE = (_listener: () => void): (() => void) => () => {}
@@ -55,6 +56,10 @@ export function PresenceDock({
   const [status, setStatus] = useState<SessionStatusView | null>(null)
   const [statusTick, setStatusTick] = useState(0)
   const animTimer = useRef<number | undefined>(undefined)
+  const fleetBusyRef = useRef(false)
+  const statusLastLatencyMs = useRef(0)
+  const statusLoadInFlight = useRef(false)
+  const statusLoadQueued = useRef(false)
 
   const parentRunning = useSessions((s) => s.byId[sessionId]?.running ?? false)
   const childRunning = useSessions((s) => {
@@ -80,6 +85,7 @@ export function PresenceDock({
     || (status?.subagents.graph.nodes.some((n) => n.activity === 'running') ?? false)
     || (status?.parentDelivery?.turnActive ?? false)
     || ((status?.parentDelivery?.runningSubs ?? 0) > 0)
+  fleetBusyRef.current = fleetBusy
 
   const presenceCue = useSyncExternalStore(
     presenceCues?.subscribe ?? NOOP_SUBSCRIBE,
@@ -128,19 +134,45 @@ export function PresenceDock({
 
   useEffect(() => {
     if (!visible || phase === 'exit') return
-    const timer = window.setInterval(() => {
-      setStatusTick((n) => n + 1)
-    }, fleetBusy ? 1_200 : 2_500)
-    return () => { window.clearInterval(timer) }
-  }, [visible, phase, fleetBusy, sessionId])
+    let cancelled = false
+    let timer: number | undefined
+    const schedule = (): void => {
+      const delay = overviewStatusPollMs(fleetBusyRef.current, statusLastLatencyMs.current)
+      timer = window.setTimeout(() => {
+        if (cancelled) return
+        setStatusTick((n) => n + 1)
+        schedule()
+      }, delay)
+    }
+    schedule()
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [visible, phase, sessionId])
 
   useEffect(() => {
     if (!visible) return
     let alive = true
-    void loadSessionStatus(sessionId).then((next) => {
-      if (!alive) return
-      setStatus(next)
-    })
+    if (statusLoadInFlight.current) {
+      statusLoadQueued.current = true
+      return () => { alive = false }
+    }
+    statusLoadInFlight.current = true
+    const started = performance.now()
+    const finish = (next: SessionStatusView | null): void => {
+      statusLastLatencyMs.current = performance.now() - started
+      statusLoadInFlight.current = false
+      if (alive) setStatus(next)
+      if (statusLoadQueued.current) {
+        statusLoadQueued.current = false
+        if (alive) setStatusTick((n) => n + 1)
+      }
+    }
+    void loadSessionStatus(sessionId).then(
+      (next) => { finish(next) },
+      () => { finish(null) },
+    )
     return () => { alive = false }
   }, [visible, sessionId, statusTick])
 

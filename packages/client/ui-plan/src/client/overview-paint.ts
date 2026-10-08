@@ -3,10 +3,9 @@
  * Same habit as community sidebar: leave a Session, come back — chrome is where you left it.
  * Shell width / open lives in the layout store (global); this map is Session-scoped content chrome.
  *
- * Deliberately does **not** cache Face `session.status` / plan / office payloads —
- * large Sessions (tens of thousands of events) made soft-restored `loaded` re-enter
- * React #185 when switching back into Overview. Tab + scroll are enough; Status
- * always cold-loads.
+ * Face `session.status` paint continuity lives in `overview-load-cache.ts`
+ * (stale-while-revalidate). Soft faces still must not read Session inside
+ * getSnapshot (React #185) — see `xrk-overview-uses`.
  */
 // Leaf import: the client barrel touches `window` (slots); this module is unit-tested in Node,
 // and the client lane sits outside the check gate. `lineage-hop.ts` imports nothing and carries

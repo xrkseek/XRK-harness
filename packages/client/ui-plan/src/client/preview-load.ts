@@ -67,6 +67,19 @@ export interface SessionStatusView {
         readonly role?: string
         readonly depth?: number
         readonly activity?: 'running' | 'inactive'
+        /** Last-turn fate — present for nodes whose session log exists. */
+        readonly outcome?: {
+          readonly kind:
+            | 'completed'
+            | 'aborted'
+            | 'error'
+            | 'max-tokens'
+            | 'interrupted'
+            | 'blocked'
+            | 'none'
+          readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+          readonly quietMs?: number
+        }
       }[]
       readonly edges: readonly {
         readonly from: string
@@ -476,7 +489,23 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     const label = str((row as { label?: unknown }).label)
     if (!id || !label) return []
     const role = str((row as { role?: unknown }).role)
-    return [{ id, label, ...(role ? { role } : {}) }]
+    // `activity` / `depth` are load-bearing downstream: Preview's presence
+    // rail and PresenceDock both read `n.activity === 'running'` to decide
+    // the busy beat. Dropping them here silently strands every session as
+    // "idle" on the automatic emotion ball.
+    const activityRaw = (row as { activity?: unknown }).activity
+    const activity =
+      activityRaw === 'running' || activityRaw === 'inactive' ? activityRaw : undefined
+    const depth = num((row as { depth?: unknown }).depth)
+    const outcome = parseLiveOutcome((row as { outcome?: unknown }).outcome)
+    return [{
+      id,
+      label,
+      ...(role ? { role } : {}),
+      ...(activity ? { activity } : {}),
+      ...(depth !== undefined ? { depth } : {}),
+      ...(outcome ? { outcome } : {}),
+    }]
   })
   const edges = edgesRaw.flatMap((row) => {
     if (!row || typeof row !== 'object') return []
