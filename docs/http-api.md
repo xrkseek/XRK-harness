@@ -111,7 +111,7 @@ Promote 规则：有 pending **steer** 时优先于更早的 queue（见 [sessio
 
 - Host：`host.describe` · `host.pickDirectory` · `host.listDirectory` · `host.createDirectory` · `host.openPath`
 - Session：`session.create`（可选 `inheritFrom`）· `list` · `history` · `search` · `prompt` · `cancel` · `models` · `selectModel` · `rename` · `updateQueue` · `fork` · `respondApproval` · `attachment` · `export`（HTTP GET/HEAD）
-  - `session.history` **尾页**可带 `projections`（含 **`turnOutline`** 等）；带 `beforeSeq` 的更旧页省略整块。见 [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
+  - `session.history` **尾页**可带 `projections`（含 **`turnOutline`** 等）；带 `beforeSeq` 的更旧页省略整块。页内 `event.seq` 为日志绝对序号（裁切 / 丢弃 chunk 后不重编号，以保证 `hasMore` 续拉）。见 [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
 - LLM：`llm.providers` · `llm.models` · `llm.discoverModels`
 - 工作区 / 设置 / 凭据：`workspace.*` · `settings.*` · `credentials.*` · `agentPreset.list|select|read`
 - 其它：`skill.list` · `commands/list` · `commands/execute` · `pluginInventory/list` · `fileReferences/list` · `sessionReferenceResolver/candidates` · `subagent.*` · `messageFeedback.*` · `goals.*` / `goal.*`
@@ -284,7 +284,7 @@ Runnable method families (summary; full table and behavior in [host-face.md](./h
 
 - Host: `host.describe` · `host.pickDirectory` · `host.listDirectory` · `host.createDirectory` · `host.openPath`
 - Session: `session.create` (optional `inheritFrom`) · `list` · `history` · `search` · `prompt` · `cancel` · `models` · `selectModel` · `rename` · `updateQueue` · `fork` · `respondApproval` · `attachment` · `export` (HTTP GET/HEAD)
-  - `session.history` **tail** may carry `projections` (including **`turnOutline`**); older pages with `beforeSeq` omit the whole block. See [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
+  - `session.history` **tail** may carry `projections` (including **`turnOutline`**); older pages with `beforeSeq` omit the whole block. Page `event.seq` values are absolute log seq (not renumbered after trim / dropped chunks, so `hasMore` paging stays contiguous). See [session-projection.md](./modules/session-projection.md) · [host-face.md](./host-face.md)
 - LLM: `llm.providers` · `llm.models` · `llm.discoverModels`
 - Workspace / settings / credentials: `workspace.*` · `settings.*` · `credentials.*` · `agentPreset.list|select|read`
 - Other: `skill.list` · `commands/list` · `commands/execute` · `pluginInventory/list` · `fileReferences/list` · `sessionReferenceResolver/candidates` · `subagent.*` · `messageFeedback.*` · `goals.*` / `goal.*`

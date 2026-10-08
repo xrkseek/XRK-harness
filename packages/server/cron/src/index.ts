@@ -43,6 +43,7 @@ export {
 export {
   createCronTools,
   CRON_PROMPT_TEXT,
+  type CronAgentRouteDefaults,
 } from "./tools.js";
 
 import path from "node:path";

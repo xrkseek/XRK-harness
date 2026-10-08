@@ -1,9 +1,14 @@
-/** Scheduled-task directory tab: read-only cron catalog + per-job run history. */
+/** Scheduled-task directory tab: cron catalog + per-job actions + run history. */
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { IconChevronDownOutline14 } from '@xrkseek/client-ui-primitives'
-import type { CronApiClient, CronJobView, CronRunRecordView } from './cron-api.ts'
+import type {
+  CronApiClient,
+  CronJobMutationResponse,
+  CronJobView,
+  CronRunRecordView,
+} from './cron-api.ts'
 import type { ScheduleLocaleKey } from './locales.ts'
 import {
   deliveryLabel,
@@ -18,7 +23,7 @@ import css from './ScheduleSettingsTab.module.css'
 
 /** Registration-side data face bound by the tab entry's inject. */
 export interface ScheduleSettingsTabInjected {
-  /** Browser data client for the Host cron read API. */
+  /** Browser data client for the Host cron API. */
   api: CronApiClient
 }
 
@@ -37,6 +42,14 @@ type ViewState =
 function formatTimestamp(iso: string): string {
   const parsed = new Date(iso)
   return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleString()
+}
+
+function modelLabel(job: CronJobView, t: ScheduleT): string {
+  if (job.run.kind !== 'agent') return '—'
+  if (job.run.provider && job.run.model) {
+    return `${job.run.provider} / ${job.run.model}`
+  }
+  return t('modelUnset')
 }
 
 /** Render the scheduled-task directory (jobs + expanded run history). */
@@ -85,6 +98,10 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
     setRequest(value => value + 1)
   }
 
+  const refreshQuiet = (): void => {
+    setRequest(value => value + 1)
+  }
+
   return (
     <div className={css.section} aria-busy={state.status === 'loading'}>
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
@@ -98,8 +115,7 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
       {state.status === 'ready' ? (
         <div className={css.catalog}>
           <div className={css.catalogHeading}>
-            <h3>{t('summary', { count: jobs.length })}</h3>
-            <span data-job-count={jobs.length}>{jobs.length}</span>
+            <h3 data-job-count={jobs.length}>{t('summary', { count: jobs.length })}</h3>
             <button
               className={css.refresh}
               type="button"
@@ -163,7 +179,13 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
                       </span>
                     </button>
                     {open ? (
-                      <JobDetail api={api} job={job} t={t} detailId={detailId} />
+                      <JobDetail
+                        api={api}
+                        job={job}
+                        t={t}
+                        detailId={detailId}
+                        onChanged={refreshQuiet}
+                      />
                     ) : null}
                   </li>
                 )
@@ -176,24 +198,88 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
   )
 }
 
-/** One expanded job: run kind, delivery, then the run-history ledger. */
+type JobAction = 'pause' | 'resume' | 'run' | 'remove'
+
+/** One expanded job: actions, run kind, delivery, then the run-history ledger. */
 function JobDetail({
   api,
   job,
   t,
   detailId,
+  onChanged,
 }: {
   readonly api: CronApiClient
   readonly job: CronJobView
   readonly t: ScheduleT
   readonly detailId: string
+  readonly onChanged: () => void
 }): ReactNode {
+  const [busy, setBusy] = useState<JobAction | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [runsTick, setRunsTick] = useState(0)
+
+  const act = (action: JobAction): void => {
+    if (busy) return
+    if (action === 'remove' && !globalThis.confirm?.(t('confirmRemove'))) return
+    setBusy(action)
+    setActionError(null)
+    const run =
+      action === 'pause' ? api.pause(job.id)
+        : action === 'resume' ? api.resume(job.id)
+          : action === 'run' ? api.runNow(job.id)
+            : api.remove(job.id)
+    void run.then(
+      (response: CronJobMutationResponse) => {
+        setBusy(null)
+        if (action === 'run' && response.ok === false) {
+          const message = response.result?.error?.trim() || t('actionError')
+          setActionError(t('actionRunFailed', { message }))
+        }
+        if (action === 'run') setRunsTick(value => value + 1)
+        onChanged()
+      },
+      () => {
+        setBusy(null)
+        setActionError(t('actionError'))
+      },
+    )
+  }
+
   return (
     <div className={css.cardDetails} id={detailId}>
+      <div className={css.actions} role="group" aria-label={jobDisplayName(job, t)}>
+        {job.enabled ? (
+          <button type="button" disabled={busy !== null} onClick={() => act('pause')}>
+            {busy === 'pause' ? t('actionBusy') : t('actionPause')}
+          </button>
+        ) : (
+          <button type="button" disabled={busy !== null} onClick={() => act('resume')}>
+            {busy === 'resume' ? t('actionBusy') : t('actionResume')}
+          </button>
+        )}
+        <button type="button" disabled={busy !== null} onClick={() => act('run')}>
+          {busy === 'run' ? t('actionBusy') : t('actionRun')}
+        </button>
+        <button
+          type="button"
+          className={css.danger}
+          disabled={busy !== null}
+          onClick={() => act('remove')}
+        >
+          {busy === 'remove' ? t('actionBusy') : t('actionRemove')}
+        </button>
+      </div>
+      {actionError ? <p className={css.actionError} role="alert">{actionError}</p> : null}
       <dl className={css.details}>
         <div>
           <dt>{t('detailRun')}</dt>
-          <dd>{runLabel(job.run, t)}</dd>
+          <dd title={job.run.kind === 'agent' ? job.run.prompt : job.run.command}>
+            {runLabel(job.run, t)}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('detailModel')}</dt>
+          <dd>{modelLabel(job, t)}</dd>
         </div>
         <div>
           <dt>{t('detailDelivery')}</dt>
@@ -204,7 +290,12 @@ function JobDetail({
           <dd>{lastStatusLabel(job, t)}{job.lastRunAt ? ` · ${formatTimestamp(job.lastRunAt)}` : ''}</dd>
         </div>
       </dl>
-      <RunHistory api={api} job={job} t={t} />
+      <RunHistory
+        api={api}
+        job={job}
+        t={t}
+        refreshKey={`${job.lastRunAt ?? ''}:${job.updatedAt}:${runsTick}`}
+      />
     </div>
   )
 }
@@ -214,15 +305,17 @@ type RunsState =
   | { readonly status: 'error' }
   | { readonly status: 'ready'; readonly runs: readonly CronRunRecordView[] }
 
-/** Read-only ledger for one job, fetched on expand. */
+/** Ledger for one job, fetched on expand and when the job's last-run stamp changes. */
 function RunHistory({
   api,
   job,
   t,
+  refreshKey,
 }: {
   readonly api: CronApiClient
   readonly job: CronJobView
   readonly t: ScheduleT
+  readonly refreshKey: string
 }): ReactNode {
   const [request, setRequest] = useState(0)
   const [state, setState] = useState<RunsState>({ status: 'loading' })
@@ -230,6 +323,7 @@ function RunHistory({
   useEffect(() => {
     let current = true
     const controller = new AbortController()
+    setState({ status: 'loading' })
     void Promise.resolve().then(() => api.listRuns(job.id, 50, controller.signal)).then(
       (response) => {
         if (current) setState({ status: 'ready', runs: response.runs })
@@ -245,7 +339,7 @@ function RunHistory({
       current = false
       controller.abort()
     }
-  }, [api, job.id, request])
+  }, [api, job.id, request, refreshKey])
 
   const retry = (): void => {
     setState({ status: 'loading' })
@@ -276,7 +370,7 @@ function RunHistory({
                 <span className={css.runStatus}>{runStatusLabel(run, t)}</span>
                 <span className={css.runMeta}>
                   {formatTimestamp(run.finishedAt)}
-                  {run.sessionId ? t('sessionRef', { id: run.sessionId }) : null}
+                  {run.sessionId ? ` · ${t('sessionRef', { id: run.sessionId })}` : null}
                 </span>
                 <span className={css.runChars}>{t('outputChars', { chars: run.outputChars })}</span>
                 {run.error ? <span className={css.runError}>{run.error}</span> : null}

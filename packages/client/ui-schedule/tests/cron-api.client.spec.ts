@@ -26,7 +26,7 @@ const JOB = {
   nextRunAt: '2026-01-02T03:00:00.000Z',
 }
 
-describe('cron read API client', () => {
+describe('cron API client', () => {
   it('lists jobs over the same-origin read endpoint', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ jobs: [JOB] }))
     const client = createCronApiClient(fetchImpl as unknown as typeof fetch)
@@ -37,6 +37,26 @@ describe('cron read API client', () => {
       '/api/cron/jobs',
       expect.objectContaining({ headers: { accept: 'application/json' } }),
     )
+  })
+
+  it('POSTs pause / resume / remove / run mutations', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ ok: true, job: JOB }))
+    const client = createCronApiClient(fetchImpl as unknown as typeof fetch)
+
+    await client.pause('job-1')
+    await client.resume('job-1')
+    await client.remove('job-1')
+    await client.runNow('job-1')
+
+    expect(fetchImpl.mock.calls.map((c) => c[0])).toEqual([
+      '/api/cron/jobs/job-1/pause',
+      '/api/cron/jobs/job-1/resume',
+      '/api/cron/jobs/job-1/remove',
+      '/api/cron/jobs/job-1/run',
+    ])
+    for (const call of fetchImpl.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ method: 'POST' }))
+    }
   })
 
   it('reads per-job run history with the bounded limit and encoded id', async () => {

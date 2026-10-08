@@ -137,6 +137,40 @@ describe("createCronTools", () => {
     const listed = await tool!.execute({ action: "list" });
     expect(String(listed.content)).toContain("run=script");
   });
+
+  it("stamps agent route defaults from the creating session", async () => {
+    const dir = tmpDir();
+    const store = createCronJobStore({
+      filePath: path.join(dir, "jobs.json"),
+    });
+    const scheduler = createCronScheduler({
+      store,
+      runScript: createDefaultScriptRunner(),
+    });
+    const [tool] = createCronTools(scheduler, {
+      resolveAgentRoute: () => ({
+        provider: "openai",
+        model: "gpt-test",
+        workspaceId: "ws_home",
+      }),
+    });
+    const created = await tool!.execute({
+      action: "create",
+      schedule_kind: "every",
+      every_seconds: 120,
+      run_kind: "agent",
+      prompt: "ping",
+      name: "route-job",
+    });
+    expect(created.isError).toBeFalsy();
+    const job = store.list()[0]!;
+    expect(job.run.kind).toBe("agent");
+    if (job.run.kind === "agent") {
+      expect(job.run.provider).toBe("openai");
+      expect(job.run.model).toBe("gpt-test");
+      expect(job.run.workspaceId).toBe("ws_home");
+    }
+  });
 });
 
 describe("createHostCron", () => {

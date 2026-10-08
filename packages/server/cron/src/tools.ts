@@ -38,7 +38,10 @@ function parseSchedule(args: Record<string, unknown>): CronSchedule {
   );
 }
 
-function parseRun(args: Record<string, unknown>): CronRun {
+function parseRun(
+  args: Record<string, unknown>,
+  defaults?: CronAgentRouteDefaults,
+): CronRun {
   const kind = String(args.run_kind ?? args.runKind ?? "agent").trim();
   if (kind === "script") {
     return {
@@ -47,10 +50,27 @@ function parseRun(args: Record<string, unknown>): CronRun {
       ...(args.cwd !== undefined ? { cwd: String(args.cwd) } : {}),
     };
   }
+  const providerRaw = String(args.provider ?? "").trim();
+  const modelRaw = String(args.model ?? "").trim();
+  const workspaceRaw = String(args.workspace_id ?? args.workspaceId ?? "").trim();
+  const provider = providerRaw || defaults?.provider?.trim() || "";
+  const model = modelRaw || defaults?.model?.trim() || "";
+  const workspaceId = workspaceRaw || defaults?.workspaceId?.trim() || "";
   return {
     kind: "agent",
     prompt: String(args.prompt ?? "").trim(),
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
   };
+}
+
+/** Optional route stamped onto agent jobs when create args omit provider/model. */
+export interface CronAgentRouteDefaults {
+  readonly provider?: string;
+  readonly model?: string;
+  /** Creating session's canvas workspace id for 主线 grouping. */
+  readonly workspaceId?: string;
 }
 
 function parseDelivery(args: Record<string, unknown>): CronDelivery | undefined {
@@ -84,13 +104,22 @@ export const CRON_PROMPT_TEXT =
 
 /**
  * Model-facing `cronjob` tool (Hermes-style action discriminator).
+ *
+ * @param defaults Optional live resolver — Host stamps the creating session's
+ *   provider/model onto agent jobs when the tool args omit them.
  */
-export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
+export function createCronTools(
+  scheduler: CronScheduler,
+  defaults?: {
+    readonly resolveAgentRoute?: () => CronAgentRouteDefaults | undefined;
+  },
+): ToolDefinition[] {
   const tool: ToolDefinition<Record<string, unknown>> = {
     name: "cronjob",
     description:
       "Manage Host scheduled tasks: create|list|pause|resume|run|remove|runs. " +
       "create needs schedule_kind (every|at|cron) and run_kind (agent|script). " +
+      "Agent jobs inherit the current session model unless provider/model are set. " +
       "Results can POST to a webhook or append to a file.",
     parameters: {
       type: "object",
@@ -120,6 +149,14 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
         },
         run_kind: { type: "string", enum: ["agent", "script"] },
         prompt: { type: "string", description: "Agent prompt when run_kind=agent." },
+        provider: {
+          type: "string",
+          description: "Optional LLM provider for run_kind=agent (defaults to current session).",
+        },
+        model: {
+          type: "string",
+          description: "Optional LLM model for run_kind=agent (defaults to current session).",
+        },
         command: { type: "string", description: "Shell command when run_kind=script." },
         cwd: { type: "string" },
         delivery_kind: {
@@ -146,7 +183,10 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
                       (j) =>
                         `${j.id} enabled=${j.enabled} next=${j.nextRunAt ?? "-"} ` +
                         `run=${j.run.kind} last=${j.lastStatus ?? "-"}` +
-                        (j.name ? ` name=${j.name}` : ""),
+                        (j.name ? ` name=${j.name}` : "") +
+                        (j.run.kind === "agent" && j.run.model
+                          ? ` model=${j.run.provider ?? ""}/${j.run.model}`
+                          : ""),
                     )
                     .join("\n"),
           };
@@ -183,9 +223,15 @@ export function createCronTools(scheduler: CronScheduler): ToolDefinition[] {
         }
         if (action === "create") {
           const delivery = parseDelivery(args ?? {});
+          let routeDefaults: CronAgentRouteDefaults | undefined;
+          try {
+            routeDefaults = defaults?.resolveAgentRoute?.();
+          } catch {
+            routeDefaults = undefined;
+          }
           const input: CronJobCreateInput = {
             schedule: parseSchedule(args ?? {}),
-            run: parseRun(args ?? {}),
+            run: parseRun(args ?? {}, routeDefaults),
             ...(args?.name !== undefined ? { name: String(args.name) } : {}),
             ...(delivery !== undefined ? { delivery } : {}),
           };

@@ -2,10 +2,9 @@
  * Scheduled-task directory registered into the Plugins settings section.
  *
  * The cron scheduler lives in the Host process, so this half talks to the Host
- * read API (`/api/cron/*`, docs/cron.md) over the same loopback gate the Face
- * WebSocket already uses. It contributes one read-only tab next to the shipped
- * plugin configuration and advanced tabs: mutations keep flowing through the
- * model-facing `cronjob` tool, so this surface never writes.
+ * cron API (`/api/cron/*`, docs/cron.md) over the same loopback gate the Face
+ * WebSocket already uses. It contributes a Tasks tab with pause / resume /
+ * run / delete — create still flows through the model-facing `cronjob` tool.
  */
 
 import type {} from '@xrkseek/client-locale/client'

@@ -8,7 +8,15 @@ export type CronSchedule =
   | { readonly kind: "cron"; readonly expr: string };
 
 export type CronRun =
-  | { readonly kind: "agent"; readonly prompt: string }
+  | {
+      readonly kind: "agent";
+      readonly prompt: string;
+      /** Captured from the creating session so unattended runs reuse its route. */
+      readonly provider?: string;
+      readonly model?: string;
+      /** Canvas/workspace key for 主线 grouping (creating session's workspace). */
+      readonly workspaceId?: string;
+    }
   | { readonly kind: "script"; readonly command: string; readonly cwd?: string };
 
 export type CronDelivery =

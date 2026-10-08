@@ -50,6 +50,18 @@ const RUN = {
   outputChars: 128,
 }
 
+function stubApi(partial: Partial<CronApiClient>): CronApiClient {
+  return {
+    listJobs: vi.fn(async () => ({ jobs: [] })),
+    listRuns: vi.fn(async () => ({ job: JOB, runs: [] })),
+    pause: vi.fn(async () => ({ ok: true as const, job: JOB })),
+    resume: vi.fn(async () => ({ ok: true as const, job: JOB })),
+    remove: vi.fn(async () => ({ ok: true as const, id: 'job-1', removed: true })),
+    runNow: vi.fn(async () => ({ ok: true as const, job: JOB })),
+    ...partial,
+  }
+}
+
 function props(api: CronApiClient): ScheduleSettingsTabProps {
   return { t, api } as ScheduleSettingsTabProps
 }
@@ -66,6 +78,14 @@ describe('schedule-view projections', () => {
   it('renders agent and script runs', () => {
     expect(runLabel({ kind: 'agent', prompt: 'hi' }, t)).toBe('Agent: hi')
     expect(runLabel({ kind: 'script', command: 'npm test', cwd: '/w' }, t)).toBe('Script: npm test')
+  })
+
+  it('clamps long agent prompts in the detail caption', () => {
+    const long = 'x'.repeat(200)
+    const label = runLabel({ kind: 'agent', prompt: long }, t)
+    expect(label.startsWith('Agent: ')).toBe(true)
+    expect(label.length).toBeLessThan(long.length)
+    expect(label.endsWith('…')).toBe(true)
   })
 
   it('renders delivery kinds and last-run status', () => {
@@ -89,23 +109,21 @@ describe('schedule-view projections', () => {
 
 describe('ScheduleSettingsTab', () => {
   it('shows loading then the task directory', async () => {
-    const api = {
+    const api = stubApi({
       listJobs: vi.fn(async () => ({ jobs: [JOB] })),
-      listRuns: vi.fn(async () => ({ job: JOB, runs: [] })),
-    } as unknown as CronApiClient
+    })
     const view = render(<ScheduleSettingsTab {...props(api)} />)
 
     expect(screen.getByText(en.loading)).toBeTruthy()
     await waitFor(() => expect(screen.getByText('nightly digest')).toBeTruthy())
     expect(api.listJobs).toHaveBeenCalledOnce()
-    expect(view.container.querySelector('[data-job-count]')?.textContent).toBe('1')
+    expect(view.container.querySelector('[data-job-count]')?.getAttribute('data-job-count')).toBe('1')
   })
 
   it('shows the retry surface on a failed catalog read', async () => {
-    const api = {
+    const api = stubApi({
       listJobs: vi.fn(async () => { throw new Error('network down') }),
-      listRuns: vi.fn(),
-    } as unknown as CronApiClient
+    })
     render(<ScheduleSettingsTab {...props(api)} />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
@@ -115,13 +133,12 @@ describe('ScheduleSettingsTab', () => {
   })
 
   it('shows the retry surface when the body lacks a jobs array', async () => {
-    const api = {
+    const api = stubApi({
       listJobs: vi.fn(async () => ({
         ok: true,
         adapter: 'xrk-dsh-compat',
-      })),
-      listRuns: vi.fn(),
-    } as unknown as CronApiClient
+      }) as never),
+    })
     render(<ScheduleSettingsTab {...props(api)} />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
@@ -130,10 +147,10 @@ describe('ScheduleSettingsTab', () => {
   })
 
   it('loads run history only when a job is expanded', async () => {
-    const api = {
+    const api = stubApi({
       listJobs: vi.fn(async () => ({ jobs: [JOB] })),
       listRuns: vi.fn(async () => ({ job: JOB, runs: [{ ...RUN, status: 'error', error: 'boom' }] })),
-    } as unknown as CronApiClient
+    })
     const view = render(<ScheduleSettingsTab {...props(api)} />)
 
     await waitFor(() => expect(screen.getByText('nightly digest')).toBeTruthy())
@@ -145,20 +162,35 @@ describe('ScheduleSettingsTab', () => {
     expect(screen.getByText(en.runStatusError)).toBeTruthy()
     expect(screen.getByText('boom')).toBeTruthy()
     expect(view.container.querySelector('[data-status="error"]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.actionPause })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.actionRun })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.actionRemove })).toBeTruthy()
+  })
+
+  it('pauses a job from the expanded actions', async () => {
+    const api = stubApi({
+      listJobs: vi.fn(async () => ({ jobs: [JOB] })),
+      pause: vi.fn(async () => ({ ok: true as const, job: { ...JOB, enabled: false } })),
+    })
+    render(<ScheduleSettingsTab {...props(api)} />)
+
+    await waitFor(() => expect(screen.getByText('nightly digest')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /nightly digest/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: en.actionPause })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: en.actionPause }))
+    await waitFor(() => expect(api.pause).toHaveBeenCalledWith('job-1'))
   })
 
   it('closes the expanded job when the catalog reloads without it', async () => {
-    const api = {
-      listJobs: vi.fn(async () => ({ jobs: [JOB] })),
-      listRuns: vi.fn(async () => ({ job: JOB, runs: [] })),
-    } as unknown as CronApiClient
+    const listJobs = vi.fn(async () => ({ jobs: [JOB] }))
+    const api = stubApi({ listJobs })
     render(<ScheduleSettingsTab {...props(api)} />)
 
     await waitFor(() => expect(screen.getByText('nightly digest')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /nightly digest/ }))
     await waitFor(() => expect(screen.getByText(en.runsTitle)).toBeTruthy())
 
-    api.listJobs.mockResolvedValueOnce({ jobs: [] })
+    listJobs.mockResolvedValueOnce({ jobs: [] })
     fireEvent.click(screen.getByRole('button', { name: en.refresh }))
     await waitFor(() => expect(screen.queryByText(en.runsTitle)).toBeNull())
   })

@@ -1,7 +1,7 @@
 /**
- * Cron read API handler tests — unit-level against a real in-memory-backed
+ * Cron API handler tests — unit-level against a real in-memory-backed
  * scheduler (tmp files), no network. Verifies the route table, JSON shapes,
- * auth-agnostic fallthrough and the read-only guard.
+ * auth gate, and POST pause/resume/remove.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -159,17 +159,69 @@ describe("createCronApiHandler", () => {
     }
   });
 
-  it("rejects non-GET with 405 (read-only surface)", () => {
+  it("POST pause / resume / remove mutate the store", () => {
+    const { scheduler, dir } = makeScheduler();
+    try {
+      const jobId = scheduler.store.list()[0]!.id;
+      const handler = makeHandler(scheduler);
+
+      {
+        const { res, captured } = mockResponse();
+        const req = mockRequest(`/api/cron/jobs/${jobId}/pause`, "POST");
+        (req as { headers?: Record<string, string> }).headers = {
+          authorization: "Bearer test-key",
+        };
+        expect(handler(req, res)).toBe(true);
+        const out = captured()!;
+        expect(out.status).toBe(200);
+        expect((out.body as { job: { enabled: boolean } }).job.enabled).toBe(
+          false,
+        );
+        expect(scheduler.store.get(jobId)?.enabled).toBe(false);
+      }
+
+      {
+        const { res, captured } = mockResponse();
+        const req = mockRequest(`/api/cron/jobs/${jobId}/resume`, "POST");
+        (req as { headers?: Record<string, string> }).headers = {
+          authorization: "Bearer test-key",
+        };
+        expect(handler(req, res)).toBe(true);
+        const out = captured()!;
+        expect(out.status).toBe(200);
+        expect((out.body as { job: { enabled: boolean } }).job.enabled).toBe(
+          true,
+        );
+        expect(scheduler.store.get(jobId)?.enabled).toBe(true);
+      }
+
+      {
+        const { res, captured } = mockResponse();
+        const req = mockRequest(`/api/cron/jobs/${jobId}/remove`, "POST");
+        (req as { headers?: Record<string, string> }).headers = {
+          authorization: "Bearer test-key",
+        };
+        expect(handler(req, res)).toBe(true);
+        const out = captured()!;
+        expect(out.status).toBe(200);
+        expect((out.body as { removed: boolean }).removed).toBe(true);
+        expect(scheduler.store.get(jobId)).toBeUndefined();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects unsupported methods with 405", () => {
     const { scheduler, dir } = makeScheduler();
     try {
       const handler = makeHandler(scheduler);
       const { res, captured } = mockResponse();
-      const req = mockRequest("/api/cron/jobs", "POST");
+      const req = mockRequest("/api/cron/jobs", "PUT");
       (req as { headers?: Record<string, string> }).headers = { authorization: "Bearer test-key" };
       expect(handler(req, res)).toBe(true);
       const out = captured()!;
       expect(out.status).toBe(405);
-      expect((out.body as { error: string }).error).toContain("read-only");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

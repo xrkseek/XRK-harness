@@ -307,6 +307,17 @@ export interface HarnessCompositionOptions {
    * Host passes the live scheduler when `XRK_CRON` is not `0`.
    */
   readonly cronScheduler?: CronScheduler;
+  /**
+   * Live resolver for the creating session's LLM route — stamped onto new
+   * agent cron jobs when tool args omit provider/model.
+   */
+  readonly cronAgentRoute?: () =>
+    | {
+        readonly provider?: string;
+        readonly model?: string;
+        readonly workspaceId?: string;
+      }
+    | undefined;
   /** Optional `run_code` backend (SSH Node or local worker). */
   readonly codeRuntime?: import("@xrkseek/code-runtime").CodeRuntime;
   readonly assemble?: boolean;
@@ -1074,7 +1085,12 @@ export function createHarnessComposition(
     }
   }
   if (options.cronScheduler) {
-    for (const tool of createCronTools(options.cronScheduler)) {
+    for (const tool of createCronTools(
+      options.cronScheduler,
+      options.cronAgentRoute
+        ? { resolveAgentRoute: options.cronAgentRoute }
+        : undefined,
+    )) {
       tools.register(tool);
     }
   }

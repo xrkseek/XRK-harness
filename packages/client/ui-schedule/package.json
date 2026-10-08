@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-ui-schedule",
-  "description": "Scheduled-task directory in Web Plugins settings: read-only cron catalog and per-job run history from the Host /api/cron read API",
+  "description": "Scheduled-task directory in Web Plugins settings: cron catalog, pause/resume/run/delete, and per-job run history from the Host /api/cron API",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

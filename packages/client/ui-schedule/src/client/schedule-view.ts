@@ -25,11 +25,20 @@ export function scheduleLabel(schedule: CronScheduleView, t: ScheduleT): string 
   }
 }
 
+const PROMPT_CLAMP = 160
+
+/** Clamp long prompts/commands for the detail row (full text stays on the job). */
+export function displayRunText(text: string, t: ScheduleT, max = PROMPT_CLAMP): string {
+  const trimmed = text.replace(/\s+/g, ' ').trim()
+  if (trimmed.length <= max) return trimmed
+  return t('promptClamp', { prompt: trimmed.slice(0, Math.max(0, max - 1)) })
+}
+
 /** Localized run caption: agent prompt or script command. */
 export function runLabel(run: CronJobView['run'], t: ScheduleT): string {
   switch (run.kind) {
-    case 'agent': return t('runAgent', { prompt: run.prompt })
-    case 'script': return t('runScript', { command: run.command })
+    case 'agent': return t('runAgent', { prompt: displayRunText(run.prompt, t) })
+    case 'script': return t('runScript', { command: displayRunText(run.command, t) })
   }
 }
 

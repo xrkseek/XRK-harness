@@ -24,8 +24,12 @@ Host spawn 时默认启动 ticker（`~/.xrk/cron/jobs.json`），除非 Settings
 
 | `run_kind` | 行为 |
 |------------|------|
-| `agent` | 新建 session，`continueTurn` 注入 prompt，结果文本可回投。回合结束后释放该 session 的 Agent 组合缓存（不常驻堆） |
+| `agent` | 新建 session，`continueTurn` 注入 prompt，结果文本可回投。回合结束后释放该 session 的 Agent 组合缓存（不常驻堆）。创建 时写入创建会话解析后的 `provider`/`model` 与 `workspaceId`；运行时用该路由，命名 `[cron] …`，挂到创建侧工作区的「定时任务」主线 |
 | `script` | Host shell 执行 `command`（捕获 stdout/stderr） |
+
+## Settings · 任务目录
+
+Settings → Plugins → **任务**：`GET /api/cron/jobs` · `GET /api/cron/jobs/<id>/logs`；`POST …/pause|resume|remove|run`。创建仍走模型工具 `cronjob`。
 
 ## 回投
 
@@ -70,8 +74,12 @@ The model tool `cronjob` (actions: `create` · `list` · `pause` · `resume` · 
 
 | `run_kind` | Behavior |
 |------------|------|
-| `agent` | New session, `continueTurn` with prompt; text may be delivered. Agent composition for that session is released after the turn (not retained on the heap) |
+| `agent` | New session, `continueTurn` with prompt; text may be delivered. Agent composition for that session is released after the turn (not retained on the heap). Create stamps the resolved `provider`/`model` and `workspaceId` from the creating session; runs reuse that route, title as `[cron] …`, and bind under that workspace's Scheduled-tasks thread |
 | `script` | Host shell runs `command` (captures stdout/stderr) |
+
+## Settings · Tasks directory
+
+Settings → Plugins → **Tasks**: `GET /api/cron/jobs` · `GET /api/cron/jobs/<id>/logs`; `POST …/pause|resume|remove|run`. Create still goes through the model `cronjob` tool.
 
 ## Delivery
 

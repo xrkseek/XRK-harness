@@ -103,6 +103,8 @@ import {
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
   createCollabBoardFragmentProvider,
+  canvasWorkspaceIdForSession,
+  resolveSessionModelSelection,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -433,6 +435,17 @@ export type AgentFactory = (input: {
    */
   cronScheduler?: import("@xrkseek/server-cron").CronScheduler;
   /**
+   * Live resolver for the creating session's LLM route — stamped onto new
+   * agent cron jobs when tool args omit provider/model.
+   */
+  cronAgentRoute?: () =>
+    | {
+        readonly provider?: string;
+        readonly model?: string;
+        readonly workspaceId?: string;
+      }
+    | undefined;
+  /**
    * Optional FsService override (SSH remote workspace). When set with
    * `remoteExecution`, tools use remote path coordinates.
    */
@@ -663,7 +676,7 @@ export function createHostManager(): HostManager {
       const managedPluginsRootReady = () => existsSync(resolvedPluginsDir);
 
       // Desktop shell: listen + IPC ready first; process plugins catch up in
-      // background so Electron can remount onto loopback without waiting for
+      // background so the xrk-app:// Fetch bridge can open without waiting for
       // every extension ESM graph (Cursor-like first paint).
       const deferManagedPlugins =
         String(process.env.XRK_SURFACE ?? "").trim() === "desktop";
@@ -1305,7 +1318,30 @@ export function createHostManager(): HostManager {
               ...(sharedShell ? { shellJobs: sharedShell } : {}),
               ...(sharedBrowser ? { browserRuntime: sharedBrowser } : {}),
               ...(cronBox.scheduler && !cronAgentDepth.getStore()
-                ? { cronScheduler: cronBox.scheduler }
+                ? {
+                    cronScheduler: cronBox.scheduler,
+                    cronAgentRoute: () => {
+                      const face = faceBox.runtime;
+                      if (!face) return undefined;
+                      try {
+                        const sel = resolveSessionModelSelection(
+                          face,
+                          sessionId,
+                        );
+                        if (!sel.provider || !sel.model) return undefined;
+                        return {
+                          provider: sel.provider,
+                          model: sel.model,
+                          workspaceId: canvasWorkspaceIdForSession(
+                            face,
+                            sessionId,
+                          ),
+                        };
+                      } catch {
+                        return undefined;
+                      }
+                    },
+                  }
                 : {}),
               ...(sshWorld
                 ? {
@@ -1664,7 +1700,48 @@ export function createHostManager(): HostManager {
           }
           return cronAgentDepth.run(true, async () => {
             const session = store.create();
+            const face = faceBox.runtime;
             try {
+              // Inherit the job's captured route so unattended runs match the
+              // session that created the cronjob (not Host agent-default).
+              if (run.provider && run.model && face) {
+                face.sessionModels.set(session.id, {
+                  provider: run.provider,
+                  model: run.model,
+                });
+              }
+              const label = job.name?.trim() || job.id;
+              try {
+                face?.titles.rename(session.id, `[cron] ${label}`);
+              } catch {
+                // title normalize can reject empty — ignore
+              }
+              // Group under the creating session's workspace 主线 (not the
+              // ephemeral cron session's default workspace).
+              if (face) {
+                try {
+                  const workspaceId =
+                    (run.workspaceId?.trim() ||
+                      canvasWorkspaceIdForSession(face, session.id)) ??
+                    "";
+                  if (workspaceId) {
+                    const thread = face.sessionThreads.upsert(workspaceId, {
+                      id: "th_cron_scheduled",
+                      title: "定时任务",
+                      brief: "Host cron agent runs",
+                    });
+                    if (thread) {
+                      face.sessionThreads.switchTo(
+                        workspaceId,
+                        session.id,
+                        thread.id,
+                      );
+                    }
+                  }
+                } catch {
+                  // thread store best-effort
+                }
+              }
               const agent = await resolveAgent(session.id);
               const result = await agent.continueTurn({
                 text: `[cron ${job.id}${job.name ? ` ${job.name}` : ""}]\n${run.prompt}`,
