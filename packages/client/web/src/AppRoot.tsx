@@ -26,6 +26,7 @@ import {
   resolveBootLang,
   type BootLang,
 } from './boot-hints.ts'
+import { BootDinoRunner } from './BootDinoRunner.tsx'
 import { BootWindowChrome } from './BootWindowChrome.tsx'
 import { clearBooting, stampBooting } from './boot-stamp.ts'
 import type { KernelSignal, LoaderStatus } from './loader-status.ts'
@@ -119,6 +120,7 @@ export function AppRoot(props: AppRootProps) {
                       <div className={css.spinnerCore} />
                     </div>
                     <div key={hint} className={css.hint}>{hint}</div>
+                    <BootDinoRunner />
                   </>
                 )
                 : (

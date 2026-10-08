@@ -54,12 +54,12 @@ export const readImageToolview = {
   name: 'read-image-toolview',
   inject: ['slots'],
   apply(ctx: Context): void {
+    // `tool.call.images` is declared once on conversation.chat.node (ui-tool apply).
     ctx.slots.inject('tool.call.toolview', () =>
       ctx.slots.register({
         name: 'tool.call.toolview',
         key: 'read_image',
         locale: NS,
-        children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
       }, ReadImageRow))
   },
 }

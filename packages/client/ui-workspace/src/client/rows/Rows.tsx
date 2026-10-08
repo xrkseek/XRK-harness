@@ -105,12 +105,12 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
 
 /**
  * Project (workspace) header row: folder + title;
- * hover reveals the chevron and create button, and dwelling on a real
- * Workspace shows its hover card (the ungrouped bucket has none).
+ * hover reveals the chevron and (for real Workspaces) create button; dwelling
+ * on a real Workspace shows its hover card (the ungrouped bucket has neither).
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
  * @param props.group - derived group node.
  * @param props.onToggle - expand/collapse the group.
- * @param props.onCreate - start a frontend Session inside this Workspace.
+ * @param props.onCreate - start a frontend Session inside this Workspace (unused for ungrouped).
  * @param props.drag - optional workspace-row drag wiring.
  * @param props.home - host account home for POSIX hover-path abbreviation.
  * @param props.t - the browser root's locale seat.
@@ -301,14 +301,16 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
             />
           </>
         )}
-        <button
-          type="button"
-          className={css.iconButton}
-          aria-label={t('actions.newSession.aria', { name: label })}
-          onClick={(e) => { e.stopPropagation(); onCreate() }}
-        >
-          <IconPlusOutline16 />
-        </button>
+        {row.workspaceId !== undefined && (
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={t('actions.newSession.aria', { name: label })}
+            onClick={(e) => { e.stopPropagation(); onCreate() }}
+          >
+            <IconPlusOutline16 />
+          </button>
+        )}
       </span>
     </div>
   )

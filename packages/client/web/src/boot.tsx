@@ -18,10 +18,11 @@
  * loader entry per plugin-view row plus the shell-own app-shell assembly
  * entry → loader.await() + a full fiber sweep (all ACTIVE, else fail
  * listing who/what/which service) → wait for Desktop Host Fetch (when
- * present), connection handshake phases, and the first session-list ready →
+ * present; started in parallel with plugin fetch so one splash covers Host +
+ * plugins), connection handshake phases, and the first session-list ready →
  * flip the settled signal so AppRoot's HARNESS splash switches to the real UI
  * in one pass (no empty shell flash). Progressive splash hints track that
- * chain (plugins → Host → Face streams → sessions).
+ * chain (Host ∥ plugins → Face streams → sessions) on a single dual-ring.
  *
  * Entry creation waits for the whole immediately tier: materialization runs
  * synchronous cross-package require edges (e.g. locale → runtime/client) that
@@ -128,6 +129,13 @@ export class AppWebEntry {
   private readonly bootLang = createSignal<BootLang>(resolveBootLang())
   /** While true, status transitions refresh the plugin-tier splash hint. */
   private pluginHintActive = true
+  /**
+   * Desktop: false until `whenHostReady` resolves. While false, Host tip
+   * ladder owns the splash hint (plugins prefetch in the background).
+   * Non-Desktop boots leave this true so plugin hints paint immediately.
+   */
+  private hostAttached = true
+  private hostTipCleanup: (() => void) | undefined
   // Assigned by run() before any private method or settled-gated closure reads them.
   private ctx!: Context
   private modules!: ClientModuleSystem
@@ -188,6 +196,9 @@ export class AppWebEntry {
       />,
     )
 
+    // Desktop Host gate starts with the splash so cold Host spawn and plugin
+    // prefetch share one dual-ring (no static-HTML remount seam).
+    const hostReady = this.beginDesktopHostGate()
     // All graph rows start fetching now; runPluginBoot only awaits the
     // immediately-tier factories before creating entries (see module comment:
     // cross-package synchronous require edges need those factories
@@ -197,6 +208,7 @@ export class AppWebEntry {
     try {
       await this.runPluginBoot(prefetching)
       this.adoptProductLocale()
+      await hostReady
       await this.awaitProductReady()
       // AppRoot keeps the splash over the first product paint, then clearBooting.
       this.settled.set(true)
@@ -204,11 +216,14 @@ export class AppWebEntry {
       // Stay on the loading page; surface the sweep report (fail loud).
       console.error(reason)
       this.error.set(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      this.stopDesktopHostTips()
     }
   }
 
   /** Unmount the shell (loading page or settled UI). */
   dispose(): void {
+    this.stopDesktopHostTips()
     clearBooting()
     this.root?.unmount()
   }
@@ -253,19 +268,22 @@ export class AppWebEntry {
   /** Project loader status onto the splash hint during the plugin tier. */
   private refreshPluginHint(): void {
     if (!this.pluginHintActive) return
+    // Host tip ladder owns the line until Desktop Fetch is attached.
+    if (!this.hostAttached) return
     this.hint.set(bootPluginHint(this.status.getSnapshot(), this.bootLang.getSnapshot()))
   }
 
-  /**
-   * Keep the HARNESS splash up until Face can paint a real session list.
-   * Chain: Desktop Host phases (spawn → wire Fetch) → Face handshake
-   * (describe / streams) → `sessions.list.phase === 'ready'`. Hints step
-   * through each stage; copy follows {@link bootLang} (zh/en).
-   */
-  private async awaitProductReady(): Promise<void> {
-    this.pluginHintActive = false
-    const lang = (): BootLang => this.bootLang.getSnapshot()
+  private stopDesktopHostTips(): void {
+    this.hostTipCleanup?.()
+    this.hostTipCleanup = undefined
+  }
 
+  /**
+   * Desktop: start Host tip ladder + `whenHostReady` alongside plugin prefetch
+   * so cold Host spawn never needs a second splash document.
+   * Web / non-Desktop: no-op (hostAttached stays true).
+   */
+  private beginDesktopHostGate(): Promise<void> {
     const transport = (globalThis as XrkWindow & {
       __XRK_TRANSPORT__?: {
         whenHostReady?: () => Promise<void>
@@ -274,38 +292,57 @@ export class AppWebEntry {
       }
     }).__XRK_TRANSPORT__
 
-    let hostAttached = false
-    if (typeof transport?.whenHostReady === 'function') {
-      const startedAt = Date.now()
-      let phase: BootHostPhase = transport.getHostPhase?.() ?? 'starting'
-      const paintHostHint = (): void => {
-        if (hostAttached) return
-        const next = bootHostPhaseHint(phase, lang(), {
-          elapsedMs: Date.now() - startedAt,
-        })
-        if (this.hint.getSnapshot() === next) return
-        this.hint.set(next)
-      }
-      paintHostHint()
-      const unsubPhase = transport.subscribeHostPhase?.((next) => {
-        phase = next
-        paintHostHint()
-      })
-      // Tick a bit under the bucket width so the first rotation is not late.
-      const tipTimer = setInterval(paintHostHint, Math.max(400, BOOT_HOST_TIP_INTERVAL_MS / 2))
-      try {
-        await transport.whenHostReady()
-      } finally {
-        clearInterval(tipTimer)
-        unsubPhase?.()
-      }
-      hostAttached = true
+    if (typeof transport?.whenHostReady !== 'function') {
+      this.hostAttached = true
+      return Promise.resolve()
     }
+
+    this.hostAttached = false
+    const lang = (): BootLang => this.bootLang.getSnapshot()
+    const startedAt = Date.now()
+    let phase: BootHostPhase = transport.getHostPhase?.() ?? 'starting'
+    const paintHostHint = (): void => {
+      if (this.hostAttached) return
+      const next = bootHostPhaseHint(phase, lang(), {
+        elapsedMs: Date.now() - startedAt,
+      })
+      if (this.hint.getSnapshot() === next) return
+      this.hint.set(next)
+    }
+    paintHostHint()
+    const unsubPhase = transport.subscribeHostPhase?.((next) => {
+      phase = next
+      paintHostHint()
+    })
+    // Tick a bit under the bucket width so the first rotation is not late.
+    const tipTimer = setInterval(paintHostHint, Math.max(400, BOOT_HOST_TIP_INTERVAL_MS / 2))
+    this.hostTipCleanup = () => {
+      clearInterval(tipTimer)
+      unsubPhase?.()
+    }
+
+    return transport.whenHostReady().then(() => {
+      this.hostAttached = true
+      this.stopDesktopHostTips()
+      if (this.pluginHintActive) this.refreshPluginHint()
+    })
+  }
+
+  /**
+   * Keep the HARNESS splash up until Face can paint a real session list.
+   * Host Fetch was awaited in {@link beginDesktopHostGate} (parallel with
+   * plugins). Remaining chain: Face handshake (describe / streams) →
+   * `sessions.list.phase === 'ready'`. Copy follows {@link bootLang} (zh/en).
+   */
+  private async awaitProductReady(): Promise<void> {
+    this.pluginHintActive = false
+    this.stopDesktopHostTips()
+    const lang = (): BootLang => this.bootLang.getSnapshot()
 
     const connection = this.ctx.get('connection') as BootConnectionFace | undefined
     if (connection !== undefined && connection.connectionState.getSnapshot() !== 'connected') {
       this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
-        hostAttached: true,
+        hostAttached: this.hostAttached,
         lang: lang(),
       }))
       await waitUntilReady(
@@ -314,7 +351,7 @@ export class AppWebEntry {
         () => {
           if (connection.connectionState.getSnapshot() === 'connected') return
           this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
-            hostAttached: true,
+            hostAttached: this.hostAttached,
             lang: lang(),
           }))
         },

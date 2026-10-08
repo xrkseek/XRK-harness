@@ -1,0 +1,16 @@
+Chromium offline T-Rex runner sprite sheet
+==========================================
+
+Files:
+  chromium-offline-sprite-1x.png
+  chromium-offline-sprite-2x.png
+
+Source: Chromium (components/neterror/resources/…/offline/*-offline-sprite.png)
+Copyright (c) The Chromium Authors
+License: BSD-style (see https://chromium.googlesource.com/chromium/src/+/main/LICENSE)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the conditions of the Chromium
+BSD license are met. Neither the name of Google nor Chromium Authors may be
+used to endorse or promote products derived from this software without
+specific prior written permission.

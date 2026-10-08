@@ -547,6 +547,26 @@ export const IconPinOutline16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
+/**
+ * Bell outline 16 — release-notes / unread-announcement affordance.
+ * Hand-authored in the ic_ds_* outline idiom (the design set ships no bell
+ * export): solid-filled dome + clapper, with the dome's inner cutout left as
+ * a hole so the glyph keeps the family's 1.6px-equivalent wall weight at the
+ * 14px sidebar size.
+ */
+export const IconBellOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8 1.25C10.0711 1.25 11.75 2.92893 11.75 5V7.67108L12.7197 10.0308C12.9206 10.4514 12.6009 10.9375 12.1361 10.9375H3.86389C3.39907 10.9375 3.07945 10.4514 3.28034 10.0308L4.25 7.67108V5C4.25 2.92893 5.92893 1.25 8 1.25ZM6.375 5C6.375 4.01754 7.01754 3.375 8 3.375C8.98246 3.375 9.625 4.01754 9.625 5V7.67108H6.375V5Z"
+      fill="currentColor"
+    />
+    <path
+      d="M6.5 11.9375H9.5C9.5 12.7663 8.82879 13.4375 8 13.4375C7.17121 13.4375 6.5 12.7663 6.5 11.9375Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 /** ic_ds_loading_outline_16 */
 export const IconLoadingOutline16 = ({ size = 16, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

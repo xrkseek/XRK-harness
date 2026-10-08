@@ -2,7 +2,8 @@
    splash stays correct before plugin CSS arrives (the one sanctioned
    fallback site — plugin packages must not do this).
    Motion is intentional and quiet: wordmark settle, dual-ring spin,
-   hint crossfade. Reduced-motion collapses to a static mark.
+   hint crossfade, dino parkour under the hint. Reduced-motion collapses
+   to a static mark.
    Dark: injectBootTheme sets body[data-ds-dark-theme] before modules load,
    but --dsw-* aliases live in design-platform.css — without dark fallbacks
    here, var(..., #f4f4f5) paints a white splash over a dark preference. */

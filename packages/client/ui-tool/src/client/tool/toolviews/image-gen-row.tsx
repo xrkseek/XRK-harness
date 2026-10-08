@@ -67,12 +67,12 @@ export const imageGenToolview = {
   name: 'image-gen-toolview',
   inject: ['slots'],
   apply(ctx: Context): void {
+    // `tool.call.images` is declared once on conversation.chat.node (ui-tool apply).
     ctx.slots.inject('tool.call.toolview', () =>
       ctx.slots.register({
         name: 'tool.call.toolview',
         key: 'image_generate',
         locale: NS,
-        children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
       }, ImageGenRow))
   },
 }

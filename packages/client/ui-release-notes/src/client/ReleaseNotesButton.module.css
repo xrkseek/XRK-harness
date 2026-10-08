@@ -1,0 +1,228 @@
+/* Release-notes sidebar-foot row.
+
+   Geometry is the settings foot trigger's, deliberately: this button sits one
+   row above Settings in the same column, and a second rhythm there reads as a
+   misaligned stack (SidebarRoot.module.css `.footArea` is a plain flex column,
+   so rows do not visually register as one control without identical metrics).
+   Wide = 42px / 12px-radius labelled row; collapsed = the rail's 36px circle. */
+
+.trigger {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 42px;
+  margin: 0;
+  padding: 0 10px 0 8px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.trigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Rail form: the 36x36 circle the other collapsed rail controls use. */
+.rail {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.rail .dot {
+  top: 5px;
+  left: 21px;
+}
+
+/* Phone drawer (AppFrame always feeds wide chrome below PHONE_MAX): enlarge
+   for thumb reach without changing the desktop rail. */
+@media (max-width: 767px) {
+  .trigger {
+    min-height: 44px;
+  }
+}
+
+.label {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bell {
+  flex: none;
+}
+
+/* Unread dot: rides the bell's top-right corner rather than taking its own row
+   space, so the label never reflows when the dot appears or clears. Purely
+   decorative — the button's aria-label carries the unread state. */
+.dot {
+  position: absolute;
+  top: 9px;
+  left: 20px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-danger-fill, #e5484d);
+  box-shadow: 0 0 0 2px var(--dsw-specific-sidebar-fill);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dot[data-unread='true'] {
+  opacity: 1;
+}
+
+/* Wider than the default Modal 380px so multi-bullet notes breathe. */
+.dialogWide {
+  width: min(560px, 100%);
+}
+
+/* Dialog body: one bordered card per released version, newest first. */
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+.entry {
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+}
+
+.entryOpen {
+  border-color: var(--dsw-alias-border-l2, var(--dsw-alias-border-l1));
+}
+
+.entryToggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entrySummary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.versionRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.unreadChip {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--dsw-alias-danger-text, #e5484d);
+  background: color-mix(in srgb, var(--dsw-alias-danger-fill, #e5484d) 14%, transparent);
+}
+
+.chevron {
+  flex: none;
+  margin-top: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  transform: rotate(0deg);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Pinned notice: same card geometry, no version/date — sits above version rows. */
+.pinned {
+  border-color: var(--dsw-alias-border-l2, var(--dsw-alias-border-l1));
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+}
+
+.pinnedBadge {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.entryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.version {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.date {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.entryTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.changes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.empty,
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.error {
+  color: var(--dsw-alias-danger-text, #e5484d);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dot {
+    transition: opacity 150ms var(--ds-ease-in-out);
+  }
+}

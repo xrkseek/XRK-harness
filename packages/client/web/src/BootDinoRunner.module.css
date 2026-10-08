@@ -1,0 +1,41 @@
+/* Chromium offline sprite canvas under the splash hint.
+   Native LDPI units — 440×150 slice of the 600×150 playfield. */
+
+.track {
+  margin-top: 6px;
+  width: 440px;
+  max-width: min(440px, 92vw);
+  height: 150px;
+  line-height: 0;
+  animation: xrk-dino-fade 480ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 150px;
+  image-rendering: pixelated;
+}
+
+/* Match Chromium neterror dark invert of the offline runner. */
+:global(body[data-ds-dark-theme]) .canvas {
+  filter: invert(1);
+}
+
+@keyframes xrk-dino-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    animation: none;
+    opacity: 0.9;
+  }
+}

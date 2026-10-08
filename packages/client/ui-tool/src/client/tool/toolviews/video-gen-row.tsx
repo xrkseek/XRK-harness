@@ -74,12 +74,12 @@ export const videoGenToolview = {
   name: 'video-gen-toolview',
   inject: ['slots'],
   apply(ctx: Context): void {
+    // `tool.call.files` is declared once on conversation.chat.node (ui-tool apply).
     ctx.slots.inject('tool.call.toolview', () =>
       ctx.slots.register({
         name: 'tool.call.toolview',
         key: 'video_generate',
         locale: NS,
-        children: { 'tool.call.files': { kind: 'single', scope: 'session' } },
       }, VideoGenRow))
   },
 }

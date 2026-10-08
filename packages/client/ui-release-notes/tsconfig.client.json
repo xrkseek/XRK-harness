@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo",
+    "composite": false,
+    "paths": {}
+  },
+  "include": [
+    "src/client",
+    "src/css-modules.d.ts"
+  ]
+}

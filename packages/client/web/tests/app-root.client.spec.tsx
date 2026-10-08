@@ -44,6 +44,7 @@ describe('AppRoot', () => {
     const { queryByTestId, counts, getByText } = mount()
     expect(getByText('HARNESS')).toBeTruthy()
     expect(getByText('Summoning plugins…')).toBeTruthy()
+    expect(queryByTestId('boot-dino-runner')).toBeTruthy()
     expect(queryByTestId('real-ui')).toBeNull()
     expect(counts()).toBe(0)
   })
@@ -96,6 +97,7 @@ describe('AppRoot', () => {
     })
     expect(getByText('Failed to load plugins')).toBeTruthy()
     expect(getByText('@xrkseek/client-ui-layout')).toBeTruthy()
+    expect(queryByTestId('boot-dino-runner')).toBeNull()
     expect(queryByTestId('real-ui')).toBeNull()
   })
 

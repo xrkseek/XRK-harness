@@ -1,0 +1,78 @@
+{
+  "name": "@xrkseek/client-ui-release-notes",
+  "description": "Per-version release notes: sidebar bell with unread dot, full history dialog, copy shipped in the bundle",
+  "version": "0.1.0-rc.8",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/client/ui-release-notes"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "xrk": {
+    "client": {
+      "inject": [
+        "@xrkseek/client-runtime",
+        "@xrkseek/xrk-api-remotes",
+        "@xrkseek/client-locale",
+        "@xrkseek/client-ui-sidebar"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-ui-sidebar": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/client-web-react": "workspace:^",
+    "@xrkseek/cordis": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@xrkseek/client-locale": "workspace:^",
+    "@xrkseek/xrk-api-remotes": "workspace:^",
+    "@xrkseek/client-runtime": "workspace:^",
+    "@xrkseek/client-test-runtime": "workspace:^",
+    "@xrkseek/client-ui-sidebar": "workspace:^",
+    "@xrkseek/client-ui-primitives": "workspace:^",
+    "@xrkseek/client-ui-slots": "workspace:^",
+    "@xrkseek/client-web-react": "workspace:^",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
+    "@xrkseek/cordis": "workspace:^",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "private": true
+}
