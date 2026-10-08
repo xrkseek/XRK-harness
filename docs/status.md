@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.5.1**（`0.5.x` 正式线，接管 `@latest`；上一正式补丁 **v0.5.0**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.5.15**（`0.5.x` 正式线，接管 `@latest`；上一正式补丁 **v0.5.14**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -26,7 +26,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | MCP | `@xrkseek/mcp`（stdio/HTTP 有界重连 + SSE；有序内容投影；可选 image → AttachmentStore）；Host `XRK_MCP_*` 或 Face `mcp.servers` + `allowConnect` 文件真源热挂载（policy deny → **park**；**`ensureMcpLiveIfIdle`** 在 boot / describe / `/mcp` 补连全员 idle）；**HTTP 设备码 OAuth**（`auth` → Bearer · 令牌 `~/.xrk/mcp-tokens/<server>.json` · CLI `xrkh mcp login`）；Agent **`settings_get`/`settings_mutate`**（全局 `~/.xrk`，MCP 增删改与代理 env）；`/mcp` 清单；playbook **`xrk-capability-attach`**（`web`/`serve` 种子 `~/.xrk`：`skills/*` · 薄 `AGENTS.md` · `recipes/*`；不 mkdir 工作区） | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
 | Attachment / 插件 | Face 附件；进程插件 `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**；CLI 用户插件目录 + 客户端 `web/` 叠加；Host `wireComposition*` 自动接线；**社区 client** 免补 `xrk.host.json`（能力表 + `client.js` 扫描 + 约定 infer，见 [plugin-loader](./plugin-loader.md)） | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | 社区插件 Host | `extensions/dsh-compat` + bridge；Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**；IM webhook/poll · **sidecar 契约**（非厂商全矩阵）· Vision 推理路由 · embedded 向量 · GenUI 库/npm/浏览器 runtime · TongFlow TS/Python；**皮肤** `/skin-assets` · `/api/dsh/skins` · `/api/skin-center`；**dsh-market install/update/uninstall** → `runPluginMutate`；`xrkh doctor` · boot 自动接线；**已适配包清单**见 community-plugins | [community-plugins.md](./community-plugins.md) · [im-gateway-sidecar](./im-gateway-sidecar.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
-| 产品 Web | `apps/web` + `packages/client`；dist 组装 · `@file`/`@session` · 跨会话 prepare · **轮次轨 / `turnOutline` · `loadThrough`** · **Status 栏**（`ui-plan` · Face `session.status` ≡ `/status` · **会话表情 presence** · 舰队 health 点/通道告警 · **上下文/轨迹页签** · live `contextTimeline` · **`costUsage` + billing 日趋势**）· Playwright **21/21**（`pnpm test:web`） | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/runner/HMR 仅 `pnpm dev:web`；fiber 子进程为 Host 按需 fallback，不进产品 boot |
+| 产品 Web | `apps/web` + `packages/client`；dist 组装 · `@file`/`@session` · 跨会话 prepare · **轮次轨 / `turnOutline` · `loadThrough`** · **Status 栏**（`ui-plan` · Face `session.status` ≡ `/status` · **修订缓存 + Overview SWR / 软轮询退避** · **会话表情 presence** · 舰队 health 点/通道告警 · **上下文/轨迹页签** · live `contextTimeline` · **`costUsage` + billing 日趋势**）· **侧栏变更公告** · Desktop **`xrk-app://` Fetch 桥 + 开屏小恐龙** · `session.history` **~1.5MiB 页预算 + 绝对 seq** · Playwright **21/21**（`pnpm test:web`） | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/runner/HMR 仅 `pnpm dev:web`；fiber 子进程为 Host 按需 fallback，不进产品 boot |
 
 ### AGT 通道集成
 
@@ -87,7 +87,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Spill locator · 概况打开 | `@xrkseek/spill`：locator / store / policy；工具结果 + **`session-reference` 同店**；Status / **上下文**列出 spill 条目（name · bytes · tool · **head/tail 预览**）+「打开 spill」→ `host.openPath`；`contextTimeline` 带 `spillPath`（自全文解析 locator，不依赖 120 字预览） | **能跑**（见 [tool-output-bound](./tool-output-bound.md)） |
 | 成本 / 账单视图 | Status/`/status` 投影会话 **`costUsage`** + Host **cost-meter ledger**（今日/本月/累计 · `billing.dailyTrend`）+ `session.export` **`cost.json` 含同窗 `dailyTrend`** + `xrkh doctor` **`cost-ledger`** 探针；社区 `costMeter/*` 仍同源 | **能跑**（超越一体：事件→投影→账单→导出→doctor） |
 | 舰队健康 / 通道告警 | Status `fleet`（health · slots · inbox · `channelAlerts` 计数）+ `channels.alerts`（bridge/stub IM，告警明细只在通道卡）；**depth 达顶按压力分级**：仅在有活跃子会话/排队/本会话在跑时判 `critical`，纯血缘达顶（闲置）降为 `warn`（血缘层数是只增常量，不按实时告警）；`/status` 文本同源；Overview **不再单独展示舰队卡**，概况头部 health 点下内联首条告警原因 | **能跑** |
-| 会话表情 / presence | Overview **XRK-harness**（EmotionBall · 注视 · 加高舞台留弹跳）；设置 / Agent Team **帽 · 眼镜 · 手持分槽**（手持内置跟球动）；Face `presence_set` 粘性 + `session.status.presence`；无粘性时按 delivery / queue / compaction / fleet / **工具失败 / 长闲置休眠** 节拍推断并在 tipKey 边沿 bounce/spin/burst；会话驱逐清行 | **能跑** |
+| 会话表情 / presence | Overview **XRK-harness**（EmotionBall · 注视 · 加高舞台留弹跳）；设置 / Agent Team **帽 · 眼镜 · 手持分槽**（手持内置跟球动；贴纸 **SVG/PNG** 同槽导入；眼镜贴纸 **96×32 半幅**各跟一只眼、框在 SVG；内置眼镜为引擎矢量）；Face `presence_set` 粘性 + `session.status.presence`；无粘性时按 delivery / queue / compaction / fleet / **工具失败 / 长闲置休眠** 节拍推断并在 tipKey 边沿 bounce/spin/burst；会话驱逐清行 | **能跑** |
 | 上下文浏览器 | Overview「上下文」页签：独立浏览 inject / compact / spill peek；Status 时间线仅条形图与计数（事件列表不重复） | **能跑** |
 | 工作区模糊 file-search | `@xrkseek/xrk-file-reference-local`：`WorkspaceFileSearch` 模糊索引 + **gitignore（git 树内）**；Face `@file` / composer mention 共用 | **能跑** |
 | Goal 自动续跑 | Face `goals/*` + `goals.json`；**round-driver**：armed 时 `turn/end` 自动 admit `<goal_round>` 直至 `complete`/`blocked`/`max-rounds`；`max-tokens` 则 disarm；模型面 `get_goal`/`update_goal`；Host 重启 disarm 须显式 resume | **能跑** |
@@ -99,8 +99,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Desktop 自绘标题栏 | frameless 壳 + `DesktopChrome`（拖拽 · 刷新 · 窗控；**不含**会话日志）· `xrkDesktop.window` IPC；会话工具在 `conversation.session.header.utilities` | **能跑**（需 Desktop 重建吃 Host/UI；见 [host-face](./host-face.md)「壳 chrome」） |
 | 壳连接进度指示 | `ConnectionState` + `ConnectionPhase` + `sessions.phase`；转圈至会话列表 `ready`；Desktop 默认 `describeBeforeStreams` | **能跑**（Web / Desktop 共用；见 [host-face](./host-face.md)「连接进度」） |
 | Desktop 内置 harness-cli | Host 旁 `@xrkseek/harness-cli`；启动恒设 `XRK_HARNESS_BIN`（独占，不回落 PATH 全局 `xrkh`）；Settings 装/更/删插件 | **能跑**（需 Desktop 重建；缺 CLI 则 Host 起不来） |
-| Desktop host 事件下行 | loopback 同源 WebSocket mux + host；unary 同 origin；`host/session-*` · `host/remote-event` 实时到壳；**SSE 下行** `: keepalive` 15s，约 45s 无字节则 idle 重连 | **能跑**（见 [host-face](./host-face.md)「Web / Desktop 载波」） |
-| Desktop Face 载波 | Host listen **`127.0.0.1:<ephemeral>`**；Electron `loadURL`；`xrk-app://` 仅闪屏；无 Face 分帧管道 | **能跑**（ADR-0008 / DSH；见 [host-face](./host-face.md)） |
+| Desktop host 事件下行 | `xrk-app://` unary + SSE mux/host（桥到回环 Host）；`host/session-*` · `host/remote-event` 实时到壳；**SSE 下行** `: keepalive` 15s，约 45s 无字节则 idle 重连 | **能跑**（见 [host-face](./host-face.md)「Web / Desktop 载波」） |
+| Desktop Face 载波 | Host listen **`127.0.0.1:<ephemeral>`**；产品页全程 `xrk-app://` + Host Fetch 桥；无 Face 分帧管道 | **能跑**（ADR-0008 / DSH；见 [host-face](./host-face.md)） |
 | GenUI 浏览器端 runtime bundle | `/dsh-genui/runtime.js`：DOM mount · custom elements · 可选 Host preview；库 CRUD / npm **能跑** | **能跑**（见 [community-plugins.md](./community-plugins.md)） |
 | Mnemon 真记忆引擎 | 文档 CRUD **能跑**；`search` / `graph` / `bodies` 走文档 keyword + `[[wiki]]` / `#tag` 图（不是向量库） | **能跑** |
 | 策展记忆 | `memory`：`{XRK_HOME}/memories` 冻进系统提示；工具 add/replace/remove/**list**（`list` 可带 `stale_entries`；字数顶满错误带 `prune_candidates`）；触碰旁路 `.usage.json`；Phase1 软删按最久未触碰 + `.trim-log.jsonl`；回合后启发式笔记；会话结束 **leased Phase1** + 可选 **Phase2 LLM**（单飞 · Status `curatedMemory`）；与 Mnemon 分开 | **能跑**（见 [curated-memory](./curated-memory.md)；Settings → Plugins → 策展记忆） |
@@ -113,7 +113,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | IM 厂商原生长连接 SDK（Telegram/Discord/Slack/…） | Face 九路 id 仅为 **discover stub**（`wired=discover`；Host `imGatewayWired` 另表）；不嵌入厂商 SDK 树 | **未做** |
 | TongFlow `/tongflow/plugins` 安装 | `POST` 调 `runPluginMutate`（`xrkh plugin add <spec>`）；已删的 `/plugins/install` 假 `accepted` 路由不恢复 | **能跑** |
 | 生命周期 hooks | `kind: hooks` → `wireCompositionHooks`；shell `hooks.json`（Pre/PostToolUse · PermissionRequest · turn · compact · subagent；Claude/Codex 兼容）；出站 `webhooks.json` | pre/post tool · PermissionRequest · lifecycle · webhook **能跑** |
-| 定时任务（cron） | Host ticker + `cronjob` 工具；agent 新回合 / script / webhook·file 回投 | **能跑**（见 [cron](./cron.md)；Settings → Plugins → Cron；`XRK_CRON` CI 旁路） |
+| 定时任务（cron） | Host ticker + `cronjob` 工具；agent 新回合 / script / webhook·file 回投；Settings 任务目录可暂停/启用/立即运行/删除；agent 任务继承创建会话模型并归入「定时任务」主线 | **能跑**（见 [cron](./cron.md)；Settings → Plugins → Cron；`XRK_CRON` CI 旁路） |
 | 桌面 computer-use | 具名 Provider：`memory` · `uia` · `background`（助手未装则 unavailable）；`capture` `mode=ax|vision|som`；与 `browser_*` 分开 | **能跑**（见 [computer-use](./computer-use.md)） |
 | ACP 服务端 | `xrkh acp` stdio JSON-RPC（initialize · session/new · session/prompt） | **能跑**（见 [acp.md](./acp.md)） |
 | 薄产品 TUI | `xrkh tui`：挂本机 Host Face（HTTP unary + `/api/events.mux`）；助手流式 + 工具轨 + `/status`（`session.status` / `formatSessionStatusText`）；非 Ink/第二运行时 | **能跑**（见 [apps/cli/README.md](../apps/cli/README.md) · [host-face](./host-face.md)） |
@@ -144,7 +144,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 时间上下文注入 | `XRK_TIME_CONTEXT_REFRESH_MS`（默认 60s）；follow-up 经 workspace block 刷新 | **能跑** |
 | 归档筛选 / 置顶 | 侧栏三态 `ArchiveViewMode`；Settings 归档页搜索 + Unarchive + 永久删除（`session.delete`，仅已归档）；Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **能跑** |
 | 模型切换等待提示 | 切换中「准备中 · 减少等待…」+ 键盘 paneFocus / 搜索虚拟高亮 + `<mark>` 命中 + cell `:focus-visible` | **能跑** |
-| Desktop 首屏与 Host 并行 | `xrk-app://` 先出闪屏；Host ready 后 `loadURL` 回环 Face | **能跑**（见 [host-face](./host-face.md)） |
+| Desktop 首屏与 Host 并行 | `xrk-app://` 产品页立刻开 HARNESS 开屏；Host ready 后挂 Fetch 桥（不 remount） | **能跑**（见 [host-face](./host-face.md)） |
 
 ### 待补（社区兼容）
 
@@ -171,7 +171,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.5.1** 当前 `@latest`（上一正式补丁 **v0.5.0**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.5.15** 当前 `@latest`（上一正式补丁 **v0.5.14**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -195,7 +195,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.5.1** (`0.5.x` formal line, owning `@latest`; prior formal patch **v0.5.0**; prior preview close **v0.4.12**; previous formal line **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.5.15** (`0.5.x` formal line, owning `@latest`; prior formal patch **v0.5.14**; prior preview close **v0.4.12**; previous formal line **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -219,7 +219,7 @@ These are **ready to use now** (`pnpm` installed, `xrkh serve` / harness preset;
 | MCP | `@xrkseek/mcp` (stdio/HTTP bounded process reconnect + SSE; ordered content projection; optional image → AttachmentStore); Host `XRK_MCP_*` or Face `mcp.servers` + `allowConnect` file-backed hot-mount (policy deny → **park**; **`ensureMcpLiveIfIdle`** remounts all-idle lists on boot / describe / `/mcp`); **HTTP device-code OAuth** (`auth` → Bearer · token at `~/.xrk/mcp-tokens/<server>.json` · CLI `xrkh mcp login`); Agent **`settings_get`/`settings_mutate`** (global `~/.xrk`, MCP CRUD + proxy env) · `/mcp` inventory; playbook **`xrk-capability-attach`** (`web`/`serve` seed `~/.xrk`: `skills/*` · thin `AGENTS.md` · `recipes/*`; no workspace mkdir) | [modules/mcp.md](./modules/mcp.md) · [host-face.md](./host-face.md) · [skills-layers.md](./skills-layers.md) |
 | Attachment / plugins | Face attachments; process plugins `tools` · `prompt` · `commands` · **`host`** · **`channel`** · **`policy`** · **`llm`**; CLI user plugin dir + client `web/` overlay; Host `wireComposition*` auto-wiring; **community clients** need no `xrk.host.json` (capability table + `client.js` scan + convention infer — [plugin-loader](./plugin-loader.md)) | [host-face.md](./host-face.md) · [plugin-loader.md](./plugin-loader.md) |
 | Community plugin Host | `extensions/dsh-compat` + bridge; Face **`contextTimeline`** / **`contextHeaders`** · **`costUsage`** · **`processChannels/list`**; IM webhook/poll · **sidecar contract** (not a vendor matrix) · vision inference routes · embedded vectors · GenUI library/npm/browser runtime · TongFlow TS/Python; **skins** `/skin-assets` · `/api/dsh/skins` · `/api/skin-center`; **dsh-market install/update/uninstall** → `runPluginMutate`; `xrkh doctor` · boot auto-wiring; **adapted package list** in community-plugins | [community-plugins.md](./community-plugins.md) · [im-gateway-sidecar](./im-gateway-sidecar.md) · [ADR-0006](./adr/0006-im-long-lived-gateway.md) · [ADR-0007](./adr/0007-taskflow-external-runtime.md) |
-| Product Web | `apps/web` + `packages/client`; dist assembly · `@file`/`@session` · cross-session prepare · **turn rail / `turnOutline` · `loadThrough`** · **Status column** (`ui-plan` · Face `session.status` ≡ `/status` · **session presence** · fleet health dot / channel alerts · **Context / Rollout tabs** · live `contextTimeline` · **`costUsage` + billing daily trend**) · Playwright **21/21** (`pnpm test:web`) | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/runner/HMR via `pnpm dev:web` only; fiber subprocess is Host on-demand fallback, not product boot |
+| Product Web | `apps/web` + `packages/client`; dist assembly · `@file`/`@session` · cross-session prepare · **turn rail / `turnOutline` · `loadThrough`** · **Status column** (`ui-plan` · Face `session.status` ≡ `/status` · **revision cache + Overview SWR / soft-poll backoff** · **session presence** · fleet health dot / channel alerts · **Context / Rollout tabs** · live `contextTimeline` · **`costUsage` + billing daily trend**) · **sidebar release notes** · Desktop **`xrk-app://` Fetch bridge + splash dino** · `session.history` **~1.5MiB page budget + absolute seq** · Playwright **21/21** (`pnpm test:web`) | [host-face.md](./host-face.md) · [testing.md](./testing.md) · Cordis UI/runner/HMR via `pnpm dev:web` only; fiber subprocess is Host on-demand fallback, not product boot |
 
 ### AGT channel integration
 
@@ -255,8 +255,8 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | Desktop custom titlebar | frameless shell + `DesktopChrome` (drag · reload · window controls; **no** session-log) · `xrkDesktop.window` IPC; session utilities on `conversation.session.header.utilities` | **Working** (rebuild Desktop for Host/UI; see [host-face](./host-face.md) “Shell chrome”) |
 | Shell connection progress | `ConnectionState` + `ConnectionPhase` + `sessions.phase`; spinner until session list `ready`; Desktop defaults `describeBeforeStreams` | **Working** (shared Web / Desktop; see [host-face](./host-face.md) “Connection progress”) |
 | Desktop bundled harness-cli | `@xrkseek/harness-cli` beside Host; startup always sets exclusive `XRK_HARNESS_BIN` (no PATH fallback to global `xrkh`); Settings plugin install/update/remove | **Working** (rebuild Desktop; missing CLI fails Host start) |
-| Desktop host event downlink | loopback same-origin WebSocket mux + host; unary same origin; `host/session-*` · `host/remote-event` reach the shell live; **SSE downlink** `: keepalive` every 15s, ~45s with no bytes reconnects | **Working** (see [host-face](./host-face.md) “Web / Desktop carriers”) |
-| Desktop Face carrier | Host listens **`127.0.0.1:<ephemeral>`**; Electron `loadURL`; `xrk-app://` splash only; no Face framed pipes | **Working** (ADR-0008 / DSH; see [host-face](./host-face.md)) |
+| Desktop host event downlink | `xrk-app://` unary + SSE mux/host (bridged to loopback Host); `host/session-*` · `host/remote-event` reach the shell live; **SSE downlink** `: keepalive` every 15s, ~45s with no bytes reconnects | **Working** (see [host-face](./host-face.md) “Web / Desktop carriers”) |
+| Desktop Face carrier | Host listens **`127.0.0.1:<ephemeral>`**; product page stays on `xrk-app://` + Host Fetch bridge; no Face framed pipes | **Working** (ADR-0008 / DSH; see [host-face](./host-face.md)) |
 
 #### Underlying capability gaps
 
@@ -285,7 +285,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Spill locator · overview open | `@xrkseek/spill`: locator / store / policy; tool results + **`session-reference` same store**; Status / **Context** list spill entries (name · bytes · tool · **head/tail preview**) + “Open spill” → `host.openPath`; `contextTimeline` carries `spillPath` (parsed from full body, not the 120-char preview) | **Working** (see [tool-output-bound](./tool-output-bound.md)) |
 | Cost / billing view | Status/`/status` projects session **`costUsage`** + Host **cost-meter ledger** (today/month/total · `billing.dailyTrend`) + `session.export` **`cost.json` with the same-window `dailyTrend`** + `xrkh doctor` **`cost-ledger`** probe; community `costMeter/*` stays on the same ledger | **Working** (surpass combo: events → projection → billing → export → doctor) |
 | Fleet health / channel alerts | Status `fleet` (health · slots · inbox · `channelAlerts` count) + `channels.alerts` (bridge/stub IM; alert detail only on Channels card); **depth-at-cap is severity-gated by live pressure**: `critical` only when an active child / queued inbox / the session's own turn is live, otherwise `warn` (lineage depth is a monotonic constant, not a live alarm); same facts in `/status` text; Overview **no longer shows a dedicated Fleet card** (the summary header health dot now inlines the leading alert reason) | **Working** |
-| Session presence | Overview **XRK-harness** (EmotionBall · gaze · taller stage for bounce); Settings / Agent Team **hat · glasses · held slots** (held builtins ride the body); Face `presence_set` sticky + `session.status.presence`; without sticky, **derive from delivery / queue / compaction / fleet / tool-error / long-idle sleep** beats with tipKey-edge bounce/spin/burst; row cleared on session eviction | **Working** |
+| Session presence | Overview **XRK-harness** (EmotionBall · gaze · taller stage for bounce); Settings / Agent Team **hat · glasses · held slots** (held builtins ride the body; stickers import **SVG/PNG** in the same slots; glasses stickers use a **96×32 dual-half** per-eye layout with the frame in the SVG; built-in glasses are engine vectors); Face `presence_set` sticky + `session.status.presence`; without sticky, **derive from delivery / queue / compaction / fleet / tool-error / long-idle sleep** beats with tipKey-edge bounce/spin/burst; row cleared on session eviction | **Working** |
 | Context browser | Overview **Context** tab browses inject / compact / spill peek; Status timeline is bar + counts only (no duplicate event list) | **Working** |
 | Workspace fuzzy file-search | `@xrkseek/xrk-file-reference-local`: `WorkspaceFileSearch` fuzzy index + **gitignore (inside git trees)**; Face `@file` / composer mentions share it | **Working** |
 | Goal auto-continue | Face `goals/*` + `goals.json`; **round-driver**: while armed, `turn/end` auto-admits `<goal_round>` until `complete`/`blocked`/`max-rounds`; `max-tokens` disarms; model tools `get_goal`/`update_goal`; Host restart disarms until explicit resume | **Working** |
@@ -306,7 +306,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | IM vendor-native long-lived SDKs (Telegram/Discord/Slack/…) | Face nine channel ids are **discover stubs** only (`wired=discover`; Host `imGatewayWired` separate); no vendor SDK tree in-host | **Not done** |
 | TongFlow `/tongflow/plugins` install | `POST` calls `runPluginMutate` (`xrkh plugin add <spec>`); the deleted `/plugins/install` fake `accepted` route stays gone | **Working** |
 | Lifecycle hooks | `kind: hooks` → `wireCompositionHooks`; shell `hooks.json` (Pre/PostToolUse · PermissionRequest · turn · compact · subagent; Claude/Codex-compatible); outbound `webhooks.json` | pre/post tool · PermissionRequest · lifecycle · webhook **Working** |
-| Scheduled tasks (cron) | Host ticker + `cronjob` tool; agent turns / scripts / webhook·file delivery | **Working** (see [cron](./cron.md); Settings → Plugins → Cron; `XRK_CRON` CI bypass) |
+| Scheduled tasks (cron) | Host ticker + `cronjob` tool; agent turns / scripts / webhook·file delivery; Settings Tasks tab can pause/resume/run/delete; agent jobs inherit the creating session model and group under the Scheduled-tasks thread | **Working** (see [cron](./cron.md); Settings → Plugins → Cron; `XRK_CRON` CI bypass) |
 | Desktop computer-use | Named providers: `memory` · `uia` · `background` (unavailable without helper); `capture` `mode=ax|vision|som`; separate from `browser_*` | **Working** (see [computer-use](./computer-use.md)) |
 | ACP server | `xrkh acp` stdio JSON-RPC (`initialize` · `session/new` · `session/prompt`) | **Working** (see [acp.md](./acp.md)) |
 | Thin product TUI | `xrkh tui`: attaches to a local Host Face (HTTP unary + `/api/events.mux`); assistant stream + tool rail + `/status` (`session.status` / `formatSessionStatusText`); not Ink / not a second runtime | **Working** (see [apps/cli/README.md](../apps/cli/README.md) · [host-face](./host-face.md)) |
@@ -337,7 +337,7 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Time-context injection | `XRK_TIME_CONTEXT_REFRESH_MS` (default 60s); follow-ups refresh via workspace block | **Working** |
 | Archive filter / pin | Sidebar `ArchiveViewMode` tri-state; Settings archive search + Unarchive + permanent delete (`session.delete`, archived only); Face `pinnedSessionIds` + `workspace.pinSession`/`unpinSession` + `host/pinned-sessions-changed` | **Working** |
 | Model-switch waiting hint | in-menu "Preparing · reduced wait…" + keyboard paneFocus / search virtual highlight + `<mark>` hit + cell `:focus-visible` | **Working** |
-| Desktop first paint ∥ Host | `xrk-app://` splash first; Host ready then `loadURL` loopback Face | **Working** (see [host-face](./host-face.md)) |
+| Desktop first paint ∥ Host | `xrk-app://` product page paints HARNESS splash immediately; Host ready wires Fetch bridge (no remount) | **Working** (see [host-face](./host-face.md)) |
 
 ### Remaining gaps (community compat)
 
@@ -364,7 +364,7 @@ Against upstream [v0.2.0-rc.2](https://github.com/deepseek-ai/deepseek-harness/r
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.5.1** is the current `@latest` (prior formal patch **v0.5.0**; prior preview close **v0.4.12**; previous formal line **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.5.15** is the current `@latest` (prior formal patch **v0.5.14**; prior preview close **v0.4.12**; previous formal line **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 

@@ -26,7 +26,7 @@
 
 - **新会话继承模型**：`session.create({ inheritFrom })` 把源会话的**有效**路由（已 pin，或与 Status / `session.models` 相同的默认解析）拷给新会话，只写内存 override（**不**进 `session-models.json`）；源未知则仍走默认链。侧栏「新会话」经 `workspaces.connectWorkspace` 带上当前会话；从**非空**会话点「新会话」时不复用工作区里已有的空白会话（避免触发器停在「选择模型」）。subagent 的 `parentSessionId` 继承更近、仍然优先。
 
-- **Face wire / 历史**：`turn/end` wire 必带 `reason`（协议必填）。`session.history` 按 **message 边界**分页（`user/message` + `assistant/message`，默认 50），chunk/turn 脚手架跟消息组一起走，不是按原始事件条数切页。
+- **Face wire / 历史**：`turn/end` wire 必带 `reason`（协议必填）。`session.history` 按 **message 边界**分页（`user/message` + `assistant/message`，默认 50），并在约 **1.5MiB** 字符预算内从更旧一侧收缩（`hasMore` 仍可续拉）；丢弃已固化 chunk / 裁切后 **保留绝对 seq**（勿按页内下标重编号，否则「加载更早」会断）；chunk/turn 脚手架跟消息组一起走，不是按原始事件条数切页。
 
 - **取消流式**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（**字段** `interrupted: true`），`turn/end.reason` 仍是 **`aborted`**（带 `AgentCancelCause`）。进程崩溃留下的开洞 turn 由 `repairOpenTurnEvents` 闭合为 **`interrupted`**（无 cancel cause）。对照表见 [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted)。
 
@@ -125,7 +125,7 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **New Session model inheritance**: `session.create({ inheritFrom })` copies the source session's **effective** route (an explicit pin, or the same default resolution Status / `session.models` already shows) onto the new one, in-memory override only (**not** written to `session-models.json`); an unknown source still falls back to the default chain. Sidebar New Session passes the current session through `workspaces.connectWorkspace`; from a **non-blank** chat it does not reuse a leftover workspace blank (that blank never inherited, so the trigger stayed on “Select model”). A subagent `parentSessionId` stays the nearer relation and still wins.
 
-- **Face wire / history**: `turn/end` wire must include `reason` (protocol-required). `session.history` paginates on **message boundaries** (`user/message` + `assistant/message`, default 50); chunk/turn scaffolding travels with the message group, not by raw event count.
+- **Face wire / history**: `turn/end` wire must include `reason` (protocol-required). `session.history` paginates on **message boundaries** (`user/message` + `assistant/message`, default 50) and shrinks from the older side under a ~**1.5MiB** char budget (`hasMore` still loads older pages); after dropping superseded chunks / trimming, keep **absolute seq** (do not renumber by in-page index, or “Load earlier” breaks); chunk/turn scaffolding travels with the message group, not by raw event count.
 
 - **Cancel streaming**: On abort, persisted `assistant/chunk` solidifies into `assistant/message` (`interrupted: true`); `turn/end.reason` remains **`aborted`** (with `AgentCancelCause`). Crash-open turns are closed by `repairOpenTurnEvents` as **`interrupted`** (no cancel cause). See the table in [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted).
 

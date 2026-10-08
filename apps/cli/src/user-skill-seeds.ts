@@ -211,10 +211,16 @@ export async function ensureUserSkillSeeds(
   const manifest = await readManifest(manifestFile);
   let manifestDirty = false;
 
-  for (const name of names) {
+  const fingerprints = await Promise.all(
+    names.map(async (name) => ({
+      name,
+      seedFingerprint: await fingerprintDir(path.join(seedRoot, name)),
+    })),
+  );
+
+  for (const { name, seedFingerprint } of fingerprints) {
     const dest = path.join(targetDir, name);
     const skillMd = path.join(dest, "SKILL.md");
-    const seedFingerprint = await fingerprintDir(path.join(seedRoot, name));
     if (!seedFingerprint) {
       skipped.push(name);
       continue;
@@ -330,11 +336,12 @@ export async function ensureUserHomeSeeds(
   xrkHome: string = resolveXrkHome(),
 ): Promise<EnsureUserHomeSeedsResult> {
   const home = path.resolve(xrkHome);
-  return {
-    skills: await ensureUserSkillSeeds(home),
-    standing: await ensureUserStandingSeeds(home),
-    recipes: await ensureUserRecipeSeeds(home),
-  };
+  const [skills, standing, recipes] = await Promise.all([
+    ensureUserSkillSeeds(home),
+    ensureUserStandingSeeds(home),
+    ensureUserRecipeSeeds(home),
+  ]);
+  return { skills, standing, recipes };
 }
 
 const HOME_SEED_ROWS: readonly {
