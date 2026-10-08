@@ -409,4 +409,25 @@ describe("contextHeaders projection", () => {
     });
     expect(view.headers[0]!.tools[0]!.tokens).toBeGreaterThan(0);
   });
+
+  it("keeps only the newest header epochs under the soft cap", () => {
+    const unit = createContextHeadersProjectionUnit();
+    let state = unit.init();
+    for (let i = 0; i < 40; i++) {
+      state = unit.apply(state, {
+        type: "request/header",
+        ts: i + 1,
+        turnId: "t1",
+        reason: i === 0 ? "initial" : "change",
+        header: {
+          config: { provider: "p", model: "m" },
+          system: `sys-${i}`,
+        },
+      });
+    }
+    const view = unit.wire!.view(state);
+    expect(view.headers).toHaveLength(32);
+    expect(view.headers[0]!.system).toBe("sys-8");
+    expect(view.headers[31]!.system).toBe("sys-39");
+  });
 });

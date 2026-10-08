@@ -1,7 +1,14 @@
 /**
  * Append `request/header` when the active LLM route changes (DSH reconstructable requests).
  */
-import { foldRequestHeader, requestHeaderEquals, type RequestHeaderSnapshot, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import {
+  foldRequestHeader,
+  requestHeaderEquals,
+  requestHeaderRouteEquals,
+  type RequestHeaderSnapshot,
+  type SessionStore,
+  readSessionEvents,
+} from "@xrkseek/core-session";
 import type { LlmAdapter } from "@xrkseek/llm";
 import type {
   RequestHeaderReason,
@@ -41,7 +48,17 @@ export function maybeAppendRequestHeader(input: {
   };
   const events = readSessionEvents(input.store, input.sessionId);
   const prev = foldRequestHeader(events);
-  if (prev && requestHeaderEquals(prev, snap)) return;
+  if (prev) {
+    // Auto step path: assembled system often churns every tool loop (inject /
+    // workspace noise) while route+tools stay fixed — that used to write a
+    // ~100KB `request/header` per step and balloon sessions.db / resident RAM.
+    // Explicit `reason` (overflow compact · resume callers) still compares the
+    // full snapshot so a real system rewrite is logged.
+    const same = input.reason === undefined
+      ? requestHeaderRouteEquals(prev, snap)
+      : requestHeaderEquals(prev, snap);
+    if (same) return;
+  }
   const reason: RequestHeaderReason =
     input.reason ??
     (prev ? "change" : events.some((e) => e.type === "turn/end") ? "resume" : "initial");

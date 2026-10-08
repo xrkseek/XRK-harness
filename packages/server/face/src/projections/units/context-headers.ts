@@ -2,10 +2,15 @@
  * DSH `contextHeaders` for community `dsh-context` browser.
  * Last-wins header epochs from `request/header` (system + standing tools).
  * Item counts for system/tools come from the live header, not from tokens alone.
+ * Cap retained epochs so a fat session cannot pin hundreds of full system texts
+ * in the projection cell / Face wire.
  */
 import type { SessionEvent } from "@xrkseek/protocol";
 import { estimateToolsTokens } from "@xrkseek/core-session";
 import type { ProjectionDefinition } from "../registry.js";
+
+/** Soft cap on retained header epochs (newest kept). */
+const MAX_CONTEXT_HEADER_EPOCHS = 32;
 
 /** One tool row as dsh-context `ToolSchema` expects. */
 export interface ContextHeaderTool {
@@ -74,9 +79,13 @@ export function createContextHeadersProjectionUnit(): ProjectionDefinition<
           : {}),
         tools: toolRows(event.header.tools),
       };
+      const headers = [...state.headers, entry];
       return {
         applied: seq,
-        headers: [...state.headers, entry],
+        headers:
+          headers.length > MAX_CONTEXT_HEADER_EPOCHS
+            ? headers.slice(-MAX_CONTEXT_HEADER_EPOCHS)
+            : headers,
       };
     },
     wire: {

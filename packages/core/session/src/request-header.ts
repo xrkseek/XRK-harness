@@ -37,17 +37,25 @@ function toolsEqual(
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
-export function requestHeaderEquals(
+/** Route + standing tools + adapterDefaults (ignores assembled `system` text). */
+export function requestHeaderRouteEquals(
   a: RequestHeaderSnapshot,
   b: RequestHeaderSnapshot,
 ): boolean {
   if (!llmConfigEquals(a.config, b.config)) return false;
-  if ((a.system ?? "") !== (b.system ?? "")) return false;
   if (!toolsEqual(a.tools, b.tools)) return false;
   return (
     a.adapterDefaults?.reasoningEffort === b.adapterDefaults?.reasoningEffort &&
     a.adapterDefaults?.maxTokens === b.adapterDefaults?.maxTokens
   );
+}
+
+export function requestHeaderEquals(
+  a: RequestHeaderSnapshot,
+  b: RequestHeaderSnapshot,
+): boolean {
+  if (!requestHeaderRouteEquals(a, b)) return false;
+  return (a.system ?? "") === (b.system ?? "");
 }
 
 /** Latest canonical request envelope after folding header events. */

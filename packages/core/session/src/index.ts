@@ -138,6 +138,7 @@ export {
   foldRequestHeader,
   llmConfigEquals,
   requestHeaderEquals,
+  requestHeaderRouteEquals,
   canonicalRequestHeader,
   type RequestHeaderSnapshot,
 } from "./request-header.js";

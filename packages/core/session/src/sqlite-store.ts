@@ -88,6 +88,47 @@ const ID_RE = /^[A-Za-z0-9._-]+$/;
 const SCHEMA_VERSION = SQLITE_SCHEMA_CURRENT;
 const DB_NAME = "sessions.db";
 const DEFAULT_MAX_RESIDENT_SESSIONS = 8;
+/**
+ * On exclusive `close()`, reclaim freelist when it is both large and a big
+ * share of the file (deleted / compacted sessions leave empty pages that still
+ * cost mmap / Working Set). Skip small DBs and shared readers.
+ */
+const VACUUM_MIN_FREE_BYTES = 64 * 1024 * 1024;
+const VACUUM_MIN_FREE_RATIO = 0.2;
+
+function maybeVacuumOnClose(db: DatabaseSync): void {
+  try {
+    const pageSize = Number(
+      (db.prepare("PRAGMA page_size").get() as { page_size: number }).page_size,
+    );
+    const pageCount = Number(
+      (db.prepare("PRAGMA page_count").get() as { page_count: number })
+        .page_count,
+    );
+    const freelist = Number(
+      (db.prepare("PRAGMA freelist_count").get() as { freelist_count: number })
+        .freelist_count,
+    );
+    if (
+      !Number.isFinite(pageSize) ||
+      !Number.isFinite(pageCount) ||
+      !Number.isFinite(freelist) ||
+      pageCount <= 0
+    ) {
+      return;
+    }
+    const freeBytes = freelist * pageSize;
+    if (
+      freeBytes < VACUUM_MIN_FREE_BYTES ||
+      freelist / pageCount < VACUUM_MIN_FREE_RATIO
+    ) {
+      return;
+    }
+    db.exec("VACUUM");
+  } catch {
+    /* best-effort: never fail Host shutdown on vacuum */
+  }
+}
 
 interface PendingEvent {
   readonly sessionId: string;
@@ -687,6 +728,7 @@ export function createPersistentSessionStore(
     close() {
       try {
         flushPending();
+        if (!shared) maybeVacuumOnClose(db);
       } finally {
         try {
           db.close();

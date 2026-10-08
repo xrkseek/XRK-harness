@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { foldRequestHeader, requestHeaderEquals } from "../src/request-header.js";
+import {
+  foldRequestHeader,
+  requestHeaderEquals,
+  requestHeaderRouteEquals,
+} from "../src/request-header.js";
 import type { SessionEvent } from "@xrkseek/protocol";
 
 describe("foldRequestHeader", () => {
@@ -48,6 +52,21 @@ describe("foldRequestHeader", () => {
       requestHeaderEquals(
         { config: { provider: "a", model: "m" } },
         { config: { provider: "a", model: "m2" } },
+      ),
+    ).toBe(false);
+  });
+
+  it("route equals ignores system text", () => {
+    expect(
+      requestHeaderRouteEquals(
+        { config: { provider: "a", model: "m" }, system: "one" },
+        { config: { provider: "a", model: "m" }, system: "two" },
+      ),
+    ).toBe(true);
+    expect(
+      requestHeaderEquals(
+        { config: { provider: "a", model: "m" }, system: "one" },
+        { config: { provider: "a", model: "m" }, system: "two" },
       ),
     ).toBe(false);
   });
