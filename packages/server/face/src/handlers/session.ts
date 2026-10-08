@@ -26,6 +26,7 @@ import {
   DEFAULT_HISTORY_MAX_MESSAGES,
   dropSupersededStreamDeltas,
   paginateSessionHistory,
+  trimHistoryPageToWireBudget,
 } from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
 import { commitPlanMode } from "../plan-mode.js";
@@ -345,12 +346,26 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       : DEFAULT_HISTORY_MAX_MESSAGES;
 
   const raw = paginateSessionHistory(events, beforeSeq, maxMessages);
+  // Absolute seq from the raw page index — drop/trim may remove rows, but must
+  // not renumber survivors (client loadOlder requires tailSeq + 1 === baseSeq).
   const seqByEvent = new Map<SessionEvent, number>();
   for (let i = 0; i < raw.events.length; i++) {
     const event = raw.events[i];
     if (event !== undefined) seqByEvent.set(event, raw.startIndex + i + 1);
   }
-  const pageEvents = dropSupersededStreamDeltas(raw.events);
+  const stripped = dropSupersededStreamDeltas(raw.events);
+  // Byte budget after delta drop — tool dumps can still blow past the wire
+  // budget with few transcript messages; shrink from the older side.
+  const fitted = trimHistoryPageToWireBudget(
+    stripped,
+    raw.startIndex,
+    raw.hasMore,
+  );
+  const pageEvents = fitted.events;
+  const pageStartSeq = pageEvents[0] !== undefined
+    ? (seqByEvent.get(pageEvents[0]) ?? raw.startIndex + 1)
+    : raw.startIndex + 1;
+  const pageStartIndex = pageStartSeq - 1;
   const inbox = runtime.inboxWire.fresh();
   const toolArgs = collectToolCallArgsForPage(events, pageEvents, seqByEvent);
   const wireCtxBase = {
@@ -362,15 +377,20 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       ? { getTool: (name: string) => runtime.getTool!(sessionId, name) }
       : {}),
   };
-  // Walk the durable log so each assistant/message inherits the latest
-  // request/header route (same attribution cost-meter uses live).
+  // Seed route from the last request/header before the page, then walk only
+  // page events (same attribution as a full-log scan; O(page) not O(log)).
   let modelRoute = runtime.sessionModels.get(sessionId);
-  const pageSet = new Set(pageEvents);
+  for (let i = pageStartIndex - 1; i >= 0; i--) {
+    const seeded = routeFromRequestHeader(events[i]!);
+    if (seeded) {
+      modelRoute = seeded;
+      break;
+    }
+  }
   const indexed: ReturnType<typeof toWireHistoryEntry>[] = [];
-  for (const event of events) {
+  for (const event of pageEvents) {
     const fromHeader = routeFromRequestHeader(event);
     if (fromHeader) modelRoute = fromHeader;
-    if (!pageSet.has(event)) continue;
     const seq = seqByEvent.get(event) ?? 0;
     indexed.push(
       toWireHistoryEntry(event, seq, {
@@ -379,7 +399,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       }),
     );
   }
-  const hasMore = raw.hasMore;
+  const hasMore = fitted.hasMore;
   let maxWireSeq = 0;
   for (const row of indexed) {
     if (row.event.seq > maxWireSeq) maxWireSeq = row.event.seq;

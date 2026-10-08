@@ -37,6 +37,33 @@ describe("Face DSH wire-event adapt", () => {
     expect(ids.step("s1", "first", "s1")).toBe(1);
   });
 
+  it("primeFromLog is idempotent for the same log length", () => {
+    const ids = new FaceWireIdMaps();
+    const log = [
+      { type: "turn/start", turnId: "first" },
+      { type: "turn/start", turnId: "late" },
+    ];
+    ids.primeFromLog("s1", log);
+    expect(ids.turn("s1", "first")).toBe(1);
+    // Same length must not clear+renumber (would break mid-page wire ids).
+    ids.turn("s1", "extra-live");
+    ids.primeFromLog("s1", log);
+    expect(ids.turn("s1", "extra-live")).toBe(3);
+    expect(ids.turn("s1", "first")).toBe(1);
+  });
+
+  it("primeFromLog only walks the append suffix when the log grows", () => {
+    const ids = new FaceWireIdMaps();
+    ids.primeFromLog("s1", [{ type: "turn/start", turnId: "first" }]);
+    expect(ids.turn("s1", "first")).toBe(1);
+    ids.primeFromLog("s1", [
+      { type: "turn/start", turnId: "first" },
+      { type: "turn/start", turnId: "second" },
+    ]);
+    expect(ids.turn("s1", "first")).toBe(1);
+    expect(ids.turn("s1", "second")).toBe(2);
+  });
+
   it("user/message carries content blocks + source.kind user", () => {
     const wire = toFaceWireSessionEvent(
       {

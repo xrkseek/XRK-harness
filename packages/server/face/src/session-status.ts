@@ -40,6 +40,11 @@ import {
   formatDescribedChildOutcome,
   type ChildOutcome,
 } from "./adapt/subagent-notice.js";
+import {
+  readStatusSnapshotCache,
+  statusSnapshotRevision,
+  writeStatusSnapshotCache,
+} from "./status-snapshot-cache.js";
 
 export interface SessionStatusJobRow {
   readonly id: string;
@@ -94,6 +99,15 @@ export interface SessionStatusGraph {
     readonly depth?: number;
     /** Joined from `subagents.live` when the node is a registered child. */
     readonly activity?: "running" | "inactive";
+    /**
+     * Last-turn fate, same axis as `subagents.live[].outcome`.
+     *
+     * `live` only lists this session's own descendants, but the board is also
+     * opened on a child — there a sibling (or the parent) sits on the graph
+     * with no `live` row, so without this axis the board's "missing verdict →
+     * done" fallback paints a killed sibling as a completion.
+     */
+    readonly outcome?: ChildOutcome;
   }[];
   readonly edges: readonly {
     readonly from: string;
@@ -944,8 +958,26 @@ function companionBallForChild(
 /**
  * Build the Status snapshot for one session.
  * Same facts feed `/status` text and Face `session.status`.
+ *
+ * Soft-poll hits this every few seconds: reuse a revision-keyed cache so a
+ * finished multi‑MB session does not re-walk its (and every child's) log on
+ * each tick. Live signals (drain · jobs · presence · teams) participate in
+ * the revision fingerprint.
  */
 export function buildSessionStatusSnapshot(
+  runtime: FaceRuntime,
+  sessionId: string,
+): SessionStatusSnapshot {
+  const revision = statusSnapshotRevision(runtime, sessionId);
+  const cached = readStatusSnapshotCache(sessionId, revision);
+  if (cached !== undefined) return cached;
+  const snapshot = buildSessionStatusSnapshotUncached(runtime, sessionId);
+  writeStatusSnapshotCache(sessionId, revision, snapshot);
+  return snapshot;
+}
+
+/** Uncached builder — tests that assert fold freshness can call this directly. */
+export function buildSessionStatusSnapshotUncached(
   runtime: FaceRuntime,
   sessionId: string,
 ): SessionStatusSnapshot {
@@ -1051,18 +1083,27 @@ export function buildSessionStatusSnapshot(
     }
   }
 
+  // One hydrate per child id for this Status build (live rows + graph share it).
+  const childLogCache = new Map<string, ReturnType<typeof readSessionEvents>>();
+  const childLog = (id: string): ReturnType<typeof readSessionEvents> => {
+    let hit = childLogCache.get(id);
+    if (hit === undefined) {
+      hit = readSessionEvents(runtime.store, id);
+      childLogCache.set(id, hit);
+    }
+    return hit;
+  };
+
   const live: SessionStatusSubagentLive[] = [];
   for (const level of levels) {
     for (const node of level) {
       if (!runtime.store.has(node.id)) continue;
-      const childEvents = readSessionEvents(runtime.store, node.id);
+      const childEvents = childLog(node.id);
       const source = activeSource.get(node.id);
       const activity = source ? ("running" as const) : ("inactive" as const);
       const line = source
         ? liveLineText(
-            source === node.id
-              ? childEvents
-              : readSessionEvents(runtime.store, source),
+            source === node.id ? childEvents : childLog(source),
           )
         : {};
       const pending = listPendingAdmits(childEvents, node.id);
@@ -1099,6 +1140,15 @@ export function buildSessionStatusSnapshot(
   // Concurrency caps stay direct-child scoped — they gate this session's slots.
   const quota = resolveSubagentQuota(runtime, sessionId);
 
+  // Terminal axis for every node on the board, not just `live` rows: when the
+  // board is opened on a child the sibling and parent nodes carry no `live`
+  // row, and the client renders a missing verdict as "done".
+  const outcomeById = new Map<string, ChildOutcome>();
+  for (const node of team.nodes) {
+    if (!runtime.store.has(node.id)) continue;
+    outcomeById.set(node.id, describeChildOutcome(childLog(node.id)));
+  }
+
   const graph: SessionStatusGraph = {
     nodes: team.nodes.map((n) => {
       // Every node carries a verdict. The current session's own turn counts,
@@ -1107,12 +1157,14 @@ export function buildSessionStatusSnapshot(
       // fallback.
       const running =
         (n.id === sessionId && turnActive) || activeSource.has(n.id);
+      const outcome = outcomeById.get(n.id);
       return {
         id: n.id,
         label: n.label,
         ...(n.role ? { role: n.role } : {}),
         ...(n.depth !== undefined ? { depth: n.depth } : {}),
         activity: running ? ("running" as const) : ("inactive" as const),
+        ...(outcome ? { outcome } : {}),
       };
     }),
     edges: team.edges.map((e) => ({

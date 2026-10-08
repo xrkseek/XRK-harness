@@ -109,6 +109,7 @@ import { FaceCanvasStore } from "./canvas-store.js";
 import { FaceSessionThreadStore } from "./session-thread-store.js";
 import { FaceAgentRosterStore } from "./agent-roster-store.js";
 import { FaceWireIdMaps } from "./adapt/wire-ids.js";
+import { clearStatusSnapshotCache } from "./status-snapshot-cache.js";
 import { configureCostMeterHome } from "./cost-meter-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import {
@@ -433,6 +434,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       toolArgMaps.clear(sessionId);
       wireIds.clear(sessionId);
       inboxWire.clear(sessionId);
+      clearStatusSnapshotCache(sessionId);
       costMeterRoutes.delete(sessionId);
       // Keep sessionAgentPresets — pinned badge is tiny and disk-backed; dropping
       // it here desyncs Overview / header from the tools createAgent binds.

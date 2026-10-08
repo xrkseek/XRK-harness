@@ -11,6 +11,13 @@ import type { SessionEvent } from "@xrkseek/protocol";
 /** DSH default when callers omit maxMessages (keep equal to client `PAGE_MESSAGES`). */
 export const DEFAULT_HISTORY_MAX_MESSAGES = 50;
 
+/**
+ * Soft UTF-16 char budget for one history page before Face wire (tool dumps
+ * can make a 50-message tail tens of MiB). Oversized pages shrink from the
+ * older side so the client still gets the newest transcript first.
+ */
+export const DEFAULT_HISTORY_MAX_WIRE_CHARS = 1_500_000;
+
 const MESSAGE_TYPES = new Set<string>(["user/message", "assistant/message"]);
 
 function eventSeq(index: number): number {
@@ -195,4 +202,144 @@ export function dropSupersededStreamDeltas(
     }
     return !finalizedSteps.has(`${event.turnId}\0${event.stepId}`);
   });
+}
+
+/** Envelope overhead per event (type · ids · ts) — not a wire JSON clone. */
+const EVENT_ENVELOPE_CHARS = 64;
+
+/** Sum string / content weight without cloning the page as JSON. */
+function estimateContentChars(content: unknown): number {
+  if (typeof content === "string") return content.length;
+  if (content === undefined || content === null) return 0;
+  if (Array.isArray(content)) {
+    let n = 0;
+    for (const block of content) {
+      if (
+        block !== null
+        && typeof block === "object"
+        && "text" in block
+        && typeof (block as { text: unknown }).text === "string"
+      ) {
+        n += (block as { text: string }).text.length;
+      } else {
+        try {
+          n += JSON.stringify(block).length;
+        } catch {
+          n += 64;
+        }
+      }
+    }
+    return n;
+  }
+  try {
+    return JSON.stringify(content).length;
+  } catch {
+    return 64;
+  }
+}
+
+/**
+ * Per-event size proxy for wire budget (string weights + small envelope).
+ * Avoids `JSON.stringify(page)` on every trim cut — that was O(page × cuts)
+ * and could cost more than shipping a slightly large page.
+ */
+export function estimateHistoryEventChars(event: SessionEvent): number {
+  let n = EVENT_ENVELOPE_CHARS;
+  const rec = event as SessionEvent & {
+    readonly content?: unknown;
+    readonly text?: string;
+    readonly reasoning?: string;
+  };
+  if (rec.content !== undefined) n += estimateContentChars(rec.content);
+  if (typeof rec.text === "string") n += rec.text.length;
+  if (typeof rec.reasoning === "string") n += rec.reasoning.length;
+  if (event.type === "tool/call") {
+    n += estimateContentChars(event.call.arguments);
+    n += event.call.name.length;
+  } else if (event.type === "tool/result") {
+    n += estimateContentChars(event.result.content);
+    n += event.result.name.length;
+  }
+  return n;
+}
+
+/** Sum of {@link estimateHistoryEventChars} over a page. */
+export function estimateHistoryPageChars(
+  events: readonly SessionEvent[],
+): number {
+  let total = 0;
+  for (const event of events) total += estimateHistoryEventChars(event);
+  return total;
+}
+
+function firstMessageIndex(
+  events: readonly SessionEvent[],
+  from = 0,
+): number {
+  for (let i = from; i < events.length; i++) {
+    const event = events[i];
+    if (event !== undefined && MESSAGE_TYPES.has(event.type)) return i;
+  }
+  return -1;
+}
+
+/**
+ * Drop oldest message groups until the page fits `maxChars` (or a single
+ * oversized group remains — cannot shrink further without breaking seq continuity).
+ *
+ * Sizes are computed once; each cut subtracts the dropped prefix (O(n + cuts)).
+ */
+export function trimHistoryPageToWireBudget(
+  events: readonly SessionEvent[],
+  startIndex: number,
+  hasMore: boolean,
+  maxChars: number = DEFAULT_HISTORY_MAX_WIRE_CHARS,
+): {
+  readonly events: SessionEvent[];
+  readonly hasMore: boolean;
+  readonly startIndex: number;
+} {
+  if (events.length === 0 || !(maxChars > 0)) {
+    return { events: [...events], hasMore, startIndex };
+  }
+  const sizes = events.map(estimateHistoryEventChars);
+  let total = 0;
+  for (const size of sizes) total += size;
+  if (total <= maxChars) {
+    return { events: [...events], hasMore, startIndex };
+  }
+
+  let lo = 0;
+  let more = hasMore;
+  while (lo < events.length - 1 && total > maxChars) {
+    const firstMsg = firstMessageIndex(events, lo);
+    if (firstMsg < 0) break;
+    // Work on the remaining suffix as a virtual page (absolute indices).
+    const page = events.slice(lo);
+    const localFirst = firstMsg - lo;
+    let cutAbs = -1;
+    let probe = localFirst + 1;
+    while (probe < page.length) {
+      const nextMsg = firstMessageIndex(page, probe);
+      if (nextMsg < 0) break;
+      const nextCut = owningTurnStartIndex(
+        page,
+        messageGroupStartIndex(page, nextMsg),
+      );
+      if (nextCut > 0 && nextCut < page.length) {
+        cutAbs = lo + nextCut;
+        break;
+      }
+      probe = nextMsg + 1;
+    }
+    if (cutAbs <= lo) break;
+    for (let i = lo; i < cutAbs; i++) total -= sizes[i]!;
+    lo = cutAbs;
+    more = true;
+  }
+  return {
+    events: events.slice(lo),
+    hasMore: more,
+    startIndex: startIndex + lo,
+  };
 }

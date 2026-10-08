@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
   DEFAULT_HISTORY_MAX_MESSAGES,
+  dropSupersededStreamDeltas,
+  estimateHistoryPageChars,
   messageGroupStartIndex,
   paginateSessionHistory,
   paginateSessionHistoryForReplay,
+  trimHistoryPageToWireBudget,
 } from "../src/adapt/history-paginate.js";
 
 function chunk(
@@ -139,5 +142,50 @@ describe("Face history message-boundary pagination (DSH parity)", () => {
     ];
     const page = paginateSessionHistoryForReplay(events, undefined, 50);
     expect(page.events.filter((e) => e.type === "assistant/chunk")).toHaveLength(1);
+  });
+
+  it("trimHistoryPageToWireBudget drops older message groups until under budget", () => {
+    const bulky = "x".repeat(8_000);
+    const events = [
+      ...plainTurn("t1", "s1", bulky, 0),
+      ...plainTurn("t2", "s2", bulky, 0),
+      ...plainTurn("t3", "s3", "tail", 0),
+    ];
+    const page = paginateSessionHistory(events, undefined, 6);
+    expect(page.hasMore).toBe(false);
+    const fullChars = estimateHistoryPageChars(page.events);
+    const trimmed = trimHistoryPageToWireBudget(
+      page.events,
+      page.startIndex,
+      page.hasMore,
+      Math.floor(fullChars / 2),
+    );
+    expect(trimmed.hasMore).toBe(true);
+    expect(trimmed.startIndex).toBeGreaterThan(page.startIndex);
+    expect(trimmed.events.some((e) => e.type === "user/message" && e.content === "tail")).toBe(
+      true,
+    );
+    expect(estimateHistoryPageChars(trimmed.events)).toBeLessThanOrEqual(
+      Math.floor(fullChars / 2),
+    );
+  });
+
+  it("drop+trim survivors keep raw absolute seq (not renumbered 1..n)", () => {
+    const events = [
+      ...plainTurn("t1", "s1", "first", 80),
+      ...plainTurn("t2", "s2", "second", 80),
+      ...plainTurn("t3", "s3", "third", 80),
+    ];
+    const raw = paginateSessionHistory(events, undefined, 4);
+    expect(raw.hasMore).toBe(true);
+    const seqByEvent = new Map<SessionEvent, number>();
+    for (let i = 0; i < raw.events.length; i++) {
+      seqByEvent.set(raw.events[i]!, raw.startIndex + i + 1);
+    }
+    const stripped = dropSupersededStreamDeltas(raw.events);
+    expect(stripped.length).toBeLessThan(raw.events.length);
+    const lastKept = stripped[stripped.length - 1]!;
+    expect(seqByEvent.get(lastKept)).toBe(raw.startIndex + raw.events.length);
+    expect(seqByEvent.get(lastKept)!).toBeGreaterThan(stripped.length);
   });
 });

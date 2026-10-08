@@ -148,4 +148,71 @@ describe("session.history projections", () => {
     }
     expect(sawFirst).toBe(true);
   });
+
+  it("preserves absolute seq across drop so loadOlder stays contiguous", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({ store, resolveAgent: unusedAgentResolve() });
+    const session = newSession(store);
+    for (let i = 1; i <= 3; i++) {
+      const turnId = `t${String(i)}`;
+      const stepId = `s${String(i)}`;
+      store.append(session.id, { type: "turn/start", ts: i * 1000, turnId });
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 1000 + 1,
+        turnId,
+        content: `ask ${String(i)}`,
+      });
+      store.append(session.id, { type: "step/start", ts: i * 1000 + 2, turnId, stepId });
+      for (let c = 0; c < 40; c++) {
+        store.append(session.id, {
+          type: "assistant/chunk",
+          ts: i * 1000 + 3 + c,
+          turnId,
+          stepId,
+          text: `chunk-${String(c)}`,
+          kind: "text",
+        });
+      }
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 1000 + 50,
+        turnId,
+        stepId,
+        content: `reply ${String(i)}`,
+      });
+      store.append(session.id, { type: "step/end", ts: i * 1000 + 51, turnId, stepId });
+      store.append(session.id, {
+        type: "turn/end",
+        ts: i * 1000 + 52,
+        turnId,
+        reason: { kind: "completed" },
+      });
+    }
+
+    const tail = await dispatchFaceMethod(runtime, "session.history", "tail", {
+      sessionId: session.id,
+      maxMessages: 2,
+    });
+    expect(tail.result.ok).toBe(true);
+    if (!tail.result.ok) throw new Error("tail history failed");
+    const tailValue = tail.result.value as HistoryValue;
+    expect(tailValue.hasMore).toBe(true);
+    const baseSeq = tailValue.events[0]?.event.seq;
+    expect(baseSeq).toBeGreaterThan(1);
+
+    const older = await dispatchFaceMethod(runtime, "session.history", "older", {
+      sessionId: session.id,
+      beforeSeq: baseSeq,
+      maxMessages: 50,
+    });
+    expect(older.result.ok).toBe(true);
+    if (!older.result.ok) throw new Error("older history failed");
+    const olderValue = older.result.value as HistoryValue;
+    const olderTail = olderValue.events.at(-1)?.event.seq;
+    expect(olderTail).toBe((baseSeq as number) - 1);
+    // Dropped chunks must not renumber the page into 1..n (that made loadOlder
+    // fail the client continuity check and clear hasMore).
+    expect(olderValue.events.length).toBeLessThan(olderTail as number);
+  });
 });

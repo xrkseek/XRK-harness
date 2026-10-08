@@ -487,6 +487,10 @@ export {
   type ResolvedFaceLlm,
 } from "./llm-resolve.js";
 export {
+  resolveSessionModelSelection,
+  type FaceModelSelection,
+} from "./model-catalog.js";
+export {
   readProviderApiKey,
   readProviderRoute,
   providerHasUsableCredential,

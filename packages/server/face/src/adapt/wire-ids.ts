@@ -8,6 +8,8 @@ export class FaceWireIdMaps {
   private readonly steps = new Map<string, Map<string, number>>();
   private readonly turnCount = new Map<string, number>();
   private readonly stepCount = new Map<string, number>();
+  /** Log length last successfully primed — skip full rewalk on soft reopens. */
+  private readonly primedLen = new Map<string, number>();
 
   turn(sessionId: string, turnId: string): number {
     let byTurn = this.turns.get(sessionId);
@@ -44,10 +46,22 @@ export class FaceWireIdMaps {
    * before wiring a tail page — otherwise the first `turn/start` in the
    * window becomes wire `1`, and a later loadOlder assigns the real first
    * 轮次 a late number (the 0.5.11 opener showing as 第 5 轮).
+   *
+   * Append-friendly: same length is a no-op; growth only walks the new
+   * suffix; shrink / replace clears and rewalks (append-only logs never shrink).
    */
   primeFromLog(sessionId: string, events: readonly { readonly type: string; readonly turnId?: string; readonly stepId?: string }[]): void {
-    this.clear(sessionId);
-    for (const event of events) {
+    const len = events.length;
+    const prev = this.primedLen.get(sessionId) ?? 0;
+    if (prev === len) return;
+    let from = 0;
+    if (prev > 0 && prev < len) {
+      from = prev;
+    } else {
+      this.clear(sessionId);
+    }
+    for (let i = from; i < len; i++) {
+      const event = events[i]!;
       if (event.type === "turn/start" && typeof event.turnId === "string") {
         this.turn(sessionId, event.turnId);
       } else if (
@@ -58,6 +72,7 @@ export class FaceWireIdMaps {
         this.step(sessionId, event.turnId, event.stepId);
       }
     }
+    this.primedLen.set(sessionId, len);
   }
 
   /**
@@ -69,6 +84,7 @@ export class FaceWireIdMaps {
     this.turns.delete(sessionId);
     this.steps.delete(sessionId);
     this.turnCount.delete(sessionId);
+    this.primedLen.delete(sessionId);
     // stepCount keys are `${sessionId}\0${turnId}`; sweep all belonging to the session.
     const prefix = `${sessionId}\0`;
     for (const key of this.stepCount.keys()) {

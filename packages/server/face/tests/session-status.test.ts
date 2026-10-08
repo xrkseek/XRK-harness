@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   buildSessionStatusSnapshot,
   formatSessionStatusText,
 } from "../src/session-status.js";
+import { resetStatusSnapshotCacheForTests } from "../src/status-snapshot-cache.js";
 import { formatPermissionStatusLabel } from "../src/permissions.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
@@ -20,6 +21,10 @@ function bareRuntime(store = createMemorySessionStore()) {
 }
 
 describe("session status snapshot", () => {
+  beforeEach(() => {
+    resetStatusSnapshotCacheForTests();
+  });
+
   it("builds shared facts for /status and session.status", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
