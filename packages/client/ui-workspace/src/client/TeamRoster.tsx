@@ -691,7 +691,7 @@ export function TeamRoster({
                           <input
                             className={css.overlayFile}
                             type="file"
-                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
                             disabled={busy}
                             aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
                             onChange={(e) => {

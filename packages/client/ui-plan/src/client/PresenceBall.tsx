@@ -121,7 +121,7 @@ function usePresencePaint(): PresencePaint {
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '21'
+const PRESENCE_BALL_REV = '28'
 
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
@@ -166,6 +166,13 @@ export type PresenceEmotion = {
   readonly source: 'tool' | 'auto' | 'local'
 }
 
+/** 三槽贴图（data URL）。空串 = 该槽无贴图。 */
+type DressingImages = {
+  readonly hat?: string
+  readonly glasses?: string
+  readonly held?: string
+}
+
 type EmotionBallHandle = {
   setEmotion: (id: string, opts?: { auto?: boolean }) => void
   setGaze: (nx: number, ny: number) => void
@@ -176,7 +183,7 @@ type EmotionBallHandle = {
   bounce?: () => void
   resetIdle?: () => void
   setKit?: (kit: string) => void
-  setDressing?: (hat: string, glasses: string, held?: string, heldImage?: string) => void
+  setDressing?: (hat: string, glasses: string, held?: string, images?: string | DressingImages) => void
   destroy: () => void
 }
 
@@ -201,6 +208,9 @@ type EmotionBallNs = {
       kitHat?: string
       kitGlasses?: string
       kitHeld?: string
+      /** 三槽贴图：进引擎层，跟随呼吸/转头/形变。已弃用的 DOM 覆盖层请勿再用。 */
+      hatImage?: string
+      glassesImage?: string
       heldImage?: string
     },
   ) => EmotionBallHandle
@@ -708,6 +718,8 @@ export function PresenceBall({
           kitHat: engineHat,
           kitGlasses: engineGlasses,
           kitHeld: engineHeld,
+          hatImage: overlayHat,
+          glassesImage: overlayGlasses,
           heldImage: overlayHeld,
         })
         ballRef.current = ball
@@ -729,7 +741,7 @@ export function PresenceBall({
     // Remount when Settings shape/color, chrome scheme, session seed, or engine
     // gate changes. Emotion id is applied in the follow-up effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHeld])
+  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld])
 
   useEffect(() => {
     const ball = ballRef.current
@@ -835,10 +847,8 @@ export function PresenceBall({
         onClick={onStageActivate}
       >
         <div ref={mountRef} className={css.mount} data-ready={ready ? '' : undefined} aria-hidden />
-        <span className={css.dressing} aria-hidden>
-          {overlayHat ? <span className={css.overlayHat} style={{ backgroundImage: `url(${overlayHat})` }} /> : null}
-          {overlayGlasses ? <span className={css.overlayGlasses} style={{ backgroundImage: `url(${overlayGlasses})` }} /> : null}
-        </span>
+        {/* 装扮贴图不再走 DOM 绝对定位层：三槽贴图都进引擎（hatG/specsG/heldG），
+            按轮廓与眼球锚点逐帧布局，才跟得上呼吸/转头/情绪形变。 */}
         {/* Spinner stays mounted and fades out under the ball. Unmounting it on
             ready punched an empty frame between the wait and the 280ms fade-in. */}
         <div

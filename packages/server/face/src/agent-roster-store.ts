@@ -18,6 +18,7 @@ import {
   GLASSES_BUILTINS,
   HAT_BUILTINS,
   HELD_BUILTINS,
+  parseOverlayImage as parsePresenceOverlayImage,
   parseSlotPick,
   resolveEnginePick,
   resolveStickerOverlay,
@@ -237,15 +238,12 @@ function isMemberKit(value: unknown): value is MemberKit {
   return MEMBER_KITS.includes(value as MemberKit);
 }
 
-/** Transparent PNG/JPEG/WebP/GIF data URL used as a kit overlay (hat / glasses / held). */
+/** Transparent PNG/JPEG/WebP/GIF/SVG data URL used as a kit overlay (hat / glasses / held). */
 export function parseOverlayImage(raw: unknown): string | undefined {
-  if (typeof raw !== "string") return undefined;
-  const face = raw.trim();
-  if (!face || face.length > MEMBER_FACE_MAX) return undefined;
-  if (!/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(face)) {
-    return undefined;
-  }
-  return face.replace(/\s+/g, "");
+  const parsed = parsePresenceOverlayImage(raw);
+  if (parsed === undefined) return undefined;
+  if (parsed.length > MEMBER_FACE_MAX) return undefined;
+  return parsed;
 }
 
 function pickOverlay(

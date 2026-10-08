@@ -4,6 +4,7 @@ import {
   PRESENCE_COLOR_PALETTES,
   PRESENCE_KITS,
   PRESENCE_SHAPES,
+  parsePresenceOverlay,
   resolvePresencePaint,
 } from '../src/presence-settings.ts'
 import {
@@ -233,6 +234,24 @@ describe('PRESENCE_KITS', () => {
       'specs-sun',
       'halo',
     ])
+  })
+})
+
+describe('parsePresenceOverlay', () => {
+  it('accepts base64 SVG stickers alongside PNG', () => {
+    const svg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4='
+    const png = 'data:image/png;base64,iVBORw0KGgo='
+    expect(parsePresenceOverlay(svg)).toBe(svg)
+    expect(parsePresenceOverlay(png)).toBe(png)
+  })
+
+  it('normalizes FileReader SVG charset and url-encoded forms to canonical base64', () => {
+    const canonical = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4='
+    const withCharset = 'data:image/svg+xml;charset=utf-8;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4='
+    const encoded = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    expect(parsePresenceOverlay(withCharset)).toBe(canonical)
+    expect(parsePresenceOverlay(encoded)).toBe(canonical)
+    expect(parsePresenceOverlay('data:image/svg+xml,not-svg')).toBeUndefined()
   })
 })
 

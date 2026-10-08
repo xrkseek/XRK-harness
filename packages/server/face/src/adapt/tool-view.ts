@@ -93,10 +93,10 @@ export function collectToolCallArgsForPage(
     const seq = seqByEvent.get(event) ?? 0;
     if (seq > maxSeq) maxSeq = seq;
   }
-  for (let i = events.length - 1; i >= 0 && needed.size > 0; i--) {
+  // Walk backwards from the page tail only — skip the suffix after maxSeq.
+  const from = Math.min(Math.max(maxSeq, 0), events.length) - 1;
+  for (let i = from; i >= 0 && needed.size > 0; i--) {
     const event = events[i]!;
-    const seq = i + 1;
-    if (seq > maxSeq) continue;
     if (event.type !== "tool/call" || !needed.has(event.call.id)) continue;
     map.set(event.call.id, {
       name: event.call.name,

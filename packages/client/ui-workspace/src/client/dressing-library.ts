@@ -15,16 +15,49 @@ export type DressingSticker = {
   readonly slot: DressingSlot
 }
 
-const OVERLAY_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i
+/** Canonical raster / SVG sticker data URLs (SVG-as-image; scripts do not run). */
+const OVERLAY_RE = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/i
+/** FileReader may emit charset before ;base64, or url-encoded SVG bodies. */
+const SVG_BASE64_RE =
+  /^data:image\/svg\+xml(?:;charset=[^;,\s]+)?;base64,([A-Za-z0-9+/=]+)$/i
+const SVG_XML_RE =
+  /^data:image\/svg\+xml(?:;charset=[^;,\s]+)?,(?!;base64)([\s\S]+)$/i
 const STICKER_ID_RE = /^stk_[a-zA-Z0-9]{6,24}$/
 const STICKER_PICK_RE = /^sticker:(stk_[a-zA-Z0-9]{6,24})$/
 
+function textToBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]!)
+  }
+  return btoa(binary)
+}
+
+/** Accept a transparent SVG/PNG (etc.) overlay, or empty to clear. Normalizes FileReader SVG forms. */
 export function parseOverlayImage(raw: unknown): string | undefined {
   if (typeof raw !== 'string') return undefined
   const value = raw.trim().replace(/\s+/g, '')
   if (!value) return ''
-  if (value.length > FACE_MAX || !OVERLAY_RE.test(value)) return undefined
-  return value
+  if (value.length > FACE_MAX) return undefined
+  if (OVERLAY_RE.test(value)) return value
+
+  const base64Svg = SVG_BASE64_RE.exec(value)
+  if (base64Svg?.[1]) {
+    const out = `data:image/svg+xml;base64,${base64Svg[1]}`
+    return out.length > FACE_MAX ? undefined : out
+  }
+
+  const encoded = SVG_XML_RE.exec(value)
+  if (!encoded?.[1]) return undefined
+  try {
+    const svgText = decodeURIComponent(encoded[1])
+    if (!/<svg[\s>/]/i.test(svgText)) return undefined
+    const out = `data:image/svg+xml;base64,${textToBase64(svgText)}`
+    return out.length > FACE_MAX ? undefined : out
+  } catch {
+    return undefined
+  }
 }
 
 export function splitLegacyKit(kit: string | undefined): { hat: string; glasses: string } {

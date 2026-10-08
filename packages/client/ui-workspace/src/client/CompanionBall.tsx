@@ -8,7 +8,7 @@ import { HELD_BUILTINS } from './dressing-library.ts'
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '21'
+const PRESENCE_BALL_REV = '28'
 
 export const COMPANION_SHAPES = [
   'blob',
@@ -137,6 +137,9 @@ type EmotionBallNs = {
       kitHat?: string
       kitGlasses?: string
       kitHeld?: string
+      /** 三槽贴图：进引擎层，跟随呼吸/转头/形变。DOM 绝对定位层已废弃。 */
+      hatImage?: string
+      glassesImage?: string
       heldImage?: string
     },
   ) => EmotionBallHandle
@@ -435,6 +438,8 @@ export function CompanionBall({
           kitHat: resolvedHat,
           kitGlasses: resolvedGlasses,
           kitHeld: heldBuiltin ?? 'none',
+          hatImage: (overlayHat || face) ?? '',
+          glassesImage: overlayGlasses ?? '',
           heldImage: overlayHeld ?? '',
         })
         setReady(true)
@@ -449,7 +454,7 @@ export function CompanionBall({
       ballRef.current = null
       setReady(false)
     }
-  }, [empty, emotion, paint.body, paint.eyes, resolvedShape, resolvedHat, resolvedGlasses, heldBuiltin, overlayHeld])
+  }, [empty, emotion, paint.body, paint.eyes, resolvedShape, resolvedHat, resolvedGlasses, heldBuiltin, overlayHat, overlayGlasses, overlayHeld, face])
 
   useEffect(() => mount(), [mount])
 
@@ -457,8 +462,8 @@ export function CompanionBall({
     <span className={css.stage} data-empty={empty ? '' : undefined}>
       {empty ? <span className={css.plus} aria-hidden>+</span> : null}
       <span ref={mountRef} className={css.mount} data-ready={ready && !empty ? '' : undefined} aria-hidden />
-      {(overlayHat || face) ? <span className={css.overlayHat} style={{ backgroundImage: `url(${overlayHat || face})` }} aria-hidden /> : null}
-      {overlayGlasses ? <span className={css.overlayGlasses} style={{ backgroundImage: `url(${overlayGlasses})` }} aria-hidden /> : null}
+      {/* 装扮贴图全部进引擎层（hatG/specsG/heldG）：按轮廓与眼球锚点逐帧布局，
+          所以呼吸、转头、情绪形变都会带着走。DOM 覆盖层做不到这点，已移除。 */}
     </span>
   )
 }

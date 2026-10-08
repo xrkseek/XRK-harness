@@ -20,12 +20,12 @@ import {
   MEMBER_COLORS,
   MEMBER_KITS,
   MEMBER_SHAPES,
-  parseOverlayImage,
 } from "./agent-roster-store.js";
 import {
   GLASSES_BUILTINS,
   HAT_BUILTINS,
   HELD_BUILTINS,
+  parseOverlayImage,
   parseSlotPick,
   parseStickers,
 } from "./presence-dressing.js";

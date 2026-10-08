@@ -166,6 +166,11 @@
     var kitHat = opts.kitHat || split0.hat;
     var kitGlasses = opts.kitGlasses || split0.glasses;
     var kitHeld = opts.kitHeld || 'none';
+    /* 三槽贴图：与内置图形平级。贴图放进 hatG/specsG/heldG，因而天然继承
+     * bodyG 的 translate/rotate/scale —— 呼吸、转头、情绪形变全部跟随身体。
+     * 绝不要退回 DOM 层绝对定位，那只会钉死在 CSS 盒子上。 */
+    var hatImage = typeof opts.hatImage === 'string' ? opts.hatImage : '';
+    var glassesImage = typeof opts.glassesImage === 'string' ? opts.glassesImage : '';
     var heldImage = typeof opts.heldImage === 'string' ? opts.heldImage : '';
     svg.appendChild(bodyG);
 
@@ -380,6 +385,8 @@
     var curSketch = -1;
     var lastYaw = 0;
     var SPEC_SCALE = 1.42;
+    /** 贴纸镜片略大于内置：半幅图有描边留白，且不再叠引擎鼻梁/镜腿。 */
+    var STICKER_SPEC_BOOST = 1.38;
     var SPEC_BRIDGE = 10;
     var CAT_LENS = 'M-1,0 C-1,-0.82 -0.2,-1.02 0.12,-0.7 C0.82,-1.18 1.18,-0.18 1,0.12 C0.5,0.82 -0.55,0.68 -1,0 Z';
 
@@ -477,6 +484,19 @@
       return typeof kind === 'string' && kind.indexOf('specs') === 0;
     }
 
+    /** Map kitGlasses id → lens shape. New built-in: add a branch + PRESENCE_GLASSES_KITS. */
+    function specsShapeOf(kind) {
+      if (kind === 'specs-rect') return 'rect';
+      if (kind === 'specs-cat') return 'cat';
+      return 'round';
+    }
+
+    var HAT_Y_OFF = { halo: -12, visor: 16, cap: 11, beanie: 8, bow: 6 };
+    var KIT_ROLE_FILL = {
+      brim: 'brim', crown: 'crown', accent: 'accent', bow: 'bow', knot: 'knot',
+    };
+    var KIT_ROLE_STROKE = { frame: 'frame', halo: 'halo', shine: 'halo' };
+
     function clearKit() {
       while (hatG.firstChild) hatG.removeChild(hatG.firstChild);
       while (specsG.firstChild) specsG.removeChild(specsG.firstChild);
@@ -492,51 +512,33 @@
       for (i = 0; i < nodes.length; i++) {
         var node = nodes[i];
         var role = node.getAttribute('data-kit-role');
-        if (role === 'frame') node.setAttribute('stroke', pal.frame);
         if (role === 'lens') {
           node.setAttribute('fill', sun ? pal.lensSun : pal.lens);
           node.setAttribute('stroke', pal.frame);
+          continue;
         }
-        if (role === 'brim') node.setAttribute('fill', pal.brim);
-        if (role === 'crown') node.setAttribute('fill', pal.crown);
-        if (role === 'accent') node.setAttribute('fill', pal.accent);
-        if (role === 'bow') node.setAttribute('fill', pal.bow);
-        if (role === 'knot') node.setAttribute('fill', pal.knot);
-        if (role === 'halo') node.setAttribute('stroke', pal.halo);
-        if (role === 'shine') node.setAttribute('stroke', pal.halo);
+        var fillKey = KIT_ROLE_FILL[role];
+        if (fillKey) { node.setAttribute('fill', pal[fillKey]); continue; }
+        var strokeKey = KIT_ROLE_STROKE[role];
+        if (strokeKey) node.setAttribute('stroke', pal[strokeKey]);
       }
     }
 
-    function addSpecsPair(shape) {
-      var sw = '4.4';
-      if (shape === 'rect') {
-        specsG.appendChild(el('rect', {
-          'data-kit': 'lens-L', 'data-kit-role': 'lens', fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
-        }));
-        specsG.appendChild(el('rect', {
-          'data-kit': 'lens-R', 'data-kit-role': 'lens', fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
-        }));
-      } else if (shape === 'cat') {
-        specsG.appendChild(el('path', {
-          'data-kit': 'lens-L', 'data-kit-role': 'lens', d: CAT_LENS, fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
-        }));
-        specsG.appendChild(el('path', {
-          'data-kit': 'lens-R', 'data-kit-role': 'lens', d: CAT_LENS, fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
-        }));
-      } else {
-        specsG.appendChild(el('ellipse', {
-          'data-kit': 'lens-L', 'data-kit-role': 'lens', fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
-        }));
-        specsG.appendChild(el('ellipse', {
-          'data-kit': 'lens-R', 'data-kit-role': 'lens', fill: palLens(),
-          stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
-        }));
+    function addLensPair(tag, attrs) {
+      var left = { 'data-kit': 'lens-L', 'data-kit-role': 'lens' };
+      var right = { 'data-kit': 'lens-R', 'data-kit-role': 'lens' };
+      var k;
+      for (k in attrs) {
+        if (Object.prototype.hasOwnProperty.call(attrs, k)) {
+          left[k] = attrs[k];
+          right[k] = attrs[k];
+        }
       }
+      specsG.appendChild(el(tag, left));
+      specsG.appendChild(el(tag, right));
+    }
+
+    function addSpecsFrame() {
       specsG.appendChild(el('path', {
         'data-kit': 'bridge', 'data-kit-role': 'frame', fill: 'none',
         stroke: '#2A2A30', 'stroke-width': '3.4', 'stroke-linecap': 'round',
@@ -551,11 +553,65 @@
       }));
     }
 
+    /** 把 96×32 贴纸裁成左/右半幅独立 data URL，避免 nested viewBox 把整副缩进一只眼。 */
+    function glassesHalfHref(image, side) {
+      var vb = side === 'left' ? '0 0 48 32' : '48 0 48 32';
+      var href = String(image)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
+      var svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32">' +
+        '<svg viewBox="' + vb + '" width="48" height="32" preserveAspectRatio="none">' +
+        '<image width="96" height="32" preserveAspectRatio="none" href="' + href + '"/>' +
+        '</svg></svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    /** 贴纸双眼：左右半幅各一张 image；框（鼻梁/镜腿）须画在 SVG 里，引擎不再叠黑杠。 */
+    function addSpecsSticker(image) {
+      specsG.appendChild(el('image', {
+        'data-kit': 'lens-L', 'data-kit-role': 'sticker',
+        href: glassesHalfHref(image, 'left'),
+        preserveAspectRatio: 'none',
+      }));
+      specsG.appendChild(el('image', {
+        'data-kit': 'lens-R', 'data-kit-role': 'sticker',
+        href: glassesHalfHref(image, 'right'),
+        preserveAspectRatio: 'none',
+      }));
+    }
+
+    function addSpecsPair(shape, image) {
+      /* 贴纸名义框 96×32：左 0–48 / 右 48–96 各跟一只眼；不调用 addSpecsFrame。 */
+      if (image) {
+        addSpecsSticker(image);
+        return;
+      }
+      var sw = '4.4';
+      var fill = palLens();
+      if (shape === 'rect') {
+        addLensPair('rect', {
+          fill: fill, stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
+        });
+      } else if (shape === 'cat') {
+        addLensPair('path', {
+          d: CAT_LENS, fill: fill, stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
+        });
+      } else {
+        addLensPair('ellipse', {
+          fill: fill, stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
+        });
+      }
+      addSpecsFrame();
+    }
+
     function palLens() {
       return kitGlasses === 'specs-sun' ? 'rgba(28,28,32,0.52)' : 'rgba(255,255,255,0.16)';
     }
 
-    function fillHat(kind) {
+    function fillHat(kind, image) {
+      if (fillStickerImage(hatG, image, 64, 'sticker')) return;
       if (kind === 'bow') {
         hatG.appendChild(el('path', {
           'data-kit-role': 'bow',
@@ -597,15 +653,24 @@
       }
     }
 
+    /** 往一个 kit 层插入一张贴图（透明 PNG/SVG）。boxW×boxH 为名义框
+     * （默认正方形），布局层再按真实锚点缩放它。 */
+    function fillStickerImage(layer, image, boxW, role, boxH) {
+      if (!image) return false;
+      var h = boxH === undefined ? boxW : boxH;
+      layer.appendChild(el('image', {
+        'data-kit': 'image',
+        'data-kit-role': role || null,
+        href: image,
+        x: String(-boxW / 2), y: String(-h / 2),
+        width: String(boxW), height: String(h),
+        preserveAspectRatio: 'xMidYMid meet',
+      }));
+      return true;
+    }
+
     function fillHeld(kind, image) {
-      if (image) {
-        var img = el('image', {
-          href: image, x: '-18', y: '-18', width: '36', height: '36',
-          preserveAspectRatio: 'xMidYMid meet',
-        });
-        heldG.appendChild(img);
-        return;
-      }
+      if (fillStickerImage(heldG, image, 52, 'sticker')) return;
       if (kind === 'flower') {
         heldG.appendChild(el('circle', { cx: '0', cy: '-8', r: '5.2', fill: '#F4A0B4' }));
         heldG.appendChild(el('circle', { cx: '-7.5', cy: '-3', r: '5.2', fill: '#E07090' }));
@@ -652,9 +717,9 @@
       hatG.style.display = '';
       specsG.style.display = '';
       heldG.style.display = '';
-      if (kitHat !== 'none') fillHat(kitHat);
-      if (isSpecsKit(kitGlasses)) {
-        addSpecsPair(kitGlasses === 'specs-rect' ? 'rect' : kitGlasses === 'specs-cat' ? 'cat' : 'round');
+      if (kitHat !== 'none' || hatImage) fillHat(kitHat, hatImage);
+      if (isSpecsKit(kitGlasses) || glassesImage) {
+        addSpecsPair(specsShapeOf(kitGlasses), glassesImage);
       }
       fillHeld(kitHeld, heldImage);
       paintKit();
@@ -680,6 +745,9 @@
       }
       node.style.display = '';
       var sz = specSize(slot, other);
+      if (node.getAttribute('data-kit-role') === 'sticker') {
+        sz = { rx: sz.rx * STICKER_SPEC_BOOST, ry: sz.ry * STICKER_SPEC_BOOST };
+      }
       var tag = node.tagName.toLowerCase();
       if (tag === 'ellipse') {
         node.setAttribute('cx', r2(slot.x));
@@ -688,7 +756,7 @@
         node.setAttribute('ry', r2(sz.ry));
         return;
       }
-      if (tag === 'rect') {
+      if (tag === 'rect' || tag === 'image' || tag === 'svg') {
         node.setAttribute('x', r2(slot.x - sz.rx));
         node.setAttribute('y', r2(slot.y - sz.ry * 0.88));
         node.setAttribute('width', r2(sz.rx * 2));
@@ -701,7 +769,7 @@
     }
 
     function layoutGlasses() {
-      if (!isSpecsKit(kitGlasses)) {
+      if (!isSpecsKit(kitGlasses) && !glassesImage) {
         specsG.style.display = 'none';
         return;
       }
@@ -711,7 +779,13 @@
         specsG.style.display = 'none';
         return;
       }
+      if (glassesImage && (!L || !L.on) && (!R || !R.on)) {
+        specsG.style.display = 'none';
+        return;
+      }
       specsG.style.display = '';
+      /* 内置椭圆 / 贴纸半幅 image 都走 lens-L/R，每片大小跟该眼 rx·ry。 */
+      specsG.removeAttribute('transform');
       layoutSpecsLens(specsG.querySelector('[data-kit="lens-L"]'), L, R, -1);
       layoutSpecsLens(specsG.querySelector('[data-kit="lens-R"]'), R, L, 1);
       var bridge = specsG.querySelector('[data-kit="bridge"]');
@@ -746,7 +820,7 @@
     }
 
     function layoutHat() {
-      if (kitHat === 'none') {
+      if (kitHat === 'none' && !hatImage) {
         hatG.style.display = 'none';
         return;
       }
@@ -757,7 +831,9 @@
         return;
       }
       hatG.style.display = '';
-      var yOff = kitHat === 'halo' ? -12 : kitHat === 'visor' ? 16 : kitHat === 'cap' ? 11 : kitHat === 'beanie' ? 8 : 6;
+      /* 贴图走中性贴顶偏移；内置按件调高，否则 bow 会被塞进身体里 */
+      var yOff = hatImage ? 6
+        : (HAT_Y_OFF[kitHat] !== undefined ? HAT_Y_OFF[kitHat] : 6);
       var y = silMinY + yOff;
       var sampleY = Math.min(silMaxY - 4, Math.max(silMinY + 6, y + 14));
       var band = silAt(sampleY);
@@ -782,7 +858,8 @@
       var hw = Math.max((band[1] - band[0]) / 2, 14);
       var cx = (band[0] + band[1]) / 2;
       var x = cx + hw * (0.62 + Math.sin(lastYaw) * 0.18);
-      var fit = hw / 42;
+      /* 贴纸手持略放大，贴近内置小花视觉体量。 */
+      var fit = hw / (heldImage ? 34 : 42);
       heldG.setAttribute('transform',
         'translate(' + r2(x) + ' ' + r2(y) + ') scale(' + r2(fit) + ' ' + r2(fit) + ')');
     }
@@ -795,17 +872,28 @@
 
     function setKit(kind) {
       var split = splitLegacyKit(kind);
+      /* legacy 单参入口 = 换回纯内置装扮：三槽贴图一并清掉，
+       * 否则上一轮 setDressing 留下的贴图会继续压在新内置件上。 */
       kitHat = split.hat;
       kitGlasses = split.glasses;
+      hatImage = '';
+      glassesImage = '';
+      heldImage = '';
       rebuildKit();
       layoutKit();
     }
 
     function setDressing(hat, glasses, held, image) {
+      /* 对象式扩展：setDressing(hat, glasses, held, { hat: url, glasses: url, held: url })。
+       * 第四参传字符串 = 旧的 heldImage 调用（只动 held 一槽，保持向后兼容）。 */
+      var imgs = (image && typeof image === 'object') ? image : {};
+      var legacyHeld = typeof image === 'string' ? image : '';
       kitHat = hat || 'none';
       kitGlasses = glasses || 'none';
       kitHeld = held || 'none';
-      heldImage = typeof image === 'string' ? image : '';
+      hatImage = typeof imgs.hat === 'string' ? imgs.hat : '';
+      glassesImage = typeof imgs.glasses === 'string' ? imgs.glasses : '';
+      heldImage = legacyHeld || (typeof imgs.held === 'string' ? imgs.held : '');
       rebuildKit();
       layoutKit();
     }

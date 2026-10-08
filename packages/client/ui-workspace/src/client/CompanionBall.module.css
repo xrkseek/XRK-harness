@@ -53,49 +53,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Transparent PNG layers. Hat · glasses · held can all show. Held sits lower-right (no hands). */
-.overlayHat,
-.overlayGlasses,
-.overlayHeld {
-  position: absolute;
-  background-size: contain;
-  background-repeat: no-repeat;
-  pointer-events: none;
-}
-
-.overlayHat {
-  left: 4%;
-  right: 4%;
-  top: -22%;
-  height: 52%;
-  z-index: 4;
-  background-position: center top;
-}
-
-.overlayGlasses {
-  left: 12%;
-  right: 12%;
-  top: 28%;
-  height: 32%;
-  z-index: 5;
-  background-position: center;
-}
-
-.overlayHeld {
-  left: 42%;
-  right: -18%;
-  top: 36%;
-  bottom: -12%;
-  z-index: 6;
-  background-position: right bottom;
-}
-
-.overlayHeld svg,
-.heldGlyph {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
+/* 装扮贴图已全部进引擎层（见 CompanionBall.tsx create opts），不再有 DOM 覆盖层。 */
 
 .kit {
   position: absolute;

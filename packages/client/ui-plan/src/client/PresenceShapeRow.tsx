@@ -243,7 +243,7 @@ function SlotRow({
           <input
             className={css.overlayFile}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
             aria-label={label}
             onChange={(e) => {
               const file = e.target.files?.[0]
@@ -334,7 +334,7 @@ export function PresenceShapeRow({
 
       <div className={css.subtitle}>{t('presenceKit.title')}</div>
       <p className={css.hint}>{t('presenceKit.hint')}</p>
-      {overlayErr ? <p className={css.hint} role="alert">{overlayErr}</p> : null}
+      {overlayErr ? <p className={css.overlayError} role="alert">{overlayErr}</p> : null}
       <SlotRow
         t={t}
         label={t('presenceOverlay.hat')}

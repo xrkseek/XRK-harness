@@ -531,9 +531,10 @@
       return this;
     },
 
-    setDressing: function (hat, glasses, held, heldImage) {
+    /* 三槽贴图；第四参兼容旧的字符串（= held 贴图） */
+    setDressing: function (hat, glasses, held, images) {
       if (this.ball.setDressing) {
-        this.ball.setDressing(hat || 'none', glasses || 'none', held || 'none', heldImage || '');
+        this.ball.setDressing(hat || 'none', glasses || 'none', held || 'none', images || '');
       }
       if (!this._active) this.renderStatic();
       return this;
