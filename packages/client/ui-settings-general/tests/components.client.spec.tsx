@@ -64,7 +64,7 @@ describe('DesktopReleaseFooter', () => {
 
   it('uses the Host reconnect chip for an available update', async () => {
     const check = vi.fn(async () => ({ phase: 'available' as const, version: '0.5.14' }))
-    const snapshot = vi.fn(async () => ({ phase: 'available' as const, version: '0.5.14' }))
+    const snapshot = vi.fn(async () => ({ phase: 'ready' as const, version: '0.5.14', percent: 100 }))
     const install = vi.fn(async () => undefined)
     const subscribe = vi.fn(() => () => undefined)
     ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
@@ -77,6 +77,35 @@ describe('DesktopReleaseFooter', () => {
     fireEvent.click(available)
     expect(check).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: 'Software update' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Install and restart' }))
+    expect(install).toHaveBeenCalledOnce()
+  })
+
+  it('keeps Install disabled until the download reaches ready', async () => {
+    let push: ((state: { phase: string; version: string; percent?: number }) => void) | undefined
+    const install = vi.fn(async () => undefined)
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check: vi.fn(),
+        snapshot: async () => ({ phase: 'available' as const, version: '0.5.15', percent: 12 }),
+        install,
+        subscribe: (listener: (state: { phase: string; version: string; percent?: number }) => void) => {
+          push = listener
+          return () => undefined
+        },
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Update 0.5.15' }))
+    const installBtn = screen.getByRole('button', { name: 'Install and restart' })
+    expect(installBtn.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(installBtn)
+    expect(install).not.toHaveBeenCalled()
+    push?.({ phase: 'ready', version: '0.5.15', percent: 100 })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Install and restart' }).hasAttribute('disabled')).toBe(false)
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Install and restart' }))
     expect(install).toHaveBeenCalledOnce()
   })

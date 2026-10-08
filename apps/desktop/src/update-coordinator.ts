@@ -195,16 +195,36 @@ export class DesktopUpdateCoordinator {
         version: this.availableVersion,
         ...(this.lastPercent > 0 ? { percent: this.lastPercent } : {}),
       });
-      void this.startDownload().catch((error: unknown) => {
-        this.downloadOperation = undefined;
-        this.publish({
-          phase: "error",
-          ...(this.availableVersion !== undefined
-            ? { version: this.availableVersion }
-            : {}),
-          message: error instanceof Error ? error.message : String(error),
+      /* Prefetch the package; only flip to ready when the bytes are fully here.
+       * Install stays disabled until ready so the UI cannot quitAndInstall mid-download. */
+      void this.startDownload()
+        .then(() => {
+          if (this.installOperation !== undefined) return;
+          if (this.availableVersion === undefined) return;
+          if (
+            this.current.phase !== "available" &&
+            this.current.phase !== "ready"
+          ) {
+            return;
+          }
+          this.lastPercent = 100;
+          this.publish({
+            phase: "ready",
+            version: this.availableVersion,
+            percent: 100,
+          });
+        })
+        .catch((error: unknown) => {
+          this.downloadOperation = undefined;
+          if (this.installOperation !== undefined) return;
+          this.publish({
+            phase: "error",
+            ...(this.availableVersion !== undefined
+              ? { version: this.availableVersion }
+              : {}),
+            message: error instanceof Error ? error.message : String(error),
+          });
         });
-      });
       return available;
     } catch (error) {
       this.availableVersion = undefined;

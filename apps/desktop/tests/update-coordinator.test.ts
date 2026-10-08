@@ -107,6 +107,9 @@ describe("DesktopUpdateCoordinator", () => {
       phase: "available",
       version: "1.1.0",
     });
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("ready");
+    });
     await expect(coordinator.install()).resolves.toEqual({
       phase: "ready",
       version: "1.1.0",
@@ -118,6 +121,7 @@ describe("DesktopUpdateCoordinator", () => {
     expect(states.map((state) => state.phase)).toEqual([
       "checking",
       "available",
+      "ready",
       "installing",
       "ready",
     ]);
@@ -125,7 +129,7 @@ describe("DesktopUpdateCoordinator", () => {
     expect(updater.autoInstallOnAppQuit).toBe(false);
   });
 
-  it("publishes download percent while installing", async () => {
+  it("publishes download percent while prefetching, then ready", async () => {
     const states: DesktopUpdateState[] = [];
     let progress: ((percent: number) => void) | undefined;
     const updater = {
@@ -157,7 +161,13 @@ describe("DesktopUpdateCoordinator", () => {
       enabled: () => true,
     });
     await coordinator.check();
-    await coordinator.install();
+    await vi.waitFor(() => {
+      expect(coordinator.state).toEqual({
+        phase: "ready",
+        version: "1.1.0",
+        percent: 100,
+      });
+    });
     expect(states).toContainEqual({
       phase: "available",
       version: "1.1.0",
@@ -169,6 +179,37 @@ describe("DesktopUpdateCoordinator", () => {
       percent: 55,
     });
     expect(states.filter((row) => row.percent === 10)).toHaveLength(1);
+    await coordinator.install();
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it("surfaces prefetch download failures as error without enabling install", async () => {
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({
+        isUpdateAvailable: true,
+        updateInfo: { version: "1.1.0" },
+      })),
+      downloadUpdate: vi.fn(async () => {
+        throw new Error("feed closed");
+      }),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => state,
+      updater,
+      enabled: () => true,
+    });
+    await expect(coordinator.check()).resolves.toEqual({
+      phase: "available",
+      version: "1.1.0",
+    });
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("error");
+    });
+    expect(coordinator.state.message).toMatch(/feed closed/u);
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
   });
 
   it("queues install behind an in-flight check", async () => {

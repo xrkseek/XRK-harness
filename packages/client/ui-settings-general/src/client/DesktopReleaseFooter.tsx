@@ -69,9 +69,11 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
 
   if (!bridge || installed === '') return null
 
-  const available = state.phase === 'available' || state.phase === 'ready'
+  const ready = state.phase === 'ready'
+  const available = state.phase === 'available' || ready
   const installing = state.phase === 'installing'
   const checking = state.phase === 'checking'
+  const downloading = installing || (state.phase === 'available' && !ready)
   const shown = available && state.version ? state.version : installed
   const versionLabel = t('release.version', { version: installed })
   const availableLabel = t('release.available', { version: shown })
@@ -79,6 +81,8 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
   const installLabel = t('release.install')
   const checkLabel = t('release.check', { version: installed })
   const percent = clampPercent(state.percent)
+  /** Install only after prefetch finished (coordinator phase `ready`). */
+  const canInstall = ready && !installing
 
   const openSheet = () => {
     setOpen(true)
@@ -95,11 +99,11 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
   }
 
   const runInstall = () => {
-    if (!bridge || (!available && !installing)) return
+    if (!bridge || !canInstall) return
     setState((current) => ({
       phase: 'installing',
       version: current.version ?? shown,
-      percent: clampPercent(current.percent),
+      percent: 100,
     }))
     void bridge.updates.install().catch(() => undefined)
   }
@@ -107,7 +111,7 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
   let body: ReactNode
   if (state.phase === 'error') {
     body = <p className={css.copy}>{state.message?.trim() || t('release.failed')}</p>
-  } else if (installing || (open && available && percent > 0)) {
+  } else if (downloading) {
     body = (
       <>
         <p className={css.copy}>{t('release.downloading', { version: state.version ?? shown })}</p>
@@ -126,7 +130,7 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
     )
   } else if (checking) {
     body = <p className={css.copy}>{checkingLabel}</p>
-  } else if (available) {
+  } else if (ready) {
     body = <p className={css.copy}>{t('release.detail', { version: shown })}</p>
   } else {
     body = <p className={css.copy}>{t('release.current', { version: installed })}</p>
@@ -193,8 +197,8 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
               ? (
                 <Button
                   variant="primary"
-                  disabled={installing}
-                  autoFocus={available}
+                  disabled={!canInstall}
+                  autoFocus={canInstall}
                   onClick={runInstall}
                 >
                   {installLabel}
