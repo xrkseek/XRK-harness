@@ -44,6 +44,7 @@ export const EVENT_ISOMORPHISM = {
   "permission/preset": "permission/preset",
   "sandbox/mode": "sandbox/mode",
   "approval/policy": "approval/policy",
+  "path/allowlisted": "path/allowlisted",
   "plan/mode": "plan/mode",
   "feedback/record": "feedback/record",
   "request/header": "request.header",
@@ -434,6 +435,7 @@ export function toFaceWireSessionEvent(
     case "permission/preset":
     case "sandbox/mode":
     case "approval/policy":
+    case "path/allowlisted":
     case "plan/mode":
     case "feedback/record":
     case "request/header":

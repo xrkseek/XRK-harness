@@ -17,5 +17,6 @@ import type { SessionId } from '@xrkseek/xrk-session/types'
 export interface ApprovalResponsePayload {
   sessionId: SessionId
   approvalId: ApprovalRequestId
-  outcome: 'allowed-once' | 'rejected'
+  /** Client-answerable outcomes (host may also emit cancelled/unavailable). */
+  outcome: 'allowed-once' | 'whitelisted' | 'rejected'
 }

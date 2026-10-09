@@ -44,6 +44,7 @@ import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
 import {
   defaultPermissionPreset,
+  pinInheritedPermission,
   pinInitialPermission,
 } from "../permissions.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
@@ -229,6 +230,17 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
   try {
+    if (parentSessionId) {
+      pinInheritedPermission(
+        runtime.store,
+        parentSessionId,
+        sessionId,
+        { autoGate: runtime.permissionAuto },
+      );
+      runtime.pathAllowlist.inherit(sessionId, parentSessionId);
+      runtime.pathAllowlist.hydrate(runtime.store, parentSessionId);
+    }
+    runtime.pathAllowlist.hydrate(runtime.store, sessionId);
     pinInitialPermission(
       runtime.store,
       sessionId,
@@ -986,12 +998,16 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
       },
     };
   }
-  if (decisionRaw !== "allow" && decisionRaw !== "deny") {
+  if (
+    decisionRaw !== "allow" &&
+    decisionRaw !== "deny" &&
+    decisionRaw !== "whitelist"
+  ) {
     return {
       ok: false,
       error: {
         code: "invalid-payload",
-        message: 'decision must be "allow" | "deny"',
+        message: 'decision must be "allow" | "deny" | "whitelist"',
       },
     };
   }
@@ -1001,7 +1017,11 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
       error: { code: "session-not-found", message: sessionId },
     };
   }
-  const out = runtime.approvals.respond(sessionId, approvalId, decisionRaw);
+  const out = runtime.approvals.respond(
+    sessionId,
+    approvalId,
+    decisionRaw as "allow" | "deny" | "whitelist",
+  );
   if (!out.ok) {
     return {
       ok: false,

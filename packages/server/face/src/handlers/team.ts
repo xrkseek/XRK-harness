@@ -3,6 +3,11 @@
  * child's tools / inject / playbook roster.
  */
 import { readSessionEvents } from "@xrkseek/core-session";
+import {
+  effectiveApprovalPolicy,
+  effectiveSandboxMode,
+  pathAccessModeFromSandbox,
+} from "@xrkseek/protocol";
 import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import {
   applySubagentSpawnPreamble,
@@ -18,6 +23,8 @@ import {
 } from "../agent-roster-store.js";
 import { captureSessionPlaybook } from "../capture-member-playbook.js";
 import { resolveSessionCwd } from "../session-cwd.js";
+import { permissionSelectFromEvents } from "../permissions.js";
+import { effectiveSessionAgentPreset } from "../session-agent-preset.js";
 import {
   publishSessionThread,
   publishSessionThreads,
@@ -270,9 +277,13 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
   const childId = String(
     (created.value as { sessionId?: string }).sessionId ?? "",
   );
+  const parentEvents = readSessionEvents(runtime.store, sessionId);
   const auth = rootUserAuthorizationBlock({
-    parentEvents: readSessionEvents(runtime.store, sessionId),
+    parentEvents,
   });
+  const sandbox = effectiveSandboxMode(parentEvents);
+  const permission = permissionSelectFromEvents(parentEvents).currentValue;
+  const approval = effectiveApprovalPolicy(parentEvents);
   const prompt = applySubagentSpawnPreamble({
     prompt: `${member.playbook.trim()}\n\nTASK:\n${task}`,
     parentSessionId: sessionId,
@@ -285,6 +296,8 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
     isolatedWorktree: false,
     memberId: member.id,
     inject: member.inject,
+    permissionInherit: `${permission} (path=${pathAccessModeFromSandbox(sandbox)}) · approval=${approval}`,
+    parentToolSurface: effectiveSessionAgentPreset(runtime, sessionId),
     ...(auth ? { userAuthorization: auth } : {}),
   });
   const prompted = await sessionPrompt(runtime, `${rpcId}-p`, {

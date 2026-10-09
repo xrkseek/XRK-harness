@@ -2688,6 +2688,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
 
   packages/im-gateway-contract: {}
 

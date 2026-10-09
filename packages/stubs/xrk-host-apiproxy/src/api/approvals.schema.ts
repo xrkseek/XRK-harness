@@ -17,5 +17,9 @@ export const approvalRequestIdSchema = z.string().min(1) as unknown as z.ZodType
 export const approvalResponsePayloadSchema = z.object({
   sessionId: sessionIdSchema,
   approvalId: approvalRequestIdSchema,
-  outcome: z.union([z.literal('allowed-once'), z.literal('rejected')]),
+  outcome: z.union([
+    z.literal('allowed-once'),
+    z.literal('whitelisted'),
+    z.literal('rejected'),
+  ]),
 }) satisfies z.ZodType<Wire<ApprovalResponsePayload>>

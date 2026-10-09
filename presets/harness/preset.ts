@@ -15,6 +15,7 @@ import {
   createStdTools,
   createToolPipeline,
   createToolRegistry,
+  createToolSearchTool,
   createWriteIntentGuard,
   extractPathArg,
   subagentRoutingPrompt,
@@ -22,10 +23,12 @@ import {
   type ToolDefinition,
   type ToolPipeline,
   type ToolRegistry,
+  type ToolSearchState,
 } from "@xrkseek/core-tools";
 import {
   createFsLocalProvider,
   createFsTools,
+  createPathOverreachPre,
   createReadImageTool,
   formatFsRoutingPrompt,
   formatShellRoutingPrompt,
@@ -36,6 +39,7 @@ import {
   formatWebFetchGuidance,
   formatWebSearchGuidance,
   formatBrowserGuidance,
+  formatWebFamilyGuidance,
   createDefaultWebAccess,
   createWebTools,
   createBrowserTools,
@@ -143,6 +147,7 @@ import {
   effectiveSandboxMode,
   flattenText,
   isHumanUserMessageSource,
+  pathAccessModeFromSandbox,
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import {
@@ -495,6 +500,24 @@ export interface HarnessCompositionOptions {
    * escape stays denied; relative paths always resolve under the workspace.
    */
   readonly extraWritableRoots?: readonly string[];
+  /**
+   * Path gate from session sandbox (`pathAccessModeFromSandbox`).
+   * `open` = danger-full-access / Auto (no workspace jail on fs).
+   */
+  readonly pathAccessMode?: import("@xrkseek/protocol").PathAccessMode;
+  /**
+   * Live session object-path allowlist (Once / Whitelist overreach grants).
+   * Merged into fs + path-overreach pre on every resolve.
+   * Once = session-memory only; Whitelist = durable `path/allowlisted`.
+   */
+  readonly readSessionPathAllowlist?: () => readonly string[];
+  /** Clear ephemeral Once path grants after each tool settle. */
+  readonly clearSessionPathOnce?: () => void;
+  /**
+   * Progressive disclosure — session expanded Deferred names + expand hook
+   * for `tool_search`. Host wires Face `toolDisclosure`.
+   */
+  readonly toolSearchState?: ToolSearchState;
   /** Durable image store — enables `read_image` when set. */
   readonly attachments?: AttachmentStore;
   /** Gate `read_image` on live route image modality (Host). */
@@ -656,6 +679,44 @@ function wrapStoreForLifecycleWebhooks(
   };
 }
 
+/**
+ * Badge delta only (absent tools + delegation posture). Permission stays in
+ * session_capability; per-tool guidance stays orthogonal.
+ */
+function formatToolSurfacePack(input: {
+  readonly hasBash: boolean;
+  readonly web: boolean;
+  readonly lsp: boolean;
+  readonly pty: boolean;
+  readonly subagents: boolean;
+  readonly delegation?: "explicit" | "proactive";
+}): string {
+  const absent: string[] = [];
+  if (!input.hasBash) absent.push("bash");
+  if (!input.web) absent.push("web");
+  if (!input.lsp) absent.push("lsp");
+  if (!input.pty) absent.push("pty");
+  if (!input.subagents) absent.push("subagent");
+  const lines: string[] = [];
+  if (absent.length > 0) {
+    lines.push(
+      `Tool surface: no ${absent.join("/")}. Say so when asked; do not invent missing tools.`,
+    );
+  }
+  if (!input.subagents) {
+    lines.push("Delegation: off — Skill or do the work yourself.");
+  } else if (input.delegation === "explicit") {
+    lines.push(
+      "Delegation: explicit only. See session_capability before spawn.",
+    );
+  } else {
+    lines.push(
+      "Delegation: proactive when useful. Check session_capability + member caps before spawn.",
+    );
+  }
+  return lines.join("\n");
+}
+
 /** Composition: fs + shell + sandbox guards + workspace inject. */
 export function createHarnessComposition(
   options: HarnessCompositionOptions,
@@ -672,6 +733,12 @@ export function createHarnessComposition(
       extraWritableRoots: options.extraWritableRoots?.length
         ? options.extraWritableRoots
         : [productHome],
+      ...(options.pathAccessMode
+        ? { pathAccessMode: options.pathAccessMode }
+        : {}),
+      ...(options.readSessionPathAllowlist
+        ? { readSessionPathAllowlist: options.readSessionPathAllowlist }
+        : {}),
     });
   const sharedShell = options.shell;
   const baseStore = options.sessionStore ?? createMemorySessionStore();
@@ -1125,6 +1192,16 @@ export function createHarnessComposition(
       ),
     );
   }
+  // Progressive disclosure meta-tool (Codex tool_search). Absent → listForModel
+  // fail-opens Deferred as Direct.
+  if (options.toolSearchState) {
+    tools.register(
+      createToolSearchTool({
+        listTools: () => tools.list(),
+        state: options.toolSearchState,
+      }),
+    );
+  }
   const policyEngine = createPolicyEngineFromPlugins({
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
@@ -1169,6 +1246,34 @@ export function createHarnessComposition(
         "read-only",
     ),
   );
+  // Path overreach (workspace-write / read-only reads) → Face 5s ask.
+  {
+    const writableBase = options.extraWritableRoots?.length
+      ? options.extraWritableRoots
+      : [productHome];
+    const readableBase = options.hostReadableRoots?.length
+      ? options.hostReadableRoots
+      : [productHome];
+    pipeline.onPre(
+      createPathOverreachPre({
+        root: () => options.workspaceRoot,
+        pathAccessMode: () =>
+          options.pathAccessMode ??
+          pathAccessModeFromSandbox(
+            effectiveSandboxMode(readSessionEvents(store, sessionId)),
+          ),
+        listWritableAllowlist: () => [
+          ...writableBase,
+          ...(options.readSessionPathAllowlist?.() ?? []),
+        ],
+        listReadableAllowlist: () => [
+          ...readableBase,
+          ...writableBase,
+          ...(options.readSessionPathAllowlist?.() ?? []),
+        ],
+      }),
+    );
+  }
   // Shell hooks.json — PreToolUse + PostToolUse after policy / read-only; before kind:hooks.
   if (options.shellHooks !== false) {
     const shellOpt =
@@ -1204,6 +1309,13 @@ export function createHarnessComposition(
   }
   // Advisory write-path content patterns (append to tool result; before lifecycle post).
   pipeline.onPost(createWritePathSecurityPost());
+  if (options.clearSessionPathOnce) {
+    const clearOnce = options.clearSessionPathOnce;
+    pipeline.onPost(async () => {
+      clearOnce();
+      return { action: "accept" as const };
+    });
+  }
   if (lifecycleNotifier) {
     const notifier = lifecycleNotifier;
     pipeline.onPost(async (ctx) => {
@@ -1295,6 +1407,11 @@ export function createHarnessComposition(
   }
   if (options.webTools !== false) {
     prompts.register({
+      id: "tool:web_family",
+      order: 109,
+      content: () => formatWebFamilyGuidance(availableToolNames()),
+    });
+    prompts.register({
       id: "tool:web_search",
       order: 110,
       content: () => formatWebSearchGuidance(availableToolNames()),
@@ -1317,6 +1434,25 @@ export function createHarnessComposition(
       content: () => formatComputerUseGuidance(availableToolNames()),
     });
   }
+  prompts.register({
+    id: "tool:surface-pack",
+    order: 103,
+    content: () => {
+      const names = availableToolNames();
+      return formatToolSurfacePack({
+        hasBash: names.has("bash"),
+        web: names.has("web_search") || names.has("web_fetch"),
+        lsp: names.has("lsp"),
+        pty: names.has("terminal_open") || names.has("terminal_send"),
+        subagents: options.subagentRouting !== false,
+        ...(options.delegationMode
+          ? { delegation: options.delegationMode }
+          : options.subagentRouting !== false
+            ? { delegation: "proactive" as const }
+            : {}),
+      });
+    },
+  });
   if (options.voiceTools !== false) {
     prompts.register({
       id: "tool:voice",
@@ -1453,8 +1589,14 @@ export function createHarnessComposition(
       "tool:jobs",
       ...(options.subagentRouting !== false ? ["tool:subagent"] : []),
       "tool:session-query",
+      "tool:surface-pack",
       ...(options.webTools !== false
-        ? ["tool:web_search", "tool:web_fetch", "tool:browser"]
+        ? [
+            "tool:web_family",
+            "tool:web_search",
+            "tool:web_fetch",
+            "tool:browser",
+          ]
         : []),
       ...(options.computerUseTools !== false ? ["tool:computer_use"] : []),
       ...(options.voiceTools !== false ? ["tool:voice"] : []),
@@ -1564,6 +1706,12 @@ export function createHarnessComposition(
         store,
         llm,
         tools,
+        ...(options.toolSearchState
+          ? {
+              expandedToolNames: () =>
+                options.toolSearchState!.listExpanded(),
+            }
+          : {}),
         pipeline,
         cwd: options.workspaceRoot,
         jobs: {

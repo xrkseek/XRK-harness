@@ -34,6 +34,8 @@ export function mcpToolDefinition(
     name: publicToolName(client.serverName, info.name),
     description: info.description || `MCP tool ${info.name}`,
     parameters: info.inputSchema,
+    // Codex tool_search_always_defer_mcp_tools — expand via tool_search.
+    exposure: "deferred",
     async execute(args, signal) {
       const result = await client.callTool(
         info.name,

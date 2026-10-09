@@ -366,6 +366,21 @@ function briefOf(name: string, playbook: string, explicit?: string): string {
   return clip(from, MEMBER_BRIEF_MAX);
 }
 
+/** True when `toolName` matches a deny entry (exact, or prefix when entry ends with `*`). */
+export function toolNameDenied(
+  toolName: string,
+  denied: ReadonlySet<string>,
+): boolean {
+  const key = toolName.toLowerCase();
+  if (denied.has(key)) return true;
+  for (const pattern of denied) {
+    if (pattern.endsWith("*") && key.startsWith(pattern.slice(0, -1))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Deny-only: a 干员 may weaken the parent preset, never add tools. */
 export function applyRosterToolPolicy(
   tools: {
@@ -385,14 +400,14 @@ export function applyRosterToolPolicy(
     const keep = new Set(policy.names.map((name) => name.toLowerCase()));
     for (const row of tools.list()) {
       const key = row.name.toLowerCase();
-      if (!keep.has(key) || denied.has(key)) {
+      if (!keep.has(key) || toolNameDenied(key, denied)) {
         tools.unregister(row.name);
       }
     }
     return;
   }
   for (const row of tools.list()) {
-    if (denied.has(row.name.toLowerCase())) tools.unregister(row.name);
+    if (toolNameDenied(row.name, denied)) tools.unregister(row.name);
   }
 }
 
@@ -516,8 +531,10 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "minimal",
       brief: "查网上公开事实，给出链接与日期。",
       playbook:
-        "You are the web scout. Use web_search and web_fetch for public facts. " +
-        "Cite URLs and dates. Do not edit the repo. Prefer primary sources over commentary.",
+        "You are the web scout. Prefer web_search and web_fetch for public facts; " +
+        "web_fetch returns text for pages and status/content-type/size for images (optional proxy / HTTP_PROXY). " +
+        "Cite URLs and dates. Do not edit the repo. Prefer primary sources. " +
+        "If a needed tool fails or is missing, put that gap and evidence in your FINAL answer for the parent.",
     },
     {
       id: "mem_seed_docs",

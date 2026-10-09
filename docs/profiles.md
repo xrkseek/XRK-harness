@@ -45,7 +45,7 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 | **shallow** | Shallow | 完整工具，一层子代理（徽章深度上限=1；并发见 Settings；`delegation: proactive`） | 浅委派 |
 | **harness** | XRK Harness | 完整工具 + 嵌套子代理（Settings 默认 depth/active=2；`delegation: proactive`） | 默认产品面 |
 
-计划模式：斜杠 **`/plan`** / Plan 芯片 / `exit_plan_mode`（与徽章正交）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
+计划模式：斜杠 **`/plan`** / Plan 芯片（与徽章正交）；交付物上工作区 **Canvas**；Overview 画布 **Build** 为可选快捷出口（关 Plan + 催实现，不挡回合）。`exit_plan_mode` 仍可用（兼容次路径）。旧 id **`plan`** 仅作 Host 兼容别名 → harness。
 
 子代理**同时存活数**与**委派深度**的运行时上限在 **设置 → 插件 → Agent loop**（`agent-loop.maxActiveSubagents` / `maxSubagentDepth`，默认 **2/2**，深度上限 3）。徽章可再收紧（如 Shallow `maxDepth: 1`）；生效值为 `min(Face, 徽章天花板)`。
 
@@ -175,7 +175,7 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 | **shallow** | Shallow | Full tools; subagents **depth ≤1** (badge ceiling; concurrency from Settings; `delegation: proactive`) | Light helper tasks |
 | **harness** | **XRK Harness** | Full coding agent; subagents **nested** (Settings defaults depth/active **2**; `delegation: proactive`) | Default product surface |
 
-Plan mode is **`/plan`** / Plan chip / `exit_plan_mode` (orthogonal to badges). Legacy id **`plan`** aliases to harness.
+Plan mode is **`/plan`** / Plan chip (orthogonal to badges); deliver on a workspace **Canvas**; Overview Canvas **Build** is an optional shortcut (exit plan + steer implement; does not gate turns). `exit_plan_mode` remains available (compat). Legacy id **`plan`** aliases to harness.
 
 Runtime caps for **concurrent live children** and **delegation depth** live under **Settings → Plugins → Agent loop** (`agent-loop.maxActiveSubagents` / `maxSubagentDepth`, defaults **2/2**, depth max 3). Badges may tighten further (e.g. Shallow `maxDepth: 1`); effective = `min(Face, badge ceiling)`.
 

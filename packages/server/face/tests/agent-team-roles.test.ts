@@ -87,11 +87,13 @@ describe("rootUserAuthorizationBlock", () => {
     expect(denied).not.toContain("grep");
   });
 
-  it("denies writes but keeps web for researcher", () => {
+  it("denies writes/shell but keeps web and browser for researcher", () => {
     const denied = roleDeniedTools("researcher");
     expect(denied).toContain("apply_patch");
     expect(denied).toContain("bash");
-    // Researcher is a read+search role, so web stays.
+    // Browser/MCP follow the parent session; role floor does not hard-deny them.
+    expect(denied).not.toContain("browser_open");
+    expect(denied).not.toContain("mcp__playwright*");
     expect(denied).not.toContain("web_search");
     expect(denied).not.toContain("web_fetch");
   });

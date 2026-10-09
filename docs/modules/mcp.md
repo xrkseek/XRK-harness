@@ -35,7 +35,7 @@ MCP **client**（stdio + streamable-http）。规格门禁：[policy.md](../poli
 | `project-content.ts` | 有序块投影；公开 barrel：`mapMcpCallContent` · `McpImageAdmission`；`projectMcpContent` 等为模块内实现 | image → AttachmentStore 或 diagnostic text；禁 JSON dump base64 |
 | `oauth-device.ts` | `startDeviceAuthorization` · `pollDeviceToken` · `loginWithDeviceCode` · `refreshDeviceToken` · `McpDeviceTokenStore` · `mergeAuthHeaders` · `isTokenExpired` · `McpDeviceCodeError` | RFC 8628 表单请求；`authorization_pending` / `slow_down` 续等（interval 只增不减），`access_denied` / `expired_token` / 超 `expires_in` 立即失败；`fetch` · `now` · `sleep` · `signal` 全注入，测试不起真定时器；令牌写盘 tmp+rename 原子 + best-effort 0600；refresh 提前 60s |
 | `oauth-discovery.ts` | `discoverDeviceCodeEndpoints` · `discoverProtectedResource` · `discoverAuthorizationServerMetadata` · `parseResourceMetadataChallenge` · `McpOAuthDiscoveryError` | RFC 9728 `/.well-known/oauth-protected-resource` → `authorization_servers` → RFC 8414 / OIDC metadata；只接受 https（localhost http 例外）；无 `device_authorization_endpoint` → `no-device-authorization-endpoint`（**不**冒充别的 grant） |
-| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | 显式同名 → skip；默认 watch；gave-up 卸工具；`annotations.readOnlyHint === true` → `isConcurrencySafe` |
+| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | 显式同名 → skip；默认 watch；gave-up 卸工具；`annotations.readOnlyHint === true` → `isConcurrencySafe`；挂表时 **`exposure: deferred`**（进 LLM wire 须经 `tool_search`，见 [tool-pipeline.md](../tool-pipeline.md)） |
 
 ## 标准用法
 
@@ -138,7 +138,7 @@ MCP **client** (stdio + streamable-http). Spec gates: [policy.md](../policy.md).
 | `project-content.ts` | Ordered block projection; public barrel: `mapMcpCallContent` · `McpImageAdmission`; `projectMcpContent` etc. are module-internal | image → AttachmentStore or diagnostic text; no JSON dump of base64 |
 | `oauth-device.ts` | `startDeviceAuthorization` · `pollDeviceToken` · `loginWithDeviceCode` · `refreshDeviceToken` · `McpDeviceTokenStore` · `mergeAuthHeaders` · `isTokenExpired` · `McpDeviceCodeError` | RFC 8628 form requests; keeps waiting on `authorization_pending` / `slow_down` (interval never shrinks), fails fast on `access_denied` / `expired_token` / past `expires_in`; `fetch` · `now` · `sleep` · `signal` are injected so tests start no real timers; atomic tmp+rename token write + best-effort 0600; refresh 60s before expiry |
 | `oauth-discovery.ts` | `discoverDeviceCodeEndpoints` · `discoverProtectedResource` · `discoverAuthorizationServerMetadata` · `parseResourceMetadataChallenge` · `McpOAuthDiscoveryError` | RFC 9728 `/.well-known/oauth-protected-resource` → `authorization_servers` → RFC 8414 / OIDC metadata; https only (localhost http excepted); no `device_authorization_endpoint` → `no-device-authorization-endpoint` (**does not** pretend another grant works) |
-| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | Explicit name clash → skip; watch by default; gave-up unloads tools; `annotations.readOnlyHint === true` → `isConcurrencySafe` |
+| `register.ts` | `registerMcpTools` · `mcpToolDefinition` | Explicit name clash → skip; watch by default; gave-up unloads tools; `annotations.readOnlyHint === true` → `isConcurrencySafe`; tools register with **`exposure: deferred`** (LLM wire via `tool_search`; see [tool-pipeline.md](../tool-pipeline.md)) |
 
 ## Standard usage
 

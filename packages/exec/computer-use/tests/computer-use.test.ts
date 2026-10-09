@@ -568,17 +568,21 @@ describe("escapeSendKeys", () => {
 });
 
 describe("COMPUTER_USE_PROMPT_TEXT", () => {
-  it("splits native GUI from browser_* with Codex-style loop", () => {
-    expect(COMPUTER_USE_PROMPT_TEXT).toContain("browser_open");
+  it("stays orthogonal (page-vs-desktop routing lives in web family)", () => {
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("native");
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("list_windows");
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("coordinate");
     expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/click|type|key|scroll/);
+    expect(COMPUTER_USE_PROMPT_TEXT).not.toContain("browser_open");
   });
 
-  it("omits browser_* when those tools are not in the catalog", async () => {
+  it("never names browser_* in computer_use guidance", async () => {
     const { formatComputerUseGuidance } = await import("../src/format.js");
-    const text = formatComputerUseGuidance(["computer_use"]);
+    const text = formatComputerUseGuidance([
+      "computer_use",
+      "browser_open",
+      "browser_act",
+    ]);
     expect(text).toContain("list_windows");
     expect(text).not.toContain("browser_open");
   });

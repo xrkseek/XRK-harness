@@ -121,6 +121,32 @@ describe("FaceAgentRosterStore", () => {
     expect(names).toEqual(["Bash", "read", "grep", "glob"]);
   });
 
+  it("keeps Playwright MCP tools on researcher unless member tools deny them", () => {
+    const names = [
+      "web_fetch",
+      "web_search",
+      "mcp__playwright__browser_navigate",
+      "read_file",
+      "bash",
+    ];
+    const tools = {
+      list: () => names.map((name) => ({ name })),
+      unregister: (name: string) => {
+        const at = names.indexOf(name);
+        if (at < 0) return false;
+        names.splice(at, 1);
+        return true;
+      },
+    };
+    applyRosterToolPolicy(tools, "researcher");
+    expect(names).toEqual([
+      "web_fetch",
+      "web_search",
+      "mcp__playwright__browser_navigate",
+      "read_file",
+    ]);
+  });
+
   it("merges missing global seed ids and refreshes seed:true rows", () => {
     const dir = home();
     mkdirSync(path.join(dir, "agent-rosters"));

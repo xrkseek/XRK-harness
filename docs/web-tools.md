@@ -38,7 +38,7 @@ Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 
 
 ## Fetch
 
-始终可用（**不需要 key**）。`GET`、只跟 **同源** 跳转、超时 30s、body 约 5MB / 10 万字符。HTML 在工具侧剥成纯文本。默认 UA：`xrk-harness/0.0.4 (+https://github.com/xrkseek)`。非 2xx 仍返回页面（不是 tool error）。超时与提供方错误标 **transient**，跟 LLM 挂起共用 settle 重试次数（壳 `llm/retry` 条）。
+始终可用（**不需要 key**）。`GET`、只跟 **同源** 跳转、超时 30s、body 约 5MB / 10 万字符。HTML 在工具侧剥成纯文本。**图片 / PDF 等二进制**只回 HTTP 状态、`Content-Type` 与长度（body 不进模型），便于核实可下载直链。可选工具参数 `proxy`（如 `http://127.0.0.1:7897`）；未传时沿用进程 `HTTP_PROXY` / `HTTPS_PROXY`（Host spawn 时装 undici `EnvHttpProxyAgent`）。默认 UA：`xrk-harness/0.0.4 (+https://github.com/xrkseek)`。非 2xx 仍返回页面（不是 tool error）。超时与提供方错误标 **transient**，跟 LLM 挂起共用 settle 重试次数（壳 `llm/retry` 条）。
 
 URL 仅 `http`/`https`，拒凭据。字面量 loopback / RFC1918 / link-local 直接拒绝。**不**做 DNS 再绑定；解析到内网 IP 的公网名拦不住。
 
@@ -104,7 +104,7 @@ Search works without keys by default (Parallel free MCP, then DDG HTML). Default
 
 ## Fetch
 
-Always available (**no key required**). `GET`, follow **same-origin** redirects only, 30s timeout, body ~5MB / 100k characters. HTML is stripped to plain text in the tool. Default UA: `xrk-harness/0.0.4 (+https://github.com/xrkseek)`. Non-2xx still returns the page (not a tool error). Timeouts and provider errors are **transient** and share the LLM-hang settle retry budget (shell `llm/retry` strip).
+Always available (**no key required**). `GET`, follow **same-origin** redirects only, 30s timeout, body ~5MB / 100k characters. HTML is stripped to plain text in the tool. **Images / PDF and other binaries** return HTTP status, `Content-Type`, and size only (body is omitted from the model) so agents can verify downloadable direct links. Optional tool argument `proxy` (e.g. `http://127.0.0.1:7897`); when omitted, process `HTTP_PROXY` / `HTTPS_PROXY` apply (Host spawn installs undici `EnvHttpProxyAgent`). Default UA: `xrk-harness/0.0.4 (+https://github.com/xrkseek)`. Non-2xx still returns the page (not a tool error). Timeouts and provider errors are **transient** and share the LLM-hang settle retry budget (shell `llm/retry` strip).
 
 URLs must be `http`/`https` without credentials. Literal loopback / RFC1918 / link-local are rejected. There is **no** DNS rebinding check; public names that resolve to private IPs are not blocked.
 

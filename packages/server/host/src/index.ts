@@ -17,7 +17,9 @@ import { flattenText, isHumanUserMessageSource } from "@xrkseek/protocol";
 import {
   effectiveApprovalPolicy,
   effectiveSandboxMode,
+  pathAccessModeFromSandbox,
   shouldConfineSandbox,
+  type PathAccessMode,
 } from "@xrkseek/protocol";
 import {
   runCuratedMemoryConsolidate,
@@ -103,6 +105,7 @@ import {
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
   createCollabBoardFragmentProvider,
+  createSessionCapabilityFragmentProvider,
   canvasWorkspaceIdForSession,
   resolveSessionModelSelection,
   type FaceApprovalBroker,
@@ -330,11 +333,14 @@ export function createHostShellPrepareArgv(options: {
   readonly readSandboxSettings: () => Record<string, unknown> | undefined;
   readonly readSandboxMode: (sessionId: string | undefined) => import("@xrkseek/protocol").SandboxMode;
   /**
-   * Live extra writable roots (`permission.extraWritableRoots`) — the same
-   * allowlist the fs tools use, so `bash` / `terminal_send` may cd into a
-   * whitelisted out-of-workspace project instead of failing `cwd escapes`.
+   * Live extra writable roots (`permission.extraWritableRoots` ∪ session
+   * object-path allowlist) — the same allowlist the fs tools use, so `bash` /
+   * `terminal_send` may cd into a whitelisted out-of-workspace project instead
+   * of failing `cwd escapes`.
    */
-  readonly readExtraWritableRoots?: () => readonly string[];
+  readonly readExtraWritableRoots?: (
+    sessionId: string | undefined,
+  ) => readonly string[];
   readonly remoteExecution: boolean;
   readonly env: NodeJS.ProcessEnv;
 }): NonNullable<
@@ -345,7 +351,8 @@ export function createHostShellPrepareArgv(options: {
   return async (argv, cwd, signal, ctx) => {
     const settings = options.readSandboxSettings();
     const product = parseSandboxProduct(settings);
-    const extraRoots = options.readExtraWritableRoots?.() ?? [];
+    const extraRoots =
+      options.readExtraWritableRoots?.(ctx?.ownerSessionId) ?? [];
     const stackKey = `${JSON.stringify(product ?? null)}|${JSON.stringify(extraRoots)}`;
     if (!cachedStack || cachedStackKey !== stackKey) {
       cachedStack = createSandboxStack({
@@ -411,6 +418,17 @@ export type AgentFactory = (input: {
    * resolve under the workspace root.
    */
   extraWritableRoots?: readonly string[];
+  /**
+   * Path gate from session sandbox. `open` when danger-full-access / Auto so
+   * file tools match shell (no workspace jail).
+   */
+  pathAccessMode?: PathAccessMode;
+  /** Live session object-path allowlist (path-overreach Once / Whitelist). */
+  readSessionPathAllowlist?: () => readonly string[];
+  /** Clear ephemeral Once grants after each tool settle. */
+  clearSessionPathOnce?: () => void;
+  /** Progressive disclosure — Face toolDisclosure for this session. */
+  toolSearchState?: import("@xrkseek/core-tools").ToolSearchState;
   /** Live route image gate for `read_image`. */
   routeAllowsImage?: () => boolean;
   /**
@@ -1046,10 +1064,16 @@ export function createHostManager(): HostManager {
                   >;
                 },
                 // Same allowlist as fs tools (Settings base / Host fallback
-                // includes product home) so bash cwd may enter those roots.
-                readExtraWritableRoots: () => {
+                // includes product home) ∪ session path-overreach grants.
+                readExtraWritableRoots: (sessionId) => {
                   const roots = readPermissionExtraWritableRoots();
-                  return roots.length > 0 ? roots : [resolveXrkHome()];
+                  const base =
+                    roots.length > 0 ? roots : [resolveXrkHome()];
+                  const session =
+                    sessionId && faceBox.runtime
+                      ? faceBox.runtime.pathAllowlist.list(sessionId)
+                      : [];
+                  return session.length > 0 ? [...base, ...session] : base;
                 },
                 readSandboxMode: (sessionId) =>
                   effectiveSandboxMode(
@@ -1270,6 +1294,9 @@ export function createHostManager(): HostManager {
           permissionExtraWritableRoots.length > 0
             ? permissionExtraWritableRoots
             : [resolveXrkHome()];
+        const pathAccessMode = pathAccessModeFromSandbox(
+          effectiveSandboxMode(readSessionEvents(store, sessionId)),
+        );
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -1300,6 +1327,18 @@ export function createHostManager(): HostManager {
               // Existing fs options — product home covers spill / attachments / memories.
               hostReadableRoots: [resolveXrkHome()],
               extraWritableRoots,
+              pathAccessMode,
+              readSessionPathAllowlist: () =>
+                faceBox.runtime?.pathAllowlist.list(sessionId) ?? [],
+              clearSessionPathOnce: () => {
+                faceBox.runtime?.pathAllowlist.clearOnce(sessionId);
+              },
+              ...(faceBox.runtime
+                ? {
+                    toolSearchState:
+                      faceBox.runtime.toolDisclosure.stateFor(sessionId),
+                  }
+                : {}),
               routeAllowsImage: () =>
                 faceForModality.current
                   ? liveRouteAllowsImageInput(faceForModality.current, sessionId)
@@ -1478,6 +1517,7 @@ export function createHostManager(): HostManager {
               ...(faceBox.runtime
                 ? {
                     contextFragmentProviders: [
+                      createSessionCapabilityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
                     ],
                   }

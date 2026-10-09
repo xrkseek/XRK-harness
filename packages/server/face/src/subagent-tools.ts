@@ -2,9 +2,15 @@ import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { SUBAGENT_ROUTING_PROMPT_TEXT } from "@xrkseek/core-tools";
 import type { SessionEvent } from "@xrkseek/protocol";
 import {
+  effectiveApprovalPolicy,
+  effectiveSandboxMode,
+  pathAccessModeFromSandbox,
+} from "@xrkseek/protocol";
+import {
   listPendingAdmits,
   readSessionEvents,
 } from "@xrkseek/core-session";
+import { permissionSelectFromEvents } from "./permissions.js";
 import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
@@ -1267,6 +1273,27 @@ function createSubagentTool(
         ...(rosterMember
           ? { memberId: rosterMember.id, inject: rosterMember.inject }
           : {}),
+        ...((): {
+          permissionInherit?: string;
+          parentToolSurface?: string;
+        } => {
+          const parentEvents = readSessionEvents(
+            options.runtime.store,
+            options.parentSessionId,
+          );
+          const sandbox = effectiveSandboxMode(parentEvents);
+          const pathMode = pathAccessModeFromSandbox(sandbox);
+          const permission =
+            permissionSelectFromEvents(parentEvents).currentValue;
+          const approval = effectiveApprovalPolicy(parentEvents);
+          return {
+            permissionInherit: `${permission} (path=${pathMode}) · approval=${approval}`,
+            parentToolSurface: effectiveSessionAgentPreset(
+              options.runtime,
+              options.parentSessionId,
+            ),
+          };
+        })(),
         // The human's own asks: a child that only sees the parent's paraphrase
         // drifts from what was actually authorized (Codex
         // `control/user_authorization.rs`). A forked child already carries

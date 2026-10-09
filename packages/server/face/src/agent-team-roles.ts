@@ -65,8 +65,10 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
   researcher: {
     id: "researcher",
     reminder:
-      "ROLE: researcher. Gather facts with read/search tools. Prefer citations (paths · symbols · quotes). Do not make durable edits unless the task explicitly requires them.",
+      "ROLE: researcher. Gather facts with read/search/web tools. Prefer citations (paths · symbols · quotes · URLs). Do not make durable edits unless the task explicitly requires them. " +
+      "If a required tool is missing or returns a hard capability error, report that blocker with evidence in your FINAL message to the parent.",
     // Read-only by construction: no edits, no shell, no delegation.
+    // Browser/MCP stay available when the parent session has them (user may deny via member tools).
     deniedTools: [
       "apply_edit",
       "apply_patch",
@@ -108,6 +110,14 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
       "terminal_signal",
       "web_search",
       "web_fetch",
+      "browser_open",
+      "browser_act",
+      "browser_snapshot",
+      "browser_vision",
+      "browser_scroll",
+      "browser_vault_list",
+      "browser_vault_fill",
+      "mcp__playwright*",
       "subagent",
       "ralph",
       "team_graph",
@@ -166,6 +176,29 @@ export interface SubagentSpawnPreambleInput {
   readonly memberId?: string;
   /** Inject thickness from the 干员 record. */
   readonly inject?: "subagent" | "minimal";
+  /**
+   * Parent permission snapshot (sandbox / pathAccessMode / approval).
+   * Example: `workspace-write (path=allowlisted) · approval=ask`
+   */
+  readonly permissionInherit?: string;
+  /** Parent tool-surface badge id (child tools are weakened from this). */
+  readonly parentToolSurface?: string;
+}
+
+/** Short caps hint for spawn preamble (deny-floor roles). */
+export function roleCapsHint(role: AgentTeamSpawnRole | undefined): string {
+  switch (role) {
+    case "researcher":
+      return "web,read-fs";
+    case "reviewer":
+      return "read-fs";
+    case "worker":
+      return "edit,shell,read-fs";
+    case "lead":
+      return "orchestrate";
+    default:
+      return "parent-tools";
+  }
 }
 
 /**
@@ -201,13 +234,24 @@ export function applySubagentSpawnPreamble(
           `- inject: ${input.inject === "subagent" ? "subagent" : "minimal"}`,
         ]
       : []),
+    ...(input.permissionInherit
+      ? [
+          `- permission: inherited from parent · ${input.permissionInherit}`,
+        ]
+      : []),
+    ...(input.parentToolSurface
+      ? [
+          `- tool_surface: weakened from parent · badge=${input.parentToolSurface} · role=${role} · caps=${roleCapsHint(input.role)}`,
+        ]
+      : []),
     `- inherit_context: ${inheritLine}`,
     `- workspace_cwd: ${input.cwd}`,
     `- workspace: ${workspaceLine}`,
     "Delivery: your FINAL assistant message is the result handed back to the parent as a tool result — it is the only thing the parent sees from you.",
     "The parent cannot see your hidden reasoning, intermediate tool output, or this conversation. Anything the parent needs must be in your final message.",
     "Write that message as a standalone deliverable: lead with the answer or the findings, then the evidence (paths · symbols · quotes · commands). Do not ask the user questions and do not end with 'let me know if you need more'.",
-    "Do not treat repository AGENTS.md / .agents/AGENTS.md as your persona or as proof of who you are, and do not defer small tasks back to the parent — you were spawned to do this work, not to plan it.",
+    "Do not treat repository AGENTS.md / .agents/AGENTS.md as your persona or as proof of who you are. Finish in-scope work yourself; do not bounce ordinary steps back to the parent.",
+    "Hard tool/capability failures (missing tool, unsupported content, denied shell, network/proxy errors you cannot clear) MUST appear in that FINAL message so the parent can act — never hide them.",
     "Never spawn your own subagents unless the task explicitly requires it.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);

@@ -40,8 +40,8 @@ export function formatCollabBoardText(input: {
   const canSpawn = input.canSpawn !== false;
   const lines = [
     canSpawn
-      ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits. Standing skills are for that member after spawn. Playbooks stay on the member."
-      : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here). Members:",
+      ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits (see session_capability for permission × tool_surface). Standing skills are for that member after spawn. Playbooks stay on the member."
+      : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here; see session_capability). Members:",
     input.membersCatalog,
     "",
     "主线 (parent sessions, last 24h) — `thread_message` the peer's session_id; reply returns here. Do not thread_switch to send mail (that moves *this* session onto their pin). Not a subagent.",

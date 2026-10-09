@@ -42,7 +42,7 @@ export const AUTO_PRESET_SPEC: PermissionPresetSpec = {
   // DSH product name; Codex status/permission chrome says "Approve for me".
   name: "Auto review",
   description:
-    "Full sandbox access with per-call Auto Review; denials still ask the user.",
+    "Open path gate (no workspace jail) with per-call Auto Review; denials still ask the user.",
 };
 
 /**
@@ -78,21 +78,21 @@ export const FACE_PERMISSION_TABLE: Readonly<
     approval: "ask",
     name: "read-only",
     description:
-      "Read tools only. Writes, bash, and mutating terminals are denied.",
+      "Read tools only (workspace + readable allowlist). Writes, bash, and mutating terminals are denied.",
   },
   "workspace-write": {
     sandbox: "workspace-write",
     approval: "ask",
     name: "workspace-write",
     description:
-      "Write inside the workspace; shell stays confined. Wider retries need approval.",
+      "Read/write inside the workspace and object allowlist roots; shell confined. Paths outside need allowlist or overreach approval.",
   },
   "danger-full-access": {
     sandbox: "danger-full-access",
     approval: "never",
     name: "danger-full-access",
     description:
-      "No approval prompts; shell is not sandboxed. File tools still cannot leave the workspace root.",
+      "No approval prompts; shell and file tools share an open path gate (no workspace jail).",
   },
 };
 
@@ -269,6 +269,66 @@ export function pinInitialPermission(
     ts: ts + 2,
     policy: spec.approval,
   });
+}
+
+/**
+ * Copy parent path/approval knobs onto a child session so pathAccessMode matches.
+ * No-op when the child already has knobs. Auto requires a live gate.
+ */
+export function pinInheritedPermission(
+  store: SessionStore,
+  parentSessionId: string,
+  childSessionId: string,
+  options?: { readonly autoGate?: FacePermissionAutoGate },
+): void {
+  const childEvents = readSessionEvents(store, childSessionId);
+  if (hasAnyKnob(childEvents)) return;
+  const parent = foldPermissionKnobs(readSessionEvents(store, parentSessionId));
+  const ts = now();
+  if (parent.preset !== null) {
+    if (parent.preset === AUTO_PERMISSION_PRESET) {
+      if (options?.autoGate?.isLive() !== true) {
+        // Fall back to full-access knobs without Auto identity.
+        store.append(childSessionId, {
+          type: "permission/preset",
+          ts,
+          preset: "danger-full-access",
+        });
+        store.append(childSessionId, {
+          type: "sandbox/mode",
+          ts: ts + 1,
+          mode: "danger-full-access",
+        });
+        store.append(childSessionId, {
+          type: "approval/policy",
+          ts: ts + 2,
+          policy: parent.approval ?? "never",
+        });
+        return;
+      }
+      options.autoGate.admit();
+    }
+    store.append(childSessionId, {
+      type: "permission/preset",
+      ts,
+      preset: parent.preset,
+    });
+  }
+  if (parent.sandbox !== null) {
+    store.append(childSessionId, {
+      type: "sandbox/mode",
+      ts: ts + 1,
+      mode: parent.sandbox,
+    });
+  }
+  if (parent.approval !== null) {
+    store.append(childSessionId, {
+      type: "approval/policy",
+      ts: ts + 2,
+      policy: parent.approval,
+    });
+  }
+  // Parent never pinned knobs — leave child for pinInitialPermission.
 }
 
 /**

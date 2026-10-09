@@ -140,16 +140,23 @@ export function createWebTools(
     isConcurrencySafe: () => true,
   };
 
-  const fetchTool: ToolDefinition<{ url: string }> = {
+  const fetchTool: ToolDefinition<{ url: string; proxy?: string }> = {
     name: "web_fetch",
     description:
-      "Fetch one specific HTTP(S) URL and return decoded text (~30s timeout). " +
+      "Fetch one specific HTTP(S) URL (~30s timeout). Returns decoded text for HTML/JSON/text; " +
+      "for images and other binaries returns status + content-type + size only (body omitted — use this to verify downloadable media). " +
+      "Optional proxy (e.g. http://127.0.0.1:7897); otherwise process HTTP_PROXY/HTTPS_PROXY apply when Host installed the env proxy agent. " +
       "Cross-origin redirects are not followed — if the error names a Location, fetch it next. " +
-      "Use web_search when you do not yet have a URL.",
+      "Use web_search when you do not yet have a URL. Do not use browser/Playwright just to verify an image URL.",
     parameters: {
       type: "object",
       properties: {
         url: { type: "string", description: "The HTTP(S) URL to fetch." },
+        proxy: {
+          type: "string",
+          description:
+            "Optional HTTP(S) proxy URL with host and port (e.g. http://127.0.0.1:7897). Omit to use process HTTP_PROXY/HTTPS_PROXY.",
+        },
       },
       required: ["url"],
     },
@@ -164,8 +171,13 @@ export function createWebTools(
           isError: true,
         };
       }
+      const proxyRaw = args?.proxy;
+      const proxy =
+        typeof proxyRaw === "string" && proxyRaw.trim() !== ""
+          ? proxyRaw.trim()
+          : undefined;
       try {
-        const result = await fetch.fetch({ url }, signal);
+        const result = await fetch.fetch({ url, ...(proxy ? { proxy } : {}) }, signal);
         return {
           content: formatFetchOutput(result, fetchMaxOutputChars),
           meta: fetchMetaFromValue(result, fetchMaxOutputChars),

@@ -33,6 +33,8 @@ import type {
 import type { FaceApprovalBroker } from "./approvals.js";
 import type { FaceQuestionBroker } from "./questions.js";
 import type { FacePermissionAutoGate } from "./permission-auto.js";
+import type { SessionPathAllowlist } from "./path-allowlist.js";
+import type { SessionToolDisclosure } from "./tool-disclosure.js";
 import type { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import type { FaceSubagentRegistry } from "./subagent-registry.js";
 import type { ExternalAgentSessionRegistry } from "./external-agent-runtime.js";
@@ -285,6 +287,13 @@ export interface FaceRuntime {
   readonly tools?: ToolRegistry;
   /** Human approval waiters (tool policy `ask`). */
   readonly approvals: FaceApprovalBroker;
+  /**
+   * Session object-path allowlist (workspace-write overreach Whitelist / Once).
+   * Shared view with child sessions via {@link SessionPathAllowlist.inherit}.
+   */
+  readonly pathAllowlist: SessionPathAllowlist;
+  /** Session-expanded Deferred tools (`tool_search`). */
+  readonly toolDisclosure: SessionToolDisclosure;
   /** DSH user-questions (`question/requested` + `/api/respond`). */
   readonly questions: FaceQuestionBroker;
   /**

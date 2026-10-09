@@ -73,6 +73,8 @@ import {
 } from "./settings-credentials.js";
 import { hydrateFaceSettingsDocument } from "./settings-document.js";
 import { FaceApprovalBroker, approvalRequestedFrame, approvalResolvedFrame } from "./approvals.js";
+import { SessionPathAllowlist } from "./path-allowlist.js";
+import { SessionToolDisclosure } from "./tool-disclosure.js";
 import {
   FaceQuestionBroker,
   bindAskUserTool,
@@ -942,12 +944,24 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const loadSlashRecipes =
     options.loadSlashRecipes ?? defaultRecipesLoader(options.workspaceRoot);
 
+  const pathAllowlist = new SessionPathAllowlist();
+  const toolDisclosure = new SessionToolDisclosure();
   const approvals = new FaceApprovalBroker(store, {
     onRequested(item) {
       bus.publishMux(approvalRequestedFrame(item), item.rpcId);
     },
     onResolved(sessionId, approvalId, outcome) {
       bus.publishMux(approvalResolvedFrame(sessionId, approvalId, outcome));
+    },
+    onPathOverreach(sessionId, absPath, mode) {
+      if (mode === "whitelist") {
+        pathAllowlist.addPermanent(sessionId, absPath, {
+          persist: true,
+          store,
+        });
+      } else {
+        pathAllowlist.addOnce(sessionId, absPath);
+      }
     },
   });
   if (permissionRequestGate) {
@@ -1026,6 +1040,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     listProjectionCache,
     titles,
     approvals,
+    pathAllowlist,
+    toolDisclosure,
     questions,
     permissionAuto,
     rpcAdmitMap,

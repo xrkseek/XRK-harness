@@ -47,6 +47,10 @@ export function createServerAgentFactory(
     resolveImage,
     hostReadableRoots,
     extraWritableRoots,
+    pathAccessMode,
+    readSessionPathAllowlist,
+    clearSessionPathOnce,
+    toolSearchState,
     ptyService,
     shellJobs,
     browserRuntime,
@@ -121,6 +125,12 @@ export function createServerAgentFactory(
       ...(routeAllowsImage ? { routeAllowsImage } : {}),
       ...(hostReadableRoots?.length ? { hostReadableRoots } : {}),
       ...(extraWritableRoots?.length ? { extraWritableRoots } : {}),
+      ...(pathAccessMode ? { pathAccessMode } : {}),
+      ...(readSessionPathAllowlist
+        ? { readSessionPathAllowlist }
+        : {}),
+      ...(clearSessionPathOnce ? { clearSessionPathOnce } : {}),
+      ...(toolSearchState ? { toolSearchState } : {}),
       ...(shellJobs ? { shell: shellJobs } : {}),
       ...(browserRuntime ? { browserRuntime } : {}),
       ...(cronScheduler ? { cronScheduler } : {}),

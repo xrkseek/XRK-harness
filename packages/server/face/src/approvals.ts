@@ -27,9 +27,13 @@ const ARGS_SUMMARY_MAX = 480;
 
 export type ApprovalOutcomeWire =
   | "allowed-once"
+  | "whitelisted"
   | "rejected"
   | "cancelled"
   | "unavailable";
+
+/** Fail-closed window for workspace-write / read-only path overreach. */
+export const PATH_OVERREACH_TIMEOUT_MS = 5_000;
 
 export interface PendingApprovalItem {
   /** Stable server-request rpcId for product-shell `/api/respond`. */
@@ -47,9 +51,11 @@ export interface PendingApprovalItem {
   readonly displayReason?: ApprovalDisplayReason;
   readonly askedAt: number;
   readonly argsSummary?: string;
-  /** UX category: ordinary tool · network · sandbox escalation. */
+  /** UX category: ordinary tool · network · sandbox escalation · path-overreach. */
   readonly category: ApprovalCategory;
   readonly network?: NetworkApprovalContext;
+  /** Absolute object path when category is path-overreach. */
+  readonly overreachPath?: string;
 }
 
 export interface FaceApprovalHooks {
@@ -59,6 +65,27 @@ export interface FaceApprovalHooks {
     approvalId: string,
     outcome: ApprovalOutcomeWire,
   ): void;
+  /**
+   * Path-overreach Once / Whitelist — Face wires this to SessionPathAllowlist.
+   */
+  onPathOverreach?(
+    sessionId: string,
+    absPath: string,
+    mode: "once" | "whitelist",
+  ): void;
+}
+
+function extractOverreachPath(reason: string, args: unknown): string | undefined {
+  const m = /^path-overreach:\s*(?:read|write)\s+(.+)$/i.exec(reason.trim());
+  if (m?.[1]?.trim()) return m[1].trim();
+  if (args && typeof args === "object" && !Array.isArray(args)) {
+    const o = args as Record<string, unknown>;
+    for (const key of ["path", "file_path", "cwd", "target_directory"]) {
+      const v = o[key];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return undefined;
 }
 
 export type PermissionRequestGate = (args: {
@@ -75,6 +102,7 @@ type Waiter = {
   resolve: (allow: boolean) => void;
   abortListener?: () => void;
   signal?: AbortSignal;
+  timeout?: ReturnType<typeof setTimeout>;
 };
 
 function summarizeArgs(args: unknown): string | undefined {
@@ -173,6 +201,10 @@ export class FaceApprovalBroker {
       args: ctx.args,
       reason,
     });
+    const overreachPath =
+      classified.category === "path-overreach"
+        ? extractOverreachPath(reason, ctx.args)
+        : undefined;
 
     // Codex precedence: PermissionRequest hooks before the human reviewer.
     if (this.permissionGate) {
@@ -209,6 +241,7 @@ export class FaceApprovalBroker {
         ? { network: classified.network }
         : {}),
       ...(argsSummary !== undefined ? { argsSummary } : {}),
+      ...(overreachPath !== undefined ? { overreachPath } : {}),
     };
 
     this.store.append(sessionId, {
@@ -233,6 +266,7 @@ export class FaceApprovalBroker {
       const finish = (allow: boolean) => {
         if (settled) return;
         settled = true;
+        if (waiter.timeout !== undefined) clearTimeout(waiter.timeout);
         if (waiter.signal && waiter.abortListener) {
           waiter.signal.removeEventListener("abort", waiter.abortListener);
         }
@@ -248,6 +282,12 @@ export class FaceApprovalBroker {
       this.waiters.set(approvalId, waiter);
       this.byRpcId.set(rpcId, approvalId);
       this.hooks.onRequested(meta);
+
+      if (classified.category === "path-overreach") {
+        waiter.timeout = setTimeout(() => {
+          this.decide(sessionId, approvalId, "deny", "timeout", "rejected");
+        }, PATH_OVERREACH_TIMEOUT_MS);
+      }
 
       if (ctx.signal) {
         const onAbort = () => {
@@ -267,16 +307,22 @@ export class FaceApprovalBroker {
   respond(
     sessionId: string,
     approvalId: string,
-    decision: "allow" | "deny",
+    decision: "allow" | "deny" | "whitelist",
   ):
     | { readonly ok: true }
     | { readonly ok: false; readonly code: string; readonly message: string } {
+    const outcome: ApprovalOutcomeWire =
+      decision === "allow"
+        ? "allowed-once"
+        : decision === "whitelist"
+          ? "whitelisted"
+          : "rejected";
     return this.decide(
       sessionId,
       approvalId,
-      decision,
+      decision === "deny" ? "deny" : "allow",
       "user",
-      decision === "allow" ? "allowed-once" : "rejected",
+      outcome,
     );
   }
 
@@ -305,14 +351,18 @@ export class FaceApprovalBroker {
       return { accepted: false, reason: "bad-response" };
     }
     const outcome = v.outcome;
-    if (outcome !== "allowed-once" && outcome !== "rejected") {
+    if (
+      outcome !== "allowed-once" &&
+      outcome !== "whitelisted" &&
+      outcome !== "rejected"
+    ) {
       return { accepted: false, reason: "bad-response" };
     }
 
     const decided = this.decide(
       waiter.sessionId,
       approvalId,
-      outcome === "allowed-once" ? "allow" : "deny",
+      outcome === "rejected" ? "deny" : "allow",
       "user",
       outcome,
     );
@@ -349,6 +399,21 @@ export class FaceApprovalBroker {
 
     this.waiters.delete(approvalId);
     this.byRpcId.delete(waiter.meta.rpcId);
+    if (waiter.timeout !== undefined) clearTimeout(waiter.timeout);
+
+    if (
+      decision === "allow" &&
+      waiter.meta.category === "path-overreach" &&
+      waiter.meta.overreachPath &&
+      this.hooks.onPathOverreach
+    ) {
+      this.hooks.onPathOverreach(
+        sessionId,
+        waiter.meta.overreachPath,
+        outcome === "whitelisted" ? "whitelist" : "once",
+      );
+    }
+
     this.store.append(sessionId, {
       type: "approval/decided",
       ts: Date.now(),

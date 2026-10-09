@@ -140,6 +140,13 @@ function renderBody(result: WebFetchResult, maxInputChars: number): {
   readonly text: string;
   readonly sourceTruncated: boolean;
 } {
+  if (result.body.kind === "binary") {
+    const content = result.body.content.slice(0, maxInputChars);
+    return {
+      text: content,
+      sourceTruncated: content.length !== result.body.content.length,
+    };
+  }
   const content = result.body.content.slice(0, maxInputChars);
   const sourceTruncated = content.length !== result.body.content.length;
   if (result.body.kind === "html") {
@@ -244,56 +251,91 @@ function asSet(available: ToolNameSet): ReadonlySet<string> {
 }
 
 /**
- * web_search guidance; empty when the tool is not available.
- * Mentions web_fetch only while that tool is also visible (DSH section gate).
+ * web_search-only guidance (orthogonal — no fetch/browser routing).
+ * Cross-tool priority lives in {@link formatWebFamilyGuidance}.
  */
 export function formatWebSearchGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("web_search")) return "";
-  if (names.has("web_fetch")) {
-    return "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Follow up with web_fetch when you need the full content of a specific result, and cite the relevant URLs as markdown links.";
-  }
-  return "Use the web_search tool to discover current information on the web. It returns an optional answer plus a list of source URLs. Use the returned source snippets when available, and cite the relevant URLs as markdown links.";
+  return (
+    "web_search: discover current web facts. Returns an optional answer plus source URLs/snippets. " +
+    "Cite used URLs as markdown links."
+  );
 }
 
 /**
- * web_fetch guidance; empty when the tool is not available.
- * Mentions web_search only while that tool is also visible.
+ * web_fetch-only guidance (orthogonal — binary/proxy/redirect are this tool's contracts).
+ * Cross-tool priority lives in {@link formatWebFamilyGuidance}.
  */
 export function formatWebFetchGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("web_fetch")) return "";
-  const searchHint = names.has("web_search")
-    ? " (for example a result from web_search)"
-    : "";
-  return `Use the web_fetch tool to retrieve one specific HTTP(S) URL as decoded text (~30s timeout). Prefer concrete page URLs over homepages${searchHint}. Cross-origin redirects are not followed — if the error names a Location URL, call web_fetch on that URL next. Cite the URL as a markdown link when you use its content.`;
+  return (
+    "web_fetch: one HTTP(S) URL (~30s). Text/HTML/JSON → decoded text; images/other binaries → status, content-type, size only (no body). " +
+    "Optional proxy (e.g. http://127.0.0.1:7897); else process HTTP_PROXY/HTTPS_PROXY when installed. " +
+    "Prefer concrete page URLs. Cross-origin redirects are not followed — if the error names a Location URL, fetch that URL next. " +
+    "Cite the URL as a markdown link when you use its content."
+  );
 }
 
 /**
- * browser_* guidance; empty when browser_open is not available.
+ * browser_*-only guidance (orthogonal — no web_* / computer_use routing).
+ * Cross-tool priority lives in {@link formatWebFamilyGuidance}.
  */
 export function formatBrowserGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("browser_open")) return "";
   return (
-    "Use browser_open / browser_snapshot / browser_act for interactive web page sessions " +
+    "browser_open / browser_snapshot / browser_act: interactive page sessions " +
     "(element refs like @e1; browser_act also supports scroll/press/back — scroll/press need CDP). " +
-    "Use browser_vision for a screenshot the vision model can see. " +
-    "Prefer web_fetch or web_search for one-shot reads. " +
-    "The default session is an HTTP snapshot. Settings → Plugins → Browser (or XRK_BROWSER_CDP_URL) selects Chrome DevTools. " +
-    "Do not drive the user's GUI browser with computer_use when browser_* can do the job; " +
-    "reserve computer_use for native desktop apps outside the page session."
+    "browser_vision: screenshot for the vision model. " +
+    "Default session is an HTTP snapshot; Settings → Plugins → Browser (or XRK_BROWSER_CDP_URL) selects Chrome DevTools."
   );
 }
 
-/** Full-surface defaults (both web tools present). */
+/**
+ * Single cross-tool web routing block (register once). Empty when no web tools.
+ * Sibling tool:* sections must not repeat this priority.
+ */
+export function formatWebFamilyGuidance(available: ToolNameSet): string {
+  const names = asSet(available);
+  const hasSearch = names.has("web_search");
+  const hasFetch = names.has("web_fetch");
+  const hasBrowser = names.has("browser_open");
+  const hasComputer = names.has("computer_use");
+  if (!hasSearch && !hasFetch && !hasBrowser) return "";
+
+  const steps: string[] = [];
+  if (hasSearch) steps.push("web_search to discover");
+  if (hasFetch) steps.push("web_fetch for one-shot URL/body (incl. image URL verify via metadata)");
+  if (hasBrowser) steps.push("browser_* for interactive sessions");
+  const lines = [
+    `Web family: ${steps.join(" → ")}.`,
+  ];
+  if (hasBrowser && hasComputer) {
+    lines.push(
+      "Pages → browser_*; native desktop apps outside the page session → computer_use.",
+    );
+  }
+  return lines.join(" ");
+}
+
+/** Full-surface defaults. */
 export const WEB_SEARCH_GUIDANCE = formatWebSearchGuidance([
   "web_search",
   "web_fetch",
 ]);
 
-/** Full-surface defaults (both web tools present). */
+/** Full-surface defaults. */
 export const WEB_FETCH_GUIDANCE = formatWebFetchGuidance([
   "web_search",
   "web_fetch",
+]);
+
+/** Full-surface web-family routing. */
+export const WEB_FAMILY_GUIDANCE = formatWebFamilyGuidance([
+  "web_search",
+  "web_fetch",
+  "browser_open",
+  "computer_use",
 ]);

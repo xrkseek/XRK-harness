@@ -164,6 +164,10 @@ export {
   formatCollabBoardText,
 } from "./collab-board.js";
 export {
+  createSessionCapabilityFragmentProvider,
+  formatSessionCapability,
+} from "./session-capability.js";
+export {
   bindAgentRosterTools,
   type BindAgentRosterToolsOptions,
 } from "./agent-roster-tools.js";
@@ -232,6 +236,7 @@ export {
   formatPermissionStatusLabel,
   permissionSelectFromEvents,
   pinInitialPermission,
+  pinInheritedPermission,
   migrateAutoSessionsToFullAccess,
   resolvePermissionPresetSpec,
   type PermissionPresetSpec,
@@ -386,6 +391,7 @@ export {
   AGENT_TEAM_SPAWN_ROLES,
   applySpawnRoleReminder,
   applySubagentSpawnPreamble,
+  roleCapsHint,
   isAgentTeamSpawnRole,
   listSpawnRoleIds,
   parseAgentTeamSpawnRole,
@@ -560,6 +566,7 @@ export {
 } from "./session-agent-preset-store.js";
 export {
   FaceApprovalBroker,
+  PATH_OVERREACH_TIMEOUT_MS,
   approvalRequestedFrame,
   approvalResolvedFrame,
   type ApprovalOutcomeWire,
@@ -567,6 +574,8 @@ export {
   type PendingApprovalItem,
   type PermissionRequestGate,
 } from "./approvals.js";
+export { SessionPathAllowlist } from "./path-allowlist.js";
+export { SessionToolDisclosure } from "./tool-disclosure.js";
 export {
   approvePendingAutoReview,
   isAutoReviewPendingApproval,

@@ -3,7 +3,11 @@
  * Heuristic only — never a security boundary by itself.
  */
 
-export type ApprovalCategory = "tool" | "network" | "escalation";
+export type ApprovalCategory =
+  | "tool"
+  | "network"
+  | "escalation"
+  | "path-overreach";
 
 export type NetworkApprovalProtocol = "http" | "https" | "ws" | "wss" | "other";
 
@@ -97,6 +101,10 @@ export function classifyApproval(input: {
   const name = input.toolName.trim();
   const reason = input.reason ?? "";
   const network = extractNetworkContext(input.args);
+
+  if (/^path-overreach:/i.test(reason) || name === "path.overreach") {
+    return { category: "path-overreach" };
+  }
 
   if (
     name === "mcp.connect" ||

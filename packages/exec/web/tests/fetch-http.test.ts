@@ -10,10 +10,13 @@ function jsonHeaders(extra: Record<string, string> = {}): Headers {
 }
 
 describe("classifyContentType", () => {
-  it("maps html / text / json and rejects binary", () => {
+  it("maps html / text / json / images and rejects unknown binaries", () => {
     expect(classifyContentType("text/html; charset=utf-8")).toBe("html");
     expect(classifyContentType("application/json")).toBe("text");
-    expect(classifyContentType("image/png")).toBeUndefined();
+    expect(classifyContentType("image/png")).toBe("binary");
+    expect(classifyContentType("image/jpeg")).toBe("binary");
+    expect(classifyContentType("application/pdf")).toBe("binary");
+    expect(classifyContentType("application/wasm")).toBeUndefined();
     expect(classifyContentType(null)).toBeUndefined();
   });
 });
@@ -64,16 +67,37 @@ describe("createHttpFetchProvider", () => {
     ).rejects.toBeInstanceOf(WebError);
   });
 
+  it("returns binary metadata for images without decoding the body", async () => {
+    const provider = createHttpFetchProvider({
+      fetch: async () =>
+        new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": "790919",
+          },
+        }),
+    });
+    const out = await provider.fetch({ url: "https://example.com/a.jpeg" });
+    expect(out.statusCode).toBe(200);
+    expect(out.body.kind).toBe("binary");
+    if (out.body.kind !== "binary") throw new Error("expected binary");
+    expect(out.body.contentType).toBe("image/jpeg");
+    expect(out.body.byteLength).toBe(790919);
+    expect(out.body.content).toContain("body omitted");
+    expect(out.body.content).toContain("790919");
+  });
+
   it("rejects unsupported content types", async () => {
     const provider = createHttpFetchProvider({
       fetch: async () =>
         new Response(new Uint8Array([1, 2, 3]), {
           status: 200,
-          headers: { "content-type": "image/png" },
+          headers: { "content-type": "application/wasm" },
         }),
     });
     await expect(
-      provider.fetch({ url: "https://example.com/a.png" }),
+      provider.fetch({ url: "https://example.com/a.wasm" }),
     ).rejects.toMatchObject({ code: "WEB_UNSUPPORTED_CONTENT_TYPE" });
   });
 

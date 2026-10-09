@@ -33,6 +33,15 @@ describe("classifyApproval", () => {
     ).toBe("tool");
   });
 
+  it("tags path-overreach: reason as path-overreach", () => {
+    expect(
+      classifyApproval({
+        toolName: "write_file",
+        reason: "path-overreach: write /tmp/out.txt",
+      }).category,
+    ).toBe("path-overreach");
+  });
+
   it("extractNetworkContext parses bare hosts", () => {
     expect(extractNetworkContext({ host: "api.github.com" })).toEqual({
       host: "api.github.com",

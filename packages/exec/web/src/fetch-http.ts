@@ -31,9 +31,12 @@ export const DEFAULT_HTTP_FETCH_LIMITS: HttpFetchLimits = {
 
 export const LOCAL_FETCH_PROVIDER_ID = "http";
 
-export type FetchableKind = "html" | "text";
+export type FetchableKind = "html" | "text" | "binary";
 
-/** `text/html` + xhtml → html; other text/* / json / xml → text; else unsupported. */
+/** Max bytes to probe when Content-Length is missing on a binary response. */
+const BINARY_PROBE_BYTES = 65_536;
+
+/** `text/html` + xhtml → html; other text/* / json / xml → text; common binaries → binary. */
 export function classifyContentType(
   contentType: string | null,
 ): FetchableKind | undefined {
@@ -48,7 +51,39 @@ export function classifyContentType(
   ) {
     return "text";
   }
+  if (
+    mime.startsWith("image/") ||
+    mime.startsWith("audio/") ||
+    mime.startsWith("video/") ||
+    mime === "application/pdf" ||
+    mime === "application/octet-stream" ||
+    mime === "application/zip" ||
+    mime === "application/gzip" ||
+    mime === "application/x-gzip"
+  ) {
+    return "binary";
+  }
   return undefined;
+}
+
+function formatBinaryBody(
+  contentType: string,
+  byteLength: number | null,
+  probedAtLeast: boolean,
+): WebFetchBody {
+  const mime = contentType.replace(/;.*$/s, "").trim() || "application/octet-stream";
+  const sizeLine =
+    byteLength === null
+      ? "length unknown"
+      : probedAtLeast
+        ? `≥${byteLength} bytes probed`
+        : `${byteLength} bytes`;
+  return {
+    kind: "binary",
+    contentType: mime,
+    byteLength,
+    content: `[binary ${mime}; ${sizeLine}; body omitted — downloadable]`,
+  };
 }
 
 function charsetOf(contentType: string | null): string {
@@ -126,7 +161,7 @@ function concat(chunks: readonly Uint8Array[], total: number): Uint8Array {
 function decodeBody(
   bytes: Uint8Array,
   contentType: string | null,
-  kind: FetchableKind,
+  kind: "html" | "text",
   maxChars: number,
   byteTruncated: boolean,
 ): { readonly body: WebFetchBody; readonly truncated: boolean } {
@@ -138,6 +173,46 @@ function decodeBody(
     body: { kind, content: capped.text },
     truncated: byteTruncated || capped.truncated,
   };
+}
+
+async function resolveFetchFn(
+  base: FetchFn,
+  proxy: string | undefined,
+): Promise<{ readonly fetch: FetchFn; readonly close?: () => void }> {
+  const trimmed = proxy?.trim() ?? "";
+  if (!trimmed) return { fetch: base };
+  let proxyUrl: URL;
+  try {
+    proxyUrl = new URL(trimmed);
+  } catch {
+    throw new WebError("proxy is not a valid URL", "WEB_INVALID_URL");
+  }
+  if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
+    throw new WebError(
+      "proxy must be an http(s) URL (include host and port, e.g. http://127.0.0.1:7897)",
+      "WEB_INVALID_URL",
+    );
+  }
+  try {
+    const undici = await import("undici");
+    const agent = new undici.ProxyAgent(proxyUrl.href);
+    const fetchFn: FetchFn = (input, init) =>
+      undici.fetch(input, {
+        ...init,
+        dispatcher: agent,
+      }) as Promise<Response>;
+    return {
+      fetch: fetchFn,
+      close: () => {
+        void agent.close().catch(() => undefined);
+      },
+    };
+  } catch (err) {
+    throw new WebError(
+      `proxy fetch unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      "WEB_PROVIDER_ERROR",
+    );
+  }
 }
 
 export function createHttpFetchProvider(
@@ -169,95 +244,132 @@ export function createHttpFetchProvider(
       });
       const timed = AbortSignal.timeout(limits.timeoutMs);
       const combined = signal ? AbortSignal.any([signal, timed]) : timed;
+      const resolved = await resolveFetchFn(fetchFn, request.proxy);
       let hops = 0;
 
-      for (;;) {
-        let response: Response;
-        try {
-          response = await fetchFn(current, {
-            method: "GET",
-            redirect: "manual",
-            signal: combined,
-            headers: {
-              "user-agent": limits.userAgent,
-              accept:
-                "text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8",
-            },
-          });
-        } catch (err) {
-          if (timed.aborted && !signal?.aborted) {
-            throw new WebError("web fetch timed out", "WEB_FETCH_TIMEOUT");
-          }
-          if (combined.aborted) {
-            throw new WebError("web fetch aborted", "WEB_ABORTED");
-          }
-          throw new WebError(
-            err instanceof Error ? err.message : String(err),
-            "WEB_PROVIDER_ERROR",
-          );
-        }
-
-        if (isRedirect(response.status)) {
-          await response.body?.cancel();
-          if (hops >= limits.maxRedirects) {
+      try {
+        for (;;) {
+          let response: Response;
+          try {
+            response = await resolved.fetch(current, {
+              method: "GET",
+              redirect: "manual",
+              signal: combined,
+              headers: {
+                "user-agent": limits.userAgent,
+                accept:
+                  "text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8,image/*;q=0.7,*/*;q=0.5",
+              },
+            });
+          } catch (err) {
+            if (timed.aborted && !signal?.aborted) {
+              throw new WebError("web fetch timed out", "WEB_FETCH_TIMEOUT");
+            }
+            if (combined.aborted) {
+              throw new WebError("web fetch aborted", "WEB_ABORTED");
+            }
             throw new WebError(
-              `exceeded the maximum of ${limits.maxRedirects} redirects`,
-              "WEB_REDIRECT_BLOCKED",
-            );
-          }
-          const location = response.headers.get("location");
-          if (!location) {
-            throw new WebError(
-              `redirect response (HTTP ${response.status}) without a Location header`,
+              err instanceof Error ? err.message : String(err),
               "WEB_PROVIDER_ERROR",
             );
           }
-          let next: URL;
-          try {
-            next = new URL(location, current);
-          } catch {
-            throw new WebError(
-              "redirect Location is not a valid URL",
-              "WEB_INVALID_URL",
-            );
-          }
-          const validated = assertHttpUrl(next.href, limits.maxUrlLength, {
-            allowlist,
-          });
-          if (!isSameOrigin(current, validated)) {
-            throw new WebError(
-              `cross-origin redirect is not followed; call web_fetch on Location: ${validated.href}`,
-              "WEB_REDIRECT_BLOCKED",
-            );
-          }
-          current = validated;
-          hops += 1;
-          continue;
-        }
 
-        const kind = classifyContentType(response.headers.get("content-type"));
-        if (kind === undefined) {
-          await response.body?.cancel();
-          throw new WebError(
-            `unsupported content type "${response.headers.get("content-type") ?? "unknown"}"`,
-            "WEB_UNSUPPORTED_CONTENT_TYPE",
+          if (isRedirect(response.status)) {
+            await response.body?.cancel();
+            if (hops >= limits.maxRedirects) {
+              throw new WebError(
+                `exceeded the maximum of ${limits.maxRedirects} redirects`,
+                "WEB_REDIRECT_BLOCKED",
+              );
+            }
+            const location = response.headers.get("location");
+            if (!location) {
+              throw new WebError(
+                `redirect response (HTTP ${response.status}) without a Location header`,
+                "WEB_PROVIDER_ERROR",
+              );
+            }
+            let next: URL;
+            try {
+              next = new URL(location, current);
+            } catch {
+              throw new WebError(
+                "redirect Location is not a valid URL",
+                "WEB_INVALID_URL",
+              );
+            }
+            const validated = assertHttpUrl(next.href, limits.maxUrlLength, {
+              allowlist,
+            });
+            if (!isSameOrigin(current, validated)) {
+              throw new WebError(
+                `cross-origin redirect is not followed; call web_fetch on Location: ${validated.href}`,
+                "WEB_REDIRECT_BLOCKED",
+              );
+            }
+            current = validated;
+            hops += 1;
+            continue;
+          }
+
+          const contentType = response.headers.get("content-type");
+          const kind = classifyContentType(contentType);
+          if (kind === undefined) {
+            await response.body?.cancel();
+            throw new WebError(
+              `unsupported content type "${contentType ?? "unknown"}"`,
+              "WEB_UNSUPPORTED_CONTENT_TYPE",
+            );
+          }
+
+          if (kind === "binary") {
+            const mime =
+              (contentType ?? "application/octet-stream")
+                .replace(/;.*$/s, "")
+                .trim() || "application/octet-stream";
+            const declared = response.headers.get("content-length");
+            if (declared !== null) {
+              const length = Number(declared);
+              if (Number.isFinite(length) && length >= 0) {
+                await response.body?.cancel();
+                return {
+                  url: current.href,
+                  statusCode: response.status,
+                  truncated: false,
+                  body: formatBinaryBody(mime, length, false),
+                };
+              }
+            }
+            const read = await readLimited(response, BINARY_PROBE_BYTES);
+            return {
+              url: current.href,
+              statusCode: response.status,
+              truncated: false,
+              body: formatBinaryBody(
+                mime,
+                read.bytes.byteLength,
+                read.truncated,
+              ),
+            };
+          }
+
+          const read = await readLimited(response, limits.maxResponseBytes);
+          const decoded = decodeBody(
+            read.bytes,
+            contentType,
+            kind,
+            limits.maxBodyChars,
+            read.truncated,
           );
+          return {
+            url: current.href,
+            statusCode: response.status,
+            truncated: decoded.truncated,
+            body: decoded.body,
+          };
         }
-
-        const read = await readLimited(response, limits.maxResponseBytes);
-        const decoded = decodeBody(
-          read.bytes,
-          response.headers.get("content-type"),
-          kind,
-          limits.maxBodyChars,
-          read.truncated,
-        );
-        return {
-          url: current.href,
-          statusCode: response.status,
-          truncated: decoded.truncated,
-          body: decoded.body,
-        };
+      } finally {
+        resolved.close?.();
       }
     },
   };

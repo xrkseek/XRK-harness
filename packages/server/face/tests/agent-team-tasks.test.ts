@@ -47,6 +47,8 @@ describe("agent team spawn roles", () => {
     expect(oneShot).toContain("same as the parent session");
     expect(oneShot).toContain("Review src/foo.ts");
     expect(oneShot).not.toMatch(/read AGENTS\.md to discover/i);
+    expect(oneShot).toContain("Hard tool/capability failures");
+    expect(oneShot).not.toContain("Playwright MCP");
 
     const companion = applySubagentSpawnPreamble({
       prompt: "You are chat companion Xiao Ai.",

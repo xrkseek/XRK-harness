@@ -12,10 +12,16 @@ import {
   createBareFaceRuntime,
 } from "./helpers/bare-runtime.js";
 import {
+  FACE_PERMISSION_TABLE,
   migrateAutoSessionsToFullAccess,
+  pinInheritedPermission,
   pinInitialPermission,
 } from "../src/permissions.js";
 import { createFacePermissionAutoGate } from "../src/permission-auto.js";
+import {
+  foldPermissionKnobs,
+  pathAccessModeFromSandbox,
+} from "@xrkseek/protocol";
 
 function bareRuntime(store = createMemorySessionStore()) {
   return createBareFaceRuntime({
@@ -25,6 +31,27 @@ function bareRuntime(store = createMemorySessionStore()) {
 }
 
 describe("Face permission presets", () => {
+  it("maps danger-full-access to open pathAccessMode", () => {
+    expect(pathAccessModeFromSandbox("danger-full-access")).toBe("open");
+    expect(pathAccessModeFromSandbox("workspace-write")).toBe("allowlisted");
+    expect(pathAccessModeFromSandbox("read-only")).toBe("allowlisted");
+    expect(FACE_PERMISSION_TABLE["danger-full-access"].description).toMatch(
+      /open path gate/i,
+    );
+  });
+
+  it("pinInheritedPermission copies parent knobs onto a child", () => {
+    const store = createMemorySessionStore();
+    const parent = store.create().id;
+    const child = store.create().id;
+    pinInitialPermission(store, parent, "danger-full-access");
+    pinInheritedPermission(store, parent, child);
+    const knobs = foldPermissionKnobs(store.get(child).events);
+    expect(knobs.preset).toBe("danger-full-access");
+    expect(knobs.sandbox).toBe("danger-full-access");
+    expect(pathAccessModeFromSandbox(knobs.sandbox)).toBe("open");
+  });
+
   it("pins workspace-write on session.create and projects permissions", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});

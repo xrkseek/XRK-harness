@@ -89,8 +89,8 @@ export type MuxFrame =
         readonly en: string;
         readonly [locale: string]: string;
       };
-      /** tool · network · escalation (Codex-style UX split). */
-      readonly category?: "tool" | "network" | "escalation";
+      /** tool · network · escalation · path-overreach (Codex-style UX split). */
+      readonly category?: "tool" | "network" | "escalation" | "path-overreach";
       readonly networkHost?: string;
       readonly networkProtocol?: string;
     }
@@ -98,7 +98,12 @@ export type MuxFrame =
       readonly type: "approval/resolved";
       readonly sessionId: string;
       readonly approvalId: string;
-      readonly outcome: "allowed-once" | "rejected" | "cancelled" | "unavailable";
+      readonly outcome:
+        | "allowed-once"
+        | "whitelisted"
+        | "rejected"
+        | "cancelled"
+        | "unavailable";
     }
   /** Face `question/requested` — answerable server-request (rpcId on envelope). */
   | {

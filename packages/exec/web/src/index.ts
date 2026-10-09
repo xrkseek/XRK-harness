@@ -90,6 +90,8 @@ export {
   formatWebFetchGuidance,
   formatWebSearchGuidance,
   formatBrowserGuidance,
+  formatWebFamilyGuidance,
+  WEB_FAMILY_GUIDANCE,
   presentFetchCall,
   presentFetchResult,
   presentSearchCall,

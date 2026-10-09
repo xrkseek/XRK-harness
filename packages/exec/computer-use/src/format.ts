@@ -141,39 +141,22 @@ export function buildCaptureResult(options: {
 }
 
 /**
- * System prompt for `computer_use`; empty when the tool is not in the catalog.
- * Mentions browser_* only while those tools are also available.
+ * System prompt for `computer_use` only (orthogonal).
+ * Page-vs-desktop routing lives in web `formatWebFamilyGuidance` when both exist.
  */
 export function formatComputerUseGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("computer_use")) return "";
-  const lines = [
+  return [
     "Desktop GUI (native apps):",
     "- Loop: `list_windows` → `capture` → `click`/`type`/`key`/`scroll` by element index → `capture` to verify.",
     "- `capture mode=ax` = accessibility tree; `vision`/`som` adds an inline screenshot (`attachmentId=sha256:…`, not a path).",
     "- Prefer element indices from the last capture. Optional `coordinate=[x,y]` for pixel click when vision is active.",
-  ];
-  if (
-    names.has("browser_open") ||
-    names.has("browser_snapshot") ||
-    names.has("browser_act") ||
-    names.has("browser_vision")
-  ) {
-    lines.push(
-      "- Web pages: `browser_open` / `browser_snapshot` / `browser_act` / `browser_vision` — not `computer_use`.",
-    );
-  }
-  lines.push(
     "- Enable: Settings → Plugins → Computer use, or `XRK_COMPUTER_USE=1` (Windows UIA).",
-  );
-  return lines.join("\n");
+  ].join("\n");
 }
 
-/** Full-surface default (computer_use + browser_* present). */
+/** Full-surface default. */
 export const COMPUTER_USE_PROMPT_TEXT = formatComputerUseGuidance([
   "computer_use",
-  "browser_open",
-  "browser_snapshot",
-  "browser_act",
-  "browser_vision",
 ]);
