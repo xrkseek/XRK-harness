@@ -128,10 +128,9 @@ SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 
 ### D. 官网
 
-- `apps/site/releases.json` 的 win-x64 `version`/`filename` 改为 N
+- `apps/site/releases.json` 的 win-x64 `version`/`filename` 改为 N（仓库源码；**push 后会自动同步到 CF**，不必本机 `wrangler deploy`）
 - Worker 演示文案里的版本号可顺手改
-- `npx wrangler deploy --config apps/site/wrangler.toml`（需 `CLOUDFLARE_API_TOKEN`）
-- 无 token 时：下载按钮仍走 origin `/releases`（AGT 已是 N 即可用）；fallback JSON 等下次能 deploy 再对齐
+- 下载按钮运行时优先拉 origin `/releases`（AGT 已是 N 即可用）；`releases.json` 仅作 fallback
 
 ### E. 桌面副本（可选）
 

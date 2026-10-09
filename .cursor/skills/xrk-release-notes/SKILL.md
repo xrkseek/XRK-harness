@@ -22,9 +22,10 @@ user-invocable: false
 
 1. 改 `apps/cli/package.json` → `version`（公开线真源）。  
 2. 写 `docs/releases/vX.Y.Z.md`；从用户可见行为归类：**新增 · 完善 · 删除 · 修复**（+ 可选「其他变更」）。  
-3. GitHub Release 正文与该文件同构。  
-4. 若能力边界变了 → 同步 [status](../../../docs/status.md) · 根 [README](../../../README.md)（「现在能用到什么程度」+ FAQ）与相关契约。  
-5. `pnpm release`（npmjs + GitHub Release）；安装示例版本号与包版本一致。
+3. 侧栏版本公告：`packages/client/ui-release-notes/src/client/release-notes.ts` 顶部追加本版（`RELEASE_NOTES` newest first）。  
+4. GitHub Release 正文与该文件同构。  
+5. 若能力边界变了 → 同步 [status](../../../docs/status.md) · 根 [README](../../../README.md)（「现在能用到什么程度」+ FAQ）与相关契约。  
+6. `pnpm release`（npmjs + GitHub Release）；安装示例版本号与包版本一致。
 
 ## 归类口诀
 

@@ -65,6 +65,42 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.19',
+    date: '2026-10-09',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Desktop Host 启动/崩溃门闩：不再卡在「正在启动 Host」；预算耗尽或 OOM 后可一点重试。',
+        en: 'Desktop Host bring-up / crash gate no longer sticks on “Starting host”; retry after budget exhaust or OOM in one click.',
+      },
+      {
+        zh: '修复重连要点两次：先等 Host rebring 再握手；检查更新一点即显示「正在检查」。',
+        en: 'Reconnect no longer needs a double tap (await Host rebring first); the update chip paints “Checking…” on the first click.',
+      },
+    ],
+  },
+  {
+    version: '0.5.18',
+    date: '2026-10-09',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '同轮多个独立子代理可真正并行；顶栏 / 概况委派图 / 侧栏预览共用运行中与终态指示。',
+        en: 'Sibling subagents in one turn actually run together; top-bar / Overview graph / sidebar preview share live and terminal status.',
+      },
+      {
+        zh: '继续压低大会话 Host 内存与输入卡顿；超长粘贴折叠更稳。',
+        en: 'Further cut Host RAM and composer jank on heavy sessions; over-long paste folding is steadier.',
+      },
+    ],
+  },
+  {
     version: '0.5.17',
     date: '2026-10-08',
     title: {

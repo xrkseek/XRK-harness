@@ -75,12 +75,13 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   `npm unpublish --force` 清。
 - 清后 `E403` = 上次 PUT 已落地（文档已有该版本），**读文档确认，别再发**。
 
-### 5. 文档中英成对，四处一起改
+### 5. 文档中英成对，四处一起改；侧栏版本公告同步
 
 - `docs/releases/README.md`：中英两半表（当前行 + 上一版行 + 承接链 + 安装速查）
 - `docs/publishing.md`：GitHub 公开页保留清单也各一份（zh 约 L79 / en 约 L164）
+- **`packages/client/ui-release-notes/src/client/release-notes.ts`**：`RELEASE_NOTES` 顶部追加本版（newest first）；测里钉死的 `latestReleaseVersion()` 一并改。漏改则侧栏铃铛公告停在旧号。
 
-改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。
+改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。侧栏公告是第五处，发版同轮必写。
 
 ### 6. 打包桌面包（release 之后，约 20 分钟）
 

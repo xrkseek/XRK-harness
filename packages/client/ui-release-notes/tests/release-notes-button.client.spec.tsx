@@ -88,7 +88,7 @@ describe('ReleaseNotesButton', () => {
     }
     for (const note of RELEASE_NOTES) {
       expect(within(dialog).getByText(note.version)).toBeTruthy()
-      expect(within(dialog).getByText(note.date)).toBeTruthy()
+      expect(within(dialog).getAllByText(note.date).length).toBeGreaterThan(0)
     }
     // Opening the dialog alone must not write the marker.
     expect(h.mutate).not.toHaveBeenCalled()
