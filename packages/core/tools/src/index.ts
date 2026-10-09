@@ -10,9 +10,27 @@ export {
   type ToolDefinition,
   type ToolDynamicSchema,
   type ToolExecuteExtras,
+  type ToolExposure,
   type ToolRegistry,
   type ToolResultContent,
 } from "./definition.js";
+export {
+  TOOL_CATALOG_MAX_BYTES,
+  TOOL_SEARCH_DEFAULT_LIMIT,
+  TOOL_SEARCH_NAME,
+  countExposures,
+  exposureOf,
+  formatDeferredCatalog,
+  listForModel,
+  scoreToolSearch,
+  searchDeferredTools,
+  toolSearchText,
+} from "./tool-exposure.js";
+export {
+  createToolSearchTool,
+  type CreateToolSearchToolOptions,
+  type ToolSearchState,
+} from "./tool-search.js";
 export {
   classifyToolExecutionMode,
   type ToolExecutionMode,

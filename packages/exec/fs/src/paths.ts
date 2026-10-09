@@ -35,13 +35,21 @@ export function resolveWithinRoot(root: string, userPath: string): string {
 }
 
 /**
+ * No path jail: absolute paths resolve as-is; relative paths join `root`.
+ * Used when permission is danger-full-access / auto (`pathAccessMode: open`).
+ */
+export function resolveOpenPath(root: string, userPath: string): string {
+  const rootAbs = path.resolve(root);
+  if (path.isAbsolute(userPath)) return path.resolve(userPath);
+  return path.resolve(rootAbs, userPath);
+}
+
+/**
  * Resolve a user path under `root`, plus `extraWritableRoots` when the caller
- * opted into a wider write surface (e.g. a "full access" preset with an
- * explicit allowlist). Relative paths always resolve under the primary root;
- * absolute paths that stay inside `root` win; otherwise they are allowed only
- * when they land inside one of the extra roots — lexically and after symlink
- * resolution (same containment posture as `resolveUnderHostRoots`, but for
- * WRITE-intent surfaces). `extraWritableRoots` empty behaves exactly like
+ * opted into a wider write surface. Relative paths always resolve under the
+ * primary root; absolute paths that stay inside `root` win; otherwise they are
+ * allowed only when they land inside one of the extra roots — lexically and
+ * after symlink resolution. `extraWritableRoots` empty behaves like
  * `resolveWithinRoot`.
  */
 export function resolveWritablePath(

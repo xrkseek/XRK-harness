@@ -770,7 +770,8 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       const category =
         categoryRaw === "tool" ||
         categoryRaw === "network" ||
-        categoryRaw === "escalation"
+        categoryRaw === "escalation" ||
+        categoryRaw === "path-overreach"
           ? categoryRaw
           : undefined;
       const networkHost = optString(value, "networkHost");
@@ -788,6 +789,13 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(networkProtocol !== undefined ? { networkProtocol } : {}),
         ...(turnId !== undefined ? { turnId } : {}),
         ...(stepId !== undefined ? { stepId } : {}),
+      };
+    }
+    case "path/allowlisted": {
+      return {
+        type,
+        ts,
+        path: reqString(value, "path", type),
       };
     }
     case "approval/decided": {

@@ -20,10 +20,12 @@ import { isDocumentExtractPath, textFromReadBuffer } from "./document-extract.js
 import { formatReadWindow } from "./read-window.js";
 import {
   PathEscapeError,
+  resolveOpenPath,
   resolveUnderHostRoots,
   resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
+import type { PathAccessMode } from "@xrkseek/protocol";
 import {
   globUnderRoot,
   grepUnderRoot,
@@ -53,10 +55,16 @@ import { createPresentTool } from "./present-deliverable.js";
 export {
   PathEscapeError,
   isLexicallyInside,
+  resolveOpenPath,
   resolveUnderHostRoots,
   resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
+export {
+  PATH_OVERREACH_REASON_PREFIX,
+  createPathOverreachPre,
+  type PathOverreachPreOptions,
+} from "./path-overreach-pre.js";
 export {
   applyLiteralEdit,
   detectLineEndings,
@@ -235,14 +243,26 @@ export interface FsLocalOptions {
    * Absolute directories whose files may be WRITTEN by absolute path, in
    * addition to `root` (Settings `permission.extraWritableRoots`). Relative
    * paths always resolve under `root`. Symlink escape denied.
+   * Ignored when `pathAccessMode` is `open` or `jailed`.
    */
   readonly extraWritableRoots?: readonly string[];
   /**
    * Absolute host directories whose files may be read by absolute path
    * (`hostReadableRoots`). Host default is product home (`{XRK_HOME}`).
    * Containment is lexical + realpath (symlink escape denied).
+   * Ignored when `pathAccessMode` is `open`.
    */
   readonly hostReadableRoots?: readonly string[];
+  /**
+   * Path gate. Default `allowlisted` (workspace + extra/host roots).
+   * `open` skips the jail (danger-full-access / Auto).
+   */
+  readonly pathAccessMode?: PathAccessMode;
+  /**
+   * Live session object-path allowlist (Once / Whitelist overreach grants).
+   * Merged into readable + writable roots on every resolve.
+   */
+  readonly readSessionPathAllowlist?: () => readonly string[];
 }
 
 function resolveReadablePath(
@@ -250,13 +270,16 @@ function resolveReadablePath(
   hostReadableRoots: readonly string[],
   writableRoots: readonly string[],
   userPath: string,
+  mode: PathAccessMode,
 ): string {
+  if (mode === "open") return resolveOpenPath(root, userPath);
   try {
     return resolveWithinRoot(root, userPath);
   } catch (error) {
     if (!(error instanceof PathEscapeError) || !path.isAbsolute(userPath)) {
       throw error;
     }
+    if (mode === "jailed") throw error;
     // A configured extra writable root is readable too — the user granted the
     // agent that directory for file work; denying the read-back would make it
     // write-only and useless. Containment is the same lexical + realpath gate.
@@ -270,9 +293,21 @@ function resolveReadablePath(
   }
 }
 
+function resolveWritePath(
+  root: string,
+  extraWritableRoots: readonly string[],
+  userPath: string,
+  mode: PathAccessMode,
+): string {
+  if (mode === "open") return resolveOpenPath(root, userPath);
+  if (mode === "jailed") return resolveWithinRoot(root, userPath);
+  return resolveWritablePath(root, extraWritableRoots, userPath);
+}
+
 /** Provider — local disk bound to workspace root. */
 export function createFsLocalProvider(options: FsLocalOptions): FsService {
   const root = path.resolve(options.root);
+  const pathAccessMode = options.pathAccessMode ?? "allowlisted";
   const extraWritableRoots = (options.extraWritableRoots ?? []).map((r) =>
     path.resolve(r),
   );
@@ -289,14 +324,33 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     for (const h of intentHandlers) h(kind, userPath);
   };
 
+  const sessionRoots = (): readonly string[] =>
+    (options.readSessionPathAllowlist?.() ?? []).map((r) => path.resolve(r));
+
+  const readPath = (userPath: string) =>
+    resolveReadablePath(
+      root,
+      hostReadableRoots,
+      [...extraWritableRoots, ...sessionRoots()],
+      userPath,
+      pathAccessMode,
+    );
+  const writePath = (userPath: string) =>
+    resolveWritePath(
+      root,
+      [...extraWritableRoots, ...sessionRoots()],
+      userPath,
+      pathAccessMode,
+    );
+
   return {
     root,
     resolvePath(userPath) {
-      return resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
+      return readPath(userPath);
     },
     async read(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
+      const abs = readPath(userPath);
       // Office/notebook extractors need the whole package; plain text reads
       // only the leading maxBytes so a multi-MB source file cannot stall Host.
       if (isDocumentExtractPath(userPath)) {
@@ -322,7 +376,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
-      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
+      const abs = readPath(userPath);
       const fh = await fsOpen(abs, "r");
       try {
         const st = await fh.stat();
@@ -341,7 +395,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async write(userPath, content) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
+      const abs = writePath(userPath);
       await mkdir(path.dirname(abs), { recursive: true });
       await writeFile(abs, content, "utf8");
     },
@@ -350,7 +404,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
         throw new EditWithoutOldError("edit requires oldContent");
       }
       emit("fs/write-intent", userPath);
-      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
+      const abs = writePath(userPath);
       const raw = await fsReadFile(abs, "utf8");
       const endings = detectLineEndings(raw);
       const currentLf = normalizeLineEndings(raw);
@@ -374,7 +428,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async remove(userPath) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
+      const abs = writePath(userPath);
       const st = await fsStat(abs);
       if (st.isDirectory()) {
         throw new Error(`cannot delete directory via apply_patch: ${userPath}`);
@@ -382,7 +436,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       await rm(abs);
     },
     async stat(userPath) {
-      const abs = resolveReadablePath(root, hostReadableRoots, extraWritableRoots, userPath);
+      const abs = readPath(userPath);
       const st = await fsStat(abs);
       return {
         size: st.size,
@@ -392,7 +446,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     },
     async mkdir(userPath) {
       emit("fs/write-intent", userPath);
-      const abs = resolveWritablePath(root, extraWritableRoots, userPath);
+      const abs = writePath(userPath);
       await mkdir(abs, { recursive: true });
     },
     async glob(pattern, options) {

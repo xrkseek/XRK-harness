@@ -387,10 +387,10 @@ export interface ApprovalAskedEvent extends SessionEventBase {
   /** Optional truncated args preview (never secrets-bearing by convention). */
   readonly argsSummary?: string;
   /**
-   * UX category (Codex-style network vs sandbox escalation vs ordinary tool).
-   * Optional for back-compat with older logs.
+   * UX category (Codex-style network vs sandbox escalation vs ordinary tool
+   * vs path-overreach). Optional for back-compat with older logs.
    */
-  readonly category?: "tool" | "network" | "escalation";
+  readonly category?: "tool" | "network" | "escalation" | "path-overreach";
   /** When category=network, optional host/protocol for the approval card. */
   readonly networkHost?: string;
   readonly networkProtocol?: string;
@@ -462,6 +462,15 @@ export interface SandboxModeEvent extends SessionEventBase {
 export interface ApprovalPolicyEvent extends SessionEventBase {
   readonly type: "approval/policy";
   readonly policy: ApprovalPolicy;
+}
+
+/**
+ * Session object path allowlist entry (workspace-write / read-only overreach
+ * "Whitelist"). Path is a normalized absolute file or directory — not a tool name.
+ */
+export interface PathAllowlistedEvent extends SessionEventBase {
+  readonly type: "path/allowlisted";
+  readonly path: string;
 }
 
 /** DSH plan-mode — log-only; Face `plan` projection. Last one wins. */
@@ -625,6 +634,7 @@ export type SessionEvent =
   | PermissionPresetEvent
   | SandboxModeEvent
   | ApprovalPolicyEvent
+  | PathAllowlistedEvent
   | PlanModeEvent
   | FeedbackRecordEvent
   | RequestHeaderEvent
@@ -659,6 +669,7 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "permission/preset",
   "sandbox/mode",
   "approval/policy",
+  "path/allowlisted",
   "plan/mode",
   "feedback/record",
   "request/header",

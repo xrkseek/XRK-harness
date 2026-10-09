@@ -644,6 +644,7 @@ describe("sessionEventJsonSchema", () => {
       "permission/preset",
       "sandbox/mode",
       "approval/policy",
+      "path/allowlisted",
       "plan/mode",
       "feedback/record",
       "request/header",

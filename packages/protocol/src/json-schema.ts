@@ -393,11 +393,22 @@ export const sessionEventJsonSchema = {
         toolName: { type: "string" },
         reason: { type: "string" },
         argsSummary: { type: "string" },
-        category: { enum: ["tool", "network", "escalation"] },
+        category: {
+          enum: ["tool", "network", "escalation", "path-overreach"],
+        },
         networkHost: { type: "string" },
         networkProtocol: { type: "string" },
         turnId: { type: "string" },
         stepId: { type: "string" },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: ["type", "ts", "path"],
+      properties: baseProps({
+        type: { const: "path/allowlisted" },
+        path: { type: "string" },
       }),
       additionalProperties: false,
     },

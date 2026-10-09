@@ -163,6 +163,12 @@ export interface RunTurnInput {
   readonly store: SessionStore;
   readonly llm: LlmAdapter;
   readonly tools: ToolRegistry;
+  /**
+   * Session-expanded Deferred tool names for progressive disclosure
+   * (`tool_search`). Omit → materialize lists only Direct (+ fail-open when
+   * `tool_search` is absent).
+   */
+  readonly expandedToolNames?: () => ReadonlySet<string>;
   readonly pipeline?: ToolPipeline;
   readonly signal?: AbortSignal;
   /**
@@ -829,7 +835,13 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         source: { kind: "user" },
       });
     }
-    const table = isLastStep ? undefined : materializeTools(input.tools);
+    const table = isLastStep
+      ? undefined
+      : materializeTools(input.tools, {
+          ...(input.expandedToolNames
+            ? { expandedToolNames: input.expandedToolNames() }
+            : {}),
+        });
 
     const buildReq = async () => {
       ensureDurableImageOffloads(

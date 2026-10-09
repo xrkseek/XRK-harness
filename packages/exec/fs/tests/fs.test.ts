@@ -57,6 +57,30 @@ describe("FsService", () => {
     ).toThrow(PathEscapeError);
   });
 
+  it("pathAccessMode open allows absolute writes outside the workspace", async () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws-open");
+    const outside = path.join(base, "outside-open", "note.txt");
+    await mkdir(path.dirname(outside), { recursive: true });
+    const fs = createFsLocalProvider({ root, pathAccessMode: "open" });
+    await fs.write(outside, "open gate");
+    expect((await fs.read(outside)).content).toBe("open gate");
+  });
+
+  it("pathAccessMode jailed ignores extraWritableRoots", async () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws-jail");
+    const extra = path.join(base, "extra-jail");
+    await mkdir(extra, { recursive: true });
+    const outside = path.join(extra, "nope.txt");
+    const fs = createFsLocalProvider({
+      root,
+      extraWritableRoots: [extra],
+      pathAccessMode: "jailed",
+    });
+    await expect(fs.write(outside, "nope")).rejects.toBeInstanceOf(PathEscapeError);
+  });
+
   it("extra writable roots are readable too (write+read on the same grant)", async () => {
     const base = path.resolve(tmpdir());
     const root = path.join(base, "xrk-ws");

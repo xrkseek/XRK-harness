@@ -31,11 +31,13 @@ export function subagentRoutingPrompt(
 ): string {
   return [
     "Subagents:",
+    "- Before spawning, read turn-start `<session_capability>`: (1) no subagent tool_surface (Minimal/Shell/Frugal) → do not spawn, Skill or self; (2) permission path gate — read-only → no write tasks; workspace-write → out-of-workspace paths need allowlist/5s confirm; open → path gate off, still pick by caps; (3) member caps must cover the task or pick another member / skip.",
     "- Use `subagent` for a self-contained task that should not consume this conversation's context.",
     "- Before spawning, make a high-level plan and identify the critical path. Do NOT delegate the task you are blocked on to a child and then wait — you are the one responsible for unblocking it.",
     "- A child task must be self-contained and must not duplicate work you are already doing. Give disjoint scopes to concurrent children so two writers never edit the same file.",
+    "- The child inherits this session's path permission (same pathAccessMode + object allowlist). Child tools ≤ this tool_surface, further weakened by role/member. Child cannot raise permission or invent parent MCP.",
     "- The child shares this session's workspace (same cwd / AGENTS inject) unless you set `worktree: true`. Do not assume it is a different project.",
-    "- The child cannot see this transcript unless `inherit_context: true` (then only completed turns; the open turn is excluded). Put paths, goals, constraints, and any persona in `prompt`. Face prepends parent/child session ids, mode, role, and cwd — never tell the child to read AGENTS.md to discover who it is.",
+    "- The child cannot see this transcript unless `inherit_context: true` (then only completed turns; the open turn is excluded). Put paths, goals, constraints, and any persona in `prompt`. Face prepends parent/child session ids, mode, role, permission inherit, and cwd — never tell the child to read AGENTS.md to discover who it is.",
     "- Pick the spawn shape:",
     "  - Foreground one-shot (default): wait for the answer. The child is read-only afterward — no human follow-ups.",
     "  - Background continuable (`run_in_background: true`): chat companion or long task. Continue with `followup_task` (new task + turn) / `send_message` (queue; delivery=steer only for a mid-turn nudge) / `wait_agent` / `interrupt_agent`.",

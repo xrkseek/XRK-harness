@@ -33,10 +33,23 @@ export interface ToolDynamicSchema {
   readonly parameters?: Record<string, unknown>;
 }
 
+/**
+ * Progressive disclosure (Codex ToolExposure subset).
+ * - `direct` — full schema every LLM turn (default)
+ * - `deferred` — search catalog only until `tool_search` expands it
+ * - `hidden` — never on the wire (internal)
+ */
+export type ToolExposure = "direct" | "deferred" | "hidden";
+
 export interface ToolDefinition<TArgs = unknown> {
   readonly name: string;
   readonly description: string;
   readonly parameters: Record<string, unknown>;
+  /**
+   * Wire disclosure. Omit → `direct`. MCP tools default to `deferred` at
+   * registration; settle still resolves from the full registry.
+   */
+  readonly exposure?: ToolExposure;
   /**
    * Hermes `dynamic_schema_overrides`: invoked by {@link materializeTools} for
    * the catalog snapshot. Soft-fail (throw / non-object) keeps static fields.

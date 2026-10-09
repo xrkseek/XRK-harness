@@ -70,6 +70,7 @@ export {
   type PermissionPresetEvent,
   type SandboxModeEvent,
   type ApprovalPolicyEvent,
+  type PathAllowlistedEvent,
   type PlanModeEvent,
   type FeedbackCategory,
   type FeedbackRecordEvent,
@@ -129,7 +130,9 @@ export {
   effectiveApprovalPolicy,
   effectiveSandboxMode,
   foldPermissionKnobs,
+  pathAccessModeFromSandbox,
   shouldConfineSandbox,
+  type PathAccessMode,
   type PermissionKnobState,
 } from "./permission-knobs.js";
 export {

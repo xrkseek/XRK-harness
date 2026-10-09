@@ -65,3 +65,19 @@ export function effectiveApprovalPolicy(
 export function shouldConfineSandbox(mode: SandboxMode | null): boolean {
   return mode !== "danger-full-access";
 }
+
+/**
+ * Path gate for fs / bash cwd (orthogonal to tool surface).
+ * - `jailed` — workspace root only (no extraWritableRoots)
+ * - `allowlisted` — workspace + Settings/session object roots
+ * - `open` — no path jail (danger-full-access / auto sandbox)
+ */
+export type PathAccessMode = "jailed" | "allowlisted" | "open";
+
+/** Map session sandbox mode → fs/shell path gate. Auto uses danger-full-access → open. */
+export function pathAccessModeFromSandbox(
+  mode: SandboxMode | null,
+): PathAccessMode {
+  if (mode === "danger-full-access") return "open";
+  return "allowlisted";
+}

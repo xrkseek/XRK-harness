@@ -86,6 +86,14 @@ export function pendingPlanTarget(
   return state.wanted;
 }
 
-/** Guidance rendered while plan mode is in force (DSH `plan:policy`). */
-export const DEFAULT_PLAN_POLICY_SECTION =
-  "You are in plan mode. Explore and design before presenting the complete plan through exit_plan_mode.";
+/**
+ * Guidance while plan mode is on (`plan:policy` / assemble). Soft posture only —
+ * Build is a user-side shortcut, not a turn gate. Prefer Canvas over exit_plan_mode.
+ */
+export const DEFAULT_PLAN_POLICY_SECTION = [
+  "<plan_turn>",
+  "Plan mode (soft): clarify and decompose; put the implementation path on a workspace Canvas;",
+  "say when the draft is ready. Prefer read/explore; avoid durable product edits while planning.",
+  "Tool surface unchanged. The user may keep chatting or press Build later — do not wait on Build to end your turn.",
+  "</plan_turn>",
+].join(" ");

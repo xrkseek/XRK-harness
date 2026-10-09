@@ -8,6 +8,7 @@ import {
 } from "./definition.js";
 import { runToolPipeline } from "./pipeline.js";
 import type { RunToolOutcome, ToolPipeline } from "./types.js";
+import { listForModel } from "./tool-exposure.js";
 
 export type ToolResolveError = "unknown" | "stale";
 
@@ -40,6 +41,12 @@ export interface MaterializeToolsOptions {
    * Guards remain the authorization boundary.
    */
   readonly omitNames?: ReadonlySet<string> | readonly string[];
+  /**
+   * Session-expanded Deferred tool names for progressive disclosure.
+   * Affects {@link ToolMaterialization.list} only — settle still resolves the
+   * full registry snapshot (including not-yet-expanded Deferred).
+   */
+  readonly expandedToolNames?: ReadonlySet<string>;
 }
 
 /**
@@ -110,10 +117,16 @@ export function materializeTools(
     return { ok: true, tool: captured };
   };
 
+  const catalog = listForModel(definitions, {
+    ...(options.expandedToolNames
+      ? { expandedNames: options.expandedToolNames }
+      : {}),
+  });
+
   return {
     definitions,
     list() {
-      return definitions;
+      return catalog;
     },
     resolve,
     async settle(input) {

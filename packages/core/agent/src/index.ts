@@ -143,6 +143,11 @@ export interface CreateAgentOptions {
   readonly store: SessionStore;
   readonly llm: LlmAdapter;
   readonly tools: ToolRegistry;
+  /**
+   * Progressive disclosure — session expanded Deferred names for `tool_search`.
+   * Forwarded to `runTurn.expandedToolNames`.
+   */
+  readonly expandedToolNames?: () => ReadonlySet<string>;
   readonly pipeline?: ToolPipeline;
   readonly system?: string;
   readonly assemble?: AssembleOptions;
@@ -355,6 +360,9 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             store: options.store,
             llm: options.llm,
             tools: options.tools,
+            ...(options.expandedToolNames
+              ? { expandedToolNames: options.expandedToolNames }
+              : {}),
             signal,
             pipeline,
             ...(options.system !== undefined ? { system: options.system } : {}),
