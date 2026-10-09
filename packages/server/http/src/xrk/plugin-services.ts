@@ -95,6 +95,8 @@ export async function fetchXrkPluginCatalog(): Promise<{
   }
   const res = await fetch(AWESOME_URL, {
     headers: { accept: "application/json" },
+    // Market mutate must not hang the Host when the catalog origin is unreachable.
+    signal: AbortSignal.timeout(8_000),
   });
   if (!res.ok) {
     throw new Error(`plugin catalog HTTP ${res.status}`);

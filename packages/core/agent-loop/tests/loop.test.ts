@@ -493,7 +493,7 @@ describe("runTurn", () => {
     const stepAt = types.lastIndexOf("step/start");
     expect(modeAt).toBeGreaterThan(-1);
     expect(stepAt).toBeGreaterThan(modeAt);
-    expect(captured.some((s) => s.includes("plan mode"))).toBe(true);
+    expect(captured.some((s) => s.includes("<plan_turn>"))).toBe(true);
   });
 
   it("respects abort signal", async () => {

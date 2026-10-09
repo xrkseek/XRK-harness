@@ -1017,11 +1017,7 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
       error: { code: "session-not-found", message: sessionId },
     };
   }
-  const out = runtime.approvals.respond(
-    sessionId,
-    approvalId,
-    decisionRaw as "allow" | "deny" | "whitelist",
-  );
+  const out = runtime.approvals.respond(sessionId, approvalId, decisionRaw);
   if (!out.ok) {
     return {
       ok: false,

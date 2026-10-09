@@ -590,9 +590,10 @@ export type AgentFactory = (input: {
    * Turn-start fragments (Agent Team catalog + last-day 主线).
    * Seed AGENTS.md / skills stay on workspace inject.
    */
-  contextFragmentProviders?: ReturnType<
-    typeof createCollabBoardFragmentProvider
-  >[];
+  contextFragmentProviders?: Array<
+    | ReturnType<typeof createCollabBoardFragmentProvider>
+    | ReturnType<typeof createSessionCapabilityFragmentProvider>
+  >;
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";

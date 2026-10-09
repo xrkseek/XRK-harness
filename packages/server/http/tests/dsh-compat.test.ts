@@ -551,7 +551,9 @@ describe("dsh-compat adapters", () => {
     }
   });
 
-  it("mutates remote dsh-market install/update/uninstall via stub CLI", async () => {
+  it(
+    "mutates remote dsh-market install/update/uninstall via stub CLI",
+    async () => {
     const stubDir = mkdtempSync(path.join(tmpdir(), "xrk-market-stub-"));
     temps.push(stubDir);
     const stubJs = path.join(stubDir, "xrkh-stub.mjs");
@@ -597,8 +599,9 @@ process.exit(0);
         const install = await fetch(`${base}/dsh-market/install`, {
           method: "POST",
           headers: { "content-type": "application/json" },
+          // Use package+version (not url) so the suite never waits on the live catalog.
           body: JSON.stringify({
-            url: "dsh-hot-example",
+            package: "dsh-hot-example",
             version: "2.0.0",
           }),
         });
@@ -654,7 +657,9 @@ process.exit(0);
       if (prevNpm === undefined) delete process.env.XRK_MARKET_MUTATE_NPM;
       else process.env.XRK_MARKET_MUTATE_NPM = prevNpm;
     }
-  });
+  },
+    15_000,
+  );
 
   it("persists mnemon documents via write RPC", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-mnemon-doc-"));

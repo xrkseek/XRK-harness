@@ -196,11 +196,14 @@ async function resolveFetchFn(
   try {
     const undici = await import("undici");
     const agent = new undici.ProxyAgent(proxyUrl.href);
+    // Dual undici / undici-types packages disagree on FormData + Dispatcher;
+    // opaque init keeps ProxyAgent attachable without RequestInit wars.
+    const proxiedFetch = undici.fetch as unknown as (
+      input: string | URL,
+      init?: unknown,
+    ) => Promise<Response>;
     const fetchFn: FetchFn = (input, init) =>
-      undici.fetch(input, {
-        ...init,
-        dispatcher: agent,
-      }) as Promise<Response>;
+      proxiedFetch(input, Object.assign({}, init ?? {}, { dispatcher: agent }));
     return {
       fetch: fetchFn,
       close: () => {
