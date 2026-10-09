@@ -189,9 +189,15 @@ function SeriesChart({
 function CanvasPlayer({
   doc,
   t,
+  planActive,
+  onBuild,
+  buildBusy,
 }: {
   doc: OverviewCanvasDocument
   t: PlanTranslate
+  planActive?: boolean
+  onBuild?: (canvasTitle: string) => void
+  buildBusy?: boolean
 }) {
   const updated = (() => {
     const ms = Date.parse(doc.updatedAt)
@@ -212,12 +218,28 @@ function CanvasPlayer({
   return (
     <article className={css.player} aria-label={doc.title} data-canvas-id={doc.id}>
       <header className={css.playerHeader}>
-        <h2 className={css.playerTitle}>{doc.title}</h2>
-        <p className={css.playerMeta}>
-          {t('preview.canvas.revision', { revision: String(doc.revision) })}
-          {' · '}
-          {updated}
-        </p>
+        <div className={css.playerHeading}>
+          <h2 className={css.playerTitle}>{doc.title}</h2>
+          <p className={css.playerMeta}>
+            {t('preview.canvas.revision', { revision: String(doc.revision) })}
+            {' · '}
+            {updated}
+          </p>
+        </div>
+        {planActive && onBuild
+          ? (
+            <button
+              type="button"
+              className={css.build}
+              title={t('preview.canvas.build.title')}
+              aria-label={t('preview.canvas.build')}
+              disabled={buildBusy}
+              onClick={() => { onBuild(doc.title) }}
+            >
+              {t('preview.canvas.build')}
+            </button>
+          )
+          : null}
       </header>
       {doc.sections.length === 0
         ? <p className={css.muted}>{t('preview.canvas.emptySections')}</p>
@@ -308,6 +330,8 @@ export function OverviewCanvasPanel({
   focusFace,
   listCanvases,
   getCanvas,
+  planActive,
+  onBuild,
   t,
 }: {
   sessionId: string
@@ -318,6 +342,12 @@ export function OverviewCanvasPanel({
     readonly items: readonly OverviewCanvasSummary[]
   }>
   getCanvas: (id: string, signal: AbortSignal) => Promise<CanvasWireDoc | null>
+  /** When plan mode is on, show Build on the current canvas player. */
+  planActive?: boolean
+  /**
+   * Exit plan + optional implement steer. Null = ok; string = English error.
+   */
+  onBuild?: (canvasTitle: string) => Promise<string | null>
   t: PlanTranslate
 }) {
   const [items, setItems] = useState<readonly OverviewCanvasSummary[]>([])
@@ -326,6 +356,8 @@ export function OverviewCanvasPanel({
   const [doc, setDoc] = useState<OverviewCanvasDocument | null | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
   const [boot, setBoot] = useState(true)
+  const [buildBusy, setBuildBusy] = useState(false)
+  const [buildError, setBuildError] = useState<string | null>(null)
   const listRef = useRef(listCanvases)
   const getRef = useRef(getCanvas)
   const chipRefs = useRef(new Map<string, HTMLButtonElement>())
@@ -539,8 +571,35 @@ export function OverviewCanvasPanel({
         {doc === null
           ? <div className={css.empty}>{t('preview.canvas.unavailable')}</div>
           : doc
-            ? <CanvasPlayer doc={doc} t={t} />
+            ? (
+              <CanvasPlayer
+                doc={doc}
+                t={t}
+                {...(planActive ? { planActive: true } : {})}
+                {...(onBuild
+                  ? {
+                      buildBusy,
+                      onBuild: (title: string) => {
+                        setBuildBusy(true)
+                        setBuildError(null)
+                        void onBuild(title).then((failure) => {
+                          setBuildBusy(false)
+                          setBuildError(failure)
+                        }, (reason: unknown) => {
+                          setBuildBusy(false)
+                          setBuildError(
+                            reason instanceof Error ? reason.message : String(reason),
+                          )
+                        })
+                      },
+                    }
+                  : {})}
+              />
+            )
             : null}
+        {buildError !== null
+          ? <p className={css.buildError} role="status" title={buildError}>{buildError}</p>
+          : null}
         {showLoading
           ? <div className={css.loadingMask} aria-busy="true">{t('preview.canvas.loading')}</div>
           : null}

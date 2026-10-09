@@ -189,6 +189,11 @@ export interface PreviewTabsInjected {
     readonly updatedAt: string
     readonly sections: readonly unknown[]
   } | null>
+  /**
+   * Canvas Build: `/plan off` + optional implement steer.
+   * Null = ok; string = English error (not localized).
+   */
+  buildFromCanvas?: (canvasTitle: string) => Promise<string | null>
 }
 
 export type PreviewTabsProps =
@@ -1677,6 +1682,7 @@ export function PreviewTabs({
   presenceCues,
   listCanvases,
   getCanvas,
+  buildFromCanvas,
   t,
   useProjection,
   useSessions,
@@ -2377,6 +2383,10 @@ export function PreviewTabs({
                       getSnapshot: getCanvasFocusSnapshot,
                       subscribe: subscribeCanvasFocus,
                     }}
+                    {...(plan != null && (plan.pending ? !plan.active : plan.active)
+                      ? { planActive: true as const }
+                      : {})}
+                    {...(buildFromCanvas ? { onBuild: buildFromCanvas } : {})}
                     t={t}
                   />
                 )

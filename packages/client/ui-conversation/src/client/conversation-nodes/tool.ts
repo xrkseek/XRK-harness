@@ -41,12 +41,46 @@ function rootCall(match: ConversationMatch): RunningToolCall {
   return {
     callId: String(match.event.data.callId),
     name: match.event.data.name,
-    argsRaw: match.event.data.arguments,
+    argsRaw: typeof match.event.data.arguments === 'string'
+      ? match.event.data.arguments
+      : jsonArguments(match.event.data.arguments),
     turn: match.event.data.turn,
     step: match.event.data.step,
     time: match.event.time,
     callView: match.view?.for === 'call' ? match.view.view : null,
     subCalls: [],
+  }
+}
+
+/** Provisional shell from the first named `tool-call-delta` (before Host `tool/call`). */
+function rootCallFromDelta(match: ConversationMatch): RunningToolCall {
+  if (match.event.type !== 'assistant/chunk') {
+    throw new Error('tool-call stream start requires assistant/chunk')
+  }
+  const chunk = match.event.data.chunk
+  if (chunk.type !== 'tool-call-delta') {
+    throw new Error('tool-call stream start requires tool-call-delta')
+  }
+  return {
+    callId: String(chunk.id),
+    name: chunk.name ?? '',
+    argsRaw: chunk.argumentsDelta ?? '',
+    turn: match.event.data.turn,
+    step: match.event.data.step,
+    time: match.event.time,
+    callView: null,
+    subCalls: [],
+  }
+}
+
+function applyToolCallDelta(root: RunningToolCall, match: ConversationMatch): RunningToolCall {
+  if (match.event.type !== 'assistant/chunk') return root
+  const chunk = match.event.data.chunk
+  if (chunk.type !== 'tool-call-delta') return root
+  return {
+    ...root,
+    name: (typeof chunk.name === 'string' && chunk.name !== '') ? chunk.name : root.name,
+    argsRaw: root.argsRaw + (chunk.argumentsDelta ?? ''),
   }
 }
 
@@ -236,7 +270,20 @@ function fallbackState(context: ConversationNodeContext<ToolState>): ToolState |
 export const toolDefinition: ConversationNodeDefinition<ToolState> = {
   kind: 'tool-call',
   target: 'chat',
+  // Delta shell then Host tool/call: second start upgrades the same Context.
+  upgradeDuplicateStart: true,
   match: (event) => {
+    if (event.type === 'assistant/chunk') {
+      const chunk = event.data.chunk
+      if (chunk.type !== 'tool-call-delta') return null
+      const id = String(chunk.id ?? '')
+      if (id === '') return null
+      // Named delta opens the shell; later args-only chunks update it.
+      if (typeof chunk.name === 'string' && chunk.name !== '') {
+        return { id, role: 'start' }
+      }
+      return { id, role: 'update' }
+    }
     if (event.type === 'tool/call') return { id: String(event.data.callId), role: 'start' }
     if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
       return { id: String(event.data.message.source.callId), role: 'update' }
@@ -249,8 +296,27 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
     }
     return null
   },
-  start: (_context, match) => ({ root: rootCall(match), children: new Map(), parents: new Map() }),
+  start: (_context, match) => {
+    if (match.event.type === 'assistant/chunk') {
+      return { root: rootCallFromDelta(match), children: new Map(), parents: new Map() }
+    }
+    return { root: rootCall(match), children: new Map(), parents: new Map() }
+  },
   update: (context, match) => {
+    if (match.event.type === 'tool/call') {
+      const previous = 'kind' in context.state.root ? undefined : context.state.root
+      const next = rootCall(match)
+      // Keep streamed args if Host arguments are still empty (rare); else prefer Host.
+      if (previous !== undefined && next.argsRaw === '' && previous.argsRaw !== '') {
+        return { ...context.state, root: { ...next, argsRaw: previous.argsRaw, name: next.name || previous.name } }
+      }
+      return { ...context.state, root: next }
+    }
+    if (match.event.type === 'assistant/chunk') {
+      const root = context.state.root
+      if ('kind' in root) return context.state
+      return { ...context.state, root: applyToolCallDelta(root, match) }
+    }
     if (match.event.type === 'tool/result') {
       const running = 'kind' in context.state.root ? undefined : context.state.root
       const result = rootResult(match, running)
@@ -258,9 +324,15 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
     }
     return updateDispatch(context.state, match)
   },
+  publication: (match) => {
+    if (match.event.type !== 'assistant/chunk') return 'immediate'
+    return match.event.data.chunk.type === 'tool-call-delta' ? 'animation-frame' : 'none'
+  },
   buildViewNode: (context) => {
     const state = context.state ?? fallbackState(context)
     if (state === undefined) return null
+    // Hide nameless provisional shells (args arrived before the name chunk).
+    if (!('kind' in state.root) && state.root.name === '') return null
     const projected = projectBlock(state.root, state, interruption(context))
     const anchor = context.start?.event.seq
       ?? ('kind' in state.root ? state.root.seq : context.matches[0]?.event.seq ?? 0)

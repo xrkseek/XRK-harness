@@ -818,8 +818,8 @@ export class PendingApproval {
     return this.wait.payload.displayReason
   }
 
-  /** UX category when the host stamped one (network · escalation · tool). */
-  get category(): 'tool' | 'network' | 'escalation' | undefined {
+  /** UX category when the host stamped one (network · escalation · tool · path-overreach). */
+  get category(): 'tool' | 'network' | 'escalation' | 'path-overreach' | undefined {
     return this.wait.payload.category
   }
 
@@ -842,9 +842,9 @@ export class PendingApproval {
    * Deliver the user's decision; a rejected carrier receipt throws. Panel
    * removal stays frame-driven: the broadcast `approval/resolved` settles the
    * wait and drops it from the pending list.
-   * @param outcome - the only two client-answerable outcomes.
+   * @param outcome - client-answerable outcomes (Whitelist only for path-overreach).
    */
-  async answer(outcome: 'allowed-once' | 'rejected'): Promise<void> {
+  async answer(outcome: 'allowed-once' | 'whitelisted' | 'rejected'): Promise<void> {
     const receipt = await this.wait.respond({
       ok: true,
       value: { sessionId: this.wait.sessionId, approvalId: this.wait.payload.approvalId, outcome },

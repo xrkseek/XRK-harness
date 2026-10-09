@@ -240,6 +240,20 @@ export function apply(ctx: ClientContext): void {
         if (!result.ok) throw new Error(result.error.message)
         return result.value.canvas
       },
+      // Build = optional shortcut: exit plan + steer implement (does not gate turns).
+      buildFromCanvas: async (canvasTitle: string) => {
+        const exit = await ctx.remote.commands.execute(sessionId, '/plan off')
+        if (!exit.ok) return `${exit.error.message} (${exit.error.code})`
+        if (exit.value === undefined) return 'unknown command: /plan off'
+        const session = ctx.sessions.binding(sessionId)?.session
+        if (session === undefined) return 'session not bound'
+        const text = `Implement from the current plan canvas: ${canvasTitle}`
+        const prompted = await session.prompt([{ type: 'text', text }], 'queue')
+        if (!prompted.ok) {
+          return `${prompted.error.message} (${prompted.error.code})`
+        }
+        return null
+      },
       // Soft face: deliverables may load after plan; resolve live on each call.
       changesReview: {
         getSnapshot: () => {

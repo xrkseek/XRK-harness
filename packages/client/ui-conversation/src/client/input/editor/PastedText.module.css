@@ -1,16 +1,115 @@
-/* Folded-paste metrics: one truncated summary line inside the composer line. */
+/* Folded-paste metrics: one resting-height row inside the composer line.
+ * Horizontal padding only — a vertical pad would grow the composer line and
+ * break the baseline the surrounding text sits on. The hit area is extended
+ * with pseudo-elements instead, so the row stays exactly one line tall. */
+
+.fold {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  max-width: min(100%, 320px);
+  padding: 0 2px 0 4px;
+  border-radius: 6px;
+  color: var(--dsw-alias-state-business-primary);
+  vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  user-select: none;
+}
+
+.fold:hover {
+  background: var(--dsw-alias-state-business-tertiary);
+}
 
 .summary {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  max-width: 240px;
-  color: var(--dsw-alias-state-business-primary);
-  user-select: none;
+  min-width: 0;
 }
 
+/* Counts never change while the row is mounted, but they are numbers in a
+ * row that reflows on every caret move — tabular keeps the label from
+ * twitching. */
 .label {
+  flex: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Icon-only ghost actions. Rest state is invisible so a fold reads as one
+ * quiet row; hover/focus reveals it. 24px inline, 44px on coarse pointers
+   (WCAG 2.5.5) — extended outward only, so two adjacent folds never
+   overlap their hit areas. */
+.action {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--ds-motion-fast) var(--ds-ease-out),
+    background-color var(--ds-motion-fast) var(--ds-ease-out);
+}
+
+.fold:hover .action,
+.action:focus-visible {
+  opacity: 1;
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* Focus must show even when the row itself is not hovered (keyboard users
+   land here without a pointer), and the outline may not change metrics. */
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.action::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
+
+@media (pointer: coarse) {
+  /* No hover to reveal with, so the actions are simply always present. */
+  .action {
+    opacity: 1;
+  }
+
+  .action::after {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action {
+    transition: none;
+  }
 }

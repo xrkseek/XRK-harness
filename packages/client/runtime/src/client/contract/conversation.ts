@@ -207,6 +207,12 @@ export interface ConversationNodeDefinition<State = unknown> {
    */
   publication?(match: ConversationMatch): ConversationPublication
   /**
+   * When true, a second `role: 'start'` for the same Context is demoted to
+   * `update` (provisional tool shells from `tool-call-delta`, then `tool/call`).
+   * Default false keeps the hard error for duplicate starts.
+   */
+  readonly upgradeDuplicateStart?: boolean
+  /**
    * Publish this Definition's read-only business value for one Location phase.
    * The Engine evaluates every Definition first for Step and then for Turn,
    * owns replacement/removal, and rejects another Context trying to publish

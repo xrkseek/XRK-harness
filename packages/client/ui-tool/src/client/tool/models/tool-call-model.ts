@@ -331,8 +331,9 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     const resolved = paths.length > 0 ? paths : callViewPaths(block)
     const displayPaths = resolved.map(path => displayPathSummary(path, cwd, home))
     const presentSummary = formatPresentSummary(displayPaths)
+    // Empty args: title + running sweep only (no callId flash on stream shells).
     const base = presentSummary
-      ?? (argsRaw === '' ? block.callId : displayPathSummary(firstLine(argsRaw), cwd, home))
+      ?? (argsRaw === '' ? '' : displayPathSummary(firstLine(argsRaw), cwd, home))
     const output = done ? (resultText(block) || null) : null
     const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
     return {
@@ -349,11 +350,13 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     }
   }
 
+  // Stream shell / empty args: keep summary blank so the shared running sweep
+  // is the only motion — no opaque callId placeholder.
   const base = argsRaw === ''
-    ? block.callId
+    ? ''
     : displayPathSummary(deriveSummary(variant, argsRaw), cwd, home)
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
-    ? `${toolName} · ${base}`
+    ? (base === '' ? toolName : `${toolName} · ${base}`)
     : base
   // The empty string is "no text" for both derived result fields: a settled
   // call with blank content has nothing to expand, and a blank first line

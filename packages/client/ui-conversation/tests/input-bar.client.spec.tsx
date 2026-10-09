@@ -1175,7 +1175,11 @@ describe('running and lock semantics', () => {
   })
 
   it('the caret layer and the glyph layer ride one scrollport', () => {
-    const { view, textarea, shell } = bench({ draft: 'line\n'.repeat(40) })
+    // A draft short enough to stay literal text. Over the fold threshold this
+    // renders a PastedText summary instead, and then the point of this test
+    // (both layers inside the one scrollport) would be untestable via
+    // textContent — the fold is specified in pasted-fold.client.spec.tsx.
+    const { view, textarea, shell } = bench({ draft: 'line\n'.repeat(3) })
     const scroll = view.container.querySelector<HTMLElement>('[data-input-scroll]')!
     const backdrop = view.container.querySelector<HTMLElement>('[data-composer-input]')!
     // Lexical collapses caret + glyphs onto one contenteditable inside the
@@ -1183,8 +1187,8 @@ describe('running and lock semantics', () => {
     // without the `\n` separators the clipboard projection keeps.
     expect(scroll.contains(textarea)).toBe(true)
     expect(scroll.contains(backdrop)).toBe(true)
-    expect(shell.snapshot.draft).toBe('line\n'.repeat(40))
-    expect(backdrop.textContent).toBe('line'.repeat(40))
+    expect(shell.snapshot.draft).toBe('line\n'.repeat(3))
+    expect(backdrop.textContent).toBe('line'.repeat(3))
   })
 
   it('Lexical composer does not invoke Safari textarea layout recovery', () => {

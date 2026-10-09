@@ -210,7 +210,13 @@ describe('built-in conversation node Definitions', () => {
       }, { surfaceOp: 'append' }),
     ])
     const toolOnlySnapshot = snapshot(toolOnlyValue)
-    expect(toolOnlySnapshot.order).toEqual([])
+    // Named tool-call-delta materializes a Tool shell (title + running sweep);
+    // the tool-only Assistant step stays hidden — no empty markdown gap.
+    expect(node(toolOnlySnapshot, 'tool-call')?.visibility).toBe('visible')
+    expect((node(toolOnlySnapshot, 'tool-call')?.data as ToolChatData).root).toMatchObject({
+      callId: 'call-1',
+      name: 'read',
+    })
     expect(node(toolOnlySnapshot, 'assistant-step')?.visibility).toBe('hidden')
     expect(toolOnlySnapshot.legacy.nodes).toMatchObject([{
       kind: 'assistant',
@@ -374,6 +380,62 @@ describe('built-in conversation node Definitions', () => {
     expect(recovered?.data).toMatchObject({
       status: 'interrupted',
       blocks: [{ kind: 'text', text: 'loaded partial' }],
+    })
+  })
+
+  it('opens a Tool shell on the first named tool-call-delta and fills args before tool/call', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'tool-call-delta', index: 0, id: 'edit-1', name: 'edit', argumentsDelta: '' },
+      }),
+    ])
+    const shell = node(snapshot(value), 'tool-call')
+    expect(shell?.visibility).toBe('visible')
+    expect((shell?.data as ToolChatData).root).toMatchObject({
+      callId: 'edit-1',
+      name: 'edit',
+      argsRaw: '',
+    })
+    expect(snapshot(value).order).toContain(shell?.key)
+    expect(snapshot(value).legacy.runningCalls).toMatchObject([
+      { callId: 'edit-1', name: 'edit' },
+    ])
+
+    value.append(at(4, 'assistant/chunk', {
+      turn: 1,
+      step: 1,
+      chunk: {
+        type: 'tool-call-delta',
+        index: 0,
+        id: 'edit-1',
+        argumentsDelta: '{"path":"a.ts","old_string":"x"',
+      },
+    }))
+    value.flush()
+    expect((node(snapshot(value), 'tool-call')?.data as ToolChatData).root).toMatchObject({
+      callId: 'edit-1',
+      name: 'edit',
+      argsRaw: '{"path":"a.ts","old_string":"x"',
+    })
+
+    value.append(at(5, 'tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'edit-1',
+      name: 'edit',
+      arguments: '{"path":"a.ts","old_string":"x","new_string":"y"}',
+    }))
+    value.flush()
+    const upgraded = node(snapshot(value), 'tool-call')
+    expect(upgraded?.key).toBe(shell?.key)
+    expect((upgraded?.data as ToolChatData).root).toMatchObject({
+      callId: 'edit-1',
+      name: 'edit',
+      argsRaw: '{"path":"a.ts","old_string":"x","new_string":"y"}',
     })
   })
 

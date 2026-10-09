@@ -145,8 +145,8 @@ describe('tool-call-model', () => {
     // flows: static "Tool call" title, the name rides the mutable summary).
     expect(toolRowModel('x', running({ argsRaw: '{"n":1}' })).summary).toBe('x · {"n":1}')
     expect(toolRowModel('x', running({ argsRaw: 'not json' })).summary).toBe('x · not json')
-    expect(toolRowModel('x', running({ argsRaw: '' })).summary).toBe('x · c1')
-    expect(toolRowModel('', running({ argsRaw: '' })).summary).toBe('c1')
+    expect(toolRowModel('x', running({ argsRaw: '' })).summary).toBe('x')
+    expect(toolRowModel('', running({ argsRaw: '' })).summary).toBe('')
   })
 
   it('exposes filePath for path/file_path args and skips URL-only reads', () => {

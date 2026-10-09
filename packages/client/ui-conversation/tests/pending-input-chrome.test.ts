@@ -123,6 +123,19 @@ describe('durableSteerPending', () => {
       'steering', { kind: 'session' }, 3, true, [3], true,
     )).toBe(true)
   })
+
+  it('does not trail a steer that opened the latest open turn (idle new-turn opener)', () => {
+    const turn2 = {
+      kind: 'turn' as const,
+      turn: { status: 'open' as const, turn: 2 },
+    } as ConversationLocation
+    expect(durableSteerPending(
+      'steering', turn2, 9, true, [9], true, 2,
+    )).toBe(false)
+    expect(durableSteerPending(
+      'user', turn2, 9, true, [9], true, 2,
+    )).toBe(false)
+  })
 })
 
 describe('isTurnOpenerRow', () => {

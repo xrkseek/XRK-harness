@@ -393,7 +393,10 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     const key = conversationContextKey(definition.kind, id)
     let context = this.contexts.get(key)
     if (role === 'start' && context?.start !== undefined) {
-      throw new Error(`conversation Context ${key} received more than one start Match`)
+      if (definition.upgradeDuplicateStart !== true) {
+        throw new Error(`conversation Context ${key} received more than one start Match`)
+      }
+      role = 'update'
     }
     if (context === undefined) {
       context = {
@@ -478,16 +481,21 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
           if (entry.definition !== context.definition || entry.id !== context.id) {
             throw new Error(`conversation Context ${key} received inconsistent Definition identity`)
           }
-          if (entry.match.role === 'start') {
+          let match = entry.match
+          if (match.role === 'start') {
             if (discoveredStart !== undefined || context.start !== undefined) {
-              throw new Error(`conversation Context ${key} received more than one start Match`)
+              if (entry.definition.upgradeDuplicateStart !== true) {
+                throw new Error(`conversation Context ${key} received more than one start Match`)
+              }
+              match = { ...match, role: 'update' }
+            } else {
+              discoveredStart = match
             }
-            discoveredStart = entry.match
           }
           const owners = this.contextsBySeq.get(entry.match.event.seq) ?? new Set<InternalContext>()
           owners.add(context)
           this.contextsBySeq.set(entry.match.event.seq, owners)
-          return entry.match
+          return match
         })
         .sort((left, right) => left.event.seq - right.event.seq)
       context.matches = mergeMatches(context.key, additions, context.matches)

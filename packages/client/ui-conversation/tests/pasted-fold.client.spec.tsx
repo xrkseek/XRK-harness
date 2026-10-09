@@ -7,9 +7,11 @@
 // gets a wall of text back in the draft or loses their pasted content.
 
 import { describe, expect, it } from 'vitest'
-import { $getRoot, $isElementNode, type LexicalNode } from 'lexical'
+import { $getRoot, $getSelection, $isElementNode, $isRangeSelection, type LexicalNode } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
-import { $isPastedTextNode, countLines, type PastedTextNode } from '../src/client/input/editor/pasted-text-node.tsx'
+import {
+  $isPastedTextNode, countLines, firstMeaningfulLine, type PastedTextNode,
+} from '../src/client/input/editor/pasted-text-node.tsx'
 import {
   planPastedFold,
   FOLD_THRESHOLD_CHARS,
@@ -60,6 +62,13 @@ function eachFold(gesture: (node: PastedTextNode) => void): void {
 
 const removeFolds = (): void => eachFold(node => { node.discard() })
 const expandFolds = (): void => eachFold(node => { node.expand() })
+
+/** The text the live caret sits in, or null when there is no range selection. */
+function $getSelectionAnchorText(): string | null {
+  const selection = $getSelection()
+  if (!$isRangeSelection(selection)) return null
+  return selection.anchor.getNode().getTextContent()
+}
 
 /** Every folded-paste node in the current editor state. */
 function foldsOf(rt: DraftEditorRuntime): number {
@@ -160,6 +169,20 @@ describe('folded paste in the composer', () => {
     expect(rt.projection.clipboardText.trim()).toBe(text.trim())
   })
 
+  it('expanding lands the caret after the body (an expansion you cannot type into reads as a dead end)', () => {
+    const { rt } = editor()
+    const text = bigBody()
+    rt.paste(text)
+    rt.refreshProjection()
+    rt.editor.update(() => {
+      expandFolds()
+    }, { discrete: true })
+    const caret = rt.editor.getEditorState().read(() => $getSelectionAnchorText())
+    expect(caret).not.toBeNull()
+    // bigBody folds into several runs, so the caret belongs to the LAST one.
+    expect(caret!.endsWith('第 79 行 ' + '内容'.repeat(20))).toBe(true)
+  })
+
   it('a persisted draft re-seeded from the store stays folded (refresh survival)', () => {
     const { rt } = editor()
     const text = bigBody()
@@ -178,6 +201,16 @@ describe('folded paste in the composer', () => {
   it('counts the lines a fold reports in its summary', () => {
     expect(countLines('a\nb\nc')).toBe(3)
     expect(countLines('a\r\nb')).toBe(2)
+  })
+
+  it('previews the first line that actually has content', () => {
+    // Leading blank lines are common in copied log/clipboard payloads; the
+    // preview must skip them instead of showing an empty box.
+    expect(firstMeaningfulLine('\n\n  第一行内容 \n第二行')).toBe('第一行内容')
+    expect(firstMeaningfulLine('a\r\nb')).toBe('a')
+    // A whitespace-only body has nothing to preview; the row falls back to
+    // the size summary rather than rendering an empty preview slot.
+    expect(firstMeaningfulLine('  \n\t\n')).toBeUndefined()
   })
 
   it('the threshold is the documented one (a paste right below it stays plain)', () => {

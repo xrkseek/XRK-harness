@@ -204,6 +204,19 @@ export type PendingInputChrome = 'steer' | 'send'
  * two Ctrl+Enter rows in the same millisecond are still first vs rest.
  * Stop clears `running` before tools drain — follow-ups go idle with Stop.
  */
+/** Owning turn is the latest open turn and this row opened it (idle new-turn tip). */
+function isLatestOpenTurnOpener(
+  location: ConversationLocation,
+  messageId: number,
+  userIds: readonly number[],
+  latestTurn?: number | null,
+): boolean {
+  if (latestTurn === null || latestTurn === undefined) return false
+  if (location.kind !== 'turn' && location.kind !== 'step') return false
+  if (location.turn.status !== 'open' || location.turn.turn !== latestTurn) return false
+  return isTurnOpenerRow(messageId, userIds)
+}
+
 export function durableSteerPending(
   kind: string,
   location: ConversationLocation,
@@ -215,6 +228,8 @@ export function durableSteerPending(
 ): boolean {
   if (!isUserShaped(kind)) return false
   if (isHistoricClosedTurn(location, latestTurn)) return false
+  // Promoted insert that opened the newest turn: body above waiting (not trailing).
+  if (isLatestOpenTurnOpener(location, messageId, userIds, latestTurn)) return false
   if (isTurnOpenerRow(messageId, userIds) && (kind === 'user' || !hasAgentWork)) return false
   return live
 }

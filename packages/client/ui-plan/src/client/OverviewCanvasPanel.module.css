@@ -138,9 +138,19 @@
 
 .playerHeader {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.playerHeading {
+  display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-bottom: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .playerTitle {
@@ -151,6 +161,44 @@
   letter-spacing: -0.03em;
   line-height: 1.2;
   color: var(--dsw-alias-label-primary);
+}
+
+.build {
+  flex: none;
+  margin: 2px 0 0;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 90%, transparent);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+}
+
+.build:hover:not(:disabled),
+.build:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dsw-alias-text-primary) 35%, transparent);
+}
+
+.build:focus-visible {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 1px;
+}
+
+.build:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.buildError {
+  margin: 0 2px 8px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .playerMeta {

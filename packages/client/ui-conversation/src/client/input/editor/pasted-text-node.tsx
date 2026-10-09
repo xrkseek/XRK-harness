@@ -21,7 +21,8 @@
  */
 import type { JSX } from 'react'
 import type {
-  EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread,
+  EditorConfig, LexicalNode, NodeKey, ParagraphNode, SerializedLexicalNode,
+  Spread, TextNode,
 } from 'lexical'
 import {
   $createLineBreakNode,
@@ -149,6 +150,7 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
     // with real paragraphs; otherwise splice inline text + line breaks.
     const lines = this.getText().replace(/\r\n?/g, '\n').split('\n')
     const parent = this.getParent()
+    let tail: ParagraphNode | TextNode | null = null
     if (
       parent !== null
       && $isElementNode(parent)
@@ -159,15 +161,22 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
         const paragraph = $createParagraphNode()
         if (line !== '') paragraph.append($createTextNode(line))
         parent.insertBefore(paragraph)
+        tail = paragraph
       }
       parent.remove()
+      // Land the caret after the body: an expansion the user cannot type
+      // into reads as a dead end.
+      tail?.selectEnd()
       return
     }
     for (let i = 0; i < lines.length; i += 1) {
-      this.insertBefore($createTextNode(lines[i]!))
+      const text = $createTextNode(lines[i]!)
+      this.insertBefore(text)
+      tail = text
       if (i < lines.length - 1) this.insertBefore($createLineBreakNode())
     }
     this.remove()
+    tail?.selectEnd()
   }
 
   /**
@@ -197,6 +206,7 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
       <PastedText
         lines={this.__lines}
         chars={this.__text.length}
+        preview={firstMeaningfulLine(this.__text)}
         onExpand={() => {
           editor.update(() => {
             const node = $getNodeByKey(key)
@@ -226,6 +236,22 @@ export function $createPastedTextNode(text: string): PastedTextNode {
 /** Line count for the summary label (`\r\n` collapsed first). */
 export function countLines(text: string): number {
   return text.replace(/\r\n?/g, '\n').split('\n').length
+}
+
+/**
+ * The fold's one-line preview: the first line with real content. A paste
+ * that opens with blank lines would otherwise preview as nothing, which is
+ * exactly the "black box" the preview exists to remove. Absent when the body
+ * holds no non-whitespace character at all.
+ * @param text - the full pasted body.
+ * @returns the preview line, or undefined for a blank body.
+ */
+export function firstMeaningfulLine(text: string): string | undefined {
+  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = line.trim()
+    if (trimmed !== '') return trimmed
+  }
+  return undefined
 }
 
 /**

@@ -72,11 +72,12 @@ function ApprovalFlow({ pending, command, localized, t }: {
   // lands; until then the buttons must not re-fire. An answer failure
   // (rejected receipt / transport) re-arms them for retry.
   const [answered, setAnswered] = useState(false)
-  const answer = (outcome: 'allowed-once' | 'rejected'): void => {
+  const answer = (outcome: 'allowed-once' | 'whitelisted' | 'rejected'): void => {
     setAnswered(true)
     void pending.answer(outcome).catch(() => { setAnswered(false) })
   }
   const category = pending.category
+  const pathOverreach = category === 'path-overreach'
   const headline = localized
     ?? pending.reason
     ?? (category === 'network'
@@ -84,21 +85,25 @@ function ApprovalFlow({ pending, command, localized, t }: {
         host: pending.networkHost ?? pending.toolName,
         protocol: pending.networkProtocol ?? 'https',
       })
-      : category === 'escalation'
-        ? t('approval.escalationDetail', { toolName: pending.toolName })
-        : t('approval.escalation', { toolName: pending.toolName }))
+      : pathOverreach
+        ? t('approval.pathOverreach', { toolName: pending.toolName })
+        : category === 'escalation'
+          ? t('approval.escalationDetail', { toolName: pending.toolName })
+          : t('approval.escalation', { toolName: pending.toolName }))
   const badge =
     category === 'network'
       ? t('approval.badge.network')
-      : category === 'escalation'
-        ? t('approval.badge.escalation')
-        : t('approval.badge.tool')
+      : pathOverreach
+        ? t('approval.badge.pathOverreach')
+        : category === 'escalation'
+          ? t('approval.badge.escalation')
+          : t('approval.badge.tool')
   return (
     <div className={css.root} data-approval-key={pending.key} data-approval-category={category ?? 'tool'}>
       <div className={css.card}>
         <div className={css.strip}>
           <span className={css.dot} />
-          {t('approval.waiting')}
+          {pathOverreach ? t('approval.waitingPath') : t('approval.waiting')}
           <span className={css.badge}>{badge}</span>
         </div>
         {/* Tab stop: the region scrolls once the command passes the cap and
@@ -117,6 +122,11 @@ function ApprovalFlow({ pending, command, localized, t }: {
           <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
             {t('approval.reject')}
           </Button>
+          {pathOverreach && (
+            <Button variant="outline" disabled={answered} onClick={() => { answer('whitelisted') }}>
+              {t('approval.whitelist')}
+            </Button>
+          )}
           <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-once') }}>
             {t('approval.allowOnce')}
           </Button>
