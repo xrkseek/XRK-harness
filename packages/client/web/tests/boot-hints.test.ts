@@ -89,11 +89,13 @@ describe('bootConnectionHint', () => {
     expect(bootConnectionHint('handshake:describe')).toBe('Asking Host who it is…')
     expect(bootConnectionHint('handshake:streams')).toBe('Opening the event firehose…')
     expect(bootConnectionHint('retry:backoff')).toBe('Taking a breath, then retry…')
+    expect(bootConnectionHint('retry:halted')).toMatch(/Host stopped/)
   })
 
   it('mirrors Chinese connection phases', () => {
     expect(bootConnectionHint('handshake:describe', { lang: 'zh' })).toBe('正在问 Host 你是谁…')
     expect(bootConnectionHint('handshake:streams', { lang: 'zh' })).toBe('正在打开事件流…')
+    expect(bootConnectionHint('retry:halted', { lang: 'zh' })).toMatch(/Host 已停/)
     expect(bootSessionsHint('zh')).toBe('正在排队你的会话…')
     expect(bootFailedTitle('zh')).toBe('插件加载失败')
   })

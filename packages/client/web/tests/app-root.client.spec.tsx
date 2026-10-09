@@ -129,6 +129,29 @@ describe('AppRoot', () => {
     expect(queryByTestId('real-ui')).toBeNull()
   })
 
+  it('shows Host retry control when onRetryHost is armed', () => {
+    const settled = createSignal(false)
+    const error = createSignal<string | undefined>(undefined)
+    const status = createLoaderStatusStore()
+    let clicks = 0
+    const onRetryHost = createSignal<(() => void) | undefined>(() => { clicks += 1 })
+    const { getByText, getByRole } = render(
+      <AppRoot
+        settled={settled}
+        status={status}
+        error={error}
+        lang={en}
+        onRetryHost={onRetryHost}
+        renderApp={() => <div data-testid="real-ui" />}
+      />,
+    )
+    act(() => { error.set('[OOM] Desktop Host exited') })
+    expect(getByText('Host failed to start')).toBeTruthy()
+    expect(getByText(/\[OOM\]/)).toBeTruthy()
+    act(() => { getByRole('button', { name: 'Retry Host' }).click() })
+    expect(clicks).toBe(1)
+  })
+
   it('stamps data-xrk-booting until settled and clears after product paint', async () => {
     const { settled, getByTestId } = mount()
     expect(document.documentElement.hasAttribute('data-xrk-booting')).toBe(true)

@@ -228,3 +228,36 @@
 :global(body[data-ds-dark-theme]) .failedItem {
   color: var(--dsw-alias-label-secondary, #c4c4cc);
 }
+
+.retry {
+  margin-top: 8px;
+  align-self: center;
+  border: 1px solid var(--dsw-alias-border, #d0d2d6);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-elevated, #fff);
+  color: var(--dsw-alias-label-primary, #14161a);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 550;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--dsw-alias-bg-sunken, #ececee);
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary, #14161a);
+  outline-offset: 2px;
+}
+
+:global(body[data-ds-dark-theme]) .retry {
+  border-color: var(--dsw-alias-border, #3a3a40);
+  background: var(--dsw-alias-bg-elevated, #1c1c1f);
+  color: var(--dsw-alias-label-primary, #e8e8ea);
+}
+
+:global(body[data-ds-dark-theme]) .retry:hover {
+  background: var(--dsw-alias-bg-sunken, #252528);
+}

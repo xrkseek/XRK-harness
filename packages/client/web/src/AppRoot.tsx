@@ -22,7 +22,9 @@ import { useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import {
   bootFailedTitle,
+  bootHostFailedTitle,
   bootPluginHint,
+  bootRetryLabel,
   resolveBootLang,
   type BootLang,
 } from './boot-hints.ts'
@@ -47,6 +49,11 @@ export interface AppRootProps {
   hint?: KernelSignal<string>
   /** Splash language (zh/en); defaults to navigator / Desktop resolution. */
   lang?: KernelSignal<BootLang>
+  /**
+   * Desktop Host gate recovery: when set, failure chrome shows a retry
+   * control that asks the shell to rebring Host.
+   */
+  onRetryHost?: KernelSignal<(() => void) | undefined>
   /** Builds the real UI; called only after settled. */
   renderApp: () => ReactNode
 }
@@ -64,8 +71,13 @@ export function AppRoot(props: AppRootProps) {
     props.hint?.subscribe ?? (() => () => {}),
     () => props.hint?.getSnapshot() ?? bootPluginHint({}, lang),
   )
+  const retryHost = useSyncExternalStore(
+    props.onRetryHost?.subscribe ?? (() => () => {}),
+    () => props.onRetryHost?.getSnapshot(),
+  )
   const failed = Object.entries(status).filter(([, s]) => s === 'failed')
   const loud = error !== undefined || failed.length > 0
+  const hostRetryable = retryHost !== undefined
   /** Splash stays until product UI has painted under it. */
   const [revealed, setRevealed] = useState(false)
 
@@ -125,9 +137,22 @@ export function AppRoot(props: AppRootProps) {
                 )
                 : (
                   <div className={css.failed}>
-                    <div className={css.failedTitle}>{bootFailedTitle(lang)}</div>
+                    <div className={css.failedTitle}>
+                      {hostRetryable ? bootHostFailedTitle(lang) : bootFailedTitle(lang)}
+                    </div>
                     {failed.map(([id]) => <div key={id} className={css.failedItem}>{id}</div>)}
                     {error !== undefined && <div className={css.failedItem}>{error}</div>}
+                    {hostRetryable
+                      ? (
+                        <button
+                          type="button"
+                          className={css.retry}
+                          onClick={() => { retryHost() }}
+                        >
+                          {bootRetryLabel(lang)}
+                        </button>
+                      )
+                      : null}
                   </div>
                 )}
             </div>

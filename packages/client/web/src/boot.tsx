@@ -76,9 +76,20 @@ type BootConnectionFace = {
       | 'handshake:describe'
       | 'handshake:streams'
       | 'retry:backoff'
+      | 'retry:halted'
       | undefined
     subscribe: (fn: () => void) => () => void
   }
+  /** Desktop: rebring sticky Host + kick Face out of `retry:halted`. */
+  reconnect?: () => void
+}
+
+type DesktopHostTransport = {
+  whenHostReady?: () => Promise<void>
+  getHostPhase?: () => BootHostPhase
+  subscribeHostPhase?: (listener: (phase: BootHostPhase) => void) => () => void
+  subscribeHostReady?: (listener: () => void) => () => void
+  requestHostRebring?: () => void | Promise<void>
 }
 
 /** Wait until `done` is true, re-checking on every source notification. */
@@ -127,6 +138,8 @@ export class AppWebEntry {
   private readonly error = createSignal<string | undefined>(undefined)
   private readonly hint = createSignal(bootPluginHint({}, resolveBootLang()))
   private readonly bootLang = createSignal<BootLang>(resolveBootLang())
+  /** Splash retry control while Desktop Host gate is parked on failure. */
+  private readonly onRetryHost = createSignal<(() => void) | undefined>(undefined)
   /** While true, status transitions refresh the plugin-tier splash hint. */
   private pluginHintActive = true
   /**
@@ -136,6 +149,9 @@ export class AppWebEntry {
    */
   private hostAttached = true
   private hostTipCleanup: (() => void) | undefined
+  /** Stops Desktop Host gate retry loop (dispose / boot-chain failure). */
+  private hostGateAbandoned = false
+  private hostBootRetryWake: (() => void) | undefined
   // Assigned by run() before any private method or settled-gated closure reads them.
   private ctx!: Context
   private modules!: ClientModuleSystem
@@ -187,6 +203,7 @@ export class AppWebEntry {
         error={this.error}
         hint={this.hint}
         lang={this.bootLang}
+        onRetryHost={this.onRetryHost}
         renderApp={() => {
           const shell = this.ctx.get('appShell')
           // Unreachable after a clean settle (the app-shell entry is in every graph).
@@ -217,15 +234,24 @@ export class AppWebEntry {
       console.error(reason)
       this.error.set(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      this.stopDesktopHostTips()
+      this.abandonDesktopHostGate()
     }
   }
 
   /** Unmount the shell (loading page or settled UI). */
   dispose(): void {
-    this.stopDesktopHostTips()
+    this.abandonDesktopHostGate()
     clearBooting()
     this.root?.unmount()
+  }
+
+  /** End Host tip ladder + retry park (idempotent). */
+  private abandonDesktopHostGate(): void {
+    this.hostGateAbandoned = true
+    this.hostBootRetryWake?.()
+    this.hostBootRetryWake = undefined
+    this.onRetryHost.set(undefined)
+    this.stopDesktopHostTips()
   }
 
   /** Prefer Desktop shell locale, then navigator (before locale plugin). */
@@ -281,15 +307,13 @@ export class AppWebEntry {
   /**
    * Desktop: start Host tip ladder + `whenHostReady` alongside plugin prefetch
    * so cold Host spawn never needs a second splash document.
+   * On sticky Host failure, park on the splash with Retry (rebring) instead of
+   * a dead-end error that requires quitting the app.
    * Web / non-Desktop: no-op (hostAttached stays true).
    */
   private beginDesktopHostGate(): Promise<void> {
     const transport = (globalThis as XrkWindow & {
-      __XRK_TRANSPORT__?: {
-        whenHostReady?: () => Promise<void>
-        getHostPhase?: () => BootHostPhase
-        subscribeHostPhase?: (listener: (phase: BootHostPhase) => void) => () => void
-      }
+      __XRK_TRANSPORT__?: DesktopHostTransport
     }).__XRK_TRANSPORT__
 
     if (typeof transport?.whenHostReady !== 'function') {
@@ -297,7 +321,36 @@ export class AppWebEntry {
       return Promise.resolve()
     }
 
-    this.hostAttached = false
+    const runAttempt = async (): Promise<void> => {
+      if (this.hostGateAbandoned) return
+      this.hostAttached = false
+      this.onRetryHost.set(undefined)
+      this.startDesktopHostTips(transport)
+      try {
+        await transport.whenHostReady!()
+        if (this.hostGateAbandoned) return
+        this.hostAttached = true
+        this.stopDesktopHostTips()
+        this.error.set(undefined)
+        this.onRetryHost.set(undefined)
+        if (this.pluginHintActive) this.refreshPluginHint()
+      } catch (reason) {
+        if (this.hostGateAbandoned) return
+        this.stopDesktopHostTips()
+        const message = reason instanceof Error ? reason.message : String(reason)
+        this.error.set(message)
+        await this.waitForHostBootRetry(transport)
+        if (this.hostGateAbandoned) return
+        this.error.set(undefined)
+        await runAttempt()
+      }
+    }
+    return runAttempt()
+  }
+
+  /** Tip ladder while Host Fetch is not yet attached. */
+  private startDesktopHostTips(transport: DesktopHostTransport): void {
+    this.stopDesktopHostTips()
     const lang = (): BootLang => this.bootLang.getSnapshot()
     const startedAt = Date.now()
     let phase: BootHostPhase = transport.getHostPhase?.() ?? 'starting'
@@ -314,17 +367,43 @@ export class AppWebEntry {
       phase = next
       paintHostHint()
     })
-    // Tick a bit under the bucket width so the first rotation is not late.
     const tipTimer = setInterval(paintHostHint, Math.max(400, BOOT_HOST_TIP_INTERVAL_MS / 2))
     this.hostTipCleanup = () => {
       clearInterval(tipTimer)
       unsubPhase?.()
     }
+  }
 
-    return transport.whenHostReady().then(() => {
-      this.hostAttached = true
-      this.stopDesktopHostTips()
-      if (this.pluginHintActive) this.refreshPluginHint()
+  /**
+   * After sticky Host failure: wait for splash Retry (rebring) or a late
+   * `hostReady` pulse before re-entering {@link beginDesktopHostGate}.
+   */
+  private waitForHostBootRetry(transport: DesktopHostTransport): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (): void => {
+        if (settled) return
+        settled = true
+        unsubReady?.()
+        this.hostBootRetryWake = undefined
+        this.onRetryHost.set(undefined)
+        resolve()
+      }
+      this.hostBootRetryWake = finish
+      if (this.hostGateAbandoned) {
+        finish()
+        return
+      }
+      const unsubReady = transport.subscribeHostReady?.(() => {
+        finish()
+      })
+      this.onRetryHost.set(() => {
+        // Await IPC: clearing sticky happens in main; racing whenHostReady
+        // rejects on the old sticky and forces a second Retry click.
+        void Promise.resolve(transport.requestHostRebring?.()).finally(() => {
+          finish()
+        })
+      })
     })
   }
 
@@ -341,21 +420,37 @@ export class AppWebEntry {
 
     const connection = this.ctx.get('connection') as BootConnectionFace | undefined
     if (connection !== undefined && connection.connectionState.getSnapshot() !== 'connected') {
-      this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
-        hostAttached: this.hostAttached,
-        lang: lang(),
-      }))
-      await waitUntilReady(
-        [connection.connectionState, connection.connectionPhase],
-        () => connection.connectionState.getSnapshot() === 'connected',
-        () => {
-          if (connection.connectionState.getSnapshot() === 'connected') return
-          this.hint.set(bootConnectionHint(connection.connectionPhase.getSnapshot(), {
+      const paintConnectionHint = (): void => {
+        if (connection.connectionState.getSnapshot() === 'connected') {
+          this.error.set(undefined)
+          this.onRetryHost.set(undefined)
+          return
+        }
+        const phase = connection.connectionPhase.getSnapshot()
+        // Host sticky fail after Fetch attach: splash has no Settings footer —
+        // arm Retry so cold start is not wedged on a spinning dual-ring.
+        if (phase === 'retry:halted') {
+          this.armProductReadyHostRetry(connection)
+          this.hint.set(bootConnectionHint(phase, {
             hostAttached: this.hostAttached,
             lang: lang(),
           }))
-        },
+          return
+        }
+        this.onRetryHost.set(undefined)
+        this.hint.set(bootConnectionHint(phase, {
+          hostAttached: this.hostAttached,
+          lang: lang(),
+        }))
+      }
+      paintConnectionHint()
+      await waitUntilReady(
+        [connection.connectionState, connection.connectionPhase],
+        () => connection.connectionState.getSnapshot() === 'connected',
+        paintConnectionHint,
       )
+      this.error.set(undefined)
+      this.onRetryHost.set(undefined)
     }
 
     const sessions = this.ctx.get('sessions') as
@@ -368,6 +463,30 @@ export class AppWebEntry {
       [sessions.list],
       () => sessions.list.getSnapshot().phase === 'ready',
     )
+  }
+
+  /**
+   * Face parked on `retry:halted` during product-ready wait: show fail chrome
+   * + Retry (rebring + reconnect). Web has no transport rebring — no-op arm.
+   */
+  private armProductReadyHostRetry(connection: BootConnectionFace): void {
+    if (this.onRetryHost.getSnapshot() !== undefined) return
+    const transport = (globalThis as XrkWindow & {
+      __XRK_TRANSPORT__?: DesktopHostTransport
+    }).__XRK_TRANSPORT__
+    if (typeof transport?.requestHostRebring !== 'function' && connection.reconnect === undefined) {
+      return
+    }
+    this.error.set(
+      bootConnectionHint('retry:halted', {
+        hostAttached: this.hostAttached,
+        lang: this.bootLang.getSnapshot(),
+      }),
+    )
+    this.onRetryHost.set(() => {
+      // connection.reconnect awaits rebring then kicks the controller.
+      connection.reconnect?.()
+    })
   }
 
   /**

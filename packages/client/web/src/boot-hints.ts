@@ -21,6 +21,7 @@ export type BootConnectionPhase =
   | 'handshake:describe'
   | 'handshake:streams'
   | 'retry:backoff'
+  | 'retry:halted'
 
 type BootHintKey =
   | 'plugins'
@@ -30,7 +31,10 @@ type BootHintKey =
   | 'streams'
   | 'sessions'
   | 'backoff'
+  | 'halted'
   | 'failedTitle'
+  | 'hostFailedTitle'
+  | 'retry'
 
 const EN: Record<BootHintKey, string> = {
   plugins: 'Summoning plugins…',
@@ -40,7 +44,10 @@ const EN: Record<BootHintKey, string> = {
   streams: 'Opening the event firehose…',
   sessions: 'Lining up your sessions…',
   backoff: 'Taking a breath, then retry…',
+  halted: 'Host stopped — tap reconnect in the footer, or retry here…',
   failedTitle: 'Failed to load plugins',
+  hostFailedTitle: 'Host failed to start',
+  retry: 'Retry Host',
 }
 
 const ZH: Record<BootHintKey, string> = {
@@ -51,7 +58,10 @@ const ZH: Record<BootHintKey, string> = {
   streams: '正在打开事件流…',
   sessions: '正在排队你的会话…',
   backoff: '歇一口气，马上再试…',
+  halted: 'Host 已停 — 点底栏重连，或在此重试…',
   failedTitle: '插件加载失败',
+  hostFailedTitle: 'Host 未能启动',
+  retry: '重试 Host',
 }
 
 /** Fun rotating lines while Host is still coming up (index by elapsed bucket). */
@@ -221,6 +231,8 @@ export function bootConnectionHint(
       return copy.streams
     case 'retry:backoff':
       return copy.backoff
+    case 'retry:halted':
+      return copy.halted
     default:
       return copy.connecting
   }
@@ -234,4 +246,14 @@ export function bootSessionsHint(lang: BootLang = 'en'): string {
 /** Fail-loud title on the splash (AppRoot). */
 export function bootFailedTitle(lang: BootLang = 'en'): string {
   return dict(lang).failedTitle
+}
+
+/** Splash title when Desktop Host bring-up failed (retryable). */
+export function bootHostFailedTitle(lang: BootLang = 'en'): string {
+  return dict(lang).hostFailedTitle
+}
+
+/** Splash retry button label (Desktop Host rebring). */
+export function bootRetryLabel(lang: BootLang = 'en'): string {
+  return dict(lang).retry
 }
