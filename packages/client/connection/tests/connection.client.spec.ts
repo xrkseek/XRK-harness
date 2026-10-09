@@ -277,6 +277,7 @@ describe('connection lifecycle', () => {
       {
         ...FAST,
         waitUntil: () => hostGate,
+        waitUntilTimeoutMs: 0,
       },
     )
     controller.start()
@@ -288,6 +289,210 @@ describe('connection lifecycle', () => {
       expect(describeCalls).toBe(1)
       expect(phases[0]).toBe('handshake:host')
     } finally {
+      controller.stop()
+    }
+  })
+
+  /**
+   * waitUntil failure modes (Desktop Host gate):
+   * | cause              | next phase      | auto-retry waitUntil | needs reconnect() |
+   * |--------------------|-----------------|----------------------|-------------------|
+   * | timed out          | retry:backoff   | yes                  | no                |
+   * | sticky / hard fail | retry:halted    | no (parked)          | yes               |
+   */
+  describe('waitUntil failure modes', () => {
+    it('timeout → retry:backoff and auto-retries waitUntil', async () => {
+      const api = new FakeApiClient()
+      const phases: Array<string | undefined> = []
+      const states: ConnectionState[] = []
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      let describeCalls = 0
+      api.onDescribe = () => {
+        describeCalls += 1
+        return Promise.resolve(ok({
+          version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true,
+        }))
+      }
+      let releaseHost!: () => void
+      const hostGate = new Promise<void>((resolve) => { releaseHost = resolve })
+      let waitCalls = 0
+      const controller = new ConnectionController(
+        api,
+        {
+          onPhaseChange: (phase) => { phases.push(phase) },
+          onStateChange: (state) => { states.push(state) },
+        },
+        {
+          ...FAST,
+          waitUntilTimeoutMs: 20,
+          waitUntil: () => {
+            waitCalls += 1
+            return waitCalls === 1 ? new Promise<void>(() => {}) : hostGate
+          },
+        },
+      )
+      controller.start()
+      try {
+        await vi.waitFor(() => { expect(phases).toContain('handshake:host') })
+        await vi.waitFor(() => { expect(phases).toContain('retry:backoff') })
+        expect(phases).not.toContain('retry:halted')
+        expect(states).toContain('reconnecting')
+        expect(describeCalls).toBe(0)
+        await vi.waitFor(() => { expect(waitCalls).toBeGreaterThanOrEqual(2) })
+        releaseHost()
+        await vi.waitFor(() => { expect(describeCalls).toBe(1) })
+        expect(phases).not.toContain('retry:halted')
+      } finally {
+        warnSpy.mockRestore()
+        controller.stop()
+      }
+    })
+
+    it('non-timeout reject → retry:halted and does not spin waitUntil', async () => {
+      const api = new FakeApiClient()
+      const phases: Array<string | undefined> = []
+      const states: ConnectionState[] = []
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      let describeCalls = 0
+      api.onDescribe = () => {
+        describeCalls += 1
+        return Promise.resolve(ok({
+          version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true,
+        }))
+      }
+      let waitCalls = 0
+      let releaseHost!: () => void
+      const hostGate = new Promise<void>((resolve) => { releaseHost = resolve })
+      const controller = new ConnectionController(
+        api,
+        {
+          onPhaseChange: (phase) => { phases.push(phase) },
+          onStateChange: (state) => { states.push(state) },
+        },
+        {
+          ...FAST,
+          waitUntilTimeoutMs: 0,
+          waitUntil: () => {
+            waitCalls += 1
+            if (waitCalls === 1) return Promise.reject(new Error('[OOM] sticky host failed'))
+            return hostGate
+          },
+        },
+      )
+      controller.start()
+      try {
+        await vi.waitFor(() => { expect(phases).toContain('retry:halted') })
+        expect(phases).not.toContain('retry:backoff')
+        expect(states).toContain('reconnecting')
+        expect(waitCalls).toBe(1)
+        expect(describeCalls).toBe(0)
+        // Parked: must not empty-spin waitUntil → reject forever.
+        await new Promise(resolve => setTimeout(resolve, 60))
+        expect(waitCalls).toBe(1)
+        expect(phases.filter((phase) => phase === 'retry:halted')).toHaveLength(1)
+        expect(phases).not.toContain('retry:backoff')
+
+        controller.reconnect()
+        releaseHost()
+        await vi.waitFor(() => { expect(describeCalls).toBe(1) })
+        expect(waitCalls).toBe(2)
+      } finally {
+        warnSpy.mockRestore()
+        controller.stop()
+      }
+    })
+  })
+
+  it('kickFromHostReady does not abort the first generation during handshake:host', async () => {
+    // Same hostReady pulse that resolves waitUntil must not also reconnect():
+    // that aborts describe/streams of the first good generation (double-click feel).
+    const api = new FakeApiClient()
+    const phases: Array<string | undefined> = []
+    let describeCalls = 0
+    api.onDescribe = () => {
+      describeCalls += 1
+      return Promise.resolve(ok({
+        version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true,
+      }))
+    }
+    let waitCalls = 0
+    let releaseHost!: () => void
+    const hostGate = new Promise<void>((resolve) => { releaseHost = resolve })
+    const controller = new ConnectionController(
+      api,
+      { onPhaseChange: (phase) => { phases.push(phase) } },
+      {
+        ...FAST,
+        waitUntilTimeoutMs: 0,
+        waitUntil: () => {
+          waitCalls += 1
+          return hostGate
+        },
+      },
+    )
+    controller.start()
+    try {
+      await vi.waitFor(() => { expect(phases).toContain('handshake:host') })
+      expect(waitCalls).toBe(1)
+      expect(describeCalls).toBe(0)
+
+      controller.kickFromHostReady()
+      await new Promise(resolve => setTimeout(resolve, 40))
+      expect(waitCalls).toBe(1)
+      expect(describeCalls).toBe(0)
+      expect(phases.filter((phase) => phase === 'handshake:host')).toHaveLength(1)
+      expect(phases).not.toContain('retry:backoff')
+      expect(phases).not.toContain('retry:halted')
+
+      releaseHost()
+      await vi.waitFor(() => { expect(describeCalls).toBe(1) })
+      expect(waitCalls).toBe(1)
+      expect(api.callsOf('host.describe')).toHaveLength(1)
+    } finally {
+      controller.stop()
+    }
+  })
+
+  it('kickFromHostReady reconnects from retry:halted (not while handshake:host)', async () => {
+    const api = new FakeApiClient()
+    const phases: Array<string | undefined> = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let describeCalls = 0
+    api.onDescribe = () => {
+      describeCalls += 1
+      return Promise.resolve(ok({
+        version: '0', cwd: '/f', home: '/home/u', attachedSessions: 0, canOpenPath: true,
+      }))
+    }
+    let waitCalls = 0
+    let releaseHost!: () => void
+    const hostGate = new Promise<void>((resolve) => { releaseHost = resolve })
+    const controller = new ConnectionController(
+      api,
+      { onPhaseChange: (phase) => { phases.push(phase) } },
+      {
+        ...FAST,
+        waitUntilTimeoutMs: 0,
+        waitUntil: () => {
+          waitCalls += 1
+          if (waitCalls === 1) return Promise.reject(new Error('sticky'))
+          return hostGate
+        },
+      },
+    )
+    controller.start()
+    try {
+      await vi.waitFor(() => { expect(phases).toContain('retry:halted') })
+      expect(waitCalls).toBe(1)
+      expect(describeCalls).toBe(0)
+      controller.kickFromHostReady()
+      await vi.waitFor(() => { expect(waitCalls).toBe(2) })
+      expect(describeCalls).toBe(0)
+      releaseHost()
+      await vi.waitFor(() => { expect(describeCalls).toBe(1) })
+      expect(waitCalls).toBe(2)
+    } finally {
+      warnSpy.mockRestore()
       controller.stop()
     }
   })

@@ -189,6 +189,25 @@ describe('SettingsRoot trigger', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
+  it('shows a disconnected chip on retry:halted (not a spinner) and reconnects once', () => {
+    // Desktop sticky Host fail: Face parks on retry:halted. Settings must show
+    // outage chrome (warning / reconnect), not the forever "Starting host" spinner.
+    const mounted = mount({
+      connectionState: 'reconnecting',
+      connectionPhase: 'retry:halted',
+    })
+    expect(screen.queryByRole('button', { name: 'Connecting, restart now' })).toBeNull()
+    const indicator = screen.getByRole('button', { name: 'Disconnected, reconnect now' })
+    expect(indicator.getAttribute('data-phase')).toBe('disconnected')
+    expect(indicator.className).toContain('warning')
+    expect(indicator.className).not.toContain('progress')
+    expect(indicator.textContent).toContain('Disconnected')
+    expect(indicator.textContent).not.toContain('Starting host')
+    expect(indicator.textContent).not.toContain('Waiting to retry')
+    fireEvent.click(indicator)
+    expect(mounted.reconnect).toHaveBeenCalledOnce()
+  })
+
   it('shows first-boot connecting chrome with handshake phase labels', () => {
     const mounted = mount({
       connectionState: undefined,

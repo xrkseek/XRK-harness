@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   connectionChromeBusy,
+  connectionChromeHalted,
   connectionChromePhaseKey,
 } from '../src/client/connection-chrome.ts'
 
@@ -46,5 +47,17 @@ describe('connectionChrome', () => {
       sessionsPhase: 'ready',
       showRecovery: false,
     })).toBeUndefined()
+  })
+
+  it('treats retry:halted as outage (not spinner)', () => {
+    const halted = {
+      connectionState: 'reconnecting' as const,
+      connectionPhase: 'retry:halted' as const,
+      sessionsPhase: 'pending' as const,
+      showRecovery: false,
+    }
+    expect(connectionChromeHalted(halted)).toBe(true)
+    expect(connectionChromeBusy(halted)).toBe(false)
+    expect(connectionChromePhaseKey(halted)).toBeUndefined()
   })
 })

@@ -87,9 +87,18 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
   const openSheet = () => {
     setOpen(true)
     if (!bridge) return
+    // Update already queued / downloading — just show the sheet.
     if (available || installing) return
+    // Optimistic `checking` so the first click paints progress (IPC round-trip
+    // otherwise leaves the idle "up to date" copy until the second interaction).
+    setState({ phase: 'checking' })
     void bridge.updates.check().then((next) => {
       setState(next)
+    }).catch((error: unknown) => {
+      setState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      })
     })
   }
 

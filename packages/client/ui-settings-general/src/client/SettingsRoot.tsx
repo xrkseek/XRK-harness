@@ -43,6 +43,7 @@ import {
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
 import {
   connectionChromeBusy,
+  connectionChromeHalted,
   connectionChromePhaseKey,
 } from './connection-chrome.ts'
 
@@ -412,6 +413,12 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   if (showRecovery) {
 
     connectionIndicator = 'recovered'
+
+  } else if (connectionChromeHalted(chromeFacts)) {
+
+    // Desktop Host budget exhausted — outage chrome, not a forever spinner.
+
+    connectionIndicator = 'disconnected'
 
   } else if (connectionChromeBusy(chromeFacts)) {
 

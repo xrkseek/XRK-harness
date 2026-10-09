@@ -54,6 +54,14 @@ export interface XrkClientTransportHooks {
    */
   whenHostReady?: () => Promise<void>
   /**
+   * Desktop: Host Fetch just became ready — kick Face out of retry:backoff.
+   */
+  subscribeHostReady?: (listener: () => void) => () => void
+  /**
+   * Desktop: after restart budget exhaustion, ask the shell to bring Host up again.
+   */
+  requestHostRebring?: () => void | Promise<void>
+  /**
    * Optional Face HTTP origin override for non-page carriers. When unset,
    * unary uses `location.origin` (Desktop: `xrk-app://app`).
    */
@@ -206,6 +214,16 @@ export function apply(ctx: Context): void {
     },
     rpc,
     reconnect() {
+      // Main clears sticky failure inside rebring; await IPC so waitUntil does
+      // not race a still-sticky hostFailedGet (that rejects once and looks like
+      // "click twice to reconnect").
+      const bring = transport?.requestHostRebring?.()
+      if (bring !== undefined) {
+        void Promise.resolve(bring).finally(() => {
+          controller?.reconnect()
+        })
+        return
+      }
       controller?.reconnect()
     },
     start(sinks, config) {
@@ -218,6 +236,9 @@ export function apply(ctx: Context): void {
         ?? (pageLocation?.protocol === 'xrk-app:' && transport?.whenHostReady
           ? () => transport.whenHostReady!()
           : undefined)
+      const waitUntilTimeoutMs =
+        config?.waitUntilTimeoutMs
+        ?? (pageLocation?.protocol === 'xrk-app:' ? 45_000 : undefined)
       controller = new ConnectionController(api, {
         ...sinks,
         onConnected: (next) => {
@@ -238,10 +259,19 @@ export function apply(ctx: Context): void {
           publishPhase(phase)
           sinks.onPhaseChange?.(phase)
         },
-      }, { ...(config ?? {}), describeBeforeStreams, ...(waitUntil ? { waitUntil } : {}) })
+      }, {
+        ...(config ?? {}),
+        describeBeforeStreams,
+        ...(waitUntilTimeoutMs !== undefined ? { waitUntilTimeoutMs } : {}),
+        ...(waitUntil ? { waitUntil } : {}),
+      })
+      const unsubHostReady = transport?.subscribeHostReady?.(() => {
+        controller?.kickFromHostReady()
+      })
       controller.start()
       return {
         stop: () => {
+          unsubHostReady?.()
           controller?.stop()
           controller = undefined
           publishDescription(undefined)

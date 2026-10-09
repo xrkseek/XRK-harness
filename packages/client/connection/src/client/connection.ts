@@ -25,6 +25,12 @@ export interface ConnectionConfig {
    * attached so first paint does not burn into retry:backoff).
    */
   waitUntil?: () => Promise<void>
+  /**
+   * Cap on awaiting `waitUntil` before treating the generation as failed (ms).
+   * Prevents permanent `handshake:host` when the Desktop gate hangs.
+   * `0` disables the cap.
+   */
+  waitUntilTimeoutMs?: number
 }
 
 /** Resolved tunables; `waitUntil` stays optional (Desktop Host gate only). */
@@ -40,6 +46,7 @@ const CONNECTION_DEFAULTS: ConnectionConfigResolved = {
   backoffMaxMs: 10_000,
   streamOpenTimeoutMs: 3_000,
   describeBeforeStreams: false,
+  waitUntilTimeoutMs: 45_000,
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -67,6 +74,8 @@ export type ConnectionPhase =
   | 'handshake:describe'
   | 'handshake:streams'
   | 'retry:backoff'
+  /** Host gate hard-failed (sticky budget exhaust); parked until reconnect(). */
+  | 'retry:halted'
 
 /** Frame sink callbacks: the Controller owns the physical streams; business dispatch belongs to
  *  SessionManager. */
@@ -89,11 +98,17 @@ export interface ConnectionSinks {
  * The pump body feeds each frame to a sink (sink exceptions must
  * not kill the pump — a broken business layer must not drag down the connection layer).
  */
+function isWaitUntilTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('waitUntil timed out')
+}
+
 export class ConnectionController {
   private generation = 0
   private attempt = 0
   private current: AbortController | null = null
   private retryIdle: AbortController | null = null
+  /** Set while parked on `retry:halted` (Host gate hard-fail). */
+  private gatePark: AbortController | null = null
   private running = false
   private immediateRetry = false
   private lastState: ConnectionState | null = null
@@ -122,6 +137,8 @@ export class ConnectionController {
     this.current = null
     this.retryIdle?.abort()
     this.retryIdle = null
+    this.gatePark?.abort()
+    this.gatePark = null
     this.emitPhase(undefined)
   }
 
@@ -132,6 +149,33 @@ export class ConnectionController {
     this.immediateRetry = true
     this.current?.abort()
     this.retryIdle?.abort()
+    this.gatePark?.abort()
+  }
+
+  /**
+   * Desktop Host Fetch just became ready. Kick only when Face is parked or in
+   * backoff — not during `handshake:host` (waitUntil resolves on the same pulse;
+   * a reconnect there aborts the first good generation and feels like a double click).
+   */
+  kickFromHostReady(): void {
+    if (!this.running) return
+    if (this.lastPhase === 'retry:backoff' || this.lastPhase === 'retry:halted') {
+      this.reconnect()
+    }
+  }
+
+  /** Park until {@link reconnect} / {@link stop} (Host gate hard-fail). */
+  private async parkUntilReconnect(): Promise<void> {
+    const park = new AbortController()
+    this.gatePark = park
+    await new Promise<void>((resolve) => {
+      if (park.signal.aborted) {
+        resolve()
+        return
+      }
+      park.signal.addEventListener('abort', () => { resolve() }, { once: true })
+    })
+    if (this.gatePark === park) this.gatePark = null
   }
 
   private backoffDelay(attempt: number): number {
@@ -183,10 +227,40 @@ export class ConnectionController {
         void this.pumpStream(this.api.events.host({}, ac.signal, hostOpened), this.sinks.onHostEnvelope, settleFailed)
       }
 
+      /** Sticky Host gate rejection — park for user reconnect (not timeout). */
+      let gateHardFail = false
       try {
         if (this.config.waitUntil) {
           this.emitPhase('handshake:host')
-          await this.config.waitUntil()
+          const gate = this.config.waitUntil()
+          const waitMs = this.config.waitUntilTimeoutMs
+          try {
+            if (waitMs > 0) {
+              await Promise.race([
+                gate,
+                new Promise<never>((_resolve, reject) => {
+                  const timer = setTimeout(() => {
+                    reject(new Error(`waitUntil timed out after ${String(waitMs)}ms`))
+                  }, waitMs)
+                  ac.signal.addEventListener('abort', () => {
+                    clearTimeout(timer)
+                  }, { once: true })
+                }),
+              ])
+            } else {
+              await gate
+            }
+          } catch (gateError) {
+            // Timeout / abort: normal backoff. Sticky Host fail: park until reconnect.
+            if (
+              this.isRunning()
+              && !ac.signal.aborted
+              && !isWaitUntilTimeoutError(gateError)
+            ) {
+              gateHardFail = true
+            }
+            throw gateError
+          }
           if (ac.signal.aborted) throw new Error('generation aborted while waiting for host')
         }
         // Strict readiness handshake: describe proves unary reachability, onOpen
@@ -231,6 +305,17 @@ export class ConnectionController {
 
       await failed
       if (!this.isRunning()) return
+      if (gateHardFail) {
+        // Desktop sticky Host failure: do not spin waitUntil → reject forever.
+        this.emitState('reconnecting')
+        this.emitPhase('retry:halted')
+        this.immediateRetry = false
+        await this.parkUntilReconnect()
+        if (!this.isRunning()) return
+        this.attempt = 0
+        this.immediateRetry = false
+        continue
+      }
       this.emitState('reconnecting')
       this.emitPhase('retry:backoff')
       const immediate = this.immediateRetry

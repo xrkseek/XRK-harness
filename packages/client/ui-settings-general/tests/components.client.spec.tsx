@@ -126,6 +126,32 @@ describe('DesktopReleaseFooter', () => {
     })
   })
 
+  it('starts an update check on the first idle-chip click', async () => {
+    let resolveCheck!: (state: { phase: 'idle' }) => void
+    const check = vi.fn(() => new Promise<{ phase: 'idle' }>((resolve) => {
+      resolveCheck = resolve
+    }))
+    ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
+      version: async () => '0.5.13',
+      updates: {
+        check,
+        snapshot: async () => ({ phase: 'idle' as const }),
+        install: vi.fn(),
+        subscribe: () => () => undefined,
+      },
+    }
+    render(<DesktopReleaseFooter t={interpolate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Check for updates v0.5.13' }))
+    expect(check).toHaveBeenCalledOnce()
+    const dialog = screen.getByRole('dialog', { name: 'Software update' })
+    expect(dialog).toBeTruthy()
+    expect(dialog.textContent).toMatch(/Checking for updates/)
+    resolveCheck({ phase: 'idle' })
+    await waitFor(() => {
+      expect(dialog.textContent).toMatch(/You are on the latest version/)
+    })
+  })
+
   it('shows download progress in the in-app dialog', async () => {
     let push: ((state: { phase: 'installing'; version: string; percent: number }) => void) | undefined
     ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {

@@ -147,6 +147,85 @@ describe('connection client apply', () => {
     }
   })
 
+  it('awaits requestHostRebring before retrying whenHostReady (sticky race)', async () => {
+    // Desktop Host budget exhaust leaves sticky failure in main. If Face
+    // reconnect() kicks waitUntil before IPC rebring clears sticky, the gate
+    // rejects once and parks again — looks like "click twice". This pins the
+    // ordering: rebring settles first, then a single whenHostReady succeeds.
+    let sticky = true
+    let releaseRebring!: () => void
+    const rebringGate = new Promise<void>((resolve) => {
+      releaseRebring = resolve
+    })
+    let waitCalls = 0
+    let waitWhileSticky = 0
+    const rebring = vi.fn(() => rebringGate.then(() => {
+      sticky = false
+    }))
+    ;(globalThis as Win).location = {
+      hostname: 'app',
+      search: '?fixture',
+      protocol: 'xrk-app:',
+      origin: 'xrk-app://app',
+    }
+    ;(globalThis as {
+      __XRK_TRANSPORT__?: {
+        ownsHost: boolean
+        whenHostReady: () => Promise<void>
+        requestHostRebring: () => Promise<void>
+        subscribeHostReady: (listener: () => void) => () => void
+      }
+    }).__XRK_TRANSPORT__ = {
+      ownsHost: true,
+      whenHostReady: async () => {
+        waitCalls += 1
+        if (sticky) {
+          waitWhileSticky += 1
+          throw new Error('[OOM] sticky host failed')
+        }
+      },
+      requestHostRebring: rebring,
+      subscribeHostReady: () => () => {},
+    }
+    const handle = await mount()
+    const phases: Array<string | undefined> = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const loop = handle.start(
+      { onPhaseChange: (phase) => { phases.push(phase) } },
+      {
+        backoffBaseMs: 10,
+        backoffFactor: 1,
+        backoffMaxMs: 10,
+        streamOpenTimeoutMs: 500,
+        waitUntilTimeoutMs: 0,
+      },
+    )
+    try {
+      await vi.waitFor(() => { expect(phases).toContain('retry:halted') })
+      expect(waitCalls).toBe(1)
+      expect(waitWhileSticky).toBe(1)
+
+      handle.reconnect()
+      expect(rebring).toHaveBeenCalledOnce()
+      // Flush reconnect()'s Promise.resolve(bring) scheduling without settling rebring.
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(waitCalls).toBe(1)
+      expect(phases.at(-1)).toBe('retry:halted')
+
+      releaseRebring()
+      await vi.waitFor(() => {
+        expect(handle.connectionState.getSnapshot()).toBe('connected')
+      })
+      expect(waitCalls).toBe(2)
+      expect(waitWhileSticky).toBe(1)
+      expect(rebring).toHaveBeenCalledOnce()
+    } finally {
+      loop.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
   it('retracts the host description while reconnecting and republishes the next generation', async () => {
     ;(globalThis as Win).location = { hostname: 'localhost', search: '?fixture' }
     const handle = await mount()

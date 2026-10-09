@@ -16,9 +16,15 @@ export type ConnectionChromeFacts = {
   readonly showRecovery: boolean
 }
 
+/** Host gate hard-fail: show outage chrome (click reconnect), not a spinner. */
+export function connectionChromeHalted(facts: ConnectionChromeFacts): boolean {
+  return !facts.showRecovery && facts.connectionPhase === 'retry:halted'
+}
+
 /** Whether the footer spinner should stay up (handshake or first list pull). */
 export function connectionChromeBusy(facts: ConnectionChromeFacts): boolean {
   if (facts.showRecovery) return false
+  if (connectionChromeHalted(facts)) return false
   if (facts.connectionState === undefined) return true
   if (facts.connectionState === 'reconnecting') return true
   return facts.connectionState === 'connected' && facts.sessionsPhase !== 'ready'
@@ -29,6 +35,7 @@ export function connectionChromePhaseKey(
   facts: ConnectionChromeFacts,
 ): SettingsKey | undefined {
   if (facts.showRecovery) return undefined
+  if (connectionChromeHalted(facts)) return undefined
   if (facts.connectionState === 'connected' && facts.sessionsPhase !== 'ready') {
     return 'connection.phase.sessions'
   }
