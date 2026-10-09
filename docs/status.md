@@ -2,7 +2,7 @@
 
 > **读者**：全员（对外说话以本页为准）
 
-三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.5.16**（`0.5.x` 正式线，接管 `@latest`；上一正式补丁 **v0.5.15**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
+三态：**能跑 / 未稳 / 未做**。与代码对齐。基线 **v0.5.20**（`0.5.x` 正式线，接管 `@latest`；上一正式补丁 **v0.5.19**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**）。**本页主路径表当前均为能跑**；扩展能力节另列已补 / 暂缓（标 **未做** 不得当作已支持）。
 
 XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在会话、工具管道、子代理与壳交互上的长处；落点以本仓契约与代码为准。
 
@@ -51,7 +51,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 提交 echo（`PendingSubmission`） | **能跑**：`beginSubmission` 同步插本地回显；ChatView / QueueDock `data-submission-echo`；同帧按 `rpcId`（及合并 steer 的 `rpcIds`）与 durable user/queue 去重；折叠条保留「发送中…」 |
 | 任意类型文件上传 · 侧栏预览 · 可继续子代理排队/Steer/Stop · Open in · feedback | **能跑**（见主路径表与 [v0.4.4](./releases/v0.4.4.md)；`pnpm test:web` **21/21**）；用户气泡文件卡经 `conversation.message.files` → `MessageFileCard`；工具结果 `type: "file"` 经 `tool.call.files` 同卡（块序混排；槽空时内联回退） |
 | 右侧工作台（文件树 / 预览 / 终端 / 浏览器） | **能跑**：流内 `details`=Status · 改动 · **Canvas**（开合/宽度按会话 `localStorage` 记忆，刷新仍在）；浮动工作台=Host `/sidebar/*` + 社区 **`xrkh-better-sidebar`**（**设置 → 插件** 推荐一键安装）。聊天 / Overview「改动」开文件：有 `betterSidebar` 先 `openTab` 再 Host `openPath`；未装则系统打开。社区底栏高度走 LayoutInsets `--xrk-layout-inset-bottom`（`--xrkh-workbench-height` 镜像），对话列让位。**不**迁 dsh dockkit 为默认右栏（见 [sidebar-workbench](./sidebar-workbench.md)） |
-| Overview Canvas（工作区看板） | Face `canvas_*` 工具 + `canvas.list`/`canvas.get`；文档落 `{XRK_HOME}/canvases/<workspaceId>/<id>.json`（跨会话保留）；概况 **Canvas** 页签列表 + 声明式播放（markdown/table/kpi/series）；skill **`xrk-canvas`** | **能跑** |
+| Overview Canvas（工作区看板） | Face `canvas_*` 工具 + `canvas.list`/`canvas.get`；文档落 `{XRK_HOME}/canvases/<workspaceId>/<id>.json`（跨会话保留）；概况 **Canvas** 页签列表 + 声明式播放（markdown/table/kpi/series）；计划模式可选 **Build**（关 Plan + steer 实现）；skill **`xrk-canvas`** / **`xrk-plan-build`** | **能跑** |
 | 会话主线 / Agent Team | 工作区主线目录（`{XRK_HOME}/session-threads/`）：AI 自定协作钉，`thread_upsert` / `thread_list` / `thread_switch` / `thread_delete`（只见本工作区已挂条目，不把未挂会话的首条人话当主线）；**已挂主线的主会话**用 `thread_message` 互发（对方 `session_id`，不必 `thread_switch`；switch 会改本会话侧栏钉；送达为 steer 插队，不跟 Settings `busyEnter` 排队），默认等待对方助手回复并回传到发起方（不是子代理）；发现后仍可用 `session_search` / `session_read` 回顾；未挂前侧栏名仍是首条人话；支线是 `presence_set` 的 `tips`；**Agent Team** 把子会话的工具面、上下文面（inject）、提示词面（playbook）公开成名册（全局 `{XRK_HOME}/agent-rosters/global.json` + 工作区覆盖）：基础 `role`（调研/施工/审稿/调度）以及探网/文书/排障/测员已在全局（`mem_seed_*` 只读，不能改/删/overlay；定制从模板新建）；用户可加新角色或主会话 `team_save`；`team_list` 短目录；每轮 **turn-start** 向主会话注入名册 + **24h 内更新的主线/已挂主会话 id**（seed AGENTS.md / skills 仍走站立 inject）；`subagent(member_id)` 应用这三面；侧栏球；子会话球用名册外观（外形 / 色盘 / 装扮 kit） | **能跑** |
 | 侧栏 Office/URL/子代理/计划预览 **契约**（protocol 载荷 · policy `host.open`/`sidebar.*`/`office.connect` · Face bridge 可选缝） | **能跑**（见 [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`） |
 | 侧栏 Host policy 闸门（`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`） | **能跑**（`ask`→Face 审批缝 / 无缝→`policy-ask`；见 [policy](./policy.md)） |
@@ -171,7 +171,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 
 | 层级 | 能做什么 | 前置 |
 | --- | --- | --- |
-| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.5.16** 当前 `@latest`（上一正式补丁 **v0.5.15**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
+| **A — 能用** | `npm i -g @xrkseek/harness-cli` 后 `xrkh web`/`run`，或源码 `build` + 组装壳后跑；**v0.5.20** 当前 `@latest`（上一正式补丁 **v0.5.19**；上一预览终态 **v0.4.12**；上一正式线 **v0.3.11**） | Node ≥26；真模型需 brand `apiKeyEnv` 或 replay |
 | **B — 浏览器硬刷** | `pnpm test:web`（不进 `pnpm check`） | Chromium；完整 `apps/web/dist` |
 | **C — 上架** | npmjs + GitHub Release（`@xrkseek/harness-cli`） | `pnpm release`；见 [publishing.md](./publishing.md) |
 
@@ -195,7 +195,7 @@ core* / 能力叶 → kernel | protocol | compose
 
 > **Audience**: Everyone (this page is the public capability truth)
 
-Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.5.16** (`0.5.x` formal line, owning `@latest`; prior formal patch **v0.5.15**; prior preview close **v0.4.12**; previous formal line **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
+Three states: **Working / Unstable / Not done**. Aligned with code. Baseline **v0.5.20** (`0.5.x` formal line, owning `@latest`; prior formal patch **v0.5.19**; prior preview close **v0.4.12**; previous formal line **v0.3.11**). **Main-path rows on this page are Working today**; the extended-capabilities section lists filled / deferred items (**Not done** must not be treated as supported).
 
 XRK-Harness is an independently developed stack. It absorbs strengths from Codex and peer agent harnesses in session, tool pipeline, subagent, and shell UX; contracts and code in this repo are authoritative.
 
@@ -244,7 +244,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | Submission echo (`PendingSubmission`) | **Working**: `beginSubmission` inserts a local echo; ChatView / QueueDock `data-submission-echo`; same-render `rpcId` (and coalesced-steer `rpcIds`) handoff vs durable user/queue; collapsed dock keeps “Sending…” |
 | Arbitrary file upload · sidebar preview · continuable subagent queue/Steer/Stop · Open in · feedback | **Working** (see main-path table and [v0.4.4](./releases/v0.4.4.md); `pnpm test:web` **21/21**); user-bubble file cards via `conversation.message.files` → `MessageFileCard`; tool-result `type: "file"` via `tool.call.files` (same cards; block order; inline fallback when the slot is empty) |
 | Right workbench (tree / preview / terminal / browser) | **Working**: in-flow `details`=Status · Changes · **Canvas** (open/width remembered per Session in `localStorage`, survives reload); floating workbench=Host `/sidebar/*` + community **`xrkh-better-sidebar`** (recommended one-click Install from **Settings → Plugins**). Chat / Overview Changes open-file: with `betterSidebar`, `openTab` then Host `openPath`; without it, OS open. Community bottom height uses LayoutInsets `--xrk-layout-inset-bottom` (mirrors `--xrkh-workbench-height`) so the conversation column yields. **No** dsh dockkit as the default rightbar (see [sidebar-workbench](./sidebar-workbench.md)) |
-| Overview Canvas (workspace boards) | Face `canvas_*` tools + `canvas.list`/`canvas.get`; docs under `{XRK_HOME}/canvases/<workspaceId>/<id>.json` (survive sessions); Overview **Canvas** tab list + declarative player (markdown/table/kpi/series); skill **`xrk-canvas`** | **Working** |
+| Overview Canvas (workspace boards) | Face `canvas_*` tools + `canvas.list`/`canvas.get`; docs under `{XRK_HOME}/canvases/<workspaceId>/<id>.json` (survive sessions); Overview **Canvas** tab list + declarative player (markdown/table/kpi/series); Plan mode optional **Build** (exit plan + steer implement); skills **`xrk-canvas`** / **`xrk-plan-build`** | **Working** |
 | Session mainline / Agent Team | Workspace mainline catalog (`{XRK_HOME}/session-threads/`): AI-owned collaboration pin via `thread_upsert` / `thread_list` / `thread_switch` / `thread_delete` (this workspace only; unbound first-message titles stay out); **parent sessions already on a 主线** talk with `thread_message` (peer `session_id`; do not `thread_switch` to send mail — that rebinds this session’s sidebar pin; delivery is steer, not Settings `busyEnter` queue; wait, default, returns the peer’s assistant reply — not a subagent); `session_search` / `session_read` still recall history; until bound the sidebar name stays the first user message; the 支线 caption is `presence_set` `tips`; **Agent Team** publishes the child's tools, inject, and playbook as a roster (global `{XRK_HOME}/agent-rosters/global.json` + workspace overlay): base `role`s plus web scout / docs / debugger / tester ship globally (`mem_seed_*` is read-only: no edit / delete / overlay; fork a new role from the template); users add roles or `team_save` from the parent chat; `team_list` short catalog; each parent turn-start injects the roster plus **parent sessions on a 主线 updated in the last 24h** (seed AGENTS.md / skills stay on standing inject); `subagent(member_id)` applies those surfaces; sidebar balls; child presence uses the roster look (shape / palette / costume kit) | **Working** |
 | Sidebar Office/URL/subagent/plan preview **contract** (protocol payloads · policy `host.open`/`sidebar.*`/`office.connect` · optional Face bridge seams) | **Working** (see [policy](./policy.md) · `@xrkseek/protocol` `sidebar-previews`) |
 | Sidebar Host policy gates (`/sidebar` · `host.open`/`sidebar.embed`/`sidebar.fs`) | **Working** (`ask`→Face approval seam / no seam→`policy-ask`; see [policy](./policy.md)) |
@@ -364,7 +364,7 @@ Against upstream [v0.2.0-rc.2](https://github.com/deepseek-ai/deepseek-harness/r
 
 | Level | What you can do | Prerequisites |
 | --- | --- | --- |
-| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.5.16** is the current `@latest` (prior formal patch **v0.5.15**; prior preview close **v0.4.12**; previous formal line **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
+| **A — Usable** | `npm i -g @xrkseek/harness-cli` then `xrkh web`/`run`, or source `build` + assembled shell; **v0.5.20** is the current `@latest` (prior formal patch **v0.5.19**; prior preview close **v0.4.12**; previous formal line **v0.3.11**) | Node ≥26; live models need brand `apiKeyEnv` or replay |
 | **B — Browser soak** | `pnpm test:web` (not part of `pnpm check`) | Chromium; full `apps/web/dist` |
 | **C — Publish** | npmjs + GitHub Release (`@xrkseek/harness-cli`) | `pnpm release`; see [publishing.md](./publishing.md) |
 
