@@ -4,6 +4,8 @@
 
 export { StateDot } from './StateDot.tsx'
 export type { StateDotState } from './StateDot.tsx'
+export { subagentActivityDot } from './subagent-activity-dot.ts'
+export type { SubagentOutcomeKind } from './subagent-activity-dot.ts'
 export { DisclosureRow } from './DisclosureRow.tsx'
 export type { DisclosureRowProps } from './DisclosureRow.tsx'
 export { Button } from './Button.tsx'

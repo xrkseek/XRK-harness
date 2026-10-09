@@ -138,7 +138,10 @@ export function installDraftKeymap(
     },
     intakeFiles: (files) => { gate.current.intakeFiles(files) },
     pasteText: (text) => {
-      if (gate.current.machineBusy || gate.current.locked) return
+      // Locked (no session / inert) still swallows paste. machineBusy must NOT:
+      // PASTE_COMMAND already preventDefault'd — dropping here made paste vanish
+      // while a turn streamed, with nothing left for the browser to insert.
+      if (gate.current.locked) return
       keyboard.paste(text)
     },
   })

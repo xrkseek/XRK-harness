@@ -35,12 +35,36 @@ export interface BrowserEmbedProbe {
   readonly frameAncestors?: readonly string[];
 }
 
+/**
+ * Terminal verdict for a sidebar child card (same axis as Face
+ * `describeChildOutcome` / Status `subagents.live[].outcome`).
+ * `activity: inactive` alone cannot tell finished from aborted.
+ */
+export interface SubagentPreviewOutcome {
+  readonly kind:
+    | "completed"
+    | "aborted"
+    | "error"
+    | "max-tokens"
+    | "interrupted"
+    | "blocked"
+    | "none";
+  readonly cause?: "user" | "parent" | "disposed" | "hook" | "legacy";
+  readonly quietMs?: number;
+}
+
 /** One running / recent child for sidebar cards (`subagents.preview`). */
 export interface SubagentPreviewSummary {
   readonly childSessionId: string;
   readonly label?: string;
   readonly mode: "one-shot" | "continuable";
   readonly activity: "running" | "inactive";
+  /** Last-turn fate — required for StateDot parity with Overview / top-bar. */
+  readonly outcome?: SubagentPreviewOutcome;
+  /** Delegation depth from the preview root (1 = direct child). */
+  readonly depth?: number;
+  /** Immediate parent session id (tree nesting for 2nd / 3rd layer). */
+  readonly parentSessionId?: string;
   readonly live?: {
     readonly text?: string;
     readonly tool?: { readonly name: string; readonly args: string };

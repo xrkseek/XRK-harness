@@ -86,6 +86,9 @@ describe("createSidebarFaceBridgeFromFace previews", () => {
       childSessionId: childId,
       label: "worker",
       activity: "running",
+      depth: 1,
+      parentSessionId: parentId,
+      outcome: { kind: "none" },
       lastAssistantPreview: "hello from child",
     });
   });

@@ -55,10 +55,22 @@ export function latestToolErrorCue(
   return undefined
 }
 
-/** Newest node wall time (any kind with `time`) — seeds idle when Overview opens mid-session. */
+/**
+ * Node kinds whose `time` updates on every stream token / reasoning chunk.
+ * Including them in cues fingerprints re-renders PresenceDock on each chunk.
+ * Idle / sleep still use `turnActive` + PHASE clock in PresenceBall — not token times.
+ */
+const STREAM_ACTIVITY_NOISE = new Set([
+  'assistant',
+  'assistant-step',
+  'step',
+])
+
+/** Newest non-stream wall time — seeds idle without thrashing on token paint. */
 export function latestNodeActivityAt(nodes: readonly PresenceTimelineNode[]): number {
   let latest = 0
   for (const node of nodes) {
+    if (STREAM_ACTIVITY_NOISE.has(node.kind)) continue
     const at = typeof node.time === 'number' && Number.isFinite(node.time) ? node.time : 0
     if (at > latest) latest = at
   }

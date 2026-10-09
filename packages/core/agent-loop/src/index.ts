@@ -1448,7 +1448,10 @@ export {
   type RunCompactionInput,
   type RunCompactionResult,
 } from "./compaction.js";
-export { maybeAppendRequestHeader } from "./request-header-log.js";
+export {
+  maybeAppendRequestHeader,
+  forgetRequestHeaderCache,
+} from "./request-header-log.js";
 export {
   boundToolResultContent,
   alreadySavedPath,

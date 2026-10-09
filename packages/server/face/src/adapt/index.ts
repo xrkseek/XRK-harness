@@ -44,7 +44,13 @@ export {
   type JobView,
   type JobViewStatus,
 } from "./job-view.js";
-export { formatSubagentCompletionNotice, lastAssistantBodyText } from "./subagent-notice.js";
+export {
+  describeChildOutcome,
+  formatSubagentCompletionNotice,
+  lastAssistantBodyText,
+  type ChildOutcome,
+  type ChildOutcomeKind,
+} from "./subagent-notice.js";
 export {
   boundChildAnswer,
   SUBAGENT_ANSWER_INLINE_BYTES,

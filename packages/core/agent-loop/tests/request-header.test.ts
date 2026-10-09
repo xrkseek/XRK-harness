@@ -1,11 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { foldRequestHeader } from "@xrkseek/core-session";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { createRoutingLlmAdapter } from "@xrkseek/llm-registry";
-import { maybeAppendRequestHeader } from "../src/request-header-log.js";
+import {
+  forgetRequestHeaderCache,
+  maybeAppendRequestHeader,
+} from "../src/request-header-log.js";
 
 describe("maybeAppendRequestHeader", () => {
+  beforeEach(() => {
+    forgetRequestHeaderCache();
+  });
+
   it("logs request/header when routing LLM route is known", () => {
     const store = createMemorySessionStore();
     const sessionId = store.create().id;

@@ -77,7 +77,10 @@
   function createBall(container, opts) {
     opts = opts || {};
     var id = 'eb' + (uid++);
+    /* Mutable: Presence can drop to lite under stream load without remount. */
     var lite = !!opts.lite;
+    var kitDirty = true;
+    var lastKitKey = '';
     var shape = RD.SHAPES[opts.shape] || RD.SHAPES.blob;
     var face = shape.face;
     var headRing = shape.ring;
@@ -180,9 +183,10 @@
     /* 眼睛基准中心：默认表情环的质心 */
     var BASE_C = [centroid(EXPR[0][0]), centroid(EXPR[0][1])];
 
-    /* ---- zzz 睡眠粒子：三枚字母沿右上方向循环漂浮 ---- */
+    /* ---- zzz 睡眠粒子：三枚字母沿右上方向循环漂浮（full 模式懒创建） ---- */
     var zzzNodes = null;
-    if (!lite) {
+    function ensureZzz() {
+      if (zzzNodes) return;
       zzzNodes = [];
       for (var zi = 0; zi < 3; zi++) {
         var zn = el('text', {
@@ -195,6 +199,7 @@
         zzzNodes.push(zn);
       }
     }
+    if (!lite) ensureZzz();
 
     container.appendChild(svg);
 
@@ -350,6 +355,36 @@
       var rb = trails[idx];
       rb.back.remove(); rb.front.remove(); rb.gradEl.remove();
       trails.splice(idx, 1);
+    }
+
+    /** Drop ribbons / confetti / zzz when entering lite so stream load stays cheap. */
+    function clearHeavyFx() {
+      while (trails.length) removeTrail(trails.length - 1);
+      spawnAt.length = 0;
+      wasFast = false;
+      for (var ci = confPieces.length - 1; ci >= 0; ci--) {
+        confPieces[ci].el.remove();
+      }
+      confPieces.length = 0;
+      if (zzzNodes) {
+        for (var z = 0; z < zzzNodes.length; z++) {
+          if (zzzNodes[z].getAttribute('opacity') !== '0') {
+            zzzNodes[z].setAttribute('opacity', '0');
+          }
+        }
+      }
+    }
+
+    /**
+     * Runtime budget toggle — no remount.
+     * @param {boolean} on
+     */
+    function setLite(on) {
+      on = !!on;
+      if (on === lite) return;
+      lite = on;
+      if (lite) clearHeavyFx();
+      else ensureZzz();
     }
 
     /* ---- 撒花：一次性物理粒子爆发 ---- */
@@ -870,6 +905,17 @@
       layoutHeld();
     }
 
+    /** Fingerprint eye slots + yaw so kit layout skips unchanged frames. */
+    function kitLayoutKey(yaw) {
+      var L = eyeL.slot;
+      var R = eyeR.slot;
+      return (L && L.on ? r2(L.x) + ',' + r2(L.y) + ',' + r2(L.rx) + ',' + r2(L.ry) : '-')
+        + '|'
+        + (R && R.on ? r2(R.x) + ',' + r2(R.y) + ',' + r2(R.rx) + ',' + r2(R.ry) : '-')
+        + '|'
+        + r2(yaw || 0);
+    }
+
     function setKit(kind) {
       var split = splitLegacyKit(kind);
       /* legacy 单参入口 = 换回纯内置装扮：三槽贴图一并清掉，
@@ -880,7 +926,10 @@
       glassesImage = '';
       heldImage = '';
       rebuildKit();
+      kitDirty = true;
       layoutKit();
+      lastKitKey = kitLayoutKey(lastYaw);
+      kitDirty = false;
     }
 
     function setDressing(hat, glasses, held, image) {
@@ -895,7 +944,10 @@
       glassesImage = typeof imgs.glasses === 'string' ? imgs.glasses : '';
       heldImage = legacyHeld || (typeof imgs.held === 'string' ? imgs.held : '');
       rebuildKit();
+      kitDirty = true;
       layoutKit();
+      lastKitKey = kitLayoutKey(lastYaw);
+      kitDirty = false;
     }
 
     rebuildKit();
@@ -992,12 +1044,22 @@
       lastYaw = yaw;
       setEye(eyeL, pose.left, 0, sketch, yaw);
       setEye(eyeR, pose.right, 1, sketch, yaw);
-      try { layoutKit(); } catch (_kitErr) { /* keep the body ticking if a kit layout fails */ }
+      var nextKitKey = kitLayoutKey(yaw);
+      if (kitDirty || nextKitKey !== lastKitKey) {
+        lastKitKey = nextKitKey;
+        kitDirty = false;
+        try { layoutKit(); } catch (_kitErr) { /* keep the body ticking if a kit layout fails */ }
+      }
 
       if (lite) return;
 
       var dt = prevNow ? clamp((now - prevNow) / 1000, 0.001, 0.05) : 1 / 60;
       prevNow = now;
+      /* Main-thread contention (stream paint): skip ribbon/confetti for this frame. */
+      if (dt > 1 / 30) {
+        prevYaw = yaw;
+        return;
+      }
 
       /* ---- zzz 睡眠粒子：三枚字母错峰沿右上方向漂浮，先淡入后淡出 ---- */
       if (zzzNodes) {
@@ -1148,7 +1210,15 @@
       if (svg.parentNode) svg.parentNode.removeChild(svg);
     }
 
-    return { svg: svg, applyPose: applyPose, burst: burst, setKit: setKit, setDressing: setDressing, destroy: destroy };
+    return {
+      svg: svg,
+      applyPose: applyPose,
+      burst: burst,
+      setKit: setKit,
+      setDressing: setDressing,
+      setLite: setLite,
+      destroy: destroy,
+    };
   }
 
   EB.createBall = createBall;

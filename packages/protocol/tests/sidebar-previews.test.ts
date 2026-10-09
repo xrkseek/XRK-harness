@@ -31,6 +31,9 @@ describe("sidebar-previews contract", () => {
       childSessionId: "child-1",
       mode: "continuable",
       activity: "running",
+      outcome: { kind: "none" },
+      depth: 1,
+      parentSessionId: "parent-1",
       live: { text: "working" },
     };
     const plan: PlanPreviewSummary = { active: true, pending: false };

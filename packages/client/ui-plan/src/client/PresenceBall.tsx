@@ -5,13 +5,12 @@
  * Session delivery / fleet edges drive bounce · spin · burst so the ball
  * reacts like a companion, not a static LED.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_SHAPE,
   isPresenceColor,
   isPresenceShape,
-  PRESENCE_HELD_KITS,
   resolvePresencePaint,
   splitLegacyKit,
   type PresenceColor,
@@ -121,7 +120,7 @@ function usePresencePaint(): PresencePaint {
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '28'
+const PRESENCE_BALL_REV = '29'
 
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
@@ -178,6 +177,7 @@ type EmotionBallHandle = {
   setGaze: (nx: number, ny: number) => void
   handleAIMessage: (msg: string | { emotionId: string; tips?: string }) => void
   setActive: (on: boolean) => void
+  setLite?: (on: boolean) => void
   spin?: (n?: number) => void
   burst?: (n?: number) => void
   bounce?: () => void
@@ -410,26 +410,27 @@ export function derivePresenceEmotion(input: {
 /**
  * Motion accents for sticky AI · click · session tipKey edges.
  * Phase rotation within the same tipKey stays quiet (no spam bounce).
+ * @returns true when spin/burst ran — caller must leave lite briefly so ribbons paint.
  */
 export function playPresenceAccent(
   ball: EmotionBallHandle,
   next: PresenceEmotion,
   prev: PresenceEmotion | null,
-): void {
+): boolean {
   if (next.source === 'local') {
     ball.bounce?.()
     ball.spin?.(1)
-    return
+    return true
   }
   if (next.source === 'tool') {
     if (CELEBRATE_IDS.has(next.emotionId)) {
       ball.burst?.(18)
       ball.bounce?.()
-      return
+      return true
     }
     if (next.emotionId === '21' || next.emotionId === '38') {
       ball.spin?.(2)
-      return
+      return true
     }
     if (
       prev === null
@@ -438,12 +439,12 @@ export function playPresenceAccent(
     ) {
       ball.bounce?.()
     }
-    return
+    return false
   }
 
   const prevKey = prev?.tipKey
   const nextKey = next.tipKey
-  if (!nextKey || nextKey === prevKey) return
+  if (!nextKey || nextKey === prevKey) return false
 
   if (
     nextKey === 'turn'
@@ -453,14 +454,14 @@ export function playPresenceAccent(
     || nextKey === 'compact'
   ) {
     ball.bounce?.()
-    return
+    return false
   }
   if (nextKey === 'critical' || nextKey === 'warn' || nextKey === 'toolError') {
     ball.spin?.(2)
-    return
+    return true
   }
   if (nextKey === 'sleep' || nextKey === 'standby') {
-    return
+    return false
   }
   if (
     nextKey === 'ambient'
@@ -468,7 +469,7 @@ export function playPresenceAccent(
     && (prevKey === 'sleep' || prevKey === 'standby')
   ) {
     ball.bounce?.()
-    return
+    return false
   }
   if (
     nextKey === 'ambient'
@@ -478,7 +479,9 @@ export function playPresenceAccent(
   ) {
     ball.burst?.(10)
     ball.bounce?.()
+    return true
   }
+  return false
 }
 
 export function presenceDisplay(
@@ -502,7 +505,7 @@ export function presenceDisplay(
   return tip ? { name, tip } : { name }
 }
 
-export function PresenceBall({
+export const PresenceBall = memo(function PresenceBall({
   sessionId,
   presence,
   turnActive,
@@ -616,16 +619,13 @@ export function PresenceBall({
   const overlayHat = memberLook ? (memberLook.overlayHat ?? '') : settingsHat
   const overlayGlasses = memberLook ? (memberLook.overlayGlasses ?? '') : settingsGlasses
   const overlayHeld = memberLook ? (memberLook.overlayHeld ?? '') : settingsHeld
-  const heldBuiltin = !overlayHeld
-    && engineHeld !== 'none'
-    && (PRESENCE_HELD_KITS as readonly string[]).includes(engineHeld)
-    ? engineHeld
-    : undefined
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
   const lastEmotionKeyRef = useRef<string>('')
   const prevEmotionRef = useRef<PresenceEmotion | null>(null)
+  const perfLiteRef = useRef(false)
+  const accentLiteTimerRef = useRef<number | undefined>(undefined)
   const clickIndexRef = useRef(0)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -634,7 +634,9 @@ export function PresenceBall({
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [lastActivityAt, setLastActivityAt] = useState(() => Math.max(Date.now(), activityAt))
 
-  const sessionBusy =
+  // Host/fleet work — drives FX budget. Click pulse is NOT work: it must keep
+  // full ribbons for spin, while still zeroing idleMs via sessionBusy below.
+  const workBusy =
     turnActive
     || runningJobs > 0
     || runningSubs > 0
@@ -643,7 +645,7 @@ export function PresenceBall({
     || steering > 0
     || toolError === true
     || (typeof toolError === 'object' && toolError !== null)
-    || Boolean(local)
+  const sessionBusy = workBusy || Boolean(local)
 
   // Track transcript / presence beats only — never stamp Date.now() while busy
   // (that forced a setState on every cue notify and amplified Overview thrash).
@@ -673,6 +675,9 @@ export function PresenceBall({
   })
   const display = presenceDisplay(emotion, t)
   const resting = emotion.tipKey === 'sleep' || emotion.tipKey === 'standby'
+  // Stream isolation budget: lite only for real work. Idle ambient / sleep keep full FX.
+  const perfLite = workBusy
+  perfLiteRef.current = perfLite
 
   // Ambient / work rotation — client lifecycle independent of AI sticky.
   useEffect(() => {
@@ -700,16 +705,11 @@ export function PresenceBall({
         if (cancelled || !mountRef.current || !window.EmotionBall?.create) return
         mountRef.current.replaceChildren()
         // idle:false — engine must not auto-sleep over activity / sticky labels.
-        // Full FX when AI sticky / click / busy; lite only for quiet ambient / rest.
-        const lite =
-          emotion.source === 'auto'
-          && (emotion.tipKey === 'ambient'
-            || emotion.tipKey === 'sleep'
-            || emotion.tipKey === 'standby')
+        // Seed lite from current workBusy; later toggles use setLite (no remount).
         const ball = window.EmotionBall.create(mountRef.current, {
           emotion: emotion.emotionId,
           idle: false,
-          lite,
+          lite: workBusy,
           eyeScale: 1.2,
           shape,
           color: paint.body,
@@ -734,6 +734,10 @@ export function PresenceBall({
     )
     return () => {
       cancelled = true
+      if (accentLiteTimerRef.current !== undefined) {
+        window.clearTimeout(accentLiteTimerRef.current)
+        accentLiteTimerRef.current = undefined
+      }
       ballRef.current?.destroy()
       ballRef.current = null
       setReady(false)
@@ -743,13 +747,19 @@ export function PresenceBall({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld])
 
+  // Runtime FX budget — never remount for lite toggles. While a heavy accent
+  // holds full FX, skip; the timer restores from perfLiteRef when it ends.
+  useEffect(() => {
+    const ball = ballRef.current
+    if (!ball || !ready || accentLiteTimerRef.current !== undefined) return
+    ball.setLite?.(perfLite)
+  }, [ready, perfLite])
+
   useEffect(() => {
     const ball = ballRef.current
     if (!ball || !ready) return
-    // Only push into the WebGL/canvas engine when the *content* of the emotion
-    // changes. `emotion` is a fresh object every React render — depending on it
-    // re-ran setEmotion on every Overview stream tick and reset transitions
-    // (blink / spin / seq), which dropped frames.
+    // Only push into the engine when the *content* of the emotion changes.
+    // Fresh `emotion` objects every React render must not restart transitions.
     const tip = display.tip
     const emotionKey = `${emotion.source}:${emotion.emotionId}:${emotion.tipKey ?? ''}`
     const accentKey = `${emotionKey}:${tip ?? ''}`
@@ -765,7 +775,22 @@ export function PresenceBall({
       // Sleep / standby own the quiet clock — do not poke the engine awake.
       if (!resting) ball.resetIdle?.()
       const prev = prevEmotionRef.current
-      playPresenceAccent(ball, emotion, prev)
+      // Drop lite only when work budget is on, so spin/burst ribbons can paint.
+      const wasLite = perfLiteRef.current
+      if (wasLite) ball.setLite?.(false)
+      const heavy = playPresenceAccent(ball, emotion, prev)
+      if (accentLiteTimerRef.current !== undefined) {
+        window.clearTimeout(accentLiteTimerRef.current)
+        accentLiteTimerRef.current = undefined
+      }
+      if (heavy && wasLite) {
+        accentLiteTimerRef.current = window.setTimeout(() => {
+          accentLiteTimerRef.current = undefined
+          ballRef.current?.setLite?.(perfLiteRef.current)
+        }, 900)
+      } else if (wasLite) {
+        ball.setLite?.(true)
+      }
       prevEmotionRef.current = emotion
       lastEmotionKeyRef.current = emotionKey
     }
@@ -780,11 +805,14 @@ export function PresenceBall({
     resting,
   ])
 
-  // Gaze from the whole window — not just the stage hitbox — so eyes track
-  // the cursor anywhere on the product shell relative to the ball center.
+  // Gaze: coalesce pointer samples to one setGaze per animation frame.
   useEffect(() => {
     if (!ready) return
-    const applyGaze = (clientX: number, clientY: number): void => {
+    let raf = 0
+    let pendingX = 0
+    let pendingY = 0
+    const flushGaze = (): void => {
+      raf = 0
       const ball = ballRef.current
       const mount = mountRef.current
       if (!ball || !mount) return
@@ -792,16 +820,18 @@ export function PresenceBall({
       if (rect.width <= 0 || rect.height <= 0) return
       const cx = rect.left + rect.width / 2
       const cy = rect.top + rect.height / 2
-      // Half-size → ±1 at the ball rim; farther stays clamped at full look.
-      const nx = (clientX - cx) / (rect.width / 2)
-      const ny = (clientY - cy) / (rect.height / 2)
+      const nx = (pendingX - cx) / (rect.width / 2)
+      const ny = (pendingY - cy) / (rect.height / 2)
       ball.setGaze(
         Math.max(-1, Math.min(1, nx)),
         Math.max(-1, Math.min(1, ny)),
       )
     }
     const onPointerMove = (event: PointerEvent): void => {
-      applyGaze(event.clientX, event.clientY)
+      pendingX = event.clientX
+      pendingY = event.clientY
+      if (raf !== 0) return
+      raf = window.requestAnimationFrame(flushGaze)
     }
     const onBlur = (): void => {
       ballRef.current?.setGaze(0, 0)
@@ -811,6 +841,7 @@ export function PresenceBall({
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('blur', onBlur)
+      if (raf !== 0) window.cancelAnimationFrame(raf)
     }
   }, [ready])
 
@@ -876,4 +907,4 @@ export function PresenceBall({
       </div>
     </div>
   )
-}
+})

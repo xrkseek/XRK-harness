@@ -120,6 +120,7 @@ export {
   type BrowserEmbedProbe,
   type OfficePreviewStatus,
   type PlanPreviewSummary,
+  type SubagentPreviewOutcome,
   type SubagentPreviewSummary,
 } from "./sidebar-previews.js";
 export {

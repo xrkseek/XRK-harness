@@ -8,7 +8,7 @@ import { HELD_BUILTINS } from './dressing-library.ts'
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '28'
+const PRESENCE_BALL_REV = '29'
 
 export const COMPANION_SHAPES = [
   'blob',
@@ -120,7 +120,10 @@ function useChromeDark(): boolean {
   )
 }
 
-type EmotionBallHandle = { destroy: () => void }
+type EmotionBallHandle = {
+  destroy: () => void
+  setLite?: (on: boolean) => void
+}
 
 type EmotionBallNs = {
   create: (

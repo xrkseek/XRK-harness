@@ -22,6 +22,13 @@
 /** Characters a plain run may hold before it becomes a fold. */
 export const FOLD_THRESHOLD_CHARS = 2000
 
+/**
+ * Line count that folds even under the char threshold — a copied chat reply
+ * is often short in bytes but many lines; leaving it literal still janks the
+ * contenteditable layout path the fold exists to avoid.
+ */
+export const FOLD_THRESHOLD_LINES = 8
+
 /** One planned piece of external text. */
 export type FoldPart =
   | { readonly kind: 'plain'; readonly text: string }
@@ -35,7 +42,12 @@ export type FoldPart =
  *   threshold, so the common case stays byte-identical to the input.
  */
 export function planPastedFold(text: string): readonly FoldPart[] {
-  if (text.length <= FOLD_THRESHOLD_CHARS) return [{ kind: 'plain', text }]
+  const lineCount = text.length === 0 ? 0 : text.split('\n').length
+  if (text.length <= FOLD_THRESHOLD_CHARS) {
+    // Multi-line under the char ceiling folds whole (copied chat replies).
+    if (lineCount >= FOLD_THRESHOLD_LINES) return [{ kind: 'fold', text }]
+    return [{ kind: 'plain', text }]
+  }
   const lines = text.split('\n')
   const parts: FoldPart[] = []
   let run: string[] = []

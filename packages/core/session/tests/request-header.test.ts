@@ -41,6 +41,29 @@ describe("foldRequestHeader", () => {
     });
   });
 
+  it("finds the latest header without walking trailing non-header noise from the front", () => {
+    const events: SessionEvent[] = [
+      {
+        type: "request/header",
+        ts: 1,
+        turnId: "t1",
+        reason: "initial",
+        header: {
+          config: { provider: "deepseek", model: "deepseek-v4-flash" },
+        },
+      },
+      ...Array.from({ length: 200 }, (_, i) => ({
+        type: "assistant/chunk" as const,
+        ts: 2 + i,
+        turnId: "t1",
+        content: `chunk-${i}`,
+      })),
+    ];
+    expect(foldRequestHeader(events)).toEqual({
+      config: { provider: "deepseek", model: "deepseek-v4-flash" },
+    });
+  });
+
   it("compares configs for dedupe", () => {
     expect(
       requestHeaderEquals(

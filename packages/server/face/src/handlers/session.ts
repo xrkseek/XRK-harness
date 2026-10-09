@@ -5,6 +5,7 @@ import {
   sessionEventCount,
   withdrawAdmit,
 } from "@xrkseek/core-session";
+import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
 import {
   type AgentCancelCause,
   type MessageContent,
@@ -236,6 +237,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     );
   } catch (err) {
     runtime.store.delete?.(sessionId);
+    forgetRequestHeaderCache(sessionId);
     return {
       ok: false,
       error: {
@@ -745,6 +747,7 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   runtime.store.delete(sessionId);
+  forgetRequestHeaderCache(sessionId);
   const sets = runtime.workspaces.forgetSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
 
@@ -908,6 +911,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     );
   } catch (err) {
     runtime.store.delete?.(child.id);
+    forgetRequestHeaderCache(child.id);
     return {
       ok: false,
       error: {

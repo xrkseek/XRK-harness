@@ -10,7 +10,11 @@ import { describe, expect, it } from 'vitest'
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
 import { $isPastedTextNode, countLines, type PastedTextNode } from '../src/client/input/editor/pasted-text-node.tsx'
-import { planPastedFold, FOLD_THRESHOLD_CHARS } from '../src/client/input/editor/pasted-fold.ts'
+import {
+  planPastedFold,
+  FOLD_THRESHOLD_CHARS,
+  FOLD_THRESHOLD_LINES,
+} from '../src/client/input/editor/pasted-fold.ts'
 
 function editor() {
   const el = document.createElement('div')
@@ -179,5 +183,11 @@ describe('folded paste in the composer', () => {
   it('the threshold is the documented one (a paste right below it stays plain)', () => {
     const justUnder = 'x'.repeat(FOLD_THRESHOLD_CHARS - 1)
     expect(planPastedFold(justUnder)).toEqual([{ kind: 'plain', text: justUnder }])
+  })
+
+  it('folds a multi-line paste under the char ceiling (copied chat replies)', () => {
+    const text = Array.from({ length: FOLD_THRESHOLD_LINES }, (_, i) => `行 ${i}`).join('\n')
+    expect(text.length).toBeLessThan(FOLD_THRESHOLD_CHARS)
+    expect(planPastedFold(text)).toEqual([{ kind: 'fold', text }])
   })
 })

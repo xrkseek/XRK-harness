@@ -58,17 +58,22 @@ export function requestHeaderEquals(
   return (a.system ?? "") === (b.system ?? "");
 }
 
-/** Latest canonical request envelope after folding header events. */
+/**
+ * Latest canonical request envelope after folding header events.
+ * Each `request/header` replaces the prior snapshot (not a patch), so the
+ * newest wins — scan from the tail so a multi-million-event session does not
+ * walk every assistant/tool chunk just to rediscover the last header.
+ */
 export function foldRequestHeader(
   events: readonly SessionEvent[],
 ): RequestHeaderSnapshot | undefined {
-  let state: RequestHeaderSnapshot | undefined;
-  for (const event of events) {
-    if (event.type === "request/header") {
-      state = canonicalRequestHeader(event);
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event !== undefined && event.type === "request/header") {
+      return canonicalRequestHeader(event);
     }
   }
-  return state;
+  return undefined;
 }
 
 export function canonicalRequestHeader(

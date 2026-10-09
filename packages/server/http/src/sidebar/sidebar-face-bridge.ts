@@ -9,6 +9,7 @@
  */
 import type {
   PlanPreviewSummary,
+  SubagentPreviewOutcome,
   SubagentPreviewSummary,
 } from "@xrkseek/protocol";
 
@@ -79,6 +80,10 @@ export interface SidebarFaceBridge {
       label: string;
       role?: "delegator" | "worker" | "observer";
       depth?: number;
+      /** Same live axis as Status `subagents.graph.nodes[].activity`. */
+      activity?: "running" | "inactive";
+      /** Same terminal axis as Status / `subagents.preview[].outcome`. */
+      outcome?: SubagentPreviewOutcome;
     }[];
     readonly edges: readonly {
       from: string;

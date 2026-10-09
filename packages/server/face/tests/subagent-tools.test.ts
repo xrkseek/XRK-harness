@@ -107,6 +107,9 @@ describe("subagent tools", () => {
     const tools = createToolRegistry();
     bindSubagentTools(tools, { runtime, parentSessionId: parent });
     expect(tools.get("subagent")).toBeTruthy();
+    // Parallel sibling `subagent` calls in one turn must not serialize as
+    // exclusive barriers (Status otherwise shows only one running).
+    expect(tools.get("subagent")!.isConcurrencySafe?.({})).toBe(true);
     expect(tools.get("list_agents")).toBeTruthy();
     expect(tools.get("send_message")).toBeTruthy();
     expect(tools.get("team_graph")).toBeTruthy();

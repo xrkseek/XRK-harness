@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/harness-desktop",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "private": true,
   "description": "XRK Harness Electron desktop shell (private package; not published to public npm). See ADR-0008.",
   "author": "xrkseek",

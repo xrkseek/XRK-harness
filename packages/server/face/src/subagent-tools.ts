@@ -5,6 +5,7 @@ import {
   listPendingAdmits,
   readSessionEvents,
 } from "@xrkseek/core-session";
+import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 import {
@@ -114,7 +115,8 @@ export function resolveSubagentQuota(
   const profile = resolveAgentPresetProfile(presetId);
   if (profile.subagents.mode === "off") {
     const depth = subagentDepth(runtime, sessionId);
-    const active = countActiveChildren(runtime, sessionId);
+    const active =
+      countActiveChildren(runtime, sessionId) + pendingSpawnCount(sessionId);
     const delegated = runtime.subagents.listDelegated(sessionId).length;
     return {
       depth,
@@ -134,7 +136,8 @@ export function resolveSubagentQuota(
       ? Math.min(faceActive, profile.subagents.maxActiveChildren)
       : faceActive;
   const depth = subagentDepth(runtime, sessionId);
-  const active = countActiveChildren(runtime, sessionId);
+  const active =
+    countActiveChildren(runtime, sessionId) + pendingSpawnCount(sessionId);
   const delegated = runtime.subagents.listDelegated(sessionId).length;
   return {
     depth,
@@ -401,6 +404,30 @@ function countActiveChildren(
 }
 
 /**
+ * In-flight spawn reservations (sync). Two parallel `subagent` settles both
+ * read `countActiveChildren` before either child's drain latches — without
+ * this, both can pass `active < maxActive` and overshoot the cap.
+ */
+const pendingSpawnSlots = new Map<string, number>();
+
+function pendingSpawnCount(parentSessionId: string): number {
+  return pendingSpawnSlots.get(parentSessionId) ?? 0;
+}
+
+function reserveSpawnSlot(parentSessionId: string): void {
+  pendingSpawnSlots.set(
+    parentSessionId,
+    pendingSpawnCount(parentSessionId) + 1,
+  );
+}
+
+function releaseSpawnSlot(parentSessionId: string): void {
+  const n = pendingSpawnCount(parentSessionId);
+  if (n <= 1) pendingSpawnSlots.delete(parentSessionId);
+  else pendingSpawnSlots.set(parentSessionId, n - 1);
+}
+
+/**
  * Undo a half-made spawn. `session.create` / `session.fork` already made the
  * child durable and registered its link, so any failure between there and a
  * successful `session.prompt` would otherwise leave an empty session in the
@@ -429,6 +456,7 @@ async function discardUnstartedChild(
   } catch {
     /* store without delete / already gone */
   }
+  forgetRequestHeaderCache(childSessionId);
   await Promise.resolve(runtime.invalidateAgent?.(childSessionId)).catch(
     () => undefined,
  );
@@ -672,6 +700,10 @@ function createSubagentTool(
       },
       required: ["prompt"],
     },
+    // Without this, settle-batch treats every `subagent` call as an exclusive
+    // barrier — two tool calls in one turn run one-after-another, so Status
+    // shows "1 subagent" even when the model asked for parallel siblings.
+    isConcurrencySafe: () => true,
     presentCall: (args) => ({
       card: "generic",
       title: String(
@@ -812,6 +844,13 @@ function createSubagentTool(
             isError: true,
           };
         }
+        reserveSpawnSlot(options.parentSessionId);
+        let externalSlotHeld = true;
+        const dropExternalSlot = (): void => {
+          if (!externalSlotHeld) return;
+          externalSlotHeld = false;
+          releaseSpawnSlot(options.parentSessionId);
+        };
         try {
           const product = parseExternalAgentProduct(
             options.runtime.settingsNamespaces.view("external-agent").value,
@@ -903,6 +942,8 @@ function createSubagentTool(
                 ? { spawnImpl: options.externalSpawn }
                 : {}),
             });
+            // Child is busy in externalAgents; pending slot no longer needed.
+            dropExternalSlot();
             return {
               content: [
                 `Started background external subagent \`${childId}\` (${label} · ${runtimeKind}).`,
@@ -915,6 +956,9 @@ function createSubagentTool(
               ].join("\n"),
             };
           }
+          // One-shot external has no Face child latch — do not hold the slot
+          // for the whole print turn (would starve parallel in-process spawns).
+          dropExternalSlot();
           const result = await runExternalAgentTurn({
             kind: runtimeKind,
             cwd: externalCwd,
@@ -937,6 +981,8 @@ function createSubagentTool(
                 ? err.message
                 : String(err);
           return { content: `subagent external: ${msg}`, isError: true };
+        } finally {
+          dropExternalSlot();
         }
       }
       const depth = subagentDepth(
@@ -956,6 +1002,14 @@ function createSubagentTool(
           isError: true,
         };
       }
+      reserveSpawnSlot(options.parentSessionId);
+      let spawnSlotHeld = true;
+      const dropSpawnSlot = (): void => {
+        if (!spawnSlotHeld) return;
+        spawnSlotHeld = false;
+        releaseSpawnSlot(options.parentSessionId);
+      };
+      try {
       const background = a.run_in_background === true;
       const inherit = a.inherit_context === true;
       const label =
@@ -1267,6 +1321,9 @@ function createSubagentTool(
       }
       // Spawn accepted — the child is no longer a half-made shell.
       started = true;
+      // Drain (or busy latch) now counts in active; drop the pending slot so
+      // a sibling parallel `subagent` is not double-charged during wait.
+      dropSpawnSlot();
       if (background) {
         return {
           content: [
@@ -1419,6 +1476,9 @@ function createSubagentTool(
           .join("\n"),
         ...(schemaValid === false ? { isError: true } : {}),
       };
+      } finally {
+        dropSpawnSlot();
+      }
     },
   };
 }

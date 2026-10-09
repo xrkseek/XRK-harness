@@ -570,6 +570,14 @@
       if (this.ball.burst) this.ball.burst(count);
       return this;
     },
+    /**
+     * Runtime FX budget — forwards to ball.setLite (no remount).
+     * lite: body + eyes + breathe; skips ribbons / orbit / confetti.
+     */
+    setLite: function (on) {
+      if (this.ball.setLite) this.ball.setLite(on);
+      return this;
+    },
     /* 弹跳（4 段递减抛物线） */
     bounce: function () {
       if (this._bounceAt < 0) this._bounceAt = performance.now();

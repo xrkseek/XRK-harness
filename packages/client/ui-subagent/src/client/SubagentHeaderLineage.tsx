@@ -8,6 +8,7 @@ import {
 } from '@xrkseek/client-runtime/client'
 import {
   IconChevronDownOutline14, IconChevronRightOutline14, IconRefreshOutline14, StateDot,
+  subagentActivityDot,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import { NS } from './locales.ts'
@@ -392,7 +393,7 @@ function CatalogRows({
                   </button>
                 )}
               <div className={css.clickarea}>
-                <StateDot state={entry.activity === 'running' ? 'ongoing' : 'done'} />
+                <StateDot state={subagentActivityDot(entry.activity, entry.outcome?.kind)} />
                 <span className={css.content}>
                   <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{label}</span>
                   <span className={css.summary}>{secondary}</span>

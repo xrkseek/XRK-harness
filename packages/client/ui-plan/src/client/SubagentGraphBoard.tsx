@@ -4,7 +4,7 @@
  */
 import { useMemo } from 'react'
 import type { KeyboardEvent } from 'react'
-import { StateDot, type StateDotState } from '@xrkseek/client-ui-primitives'
+import { StateDot, subagentActivityDot } from '@xrkseek/client-ui-primitives'
 import css from './SubagentGraphBoard.module.css'
 
 export interface SubagentGraphNode {
@@ -77,23 +77,6 @@ const PAD_X = 16
 const PAD_Y = 20
 
 type LiveOutcomeKind = LiveOutcome['kind']
-
-function activityDot(
-  activity: 'running' | 'inactive' | undefined,
-  outcomeKind: LiveOutcomeKind | undefined,
-): StateDotState {
-  if (activity === 'running') return 'ongoing'
-  if (
-    outcomeKind === 'aborted' ||
-    outcomeKind === 'error' ||
-    outcomeKind === 'interrupted' ||
-    outcomeKind === 'max-tokens' ||
-    outcomeKind === 'blocked'
-  ) {
-    return 'error'
-  }
-  return 'done'
-}
 
 /** Verdict for one node: its own terminal axis first, then any `live` row. */
 function outcomeOf(
@@ -405,7 +388,7 @@ export function SubagentGraphBoard({
                 : {})}
             >
               <StateDot
-                state={activityDot(node.activity, outcome?.kind)}
+                state={subagentActivityDot(node.activity, outcome?.kind)}
                 size={8}
               />
               <div className={css.nodeText}>

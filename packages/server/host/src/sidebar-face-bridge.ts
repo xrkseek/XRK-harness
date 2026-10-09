@@ -9,6 +9,7 @@ import {
   type SubagentPreviewSummary,
 } from "@xrkseek/protocol";
 import {
+  describeChildOutcome,
   dispatchFaceMethod,
   hostOpenPath,
   isChildSessionActive,
@@ -29,21 +30,30 @@ import { liveLineFromSessionEvents } from "./sidebar-live-line.js";
 const JOB_OUTPUT_LIMIT = 256_000;
 const CHANGES_EVENTS_CAP = 4000;
 
+/** One descendant link plus BFS depth from the preview/live root (1 = direct). */
+type DescendantLink = {
+  readonly link: FaceSubagentLink;
+  readonly depth: number;
+};
+
 /** BFS over Face subagent links (root excluded). */
 function collectDescendantLinks(
   face: FaceRuntime,
   rootSessionId: string,
-): FaceSubagentLink[] {
-  const out: FaceSubagentLink[] = [];
-  const queue = [rootSessionId];
+): DescendantLink[] {
+  const out: DescendantLink[] = [];
+  const queue: { id: string; depth: number }[] = [
+    { id: rootSessionId, depth: 0 },
+  ];
   const seen = new Set<string>([rootSessionId]);
   while (queue.length > 0) {
     const parent = queue.shift()!;
-    for (const link of face.subagents.list(parent)) {
+    for (const link of face.subagents.list(parent.id)) {
       if (seen.has(link.childSessionId)) continue;
       seen.add(link.childSessionId);
-      out.push(link);
-      queue.push(link.childSessionId);
+      const depth = parent.depth + 1;
+      out.push({ link, depth });
+      queue.push({ id: link.childSessionId, depth });
     }
   }
   return out;
@@ -121,7 +131,7 @@ export function createSidebarFaceBridgeFromFace(
 
     async listSubagentsLive(rootSessionId) {
       const live: Record<string, SidebarSubagentLiveActivity> = {};
-      for (const link of collectDescendantLinks(face, rootSessionId)) {
+      for (const { link } of collectDescendantLinks(face, rootSessionId)) {
         if (link.mode === "fork") continue;
         const childId = link.childSessionId;
         // Same predicate as the Overview board: an ACP / app-server child is
@@ -136,13 +146,17 @@ export function createSidebarFaceBridgeFromFace(
 
     async listSubagentPreviews(rootSessionId) {
       const previews: SubagentPreviewSummary[] = [];
-      for (const link of collectDescendantLinks(face, rootSessionId)) {
+      for (const { link, depth } of collectDescendantLinks(
+        face,
+        rootSessionId,
+      )) {
         if (link.mode === "fork") continue;
         if (!face.store.has(link.childSessionId)) continue;
         const activity = isChildSessionActive(face, link.childSessionId)
           ? ("running" as const)
           : ("inactive" as const);
         const events = readSessionEvents(face.store, link.childSessionId);
+        const outcome = describeChildOutcome(events);
         const live =
           activity === "running"
             ? liveLineFromSessionEvents(events)
@@ -158,6 +172,9 @@ export function createSidebarFaceBridgeFromFace(
           childSessionId: link.childSessionId,
           mode: link.mode,
           activity,
+          outcome,
+          depth,
+          parentSessionId: link.parentSessionId,
           ...(link.label ? { label: link.label } : {}),
           ...(live !== undefined ? { live } : {}),
           ...(lastAssistantPreview !== undefined
@@ -183,7 +200,25 @@ export function createSidebarFaceBridgeFromFace(
       } else if (action?.op === "remove") {
         face.agentTeams.removeNode(action.nodeId);
       }
-      return face.agentTeams.view(rootSessionId);
+      // Decorate with the same activity/outcome axes Status / top-bar use so
+      // better-sidebar does not invent a third state machine for the graph.
+      const view = face.agentTeams.view(rootSessionId);
+      return {
+        nodes: view.nodes.map((n) => {
+          const activity = isChildSessionActive(face, n.id)
+            ? ("running" as const)
+            : ("inactive" as const);
+          const outcome = face.store.has(n.id)
+            ? describeChildOutcome(readSessionEvents(face.store, n.id))
+            : undefined;
+          return {
+            ...n,
+            activity,
+            ...(outcome ? { outcome } : {}),
+          };
+        }),
+        edges: view.edges,
+      };
     },
 
     async getPlanPreview(sessionId) {

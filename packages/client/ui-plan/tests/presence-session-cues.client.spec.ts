@@ -48,4 +48,36 @@ describe('presenceSessionCuesSnapshot', () => {
     expect(first).toBe(second)
     expect(first.toolError).toBe(second.toolError)
   })
+
+  it('ignores assistant stream time jumps so the snapshot reference stays stable', () => {
+    const base = [
+      { kind: 'user', time: 100 },
+      { kind: 'assistant', time: 200 },
+    ]
+    const first = presenceSessionCuesSnapshot('s5', base, 250)
+    const streamed = [
+      { kind: 'user', time: 100 },
+      { kind: 'assistant', time: 280 },
+    ]
+    const second = presenceSessionCuesSnapshot('s5', streamed, 290)
+    expect(second).toBe(first)
+    expect(first.activityAt).toBe(100)
+  })
+
+  it('still updates when a tool-result error lands during the stream', () => {
+    const streaming = [
+      { kind: 'user', time: 100 },
+      { kind: 'assistant', time: 200 },
+    ]
+    const first = presenceSessionCuesSnapshot('s6', streaming, 210)
+    const withError = [
+      { kind: 'user', time: 100 },
+      { kind: 'assistant', time: 220 },
+      { kind: 'tool-result', time: 230, isError: true, call: { name: 'bash' } },
+    ]
+    const second = presenceSessionCuesSnapshot('s6', withError, 240)
+    expect(second).not.toBe(first)
+    expect(second.toolError).toEqual({ name: 'bash' })
+    expect(second.activityAt).toBe(230)
+  })
 })
