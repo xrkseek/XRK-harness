@@ -23,12 +23,14 @@ import {
 import { registerDesktopIpcHandlers } from "./desktop-ipc.js";
 import {
   getDesktopHostPhase,
+  getLastHostFailure,
   isDesktopHostFetchReady,
   markDesktopHostFetchReady,
   publishDesktopHostFailed,
   publishDesktopHostPhase,
   resetDesktopHostFetchReady,
   scheduleDesktopHostFetchAttach,
+  type DesktopHostBringUpHandle,
 } from "./desktop-host-attach.js";
 import { startDesktopMain } from "./desktop-bootstrap.js";
 import {
@@ -167,6 +169,8 @@ function loadProductShell(window: BrowserWindow): void {
 }
 
 let desktopHost: DesktopHostProcess | undefined;
+/** Active bring-up scheduler (auto-restart + manual rebring). */
+let desktopHostBringUp: DesktopHostBringUpHandle | undefined;
 /** Set on will-quit so Host exit does not auto-restart into a dying app. */
 let desktopQuitting = false;
 let updateCoordinator: DesktopUpdateCoordinator | undefined;
@@ -174,7 +178,10 @@ let updateSchedule: DesktopUpdateSchedule | undefined;
 
 async function startDesktopHostCarrier(
   webRoot: string,
-  hooks: { readonly onSpawned?: () => void } = {},
+  hooks: {
+    readonly onSpawned?: () => void;
+    readonly attempt?: number;
+  } = {},
 ): Promise<DesktopHostProcess | undefined> {
   try {
     const runtime = app.isPackaged
@@ -187,8 +194,11 @@ async function startDesktopHostCarrier(
       isPackaged: app.isPackaged,
       desktopAppRoot: DESKTOP_APP_ROOT,
     });
+    const attempt = hooks.attempt ?? 0;
     const host = new DesktopHostProcess(runtime.nodeExecutable, runtime.projectDir, {
       entry: runtime.entry,
+      // Cold start may be slow; mid-session restarts must not pin UI for 120s.
+      readyTimeoutMs: attempt === 0 ? 120_000 : 30_000,
       env: {
         XRK_HOME: xrkHome,
         XRK_WEB_DIST: runtime.webDist,
@@ -198,18 +208,18 @@ async function startDesktopHostCarrier(
         NODE_COMPILE_CACHE: resolveDesktopHostCompileCacheDir(xrkHome),
       },
       ...(hooks.onSpawned !== undefined ? { onSpawned: hooks.onSpawned } : {}),
+      onEarlyDeath: () => {
+        desktopHostFetchApp = undefined;
+        if (desktopHost !== undefined) desktopHost = undefined;
+        resetDesktopHostFetchReady();
+      },
     });
     await host.start();
     desktopHost = host;
     return host;
   } catch (error) {
+    // Mid-restart failures must not ErrorBox-spam; final onFailed may dialog.
     console.error(error);
-    dialog.showErrorBox(
-      desktopWindowTitle(),
-      error instanceof Error
-        ? `Desktop Host failed to start:\n${error.message}`
-        : String(error),
-    );
     return undefined;
   }
 }
@@ -224,23 +234,20 @@ function liveHostWindows(): Electron.WebContents[] {
 
 function beginDesktopHostBringUp(webRoot: string): void {
   resetDesktopHostFetchReady();
-  scheduleDesktopHostFetchAttach({
-    start: (hooks) => startDesktopHostCarrier(webRoot, hooks),
+  desktopHostBringUp = scheduleDesktopHostFetchAttach({
+    start: (hooks) =>
+      startDesktopHostCarrier(webRoot, {
+        attempt: hooks.attempt,
+        ...(hooks.onSpawned !== undefined ? { onSpawned: hooks.onSpawned } : {}),
+      }),
     onPhase: (phase) => {
       publishDesktopHostPhase(phase, DESKTOP_IPC.hostPhase, liveHostWindows());
     },
     attach: (host) => {
-      const origin = host.faceOrigin;
-      if (origin === undefined) {
-        publishDesktopHostFailed(
-          DESKTOP_IPC.hostFailed,
-          liveHostWindows(),
-          "Desktop Host ready without loopback origin",
-        );
-        return;
-      }
       // Keep the existing `xrk-app://` document — wire Fetch, then mark ready
       // so the same React splash continues into plugin / Face boot.
+      // Missing origin is handled by the scheduler (stop + restart budget).
+      if (host.faceOrigin === undefined) return;
       desktopHostFetchApp = (request) => host.fetch(request);
       markDesktopHostFetchReady(
         DESKTOP_IPC.hostReady,
@@ -260,6 +267,10 @@ function beginDesktopHostBringUp(webRoot: string): void {
         DESKTOP_IPC.hostFailed,
         liveHostWindows(),
         error.message,
+      );
+      dialog.showErrorBox(
+        desktopWindowTitle(),
+        `Desktop Host failed to start:\n${error.message}`,
       );
     },
   });
@@ -353,7 +364,11 @@ function registerDesktopShellIpc(): void {
       return win;
     },
     isHostReady: () => isDesktopHostFetchReady(),
+    getHostFailed: () => getLastHostFailure() ?? null,
     getHostPhase: () => getDesktopHostPhase(),
+    rebringHost: () => {
+      desktopHostBringUp?.rebring();
+    },
   });
 
   installDesktopApplicationMenu({

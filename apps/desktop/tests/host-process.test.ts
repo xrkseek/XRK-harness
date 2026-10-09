@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DESKTOP_HOST_PROTOCOL_VERSION } from "../src/host-protocol.js";
-import { DesktopHostProcess } from "../src/host-process.js";
+import {
+  appendUtf8StderrTail,
+  DESKTOP_HOST_STDERR_TAIL_MAX,
+  DesktopHostProcess,
+  formatDesktopHostDeathMessage,
+} from "../src/host-process.js";
 
 const roots: string[] = [];
 
@@ -211,5 +216,76 @@ process.on('message', (m) => { if (m.type === 'shutdown') { process.disconnect()
     });
     await expect(host.start()).rejects.toThrow(/invalid IPC event/i);
     await host.stop().catch(() => undefined);
+  });
+
+  it("records lastDeath after ready exit and notifies onEarlyDeath", async () => {
+    const { project, entry } = projectWithHost(`
+listenAndReady('death', (_req, res) => {
+  res.writeHead(200)
+  res.end('ok')
+})
+process.stderr.write('JavaScript heap out of memory\\n')
+process.on('message', (m) => {
+  if (m.type === 'die') process.exit(134)
+})
+`);
+    const early: unknown[] = [];
+    const host = new DesktopHostProcess(process.execPath, project, {
+      entry,
+      onEarlyDeath: (death) => {
+        early.push(death);
+      },
+    });
+    await host.start();
+    const child = (
+      host as unknown as { child?: { send: (msg: unknown) => void } }
+    ).child;
+    const exited = host.waitForExit();
+    child!.send({ type: "die" });
+    await exited;
+    expect(host.lastDeath).toBeDefined();
+    expect(host.lastDeath?.code).toBe(134);
+    expect(host.lastDeath?.stderrTail).toMatch(/heap out of memory/i);
+    expect(early).toHaveLength(1);
+    expect(formatDesktopHostDeathMessage(host.lastDeath!)).toMatch(/^\[OOM]/);
+  }, 15_000);
+
+  it("kills the child on IPC fatal after ready so waitForExit settles", async () => {
+    const { project, entry } = projectWithHost(`
+listenAndReady('fatal-later', (_req, res) => {
+  res.writeHead(200)
+  res.end('ok')
+})
+setTimeout(() => {
+  process.send({ type: 'fatal', message: 'runtime fatal' })
+}, 50)
+setInterval(() => {}, 60_000)
+`);
+    const host = new DesktopHostProcess(process.execPath, project, { entry });
+    await host.start();
+    await expect(
+      Promise.race([
+        host.waitForExit().then(() => "exited"),
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve("timeout"), 8_000);
+        }),
+      ]),
+    ).resolves.toBe("exited");
+    expect(host.lastDeath?.reason).toMatch(/runtime fatal/);
+  }, 15_000);
+});
+
+describe("stderr tail helpers", () => {
+  it("caps stderr growth and fingerprints OOM messages", () => {
+    const huge = "x".repeat(DESKTOP_HOST_STDERR_TAIL_MAX + 100);
+    const capped = appendUtf8StderrTail("", huge);
+    expect(capped.length).toBe(DESKTOP_HOST_STDERR_TAIL_MAX);
+    expect(
+      formatDesktopHostDeathMessage({
+        code: 1,
+        signal: null,
+        stderrTail: "JavaScript heap out of memory",
+      }),
+    ).toMatch(/^\[OOM]/);
   });
 });

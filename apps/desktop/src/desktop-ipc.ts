@@ -49,8 +49,12 @@ export interface RegisterDesktopIpcOptions {
    * Default: always false until main wires {@link markDesktopHostFetchReady}.
    */
   isHostReady?: () => boolean;
+  /** Sticky Host failure text for preload `hostFailedGet` (null when clear). */
+  getHostFailed?: () => string | null;
   /** Current Host bring-up phase for splash hints. */
   getHostPhase?: () => "starting" | "attaching" | "ready";
+  /** Manual Host rebring after restart budget exhaustion. */
+  rebringHost?: () => void;
 }
 
 const idleUpdate: DesktopUpdateState = { phase: "idle" };
@@ -123,7 +127,13 @@ export function registerDesktopIpcHandlers(
   ipcMain.handle(DESKTOP_IPC.hostReadyGet, (): boolean => {
     return options.isHostReady?.() === true;
   });
+  ipcMain.handle(DESKTOP_IPC.hostFailedGet, (): string | null => {
+    return options.getHostFailed?.() ?? null;
+  });
   ipcMain.handle(DESKTOP_IPC.hostPhaseGet, (): "starting" | "attaching" | "ready" => {
     return options.getHostPhase?.() ?? "starting";
+  });
+  ipcMain.handle(DESKTOP_IPC.hostRebring, (): void => {
+    options.rebringHost?.();
   });
 }

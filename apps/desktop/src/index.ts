@@ -269,22 +269,30 @@ export {
   type DesktopHostRuntimePaths,
 } from "./host-runtime.js";
 export {
+  appendUtf8StderrTail,
   DesktopHostProcess,
+  DESKTOP_HOST_STDERR_TAIL_MAX,
+  formatDesktopHostDeathMessage,
+  type DesktopHostDeath,
   type DesktopHostProcessOptions,
   type DesktopHostReady,
 } from "./host-process.js";
 export {
+  clearLastHostFailure,
   getDesktopHostPhase,
+  getLastHostFailure,
   isDesktopHostFetchReady,
   markDesktopHostFetchReady,
   publishDesktopHostFailed,
   publishDesktopHostPhase,
   resetDesktopHostFetchReady,
   scheduleDesktopHostFetchAttach,
+  type DesktopHostBringUpHandle,
   type DesktopHostPhase,
   type DesktopHostReadyBroadcaster,
   type ScheduleDesktopHostFetchAttachOptions,
 } from "./desktop-host-attach.js";
+export { waitForHostReady, type HostReadyWaitPorts } from "./host-ready-wait.js";
 export {
   attachDesktopNavigationGuard,
   desktopAppIndexUrl,

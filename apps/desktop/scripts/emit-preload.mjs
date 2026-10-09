@@ -4,6 +4,8 @@
  * Electron's sandbox loader does not treat package "type":"module" .js as ESM.
  *
  *   node apps/desktop/scripts/emit-preload.mjs
+ *
+ * Keep in sync with src/preload-app.ts (+ host-ready-wait listen-first gate).
  */
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -35,8 +37,10 @@ const DESKTOP_IPC = {
   hostReadyGet: "xrk-desktop:host-ready-get",
   hostReady: "xrk-desktop:host-ready",
   hostFailed: "xrk-desktop:host-failed",
+  hostFailedGet: "xrk-desktop:host-failed-get",
   hostPhaseGet: "xrk-desktop:host-phase-get",
   hostPhase: "xrk-desktop:host-phase",
+  hostRebring: "xrk-desktop:host-rebring",
 };
 const DESKTOP_BRIDGE_PROTOCOL_VERSION = 1;
 
@@ -101,41 +105,59 @@ const api = {
 
 contextBridge.exposeInMainWorld("xrkDesktop", api);
 
-function whenHostReady() {
+/** Listen-first Host Fetch gate (mirrors src/host-ready-wait.ts). */
+function waitForHostReady(ports) {
   return new Promise((resolve, reject) => {
-    const cleanup = (onReady, onFailed) => {
-      ipcRenderer.off(DESKTOP_IPC.hostReady, onReady);
-      ipcRenderer.off(DESKTOP_IPC.hostFailed, onFailed);
+    let settled = false;
+    let unsubReady = () => {};
+    let unsubFailed = () => {};
+    const settle = (fn) => {
+      if (settled) return;
+      settled = true;
+      unsubReady();
+      unsubFailed();
+      fn();
     };
-    void ipcRenderer.invoke(DESKTOP_IPC.hostReadyGet).then((ready) => {
-      if (ready === true) {
-        setHostPhase("ready");
+    unsubReady = ports.onReady(() => {
+      settle(() => {
         resolve();
-        return;
-      }
-      const onReady = () => {
-        cleanup(onReady, onFailed);
-        setHostPhase("ready");
-        resolve();
-      };
-      const onFailed = (_event, message) => {
-        cleanup(onReady, onFailed);
+      });
+    });
+    unsubFailed = ports.onFailed((message) => {
+      settle(() => {
         reject(
           new Error(
-            typeof message === "string" && message.trim() !== ""
-              ? message
-              : "Desktop Host failed to start",
+            message.trim() !== "" ? message : "Desktop Host failed to start",
           ),
         );
-      };
-      ipcRenderer.on(DESKTOP_IPC.hostReady, onReady);
-      ipcRenderer.on(DESKTOP_IPC.hostFailed, onFailed);
+      });
     });
+    void (async () => {
+      try {
+        if (await ports.getReady()) {
+          settle(() => {
+            resolve();
+          });
+          return;
+        }
+        const failed = await ports.getFailed();
+        if (failed !== null && failed.trim() !== "") {
+          settle(() => {
+            reject(new Error(failed));
+          });
+        }
+      } catch (error) {
+        settle(() => {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      }
+    })();
   });
 }
 
 let hostPhase = "starting";
 const hostPhaseListeners = new Set();
+const hostReadyListeners = new Set();
 
 function isHostPhase(value) {
   return value === "starting" || value === "attaching" || value === "ready";
@@ -151,9 +173,52 @@ ipcRenderer.on(DESKTOP_IPC.hostPhase, (_event, phase) => {
   if (isHostPhase(phase)) setHostPhase(phase);
 });
 
+ipcRenderer.on(DESKTOP_IPC.hostReady, () => {
+  setHostPhase("ready");
+  for (const listener of hostReadyListeners) listener();
+});
+
 void ipcRenderer.invoke(DESKTOP_IPC.hostPhaseGet).then((phase) => {
   if (isHostPhase(phase)) setHostPhase(phase);
 });
+
+function whenHostReady() {
+  return waitForHostReady({
+    getReady: async () => {
+      const ready = await ipcRenderer.invoke(DESKTOP_IPC.hostReadyGet);
+      if (ready === true) setHostPhase("ready");
+      return ready === true;
+    },
+    getFailed: async () => {
+      const failed = await ipcRenderer.invoke(DESKTOP_IPC.hostFailedGet);
+      return typeof failed === "string" ? failed : null;
+    },
+    onReady: (listener) => {
+      const handle = () => {
+        listener();
+      };
+      ipcRenderer.on(DESKTOP_IPC.hostReady, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.hostReady, handle);
+      };
+    },
+    onFailed: (listener) => {
+      const handle = (_event, message) => {
+        listener(
+          typeof message === "string" && message.trim() !== ""
+            ? message
+            : "Desktop Host failed to start",
+        );
+      };
+      ipcRenderer.on(DESKTOP_IPC.hostFailed, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.hostFailed, handle);
+      };
+    },
+  }).then(() => {
+    setHostPhase("ready");
+  });
+}
 
 function getHostPhase() {
   return hostPhase;
@@ -166,6 +231,17 @@ function subscribeHostPhase(listener) {
   };
 }
 
+function subscribeHostReady(listener) {
+  hostReadyListeners.add(listener);
+  return () => {
+    hostReadyListeners.delete(listener);
+  };
+}
+
+function requestHostRebring() {
+  return ipcRenderer.invoke(DESKTOP_IPC.hostRebring).then(() => undefined);
+}
+
 // Desktop owns the private Host. Product UI stays on xrk-app://; Face is
 // proxied to the loopback Host after ready. whenHostReady gates Face connect.
 contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
@@ -173,6 +249,8 @@ contextBridge.exposeInMainWorld("__XRK_TRANSPORT__", {
   whenHostReady,
   getHostPhase,
   subscribeHostPhase,
+  subscribeHostReady,
+  requestHostRebring,
 });
 `;
 

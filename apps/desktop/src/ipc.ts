@@ -22,10 +22,14 @@ export const DESKTOP_IPC = {
   hostReady: "xrk-desktop:host-ready",
   /** Push when Host spawn/ready fails (renderer fails splash loud). */
   hostFailed: "xrk-desktop:host-failed",
+  /** Sticky Host failure message after `hostFailed` (null when none). */
+  hostFailedGet: "xrk-desktop:host-failed-get",
   /** Current Host bring-up phase (`starting` | `attaching` | `ready`). */
   hostPhaseGet: "xrk-desktop:host-phase-get",
   /** Push Host bring-up phase for splash hints. */
   hostPhase: "xrk-desktop:host-phase",
+  /** After restart budget exhaustion: clear sticky and schedule bring-up again. */
+  hostRebring: "xrk-desktop:host-rebring",
 } as const;
 
 /** Renderer bridge marker (≠ Host framed-pipe protocol version). */

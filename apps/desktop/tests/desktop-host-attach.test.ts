@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearLastHostFailure,
   getDesktopHostPhase,
+  getLastHostFailure,
   isDesktopHostFetchReady,
   markDesktopHostFetchReady,
+  publishDesktopHostFailed,
   publishDesktopHostPhase,
   resetDesktopHostFetchReady,
   scheduleDesktopHostFetchAttach,
@@ -11,7 +14,23 @@ import type { DesktopHostProcess } from "../src/host-process.js";
 
 afterEach(() => {
   resetDesktopHostFetchReady();
+  clearLastHostFailure();
 });
+
+function fakeHost(
+  overrides: Partial<DesktopHostProcess> & {
+    waitForExit?: () => Promise<void>;
+  } = {},
+): DesktopHostProcess {
+  return {
+    faceOrigin: "http://127.0.0.1:9",
+    stopWasRequested: false,
+    lastDeath: undefined,
+    waitForExit: () => new Promise<void>(() => {}),
+    stop: vi.fn(async () => {}),
+    ...overrides,
+  } as unknown as DesktopHostProcess;
+}
 
 describe("scheduleDesktopHostFetchAttach", () => {
   it("does not block the caller and attaches after Host ready", async () => {
@@ -36,17 +55,13 @@ describe("scheduleDesktopHostFetchAttach", () => {
     expect(onPhase).toHaveBeenCalledWith("starting");
     expect(onPhase).toHaveBeenCalledWith("attaching");
 
-    const fakeHost = {
-      fetch: vi.fn(),
-      stopWasRequested: false,
-      waitForExit: () => new Promise<void>(() => {}),
-    } as unknown as DesktopHostProcess;
-    resolveHost(fakeHost);
+    const host = fakeHost();
+    resolveHost(host);
     await hostPromise;
     await vi.waitFor(() => {
       expect(attach).toHaveBeenCalledOnce();
     });
-    expect(attach).toHaveBeenCalledWith(fakeHost);
+    expect(attach).toHaveBeenCalledWith(host);
   });
 
   it("skips attach when Host start returns undefined and reports failure", async () => {
@@ -66,6 +81,26 @@ describe("scheduleDesktopHostFetchAttach", () => {
     expect(attach).not.toHaveBeenCalled();
   });
 
+  it("retries start failures within restartMaxAttempts then fails", async () => {
+    const onFailed = vi.fn();
+    let starts = 0;
+    scheduleDesktopHostFetchAttach({
+      start: async ({ onSpawned }) => {
+        starts += 1;
+        onSpawned();
+        return undefined;
+      },
+      attach: vi.fn(),
+      onFailed,
+      restartMaxAttempts: 2,
+      restartDelayMs: 5,
+    });
+    await vi.waitFor(() => {
+      expect(onFailed).toHaveBeenCalledOnce();
+    });
+    expect(starts).toBe(3);
+  });
+
   it("restarts after unexpected Host exit when restartMaxAttempts is set", async () => {
     let exitResolve!: () => void;
     const exitPromise = new Promise<void>((resolve) => {
@@ -78,11 +113,10 @@ describe("scheduleDesktopHostFetchAttach", () => {
       start: async ({ onSpawned }) => {
         startCount += 1;
         onSpawned();
-        return {
-          stopWasRequested: false,
+        return fakeHost({
           waitForExit: () =>
             startCount === 1 ? exitPromise : new Promise<void>(() => {}),
-        } as unknown as DesktopHostProcess;
+        });
       },
       attach,
       detach,
@@ -94,6 +128,49 @@ describe("scheduleDesktopHostFetchAttach", () => {
     await vi.waitFor(() => expect(detach).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
     expect(startCount).toBe(2);
+  });
+
+  it("rebring clears sticky failure and starts again after budget exhaust", async () => {
+    const onFailed = vi.fn();
+    let starts = 0;
+    const handle = scheduleDesktopHostFetchAttach({
+      start: async ({ onSpawned }) => {
+        starts += 1;
+        onSpawned();
+        if (starts <= 2) return undefined;
+        return fakeHost();
+      },
+      attach: vi.fn(),
+      onFailed,
+      restartMaxAttempts: 1,
+      restartDelayMs: 5,
+    });
+    await vi.waitFor(() => expect(onFailed).toHaveBeenCalledOnce());
+    expect(getLastHostFailure()).toBeUndefined();
+    publishDesktopHostFailed("fail", [], "budget gone");
+    expect(getLastHostFailure()).toBe("budget gone");
+    const before = starts;
+    handle.rebring();
+    await vi.waitFor(() => expect(starts).toBeGreaterThan(before));
+    expect(getLastHostFailure()).toBeUndefined();
+  });
+
+  it("rebring is a no-op while Host Fetch is ready and healthy", async () => {
+    let starts = 0;
+    const handle = scheduleDesktopHostFetchAttach({
+      start: async ({ onSpawned }) => {
+        starts += 1;
+        onSpawned();
+        return fakeHost();
+      },
+      attach: () => {
+        markDesktopHostFetchReady("ready", "phase", []);
+      },
+    });
+    await vi.waitFor(() => expect(starts).toBe(1));
+    await vi.waitFor(() => expect(isDesktopHostFetchReady()).toBe(true));
+    handle.rebring();
+    expect(starts).toBe(1);
   });
 });
 
@@ -112,6 +189,13 @@ describe("host fetch ready gate", () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledWith("xrk-desktop:host-phase", "ready");
     expect(send).toHaveBeenCalledWith("xrk-desktop:host-ready");
+  });
+
+  it("stores sticky failure on publishDesktopHostFailed and clears on mark ready", () => {
+    publishDesktopHostFailed("fail", [], "nope");
+    expect(getLastHostFailure()).toBe("nope");
+    markDesktopHostFetchReady("ready", "phase", []);
+    expect(getLastHostFailure()).toBeUndefined();
   });
 
   it("does not re-broadcast on a second mark", () => {

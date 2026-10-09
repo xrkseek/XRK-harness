@@ -14,6 +14,17 @@ import {
   type DesktopHostEvent,
 } from "./host-protocol.js";
 
+/** Cap Host stderr retained for post-ready death forensics (OOM fingerprinted). */
+export const DESKTOP_HOST_STDERR_TAIL_MAX = 64 * 1024;
+
+/** How a Desktop Host child died (readable after ready — `fail()` alone is a no-op then). */
+export interface DesktopHostDeath {
+  readonly code: number | null;
+  readonly signal: NodeJS.Signals | null;
+  readonly stderrTail: string;
+  readonly reason?: string;
+}
+
 export interface DesktopHostProcessOptions {
   /** Optional loopback inspector port for development. */
   readonly inspectPort?: number;
@@ -37,6 +48,11 @@ export interface DesktopHostProcessOptions {
    * `0` disables the timeout.
    */
   readonly readyTimeoutMs?: number;
+  /**
+   * Fired synchronously on child exit / fatal so main can clear Fetch before
+   * `waitForExit` Promise microtasks run (shrinks the stale-ready window).
+   */
+  readonly onEarlyDeath?: (death: DesktopHostDeath) => void;
 }
 
 /** Ready facts reported by one Desktop Host child. */
@@ -129,6 +145,29 @@ function defaultHostEntry(projectDir: string): string {
   );
 }
 
+export function appendUtf8StderrTail(previous: string, chunk: string): string {
+  const next = previous + chunk;
+  if (next.length <= DESKTOP_HOST_STDERR_TAIL_MAX) return next;
+  return next.slice(next.length - DESKTOP_HOST_STDERR_TAIL_MAX);
+}
+
+/** Prefix OOM fingerprints for shell / Face failure copy. */
+export function formatDesktopHostDeathMessage(death: DesktopHostDeath): string {
+  const tail = death.stderrTail.trim();
+  const oom =
+    /JavaScript heap out of memory/u.test(tail) ||
+    /heap limit/iu.test(tail);
+  const codePart =
+    death.code !== null && death.code !== 0
+      ? `exit ${String(death.code)}`
+      : death.signal !== null
+        ? `signal ${death.signal}`
+        : death.reason ?? "stopped";
+  const body = tail === "" ? codePart : `${codePart}: ${tail}`;
+  const clipped = body.length <= 500 ? body : `${body.slice(0, 500)}…`;
+  return oom ? `[OOM] ${clipped}` : clipped;
+}
+
 /** One Desktop Host running under a bundled (or test) upstream Node.js executable. */
 export class DesktopHostProcess {
   private child: ChildProcess | undefined;
@@ -144,10 +183,13 @@ export class DesktopHostProcess {
   );
   private exitPromise: Promise<void> | undefined;
   private stderr = "";
+  private deathRecorded = false;
+  private lastDeathValue: DesktopHostDeath | undefined;
   private readonly inspectPort: number | undefined;
   private readonly entry: string;
   private readonly childEnvironment: NodeJS.ProcessEnv | undefined;
   private readonly onSpawned: (() => void) | undefined;
+  private readonly onEarlyDeath: ((death: DesktopHostDeath) => void) | undefined;
   private readonly readyTimeoutMs: number;
   private readyTimer: ReturnType<typeof setTimeout> | undefined;
   /** Set by {@link stop} so attach logic can skip auto-restart on quit. */
@@ -162,6 +204,7 @@ export class DesktopHostProcess {
     this.entry = options.entry ?? defaultHostEntry(projectDir);
     this.childEnvironment = options.env;
     this.onSpawned = options.onSpawned;
+    this.onEarlyDeath = options.onEarlyDeath;
     this.readyTimeoutMs = options.readyTimeoutMs ?? 120_000;
   }
 
@@ -173,6 +216,11 @@ export class DesktopHostProcess {
   /** Loopback Face origin after {@link start} resolves; `undefined` before ready. */
   get faceOrigin(): string | undefined {
     return this.origin;
+  }
+
+  /** Last exit / fatal facts (set even after a successful ready). */
+  get lastDeath(): DesktopHostDeath | undefined {
+    return this.lastDeathValue;
   }
 
   /**
@@ -206,7 +254,7 @@ export class DesktopHostProcess {
     this.child = child;
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
-      this.stderr += chunk;
+      this.stderr = appendUtf8StderrTail(this.stderr, chunk);
     });
     child.stdout?.pipe(process.stdout);
     child.on("message", (message: unknown) => {
@@ -231,7 +279,16 @@ export class DesktopHostProcess {
       }
     });
     this.exitPromise = new Promise<void>((resolve) => {
-      child.once("exit", (code) => {
+      child.once("exit", (code, signal) => {
+        this.recordDeath({
+          code,
+          signal,
+          stderrTail: this.stderr,
+          reason:
+            code !== 0 && code !== null
+              ? `exited with ${String(code)}`
+              : "stopped",
+        });
         const suffix =
           this.stderr.trim() === "" ? "" : `: ${this.stderr.trim()}`;
         if (code !== 0 && code !== null) {
@@ -342,11 +399,37 @@ export class DesktopHostProcess {
           origin: this.origin,
         });
         return;
-      case "fatal":
+      case "fatal": {
+        this.recordDeath({
+          code: null,
+          signal: null,
+          stderrTail: this.stderr,
+          reason: message.message,
+        });
         this.fail(new Error(message.message));
+        const child = this.child;
+        if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+          try {
+            child.kill("SIGTERM");
+          } catch {
+            // already gone
+          }
+        }
         return;
+      }
       default:
         message satisfies never;
+    }
+  }
+
+  private recordDeath(death: DesktopHostDeath): void {
+    if (this.deathRecorded) return;
+    this.deathRecorded = true;
+    this.lastDeathValue = death;
+    try {
+      this.onEarlyDeath?.(death);
+    } catch {
+      // never block exit path
     }
   }
 
