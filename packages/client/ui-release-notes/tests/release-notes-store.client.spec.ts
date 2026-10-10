@@ -142,6 +142,6 @@ describe('bundled release notes', () => {
       expect(change.en.trim()).not.toBe('')
     }
     expect(RELEASE_NOTES.some((note) => note.version === '0.1.0')).toBe(false)
-    expect(latestReleaseVersion()).toBe('0.5.23')
+    expect(latestReleaseVersion()).toBe('0.5.24')
   })
 })

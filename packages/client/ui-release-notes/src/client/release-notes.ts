@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.24',
+    date: '2026-10-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '右键菜单在编辑器里走编辑器自己的撤销栈；选中内容不再因菜单偷焦点丢失；复制 / 剪切真正进系统剪贴板。',
+        en: 'The context menu drives the editor’s own undo stack; the right-click selection survives focus theft; copy / cut really reach the system clipboard.',
+      },
+      {
+        zh: '菜单打开时外壳不再被挤瘦；技能目录被截断时提示代理自己列目录，别即兴发挥。',
+        en: 'An open menu no longer squeezes the shell; a budget-truncated skill catalog tells the agent to list the dirs instead of improvising.',
+      },
+    ],
+  },
+  {
     version: '0.5.23',
     date: '2026-10-10',
     title: {
