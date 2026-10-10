@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.22',
+    date: '2026-10-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '桌面「安装并重启」不再闪回可安装态；粘贴折叠块与查看弹窗改用统一按钮。',
+        en: 'Desktop install no longer flashes back to ready; the paste fold and its modal use the shared buttons.',
+      },
+      {
+        zh: '输入框与模态内右键保留原生菜单；侧栏产出文件字号恢复；旧清单键的社区包可加载。',
+        en: 'Right-click keeps the native menu in fields and modals; produced-files caption size restored; legacy-key community packages load again.',
+      },
+    ],
+  },
+  {
     version: '0.5.21',
     date: '2026-10-10',
     title: {
