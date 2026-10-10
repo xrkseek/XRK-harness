@@ -124,8 +124,9 @@ export function ContextMenuHost({
         event.target instanceof Element ? event.target : null;
       // Native text fields + modal dialogs keep the browser menu. A portaled
       // Menu steals focus (and can scroll the page behind a dialog), which
-      // made the shell look "squeezed" and broke Ctrl+A / Select All on
-      // textarea edit surfaces such as the pasted-text modal.
+      // broke Ctrl+A / Select All on textarea edit surfaces such as the
+      // pasted-text modal. (Shell squeeze from an in-flow portal host is
+      // handled separately by Menu's `.detachedRoot`.)
       if (
         target !== null
         && target.closest(

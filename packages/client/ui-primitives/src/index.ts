@@ -21,9 +21,11 @@ export type { ContextMenuHostProps } from './ContextMenu.tsx'
 export {
   buildContextMenuEntries,
   contextMenuCommandEnabled,
+  contextMenuHistoryEnabled,
   hasContextMenuSelection,
   probeContextMenuClipboard,
   readContextMenuHit,
+  restoreContextMenuSelection,
 } from './context-menu.ts'
 export type {
   ClipboardProbe,
@@ -31,6 +33,7 @@ export type {
   ContextMenuEntry,
   ContextMenuHit,
   ContextMenuLabels,
+  ContextMenuSelectionBookmark,
 } from './context-menu.ts'
 export { domContextMenuActions } from './contextMenuGestures.ts'
 export { useAnchoredMaxHeight } from './useAnchoredMaxHeight.ts'

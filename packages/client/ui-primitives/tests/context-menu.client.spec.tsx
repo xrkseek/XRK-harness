@@ -189,13 +189,13 @@ describe("ContextMenuHost", () => {
     const el = screen.getByTestId("composer");
     selectContents(el);
     await rightClick(el);
-    // Focus lands on the first *enabled* row (paste/undo/redo are greyed out
-    // here) once the placement frame has run.
+    // Contenteditable keeps undo/redo enabled (Lexical history); paste stays
+    // grey without a clipboard stub. Focus lands on the first enabled row.
     await waitFor(() => {
-      expect(document.activeElement?.textContent).toBe("Cut");
+      expect(document.activeElement?.textContent).toBe("Undo");
     });
     fireEvent.keyDown(document, { key: "ArrowDown" });
-    expect(document.activeElement?.textContent).toBe("Copy");
+    expect(document.activeElement?.textContent).toBe("Redo");
     fireEvent.keyDown(document, { key: "End" });
     expect(document.activeElement?.textContent).toBe("Select All");
   });

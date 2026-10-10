@@ -300,6 +300,27 @@ describe('Menu', () => {
     expect(menu.style.top).toBe('132px')
   })
 
+  it('portal mode with no in-flow anchor detaches the host so it cannot grow a body scrollbar', () => {
+    const { container } = render(
+      <Menu
+        portal
+        open
+        getAnchorRect={() => new DOMRect(40, 100, 0, 0)}
+        anchor={null}
+        items={items}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />)
+    const host = container.firstElementChild as HTMLElement
+    expect(host.tagName).toBe('SPAN')
+    // Out of flow + zero box (Menu.module.css `.detachedRoot`): an empty
+    // inline-flex after AppFrame used to add a line box and pop a body
+    // scrollbar. jsdom does not apply the sheet, so the class token is the
+    // contract this lane can assert.
+    expect(host.className).toContain('detachedRoot')
+    expect(screen.getByRole('menu').parentElement).toBe(document.body)
+  })
+
   it('portal mode skips the frame when getAnchorRect returns null (no menu until a rect exists)', () => {
     render(
       <Menu

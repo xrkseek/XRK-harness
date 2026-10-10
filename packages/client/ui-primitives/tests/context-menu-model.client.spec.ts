@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildContextMenuEntries,
+  contextMenuHistoryEnabled,
   hasContextMenuSelection,
   probeContextMenuClipboard,
   readContextMenuHit,
@@ -63,7 +64,10 @@ function rowsOf(hit: ContextMenuHit, clipboard = { hasText: false, hasFiles: fal
 describe('context menu hit', () => {
   it('reads a text control selection, which is not a document selection', () => {
     const selected = textareaWithSelection(0, 5)
-    expect(hasContextMenuSelection(hitOn(selected))).toBe(true)
+    const selectedHit = hitOn(selected)
+    expect(hasContextMenuSelection(selectedHit)).toBe(true)
+    expect(selectedHit.selectionText).toBe('draft')
+    expect(selectedHit.selection).toEqual({ kind: 'control', start: 0, end: 5 })
     const caretOnly = textareaWithSelection(3, 3)
     expect(hasContextMenuSelection(hitOn(caretOnly))).toBe(false)
   })
@@ -108,6 +112,23 @@ describe('context menu rows', () => {
     expect(rowsOf(hitOn(editor))).toEqual(['undo', 'redo', 'cut', 'copy', 'paste', 'delete', 'select-all'])
     const paste = entries.find(entry => entry.kind === 'row' && entry.id === 'paste')
     expect(paste?.kind === 'row' && paste.disabled).toBe(true)
+  })
+
+  it('keeps undo/redo enabled on contenteditable (Lexical owns that stack)', () => {
+    const editor = document.createElement('div')
+    editor.setAttribute('contenteditable', 'true')
+    document.body.append(editor)
+    const hit = hitOn(editor)
+    // queryCommandEnabled would often say false; the composer still needs the rows.
+    expect(contextMenuHistoryEnabled(hit, 'undo')).toBe(true)
+    expect(contextMenuHistoryEnabled(hit, 'redo')).toBe(true)
+    const entries = buildContextMenuEntries({
+      hit, labels, clipboard: { hasText: false, hasFiles: false }, actions,
+    })
+    for (const id of ['undo', 'redo']) {
+      const row = entries.find(entry => entry.kind === 'row' && entry.id === id)
+      expect(row?.kind === 'row' && row.disabled).toBe(false)
+    }
   })
 
   it('enables paste when only an image is on the clipboard', () => {
