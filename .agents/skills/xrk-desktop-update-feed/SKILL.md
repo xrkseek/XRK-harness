@@ -108,21 +108,22 @@ Cursor 锁住 `app.asar`（`EBUSY`）时设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=
 不要整目录盲传旧版大 exe。只推本版：
 
 数据根（勿放错）：`/root/cs/XRK-AGT/data/harness-download/`（= AGT `paths.data` + `harness-download`）。  
-公开 HTTPS：`https://xrk.siphot.com/api/harness/…`（openresty → `:6969`）。直连调试用 IP:6969。
+官网 HTTPS：`https://xrk.siphot.com/api/harness/…`（只服务 `/releases` · `/download/:target` · 相对路径）。  
+壳内更新 **exe 绝对 URL** 用 `local.md` 里的直连 `http://IP:6969/api/harness`（公网 HTTPS 大文件会卡 0%）。
 
 1. 本地 stage：
    - `…/bin/win-x64/xrk-harness-N-win-x64.exe` ← 从 `*-unsigned.exe` **复制改名**
    - 同名 `.blockmap`
    - `nightly.yml` / `latest.yml`：`version: N`，`url`/`path` 用  
-     **`https://xrk.siphot.com/api/harness/desktop/bin/win-x64/xrk-harness-N-win-x64.exe`**  
-     （不要写裸 `http://IP:6969`，部分网络拦明文端口 → 更新下载失败）
-2. **先传完整 exe + blockmap**（`stat` 大小 == 本地；`HEAD` Content-Length 对齐）
+     **`http://<AGT-IP>:6969/api/harness/desktop/bin/win-x64/xrk-harness-N-win-x64.exe`**  
+     （IP 只写 `local.md`；**官网**仍走 siphot 相对 `/download/...`，不要改 `releases.json` 去指明文 IP）
+2. **先传完整 exe + blockmap**（`stat` 大小 == 本地；直连 `HEAD` Content-Length 对齐）
 3. **再** 上传两个 yml（半截包 + 完整清单 → `sha512 checksum mismatch`）
 4. 传断必须 `rm` 半截再重传
 5. 核对：
-   - `HEAD https://xrk.siphot.com/api/harness/desktop/bin/…/xrk-harness-N-win-x64.exe` → 200 + 完整长度
-   - `GET …/releases` → `available:true`、version=N
-   - `GET …/desktop/win-x64/nightly.yml` → `version: N` 且 url 为 HTTPS
+   - `HEAD http://<AGT-IP>:6969/api/harness/desktop/bin/…/xrk-harness-N-win-x64.exe` → 200 + 完整长度
+   - `GET https://xrk.siphot.com/api/harness/releases` → `available:true`、version=N（官网不变）
+   - `GET …/desktop/win-x64/nightly.yml` → `version: N` 且 **exe url 为明文 IP**
 
 SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 

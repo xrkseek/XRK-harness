@@ -56,14 +56,24 @@ gh api repos/xrkseek/XRK-harness/git/ref/tags/v<ver> --jq '.object.sha'
 ### 2. 先装根依赖再跑 stage（副作用 1）
 
 release 的 stage 步骤会在根工作区跑一次类 `--production` 安装，把根 devDeps
-（typescript/eslint/vitest/prettier）清掉 → 同轮第二次跑 release 死在
-`stage: missing node_modules/typescript`。必须先：
+（typescript/eslint/vitest/prettier）清掉。这一轮发版里这个清空**会触发两次**，
+伪装成两个完全不同的症状：
+
+| 症状 | 真实原因 |
+|---|---|
+| `pnpm release` 打印 `release: GitHub Release … ok` 后**静默 exit 1**，npm 一行 publish 输出都没有 | `npmPack()` 跑在已被掏空的根目录 → 死在 `npx npm@10.9.2 pack` |
+| `pnpm package:desktop` 报 `'tsc' is not recognized` 且中途 abort、不执行 restore | 同一个 deps-status check 在 build 之前就要求 devDeps |
+
+两条都是 `CI=true pnpm install --frozen-lockfile` 装回后一次通过。
+release 静默失败时最快的复现：`XRK_RELEASE_SKIP_UPLOAD=1 pnpm release`——绕过 GitHub 上传
+直接暴露 stage 问题，GitHub Release 已建、重跑走 `--clobber` 分支不会产生重复 Release。
 
 ```
 CI=true pnpm install --frozen-lockfile
 ```
 
-（不设 `CI` 则 `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`）。发布完再装回来。
+（不设 `CI` 则 `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`；`CI` 是 pnpm 自己的开关、**非代理**，
+可放心设。）**release 一成功就立刻装回**，别等打包报错再补。
 
 ### 3. 大 tarball 上传用 bash 后台任务（副作用 2）
 
@@ -118,8 +128,12 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
   `4b9c445..03281ea7 main -> main` 走的是 stderr，`$LASTEXITCODE` 可能也是 1。
   判成功要看**结果行**，不要看 exit code / 红色报错。
 - **`gh` / GitHub API 的代理**：这台机子直连和 Clash 7897 常都能通，但**先各探一次**
-  （`gh api user --jq .login`）再决定设不设 `$env:HTTPS_PROXY`/`$env:HTTP_PROXY`；
-  `registry.npmjs.org` 直连可达，别给 npm 强塞代理。
+  （`gh api user --jq .login`）再决定走哪条；`registry.npmjs.org` 直连可达，别给 npm 强塞代理。
+  **绝不设 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 环境变量**（会破坏用户正常生产生活）。
+  要走代理只落在单命令参数上：`curl.exe -x http://127.0.0.1:7897 <url>`、
+  `npm publish --proxy … --https-proxy …`、`git -c http.proxy=… -c https.proxy=… push`。
+  探活只用 `curl.exe`——Node `https.get` 不读代理**参数**，会给你「直连不通」的假阴性。
+  直连 200 也不等于能用（2026-10 撞过 TLS 拦 / `ECONNRESET`），大包别赌直连。
 - 发布产物不一致：GitHub asset 前缀 `<dir>/` vs npm tarball `package/`——字节与
   清单都不同，各自用对应清单核对。
 - `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 把大包上传掐死，日志

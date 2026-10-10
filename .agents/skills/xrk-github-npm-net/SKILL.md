@@ -20,14 +20,18 @@ description: >-
 
 ### 1. 调 GitHub API 前先各探一次
 
-`api.github.com` 哪条网通会变（2026-09-24 实测直连可用、走代理反而 EOF；更早相反——直连 10060、必须给 `HTTPS_PROXY`）。探法：
+`api.github.com` 哪条网通会变（2026-09-24 实测直连可用、走代理反而 EOF；更早相反——直连 10060、必须走代理）。探法：
 
 ```
 gh api repos/<owner>/<repo>/releases/tags/<tag>
 ```
 
 - 返回 **404** = 网络通（资源不存在但请求到达）
-- `EOF` / timeout / 10060 = 这条不通 → **换另一条**（`HTTPS_PROXY=http://127.0.0.1:7897` 或去掉）
+- `EOF` / timeout / 10060 = 这条不通 → **换另一条**（单命令加 `-x http://127.0.0.1:7897` 或去掉）
+
+**绝不设 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 环境变量**（会破坏用户正常生产生活）。要走代理只落在
+单条命令的参数上：`curl.exe -x … <url>`、`npm … --proxy … --https-proxy …`、`git -c http.proxy=… push`。
+探活只用 `curl.exe`——Node `https.get` 不读代理**参数**，会给出「直连不通」的假阴性。
 
 ### 2. registry.npmjs.org 与 release asset 下载一直直连可达
 
@@ -44,6 +48,7 @@ Get-NetAdapterStatistics
 
 ## Pitfalls
 
-- 每次调 GitHub API 前探一次，两个方向都试（直连 / `HTTPS_PROXY=http://127.0.0.1:7897`）——连通性会反转，凭记忆固定某一条会踩空。
+- 每次调 GitHub API 前探一次，两个方向都试（直连 / 单命令 `-x http://127.0.0.1:7897`）——连通性会反转，凭记忆固定某一条会踩空。
+- **直连 200 / 「已连通」不等于能用**：2026-10 `registry.npmjs.org` 直连出现过 `ERR_TLS_CERT_ALTNAME_INVALID` / `ECONNRESET`。大包（npm ~120MB、AGT ~332MB）别赌直连。
 - `gh api` 的 EOF 和 `error checking for existing release: ... EOF` 都是网络层报错，不是仓库/权限问题。
 - `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 直接把大包上传掐死，日志表现为 `verbose type request-timeout` / `FETCH_ERROR`）；`fetch_retries` 保持默认。
