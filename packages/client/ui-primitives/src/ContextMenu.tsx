@@ -120,6 +120,20 @@ export function ContextMenuHost({
       // Something that already answered this gesture keeps it (JsonTree's copy
       // button, a nested menu, a plugin).
       if (event.defaultPrevented) return;
+      const target =
+        event.target instanceof Element ? event.target : null;
+      // Native text fields + modal dialogs keep the browser menu. A portaled
+      // Menu steals focus (and can scroll the page behind a dialog), which
+      // made the shell look "squeezed" and broke Ctrl+A / Select All on
+      // textarea edit surfaces such as the pasted-text modal.
+      if (
+        target !== null
+        && target.closest(
+          'textarea, input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), [role="dialog"][aria-modal="true"]',
+        )
+      ) {
+        return;
+      }
       const hit = readContextMenuHit(event);
       // Nothing to offer: leave the event alone so blank panels stay quiet.
       if (!hit.isEditable && hit.selectionText === "" && hit.linkUrl === "") return;
@@ -175,7 +189,7 @@ export function ContextMenuHost({
             : key === "ArrowDown"
               ? (current + 1) % rows.length
               : (current - 1 + rows.length) % rows.length;
-      rows[next]?.focus();
+      rows[next]?.focus({ preventScroll: true });
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
@@ -188,7 +202,9 @@ export function ContextMenuHost({
   useLayoutEffect(() => {
     if (request === null) return;
     const frame = requestAnimationFrame(() => {
-      menuRows(listRef.current)[0]?.focus();
+      // preventScroll: focusing a menuitem must not scroll the page under a
+      // dialog / composer (that reflow reads as the shell "squeezing").
+      menuRows(listRef.current)[0]?.focus({ preventScroll: true });
     });
     return () => {
       cancelAnimationFrame(frame);

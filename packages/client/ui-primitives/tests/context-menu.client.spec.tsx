@@ -304,4 +304,20 @@ describe("ContextMenuHost row copy", () => {
       expect(screen.getByRole("menuitem", { name })).toBeDefined();
     }
   });
+
+  it("leaves native textarea / modal dialogs to the browser menu", async () => {
+    renderHost(
+      <div role="dialog" aria-modal="true">
+        <textarea data-testid="paste-editor" defaultValue="body" />
+      </div>,
+    );
+    fireEvent.contextMenu(screen.getByTestId("paste-editor"), {
+      clientX: 20,
+      clientY: 20,
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
 });
