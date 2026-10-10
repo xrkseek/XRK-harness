@@ -1336,6 +1336,26 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
   })
 
+  it('hides tip-turn ending chrome while session.running (false 已停止)', () => {
+    // wait_agent / subagent drain can leave tip turn closed+aborted while
+    // Overview still shows 回合进行中 — refresh clears; suppress until idle.
+    const chat = chatSnapshotFixture({
+      nodes: [user(1, 'hi'), assistant(2, 'partial')],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
+      turnEnds: new Map([[1, 3]]),
+      turnEndReasons: new Map([[1, { kind: 'aborted' }]]),
+    })
+    const h = makeHarness({ running: true, chat })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByText('已停止')).toBeNull()
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(0)
+    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    // Re-pass chat: set() rebuilds from top-level nodes (empty here) otherwise.
+    act(() => { h.set({ running: false, chat }) })
+    expect(view.getAllByText('已停止').length).toBeGreaterThan(0)
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
+  })
+
   it('turn/end error shows turn-error chrome without 已停止', () => {
     const h = makeHarness({
       chat: chatSnapshotFixture({

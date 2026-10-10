@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
 import { turnEndedAsStop } from '../conversation-nodes/common.ts'
+import { latestTurnNumber } from './pending-input-chrome.ts'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { TurnTimePanel, TurnUsagePanel } from './TurnUsagePanel.tsx'
 import { assistantText } from './turn-assistant.ts'
@@ -30,8 +31,10 @@ function turnEndRunMs(turn: {
  * as the next round started. Branch/restore still use `hasLaterChatNode` /
  * `branchUnavailable` so mid-history forks stay gated.
  *
- * Stop / abnormal cut with no text reply still owes an end-of-turn row
- * (「已停止」 + 用时): `closing` may be null after Think+tool-only cancels.
+ * Assembler only materializes visible tails after turn/end. Host `running` on
+ * the tip Turn still suppresses the footer: wait_agent / subagent drain can
+ * leave a closed tip while Overview says 回合进行中. Prior closed turns keep
+ * their footers. Stop with no text reply still owes 「已停止」+用时 once idle.
  */
 export const TurnTailNodeView = memo(function TurnTailNodeView({
   node, openFile, forkAt, restoreAt, renderSlot, renderSlotChain, t, useSession,
@@ -39,10 +42,13 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const data = node.data
   const hasLaterChatNode = useSession(snapshot =>
     snapshot.chat.locations.getTurn(data.turn).at(-1) !== node.key)
+  // Host busy latch is outside the event timeline — only the tip footer waits.
+  const suppressTipWhileRunning = useSession(snapshot =>
+    snapshot.running && latestTurnNumber(snapshot.chat.timeline) === data.turn)
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
-  if (turn === undefined) return null
+  if (turn === undefined || turn.status !== 'closed' || suppressTipWhileRunning) return null
   const closing = data.closing
   const owner: TurnTailOwnerProps = { turn, seq: closing?.finalNode.seq ?? data.seq, openFile }
   const tail = renderSlotChain('conversation.chat.turnTail', owner)
@@ -89,9 +95,11 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     )
   }
   // Interruption-frozen partials carry no messageId — copy / branch / usage
-  // still render; feedback (needs a durable id) stays off.
+  // still render; feedback (needs a durable id) stays off. Same-turn nodes
+  // after this row (steering / trailing tools) keep the footer but drop 赞 —
+  // ending rating belongs on the tip of a settled turn.
   const messageId = closing.finalNode.messageId
-  const assistantActions = messageId === undefined
+  const assistantActions = messageId === undefined || hasLaterChatNode
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
   const actionsUnavailable = data.branchUnavailable || hasLaterChatNode
