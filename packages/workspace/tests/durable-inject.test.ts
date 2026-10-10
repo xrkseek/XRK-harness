@@ -141,7 +141,12 @@ describe("durable workspace inject", () => {
     const budget = { left: 400, events: [] as import("../src/index.js").WorkspaceBudgetEvent[] };
     const payload = buildSkillCatalogPayload(skills, budget);
     expect(payload).toBeDefined();
-    expect(payload!.content.length).toBeLessThanOrEqual(400 + 32);
+    const truncAt = payload!.content.indexOf("[skill catalog truncated]");
+expect(truncAt).toBeGreaterThan(0);
+expect(payload!.content.slice(0, truncAt).trimEnd().length).toBeLessThanOrEqual(400);
+expect(payload!.content).toContain("[skill catalog truncated]");
+// a truncated catalog must still tell the model how to find the missing skills
+expect(payload!.content).toContain("skills/*/SKILL.md");
     expect(payload!.content).toContain("[skill catalog truncated]");
     expect(payload!.source.entries.length).toBeLessThan(skills.length);
   });

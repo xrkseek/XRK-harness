@@ -376,7 +376,7 @@ export function formatSkillCatalog(
   return [
     "## Skills",
     ...lines,
-    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task.",
+    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
   ].join("\n");
 }
 
@@ -404,4 +404,4 @@ export function renderSkillContent(skill: SkillDefinition): string {
 }
 
 export const SKILL_TOOL_GUIDANCE =
-  "Use the skill tool to load the full instructions for an available skill listed in the Skills catalog. Call it with the exact skill name before acting on a task that names or clearly matches that skill. Sessions with subagent tools: if the Agent Team board lists a fitting member, spawn that member_id instead. Frugal and other no-subagent badges: load the skill and do the job here.";
+  "Use the skill tool to load the full instructions for an available skill listed in the Skills catalog. Call it with the exact skill name before acting on a task that names or clearly matches that skill. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising. Sessions with subagent tools: if the Agent Team board lists a fitting member, spawn that member_id instead. Frugal and other no-subagent badges: load the skill and do the job here.";

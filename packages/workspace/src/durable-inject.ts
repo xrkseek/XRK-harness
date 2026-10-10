@@ -45,7 +45,7 @@ export function formatAvailableSkillsXml(
     "<available_skills>",
     ...lines,
     "</available_skills>",
-    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task.",
+    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
     "</system-reminder>",
   ].join("\n");
 }
@@ -86,7 +86,7 @@ export function buildSkillCatalogPayload(
   if (listed.length === 0) return undefined;
   const full = formatAvailableSkillsXml(listed);
   const content = clipToBudget("skills", full, budget, {
-    suffix: "\n[skill catalog truncated]",
+    suffix: "\n[skill catalog truncated] No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
   });
   if (!content.trim()) return undefined;
   const included = listedForClippedCatalog(listed, content);
