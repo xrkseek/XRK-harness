@@ -1,7 +1,8 @@
 /* Full-bleed thin titlebar — fixed to the viewport so community sidebar
    layout-push on #root cannot shove min/max/close off the OS window edge.
-   z-index above better-sidebar panel-host (25) and toggle cluster (45);
-   splash uses BootWindowChrome at 110 until AppFrame mounts this chrome. */
+   z-index above better-sidebar panels (40), toggle cluster (45), and free
+   windows (48); splash uses BootWindowChrome at 110 until AppFrame mounts
+   this chrome. */
 .chrome {
   position: fixed;
   top: 0;
