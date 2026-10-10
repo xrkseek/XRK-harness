@@ -111,7 +111,7 @@ describe("DesktopUpdateCoordinator", () => {
       expect(coordinator.state.phase).toBe("ready");
     });
     await expect(coordinator.install()).resolves.toEqual({
-      phase: "ready",
+      phase: "installing",
       version: "1.1.0",
       percent: 100,
     });
@@ -123,10 +123,58 @@ describe("DesktopUpdateCoordinator", () => {
       "available",
       "ready",
       "installing",
-      "ready",
+      "installing",
     ]);
     expect(updater.autoDownload).toBe(false);
     expect(updater.autoInstallOnAppQuit).toBe(false);
+  });
+
+  it("does not flash back to ready between Install click and quitAndInstall", async () => {
+    const states: DesktopUpdateState[] = [];
+    let finishRestart!: () => void;
+    const beforeRestart = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRestart = resolve;
+        }),
+    );
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({
+        isUpdateAvailable: true,
+        updateInfo: { version: "1.2.0" },
+      })),
+      downloadUpdate: vi.fn(async () => []),
+      quitAndInstall: vi.fn(),
+    } satisfies DesktopAppUpdater;
+    const coordinator = new DesktopUpdateCoordinator({
+      publish: (state) => {
+        states.push(state);
+        return state;
+      },
+      beforeRestart,
+      updater,
+      enabled: () => true,
+    });
+    await coordinator.check();
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("ready");
+    });
+    const install = coordinator.install();
+    await vi.waitFor(() => {
+      expect(coordinator.state.phase).toBe("installing");
+      expect(beforeRestart).toHaveBeenCalledOnce();
+    });
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(
+      states.slice(states.findIndex((row) => row.phase === "installing")).every(
+        (row) => row.phase === "installing",
+      ),
+    ).toBe(true);
+    finishRestart();
+    await expect(install).resolves.toMatchObject({ phase: "installing" });
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true);
   });
 
   it("publishes download percent while prefetching, then ready", async () => {
@@ -248,7 +296,7 @@ describe("DesktopUpdateCoordinator", () => {
       version: "2.0.0",
     });
     await expect(install).resolves.toEqual({
-      phase: "ready",
+      phase: "installing",
       version: "2.0.0",
       percent: 100,
     });

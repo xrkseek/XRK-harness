@@ -263,13 +263,18 @@ export class DesktopUpdateCoordinator {
     });
     try {
       await this.startDownload();
-      this.availableVersion = undefined;
-      this.downloadOperation = undefined;
       this.lastPercent = 100;
-      const ready = this.publish({ phase: "ready", version, percent: 100 });
+      /* Stay on `installing` through quit — republishing `ready` re-enables the
+       * Install button (first click flashes; second click looks like it "works"). */
+      const installing = this.publish({
+        phase: "installing",
+        version,
+        percent: 100,
+      });
       await this.beforeRestart();
       this.updater.quitAndInstall(false, true);
-      return ready;
+      this.downloadOperation = undefined;
+      return installing;
     } catch (error) {
       return this.publish({
         phase: "error",
