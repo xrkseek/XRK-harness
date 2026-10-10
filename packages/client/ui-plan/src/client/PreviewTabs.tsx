@@ -730,13 +730,15 @@ function StatusPanel({
     || queued > 0
     || steering > 0
     || status.compaction.phase === 'busy'
+  // Live children beat the home turn latch: a parked parent waiting on
+  // xrkh发版员 must read as「子代理活跃」, not「回合中」.
   const summaryBeat = summaryBusy
-    ? (turnActive
-      ? t('preview.summary.beat.turn')
-      : runningJobs.length > 0
-        ? t('preview.summary.beat.jobs')
-        : liveSubs.length > 0
-          ? t('preview.summary.beat.subs')
+    ? (liveSubs.length > 0
+      ? t('preview.summary.beat.subs')
+      : turnActive
+        ? t('preview.summary.beat.turn')
+        : runningJobs.length > 0
+          ? t('preview.summary.beat.jobs')
           : t('preview.summary.beat.busy'))
     : t('preview.summary.beat.idle')
 
@@ -780,7 +782,9 @@ function StatusPanel({
       label: t('preview.summary.subs'),
     })
   }
-  if (turnActive || queued > 0 || steering > 0) {
+  // Skip the「回合进行中」cell while live children already explain the busy
+  // state (same parked-parent / wait_agent case as summaryBeat).
+  if (liveSubs.length === 0 && (turnActive || queued > 0 || steering > 0)) {
     summaryActivity.push({
       key: 'queue',
       hot: true,
@@ -1847,12 +1851,12 @@ export function PreviewTabs({
   fleetBusyRef.current = fleetBusy
 
   const homeId = status?.delegate?.parentSessionId ?? parentId
+  // Graph nodes stay `running` while any descendant drains (Face contract).
+  // That must NOT inflate the Overview turn latch — otherwise a parked home
+  // seat shows「回合进行中 / 思考中」for the child's work.
   const fromTurnActive = Boolean(
     (status?.parentDelivery?.turnActive ?? false)
-    || homeTurnActive
-    || (status?.subagents.graph.nodes.some(
-      (n) => n.id === homeId && n.activity === 'running',
-    ) ?? false),
+    || homeTurnActive,
   )
   const fromQueued = status?.parentDelivery?.queued ?? 0
   const fromSteering = status?.parentDelivery?.steering ?? 0
@@ -1865,10 +1869,7 @@ export function PreviewTabs({
   )
   const ownTurnActive = Boolean(
     (status?.delivery.turnActive ?? false)
-    || parentRunning
-    || (status?.subagents.graph.nodes.some(
-      (n) => n.id === sessionId && n.activity === 'running',
-    ) ?? false),
+    || parentRunning,
   )
   const ownSubs = Math.max(
     status?.subagents.live.filter((s) => s.activity === 'running').length ?? 0,

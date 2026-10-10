@@ -372,6 +372,12 @@ export function derivePresenceEmotion(input: {
       ...(name ? { tips: name } : {}),
     }
   }
+  // Prefer「子代理活跃」over「回合进行中」when a child is draining. A parent
+  // that already parked (or is blocked in wait_agent) still holds a turn latch,
+  // but the Overview ball must not look like the home model is still thinking.
+  if (input.runningSubs > 0) {
+    return { emotionId: '03', tipKey: 'subs', source: 'auto' }
+  }
   if (input.turnActive) {
     return {
       emotionId: pickRotated(WORK_TURN_IDS, phase),
@@ -387,9 +393,6 @@ export function derivePresenceEmotion(input: {
   }
   if (input.runningJobs > 0) {
     return { emotionId: '40', tipKey: 'jobs', source: 'auto' }
-  }
-  if (input.runningSubs > 0) {
-    return { emotionId: '03', tipKey: 'subs', source: 'auto' }
   }
   if (input.fleetHealth === 'warn') {
     return { emotionId: '13', tipKey: 'warn', source: 'auto' }

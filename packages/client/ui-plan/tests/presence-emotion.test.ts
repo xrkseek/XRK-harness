@@ -105,6 +105,16 @@ describe('derivePresenceEmotion', () => {
       fleetHealth: 'ok',
     })).toMatchObject({ emotionId: '03', tipKey: 'subs' })
 
+    // Parent still holding wait_agent / drain latch, but a child is the live
+    // work — tip must say「子代理活跃」, not「回合进行中」.
+    expect(derivePresenceEmotion({
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 1,
+      fleetHealth: 'ok',
+      phase: 0,
+    })).toMatchObject({ emotionId: '03', tipKey: 'subs' })
+
     expect(derivePresenceEmotion({
       turnActive: false,
       runningJobs: 0,
