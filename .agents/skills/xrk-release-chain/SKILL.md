@@ -119,7 +119,9 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
   前面还有 `smoke packaged Host loopback Face` 与 `restore workspace node_modules`，
   且 `win-unpacked/resources/` 下 `host` / `web` / `runtime` 都是本轮时间。
 - **发新桌面版必须上 AGT 更新源**：顺序见 skill **`xrk-desktop-update-feed`**
-  （改名去 `unsigned` → **先传 nightly/latest.yml** → 再传 exe/blockmap → 核对 HEAD 大小）。
+  （改名去 `unsigned` → **先传完整 exe/blockmap** → 再传 nightly/latest.yml → 核对 HEAD 大小）。
+  yml 必须写**明文 IP 绝对 URL**（`http://IP:6969/api/harness/desktop/bin/win-x64/…`）——
+  不是 HTTPS 域名、不是相对文件名，写错会 403 / checksum mismatch。
   不要整目录盲传旧版；不要 `C:\xrk-h` junction。
 
 ## Pitfalls

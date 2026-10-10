@@ -103,7 +103,7 @@ Cursor 锁住 `app.asar`（`EBUSY`）时设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=
 `XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → `upload-mirror/test/`  
 （yml 里可能仍指向 `-unsigned` 文件名；上服务器前以 C 节为准改名。）
 
-### C. 上服务器（改名 + **先 yml 后 exe**）
+### C. 上服务器（改名 + **先 exe 后 yml**）
 
 不要整目录盲传旧版大 exe。只推本版：
 
@@ -149,7 +149,7 @@ SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 
 ## Pitfalls
 
-- 先传整包 mirror 会先灌旧版几百 MB，yml 迟到——**先 yml 后本版 exe**。
+- 先传整包 mirror 会先灌旧版几百 MB——**先传完整 exe/blockmap，再传 yml**（yml 先指半截包 → `sha512 checksum mismatch`）。
 - 半截 exe（传断）必须删掉再传；`HEAD` Content-Length 必须等于 yml `size`。
 - 同版本重打覆盖同名产物与 `nightly.yml`。
 - Node ≥26；不用 Cursor helper `node.exe`。
