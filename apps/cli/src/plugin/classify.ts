@@ -37,7 +37,11 @@ function readClientMeta(
   pkg: Record<string, unknown>,
 ): { inject: string[]; immediately: boolean } | undefined {
   const client =
-    nestedField(pkg, "xrk", "client") ?? nestedField(pkg, "dsh", "client");
+    nestedField(pkg, "xrk", "client") ??
+    nestedField(pkg, "dsh", "client") ??
+    // Some community packages used `xrkh.client` before the inventory gate
+    // standardized on `xrk` / `dsh` (e.g. early office preview builds).
+    nestedField(pkg, "xrkh", "client");
   const rec = asRecord(client);
   if (!rec) return undefined;
   const inject = Array.isArray(rec.inject)
