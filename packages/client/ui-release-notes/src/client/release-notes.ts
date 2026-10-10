@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.21',
+    date: '2026-10-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '大段粘贴可折叠；回合交付物与 turn-tail 门控更稳；右键菜单原语。',
+        en: 'Large pastes fold; turn deliverables and turn-tail gating are stabler; context-menu primitive.',
+      },
+      {
+        zh: 'Settings 推荐安装侧栏与 Office 高保真预览插件；附件句柄对人隐藏（modelOnly）。',
+        en: 'Settings recommends sidebar + hi-fi Office preview plugins; attachment handles stay model-only.',
+      },
+    ],
+  },
+  {
     version: '0.5.20',
     date: '2026-10-09',
     title: {
