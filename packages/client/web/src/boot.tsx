@@ -268,7 +268,10 @@ export class AppWebEntry {
         /* ignore — fall through to navigator */
       }
     }
-    this.setBootLang(resolveBootLang({ desktopLocaleId }))
+    this.setBootLang(
+      // exactOptionalPropertyTypes: an absent id must be an absent key.
+      resolveBootLang(desktopLocaleId === undefined ? {} : { desktopLocaleId }),
+    )
   }
 
   /** After plugins activate, adopt product Settings language when present. */

@@ -189,6 +189,9 @@ export const turnTailDefinition: ConversationNodeDefinition<TurnTailState> = {
     }
   },
   buildViewNode: (context) => {
+    // Location data is null until turn/end (see tailData + publication), so
+    // step/end and steered next-steps never materialize the footer. History
+    // tails may see turn/end without turn/start in-window — still publish.
     const turn = turnLocation(context)
     const data = turn?.data.get('turn-tail')
     return data === undefined ? null : chatNode(context, 'turn-tail', closingAnchor(context), data)

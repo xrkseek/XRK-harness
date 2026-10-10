@@ -18,11 +18,15 @@
  * the editor state (one string field per node), so a draft made of a
  * million pathological pastes would still weigh memory; splitting to disk
  * is the upgrade path.
+ *
+ * Read-only by contract: nothing inlines the body back into the draft as
+ * editable text (PastedText only reads, copies, and discards it). That escape
+ * hatch used to live here, and every use of it handed the wall straight back
+ * to contenteditable — the one path the fold exists to close.
  */
 import type { JSX } from 'react'
 import type {
-  EditorConfig, LexicalNode, NodeKey, ParagraphNode, SerializedLexicalNode,
-  Spread, TextNode,
+  EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread, TextNode,
 } from 'lexical'
 import {
   $createLineBreakNode,
@@ -34,6 +38,7 @@ import {
   DecoratorNode,
 } from 'lexical'
 import { PastedText } from './PastedText.tsx'
+import { planPastedFold } from './pasted-fold.ts'
 
 /** JSON form of one folded paste (Lexical node serialization contract). */
 export type SerializedPastedTextNode = Spread<{
@@ -139,47 +144,6 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
   }
 
   /**
-   * Inline the full body: the decorator leaves the document and ordinary
-   * text nodes take its place. This is the escape hatch for the rare case
-   * where the user wants to actually edit inside the pasted block — the
-   * ceiling noted in the module doc.
-   */
-  expand(): void {
-    // Not $insertNodes: a decorator click in an unfocused draft has no
-    // selection. Prefer replacing a sole-child paragraph (setDraft path)
-    // with real paragraphs; otherwise splice inline text + line breaks.
-    const lines = this.getText().replace(/\r\n?/g, '\n').split('\n')
-    const parent = this.getParent()
-    let tail: ParagraphNode | TextNode | null = null
-    if (
-      parent !== null
-      && $isElementNode(parent)
-      && parent.getChildrenSize() === 1
-      && parent.getParent() !== null
-    ) {
-      for (const line of lines) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        parent.insertBefore(paragraph)
-        tail = paragraph
-      }
-      parent.remove()
-      // Land the caret after the body: an expansion the user cannot type
-      // into reads as a dead end.
-      tail?.selectEnd()
-      return
-    }
-    for (let i = 0; i < lines.length; i += 1) {
-      const text = $createTextNode(lines[i]!)
-      this.insertBefore(text)
-      tail = text
-      if (i < lines.length - 1) this.insertBefore($createLineBreakNode())
-    }
-    this.remove()
-    tail?.selectEnd()
-  }
-
-  /**
    * Drop the fold and its body from the document (the delete gesture).
    */
   discard(): void {
@@ -197,6 +161,64 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
     }
   }
 
+  /**
+   * Adopt an edited body. This is the ONE way a fold's text changes, and it
+   * is reached only from the composer's off-line edit surface — the body is
+   * never spliced into the document as editable text.
+   *
+   * A body that the user trimmed back under the fold threshold is inlined as
+   * ordinary text, because at that size the fold no longer buys anything and
+   * the chip would just be a wrapper around a sentence. That inlining is
+   * bounded by the same threshold the fold was created at, so it cannot
+   * reintroduce the wall-of-text layout the fold exists to avoid.
+   * @param text - the edited body.
+   */
+  replaceText(text: string): void {
+    const parts = planPastedFold(text)
+    if (parts.length !== 1 || parts[0]!.kind !== 'plain') {
+      const writable = this.getWritable()
+      writable.__text = text
+      writable.__lines = countLines(text)
+      return
+    }
+    const parent = this.getParent()
+    const block = parent !== null && $isElementNode(parent) && parent.getParent() !== null
+      ? parent
+      : null
+    if (block === null) {
+      // Not inside a block we can replace; keep the fold rather than guess.
+      const writable = this.getWritable()
+      writable.__text = text
+      writable.__lines = countLines(text)
+      return
+    }
+    const lines = parts[0]!.text.split('\n')
+    if (block.getChildrenSize() === 1) {
+      // Sole-child block: swap the WHOLE block for one paragraph per line.
+      // Splicing paragraphs beside this node instead would nest a paragraph
+      // inside a paragraph, and the clipboard projection only emits `\n`
+      // between top-level blocks — the line breaks would silently vanish.
+      for (const line of lines) {
+        const paragraph = $createParagraphNode()
+        if (line !== '') paragraph.append($createTextNode(line))
+        block.insertBefore(paragraph)
+      }
+      block.remove()
+      return
+    }
+    // Mid-line fold: inline text + real line breaks, the same shape a plain
+    // paste would have produced.
+    let tail: TextNode | null = null
+    for (let index = 0; index < lines.length; index += 1) {
+      const leaf = $createTextNode(lines[index]!)
+      this.insertBefore(leaf)
+      tail = leaf
+      if (index < lines.length - 1) this.insertBefore($createLineBreakNode())
+    }
+    this.discard()
+    tail?.selectEnd()
+  }
+
   /** React face rendered into the host element by the decorator portal. */
   override decorate(): JSX.Element {
     // Capture the editor while decorate() still runs inside an active update.
@@ -207,10 +229,11 @@ export class PastedTextNode extends DecoratorNode<JSX.Element> {
         lines={this.__lines}
         chars={this.__text.length}
         preview={firstMeaningfulLine(this.__text)}
-        onExpand={() => {
+        text={this.__text}
+        onSave={(next) => {
           editor.update(() => {
             const node = $getNodeByKey(key)
-            if ($isPastedTextNode(node)) node.expand()
+            if ($isPastedTextNode(node)) node.replaceText(next)
           }, { discrete: true })
         }}
         onDelete={() => {

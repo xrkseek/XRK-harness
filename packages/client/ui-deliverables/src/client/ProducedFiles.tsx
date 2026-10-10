@@ -60,6 +60,12 @@ export interface ProducedFilesInjected {
   isLoopback: boolean
   /** Default-app open and file-manager reveal (Host `host.openPath`). */
   openNativePath: OpenNativePath
+  /**
+   * Workspace-root "Show in folder": Host Explorer by default; when
+   * `xrkh-better-sidebar` wraps `workspaces.openPath`, highlights the
+   * explorer folder once instead. Absent → `openNativePath('.', { reveal })`.
+   */
+  showInFolder?: () => Promise<void>
   hooks: {
     /** Current generation's Host description, bound by the slot renderer. */
     hostDescription: HostDescriptionSource
@@ -73,6 +79,11 @@ export type ProducedFilesProps = Pick<TurnTailOwnerProps, 'openFile'> & {
   label?: string
   /** data-* marker for tests / e2e (defaults to produced-files-row). */
   rowTestId?: string
+  /**
+   * When false, omit the row's folder action (Deliverables owns a single
+   * stack-level button). Defaults to true for standalone ProducedFiles use.
+   */
+  showFolderAction?: boolean
 } & PropsLocale<typeof NS> & InjectFace<ProducedFilesInjected>
 
 function moreLabel(t: ProducedFilesProps['t'], count: number): string {
@@ -142,6 +153,8 @@ function ProducedFileChip({
 export function ProducedFiles({
   matched: paths, openFile, isLoopback, openNativePath, useHostDescription, t,
   label, rowTestId = 'produced-files-row',
+  showFolderAction = true,
+  showInFolder,
 }: ProducedFilesProps) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
   const canOpenPath = isLoopback && hostCanOpenPath
@@ -151,6 +164,8 @@ export function ProducedFiles({
   const chipProbes = useRef<Array<HTMLButtonElement | null>>([])
   const moreProbe = useRef<HTMLSpanElement>(null)
   const rowLabel = label ?? t('produced.label')
+  const revealFolder = showInFolder
+    ?? (async () => { await openNativePath('.', { reveal: true }) })
 
   useLayoutEffect(() => {
     const row = rowRef.current
@@ -201,11 +216,11 @@ export function ProducedFiles({
         ))}
         {hidden > 0 && <span className={css.more}>{moreLabel(t, hidden)}</span>}
       </div>
-      {hidden > 0 && canOpenPath && (
+      {showFolderAction && canOpenPath && (
         <button
           type="button"
           className={css.showFolder}
-          onClick={() => { void openNativePath('.', { reveal: true }) }}
+          onClick={() => { void revealFolder() }}
         >
           {t('produced.showInFolder')}
         </button>

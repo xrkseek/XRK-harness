@@ -41,6 +41,8 @@
 
 协议方案名：**`xrk-app`**。渲染：`sandbox` + `contextIsolation` + `nodeIntegration: false`；preload 仅类型化 API（locale · 更新；插件接线二期）。
 
+右键菜单是**产品自绘**的（`packages/client/ui-primitives/src/ContextMenu.tsx`，复用 `Menu` 原语）：Electron 不带上下文菜单，壳也不补系统菜单 —— 输入框与回复正文的右键因此和产品同一套视觉。
+
 ## 开发命令
 
 需 **Node ≥26**（与根 `engines` 一致）。根脚本：
@@ -139,6 +141,8 @@ The shell wraps the assembled XRK Web UI. The private Host (`@xrkseek/harness-de
 | `~/.xrk/profiles/desktop` | Reserved Desktop profile (after packaged install) |
 
 Protocol scheme: **`xrk-app`**. Renderer: `sandbox` + `contextIsolation` + `nodeIntegration: false`; preload exposes typed APIs only (locale · updates; plugin wiring phase 2).
+
+The right-click menu is **drawn by the product** (`packages/client/ui-primitives/src/ContextMenu.tsx`, reusing the `Menu` primitive): Electron ships no context menu and the shell adds no system one, so the composer input box and reply bodies share the product's own visual language.
 
 ## Development commands
 

@@ -114,9 +114,9 @@ export function Modal({
       const last = items[items.length - 1]
       const active = document.activeElement
       if (!e.shiftKey && (active === last || !dialog.contains(active))) {
-        e.preventDefault(); first.focus()
+        e.preventDefault(); first?.focus()
       } else if (e.shiftKey && (active === first || !dialog.contains(active))) {
-        e.preventDefault(); last.focus()
+        e.preventDefault(); last?.focus()
       }
     }
 

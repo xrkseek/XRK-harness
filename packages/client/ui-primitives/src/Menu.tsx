@@ -9,7 +9,7 @@
 // internally past that; submenu-bearing menus are exempt (see .scrollable).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutline16 } from './icons/index.tsx'
@@ -77,6 +77,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * gap and a brief overshoot survivable; coming back cancels the close.
  * @param props.dense - reduce vertical row spacing without changing the standard typography or card width.
  * @param props.compact - use reduced menu typography and spacing.
+ * @param props.listRef - adopt the list element so a host can walk its rows by keyboard.
  * @param props.getAnchorRect - portal mode only: supply the anchor rect
  * directly (e.g. from a host-owned trigger button) instead of measuring the
  * Menu's own wrapper span. Required when the wrapper isn't itself laid out at
@@ -87,7 +88,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * by a hairline; they stay visible while the items above scroll.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, footer, className }: {
+export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, listRef: listRefProp, footer, className }: {
   open: boolean
   anchor: ReactNode
   items: readonly MenuEntry[]
@@ -102,11 +103,13 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   closeOnPointerLeave?: boolean
   dense?: boolean
   compact?: boolean
+  listRef?: RefObject<HTMLDivElement>
   getAnchorRect?: () => DOMRect | null
   className?: string
 }) {
   const rootRef = useRef<HTMLSpanElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
+  const ownListRef = useRef<HTMLDivElement>(null)
+  const listRef = listRefProp ?? ownListRef
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
   /** Submenu opens to the end (right in LTR) by default; flip to start when clipped. */
   const [submenuPlacement, setSubmenuPlacement] = useState<'end' | 'start'>('end')

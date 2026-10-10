@@ -1297,6 +1297,30 @@ describe('built-in conversation node Definitions', () => {
     expect(node(snapshot(value), 'turn-tail')).toBeDefined()
   })
 
+  it('does not materialize turn-tail after several step/end events until turn/end', () => {
+    // Steer → next-step closes steps inside an open Turn; ending footer /
+    // deliverables chain must wait for the Turn boundary, not step/end.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1, step: 1, message: assistantMessage('a1', '第一步'),
+      }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'step/start', { turn: 1, step: 2 }),
+      at(6, 'assistant/message', {
+        turn: 1, step: 2, message: assistantMessage('a2', '第二步'),
+      }, { surfaceOp: 'append' }),
+      at(7, 'step/end', { turn: 1, step: 2 }),
+    ])
+    expect(node(snapshot(value), 'turn-tail')).toBeUndefined()
+
+    value.append(at(8, 'turn/end', { turn: 1, reason: { kind: 'completed' } }))
+    value.flush()
+    expect(node(snapshot(value), 'turn-tail')).toBeDefined()
+    expect((node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).turn).toBe(1)
+  })
+
   it('keeps a single turn-tail when Stop cancels an in-flight llm/retry after file diffs', () => {
     // Screenshot repro: tools write files → empty model response schedules
     // llm/retry → user hits Stop. The never-started cancel must not paint a

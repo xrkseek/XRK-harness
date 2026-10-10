@@ -63,6 +63,8 @@ declare module '@xrkseek/client-runtime/client' {
 interface DeliverablesState extends DeliverablesTurnData {
   readonly turn: number
   readonly calls: ReadonlyMap<string, ToolResultNode['callView']>
+  /** Set on `turn/end` — location data stays unpublished until the Turn closes. */
+  readonly closed?: true
 }
 
 function isChangesWireData(data: unknown): data is {
@@ -153,8 +155,10 @@ export interface DeliverablesMatch {
 
 /**
  * Claim the turn-tail chain when the closing turn announced changes or file lanes.
+ * Open Turns (mid-step / steered next-step) never claim — ending UI is turn/end only.
  */
 export function selectDeliverables(owner: TurnTailOwnerProps): DeliverablesMatch | null {
+  if (owner.turn.status !== 'closed') return null
   const data = owner.turn.data.get('deliverables')
   const changes = changesForClosing(data, owner.seq)
   const lanes = fileLanesForClosing(data, owner.seq)
@@ -178,6 +182,7 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
   kind: 'deliverables',
   match: (event) => {
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
+    if (event.type === 'turn/end') return { id: String(event.data.turn), role: 'update' }
     if (event.type === 'tool/call') return { id: String(event.data.turn), role: 'update' }
     if (event.type === 'workspace/changes' && isChangesWireData(event.data)) {
       return { id: String(event.data.turn), role: 'update' }
@@ -195,6 +200,9 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     return { turn: match.event.data.turn, calls: new Map(), produced: [] }
   },
   update: (context, match) => {
+    if (match.event.type === 'turn/end') {
+      return context.state.closed === true ? context.state : { ...context.state, closed: true }
+    }
     if (match.event.type === 'workspace/changes' && isChangesWireData(match.event.data)) {
       const { summary } = match.event.data
       return {
@@ -243,7 +251,12 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
       ? context.state
       : { ...context.state, produced: [...context.state.produced, ...additions] }
   },
-  buildLocationData: (context, scope) => scope !== 'turn' || context.state === undefined
+  // Mid-turn workspace/changes still feed Face Overview; chat location data
+  // waits for turn/end so step boundaries never look like an ending card.
+  publication: match => match.event.type === 'turn/end' ? 'immediate' : 'none',
+  buildLocationData: (context, scope) => scope !== 'turn'
+    || context.state === undefined
+    || context.state.closed !== true
     ? null
     : {
       kind: 'turn',

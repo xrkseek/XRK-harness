@@ -76,8 +76,13 @@ function contentParts(content: readonly unknown[]): {
   const attachments: PresentedAttachment[] = []
   const rest: unknown[] = []
   for (const block of content) {
-    const b = block as { type?: string; text?: string; attachment?: unknown }
-    if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text)
+    const b = block as { type?: string; text?: string; modelOnly?: boolean; attachment?: unknown }
+    if (b.type === 'text' && typeof b.text === 'string') {
+      // Harness-injected handle text (image/file attachment ids) reaches the
+      // model but is not what the reader typed — keep it out of the bubble.
+      if (b.modelOnly === true) continue
+      texts.push(b.text)
+    }
     else if (b.type === 'image' && b.attachment !== undefined) {
       attachments.push({ type: 'image', image: { attachment: (b as UserImage).attachment } })
     }
@@ -474,6 +479,8 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
     const parts: string[] = []
     for (const block of data.content) {
       if (block !== null && typeof block === 'object' && 'type' in block && block.type === 'text' && typeof (block as { text?: unknown }).text === 'string') {
+        // Model-only handle text never enters copy/edit — same rule as the bubble.
+        if ((block as { modelOnly?: unknown }).modelOnly === true) continue
         parts.push((block as { text: string }).text)
       }
     }

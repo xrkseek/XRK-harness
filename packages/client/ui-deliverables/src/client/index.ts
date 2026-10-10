@@ -43,7 +43,7 @@ export {
 
 export const inject = [
   'slots', 'locale', 'conversationEvents', 'connection', 'sessions',
-  'remote', 'remote.changes', 'layout',
+  'workspaces', 'remote', 'remote.changes', 'layout',
 ]
 
 export function apply(ctx: ClientContext): void {
@@ -58,9 +58,11 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.chat.turnTail',
       select: selectDeliverables,
       locale: NS,
-      inject: (sessionId): DeliverablesInjected => ({
-        isLoopback: connection.isLoopback,
-        openNativePath: async (path: string, options?: { readonly reveal?: boolean }) => {
+      inject: (sessionId): DeliverablesInjected => {
+        const openNativePath = async (
+          path: string,
+          options?: { readonly reveal?: boolean },
+        ): Promise<void> => {
           const snap = ctx.sessions.list.getSnapshot()
           const cwd = snap.current === undefined
             ? undefined
@@ -72,23 +74,38 @@ export function apply(ctx: ClientContext): void {
           if (!response.result.ok) {
             throw new Error(`path open failed: ${response.result.error.message}`)
           }
-        },
-        hooks: { hostDescription: connection.hostDescription },
-        loadFileDiff: async (seq, index, signal) => {
-          const result = await ctx.remote.changes.fileDiff(
-            { sessionId, seq, index },
-            signal,
-          )
-          if (!result.ok) {
-            throw new Error(result.error.message)
-          }
-          return result.value.diff
-        },
-        openOverviewReview: (index, seq) => {
-          changesReview.open({ sessionId, seq, index })
-          ctx.layout.openDetails()
-        },
-      }),
+        }
+        return {
+          isLoopback: connection.isLoopback,
+          openNativePath,
+          // Prefer workspaces.openPath('.') so xrkh-better-sidebar can
+          // intercept the folder gesture; without the plugin, Host Explorer
+          // opens the absolute workspace root (same as openNativePath reveal).
+          showInFolder: async () => {
+            const sidebar = ctx.get('betterSidebar') as unknown
+            if (sidebar != null) {
+              await ctx.workspaces.openPath('.')
+              return
+            }
+            await openNativePath('.', { reveal: true })
+          },
+          hooks: { hostDescription: connection.hostDescription },
+          loadFileDiff: async (seq, index, signal) => {
+            const result = await ctx.remote.changes.fileDiff(
+              { sessionId, seq, index },
+              signal,
+            )
+            if (!result.ok) {
+              throw new Error(result.error.message)
+            }
+            return result.value.diff
+          },
+          openOverviewReview: (index, seq) => {
+            changesReview.open({ sessionId, seq, index })
+            ctx.layout.openDetails()
+          },
+        }
+      },
     }, DeliverablesTail),
   )
   const t = ctx.locale.bind(NS)

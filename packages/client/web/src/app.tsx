@@ -7,6 +7,7 @@
  */
 import type { ReactNode } from 'react'
 import type { Context } from '@xrkseek/cordis'
+import { ContextMenuHost } from '@xrkseek/client-ui-primitives'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import { DocumentTitle } from './DocumentTitle.tsx'
 // Type-only: pulls the runtime's SlotMap declaration merge (the 'root' key) into this program.
@@ -28,6 +29,19 @@ export function buildRenderApp(deps: AssemblyDeps): () => ReactNode {
   const sessions = ctx.get('sessions')
   if (sessions === undefined) throw new Error('shell assembly: sessions service unavailable')
   const useSessions = bindSnapshotSelector(sessions.list)
+  // Locale typing is invisible to this program (same situation as
+  // boot.tsx's adoptProductLocale), and the right-click menu must never be
+  // the thing that breaks boot: a missing locale seat falls back to English
+  // inside ContextMenuHost.
+  const locale = ctx.get('locale') as
+    | { bind?: (ns: string) => (key: string) => string }
+    | undefined
+  let translate: ((key: string) => string) | undefined
+  try {
+    translate = locale?.bind?.('common')
+  } catch {
+    translate = undefined
+  }
   const SessionDocumentTitle = (): ReactNode => {
     const title = useSessions((state) => {
       const id = state.current
@@ -39,6 +53,9 @@ export function buildRenderApp(deps: AssemblyDeps): () => ReactNode {
     <>
       <SessionDocumentTitle />
       {ctx.slots.renderSlot('root', {})}
+      {/* Right-click is product-drawn (Electron has no native menu); one
+          host covers the whole surface tree, so it sits beside the root slot. */}
+      <ContextMenuHost t={translate} />
     </>
   )
 }

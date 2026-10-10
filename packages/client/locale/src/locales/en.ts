@@ -26,4 +26,11 @@ export const en = {
   'unknown': 'Unknown',
   'none': 'None',
   'truncated': 'Truncated',
+  'undo': 'Undo',
+  'redo': 'Redo',
+  'cut': 'Cut',
+  'paste': 'Paste',
+  'pastePlainText': 'Paste as Plain Text',
+  'selectAll': 'Select All',
+  'copyLink': 'Copy Link Address',
 } satisfies Record<CommonKey, string>

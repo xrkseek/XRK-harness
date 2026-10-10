@@ -80,7 +80,8 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     // A claimed next-step at a brand-new turn (no step has started) is the
     // send that opens the next request. Same-turn claims after a prior step
     // — including the post-`step/end` vacuum whose Location is `turn` —
-    // stay steering so Chat can park 「权衡方案中」 above 「插队中」.
+    // stay steering so Chat can park 「权衡方案中」 above 「插队中」, until
+    // the Host runs the step that promotes them into the next opener.
     const loc = match.location
     const turnOpening = loc.kind === 'turn'
       && !loc.turn.steps.some(step => step.start !== undefined)

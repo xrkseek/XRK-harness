@@ -6,8 +6,11 @@ import { ProducedFiles, type ProducedFilesInjected } from './ProducedFiles.tsx'
 import { selectDeliverables, type DeliverablesMatch } from './turn-deliverables.ts'
 import type { NS } from './locales.ts'
 import css from './Deliverables.module.css'
+import producedCss from './ProducedFiles.module.css'
 
 export type DeliverablesInjected = ProducedFilesInjected & {
+  /** Required on the combined turn-tail seat (stack-level folder action). */
+  showInFolder: () => Promise<void>
   loadFileDiff: LoadFileDiff
   /** Open Status-column Changes tab for this turn (optional in unit tests). */
   openOverviewReview?: (index: number, seq: number) => void
@@ -26,17 +29,25 @@ export function DeliverablesTail(props: DeliverablesTailProps) {
 }
 
 function Deliverables({
-  matched, openFile, t, loadFileDiff, openOverviewReview, isLoopback, openNativePath, useHostDescription,
+  matched, openFile, t, loadFileDiff, openOverviewReview, isLoopback, openNativePath,
+  showInFolder, useHostDescription,
 }: Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: DeliverablesMatch
 } & PropsLocale<typeof NS> & InjectFace<DeliverablesInjected>) {
+  const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
+  const canOpenPath = isLoopback && hostCanOpenPath
+  const hasLaneFiles = matched.lanes.created.length > 0
+    || matched.lanes.modified.length > 0
+    || matched.lanes.deleted.length > 0
   const laneProps = {
     openFile,
     t,
     isLoopback,
     openNativePath,
+    showInFolder,
     useHostDescription,
-  } as const
+    showFolderAction: false as const,
+  }
   // One flex item for the turn-tail column: card + lanes share 8px, not the
   // outer 16px gap stacked on each lane's former margin-top.
   return (
@@ -74,7 +85,15 @@ function Deliverables({
         rowTestId="file-lane-created"
         {...laneProps}
       />
+      {canOpenPath && (hasLaneFiles || matched.changes !== null) && (
+        <button
+          type="button"
+          className={producedCss.showFolder}
+          onClick={() => { void showInFolder() }}
+        >
+          {t('produced.showInFolder')}
+        </button>
+      )}
     </div>
   )
 }
-

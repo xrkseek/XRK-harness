@@ -16,6 +16,23 @@ export type { InspectActionProps } from './InspectAction.tsx'
 export { Input } from './Input.tsx'
 export { Menu } from './Menu.tsx'
 export type { MenuEntry, MenuItem, MenuSeparator, MenuLabel } from './Menu.tsx'
+export { ContextMenuHost } from './ContextMenu.tsx'
+export type { ContextMenuHostProps } from './ContextMenu.tsx'
+export {
+  buildContextMenuEntries,
+  contextMenuCommandEnabled,
+  hasContextMenuSelection,
+  probeContextMenuClipboard,
+  readContextMenuHit,
+} from './context-menu.ts'
+export type {
+  ClipboardProbe,
+  ContextMenuActions,
+  ContextMenuEntry,
+  ContextMenuHit,
+  ContextMenuLabels,
+} from './context-menu.ts'
+export { domContextMenuActions } from './contextMenuGestures.ts'
 export { useAnchoredMaxHeight } from './useAnchoredMaxHeight.ts'
 export { useAnchoredPosition } from './useAnchoredPosition.ts'
 export type { AnchoredPositionOptions } from './useAnchoredPosition.ts'

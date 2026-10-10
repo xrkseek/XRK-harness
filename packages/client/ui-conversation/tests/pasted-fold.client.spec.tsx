@@ -6,12 +6,15 @@
 // The fold is invisible by design — if any of these break, the user either
 // gets a wall of text back in the draft or loses their pasted content.
 
-import { describe, expect, it } from 'vitest'
-import { $getRoot, $getSelection, $isElementNode, $isRangeSelection, type LexicalNode } from 'lexical'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { $getRoot, $isElementNode, type LexicalNode } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
 import {
-  $isPastedTextNode, countLines, firstMeaningfulLine, type PastedTextNode,
+  $isPastedTextNode, countLines, firstMeaningfulLine, PastedTextNode,
 } from '../src/client/input/editor/pasted-text-node.tsx'
+import { PastedText } from '../src/client/input/editor/PastedText.tsx'
+import type { PastedTextProps } from '../src/client/input/editor/PastedText.tsx'
 import {
   planPastedFold,
   FOLD_THRESHOLD_CHARS,
@@ -61,14 +64,6 @@ function eachFold(gesture: (node: PastedTextNode) => void): void {
 }
 
 const removeFolds = (): void => eachFold(node => { node.discard() })
-const expandFolds = (): void => eachFold(node => { node.expand() })
-
-/** The text the live caret sits in, or null when there is no range selection. */
-function $getSelectionAnchorText(): string | null {
-  const selection = $getSelection()
-  if (!$isRangeSelection(selection)) return null
-  return selection.anchor.getNode().getTextContent()
-}
 
 /** Every folded-paste node in the current editor state. */
 function foldsOf(rt: DraftEditorRuntime): number {
@@ -156,31 +151,69 @@ describe('folded paste in the composer', () => {
     expect(rt.projection.clipboardText).toBe('')
   })
 
-  it('expanding the fold re-inlines the body as ordinary text', () => {
+  it('the body stays out of the document: nothing inlines it as editable text', () => {
     const { rt } = editor()
     const text = bigBody()
     rt.paste(text)
     rt.refreshProjection()
+    // No expand(): the type-level removal is the guarantee, so reaching for it
+    // is a compile error rather than a runtime check.
+    expect(Object.getOwnPropertyNames(PastedTextNode.prototype)).not.toContain('expand')
+    // Typing next to the fold must not materialize its body either.
     rt.editor.update(() => {
-      expandFolds()
+      $getRoot().selectEnd().insertText('尾')
+    }, { discrete: true })
+    rt.refreshProjection()
+    expect(foldsOf(rt)).toBeGreaterThan(0)
+    expect(rt.projection.clipboardText.endsWith('尾')).toBe(true)
+  })
+
+  it('every fold still carries its own full body for the read-only viewer', () => {
+    const { rt } = editor()
+    // 3000 chars per line crosses the 2000 threshold on each line, so this
+    // pastes as two independent folds — the assertion is per node, not once.
+    const text = 'x'.repeat(3000) + '\n' + 'y'.repeat(3000)
+    rt.paste(text)
+    rt.refreshProjection()
+    const carried: string[] = []
+    rt.editor.getEditorState().read(() => { eachFold(node => { carried.push(node.getText()) }) })
+    expect(carried).toEqual(['x'.repeat(3000), 'y'.repeat(3000)])
+  })
+
+  it('a saved edit re-projects the new body without unfolding the draft', () => {
+    const { rt } = editor()
+    rt.paste('x'.repeat(3000))
+    rt.refreshProjection()
+    rt.editor.update(() => {
+      eachFold(node => { node.replaceText('改短了') })
+    }, { discrete: true })
+    rt.refreshProjection()
+    expect(rt.projection.clipboardText).toBe('改短了')
+  })
+
+  it('saving back to an over-long body keeps it folded (the fold follows the text)', () => {
+    const { rt } = editor()
+    rt.paste('x'.repeat(3000))
+    rt.refreshProjection()
+    const longer = 'y'.repeat(6000)
+    rt.editor.update(() => {
+      eachFold(node => { node.replaceText(longer) })
+    }, { discrete: true })
+    rt.refreshProjection()
+    expect(foldsOf(rt)).toBe(1)
+    expect(rt.projection.clipboardText).toBe(longer)
+  })
+
+  it('trimming below the threshold inlines the text (a chip around a sentence is noise)', () => {
+    const { rt } = editor()
+    rt.paste('x'.repeat(3000))
+    rt.refreshProjection()
+    rt.editor.update(() => {
+      eachFold(node => { node.replaceText('只剩一句\n第二句') })
     }, { discrete: true })
     rt.refreshProjection()
     expect(foldsOf(rt)).toBe(0)
-    expect(rt.projection.clipboardText.trim()).toBe(text.trim())
-  })
-
-  it('expanding lands the caret after the body (an expansion you cannot type into reads as a dead end)', () => {
-    const { rt } = editor()
-    const text = bigBody()
-    rt.paste(text)
-    rt.refreshProjection()
-    rt.editor.update(() => {
-      expandFolds()
-    }, { discrete: true })
-    const caret = rt.editor.getEditorState().read(() => $getSelectionAnchorText())
-    expect(caret).not.toBeNull()
-    // bigBody folds into several runs, so the caret belongs to the LAST one.
-    expect(caret!.endsWith('第 79 行 ' + '内容'.repeat(20))).toBe(true)
+    expect(rt.projection.clipboardText).toBe('只剩一句\n第二句')
   })
 
   it('a persisted draft re-seeded from the store stays folded (refresh survival)', () => {
@@ -222,5 +255,124 @@ describe('folded paste in the composer', () => {
     const text = Array.from({ length: FOLD_THRESHOLD_LINES }, (_, i) => `行 ${i}`).join('\n')
     expect(text.length).toBeLessThan(FOLD_THRESHOLD_CHARS)
     expect(planPastedFold(text)).toEqual([{ kind: 'fold', text }])
+  })
+})
+
+describe('folded-paste chrome', () => {
+  // Each test mounts its own row; the Modal portals to document.body, so an
+  // earlier row surviving into the next would leak buttons into getAllByRole.
+  afterEach(() => { cleanup() })
+
+  /** Mount one folded-paste row over a stubbed clipboard. */
+  function mount(overrides: Partial<PastedTextProps> = {}) {
+    const writes: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => { writes.push(text); return Promise.resolve() },
+      },
+    })
+    const props: PastedTextProps = {
+      lines: 80, chars: 1200, preview: '第一行', text: '第一行\n第二行',
+      onSave: () => {}, onDelete: () => {}, ...overrides,
+    }
+    const view = render(<PastedText {...props} />)
+    return { writes, ...view }
+  }
+
+  it('offers edit and remove on the row, and nothing that inlines the body', () => {
+    const { getAllByRole } = mount()
+    const labels = getAllByRole('button').map(b => b.getAttribute('aria-label'))
+    expect(labels).toEqual(['查看 / 编辑粘贴内容', '移除粘贴内容（Ctrl+Z 可撤销）'])
+    // The escape hatch is gone by name too — a paste never becomes draft text
+    // on a gesture; it only changes through the off-line surface's save.
+    expect(labels.join(' ')).not.toContain('插入')
+  })
+
+  it('a small body opens an editable textarea OUTSIDE contenteditable', () => {
+    mount()
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    const area = document.querySelector<HTMLTextAreaElement>('[data-composer-pasted-editor]')!
+    expect(area.tagName).toBe('TEXTAREA')
+    expect(area.value).toBe('第一行\n第二行')
+    // The whole point: the editable surface is a native control in a Modal,
+    // never the composer.
+    expect(area.closest('[contenteditable]')).toBeNull()
+  })
+
+  it('editing then saving hands the new body to onSave', () => {
+    const saved: string[] = []
+    mount({ onSave: next => { saved.push(next) } })
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    const area = document.querySelector<HTMLTextAreaElement>('[data-composer-pasted-editor]')!
+    fireEvent.change(area, { target: { value: '改过的第一行' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(saved).toEqual(['改过的第一行'])
+  })
+
+  it('save stays disabled until the body actually changes (a no-op must not mark history)', () => {
+    mount()
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    expect(screen.getByRole('button', { name: '保存' })).toHaveProperty('disabled', true)
+    fireEvent.change(document.querySelector('[data-composer-pasted-editor]')!, {
+      target: { value: 'x' },
+    })
+    expect(screen.getByRole('button', { name: '保存' })).toHaveProperty('disabled', false)
+  })
+
+  it('a cancelled edit does not leak into the next open', () => {
+    mount()
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    fireEvent.change(document.querySelector('[data-composer-pasted-editor]')!, {
+      target: { value: '改坏了' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    expect(document.querySelector<HTMLTextAreaElement>('[data-composer-pasted-editor]')!.value)
+      .toBe('第一行\n第二行')
+  })
+
+  it('an over-long body is read-only, head/tail capped, never editable', () => {
+    // 30 lines × 700 chars = 21k, past EDIT_MAX_CHARS: editing a body this big
+    // is the wall-of-text cost, so the surface reads and copies instead.
+    const body = Array.from({ length: 30 }, (_, i) => `行 ${i} ${'x'.repeat(680)}`).join('\n')
+    const { container } = mount({ chars: body.length, lines: 30, preview: '行 0', text: body })
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    expect(container.ownerDocument.querySelector('[data-composer-pasted-editor]')).toBeNull()
+    const view = document.querySelector('[data-composer-pasted-view]')!
+    expect(view.closest('[contenteditable]')).toBeNull()
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    // Cap: 16 rows over 30 lines → 8 head + 8 tail, 14 hidden.
+    expect(screen.getByRole('button', { name: '展开其余 14 行' })).toBeTruthy()
+    const pres = [...document.querySelectorAll('pre')]
+    expect(pres).toHaveLength(2)
+    expect(pres[0]!.textContent!.startsWith('行 0 ')).toBe(true)
+    expect(pres[1]!.textContent!.startsWith('行 22 ')).toBe(true)
+  })
+
+  it('expanding shows the whole body without an editable surface', () => {
+    const body = Array.from({ length: 30 }, (_, i) => `行 ${i} ${'x'.repeat(680)}`).join('\n')
+    mount({ chars: body.length, lines: 30, text: body })
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    fireEvent.click(screen.getByRole('button', { name: '展开其余 14 行' }))
+    expect(document.querySelectorAll('pre')).toHaveLength(1)
+    expect(document.querySelector('pre')!.textContent).toBe(body)
+    expect(document.querySelector('[data-composer-pasted-editor]')).toBeNull()
+  })
+
+  it('copy takes the FULL body, never the displayed slice', async () => {
+    const body = Array.from({ length: 30 }, (_, i) => `行 ${i} ${'x'.repeat(680)}`).join('\n')
+    const { writes } = mount({ chars: body.length, lines: 30, text: body })
+    fireEvent.click(screen.getAllByRole('button')[0]!)
+    fireEvent.click(screen.getByRole('button', { name: '复制全部' }))
+    await vi.waitFor(() => { expect(writes).toEqual([body]) })
+    expect(await screen.findByRole('button', { name: '已复制' })).toBeTruthy()
+  })
+
+  it('removing fires the delete gesture', () => {
+    let deleted = 0
+    mount({ onDelete: () => { deleted += 1 } })
+    fireEvent.click(screen.getAllByRole('button')[1]!)
+    expect(deleted).toBe(1)
   })
 })

@@ -8,3 +8,8 @@
   gap: 6px;
   min-width: 0;
 }
+
+/* Stack-level "Show in folder" reuses ProducedFiles.showFolder look. */
+.stack > button {
+  align-self: flex-start;
+}

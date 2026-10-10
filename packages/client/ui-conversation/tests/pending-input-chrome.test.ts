@@ -124,17 +124,37 @@ describe('durableSteerPending', () => {
     )).toBe(true)
   })
 
-  it('does not trail a steer that opened the latest open turn (idle new-turn opener)', () => {
-    const turn2 = {
-      kind: 'turn' as const,
-      turn: { status: 'open' as const, turn: 2 },
-    } as ConversationLocation
+  // Production log: seq 6-10 openers, seq 84 promote, seq 85 `step/start`.
+  const promoted = {
+    kind: 'turn' as const,
+    turn: {
+      status: 'open' as const,
+      turn: 1,
+      steps: [{ start: { seq: 64 } }, { start: { seq: 85 } }],
+    },
+  } as unknown as ConversationLocation
+  const stillSending = {
+    kind: 'turn' as const,
+    turn: {
+      status: 'open' as const,
+      turn: 1,
+      steps: [{ start: { seq: 64 } }],
+    },
+  } as unknown as ConversationLocation
+
+  it('does not trail a steer that opened the next step', () => {
     expect(durableSteerPending(
-      'steering', turn2, 9, true, [9], true, 2,
+      'steering', promoted, 84, true, [6, 84], true, 1,
     )).toBe(false)
     expect(durableSteerPending(
-      'user', turn2, 9, true, [9], true, 2,
+      'user', promoted, 84, true, [6, 84], true, 1,
     )).toBe(false)
+  })
+
+  it('keeps a steer that is still 发送中 in the trailing cluster', () => {
+    expect(durableSteerPending(
+      'steering', stillSending, 84, true, [6, 84], true, 1,
+    )).toBe(true)
   })
 })
 

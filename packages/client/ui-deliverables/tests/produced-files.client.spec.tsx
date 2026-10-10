@@ -199,6 +199,7 @@ describe('produced-file Turn data', () => {
       result(9, 'failed', true),
       call(10, 'locationless', { card: 'diff', title: 'Write', diffs: [] }),
       result(11, 'locationless'),
+      at(12, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
     ])
 
     expect(fileLanesForClosing(deliverablesOf(value))).toEqual({
@@ -223,6 +224,7 @@ describe('produced-file Turn data', () => {
         locations: [{ path: '.tmp-commit-msg.txt' }],
       }),
       result(5, 'rm'),
+      at(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
     ])
     expect(fileLanesForClosing(deliverablesOf(value))).toEqual({
       created: [],
@@ -230,6 +232,43 @@ describe('produced-file Turn data', () => {
       deleted: ['.tmp-commit-msg.txt'],
     })
     expect(producedForClosing(deliverablesOf(value))).toEqual([])
+  })
+
+  it('withholds deliverables location data until turn/end (mid-turn workspace/changes)', () => {
+    const changesEvent: ConversationEventInput = {
+      event: {
+        type: 'workspace/changes',
+        seq: 2,
+        time: 2,
+        data: {
+          turn: 1,
+          turnId: 'turn_1',
+          summary: {
+            turnId: 'turn_1',
+            cwd: '/w',
+            files: [{ path: 'a.ts', display: 'a.ts', added: 2, deleted: 0 }],
+            total: 1,
+            added: 2,
+            deleted: 0,
+          },
+        },
+        ignorable: true,
+      },
+      view: null,
+    }
+    const open = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      changesEvent,
+      call(3, 'write', diff('b.ts')),
+      result(4, 'write'),
+    ])
+    expect(deliverablesOf(open)).toBeUndefined()
+
+    open.append(at(5, 'turn/end', { turn: 1, reason: { kind: 'completed' } }))
+    open.flush()
+    const data = deliverablesOf(open)
+    expect(data?.changes?.files.map(f => f.path)).toEqual(['a.ts'])
+    expect(producedForClosing(data)).toEqual(['b.ts'])
   })
 
   it('folds workspace/changes into turn deliverables for the changed-files card', () => {
@@ -275,6 +314,25 @@ describe('produced-file Turn data', () => {
     })
   })
 
+  it('declines the turn-tail chain while the Turn is still open', () => {
+    const openTurn = {
+      ...turnLocation(1, {
+        produced: [{ seq: 2, path: 'a.ts', op: 'create' as const }],
+        changes: {
+          seq: 2,
+          turnId: 'turn_1',
+          cwd: '/w',
+          files: [{ path: 'a.ts', display: 'a.ts', added: 1, deleted: 0 }],
+          total: 1,
+          added: 1,
+          deleted: 0,
+        },
+      }),
+      status: 'open' as const,
+    }
+    expect(selectDeliverables({ turn: openTurn, seq: 2, openFile: () => {} })).toBeNull()
+  })
+
   it('ignores calls without mutation locations, orphan results, and replacement results', () => {
     const replacement = result(8, 'replacement')
     const value = assembler([
@@ -298,7 +356,7 @@ describe('produced-file Turn data', () => {
     expect(producedForClosing(deliverablesOf(value))).toEqual([])
   })
 
-  it('rejects an invalid start match and preserves state for an unrelated update', () => {
+  it('rejects an invalid start match and closes state on turn/end', () => {
     const startMatch = matched(at(1, 'turn/start', { turn: 1 }), 'start')
     const emptyContext: Parameters<typeof deliverablesDefinition.start>[0] = {
       key: 'deliverables:1',
@@ -311,12 +369,12 @@ describe('produced-file Turn data', () => {
     }
     const reader: Parameters<typeof deliverablesDefinition.start>[2] = { previous: () => undefined }
     const state = deliverablesDefinition.start(emptyContext, startMatch, reader)
-    const unrelated = matched(at(2, 'turn/end', { turn: 1, reason: { kind: 'completed' } }), 'update')
+    const end = matched(at(2, 'turn/end', { turn: 1, reason: { kind: 'completed' } }), 'update')
     const context: Parameters<typeof deliverablesDefinition.update>[0] = { ...emptyContext, state }
 
-    expect(() => deliverablesDefinition.start(emptyContext, unrelated, reader))
+    expect(() => deliverablesDefinition.start(emptyContext, end, reader))
       .toThrow('deliverables start requires turn/start')
-    expect(deliverablesDefinition.update(context, unrelated)).toBe(state)
+    expect(deliverablesDefinition.update(context, end)).toEqual({ ...state, closed: true })
   })
 
   it('replays a tail page once prepend supplies its missing Turn start', () => {
@@ -327,6 +385,7 @@ describe('produced-file Turn data', () => {
     expect(deliverablesOf(value)).toBeUndefined()
 
     value.prepend([at(1, 'turn/start', { turn: 1 })], false)
+    value.append(at(12, 'turn/end', { turn: 1, reason: { kind: 'completed' } }))
     value.flush()
     expect(producedForClosing(deliverablesOf(value))).toEqual(['history.txt'])
   })
@@ -337,11 +396,11 @@ describe('produced-file Turn data', () => {
       call(2, 'first', diff('first.txt')),
       result(3, 'first'),
     ])
-    const first = deliverablesOf(value)
-    expect(producedForClosing(first)).toEqual(['first.txt'])
+    expect(deliverablesOf(value)).toBeUndefined()
 
     value.append(call(4, 'second', diff('second.txt')))
     value.append(result(5, 'second'))
+    value.append(at(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }))
     value.flush()
     expect(producedForClosing(deliverablesOf(value))).toEqual(['first.txt', 'second.txt'])
   })
@@ -433,6 +492,7 @@ describe('ProducedFiles row', () => {
     fireEvent.click(view.getByRole('menuitem', { name: '在资源管理器中显示' }))
     expect(openNativePath).toHaveBeenCalledWith('deep/a.html', { reveal: true })
 
+    // Folder action is always offered when Host can open paths (not only on overflow).
     const showFolder = view.getByRole('button', { name: '在文件夹中显示' })
     fireEvent.click(showFolder)
     expect(openNativePath).toHaveBeenLastCalledWith('.', { reveal: true })
@@ -469,13 +529,16 @@ describe('ProducedFiles row', () => {
     bounds.mockRestore()
   })
 
-  it('keeps the folder action absent without overflow or a local native opener', () => {
+  it('shows the folder action whenever a local native opener is available', () => {
     const openFile = vi.fn<(path: string) => void>()
+    const openNativePath = vi.fn(async () => {})
     const view = render(
-      <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true, true, openNativePath)} t={t} />,
     )
+    expect(view.getByRole('button', { name: '在文件夹中显示' })).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: '在文件夹中显示' }))
+    expect(openNativePath).toHaveBeenCalledWith('.', { reveal: true })
     const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
-    expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
       view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
       expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
@@ -565,6 +628,9 @@ describe('plugin registration', () => {
         subscribe: () => () => {},
       },
     } as never)
+    ctx.provide('workspaces', {
+      openPath: async () => {},
+    } as never)
     ctx.provide('remote', {
       $on: () => () => {},
       changes: {
@@ -585,11 +651,13 @@ describe('plugin registration', () => {
     const injected = entry?.inject?.() as {
       isLoopback: boolean
       openNativePath: (path: string) => Promise<void>
+      showInFolder: () => Promise<void>
       hooks: { hostDescription: unknown }
     }
     expect(injected.isLoopback).toBe(false)
     expect(injected.hooks).toEqual({ hostDescription })
     expect(typeof injected.openNativePath).toBe('function')
+    expect(typeof injected.showInFolder).toBe('function')
 
     // The prose face is live while the plugin is: a produced turn yields a
     // resolver whose matches open through the owner-supplied opener.

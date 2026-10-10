@@ -630,15 +630,6 @@ export function ChatView({
     break
   }
   const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
-  const tailWaiting = shouldShowFlowWaiting({
-    running,
-    pendingSendCount: 0,
-    tailKind: lastDurable?.kind,
-    turnSurfaceActive,
-    runningCallCount,
-    skippedTrailingRunningStep,
-    turnsSettled,
-  })
   const pendingGroups = useMemo(
     () => groupPendingByChrome(pendingInputs, (input) => {
       // 排队 never paints here. Host FIFO-claim promotes a flushed 排队

@@ -6,7 +6,9 @@ import type {
 /**
  * Turn 回合: opener (earliest live-turn user row) sits above waiting.
  * Later user-shaped rows on that in-flight turn are 「插队中」 below waiting
- * until the turn ends. 排队 is the next 轮次 (QueueDock).
+ * until the turn ends — unless Host promoted the row and opened the next
+ * step, which re-anchors the flow: that row is the next request's opener, so
+ * waiting follows it. 排队 is the next 轮次 (QueueDock).
  *
  * The opener may precede Host `turn/start` (inject stamps the clock after
  * the first user message). Follow-ups are 插队 by identity, not by clock.
@@ -204,17 +206,16 @@ export type PendingInputChrome = 'steer' | 'send'
  * two Ctrl+Enter rows in the same millisecond are still first vs rest.
  * Stop clears `running` before tools drain — follow-ups go idle with Stop.
  */
-/** Owning turn is the latest open turn and this row opened it (idle new-turn tip). */
-function isLatestOpenTurnOpener(
-  location: ConversationLocation,
-  messageId: number,
-  userIds: readonly number[],
-  latestTurn?: number | null,
-): boolean {
-  if (latestTurn === null || latestTurn === undefined) return false
+/**
+ * Host promoted this row and the same turn ran `step/start` after it
+ * (`messageId` is the event seq): the steer became the next request's opener,
+ * so it stays in the body and the waiting line drops below it. A steer that
+ * is still waiting for its step (发送中) keeps the trailing cluster.
+ */
+function openedNextStep(location: ConversationLocation, seq: number): boolean {
   if (location.kind !== 'turn' && location.kind !== 'step') return false
-  if (location.turn.status !== 'open' || location.turn.turn !== latestTurn) return false
-  return isTurnOpenerRow(messageId, userIds)
+  const last = location.turn.steps?.at(-1)
+  return last?.start !== undefined && last.start.seq > seq
 }
 
 export function durableSteerPending(
@@ -228,8 +229,8 @@ export function durableSteerPending(
 ): boolean {
   if (!isUserShaped(kind)) return false
   if (isHistoricClosedTurn(location, latestTurn)) return false
-  // Promoted insert that opened the newest turn: body above waiting (not trailing).
-  if (isLatestOpenTurnOpener(location, messageId, userIds, latestTurn)) return false
+  // Promoted into the next request: body above waiting (not trailing).
+  if (openedNextStep(location, messageId)) return false
   if (isTurnOpenerRow(messageId, userIds) && (kind === 'user' || !hasAgentWork)) return false
   return live
 }

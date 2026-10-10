@@ -42,7 +42,14 @@ const REGISTRY_URLS = {
   npmmirror: 'https://registry.npmmirror.com/',
 } as const
 
-const RECOMMENDED_PLUGIN_SPEC = 'xrkh-better-sidebar'
+/** One-click install chips under the Manager install row. */
+const RECOMMENDED_PLUGINS: readonly {
+  readonly spec: string
+  readonly hintKey: PluginInventoryLocaleKey
+}[] = [
+  { spec: 'xrkh-better-sidebar', hintKey: 'installRecommendedHint' },
+  { spec: 'xrkh-better-sidebar-plugin-office', hintKey: 'installRecommendedOfficeHint' },
+]
 
 /** Registration-side Remote face used by the section. */
 export interface PluginInventorySettingsTabInjected {
@@ -446,14 +453,14 @@ export function PluginInventorySettingsTab({
     })
   }
 
-  const runRecommendedInstall = async (): Promise<void> => {
+  const runRecommendedInstall = async (spec: string): Promise<void> => {
     if (installBusy || busyId !== null) return
-    setInstallSpec(RECOMMENDED_PLUGIN_SPEC)
+    setInstallSpec(spec)
     clearPluginInstallSettledUi()
     const registry = resolveInstallRegistry(registryChoice, registryCustom)
     persistRegistry(registryChoice, registryCustom)
     await runPluginInstallUi({
-      spec: RECOMMENDED_PLUGIN_SPEC,
+      spec,
       ...(registry !== undefined ? { registry } : {}),
       install,
       ...(subscribeInstallLog !== undefined ? { subscribeInstallLog } : {}),
@@ -461,12 +468,15 @@ export function PluginInventorySettingsTab({
     })
   }
 
-  const hasRecommendedInstalled = state.status === 'ready'
+  const isRecommendedInstalled = (spec: string): boolean =>
+    state.status === 'ready'
     && state.snapshot.entries.some((entry) =>
-      entry.moduleName === RECOMMENDED_PLUGIN_SPEC
-      || entry.source?.includes(RECOMMENDED_PLUGIN_SPEC) === true
-      || String(entry.entryId).includes(RECOMMENDED_PLUGIN_SPEC),
+      entry.moduleName === spec
+      || entry.source?.includes(spec) === true
+      || String(entry.entryId).includes(spec),
     )
+
+  const pendingRecommended = RECOMMENDED_PLUGINS.filter((item) => !isRecommendedInstalled(item.spec))
 
   const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
     { id: 'all', label: t('filterAll') },
@@ -559,27 +569,29 @@ export function PluginInventorySettingsTab({
               : null}
           </div>
           <p className={css.installHint}>{t('installHint')}</p>
-          {!hasRecommendedInstalled
-            ? (
-              <div className={css.recommendRow} data-plugin-recommend={RECOMMENDED_PLUGIN_SPEC}>
-                <div className={css.recommendCopy}>
-                  <strong>{t('installRecommended', { name: RECOMMENDED_PLUGIN_SPEC })}</strong>
-                  <span>{t('installRecommendedHint')}</span>
-                </div>
-                <button
-                  type="button"
-                  className={css.recommendButton}
-                  disabled={installBusy || busyId !== null}
-                  aria-label={t('installRecommendedAria', { name: RECOMMENDED_PLUGIN_SPEC })}
-                  onClick={() => { void runRecommendedInstall() }}
-                >
-                  {installBusy && activeSpec === RECOMMENDED_PLUGIN_SPEC
-                    ? t('actionBusy')
-                    : t('install')}
-                </button>
+          {pendingRecommended.map((item) => (
+            <div
+              key={item.spec}
+              className={css.recommendRow}
+              data-plugin-recommend={item.spec}
+            >
+              <div className={css.recommendCopy}>
+                <strong>{t('installRecommended', { name: item.spec })}</strong>
+                <span>{t(item.hintKey)}</span>
               </div>
-            )
-            : null}
+              <button
+                type="button"
+                className={css.recommendButton}
+                disabled={installBusy || busyId !== null}
+                aria-label={t('installRecommendedAria', { name: item.spec })}
+                onClick={() => { void runRecommendedInstall(item.spec) }}
+              >
+                {installBusy && activeSpec === item.spec
+                  ? t('actionBusy')
+                  : t('install')}
+              </button>
+            </div>
+          ))}
           <button
             type="button"
             className={css.guideToggle}
