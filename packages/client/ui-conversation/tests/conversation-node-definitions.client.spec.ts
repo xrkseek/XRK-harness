@@ -146,6 +146,25 @@ describe('built-in conversation node Definitions', () => {
     expect(settledSnapshot.order).toBe(order)
     expect(settled?.data).toMatchObject({ status: 'settled', blocks: [{ kind: 'text', text: 'settled' }] })
 
+    // Bare step/end without finalize parks the partial — 「已停止」 waits for
+    // turn/end aborted|interrupted (same Turn still in flight otherwise).
+    const cutBeforeTurnEnd = assembler([
+      at(10, 'turn/start', { turn: 2 }),
+      at(11, 'step/start', { turn: 2, step: 1 }),
+      at(12, 'assistant/chunk', {
+        turn: 2,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'partial' },
+      }),
+      at(13, 'step/end', { turn: 2, step: 1 }),
+    ])
+    const parked = node(snapshot(cutBeforeTurnEnd), 'assistant-step')
+    expect(parked?.data).toMatchObject({
+      status: 'settled',
+      blocks: [{ kind: 'text', text: 'partial' }],
+    })
+    expect((parked?.data as AssistantChatData).finalNode?.interrupted).not.toBe(true)
+
     const interruptedValue = assembler([
       at(10, 'turn/start', { turn: 2 }),
       at(11, 'step/start', { turn: 2, step: 1 }),
@@ -155,6 +174,10 @@ describe('built-in conversation node Definitions', () => {
         chunk: { type: 'text-delta', index: 0, text: 'partial' },
       }),
       at(13, 'step/end', { turn: 2, step: 1 }),
+      at(14, 'turn/end', {
+        turn: 2,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
     ])
     const interrupted = node(snapshot(interruptedValue), 'assistant-step')
     expect(interrupted?.data).toMatchObject({ status: 'interrupted' })
@@ -233,6 +256,10 @@ describe('built-in conversation node Definitions', () => {
         chunk: { type: 'tool-call-delta', index: 0, id: 'call-2', name: 'read', argumentsDelta: '' },
       }),
       at(38, 'step/end', { turn: 5, step: 1 }),
+      at(39, 'turn/end', {
+        turn: 5,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
     ])
     const interruptedToolOnly = node(snapshot(interruptedToolOnlyValue), 'assistant-step')
     expect(interruptedToolOnly?.visibility).toBe('visible')
@@ -368,6 +395,8 @@ describe('built-in conversation node Definitions', () => {
     const retryTiming = (node(snapshot(retryTimingValue), 'assistant-step')?.data as AssistantChatData).finalNode
     expect(retryTiming?.timing?.firstTokenTime).toBe(1_700_000_000_052)
 
+    // Truncated history: step/end alone parks the partial without 「已停止」.
+    // Stop chrome needs turn/end aborted|interrupted in-window.
     const partialWindow = assembler([
       at(40, 'assistant/chunk', {
         turn: 5,
@@ -378,6 +407,24 @@ describe('built-in conversation node Definitions', () => {
     ], true)
     const recovered = node(snapshot(partialWindow), 'assistant-step')
     expect(recovered?.data).toMatchObject({
+      status: 'settled',
+      blocks: [{ kind: 'text', text: 'loaded partial' }],
+    })
+    expect((recovered?.data as AssistantChatData).finalNode?.interrupted).not.toBe(true)
+
+    const partialStopWindow = assembler([
+      at(40, 'assistant/chunk', {
+        turn: 5,
+        step: 2,
+        chunk: { type: 'text-delta', index: 0, text: 'loaded partial' },
+      }),
+      at(41, 'step/end', { turn: 5, step: 2 }),
+      at(42, 'turn/end', {
+        turn: 5,
+        reason: { kind: 'aborted', reason: { kind: 'user' } },
+      }),
+    ], true)
+    expect(node(snapshot(partialStopWindow), 'assistant-step')?.data).toMatchObject({
       status: 'interrupted',
       blocks: [{ kind: 'text', text: 'loaded partial' }],
     })
@@ -1321,6 +1368,40 @@ describe('built-in conversation node Definitions', () => {
     expect((node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).turn).toBe(1)
   })
 
+  it('anchors turn-tail at turn/end after trailing tools (not after the last text)', () => {
+    // text → tool rows → turn/end: footer must sort after the tools so copy/赞
+    // never sits between in-flight steps of an open Host run.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1, step: 1, message: assistantMessage('a1', 'will call tools'),
+      }, { surfaceOp: 'append' }),
+      at(4, 'tool/call', {
+        turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}',
+      }),
+      at(5, 'tool/result', {
+        turn: 1, step: 1, message: toolResult('c1', 'ok'),
+      }, { surfaceOp: 'append' }),
+      at(6, 'tool/call', {
+        turn: 1, step: 1, callId: 'c2', name: 'bash', arguments: '{}',
+      }),
+      at(7, 'tool/result', {
+        turn: 1, step: 1, message: toolResult('c2', 'ok'),
+      }, { surfaceOp: 'append' }),
+      at(8, 'step/end', { turn: 1, step: 1 }),
+      at(9, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ])
+    const snap = snapshot(value)
+    const tail = node(snap, 'turn-tail')
+    expect(tail?.anchorSeq).toBe(9)
+    const order = snap.order.filter(key => {
+      const kind = snap.nodes.get(key)?.kind
+      return kind === 'tool-call' || kind === 'turn-tail'
+    })
+    expect(order.at(-1)).toBe(tail?.key)
+  })
+
   it('keeps a single turn-tail when Stop cancels an in-flight llm/retry after file diffs', () => {
     // Screenshot repro: tools write files → empty model response schedules
     // llm/retry → user hits Stop. The never-started cancel must not paint a
@@ -1374,6 +1455,42 @@ describe('built-in conversation node Definitions', () => {
     expect(snap.order.filter(key => snap.nodes.get(key)?.kind === 'turn-tail')).toHaveLength(1)
     // Stop during backoff: never-started cancel must not leave a retry banner.
     expect(node(snap, 'model-retry')).toBeUndefined()
+  })
+
+  it('hides a painted assistant-step on llm/retry without withdrawing it', () => {
+    // Live path: text was visible, retry clears blocks. Returning null used to
+    // throw "withdrew materialized target" and freeze Chat until refresh.
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'about to retry' },
+      }),
+    ])
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+
+    expect(() => {
+      value.append(at(4, 'llm/retry', {
+        retryId: 'retry-hide-assistant',
+        turn: 1,
+        step: 1,
+        provider: 'fake',
+        mode: 'normal',
+        policyKey: 'fake-normal',
+        retry: 1,
+        maxRetries: 2,
+        delayMs: 10,
+        failure: { code: 'TRANSPORT', message: 'temporary' },
+      }))
+      value.flush()
+    }).not.toThrow()
+
+    const afterRetry = snapshot(value)
+    const assistant = node(afterRetry, 'assistant-step')
+    expect(assistant?.visibility).toBe('hidden')
+    expect(afterRetry.order.filter(key => afterRetry.nodes.get(key)?.kind === 'assistant-step')).toHaveLength(0)
   })
 
   it('hides a painted model-retry on Stop without freezing later turns', () => {

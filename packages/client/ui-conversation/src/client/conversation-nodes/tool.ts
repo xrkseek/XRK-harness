@@ -330,9 +330,29 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
   },
   buildViewNode: (context) => {
     const state = context.state ?? fallbackState(context)
-    if (state === undefined) return null
+    const previous = context.current.get('chat')
+    if (state === undefined) {
+      // Same withdraw rule as turn-tail / model-retry: hide, do not null after paint.
+      if (previous === undefined || previous === null || previous.kind !== 'tool-call') return null
+      return chatNode(
+        context,
+        'tool-call',
+        previous.anchorSeq,
+        previous.data as ToolChatData,
+        { visibility: 'hidden' },
+      )
+    }
     // Hide nameless provisional shells (args arrived before the name chunk).
-    if (!('kind' in state.root) && state.root.name === '') return null
+    if (!('kind' in state.root) && state.root.name === '') {
+      if (previous === undefined || previous === null || previous.kind !== 'tool-call') return null
+      return chatNode(
+        context,
+        'tool-call',
+        previous.anchorSeq,
+        previous.data as ToolChatData,
+        { visibility: 'hidden' },
+      )
+    }
     const projected = projectBlock(state.root, state, interruption(context))
     const anchor = context.start?.event.seq
       ?? ('kind' in state.root ? state.root.seq : context.matches[0]?.event.seq ?? 0)

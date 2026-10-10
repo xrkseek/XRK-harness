@@ -68,8 +68,14 @@ function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[
 }
 
 function closingAnchor(context: ConversationNodeContext<TurnTailState>): number {
-  let anchor = context.matches.find(match => match.event.type === 'turn/end')?.event.seq
-    ?? context.start?.event.seq
+  // Prefer the durable turn/end seq so the footer stays after trailing tools
+  // (text → tools → turn/end). Anchoring on the last text assistant left
+  // copy/赞/用时 between mid-turn tool rows while the Host was still running.
+  const endSeq = context.state?.end?.event.seq
+    ?? context.matches.find(match => match.event.type === 'turn/end')?.event.seq
+  if (endSeq !== undefined) return endSeq
+
+  let anchor = context.start?.event.seq
     ?? context.matches[0]?.event.seq
     ?? 0
   const steps = new Map<number, StepEvidence>()
@@ -194,7 +200,23 @@ export const turnTailDefinition: ConversationNodeDefinition<TurnTailState> = {
     // tails may see turn/end without turn/start in-window — still publish.
     const turn = turnLocation(context)
     const data = turn?.data.get('turn-tail')
-    return data === undefined ? null : chatNode(context, 'turn-tail', closingAnchor(context), data)
+    const ready = data !== undefined && turn !== undefined && turn.status === 'closed'
+    if (!ready) {
+      // Same rule as model-retry: never return null after a visible row — that
+      // throws "withdrew materialized target" and freezes the chat until refresh.
+      const previous = context.current.get('chat')
+      if (previous === undefined || previous === null || previous.kind !== 'turn-tail') {
+        return null
+      }
+      return chatNode(
+        context,
+        'turn-tail',
+        previous.anchorSeq,
+        previous.data as TurnTailChatData,
+        { visibility: 'hidden' },
+      )
+    }
+    return chatNode(context, 'turn-tail', closingAnchor(context), data)
   },
 }
 

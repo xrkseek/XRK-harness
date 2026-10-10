@@ -189,6 +189,10 @@ function finalNode(
       ...(event.data.interrupted === true || stopped ? { interrupted: true as const } : {}),
     }
   }
+  // Step closed without assistant/message: park the partial, but only stamp
+  // 「已停止」 when the Turn itself ended as Stop. A bare step/end (or a
+  // completed/error turn/end) must not paint stop chrome while the Host is
+  // still on the same Turn — that was the live false-「已停止」 flash.
   const boundary = location === undefined ? undefined : closedBoundary(location)
   const blocks = compactBlocks(state.blocks)
   if (boundary === undefined || !hasInterruptionEvidence(blocks)) return undefined
@@ -199,7 +203,7 @@ function finalNode(
     turn: state.turn,
     step: state.step,
     blocks,
-    interrupted: true,
+    ...(stopped ? { interrupted: true as const } : {}),
   }
 }
 
@@ -318,12 +322,23 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
   },
   buildViewNode: (context) => {
     const projected = projectAssistant(context)
-    if (projected === undefined) return null
+    const previous = context.current.get('chat')
+    // Never withdraw a painted row — assembler throws and freezes Chat until refresh.
+    const hidePrevious = () => {
+      if (previous === undefined || previous === null || previous.kind !== 'assistant-step') return null
+      return chatNode(
+        context,
+        'assistant-step',
+        previous.anchorSeq,
+        previous.data as AssistantChatData,
+        { visibility: 'hidden' },
+      )
+    }
+    if (projected === undefined) return hidePrevious()
     if (projected.settled === undefined && !projected.visible) {
-      const state = context.state ?? fallbackState(context)
-      if (state === undefined) return null
-      const current = context.current.get('chat')
-      if (!state.hidden || current === undefined || current === null) return null
+      // Omit until first paint; once materialized, fall through as hidden
+      // (never withdraw — that freezes Chat until refresh).
+      if (previous === undefined || previous === null) return null
     }
     return chatNode(context, 'assistant-step', projected.anchorSeq, projected.data, {
       visibility: projected.settled?.interrupted === true || projected.visible ? 'visible' : 'hidden',
