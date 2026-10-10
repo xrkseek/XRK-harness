@@ -102,6 +102,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Explicit caption size: stack-level Deliverables mounts this outside
+   `.root`, so `font: inherit` picked up the turn-tail body size and the
+   link looked oversized next to the 13px chip lane. */
 .showFolder {
   grid-column: 2;
   grid-row: 2;
@@ -112,8 +115,9 @@
   border-radius: 4px;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
   cursor: pointer;
 }
 

@@ -1,20 +1,21 @@
 /* Folded-paste metrics: one resting-height row inside the composer line.
  * Horizontal padding only — a vertical pad would grow the composer line and
- * break the baseline the surrounding text sits on. The hit area is extended
- * with pseudo-elements instead, so the row stays exactly one line tall. */
+ * break the baseline the surrounding text sits on. */
 
 .fold {
   display: inline-flex;
   align-items: baseline;
-  gap: 2px;
-  max-width: min(100%, 320px);
-  padding: 0 2px 0 4px;
+  gap: 4px;
+  max-width: min(100%, 360px);
+  padding: 0 4px 0 6px;
   border-radius: 6px;
   color: var(--dsw-alias-state-business-primary);
   vertical-align: baseline;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  user-select: none;
+  /* Allow Ctrl+A / range selection to paint the chip (was none → invisible). */
+  user-select: all;
+  -webkit-user-select: all;
 }
 
 .fold:hover {
@@ -28,9 +29,6 @@
   min-width: 0;
 }
 
-/* Counts never change while the row is mounted, but they are numbers in a
- * row that reflows on every caret move — tabular keeps the label from
- * twitching. */
 .label {
   flex: none;
   overflow: hidden;
@@ -47,10 +45,8 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Icon-only ghost actions. Rest state is invisible so a fold reads as one
- * quiet row; hover/focus reveals it. 24px inline, 44px on coarse pointers
-   (WCAG 2.5.5) — extended outward only, so two adjacent folds never
-   overlap their hit areas. */
+/* Always-visible icon actions (not hover-only). Hit area extended with
+ * ::after so the row stays one line tall. */
 .action {
   position: relative;
   flex: none;
@@ -62,28 +58,26 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: inherit;
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--ds-motion-fast) var(--ds-ease-out),
+  opacity: 1;
+  transition:
+    color var(--ds-motion-fast) var(--ds-ease-out),
     background-color var(--ds-motion-fast) var(--ds-ease-out);
 }
 
 .fold:hover .action,
-.action:focus-visible {
-  opacity: 1;
+.action:hover {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .action:hover {
   background: var(--dsw-alias-interactive-bg-active);
 }
 
-/* Focus must show even when the row itself is not hovered (keyboard users
-   land here without a pointer), and the outline may not change metrics. */
 .action:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 1px;
-  opacity: 1;
 }
 
 .action::after {
@@ -97,11 +91,6 @@
 }
 
 @media (pointer: coarse) {
-  /* No hover to reveal with, so the actions are simply always present. */
-  .action {
-    opacity: 1;
-  }
-
   .action::after {
     width: 44px;
     height: 44px;
@@ -114,15 +103,8 @@
   }
 }
 
-/* ---- Off-line edit / read surface --------------------------------------
- * The body is painted OUTSIDE the composer, on a native textarea (edit arm) or
- * plain <pre> rows (read arm). Neither is inside contenteditable, so neither
- * pays the per-character editable-layout cost the fold just avoided. */
+/* ---- Off-line edit / read surface -------------------------------------- */
 
-/* Pasted text wants a reading width (logs, JSON, stack traces) — wider than
- * the Modal card's default 380px, but never wider than the viewport minus its
- * own padding. The class rides the card itself because Modal sizes width on
- * the dialog, not on the content column. */
 .viewDialog {
   width: min(680px, calc(100vw - 48px));
 }
@@ -133,40 +115,15 @@
   }
 }
 
-/* Edit arm. Fixed height with its own scroll: an auto-growing textarea would
- * re-measure on every keystroke, which is the cost this surface exists to
- * avoid. `white-space: pre` (below) keeps pasted indentation and code
- * alignment intact instead of soft-wrapping it into a different shape. */
 .viewArea {
+  box-sizing: border-box;
   width: 100%;
-  min-height: 52vh;
-  padding: 12px 16px;
-  resize: vertical;
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2));
-  color: var(--dsw-alias-label-primary);
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 12px;
-  line-height: 20px;
-  white-space: pre;
-  tab-size: 2;
-}
-
-/* Read arm: the capped head/tail slices stack with the expand row between
- * them, so the fold reads as one continuous body rather than two cards. */
-.viewRead {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.viewBody {
-  max-height: 52vh;
+  min-height: 48vh;
+  max-height: min(64vh, 720px);
   margin: 0;
-  padding: 12px 16px;
-  overflow: auto;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  padding: 12px 14px;
+  resize: vertical;
+  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-alias-border-inverted));
   border-radius: 12px;
   background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2));
   color: var(--dsw-alias-label-primary);
@@ -176,10 +133,48 @@
   white-space: pre;
   tab-size: 2;
   user-select: text;
+  -webkit-user-select: text;
 }
 
-/* The slice-to-slice gap: the two <pre> borders meet here, so the row carries
- * no border of its own and only its label + hover state. */
+.viewArea:focus {
+  outline: 2px solid var(--dsw-alias-text-primary);
+  outline-offset: 1px;
+}
+
+.viewArea::selection {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.viewRead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.viewBody {
+  max-height: 52vh;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  border: 1px solid var(--dsw-alias-border-l2, var(--dsw-alias-border-inverted));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2));
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre;
+  tab-size: 2;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.viewBody::selection {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-label-primary);
+}
+
 .viewNote {
   display: flex;
   justify-content: center;
@@ -199,39 +194,10 @@
 
 .viewMore:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .viewMore:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 1px;
-}
-
-/* Footer controls mirror the Modal chrome's own metrics (32px rows, 8px
- * radius) so the dialog's action row does not read as a second design. */
-.viewGhost,
-.viewPrimary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.viewGhost {
-  border: 1px solid var(--dsw-alias-border-inverted);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-}
-
-.viewPrimary {
-  border: 1px solid transparent;
-  background: var(--dsw-alias-brand-primary);
-  color: var(--dsw-alias-text-on-brand, var(--dsw-alias-label-primary));
-}
-
-.viewPrimary:disabled {
-  cursor: default;
-  opacity: 0.5;
 }

@@ -2,25 +2,22 @@
  * Visual body of one folded paste: the PastedTextNode's React face.
  *
  * Paints the folded block as a single resting-height row: a size summary, a
- * one-line preview of what was actually pasted, and two gestures.
- *
- * The block is atomic in the draft but NOT read-only. Editing happens in a
- * Modal textarea and is written back through `onSave`, so the body never
- * rejoins contenteditable — the one thing that froze the composer before the
- * fold existed. Editing a paste is "edit off-line, save back", not "the draft
- * becomes a wall of text".
+ * one-line preview of what was actually pasted, and always-visible actions
+ * (view/edit + delete). Editing happens in a Modal textarea and writes back
+ * through `onSave` — the body never rejoins contenteditable.
  *
  * Two arms, split by body size:
- * - Within {@link EDIT_MAX_CHARS}: a native textarea, fully editable. Native
- *   text control, so typing in it costs one layout of that control alone.
- * - Beyond it: read-only, head/tail-capped, copyable. Editing a body this
- *   large is the very thing the fold exists to avoid, so the modal says so
- *   instead of offering an edit it cannot make cheap.
+ * - Within {@link EDIT_MAX_CHARS}: a native textarea, fully editable.
+ * - Beyond it: read-only, head/tail-capped, copyable.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  IconInspectOutline12, IconTrashOutline16, Modal, writeClipboard,
+  Button,
+  IconInspectOutline12,
+  IconTrashOutline16,
+  Modal,
+  writeClipboard,
 } from '@xrkseek/client-ui-primitives'
 import css from './PastedText.module.css'
 
@@ -61,12 +58,6 @@ const EDIT_MAX_CHARS = 20_000
  * Content lines the read arm shows before the middle collapses. Matches the
  * terminal / read blocks' 16-line default so a long paste cuts at the same
  * place in the same flow.
- *
- * The split arithmetic mirrors `headTailCap` in @xrkseek/client-ui-primitives:
- * `ceil(max / 2)` head rows and the remainder as tail rows. It is inlined
- * rather than imported because that package's public entry is its built
- * `lib/types`, so adding an export there means rebuilding a dependency; four
- * lines are cheaper than that and the constant above keeps them in step.
  */
 const READ_MAX_LINES = 16
 
@@ -105,6 +96,10 @@ export function PastedText({
     setOpen(true)
   }, [text])
 
+  const closeSurface = useCallback(() => {
+    setOpen(false)
+  }, [])
+
   const editable = text.length <= EDIT_MAX_CHARS
   const bodyLines = useMemo(() => draft.split('\n'), [draft])
   const hidden = bodyLines.length - READ_MAX_LINES
@@ -141,42 +136,43 @@ export function PastedText({
       </span>
       <Modal
         open={open}
-        onClose={() => { setOpen(false) }}
+        onClose={closeSurface}
         title="粘贴内容"
         closeLabel="关闭"
         description={editable
-          ? '大段粘贴内容不直接进入编辑区：在这里改好保存，草稿里仍是一行折叠块。'
-          : `内容超过 ${EDIT_MAX_CHARS} 字符，只读查看；修改请移除后在编辑器里重贴需要改的部分。`}
-        className={css.viewDialog ?? ''}
+          ? '大段粘贴在此编辑并保存；草稿里仍是一行折叠块。'
+          : `内容超过 ${EDIT_MAX_CHARS.toLocaleString()} 字符，只读查看；修改请移除后重贴需要改的部分。`}
+        className={css.viewDialog}
         footer={(
           <>
-            <button type="button" className={css.viewGhost} onClick={onCopy}>
+            <Button variant="outline" size="sm" onClick={onCopy}>
               {copied ? '已复制' : '复制全部'}
-            </button>
-            {editable && (
-              <button
-                type="button"
-                className={css.viewGhost}
-                onClick={() => { setOpen(false) }}
-              >
-                取消
-              </button>
-            )}
-            {editable && (
-              <button
-                type="button"
-                className={css.viewPrimary}
-                // Saving a no-op would still mark history; the button only
-                // enables on a real edit, so Esc is the way out otherwise.
-                disabled={!dirty}
-                onClick={() => {
-                  onSave(draft)
-                  setOpen(false)
-                }}
-              >
-                保存
-              </button>
-            )}
+            </Button>
+            {editable
+              ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={closeSurface}>
+                    取消
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    // No-op saves would still mark history; keep Save gated.
+                    disabled={!dirty}
+                    onClick={() => {
+                      onSave(draft)
+                      setOpen(false)
+                    }}
+                  >
+                    保存
+                  </Button>
+                </>
+              )
+              : (
+                <Button variant="primary" size="sm" onClick={closeSurface}>
+                  完成
+                </Button>
+              )}
           </>
         )}
       >

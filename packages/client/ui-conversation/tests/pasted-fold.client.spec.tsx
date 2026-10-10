@@ -342,6 +342,7 @@ describe('folded-paste chrome', () => {
     const view = document.querySelector('[data-composer-pasted-view]')!
     expect(view.closest('[contenteditable]')).toBeNull()
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
+    expect(screen.getByRole('button', { name: '完成' })).toBeTruthy()
     // Cap: 16 rows over 30 lines → 8 head + 8 tail, 14 hidden.
     expect(screen.getByRole('button', { name: '展开其余 14 行' })).toBeTruthy()
     const pres = [...document.querySelectorAll('pre')]
