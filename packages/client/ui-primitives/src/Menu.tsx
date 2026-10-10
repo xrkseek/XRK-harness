@@ -350,10 +350,15 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   // enter/leave traversal runs over the React tree, so trigger and portaled
   // list are one region here. Aiming back at the trigger, or crossing the 4px
   // gap between them, therefore never counts as leaving.
+  //
+  // A portal Menu with no in-flow anchor (ContextMenuHost) must not leave an
+  // empty inline-flex in the shell tree — that line box after AppFrame pops a
+  // body scrollbar and squeezes the layout for the life of the menu.
+  const detachedHost = portal && (anchor === null || anchor === undefined || anchor === false)
   return (
     <span
       ref={rootRef}
-      className={clsx(css.root, className)}
+      className={clsx(css.root, detachedHost && css.detachedRoot, className)}
       onPointerEnter={closeOnPointerLeave ? cancelClose : undefined}
       onPointerLeave={closeOnPointerLeave ? () => { if (open) armClose() } : undefined}
     >

@@ -6,6 +6,21 @@
   max-width: 100%;
 }
 
+/* Context-menu (and any portal Menu with no in-flow anchor): the host span
+ * must leave document flow. An empty `inline-flex` after a 100%-tall AppFrame
+ * still grows a line box, which pops a body scrollbar and squeezes the shell
+ * by the bar's width for as long as the menu is open. */
+.detachedRoot {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
 /* Dropdown card (figma MenuDropdown 122:9481 / 419:16920): menu surface,
  * r12, inverted hairline border, shadow-lv3, 4px inset padding. */
 .list,
