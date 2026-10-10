@@ -6,8 +6,8 @@
     {
       "target": "win-x64",
       "available": true,
-      "version": "0.5.22",
-      "filename": "xrk-harness-0.5.22-win-x64.exe",
+      "version": "0.5.23",
+      "filename": "xrk-harness-0.5.23-win-x64.exe",
       "feed": "/api/harness/desktop/win-x64/nightly.yml",
       "download": "/api/harness/download/win-x64"
     },

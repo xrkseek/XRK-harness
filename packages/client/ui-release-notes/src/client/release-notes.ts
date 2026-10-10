@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.23',
+    date: '2026-10-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '回合结束行改锚在 turn/end；工具运行中不再误闪「已停止」；已画出的节点不再消失把对话冻住。',
+        en: 'The turn-end row anchors on turn/end; no stray 已停止 while tools run; a painted node never vanishes and freezes the chat.',
+      },
+      {
+        zh: '顶端回合仍在运行时页脚等它收尾；同回合尾部不显示赞。',
+        en: 'A tip-turn footer waits until it settles; a mid-turn tail shows no rating.',
+      },
+    ],
+  },
+  {
     version: '0.5.22',
     date: '2026-10-10',
     title: {
