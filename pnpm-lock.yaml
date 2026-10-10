@@ -3518,6 +3518,9 @@ importers:
 
   packages/stubs/xrk-host-apiproxy:
     dependencies:
+      '@xrkseek/protocol':
+        specifier: workspace:^
+        version: link:../../protocol
       '@xrkseek/schemastery':
         specifier: workspace:^
         version: link:../../schemastery

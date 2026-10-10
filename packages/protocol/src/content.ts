@@ -31,6 +31,13 @@ export interface ImageAttachmentRef {
 export interface TextBlock {
   readonly type: "text";
   readonly text: string;
+  /**
+   * Addressable handle text the harness injects for the model only (image /
+   * file pointers). Stays in the log and reaches every model request through
+   * {@link flattenText}; user-facing projections (bubbles, session titles)
+   * skip it so the reader never sees an attachment id they cannot use.
+   */
+  readonly modelOnly?: true;
 }
 
 export interface ImageBlock {
@@ -86,7 +93,35 @@ export function isTextBlock(value: unknown): value is TextBlock {
     return false;
   }
   const o = value as Record<string, unknown>;
-  return o.type === "text" && typeof o.text === "string";
+  return (
+    o.type === "text" &&
+    typeof o.text === "string" &&
+    (o.modelOnly === undefined || o.modelOnly === true)
+  );
+}
+
+/** True when a text block is model-facing handle text (never shown to readers). */
+export function isModelOnlyText(block: ContentBlock): boolean {
+  return block.type === "text" && block.modelOnly === true;
+}
+
+/**
+ * Reader-facing plain text: same as {@link flattenText} minus `modelOnly`
+ * handle text. Use for anything a human reads (bubbles, titles, transcripts).
+ */
+export function readerText(content: MessageContent): string {
+  if (typeof content === "string") return content;
+  const parts: string[] = [];
+  for (const block of content) {
+    if (isTextBlock(block) && !isModelOnlyText(block)) {
+      parts.push(block.text);
+      continue;
+    }
+    if (isFileBlock(block)) {
+      parts.push(fileHandleText(block.attachment, undefined));
+    }
+  }
+  return parts.join("");
 }
 
 export function isImageAttachmentRef(
@@ -189,6 +224,40 @@ export function flattenText(content: MessageContent): string {
     }
   }
   return parts.join("");
+}
+
+/**
+ * Model-only handle block for one uploaded image: numbering, addressable id,
+ * pixel size, and the read_image escape hatch.
+ *
+ * It is a `modelOnly` text block, so `flattenText` keeps it on every model
+ * request while user-facing projections skip it.
+ * @param imageNo - session-wide image ordinal (1-based).
+ * @param ref - durable image metadata.
+ * @returns the handle text block.
+ */
+export function imageHandleBlock(
+  imageNo: number,
+  ref: ImageAttachmentRef,
+): TextBlock {
+  return {
+    type: "text",
+    modelOnly: true,
+    text: `[图${imageNo} ${ref.attachmentId}（${ref.width}×${ref.height} ${ref.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${ref.attachmentId} 读取]`,
+  };
+}
+
+/**
+ * Model-only handle block for one uploaded file (see {@link imageHandleBlock}).
+ * @param ref - durable file metadata.
+ * @returns the handle text block.
+ */
+export function fileUploadHandleBlock(ref: FileAttachmentRef): TextBlock {
+  return {
+    type: "text",
+    modelOnly: true,
+    text: `[文件附件 ${ref.name}（${ref.attachmentId}）。需内容时用 read_file 按 id 读取]`,
+  };
 }
 
 function quotedLeaf(name: string): string {

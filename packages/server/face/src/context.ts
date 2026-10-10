@@ -87,6 +87,21 @@ export interface FaceRuntime {
   readonly store: SessionStore;
   ensureSession(id?: string): string;
   resolveAgent(sessionId: string): Promise<AgentHandle>;
+  /**
+   * Bind the per-session Face wiring onto an agent: session tool set
+   * (`presence_set` / `canvas_*` / `thread_*` / goal / `team_*` /
+   * `propose_skill` …) plus the job-completion subscription.
+   *
+   * Host drives turns without {@link resolveAgent} (`createDrain` for slash
+   * `agent.steer`, cron admits, subagent + job notices, cross-session
+   * `thread_message`; cron runs; HTTP `/api/chat`), so binding cannot live in
+   * `resolveAgent` alone: an agent rebuilt on those paths used to reach the
+   * model with a catalog short of the system prompt ("Unknown tool:
+   * presence_set") and to miss job notices. Tool binding is idempotent per
+   * registry — rebinding would re-`replace()` ask_user and make settle answer
+   * "Stale tool call". Safe to call on every resolve.
+   */
+  bindSessionAgent(sessionId: string, agent: AgentHandle): void;
   readonly drain: FaceDrain;
   readonly registry: ProviderRegistry;
   readonly workspaceRoot: string;

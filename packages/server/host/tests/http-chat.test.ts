@@ -3,6 +3,7 @@ import path from "node:path";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { loadHostConfig } from "@xrkseek/server-config";
+import type { ToolRegistry } from "@xrkseek/core-tools";
 import { createHostManager } from "../src/index.js";
 import { isolatedHostEnv, withIsolatedXrkHome } from "./helpers/isolated-xrk-home.js";
 
@@ -305,6 +306,52 @@ describe("host http chat", () => {
 
     await manager.stopAll();
     expect(instance.loader.list()).toEqual([]);
+    });
+  });
+
+  it("binds the Face session tools on the Host /api/chat path", async () => {
+    // Host resolves agents for /api/chat without Face `resolveAgent`; the Face
+    // per-session tools (presence_set, canvas_*, thread_*, goal, team_*) used
+    // to stay unbound there, so the model saw them in the system prompt and
+    // got "Unknown tool: presence_set" on call.
+    await withIsolatedXrkHome(async (xrkHome) => {
+    const manager = createHostManager();
+    const config = loadHostConfig({
+      env: isolatedHostEnv(xrkHome, { XRK_API_KEY: "test-key" }),
+      patch: { workspaceRoot: process.cwd() },
+    });
+
+    let tools: ToolRegistry | undefined;
+    const instance = await manager.spawn(config, async ({ sessionId, store, workspaceRoot, plugins }) => {
+      const composition = createMinimalComposition({
+        workspaceRoot,
+        sessionStore: store,
+        sessionId,
+        plugins,
+        llm: createReplayAdapter([{ content: "ok" }]),
+        assemble: true,
+      });
+      tools = composition.tools;
+      return composition.createAgent();
+    });
+
+    const port = instance.health().port!;
+    const chat = await fetch(`http://127.0.0.1:${port}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-key",
+      },
+      body: JSON.stringify({ message: "x" }),
+    });
+    expect(chat.status).toBe(200);
+
+    const names = tools?.list().map((t) => t.name) ?? [];
+    expect(names).toContain("presence_set");
+    expect(names).toContain("canvas_upsert");
+    expect(names).toContain("thread_upsert");
+
+    await manager.stopAll();
     });
   });
 });

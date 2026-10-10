@@ -1647,7 +1647,18 @@ export function createHostManager(): HostManager {
             return agent;
           },
           parentSessionId ? { parentSessionId } : undefined,
-        );
+        ).then(async (agent) => {
+          // Face wiring for agents Host resolves on its own paths — createDrain
+          // (slash `agent.steer`, cron admits, subagent + job notices,
+          // cross-session thread_message), cron runs, HTTP /api/chat. Binding
+          // only inside Face `resolveAgent` left those turns with a catalog
+          // shorter than the system prompt ("Unknown tool: presence_set") and
+          // no job notices. Runs on cache hits too, so an agent first built
+          // before the Face runtime was ready heals on its next resolve.
+          if (!faceBox.runtime) await faceRuntimeReady;
+          faceBox.runtime?.bindSessionAgent(sessionId, agent);
+          return agent;
+        });
       };
 
       const hub: SessionDrainHub = createSessionDrainHub({
@@ -1936,6 +1947,15 @@ export function createHostManager(): HostManager {
         }));
       };
       const secretStore = await resolveSecretStore(process.env);
+      // Face owns the per-session agent wiring (tool set + job notices), and
+      // Host's drain can resolve an agent during createFaceRuntime's own
+      // pending-admit replay — before `faceBox.runtime` is assigned below. Wait
+      // for it there so the first post-restart turn is not the one that ships a
+      // catalog short of the system prompt.
+      let signalFaceRuntimeReady: () => void = () => {};
+      const faceRuntimeReady = new Promise<void>((resolve) => {
+        signalFaceRuntimeReady = resolve;
+      });
       const faceRuntime = createFaceRuntime({
         store,
         resolveAgent,
@@ -2122,6 +2142,7 @@ export function createHostManager(): HostManager {
       faceBox.approvals = faceRuntime.approvals;
       faceBox.questions = faceRuntime.questions;
       faceBox.runtime = faceRuntime;
+      signalFaceRuntimeReady();
       const workflowMount = await tryMountHostIsolatingWorkflowEngine(faceRuntime);
       if (workflowMount !== undefined) {
         Object.assign(hostPublic, {

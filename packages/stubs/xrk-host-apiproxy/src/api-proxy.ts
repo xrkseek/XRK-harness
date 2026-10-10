@@ -14,6 +14,7 @@ import { AttachmentError } from '@xrkseek/xrk-attachment'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@xrkseek/xrk-llm'
 import { errorChain } from '@xrkseek/xrk-llm'
+import { imageHandleBlock } from '@xrkseek/protocol'
 import type { ContentBlock, MessageSource } from '@xrkseek/xrk-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@xrkseek/xrk-session'
 import type { JsonValue, Session, SessionEvent, SessionEventMap, SessionHeader, SessionId, UserMessage } from '@xrkseek/xrk-session'
@@ -157,10 +158,7 @@ async function durablePromptContent(ctx: Context, content: readonly PromptConten
     /* v8 ignore next -- each prepared image supplied exactly one saveImages input and therefore one ordered ref. */
     if (attachment === undefined) throw new Error('attachment batch result did not preserve input cardinality')
     const imageNo = (options.imageStartIndex ?? 0) + imageIndex
-    blocks.push({
-      type: 'text',
-      text: `[图${imageNo} ${attachment.attachmentId}（${attachment.width}×${attachment.height} ${attachment.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${attachment.attachmentId} 读取]`,
-    })
+    blocks.push(imageHandleBlock(imageNo, attachment))
     blocks.push({ type: 'image', attachment })
   }
   return blocks

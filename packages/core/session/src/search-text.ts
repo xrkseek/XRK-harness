@@ -1,16 +1,18 @@
 import type { SessionEvent } from "@xrkseek/protocol";
-import { flattenText } from "@xrkseek/protocol";
+import { readerText } from "@xrkseek/protocol";
 
 /** Searchable plain text extracted from one session event (empty = skip index). */
 export function extractEventSearchText(event: SessionEvent): string {
   if (event.type === "user/message") {
-    return flattenText(event.content);
+    // readerText, not flattenText: attachment handle text is model-facing, and
+    // a reader searching for it would only ever find noise.
+    return readerText(event.content);
   }
   if (event.type === "assistant/message" && typeof event.content === "string") {
     return event.content;
   }
   if (event.type === "prompt/admitted") {
-    return flattenText(event.content);
+    return readerText(event.content);
   }
   if (event.type === "safety/notice" && typeof event.content === "string") {
     return event.content;

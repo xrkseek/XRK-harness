@@ -692,53 +692,84 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
   });
 
-  const resolveAgent = async (sessionId: string) => {
-    const agent = await options.resolveAgent(sessionId);
-    if (agent.tools) {
-      rememberedTools.set(sessionId, agent.tools);
-      bindAskUserTool(agent.tools, (qs, signal) =>
-        questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
-      );
-      bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
-        questions.ask(sessionId, qs, signal),
-      );
-      bindSettingsTools(agent.tools, runtimeBox.current!);
-      bindSessionQueryTools(agent.tools, {
-        runtime: runtimeBox.current!,
-        parentSessionId: sessionId,
-      });
-      bindGoalTools(agent.tools, {
-        runtime: runtimeBox.current!,
-        sessionId,
-      });
-      bindCanvasTools(agent.tools, {
-        runtime: runtimeBox.current!,
-        sessionId,
-      });
-      const childLink = runtimeBox.current!.subagents.getByChild(sessionId);
-      if (!childLink) {
-        bindSessionThreadTools(agent.tools, {
-          runtime: runtimeBox.current!,
+  /**
+   * Registries whose Face tools are already bound. `ask_user` /
+   * `exit_plan_mode` rebind through `replace()` (new object identity), so a
+   * second bind inside one turn would make `materializeTools.settle` answer
+   * "Stale tool call" for a call the snapshot already captured. One bind per
+   * registry; the rest of the binders are keep-first anyway.
+   */
+  const sessionToolsBound = new WeakSet<ToolRegistry>();
+
+  /**
+   * Everything a per-session agent needs from Face: the session tool set and
+   * the job-completion subscription.
+   *
+   * Host drives turns without going through {@link resolveAgent} —
+   * `createDrain` (slash `agent.steer`, cron admits, subagent + job notices,
+   * `thread_message` waking another session), cron runs, HTTP `/api/chat`. Both
+   * used to bind only inside `resolveAgent`, so an agent rebuilt on those paths
+   * reached the model with a catalog 16 tools short of the system prompt
+   * ("Unknown tool: presence_set") and never received job notices. Host calls
+   * this on every resolve, so a late Face runtime still self-heals.
+   */
+  const bindSessionAgent = (sessionId: string, agent: AgentHandle): void => {
+    if (agent.tools && !sessionToolsBound.has(agent.tools)) {
+      const runtime = runtimeBox.current;
+      // Host may resolve an agent before the runtime box is filled; leave the
+      // registry unbound so the next call still lands.
+      if (runtime) {
+        sessionToolsBound.add(agent.tools);
+        rememberedTools.set(sessionId, agent.tools);
+        bindAskUserTool(agent.tools, (qs, signal) =>
+          questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+        );
+        bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
+          questions.ask(sessionId, qs, signal),
+        );
+        bindSettingsTools(agent.tools, runtime);
+        bindSessionQueryTools(agent.tools, {
+          runtime,
+          parentSessionId: sessionId,
+        });
+        bindGoalTools(agent.tools, {
+          runtime,
           sessionId,
         });
-      }
-      if (!childLink || childLink.role === "lead") {
-        bindAgentRosterTools(agent.tools, {
-          runtime: runtimeBox.current!,
+        bindCanvasTools(agent.tools, {
+          runtime,
           sessionId,
         });
+        const childLink = runtime.subagents.getByChild(sessionId);
+        if (!childLink) {
+          bindSessionThreadTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+        }
+        if (!childLink || childLink.role === "lead") {
+          bindAgentRosterTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+        }
+        bindPresenceTools(agent.tools, {
+          runtime,
+          sessionId,
+        });
+        bindProposeSkillTool(agent.tools, {
+          workspaceRoot: options.workspaceRoot,
+          sessionId,
+          ask: (qs, signal) => questions.ask(sessionId, qs, signal),
+        });
       }
-      bindPresenceTools(agent.tools, {
-        runtime: runtimeBox.current!,
-        sessionId,
-      });
-      bindProposeSkillTool(agent.tools, {
-        workspaceRoot: options.workspaceRoot,
-        sessionId,
-        ask: (qs, signal) => questions.ask(sessionId, qs, signal),
-      });
     }
     bindAgentJobs(sessionId, agent);
+  };
+
+  const resolveAgent = async (sessionId: string) => {
+    const agent = await options.resolveAgent(sessionId);
+    bindSessionAgent(sessionId, agent);
     return agent;
   };
 
@@ -984,6 +1015,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       return newSession(store).id;
     },
     resolveAgent,
+    bindSessionAgent,
     drain: options.drain,
     registry: options.registry ?? createProviderRegistry(),
     workspaceRoot: options.workspaceRoot,

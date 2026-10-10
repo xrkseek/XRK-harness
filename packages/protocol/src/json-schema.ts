@@ -42,6 +42,9 @@ const messageContentSchema = {
             properties: {
               type: { const: "text" },
               text: { type: "string" },
+              // Model-only handle text (image/file pointers): kept in the log
+              // and on every model request, skipped by reader-facing projections.
+              modelOnly: { const: true },
             },
             additionalProperties: false,
           },

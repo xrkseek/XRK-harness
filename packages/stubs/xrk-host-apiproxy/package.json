@@ -42,6 +42,7 @@
                          "@xrkseek/xrk-attachment":  "workspace:^",
                          "@xrkseek/xrk-brand":  "workspace:^",
                          "@xrkseek/xrk-llm":  "workspace:^",
+                         "@xrkseek/protocol":  "workspace:^",
                          "@xrkseek/xrk-session":  "workspace:^",
                          "@xrkseek/xrk-session-projection":  "workspace:^",
                          "@xrkseek/xrk-tools":  "workspace:^",

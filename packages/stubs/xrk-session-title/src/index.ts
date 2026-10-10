@@ -174,7 +174,9 @@ export function collectSessionTitleMessages(
     if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue
     const content = event.data.content
     const text = content
-      .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text')
+      // Model-only handle text (image/file attachment ids) is not something the
+      // reader wrote, so it must not become a session title.
+      .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text' && block.modelOnly !== true)
       .map(block => block.text)
       .join('\n')
     if (normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER).length === 0) continue

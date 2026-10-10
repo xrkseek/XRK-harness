@@ -10,7 +10,7 @@ import type {
   ImageMediaType,
   MessageContent,
 } from "@xrkseek/protocol";
-import { isImageMediaType } from "@xrkseek/protocol";
+import { fileUploadHandleBlock, imageHandleBlock, isImageMediaType } from "@xrkseek/protocol";
 
 export type PromptWirePart =
   | { readonly type: "text"; readonly text: string }
@@ -205,18 +205,12 @@ export async function durablePromptContent(
     if (p.kind === "image") {
       const ref = imageRefs[imageIndex++]!;
       const imageNo = (options.imageStartIndex ?? 0) + imageIndex;
-      blocks.push({
-        type: "text",
-        text: `[图${imageNo} ${ref.attachmentId}（${ref.width}×${ref.height} ${ref.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${ref.attachmentId} 读取]`,
-      });
+      blocks.push(imageHandleBlock(imageNo, ref));
       blocks.push({ type: "image", attachment: ref });
       continue;
     }
     const ref = fileRefs[fileIndex++]!;
-    blocks.push({
-      type: "text",
-      text: `[文件附件 ${ref.name}（${ref.attachmentId}）。需内容时用 read_file 按 id 读取]`,
-    });
+    blocks.push(fileUploadHandleBlock(ref));
     blocks.push({ type: "file", attachment: ref });
   }
 

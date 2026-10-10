@@ -4,7 +4,7 @@
  */
 
 import type { SessionEvent } from "@xrkseek/protocol";
-import { flattenText } from "@xrkseek/protocol";
+import { flattenText, readerText } from "@xrkseek/protocol";
 
 export type TrajectoryNode =
   | {
@@ -64,7 +64,7 @@ export class ChunkFold {
         this.nodes.push({
           kind: "user",
           turnId: event.turnId,
-          content: flattenText(event.content),
+          content: readerText(event.content),
           ...(event.rpcId !== undefined ? { rpcId: event.rpcId } : {}),
         });
         break;
