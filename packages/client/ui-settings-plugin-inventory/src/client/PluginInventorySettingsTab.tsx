@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { PluginEntryId, PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
+import { startBoundCreatorDraft } from '@xrkseek/client-runtime/client'
 import {
   Button,
   IconBrowseOutline16,
@@ -7,6 +8,7 @@ import {
   IconChevronDownOutline14,
   IconEllipsisOutline16,
   IconEnhanceOutline16,
+  IconPlusOutline16,
   IconSearchOutline16,
   IconSettingsOutline16,
   Menu,
@@ -854,6 +856,21 @@ export function PluginInventorySettingsTab({
               </span>
             </div>
             <p className={css.scopeSub}>{t('globalSubtitle')}</p>
+            <p className={css.scopeSub}>
+              <button
+                type="button"
+                className={css.creatorButton}
+                onClick={() => {
+                  if (!startBoundCreatorDraft()) {
+                    setActionError(t('creatorDraftUnavailable'))
+                  }
+                }}
+              >
+                <IconPlusOutline16 size={14} aria-hidden="true" />
+                {t('creatorDraft')}
+              </button>
+              <span className={css.optionalBundleHint}>{t('gitWorktreesHint')}</span>
+            </p>
             {globalOpen ? (
               <div id={`${catalogId}-global`} className={css.scopeBody}>
           {state.snapshot.entries.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}

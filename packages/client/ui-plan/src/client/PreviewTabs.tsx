@@ -17,6 +17,7 @@ import {
   StateDot,
   TerminalBlock,
   EMPTY_WORKSPACE_CHANGES_TURNS,
+  abbreviateHomePath,
   stableWorkspaceChangesTurns,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
@@ -83,6 +84,20 @@ function delegateSeatCaption(role: string, name: string | undefined): string {
   const n = name?.trim()
   if (!n || n === 'untitled') return role
   return `${role} · ${n}`
+}
+
+/**
+ * Status cwd: prefer `~` abbreviation (POSIX home), else last two segments.
+ * Full path stays in the title attribute.
+ */
+function shortCwdDisplay(cwd: string, home?: string): string {
+  const abbreviated = abbreviateHomePath(cwd, home)
+  if (abbreviated !== cwd) return abbreviated
+  const trimmed = cwd.replace(/[/\\]+$/, '')
+  const parts = trimmed.split(/[/\\]/).filter(Boolean)
+  if (parts.length <= 2) return cwd
+  const sep = cwd.includes('\\') && !cwd.includes('/') ? '\\' : '/'
+  return `…${sep}${parts.slice(-2).join(sep)}`
 }
 
 export type PreviewTabId = 'status' | 'context' | 'todos' | 'changes' | 'canvas'
@@ -1544,7 +1559,9 @@ function StatusPanel({
         </div>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.cwd')}</span>
-          <span className={css.mono}>{status.cwd}</span>
+          <span className={css.mono} title={status.cwd}>
+            {shortCwdDisplay(status.cwd)}
+          </span>
         </div>
         <div className={css.row}>
           <span className={css.label}>{t('preview.status.events')}</span>

@@ -1,7 +1,7 @@
 // Present toolview: keyed hole for `present`. Reuses ToolRow chrome + the
 // shared write-family path summary from toolRowModel; adds a visible
-// delivering/delivered status suffix (DSH PresentRow collapsed state copy)
-// without a separate preparing phase (XRK has no ToolCallViewProps.phase).
+// delivering/delivered status suffix (DSH PresentRow collapsed state copy).
+// Preparing uses streamed args / presentCall title via toolRowModel (no phase FSM).
 
 import type { Context } from '@xrkseek/cordis'
 import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'

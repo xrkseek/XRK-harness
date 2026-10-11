@@ -37,6 +37,7 @@ export type {
 export type { ConversationRuntime } from './sessions/conversation-assembler.ts'
 export type { RootOwnerProps } from './slots.ts'
 export { SessionCreateError, SessionRuntime, scopeOf, workspaceTitleOf, subagentDisplayTitle } from './sessions/service.ts'
+export { bindCreatorDraftStarter, startBoundCreatorDraft } from './creator-draft-bridge.ts'
 export { indexSubagentDescendants } from './sessions/subagent-lineage.ts'
 export type { SubagentDescendantSummary } from './sessions/subagent-lineage.ts'
 export { isSessionLineageHop } from './sessions/lineage-hop.ts'

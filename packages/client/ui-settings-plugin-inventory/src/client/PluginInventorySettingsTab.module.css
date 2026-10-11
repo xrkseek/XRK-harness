@@ -537,6 +537,33 @@
   line-height: 18px;
 }
 
+.creatorButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px 0 0;
+  padding: 4px 10px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.creatorButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.optionalBundleHint {
+  display: inline;
+  vertical-align: middle;
+}
+
 .scopeBody {
   display: flex;
   flex-direction: column;

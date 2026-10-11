@@ -357,10 +357,16 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     }
   }
 
-  // Stream shell / empty args: keep summary blank so the shared running sweep
-  // is the only motion — no opaque callId placeholder.
+  // Preparing / mid-stream: prefer Host presentCall title when args have not
+  // arrived yet; once args stream in, show command/path from them (no phase FSM).
+  const preparingTitle = (() => {
+    const view = block.callView
+    if (view === null || typeof view !== 'object') return ''
+    const title = (view as { title?: unknown }).title
+    return typeof title === 'string' && title.trim() !== '' ? title.trim() : ''
+  })()
   const base = argsRaw === ''
-    ? ''
+    ? preparingTitle
     : displayPathSummary(deriveSummary(variant, argsRaw), cwd, home)
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
     ? (base === '' ? toolName : `${toolName} · ${base}`)
