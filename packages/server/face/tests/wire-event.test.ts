@@ -88,6 +88,52 @@ describe("Face DSH wire-event adapt", () => {
     });
   });
 
+  it("user/message preserves modelOnly on attachment handle text", () => {
+    const handle = {
+      type: "text" as const,
+      modelOnly: true as const,
+      text: "[图1 sha256:abc（1×1 image/png）。视觉模型直接看块]",
+    };
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "user/message",
+        ts: 10,
+        turnId: "t1",
+        content: [
+          { type: "text", text: "看这张" },
+          handle,
+          {
+            type: "image",
+            attachment: {
+              attachmentId: "sha256:abc",
+              mediaType: "image/png",
+              bytes: 1,
+              width: 1,
+              height: 1,
+            },
+          },
+        ],
+      },
+      4,
+    );
+    expect(wire.type).toBe("user/message");
+    if (wire.type !== "user/message") return;
+    expect(wire.data.content).toEqual([
+      { type: "text", text: "看这张" },
+      handle,
+      {
+        type: "image",
+        attachment: {
+          attachmentId: "sha256:abc",
+          mediaType: "image/png",
+          bytes: 1,
+          width: 1,
+          height: 1,
+        },
+      },
+    ]);
+  });
+
   it("user/message carries sibling echo ids when steers coalesced", () => {
     const wire = toFaceWireSessionEvent(
       {

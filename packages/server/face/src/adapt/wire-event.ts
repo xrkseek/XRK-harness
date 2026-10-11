@@ -113,7 +113,7 @@ function wireToolArguments(value: unknown): string {
 }
 
 function wireContentBlocks(content: MessageContent): readonly (
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; modelOnly?: true }
   | {
       type: "image";
       attachment: {
@@ -138,7 +138,11 @@ function wireContentBlocks(content: MessageContent): readonly (
 )[] {
   return asContentBlocks(content).map((block) => {
     if (block.type === "text") {
-      return { type: "text" as const, text: block.text };
+      // Keep modelOnly so the client can hide attachment handle captions
+      // while the durable log (and LLM flattenText) still carry them.
+      return block.modelOnly === true
+        ? { type: "text" as const, text: block.text, modelOnly: true as const }
+        : { type: "text" as const, text: block.text };
     }
     if (block.type === "file") {
       return {
