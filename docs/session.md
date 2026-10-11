@@ -22,6 +22,8 @@
 
 包：`@xrkseek/protocol` · `@xrkseek/core-session` · `@xrkseek/core-agent`。
 
+**有效工作目录**：项目/header cwd 为锚点；会话有效目录可经 Face `session.setWorkingDirectory` / 模型工具 `working_directory` 变更（事件 `working-directory/change` · Host 会 invalidate agent）。可选插件 `git-worktrees`（默认关）启用 `create_worktree`（池 `.xrk/worktrees`，建+进，不接 Teams merge）。插件会话状态用闭集 `plugin/record`（`appendPluginRecord`），不进 `deriveMessages`。
+
 JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJSONL`（`text-chunks` / `tool-call-chunks` 行压缩连续 `assistant/chunk`，≥3）+ 可选 `.jsonl.zst` sidecar；`fromPackedJSONL` / `parsePackedJSONL` / `fromPackedJSONLZstd` 可导入。
 
 **默认持久化**：`createPersistentSessionStore` → `{XRK_SESSIONS_DIR}/sessions.db`（WAL · **schema v3** · `node:sqlite` · FTS5 trigram · lazy load · chunk 写批并物理打包 `text-chunks` / `tool-call-chunks` · `flush()` · open-turn 崩溃修复 · **驻留 LRU**：默认最多 8 个会话在内存，**未闭合 turn 不驱逐**，必要时可临时超上限）。内存 API 仍为扁平 `SessionEvent[]`。`SessionStore.readEvents` **必选**；生产读走 [session-log.md](./session-log.md)（`readSessionEvents` · `sessionEventCount` · …）。`SessionStore.has` 不抛。`session.search` 持久化走 FTS 候选。

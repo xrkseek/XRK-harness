@@ -126,7 +126,8 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 回合回退 · 工作区快照 | `WorkspaceCheckpointStore`：影子 git；Host 每轮前自动 snapshot；Face `session.checkpoint.*` · `/rollback` · 消息 Restore；与 `session.fork` / fork-cut（仅血缘）分界见 [turn-rewind.md](./turn-rewind.md) | **能跑**（需 `git`；`XRK_CHECKPOINTS=0` 关闭自动快照） |
 | MCP HTTP · OAuth 设备码 | `loginWithDeviceCode` + `McpDeviceTokenStore`（RFC 8628：`authorization_pending` / `slow_down` 续等，`access_denied` / `expired_token` 立即失败；原子落盘 `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · 到期前 refresh）；端点缺失时按 RFC 9728 / RFC 8414 发现；`auth` 只挂在 HTTP transport；CLI `xrkh mcp login/status/logout/list/path`；Settings MCP 卡经 Face `mcp.oauth.login|status|logout` 同路径（pending：取消 / 复制码 / 自动打开验证页；已登录：到期与 refresh 徽标；IdP 无设备码 → 诚实错误；**auth-code+PKCE 未做**） | **能跑**（见 [modules/mcp.md](./modules/mcp.md)、[configuration.md](./configuration.md)；需 IdP 支持设备码） |
 | 文档抽取 | `read_file` 在 `FsService.read` 内把 PDF / DOCX / XLSX / ipynb 转成文本（扫描版 PDF 无文本层时说明，不另开工具名） | **能跑** |
-| apply_patch · managed worktree 合回 | Codex 格式 `apply_patch`（失败卡带 `meta.code`）；子代理 `worktree:true`；`mergeIntoParent` **ff-only**（冲突 retain）；Face `worktree.merge`；Status / Overview 任务行 **合回主仓** 按钮 + `worktreeLeaseStatus`（retained 文案） | **能跑** |
+| apply_patch · managed worktree 合回 | Codex 格式 `apply_patch`（失败卡带 `meta.code`）；子代理 `worktree:true`；checkout **禁 filter**（`--no-checkout` + hard reset · `GIT_CONFIG_*`）；spawn / `resolveAgent` **ensure cwd**；`mergeIntoParent` **ff-only**（冲突 retain）；Face `worktree.merge`；Status / Overview 任务行 **合回主仓** 按钮 + `worktreeLeaseStatus`（retained 文案） | **能跑** |
+| 主会话 cwd · `create_worktree` · `plugin/record` | Face `session.setWorkingDirectory` / `worktree.create`；事件 `working-directory/change`；模型工具 `working_directory`（默认）· `create_worktree`（`extensions/git-worktrees`，**默认关**）；闭集 `plugin/record` + `appendPluginRecord`；Status cwd 短展示；插件页 Creator 入口 | **能跑** |
 | Office→PDF 转换缝 | 侧栏 `/sidebar/file?preview=pdf` 走独立 `OfficeToPdfProvider`（默认 `soffice`；未安装返回 `unavailable`）；不进 `read_file` | **能跑** |
 | 会话遥测导出 | `wrapStoreForSessionTelemetry` + OTLP/HTTP logs；Settings `session-telemetry`（关/memory/OTLP+endpoint）为产品真源；`XRK_TELEMETRY` 仅 CI 旁路；notify-only | **能跑**（见 [session-telemetry.md](./session-telemetry.md)） |
 | 运行时 invariants | `@xrkseek/runtime-invariants` + `core-session`/`core-agent-loop` `./invariant` 伴侣；Host `XRK_INVARIANTS_FAIL_FAST=1` 包装 SessionStore fail-fast | **能跑**（默认关） |
@@ -166,6 +167,21 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | 合集 Settings 卡（`plugins.bundle.config`） | 座位已声明；Configurable 只派发 `settings.plugin.item` | **未做**（渲染） |
 | 模型选择器搜索 / 键盘 | `ui-model-selection` ModelSelect | **能跑** |
 | 侧栏用本地应用打开文件夹并记忆 | `host.openPath` + Open in App；记忆面弱于上游 | **未稳** |
+
+### 对照 DSH alpha.1 / alpha.2（P2 未做）
+
+对照 [dsh-v0.2.1-alpha.1](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.1) / [alpha.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2)。P0/P1（主会话 cwd · create_worktree · plugin/record · 工具准备态 · 合回 reason · Status/list cwd 短展示 · 插件页 Creator）已落；草稿引用跨工作区由 InputHub 携带（核对无缺口）；下列只记缺口：
+
+| 上游点 | 本仓 | 状态 |
+| --- | --- | --- |
+| Web `--public-url`（反代 path 前缀给 UI/模型） | 仅 A2A `XRK_A2A_PUBLIC_URL` | **未做** |
+| 工作步骤收起时机（答完 / 下一条消息） | Details / tool group 无此设置 | **未做** |
+| 通用设置独立字体（UI / 代码 / 侧栏终端） | 未见三路字体 | **未做** |
+| Markdown 预览 YAML frontmatter 字段列表 | 无清晰字段列表 UI | **未做** |
+| 可选 DevTools / Inspector 组合包 | console / export / trajectory 分散 | **未做** |
+| Claude Code Mods 兼容层 | 产品身份禁膨胀 | **未做**（刻意） |
+| 语音麦克风选择 + 电平 | Voice 能跑；设备选择未必齐 | **未做** |
+| 自动标题「同主题保留」策略 | 自动标题存在；保留策略未对齐 | **未做** |
 
 ## 正式使用
 
@@ -319,7 +335,8 @@ Gaps in **this repo's** underlying surface after review against local reference 
 | Turn rewind · workspace snapshots | `WorkspaceCheckpointStore`: shadow git; Host auto-snapshots before each turn; Face `session.checkpoint.*` · `/rollback` · message Restore; distinct from `session.fork` / fork-cut (lineage only) — see [turn-rewind.md](./turn-rewind.md) | **Working** (needs `git`; `XRK_CHECKPOINTS=0` disables auto-snapshot) |
 | MCP HTTP · OAuth device code | `loginWithDeviceCode` + `McpDeviceTokenStore` (RFC 8628: keeps waiting on `authorization_pending` / `slow_down`, fails immediately on `access_denied` / `expired_token`; atomic write to `~/.xrk/mcp-tokens/<server>.json` · best-effort 0600 · refresh before expiry); endpoints discovered per RFC 9728 / RFC 8414 when unknown; `auth` attaches to the HTTP transport only; CLI `xrkh mcp login/status/logout/list/path`; Settings MCP card uses Face `mcp.oauth.login|status|logout` on the same path (pending: cancel / copy code / auto-open verify URI; signed-in: expiry + refresh badge; IdP without device code → honest error; **auth-code+PKCE not done**) | **Working** (see [modules/mcp.md](./modules/mcp.md) · [configuration.md](./configuration.md); needs an IdP with device-code support) |
 | Document extraction | `read_file` converts PDF / DOCX / XLSX / ipynb to text inside `FsService.read` (scanned PDFs with no text layer say so; no extra tool name) | **Working** |
-| apply_patch · managed worktree fold-back | Codex-format `apply_patch` (failure card with `meta.code`); subagent `worktree:true`; `mergeIntoParent` **ff-only** (retain on conflict); Face `worktree.merge`; Status / Overview task-row **Merge to parent** + `worktreeLeaseStatus` (retained copy) | **Working** |
+| apply_patch · managed worktree fold-back | Codex-format `apply_patch` (failure card with `meta.code`); subagent `worktree:true`; checkout **disables filters** (`--no-checkout` + hard reset · `GIT_CONFIG_*`); spawn / `resolveAgent` **ensure cwd**; `mergeIntoParent` **ff-only** (retain on conflict); Face `worktree.merge`; Status / Overview task-row **Merge to parent** + `worktreeLeaseStatus` (retained copy) | **Working** |
+| Main-session cwd · `create_worktree` · `plugin/record` | Face `session.setWorkingDirectory` / `worktree.create`; event `working-directory/change`; model tools `working_directory` (default) · `create_worktree` (`extensions/git-worktrees`, **off by default**); closed-union `plugin/record` + `appendPluginRecord`; Status short cwd; Plugins Creator entry | **Working** |
 | Office→PDF conversion seam | Sidebar `/sidebar/file?preview=pdf` uses a separate `OfficeToPdfProvider` (default `soffice`; missing binary returns `unavailable`); not part of `read_file` | **Working** |
 | Session telemetry export | `wrapStoreForSessionTelemetry` + OTLP/HTTP logs; Settings `session-telemetry` (off/memory/OTLP+endpoint) is product SoT; `XRK_TELEMETRY` is CI bypass only; notify-only | **Working** (see [session-telemetry.md](./session-telemetry.md)) |
 | Runtime invariants | `@xrkseek/runtime-invariants` + `core-session`/`core-agent-loop` `./invariant` companions; Host `XRK_INVARIANTS_FAIL_FAST=1` wraps SessionStore fail-fast | **Working** (off by default) |
