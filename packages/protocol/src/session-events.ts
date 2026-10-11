@@ -610,6 +610,31 @@ export interface DeliverablesPresentedEvent extends SessionEventBase {
   readonly files: readonly PresentedFile[];
 }
 
+/**
+ * Effective session working directory after a successful change.
+ * Log-only for deriveMessages; Face / tools read via sessionCwds + this event.
+ * The immutable project anchor (workspace membership / create-time root) is separate.
+ */
+export interface WorkingDirectoryChangeEvent extends SessionEventBase {
+  readonly type: "working-directory/change";
+  /** Absolute directory used by subsequent directory-based operations. */
+  readonly cwd: string;
+}
+
+/**
+ * Experimental plugin-owned session state (DSH `appendPluginRecord` semantic).
+ * Log-only — not model-visible. Closed-union form of open `plugin:*` types.
+ */
+export interface PluginRecordEvent extends SessionEventBase {
+  readonly type: "plugin/record";
+  /** Lowercase plugin id segment (no slashes). */
+  readonly pluginId: string;
+  /** Lowercase slash-separated key under the plugin. */
+  readonly key: string;
+  /** JSON-serializable payload (frozen at append). */
+  readonly data: unknown;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -642,7 +667,9 @@ export type SessionEvent =
   | LlmRetryStartedEvent
   | ImageOffloadEvent
   | WorkspaceChangesEvent
-  | DeliverablesPresentedEvent;
+  | DeliverablesPresentedEvent
+  | WorkingDirectoryChangeEvent
+  | PluginRecordEvent;
 
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
@@ -678,6 +705,8 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "image/offload",
   "workspace/changes",
   "deliverables/presented",
+  "working-directory/change",
+  "plugin/record",
 ]);
 
 /**

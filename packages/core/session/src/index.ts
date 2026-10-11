@@ -143,6 +143,12 @@ export {
   type RequestHeaderSnapshot,
 } from "./request-header.js";
 
+export {
+  appendPluginRecord,
+  pluginRecordsOf,
+  type PluginRecordView,
+} from "./plugin-records.js";
+
 export type { SessionListHints, SessionRecord, SessionStore } from "./store.js";
 export {
   SessionLogOffset,

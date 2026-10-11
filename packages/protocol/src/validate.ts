@@ -1402,6 +1402,45 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       }
       return { type, ts, turnId, callId, files };
     }
+    case "working-directory/change": {
+      const cwd = value.cwd;
+      if (typeof cwd !== "string" || !cwd.trim()) {
+        throw new SessionEventParseError(
+          "cwd must be a non-empty string",
+          type,
+        );
+      }
+      return { type, ts, cwd: cwd.trim() };
+    }
+    case "plugin/record": {
+      const pluginId = value.pluginId;
+      const key = value.key;
+      if (typeof pluginId !== "string" || !/^[a-z][a-z0-9-]*$/.test(pluginId)) {
+        throw new SessionEventParseError(
+          'pluginId must match /^[a-z][a-z0-9-]*$/',
+          type,
+        );
+      }
+      if (
+        typeof key !== "string" ||
+        !/^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*)*$/.test(key)
+      ) {
+        throw new SessionEventParseError(
+          "key must be lowercase slash-separated segments",
+          type,
+        );
+      }
+      let data: unknown;
+      try {
+        data = JSON.parse(JSON.stringify(value.data));
+      } catch {
+        throw new SessionEventParseError(
+          "data must be JSON-serializable",
+          type,
+        );
+      }
+      return { type, ts, pluginId, key, data };
+    }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);
   }

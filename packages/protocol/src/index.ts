@@ -101,6 +101,8 @@ export {
   type WorkspaceBudgetTruncation,
   type PresentedFile,
   type DeliverablesPresentedEvent,
+  type WorkingDirectoryChangeEvent,
+  type PluginRecordEvent,
   TOOL_EMITTABLE_EVENT_TYPES,
 } from "./session-events.js";
 export { parseTurnEndCancelCause } from "./session-events.js";

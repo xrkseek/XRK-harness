@@ -231,6 +231,51 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses working-directory/change and plugin/record", () => {
+    expect(
+      parseSessionEvent({
+        type: "working-directory/change",
+        ts: 1,
+        cwd: "/tmp/proj",
+      }),
+    ).toEqual({
+      type: "working-directory/change",
+      ts: 1,
+      cwd: "/tmp/proj",
+    });
+    expect(
+      parseSessionEvent({
+        type: "plugin/record",
+        ts: 2,
+        pluginId: "git-worktrees",
+        key: "probe/state",
+        data: { ok: true },
+      }),
+    ).toEqual({
+      type: "plugin/record",
+      ts: 2,
+      pluginId: "git-worktrees",
+      key: "probe/state",
+      data: { ok: true },
+    });
+    expect(() =>
+      parseSessionEvent({
+        type: "working-directory/change",
+        ts: 1,
+        cwd: "  ",
+      }),
+    ).toThrow(SessionEventParseError);
+    expect(() =>
+      parseSessionEvent({
+        type: "plugin/record",
+        ts: 1,
+        pluginId: "Bad",
+        key: "k",
+        data: {},
+      }),
+    ).toThrow(SessionEventParseError);
+  });
+
   it("rejects user/message missing content", () => {
     expect(() =>
       parseSessionEvent({ type: "user/message", ts: 1, turnId: "t" }),
