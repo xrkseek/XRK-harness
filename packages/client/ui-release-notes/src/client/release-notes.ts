@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.25',
+    date: '2026-10-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '超过上限的大文件不再被拒收，自动转为 @路径 引用；小文件与路径芯片可在同一次拖入共存。',
+        en: 'Files over the limit are no longer refused — they become @path references; small files and path chips coexist in one drop.',
+      },
+      {
+        zh: '入料改为先上传后插路径芯片，被拒时草稿不留残片；站立人格新增对用户立场契约。',
+        en: 'Intake uploads first and inserts path chips after, so a rejection leaves no strays; the standing persona gains a stance contract.',
+      },
+    ],
+  },
+  {
     version: '0.5.24',
     date: '2026-10-10',
     title: {
