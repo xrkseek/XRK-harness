@@ -53,6 +53,8 @@ export const EVENT_ISOMORPHISM = {
   "image/offload": "image/offload",
   "workspace/changes": "workspace/changes",
   "deliverables/presented": "deliverables/presented",
+  "working-directory/change": "working-directory/change",
+  "plugin/record": "plugin/record",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -496,6 +498,17 @@ export function toFaceWireSessionEvent(
           callId: event.callId,
           files: event.files,
         },
+        ignorable: true,
+      };
+    case "working-directory/change":
+    case "plugin/record":
+      // Log-only: neither is model-visible. Projected verbatim for clients
+      // that track session cwd / plugin-owned records.
+      return {
+        type: event.type,
+        seq,
+        time,
+        data: stripBase(event),
         ignorable: true,
       };
     case "prompt/admitted":
