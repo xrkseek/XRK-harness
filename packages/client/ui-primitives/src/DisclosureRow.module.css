@@ -5,6 +5,7 @@
   flex-direction: column;
   width: 100%;
   min-width: 0;
+  contain: style;
 }
 
 .row {
@@ -42,7 +43,7 @@ button.leading {
 .iconIdle {
   display: inline-flex;
   opacity: 1;
-  transition: opacity 100ms ease;
+  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
 }
 
 .chevronHover {
@@ -50,7 +51,7 @@ button.leading {
   inset: 0;
   margin: auto;
   opacity: 0;
-  transition: opacity 100ms ease;
+  transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
 }
 
 .row:hover .iconIdle {
@@ -61,9 +62,22 @@ button.leading {
   opacity: 1;
 }
 
+/* Open: chevron points up. Leading swaps icon→chevron on toggle, so this is
+   a static cue (not a mid-flight rotate); transform stays compositor-cheap. */
+.root[data-open] .leading > svg {
+  transform: rotate(180deg);
+}
+
 .title {
   flex: none;
   font-size: 14px;
   line-height: 24px;
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconIdle,
+  .chevronHover {
+    transition: none;
+  }
 }

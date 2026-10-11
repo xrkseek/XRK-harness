@@ -138,7 +138,7 @@ export function SkillRow({ block, inspect, t }: SkillRowProps) {
   } : {}
   const leading = disclosureLeading(model.state, open, expandable)
   return (
-    <div className={css.card} data-tool="skill" data-state={model.state}>
+    <div className={css.card} data-tool="skill" data-state={model.state} data-open={open || undefined}>
       <div
         className={css.row}
         data-expandable={expandable || undefined}
