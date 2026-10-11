@@ -47,6 +47,9 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
   readonly maxTokens: number;
   /** Soft compact ceiling (orthogonal to contextWindow). */
   readonly softBudgetMaxTokens: number;
+  /** Omitted → derived from softBudgetMaxTokens by `resolveSoftBudgetTokens`. */
+  readonly softBudgetKeepTokens: number;
+  readonly softBudgetBufferTokens: number;
   readonly inputModalities: Array<"text" | "image">;
 }> = [
   {
@@ -56,6 +59,8 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
     contextWindow: 1_000_000,
     maxTokens: 384_000,
     softBudgetMaxTokens: 300_000,
+    softBudgetKeepTokens: 24_000,
+    softBudgetBufferTokens: 4_000,
     inputModalities: ["text", "image"],
   },
   {
@@ -65,6 +70,8 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
     contextWindow: 1_000_000,
     maxTokens: 384_000,
     softBudgetMaxTokens: 300_000,
+    softBudgetKeepTokens: 24_000,
+    softBudgetBufferTokens: 4_000,
     inputModalities: ["text"],
   },
 ];
@@ -84,6 +91,7 @@ const DeepSeekConfig = Schema.object({
       maxTokens: Schema.number().step(1).min(1),
       /** Soft-budget ceiling; omit → no proactive compact for this model. */
       softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
+      /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
       softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
       softBudgetBufferTokens: Schema.number().step(500).min(0),
       inputModalities: Schema.array(Schema.union(["text", "image"])).min(1),
