@@ -1,6 +1,7 @@
 /**
- * Folder / absolute-path drop intake: directories are path references (`@…/`),
- * not FileReader byte uploads (Chromium fails with ENOENT-style messages).
+ * Folder / absolute-path drop intake: directories and oversized files are path
+ * references (`@…` / `@…/`), not FileReader byte uploads (Chromium fails with
+ * ENOENT-style messages on folders; large files skip the attachment byte rail).
  */
 
 import type { ReferenceInsert } from '@xrkseek/client-ui-input-trigger/client'
@@ -70,6 +71,30 @@ export function pathReferenceInsert(
 }
 
 /**
+ * Resolve dropped Files into path refs via Desktop bridge.
+ * Entries without a resolvable path are returned in `unresolved`.
+ */
+export function resolveDroppedPaths(
+  files: readonly File[],
+  kind: 'file' | 'directory',
+): {
+  readonly resolved: readonly DroppedPathRef[]
+  readonly unresolved: readonly File[]
+} {
+  const resolved: DroppedPathRef[] = []
+  const unresolved: File[] = []
+  for (const file of files) {
+    const path = desktopPathForFile(file)
+    if (path === undefined) {
+      unresolved.push(file)
+      continue
+    }
+    resolved.push({ path, kind })
+  }
+  return { resolved, unresolved }
+}
+
+/**
  * Resolve dropped directory Files into path refs via Desktop bridge.
  * Entries without a resolvable path are returned in `unresolved`.
  */
@@ -79,15 +104,5 @@ export function resolveDroppedDirectories(
   readonly resolved: readonly DroppedPathRef[]
   readonly unresolved: readonly File[]
 } {
-  const resolved: DroppedPathRef[] = []
-  const unresolved: File[] = []
-  for (const file of directories) {
-    const path = desktopPathForFile(file)
-    if (path === undefined) {
-      unresolved.push(file)
-      continue
-    }
-    resolved.push({ path, kind: 'directory' })
-  }
-  return { resolved, unresolved }
+  return resolveDroppedPaths(directories, 'directory')
 }

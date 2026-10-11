@@ -4,6 +4,7 @@ import {
   normalizeMentionPath,
   pathReferenceInsert,
   resolveDroppedDirectories,
+  resolveDroppedPaths,
 } from '../src/client/drop-path-intake.ts'
 
 describe('drop-path-intake', () => {
@@ -56,6 +57,31 @@ describe('drop-path-intake', () => {
     expect(resolveDroppedDirectories([file])).toEqual({
       resolved: [],
       unresolved: [file],
+    })
+  })
+
+  it('builds a file chip insert without a trailing slash', () => {
+    expect(pathReferenceInsert(String.raw`C:\Users\x\big.bin`, 'file')).toEqual({
+      source: 'reference',
+      ref: '@C:/Users/x/big.bin',
+      label: 'big.bin',
+      appearance: 'file',
+      clipboardText: '@C:/Users/x/big.bin',
+    })
+  })
+
+  it('resolves oversized files through the Desktop path bridge', () => {
+    const file = new File([], 'big.bin')
+    ;(globalThis as {
+      xrkDesktop?: { files: { pathForFile: (f: File) => string | undefined } }
+    }).xrkDesktop = {
+      files: {
+        pathForFile: (f) => (f === file ? String.raw`C:\Users\x\big.bin` : undefined),
+      },
+    }
+    expect(resolveDroppedPaths([file], 'file')).toEqual({
+      resolved: [{ path: String.raw`C:\Users\x\big.bin`, kind: 'file' }],
+      unresolved: [],
     })
   })
 })

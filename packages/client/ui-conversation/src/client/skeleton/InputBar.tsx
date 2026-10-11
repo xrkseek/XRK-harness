@@ -47,7 +47,7 @@ import {
 import { resolveSubmitMode } from '../input/resolve-submit-mode.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
 import {
-  pathReferenceInsert, resolveDroppedDirectories,
+  pathReferenceInsert, resolveDroppedDirectories, resolveDroppedPaths,
 } from '../drop-path-intake.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
@@ -290,8 +290,11 @@ export const InputBar = memo(function InputBar({
   // Intake pre-check (DeepSeek Chat semantics): an addition that would break
   // a projected limit is refused as a whole batch, announced immediately, and
   // never enters the rail — no more submit-time failure rolling the rail
-  // back. The host enforces the same limits at submit for callers that bypass
-  // this composer. Subagent sessions reject attachments at intake (not only at RPC).
+  // back. Oversized generic files (> maxFileBytes) become `@path` chips via
+  // Desktop `pathForFile` instead of base64 upload; without a host path the
+  // batch is refused. The host still enforces byte limits at submit for
+  // callers that bypass this composer. Subagent sessions reject attachments
+  // at intake (not only at RPC).
   const intakeImages = useCallback((files: readonly File[]): void => {
     if (addImages === undefined || files.length === 0) return
     if (subagent !== null) {
@@ -327,25 +330,63 @@ export const InputBar = memo(function InputBar({
         }
       }
 
+      let uploadFiles = otherFiles
+      const oversizedPathInserts: NonNullable<ReturnType<typeof pathReferenceInsert>>[] = []
       if (fileLimits !== undefined && otherFiles.length > 0) {
+        const oversized = otherFiles.filter(file => file.size > fileLimits.maxFileBytes)
+        const within = otherFiles.filter(file => file.size <= fileLimits.maxFileBytes)
+        if (oversized.length > 0) {
+          if (keyboard === undefined) {
+            return t('file.largeNeedsDesktop', { size: imageSizeText(fileLimits.maxFileBytes) })
+          }
+          const { resolved, unresolved } = resolveDroppedPaths(oversized, 'file')
+          if (unresolved.length > 0) {
+            return t('file.largeNeedsDesktop', { size: imageSizeText(fileLimits.maxFileBytes) })
+          }
+          for (const entry of resolved) {
+            const insert = pathReferenceInsert(entry.path, 'file')
+            if (insert === undefined) {
+              return t('file.pathInsertFailed')
+            }
+            oversizedPathInserts.push(insert)
+          }
+        }
+        uploadFiles = within
         const existingFiles = attachments.filter(attachment => attachment.kind === 'file')
-        if (existingFiles.length + otherFiles.length > fileLimits.maxFilesPerMessage) {
+        if (existingFiles.length + uploadFiles.length > fileLimits.maxFilesPerMessage) {
           return t('file.tooMany', { count: fileLimits.maxFilesPerMessage })
         }
-        if (otherFiles.some(file => file.size > fileLimits.maxFileBytes)) {
-          return t('file.fileTooLarge', { size: imageSizeText(fileLimits.maxFileBytes) })
-        }
         const total = existingFiles.reduce((sum, attachment) => sum + attachment.file.size, 0)
-          + otherFiles.reduce((sum, file) => sum + file.size, 0)
+          + uploadFiles.reduce((sum, file) => sum + file.size, 0)
         if (total > fileLimits.maxMessageFileBytes) {
           return t('file.totalTooLarge', { size: imageSizeText(fileLimits.maxMessageFileBytes) })
         }
       }
 
-      return addImages(files)
+      const toAdd = imageTypes === undefined
+        ? [...uploadFiles]
+        : [...imageFiles, ...uploadFiles]
+      // Byte uploads first so a rail rejection leaves the draft untouched by path chips.
+      if (toAdd.length > 0) {
+        const railError = addImages(toAdd)
+        if (railError !== null) return railError
+      }
+      if (oversizedPathInserts.length > 0) {
+        if (keyboard === undefined) {
+          return t('file.largeNeedsDesktop', {
+            size: imageSizeText(fileLimits?.maxFileBytes ?? 0),
+          })
+        }
+        for (const insert of oversizedPathInserts) {
+          if (!keyboard.insertPathReference(insert)) {
+            return t('file.pathInsertFailed')
+          }
+        }
+      }
+      return null
     })()
     if (rejected !== null) showToast(rejected)
-  }, [addImages, attachments, fileLimits, imageLimits, showToast, subagent, t])
+  }, [addImages, attachments, fileLimits, imageLimits, keyboard, showToast, subagent, t])
 
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined && subagent === null
 

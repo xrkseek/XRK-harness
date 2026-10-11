@@ -443,6 +443,43 @@ describe('image draft rail', () => {
     expect(result.view.getByRole('alert').textContent).toContain('仅支持 PNG、JPG、WebP、GIF 格式的图片')
   })
 
+  it('turns oversized generic files into @path chips on Desktop instead of byte upload', () => {
+    const fileLimits = {
+      maxFileBytes: 1024 * 1024,
+      maxFilesPerMessage: 20,
+      maxMessageFileBytes: 40 * 1024 * 1024,
+    }
+    const big = new File([new ArrayBuffer(1024 * 1024 + 1)], 'big.bin', { type: 'application/octet-stream' })
+    const small = new File([new ArrayBuffer(16)], 'small.bin', { type: 'application/octet-stream' })
+    ;(globalThis as {
+      xrkDesktop?: { files: { pathForFile: (f: File) => string | undefined } }
+    }).xrkDesktop = {
+      files: {
+        pathForFile: (f) => (f === big ? String.raw`C:\data\big.bin` : undefined),
+      },
+    }
+    onTestFinished(() => {
+      delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
+    })
+    const addImages = vi.fn(() => null)
+    const result = bench({ addImages, imageLimits: PNG_LIMITS, fileLimits })
+    const insertSpy = vi.spyOn(result.shell, 'insertPathReference')
+    act(() => { attachmentOwner(result.slotCalls).onAddImages([big, small]) })
+    expect(addImages).toHaveBeenCalledWith([small])
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      ref: '@C:/data/big.bin',
+      appearance: 'file',
+    }))
+    expect(result.view.queryByRole('alert')).toBeNull()
+    cleanup()
+    // Without a host path, oversized files still refuse the batch.
+    delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
+    const noPath = bench({ addImages: vi.fn(() => null), imageLimits: PNG_LIMITS, fileLimits })
+    act(() => { attachmentOwner(noPath.slotCalls).onAddImages([big]) })
+    expect(noPath.props.addImages).not.toHaveBeenCalled()
+    expect(noPath.view.getByRole('alert').textContent).toContain('超过 1MB 的文件会改为路径引用')
+  })
+
   it('projects display-ready limits into the attachment slot', () => {
     const result = bench({
       addImages: vi.fn(() => null),
