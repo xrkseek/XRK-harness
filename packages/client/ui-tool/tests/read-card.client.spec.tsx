@@ -238,15 +238,20 @@ describe('ReadRow keyed toolview', () => {
     expect(view.container.querySelector('[data-variant="read"]')?.getAttribute('data-state')).toBe('stopped')
   })
 
-  it('registers under the read key of the keyed toolview slot', () => {
-    const registered: { name: unknown; key?: unknown }[] = []
+  it('registers Host read_file and fixture read keys', () => {
+    const registered: { name: unknown; key?: unknown; locale?: unknown }[] = []
     const ctx = { slots: {
-      inject: (_name: string, callback: () => () => void) => callback(),
-      register: (options: { name: unknown; key?: unknown }) => { registered.push(options); return () => undefined },
+      inject: (_name: string, callback: () => Iterable<() => void>) => {
+        for (const dispose of callback()) void dispose
+      },
+      register: (options: { name: unknown; key?: unknown; locale?: unknown }) => {
+        registered.push(options)
+        return () => undefined
+      },
     } } as unknown as Context
     readToolview.apply(ctx)
-    // The row composes ToolRow, so it declares its locale namespace at the seat.
-    expect(registered).toEqual([{ name: 'tool.call.toolview', key: 'read', locale: 'conversation' }])
+    expect(registered.map(r => r.key).sort()).toEqual(['read', 'read_file'])
+    expect(registered.every(r => r.locale === 'conversation')).toBe(true)
     expect(readToolview.inject).toEqual(['slots'])
   })
 })

@@ -45,14 +45,21 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   // The PowerShell twin is a shell tool: the bash row family (icon, colors)
   // with its own title from TOOL_TITLES, not the generic `others` row.
   pwsh: 'bash',
+  // Fixture short name + Host wire name (exec-fs).
   read: 'read',
+  read_file: 'read',
   read_image: 'read',
   web_fetch: 'read',
   web_search: 'search',
   grep: 'search',
   glob: 'search',
+  // Fixture short names (`write`/`edit` in connection fixture) + Host wire names.
   write: 'write',
+  write_file: 'write',
   edit: 'edit',
+  apply_edit: 'edit',
+  // Patch is edit-family chrome; body streams args (no FileMutationRow).
+  apply_patch: 'edit',
   // Deliverable declaration: write-family chrome (edit glyph) while the title
   // below names the act; paths come from args.files / callView.locations.
   present: 'write',

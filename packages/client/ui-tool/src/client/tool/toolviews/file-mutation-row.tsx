@@ -32,6 +32,9 @@ type FileMutationRowProps = ToolCallViewProps & PropsLocale<'conversation'>
 export function FileMutationRow({ toolName, block, cwd, home, openFile, inspect, t }: FileMutationRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const diff = diffCardModel(block)
+  // Incomplete tool-call JSON cannot yield a provisional diff yet — keep the
+  // raw/pretty args body so write_file / apply_edit stream like before.
+  const body = diff === null ? model.body : null
   return (
     <ToolRow
       t={t}
@@ -40,7 +43,7 @@ export function FileMutationRow({ toolName, block, cwd, home, openFile, inspect,
       icon={<IconEditOutline16 size={14} />}
       title={model.title}
       summary={model.summary}
-      body={null}
+      body={body}
       output={model.output}
       errorSummary={model.errorSummary}
       diff={diff}
@@ -66,8 +69,10 @@ export const fileMutationToolview = {
    */
   apply(ctx: Context): void {
     ctx.slots.inject('tool.call.toolview', function* () {
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'edit', locale: NS }, FileMutationRow)
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'write', locale: NS }, FileMutationRow)
+      // exec-fs wire names only. Fixture short names `write`/`edit` stay on
+      // GenericToolCard (still paints card:'diff' via diffCardModel).
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'apply_edit', locale: NS }, FileMutationRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'write_file', locale: NS }, FileMutationRow)
     })
   },
 }

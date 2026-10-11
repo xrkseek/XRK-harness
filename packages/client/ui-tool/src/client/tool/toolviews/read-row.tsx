@@ -59,7 +59,10 @@ export const readToolview = {
    * @param ctx - registrant context (disposal rides ctx.effect inside slots.register).
    */
   apply(ctx: Context): void {
-    ctx.slots.inject('tool.call.toolview', () =>
-      ctx.slots.register({ name: 'tool.call.toolview', key: 'read', locale: NS }, ReadRow))
+    ctx.slots.inject('tool.call.toolview', function* () {
+      // Host wire name (exec-fs). Fixture short name `read` kept for samples.
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'read_file', locale: NS }, ReadRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'read', locale: NS }, ReadRow)
+    })
   },
 }

@@ -83,7 +83,8 @@ describe('diffCardModel', () => {
   })
 
   it('returns null for every non-diff call: no views, generic views, unknown cards', () => {
-    expect(diffCardModel(running({ callView: null }))).toBeNull()
+    // Running with no callView but parseable edit args → provisional (below).
+    expect(diffCardModel(running({ callView: null, name: 'bash', argsRaw: '{}' }))).toBeNull()
     expect(diffCardModel(settled({ callView: null, resultView: null }))).toBeNull()
     expect(diffCardModel(running({ callView: { card: 'generic', title: 'read x' } }))).toBeNull()
     // A generic result settles a diff call on the generic path (write/edit's
@@ -95,6 +96,32 @@ describe('diffCardModel', () => {
     expect(diffCardModel(running({ callView: future }))).toBeNull()
     expect(diffCardModel(settled({
       callView: future, resultView: { card: 'chart' } as unknown as ToolResultView,
+    }))).toBeNull()
+  })
+
+  it('derives a provisional running diff from args while callView is still null', () => {
+    expect(diffCardModel(running({ callView: null }))).toEqual({
+      card: { diffs: [{ path: 'notes/demo.txt', oldText: 'hello', newText: 'hello fixture' }] },
+    })
+    expect(diffCardModel(running({
+      callView: null,
+      name: 'write_file',
+      argsRaw: '{"path":"a.ts","content":"x"}',
+    }))).toEqual({
+      card: { diffs: [{ path: 'a.ts', oldText: null, newText: 'x' }] },
+    })
+    expect(diffCardModel(running({
+      callView: null,
+      name: 'apply_edit',
+      argsRaw: '{"path":"a.ts","old_content":"a","content":"b"}',
+    }))).toEqual({
+      card: { diffs: [{ path: 'a.ts', oldText: 'a', newText: 'b' }] },
+    })
+    // Incomplete JSON while the tool-call delta is still streaming.
+    expect(diffCardModel(running({
+      callView: null,
+      name: 'write_file',
+      argsRaw: '{"path":"a.ts","content":"',
     }))).toBeNull()
   })
 
@@ -264,9 +291,10 @@ describe('FileMutationRow diff card', () => {
   })
 
   it('renders a plain summary span when the call carries no file path', () => {
-    // Empty args leave deriveFilePath undefined, so the summary is not a link.
+    // Parseable args without a path key: summary is plain text, not a file link.
     const view = render(<FileMutationRow {...rowProps(settled({
-      call: { name: 'edit', argsRaw: '' }, callView: null, resultView: null,
+      call: { name: 'edit', argsRaw: '{"old_string":"a","new_string":"b"}' },
+      callView: null, resultView: null,
     }))} />)
     expect(view.container.querySelector('[class*="_fileLink_"]')).toBeNull()
     expect(view.container.querySelector('[class*="_summary_"]')).not.toBeNull()
@@ -274,7 +302,7 @@ describe('FileMutationRow diff card', () => {
 })
 
 describe('fileMutationToolview registration', () => {
-  it('registers one component under both edit and write, and each disposes', () => {
+  it('registers exec-fs wire names only, and each disposes', () => {
     const registered: { key: string; locale: unknown; disposed: boolean }[] = []
     const disposers: (() => void)[] = []
     let disposeInjection = (): void => {}
@@ -295,13 +323,45 @@ describe('fileMutationToolview registration', () => {
       },
     }
     fileMutationToolview.apply(ctx as never)
-    expect(registered.map(r => r.key).sort()).toEqual(['edit', 'write'])
-    // Both keys claim the conversation locale seat ToolRow's body copy needs.
+    expect(registered.map(r => r.key).sort()).toEqual(['apply_edit', 'write_file'])
     expect(registered.map(r => r.locale)).toEqual(['conversation', 'conversation'])
     expect(fileMutationToolview.inject).toEqual(['slots'])
     // Disposal removes each contribution (packages/AGENTS.md registry contract).
     disposeInjection()
     expect(registered.every(r => r.disposed)).toBe(true)
+  })
+})
+
+describe('FileMutationRow Host wire names', () => {
+  it('paints a provisional write_file diff while callView is still null', () => {
+    const block: RunningToolCall = {
+      callId: 'c1', name: 'write_file',
+      argsRaw: '{"path":"notes/demo.txt","content":"hello fixture"}',
+      turn: 1, step: 1, time: 1_000, callView: null, subCalls: [],
+    }
+    const view = render(<FileMutationRow {...{
+      callId: 'c1', toolName: 'write_file', block, cwd: '/w', home: '/h',
+      openFile: vi.fn(), inspect: undefined, t,
+    } as unknown as FileMutationRowProps} />)
+    fireEvent.click(view.container.querySelector('[data-expandable]')!)
+    expect(view.container.querySelector('[data-diff]')).not.toBeNull()
+    expect(view.getByText('hello fixture')).toBeTruthy()
+  })
+
+  it('keeps streaming args body while write_file JSON is still incomplete', () => {
+    const block: RunningToolCall = {
+      callId: 'c1', name: 'write_file',
+      argsRaw: '{"path":"notes/demo.txt","content":"hel',
+      turn: 1, step: 1, time: 1_000, callView: null, subCalls: [],
+    }
+    const view = render(<FileMutationRow {...{
+      callId: 'c1', toolName: 'write_file', block, cwd: '/w', home: '/h',
+      openFile: vi.fn(), inspect: undefined, t,
+    } as unknown as FileMutationRowProps} />)
+    fireEvent.click(view.container.querySelector('[data-expandable]')!)
+    expect(view.container.querySelector('[data-diff]')).toBeNull()
+    // Incomplete args ride both the collapsed summary and the IN body.
+    expect(view.container.querySelector('[class*="_ioText_"]')?.textContent).toContain('"content"')
   })
 })
 

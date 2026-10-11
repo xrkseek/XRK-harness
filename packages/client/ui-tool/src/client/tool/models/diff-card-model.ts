@@ -5,10 +5,61 @@
  * that pair into what {@link DiffBlock} draws. Both conversation render sites
  * (the chat tool row's expanded body and the details panel's Output section)
  * call this, so the hunks they show are derived once.
+ *
+ * While `assistant/chunk` tool-call deltas stream, Host has not yet emitted
+ * `tool/call` (so `callView` is null). For `write_file` / `apply_edit`, a
+ * provisional hunk is derived from parseable `argsRaw` so the DiffBlock can
+ * paint as soon as JSON closes — same shapes as exec-fs `presentWriteCall` /
+ * `presentEditCall`.
  * @module
  */
 import type { DiffBlockProps, DiffHunk } from '@xrkseek/client-ui-primitives'
 import type { ToolCallBlock } from './tool-call-model.ts'
+
+function toolNameOf(block: ToolCallBlock): string {
+  return 'kind' in block ? (block.call?.name ?? '') : block.name
+}
+
+function strField(args: Record<string, unknown>, key: string): string | undefined {
+  const value = args[key]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * Args-derived call-time diff when Host `presentCall` has not arrived yet.
+ * Mirrors `@xrkseek/exec-fs` presenters; also accepts fixture `old_string` /
+ * `new_string` / `file_path` aliases.
+ */
+function provisionalDiffFromArgs(
+  toolName: string,
+  argsRaw: string,
+): DiffCardModel | null {
+  if (argsRaw === '') return null
+  let args: Record<string, unknown>
+  try {
+    args = JSON.parse(argsRaw) as Record<string, unknown>
+  } catch {
+    return null
+  }
+  if (toolName === 'write_file' || toolName === 'write' || toolName === 'fx-write') {
+    const path = strField(args, 'path') ?? strField(args, 'file_path')
+    if (path === undefined) return null
+    const newText = typeof args.content === 'string' ? args.content : ''
+    return { card: { diffs: [{ path, oldText: null, newText }] } }
+  }
+  if (toolName === 'apply_edit' || toolName === 'edit') {
+    const path = strField(args, 'path') ?? strField(args, 'file_path')
+    if (path === undefined) return null
+    const oldText = strField(args, 'old_content')
+      ?? strField(args, 'old_string')
+      ?? null
+    const newText = typeof args.content === 'string'
+      ? args.content
+      : (typeof args.new_string === 'string' ? args.new_string : '')
+    return { card: { diffs: [{ path, oldText, newText }] } }
+  }
+  return null
+}
 
 /**
  * Diff-body lines the chat row shows before collapsing the middle — half the
@@ -83,10 +134,18 @@ function narrowDiffs(diffs: unknown): DiffHunk[] | null {
  */
 export function diffCardModel(block: ToolCallBlock): DiffCardModel | null {
   if (!('kind' in block)) {
-    // Running: the call view may carry the intended diff; the result is absent.
+    // Running: Host presentCall when tool/call landed.
     const call = block.callView?.card === 'diff' ? block.callView : null
-    const diffs = call === null ? null : narrowDiffs(call.diffs)
-    return diffs === null ? null : { card: { diffs } }
+    if (call !== null) {
+      const diffs = narrowDiffs(call.diffs)
+      return diffs === null ? null : { card: { diffs } }
+    }
+    // Streaming shell (`assistant/chunk`): callView still null — paint from args
+    // when JSON is complete. Generic / unknown call views stay on the null path.
+    if (block.callView == null) {
+      return provisionalDiffFromArgs(toolNameOf(block), block.argsRaw)
+    }
+    return null
   }
   // Settled: the result view's applied hunks replace the call-time diff. A
   // window that dropped the call head leaves only the result, which still
