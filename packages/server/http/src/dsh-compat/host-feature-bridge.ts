@@ -593,7 +593,11 @@ export function classifyAutoReviewHeuristic(
   const blob = `${toolName} ${args}`.toLowerCase();
   const destructive =
     /\b(rm\s+-rf|del\s+\/|format\s+c:|drop\s+table|truncate\s+table|shutdown|mkfs)\b/;
-  if (destructive.test(blob)) {
+  // Second floor for Auto mode: indiscriminate node kills take down Host/IDE.
+  // blob is already lowercased; precise `/PID` / `Stop-Process -Id` stay out.
+  const killAllNode =
+    /stop-process[\s\S]{0,240}?-(?:name|processname)\s+[^\n|;]*\bnode(?:\.exe)?\b|get-process[\s\S]{0,500}?\bnode(?:\.exe)?\b[\s\S]{0,500}?\bstop-process\b|taskkill[\s\S]{0,160}?\/im\s*:?\s*"?node(?:\.exe)?"?|(?:killall|pkill)\s+[^\n]*\bnode(?:\.exe)?\b/;
+  if (destructive.test(blob) || killAllNode.test(blob)) {
     return { verdict: "deny", reason: "destructive-pattern", confidence: 0.92 };
   }
   if (/\b(curl|wget|invoke-webrequest).*(http|https)/.test(blob)) {

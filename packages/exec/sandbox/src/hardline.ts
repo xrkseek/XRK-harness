@@ -61,6 +61,34 @@ export const HARDLINE_ARGV_RULES: readonly HardlineArgvRule[] = [
     pattern: new RegExp(CMDPOS + String.raw`kill\s+(-[^\s]+\s+)*-1\b`, "i"),
     reason: "hardline: kill all processes",
   },
+  // Indiscriminate node massacre — takes down Cursor helper / xrkh Host / IDE.
+  // Precise `Stop-Process -Id <pid>` / `taskkill /PID <n>` stay allowed.
+  {
+    pattern:
+      /\bStop-Process\b[\s\S]{0,240}?-(?:Name|ProcessName)\s+[^\n|;]*\bnode(?:\.exe)?\b/i,
+    reason: "hardline: Stop-Process by name targeting node",
+  },
+  {
+    pattern:
+      /\bGet-Process\b[\s\S]{0,500}?\bnode(?:\.exe)?\b[\s\S]{0,500}?\bStop-Process\b/i,
+    reason: "hardline: Get-Process node piped to Stop-Process",
+  },
+  {
+    pattern: /\btaskkill\b[\s\S]{0,160}?\/IM\s*:?\s*"?node(?:\.exe)?"?/i,
+    reason: "hardline: taskkill /IM node",
+  },
+  {
+    pattern: new RegExp(
+      CMDPOS + String.raw`(?:killall|pkill)\s+(-[^\s]+\s+)*node(?:\.exe)?\b`,
+      "i",
+    ),
+    reason: "hardline: killall/pkill node",
+  },
+  {
+    pattern:
+      /\bwmic\b[\s\S]{0,200}?\bprocess\b[\s\S]{0,200}?\bnode\.exe\b[\s\S]{0,120}?\b(?:call\s+)?terminate\b/i,
+    reason: "hardline: wmic terminate node.exe",
+  },
   {
     pattern: new RegExp(
       CMDPOS + String.raw`(?:shutdown|reboot|halt|poweroff)\b`,
@@ -93,24 +121,39 @@ export function matchHardlineArgv(
   return undefined;
 }
 
-const SHELL_TOOLS = new Set(["bash", "shell", "run_terminal_cmd"]);
+const SHELL_TOOLS = new Set([
+  "bash",
+  "shell",
+  "run_terminal_cmd",
+  "pwsh",
+  "powershell",
+]);
+
+/** PTY follow-up text — argv confine does not see keystrokes. */
+const TEXT_TOOLS = new Set(["terminal_send"]);
 
 /**
  * Pre-execute hardline: deny matching shell argv **before** policy / YOLO.
+ * Also scans `terminal_send` text so a live PTY cannot bypass the floor.
  * Non-shell tools continue.
  */
 export function createHardlineArgvPre(
   rules: readonly HardlineArgvRule[] = HARDLINE_ARGV_RULES,
 ): PreHandler {
   return (ctx) => {
-    if (!SHELL_TOOLS.has(ctx.call.name)) {
+    const name = ctx.call.name;
+    const isShell = SHELL_TOOLS.has(name);
+    const isText = TEXT_TOOLS.has(name);
+    if (!isShell && !isText) {
       return { action: "continue", args: ctx.args };
     }
     const args =
       ctx.args && typeof ctx.args === "object" && !Array.isArray(ctx.args)
         ? (ctx.args as Record<string, unknown>)
         : {};
-    const command = String(args.command ?? args.cmd ?? "");
+    const command = isText
+      ? String(args.text ?? args.data ?? "")
+      : String(args.command ?? args.cmd ?? "");
     const hit = matchHardlineArgv(command, rules);
     if (!hit) return { action: "continue", args: ctx.args };
     return { action: "deny", reason: hit.reason };

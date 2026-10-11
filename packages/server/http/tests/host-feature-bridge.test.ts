@@ -85,11 +85,24 @@ describe("host-feature-bridge", () => {
       args: { cmd: "rm -rf /" },
     });
     expect(deny.verdict).toBe("deny");
+    const killNode = classifyAutoReviewHeuristic({
+      toolName: "bash",
+      args: {
+        command:
+          "Get-Process node | Where-Object { $_.Path -like '*node*' } | Stop-Process -Force",
+      },
+    });
+    expect(killNode.verdict).toBe("deny");
     const allow = classifyAutoReviewHeuristic({
       toolName: "read_file",
       args: { path: "README.md" },
     });
     expect(allow.verdict).toBe("allow");
+    const preciseKill = classifyAutoReviewHeuristic({
+      toolName: "bash",
+      args: { command: "Stop-Process -Id 47268 -Force" },
+    });
+    expect(preciseKill.verdict).toBe("ask");
   });
 
   it("validates IM connector fields", () => {
