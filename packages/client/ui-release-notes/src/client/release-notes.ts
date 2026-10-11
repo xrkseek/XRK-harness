@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.27',
+    date: '2026-10-11',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '主会话有了自己的工作目录：模型可读可切，还能为自己开 linked worktree；插件有了 plugin/record 记录面。',
+        en: 'The main session owns a working directory the model can read and change, plus create_worktree; plugins gain plugin/record.',
+      },
+      {
+        zh: '沙箱拦截按名屠杀 node 的命令（精确 PID 仍放行）；max-tokens 自动续跑一路透传；插件页加了 Creator 入口。',
+        en: 'The sandbox blocks kill-node-by-name commands (precise PIDs stay allowed); max-tokens auto-continue forwards through; the Plugins page gains a Creator entry.',
+      },
+    ],
+  },
+  {
     version: '0.5.26',
     date: '2026-10-11',
     title: {
