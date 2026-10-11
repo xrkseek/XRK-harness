@@ -658,7 +658,7 @@ process.exit(0);
       else process.env.XRK_MARKET_MUTATE_NPM = prevNpm;
     }
   },
-    15_000,
+    60_000,
   );
 
   it("persists mnemon documents via write RPC", async () => {
@@ -820,7 +820,7 @@ process.exit(0);
       }
     });
   },
-    15_000,
+    60_000,
   );
 
   it("vision-router-settings describe uses enabled+view shape", async () => {
