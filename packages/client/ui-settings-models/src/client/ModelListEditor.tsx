@@ -113,8 +113,8 @@ function IconTrash(): ReactNode {
   )
 }
 
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
+/** Token counts edited as K/M-suffixed text behind a row's disclosure. */
+type CapacityField = 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens'
 
 /**
  * What an empty capacity field is worth, shown as its placeholder so a row left
@@ -130,6 +130,7 @@ type CapacityField = 'contextWindow' | 'maxTokens'
 const CAPACITY_HINT: Readonly<Record<CapacityField, string>> = {
   contextWindow: '256K',
   maxTokens: '32K',
+  softBudgetMaxTokens: '300K',
 }
 
 /**
@@ -427,6 +428,19 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     aria-label={`${t('modelMaxTokens')} ${index + 1}`}
                     disabled={disabled}
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
+                  />
+                </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('softBudgetMaxTokens')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    inputMode="numeric"
+                    value={capacityText(model, index, 'softBudgetMaxTokens')}
+                    placeholder={t('softBudgetMaxTokensPlaceholder')}
+                    aria-label={`${t('softBudgetMaxTokens')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => { editCapacity(index, 'softBudgetMaxTokens', event.target.value) }}
                   />
                 </label>
                 <fieldset className={styles['modelField']}>

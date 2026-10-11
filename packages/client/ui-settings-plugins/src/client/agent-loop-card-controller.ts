@@ -92,15 +92,9 @@ export interface AgentLoopSettings {
   toolSettle?: 'parallel' | 'serial'
   /** Max provider retries per step; `0` disables. */
   llmRetryMaxRetries?: number
-  /** Soft context budget (messages + tool schemas). */
-  maxRequestTokens?: number
-  /** Tokens kept as recent tail after auto-compact. */
-  keepTokens?: number
-  /** Soft ceiling = maxRequestTokens − bufferTokens. */
-  bufferTokens?: number
   /**
    * Soft-budget strategy: `prune-summary` (default) · `prune-only` ·
-   * `summary-only` · `off`.
+   * `summary-only` · `off`. Soft ceiling is per-model in Settings → Models.
    */
   compactionStrategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
   /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
@@ -133,12 +127,6 @@ export interface AgentLoopCardState extends CardShell {
   toolSettle: CardFieldState
   /** Provider retry cap. */
   llmRetryMaxRetries: CardFieldState
-  /** Soft request budget. */
-  maxRequestTokens: CardFieldState
-  /** Compaction keep tail. */
-  keepTokens: CardFieldState
-  /** Soft-budget buffer. */
-  bufferTokens: CardFieldState
   /** Soft-budget strategy family. */
   compactionStrategy: CardFieldState
   /** Tool-result spill ceiling. */
@@ -174,9 +162,6 @@ export class AgentLoopCardController {
       toolOrderField(),
       textField('toolSettle'),
       numberField('llmRetryMaxRetries'),
-      numberField('maxRequestTokens'),
-      numberField('keepTokens'),
-      numberField('bufferTokens'),
       compactionStrategyField(),
       numberField('toolResultMaxInlineBytes'),
       numberField('maxSubagentDepth'),
@@ -196,9 +181,6 @@ export class AgentLoopCardController {
       toolOrder: this.form.field('toolOrder'),
       toolSettle: this.form.field('toolSettle'),
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
-      maxRequestTokens: this.form.field('maxRequestTokens'),
-      keepTokens: this.form.field('keepTokens'),
-      bufferTokens: this.form.field('bufferTokens'),
       compactionStrategy: this.form.field('compactionStrategy'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxSubagentDepth: this.form.field('maxSubagentDepth'),

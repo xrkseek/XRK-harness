@@ -16,9 +16,6 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopToolOrder' | 'agentLoopToolOrderHint' | 'agentLoopToolOrderInvalid'
   | 'agentLoopToolSettle' | 'agentLoopToolSettleHint'
   | 'agentLoopLlmRetry' | 'agentLoopLlmRetryHint'
-  | 'agentLoopMaxRequestTokens' | 'agentLoopMaxRequestTokensHint'
-  | 'agentLoopKeepTokens' | 'agentLoopKeepTokensHint'
-  | 'agentLoopBufferTokens' | 'agentLoopBufferTokensHint'
   | 'agentLoopCompactionStrategy' | 'agentLoopCompactionStrategyHint'
   | 'agentLoopCompactionStrategyInvalid'
   | 'agentLoopCompactionPruneSummary' | 'agentLoopCompactionPruneOnly'
@@ -192,14 +189,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolSettleHint: 'parallel (default): overlap only isConcurrencySafe tools. serial: one call at a time.',
   agentLoopLlmRetry: 'LLM retries per step',
   agentLoopLlmRetryHint: 'Retry empty / rate-limit / server / timeout failures within one step. 0 disables. Default 5.',
-  agentLoopMaxRequestTokens: 'Soft request budget (tokens)',
-  agentLoopMaxRequestTokensHint: 'Messages + standing tool schemas. Over budget follows the compaction strategy below (default prune → summary → fail-closed). Default 100000.',
-  agentLoopKeepTokens: 'Keep tokens after compact',
-  agentLoopKeepTokensHint: 'Recent tail kept when auto-compacting. Default 24000.',
-  agentLoopBufferTokens: 'Soft-budget buffer (tokens)',
-  agentLoopBufferTokensHint: 'Soft ceiling = max request tokens − this buffer. Default 4000.',
   agentLoopCompactionStrategy: 'Compaction strategy',
-  agentLoopCompactionStrategyHint: 'Soft-budget overage and provider overflow recovery. Default prune-summary.',
+  agentLoopCompactionStrategyHint: 'When a model soft budget (Settings → Models) is exceeded, and on provider overflow. Soft ceiling is per model, not here. Default prune-summary.',
   agentLoopCompactionStrategyInvalid: 'Pick prune-summary, prune-only, summary-only, or off.',
   agentLoopCompactionPruneSummary: 'Prune then summary (default)',
   agentLoopCompactionPruneOnly: 'Prune only',
@@ -566,14 +557,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolSettleHint: 'parallel（默认）：仅 isConcurrencySafe 的工具可重叠。serial：逐步独占。',
   agentLoopLlmRetry: '步内 LLM 重试次数',
   agentLoopLlmRetryHint: '对空响应 / 限流 / 服务端 / 超时在同一步内重试。0 关闭。默认 5。',
-  agentLoopMaxRequestTokens: '软请求预算（token）',
-  agentLoopMaxRequestTokensHint: '消息面 + 站立 tool schemas。超限按下方压缩策略处理（默认 prune → summary → fail-closed）。默认 100000。',
-  agentLoopKeepTokens: '压缩后保留 token',
-  agentLoopKeepTokensHint: '自动压缩时保留的近期尾部。默认 24000。',
-  agentLoopBufferTokens: '软预算缓冲（token）',
-  agentLoopBufferTokensHint: '软上限 = 软请求预算 − 该缓冲。默认 4000。',
   agentLoopCompactionStrategy: '压缩策略',
-  agentLoopCompactionStrategyHint: '软请求预算超限与 Provider overflow 恢复怎么做。默认 prune-summary。',
+  agentLoopCompactionStrategyHint: '模型软预算（设置 → 模型）超限时，以及 Provider overflow 时怎么恢复。软上限按模型配置，不在这里。默认 prune-summary。',
   agentLoopCompactionStrategyInvalid: '请选 prune-summary、prune-only、summary-only 或 off。',
   agentLoopCompactionPruneSummary: '先 prune 再 summary（默认）',
   agentLoopCompactionPruneOnly: '仅 prune',

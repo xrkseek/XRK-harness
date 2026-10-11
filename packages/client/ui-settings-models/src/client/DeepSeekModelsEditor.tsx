@@ -17,10 +17,10 @@ import styles from './ModelsSection.module.css'
 export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
-type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'inputModalities'
+type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens' | 'inputModalities'
 
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
+/** Token counts edited as K/M-suffixed text behind a row's disclosure. */
+type CapacityField = 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens'
 
 /** Row index encoded in an editing-buffer key. */
 function rowOf(key: string): number {
@@ -74,7 +74,7 @@ export interface DeepSeekModelsValidationFailure {
   index: number
   /** Message key owned by the Models settings section. */
   key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  | 'modelMaxTokensInvalid' | 'modelSoftBudgetInvalid'
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
@@ -117,6 +117,13 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
     if (maxTokens !== undefined
       && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
       return { index, key: 'modelMaxTokensInvalid' }
+    }
+    const softBudgetMaxTokens = model['softBudgetMaxTokens']
+    if (softBudgetMaxTokens !== undefined
+      && (typeof softBudgetMaxTokens !== 'number'
+        || !Number.isInteger(softBudgetMaxTokens)
+        || softBudgetMaxTokens < 8_000)) {
+      return { index, key: 'modelSoftBudgetInvalid' }
     }
   }
   return undefined
@@ -234,6 +241,20 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   /** One capacity field of one row, rendered inside the row's disclosure. */
+  const capacityLabel = (field: CapacityField): keyof typeof en =>
+    field === 'contextWindow'
+      ? 'contextWindow'
+      : field === 'maxTokens'
+        ? 'maxTokens'
+        : 'softBudgetMaxTokens'
+
+  const capacityPlaceholder = (field: CapacityField): keyof typeof en =>
+    field === 'contextWindow'
+      ? 'contextWindowPlaceholder'
+      : field === 'maxTokens'
+        ? 'maxTokensPlaceholder'
+        : 'softBudgetMaxTokensPlaceholder'
+
   const capacityField = (
     model: DeepSeekModelDraft,
     index: number,
@@ -241,16 +262,16 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
     fallback: number | undefined,
   ): ReactNode => (
     <label className={styles['modelField']}>
-      <span className={styles['modelFieldLabel']}>{props.t(field === 'contextWindow' ? 'contextWindow' : 'maxTokens')}</span>
+      <span className={styles['modelFieldLabel']}>{props.t(capacityLabel(field))}</span>
       <input
         className={styles['input']}
         type="text"
         inputMode="numeric"
         value={capacityText(model, index, field)}
         placeholder={fallback === undefined
-          ? props.t(field === 'contextWindow' ? 'contextWindowPlaceholder' : 'maxTokensPlaceholder')
+          ? props.t(capacityPlaceholder(field))
           : formatCapacity(fallback)}
-        aria-label={`${props.t(field === 'contextWindow' ? 'contextWindow' : 'maxTokens')} ${String(index + 1)}`}
+        aria-label={`${props.t(capacityLabel(field))} ${String(index + 1)}`}
         disabled={props.disabled}
         onChange={(event) => {
           const text = event.target.value
@@ -343,6 +364,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     <div className={styles['modelAdvanced']}>
                       {capacityField(model, index, 'contextWindow', props.defaultContextWindow)}
                       {capacityField(model, index, 'maxTokens', props.defaultMaxTokens)}
+                      {capacityField(model, index, 'softBudgetMaxTokens', undefined)}
                       <fieldset className={styles['modelField']}>
                         <legend className={styles['modelFieldLabel']}>{props.t('inputModalities')}</legend>
                         <label className={styles['modalityCheck']}>
