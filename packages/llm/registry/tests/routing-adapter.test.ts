@@ -70,6 +70,29 @@ describe("createRoutingLlmAdapter", () => {
     expect(routing.peekRoute()?.contextWindow).toBe(128_000);
   });
 
+  it("puts selection soft-budget fields on ensureRoute", () => {
+    const routing = createRoutingLlmAdapter({
+      id: "route-soft-budget",
+      getSelection: () => ({
+        provider: "deepseek",
+        model: "deepseek-flash",
+        contextWindow: 1_000_000,
+        softBudgetMaxTokens: 300_000,
+        softBudgetKeepTokens: 24_000,
+        softBudgetBufferTokens: 4_000,
+      }),
+      resolveAdapter: () => createReplayAdapter([{ content: "ok" }]),
+    });
+    expect(routing.ensureRoute()).toEqual({
+      provider: "deepseek",
+      model: "deepseek-flash",
+      contextWindow: 1_000_000,
+      softBudgetMaxTokens: 300_000,
+      softBudgetKeepTokens: 24_000,
+      softBudgetBufferTokens: 4_000,
+    });
+  });
+
   it("forwards inner systemPromptUpdate for live routes", () => {
     const routing = createRoutingLlmAdapter({
       id: "route-spu",

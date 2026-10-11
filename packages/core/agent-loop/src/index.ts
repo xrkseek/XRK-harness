@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_BUFFER_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -886,71 +886,109 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
     // Soft budget + overflow share `compactionStrategy`: prune→summary by default;
     // prune-only / summary-only / off select which stages run before fail-closed.
-    if (
-      compaction?.auto !== false &&
-      compaction?.maxRequestTokens !== undefined
-    ) {
-      const strategy = resolveCompactionStrategy(compaction);
-      if (strategy !== "off") {
-        const buffer =
-          compaction.bufferTokens ?? DEFAULT_COMPACTION_BUFFER_TOKENS;
-        const softCeiling = resolveSoftBudgetCeiling(
-          compaction.maxRequestTokens,
-          buffer,
-        );
-        const measure = () => {
-          // Align with toLlmRequest: file handles may grow after path projection.
-          const messages = projectFilesToText(
-            req.messages,
-            (ref) => input.resolveFilePath?.(ref),
+    // Ceiling: SDK CompactionOptions.maxRequestTokens, else Models catalog
+    // softBudget* on the active route (orthogonal to contextWindow).
+    {
+      const route =
+        input.llm.ensureRoute?.() ?? input.llm.peekRoute?.();
+      const softBudget = resolveSoftBudgetTokens({
+        ...(compaction?.maxRequestTokens !== undefined
+          ? { maxRequestTokens: compaction.maxRequestTokens }
+          : {}),
+        ...(compaction?.keepTokens !== undefined
+          ? { keepTokens: compaction.keepTokens }
+          : {}),
+        ...(compaction?.bufferTokens !== undefined
+          ? { bufferTokens: compaction.bufferTokens }
+          : {}),
+        ...(route?.softBudgetMaxTokens !== undefined
+          ? { softBudgetMaxTokens: route.softBudgetMaxTokens }
+          : {}),
+        ...(route?.softBudgetKeepTokens !== undefined
+          ? { softBudgetKeepTokens: route.softBudgetKeepTokens }
+          : {}),
+        ...(route?.softBudgetBufferTokens !== undefined
+          ? { softBudgetBufferTokens: route.softBudgetBufferTokens }
+          : {}),
+      });
+      if (
+        compaction &&
+        compaction.auto !== false &&
+        softBudget !== undefined
+      ) {
+        const strategy = resolveCompactionStrategy(compaction);
+        if (strategy !== "off") {
+          const softCeiling = resolveSoftBudgetCeiling(
+            softBudget.maxRequestTokens,
+            softBudget.bufferTokens,
           );
-          return estimateRequestTokens({
-            messages,
-            tools: req.tools,
-            ...(req.system !== undefined ? { system: req.system } : {}),
-          });
-        };
-        let used = measure();
-        if (used > softCeiling) {
-          if (strategy === "prune-summary" || strategy === "prune-only") {
-            pruneOversizedToolResults(input.store, input.sessionId, {
-              now,
-              turnId,
-              stepId,
+          // After a successful window swap, remeasure with local estimate only —
+          // the prior provider sample is stale until the next usage stamp.
+          let trustProjected = true;
+          const measure = () => {
+            // Align with toLlmRequest: file handles may grow after path projection.
+            const messages = projectFilesToText(
+              req.messages,
+              (ref) => input.resolveFilePath?.(ref),
+            );
+            const estimate = estimateRequestTokens({
+              messages,
+              tools: req.tools,
+              ...(req.system !== undefined ? { system: req.system } : {}),
             });
-            // Always remeasure after the prune pass (DSH posture), even if pruned===0.
-            req = await buildReq();
-            used = measure();
-          }
-          if (strategy === "prune-summary" || strategy === "summary-only") {
-            let compactAttempts = 0;
-            while (
-              used > softCeiling &&
-              compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
-            ) {
-              const did = await runCompaction({
-                store: input.store,
-                sessionId: input.sessionId,
-                llm: input.llm,
-                reason: "auto",
-                keepTokens:
-                  compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
-                turnId,
-                ...(input.signal ? { signal: input.signal } : {}),
+            if (!trustProjected) return estimate;
+            // Provider pressure (Context meter numerator) can run far above the
+            // local chars/4 estimate — soft budget must not trust the optimistic
+            // number alone or the UI hits 100% with no compact.
+            const projected = projectedInputPressureTokens(
+              readSessionEvents(input.store, input.sessionId),
+            );
+            return projected === undefined
+              ? estimate
+              : Math.max(estimate, projected);
+          };
+          let used = measure();
+          if (used > softCeiling) {
+            if (strategy === "prune-summary" || strategy === "prune-only") {
+              pruneOversizedToolResults(input.store, input.sessionId, {
                 now,
+                turnId,
+                stepId,
               });
-              if (!did.compacted) break;
-              compactAttempts += 1;
-              // Compaction breaks the cached prefix → re-baseline system at head.
-              seriesBaselineSystem = undefined;
+              // Always remeasure after the prune pass (DSH posture), even if pruned===0.
               req = await buildReq();
               used = measure();
             }
-          }
-          if (used > softCeiling) {
-            throw new ContextOverflowError(
-              `request ~${used} tokens exceeds soft budget ${softCeiling} after ${strategy}`,
-            );
+            if (strategy === "prune-summary" || strategy === "summary-only") {
+              let compactAttempts = 0;
+              while (
+                used > softCeiling &&
+                compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
+              ) {
+                const did = await runCompaction({
+                  store: input.store,
+                  sessionId: input.sessionId,
+                  llm: input.llm,
+                  reason: "auto",
+                  keepTokens: softBudget.keepTokens,
+                  turnId,
+                  ...(input.signal ? { signal: input.signal } : {}),
+                  now,
+                });
+                if (!did.compacted) break;
+                compactAttempts += 1;
+                trustProjected = false;
+                // Compaction breaks the cached prefix → re-baseline system at head.
+                seriesBaselineSystem = undefined;
+                req = await buildReq();
+                used = measure();
+              }
+            }
+            if (used > softCeiling) {
+              throw new ContextOverflowError(
+                `request ~${used} tokens exceeds soft budget ${softCeiling} after ${strategy}`,
+              );
+            }
           }
         }
       }

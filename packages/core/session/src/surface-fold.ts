@@ -12,6 +12,10 @@
  */
 
 import type { ContextCompactionEvent, SessionEvent, ToolResultEvent } from "@xrkseek/protocol";
+import {
+  inputPressureTokens,
+  usageFromSessionEvent,
+} from "@xrkseek/protocol";
 import { formatCompactionForModel, findLatestCompaction } from "./compaction.js";
 import {
   estimateAssistantSurface,
@@ -73,6 +77,41 @@ export function foldSurfaceTokens(
   const delta = surfaceDeltaFor(event);
   if (delta === 0) return surfaceTokens;
   return Math.max(0, surfaceTokens + delta);
+}
+
+/**
+ * Provider-side occupancy projected forward from the last usage sample
+ * (same formula as Face `contextPressure.projectedTokens`):
+ *   pressure + (surface − sampledSurface)
+ * where pressure is stamped against the surface **before** that usage event
+ * joins the fold. Undefined until any provider usage sample exists.
+ */
+export function projectedInputPressureTokens(
+  events: readonly SessionEvent[],
+): number | undefined {
+  let pressureTokens: number | undefined;
+  let surfaceTokens = 0;
+  let sampledSurfaceTokens: number | undefined;
+  for (const event of events) {
+    // Window swap invalidates the prior provider sample (stale pressure would
+    // keep soft-budget / meter at the pre-compact peak after a successful swap).
+    if (
+      event.type === "context/compaction" &&
+      event.shadowedTokenCount !== undefined
+    ) {
+      pressureTokens = undefined;
+      sampledSurfaceTokens = undefined;
+    }
+    const usage = usageFromSessionEvent(event);
+    if (usage !== undefined) {
+      pressureTokens = inputPressureTokens(usage);
+      sampledSurfaceTokens = surfaceTokens;
+    }
+    surfaceTokens = foldSurfaceTokens(surfaceTokens, event);
+  }
+  if (pressureTokens === undefined) return undefined;
+  const sampled = sampledSurfaceTokens ?? surfaceTokens;
+  return Math.max(0, pressureTokens + surfaceTokens - sampled);
 }
 
 /**

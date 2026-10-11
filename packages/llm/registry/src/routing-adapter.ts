@@ -16,6 +16,9 @@ export interface LlmRouteSelection {
   readonly model: string;
   readonly reasoningEffort?: string;
   readonly contextWindow?: number;
+  readonly softBudgetMaxTokens?: number;
+  readonly softBudgetKeepTokens?: number;
+  readonly softBudgetBufferTokens?: number;
 }
 
 export interface RoutingLlmAdapter extends LlmAdapter {
@@ -61,6 +64,15 @@ export function createRoutingLlmAdapter(
         : {}),
       ...(selection.contextWindow !== undefined
         ? { contextWindow: selection.contextWindow }
+        : {}),
+      ...(selection.softBudgetMaxTokens !== undefined
+        ? { softBudgetMaxTokens: selection.softBudgetMaxTokens }
+        : {}),
+      ...(selection.softBudgetKeepTokens !== undefined
+        ? { softBudgetKeepTokens: selection.softBudgetKeepTokens }
+        : {}),
+      ...(selection.softBudgetBufferTokens !== undefined
+        ? { softBudgetBufferTokens: selection.softBudgetBufferTokens }
         : {}),
     };
     return options.resolveAdapter(selection);

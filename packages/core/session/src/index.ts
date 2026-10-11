@@ -66,12 +66,14 @@ export {
   formatCompactionForModel,
   prepareCompactionPayload,
   resolveSoftBudgetCeiling,
+  resolveSoftBudgetTokens,
   parseCompactionStrategy,
   resolveCompactionStrategy,
   COMPACTION_STRATEGIES,
   selectHeadRecent,
   type CompactionOptions,
   type CompactionStrategy,
+  type ResolvedSoftBudget,
 } from "./compaction.js";
 
 export {
@@ -99,7 +101,11 @@ export {
   estimateToolsTokens,
 } from "./surface-estimate.js";
 
-export { foldSurfaceTokens, priceCurrentSurfaceWindow } from "./surface-fold.js";
+export {
+  foldSurfaceTokens,
+  priceCurrentSurfaceWindow,
+  projectedInputPressureTokens,
+} from "./surface-fold.js";
 
 export {
   TOOL_NOT_STARTED,

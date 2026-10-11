@@ -14,6 +14,7 @@ import {
   type LlmChatRequest,
   type LlmChatResponse,
 } from "@xrkseek/llm";
+import { createRoutingLlmAdapter } from "@xrkseek/llm-registry";
 import { runTurn } from "../src/index.js";
 import { runCompaction } from "../src/compaction.js";
 
@@ -339,6 +340,138 @@ describe("runTurn compaction / overflow", () => {
       },
     });
     expect(result.assistantText).toBe("ok-after-soft-compact");
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+  });
+
+  it("auto-compacts from route softBudgetMaxTokens without CompactionOptions.max", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    // Catalog softBudgetMaxTokens requires ≥8k; pad history over that ceiling.
+    for (let i = 0; i < 24; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(1_200),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(1_200),
+      });
+    }
+
+    const inner: LlmAdapter = {
+      id: "inner-route-soft",
+      async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
+        const text = req.messages.map((m) => m.content).join("\n");
+        const isSummarizer =
+          req.messages.length === 1 &&
+          req.messages[0]?.role === "user" &&
+          text.includes("Create a new anchored summary");
+        if (isSummarizer) {
+          return { content: "## Objective\n- route\n## Next\n1. go" };
+        }
+        return { content: "ok-after-route-soft" };
+      },
+    };
+    const llm = createRoutingLlmAdapter({
+      id: "route-soft",
+      getSelection: () => ({
+        provider: "deepseek",
+        model: "deepseek-flash",
+        softBudgetMaxTokens: 8_000,
+        softBudgetBufferTokens: 0,
+        softBudgetKeepTokens: 2_000,
+      }),
+      resolveAdapter: () => inner,
+    });
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      compaction: {},
+    });
+    expect(result.assistantText).toBe("ok-after-route-soft");
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+  });
+
+  it("auto-compacts when provider pressure exceeds soft budget despite small local estimate", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    // Enough history to summarize; last usage already over the soft ceiling.
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+        ...(i === 7
+          ? {
+              usage: {
+                inputTokens: 80_000,
+                outputTokens: 5,
+                cacheReadTokens: 20_000,
+              },
+            }
+          : {}),
+      });
+    }
+
+    const llm: LlmAdapter = {
+      id: "soft-budget-pressure",
+      async chat(req: LlmChatRequest): Promise<LlmChatResponse> {
+        const text = req.messages.map((m) => m.content).join("\n");
+        const isSummarizer =
+          req.messages.length === 1 &&
+          req.messages[0]?.role === "user" &&
+          text.includes("Create a new anchored summary");
+        if (isSummarizer) {
+          return { content: "## Objective\n- pressure\n## Next\n1. go" };
+        }
+        return { content: "ok-after-pressure-compact" };
+      },
+    };
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm,
+      tools: createToolRegistry(),
+      compaction: {
+        maxRequestTokens: 50_000,
+        // Keep must be below local history so prepareCompactionPayload has work
+        // (pressure alone cannot summarize an empty shadow window).
+        keepTokens: 40,
+        bufferTokens: 0,
+      },
+    });
+    expect(result.assistantText).toBe("ok-after-pressure-compact");
     expect(
       store
         .get(session.id)

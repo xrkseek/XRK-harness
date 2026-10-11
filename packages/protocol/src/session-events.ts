@@ -506,6 +506,15 @@ export interface LlmRequestConfig {
   readonly reasoningEffort?: string;
   /** Provider-advertised context capacity when known (Face contextPressure). */
   readonly contextWindow?: number;
+  /**
+   * Soft-budget proactive compact ceiling for this model (Models catalog).
+   * Orthogonal to {@link contextWindow}: 1M window + 300k soft budget is valid.
+   */
+  readonly softBudgetMaxTokens?: number;
+  /** Optional keep-tail override for auto-compact; else derived from soft max. */
+  readonly softBudgetKeepTokens?: number;
+  /** Optional soft-ceiling buffer; else derived from soft max. */
+  readonly softBudgetBufferTokens?: number;
 }
 
 export type RequestHeaderReason = "initial" | "resume" | "change";

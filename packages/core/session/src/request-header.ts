@@ -26,7 +26,10 @@ export function llmConfigEquals(
     a.provider === b.provider &&
     a.model === b.model &&
     a.reasoningEffort === b.reasoningEffort &&
-    a.contextWindow === b.contextWindow
+    a.contextWindow === b.contextWindow &&
+    a.softBudgetMaxTokens === b.softBudgetMaxTokens &&
+    a.softBudgetKeepTokens === b.softBudgetKeepTokens &&
+    a.softBudgetBufferTokens === b.softBudgetBufferTokens
   );
 }
 
@@ -89,6 +92,15 @@ export function canonicalRequestHeader(
         : {}),
       ...(config.contextWindow !== undefined
         ? { contextWindow: config.contextWindow }
+        : {}),
+      ...(config.softBudgetMaxTokens !== undefined
+        ? { softBudgetMaxTokens: config.softBudgetMaxTokens }
+        : {}),
+      ...(config.softBudgetKeepTokens !== undefined
+        ? { softBudgetKeepTokens: config.softBudgetKeepTokens }
+        : {}),
+      ...(config.softBudgetBufferTokens !== undefined
+        ? { softBudgetBufferTokens: config.softBudgetBufferTokens }
         : {}),
     },
     ...(system !== undefined ? { system } : {}),

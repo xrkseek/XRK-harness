@@ -12,6 +12,7 @@ import {
   prepareCompactionPayload,
   resolveCompactionStrategy,
   resolveSoftBudgetCeiling,
+  resolveSoftBudgetTokens,
   selectHeadRecent,
 } from "../src/index.js";
 
@@ -19,6 +20,39 @@ describe("compaction helpers", () => {
   it("estimates tokens roughly", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("abcdefgh")).toBe(2);
+  });
+
+  it("resolves soft-budget tokens from catalog soft max with derived keep/buffer", () => {
+    expect(resolveSoftBudgetTokens({})).toBeUndefined();
+    expect(resolveSoftBudgetTokens({ softBudgetMaxTokens: 7_999 })).toBeUndefined();
+    // Tiny SDK ceilings are allowed (tests); catalog softBudget stays ≥8k.
+    expect(resolveSoftBudgetTokens({ maxRequestTokens: 50 })?.maxRequestTokens).toBe(
+      50,
+    );
+    const derived = resolveSoftBudgetTokens({ softBudgetMaxTokens: 100_000 });
+    expect(derived).toEqual({
+      maxRequestTokens: 100_000,
+      keepTokens: 24_000,
+      bufferTokens: 4_000,
+    });
+    const explicit = resolveSoftBudgetTokens({
+      softBudgetMaxTokens: 300_000,
+      softBudgetKeepTokens: 40_000,
+      softBudgetBufferTokens: 0,
+    });
+    expect(explicit).toEqual({
+      maxRequestTokens: 300_000,
+      keepTokens: 40_000,
+      bufferTokens: 0,
+    });
+    // SDK maxRequestTokens wins over catalog soft max.
+    expect(
+      resolveSoftBudgetTokens({
+        maxRequestTokens: 50_000,
+        softBudgetMaxTokens: 300_000,
+        bufferTokens: 0,
+      })?.maxRequestTokens,
+    ).toBe(50_000);
   });
 
   it("counts assistant reasoning toward soft-budget message price", () => {

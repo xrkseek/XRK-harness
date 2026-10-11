@@ -154,6 +154,84 @@ export function resolveSoftBudgetCeiling(
   return max - buffer;
 }
 
+/** Soft-budget numbers resolved for one outbound step (SDK or model catalog). */
+export interface ResolvedSoftBudget {
+  readonly maxRequestTokens: number;
+  readonly keepTokens: number;
+  readonly bufferTokens: number;
+}
+
+/**
+ * Derive keep/buffer defaults from a soft-budget max (old Face 24k/4k @ 100k).
+ * Explicit keep/buffer win when provided and valid.
+ */
+export function resolveSoftBudgetTokens(input: {
+  readonly softBudgetMaxTokens?: number;
+  readonly softBudgetKeepTokens?: number;
+  readonly softBudgetBufferTokens?: number;
+  /** SDK / test override — wins over catalog soft max when set. */
+  readonly maxRequestTokens?: number;
+  readonly keepTokens?: number;
+  readonly bufferTokens?: number;
+}): ResolvedSoftBudget | undefined {
+  // SDK / tests may pass a small maxRequestTokens; catalog softBudget* stays ≥8k.
+  const sdkMax = input.maxRequestTokens;
+  const catalogMax = input.softBudgetMaxTokens;
+  let maxRaw: number | undefined;
+  if (typeof sdkMax === "number" && Number.isFinite(sdkMax) && sdkMax > 0) {
+    maxRaw = sdkMax;
+  } else if (
+    typeof catalogMax === "number" &&
+    Number.isFinite(catalogMax) &&
+    catalogMax >= 8_000
+  ) {
+    maxRaw = catalogMax;
+  } else {
+    return undefined;
+  }
+  const maxRequestTokens = Math.floor(maxRaw);
+  // SDK keep/buffer (CompactionOptions) accept any non-negative; catalog soft*
+  // keep stays ≥2k when set; derived keep scales with max (no 2k floor on
+  // tiny SDK ceilings used in tests).
+  let keepTokens: number;
+  if (
+    typeof input.keepTokens === "number" &&
+    Number.isFinite(input.keepTokens) &&
+    input.keepTokens >= 0
+  ) {
+    keepTokens = Math.floor(input.keepTokens);
+  } else if (
+    typeof input.softBudgetKeepTokens === "number" &&
+    Number.isFinite(input.softBudgetKeepTokens) &&
+    input.softBudgetKeepTokens >= 2_000
+  ) {
+    keepTokens = Math.floor(input.softBudgetKeepTokens);
+  } else {
+    const scaled = Math.max(1, Math.floor(maxRequestTokens * 0.24));
+    keepTokens =
+      maxRequestTokens >= 8_000
+        ? Math.min(24_000, Math.max(2_000, scaled))
+        : Math.min(24_000, scaled);
+  }
+  let bufferTokens: number;
+  if (
+    typeof input.bufferTokens === "number" &&
+    Number.isFinite(input.bufferTokens) &&
+    input.bufferTokens >= 0
+  ) {
+    bufferTokens = Math.floor(input.bufferTokens);
+  } else if (
+    typeof input.softBudgetBufferTokens === "number" &&
+    Number.isFinite(input.softBudgetBufferTokens) &&
+    input.softBudgetBufferTokens >= 0
+  ) {
+    bufferTokens = Math.floor(input.softBudgetBufferTokens);
+  } else {
+    bufferTokens = Math.min(4_000, Math.max(0, Math.floor(maxRequestTokens * 0.04)));
+  }
+  return { maxRequestTokens, keepTokens, bufferTokens };
+}
+
 export const COMPACTION_SUMMARY_TEMPLATE = `Output exactly this Markdown structure (keep section order). Do not mention that context was compacted.
 
 ## Objective
