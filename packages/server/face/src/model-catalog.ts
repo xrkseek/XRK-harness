@@ -30,6 +30,10 @@ export interface FaceModelEntry {
   readonly name: string;
   readonly description?: string;
   readonly contextWindow?: number;
+  /** Soft-budget proactive compact ceiling (orthogonal to contextWindow). */
+  readonly softBudgetMaxTokens?: number;
+  readonly softBudgetKeepTokens?: number;
+  readonly softBudgetBufferTokens?: number;
   /** Declared intake modalities (Settings-editable; adapter may still gate). */
   readonly inputModalities?: readonly ("text" | "image")[];
   /** DeepSeek-style thinking intensity when the route exposes it. */
@@ -71,6 +75,25 @@ function mergedNamespace(
   );
 }
 
+function positiveIntField(
+  row: object,
+  key: string,
+): number | undefined {
+  const raw = (row as Record<string, unknown>)[key];
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) return raw;
+  return undefined;
+}
+
+/** Buffer may be 0 (no headroom). */
+function nonNegIntField(
+  row: object,
+  key: string,
+): number | undefined {
+  const raw = (row as Record<string, unknown>)[key];
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0) return raw;
+  return undefined;
+}
+
 function asModelRows(raw: unknown): FaceModelEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: FaceModelEntry[] = [];
@@ -82,7 +105,13 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
     const name =
       typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : id;
     const descRaw = (row as { description?: unknown }).description;
-    const cwRaw = (row as { contextWindow?: unknown }).contextWindow;
+    const contextWindow = positiveIntField(row, "contextWindow");
+    const softBudgetMaxTokens = positiveIntField(row, "softBudgetMaxTokens");
+    const softBudgetKeepTokens = positiveIntField(row, "softBudgetKeepTokens");
+    const softBudgetBufferTokens = nonNegIntField(
+      row,
+      "softBudgetBufferTokens",
+    );
     const modsRaw = (row as { inputModalities?: unknown }).inputModalities;
     const inputModalities = Array.isArray(modsRaw)
       ? modsRaw
@@ -95,10 +124,11 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       ...(typeof descRaw === "string" && descRaw.trim()
         ? { description: descRaw.trim() }
         : {}),
-      ...(typeof cwRaw === "number" &&
-      Number.isInteger(cwRaw) &&
-      cwRaw > 0
-        ? { contextWindow: cwRaw }
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(softBudgetMaxTokens !== undefined ? { softBudgetMaxTokens } : {}),
+      ...(softBudgetKeepTokens !== undefined ? { softBudgetKeepTokens } : {}),
+      ...(softBudgetBufferTokens !== undefined
+        ? { softBudgetBufferTokens }
         : {}),
       ...(inputModalities && inputModalities.length > 0
         ? { inputModalities: [...new Set(inputModalities)] }
@@ -140,6 +170,9 @@ function deepseekModels(runtime: FaceRuntime): FaceModelEntry[] {
       name: m.name,
       ...(m.description ? { description: m.description } : {}),
       ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+      ...(m.softBudgetMaxTokens
+        ? { softBudgetMaxTokens: m.softBudgetMaxTokens }
+        : {}),
       ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
     })),
     reasoning,
@@ -208,6 +241,15 @@ export function buildFaceModelCatalog(
         ...(m.contextWindow !== undefined
           ? { contextWindow: m.contextWindow }
           : {}),
+        ...(m.softBudgetMaxTokens !== undefined
+          ? { softBudgetMaxTokens: m.softBudgetMaxTokens }
+          : {}),
+        ...(m.softBudgetKeepTokens !== undefined
+          ? { softBudgetKeepTokens: m.softBudgetKeepTokens }
+          : {}),
+        ...(m.softBudgetBufferTokens !== undefined
+          ? { softBudgetBufferTokens: m.softBudgetBufferTokens }
+          : {}),
       })),
     });
   }
@@ -220,6 +262,30 @@ export function lookupModelContextWindow(
   selection: FaceModelSelection,
 ): number | undefined {
   return findCatalogModel(runtime, selection)?.contextWindow;
+}
+
+/** Soft-budget fields from the catalog row for the active selection. */
+export function lookupModelSoftBudget(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): {
+  readonly softBudgetMaxTokens?: number;
+  readonly softBudgetKeepTokens?: number;
+  readonly softBudgetBufferTokens?: number;
+} {
+  const m = findCatalogModel(runtime, selection);
+  if (!m) return {};
+  return {
+    ...(m.softBudgetMaxTokens !== undefined
+      ? { softBudgetMaxTokens: m.softBudgetMaxTokens }
+      : {}),
+    ...(m.softBudgetKeepTokens !== undefined
+      ? { softBudgetKeepTokens: m.softBudgetKeepTokens }
+      : {}),
+    ...(m.softBudgetBufferTokens !== undefined
+      ? { softBudgetBufferTokens: m.softBudgetBufferTokens }
+      : {}),
+  };
 }
 
 /** Catalog-declared intake modalities for a selection (adapter create extras). */

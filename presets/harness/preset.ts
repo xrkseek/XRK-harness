@@ -1852,14 +1852,13 @@ export function createHarnessComposition(
         ...(options.resolveFilePath
           ? { resolveFilePath: options.resolveFilePath }
           : {}),
+        // Soft ceiling comes from Models catalog softBudgetMaxTokens on the
+        // active route (Face). Preset `{}` enables overflow + /compact; pass
+        // explicit maxRequestTokens only for SDK / tests without a catalog.
         compaction:
           options.compaction === false
             ? false
-            : (options.compaction ?? {
-                maxRequestTokens: 100_000,
-                keepTokens: 24_000,
-                bufferTokens: 4_000,
-              }),
+            : (options.compaction ?? {}),
         ...(options.toolResultMaxInlineBytes !== undefined
           ? { toolResultMaxInlineBytes: options.toolResultMaxInlineBytes }
           : {}),

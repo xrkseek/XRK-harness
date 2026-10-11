@@ -45,6 +45,8 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
   readonly description: string;
   readonly contextWindow: number;
   readonly maxTokens: number;
+  /** Soft compact ceiling (orthogonal to contextWindow). */
+  readonly softBudgetMaxTokens: number;
   readonly inputModalities: Array<"text" | "image">;
 }> = [
   {
@@ -53,6 +55,7 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
+    softBudgetMaxTokens: 300_000,
     inputModalities: ["text", "image"],
   },
   {
@@ -61,6 +64,7 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
     description: "",
     contextWindow: 1_000_000,
     maxTokens: 384_000,
+    softBudgetMaxTokens: 300_000,
     inputModalities: ["text"],
   },
 ];
@@ -78,6 +82,10 @@ const DeepSeekConfig = Schema.object({
       description: Schema.string(),
       contextWindow: Schema.number().step(1).min(1),
       maxTokens: Schema.number().step(1).min(1),
+      /** Soft-budget ceiling; omit → no proactive compact for this model. */
+      softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
+      softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
+      softBudgetBufferTokens: Schema.number().step(500).min(0),
       inputModalities: Schema.array(Schema.union(["text", "image"])).min(1),
     }),
   ).default([...DEFAULT_DEEPSEEK_MODELS]),
@@ -104,6 +112,9 @@ const PiAiProvider = Schema.object({
       name: Schema.string(),
       contextWindow: Schema.number().step(1).min(1),
       maxTokens: Schema.number().step(1).min(1),
+      softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
+      softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
+      softBudgetBufferTokens: Schema.number().step(500).min(0),
     }),
   ),
 });
@@ -169,16 +180,8 @@ const AgentLoopConfig = Schema.object({
    */
   llmRetryMaxRetries: Schema.number().step(1).min(0).default(5),
   /**
-   * Soft context budget (messages + tool schemas). Exceed → strategy
-   * (`compactionStrategy`) → fail-closed. Default 100_000.
-   */
-  maxRequestTokens: Schema.number().step(1_000).min(8_000).default(100_000),
-  /** Tokens kept as recent tail after auto-compact. */
-  keepTokens: Schema.number().step(1_000).min(2_000).default(24_000),
-  /** Soft ceiling = maxRequestTokens − bufferTokens. */
-  bufferTokens: Schema.number().step(500).min(0).default(4_000),
-  /**
    * Soft-budget strategy family (DSH prune→summary posture).
+   * Soft ceiling numbers live on Models catalog (`softBudgetMaxTokens`).
    * `prune-summary` (default) · `prune-only` · `summary-only` · `off`.
    */
   compactionStrategy: Schema.union([
@@ -559,9 +562,6 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         autoContinueMaxRounds: 2,
         toolSettle: "parallel",
         llmRetryMaxRetries: 5,
-        maxRequestTokens: 100_000,
-        keepTokens: 24_000,
-        bufferTokens: 4_000,
         compactionStrategy: "prune-summary",
         toolResultMaxInlineBytes: 64_000,
         maxSubagentDepth: 2,

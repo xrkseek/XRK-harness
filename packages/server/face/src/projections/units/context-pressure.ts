@@ -10,7 +10,9 @@ import { asOptNonNegInt, asOptPositiveInt } from "../parse-int.js";
 /**
  * Approximate context occupancy (DSH contextPressure; ContextMeter).
  * Provider pressure from usage; capacity from `request/header.config.contextWindow`;
- * projectedTokens = pressure + (surface − sampledSurface) after stamp-before-append.
+ * projectedTokens = pressure + (surface − sampledSurface) after stamp-before-append
+ * (same formula as core-session {@link projectedInputPressureTokens}, which soft
+ * budget also reads so the meter and auto-compact share one occupancy signal).
  */
 export interface ContextPressureProjection {
   readonly pressureTokens?: number;
@@ -32,7 +34,7 @@ export function createContextPressureProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextPressure",
-    stateVersion: 3,
+    stateVersion: 4,
     init: () => ({ surfaceTokens: 0 }),
     apply(state, event: SessionEvent): ContextPressureState {
       let next: ContextPressureState = state;
@@ -48,6 +50,19 @@ export function createContextPressureProjectionUnit(): ProjectionDefinition<
                 })()
               : { ...next, contextWindow: window };
         }
+      }
+
+      // Window swap drops the stale provider sample (same as projectedInputPressureTokens).
+      if (
+        event.type === "context/compaction" &&
+        event.shadowedTokenCount !== undefined
+      ) {
+        const {
+          pressureTokens: _p,
+          sampledSurfaceTokens: _s,
+          ...rest
+        } = next;
+        next = rest;
       }
 
       // Stamp usage against surface BEFORE this event joins (DSH order).

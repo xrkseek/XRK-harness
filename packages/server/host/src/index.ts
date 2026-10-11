@@ -499,11 +499,8 @@ export type AgentFactory = (input: {
     maxOutputBytes?: number;
     foregroundYieldMs?: number;
   };
-  /** Face `agent-loop` soft compaction budget (harness). */
+  /** Face `agent-loop` compaction strategy (soft ceiling is per-model catalog). */
   compaction?: {
-    maxRequestTokens?: number;
-    keepTokens?: number;
-    bufferTokens?: number;
     strategy?:
       | "prune-summary"
       | "prune-only"
@@ -1227,9 +1224,6 @@ export function createHostManager(): HostManager {
             foregroundYieldMs?: number;
           };
           compaction?: {
-            maxRequestTokens?: number;
-            keepTokens?: number;
-            bufferTokens?: number;
             strategy?:
               | "prune-summary"
               | "prune-only"
@@ -2303,24 +2297,6 @@ export function createHostManager(): HostManager {
           llmRetryMaxRetriesRaw >= 0
             ? Math.floor(llmRetryMaxRetriesRaw)
             : undefined;
-        const maxRequestTokens =
-          typeof loop.maxRequestTokens === "number" &&
-          Number.isFinite(loop.maxRequestTokens) &&
-          loop.maxRequestTokens >= 8_000
-            ? Math.floor(loop.maxRequestTokens)
-            : undefined;
-        const keepTokens =
-          typeof loop.keepTokens === "number" &&
-          Number.isFinite(loop.keepTokens) &&
-          loop.keepTokens >= 2_000
-            ? Math.floor(loop.keepTokens)
-            : undefined;
-        const bufferTokens =
-          typeof loop.bufferTokens === "number" &&
-          Number.isFinite(loop.bufferTokens) &&
-          loop.bufferTokens >= 0
-            ? Math.floor(loop.bufferTokens)
-            : undefined;
         const compactionStrategyRaw = String(
           loop.compactionStrategy ?? "",
         ).trim();
@@ -2715,22 +2691,8 @@ export function createHostManager(): HostManager {
           ...(toolOrder !== undefined ? { toolOrder } : {}),
           ...(toolSettle !== undefined ? { toolSettle } : {}),
           ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
-          ...(maxRequestTokens !== undefined ||
-          keepTokens !== undefined ||
-          bufferTokens !== undefined ||
-          compactionStrategy !== undefined
-            ? {
-                compaction: {
-                  ...(maxRequestTokens !== undefined
-                    ? { maxRequestTokens }
-                    : {}),
-                  ...(keepTokens !== undefined ? { keepTokens } : {}),
-                  ...(bufferTokens !== undefined ? { bufferTokens } : {}),
-                  ...(compactionStrategy !== undefined
-                    ? { strategy: compactionStrategy }
-                    : {}),
-                },
-              }
+          ...(compactionStrategy !== undefined
+            ? { compaction: { strategy: compactionStrategy } }
             : {}),
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }

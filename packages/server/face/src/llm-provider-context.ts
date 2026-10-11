@@ -44,6 +44,9 @@ export type DeclaredPiAiProvider = {
     readonly name?: string;
     readonly inputModalities?: readonly ("text" | "image")[];
     readonly contextWindow?: number;
+    readonly softBudgetMaxTokens?: number;
+    readonly softBudgetKeepTokens?: number;
+    readonly softBudgetBufferTokens?: number;
   }[];
 };
 
@@ -97,6 +100,24 @@ export function piAiProviderProfile(
   return undefined;
 }
 
+function profilePositiveInt(
+  row: object,
+  key: string,
+): number | undefined {
+  const raw = (row as Record<string, unknown>)[key];
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) return raw;
+  return undefined;
+}
+
+function profileNonNegInt(
+  row: object,
+  key: string,
+): number | undefined {
+  const raw = (row as Record<string, unknown>)[key];
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0) return raw;
+  return undefined;
+}
+
 function profileModels(
   profile: Record<string, unknown>,
 ): {
@@ -104,6 +125,9 @@ function profileModels(
   name?: string;
   inputModalities?: readonly ("text" | "image")[];
   contextWindow?: number;
+  softBudgetMaxTokens?: number;
+  softBudgetKeepTokens?: number;
+  softBudgetBufferTokens?: number;
 }[] {
   const modelsRaw = profile.models;
   if (!Array.isArray(modelsRaw)) return [];
@@ -112,6 +136,9 @@ function profileModels(
     name?: string;
     inputModalities?: readonly ("text" | "image")[];
     contextWindow?: number;
+    softBudgetMaxTokens?: number;
+    softBudgetKeepTokens?: number;
+    softBudgetBufferTokens?: number;
   }[] = [];
   for (const row of modelsRaw) {
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
@@ -124,7 +151,16 @@ function profileModels(
           .map((m) => String(m).trim())
           .filter((m): m is "text" | "image" => m === "text" || m === "image")
       : undefined;
-    const cwRaw = (row as { contextWindow?: unknown }).contextWindow;
+    const contextWindow = profilePositiveInt(row, "contextWindow");
+    const softBudgetMaxTokens = profilePositiveInt(row, "softBudgetMaxTokens");
+    const softBudgetKeepTokens = profilePositiveInt(
+      row,
+      "softBudgetKeepTokens",
+    );
+    const softBudgetBufferTokens = profileNonNegInt(
+      row,
+      "softBudgetBufferTokens",
+    );
     models.push({
       id: mid.trim(),
       ...(typeof name === "string" && name.trim()
@@ -133,8 +169,11 @@ function profileModels(
       ...(inputModalities && inputModalities.length > 0
         ? { inputModalities: [...new Set(inputModalities)] }
         : {}),
-      ...(typeof cwRaw === "number" && Number.isInteger(cwRaw) && cwRaw > 0
-        ? { contextWindow: cwRaw }
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(softBudgetMaxTokens !== undefined ? { softBudgetMaxTokens } : {}),
+      ...(softBudgetKeepTokens !== undefined ? { softBudgetKeepTokens } : {}),
+      ...(softBudgetBufferTokens !== undefined
+        ? { softBudgetBufferTokens }
         : {}),
     });
   }

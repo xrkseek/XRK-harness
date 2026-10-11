@@ -11,6 +11,7 @@ import type { FaceRuntime } from "./context.js";
 import {
   lookupModelContextWindow,
   lookupModelInputModalities,
+  lookupModelSoftBudget,
   resolveAgentDefaultModel,
   resolveSessionModelSelection,
   type FaceModelSelection,
@@ -99,6 +100,7 @@ export function createSessionRoutingLlm(
     getSelection: () => {
       const selection = pickSelection();
       const contextWindow = lookupModelContextWindow(runtime, selection);
+      const softBudget = lookupModelSoftBudget(runtime, selection);
       return {
         provider: selection.provider,
         model: selection.model,
@@ -106,6 +108,7 @@ export function createSessionRoutingLlm(
           ? { reasoningEffort: selection.reasoningEffort }
           : {}),
         ...(contextWindow !== undefined ? { contextWindow } : {}),
+        ...softBudget,
       };
     },
     resolveAdapter: (selection) =>
