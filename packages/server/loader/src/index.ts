@@ -10,6 +10,7 @@ import {
   isPluginSoftDisabledAt,
   readDisabledPluginIdsAt,
   readManagedPackageIndexAt,
+  seedOptionalOffByDefaultAt,
 } from "./managed-state.js";
 import type { RegisteredPlugin } from "./types.js";
 
@@ -134,6 +135,8 @@ export { atomicWriteText } from "./atomic-write.js";
 export {
   DISABLED_PLUGINS_FILE,
   MANAGED_PLUGINS_INVENTORY_FILE,
+  OPTIONAL_DEFAULTS_SEEDED_FILE,
+  OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS,
   canonicalizeDisabledPluginIdsAt,
   clearSoftDisabledIdsAt,
   disabledPluginsPath,
@@ -144,6 +147,7 @@ export {
   readManagedPackageIndexAt,
   readManagedPluginPackagesAt,
   reconcileManagedProcessPlugins,
+  seedOptionalOffByDefaultAt,
   setSoftDisabledAt,
   writeDisabledPluginIdsAt,
   RequiredPluginLoadError,
@@ -242,6 +246,10 @@ export function createPluginLoader(): PluginLoader {
     async loadAll(dir) {
       const root = dir;
       const hits = await scanPluginDir(root);
+      seedOptionalOffByDefaultAt(
+        root,
+        hits.map((h) => h.manifest.id),
+      );
       const disabled = readDisabledPluginIdsAt(root);
       const index = readManagedPackageIndexAt(root);
       const ids: string[] = [];

@@ -91,6 +91,9 @@ import {
   createSessionRoutingLlm,
   liveRouteAllowsImageInput,
   resolveSessionCwd,
+  ensureSessionWorkingDirectory,
+  setSessionWorkingDirectory,
+  createSessionWorktree,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
   effectiveSessionAgentPreset,
@@ -481,6 +484,10 @@ export type AgentFactory = (input: {
   maxParallelToolCalls?: number;
   /** Face `agent-loop.maxSteps` — LLM steps per user turn. */
   maxSteps?: number;
+  /** Face `agent-loop.autoContinueOnMaxTokens` — resume after output cap. */
+  autoContinueOnMaxTokens?: boolean;
+  /** Face `agent-loop.autoContinueMaxRounds` — max auto resumes per turn. */
+  autoContinueMaxRounds?: number;
   /** Face `agent-loop.toolOrder` — DSH-style tool wire order. */
   toolOrder?: readonly string[];
   /** Face `agent-loop.toolSettle`. */
@@ -594,6 +601,12 @@ export type AgentFactory = (input: {
     | ReturnType<typeof createCollabBoardFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
   >;
+  /** Face-backed working_directory tool (Host wires per session). */
+  workingDirectoryTools?: import("@xrkseek/core-tools").WorkingDirectoryToolsOptions;
+  /**
+   * Face-backed create_worktree when the `git-worktrees` process plugin is loaded.
+   */
+  createWorktreeTools?: import("@xrkseek/core-tools").CreateWorktreeToolsOptions;
 }) => Promise<AgentHandle>;
 
 export type { SessionDrainControl } from "./drain-status.js";
@@ -1275,6 +1288,14 @@ export function createHostManager(): HostManager {
       const resolveAgent = async (sessionId: string) => {
         // Cache composition binding only — never treat AgentHandle as transcript source (ADR-0003).
         const parentSessionId = lineage.parentOf(sessionId);
+        // Mapped effective cwd (worktree / working_directory): light ensure so a
+        // vanished checkout recovers before composition freezes workspaceRoot.
+        if (faceBox.runtime?.sessionCwds.has(sessionId)) {
+          await ensureSessionWorkingDirectory(
+            faceBox.runtime,
+            sessionId,
+          ).catch(() => undefined);
+        }
         const sessionRoot =
           sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
         const agentPreset =
@@ -1521,6 +1542,61 @@ export function createHostManager(): HostManager {
                       createSessionCapabilityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
                     ],
+                    workingDirectoryTools: {
+                      get: () => resolveSessionCwd(faceBox.runtime!, sessionId),
+                      set: async (cd) => {
+                        const out = await setSessionWorkingDirectory(
+                          faceBox.runtime!,
+                          sessionId,
+                          cd,
+                        );
+                        if (!out.ok) return { ok: false as const, error: out.error };
+                        return {
+                          ok: true as const,
+                          cwd: out.cwd,
+                          changed: out.changed,
+                        };
+                      },
+                    },
+                    ...(loader.list().some((p) => p.id === "git-worktrees")
+                      ? {
+                          createWorktreeTools: {
+                            create: async (request: {
+                              readonly name?: string;
+                              readonly from?: string;
+                            }) => {
+                              const face = faceBox.runtime!;
+                              const source = resolveSessionCwd(face, sessionId);
+                              const created = createSessionWorktree(source, request);
+                              if (!created.ok) {
+                                return {
+                                  ok: false as const,
+                                  error: created.error,
+                                };
+                              }
+                              const entered = await setSessionWorkingDirectory(
+                                face,
+                                sessionId,
+                                created.value.path,
+                              );
+                              if (!entered.ok) {
+                                return {
+                                  ok: false as const,
+                                  error: `${entered.error}. Checkout retained at ${created.value.path} (branch ${created.value.branch}).`,
+                                };
+                              }
+                              return {
+                                ok: true as const,
+                                path: created.value.path,
+                                branch: created.value.branch,
+                                baseCommit: created.value.baseCommit,
+                                repositoryRoot: created.value.repositoryRoot,
+                                cwd: entered.cwd,
+                              };
+                            },
+                          },
+                        }
+                      : {}),
                   }
                 : {}),
               autoReviewPre: createAutoReviewToolPre({

@@ -186,8 +186,16 @@ async function importHref(href: string): Promise<Record<string, unknown>> {
     ) {
       throw err;
     }
-    const absPath = fileURLToPath(href);
-    return (await import(/* @vite-ignore */ absPath)) as Record<
+    // Keep `?mtime=` on the Vite fallback path — a bare absPath reuses the
+    // first import and breaks reloadIds / soft-disable remount tests.
+    const url = new URL(href);
+    const absPath = fileURLToPath(url);
+    const bust = url.searchParams.get("mtime");
+    const specifier =
+      bust !== null && bust !== ""
+        ? `${pathToFileURL(absPath).href}?mtime=${encodeURIComponent(bust)}`
+        : absPath;
+    return (await import(/* @vite-ignore */ specifier)) as Record<
       string,
       unknown
     >;

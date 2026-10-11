@@ -27,6 +27,16 @@ export {
 
 export const DISABLED_PLUGINS_FILE = ".xrk-plugins-disabled.json";
 export const MANAGED_PLUGINS_INVENTORY_FILE = ".xrk-plugins.json";
+/** Once-per-id seed marker so OPTIONAL_OFF_BY_DEFAULT does not re-disable after enable. */
+export const OPTIONAL_DEFAULTS_SEEDED_FILE = ".xrk-optional-defaults-seeded.json";
+
+/**
+ * Process plugins discovered under pluginsDir but soft-disabled on first seed
+ * (DSH OPTIONAL_BUNDLES Official default-off). Enable via Settings → Plugins.
+ */
+export const OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS: readonly string[] = [
+  "git-worktrees",
+];
 
 /** Map any inventory key / package name → durable soft-disable id. */
 export interface ManagedPackageIndex {
@@ -210,9 +220,7 @@ export function readManagedPackageIndexAt(
   };
 }
 
-/** Soft-disabled managed plugin ids under a plugins directory. */
-export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
-  const file = disabledPluginsPath(pluginsDir);
+function readIdSetFile(file: string): Set<string> {
   const out = new Set<string>();
   if (!existsSync(file)) return out;
   try {
@@ -225,6 +233,62 @@ export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
     /* empty */
   }
   return out;
+}
+
+function writeIdSetFile(file: string, ids: ReadonlySet<string>): void {
+  const dir = path.dirname(file);
+  mkdirSync(dir, { recursive: true });
+  const sorted = [...ids].map((id) => id.trim()).filter(Boolean).sort();
+  if (sorted.length === 0) {
+    if (existsSync(file)) rmSync(file, { force: true });
+    return;
+  }
+  const body = `${JSON.stringify({ ids: sorted }, null, 2)}\n`;
+  if (existsSync(file)) {
+    try {
+      if (readFileSync(file, "utf8") === body) return;
+    } catch {
+      /* rewrite */
+    }
+  }
+  atomicWriteText(file, body);
+}
+
+/**
+ * Soft-disable OPTIONAL_OFF_BY_DEFAULT ids the first time they are discovered.
+ * Re-enable (clear soft-disable) is sticky — seeded marker prevents re-disable.
+ * @returns whether disabled or seeded files changed.
+ */
+export function seedOptionalOffByDefaultAt(
+  pluginsDir: string,
+  discoveredIds: readonly string[],
+): boolean {
+  const root = path.resolve(pluginsDir);
+  const discovered = new Set(
+    discoveredIds.map((id) => id.trim()).filter(Boolean),
+  );
+  const seedFile = path.join(root, OPTIONAL_DEFAULTS_SEEDED_FILE);
+  const seeded = readIdSetFile(seedFile);
+  const disabled = readDisabledPluginIdsAt(root);
+  let dirtySeed = false;
+  let dirtyDisabled = false;
+  for (const id of OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS) {
+    if (!discovered.has(id) || seeded.has(id)) continue;
+    seeded.add(id);
+    dirtySeed = true;
+    if (!disabled.has(id)) {
+      disabled.add(id);
+      dirtyDisabled = true;
+    }
+  }
+  if (dirtyDisabled) writeDisabledPluginIdsAt(root, disabled);
+  if (dirtySeed) writeIdSetFile(seedFile, seeded);
+  return dirtyDisabled || dirtySeed;
+}
+
+/** Soft-disabled managed plugin ids under a plugins directory. */
+export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
+  return readIdSetFile(disabledPluginsPath(pluginsDir));
 }
 
 /** Persist soft-disable list (empty set removes the marker file). */
@@ -409,9 +473,13 @@ export async function reconcileManagedProcessPlugins(
   options: ReconcileManagedProcessPluginsOptions = {},
 ): Promise<ReconcileProcessPluginsResult> {
   const root = path.resolve(pluginsDir);
+  const hits = await loader.discover(root);
+  seedOptionalOffByDefaultAt(
+    root,
+    hits.map((h) => h.manifest.id),
+  );
   const disabled = readDisabledPluginIdsAt(root);
   const index = readManagedPackageIndexAt(root);
-  const hits = await loader.discover(root);
   const discoveredIds = new Set(hits.map((h) => h.manifest.id));
   const reloadCanonical = new Set<string>();
   for (const raw of options.reloadIds ?? []) {

@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +19,7 @@ import {
   readManagedPackageIndexAt,
   readManagedPluginPackagesAt,
   reconcileManagedProcessPlugins,
+  seedOptionalOffByDefaultAt,
   setSoftDisabledAt,
   writeDisabledPluginIdsAt,
 } from "../src/managed-state.js";
@@ -41,6 +43,24 @@ function writeInventory(
 }
 
 describe("managed-state soft-disable", () => {
+  it("seeds OPTIONAL_OFF_BY_DEFAULT once and does not re-disable after enable", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-optional-"));
+    temps.push(root);
+    expect(seedOptionalOffByDefaultAt(root, ["git-worktrees", "example-tools"])).toBe(
+      true,
+    );
+    expect([...readDisabledPluginIdsAt(root)]).toEqual(["git-worktrees"]);
+    expect(seedOptionalOffByDefaultAt(root, ["git-worktrees"])).toBe(false);
+    setSoftDisabledAt(root, {
+      enabled: true,
+      entryId: "git-worktrees",
+      aliases: [],
+    });
+    expect(readDisabledPluginIdsAt(root).size).toBe(0);
+    expect(seedOptionalOffByDefaultAt(root, ["git-worktrees"])).toBe(false);
+    expect(readDisabledPluginIdsAt(root).size).toBe(0);
+  });
+
   it("canonicalizes alias ids to inventory package names and drops orphans", () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-canon-"));
     temps.push(root);
@@ -281,9 +301,11 @@ describe("managed-state soft-disable", () => {
     await reconcileManagedProcessPlugins(loader, root);
     expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v1");
 
-    // Ensure mtime advances so ESM cache-bust query changes.
-    await new Promise((r) => setTimeout(r, 20));
     writeEntry("v2");
+    // Windows mtime granularity can keep the same ms after a quick rewrite;
+    // bump explicitly so the ESM `?mtime=` cache-bust query changes.
+    const next = new Date(Date.now() + 2000);
+    utimesSync(entry, next, next);
     // Without reloadIds, live id is kept as-is.
     await reconcileManagedProcessPlugins(loader, root);
     expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v1");
