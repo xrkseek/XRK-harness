@@ -31,7 +31,10 @@ import {
   resolveAgentPresetProfile,
 } from "./presets-catalog.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
-import { resolveSessionCwd } from "./session-cwd.js";
+import {
+  ensureSessionWorkingDirectory,
+  resolveSessionCwd,
+} from "./session-cwd.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { formatRosterCatalog } from "./agent-roster-store.js";
 import {
@@ -1254,6 +1257,11 @@ function createSubagentTool(
       }
       if (isolated) {
         options.runtime.sessionCwds.set(childId, isolated.path);
+        // Confirm the checkout still exists (DSH working-directory ensure);
+        // failure must not abort spawn — next resolveAgent can recover.
+        await ensureSessionWorkingDirectory(options.runtime, childId).catch(
+          () => undefined,
+        );
         // Worktree bind failure must not leak the child: swallow and let the
         // prompt below decide the spawn's fate (or the catch backstop).
         await Promise.resolve(options.runtime.invalidateAgent?.(childId)).catch(

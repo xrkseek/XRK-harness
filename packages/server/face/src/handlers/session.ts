@@ -75,6 +75,7 @@ import { persistWorkspaceDoc } from "../workspace-store.js";
 import {
   resolveParentWorkspaceAttach,
   resolveSessionCwd,
+  setSessionWorkingDirectory,
 } from "../session-cwd.js";
 import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import {
@@ -1027,6 +1028,55 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
   return {
     ok: true,
     value: { sessionId, approvalId, decision: decisionRaw },
+  };
+};
+
+/**
+ * `session.setWorkingDirectory` — read (`cd` omitted) or change session cwd.
+ * Payload: `{ sessionId, cd? }`. Relative `cd` resolves against the current cwd.
+ */
+export const sessionSetWorkingDirectory: FaceHandler = async (
+  runtime,
+  _rpcId,
+  payload,
+) => {
+  const p = asRecord(payload);
+  const sessionId = String(p.sessionId ?? "").trim();
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  const cdRaw = p.cd;
+  if (cdRaw === undefined || cdRaw === null || cdRaw === "") {
+    return {
+      ok: true,
+      value: { cwd: resolveSessionCwd(runtime, sessionId) },
+    };
+  }
+  if (typeof cdRaw !== "string") {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "cd must be a string" },
+    };
+  }
+  const result = await setSessionWorkingDirectory(runtime, sessionId, cdRaw);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: { code: "cwd-invalid", message: result.error },
+    };
+  }
+  return {
+    ok: true,
+    value: { cwd: result.cwd, changed: result.changed },
   };
 };
 

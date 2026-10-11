@@ -513,7 +513,23 @@ export {
   type DeclaredPiAiProvider,
 } from "./llm-provider-context.js";
 export { normalizeApiKey, type ApiKeyCheck } from "./llm-api-key.js";
-export { resolveSessionCwd } from "./session-cwd.js";
+export {
+  ensureSessionWorkingDirectory,
+  resolveSessionCwd,
+  setSessionWorkingDirectory,
+  type SetSessionWorkingDirectoryResult,
+} from "./session-cwd.js";
+export {
+  createSessionWorktree,
+  type CreateSessionWorktreeRequest,
+  type CreateSessionWorktreeResult,
+  type CreatedSessionWorktree,
+} from "./session-worktree.js";
+export {
+  addLinkedWorktreeCheckout,
+  filterDisableEnv,
+  type LinkedWorktreeCheckoutResult,
+} from "./subagent-worktree.js";
 export {
   FaceCredentialVault,
   FaceSettingsNamespaces,

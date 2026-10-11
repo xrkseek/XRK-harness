@@ -15,6 +15,7 @@ import { permissionSelectFromEvents } from "./permissions.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
 import { countExposures } from "@xrkseek/core-tools";
+import { resolveSessionCwd } from "./session-cwd.js";
 
 function toolSurfaceSummary(badge: string): string {
   const profile = resolveAgentPresetProfile(badge);
@@ -53,9 +54,11 @@ export function formatSessionCapability(
   const counts = countExposures(tools);
   const expanded = runtime.toolDisclosure.count(sessionId);
 
+  const cwd = resolveSessionCwd(runtime, sessionId);
   const lines = [
     `permission: ${permission} (path=${pathMode}) · approval=${approval}`,
     `tool_surface: ${toolSurfaceSummary(badge)}`,
+    `cwd: ${cwd}`,
     `path_allowlist: ${allowN} objects (session+settings)`,
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];

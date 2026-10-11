@@ -61,6 +61,8 @@ export function createServerAgentFactory(
     routeAllowsImage,
     maxParallelToolCalls,
     maxSteps,
+    autoContinueOnMaxTokens,
+    autoContinueMaxRounds,
     toolOrder,
     toolSettle,
     llmRetryMaxRetries,
@@ -87,6 +89,8 @@ export function createServerAgentFactory(
     locale,
     autoReviewPre,
     contextFragmentProviders,
+    workingDirectoryTools,
+    createWorktreeTools,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -137,6 +141,12 @@ export function createServerAgentFactory(
       ...(cronAgentRoute ? { cronAgentRoute } : {}),
       ...(maxParallelToolCalls !== undefined ? { maxParallelToolCalls } : {}),
       ...(maxSteps !== undefined ? { maxSteps } : {}),
+      ...(autoContinueOnMaxTokens !== undefined
+        ? { autoContinueOnMaxTokens }
+        : {}),
+      ...(autoContinueMaxRounds !== undefined
+        ? { autoContinueMaxRounds }
+        : {}),
       ...(toolOrder !== undefined ? { toolOrder } : {}),
       ...(toolSettle !== undefined ? { toolSettle } : {}),
       ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
@@ -167,6 +177,8 @@ export function createServerAgentFactory(
       ...(contextFragmentProviders
         ? { contextFragmentProviders }
         : {}),
+      ...(workingDirectoryTools ? { workingDirectoryTools } : {}),
+      ...(createWorktreeTools ? { createWorktreeTools } : {}),
     });
     return composition.createAgent();
   };

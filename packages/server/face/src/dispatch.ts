@@ -66,6 +66,7 @@ import {
   sessionRespondApproval,
   sessionSearch,
   sessionSelectModel,
+  sessionSetWorkingDirectory,
   sessionStatus,
   sessionRolloutTrace,
   sessionUpdateQueue,
@@ -92,7 +93,7 @@ import {
   subagentList,
   subagentPrompt,
 } from "./handlers/subagent.js";
-import { worktreeMerge } from "./handlers/worktree.js";
+import { worktreeCreate, worktreeMerge } from "./handlers/worktree.js";
 import { jobBackground, jobKill } from "./handlers/job.js";
 import {
   commandsExecute,
@@ -223,6 +224,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "subagent.prompt": subagentPrompt,
   "subagent.interrupt": subagentInterrupt,
   "worktree.merge": worktreeMerge,
+  "worktree.create": worktreeCreate,
+  "session.setWorkingDirectory": sessionSetWorkingDirectory,
   "job.kill": jobKill,
   "job.background": jobBackground,
   "commands/list": commandsList,

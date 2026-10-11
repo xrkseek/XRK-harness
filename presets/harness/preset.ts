@@ -16,6 +16,8 @@ import {
   createToolPipeline,
   createToolRegistry,
   createToolSearchTool,
+  createWorkingDirectoryTool,
+  createCreateWorktreeTool,
   createWriteIntentGuard,
   extractPathArg,
   subagentRoutingPrompt,
@@ -24,6 +26,8 @@ import {
   type ToolPipeline,
   type ToolRegistry,
   type ToolSearchState,
+  type WorkingDirectoryToolsOptions,
+  type CreateWorktreeToolsOptions,
 } from "@xrkseek/core-tools";
 import {
   createFsLocalProvider,
@@ -355,6 +359,16 @@ export interface HarnessCompositionOptions {
   readonly slashRecipes?: boolean | string;
   /** Extra tools registered after builtins (name clash throws). */
   readonly extraTools?: readonly ToolDefinition[];
+  /**
+   * Session working_directory tool (read/change cwd). Host Face wires get/set.
+   * When omitted, the tool is not registered.
+   */
+  readonly workingDirectoryTools?: WorkingDirectoryToolsOptions;
+  /**
+   * Optional create_worktree tool (experimental). Host registers when the
+   * `git-worktrees` process plugin is loaded.
+   */
+  readonly createWorktreeTools?: CreateWorktreeToolsOptions;
   /** Host plugins — `kind: tools` merged after extras; explicit names win. */
   readonly plugins?: readonly RegisteredPlugin[];
   /**
@@ -541,6 +555,15 @@ export interface HarnessCompositionOptions {
    * Face `agent-loop.maxSteps` overrides when Host injects it.
    */
   readonly maxSteps?: number;
+  /**
+   * Face `agent-loop.autoContinueOnMaxTokens` — inject a synthetic「继续」
+   * and keep the turn open when the model hits its output token cap.
+   */
+  readonly autoContinueOnMaxTokens?: boolean;
+  /**
+   * Face `agent-loop.autoContinueMaxRounds` — max synthetic resumes per turn.
+   */
+  readonly autoContinueMaxRounds?: number;
   /**
    * Face `agent-loop.toolOrder` — DSH-style wire order with one `' '` rest.
    * Forwarded into `assemble.toolOrder`.
@@ -936,6 +959,12 @@ export function createHarnessComposition(
     defaultCwd: options.workspaceRoot,
   })) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
+  if (options.workingDirectoryTools) {
+    tools.register(createWorkingDirectoryTool(options.workingDirectoryTools));
+  }
+  if (options.createWorktreeTools) {
+    tools.register(createCreateWorktreeTool(options.createWorktreeTools));
+  }
   for (const tool of createSkillTools({
     workspaceRoot: injectOpts.root,
     productDir,
@@ -1849,6 +1878,12 @@ export function createHarnessComposition(
             }
           : {}),
         maxSteps: options.maxSteps ?? 32,
+        ...(options.autoContinueOnMaxTokens !== undefined
+          ? { autoContinueOnMaxTokens: options.autoContinueOnMaxTokens }
+          : {}),
+        ...(options.autoContinueMaxRounds !== undefined
+          ? { autoContinueMaxRounds: options.autoContinueMaxRounds }
+          : {}),
       });
     },
     dumpConfig(patch = {}) {

@@ -137,6 +137,14 @@ export {
   type SettingsMutateResult,
 } from "./settings-tools.js";
 export {
+  createWorkingDirectoryTool,
+  createCreateWorktreeTool,
+  WORKING_DIRECTORY,
+  CREATE_WORKTREE,
+  type WorkingDirectoryToolsOptions,
+  type CreateWorktreeToolsOptions,
+} from "./working-directory-tools.js";
+export {
   isTransientError,
   transientError,
   type ApprovalDisplayReason,
