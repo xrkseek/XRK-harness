@@ -245,8 +245,8 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
-| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | 软上下文预算（默认 100k / 24k / 4k） |
-| `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off` |
+| `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off`；软上限见下方 Models |
+| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；留空 = 不主动软压 |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | 子代理嵌套深度（默认 2）与同父并发上限（默认 2） |
 | `agent-loop` | `subagentModel` | 委派子代理的统一线路 `provider/model`（可带 `(effort)`）；**留空（默认）跟父会话**；单次 `subagent` 仍可覆盖 |
@@ -553,8 +553,8 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `toolSettle` | `parallel` (default, by `isConcurrencySafe`) or `serial` |
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |
-| `agent-loop` | `maxRequestTokens` · `keepTokens` · `bufferTokens` | Soft context budget (defaults 100k / 24k / 4k) |
-| `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off` |
+| `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off`; soft ceiling is per model (below) |
+| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; omit = no proactive soft compact |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | Subagent nesting depth (default 2) and concurrent children under one parent (default 2) |
 | `agent-loop` | `subagentModel` | Fleet-wide child route `provider/model` (optional `(effort)`); **empty (default) inherits the parent**; a single `subagent` call may still override |
