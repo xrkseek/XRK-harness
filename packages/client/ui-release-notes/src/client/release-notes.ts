@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.26',
+    date: '2026-10-11',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '写文件 / 编辑在参数还在流式时就画出 diff；exec-fs 线名接上专用行组件。',
+        en: 'Write / edit paint their diff while arguments still stream; exec-fs wire names bind their dedicated rows.',
+      },
+      {
+        zh: '工具行 / 推理行 / 技能行 / 刷新扫光改用合成器动画，并全面支持「减少动态效果」；附件句柄的 modelOnly 不再在线适配层丢失。',
+        en: 'Sweeps move to compositor animation and fully honor reduced-motion; modelOnly survives the Face wire adapt.',
+      },
+    ],
+  },
+  {
     version: '0.5.25',
     date: '2026-10-10',
     title: {
