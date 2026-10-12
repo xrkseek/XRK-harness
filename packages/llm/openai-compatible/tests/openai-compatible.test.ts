@@ -760,6 +760,77 @@ describe("openai-compatible adapter", () => {
       expect.arrayContaining([
         { type: "text", text: "see" },
         {
+          type: "text",
+          text: expect.stringMatching(/sha256:x/),
+        },
+        {
+          type: "image_url",
+          image_url: {
+            url: expect.stringMatching(/^data:image\/png;base64,/),
+          },
+        },
+      ]),
+    );
+  });
+
+  it("keeps tool-role images as multimodal content", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    let body: {
+      messages: { role: string; content: unknown }[];
+    } | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      inputModalities: ["text", "image"],
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as typeof body;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" } }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c1", name: "read_image", arguments: {} }],
+        },
+        {
+          role: "tool",
+          toolCallId: "c1",
+          name: "read_image",
+          content: [
+            { type: "text", text: "<path>a.png</path>" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:toolimg",
+                mediaType: "image/png",
+                bytes: png.byteLength,
+                width: 1,
+                height: 1,
+              },
+            },
+          ],
+        },
+      ],
+      resolveImage: async () => ({ mediaType: "image/png", data: png }),
+    });
+    const tool = body?.messages.find((m) => m.role === "tool");
+    expect(Array.isArray(tool?.content)).toBe(true);
+    expect(tool?.content).toEqual(
+      expect.arrayContaining([
+        { type: "text", text: "<path>a.png</path>" },
+        {
           type: "image_url",
           image_url: {
             url: expect.stringMatching(/^data:image\/png;base64,/),

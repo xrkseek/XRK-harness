@@ -30,6 +30,7 @@ import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  requestImageHandleText,
   tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 import {
@@ -208,6 +209,14 @@ async function userContentToWire(
       continue;
     }
     const stored = await resolveImage(block.attachment.attachmentId);
+    const ref = stored.ref ?? block.attachment;
+    parts.push({
+      type: "text",
+      text: requestImageHandleText(ref, {
+        width: ref.width,
+        height: ref.height,
+      }),
+    });
     if (wireImagePart && wireCtx.apiKey.trim()) {
       parts.push(
         await wireImagePart(

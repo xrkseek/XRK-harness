@@ -21,6 +21,7 @@ import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  requestImageHandleText,
 } from "@xrkseek/protocol";
 
 export const OPENAI_RESPONSES_DEFAULT_PATH = "/responses";
@@ -106,7 +107,16 @@ async function userContent(
       if (block.text) parts.push({ type: "input_text", text: block.text });
       continue;
     }
+    if (block.type !== "image" || block.offloaded === true) continue;
     const stored = await resolveImage(block.attachment.attachmentId);
+    const ref = stored.ref ?? block.attachment;
+    parts.push({
+      type: "input_text",
+      text: requestImageHandleText(ref, {
+        width: ref.width,
+        height: ref.height,
+      }),
+    });
     parts.push({
       type: "input_image",
       image_url: `data:${stored.mediaType};base64,${bytesToBase64(stored.data)}`,
@@ -154,11 +164,35 @@ async function toInput(
       continue;
     }
     if (m.role === "tool") {
+      // Responses `function_call_output` is string-only; keep the envelope there
+      // and hoist vision pixels onto a following user item (DSH-shaped).
+      const envelope = flattenText(m.content);
+      const handles: string[] = [];
+      if (contentHasImage(m.content) && modalities.includes("image")) {
+        for (const block of asContentBlocks(m.content)) {
+          if (block.type !== "image" || block.offloaded === true) continue;
+          handles.push(
+            requestImageHandleText(block.attachment, {
+              width: block.attachment.width,
+              height: block.attachment.height,
+            }),
+          );
+        }
+      }
       out.push({
         type: "function_call_output",
         call_id: m.toolCallId,
-        output: flattenText(m.content),
+        output: [envelope, ...handles].filter(Boolean).join("\n") || "(no output)",
       });
+      if (contentHasImage(m.content) && modalities.includes("image")) {
+        const vision = await userContent(m.content, resolveImage, modalities);
+        if (Array.isArray(vision)) {
+          const images = vision.filter((p) => p.type === "input_image");
+          if (images.length > 0) {
+            out.push({ role: "user", content: images });
+          }
+        }
+      }
     }
   }
   return out;

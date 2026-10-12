@@ -211,4 +211,81 @@ describe("anthropic adapter", () => {
     });
     expect(isRetryableFailure(failureFromUnknown(err))).toBe(true);
   });
+
+  it("keeps tool-role images inside tool_result content parts", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    let body: {
+      messages: {
+        role: string;
+        content: {
+          type: string;
+          tool_use_id?: string;
+          content?: unknown;
+        }[];
+      }[];
+    } | undefined;
+    const llm = createAnthropicAdapter({
+      apiKey: "k",
+      inputModalities: ["text", "image"],
+      fetch: (async (_url: string, init?: RequestInit) => {
+        body = JSON.parse(String(init?.body)) as typeof body;
+        return new Response(
+          JSON.stringify({ content: [{ type: "text", text: "saw" }] }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+      enableStream: false,
+    });
+    await llm.chat({
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c1", name: "read_image", arguments: {} }],
+        },
+        {
+          role: "tool",
+          toolCallId: "c1",
+          name: "read_image",
+          content: [
+            { type: "text", text: "<path>a.png</path>" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:toolimg",
+                mediaType: "image/png",
+                bytes: png.byteLength,
+                width: 1,
+                height: 1,
+              },
+            },
+          ],
+        },
+      ],
+      resolveImage: async () => ({ mediaType: "image/png", data: png }),
+    });
+    const toolResult = body?.messages
+      .flatMap((m) => m.content)
+      .find((b) => b.type === "tool_result");
+    expect(toolResult?.tool_use_id).toBe("c1");
+    expect(Array.isArray(toolResult?.content)).toBe(true);
+    expect(toolResult?.content).toEqual(
+      expect.arrayContaining([
+        { type: "text", text: "<path>a.png</path>" },
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: expect.any(String),
+          },
+        },
+      ]),
+    );
+  });
 });

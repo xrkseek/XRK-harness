@@ -24,6 +24,7 @@ import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  requestImageHandleText,
   tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 
@@ -137,14 +138,23 @@ export interface AnthropicAdapterOptions {
   readonly anthropicVersion?: string;
 }
 
-type AnthContent =
+type AnthMediaPart =
   | { type: "text"; text: string }
   | {
       type: "image";
       source: { type: "base64"; media_type: string; data: string };
-    }
+    };
+
+type AnthContent =
+  | AnthMediaPart
   | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+  | {
+      type: "tool_result";
+      tool_use_id: string;
+      /** Anthropic accepts string or text/image parts (vision tool results). */
+      content: string | AnthMediaPart[];
+      is_error?: boolean;
+    };
 
 type AnthMessage = { role: "user" | "assistant"; content: string | AnthContent[] };
 
@@ -167,7 +177,7 @@ async function userParts(
   content: MessageContent,
   resolveImage: LlmChatRequest["resolveImage"],
   modalities: readonly ("text" | "image")[],
-): Promise<AnthContent[]> {
+): Promise<AnthMediaPart[]> {
   if (typeof content === "string") return [{ type: "text", text: content }];
   if (!contentHasImage(content)) {
     return [{ type: "text", text: flattenText(content) }];
@@ -182,13 +192,23 @@ async function userParts(
       "image content requires resolveImage on the LLM request",
     );
   }
-  const parts: AnthContent[] = [];
+  const parts: AnthMediaPart[] = [];
   for (const block of asContentBlocks(content)) {
     if (block.type === "text") {
       if (block.text) parts.push({ type: "text", text: block.text });
       continue;
     }
+    if (block.type !== "image") continue;
+    if (block.offloaded === true) continue;
     const stored = await resolveImage(block.attachment.attachmentId);
+    const ref = stored.ref ?? block.attachment;
+    parts.push({
+      type: "text",
+      text: requestImageHandleText(ref, {
+        width: ref.width,
+        height: ref.height,
+      }),
+    });
     parts.push({
       type: "image",
       source: {
@@ -239,13 +259,18 @@ async function toAnthMessages(
       continue;
     }
     if (m.role === "tool") {
+      const parts = await userParts(m.content, resolveImage, modalities);
+      const toolContent: string | AnthMediaPart[] =
+        parts.length === 1 && parts[0]!.type === "text"
+          ? parts[0]!.text
+          : parts;
       out.push({
         role: "user",
         content: [
           {
             type: "tool_result",
             tool_use_id: m.toolCallId,
-            content: flattenText(m.content),
+            content: toolContent,
             ...(m.isError ? { is_error: true } : {}),
           },
         ],

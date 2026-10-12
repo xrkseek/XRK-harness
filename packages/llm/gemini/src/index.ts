@@ -21,6 +21,7 @@ import {
   asContentBlocks,
   contentHasImage,
   flattenText,
+  requestImageHandleText,
 } from "@xrkseek/protocol";
 
 export const GEMINI_DEFAULT_BASE_URL =
@@ -104,7 +105,16 @@ async function userParts(
       if (block.text) parts.push({ text: block.text });
       continue;
     }
+    if (block.type !== "image") continue;
+    if (block.offloaded === true) continue;
     const stored = await resolveImage(block.attachment.attachmentId);
+    const ref = stored.ref ?? block.attachment;
+    parts.push({
+      text: requestImageHandleText(ref, {
+        width: ref.width,
+        height: ref.height,
+      }),
+    });
     parts.push({
       inlineData: {
         mimeType: stored.mediaType,
@@ -154,17 +164,45 @@ async function toGeminiContents(
       continue;
     }
     if (m.role === "tool") {
-      contents.push({
-        role: "user",
-        parts: [
-          {
-            functionResponse: {
-              name: m.name ?? "tool",
-              response: { result: flattenText(m.content) },
-            },
+      // functionResponse stays text; vision pixels + handles are sibling parts.
+      const parts: GemPart[] = [
+        {
+          functionResponse: {
+            name: m.name ?? "tool",
+            response: { result: flattenText(m.content) || "(no output)" },
           },
-        ],
-      });
+        },
+      ];
+      if (contentHasImage(m.content)) {
+        if (!modalities.includes("image")) {
+          throw new UnsupportedContentError(
+            "image content is not supported on text-only Gemini routes",
+          );
+        }
+        if (!resolveImage) {
+          throw new UnsupportedContentError(
+            "image content requires resolveImage on the LLM request",
+          );
+        }
+        for (const block of asContentBlocks(m.content)) {
+          if (block.type !== "image" || block.offloaded === true) continue;
+          const stored = await resolveImage(block.attachment.attachmentId);
+          const ref = stored.ref ?? block.attachment;
+          parts.push({
+            text: requestImageHandleText(ref, {
+              width: ref.width,
+              height: ref.height,
+            }),
+          });
+          parts.push({
+            inlineData: {
+              mimeType: stored.mediaType,
+              data: bytesToBase64(stored.data),
+            },
+          });
+        }
+      }
+      contents.push({ role: "user", parts });
     }
   }
   return {
