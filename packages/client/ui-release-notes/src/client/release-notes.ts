@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.31',
+    date: '2026-10-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '视觉模型读图工具的结果里带着图直接进上下文：Anthropic 的 tool_result、Gemini 的 functionResponse 兄弟 part、OpenAI Responses 的 function_call_output + 后续 user 项都能带图。',
+        en: 'Vision-capable models now see the image a read-image tool produced: Anthropic tool_result, Gemini sibling parts next to functionResponse, and OpenAI Responses function_call_output plus a following user item all carry pixels.',
+      },
+      {
+        zh: '每张进请求的图旁边都有一行句柄文本（文件名、attachment sha256 前缀、字节数、请求侧预览尺寸），模型不用再猜图到底是什么。',
+        en: 'Every inlined image is preceded by a handle line (name, attachment sha256 prefix, byte size, request-side preview size), so the model stops guessing what it is looking at.',
+      },
+      {
+        zh: '切到纯文本模型时不再中途报错：历史里的图片会换成稳定的占位说明，read_image 也会在动手读盘之前就提示换一个支持图像的模型。',
+        en: 'Switching to a text-only model no longer fails mid-turn: retained images become stable placeholders, and read_image refuses before touching the filesystem with a route-switch hint.',
+      },
+    ],
+  },
+  {
     version: '0.5.30',
     date: '2026-10-12',
     title: {
