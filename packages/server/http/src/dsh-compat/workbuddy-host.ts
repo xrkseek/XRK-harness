@@ -31,6 +31,8 @@ import { resolveCompatHome } from "./underlying/json-store.js";
 import type { XrkWebServerRoute } from "./xrk-host-apply.js";
 
 const WORKBUDDY_PACKAGE = "dsh-workbuddy-connect";
+/** Plugin env that skips Windows registry discovery for the international app. */
+const WORKBUDDY_AI_ELECTRON_BIN = "WORKBUDDY_AI_ELECTRON_BIN";
 
 export function isWorkBuddyConnectPackage(packageName: string): boolean {
   return packageName.trim() === WORKBUDDY_PACKAGE;
@@ -38,6 +40,35 @@ export function isWorkBuddyConnectPackage(packageName: string): boolean {
 
 export function hasWorkBuddyHostLib(pkgRoot: string): boolean {
   return existsSync(path.join(pkgRoot, "lib", "index.js"));
+}
+
+/**
+ * Hint WorkBuddy AI's Electron binary when the plugin's Windows registry
+ * discovery cannot finish (non-ASCII uninstall trees force a PowerShell
+ * fallback that exits incomplete on some machines). CN already has a
+ * LocalAppData default path; international is registry-only in the plugin.
+ *
+ * Never overrides an explicit `WORKBUDDY_AI_ELECTRON_BIN`. Only the verified
+ * installer layout `LOCALAPPDATA\\Programs\\WorkBuddyAI\\WorkBuddyAI.exe`.
+ */
+export function ensureWorkBuddyAiElectronBin(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  const existing = env[WORKBUDDY_AI_ELECTRON_BIN]?.trim();
+  if (existing) return existing;
+  if (platform !== "win32") return undefined;
+  const localAppData = env.LOCALAPPDATA?.trim();
+  if (!localAppData) return undefined;
+  const installRoot = path.join(localAppData, "Programs", "WorkBuddyAI");
+  const electronPath = path.join(installRoot, "WorkBuddyAI.exe");
+  if (!existsSync(electronPath)) return undefined;
+  if (!existsSync(path.join(installRoot, "resources", "app.asar"))) {
+    return undefined;
+  }
+  if (!existsSync(path.join(installRoot, "version"))) return undefined;
+  env[WORKBUDDY_AI_ELECTRON_BIN] = electronPath;
+  return electronPath;
 }
 
 interface WorkBuddyApplyModule {
@@ -83,6 +114,13 @@ export async function tryApplyWorkBuddyHost(
   }
 
   ensureHostModuleRemap();
+  const aiElectron = ensureWorkBuddyAiElectronBin();
+  if (aiElectron) {
+    console.info(
+      "[dsh-workbuddy-connect] WORKBUDDY_AI_ELECTRON_BIN hint",
+      aiElectron,
+    );
+  }
 
   const http: Array<{
     match: (pathname: string) => boolean;

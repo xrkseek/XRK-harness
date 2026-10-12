@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureWorkBuddyAiElectronBin,
   hasWorkBuddyHostLib,
   isWorkBuddyConnectPackage,
   tryApplyWorkBuddyHost,
@@ -10,15 +11,42 @@ import {
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
 
 const temps: string[] = [];
+const prevAiElectron = process.env.WORKBUDDY_AI_ELECTRON_BIN;
 
 afterEach(() => {
   resetHostApplyRegistry();
   for (const d of temps.splice(0)) {
     rmSync(d, { recursive: true, force: true });
   }
+  if (prevAiElectron === undefined) delete process.env.WORKBUDDY_AI_ELECTRON_BIN;
+  else process.env.WORKBUDDY_AI_ELECTRON_BIN = prevAiElectron;
 });
 
 describe("workbuddy-host", () => {
+  it("hints WORKBUDDY_AI_ELECTRON_BIN for the WorkBuddyAI install layout", () => {
+    const local = mkdtempSync(path.join(tmpdir(), "wb-ai-local-"));
+    temps.push(local);
+    const installRoot = path.join(local, "Programs", "WorkBuddyAI");
+    mkdirSync(path.join(installRoot, "resources"), { recursive: true });
+    writeFileSync(path.join(installRoot, "WorkBuddyAI.exe"), "");
+    writeFileSync(path.join(installRoot, "version"), "37.2.0");
+    writeFileSync(path.join(installRoot, "resources", "app.asar"), "");
+
+    const env: NodeJS.ProcessEnv = { LOCALAPPDATA: local };
+    expect(ensureWorkBuddyAiElectronBin(env, "win32")).toBe(
+      path.join(installRoot, "WorkBuddyAI.exe"),
+    );
+    expect(env.WORKBUDDY_AI_ELECTRON_BIN).toBe(
+      path.join(installRoot, "WorkBuddyAI.exe"),
+    );
+
+    env.WORKBUDDY_AI_ELECTRON_BIN = "C:\\custom\\WorkBuddyAI.exe";
+    expect(ensureWorkBuddyAiElectronBin(env, "win32")).toBe(
+      "C:\\custom\\WorkBuddyAI.exe",
+    );
+    expect(ensureWorkBuddyAiElectronBin({ LOCALAPPDATA: local }, "darwin")).toBeUndefined();
+  });
+
   it("detects package name and staged lib", () => {
     expect(isWorkBuddyConnectPackage("dsh-workbuddy-connect")).toBe(true);
     expect(isWorkBuddyConnectPackage("other")).toBe(false);

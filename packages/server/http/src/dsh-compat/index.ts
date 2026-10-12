@@ -155,6 +155,7 @@ export {
   tryApplyWorkBuddyHost,
   isWorkBuddyConnectPackage,
   hasWorkBuddyHostLib,
+  ensureWorkBuddyAiElectronBin,
 } from "./workbuddy-host.js";
 export {
   tryApplyOurFreeModelHost,
