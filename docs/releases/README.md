@@ -8,7 +8,7 @@
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（本机包）**  | [v0.5.30](./v0.5.30.md)                 | `0.5.x` 补丁：**统计口径对齐 DSH · ContextMeter 本地化 · WorkBuddy 国际版 Electron 定位** |
+| **当前（本机包）**  | [v0.5.30](./v0.5.30.md)                 | `0.5.x` 补丁：**拖放文件带源路径 · read_file 支持附件 id · 统计口径对齐 DSH** |
 | **上一正式补丁**    | [v0.5.29](./v0.5.29.md)                 | `0.5.x` 补丁：**社区模型思考档位贯通 · 工具行展开跟随设置 · 缓存命中原口径** |
 | **上一预览终态**    | [v0.4.12](./v0.4.12.md)                 | `0.4.x` 收口：Mux 超顶丢帧不掐线 · 心跳 5 miss                          |
 | **上一正式线**      | [v0.3.11](./v0.3.11.md)                 | `MINOR=3`；npm 回退钉（`@0.3.11`）                                   |
@@ -42,7 +42,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (local package)** | [v0.5.30](./v0.5.30.md) | `0.5.x` patch: **DSH stats parity · localized ContextMeter · WorkBuddy intl Electron lookup** |
+| **Current (local package)** | [v0.5.30](./v0.5.30.md) | `0.5.x` patch: **drag/drop source paths · read_file attachment ids · DSH stats parity** |
 | **Prior formal patch** | [v0.5.29](./v0.5.29.md) | `0.5.x` patch: **community reasoning efforts end-to-end · tool-row expand follows Settings · cache-hit denominator fix** |
 | **Prior preview close** | [v0.4.12](./v0.4.12.md) | `0.4.x` close: Mux drop-over-budget without kill · 5-miss heartbeat |
 | **Prior formal line** | [v0.3.11](./v0.3.11.md) | `MINOR=3`; npm rollback pin (`@0.3.11`) |
