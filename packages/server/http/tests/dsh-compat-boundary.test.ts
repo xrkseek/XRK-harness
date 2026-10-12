@@ -48,6 +48,8 @@ const FORBIDDEN_MAIN_PACKAGES = [
 const DSH_COMPAT_ALLOWED_EXTERNAL = [
   "@xrkseek/core-session",
   "@xrkseek/core-tools",
+  // Host halves construct the Cordis Context the community plugins run in.
+  "@xrkseek/cordis",
   "@xrkseek/exec-web",
   "@xrkseek/im-gateway-contract",
   "@xrkseek/llm",

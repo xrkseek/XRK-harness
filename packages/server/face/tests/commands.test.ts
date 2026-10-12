@@ -786,6 +786,16 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
+          // Product optional (default off) is always listed so Settings can
+          // toggle it; soft-disabled here ⇒ enabled:false, no fiberPhase.
+          entryId: "git-worktrees",
+          moduleName: "git-worktrees",
+          enabled: false,
+          fiberPhase: null,
+          managed: true,
+          kind: "process",
+        },
+        {
           entryId: "@xrkseek/client-runtime",
           moduleName: "@xrkseek/client-runtime",
           enabled: true,
@@ -841,6 +851,14 @@ describe("pluginInventory/list", () => {
     expect(listed.result.value).toEqual({
       entries: [
         {
+          entryId: "git-worktrees",
+          moduleName: "git-worktrees",
+          enabled: false,
+          fiberPhase: null,
+          managed: true,
+          kind: "process",
+        },
+        {
           entryId: "community-cordis",
           moduleName: "community-cordis",
           enabled: true,
@@ -875,7 +893,7 @@ describe("DSH shell remotes that must not 404 / NI", () => {
     expect(state.today.calls).toBe(0);
   });
 
-  it("dynamicCordisRunner/inventory is an empty list (no Cordis apply)", async () => {
+  it("dynamicCordisRunner/inventory lists no running Cordis fiber (no apply)", async () => {
     const runtime = bareRuntime();
     expect(faceMethodFromPath("/api/dynamicCordisRunner/inventory")).toBe(
       "dynamicCordisRunner/inventory",
@@ -886,7 +904,16 @@ describe("DSH shell remotes that must not 404 / NI", () => {
       "c0",
       { args: {} },
     );
-    expect(listed.result).toEqual({ ok: true, value: [] });
+    expect(listed.result).toEqual({
+      ok: true,
+      value: [
+        {
+          pluginId: "git-worktrees",
+          packageId: "git-worktrees",
+          fiberPhase: null,
+        },
+      ],
+    });
 
     const stopped = await dispatchFaceMethod(
       runtime,
