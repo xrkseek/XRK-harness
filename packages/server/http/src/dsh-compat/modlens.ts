@@ -119,7 +119,8 @@ function engineEnvSettings(
   for (const [field, variable] of Object.entries(
     ENGINE_ENV_BINDINGS[engine] ?? {},
   )) {
-    const value = typeof env[variable] === "string" ? env[variable]!.trim() : "";
+    const raw = env[variable];
+    const value = typeof raw === "string" ? raw.trim() : "";
     if (value !== "" && (field !== "apiKey" || hasApiKeys(value))) {
       (settings as Record<string, string>)[field] = value;
     }
