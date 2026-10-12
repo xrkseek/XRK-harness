@@ -161,9 +161,13 @@ export function createReadImageTool(
         }
         region = parsed;
       }
+      // DSH-aligned: refuse before filesystem / attachment work when the live
+      // route cannot inspect the image result.
       if (routeAllowsImage && !routeAllowsImage()) {
         return {
-          content: `cannot read "${filePath}" as an image: current model route does not declare image input`,
+          content:
+            `cannot read "${filePath}" as an image: the current model route ` +
+            `does not declare image input; switch to an image-capable model to read images`,
           isError: true,
         };
       }

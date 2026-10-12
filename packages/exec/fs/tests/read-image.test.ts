@@ -88,6 +88,22 @@ function mockAttachments(
 }
 
 describe("createReadImageTool region", () => {
+  it("refuses before filesystem I/O when the live route is text-only", async () => {
+    const stat = vi.fn(async () => ({ isFile: true }));
+    const tool = createReadImageTool({
+      fs: {
+        stat,
+        readBytes: async () => new Uint8Array([1, 2, 3]),
+      },
+      attachments: mockAttachments(),
+      routeAllowsImage: () => false,
+    });
+    const result = await tool.execute({ file_path: "a.png" });
+    expect(result.isError).toBe(true);
+    expect(String(result.content)).toContain("does not declare image input");
+    expect(stat).not.toHaveBeenCalled();
+  });
+
   it("refuses region when the store has no cropImageRegion", async () => {
     const tool = createReadImageTool({
       fs: {

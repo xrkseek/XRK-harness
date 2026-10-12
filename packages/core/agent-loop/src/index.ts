@@ -48,6 +48,7 @@ import {
   parseSessionEvent,
   parseTurnEndCancelCause,
   projectFilesToText,
+  projectImagesForTextModel,
   DEFAULT_PLAN_POLICY_SECTION,
   TOOL_EMITTABLE_EVENT_TYPES,
   foldPlanMode,
@@ -339,15 +340,22 @@ function toLlmRequest(
   } catch {
     reasoningEffort = input.llm.peekRoute?.()?.reasoningEffort;
   }
-  const messages = projectFilesToText(
+  let messages = projectFilesToText(
     req.messages,
     (ref) => input.resolveFilePath?.(ref),
   );
+  // Text-only routes: deterministic placeholders (incl. tool-role images) —
+  // do not hard-fail mid-turn after a vision tool already settled.
+  if (!llmAllowsImage(input.llm)) {
+    messages = projectImagesForTextModel(messages);
+  }
   return {
     messages,
     ...(req.tools.length ? { tools: req.tools } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
-    ...(input.resolveImage ? { resolveImage: input.resolveImage } : {}),
+    ...(input.resolveImage && llmAllowsImage(input.llm)
+      ? { resolveImage: input.resolveImage }
+      : {}),
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
   };
 }
@@ -926,11 +934,14 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           // the prior provider sample is stale until the next usage stamp.
           let trustProjected = true;
           const measure = () => {
-            // Align with toLlmRequest: file handles may grow after path projection.
-            const messages = projectFilesToText(
+            // Align with toLlmRequest: file handles + text-only image placeholders.
+            let messages = projectFilesToText(
               req.messages,
               (ref) => input.resolveFilePath?.(ref),
             );
+            if (!llmAllowsImage(input.llm)) {
+              messages = projectImagesForTextModel(messages);
+            }
             const estimate = estimateRequestTokens({
               messages,
               tools: req.tools,
