@@ -10,6 +10,7 @@ import {
   imageHandleBlock,
   isContentBlock,
   isModelOnlyText,
+  looksLikeAttachmentHandleCaption,
   parseSessionEvent,
   readerText,
   type ImageAttachmentRef,
@@ -44,7 +45,33 @@ describe("modelOnly handle text", () => {
       bytes: 3,
     });
     expect(isModelOnlyText(block)).toBe(true);
+    expect(block.text).toContain("read_file path=attachment:sha256:beef");
     expect(readerText([block])).toBe("");
+  });
+
+  it("includes sourcePath in model-only handle captions", () => {
+    const block = fileUploadHandleBlock({
+      attachmentId: "sha256:beef",
+      name: "notes.txt",
+      bytes: 3,
+      sourcePath: String.raw`C:\Users\x\notes.txt`,
+    });
+    expect(block.text).toContain(String.raw`C:\Users\x\notes.txt`);
+    expect(looksLikeAttachmentHandleCaption(block.text)).toBe(true);
+  });
+
+  it("recognizes handle captions even without modelOnly", () => {
+    expect(
+      looksLikeAttachmentHandleCaption(
+        "[文件附件 a.docx（sha256:abcd）。需内容时用 read_file path=attachment:sha256:abcd 读取]",
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeAttachmentHandleCaption(
+        "[文件附件 a.docx（sha256:abcd；源路径 /tmp/a.docx）。需内容时用 read_file path=attachment:sha256:abcd 读取]",
+      ),
+    ).toBe(true);
+    expect(looksLikeAttachmentHandleCaption("帮我做")).toBe(false);
   });
 
   it("survives the durable event parse round trip", () => {

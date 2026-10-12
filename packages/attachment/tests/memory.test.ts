@@ -73,6 +73,23 @@ describe("@xrkseek/attachment memory store", () => {
     expect(stored.data).toEqual(data);
   });
 
+  it("keeps absolute sourcePath and drops relative clipboard names", async () => {
+    const store = createMemoryAttachmentStore();
+    const data = new TextEncoder().encode("drop");
+    const withPath = await store.saveFile({
+      data,
+      name: "a.txt",
+      sourcePath: "/tmp/drop/a.txt",
+    });
+    expect(withPath.sourcePath).toBe("/tmp/drop/a.txt");
+    const clipboard = await store.saveFile({
+      data: new TextEncoder().encode("paste"),
+      name: "b.txt",
+      sourcePath: "b.txt",
+    });
+    expect(clipboard.sourcePath).toBeUndefined();
+  });
+
   it("rejects path-like file names by sanitizing to leaf", async () => {
     const store = createMemoryAttachmentStore();
     const ref = await store.saveFile({

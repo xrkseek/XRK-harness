@@ -34,6 +34,7 @@ export {
   isTextBlock,
   listFileRefs,
   listImageRefs,
+  looksLikeAttachmentHandleCaption,
   mergeMessageContents,
   projectFileContentToText,
   projectFilesToText,

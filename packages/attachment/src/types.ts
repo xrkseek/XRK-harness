@@ -48,6 +48,8 @@ export interface SaveImageAttachment {
   readonly data: Uint8Array;
   readonly mediaType: ImageMediaType;
   readonly name?: string;
+  /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+  readonly sourcePath?: string;
 }
 
 export interface SaveFileAttachment {
@@ -55,6 +57,8 @@ export interface SaveFileAttachment {
   /** Display leaf name; never interpreted as a path. */
   readonly name?: string;
   readonly mediaType?: string;
+  /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+  readonly sourcePath?: string;
 }
 
 export interface StoredImageAttachment {
@@ -97,4 +101,21 @@ export function sanitizeAttachmentFileName(
   /* eslint-disable-next-line no-control-regex -- strip C0 controls from filenames */
   const cleaned = leaf.replace(/[\u0000-\u001f<>:"|?*]/g, "_").trim() || fallback;
   return cleaned.slice(0, 255);
+}
+
+/**
+ * Keep only absolute OS paths for `sourcePath` (Desktop drag/drop).
+ * Clipboard paste and bare leaf names are dropped.
+ */
+export function sanitizeAttachmentSourcePath(
+  path: string | undefined,
+): string | undefined {
+  const raw = path?.trim();
+  if (raw === undefined || raw === "") return undefined;
+  /* eslint-disable-next-line no-control-regex -- strip C0 controls from paths */
+  if (/[\u0000-\u001f]/.test(raw)) return undefined;
+  if (raw.startsWith("/") || raw.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(raw)) {
+    return raw.slice(0, 4096);
+  }
+  return undefined;
 }

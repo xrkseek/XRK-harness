@@ -6,6 +6,7 @@ import {
   DEFAULT_FILE_LIMITS,
   DEFAULT_IMAGE_LIMITS,
   sanitizeAttachmentFileName,
+  sanitizeAttachmentSourcePath,
   type FileAttachmentLimits,
   type FileAttachmentRef,
   type ImageAttachmentLimits,
@@ -98,6 +99,7 @@ export function createMemoryAttachmentStore(
     const existing = images.get(attachmentId);
     if (existing) return existing.ref;
 
+    const sourcePath = sanitizeAttachmentSourcePath(input.sourcePath);
     const ref: ImageAttachmentRef = {
       attachmentId,
       mediaType: input.mediaType,
@@ -105,6 +107,7 @@ export function createMemoryAttachmentStore(
       width: size.width,
       height: size.height,
       ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(sourcePath !== undefined ? { sourcePath } : {}),
     };
     images.set(attachmentId, {
       ref,
@@ -182,6 +185,7 @@ export function createMemoryAttachmentStore(
     const existing = files.get(attachmentId);
     if (existing) return existing.ref;
 
+    const sourcePath = sanitizeAttachmentSourcePath(input.sourcePath);
     const ref: FileAttachmentRef = {
       attachmentId,
       name: sanitizeAttachmentFileName(input.name),
@@ -189,6 +193,7 @@ export function createMemoryAttachmentStore(
       ...(input.mediaType !== undefined && input.mediaType.length > 0
         ? { mediaType: input.mediaType }
         : {}),
+      ...(sourcePath !== undefined ? { sourcePath } : {}),
     };
     files.set(attachmentId, {
       ref,

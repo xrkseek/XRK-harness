@@ -21,6 +21,7 @@ export {
   DEFAULT_IMAGE_LIMITS,
   IMAGE_MEDIA_TYPES,
   sanitizeAttachmentFileName,
+  sanitizeAttachmentSourcePath,
 } from "./types.js";
 export {
   AttachmentError,

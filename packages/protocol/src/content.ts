@@ -21,6 +21,11 @@ export interface ImageAttachmentRef {
   readonly width: number;
   readonly height: number;
   readonly name?: string;
+  /**
+   * Absolute OS path when the client resolved one (Desktop drag/drop).
+   * Absent for clipboard paste and browser-only uploads.
+   */
+  readonly sourcePath?: string;
   /** Orientation-applied dimensions before normalization scaling. */
   readonly originalDimensions?: {
     readonly width: number;
@@ -61,6 +66,11 @@ export interface FileAttachmentRef {
   readonly bytes: number;
   /** Browser/provider MIME when known; optional. */
   readonly mediaType?: string;
+  /**
+   * Absolute OS path when the client resolved one (Desktop drag/drop).
+   * Absent for clipboard paste and browser-only uploads.
+   */
+  readonly sourcePath?: string;
 }
 
 export interface FileBlock {
@@ -145,6 +155,8 @@ export function isImageAttachmentRef(
     Number.isFinite(o.height) &&
     o.height >= 0 &&
     (o.name === undefined || typeof o.name === "string") &&
+    (o.sourcePath === undefined ||
+      (typeof o.sourcePath === "string" && o.sourcePath.length > 0)) &&
     (o.originalDimensions === undefined ||
       (typeof o.originalDimensions === "object" &&
         o.originalDimensions !== null &&
@@ -184,7 +196,9 @@ export function isFileAttachmentRef(
     typeof o.bytes === "number" &&
     Number.isFinite(o.bytes) &&
     o.bytes >= 0 &&
-    (o.mediaType === undefined || typeof o.mediaType === "string")
+    (o.mediaType === undefined || typeof o.mediaType === "string") &&
+    (o.sourcePath === undefined ||
+      (typeof o.sourcePath === "string" && o.sourcePath.length > 0))
   );
 }
 
@@ -240,10 +254,14 @@ export function imageHandleBlock(
   imageNo: number,
   ref: ImageAttachmentRef,
 ): TextBlock {
+  const pathNote =
+    ref.sourcePath !== undefined && ref.sourcePath.length > 0
+      ? `；源路径 ${ref.sourcePath}`
+      : "";
   return {
     type: "text",
     modelOnly: true,
-    text: `[图${imageNo} ${ref.attachmentId}（${ref.width}×${ref.height} ${ref.mediaType}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${ref.attachmentId} 读取]`,
+    text: `[图${imageNo} ${ref.attachmentId}（${ref.width}×${ref.height} ${ref.mediaType}${pathNote}）。视觉模型直接看块；若未渲染或需细看，用 read_image file_path=attachment:${ref.attachmentId} 读取]`,
   };
 }
 
@@ -253,11 +271,29 @@ export function imageHandleBlock(
  * @returns the handle text block.
  */
 export function fileUploadHandleBlock(ref: FileAttachmentRef): TextBlock {
+  const pathNote =
+    ref.sourcePath !== undefined && ref.sourcePath.length > 0
+      ? `；源路径 ${ref.sourcePath}`
+      : "";
   return {
     type: "text",
     modelOnly: true,
-    text: `[文件附件 ${ref.name}（${ref.attachmentId}）。需内容时用 read_file 按 id 读取]`,
+    text: `[文件附件 ${ref.name}（${ref.attachmentId}${pathNote}）。需内容时用 read_file path=attachment:${ref.attachmentId} 读取]`,
   };
+}
+
+/**
+ * Heuristic for attachment handle captions that lost `modelOnly` on an older
+ * wire path or session log. Reader UI must still hide them.
+ */
+export function looksLikeAttachmentHandleCaption(text: string): boolean {
+  const t = text.trim();
+  return (
+    // Digest may be followed by `；源路径 …` before the closing paren.
+    /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t) ||
+    /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t) ||
+    /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
+  );
 }
 
 function quotedLeaf(name: string): string {
@@ -277,10 +313,14 @@ export function fileHandleText(
     "sha256:".length + 8,
   );
   const identity = `File ${quotedLeaf(ref.name)} (${ref.bytes} bytes, sha256:${digest})`;
+  const source =
+    ref.sourcePath !== undefined && ref.sourcePath.length > 0
+      ? ` Original drop path ${quotedLeaf(ref.sourcePath)}.`
+      : "";
   if (readonlyPath === undefined) {
-    return `[${identity} was uploaded, but the current execution environment cannot access a readable path. Report that limitation if its contents are needed; do not claim to have read it.]`;
+    return `[${identity} was uploaded.${source} The current execution environment cannot access a readable path. Report that limitation if its contents are needed; do not claim to have read it.]`;
   }
-  return `[${identity}: verbatim read-only copy saved at ${quotedLeaf(readonlyPath)}. Read that path with your file tools (e.g. read_file) when its contents are needed; copy it to a writable location before modifying it.]`;
+  return `[${identity}:${source} Verbatim read-only copy saved at ${quotedLeaf(readonlyPath)}. Read that path with your file tools (e.g. read_file) when its contents are needed; copy it to a writable location before modifying it.]`;
 }
 
 /**

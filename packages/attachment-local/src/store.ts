@@ -2,9 +2,22 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { chmod, link, mkdir, open, readFile, unlink } from 'node:fs/promises'
+import {
+  chmod,
+  link,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { dirname, join, parse, resolve } from 'node:path'
-import { AttachmentError, sanitizeAttachmentFileName } from '@xrkseek/attachment'
+import {
+  AttachmentError,
+  sanitizeAttachmentFileName,
+  sanitizeAttachmentSourcePath,
+} from '@xrkseek/attachment'
 import type {
   FileAttachmentRef,
   ImageAttachmentLimits,
@@ -109,6 +122,7 @@ export async function prepareImageFile(
   const normalized = await normalizeImage(input.data, detected, policy)
   const sha256 = digest(normalized.data)
   const name = displayName(input.name)
+  const sourcePath = sanitizeAttachmentSourcePath(input.sourcePath)
   const downscaled = detected.width !== normalized.width || detected.height !== normalized.height
   return {
     data: normalized.data,
@@ -119,6 +133,7 @@ export async function prepareImageFile(
       height: normalized.height,
       bytes: normalized.data.byteLength,
       ...(name !== undefined ? { name } : {}),
+      ...(sourcePath !== undefined ? { sourcePath } : {}),
       ...downscaled ? { originalDimensions: { width: detected.width, height: detected.height } } : {},
     },
   }
@@ -246,6 +261,9 @@ export async function commitPreparedImageFile(
     if (error instanceof AttachmentError) throw error
     throw new AttachmentError('Unable to persist image attachment.', 'ATTACHMENT_WRITE_FAILED', { cause: error })
   }
+  if (prepared.ref.sourcePath !== undefined) {
+    await writeSourcePathSidecar(root, sha256, prepared.ref.sourcePath)
+  }
   return prepared.ref
 }
 
@@ -342,12 +360,14 @@ export async function readImageByAttachmentId(
     );
   }
   const metadata = await probeImage(data);
+  const sourcePath = await readSourcePathSidecar(root, match[1]!);
   const ref: ImageAttachmentRef = {
     attachmentId,
     mediaType: metadata.mediaType,
     bytes: data.byteLength,
     width: metadata.width,
     height: metadata.height,
+    ...(sourcePath !== undefined ? { sourcePath } : {}),
   };
   return readImageFile(root, ref, signal);
 }
@@ -414,6 +434,7 @@ export async function commitFileAttachment(
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
   }
+  const sourcePath = sanitizeAttachmentSourcePath(input.sourcePath)
   const ref: FileAttachmentRef = {
     attachmentId,
     name: sanitizeAttachmentFileName(input.name),
@@ -421,9 +442,46 @@ export async function commitFileAttachment(
     ...(input.mediaType !== undefined && input.mediaType.length > 0
       ? { mediaType: input.mediaType }
       : {}),
+    ...(sourcePath !== undefined ? { sourcePath } : {}),
   }
   await publishFileAlias(root, dest, storedFilePath(root, ref), sha256)
+  if (sourcePath !== undefined) {
+    await writeSourcePathSidecar(root, matchSha(ref.attachmentId), sourcePath)
+  }
   return ref
+}
+
+function matchSha(attachmentId: string): string {
+  const match = ID_PATTERN.exec(attachmentId)
+  if (match?.[1] === undefined) {
+    throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
+  }
+  return match[1]
+}
+
+async function writeSourcePathSidecar(
+  root: string,
+  sha256: string,
+  sourcePath: string,
+): Promise<void> {
+  const dest = join(root, 'files', sha256.slice(0, 2), sha256, '.source-path')
+  await mkdir(dirname(dest), { recursive: true })
+  await writeFile(dest, sourcePath, 'utf8')
+}
+
+async function readSourcePathSidecar(
+  root: string,
+  sha256: string,
+): Promise<string | undefined> {
+  try {
+    const text = await readFile(
+      join(root, 'files', sha256.slice(0, 2), sha256, '.source-path'),
+      'utf8',
+    )
+    return sanitizeAttachmentSourcePath(text)
+  } catch {
+    return undefined
+  }
 }
 
 export async function readFileByAttachmentId(
@@ -450,11 +508,26 @@ export async function readFileByAttachmentId(
   if (digest(data) !== match[1]) {
     throw new AttachmentError('Attachment bytes do not match the recorded digest.', 'ATTACHMENT_CORRUPT')
   }
+  // Prefer the filename alias leaf so callers (read_file DOCX/PDF extract) keep
+  // the original extension when resolving by content id alone.
+  let name = 'file'
+  try {
+    const aliasDir = join(root, 'files', match[1].slice(0, 2), match[1])
+    const leaves = await readdir(aliasDir)
+    const leaf = leaves.find(
+      (entry) => entry.length > 0 && !entry.startsWith('.'),
+    )
+    if (leaf !== undefined) name = leaf
+  } catch {
+    // Alias missing → keep opaque "file"; plaintext reads still work.
+  }
+  const sourcePath = await readSourcePathSidecar(root, match[1])
   return {
     ref: {
       attachmentId,
-      name: 'file',
+      name,
       bytes: data.byteLength,
+      ...(sourcePath !== undefined ? { sourcePath } : {}),
     },
     data,
   }
