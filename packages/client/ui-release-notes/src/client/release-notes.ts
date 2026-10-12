@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.30',
+    date: '2026-10-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '对话统计与 DSH 对齐：缓存命中按全部计费输入算，上下文环优先用投影值；token 数字随语言本地化。',
+        en: 'Conversation stats match DSH: cache-hit covers all billed input, the context ring prefers projected tokens, and figures localize.',
+      },
+      {
+        zh: 'WorkBuddy 国际版不再依赖 Windows 注册表发现，Host 会直接定位到它的 Electron 主程序。',
+        en: 'The WorkBuddy international app no longer depends on registry discovery — the Host locates its Electron binary directly.',
+      },
+    ],
+  },
+  {
     version: '0.5.29',
     date: '2026-10-12',
     title: {
