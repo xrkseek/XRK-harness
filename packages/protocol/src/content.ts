@@ -364,6 +364,69 @@ export function projectFilesToText(
   return changed ? out : messages;
 }
 
+/**
+ * Stable placeholder when a text-only route cannot accept an image block.
+ * History stays append-only; only the wire request is projected.
+ */
+export function textOnlyImageText(ref: ImageAttachmentRef): string {
+  const digest = String(ref.attachmentId).slice(
+    "sha256:".length,
+    "sha256:".length + 8,
+  );
+  return `[image omitted because this model accepts text only; attachment sha256:${digest}]`;
+}
+
+/**
+ * Model-facing handle beside an inlined request image (DSH-shaped).
+ * @param ref - durable attachment on the message.
+ * @param version - exact pixel size sent on this request (may differ from source).
+ */
+export function requestImageHandleText(
+  ref: ImageAttachmentRef,
+  version: { readonly width: number; readonly height: number },
+): string {
+  const digest = String(ref.attachmentId).slice(
+    "sha256:".length,
+    "sha256:".length + 8,
+  );
+  const name =
+    ref.name !== undefined && ref.name.trim().length > 0
+      ? ` ${quotedLeaf(ref.name)}`
+      : "";
+  return `Image${name} (sha256:${digest}, ${ref.bytes} bytes); request preview ${version.width}x${version.height}px. It may be resized or re-encoded; source dimensions, format, and byte size may differ.`;
+}
+
+/** Replace every retained image occurrence with {@link textOnlyImageText}. */
+export function projectImageContentForTextModel(
+  content: MessageContent,
+): MessageContent {
+  if (typeof content === "string") return content;
+  if (!content.some((b) => isImageBlock(b))) return content;
+  return content.map((block) =>
+    isImageBlock(block)
+      ? { type: "text" as const, text: textOnlyImageText(block.attachment) }
+      : block,
+  );
+}
+
+/**
+ * Project image blocks to text placeholders for an exact text-only model.
+ * Covers user and tool-role results without rewriting durable session history.
+ */
+export function projectImagesForTextModel(
+  messages: readonly import("./messages.js").ChatMessage[],
+): readonly import("./messages.js").ChatMessage[] {
+  let changed = false;
+  const out = messages.map((message) => {
+    if (message.role !== "user" && message.role !== "tool") return message;
+    const next = projectImageContentForTextModel(message.content);
+    if (next === message.content) return message;
+    changed = true;
+    return { ...message, content: next };
+  });
+  return changed ? out : messages;
+}
+
 export function contentHasImage(content: MessageContent): boolean {
   if (typeof content === "string") return false;
   return content.some((block) => isImageBlock(block) && block.offloaded !== true);

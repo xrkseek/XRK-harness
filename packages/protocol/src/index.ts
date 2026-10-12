@@ -38,7 +38,11 @@ export {
   mergeMessageContents,
   projectFileContentToText,
   projectFilesToText,
+  projectImageContentForTextModel,
+  projectImagesForTextModel,
   readerText,
+  requestImageHandleText,
+  textOnlyImageText,
 } from "./content.js";
 export {
   isSessionEvent,
