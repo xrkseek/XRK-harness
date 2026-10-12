@@ -274,6 +274,30 @@ describe('chat row terminal body', () => {
     expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
   })
 
+  it('follows Settings hydrate false→true until the reader toggles', () => {
+    const view = render(
+      <ToolDefaultExpandedContext.Provider value={false}>
+        <GenericToolCard {...ownerProps(settled())} />
+      </ToolDefaultExpandedContext.Provider>,
+    )
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('false')
+    view.rerender(
+      <ToolDefaultExpandedContext.Provider value={true}>
+        <GenericToolCard {...ownerProps(settled())} />
+      </ToolDefaultExpandedContext.Provider>,
+    )
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(view.container.querySelector('[data-expandable]')!)
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('false')
+    view.rerender(
+      <ToolDefaultExpandedContext.Provider value={true}>
+        <GenericToolCard {...ownerProps(settled())} />
+      </ToolDefaultExpandedContext.Provider>,
+    )
+    // Manual collapse wins over a still-true Settings value.
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('a long output renders in full — the scroll container replaces the middle collapse', () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line-${i}`)
     const view = render(<GenericToolCard {...ownerProps(settled({

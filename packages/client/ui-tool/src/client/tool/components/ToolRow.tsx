@@ -24,7 +24,7 @@ import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-mod
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import { terminalBlockLabels, type TerminalCardModel } from '../models/terminal-card-model.ts'
 import type { ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
-import { useToolDefaultExpanded } from '../tool-default-expanded.ts'
+import { useToolExpandState } from '../tool-default-expanded.ts'
 import css from './ToolRow.module.css'
 
 type MediaRenderSlot = PropsRenderSlots<'tool.call.images' | 'tool.call.files'>['renderSlot']
@@ -142,8 +142,7 @@ export function ToolRow({
   onOpenFile,
   inspect,
 }: ToolRowProps) {
-  const defaultExpanded = useToolDefaultExpanded()
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, toggleExpand] = useToolExpandState()
   const terminalBody = terminal ?? null
   const diffBody = diff ?? null
   const readBody = read ?? null
@@ -169,9 +168,6 @@ export function ToolRow({
     && loadImage !== undefined
     ? imageBody.images[0]?.attachment
     : undefined
-  const toggleExpand = () => {
-    setExpanded(v => !v)
-  }
   const openFile = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     if (filePath !== undefined) onOpenFile?.(filePath)

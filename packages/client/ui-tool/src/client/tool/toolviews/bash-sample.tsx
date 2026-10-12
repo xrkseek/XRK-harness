@@ -13,7 +13,7 @@
 // second scrollport; maxLines Infinity — no middle collapse). An error row's
 // collapsed summary is the failure's first line in the error color.
 
-import { useState, type KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { Context } from '@xrkseek/cordis'
 import clsx from 'clsx'
 import {
@@ -23,7 +23,7 @@ import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { terminalBlockLabels, terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { toolRowModel, type ToolRowState } from '../models/tool-call-model.ts'
-import { useToolDefaultExpanded } from '../tool-default-expanded.ts'
+import { useToolExpandState } from '../tool-default-expanded.ts'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 import css from './bash-sample.module.css'
 
@@ -66,8 +66,7 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
     ? 'error'
     : model.state
   const status = stateStatus(state, t)
-  const defaultExpanded = useToolDefaultExpanded()
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, toggleExpand] = useToolExpandState()
   // Execution failures (for example cancellation before the process reports a
   // terminal result) use the generic presenter. Keep their recorded args and
   // full error reachable instead of collapsing the row to the first line.
@@ -77,9 +76,6 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
   const expandable = terminal !== null || genericError
   const open = expanded && expandable
   const failureLine = model.state === 'error' ? model.errorSummary : null
-  const toggleExpand = () => {
-    setExpanded(v => !v)
-  }
   const toggleFromKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!expandable || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()

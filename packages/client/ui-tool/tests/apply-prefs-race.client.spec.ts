@@ -1,29 +1,30 @@
 // @vitest-environment jsdom
-/** ui-tool must not capture an orphan toolsDefaultExpanded store at apply time. */
+/** ui-tool waits on conversationUiPrefs so ToolCallTree never gets an orphan store. */
 import { describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
-import { apply } from '../src/client/apply.ts'
+import { apply, inject } from '../src/client/apply.ts'
 
-describe('ui-tool apply prefs race', () => {
-  it('binds ToolCallTree inject to conversationUiPrefs resolved when the chat.node slot appears', () => {
+describe('ui-tool apply prefs wiring', () => {
+  it('lists conversationUiPrefs in cordis inject (no apply-time orphan fallback)', () => {
+    expect(inject).toContain('conversationUiPrefs')
+  })
+
+  it('binds ToolCallTree inject to the provided conversationUiPrefs store', () => {
     const live = createSnapshotStore(false)
-    let prefsReady = false
-    let slotFactory: (() => { inject: () => { hooks: { toolsDefaultExpanded: typeof live } } }) | undefined
+    let registered: { inject: () => { hooks: { toolsDefaultExpanded: typeof live } } } | undefined
 
     const ctx = {
       get(name: string) {
         if (name === 'connection') {
           return { hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} } }
         }
-        if (name === 'conversationUiPrefs') {
-          return prefsReady ? { toolsDefaultExpanded: live } : undefined
-        }
         return undefined
       },
+      conversationUiPrefs: { toolsDefaultExpanded: live },
       slots: {
         inject(_key: string, factory: () => unknown) {
-          slotFactory = factory as typeof slotFactory
+          registered = factory() as typeof registered
         },
         register(options: { inject: () => { hooks: { toolsDefaultExpanded: typeof live } } }) {
           return options
@@ -32,14 +33,9 @@ describe('ui-tool apply prefs race', () => {
       plugin: vi.fn(),
     } as unknown as ClientContext
 
-    // Fiber apply races ahead of ui-conversation.provide — prefs absent.
     apply(ctx)
-    expect(slotFactory).toBeTypeOf('function')
-
-    // conversation.chat.node declaration fires the deferred factory after provide.
-    prefsReady = true
-    const registered = slotFactory!()
-    const bound = registered.inject().hooks.toolsDefaultExpanded
+    expect(registered).toBeDefined()
+    const bound = registered!.inject().hooks.toolsDefaultExpanded
     expect(bound).toBe(live)
 
     live.set(true)
