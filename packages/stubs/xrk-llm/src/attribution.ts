@@ -9,11 +9,20 @@
 
 import { createRequire } from 'node:module'
 
-// The package's own manifest is the single source of the version so the
-// User-Agent cannot drift from what is published (`./package.json` is an
-// export of this package; the relative path resolves from both `src/` and
-// the bundled `lib/`).
-const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
+// Package version for User-Agent. Emitted files live under `lib/types/`, so
+// `../package.json` hits a build-time `lib/package.json` when present and
+// `../../package.json` is the published package root (Desktop npm layout).
+const version = (() => {
+  const req = createRequire(import.meta.url)
+  for (const rel of ['../package.json', '../../package.json'] as const) {
+    try {
+      return (req(rel) as { version: string }).version
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return '0.0.0'
+})()
 
 /**
  * Static public application identity sent to LLM providers.
