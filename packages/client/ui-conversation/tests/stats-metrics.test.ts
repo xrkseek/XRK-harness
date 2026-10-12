@@ -37,12 +37,13 @@ describe('stats-metrics', () => {
       cacheReadTokens: 90,
       cacheWriteTokens: 100,
     })).toBe(200)
+    // Writes populate cache; hit rate is read / (uncached + read).
     expect(cacheHitPercent({
       uncachedInputTokens: 10,
       outputTokens: 7,
       cacheReadTokens: 90,
       cacheWriteTokens: 100,
-    })).toBe('45')
+    })).toBe('90')
   })
 
   it('computes context occupancy only when both numerator and capacity are known', () => {

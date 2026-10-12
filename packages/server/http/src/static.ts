@@ -134,6 +134,13 @@ export async function tryServeWebStatic(
 
   if (!st?.isFile()) {
     if (url.pathname.startsWith("/plugins/")) {
+      // Extensionless plugin paths are Cordis/dsh-compat host API surfaces
+      // (status/probe/…). Do not terminal-404 here — tryHandlePublic may have
+      // yielded and a later handler, or the HTTP 404 JSON path, should answer.
+      const base = path.basename(url.pathname);
+      if (!path.extname(base)) {
+        return false;
+      }
       res.writeHead(404, extraHeaders);
       res.end("not found");
       return true;

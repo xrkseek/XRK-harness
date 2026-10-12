@@ -101,12 +101,14 @@ export function formatDuration(ms: number, t: StatsDurationTranslate): string {
 }
 
 /**
- * Display-ready cache-hit share of prompt-side input over the whole durable log.
+ * Display-ready cache-hit share of prompt tokens that were reads vs misses.
+ * Cache *writes* (population) stay out of the denominator — including them
+ * understated the StatsLine 「缓存命中」pill on warm DeepSeek turns.
  * @param usage - the session's token-usage projection value.
- * @returns percentage text, or null when there was no billed input.
+ * @returns percentage text, or null when there was no prompt input.
  */
 export function cacheHitPercent(usage: TokenUsageProjection): string | null {
-  const denominator = billedInputTokens(usage)
+  const denominator = usage.uncachedInputTokens + usage.cacheReadTokens
   return formatCacheHitPercent(usage.cacheReadTokens, denominator)
 }
 
