@@ -365,47 +365,49 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                       {capacityField(model, index, 'contextWindow', props.defaultContextWindow)}
                       {capacityField(model, index, 'maxTokens', props.defaultMaxTokens)}
                       {capacityField(model, index, 'softBudgetMaxTokens', undefined)}
-                      <fieldset className={styles['modelField']}>
-                        <legend className={styles['modelFieldLabel']}>{props.t('inputModalities')}</legend>
-                        <label className={styles['modalityCheck']}>
-                          <input
-                            type="checkbox"
-                            checked={Array.isArray(model['inputModalities'])
-                              ? (model['inputModalities'] as unknown[]).includes('text')
-                              : true}
-                            disabled={props.disabled}
-                            onChange={(event) => {
-                              const cur = Array.isArray(model['inputModalities'])
-                                ? [...(model['inputModalities'] as ("text" | "image")[])]
-                                : (['text'] as ("text" | "image")[])
-                              const next = event.target.checked
-                                ? (cur.includes('text') ? cur : [...cur, 'text' as const])
-                                : cur.filter(m => m !== 'text')
-                              update(index, 'inputModalities', next.length > 0 ? next : ['text'])
-                            }}
-                          />
-                          {props.t('modalityText')}
-                        </label>
-                        <label className={styles['modalityCheck']}>
-                          <input
-                            type="checkbox"
-                            checked={Array.isArray(model['inputModalities'])
-                              ? (model['inputModalities'] as unknown[]).includes('image')
-                              : false}
-                            disabled={props.disabled}
-                            onChange={(event) => {
-                              const cur = Array.isArray(model['inputModalities'])
-                                ? [...(model['inputModalities'] as ("text" | "image")[])]
-                                : (['text'] as ("text" | "image")[])
-                              const next = event.target.checked
-                                ? (cur.includes('image') ? cur : [...cur, 'image' as const])
-                                : cur.filter(m => m !== 'image')
-                              update(index, 'inputModalities', next.length > 0 ? next : ['text'])
-                            }}
-                          />
-                          {props.t('modalityImage')}
-                        </label>
-                      </fieldset>
+                      <div className={styles['modelField']}>
+                        <span className={styles['modelFieldLabel']}>{props.t('inputModalities')}</span>
+                        <div className={styles['modalityRow']}>
+                          <label className={styles['modalityCheck']}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(model['inputModalities'])
+                                ? (model['inputModalities'] as unknown[]).includes('text')
+                                : true}
+                              disabled={props.disabled}
+                              onChange={(event) => {
+                                const cur = Array.isArray(model['inputModalities'])
+                                  ? [...(model['inputModalities'] as ("text" | "image")[])]
+                                  : (['text'] as ("text" | "image")[])
+                                const next = event.target.checked
+                                  ? (cur.includes('text') ? cur : [...cur, 'text' as const])
+                                  : cur.filter(m => m !== 'text')
+                                update(index, 'inputModalities', next.length > 0 ? next : ['text'])
+                              }}
+                            />
+                            {props.t('modalityText')}
+                          </label>
+                          <label className={styles['modalityCheck']}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(model['inputModalities'])
+                                ? (model['inputModalities'] as unknown[]).includes('image')
+                                : false}
+                              disabled={props.disabled}
+                              onChange={(event) => {
+                                const cur = Array.isArray(model['inputModalities'])
+                                  ? [...(model['inputModalities'] as ("text" | "image")[])]
+                                  : (['text'] as ("text" | "image")[])
+                                const next = event.target.checked
+                                  ? (cur.includes('image') ? cur : [...cur, 'image' as const])
+                                  : cur.filter(m => m !== 'image')
+                                update(index, 'inputModalities', next.length > 0 ? next : ['text'])
+                              }}
+                            />
+                            {props.t('modalityImage')}
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   )
                   : null}

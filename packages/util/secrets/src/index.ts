@@ -16,6 +16,7 @@ export {
   resolveSecretStore,
   type SecretsBackendKind,
 } from "./resolve.js";
+export { credentialRef, type CredentialRef } from "./credential-ref.js";
 
 import {
   XRK_KEYRING_SERVICE,

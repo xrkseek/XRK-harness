@@ -1,6 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { PluginEntryId, PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
-import { startBoundCreatorDraft } from '@xrkseek/client-runtime/client'
 import {
   Button,
   IconBrowseOutline16,
@@ -8,7 +7,6 @@ import {
   IconChevronDownOutline14,
   IconEllipsisOutline16,
   IconEnhanceOutline16,
-  IconPlusOutline16,
   IconSearchOutline16,
   IconSettingsOutline16,
   Menu,
@@ -856,21 +854,50 @@ export function PluginInventorySettingsTab({
               </span>
             </div>
             <p className={css.scopeSub}>{t('globalSubtitle')}</p>
-            <p className={css.scopeSub}>
-              <button
-                type="button"
-                className={css.creatorButton}
-                onClick={() => {
-                  if (!startBoundCreatorDraft()) {
-                    setActionError(t('creatorDraftUnavailable'))
-                  }
-                }}
-              >
-                <IconPlusOutline16 size={14} aria-hidden="true" />
-                {t('creatorDraft')}
-              </button>
-              <span className={css.optionalBundleHint}>{t('gitWorktreesHint')}</span>
-            </p>
+            {state.status === 'ready' ? (() => {
+              const gitWt = state.snapshot.entries.find(
+                (entry) => entry.entryId === 'git-worktrees',
+              )
+              if (!gitWt) return null
+              const busy = busyId === gitWt.entryId
+              return (
+                <div className={css.optionalBundleRow} data-optional-bundle="git-worktrees">
+                  <div className={css.optionalBundleText}>
+                    <div className={css.optionalBundleTitle}>{t('gitWorktreesTitle')}</div>
+                    <div className={css.optionalBundleHint}>{t('gitWorktreesHint')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={css.optionalBundleSwitch}
+                    role="switch"
+                    aria-checked={gitWt.enabled}
+                    aria-label={t('gitWorktreesSwitch')}
+                    disabled={busy}
+                    onClick={() => {
+                      const next = !gitWt.enabled
+                      void runManaged(
+                        gitWt.entryId,
+                        () => setEnabled(gitWt.entryId, next),
+                        {
+                          notice: t(next ? 'toastEnabled' : 'toastDisabled', {
+                            name: t('gitWorktreesTitle'),
+                          }),
+                          clientRefresh: true,
+                        },
+                      )
+                    }}
+                  >
+                    <span
+                      className={css.optionalBundleTrack}
+                      data-on={gitWt.enabled || undefined}
+                      aria-hidden="true"
+                    >
+                      <span className={css.optionalBundleThumb} />
+                    </span>
+                  </button>
+                </div>
+              )
+            })() : null}
             {globalOpen ? (
               <div id={`${catalogId}-global`} className={css.scopeBody}>
           {state.snapshot.entries.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
@@ -1023,18 +1050,26 @@ export function PluginInventorySettingsTab({
                                 <IconEllipsisOutline16 size={14} />
                               </button>
                             )}
-                            items={[
-                              { id: 'edit', label: t('edit'), disabled: busy || installBusy },
-                              { id: 'reload', label: t('reload'), disabled: busy || installBusy },
-                              { id: 'update', label: t('update'), disabled: busy || installBusy },
-                              {
-                                id: 'toggle',
-                                label: entry.enabled ? t('disable') : t('enable'),
-                                disabled: busy || installBusy,
-                              },
-                              { type: 'separator', id: 'remove-sep' },
-                              { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
-                            ]}
+                            items={entry.entryId === 'git-worktrees'
+                              ? [
+                                {
+                                  id: 'toggle',
+                                  label: entry.enabled ? t('disable') : t('enable'),
+                                  disabled: busy || installBusy,
+                                },
+                              ]
+                              : [
+                                { id: 'edit', label: t('edit'), disabled: busy || installBusy },
+                                { id: 'reload', label: t('reload'), disabled: busy || installBusy },
+                                { id: 'update', label: t('update'), disabled: busy || installBusy },
+                                {
+                                  id: 'toggle',
+                                  label: entry.enabled ? t('disable') : t('enable'),
+                                  disabled: busy || installBusy,
+                                },
+                                { type: 'separator', id: 'remove-sep' },
+                                { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
+                              ]}
                             onSelect={(id) => {
                               setMenuEntryId(null)
                               const name = title

@@ -105,9 +105,10 @@ export const zh = {
   installGuideSafety: '安装会写入 ~/.xrk/plugins；来源不明的包请自行审阅后再装。',
   installErrorHint: '检查包名、网络，或对照下方安装日志排查。',
   installSuccessHint: '已写入磁盘。启停 / 删除 / 重载 / 更新 / 安装后，若列表或 client 半部未生效，请刷新页面。',
-  creatorDraft: '让 Agent 创建插件',
-  creatorDraftUnavailable: '请先打开工作区后再启动创作会话。',
-  gitWorktreesHint: '实验包 git-worktrees 默认关闭；启用后模型可用 create_worktree。',
+  gitWorktreesTitle: '主会话 Git worktree',
+  gitWorktreesHint:
+    '给主会话 / XRKH 子代理各开独立 linked checkout（.xrk/worktrees），便于协作；默认关闭。开启后模型可用 create_worktree。',
+  gitWorktreesSwitch: '启用主会话 Git worktree',
 } satisfies Record<string, string>
 
 /** Plugin inventory locale key union. */
@@ -218,7 +219,8 @@ export const en = {
   installGuideSafety: 'Install writes ~/.xrk/plugins. Review untrusted packages before installing.',
   installErrorHint: 'Check the package name and network, or the install log below.',
   installSuccessHint: 'Written to disk. After enable / disable / delete / reload / update / install, refresh the page if the list or client half does not update.',
-  creatorDraft: 'Have the Agent create a plugin',
-  creatorDraftUnavailable: 'Open a workspace before starting a Creator session.',
-  gitWorktreesHint: 'Optional git-worktrees is off by default; enable it to expose create_worktree.',
+  gitWorktreesTitle: 'Main-session Git worktree',
+  gitWorktreesHint:
+    'Give the main session / XRKH subagents separate linked checkouts under .xrk/worktrees for collaboration. Off by default; enable to expose create_worktree.',
+  gitWorktreesSwitch: 'Enable main-session Git worktree',
 } satisfies Record<PluginInventoryLocaleKey, string>

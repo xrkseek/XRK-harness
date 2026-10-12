@@ -3,6 +3,27 @@
 export type FaceArgSpec = readonly string[] | 'args'
 
 /**
+ * DSH session-controller Remote names → Face dotted methods.
+ * Keeps community `ctx.remote.session.*` call sites working on Face wire.
+ */
+const SESSION_METHOD_ALIASES: Readonly<Record<string, string>> = {
+  modelCatalog: 'session.models',
+  page: 'session.history',
+}
+
+/**
+ * Face RPC path for one Remote call.
+ * Session handlers are dotted (`session.list`); other remotes use slash
+ * (`commands/list`). Community clients inject `remote.session`.
+ */
+export function faceRemoteEndpoint(namespace: string, method: string): string {
+  if (namespace === 'session') {
+    return SESSION_METHOD_ALIASES[method] ?? `${namespace}.${method}`
+  }
+  return `${namespace}/${method}`
+}
+
+/**
  * Pack positional Remote arguments into the Face unary `{ args }` object.
  * `'args'` means the first business argument is already the wire bag
  * (messageFeedback). A trailing `AbortSignal` is dropped.

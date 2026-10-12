@@ -161,27 +161,50 @@ describe('require resolution', () => {
   it('remaps require("@deepseek-ai/dsh-client-*") onto @xrkseek seed ids', async () => {
     const prim = { marker: 'primitives' }
     const slots = { marker: 'slots' }
+    const models = { marker: 'model-selection' }
     const b = bench([row('community')], {
       community: req => ({
         prim: req('@deepseek-ai/dsh-client-ui-primitives'),
         slots: req('@deepseek-ai/dsh-client-ui-slots'),
+        renderer: req('@deepseek-ai/dsh-client-ui-renderer'),
+        modelSelection: req('@deepseek-ai/dsh-client-ui-model-selection'),
         runtimeClient: req('@deepseek-ai/dsh-client-runtime/client'),
       }),
     }, {
       seed: {
         '@xrkseek/client-ui-primitives': prim,
         '@xrkseek/client-ui-slots': slots,
+        '@xrkseek/client-ui-model-selection': models,
         '@xrkseek/client-runtime': { marker: 'runtime' },
       },
     })
     const exports = await b.loader.import('community', '', {}) as {
       prim: { marker: string }
       slots: { marker: string }
+      renderer: { marker: string }
+      modelSelection: { marker: string }
       runtimeClient: { marker: string }
     }
     expect(exports.prim).toBe(prim)
     expect(exports.slots).toBe(slots)
+    expect(exports.renderer).toBe(slots)
+    expect(exports.modelSelection).toBe(models)
     expect(exports.runtimeClient.marker).toBe('runtime')
+  })
+
+  it('remaps require("@deepseek-ai/dsh-api-session-controller") onto api-remotes', async () => {
+    const remotes = { marker: 'api-remotes' }
+    const b = bench([row('community')], {
+      community: req => ({
+        session: req('@deepseek-ai/dsh-api-session-controller'),
+      }),
+    }, {
+      seed: { '@xrkseek/xrk-api-remotes': remotes },
+    })
+    const exports = await b.loader.import('community', '', {}) as {
+      session: { marker: string }
+    }
+    expect(exports.session).toBe(remotes)
   })
 
   it('remaps require("@deepseek-ai/cordis") onto the @xrkseek/cordis seed', async () => {

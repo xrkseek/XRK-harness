@@ -16,12 +16,19 @@ const EXACT: Readonly<Record<string, string>> = {
   "@deepseek-ai/dsh-client-ui-primitives": "@xrkseek/client-ui-primitives",
   "@deepseek-ai/dsh-client-ui-conversation": "@xrkseek/client-ui-conversation",
   "@deepseek-ai/dsh-client-ui-attachment": "@xrkseek/client-ui-attachment",
+  "@deepseek-ai/dsh-client-ui-reference": "@xrkseek/client-ui-reference",
+  // DSH put SlotRegistry on ui-renderer; XRK owns it on ui-slots.
+  "@deepseek-ai/dsh-client-ui-renderer": "@xrkseek/client-ui-slots",
   "@deepseek-ai/dsh-client-web-react": "@xrkseek/client-web-react",
   "@deepseek-ai/dsh-client-schema-form": "@xrkseek/client-schema-form",
   "@deepseek-ai/dsh-client-modules": "@xrkseek/client-modules",
+  "@deepseek-ai/dsh-client-ui-model-selection": "@xrkseek/client-ui-model-selection",
   // Non-client-prefixed remotes (same map as modules/dsh-require-remap).
   "@deepseek-ai/dsh-api-remotes": "@xrkseek/xrk-api-remotes",
   "@deepseek-ai/dsh-api-gateway": "@xrkseek/xrk-api-gateway",
+  // DSH mounts session Remote via session-controller; XRK binds Face session
+  // on api-remotes (`remote.session`). Keep inject edge so boot waits correctly.
+  "@deepseek-ai/dsh-api-session-controller": "@xrkseek/xrk-api-remotes",
 };
 
 /**

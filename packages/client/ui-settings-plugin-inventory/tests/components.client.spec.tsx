@@ -91,12 +91,46 @@ const SNAPSHOT = {
 } as unknown as Snapshot
 
 describe('PluginInventorySettingsTab', () => {
+  it('exposes a clickable git-worktrees switch for main-session / subagent collaboration', async () => {
+    const setEnabled = vi.fn(async () => {})
+    const snapshot = {
+      ...SNAPSHOT,
+      entries: [
+        {
+          entryId: 'git-worktrees',
+          moduleName: 'git-worktrees',
+          enabled: false,
+          fiberPhase: null,
+          managed: true,
+          kind: 'process',
+        },
+        ...SNAPSHOT.entries,
+      ],
+    } as unknown as Snapshot
+    render(<PluginInventorySettingsTab {...props(async () => snapshot, { setEnabled })} />)
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: en.gitWorktreesSwitch })).toBeTruthy()
+    })
+    expect(screen.getByText(en.gitWorktreesTitle)).toBeTruthy()
+    expect(screen.getByText(en.gitWorktreesHint)).toBeTruthy()
+    const sw = screen.getByRole('switch', { name: en.gitWorktreesSwitch })
+    expect(sw.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(sw)
+    await waitFor(() => {
+      expect(setEnabled).toHaveBeenCalledWith('git-worktrees', true)
+    })
+  })
+
   it('renders runtime status only for enabled plugins and pins custom actions', async () => {
     const deferred = Promise.withResolvers<Snapshot>()
     const list = vi.fn(() => deferred.promise)
     const setEnabled = vi.fn(async () => {})
     const remove = vi.fn(async () => {})
-    const update = vi.fn(async () => {})
+    const update = vi.fn(async () => ({
+      command: 'xrkh plugin add xrkh-better-sidebar@latest',
+      output: '',
+      exitCode: 0,
+    }))
     const open = vi.fn(async () => {})
     const view = render(<PluginInventorySettingsTab {...props(list, { setEnabled, remove, update, open })} />)
     expect(screen.getByText(en.loading)).toBeTruthy()
@@ -131,7 +165,9 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getByRole('menuitem', { name: en.disable })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: en.remove })).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: en.update }))
-    await waitFor(() => { expect(update).toHaveBeenCalledWith('xrkh-better-sidebar') })
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith('xrkh-better-sidebar', expect.any(String))
+    })
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toBe(en.toastUpdated.replace('{name}', 'better-sidebar'))
     })
@@ -171,7 +207,11 @@ describe('PluginInventorySettingsTab', () => {
     await waitFor(() => {
       const hint = view.container.querySelector('[data-client-refresh-hint]')
       expect(hint).toBeTruthy()
-      expect(hint!.textContent).toContain(en.clientRefreshHint)
+      // Update leaves installSuccess; later toggles/remove keep the refresh row.
+      const hintText = hint!.textContent ?? ''
+      expect(
+        hintText.includes(en.clientRefreshHint) || hintText.includes(en.installSuccessHint),
+      ).toBe(true)
       // Failed-fiber banner also exposes refresh — assert the hint row's button.
       expect(hint!.querySelector('button')?.textContent).toBe(en.refreshPage)
     })

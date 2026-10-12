@@ -376,9 +376,23 @@ export async function handleDesktopProtocolRequest(
     return fromDisk;
   }
 
-  // Hashed /assets and extensioned statics stay on disk (honest miss = 404).
+  // Packaged Vite `/assets/*` and other extensioned paths: try disk first.
+  // Honest 404 for missing `/assets/*` (never Host). Other extensioned misses
+  // (skin preview · community rasters · hashed artwork) fall through to Host
+  // so Desktop does not blank skin UI that DSH serves from the Host tree.
   if (isDesktopStaticAssetPath(url.pathname)) {
-    return serveDesktopStaticAsset(options.webRoot, request, staticOpts);
+    const fromDisk = await serveDesktopStaticAsset(
+      options.webRoot,
+      request,
+      staticOpts,
+    );
+    if (fromDisk.status !== 404) return fromDisk;
+    const packagedAssets =
+      url.pathname === "/assets" || url.pathname.startsWith("/assets/");
+    if (hostUp && !packagedAssets) {
+      return fetchApp(request);
+    }
+    return fromDisk;
   }
 
   // Host-up: every remaining path is a Host surface (community root, unlisted

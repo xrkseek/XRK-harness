@@ -1,0 +1,119 @@
+/**
+ * Merge community Cordis LLM catalog rows into Face `llm-pi-ai` models.
+ *
+ * Re-sync must keep user-edited capacities (`softBudgetMaxTokens`, `maxTokens`, …)
+ * while refreshing id/name/context from the adapter catalog.
+ */
+
+export interface CommunitySyncModelIn {
+  readonly id: string;
+  readonly name?: string;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly softBudgetMaxTokens?: number;
+  readonly inputModalities?: readonly ("text" | "image")[];
+}
+
+export interface CommunitySyncModelOut {
+  readonly id: string;
+  readonly name?: string;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly softBudgetMaxTokens?: number;
+  readonly inputModalities?: readonly ("text" | "image")[];
+}
+
+/** Soft ceiling from context when the catalog omits one (DeepSeek-ish 75%, ≥8k). */
+export function defaultSoftBudgetMaxTokens(
+  contextWindow: number | undefined,
+): number | undefined {
+  if (
+    typeof contextWindow !== "number" ||
+    !Number.isFinite(contextWindow) ||
+    contextWindow < 8_000
+  ) {
+    return undefined;
+  }
+  const raw = Math.min(300_000, Math.floor(contextWindow * 0.75));
+  const stepped = Math.floor(raw / 1_000) * 1_000;
+  return stepped >= 8_000 ? stepped : 8_000;
+}
+
+function positiveInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function modalitiesOf(
+  value: unknown,
+): readonly ("text" | "image")[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const mods = value
+    .map((m) => String(m).trim())
+    .filter((m): m is "text" | "image" => m === "text" || m === "image");
+  return mods.length > 0 ? [...new Set(mods)] : undefined;
+}
+
+/** Existing `llm-pi-ai.providers.<id>` row from Face settings (merged layers). */
+export function existingPiAiProvider(
+  llmPiAiValue: unknown,
+  providerId: string,
+): Record<string, unknown> | undefined {
+  if (!llmPiAiValue || typeof llmPiAiValue !== "object") return undefined;
+  const providers = (llmPiAiValue as { providers?: unknown }).providers;
+  if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
+    return undefined;
+  }
+  const row = (providers as Record<string, unknown>)[providerId];
+  if (!row || typeof row !== "object" || Array.isArray(row)) return undefined;
+  return row as Record<string, unknown>;
+}
+
+/**
+ * @param incoming - adapter catalog rows (WorkBuddy · OFM · …).
+ * @param previousModels - existing `providers.<id>.models` from Face settings.
+ */
+export function mergeCommunityProviderModels(
+  incoming: readonly CommunitySyncModelIn[],
+  previousModels: unknown,
+): CommunitySyncModelOut[] {
+  const prevById = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(previousModels)) {
+    for (const row of previousModels) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      const id = (row as { id?: unknown }).id;
+      if (typeof id !== "string" || !id.trim()) continue;
+      prevById.set(id.trim(), row as Record<string, unknown>);
+    }
+  }
+
+  return incoming.map((m) => {
+    const prev = prevById.get(m.id);
+    const contextWindow =
+      positiveInt(m.contextWindow) ?? positiveInt(prev?.contextWindow);
+    const maxTokens = positiveInt(m.maxTokens) ?? positiveInt(prev?.maxTokens);
+    // User-edited soft budget wins over catalog / derived defaults.
+    const softBudgetMaxTokens =
+      positiveInt(prev?.softBudgetMaxTokens) ??
+      positiveInt(m.softBudgetMaxTokens) ??
+      defaultSoftBudgetMaxTokens(contextWindow);
+    const inputModalities =
+      modalitiesOf(m.inputModalities) ?? modalitiesOf(prev?.inputModalities);
+    const name =
+      typeof m.name === "string" && m.name.trim()
+        ? m.name.trim()
+        : typeof prev?.name === "string" && prev.name.trim()
+          ? prev.name.trim()
+          : undefined;
+
+    return {
+      id: m.id,
+      ...(name ? { name } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(softBudgetMaxTokens !== undefined ? { softBudgetMaxTokens } : {}),
+      ...(inputModalities ? { inputModalities } : {}),
+    };
+  });
+}

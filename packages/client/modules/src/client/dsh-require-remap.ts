@@ -15,11 +15,17 @@ const EXACT: Readonly<Record<string, string>> = {
   "@deepseek-ai/dsh-client-ui-conversation": "@xrkseek/client-ui-conversation",
   "@deepseek-ai/dsh-client-ui-attachment": "@xrkseek/client-ui-attachment",
   "@deepseek-ai/dsh-client-ui-reference": "@xrkseek/client-ui-reference",
+  // DSH put SlotRegistry on ui-renderer; XRK owns it on ui-slots.
+  "@deepseek-ai/dsh-client-ui-renderer": "@xrkseek/client-ui-slots",
   "@deepseek-ai/dsh-client-web-react": "@xrkseek/client-web-react",
   "@deepseek-ai/dsh-client-schema-form": "@xrkseek/client-schema-form",
   "@deepseek-ai/dsh-client-modules": "@xrkseek/client-modules",
+  "@deepseek-ai/dsh-client-ui-model-selection": "@xrkseek/client-ui-model-selection",
   "@deepseek-ai/dsh-api-remotes": "@xrkseek/xrk-api-remotes",
   "@deepseek-ai/dsh-api-gateway": "@xrkseek/xrk-api-gateway",
+  // Session Remote lives on Face via api-remotes `$bindFace` (not a separate
+  // session-controller package on XRK).
+  "@deepseek-ai/dsh-api-session-controller": "@xrkseek/xrk-api-remotes",
 };
 
 /**

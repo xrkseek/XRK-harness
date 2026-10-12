@@ -372,7 +372,7 @@ describe("managed plugin inventory paths", () => {
     expect(resolveManagedPluginsDir(runtime)).toBe(path.resolve(altRoot));
     expect(
       listFacePluginInventory(runtime).map((e) => e.entryId),
-    ).toEqual(["real-plugin"]);
+    ).toEqual(["git-worktrees", "real-plugin"]);
     setFacePluginInventoryEnabled(runtime, "real-plugin", false);
     expect(existsSync(path.join(altRoot, "web", "boot.json"))).toBe(false);
     expect(
@@ -526,5 +526,55 @@ describe("managed plugin inventory paths", () => {
     expect(existsSync(path.join(plugins, ".xrk-plugins-disabled.json"))).toBe(
       false,
     );
+  });
+
+  it("lists git-worktrees as a toggleable optional bundle even when not installed", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-git-wt-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    const runtime = runtimeAt(productDir, {
+      plugins: [],
+      webPlugins: [],
+      hostPublic: { pluginsDir: plugins },
+    });
+    const row = listFacePluginInventory(runtime).find(
+      (e) => e.entryId === "git-worktrees",
+    );
+    expect(row).toMatchObject({
+      entryId: "git-worktrees",
+      managed: true,
+      enabled: false,
+      kind: "process",
+    });
+    expect(row?.needsRestart).toBeUndefined();
+    expect(setFacePluginInventoryEnabled(runtime, "git-worktrees", true)).toEqual(
+      { ok: true },
+    );
+    const enabled = listFacePluginInventory(runtime).find(
+      (e) => e.entryId === "git-worktrees",
+    );
+    expect(enabled?.enabled).toBe(true);
+    // Host-gated optional: enable without a live process half must not sticky-flag.
+    expect(enabled?.needsRestart).toBeUndefined();
+  });
+
+  it("marks needsRestart when soft-disabled optional is still live in Host", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-git-wt-live-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    writeDisabledPluginIds(runtimeAt(productDir), new Set(["git-worktrees"]));
+    const listed = listFacePluginInventory(
+      runtimeAt(productDir, {
+        plugins: [{ id: "git-worktrees", kind: "tools" }],
+        webPlugins: [],
+        hostPublic: { pluginsDir: plugins },
+      }),
+    );
+    expect(listed.find((e) => e.entryId === "git-worktrees")).toMatchObject({
+      enabled: false,
+      needsRestart: true,
+    });
   });
 });

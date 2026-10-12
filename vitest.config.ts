@@ -88,6 +88,52 @@ export default defineConfig({
       ["@xrkseek/xrk-llm/message", path.join(root, "packages/stubs/xrk-llm/src/message.ts")],
       ["@xrkseek/xrk-llm/src/error.ts", path.join(root, "packages/stubs/xrk-llm/src/error.ts")],
       ["@xrkseek/xrk-llm", path.join(root, "packages/stubs/xrk-llm/src/index.ts")],
+      // Community Cordis host remaps (WorkBuddy lib/*) — mirror host-module-remap-hook.
+      [
+        "@deepseek-ai/dsh-atomic-write",
+        path.join(root, "packages/stubs/xrk-atomic-write/src/index.ts"),
+      ],
+      [
+        "@deepseek-ai/dsh-home-paths",
+        path.join(root, "packages/util/home-paths/src/index.ts"),
+      ],
+      ["@deepseek-ai/dsh-llm", path.join(root, "packages/stubs/xrk-llm/src/index.ts")],
+      [
+        "@deepseek-ai/dsh-llm-pi-ai",
+        path.join(root, "packages/stubs/xrk-llm-pi-ai/src/index.ts"),
+      ],
+      ["@deepseek-ai/schemastery", path.join(root, "packages/schemastery/src/index.ts")],
+      ["@deepseek-ai/cordis", path.join(root, "packages/cordis/src/index.ts")],
+      // Real pi-ai (stub re-exports it). Do not alias earendil → xrk-pi-ai or
+      // the shim's `export * from "@earendil-works/pi-ai"` loops onto itself.
+      [
+        "@earendil-works/pi-ai/api/openai-completions.lazy",
+        path.join(
+          root,
+          "packages/stubs/xrk-pi-ai/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.lazy.js",
+        ),
+      ],
+      [
+        "@earendil-works/pi-ai",
+        path.join(
+          root,
+          "packages/stubs/xrk-pi-ai/node_modules/@earendil-works/pi-ai/dist/index.js",
+        ),
+      ],
+      ["@xrkseek/xrk-pi-ai", path.join(root, "packages/stubs/xrk-pi-ai/src/index.ts")],
+      [
+        "@xrkseek/xrk-pi-ai/api/openai-completions.lazy",
+        path.join(root, "packages/stubs/xrk-pi-ai/src/openai-completions.ts"),
+      ],
+      [
+        "@xrkseek/xrk-llm-pi-ai",
+        path.join(root, "packages/stubs/xrk-llm-pi-ai/src/index.ts"),
+      ],
+      [
+        "@xrkseek/xrk-atomic-write",
+        path.join(root, "packages/stubs/xrk-atomic-write/src/index.ts"),
+      ],
+      ["@xrkseek/xrk-home-paths", path.join(root, "packages/util/home-paths/src/index.ts")],
     ]),
   },
   test: {

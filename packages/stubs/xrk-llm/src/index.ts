@@ -43,6 +43,16 @@ export { BlockAssembler } from './assembler.ts'
 export { callConfigEquals, deepFreeze, isAgentLoopRequest, markAgentLoopRequest } from './call-config.ts'
 export type { LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
 
+/**
+ * DSH `resolveImageAttachmentAccess` stand-in for community host remaps.
+ * Face owns attachment bytes; WorkBuddy shim does not need Host path mapping here.
+ */
+export function resolveImageAttachmentAccess(
+  ..._args: readonly unknown[]
+): undefined {
+  return undefined
+}
+
 declare module '@xrkseek/cordis' {
   interface Context {
     llm: LlmRuntime

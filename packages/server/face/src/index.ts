@@ -48,6 +48,7 @@ export {
   clearSoftDisabledIdsAt,
   setSoftDisabledAt,
   isPluginSoftDisabledAt,
+  isOptionalProductBundle,
   lookupManagedPluginSourceAt,
   reconcileManagedClientBoot,
   resolveManagedPluginDir,
@@ -512,6 +513,13 @@ export {
   type ProviderRouteContext,
   type DeclaredPiAiProvider,
 } from "./llm-provider-context.js";
+export {
+  defaultSoftBudgetMaxTokens,
+  existingPiAiProvider,
+  mergeCommunityProviderModels,
+  type CommunitySyncModelIn,
+  type CommunitySyncModelOut,
+} from "./community-llm-sync.js";
 export { normalizeApiKey, type ApiKeyCheck } from "./llm-api-key.js";
 export {
   ensureSessionWorkingDirectory,

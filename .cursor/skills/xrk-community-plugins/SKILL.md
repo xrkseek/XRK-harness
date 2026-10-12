@@ -66,7 +66,9 @@ user-invocable: false
 - **Client 半部装完「没反应」**：列表会标 `needsRestart`；Desktop 热刷新只重载渲染页，**不会**重挂 `webPlugins` — 首次装 client 包要整应用 / Host 重启。  
 - **启停 / 删除 / 重载 / 更新**：与安装一样引导刷新（toast + `clientRefreshHint` 横幅 + 待重启标签上的刷新按钮）；卸载必须传 `clientRefresh: true`（否则条目标没了看不见 `needsRestart`）。  
 - **Settings 卡看不见**：社区包常双注册 `settings.plugin.item` + `plugins.bundle.config`。Configurable 标签页在 Host `describe` 之后派发**全部已注册** `settings.plugin.item` 键（含 Face 未列出的自托管键，如 `modlens`）；`plugins.bundle.config` 已声明供 inject，配置面仍走 Settings 卡。  
+- **`@liustack/modlens` Settings 卡**：`GET/POST /modlens/config` 必须回 DSH `engineSummary`（`engines.*.hasKey` · `proxyMode` · `keyless` · `discovery`；密钥不进浏览器）。形状不对时卡能挂上但表单崩溃/空白。  
 - **`@liustack/modlens` 粘贴无反应**：client 先 `GET /modlens/paste?model=`，要 `{ takeover: true }` 才劫持粘贴；关 `pasteToPath` 时 Host 回 404。二进制 `POST /modlens/paste` → `{ path }`。  
+- **Desktop 皮肤图 404**：`isDesktopStaticAssetPath` 磁盘未命中时，**非** `/assets/*` 的扩展名路径须回落 Host Fetch（preview / 社区 raster）；`/assets/*` 仍诚实 404。  
 - **`dsh-niulai-pet`**：client-only 桌宠（`createRoot` 挂 body，非 `shell.overlay`）；Settings 卡键 `niulai-pet`；语音停喊要 `GET /niulai-kws/*`（Host 白名单伺服 staged `kws/`）— 装包时 `installClientBundle` 需拷贝 `kws/` 资产目录。  
 - **皮肤包**（`@smalltailqwq/dsh-client-ui-skin-*` · `dsh-dream-skin` · `@linxin666/dsh-skins` · `dsh-client-ui-aqua`）：
   - client 用相对 URL `skin-assets/<skinId>/<hash>.webp` → Host `/skin-assets/*`（staged `assets/runtime/` + `skin.json` id）。

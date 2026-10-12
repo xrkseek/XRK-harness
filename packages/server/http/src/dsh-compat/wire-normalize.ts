@@ -44,5 +44,8 @@ export function normalizeDshCompatWireCtx(
     ...(ctx.resolvePolicyAsk
       ? { resolvePolicyAsk: ctx.resolvePolicyAsk }
       : {}),
+    ...(ctx.syncCommunityLlmProvider
+      ? { syncCommunityLlmProvider: ctx.syncCommunityLlmProvider }
+      : {}),
   };
 }

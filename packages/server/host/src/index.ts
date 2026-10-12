@@ -45,6 +45,7 @@ import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
   ensureDshCompatHostPlugin,
+  DSH_COMPAT_HOST_PLUGIN_ID,
   createLiveHostPluginsPublicHandler,
   createHttpServer,
   createXrkPluginPublicHandler,
@@ -111,6 +112,10 @@ import {
   createSessionCapabilityFragmentProvider,
   canvasWorkspaceIdForSession,
   resolveSessionModelSelection,
+  credentialsSet,
+  settingsMutateFace,
+  existingPiAiProvider,
+  mergeCommunityProviderModels,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -121,6 +126,7 @@ import {
   wireCompositionChannels,
   wireCompositionLlm,
   collectChannelPluginRegistrations,
+  isOptionalBundleEnabledAt,
   type PluginLoader,
   type RegisteredPlugin,
 } from "@xrkseek/server-loader";
@@ -716,6 +722,7 @@ export function createHostManager(): HostManager {
         const bootPlugins = await reconcileManagedProcessPlugins(
           loader,
           resolvedPluginsDir,
+          { preserveIds: [DSH_COMPAT_HOST_PLUGIN_ID] },
         );
         loadedPluginIds = [...bootPlugins.ids];
         for (const failure of bootPlugins.failures) {
@@ -1552,7 +1559,10 @@ export function createHostManager(): HostManager {
                         };
                       },
                     },
-                    ...(loader.list().some((p) => p.id === "git-worktrees")
+                    ...(isOptionalBundleEnabledAt(
+                      resolvedPluginsDir,
+                      "git-worktrees",
+                    )
                       ? {
                           createWorktreeTools: {
                             create: async (request: {
@@ -2091,7 +2101,12 @@ export function createHostManager(): HostManager {
           const synced = await reconcileManagedProcessPlugins(
             loader,
             resolvedPluginsDir,
-            options,
+            {
+              ...(options?.reloadIds !== undefined
+                ? { reloadIds: options.reloadIds }
+                : {}),
+              preserveIds: [DSH_COMPAT_HOST_PLUGIN_ID],
+            },
           );
           loadedPluginIds = [...synced.ids];
           for (const failure of synced.failures) {
@@ -2897,6 +2912,75 @@ export function createHostManager(): HostManager {
               ? { embeddingsModel: ns.embeddingsModel.trim() }
               : {}),
           };
+        },
+        syncCommunityLlmProvider: async (args: {
+          readonly providerId: string;
+          readonly displayName: string;
+          readonly baseUrl: string;
+          readonly apiKey: string;
+          readonly models: readonly {
+            readonly id: string;
+            readonly name?: string;
+            readonly contextWindow?: number;
+            readonly maxTokens?: number;
+            readonly softBudgetMaxTokens?: number;
+            readonly inputModalities?: readonly ("text" | "image")[];
+          }[];
+        }) => {
+          const providerId = args.providerId.trim().toLowerCase();
+          if (!providerId || !args.baseUrl.trim() || args.models.length === 0) {
+            return;
+          }
+          const apiKeyEnv = `${providerId
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_|_$/g, "")
+            .toUpperCase()}_API_KEY`;
+          const prev = existingPiAiProvider(
+            faceRuntime.settingsNamespaces.view("llm-pi-ai").value,
+            providerId,
+          );
+          const prevDisplay =
+            typeof prev?.displayName === "string" ? prev.displayName.trim() : "";
+          const prevApi = typeof prev?.api === "string" ? prev.api.trim() : "";
+          const prevKeyEnv =
+            typeof prev?.apiKeyEnv === "string" ? prev.apiKeyEnv.trim() : "";
+          const mutate = await settingsMutateFace(faceRuntime, {
+            ns: "llm-pi-ai",
+            ops: [
+              {
+                op: "set",
+                path: ["providers", providerId],
+                value: {
+                  ...(prev ?? {}),
+                  displayName: prevDisplay || args.displayName,
+                  api: prevApi || "openai-chat",
+                  baseURL: args.baseUrl.trim().replace(/\/+$/, ""),
+                  apiKeyEnv: prevKeyEnv || apiKeyEnv,
+                  models: mergeCommunityProviderModels(
+                    args.models,
+                    prev?.models,
+                  ),
+                },
+              },
+            ],
+          });
+          if (!mutate.ok) {
+            console.warn(
+              `[host] syncCommunityLlmProvider settings failed for ${providerId}:`,
+              mutate.error?.message ?? mutate.error,
+            );
+            return;
+          }
+          const cred = await credentialsSet(faceRuntime, {
+            slotId: `llm.${providerId}`,
+            value: args.apiKey,
+          });
+          if (!cred.ok) {
+            console.warn(
+              `[host] syncCommunityLlmProvider credentials failed for ${providerId}:`,
+              cred.error?.message ?? cred.error,
+            );
+          }
         },
         tokenLedger: {
           ...createCostMeterUsageBridge(faceRuntime),

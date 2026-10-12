@@ -71,6 +71,9 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | `im-provision-bridge.ts` · `im-messaging-bridge.ts` | OAuth · messaging · webhook |
 | `tongflow-node-runtime.ts` | Built-in node execution |
 | `cordis-fiber-runner.ts` · `host-apply-bridge.ts` | `host.mjs` apply / subprocess |
+| `host-module-remap*.ts` | Cordis host `import` remap：`@deepseek-ai/dsh-*` → `@xrkseek/xrk-*`（约定）+ 特例（`cordis` · `schemastery` · `pi-ai` · `secrets` · `workspace` · `core-agent-loop` …）；`xrk-pi-ai` 再导出真包时跳过 remap 以免自环 |
+| `workbuddy-host.ts` | `dsh-workbuddy-connect` stage `lib/`：await inject fibers · settings stub · loopback + `syncCommunityLlmProvider`（catalog 未登录时短暂露出 fallback；apply 后退避重试 + status 未同步前 nudge） |
+| `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：await inject fibers · forward 默认开启 · `/api/our-free-model` · `syncCommunityLlmProvider`（`distribution: managed`；forward 端口内存兜底；catalog 就绪后退避重试） |
 
 ## 社区 client 契约形状 / Community Client Contract Shapes
 

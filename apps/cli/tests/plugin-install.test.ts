@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { pruneEmptyParents } from "../src/plugin/install-client.js";
+import {
+  patchWorkBuddyClientProbeNull,
+  pruneEmptyParents,
+} from "../src/plugin/install-client.js";
 import {
   addPlugin,
   listPlugins,
@@ -145,6 +148,105 @@ describe("plugin add/remove/list", () => {
     expect(listPlugins({ pluginsDir })).toHaveLength(0);
     expect(existsSync(clientJs)).toBe(false);
     expect(existsSync(path.join(pluginsDir, "web", "boot.json"))).toBe(false);
+  });
+
+  it("stages WorkBuddy Cordis lib/ beside client.js", () => {
+    const home = tempDir("xrk-plug-wb-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "wb-fixture");
+    mkdirSync(path.join(dir, "lib"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "dsh-workbuddy-connect",
+          version: "0.1.0",
+          dsh: { client: { inject: [], platform: "web" } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(dir, "lib", "client.js"),
+      `window.__ModuleLoader__.load({ id: "dsh-workbuddy-connect", factory: () => ({ apply() {} }) });\n`,
+    );
+    writeFileSync(
+      path.join(dir, "lib", "index.js"),
+      "export function apply() {}\n",
+    );
+    writeFileSync(path.join(dir, "lib", "shim.js"), "export const ok = true;\n");
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "dsh-workbuddy-connect",
+    );
+    expect(existsSync(path.join(staged, "client.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "lib", "index.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "lib", "shim.js"))).toBe(true);
+  });
+
+  it("stages Our Free Model host index.js + src beside client.js", () => {
+    const home = tempDir("xrk-plug-ofm-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "ofm-fixture");
+    mkdirSync(path.join(dir, "src"), { recursive: true });
+    mkdirSync(path.join(dir, "adapter"), { recursive: true });
+    mkdirSync(path.join(dir, "vendor", "channel-pack"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "dsh-our-free-model",
+          version: "2.1.0",
+          dsh: { client: { inject: [], platform: "web", immediately: true } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(dir, "client.js"),
+      `window.__ModuleLoader__.load({ id: "dsh-our-free-model", factory: () => ({ apply() {} }) });\n`,
+    );
+    writeFileSync(path.join(dir, "index.js"), "export function apply() {}\n");
+    writeFileSync(path.join(dir, "src", "store.js"), "export const ok = true;\n");
+    writeFileSync(path.join(dir, "adapter", "kernel.js"), "export const ok = true;\n");
+    writeFileSync(path.join(dir, "cordis.patch.yml"), "- insert: []\n");
+    writeFileSync(
+      path.join(dir, "vendor", "channel-pack", "pack.js"),
+      "export default {};\n",
+    );
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "dsh-our-free-model",
+    );
+    expect(existsSync(path.join(staged, "client.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "index.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "src", "store.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "adapter", "kernel.js"))).toBe(true);
+    expect(
+      existsSync(path.join(staged, "vendor", "channel-pack", "pack.js")),
+    ).toBe(true);
   });
 
   it("installs a process package under a discoverable path", () => {
@@ -400,5 +502,29 @@ describe("plugin add/remove/list", () => {
     ) as { ids: string[] };
     expect(disabled.ids).toEqual(["alive"]);
     expect(existsSync(path.join(pluginsDir, "web", "boot.json"))).toBe(false);
+  });
+
+  it("patches WorkBuddy probe slot nullish selection checks", () => {
+    const dir = tempDir("xrk-wb-probe-");
+    const clientJs = path.join(dir, "client.js");
+    writeFileSync(
+      clientJs,
+      [
+        "const card = selection === void 0 ? void 0 : cardVariantFor(selection.provider);",
+        "const key = card === void 0 || selection === void 0 ? void 0 : `${card.id}:${selection.model}`;",
+        "return card === void 0 || selection === void 0 || key === void 0 ? null : ok;",
+      ].join("\n"),
+      "utf8",
+    );
+    expect(patchWorkBuddyClientProbeNull(clientJs)).toBe(true);
+    const out = readFileSync(clientJs, "utf8");
+    expect(out).toContain(
+      "selection == null ? void 0 : cardVariantFor(selection.provider)",
+    );
+    expect(out).toContain("card == null || selection == null ? void 0 :");
+    expect(out).toContain(
+      "card == null || selection == null || key == null ? null",
+    );
+    expect(patchWorkBuddyClientProbeNull(clientJs)).toBe(false);
   });
 });

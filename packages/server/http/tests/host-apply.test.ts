@@ -77,6 +77,29 @@ describe("xrk-host-apply", () => {
     expect(contribution?.http?.length).toBe(1);
   });
 
+  it("stores Cordis-shaped provide/get for host.mjs DI", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "xrk-apply-di-"));
+    temps.push(pkgRoot);
+    writeFileSync(
+      path.join(pkgRoot, "host.mjs"),
+      `export async function apply(ctx) {
+  ctx.provide("marker", { ok: true });
+  const got = ctx.get("marker");
+  if (!got || got.ok !== true) throw new Error("provide/get failed");
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/di-probe",
+    handler: async (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(got));
+    },
+  });
+}`,
+    );
+    const contribution = await tryApplyHostModule(pkgRoot, "di-probe", {});
+    expect(contribution?.http?.length).toBe(1);
+  });
+
   it("registers upgrade routes via webServer.registerUpgrade", async () => {
     resetDshCompatUpgrades();
     const pkgRoot = mkdtempSync(path.join(tmpdir(), "xrk-apply-ws-"));

@@ -29,31 +29,37 @@ export const inject = ['slots', 'connection']
  */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
-  // Provided by ui-conversation when composed; tests without it stay collapsed.
-  const prefs = ctx.get('conversationUiPrefs') as {
-    toolsDefaultExpanded: SnapshotStore<boolean>
-  } | undefined
-  const toolsDefaultExpanded = prefs?.toolsDefaultExpanded
-    ?? createSnapshotStore(false)
-  const toolInject = () => ({
-    hooks: {
-      hostDescription: connection.hostDescription,
-      toolsDefaultExpanded,
-    },
+  // Resolve prefs when conversation.chat.node is declared — not at fiber
+  // apply time. xrk.client.inject is prefetch metadata only; ui-tool's cordis
+  // inject is just slots+connection, so apply can race ahead of
+  // ui-conversation.provide('conversationUiPrefs'). Capturing a fallback
+  // store here would leave ToolCallTree on an orphan that Settings never
+  // writes (switch ON, chat rows stay collapsed).
+  ctx.slots.inject('conversation.chat.node', () => {
+    const prefs = ctx.get('conversationUiPrefs') as {
+      toolsDefaultExpanded: SnapshotStore<boolean>
+    } | undefined
+    const toolsDefaultExpanded = prefs?.toolsDefaultExpanded
+      ?? createSnapshotStore(false)
+    return ctx.slots.register({
+      name: 'conversation.chat.node',
+      key: 'tool-call',
+      locale: NS,
+      children: {
+        'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+        // Sole declaration for media holes (GenericToolCard + image/video rows).
+        // Keyed toolviews must not re-declare these — SlotCore allows one owner.
+        'tool.call.images': { kind: 'single', scope: 'session' },
+        'tool.call.files': { kind: 'single', scope: 'session' },
+      },
+      inject: () => ({
+        hooks: {
+          hostDescription: connection.hostDescription,
+          toolsDefaultExpanded,
+        },
+      }),
+    }, ToolCallTree)
   })
-  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
-    name: 'conversation.chat.node',
-    key: 'tool-call',
-    locale: NS,
-    children: {
-      'tool.call.toolview': { kind: 'keyed', scope: 'session' },
-      // Sole declaration for media holes (GenericToolCard + image/video rows).
-      // Keyed toolviews must not re-declare these — SlotCore allows one owner.
-      'tool.call.images': { kind: 'single', scope: 'session' },
-      'tool.call.files': { kind: 'single', scope: 'session' },
-    },
-    inject: toolInject,
-  }, ToolCallTree))
 
   // conversation.details.tool / ToolDetails registration removed: the right
   // Detail column is demoted; inspect stays on trajectory; file open wakes

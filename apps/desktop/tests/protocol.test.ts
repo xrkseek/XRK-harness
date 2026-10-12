@@ -241,6 +241,16 @@ describe("desktop custom protocol", () => {
     expect(missingAsset.status).toBe(404);
     expect(fetchApp).not.toHaveBeenCalled();
 
+    // Extensioned paths outside packaged `/assets/*` (skin preview · artwork)
+    // must fall through to Host — disk 404 alone blanks community skins.
+    fetchApp.mockClear();
+    const skinPreviewMiss = await handleDesktopProtocolRequest(
+      new Request("xrk-app://app/preview/light.webp"),
+      { webRoot, fetchApp },
+    );
+    expect(skinPreviewMiss.status).toBe(201);
+    expect(fetchApp).toHaveBeenCalledOnce();
+
     // Mutating Host verbs must not hit serveDesktopStaticAsset's 405 gate
     // (market install · modlens config save · pty input).
     fetchApp.mockClear();

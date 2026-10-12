@@ -1,5 +1,5 @@
 /**
- * Face Client remotes assembly: mount commands / goals / pluginInventory /
+ * Face Client remotes assembly: mount session / commands / goals / pluginInventory /
  * messageFeedback / sessionFeedback / dynamicCordisRunner onto `ctx.remote` via the Face gateway.
  * Type-only Cordis; no value import of the gateway (bundle purity).
  */
@@ -19,6 +19,30 @@ const FACE_REMOTES: FaceRemoteSpec = {
   commands: {
     list: ['agentId'],
     execute: ['agentId', 'line'],
+  },
+  // Dotted Face methods (`session.list`); gateway maps namespace→dot endpoint.
+  // Community clients (e.g. dsh-workbuddy-connect) inject `remote.session`.
+  session: {
+    list: 'args',
+    create: 'args',
+    history: 'args',
+    search: 'args',
+    models: 'args',
+    // DSH session-controller aliases → Face (see faceRemoteEndpoint).
+    modelCatalog: 'args',
+    page: 'args',
+    selectModel: 'args',
+    rename: 'args',
+    fork: 'args',
+    prompt: 'args',
+    cancel: 'args',
+    delete: 'args',
+    updateQueue: 'args',
+    status: 'args',
+    attachment: 'args',
+    respondApproval: 'args',
+    setWorkingDirectory: 'args',
+    rolloutTrace: 'args',
   },
   goals: {
     create: ['agentId', 'request'],

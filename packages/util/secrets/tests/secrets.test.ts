@@ -3,6 +3,7 @@ import {
   REDACTED_SECRET,
   createMemorySecretStore,
   createOsKeyringStore,
+  credentialRef,
   loadSlotFromSecretStore,
   redactSecrets,
   resolveSecretStore,
@@ -11,6 +12,11 @@ import {
 } from "../src/index.js";
 
 describe("@xrkseek/secrets", () => {
+  it("credentialRef brands POSIX env-var names (DSH remap)", () => {
+    expect(credentialRef("OFM_CODEARTS_KEY")).toBe("OFM_CODEARTS_KEY");
+    expect(() => credentialRef("bad-name")).toThrow(/invalid credentialRef/);
+  });
+
   it("redactSecrets strips keys, bearer, and assignments", () => {
     expect(redactSecrets("key sk-abcdefghijklmnopqrst")).toContain(REDACTED_SECRET);
     expect(redactSecrets("Bearer abcdefghijklmnopqr")).toBe(

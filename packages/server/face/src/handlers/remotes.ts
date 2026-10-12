@@ -9,6 +9,7 @@ import {
   resolveManagedPluginUpdateSpec,
   resolveManagedPluginsDir,
   setFacePluginInventoryEnabled,
+  isOptionalProductBundle,
   clearSoftDisabledIdsAt,
   lookupManagedPluginSourceAt,
   reconcileManagedClientBoot,
@@ -180,6 +181,15 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
     return {
       ok: false,
       error: { code: "refused", message: "builtin plugins cannot be removed here" },
+    };
+  }
+  if (isOptionalProductBundle(entryId)) {
+    return {
+      ok: false,
+      error: {
+        code: "refused",
+        message: "optional product bundle — enable or disable instead of remove",
+      },
     };
   }
   if (!runtime.removeUserPlugin) {

@@ -14,9 +14,15 @@ import type {
   DshCompatWireOptions,
   HostProviderPartial,
 } from "./adapter-types.js";
+import {
+  createCordisConnectionBridge,
+  pushCordisWebServerRoute,
+} from "./cordis-connection-bridge.js";
+import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { registerDshCompatUpgrade } from "./dsh-compat-upgrades.js";
 import { registerHostApply } from "./host-apply-registry.js";
+import { resolveCompatHome } from "./underlying/json-store.js";
 
 export interface XrkWebServerRoute {
   readonly kind?: string;
@@ -57,7 +63,9 @@ export interface XrkHostApplyContext extends DshCompatWireOptions {
     register(channel: string, handler: CordisRpcHandler): void;
   };
   effect(fn: () => void | Promise<void>, _label?: string): void;
-  provide?(_name: string, _value: unknown): void;
+  /** Cordis-shaped DI store for host.mjs `ctx.provide` / `ctx.get`. */
+  provide(name: string, value: unknown): void;
+  get(name: string): unknown;
 }
 
 interface ApplyCollection {
@@ -89,16 +97,6 @@ function resolveHostEntry(pkgRoot: string): string | undefined {
     }
   }
   return undefined;
-}
-
-function routeMatcher(route: XrkWebServerRoute): (pathname: string) => boolean {
-  const p = route.path.endsWith("/") ? route.path.slice(0, -1) : route.path;
-  const kind = route.kind ?? "prefix";
-  if (kind === "exact") {
-    return (pathname) => pathname === p;
-  }
-  const prefix = p.endsWith("/") ? p : `${p}/`;
-  return (pathname) => pathname === p || pathname.startsWith(prefix);
 }
 
 function createApplyCollection(): ApplyCollection {
@@ -133,8 +131,11 @@ export function createXrkHostApplyContext(
   pkgRoot: string,
   wire: DshCompatWireOptions,
   collection: ApplyCollection,
-): XrkHostApplyContext {
-  const ctx: XrkHostApplyContext = {
+): XrkHostApplyContext & { sealHttp: () => void } {
+  // Thin DI bag — not a full Cordis Host; enough for host.mjs provide/get.
+  const services = new Map<string, unknown>();
+  const sealState = { sealed: false };
+  const ctx: XrkHostApplyContext & { sealHttp: () => void } = {
     ...wire,
     packageName,
     pkgRoot,
@@ -147,19 +148,7 @@ export function createXrkHostApplyContext(
     },
     webServer: {
       register(route) {
-        const methods = route.methods?.map((m) => m.toUpperCase());
-        const match = routeMatcher(route);
-        collection.http.push({
-          match,
-          handle: async (req, res, pathname) => {
-            const method = (req.method ?? "GET").toUpperCase();
-            if (methods?.length && !methods.includes(method)) {
-              return false;
-            }
-            const result = await route.handler(req, res, pathname);
-            return result === undefined ? true : Boolean(result);
-          },
-        });
+        pushCordisWebServerRoute(collection.http, route);
       },
       registerUpgrade(route) {
         registerDshCompatUpgrade({
@@ -181,10 +170,32 @@ export function createXrkHostApplyContext(
     effect(fn, _label) {
       collection.disposers.push(fn);
     },
-    provide(_name, _value) {
-      /* Cordis DI not embedded — no-op for apply compatibility */
+    provide(name, value) {
+      services.set(name, value);
+    },
+    get(name) {
+      return services.get(name);
+    },
+    sealHttp() {
+      sealState.sealed = true;
     },
   };
+  // Pre-seed DSH connection / credentials so host.mjs packs that inject them
+  // (trust fence, channel-pack style fetch.register, OAuth pools) do not 503.
+  services.set(
+    "connection",
+    createCordisConnectionBridge({
+      http: collection.http,
+      isSealed: () => sealState.sealed,
+    }),
+  );
+  services.set(
+    "credentials",
+    createCordisCredentialsBridge(
+      resolveCompatHome(wire.xrkHome),
+      packageName,
+    ),
+  );
   return ctx;
 }
 
@@ -253,6 +264,7 @@ export async function tryApplyHostModule(
     if (!(await invokeHostContribution(mod, ctx, wire, collection))) {
       return undefined;
     }
+    ctx.sealHttp();
   } catch {
     return undefined;
   }

@@ -138,7 +138,8 @@ for (const key of [
 	"disabled",
 	"collapse",
 	"hidden",
-	"loose"
+	"loose",
+	"volatile"
 ]) Object.assign(Schema.prototype, { [key](value = true) {
 	const schema = Schema(this);
 	schema.meta = {

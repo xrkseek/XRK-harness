@@ -20,7 +20,6 @@ import type {} from '@xrkseek/xrk-api-remotes/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@xrkseek/client-ui-settings/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
-import { bindCreatorDraftStarter } from '@xrkseek/client-runtime/client'
 import { AgentPresetLabel } from './AgentPresetLabel.tsx'
 import type { AgentPresetLabelInjected } from './AgentPresetLabel.tsx'
 import { AgentPresetRow } from './AgentPresetRow.tsx'
@@ -170,7 +169,6 @@ export function apply(ctx: ClientContext): void {
         seat.stage('cordis', true)
         scope.workspaces.startSession()
       }
-      const unbindCreator = bindCreatorDraftStarter(creatorDraft)
       const chip = scope.slots.register({
         name: 'conversation.hero.agentPreset',
         locale: 'settings.agentPreset',
@@ -189,7 +187,6 @@ export function apply(ctx: ClientContext): void {
         settingsMoved()
         presetSelected()
         rosterReaders.delete(readRoster)
-        unbindCreator()
         creatorDraft = undefined
         chip()
         label()

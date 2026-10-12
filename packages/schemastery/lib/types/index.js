@@ -159,7 +159,7 @@ Schema.prototype.extra = function extra(key, value) {
     schema.meta = { ...schema.meta, [key]: value };
     return schema;
 };
-for (const key of ['required', 'disabled', 'collapse', 'hidden', 'loose']) {
+for (const key of ['required', 'disabled', 'collapse', 'hidden', 'loose', 'volatile']) {
     Object.assign(Schema.prototype, {
         [key](value = true) {
             const schema = Schema(this);

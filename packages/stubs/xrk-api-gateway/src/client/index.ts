@@ -1,6 +1,7 @@
 /**
  * Face Client Remote gateway: `$on` / `$dispatch` / Face-native `$bindFace`.
- * Calls go through `connection.rpc.call('/api', ns/method, { args })`.
+ * Calls go through `connection.rpc.call('/api', endpoint, { args })`
+ * (session → dotted Face path; others → `ns/method`).
  * Not the DSH generated-codec gateway.
  */
 
@@ -11,7 +12,7 @@ import type {
   TypertDisposer,
   TypertRemoteContribution,
 } from '@xrkseek/xrk-typert-protocol'
-import { packRemoteArgs, type FaceArgSpec } from './pack.ts'
+import { faceRemoteEndpoint, packRemoteArgs, type FaceArgSpec } from './pack.ts'
 
 /** One Face namespace: method name → positional wire fields, or `'args'` bag. */
 export type FaceRemoteSpec = Record<string, Record<string, FaceArgSpec>>
@@ -147,7 +148,7 @@ export class FaceClientRemote extends Service {
     spec: FaceArgSpec,
     values: readonly unknown[],
   ): Promise<RemoteResult<unknown>> {
-    const endpoint = `${namespace}/${method}`
+    const endpoint = faceRemoteEndpoint(namespace, method)
     const connection = scope.get('connection') as ConnectionHandle | undefined
     if (connection === undefined) {
       return {

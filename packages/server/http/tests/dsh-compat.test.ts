@@ -2090,11 +2090,13 @@ process.exit(0);
       const rpcBody = (await rpc.json()) as {
         result: {
           ok: boolean;
-          value: { ok: boolean; discover: unknown[] };
+          value: { discovery: unknown[]; engines: Record<string, unknown> };
         };
       };
       expect(rpcBody.result.ok).toBe(true);
-      expect(Array.isArray(rpcBody.result.value.discover)).toBe(true);
+      // DSH settings card reads `discovery` (reuse probes), not legacy `discover`.
+      expect(Array.isArray(rpcBody.result.value.discovery)).toBe(true);
+      expect(rpcBody.result.value.engines.openai).toBeTypeOf("object");
 
       const slug = await fetch(`${base}/whale-girl`);
       const slugBody = (await slug.json()) as { ok: boolean; plugin: string };

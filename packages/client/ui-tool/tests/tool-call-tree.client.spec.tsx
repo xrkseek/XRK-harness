@@ -83,6 +83,27 @@ describe('ToolCallTree', () => {
     expect(nests).toHaveLength(2)
   })
 
+  it('passes toolsDefaultExpanded into GenericToolCard so rows mount open', () => {
+    const block = root('exp1', {
+      name: 'fx-bash',
+      argsRaw: '{"command":"ls"}',
+    })
+    // Mimic a settled terminal card so the expand surface is material-backed.
+    const settled: ToolResultNode = {
+      ...block,
+      callView: { card: 'terminal', title: 'ls', description: 'List' },
+      resultView: { card: 'terminal', output: 'ok\n', exitCode: 0 },
+      content: [{ type: 'text', text: 'ok\n' }],
+    }
+    const treeProps = props(settled)
+    treeProps.useToolsDefaultExpanded = selector => selector(true)
+    treeProps.renderSlot = ((_key, _owner, options) =>
+      options?.fallback ?? null) as ToolTreeProps['renderSlot']
+    const view = render(<ToolCallTree {...treeProps} />)
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(view.container.querySelector('[data-terminal]')).not.toBeNull()
+  })
+
   it('forces GenericToolCard for AUTO_REVIEW_DENIED and skips keyed toolview', () => {
     const keyed = vi.fn(() => <div data-testid="keyed-bash">keyed bash</div>)
     const block: ToolResultNode = {

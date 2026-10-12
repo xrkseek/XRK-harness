@@ -537,31 +537,87 @@
   line-height: 18px;
 }
 
-.creatorButton {
-  box-sizing: border-box;
-  display: inline-flex;
+.optionalBundleRow {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 8px 0 0;
-  padding: 4px 10px;
-  border: 1px dashed var(--dsw-alias-border-l3);
-  border-radius: 8px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  vertical-align: middle;
+  gap: 12px;
+  margin: 0 0 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
-.creatorButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.optionalBundleText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.optionalBundleTitle {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
 }
 
 .optionalBundleHint {
-  display: inline;
-  vertical-align: middle;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.optionalBundleSwitch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.optionalBundleSwitch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.optionalBundleTrack {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+  transition-property: background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.optionalBundleTrack[data-on] {
+  background: var(--dsw-alias-label-primary);
+}
+
+.optionalBundleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-primary, #fff);
+  transition-property: transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.optionalBundleTrack[data-on] .optionalBundleThumb {
+  transform: translateX(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .optionalBundleTrack,
+  .optionalBundleThumb {
+    transition: none;
+  }
 }
 
 .scopeBody {

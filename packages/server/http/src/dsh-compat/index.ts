@@ -75,9 +75,27 @@ export type { PluginHostManifest } from "./adapter-types.js";
 export {
   ensureDshCompatRegistry,
   appendDshCompatContribution,
+  registerDshCompatHttpLate,
   invokeDshCompatRpc,
   resetDshCompatRegistryCache,
 } from "./shared-registry.js";
+export {
+  createCordisConnectionBridge,
+  matchWebServerRoute,
+  pushCordisWebServerRoute,
+  type CordisFetchRoute,
+  type CordisHttpRow,
+} from "./cordis-connection-bridge.js";
+export {
+  createCordisCredentialsBridge,
+  type CordisCredentialsBridge,
+} from "./cordis-credentials-bridge.js";
+export {
+  asCommunityLlmModelRows,
+  baseUrlFromCommunityModels,
+  scheduleCommunityLlmSyncRetries,
+  type CommunityLlmSyncModelRow,
+} from "./community-llm-host-sync.js";
 export {
   baselineHttpRoutes,
   baselineRpcRoutes,
@@ -130,6 +148,18 @@ export {
   applyHostPackageByName,
   stopHostPackageFiber,
 } from "./host-apply-bridge.js";
+export {
+  tryApplyWorkBuddyHost,
+  isWorkBuddyConnectPackage,
+  hasWorkBuddyHostLib,
+} from "./workbuddy-host.js";
+export {
+  tryApplyOurFreeModelHost,
+  isOurFreeModelPackage,
+  hasOurFreeModelEntry,
+} from "./our-free-model-host.js";
+export { ensureHostModuleRemap } from "./host-module-remap.js";
+export { remapHostModuleId } from "./host-module-remap-ids.js";
 export {
   startCordisFiber,
   stopCordisFiber,

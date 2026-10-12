@@ -106,6 +106,8 @@ declare global {
             }[];
             hidden?: boolean;
             loose?: boolean;
+            /** Runtime-only; skip persist (DSH community packs e.g. OFM channel-pack). */
+            volatile?: boolean;
             role?: string;
             extra?: any;
             link?: string;
@@ -148,6 +150,8 @@ declare global {
         required(value?: boolean): Schema<S, T>;
         /** Hide this schema node from UI renderers. */
         hidden(value?: boolean): Schema<S, T>;
+        /** Mark this node as runtime-only (not persisted). */
+        volatile(value?: boolean): Schema<S, T>;
         /** Return the default value instead of throwing when validation fails. */
         loose(value?: boolean): Schema<S, T>;
         /** Attach a renderer role and optional role-specific metadata. */

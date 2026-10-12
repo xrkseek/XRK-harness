@@ -50,6 +50,16 @@ export function resolveXrkHome(
 }
 
 /**
+ * DSH community host packages call `resolveDshHome()`.
+ * Same path as {@link resolveXrkHome} (env already accepts `DSH_HOME`).
+ */
+export function resolveDshHome(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return resolveXrkHome(env);
+}
+
+/**
  * Like {@link resolveXrkHome}, but an explicit configured path wins over env.
  * Used by Host/Face injectors that pass `xrkHome` / `productDir`.
  */

@@ -94,7 +94,9 @@ const DeepSeekConfig = Schema.object({
       /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
       softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
       softBudgetBufferTokens: Schema.number().step(500).min(0),
-      inputModalities: Schema.array(Schema.union(["text", "image"])).min(1),
+      // Empty = unset (UI treats as text); do not use .min(1) — legacy rows
+      // with `[]` must not block unrelated settings.mutate (community LLM sync).
+      inputModalities: Schema.array(Schema.union(["text", "image"])),
     }),
   ).default([...DEFAULT_DEEPSEEK_MODELS]),
 });
@@ -123,6 +125,8 @@ const PiAiProvider = Schema.object({
       softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
       softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
       softBudgetBufferTokens: Schema.number().step(500).min(0),
+      // Same modality toggle the Models → Capacities row edits (DeepSeek catalog too).
+      inputModalities: Schema.array(Schema.union(["text", "image"])),
     }),
   ),
 });

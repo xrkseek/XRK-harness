@@ -99,6 +99,24 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
       readonly token?: string;
       readonly collection?: string;
     };
+    /**
+     * Sync a community Cordis LLM adapter (e.g. WorkBuddy loopback) into Face
+     * `llm-pi-ai.providers.<id>` + credential vault so product chat can route.
+     */
+    readonly syncCommunityLlmProvider?: (args: {
+      readonly providerId: string;
+      readonly displayName: string;
+      readonly baseUrl: string;
+      readonly apiKey: string;
+      readonly models: readonly {
+        readonly id: string;
+        readonly name?: string;
+        readonly contextWindow?: number;
+        readonly maxTokens?: number;
+        readonly softBudgetMaxTokens?: number;
+        readonly inputModalities?: readonly ("text" | "image")[];
+      }[];
+    }) => void | Promise<void>;
   };
 
 export type HostProviderPartial = Pick<DshAdapterContribution, "http" | "rpc">;

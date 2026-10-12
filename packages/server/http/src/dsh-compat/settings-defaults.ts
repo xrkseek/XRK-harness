@@ -114,15 +114,9 @@ export const DSH_SETTINGS_DEFAULTS: Readonly<
     accounts: {},
   },
   modlens: {
+    // Face ns stub only — the Settings card self-hosts via GET/POST /modlens/config
+    // (DSH engineSummary shape: engines.*.hasKey · keyless · discovery).
     provider: "",
-    engines: {},
-    reuse: {
-      claude: false,
-      codex: false,
-      opencode: false,
-      pi: false,
-      grok: false,
-    },
     pasteToPath: true,
   },
   modsearch: {

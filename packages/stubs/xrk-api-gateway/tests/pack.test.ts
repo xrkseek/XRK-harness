@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { packRemoteArgs } from '../src/client/pack.ts'
+import { faceRemoteEndpoint, packRemoteArgs } from '../src/client/pack.ts'
+
+describe('faceRemoteEndpoint', () => {
+  it('uses dotted Face paths for session and slash paths for other remotes', () => {
+    expect(faceRemoteEndpoint('session', 'list')).toBe('session.list')
+    expect(faceRemoteEndpoint('session', 'selectModel')).toBe('session.selectModel')
+    expect(faceRemoteEndpoint('commands', 'list')).toBe('commands/list')
+    expect(faceRemoteEndpoint('pluginInventory', 'open')).toBe('pluginInventory/open')
+  })
+
+  it('aliases DSH session-controller names onto Face methods', () => {
+    expect(faceRemoteEndpoint('session', 'modelCatalog')).toBe('session.models')
+    expect(faceRemoteEndpoint('session', 'page')).toBe('session.history')
+  })
+})
 
 describe('packRemoteArgs', () => {
   it('zips positional wires', () => {

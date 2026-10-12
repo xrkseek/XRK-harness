@@ -114,3 +114,99 @@ describe("modlens paste takeover HTTP", () => {
     });
   });
 });
+
+describe("modlens settings card config (DSH engineSummary)", () => {
+  let home: string;
+
+  afterEach(() => {
+    if (home) rmSync(home, { recursive: true, force: true });
+  });
+
+  async function withServer(
+    run: (port: number) => Promise<void>,
+  ): Promise<void> {
+    home = mkdtempSync(path.join(tmpdir(), "xrk-modlens-cfg-"));
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      void (async () => {
+        const url = new URL(req.url ?? "/", "http://127.0.0.1");
+        const claimed = await handleModlensHttp(req, res, url.pathname, {
+          xrkHome: home,
+        });
+        if (!claimed) {
+          res.writeHead(404);
+          res.end("no");
+        }
+      })();
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    const { port } = server.address() as { port: number };
+    try {
+      await run(port);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+    }
+  }
+
+  it("GET /modlens/config returns engines with hasKey and keyless (no secrets)", async () => {
+    await withServer(async (port) => {
+      const res = await fetch(`http://127.0.0.1:${port}/modlens/config`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        provider?: string;
+        engines?: Record<string, { hasKey?: boolean; proxyMode?: string }>;
+        keyless?: string[];
+        reuse?: Record<string, boolean>;
+        discovery?: unknown;
+      };
+      expect(body.provider).toBe("");
+      expect(body.engines?.openai?.hasKey).toBe(false);
+      expect(body.engines?.openai?.proxyMode).toBe("inherit");
+      expect(body.keyless).toContain("claude-cli");
+      expect(body.reuse?.claude).toBe(true);
+      expect(body.discovery).toBeUndefined();
+      expect(JSON.stringify(body)).not.toMatch(/apiKey/i);
+    });
+  });
+
+  it("GET ?discover=1 adds discovery probes; POST saves provider without leaking keys", async () => {
+    await withServer(async (port) => {
+      const discovered = await (
+        await fetch(`http://127.0.0.1:${port}/modlens/config?discover=1`)
+      ).json() as { discovery?: Array<{ harness: string }> };
+      expect(Array.isArray(discovered.discovery)).toBe(true);
+      expect(discovered.discovery!.some((p) => p.harness === "claude")).toBe(
+        true,
+      );
+
+      const saved = await fetch(`http://127.0.0.1:${port}/modlens/config`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "openai",
+          engine: "openai",
+          apiKey: "sk-test-secret",
+          baseUrl: "https://api.example/v1",
+          model: "gpt-4o",
+        }),
+      });
+      expect(saved.status).toBe(200);
+      const summary = (await saved.json()) as {
+        provider?: string;
+        engines?: Record<string, { hasKey?: boolean; baseUrl?: string }>;
+      };
+      expect(summary.provider).toBe("openai");
+      expect(summary.engines?.openai?.hasKey).toBe(true);
+      expect(summary.engines?.openai?.baseUrl).toBe("https://api.example/v1");
+      expect(JSON.stringify(summary)).not.toContain("sk-test-secret");
+
+      const onDisk = JSON.parse(
+        readFileSync(path.join(home, "modlens", "engine-config.json"), "utf8"),
+      ) as { providers?: { openai?: { apiKey?: string } } };
+      expect(onDisk.providers?.openai?.apiKey).toBe("sk-test-secret");
+    });
+  });
+});

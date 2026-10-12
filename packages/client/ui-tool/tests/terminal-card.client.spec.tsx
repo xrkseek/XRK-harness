@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // The terminal render intent on the web side: the pure terminalCardModel
 // derivation over callView/resultView, and both conversation render sites that
 // consume it — the chat tool row's expanded body (GenericToolCard / BashRow)
@@ -20,6 +20,7 @@ import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { terminalCardModel, terminalFailed } from '../src/client/tool/models/terminal-card-model.ts'
 import { createChatStore } from '@xrkseek/client-ui-conversation/src/client/stores.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
+import { ToolDefaultExpandedContext } from '../src/client/tool/tool-default-expanded.ts'
 import { DetailsPanel } from '@xrkseek/client-ui-conversation/src/client/skeleton/DetailsPanel.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
 import { renderToolDetails, SessionProviderStub, toolChatSnapshot } from './tool-details-render.client.tsx'
@@ -262,6 +263,17 @@ describe('chat row terminal body', () => {
     expect(view.queryByText(/"command"/)).toBeNull()
   })
 
+  it('mounts expanded when ToolDefaultExpandedContext is true (Settings auto-expand)', () => {
+    const view = render(
+      <ToolDefaultExpandedContext.Provider value={true}>
+        <GenericToolCard {...ownerProps(settled())} />
+      </ToolDefaultExpandedContext.Provider>,
+    )
+    expect(view.container.querySelector('[data-expandable]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(view.container.querySelector('[data-terminal]')).not.toBeNull()
+    expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
+  })
+
   it('a long output renders in full — the scroll container replaces the middle collapse', () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line-${i}`)
     const view = render(<GenericToolCard {...ownerProps(settled({
@@ -369,6 +381,17 @@ describe('BashRow terminal card', () => {
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
     expect(view.queryByText(/a\.ts/)).toBeNull()
     expect(view.getByText('List files')).toBeTruthy()
+  })
+
+  it('mounts expanded when ToolDefaultExpandedContext is true', () => {
+    const view = render(
+      <ToolDefaultExpandedContext.Provider value={true}>
+        <BashRow {...rowProps(settled())} />
+      </ToolDefaultExpandedContext.Provider>,
+    )
+    expect(view.container.querySelector('[data-sample="bash"]')?.getAttribute('aria-expanded')).toBe('true')
+    expect(view.container.querySelector('[data-terminal]')).not.toBeNull()
+    expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
   })
 
   // The row's leading StateDot and the card's run-state dot describe the same

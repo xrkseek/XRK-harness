@@ -20,7 +20,16 @@ describe("remapInject", () => {
     expect(remapInjectId("@deepseek-ai/dsh-api-gateway")).toBe(
       "@xrkseek/xrk-api-gateway",
     );
+    expect(remapInjectId("@deepseek-ai/dsh-api-session-controller")).toBe(
+      "@xrkseek/xrk-api-remotes",
+    );
     expect(remapInjectId("@deepseek-ai/cordis")).toBe("@xrkseek/cordis");
+    expect(remapInjectId("@deepseek-ai/dsh-client-ui-renderer")).toBe(
+      "@xrkseek/client-ui-slots",
+    );
+    expect(remapInjectId("@deepseek-ai/dsh-client-ui-model-selection")).toBe(
+      "@xrkseek/client-ui-model-selection",
+    );
     expect(remapInjectId("@xrkseek/client-locale")).toBe(
       "@xrkseek/client-locale",
     );

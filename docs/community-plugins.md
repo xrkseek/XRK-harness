@@ -69,7 +69,7 @@ community client.js
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
 | **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；**设置 → 通用** 可开 `agentOpenTools` / `agentTerminalTools`（写 `~/.xrk/sidebar/prefs.json`），开后模型可 `sidebar_open` / `terminal_create` |
-| **ModLens（`@liustack/modlens`）** | `GET/POST /modlens/config` · `GET /modlens/paste` → `{ takeover: true }`（关 `pasteToPath` 时 404）· 二进制 `POST /modlens/paste` → `{ path }`；Settings → Plugins 配置卡（`settings.plugin.item` 键 `modlens`；`plugins.bundle.config` 已声明供 inject） | — |
+| **ModLens（`@liustack/modlens`）** | `GET/POST /modlens/config`（DSH engineSummary：`engines.*.hasKey` · `keyless` · `discovery`；密钥不进浏览器）· `GET /modlens/paste` → `{ takeover: true }`（关 `pasteToPath` 时 404）· 二进制 `POST /modlens/paste` → `{ path }`；Settings → Plugins 配置卡（`settings.plugin.item` 键 `modlens`） | — |
 | **牛来桌宠（`dsh-niulai-pet`）** | client `createRoot` 挂 body；Settings 卡 `niulai-pet`；`GET /niulai-kws/*` 白名单伺服 staged `kws/`（装包拷贝资产目录） | 全量 host.mjs Cordis settings 节（桌宠本体不依赖） |
 | **皮肤** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`；装包拷贝 `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis profile 互斥启停区段（XRK 持久化偏好 + 重载；不改写第三方 patch YAML） |
 
@@ -79,7 +79,16 @@ community client.js
 
 按下表安装的包，**Host HTTP/RPC 路径已接线**（或纯 client、无 Host 请求）。版本以 npm 当时最新为准；装后执行 `xrkh restart`（或 Settings 提示的刷新）。对照审计：`node scripts/dsh-community-audit.mjs`。
 
-**覆盖说明**：`full` = 审计无缺 HTTP、seat 落在产品壳已声明座位；`host-ok` = Host 路径已覆盖，但仍注册 DSH 全局面板 seat（`sidebar.panellist` / `main` 等）— 见「待补特性」；`client` = 仅壳 UI / Settings 卡，无 Host HTTP。
+**覆盖说明**：
+
+| 标签 | 含义 |
+|------|------|
+| `full` | 主路径可日常使用（HTTP/RPC + 装包 staging + web/Desktop 同 Host）；要点列里**不再**用「诚实离线 / deferred」充当主能力 |
+| `partial` | Host 形状已接线，但核心能力仍诚实降级、缺 seat、或缺引擎（见要点） |
+| `host-ok` | Host 路径已覆盖，但仍注册 DSH 全局面板 seat（`sidebar.panellist` / `main` 等）— 见「待补特性」 |
+| `client` | 仅壳 UI / Settings 卡，无 Host HTTP |
+
+Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；Desktop 另需整应用重启以挂 `webPlugins`（见上文）。
 
 ### 壳 · 工具 · 市场
 
@@ -88,7 +97,7 @@ community client.js
 | `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host 原生 `/sidebar/*` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
-| `@liustack/modlens` | full | `/modlens` · paste takeover |
+| `@liustack/modlens` | full | `/modlens` · paste takeover · Settings `GET/POST /modlens/config`（DSH engineSummary） |
 | `@liustack/modsearch` | full | `/modsearch` |
 | `dsh-niulai-pet` | full | `/niulai-kws/*` · Settings `niulai-pet` |
 | `dsh-genui` | full | `/api/dsh-genui` · `/dsh-genui` · runtime |
@@ -108,31 +117,33 @@ community client.js
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision Host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | full | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame`（占位帧 + progress=100；无 ffmpeg 场景渲染） |
-| `dsh-context` | full | `/api/dsh-context/detail` → `{ ok, value }`（session DocStore 可 push）；`balance` · `backfill`；缺 `sidebar.right.pane.*` |
+| `dsh-plugin-wallpaper-engine` | partial | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame`（占位帧 + progress=100；无 ffmpeg 场景渲染） |
+| `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }`（session DocStore 可 push）；`balance` · `backfill`；缺 `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC：documents CRUD · archive/forget · snapshot/capacity/placement · view-settings；缺 panellist / `main` |
 | `@linxin666/dsh-client-ui-task-board` | full | `/api/task-board` schemaVersion=3 · `/action` CRUD 持久化 · `/parse` |
-| `@linxin666/dsh-ssh` | full | `/api/dsh-ssh/hosts` CRUD 持久化（`~/.xrk/dsh-ssh`）· import `~/.ssh/config`；`/test` TCP 探测；exec/tunnel 诚实无 SSH 引擎；缺 panellist / `main` |
+| `@linxin666/dsh-ssh` | partial | `/api/dsh-ssh/hosts` CRUD 持久化（`~/.xrk/dsh-ssh`）· import `~/.ssh/config`；`/test` TCP 探测；exec/tunnel 诚实无 SSH 引擎；缺 panellist / `main` |
 | `@linxin666/dsh-client-ui-git-graph` | host-ok | `/git/*` status · branches · graph · switch · worktrees（真实 git）；缺 `conversation.input.selector.context` |
-| `@linxin666/dsh-remote-web-ui` | full | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` 持久化；`remote.mux` 需 WS；缺 panellist |
+| `@linxin666/dsh-remote-web-ui` | partial | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` 持久化；`remote.mux` 需 WS；缺 panellist |
 | `@linxin666/dsh-web-all` | host-ok | 合集：task-board · ssh · pet · remote · skin-center 等同表路径；`GET /api/update/status` · `POST /api/update/run`（客户端形状；不跑 DSH profile `pnpm update`）；client `require("@deepseek-ai/cordis")` 映射到 `@xrkseek/cordis` 种子；Fluent 图标名（`IconDownloadOutlineRegular` 等）在 `@xrkseek/client-ui-primitives` 上有同字形别名 |
-| `@michengai/dsh-automation` | full | `/api/michengai/dsh-automation/update` 探针 · `/tasks` 日程持久化；缺 `sidebar.schedule` seat |
-| `@michengai/dsh-codex-ui` | full | `/api/dsh-codex-ui/preferences` 持久化 · `dependencies` 目录；缺 `settings.general.footer` |
+| `@michengai/dsh-automation` | partial | `/api/michengai/dsh-automation/update` 探针 · `/tasks` 日程持久化；缺 `sidebar.schedule` seat |
+| `@michengai/dsh-codex-ui` | partial | `/api/dsh-codex-ui/preferences` 持久化 · `dependencies` 目录；缺 `settings.general.footer` |
 | `@michengai/dsh-archive-manager` | full | `/api/michengai/dsh-archive-manager/*` 归档列表持久化 · update 探针 |
 | `@michengai/dsh-agency-agents` | full | `/api/michengai/dsh-agency-agents/*` agents 列表持久化 · update 探针 |
-| `@michengai/dsh-im-connect` | full | `/api/dsh-im-connect/*` 通道/助手可持久化（离线）；QR/session 需 IM host；缺 `sidebar.channels` |
+| `@michengai/dsh-im-connect` | partial | `/api/dsh-im-connect/*` 通道/助手可持久化（离线）；QR/session 需 IM host；缺 `sidebar.channels` |
 | `@linxin666/dsh-pet` | full | `/api/pet/state|pets|…` 客户端形状 · `/pet/*` 资产（装包后）· runtime 回落 |
-| `dsh-pet` | full | `/dsh-pet-7340/config` GET/PUT/DELETE 持久化 · whisper/chat/balance 诚实离线；另见 `@linxin666/dsh-pet` |
-| `dsh-univer-office` | full | `/univer-api/status|gateway|state|…` 离线网关形状（不启进程） |
+| `dsh-pet` | partial | `/dsh-pet-7340/config` GET/PUT/DELETE 持久化 · whisper/chat/balance 诚实离线；另见 `@linxin666/dsh-pet` |
+| `dsh-univer-office` | partial | `/univer-api/status|gateway|state|…` 离线网关形状（不启进程） |
 | `@kenz1117/dsh-ui-usage-billing` | full | `/api/billing/*`（`total` · `source` · `balances` · `quotas` · `enabled`） |
 | `dsh-mcp-connector` | full | `POST /mcp-connector/api` 连接目录可 upsert/list |
-| `dsh-code-server-app` | full | `/code-server/*` · `/api/code-server/*` 同形离线状态 · `ui-mode` 持久化 · `/ask/state`；进程 start/stop 仍 deferred |
+| `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` 同形离线状态 · `ui-mode` 持久化 · `/ask/state`；进程 start/stop 仍 deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` 团队目录持久化 |
+| `dsh-workbuddy-connect` | full | web/Desktop：stage `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face；共享 `connection`（admit/fetch）· `credentials` 落盘；装后需重启 Host |
+| `dsh-our-free-model` | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials` 落盘 · forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
-| `dsh-free-search` | full | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` 持久化；`raw-search` 无钥 `ddg` 走 DuckDuckGo HTML；带 key 引擎仍 deferred |
-| `dsh-server-deck` | full | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings；PTY 需 WS |
+| `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` 持久化；`raw-search` 无钥 `ddg` 走 DuckDuckGo HTML；带 key 引擎仍 deferred |
+| `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings；PTY 需 WS |
 | `dsh-aimail` | host-ok | 镜像未见独立 pack；见 `dsh-email` |
-| `dsh-email` | full | `/_dsh/dsh-email/settings` snapshot/save/serialize/parse 持久化 · whale 占位图；IMAP/SMTP/OAuth dial deferred |
+| `dsh-email` | partial | `/_dsh/dsh-email/settings` snapshot/save/serialize/parse 持久化 · whale 占位图；IMAP/SMTP/OAuth dial deferred |
 | `@roarpeng/graphflow` | client | `/gf` community-root · MCP 工具面 |
 | `@michengai/dsh-btw` | client | `/btw` community-root |
 | `@michengai/dsh-codex-pet` | client | `/dsh-codex-pet` community-root |
@@ -157,12 +168,12 @@ community client.js
 | `@linxin666/dsh-skins`（及内嵌 `blue-fantasy` · `dragon-heir` · `harbor` · `maid-atelier` · `matrix` · `miku` · `minecraft` · `trading` · `whale-mom` · `whale-song` · `xp`） | full | 经 skin-center / skin-assets 发现 `skin.json` |
 | `dsh-skin-market` | full | `/dsh-skin-market/catalog` · state · activate |
 | `dsh-dream-skin` | full | `/dream-skin/api` · Settings `dreamSkin` |
-| `dsh-plugin-wallpaper-engine` | full | 见上表「壳 · 工具」 |
+| `dsh-plugin-wallpaper-engine` | partial | 见上表「壳 · 工具」 |
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body 装饰 |
 | `open-sea-skin` | client | body 装饰 |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |
 
-装皮肤包后若立绘 404：确认 staged `assets/` · `skin.json`，并重启 Host。
+装皮肤包后若立绘 404：确认 staged `assets/` · `skin.json`，并重启 Host。Desktop 上非 `/assets/*` 的扩展名路径（如 preview 图）在磁盘未命中时会回落 Host Fetch，避免皮肤资源被静态 404 吃掉。
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
@@ -341,7 +352,7 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
 | **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; **Settings → General** toggles `agentOpenTools` / `agentTerminalTools` (`~/.xrk/sidebar/prefs.json`); then model may `sidebar_open` / `terminal_create` |
-| **ModLens (`@liustack/modlens`)** | `GET/POST /modlens/config` · `GET /modlens/paste` → `{ takeover: true }` (404 when `pasteToPath` off) · binary `POST /modlens/paste` → `{ path }`; Settings → Plugins config card (`settings.plugin.item` key `modlens`; `plugins.bundle.config` declared for inject) | — |
+| **ModLens (`@liustack/modlens`)** | `GET/POST /modlens/config` (DSH engineSummary: `engines.*.hasKey` · `keyless` · `discovery`; secrets stay off the wire) · `GET /modlens/paste` → `{ takeover: true }` (404 when `pasteToPath` off) · binary `POST /modlens/paste` → `{ path }`; Settings → Plugins config card (`settings.plugin.item` key `modlens`) | — |
 | **Niulai pet (`dsh-niulai-pet`)** | client `createRoot` on `document.body`; Settings card `niulai-pet`; `GET /niulai-kws/*` allowlist serves staged `kws/` (install copies asset dirs) | Full Cordis host settings section (pet UI does not require it) |
 | **Skins** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`; install stages `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis exclusive profile patch blocks (XRK stores preference + reload; does not rewrite third-party patch YAML) |
 
@@ -351,7 +362,16 @@ Local messaging, nodes, OCR, and GenUI preview are available inside the adapter 
 
 Packages in the tables below have **Host HTTP/RPC wired** (or are client-only with no Host calls). Use current npm versions; after install run `xrkh restart` (or refresh when Settings prompts). Audit: `node scripts/dsh-community-audit.mjs`.
 
-**Coverage**: `full` = no missing HTTP and seats land on product-shell seats; `host-ok` = Host paths covered, but the client still registers DSH global-panel seats (`sidebar.panellist` / `main`, …) — see **Planned work**; `client` = shell UI / Settings only, no Host HTTP.
+**Coverage**:
+
+| Tag | Meaning |
+|-----|---------|
+| `full` | Main path is usable day-to-day (HTTP/RPC + install staging + shared web/Desktop Host); notes must **not** treat honest-offline / deferred as the primary capability |
+| `partial` | Host shapes are wired, but core capability is still honest-degraded, missing seats, or missing an engine (see notes) |
+| `host-ok` | Host paths covered, but the client still registers DSH global-panel seats (`sidebar.panellist` / `main`, …) — see **Planned work** |
+| `client` | Shell UI / Settings only, no Host HTTP |
+
+Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; Desktop still needs a full app restart to mount `webPlugins` (see above).
 
 ### Shell · tools · market
 
@@ -360,7 +380,7 @@ Packages in the tables below have **Host HTTP/RPC wired** (or are client-only wi
 | `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host-native `/sidebar/*` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
-| `@liustack/modlens` | full | `/modlens` · paste takeover |
+| `@liustack/modlens` | full | `/modlens` · paste takeover · Settings `GET/POST /modlens/config` (DSH engineSummary) |
 | `@liustack/modsearch` | full | `/modsearch` |
 | `dsh-niulai-pet` | full | `/niulai-kws/*` · Settings `niulai-pet` |
 | `dsh-genui` | full | `/api/dsh-genui` · `/dsh-genui` · runtime |
@@ -380,31 +400,33 @@ Packages in the tables below have **Host HTTP/RPC wired** (or are client-only wi
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | full | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame` (placeholder frame + progress=100; no ffmpeg scene render) |
-| `dsh-context` | full | `/api/dsh-context/detail` → `{ ok, value }` (session DocStore push); `balance` · `backfill`; missing `sidebar.right.pane.*` |
+| `dsh-plugin-wallpaper-engine` | partial | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame` (placeholder frame + progress=100; no ffmpeg scene render) |
+| `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }` (session DocStore push); `balance` · `backfill`; missing `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC: documents CRUD · archive/forget · snapshot/capacity/placement · view-settings; missing panellist / `main` |
 | `@linxin666/dsh-client-ui-task-board` | full | `/api/task-board` schemaVersion=3 · `/action` CRUD persisted · `/parse` |
-| `@linxin666/dsh-ssh` | full | `/api/dsh-ssh/hosts` CRUD persisted (`~/.xrk/dsh-ssh`) · import `~/.ssh/config`; `/test` TCP probe; exec/tunnel honest without SSH engine; missing panellist / `main` |
+| `@linxin666/dsh-ssh` | partial | `/api/dsh-ssh/hosts` CRUD persisted (`~/.xrk/dsh-ssh`) · import `~/.ssh/config`; `/test` TCP probe; exec/tunnel honest without SSH engine; missing panellist / `main` |
 | `@linxin666/dsh-client-ui-git-graph` | host-ok | `/git/*` status · branches · graph · switch · worktrees (real git); missing `conversation.input.selector.context` |
-| `@linxin666/dsh-remote-web-ui` | full | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` persisted; `remote.mux` needs WS; missing panellist |
+| `@linxin666/dsh-remote-web-ui` | partial | `/api/pair/status|start|claim|…` · `/api/dsh-web-ui-settings` persisted; `remote.mux` needs WS; missing panellist |
 | `@linxin666/dsh-web-all` | host-ok | Bundle: task-board · ssh · pet · remote · skin-center (same paths as above); `GET /api/update/status` · `POST /api/update/run` (client-shaped; no DSH profile `pnpm update`); client `require("@deepseek-ai/cordis")` remaps onto the `@xrkseek/cordis` seed; Fluent icon ids (`IconDownloadOutlineRegular`, …) are aliased on `@xrkseek/client-ui-primitives` |
-| `@michengai/dsh-automation` | full | `/api/michengai/dsh-automation/update` probe · `/tasks` schedule persisted; missing `sidebar.schedule` seat |
-| `@michengai/dsh-codex-ui` | full | `/api/dsh-codex-ui/preferences` persisted · `dependencies` catalog; missing `settings.general.footer` |
+| `@michengai/dsh-automation` | partial | `/api/michengai/dsh-automation/update` probe · `/tasks` schedule persisted; missing `sidebar.schedule` seat |
+| `@michengai/dsh-codex-ui` | partial | `/api/dsh-codex-ui/preferences` persisted · `dependencies` catalog; missing `settings.general.footer` |
 | `@michengai/dsh-archive-manager` | full | `/api/michengai/dsh-archive-manager/*` archive list persisted · update probe |
 | `@michengai/dsh-agency-agents` | full | `/api/michengai/dsh-agency-agents/*` agents list persisted · update probe |
-| `@michengai/dsh-im-connect` | full | `/api/dsh-im-connect/*` channels/assistant persist (offline); QR/session need IM host; missing `sidebar.channels` |
+| `@michengai/dsh-im-connect` | partial | `/api/dsh-im-connect/*` channels/assistant persist (offline); QR/session need IM host; missing `sidebar.channels` |
 | `@linxin666/dsh-pet` | full | `/api/pet/state|pets|…` client shapes · `/pet/*` assets (when staged) · runtime fallback |
-| `dsh-pet` | full | `/dsh-pet-7340/config` GET/PUT/DELETE persist · whisper/chat/balance honest offline; see also `@linxin666/dsh-pet` |
-| `dsh-univer-office` | full | `/univer-api/status|gateway|state|…` offline gateway shapes (no process start) |
+| `dsh-pet` | partial | `/dsh-pet-7340/config` GET/PUT/DELETE persist · whisper/chat/balance honest offline; see also `@linxin666/dsh-pet` |
+| `dsh-univer-office` | partial | `/univer-api/status|gateway|state|…` offline gateway shapes (no process start) |
 | `@kenz1117/dsh-ui-usage-billing` | full | `/api/billing/*` (`total` · `source` · `balances` · `quotas` · `enabled`) |
 | `dsh-mcp-connector` | full | `POST /mcp-connector/api` connection catalog upsert/list |
-| `dsh-code-server-app` | full | `/code-server/*` · `/api/code-server/*` same offline shape · `ui-mode` persist · `/ask/state`; process start/stop still deferred |
+| `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` same offline shape · `ui-mode` persist · `/ask/state`; process start/stop still deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` team catalog persisted |
+| `dsh-workbuddy-connect` | full | web/Desktop: staged `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face; shared `connection` (admit/fetch) · persisted `credentials`; restart Host after install |
+| `dsh-our-free-model` | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` on disk · forward on by default · Face sync; `distribution: managed`; restart Host after install |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
-| `dsh-free-search` | full | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` persist; keyless `ddg` `raw-search` via DuckDuckGo HTML; keyed engines still deferred |
-| `dsh-server-deck` | full | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings; PTY needs WS |
+| `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` persist; keyless `ddg` `raw-search` via DuckDuckGo HTML; keyed engines still deferred |
+| `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings; PTY needs WS |
 | `dsh-aimail` | host-ok | no separate pack in mirror; see `dsh-email` |
-| `dsh-email` | full | `/_dsh/dsh-email/settings` snapshot/save/serialize/parse persist · whale placeholder; IMAP/SMTP/OAuth dial deferred |
+| `dsh-email` | partial | `/_dsh/dsh-email/settings` snapshot/save/serialize/parse persist · whale placeholder; IMAP/SMTP/OAuth dial deferred |
 | `@roarpeng/graphflow` | client | `/gf` community-root · MCP tools |
 | `@michengai/dsh-btw` | client | `/btw` community-root |
 | `@michengai/dsh-codex-pet` | client | `/dsh-codex-pet` community-root |
@@ -429,12 +451,12 @@ Packages in the tables below have **Host HTTP/RPC wired** (or are client-only wi
 | `@linxin666/dsh-skins` (nested `blue-fantasy` · `dragon-heir` · `harbor` · `maid-atelier` · `matrix` · `miku` · `minecraft` · `trading` · `whale-mom` · `whale-song` · `xp`) | full | discovered via skin-center / skin-assets `skin.json` |
 | `dsh-skin-market` | full | `/dsh-skin-market/catalog` · state · activate |
 | `dsh-dream-skin` | full | `/dream-skin/api` · Settings `dreamSkin` |
-| `dsh-plugin-wallpaper-engine` | full | see Shell · tools table above |
+| `dsh-plugin-wallpaper-engine` | partial | see Shell · tools table above |
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body décor |
 | `open-sea-skin` | client | body décor |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |
 
-If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, then restart Host.
+If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, then restart Host. On Desktop, extensioned paths outside packaged `/assets/*` (e.g. preview images) fall through to Host Fetch on disk miss so community skin rasters are not swallowed by a static 404.
 
 ## Sidebar plugin contract (Host owns; client UI only)
 

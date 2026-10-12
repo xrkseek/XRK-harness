@@ -125,6 +125,33 @@ declare module '@xrkseek/xrk-typert-protocol' {
       ) => Promise<RemoteResult<CommandExecution | undefined>>
       list: (agentId: SessionId) => Promise<RemoteResult<readonly CommandDescriptor[]>>
     }
+    /**
+     * Face session Remote (`session.list` …). Provided as Cordis
+     * `remote.session` so community clients (e.g. dsh-workbuddy-connect) activate.
+     */
+    session: {
+      list: (args?: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      create: (args?: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      history: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      search: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      models: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      /** DSH alias → Face `session.models`. */
+      modelCatalog: (args?: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      /** DSH alias → Face `session.history`. */
+      page: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      selectModel: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      rename: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      fork: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      prompt: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      cancel: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      delete: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      updateQueue: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      status: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      attachment: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      respondApproval: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      setWorkingDirectory: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      rolloutTrace: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+    }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>
       setEnabled: (

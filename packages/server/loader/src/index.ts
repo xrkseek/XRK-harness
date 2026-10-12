@@ -7,6 +7,7 @@ import {
 } from "./load-failures.js";
 import { scanPluginDir, type DiscoveryHit } from "./manifest.js";
 import {
+  ensureOptionalDefaultsSeededAt,
   isPluginSoftDisabledAt,
   readDisabledPluginIdsAt,
   readManagedPackageIndexAt,
@@ -148,6 +149,8 @@ export {
   readManagedPluginPackagesAt,
   reconcileManagedProcessPlugins,
   seedOptionalOffByDefaultAt,
+  ensureOptionalDefaultsSeededAt,
+  isOptionalBundleEnabledAt,
   setSoftDisabledAt,
   writeDisabledPluginIdsAt,
   RequiredPluginLoadError,
@@ -245,6 +248,7 @@ export function createPluginLoader(): PluginLoader {
     },
     async loadAll(dir) {
       const root = dir;
+      ensureOptionalDefaultsSeededAt(root);
       const hits = await scanPluginDir(root);
       seedOptionalOffByDefaultAt(
         root,

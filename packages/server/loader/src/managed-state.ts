@@ -286,6 +286,32 @@ export function seedOptionalOffByDefaultAt(
   return dirtyDisabled || dirtySeed;
 }
 
+/**
+ * Product-bundled optionals (e.g. `git-worktrees`) seed as off even before the
+ * package is discovered on disk — Settings can toggle them without a prior install.
+ * @returns whether disabled or seeded files changed.
+ */
+export function ensureOptionalDefaultsSeededAt(pluginsDir: string): boolean {
+  return seedOptionalOffByDefaultAt(
+    pluginsDir,
+    OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS,
+  );
+}
+
+/** Whether an optional-off-by-default product bundle is currently enabled. */
+export function isOptionalBundleEnabledAt(
+  pluginsDir: string,
+  pluginId: string,
+): boolean {
+  const id = pluginId.trim();
+  if (!id || !OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(id)) return false;
+  const root = path.resolve(pluginsDir);
+  ensureOptionalDefaultsSeededAt(root);
+  const disabled = readDisabledPluginIdsAt(root);
+  const index = readManagedPackageIndexAt(root);
+  return !isPluginSoftDisabledAt(id, disabled, index);
+}
+
 /** Soft-disabled managed plugin ids under a plugins directory. */
 export function readDisabledPluginIdsAt(pluginsDir: string): Set<string> {
   return readIdSetFile(disabledPluginsPath(pluginsDir));
@@ -451,6 +477,12 @@ export type ReconcileManagedProcessPluginsOptions = {
    * without a Host restart.
    */
   readonly reloadIds?: readonly string[];
+  /**
+   * Live ids that must not be unloaded for "missing under pluginsDir"
+   * (Host built-ins such as `dsh-compat-host` registered outside managed disk).
+   * Soft-disable and `reloadIds` still apply.
+   */
+  readonly preserveIds?: readonly string[];
 };
 
 /**
@@ -473,6 +505,8 @@ export async function reconcileManagedProcessPlugins(
   options: ReconcileManagedProcessPluginsOptions = {},
 ): Promise<ReconcileProcessPluginsResult> {
   const root = path.resolve(pluginsDir);
+  // Product optionals seed off even when not yet on disk.
+  ensureOptionalDefaultsSeededAt(root);
   const hits = await loader.discover(root);
   seedOptionalOffByDefaultAt(
     root,
@@ -481,6 +515,11 @@ export async function reconcileManagedProcessPlugins(
   const disabled = readDisabledPluginIdsAt(root);
   const index = readManagedPackageIndexAt(root);
   const discoveredIds = new Set(hits.map((h) => h.manifest.id));
+  const preserveIds = new Set(
+    (options.preserveIds ?? [])
+      .map((id) => id.trim())
+      .filter((id) => id && !id.startsWith("mcp:")),
+  );
   const reloadCanonical = new Set<string>();
   for (const raw of options.reloadIds ?? []) {
     const trimmed = raw.trim();
@@ -495,7 +534,9 @@ export async function reconcileManagedProcessPlugins(
       disabled,
       index,
     );
-    const missingOnDisk = !discoveredIds.has(plugin.id);
+    // Host built-ins live outside pluginsDir; do not treat them as CLI-removed.
+    const missingOnDisk =
+      !discoveredIds.has(plugin.id) && !preserveIds.has(plugin.id);
     const forceReload = reloadCanonical.has(
       index.resolve(plugin.id) ?? plugin.id,
     );

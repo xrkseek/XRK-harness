@@ -7,7 +7,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import {
+  ensureOptionalDefaultsSeededAt,
   isPluginSoftDisabledAt,
+  OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS,
   readDisabledPluginIdsAt,
   readManagedPackageIndexAt,
   readManagedPluginPackagesAt,
@@ -238,6 +240,9 @@ function isManagedProcessPlugin(
   runtime: Pick<FaceRuntime, "hostPublic">,
 ): boolean {
   if (plugin.id.startsWith("mcp:")) return false;
+  // Product optionals (Settings toggle) stay managed even when Host-gated and
+  // not listed in CLI inventory — otherwise soft-disable cannot clear a live half.
+  if (OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(plugin.id)) return true;
   if (userNames.has(plugin.id)) return true;
   // Only staged / inventory community cordis are managed — not product-shell
   // cordis stubs (those must not gain Settings disable/delete).
@@ -264,10 +269,12 @@ export function listFacePluginInventory(
   const seen = new Set<string>();
   const liveIds = new Set<string>();
   const entries: FacePluginInventoryEntry[] = [];
+  const pluginsRoot = pluginsDirOf(runtime);
+  ensureOptionalDefaultsSeededAt(pluginsRoot);
   const packages = readUserPluginPackages(runtime);
   const userNames = new Set(packages.keys());
   const disabled = readDisabledPluginIds(runtime);
-  const packageIndex = readManagedPackageIndexAt(pluginsDirOf(runtime));
+  const packageIndex = readManagedPackageIndexAt(pluginsRoot);
   const softDisabledOf = (...ids: readonly string[]) =>
     ids.some((id) => isPluginSoftDisabledAt(id, disabled, packageIndex));
   const metaOf = (id: string): FaceManagedPluginMeta => packages.get(id) ?? {};
@@ -348,10 +355,33 @@ export function listFacePluginInventory(
     });
   }
 
+  // Product optional bundles (default off) always appear so Settings can toggle.
+  for (const id of OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS) {
+    if (seen.has(id)) continue;
+    const softDisabled = softDisabledOf(id);
+    push({
+      entryId: id,
+      moduleName: id,
+      enabled: !softDisabled,
+      fiberPhase: softDisabled ? null : "active",
+      managed: true,
+      kind: "process",
+    });
+  }
+
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
     if (!entry.managed) continue;
     const live = liveIds.has(entry.entryId);
+    // Host-gated product optionals (e.g. git-worktrees): durable soft-disable is
+    // the live switch. Without a loaded process/client half, restart cannot
+    // materialize the row — do not sticky-flag needsRestart.
+    if (
+      OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(entry.entryId) &&
+      !live
+    ) {
+      continue;
+    }
     const needsRestart =
       (entry.enabled && !live) || (!entry.enabled && live);
     if (!needsRestart) continue;
@@ -398,4 +428,9 @@ export function setFacePluginInventoryEnabled(
   });
   reconcileManagedClientBoot(runtime);
   return { ok: true };
+}
+
+/** Product optional bundles cannot be removed — only enabled / disabled. */
+export function isOptionalProductBundle(entryId: string): boolean {
+  return OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(entryId.trim());
 }

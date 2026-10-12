@@ -12,6 +12,41 @@ import {
   stopCordisFiber,
 } from "./cordis-fiber-runner.js";
 import { appendDshCompatContribution } from "./shared-registry.js";
+import {
+  hasWorkBuddyHostLib,
+  isWorkBuddyConnectPackage,
+  tryApplyWorkBuddyHost,
+} from "./workbuddy-host.js";
+import {
+  hasOurFreeModelEntry,
+  isOurFreeModelPackage,
+  tryApplyOurFreeModelHost,
+} from "./our-free-model-host.js";
+
+async function tryApplyStagedHost(
+  root: string,
+  packageName: string,
+  ctx: DshCompatWireOptions,
+): Promise<DshAdapterContribution | undefined> {
+  if (isWorkBuddyConnectPackage(packageName) && hasWorkBuddyHostLib(root)) {
+    const wb = await tryApplyWorkBuddyHost(root, packageName, ctx);
+    if (wb) return wb;
+  }
+  if (isOurFreeModelPackage(packageName) && hasOurFreeModelEntry(root)) {
+    const ofm = await tryApplyOurFreeModelHost(root, packageName, ctx);
+    if (ofm) return ofm;
+  }
+  if (!hasHostApplyEntry(root)) return undefined;
+  return tryApplyHostModule(root, packageName, ctx);
+}
+
+function hasStagedHostEntry(root: string, packageName: string): boolean {
+  return (
+    hasHostApplyEntry(root) ||
+    (isWorkBuddyConnectPackage(packageName) && hasWorkBuddyHostLib(root)) ||
+    (isOurFreeModelPackage(packageName) && hasOurFreeModelEntry(root))
+  );
+}
 
 function manifestUsesXrkModule(
   manifest: { http?: readonly { provider: string }[]; rpc?: readonly { provider: string }[] },
@@ -33,10 +68,10 @@ export async function composeApplyBridgeContributions(
 
   for (const pkg of inventory.packages) {
     const root = clientPluginRoot(inventory.pluginsDir, pkg.name);
-    if (!existsSync(root) || !hasHostApplyEntry(root)) continue;
+    if (!existsSync(root) || !hasStagedHostEntry(root, pkg.name)) continue;
     const manifest = resolvePluginHostManifest(root, pkg.name);
     if (manifest && manifestUsesXrkModule(manifest)) continue;
-    const contribution = await tryApplyHostModule(root, pkg.name, ctx);
+    const contribution = await tryApplyStagedHost(root, pkg.name, ctx);
     if (contribution) {
       recordAppliedHostContribution(contribution);
       out.push(contribution);
@@ -57,10 +92,10 @@ export async function applyHostPackageByName(
   const pkg = inventory.packages.find((row) => row.name === name);
   if (!pkg) return false;
   const root = clientPluginRoot(inventory.pluginsDir, pkg.name);
-  if (!existsSync(root) || !hasHostApplyEntry(root)) return false;
+  if (!existsSync(root) || !hasStagedHostEntry(root, name)) return false;
   const manifest = resolvePluginHostManifest(root, pkg.name);
   if (manifest && manifestUsesXrkModule(manifest)) return false;
-  const contribution = await tryApplyHostModule(root, pkg.name, ctx);
+  const contribution = await tryApplyStagedHost(root, pkg.name, ctx);
   const fiberFallback = await applyHostPackageWithFiberFallback(
     ctx,
     pkg.name,

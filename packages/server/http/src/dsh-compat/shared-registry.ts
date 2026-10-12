@@ -23,10 +23,26 @@ function installKey(ctx: DshCompatWireOptions): string {
 
 let bootKey: string | undefined;
 let bootPromise: Promise<CordisCompatRegistry> | undefined;
+/** Set while compose runs so late HTTP can register without awaiting bootPromise. */
+let activeRegistry: CordisCompatRegistry | undefined;
 
 export function resetDshCompatRegistryCache(): void {
   bootKey = undefined;
   bootPromise = undefined;
+  activeRegistry = undefined;
+}
+
+/**
+ * Register an HTTP handler on the in-flight / live dsh-compat registry.
+ * Safe during compose (avoids awaiting the same bootPromise — deadlock).
+ */
+export function registerDshCompatHttpLate(
+  match: (pathname: string) => boolean,
+  handle: Parameters<CordisCompatRegistry["registerHttp"]>[1],
+): boolean {
+  if (!activeRegistry) return false;
+  activeRegistry.registerHttp(match, handle);
+  return true;
 }
 
 export async function ensureDshCompatRegistry(
@@ -42,6 +58,7 @@ export async function ensureDshCompatRegistry(
     resetDshCompatUpgrades();
     resetHostApplyRegistry();
     const registry = createCordisCompatRegistry();
+    activeRegistry = registry;
     await installComposedAdapters(registry, normalized);
     configureImGatewayLocalWs({
       ...(normalized.xrkHome ? { xrkHome: normalized.xrkHome } : {}),

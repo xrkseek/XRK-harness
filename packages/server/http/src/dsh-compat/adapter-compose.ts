@@ -195,8 +195,10 @@ export async function installComposedAdapters(
   configureSettingsFallback({
     ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
   });
+  // Host apply routes (exact WorkBuddy status/probe/…) must win over the
+  // baseline `/plugins/` asset catch-all (first match in the registry).
+  installAdapters(registry, await composeApplyBridgeContributions(ctx));
   installAdapters(registry, await composeBaselineCapabilities(ctx));
   installAdapters(registry, await composeAdaptersFromInventory(ctx));
-  installAdapters(registry, await composeApplyBridgeContributions(ctx));
   registerHonestHttpCatchall(registry);
 }

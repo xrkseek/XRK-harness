@@ -39,6 +39,18 @@ export function CallId(id: string): CallId {
   return id as CallId
 }
 
+/**
+ * DSH renamed {@link CallId} → `ToolCallId` on newer `dsh-llm` lines.
+ * Community channel-pack (`dsh-our-free-model`) still imports that name when
+ * remapped onto `@xrkseek/xrk-llm` — keep both spellings.
+ */
+export type ToolCallId = CallId
+
+/** @see {@link CallId} */
+export function ToolCallId(id: string): ToolCallId {
+  return CallId(id)
+}
+
 /** Provider-issued request identifier retained for diagnostics across package boundaries. */
 export type ProviderRequestId = Branded<'ProviderRequestId'>
 

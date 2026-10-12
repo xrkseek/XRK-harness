@@ -111,6 +111,16 @@ function looksApiTail(tail: string): boolean {
   );
 }
 
+/**
+ * Cordis host halves (WorkBuddy status/probe/update) register after this
+ * catch-all. Yield so those exact routes are not shadowed by stub/404 JSON.
+ */
+export function looksCordisHostApiTail(tail: string): boolean {
+  if (!tail) return false;
+  const base = tail.split("/").pop() ?? "";
+  return base === "status" || base === "probe" || base === "update";
+}
+
 function tryServePluginFile(
   res: ServerResponse,
   abs: string,
@@ -156,6 +166,8 @@ export async function handlePluginAssetHttp(
   }
 
   const { pluginId, tail } = parsePluginPath(pathname);
+  if (looksCordisHostApiTail(tail)) return false;
+
   const baseDir = pluginDir(options.pluginsDir, pluginId);
 
   if (baseDir && tail && (method === "GET" || method === "HEAD")) {

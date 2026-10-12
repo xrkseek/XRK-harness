@@ -18,8 +18,10 @@ packages:
   - "extensions/example-im-mock-sidecar"
   - "extensions/dsh-compat"
   - "extensions/a2a"
+  - "extensions/git-worktrees"
 # pnpm ≥10：仅允许下列包跑 lifecycle
 allowBuilds:
+  '@google/genai': set this to true or false
   "@xrkseek/exec-pty": true
   "@xrkseek/exec-pty@file:packages/exec/pty": true
   electron: true
@@ -27,4 +29,5 @@ allowBuilds:
   esbuild: true
   keytar: false
   node-pty: true
+  protobufjs: set this to true or false
   sharp: true

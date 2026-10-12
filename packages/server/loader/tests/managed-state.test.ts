@@ -13,6 +13,8 @@ import { createPluginLoader } from "../src/index.js";
 import {
   canonicalizeDisabledPluginIdsAt,
   clearSoftDisabledIdsAt,
+  ensureOptionalDefaultsSeededAt,
+  isOptionalBundleEnabledAt,
   isPluginSoftDisabledAt,
   lookupManagedPluginSourceAt,
   readDisabledPluginIdsAt,
@@ -59,6 +61,20 @@ describe("managed-state soft-disable", () => {
     expect(readDisabledPluginIdsAt(root).size).toBe(0);
     expect(seedOptionalOffByDefaultAt(root, ["git-worktrees"])).toBe(false);
     expect(readDisabledPluginIdsAt(root).size).toBe(0);
+  });
+
+  it("ensureOptionalDefaultsSeededAt seeds product bundles without discovery", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-optional-seed-"));
+    temps.push(root);
+    expect(ensureOptionalDefaultsSeededAt(root)).toBe(true);
+    expect(isOptionalBundleEnabledAt(root, "git-worktrees")).toBe(false);
+    setSoftDisabledAt(root, {
+      enabled: true,
+      entryId: "git-worktrees",
+      aliases: [],
+    });
+    expect(isOptionalBundleEnabledAt(root, "git-worktrees")).toBe(true);
+    expect(ensureOptionalDefaultsSeededAt(root)).toBe(false);
   });
 
   it("canonicalizes alias ids to inventory package names and drops orphans", () => {
@@ -314,6 +330,33 @@ describe("managed-state soft-disable", () => {
       reloadIds: ["bump-tools"],
     });
     expect(loader.list()[0]?.promptSections?.[0]?.content).toBe("v2");
+  });
+
+  it("preserveIds keeps Host built-ins that are not under pluginsDir", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-loader-preserve-"));
+    temps.push(root);
+    mkdirSync(path.join(root, "keep-tools"), { recursive: true });
+    writeFileSync(
+      path.join(root, "keep-tools", "xrk.plugin.json"),
+      JSON.stringify({ id: "keep-tools", kind: "tools", entry: "./plugin.mjs" }),
+    );
+    writeFileSync(
+      path.join(root, "keep-tools", "plugin.mjs"),
+      `export function createPlugin() {
+  return { id: "keep-tools", kind: "tools", tools: [] };
+}
+`,
+    );
+    const loader = createPluginLoader();
+    loader.register({
+      id: "dsh-compat-host",
+      kind: "host",
+      createPublicHandler: () => async () => false,
+    });
+    const kept = await reconcileManagedProcessPlugins(loader, root, {
+      preserveIds: ["dsh-compat-host"],
+    });
+    expect(kept.ids.sort()).toEqual(["dsh-compat-host", "keep-tools"]);
   });
 
   it("soft-disable unload pairs dispose", async () => {
