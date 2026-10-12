@@ -329,12 +329,21 @@ export const imageMediaTypeSchema = z.union([
 /** Prompt wire content is intentionally narrower than merge-extensible durable core content. */
 export const promptContentPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
-  z.object({ type: z.literal('image'), mediaType: imageMediaTypeSchema, data: z.string(), name: z.string().optional() }),
+  z.object({
+    type: z.literal('image'),
+    mediaType: imageMediaTypeSchema,
+    data: z.string(),
+    name: z.string().optional(),
+    /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+    sourcePath: z.string().min(1).optional(),
+  }),
   z.object({
     type: z.literal('file'),
     data: z.string(),
     name: z.string().optional(),
     mediaType: z.string().optional(),
+    /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+    sourcePath: z.string().min(1).optional(),
   }),
 ])
 
@@ -367,6 +376,7 @@ export const imageAttachmentRefSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   name: z.string().optional(),
+  sourcePath: z.string().min(1).optional(),
 }) as unknown as z.ZodType<ImageAttachmentRef>
 
 /** session.attachment request payload. */

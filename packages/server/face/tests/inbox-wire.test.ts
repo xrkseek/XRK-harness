@@ -146,4 +146,46 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
     expect(wire.ignorable).toBe(true);
     expect(wire.type).toBe("prompt/admitted");
   });
+
+  it("preserves modelOnly on attachment handle text in inbox splices", () => {
+    const inbox = new FaceInboxWireProjector(new Map([["a1", "rpc-1"]]));
+    const handle = {
+      type: "text" as const,
+      modelOnly: true as const,
+      text: "[文件附件 notes.docx（sha256:abcd）。需内容时用 read_file path=attachment:sha256:abcd 读取]",
+    };
+    const wire = toFaceWireSessionEvent(
+      {
+        type: "prompt/admitted",
+        ts: 1,
+        admitId: "a1",
+        content: [
+          handle,
+          {
+            type: "file",
+            attachment: {
+              attachmentId: "sha256:abcd",
+              name: "notes.docx",
+              bytes: 12,
+            },
+          },
+        ],
+      },
+      1,
+      { sessionId: "s", inbox },
+    );
+    expect(wire.type).toBe("agent/inbox/spliced");
+    if (wire.type !== "agent/inbox/spliced") return;
+    expect(wire.data.inserted[0]?.content).toEqual([
+      handle,
+      {
+        type: "file",
+        attachment: {
+          attachmentId: "sha256:abcd",
+          name: "notes.docx",
+          bytes: 12,
+        },
+      },
+    ]);
+  });
 });

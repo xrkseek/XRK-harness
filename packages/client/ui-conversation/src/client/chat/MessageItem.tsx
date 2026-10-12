@@ -66,6 +66,16 @@ function isFileAttachment(value: unknown): value is FileAttachmentRef {
     && (o.mediaType === undefined || typeof o.mediaType === 'string')
 }
 
+/** Hide attachment handle captions even when an older wire dropped `modelOnly`. */
+function looksLikeAttachmentHandleCaption(text: string): boolean {
+  const t = text.trim()
+  return (
+    /^\[文件附件 .+（sha256:[a-f0-9]+）/u.test(t)
+    || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
+    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+\)/u.test(t)
+  )
+}
+
 function contentParts(content: readonly unknown[]): {
   text: string
   segments: readonly string[]
@@ -80,7 +90,7 @@ function contentParts(content: readonly unknown[]): {
     if (b.type === 'text' && typeof b.text === 'string') {
       // Harness-injected handle text (image/file attachment ids) reaches the
       // model but is not what the reader typed — keep it out of the bubble.
-      if (b.modelOnly === true) continue
+      if (b.modelOnly === true || looksLikeAttachmentHandleCaption(b.text)) continue
       texts.push(b.text)
     }
     else if (b.type === 'image' && b.attachment !== undefined) {
@@ -480,8 +490,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
     for (const block of data.content) {
       if (block !== null && typeof block === 'object' && 'type' in block && block.type === 'text' && typeof (block as { text?: unknown }).text === 'string') {
         // Model-only handle text never enters copy/edit — same rule as the bubble.
-        if ((block as { modelOnly?: unknown }).modelOnly === true) continue
-        parts.push((block as { text: string }).text)
+        const text = (block as { text: string }).text
+        if ((block as { modelOnly?: unknown }).modelOnly === true || looksLikeAttachmentHandleCaption(text)) continue
+        parts.push(text)
       }
     }
     return parts.join('')

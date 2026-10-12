@@ -153,6 +153,54 @@ describe("Face session.attachment / image prompt", () => {
     expect(contentHasFile(pending[1]!.content)).toBe(true);
   });
 
+  it("persists drag/drop sourcePath on admitted image and file refs", async () => {
+    const { runtime, store } = await face({
+      modalities: ["text", "image"],
+      visionRoute: true,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});
+    if (!created.result.ok) throw new Error("create failed");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const imagePath = "/tmp/drop/dot.png";
+    const filePath = "/tmp/drop/note.txt";
+
+    const res = await dispatchFaceMethod(runtime, "session.prompt", "r-src", {
+      sessionId,
+      mode: "queue",
+      content: [
+        {
+          type: "image",
+          mediaType: "image/png",
+          data: PNG_B64,
+          name: "dot.png",
+          sourcePath: imagePath,
+        },
+        {
+          type: "file",
+          data: Buffer.from("hello\n", "utf8").toString("base64"),
+          name: "note.txt",
+          mediaType: "text/plain",
+          sourcePath: filePath,
+        },
+      ],
+    });
+    expect(res.result.ok).toBe(true);
+
+    const pending = listPendingAdmits(store.get(sessionId).events, sessionId);
+    expect(pending).toHaveLength(1);
+    const content = pending[0]!.content;
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) throw new Error("expected blocks");
+    const image = content.find((b) => b.type === "image");
+    const file = content.find((b) => b.type === "file");
+    expect(image && "attachment" in image ? image.attachment.sourcePath : undefined).toBe(
+      imagePath,
+    );
+    expect(file && "attachment" in file ? file.attachment.sourcePath : undefined).toBe(
+      filePath,
+    );
+  });
+
   it("rejects image when Face intake is text-only", async () => {
     const { runtime } = await face({ modalities: ["text"] });
     const created = await dispatchFaceMethod(runtime, "session.create", "r0", {});

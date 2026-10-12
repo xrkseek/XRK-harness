@@ -25,6 +25,7 @@ import type { ComposerBlocks } from './input/blocks.ts'
 import { randomUuid } from '@xrkseek/xrk-host-apiproxy/api'
 import type { DraftAttachmentId, SessionInputResolver } from './input/contract.ts'
 import type { InputSubmitMode } from './contract/composer-submission.ts'
+import { desktopPathForFile } from './drop-path-intake.ts'
 
 /**
  * The outward conversation face (`ctx.conversation`): the scope-addressed
@@ -218,8 +219,14 @@ export class ConversationController extends Service implements IConversation {
     const uploads = this.fileUploads.getSnapshot()
     const serializeParts = async (): Promise<Parameters<SessionFace['prompt']>[0]> => {
       const content = await Promise.all(attachments.map(async (attachment) => {
+        // Desktop drag/drop: absolute OS path. Clipboard paste has none.
+        const sourcePath = desktopPathForFile(attachment.file)
         if (attachment.kind === 'image') {
-          return { type: 'image' as const, ...await this.encodeImage(attachment.file) }
+          return {
+            type: 'image' as const,
+            ...await this.encodeImage(attachment.file),
+            ...(sourcePath !== undefined ? { sourcePath } : {}),
+          }
         }
         const upload = uploads[attachment.id]
         if (upload === undefined || upload.status !== 'ready') {
@@ -230,6 +237,7 @@ export class ConversationController extends Service implements IConversation {
           data: upload.data,
           ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
           ...(attachment.file.type === '' ? {} : { mediaType: attachment.file.type }),
+          ...(sourcePath !== undefined ? { sourcePath } : {}),
         }
       }))
       return [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]

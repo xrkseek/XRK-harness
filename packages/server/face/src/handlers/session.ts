@@ -491,6 +491,9 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
         mediaType: x.mediaType,
         data: x.data,
         ...(typeof x.name === "string" ? { name: x.name } : {}),
+        ...(typeof x.sourcePath === "string" && x.sourcePath.length > 0
+          ? { sourcePath: x.sourcePath }
+          : {}),
       });
       continue;
     }
@@ -509,6 +512,9 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
         data: x.data,
         ...(typeof x.name === "string" ? { name: x.name } : {}),
         ...(typeof x.mediaType === "string" ? { mediaType: x.mediaType } : {}),
+        ...(typeof x.sourcePath === "string" && x.sourcePath.length > 0
+          ? { sourcePath: x.sourcePath }
+          : {}),
       });
       continue;
     }

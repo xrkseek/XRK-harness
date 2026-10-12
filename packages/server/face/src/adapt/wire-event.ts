@@ -156,6 +156,9 @@ function wireContentBlocks(content: MessageContent): readonly (
           ...(block.attachment.mediaType !== undefined
             ? { mediaType: block.attachment.mediaType }
             : {}),
+          ...(block.attachment.sourcePath !== undefined
+            ? { sourcePath: block.attachment.sourcePath }
+            : {}),
         },
       };
     }
@@ -169,6 +172,9 @@ function wireContentBlocks(content: MessageContent): readonly (
         height: block.attachment.height,
         ...(block.attachment.name !== undefined
           ? { name: block.attachment.name }
+          : {}),
+        ...(block.attachment.sourcePath !== undefined
+          ? { sourcePath: block.attachment.sourcePath }
           : {}),
         ...(block.attachment.originalDimensions !== undefined
           ? { originalDimensions: { ...block.attachment.originalDimensions } }

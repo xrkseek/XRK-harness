@@ -133,8 +133,8 @@ export interface SessionProjectionsBlock {
 /** Browser-submitted prompt content; the host promotes image/file bytes to durable references. */
 export type PromptContentPart =
   | { type: 'text'; text: string }
-  | { type: 'image'; mediaType: ImageMediaType; data: string; name?: string }
-  | { type: 'file'; data: string; name?: string; mediaType?: string }
+  | { type: 'image'; mediaType: ImageMediaType; data: string; name?: string; sourcePath?: string }
+  | { type: 'file'; data: string; name?: string; mediaType?: string; sourcePath?: string }
 
 /** Complete model selection for one session. */
 export interface ModelSelection {

@@ -21,6 +21,8 @@ export interface ImageAttachmentRef {
   height: number
   /** Optional display name stripped of local path information. */
   name?: string
+  /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+  sourcePath?: string
 }
 
 /** Durable, serializable metadata for one immutable generic file object. */
@@ -33,6 +35,8 @@ export interface FileAttachmentRef {
   bytes: number
   /** Browser/provider MIME when known; optional. */
   mediaType?: string
+  /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+  sourcePath?: string
 }
 
 /** Deployment-resolved limits used by upload admission and request buffering. */
@@ -60,6 +64,8 @@ export interface SaveImageAttachment {
   mediaType: ImageMediaType
   /** Optional browser/provider display name; it is never interpreted as a path. */
   name?: string
+  /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+  sourcePath?: string
 }
 
 /** Stored image bytes returned after reference and digest verification. */

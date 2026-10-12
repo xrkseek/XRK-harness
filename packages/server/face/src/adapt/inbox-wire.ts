@@ -12,7 +12,7 @@ export interface FaceWireUserMessage {
   readonly id: string;
   readonly role: "user";
   readonly content: readonly (
-    | { readonly type: "text"; readonly text: string }
+    | { readonly type: "text"; readonly text: string; readonly modelOnly?: true }
     | {
         readonly type: "image";
         readonly attachment: {
@@ -57,7 +57,13 @@ function userMessage(
     id,
     role: "user",
     content: asContentBlocks(content).map((block) => {
-      if (block.type === "text") return { type: "text" as const, text: block.text };
+      if (block.type === "text") {
+        // Keep modelOnly so queue / pre-admit rows hide attachment handle
+        // captions the same way durable user/message does (wire-event).
+        return block.modelOnly === true
+          ? { type: "text" as const, text: block.text, modelOnly: true as const }
+          : { type: "text" as const, text: block.text };
+      }
       if (block.type === "file") {
         return { type: "file" as const, attachment: { ...block.attachment } };
       }

@@ -19,12 +19,16 @@ export type PromptWirePart =
       readonly mediaType: string;
       readonly data: string;
       readonly name?: string;
+      /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+      readonly sourcePath?: string;
     }
   | {
       readonly type: "file";
       readonly data: string;
       readonly name?: string;
       readonly mediaType?: string;
+      /** Absolute OS path when Desktop resolved a drag/drop (not clipboard). */
+      readonly sourcePath?: string;
     };
 
 export type DurablePromptResult =
@@ -100,12 +104,14 @@ export async function durablePromptContent(
         readonly mediaType: ImageMediaType;
         readonly data: Uint8Array;
         readonly name?: string;
+        readonly sourcePath?: string;
       }
     | {
         readonly kind: "file";
         readonly data: Uint8Array;
         readonly name?: string;
         readonly mediaType?: string;
+        readonly sourcePath?: string;
       };
 
   const pending: Pending[] = [];
@@ -135,6 +141,9 @@ export async function durablePromptContent(
         mediaType: part.mediaType,
         data,
         ...(part.name !== undefined ? { name: part.name } : {}),
+        ...(part.sourcePath !== undefined
+          ? { sourcePath: part.sourcePath }
+          : {}),
       });
       continue;
     }
@@ -152,6 +161,9 @@ export async function durablePromptContent(
         data,
         ...(part.name !== undefined ? { name: part.name } : {}),
         ...(part.mediaType !== undefined ? { mediaType: part.mediaType } : {}),
+        ...(part.sourcePath !== undefined
+          ? { sourcePath: part.sourcePath }
+          : {}),
       });
       continue;
     }
@@ -168,6 +180,7 @@ export async function durablePromptContent(
       data: p.data,
       mediaType: p.mediaType,
       ...(p.name !== undefined ? { name: p.name } : {}),
+      ...(p.sourcePath !== undefined ? { sourcePath: p.sourcePath } : {}),
     }));
   const fileInputs = pending
     .filter((p): p is Extract<Pending, { kind: "file" }> => p.kind === "file")
@@ -175,6 +188,7 @@ export async function durablePromptContent(
       data: p.data,
       ...(p.name !== undefined ? { name: p.name } : {}),
       ...(p.mediaType !== undefined ? { mediaType: p.mediaType } : {}),
+      ...(p.sourcePath !== undefined ? { sourcePath: p.sourcePath } : {}),
     }));
 
   let imageRefs;

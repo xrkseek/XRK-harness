@@ -5,9 +5,17 @@ import type { QueuedMessage } from './conversation.ts'
 
 const QUEUE_PREVIEW_CHARS = 200
 
+function isModelOnlyText(block: ContentBlock): boolean {
+  return block.type === 'text' && (block as { modelOnly?: unknown }).modelOnly === true
+}
+
 function previewOf(content: readonly ContentBlock[]): string {
   const flat = content
-    .map(block => (block.type === 'text' ? block.text : `[${block.type}]`))
+    .map(block => {
+      if (block.type === 'text') return isModelOnlyText(block) ? '' : block.text
+      return `[${block.type}]`
+    })
+    .filter(part => part.length > 0)
     .join(' ').replace(/\s+/g, ' ').trim()
   const chars = Array.from(flat)
   return chars.length > QUEUE_PREVIEW_CHARS ? `${chars.slice(0, QUEUE_PREVIEW_CHARS).join('')}…` : flat
@@ -15,7 +23,7 @@ function previewOf(content: readonly ContentBlock[]): string {
 
 function textOf(content: readonly ContentBlock[]): string {
   return content
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text' && !isModelOnlyText(block))
     .map(block => block.text)
     .join('')
 }
