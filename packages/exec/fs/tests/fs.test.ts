@@ -143,7 +143,7 @@ describe("FsService", () => {
     const tools = createFsTools(stub);
     const read = tools.find((t) => t.name === "read_file")!;
     const out = await read.execute({ path: "x" });
-    expect(out.content).toBe("1|stub");
+    expect(out.content).toBe("1|stub\npath: x");
     expect(stub.read).toHaveBeenCalledWith("x");
   });
 
@@ -169,7 +169,121 @@ describe("FsService", () => {
     const tools = createFsTools(stub);
     const read = tools.find((t) => t.name === "read_file")!;
     const out = await read.execute({ path: "x", offset: 2, limit: 2 });
-    expect(out.content).toBe("2|b\n3|c\n\n[… 2 more lines; use offset=4]");
+    expect(out.content).toBe(
+      "2|b\n3|c\n\n[… 2 more lines; use offset=4]\npath: x",
+    );
+  });
+
+  it("read_file resolves Host attachment ids without joining the workspace", async () => {
+    const id =
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const stub = {
+      root: "/virtual",
+      resolvePath: vi.fn((p: string) => p),
+      read: vi.fn(async () => ({ content: "should-not-run" })),
+      readBytes: vi.fn(async () => new Uint8Array()),
+      write: vi.fn(async () => {}),
+      edit: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+      stat: vi.fn(async () => ({
+        size: 0,
+        isFile: true,
+        isDirectory: false,
+      })),
+      mkdir: vi.fn(async () => {}),
+      glob: vi.fn(async () => []),
+      grep: vi.fn(async () => []),
+      onIntent: () => () => {},
+    };
+    const readFile = vi.fn(async () => ({
+      ref: { name: "notes.txt", bytes: 5 },
+      data: new TextEncoder().encode("hello"),
+    }));
+    const tools = createFsTools(stub, { attachments: { readFile } });
+    const read = tools.find((t) => t.name === "read_file")!;
+    const out = await read.execute({ path: `attachment:${id}` });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toBe("1|hello");
+    expect(readFile).toHaveBeenCalledWith(id);
+    expect(stub.read).not.toHaveBeenCalled();
+    expect(stub.resolvePath).not.toHaveBeenCalled();
+  });
+
+  it("read_file prefers attachment sourcePath over host alias", async () => {
+    const id =
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const stub = {
+      root: "/virtual",
+      resolvePath: vi.fn((p: string) => p),
+      read: vi.fn(async () => ({ content: "should-not-run" })),
+      readBytes: vi.fn(async () => new Uint8Array()),
+      write: vi.fn(async () => {}),
+      edit: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+      stat: vi.fn(async () => ({
+        size: 0,
+        isFile: true,
+        isDirectory: false,
+      })),
+      mkdir: vi.fn(async () => {}),
+      glob: vi.fn(async () => []),
+      grep: vi.fn(async () => []),
+      onIntent: () => () => {},
+    };
+    const dropPath = String.raw`C:\Users\x\Desktop\notes.txt`;
+    const readFile = vi.fn(async () => ({
+      ref: {
+        attachmentId: id,
+        name: "notes.txt",
+        bytes: 5,
+        sourcePath: dropPath,
+      },
+      data: new TextEncoder().encode("hello"),
+    }));
+    const fileHostPath = vi.fn(() => "/host/alias/notes.txt");
+    const tools = createFsTools(stub, {
+      attachments: { readFile, fileHostPath },
+    });
+    const read = tools.find((t) => t.name === "read_file")!;
+    const out = await read.execute({ path: id });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toBe(`1|hello\npath: ${dropPath}`);
+    expect(fileHostPath).not.toHaveBeenCalled();
+  });
+
+  it("read_file falls back to fileHostPath when sourcePath is absent", async () => {
+    const id =
+      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const stub = {
+      root: "/virtual",
+      resolvePath: vi.fn((p: string) => p),
+      read: vi.fn(async () => ({ content: "should-not-run" })),
+      readBytes: vi.fn(async () => new Uint8Array()),
+      write: vi.fn(async () => {}),
+      edit: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+      stat: vi.fn(async () => ({
+        size: 0,
+        isFile: true,
+        isDirectory: false,
+      })),
+      mkdir: vi.fn(async () => {}),
+      glob: vi.fn(async () => []),
+      grep: vi.fn(async () => []),
+      onIntent: () => () => {},
+    };
+    const readFile = vi.fn(async () => ({
+      ref: { attachmentId: id, name: "notes.txt", bytes: 5 },
+      data: new TextEncoder().encode("hello"),
+    }));
+    const fileHostPath = vi.fn(() => "/host/alias/notes.txt");
+    const tools = createFsTools(stub, {
+      attachments: { readFile, fileHostPath },
+    });
+    const read = tools.find((t) => t.name === "read_file")!;
+    const out = await read.execute({ path: `attachment:${id}` });
+    expect(out.content).toBe("1|hello\npath: /host/alias/notes.txt");
+    expect(fileHostPath).toHaveBeenCalled();
   });
 
   it("registers read_file write_file apply_edit apply_patch glob grep present", async () => {

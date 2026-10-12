@@ -192,4 +192,50 @@ describe("createReadImageTool region", () => {
     }
     expect(readImage).toHaveBeenCalled();
   });
+
+  it("surfaces attachment sourcePath as the read_image display path", async () => {
+    const dropPath = String.raw`C:\Users\x\Pictures\shot.png`;
+    const stored = {
+      attachmentId: "sha256:deadbeef",
+      mediaType: "image/png" as const,
+      bytes: 12,
+      width: 8,
+      height: 6,
+      name: "shot.png",
+      sourcePath: dropPath,
+    };
+    const readImage = vi.fn(async () => ({
+      ref: stored,
+      data: new Uint8Array([1, 2, 3]),
+    }));
+    const saveImage = vi.fn(async (input) => ({
+      ...stored,
+      attachmentId: "sha256:reread",
+      ...(input.sourcePath !== undefined
+        ? { sourcePath: input.sourcePath }
+        : {}),
+    }));
+    const tool = createReadImageTool({
+      fs: {
+        stat: async () => {
+          throw new Error("fs should not run for attachment ids");
+        },
+        readBytes: async () => {
+          throw new Error("fs should not run for attachment ids");
+        },
+      },
+      attachments: mockAttachments({ readImage, saveImage }),
+    });
+    const result = await tool.execute({
+      file_path: "attachment:sha256:deadbeef",
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.meta).toMatchObject({ path: dropPath });
+    expect(saveImage).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePath: dropPath }),
+    );
+    if (!Array.isArray(result.content)) throw new Error("expected blocks");
+    const text = result.content.find((b) => b.type === "text");
+    expect(text && "text" in text ? text.text : "").toContain(dropPath);
+  });
 });

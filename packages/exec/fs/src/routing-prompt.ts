@@ -21,7 +21,7 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
   }
   if (names.has("read_file")) {
     lines.push(
-      "- Inspect: prefer `read_file` (use offset/limit on large files) over cat/head/sed.",
+      "- Inspect: prefer `read_file` (use offset/limit on large files) over cat/head/sed. Uploaded files use `sha256:…` / `attachment:sha256:…` paths (not a workspace disk hunt).",
     );
   }
   if (names.has("read_image")) {

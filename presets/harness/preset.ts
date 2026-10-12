@@ -935,7 +935,12 @@ export function createHarnessComposition(
   const productDir = injectOpts.productDir ?? resolveProductHome();
 
   const tools = createToolRegistry();
-  for (const tool of createFsTools(fs)) tools.register(tool);
+  for (const tool of createFsTools(
+    fs,
+    options.attachments ? { attachments: options.attachments } : {},
+  )) {
+    tools.register(tool);
+  }
   if (options.attachments) {
     tools.register(
       createReadImageTool({

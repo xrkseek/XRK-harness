@@ -51,6 +51,7 @@ import { applyPatchToFs } from "./apply-patch.js";
 import { PatchParseError } from "./apply-patch-parser.js";
 import { ApplyPatchError } from "./apply-patch-apply.js";
 import { createPresentTool } from "./present-deliverable.js";
+import { parseAttachmentFilePath } from "./read-image.js";
 
 export {
   PathEscapeError,
@@ -464,8 +465,38 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
   };
 }
 
-/** Consumer — tools talk only to FsService. */
-export function createFsTools(fs: FsService): ToolDefinition[] {
+/** Optional Host attachment store for `read_file` content-id paths. */
+export interface FsToolsOptions {
+  readonly attachments?: {
+    readFile(attachmentId: string): Promise<{
+      readonly ref: {
+        readonly attachmentId?: string;
+        readonly name: string;
+        readonly bytes: number;
+        readonly mediaType?: string;
+        readonly sourcePath?: string;
+      };
+      readonly data: Uint8Array;
+    }>;
+    /** Absolute host alias path when the store publishes one (local). */
+    fileHostPath?(ref: {
+      readonly attachmentId: string;
+      readonly name: string;
+      readonly bytes: number;
+      readonly mediaType?: string;
+      readonly sourcePath?: string;
+    }): string | undefined;
+  };
+  /** Byte cap when reading via attachment id (mirrors FsLocal defaultMaxBytes). */
+  readonly attachmentMaxBytes?: number;
+}
+
+/** Consumer — tools talk only to FsService (+ optional attachment ids). */
+export function createFsTools(
+  fs: FsService,
+  options: FsToolsOptions = {},
+): ToolDefinition[] {
+  const attachmentMaxBytes = options.attachmentMaxBytes ?? 512_000;
   return [
     {
       name: "read_file",
@@ -473,8 +504,9 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
         "Read a UTF-8 file with 1-based line numbers (`N|line`). " +
         "PDF, DOCX, XLSX, and ipynb are converted to text inside this tool. " +
         "Use offset/limit for large files. Path may be workspace-relative, " +
-        "absolute under the workspace, or absolute under host-readable roots " +
-        "(product home `{XRK_HOME}` by default — spill, attachments, memories).",
+        "absolute under the workspace, absolute under host-readable roots " +
+        "(product home `{XRK_HOME}` by default — spill, attachments, memories), " +
+        "or a Host file attachment id (`sha256:…` / `attachment:sha256:…` from uploads).",
       parameters: {
         type: "object",
         properties: {
@@ -498,14 +530,56 @@ export function createFsTools(fs: FsService): ToolDefinition[] {
         };
         const p = String(a.path ?? "");
         try {
-          const out = await fs.read(p);
+          const attachmentId = parseAttachmentFilePath(p);
+          let out: { content: string; truncated?: boolean };
+          let pathFooter: string | undefined;
+          if (attachmentId !== undefined) {
+            const store = options.attachments;
+            if (store === undefined) {
+              throw new Error(
+                `path ${JSON.stringify(p)} is a Host attachment id, but this tool has no attachment store; use a workspace path or set attachments on createFsTools`,
+              );
+            }
+            const stored = await store.readFile(attachmentId);
+            out = textFromReadBuffer(
+              Buffer.from(stored.data),
+              stored.ref.name,
+              attachmentMaxBytes,
+            );
+            // Prefer original drop path; else Host alias under product home.
+            if (
+              stored.ref.sourcePath !== undefined &&
+              stored.ref.sourcePath.length > 0
+            ) {
+              pathFooter = stored.ref.sourcePath;
+            } else if (
+              store.fileHostPath !== undefined &&
+              stored.ref.attachmentId !== undefined
+            ) {
+              pathFooter = store.fileHostPath({
+                attachmentId: stored.ref.attachmentId,
+                name: stored.ref.name,
+                bytes: stored.ref.bytes,
+                ...(stored.ref.mediaType !== undefined
+                  ? { mediaType: stored.ref.mediaType }
+                  : {}),
+              });
+            }
+          } else {
+            out = await fs.read(p);
+            pathFooter = fs.resolvePath(p);
+          }
           const body = stripCarriageReturn(out.content);
           const windowed = formatReadWindow(body, {
             ...(typeof a.offset === "number" ? { offset: a.offset } : {}),
             ...(typeof a.limit === "number" ? { limit: a.limit } : {}),
           });
           const suffix = out.truncated ? "\n[byte-truncated]" : "";
-          return { content: windowed.content + suffix };
+          const pathLine =
+            pathFooter !== undefined && pathFooter.length > 0
+              ? `\npath: ${pathFooter}`
+              : "";
+          return { content: windowed.content + suffix + pathLine };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { content: message, isError: true };

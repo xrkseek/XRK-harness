@@ -35,6 +35,7 @@ export interface ImageReadValue {
     readonly width: number;
     readonly height: number;
     readonly name?: string;
+    readonly sourcePath?: string;
     readonly originalDimensions?: {
       readonly width: number;
       readonly height: number;
@@ -174,12 +175,18 @@ export function createReadImageTool(
         let displayPath: string;
         let name: string | undefined;
         let cropOffset: { x: number; y: number } | undefined;
+        /** Preserve drag/drop OS path across attachment re-read → save. */
+        let sourcePath: string | undefined;
 
         if (attachmentId !== undefined) {
           const stored = await attachments.readImage(attachmentId);
           data = stored.data;
           saveMediaType = stored.ref.mediaType;
-          displayPath = `attachment:${stored.ref.attachmentId}`;
+          sourcePath = stored.ref.sourcePath;
+          displayPath =
+            sourcePath !== undefined && sourcePath.length > 0
+              ? sourcePath
+              : `attachment:${stored.ref.attachmentId}`;
           name = stored.ref.name ?? stored.ref.attachmentId;
           if (!attachments.imageLimits.mediaTypes.includes(saveMediaType)) {
             return {
@@ -230,6 +237,7 @@ export function createReadImageTool(
           data,
           mediaType: saveMediaType,
           name: name ?? "image",
+          ...(sourcePath !== undefined ? { sourcePath } : {}),
         });
         const value: ImageReadValue = {
           path: displayPath,
@@ -240,6 +248,9 @@ export function createReadImageTool(
             width: ref.width,
             height: ref.height,
             ...(ref.name !== undefined ? { name: ref.name } : {}),
+            ...(ref.sourcePath !== undefined
+              ? { sourcePath: ref.sourcePath }
+              : {}),
             ...(ref.originalDimensions !== undefined
               ? { originalDimensions: { ...ref.originalDimensions } }
               : {}),
@@ -260,6 +271,9 @@ export function createReadImageTool(
                 width: value.image.width,
                 height: value.image.height,
                 ...(value.image.name !== undefined ? { name: value.image.name } : {}),
+                ...(value.image.sourcePath !== undefined
+                  ? { sourcePath: value.image.sourcePath }
+                  : {}),
                 ...(value.image.originalDimensions !== undefined
                   ? { originalDimensions: { ...value.image.originalDimensions } }
                   : {}),
