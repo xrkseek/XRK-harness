@@ -2925,6 +2925,14 @@ export function createHostManager(): HostManager {
             readonly maxTokens?: number;
             readonly softBudgetMaxTokens?: number;
             readonly inputModalities?: readonly ("text" | "image")[];
+            readonly reasoning?: {
+              readonly efforts: readonly {
+                readonly id: string;
+                readonly name: string;
+                readonly description?: string;
+              }[];
+              readonly defaultEffort?: string;
+            };
           }[];
         }) => {
           const providerId = args.providerId.trim().toLowerCase();

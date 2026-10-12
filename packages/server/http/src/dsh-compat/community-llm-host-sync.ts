@@ -3,6 +3,16 @@
  * (OFM, WorkBuddy, …).
  */
 
+/** Selectable reasoning levels carried into Face `llm-pi-ai` / ModelSelect. */
+export interface CommunityLlmSyncReasoning {
+  readonly efforts: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+  }[];
+  readonly defaultEffort?: string;
+}
+
 export interface CommunityLlmSyncModelRow {
   readonly id: string;
   readonly name?: string;
@@ -10,6 +20,164 @@ export interface CommunityLlmSyncModelRow {
   readonly maxTokens?: number;
   readonly softBudgetMaxTokens?: number;
   readonly inputModalities?: readonly ("text" | "image")[];
+  /** Thinking intensity menu when the adapter advertises one (not DeepSeek-only). */
+  readonly reasoning?: CommunityLlmSyncReasoning;
+}
+
+/** Parse adapter / settings reasoning shapes into Face ModelSelect form. */
+export function reasoningFromUnknown(
+  raw: unknown,
+): CommunityLlmSyncReasoning | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+
+  // DSH / Cordis resolveModel: { reasoning: { efforts, defaultEffort } }
+  const nested = o.reasoning;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    const fromNested = reasoningFromEffortsBlob(nested as Record<string, unknown>);
+    if (fromNested) return fromNested;
+  }
+
+  // DSH pi-ai profile: reasoningEfforts: { off: null, high: "high" } (dict)
+  // or string[] + defaultReasoningEffort. false = non-reasoning model.
+  if (o.reasoningEfforts === false) return undefined;
+  if (
+    o.reasoningEfforts &&
+    typeof o.reasoningEfforts === "object" &&
+    !Array.isArray(o.reasoningEfforts)
+  ) {
+    const fromDict = reasoningFromEffortsDict(
+      o.reasoningEfforts as Record<string, unknown>,
+      o,
+    );
+    if (fromDict) return fromDict;
+  }
+
+  // pi-ai materialized model: thinkingLevelMap (null = unsupported)
+  if (
+    o.thinkingLevelMap &&
+    typeof o.thinkingLevelMap === "object" &&
+    !Array.isArray(o.thinkingLevelMap)
+  ) {
+    const fromMap = reasoningFromThinkingLevelMap(
+      o.thinkingLevelMap as Record<string, unknown>,
+      o,
+    );
+    if (fromMap) return fromMap;
+  }
+
+  // Catalog product rows: reasoningEfforts: string[] + defaultReasoningEffort
+  if (Array.isArray(o.reasoningEfforts) || Array.isArray(o.efforts)) {
+    return reasoningFromEffortsBlob(o);
+  }
+
+  return undefined;
+}
+
+/** DSH `reasoningEfforts` dict — keys are offered levels (values are wire ids). */
+function reasoningFromEffortsDict(
+  dict: Record<string, unknown>,
+  meta: Record<string, unknown>,
+): CommunityLlmSyncReasoning | undefined {
+  const efforts: { id: string; name: string }[] = [];
+  for (const [rawId, wire] of Object.entries(dict)) {
+    const id = rawId.trim();
+    if (!id || wire === false) continue;
+    efforts.push({ id, name: effortDisplayName(id) });
+  }
+  if (efforts.length === 0) return undefined;
+  return withDefaultEffort(efforts, meta);
+}
+
+/** pi-ai `thinkingLevelMap` — `null` means level not offered. */
+function reasoningFromThinkingLevelMap(
+  map: Record<string, unknown>,
+  meta: Record<string, unknown>,
+): CommunityLlmSyncReasoning | undefined {
+  const efforts: { id: string; name: string }[] = [];
+  for (const [rawId, wire] of Object.entries(map)) {
+    const id = rawId.trim();
+    if (!id || wire === null || wire === false) continue;
+    efforts.push({ id, name: effortDisplayName(id) });
+  }
+  // Declared `off: null` in reasoningEfforts is omitted from the map but still
+  // offered — when reasoning is on and "off" is absent from the map entirely,
+  // DSH still lists off. If the map only has nulls for undeclared levels,
+  // keys with string wire values are the explicit menu.
+  if (efforts.length === 0) return undefined;
+  if (
+    !efforts.some((e) => e.id === "off") &&
+    Object.prototype.hasOwnProperty.call(map, "off") === false &&
+    meta.reasoning === true
+  ) {
+    efforts.unshift({ id: "off", name: "Off" });
+  }
+  return withDefaultEffort(efforts, meta);
+}
+
+function withDefaultEffort(
+  efforts: { id: string; name: string; description?: string }[],
+  meta: Record<string, unknown>,
+): CommunityLlmSyncReasoning {
+  const defaultRaw =
+    meta.defaultEffort ?? meta.defaultReasoningEffort ?? meta.default;
+  const defaultEffort =
+    typeof defaultRaw === "string" && defaultRaw.trim()
+      ? defaultRaw.trim()
+      : undefined;
+  const defaultOk =
+    defaultEffort !== undefined &&
+    efforts.some((effort) => effort.id === defaultEffort)
+      ? defaultEffort
+      : undefined;
+  return {
+    efforts,
+    ...(defaultOk !== undefined ? { defaultEffort: defaultOk } : {}),
+  };
+}
+
+function reasoningFromEffortsBlob(
+  o: Record<string, unknown>,
+): CommunityLlmSyncReasoning | undefined {
+  const list = Array.isArray(o.efforts)
+    ? o.efforts
+    : Array.isArray(o.reasoningEfforts)
+      ? o.reasoningEfforts
+      : undefined;
+  if (!list || list.length === 0) return undefined;
+
+  const efforts: { id: string; name: string; description?: string }[] = [];
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) {
+      const id = item.trim();
+      efforts.push({ id, name: effortDisplayName(id) });
+      continue;
+    }
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof row.name === "string" && row.name.trim()
+        ? row.name.trim()
+        : effortDisplayName(id);
+    const description =
+      typeof row.description === "string" && row.description.trim()
+        ? row.description.trim()
+        : undefined;
+    efforts.push({
+      id,
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+  if (efforts.length === 0) return undefined;
+  return withDefaultEffort(efforts, o);
+}
+
+function effortDisplayName(id: string): string {
+  if (!id) return id;
+  return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 /** Normalize adapter `listModels` rows for Face merge. */
@@ -37,6 +205,7 @@ export function asCommunityLlmModelRows(
               ?.contextWindow === "number"
           ? (o.context as { contextWindow: number }).contextWindow
           : undefined;
+    const reasoning = reasoningFromUnknown(o);
     out.push({
       id: o.id.trim(),
       ...(typeof o.name === "string" ? { name: o.name } : {}),
@@ -51,9 +220,63 @@ export function asCommunityLlmModelRows(
         ? { softBudgetMaxTokens: o.softBudgetMaxTokens }
         : {}),
       inputModalities: modalities,
+      ...(reasoning !== undefined ? { reasoning } : {}),
     });
   }
   return out;
+}
+
+/**
+ * DSH catalog fills efforts via `resolveModelInfo`; many Cordis adapters only
+ * put reasoning on `resolveModel`, not `listModels`. Enrich listed rows when
+ * the adapter exposes resolve.
+ */
+export async function enrichCommunityModelsWithResolve(
+  adapter: {
+    resolveModel?: (provider: string, model: string) => Promise<unknown>;
+  },
+  providerId: string,
+  rows: readonly CommunityLlmSyncModelRow[],
+): Promise<CommunityLlmSyncModelRow[]> {
+  if (typeof adapter.resolveModel !== "function" || rows.length === 0) {
+    return [...rows];
+  }
+  const resolve = adapter.resolveModel.bind(adapter);
+  return Promise.all(
+    rows.map(async (row) => {
+      if (row.reasoning !== undefined) return row;
+      try {
+        const info = await resolve(providerId, row.id);
+        const reasoning = reasoningFromUnknown(info);
+        if (reasoning === undefined) return row;
+        const context =
+          row.contextWindow ??
+          (info &&
+          typeof info === "object" &&
+          typeof (info as { context?: { contextWindow?: unknown } }).context
+            ?.contextWindow === "number"
+            ? (info as { context: { contextWindow: number } }).context
+                .contextWindow
+            : undefined);
+        const maxTokens =
+          row.maxTokens ??
+          (info &&
+          typeof info === "object" &&
+          typeof (info as { defaultMaxTokens?: unknown }).defaultMaxTokens ===
+            "number"
+            ? (info as { defaultMaxTokens: number }).defaultMaxTokens
+            : undefined);
+        return {
+          ...row,
+          ...(context !== undefined ? { contextWindow: context } : {}),
+          ...(maxTokens !== undefined ? { maxTokens } : {}),
+          reasoning,
+        };
+      } catch {
+        return row;
+      }
+    }),
+  );
 }
 
 /** First non-empty `baseUrl` on adapter model rows (loopback / catalog). */

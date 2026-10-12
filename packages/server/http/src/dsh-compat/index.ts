@@ -93,8 +93,11 @@ export {
 export {
   asCommunityLlmModelRows,
   baseUrlFromCommunityModels,
+  enrichCommunityModelsWithResolve,
+  reasoningFromUnknown,
   scheduleCommunityLlmSyncRetries,
   type CommunityLlmSyncModelRow,
+  type CommunityLlmSyncReasoning,
 } from "./community-llm-host-sync.js";
 export {
   baselineHttpRoutes,

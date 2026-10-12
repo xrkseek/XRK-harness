@@ -2,7 +2,8 @@ import type { FaceRuntime } from "./context.js";
 import { readStagedClientCode } from "./handlers/staged-client-code.js";
 import type { FacePluginFiberPhase } from "./plugin-inventory.js";
 
-function isCordisHostApplied(
+/** True when dsh-compat recorded a successful host-half apply for one of the ids. */
+export function isCordisHostApplied(
   runtime: Pick<FaceRuntime, "hostPublic">,
   ...ids: readonly string[]
 ): boolean {

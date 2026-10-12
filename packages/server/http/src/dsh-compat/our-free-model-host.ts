@@ -17,6 +17,7 @@ import {
 import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import {
   asCommunityLlmModelRows,
+  enrichCommunityModelsWithResolve,
   baseUrlFromCommunityModels,
   scheduleCommunityLlmSyncRetries,
 } from "./community-llm-host-sync.js";
@@ -205,6 +206,7 @@ export async function tryApplyOurFreeModelHost(
       providers: string[],
       adapter: {
         listModels?: (provider: string) => Promise<readonly unknown[]>;
+        resolveModel?: (provider: string, model: string) => Promise<unknown>;
         resolveApiKey?: () => Promise<string | undefined>;
       },
     ) {
@@ -231,7 +233,11 @@ export async function tryApplyOurFreeModelHost(
         for (const providerId of ids) {
           try {
             const listed = (await adapter.listModels?.(providerId)) ?? [];
-            const models = asCommunityLlmModelRows(listed);
+            const models = await enrichCommunityModelsWithResolve(
+              adapter,
+              providerId,
+              asCommunityLlmModelRows(listed),
+            );
             const baseUrl =
               baseUrlFromCommunityModels(listed) ??
               forward.baseUrl ??
@@ -242,7 +248,12 @@ export async function tryApplyOurFreeModelHost(
               );
               continue;
             }
-            const fingerprint = `${providerId}|${baseUrl}|${models.map((m) => m.id).join(",")}|c1`;
+            // c2: fingerprint includes effort menus so resolveModel enrichment re-syncs.
+            const fingerprint = `${providerId}|${baseUrl}|${models
+              .map((m) =>
+                `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
+              )
+              .join(",")}|c2`;
             if (syncedFingerprints.has(fingerprint)) {
               anyOk = true;
               continue;

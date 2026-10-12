@@ -94,6 +94,93 @@ function nonNegIntField(
   return undefined;
 }
 
+/** Settings / sync row → Face reasoning (community + hand-edited pi-ai). */
+function reasoningFromRow(row: object): FaceModelReasoning | undefined {
+  const o = row as Record<string, unknown>;
+  const nested = o.reasoning;
+  const source =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : o;
+
+  // DSH pi-ai YAML: reasoningEfforts: { off: null, high: "high" }
+  if (source.reasoningEfforts === false) return undefined;
+  if (
+    source.reasoningEfforts &&
+    typeof source.reasoningEfforts === "object" &&
+    !Array.isArray(source.reasoningEfforts)
+  ) {
+    const efforts: FaceModelReasoning["efforts"][number][] = [];
+    for (const [rawId, wire] of Object.entries(
+      source.reasoningEfforts as Record<string, unknown>,
+    )) {
+      const id = rawId.trim();
+      if (!id || wire === false) continue;
+      efforts.push({
+        id,
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+      });
+    }
+    if (efforts.length === 0) return undefined;
+    return withRowDefaultEffort(efforts, source);
+  }
+
+  const list = Array.isArray(source.efforts)
+    ? source.efforts
+    : Array.isArray(source.reasoningEfforts)
+      ? source.reasoningEfforts
+      : undefined;
+  if (!list || list.length === 0) return undefined;
+  const efforts: FaceModelReasoning["efforts"][number][] = [];
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) {
+      const id = item.trim();
+      efforts.push({
+        id,
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+      });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const effort = item as Record<string, unknown>;
+    const id = typeof effort.id === "string" ? effort.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof effort.name === "string" && effort.name.trim()
+        ? effort.name.trim()
+        : id;
+    const description =
+      typeof effort.description === "string" && effort.description.trim()
+        ? effort.description.trim()
+        : undefined;
+    efforts.push({
+      id,
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+  if (efforts.length === 0) return undefined;
+  return withRowDefaultEffort(efforts, source);
+}
+
+function withRowDefaultEffort(
+  efforts: FaceModelReasoning["efforts"][number][],
+  source: Record<string, unknown>,
+): FaceModelReasoning {
+  const defaultRaw =
+    source.defaultEffort ?? source.defaultReasoningEffort;
+  const defaultEffort =
+    typeof defaultRaw === "string" &&
+    defaultRaw.trim() &&
+    efforts.some((effort) => effort.id === defaultRaw.trim())
+      ? defaultRaw.trim()
+      : undefined;
+  return {
+    efforts,
+    ...(defaultEffort !== undefined ? { defaultEffort } : {}),
+  };
+}
+
 function asModelRows(raw: unknown): FaceModelEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: FaceModelEntry[] = [];
@@ -118,6 +205,7 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
           .map((m) => String(m).trim())
           .filter((m): m is "text" | "image" => m === "text" || m === "image")
       : undefined;
+    const reasoning = reasoningFromRow(row);
     out.push({
       id,
       name,
@@ -133,6 +221,7 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       ...(inputModalities && inputModalities.length > 0
         ? { inputModalities: [...new Set(inputModalities)] }
         : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
     });
   }
   return out;
@@ -231,26 +320,14 @@ export function buildFaceModelCatalog(
   }
   for (const declared of listDeclaredPiAiProviders(runtime)) {
     if (!declared.baseUrl || declared.models.length === 0) continue;
+    // Re-read profile models so reasoning / soft-budget fields survive
+    // (DeclaredPiAiProvider.models is a thinner inventory shape).
+    const models = asModelRows(piAiProviderProfile(runtime, declared.id)?.models);
+    if (models.length === 0) continue;
     groups.push({
       id: declared.id,
       name: declared.displayName,
-      models: declared.models.map((m) => ({
-        id: m.id,
-        name: m.name ?? m.id,
-        ...(m.inputModalities ? { inputModalities: m.inputModalities } : {}),
-        ...(m.contextWindow !== undefined
-          ? { contextWindow: m.contextWindow }
-          : {}),
-        ...(m.softBudgetMaxTokens !== undefined
-          ? { softBudgetMaxTokens: m.softBudgetMaxTokens }
-          : {}),
-        ...(m.softBudgetKeepTokens !== undefined
-          ? { softBudgetKeepTokens: m.softBudgetKeepTokens }
-          : {}),
-        ...(m.softBudgetBufferTokens !== undefined
-          ? { softBudgetBufferTokens: m.softBudgetBufferTokens }
-          : {}),
-      })),
+      models,
     });
   }
   return { groups, failures: [] };

@@ -2,7 +2,10 @@
  * Product-shell Cordis panel calls `dynamicCordisRunner/*`.
  * Host half runs via dsh-compat `host.mjs` apply; client half via staged `client.js`.
  */
-import { isCordisBridgedForInvoke } from "../cordis-bridge.js";
+import {
+  isCordisBridgedForInvoke,
+  isCordisHostApplied,
+} from "../cordis-bridge.js";
 import { listFacePluginInventory } from "../plugin-inventory.js";
 import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 import { readStagedClientCode } from "./staged-client-code.js";
@@ -300,7 +303,9 @@ const STUBS: Record<string, FaceHandler> = {
         message: "packageId required",
       });
     }
-    if (isCordisBridgedForInvoke(runtime, packageId, packageId)) {
+    // Staged client.js alone is not a host apply — only skip when the
+    // host-half registry already lists this package (else status stays 404).
+    if (isCordisHostApplied(runtime, packageId)) {
       return ok({
         ok: true,
         appliedVia: "xrk-dsh-compat",

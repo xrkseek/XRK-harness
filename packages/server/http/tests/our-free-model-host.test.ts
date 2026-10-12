@@ -47,6 +47,21 @@ describe("our-free-model-host", () => {
         vision: true,
       }];
     },
+    async resolveModel(_provider, model) {
+      return {
+        id: model,
+        name: "Muse Spark",
+        context: { contextWindow: 128000 },
+        reasoning: {
+          efforts: [
+            { id: "light", name: "Light" },
+            { id: "balanced", name: "Balanced" },
+            { id: "deep", name: "Deep" },
+          ],
+          defaultEffort: "balanced",
+        },
+      };
+    },
     async resolveApiKey() { return "ofm-forward-key"; },
   });
   ctx.webServer.register({
@@ -97,6 +112,14 @@ describe("our-free-model-host", () => {
             name: "Muse Spark",
             contextWindow: 128000,
             inputModalities: ["text", "image"],
+            reasoning: {
+              efforts: [
+                { id: "light", name: "Light" },
+                { id: "balanced", name: "Balanced" },
+                { id: "deep", name: "Deep" },
+              ],
+              defaultEffort: "balanced",
+            },
           }),
         ],
       }),

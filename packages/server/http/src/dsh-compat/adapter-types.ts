@@ -115,6 +115,14 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
         readonly maxTokens?: number;
         readonly softBudgetMaxTokens?: number;
         readonly inputModalities?: readonly ("text" | "image")[];
+        readonly reasoning?: {
+          readonly efforts: readonly {
+            readonly id: string;
+            readonly name: string;
+            readonly description?: string;
+          }[];
+          readonly defaultEffort?: string;
+        };
       }[];
     }) => void | Promise<void>;
   };

@@ -50,6 +50,52 @@ describe("mergeCommunityProviderModels", () => {
     });
   });
 
+  it("carries reasoning menus from catalog sync into llm-pi-ai rows", () => {
+    const merged = mergeCommunityProviderModels(
+      [
+        {
+          id: "muse-spark",
+          name: "Muse Spark",
+          contextWindow: 128_000,
+          reasoning: {
+            efforts: [
+              { id: "light", name: "Light" },
+              { id: "balanced", name: "Balanced" },
+            ],
+            defaultEffort: "balanced",
+          },
+        },
+      ],
+      undefined,
+    );
+    expect(merged[0]?.reasoning).toEqual({
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "balanced", name: "Balanced" },
+      ],
+      defaultEffort: "balanced",
+    });
+  });
+
+  it("keeps previous reasoning when a re-sync omits the menu", () => {
+    const merged = mergeCommunityProviderModels(
+      [{ id: "muse-spark", name: "Muse Spark", contextWindow: 128_000 }],
+      [
+        {
+          id: "muse-spark",
+          reasoning: {
+            efforts: [{ id: "deep", name: "Deep" }],
+            defaultEffort: "deep",
+          },
+        },
+      ],
+    );
+    expect(merged[0]?.reasoning).toEqual({
+      efforts: [{ id: "deep", name: "Deep" }],
+      defaultEffort: "deep",
+    });
+  });
+
   it("reads the existing provider row from llm-pi-ai settings", () => {
     const row = existingPiAiProvider(
       {

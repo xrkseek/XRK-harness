@@ -185,6 +185,65 @@ describe("resolveLlmForSession", () => {
   });
 });
 
+describe("buildFaceModelCatalog community / pi-ai reasoning", () => {
+  it("keeps reasoning menus from llm-pi-ai model rows (not DeepSeek-only)", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-catalog-pi-effort-"));
+    await writeFile(
+      path.join(dir, "settings.yaml"),
+      [
+        "llm-pi-ai:",
+        "  providers:",
+        "    our-free-model:",
+        "      displayName: Our Free Model",
+        "      api: openai-chat",
+        "      baseURL: http://127.0.0.1:18899/v1",
+        "      apiKeyEnv: OUR_FREE_MODEL_API_KEY",
+        "      models:",
+        "        - id: muse-spark",
+        "          name: Muse Spark",
+        "          contextWindow: 128000",
+        "          reasoning:",
+        "            defaultEffort: balanced",
+        "            efforts:",
+        "              - id: light",
+        "                name: Light",
+        "              - id: balanced",
+        "                name: Balanced",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(dir, ".credentials.yaml"),
+      "OUR_FREE_MODEL_API_KEY: sk-test\n",
+      "utf8",
+    );
+
+    const rt = createFaceRuntime({
+      store: createMemorySessionStore(),
+      workspaceRoot: dir,
+      productDir: dir,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const { groups } = buildFaceModelCatalog(rt);
+    const ofm = groups.find((group) => group.id === "our-free-model");
+    expect(ofm?.models[0]).toMatchObject({
+      id: "muse-spark",
+      reasoning: {
+        defaultEffort: "balanced",
+        efforts: [
+          { id: "light", name: "Light" },
+          { id: "balanced", name: "Balanced" },
+        ],
+      },
+    });
+  });
+});
+
 describe("buildFaceModelCatalog DeepSeek reasoning", () => {
   it("exposes thinking intensity efforts for DeepSeek catalog models", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-catalog-effort-"));

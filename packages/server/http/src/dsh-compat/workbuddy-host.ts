@@ -18,6 +18,7 @@ import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import {
   asCommunityLlmModelRows,
   baseUrlFromCommunityModels,
+  enrichCommunityModelsWithResolve,
   scheduleCommunityLlmSyncRetries,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
@@ -140,6 +141,7 @@ export async function tryApplyWorkBuddyHost(
   root.provide("llm", {
     registerAdapter(providers: string[], adapter: {
       listModels?: (provider: string) => Promise<readonly unknown[]>;
+      resolveModel?: (provider: string, model: string) => Promise<unknown>;
       resolveApiKey?: () => Promise<string | undefined>;
       catalog?: {
         isVisible?: () => boolean;
@@ -156,7 +158,11 @@ export async function tryApplyWorkBuddyHost(
         for (const providerId of ids) {
           try {
             const listed = await listModelsForSync(adapter, providerId);
-            const models = asCommunityLlmModelRows(listed);
+            const models = await enrichCommunityModelsWithResolve(
+              adapter,
+              providerId,
+              asCommunityLlmModelRows(listed),
+            );
             const baseUrl =
               baseUrlFromCommunityModels(listed) ??
               lastBaseUrlByProvider.get(providerId);
@@ -166,8 +172,12 @@ export async function tryApplyWorkBuddyHost(
               );
               continue;
             }
-            // `c1`: re-sync once so Face merge can fill softBudgetMaxTokens.
-            const fingerprint = `${providerId}|${baseUrl}|${models.map((m) => m.id).join(",")}|c1`;
+            // c2: include effort menus so resolveModel enrichment re-syncs.
+            const fingerprint = `${providerId}|${baseUrl}|${models
+              .map((m) =>
+                `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
+              )
+              .join(",")}|c2`;
             if (syncedFingerprints.has(fingerprint)) {
               anyOk = true;
               continue;

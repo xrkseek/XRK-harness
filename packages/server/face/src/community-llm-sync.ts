@@ -5,6 +5,16 @@
  * while refreshing id/name/context from the adapter catalog.
  */
 
+/** Reasoning menu mirrored from Cordis resolveModel / catalog product rows. */
+export interface CommunitySyncReasoning {
+  readonly efforts: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+  }[];
+  readonly defaultEffort?: string;
+}
+
 export interface CommunitySyncModelIn {
   readonly id: string;
   readonly name?: string;
@@ -12,6 +22,7 @@ export interface CommunitySyncModelIn {
   readonly maxTokens?: number;
   readonly softBudgetMaxTokens?: number;
   readonly inputModalities?: readonly ("text" | "image")[];
+  readonly reasoning?: CommunitySyncReasoning;
 }
 
 export interface CommunitySyncModelOut {
@@ -21,6 +32,7 @@ export interface CommunitySyncModelOut {
   readonly maxTokens?: number;
   readonly softBudgetMaxTokens?: number;
   readonly inputModalities?: readonly ("text" | "image")[];
+  readonly reasoning?: CommunitySyncReasoning;
 }
 
 /** Soft ceiling from context when the catalog omits one (DeepSeek-ish 75%, ≥8k). */
@@ -53,6 +65,43 @@ function modalitiesOf(
     .map((m) => String(m).trim())
     .filter((m): m is "text" | "image" => m === "text" || m === "image");
   return mods.length > 0 ? [...new Set(mods)] : undefined;
+}
+
+function reasoningOf(value: unknown): CommunitySyncReasoning | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const o = value as Record<string, unknown>;
+  const list = Array.isArray(o.efforts) ? o.efforts : undefined;
+  if (!list || list.length === 0) return undefined;
+  const efforts: { id: string; name: string; description?: string }[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof row.name === "string" && row.name.trim() ? row.name.trim() : id;
+    const description =
+      typeof row.description === "string" && row.description.trim()
+        ? row.description.trim()
+        : undefined;
+    efforts.push({
+      id,
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+  if (efforts.length === 0) return undefined;
+  const defaultRaw = o.defaultEffort;
+  const defaultEffort =
+    typeof defaultRaw === "string" &&
+    defaultRaw.trim() &&
+    efforts.some((effort) => effort.id === defaultRaw.trim())
+      ? defaultRaw.trim()
+      : undefined;
+  return {
+    efforts,
+    ...(defaultEffort !== undefined ? { defaultEffort } : {}),
+  };
 }
 
 /** Existing `llm-pi-ai.providers.<id>` row from Face settings (merged layers). */
@@ -106,6 +155,8 @@ export function mergeCommunityProviderModels(
         : typeof prev?.name === "string" && prev.name.trim()
           ? prev.name.trim()
           : undefined;
+    // Fresh catalog reasoning wins; keep previous when the adapter omitted it.
+    const reasoning = reasoningOf(m.reasoning) ?? reasoningOf(prev?.reasoning);
 
     return {
       id: m.id,
@@ -114,6 +165,7 @@ export function mergeCommunityProviderModels(
       ...(maxTokens !== undefined ? { maxTokens } : {}),
       ...(softBudgetMaxTokens !== undefined ? { softBudgetMaxTokens } : {}),
       ...(inputModalities ? { inputModalities } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
     };
   });
 }

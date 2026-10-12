@@ -43,7 +43,12 @@ describe("cordis dsh-compat bridge", () => {
       enabled: true,
       fiberPhase: "active",
     });
-    expect(listFacePluginInventory(runtime)[0]?.fiberPhase).toBe("active");
+    // Optional-defaults may seed soft-disabled rows (e.g. git-worktrees) ahead
+    // of process plugins — assert by id, not inventory[0].
+    expect(
+      listFacePluginInventory(runtime).find((e) => e.entryId === "dsh/demo")
+        ?.fiberPhase,
+    ).toBe("active");
   });
 
   it("marks cordis active when staged client.js exists", () => {
