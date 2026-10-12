@@ -10,7 +10,8 @@ import type { UseProjection } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-token-meter/client'
 import { Tooltip } from '@xrkseek/client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
-import { contextOccupancy, formatTokens } from '../chat/StatsLine.tsx'
+import { contextOccupancy } from '../chat/StatsLine.tsx'
+import { formatTokens } from '../chat/token-format.ts'
 import css from './ContextMeter.module.css'
 
 /** Ring geometry: 14px viewBox, 2px stroke. */
@@ -120,8 +121,9 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
             <span className={css.headline}>{headBefore}</span>
             <span className={css.percent}>{reading}</span>
             <span className={css.headline}>{headAfter}</span>
+            {/* `~`: usedTokens prefers projectedTokens (DSH ContextMeter parity). */}
             <span className={css.figures}>
-              {`~${formatTokens(context.usedTokens)} / ${formatTokens(context.contextWindow)}`}
+              {`~${formatTokens(context.usedTokens, t)} / ${formatTokens(context.contextWindow, t)}`}
             </span>
           </div>
           <div className={css.bar}>
@@ -141,7 +143,7 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
                     <span className={`${css.swatch} ${row.color}`} aria-hidden />
                     {t(row.label)}
                   </dt>
-                  <dd>{`~${formatTokens(breakdown[row.key])}`}</dd>
+                  <dd>{`~${formatTokens(breakdown[row.key], t)}`}</dd>
                 </div>
               ))}
             </dl>

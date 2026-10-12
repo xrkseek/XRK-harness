@@ -37,19 +37,24 @@ describe('stats-metrics', () => {
       cacheReadTokens: 90,
       cacheWriteTokens: 100,
     })).toBe(200)
-    // Writes populate cache; hit rate is read / (uncached + read).
+    // DSH: hit = read / (uncached + read + write).
     expect(cacheHitPercent({
       uncachedInputTokens: 10,
       outputTokens: 7,
       cacheReadTokens: 90,
       cacheWriteTokens: 100,
-    })).toBe('90')
+    })).toBe('45')
   })
 
   it('computes context occupancy only when both numerator and capacity are known', () => {
+    // Prefer projectedTokens when both are present (DSH context-occupancy).
     expect(contextOccupancy({ pressureTokens: 32_000, projectedTokens: 6_000, contextWindow: 128_000 }))
       .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000 })
+    expect(contextOccupancy({ pressureTokens: 32_000, contextWindow: 128_000 }))
+      .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000 })
     expect(contextOccupancy({ pressureTokens: 32_000 })).toBeNull()
+    expect(contextOccupancy({ contextWindow: 128_000 })).toBeNull()
     expect(contextOccupancy(undefined)).toBeNull()
+    expect(contextOccupancy({ pressureTokens: 300_000, contextWindow: 128_000 })?.percent).toBe(100)
   })
 })
