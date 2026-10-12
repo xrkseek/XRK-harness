@@ -65,6 +65,38 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.5.29',
+    date: '2026-10-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '社区模型的思考档位一路送到模型选择器：Our Free Model / WorkBuddy / pi-ai 声明的档位菜单与默认档都会出现。',
+        en: 'Community reasoning efforts reach the model picker: Our Free Model / WorkBuddy / pi-ai menus and defaults now show up.',
+      },
+      {
+        zh: '「工具行默认展开」真正生效了；缓存命中率改用正确的分母，暖会话读数不再偏低。',
+        en: '“Expand tool rows by default” actually applies, and the cache-hit pill uses the right denominator.',
+      },
+    ],
+  },
+  {
+    version: '0.5.28',
+    date: '2026-10-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '社区 Cordis LLM 宿主（Our Free Model · WorkBuddy）共用一套 connection / credentials 桥与 Face 同步；可选产品包 git-worktrees 不再误标「待重启」。',
+        en: 'Community Cordis LLM hosts (Our Free Model · WorkBuddy) share one connection / credentials bridge and Face sync; the optional git-worktrees bundle no longer sticky-flags “Restart pending”.',
+      },
+    ],
+  },
+  {
     version: '0.5.27',
     date: '2026-10-11',
     title: {
