@@ -2,6 +2,7 @@
 import { defineStore, type EngineStoreHandle } from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_ENABLED,
   DEFAULT_PRESENCE_KIT,
   DEFAULT_PRESENCE_SHAPE,
   type PresenceColor,
@@ -11,6 +12,7 @@ import {
 } from '../presence-settings.ts'
 
 export interface PresencePrefsRowState {
+  enabled: boolean
   shape: PresenceShape
   color: PresenceColor
   kit: PresenceKit
@@ -27,6 +29,7 @@ export interface PresencePrefsRowState {
 type PresencePrefsRowActions = {
   sync: (
     draft: PresencePrefsRowState,
+    enabled: boolean,
     shape: PresenceShape,
     color: PresenceColor,
     kit: PresenceKit,
@@ -48,6 +51,7 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
 > {
   return defineStore({
     init: (): PresencePrefsRowState => ({
+      enabled: DEFAULT_PRESENCE_ENABLED,
       shape: DEFAULT_PRESENCE_SHAPE,
       color: DEFAULT_PRESENCE_COLOR,
       kit: DEFAULT_PRESENCE_KIT,
@@ -63,6 +67,7 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
     actions: {
       sync: (
         d,
+        enabled,
         shape,
         color,
         kit,
@@ -76,6 +81,7 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
         revision,
       ) => {
         if (revision <= d.revision) return
+        d.enabled = enabled
         d.shape = shape
         d.color = color
         d.kit = kit

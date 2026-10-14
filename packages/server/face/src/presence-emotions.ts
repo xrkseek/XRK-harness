@@ -1,7 +1,7 @@
 /**
  * Overview presence emotion catalog — same ids as
  * `apps/web/public/presence/emotion-ball/emotions.js` (`EMOTION_SEED`).
- * Tool + standing docs should stay in lockstep with that list.
+ * Tool descriptions (`presence_set`) stay in lockstep with that list.
  */
 
 export type PresenceEmotionGroup = "life" | "emotion" | "agent";

@@ -1359,6 +1359,9 @@ importers:
       '@xrkseek/client-ui-settings':
         specifier: workspace:^
         version: link:../ui-settings
+      '@xrkseek/client-ui-settings-plugins':
+        specifier: workspace:^
+        version: link:../ui-settings-plugins
       '@xrkseek/client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots
@@ -1801,6 +1804,9 @@ importers:
       '@xrkseek/client-ui-settings':
         specifier: workspace:^
         version: link:../ui-settings
+      '@xrkseek/client-ui-sidebar':
+        specifier: workspace:^
+        version: link:../ui-sidebar
       '@xrkseek/client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots

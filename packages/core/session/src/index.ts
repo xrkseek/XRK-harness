@@ -237,6 +237,18 @@ export function createMemorySessionStore(): SessionStore {
       return { id, events: frozen };
     },
 
+    replacePrefix(id: string, events = []): SessionRecord {
+      if (!sessions.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const frozen: SessionEvent[] = [];
+      for (const event of events) {
+        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+      }
+      sessions.set(id, frozen);
+      return { id, events: frozen };
+    },
+
     list(): readonly string[] {
       return [...sessions.keys()];
     },
@@ -382,6 +394,7 @@ export {
 export {
   createPersistentSessionStore,
   ftsMatchQuery,
+  SESSION_ARCHIVE_DB_FILENAME,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
   SessionsDirInUseError,
@@ -435,4 +448,29 @@ export function forkSession(
     store.append(child.id, ev);
   }
   return store.get(child.id);
+}
+
+/**
+ * Cursor-style in-place truncate: keep `[0, boundaryIndex)` on the same
+ * session id. Requires {@link SessionStore.replacePrefix} (or delete+seed).
+ */
+export function truncateSession(
+  store: SessionStore,
+  sessionId: string,
+  boundaryIndex: number,
+): SessionRecord {
+  const total = sessionEventCount(store, sessionId);
+  const end = SessionLogOffset(
+    Math.max(0, Math.min(Math.floor(boundaryIndex), total)),
+  );
+  const prefix = readSessionEvents(store, sessionId, SessionLogOffset(0), end);
+  if (typeof store.replacePrefix === "function") {
+    return store.replacePrefix(sessionId, prefix);
+  }
+  // Fallback for sparse test doubles: wipe + re-seed when both exist.
+  if (typeof store.delete === "function" && typeof store.seed === "function") {
+    store.delete(sessionId);
+    return store.seed(sessionId, prefix);
+  }
+  throw new Error("session store does not support replacePrefix");
 }

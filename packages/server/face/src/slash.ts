@@ -18,6 +18,7 @@ import {
   applyPermissionPreset,
   permissionSelectFromEvents,
 } from "./permissions.js";
+import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
 import {
   commitPlanMode,
   narratePlanCommand,
@@ -308,6 +309,15 @@ export async function executeFaceCommand(
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
         text: `current permission mode ${current} (available: ${runtime.permissionAuto.catalogNames().join(", ")})`,
+      });
+    }
+    // Settings / Access apply to coding workspaces; IM / 奇创 stay full access.
+    if (
+      isOrchestrationWorkspaceId(runtime.workspaces.workspaceIdOf(sessionId))
+    ) {
+      return appendCommandPair(runtime, sessionId, parsed, {
+        kind: "error",
+        text: "permission locked to full access on IM / Xiangyang",
       });
     }
     const applied = applyPermissionPreset(runtime.store, sessionId, name, {

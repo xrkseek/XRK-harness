@@ -5,6 +5,7 @@ import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
 import { usePinnedBrowserLanguages } from '@xrkseek/client-test-runtime'
+import { SettingsNavBinder } from '@xrkseek/client-ui-settings/client'
 import { apply, inject } from '@xrkseek/client-ui-settings-general/client'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
@@ -49,6 +50,7 @@ async function bench(isLoopback = true) {
     api: { settings: { describe: settingsDescribe, openDocument: settingsOpenDocument } },
     isLoopback,
   } as never)
+  await ctx.plugin(SettingsNavBinder).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, settingsDescribe, settingsOpenDocument }
 }
 
@@ -76,7 +78,7 @@ function generalEntry(slots: SlotRegistry) {
 
 describe('ui-settings-general apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'settingsNav'])
   })
 
   it('fills all five seats for declarations before or after apply', async () => {

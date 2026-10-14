@@ -98,10 +98,11 @@ describe("Face host stream (DSH host frames)", () => {
     );
     expect(reordered.result.ok).toBe(true);
     const order = host.find((f) => f.type === "host/workspace-order-changed");
-    expect(order).toEqual({
-      type: "host/workspace-order-changed",
-      workspaceIds: [extraId, "ws_default"],
-    });
+    expect(order?.type).toBe("host/workspace-order-changed");
+    if (order?.type === "host/workspace-order-changed") {
+      expect(order.workspaceIds[0]).toBe(extraId);
+      expect(order.workspaceIds).toContain("ws_default");
+    }
 
     const deleted = await dispatchFaceMethod(runtime, "workspace.delete", "d", {
       workspaceId: extraId,
@@ -312,7 +313,13 @@ describe("host/remote-event", () => {
 
   it("forwards agent-preset/selected on select", async () => {
     const rt = await runtime();
-    const created = await dispatchFaceMethod(rt, "session.create", "s", {});
+    // Attach to the launch coding workspace — 向阳空间 locks 奇创.
+    const coding = rt.workspaces
+      .list(rt.store.list())
+      .items.find((w) => w.workspaceId !== "ws_default");
+    const created = await dispatchFaceMethod(rt, "session.create", "s", {
+      ...(coding ? { workspaceId: coding.workspaceId } : { cwd: rt.workspaceRoot }),
+    });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const host = collectHost(rt);

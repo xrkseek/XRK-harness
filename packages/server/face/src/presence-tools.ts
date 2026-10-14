@@ -1,5 +1,6 @@
 /**
- * `presence_set` — AI drives the Overview emotion ball for this session.
+ * `presence_set` — 支线 (`tips`) + optional Overview emotion mood.
+ * Bound only on surfaces that register it; description is the playbook.
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
@@ -36,13 +37,16 @@ export function bindPresenceTools(
   const { runtime, sessionId } = options;
   const catalogHint = formatPresenceEmotionToolHint();
   const child = Boolean(runtime.subagents.getByChild(sessionId));
+  // tips = 支线 (sidebar). Emotion ball is optional chrome; tips are the product line.
   const description = child
-    ? "Show this session's Overview emotion + 支线 caption (what you are doing now). Call when mood or work shifts — do not wait to be asked. "
-      + `Prefer the catalog: ${catalogHint}. tips ≤200 chars. emotionId "auto" clears sticky mood.`
-    : "Show this session's 支线: Overview emotion ball + a short caption of what you are doing now "
-      + "(sidebar under the session name). Call when mood or current work shifts — do not wait to be asked. "
-      + `Prefer the full catalog: ${catalogHint}. `
-      + 'tips = 支线 (≤200 chars). Pass emotionId "auto" only to clear sticky mood.';
+    ? "Update 支线 (`tips`) and sticky mood for this child session. "
+      + "Call when what you are doing or your mood shifts. tips ≤200 chars under the session name. "
+      + `Catalog: ${catalogHint}. emotionId "auto" clears sticky mood. Do not use 38 to decline work.`
+    : "Update 支线: `tips` is the caption under the session name (primary signal). "
+      + "`emotionId` drives the Overview ball when that chrome is on — accessory, not a gate for tips. "
+      + "Call when work or mood shifts. tips ≤200 chars. "
+      + `Full catalog: ${catalogHint}. `
+      + 'Pass emotionId "auto" only to clear sticky mood. Do not use 38 to decline work.';
 
   registerTool(tools, {
     name: "presence_set",
@@ -57,7 +61,8 @@ export function bindPresenceTools(
         },
         tips: {
           type: "string",
-          description: "支线 caption: what you are doing now (Overview + sidebar, ≤200 chars).",
+          description:
+            "支线 caption under the session name (≤200 chars). Applies even when Overview ball is hidden.",
         },
       },
       required: ["emotionId"],

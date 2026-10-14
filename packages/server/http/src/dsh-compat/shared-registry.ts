@@ -13,6 +13,7 @@ import {
 import { resetDshCompatUpgrades } from "./dsh-compat-upgrades.js";
 import { configureImGatewayLocalWs } from "./im-gateway-local-ws.js";
 import { resetHostApplyRegistry } from "./host-apply-registry.js";
+import { resetLiveHostApply } from "./live-host-apply.js";
 import { normalizeDshCompatWireCtx } from "./wire-normalize.js";
 
 function installKey(ctx: DshCompatWireOptions): string {
@@ -30,6 +31,8 @@ export function resetDshCompatRegistryCache(): void {
   bootKey = undefined;
   bootPromise = undefined;
   activeRegistry = undefined;
+  resetHostApplyRegistry();
+  resetLiveHostApply();
 }
 
 /**
@@ -57,6 +60,7 @@ export async function ensureDshCompatRegistry(
   bootPromise = (async () => {
     resetDshCompatUpgrades();
     resetHostApplyRegistry();
+    resetLiveHostApply();
     const registry = createCordisCompatRegistry();
     activeRegistry = registry;
     await installComposedAdapters(registry, normalized);

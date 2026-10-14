@@ -23,9 +23,14 @@ import {
 } from "@xrkseek/protocol";
 import {
   runCuratedMemoryConsolidate,
-  resolveMemoryProvider,
+  createLayeredCuratedMemoryStore,
   type MemoryProvider,
 } from "@xrkseek/exec-memory";
+import {
+  createSpeakTool,
+  createDefaultVoiceAccess,
+  createMemoryVoiceProvider,
+} from "@xrkseek/exec-voice";
 import { runSkillCurator } from "@xrkseek/workspace";
 import { resolveSecretStore } from "@xrkseek/secrets";
 import {
@@ -53,7 +58,7 @@ import {
   prewarmDshCompatAdapters,
   shutdownDshCompatServices,
   applyHostPackageByName,
-  stopHostPackageFiber,
+  stopHostPackage,
   listHostAppliedPackages,
   invokeDshCompatRpc,
   attachDshCompatUpgrades,
@@ -77,12 +82,17 @@ import {
   createAutoReviewToolPre,
   isAutoReviewEnabled,
   setAutoReviewEnabled,
+  setImFaceAdmitHook,
 } from "@xrkseek/server-http";
 import {
   attachFaceUpgrades,
   bindSubagentTools,
   bindSessionQueryTools,
   createFaceRuntime,
+  IM_AGENT_PRESET_ID,
+  IM_WORKSPACE_ID,
+  QICHUANG_AGENT_PRESET_ID,
+  XIANGYANG_WORKSPACE_ID,
   effectiveHostApiKey,
   ensureMcpLiveIfIdle,
   isLoopbackAddress,
@@ -110,10 +120,12 @@ import {
   approvePendingAutoReview,
   createCollabBoardFragmentProvider,
   createSessionCapabilityFragmentProvider,
+  createSessionPostureFragmentProvider,
   canvasWorkspaceIdForSession,
   resolveSessionModelSelection,
   credentialsSet,
   settingsMutateFace,
+  communityLoopbackBaseUrlCollision,
   existingPiAiProvider,
   mergeCommunityProviderModels,
   type FaceApprovalBroker,
@@ -194,6 +206,30 @@ export {
   resolveA2aInboundEnabled,
   type A2aInboundProductSettings,
 } from "./a2a-inbound-public.js";
+import {
+  admitImInboundToFace,
+  createImFaceAdmitHook,
+} from "./im-face-admit.js";
+import {
+  bindImTools,
+  setImToolPorts,
+} from "./im-reply-tool.js";
+export {
+  admitImInboundToFace,
+  createImFaceAdmitHook,
+  imInboundContentBlocks,
+} from "./im-face-admit.js";
+export {
+  bindImTools,
+  bindImReplyTool,
+  createImToolDefinitions,
+  setImToolPorts,
+  resolveImToolPorts,
+  type ImToolPorts,
+  type ImSendRequest,
+  type ImSendResult,
+  type CreateImToolDefinitionsOptions,
+} from "./im-reply-tool.js";
 export {
   loadMcpToolPlugins,
   mcpDraftsToSpecs,
@@ -603,6 +639,7 @@ export type AgentFactory = (input: {
   contextFragmentProviders?: Array<
     | ReturnType<typeof createCollabBoardFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
+    | ReturnType<typeof createSessionPostureFragmentProvider>
   >;
   /** Face-backed working_directory tool (Host wires per session). */
   workingDirectoryTools?: import("@xrkseek/core-tools").WorkingDirectoryToolsOptions;
@@ -1119,13 +1156,25 @@ export function createHostManager(): HostManager {
         runtime?: FaceRuntime;
       } = {};
 
-      /** Session-end Phase1 (+ optional Phase2 LLM): fold leftover notes into MEMORY.md. */
-      let curatedMemProvider: MemoryProvider | undefined;
-      const getCuratedMemProvider = (): MemoryProvider => {
-        if (!curatedMemProvider) {
-          curatedMemProvider = resolveMemoryProvider();
-        }
-        return curatedMemProvider;
+      /** Per-session layered zones (global + workspace + session + optional agent). */
+      const curatedMemoryForSession = (sessionId: string): MemoryProvider => {
+        const rt = faceBox.runtime;
+        const workspaceId = rt?.workspaces.workspaceIdOf(sessionId);
+        const link = rt?.subagents.getByChild(sessionId);
+        const agentId =
+          typeof link?.memberId === "string" && link.memberId.trim()
+            ? link.memberId.trim()
+            : undefined;
+        const layered = createLayeredCuratedMemoryStore({
+          sessionId,
+          ...(workspaceId ? { workspaceId } : {}),
+          ...(agentId ? { agentId } : {}),
+          defaultScope: agentId ? "agent" : "session",
+        });
+        return Object.assign(layered, {
+          providerName: "layered",
+          isAvailable: () => true,
+        });
       };
       const consolidateCuratedMemoryForSession = (sessionId: string): void => {
         try {
@@ -1161,7 +1210,8 @@ export function createHostManager(): HostManager {
             }
           }
           if (userTexts.length === 0) return;
-          const memStore = getCuratedMemProvider();
+          // Fold into this session's layered zones (not the home-wide global store).
+          const memStore = curatedMemoryForSession(sessionId);
           void (async () => {
             let phase2Complete:
               | ((prompt: string) => Promise<string>)
@@ -1299,14 +1349,18 @@ export function createHostManager(): HostManager {
         }
         const sessionRoot =
           sessionCwdBox.get?.(sessionId) ?? config.runtime.workspaceRoot;
-        const agentPreset =
-          sessionPresetBox.get?.(sessionId) ??
-          (faceBox.runtime
-            ? effectiveSessionAgentPreset(faceBox.runtime, sessionId)
-            : undefined) ??
-          config.runtime.preset;
         const wsId = faceRuntime.workspaces.workspaceIdOf(sessionId);
         const wsRow = wsId ? faceRuntime.workspaces.get(wsId) : undefined;
+        const agentPreset =
+          wsId === IM_WORKSPACE_ID
+            ? IM_AGENT_PRESET_ID
+            : wsId === XIANGYANG_WORKSPACE_ID
+              ? QICHUANG_AGENT_PRESET_ID
+              : sessionPresetBox.get?.(sessionId) ??
+                (faceBox.runtime
+                  ? effectiveSessionAgentPreset(faceBox.runtime, sessionId)
+                  : undefined) ??
+                config.runtime.preset;
         // Settings `permission.extraWritableRoots` (schema base includes
         // product home). Re-read live so the next agent resolve picks up
         // changes; agentCache keys on sessionId so a bound agent keeps its
@@ -1536,11 +1590,12 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
-                : { curatedMemory: getCuratedMemProvider() }),
+                : { curatedMemory: curatedMemoryForSession(sessionId) }),
               ...(faceBox.runtime
                 ? {
                     contextFragmentProviders: [
                       createSessionCapabilityFragmentProvider(faceBox.runtime),
+                      createSessionPostureFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
                     ],
                     workingDirectoryTools: {
@@ -1659,57 +1714,120 @@ export function createHostManager(): HostManager {
             }
             // ask_user / exit_plan_mode: Face resolveAgent rebinds once.
             if (agent.tools && faceBox.runtime) {
-              const profile = resolveAgentPresetProfile(
-                agentPreset,
-                config.runtime.preset,
-              );
-              if (profile.subagents.mode === "on") {
-                // No ceilings passed: the tool resolves them live from
-                // Settings ∩ badge, so what `analytics` reports is what spawn
-                // enforces (freezing them here desynced the two).
+              const imSession =
+                faceBox.runtime.workspaces.workspaceIdOf(sessionId) ===
+                IM_WORKSPACE_ID;
+              if (imSession) {
+                bindImTools(agent.tools, {
+                  sessionId,
+                  xrkHome: resolveXrkHome(),
+                });
+                // Summon coding teams in other workspaces (Face binds roster /
+                // session_query / workspace_list; no presence/thread/canvas).
                 bindSubagentTools(agent.tools, {
                   runtime: faceBox.runtime,
                   parentSessionId: sessionId,
                 });
-              }
-              bindSessionQueryTools(agent.tools, {
-                runtime: faceBox.runtime,
-                parentSessionId: sessionId,
-              });
-              const prefs = loadSidebarPrefs(resolveXrkHome()).value;
-              if (
-                prefs.agentOpenTools === true ||
-                prefs.agentTerminalTools === true
-              ) {
-                bindSidebarAgentTools(agent.tools, {
-                  sessionId,
-                  agentOpens: agentOpenRegistry,
-                  agentPty: agentPtyRegistry,
-                  resolveCwd: (sid) =>
-                    resolveSessionCwd(faceBox.runtime!, sid) ??
-                    faceBox.runtime!.workspaceRoot,
-                  readPrefs: () => loadSidebarPrefs(resolveXrkHome()).value,
-                  readShellOverrides: () => {
-                    const p = loadSidebarPrefs(resolveXrkHome()).value;
-                    const shell =
-                      typeof p.terminalShell === "string" &&
-                      p.terminalShell.trim()
-                        ? p.terminalShell.trim()
-                        : undefined;
-                    const shellArgsRaw =
-                      typeof p.terminalShellArgs === "string"
-                        ? p.terminalShellArgs.trim()
-                        : "";
-                    const shellArgs =
-                      shellArgsRaw.length > 0
-                        ? shellArgsRaw.split(/\s+/).filter(Boolean)
-                        : undefined;
-                    return {
-                      ...(shell ? { shell } : {}),
-                      ...(shellArgs ? { shellArgs } : {}),
-                    };
-                  },
+              } else {
+                const profile = resolveAgentPresetProfile(
+                  agentPreset,
+                  config.runtime.preset,
+                );
+                if (profile.subagents.mode === "on") {
+                  // No ceilings passed: the tool resolves them live from
+                  // Settings ∩ badge, so what `analytics` reports is what spawn
+                  // enforces (freezing them here desynced the two).
+                  bindSubagentTools(agent.tools, {
+                    runtime: faceBox.runtime,
+                    parentSessionId: sessionId,
+                  });
+                }
+                bindSessionQueryTools(agent.tools, {
+                  runtime: faceBox.runtime,
+                  parentSessionId: sessionId,
                 });
+                const prefs = loadSidebarPrefs(resolveXrkHome()).value;
+                if (
+                  prefs.agentOpenTools === true ||
+                  prefs.agentTerminalTools === true
+                ) {
+                  bindSidebarAgentTools(agent.tools, {
+                    sessionId,
+                    agentOpens: agentOpenRegistry,
+                    agentPty: agentPtyRegistry,
+                    resolveCwd: (sid) =>
+                      resolveSessionCwd(faceBox.runtime!, sid) ??
+                      faceBox.runtime!.workspaceRoot,
+                    readPrefs: () => loadSidebarPrefs(resolveXrkHome()).value,
+                    readShellOverrides: () => {
+                      const p = loadSidebarPrefs(resolveXrkHome()).value;
+                      const shell =
+                        typeof p.terminalShell === "string" &&
+                        p.terminalShell.trim()
+                          ? p.terminalShell.trim()
+                          : undefined;
+                      const shellArgsRaw =
+                        typeof p.terminalShellArgs === "string"
+                          ? p.terminalShellArgs.trim()
+                          : "";
+                      const shellArgs =
+                        shellArgsRaw.length > 0
+                          ? shellArgsRaw.split(/\s+/).filter(Boolean)
+                          : undefined;
+                      return {
+                        ...(shell ? { shell } : {}),
+                        ...(shellArgs ? { shellArgs } : {}),
+                      };
+                    },
+                  });
+                }
+              }
+              // Settings voice.speakTools: ensure text_to_speech on every surface
+              // (including Minimal / IM). OpenAI when mode=openai + key; else
+              // local memory TTS stub so the switch always has a Provider.
+              const voiceNsSpeak = faceBox.runtime.settingsNamespaces.view(
+                "voice",
+              ).value as Record<string, unknown>;
+              if (
+                voiceNsSpeak.speakTools === true &&
+                !agent.tools.get("text_to_speech")
+              ) {
+                const voiceMode =
+                  typeof voiceNsSpeak.mode === "string"
+                    ? voiceNsSpeak.mode.trim().toLowerCase()
+                    : "off";
+                const voiceBase =
+                  typeof voiceNsSpeak.baseUrl === "string" &&
+                  voiceNsSpeak.baseUrl.trim()
+                    ? voiceNsSpeak.baseUrl.trim()
+                    : undefined;
+                const voiceKey =
+                  faceBox.runtime.credentials.peek("voice.openai")?.trim() ||
+                  process.env.XRK_VOICE_OPENAI_KEY?.trim() ||
+                  "";
+                const voiceEnv: NodeJS.ProcessEnv | undefined = voiceKey
+                  ? { ...process.env, XRK_VOICE_OPENAI_KEY: voiceKey }
+                  : undefined;
+                const product = {
+                  mode:
+                    voiceMode === "openai"
+                      ? ("openai" as const)
+                      : ("off" as const),
+                  ...(voiceBase ? { baseUrl: voiceBase } : {}),
+                };
+                const access = createDefaultVoiceAccess({
+                  product,
+                  ...(voiceEnv ? { env: voiceEnv } : {}),
+                });
+                const service =
+                  access.service ?? createMemoryVoiceProvider();
+                agent.tools.register(
+                  createSpeakTool({
+                    service,
+                    product,
+                    ...(voiceEnv ? { env: voiceEnv } : {}),
+                  }),
+                );
               }
             }
             // Role deny projection (Codex `role.rs`: a role may only weaken).
@@ -2167,7 +2285,8 @@ export function createHostManager(): HostManager {
             return invokeDshCompatRpc(ctx, channel, endpoint, rpcPayload);
           },
           stopHostHalf: async (packageName: string) => {
-            await stopHostPackageFiber(packageName);
+            await stopHostPackage(packageName);
+            syncCordisHostApplied();
           },
         },
         bootstrapApiKey: config.credentials.apiKey,
@@ -2228,6 +2347,13 @@ export function createHostManager(): HostManager {
       faceBox.questions = faceRuntime.questions;
       faceBox.runtime = faceRuntime;
       signalFaceRuntimeReady();
+      // IM bridge → Face ws_im (messages-only when Face absent / hook cleared).
+      setImFaceAdmitHook(
+        createImFaceAdmitHook({
+          face: faceRuntime,
+          xrkHome: resolveXrkHome(),
+        }),
+      );
       const workflowMount = await tryMountHostIsolatingWorkflowEngine(faceRuntime);
       if (workflowMount !== undefined) {
         Object.assign(hostPublic, {
@@ -2939,14 +3065,24 @@ export function createHostManager(): HostManager {
           if (!providerId || !args.baseUrl.trim() || args.models.length === 0) {
             return;
           }
+          const baseURL = args.baseUrl.trim().replace(/\/+$/, "");
+          const llmPiAi = faceRuntime.settingsNamespaces.view("llm-pi-ai").value;
+          const collide = communityLoopbackBaseUrlCollision(
+            providerId,
+            baseURL,
+            llmPiAi,
+          );
+          if (collide) {
+            console.warn(
+              `[host] syncCommunityLlmProvider refuse ${providerId}: baseURL ${baseURL} collides with ${collide}`,
+            );
+            return;
+          }
           const apiKeyEnv = `${providerId
             .replace(/[^a-z0-9]+/g, "_")
             .replace(/^_|_$/g, "")
             .toUpperCase()}_API_KEY`;
-          const prev = existingPiAiProvider(
-            faceRuntime.settingsNamespaces.view("llm-pi-ai").value,
-            providerId,
-          );
+          const prev = existingPiAiProvider(llmPiAi, providerId);
           const prevDisplay =
             typeof prev?.displayName === "string" ? prev.displayName.trim() : "";
           const prevApi = typeof prev?.api === "string" ? prev.api.trim() : "";
@@ -2962,7 +3098,7 @@ export function createHostManager(): HostManager {
                   ...(prev ?? {}),
                   displayName: prevDisplay || args.displayName,
                   api: prevApi || "openai-chat",
-                  baseURL: args.baseUrl.trim().replace(/\/+$/, ""),
+                  baseURL,
                   apiKeyEnv: prevKeyEnv || apiKeyEnv,
                   models: mergeCommunityProviderModels(
                     args.models,
@@ -3174,6 +3310,8 @@ export function createHostManager(): HostManager {
               agentPtyRegistry.disposeAll();
               agentOpenRegistry.dispose();
               dshUpgrades.close();
+              setImFaceAdmitHook(undefined);
+              setImToolPorts(undefined);
               face.close();
               unregisterPermissionAuto();
               shutdownDshCompatServices();

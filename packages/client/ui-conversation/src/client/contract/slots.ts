@@ -510,13 +510,18 @@ export interface ChatNodeOwnerProps {
    */
   restoreAt: (seq: number) => void
   /**
-   * Edit-resubmit a past user message: confirm truncate (fork beforeSeq) and
+   * Edit-resubmit a past user message: confirm truncate (in-place beforeSeq) and
    * optionally workspace revert, then prompt the child with `text`.
    */
   editAt: (seq: number, text: string) => void
   /**
+   * Regenerate from a past user message: truncate later turns and re-prompt
+   * the same text (confirm when a live turn or later nodes would be dropped).
+   */
+  regenerateAt: (seq: number, text: string) => void
+  /**
    * Delete/recall from a past user message: confirm truncate before this seq
-   * (fork beforeSeq) and optionally workspace revert.
+   * (in-place beforeSeq) and optionally workspace revert.
    */
   deleteAt: (seq: number) => void
   /** Withdraw one still-pending next-step steer (`session.updateQueue` remove). */
@@ -641,6 +646,11 @@ export interface ComposerBarOwnerProps {
   /** Open the existing Workspace picker from the inert textarea. */
   onRequestWorkspace?: () => void
   placeholder?: string
+  /**
+   * IM / 向阳空间: Access chip stays on full access (Settings permission is
+   * coding-workspace only). Absent = ordinary coding session.
+   */
+  accessLocked?: boolean
   /** Optional content rendered above the textarea. */
   accessory?: ReactNode
   /** Floating overlay anchor content (menu / popup shell entries), rendered inside the card. */
@@ -920,9 +930,11 @@ export interface ChatViewInjected {
    * (Face slash `/rollback seq:N`). Does not fork the session.
    */
   restoreAt: (seq: number) => void
-  /** Edit-resubmit confirm → fork before `seq` (+ optional rollback) → prompt. */
+  /** Edit-resubmit confirm → truncate before `seq` (+ optional rollback) → prompt. */
   editAt: (seq: number, text: string) => void
-  /** Delete/recall confirm → fork before `seq` (+ optional rollback). */
+  /** One-click regenerate from user `seq` with the same `text`. */
+  regenerateAt: (seq: number, text: string) => void
+  /** Delete/recall confirm → truncate before `seq` (+ optional rollback). */
   deleteAt: (seq: number) => void
   /** Withdraw one still-pending next-step steer (Host `updateQueue` remove). */
   withdrawSteer: (itemId: MessageId) => void

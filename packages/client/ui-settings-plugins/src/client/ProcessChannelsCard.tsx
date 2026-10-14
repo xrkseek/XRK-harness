@@ -11,11 +11,11 @@ import { InfoRows } from './InfoRows.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import { READ_ONLY_SHELL } from './info-card-model.ts'
 import type { ProcessChannelsCardFace } from './process-channels-card-controller.ts'
-import type {} from './advanced-slot-contract.ts'
+import type {} from './slot-contract.ts'
 
 /** Props the renderer binds for the channel card. */
 export type ProcessChannelsCardProps =
-  PropsRuntime<'settings.plugin.advanced.item'>
+  PropsRuntime<'settings.plugin.item'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<ProcessChannelsCardFace>
 

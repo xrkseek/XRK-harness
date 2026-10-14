@@ -294,8 +294,15 @@ const CronConfig = Schema.object({
  * API key via Credentials `XRK_VOICE_OPENAI_KEY`.
  */
 const VoiceConfig = Schema.object({
-  mode: Schema.union(["off", "openai"]).default("off"),
+  mode: Schema.union(["off", "openai", "local"]).default("off"),
   baseUrl: Schema.string().default(""),
+  /**
+   * When true, bind `text_to_speech` on every tool surface (including Minimal /
+   * IM). Uses OpenAI TTS when mode=openai + key; otherwise the in-process
+   * memory TTS stub (local). Full voice_transcribe / voice_session still
+   * follow `mode` (`local` = SenseVoice STT when assets + sherpa-onnx-node ready).
+   */
+  speakTools: Schema.boolean().default(false),
 });
 
 /**
@@ -445,6 +452,8 @@ const UiConversationConfig = Schema.object({
 
 /** Companion body shape + named palette in session header / Status rail (client ui-plan). */
 const UiPresenceConfig = Schema.object({
+  /** When false, hide the ball; chat / Status / tools keep working. */
+  enabled: Schema.boolean().default(true),
   shape: Schema.union([...MEMBER_SHAPES]).default("blob"),
   color: Schema.union([...MEMBER_COLORS]).default("cream"),
   kit: Schema.union([...MEMBER_KITS]).default("none"),
@@ -510,6 +519,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "ui-presence",
       schema: schemasteryJson(UiPresenceConfig) as FaceSchemaEnvelope,
       base: {
+        enabled: true,
         shape: "blob",
         color: "cream",
         kit: "none",

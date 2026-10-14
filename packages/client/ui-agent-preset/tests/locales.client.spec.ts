@@ -1,13 +1,15 @@
 /** Web-localized copy for the five shipped tool surfaces. */
 
 import { describe, expect, it } from 'vitest'
-import { en, presetDisplayText, zh } from '../src/client/locales.ts'
+import { en, presetDisplayText, resolvePresetDisplayText, zh } from '../src/client/locales.ts'
 
 const translate = (bundle: typeof en) => (key: keyof typeof en): string => bundle[key]
 
 describe('preset display copy', () => {
   it.each([
     ['minimal', 'presetMinimalName', 'presetMinimalDescription'],
+    ['im', 'presetImName', 'presetImDescription'],
+    ['qichuang', 'presetQichuangName', 'presetQichuangDescription'],
     ['shell', 'presetShellName', 'presetShellDescription'],
     ['frugal', 'presetFrugalName', 'presetFrugalDescription'],
     ['shallow', 'presetShallowName', 'presetShallowDescription'],
@@ -19,6 +21,12 @@ describe('preset display copy', () => {
       .toEqual({ name: en[nameKey], description: en[descriptionKey] })
     expect(presetDisplayText(preset, translate(zh)))
       .toEqual({ name: zh[nameKey], description: zh[descriptionKey] })
+  })
+
+  it('resolves IM / Qichuang labels when the selectable roster omitted them', () => {
+    expect(resolvePresetDisplayText('qichuang', undefined, translate(zh)).name).toBe('奇创')
+    expect(resolvePresetDisplayText('im', undefined, translate(zh)).name).toBe('IM')
+    expect(resolvePresetDisplayText('qichuang', undefined, translate(en)).name).toBe('Qichuang')
   })
 
   it('keeps Face/file metadata for unknown or user presets', () => {

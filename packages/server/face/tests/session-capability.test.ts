@@ -38,7 +38,10 @@ describe("session_capability", () => {
         throw new Error("unused");
       },
     });
+    const codingRoot = path.join(root, "code-proj");
+    const { workspace: codingWs } = runtime.workspaces.create(codingRoot);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      workspaceId: codingWs.workspaceId,
       agentPreset: "harness",
     });
     expect(created.result.ok).toBe(true);
@@ -47,7 +50,9 @@ describe("session_capability", () => {
 
     const text = formatSessionCapability(runtime, sessionId);
     expect(text).toMatch(/permission: .*path=/);
-    expect(text).toMatch(/tool_surface: harness/);
+    expect(text).toMatch(/permission_brief:/);
+    expect(text).toMatch(/tool_surface: harness \(/);
+    expect(text).toMatch(/surface_brief: Coding/);
     expect(text).toMatch(/path_allowlist: \d+ objects/);
 
     const provider = createSessionCapabilityFragmentProvider(runtime);
@@ -55,6 +60,28 @@ describe("session_capability", () => {
     expect(frags).toHaveLength(1);
     expect(frags[0]!.text).toContain("<session_capability>");
     expect(frags[0]!.priority).toBe(9);
+  });
+
+  it("names orchestration tools on im / qichuang tool_surface", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-cap-orch-"));
+    const runtime = createFaceRuntime({
+      store: createMemorySessionStore(),
+      workspaceRoot: root,
+      productDir: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const xy = await dispatchFaceMethod(runtime, "session.create", "xy", {
+      workspaceId: "ws_default",
+    });
+    expect(xy.result.ok).toBe(true);
+    if (!xy.result.ok) return;
+    const xyId = (xy.result.value as { sessionId: string }).sessionId;
+    expect(formatSessionCapability(runtime, xyId)).toMatch(
+      /tool_surface: qichuang \(full-access/,
+    );
   });
 
   it("preamble includes inherited permission and weakened tool_surface", () => {

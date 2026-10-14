@@ -42,6 +42,31 @@ export {
 } from "./context.js";
 export { createFaceRuntime, type CreateFaceRuntimeOptions } from "./runtime.js";
 export {
+  IM_WORKSPACE_ID,
+  IM_WORKSPACE_TITLE,
+  IM_AGENT_PRESET_ID,
+  isImWorkspaceId,
+} from "./im-workspace.js";
+export { ensureImWorkspace } from "./im-workspace-ensure.js";
+export {
+  bindImWorkspaceTools,
+  type BindImWorkspaceToolsOptions,
+} from "./im-workspace-tools.js";
+export {
+  XIANGYANG_WORKSPACE_ID,
+  XIANGYANG_WORKSPACE_TITLE,
+  XIANGYANG_WORKSPACE_DIR,
+  QICHUANG_AGENT_PRESET_ID,
+  isXiangyangWorkspaceId,
+  isOrchestrationWorkspaceId,
+  xiangyangWorkspacePath,
+} from "./xiangyang-workspace.js";
+export {
+  bindXiangyangWorkspaceTools,
+  type BindXiangyangWorkspaceToolsOptions,
+} from "./xiangyang-workspace-tools.js";
+export { seedXiangyangSkills } from "./xiangyang-skills.js";
+export {
   listFacePluginInventory,
   readDisabledPluginIdsAt,
   writeDisabledPluginIdsAt,
@@ -168,6 +193,10 @@ export {
   createSessionCapabilityFragmentProvider,
   formatSessionCapability,
 } from "./session-capability.js";
+export {
+  createSessionPostureFragmentProvider,
+  formatSessionPosture,
+} from "./session-posture.js";
 export {
   bindAgentRosterTools,
   type BindAgentRosterToolsOptions,
@@ -365,6 +394,10 @@ export {
   type SubagentMode,
 } from "./subagent-registry.js";
 export {
+  FaceForkLineageStore,
+  type FaceForkLink,
+} from "./fork-lineage.js";
+export {
   bindRalphTool,
   createRalphTool,
   RALPH_DEFAULT_MAX_ROUNDS,
@@ -514,9 +547,13 @@ export {
   type DeclaredPiAiProvider,
 } from "./llm-provider-context.js";
 export {
+  COMMUNITY_LOOPBACK_LLM_PROVIDERS,
+  communityLoopbackBaseUrlCollision,
   defaultSoftBudgetMaxTokens,
   existingPiAiProvider,
+  isCommunityLoopbackLlmProvider,
   mergeCommunityProviderModels,
+  type CommunityLoopbackLlmProviderId,
   type CommunitySyncModelIn,
   type CommunitySyncModelOut,
 } from "./community-llm-sync.js";

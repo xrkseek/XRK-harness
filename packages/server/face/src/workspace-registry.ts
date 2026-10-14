@@ -5,6 +5,10 @@
 
 import path from "node:path";
 import { defaultWorkspaceTitle } from "./workspace-paths.js";
+import {
+  XIANGYANG_WORKSPACE_ID,
+  XIANGYANG_WORKSPACE_TITLE,
+} from "./xiangyang-workspace.js";
 
 export interface FaceWorkspaceView {
   readonly workspaceId: string;
@@ -35,12 +39,12 @@ export class FaceWorkspaceRegistry {
   constructor(root: string) {
     const abs = path.resolve(root);
     this.root = abs;
-    const id = "ws_default";
+    const id = XIANGYANG_WORKSPACE_ID;
     const now = new Date().toISOString();
     this.workspaces.set(id, {
       workspaceId: id,
       path: abs,
-      title: defaultWorkspaceTitle(abs),
+      title: XIANGYANG_WORKSPACE_TITLE,
       createdAt: now,
       updatedAt: now,
     });
@@ -49,7 +53,7 @@ export class FaceWorkspaceRegistry {
   }
 
   defaultId(): string {
-    return "ws_default";
+    return XIANGYANG_WORKSPACE_ID;
   }
 
   /** Live (non-archived) workspace owning this session, if any. */
@@ -137,7 +141,46 @@ export class FaceWorkspaceRegistry {
     return { workspace: this.view(id)!, created: true };
   }
 
+  /**
+   * Ensure a fixed-id workspace exists (e.g. `ws_im`). Does not mint `ws_${seq}`.
+   * Path/title update when the reserved id already exists.
+   */
+  ensureReserved(
+    workspaceId: string,
+    absPath: string,
+    title: string,
+  ): { workspace: FaceWorkspaceView; created: boolean } {
+    const id = workspaceId.trim();
+    const abs = path.resolve(absPath);
+    const trimmedTitle = title.trim() || defaultWorkspaceTitle(abs);
+    const existing = this.workspaces.get(id);
+    if (existing) {
+      this.workspaces.set(id, {
+        workspaceId: id,
+        path: abs,
+        title: trimmedTitle || existing.title,
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+      if (!this.order.includes(id)) this.order.push(id);
+      if (!this.sessionOrder.has(id)) this.sessionOrder.set(id, []);
+      return { workspace: this.view(id)!, created: false };
+    }
+    const now = new Date().toISOString();
+    this.workspaces.set(id, {
+      workspaceId: id,
+      path: abs,
+      title: trimmedTitle,
+      createdAt: now,
+      updatedAt: now,
+    });
+    this.order.push(id);
+    this.sessionOrder.set(id, []);
+    return { workspace: this.view(id)!, created: true };
+  }
+
   rename(workspaceId: string, title: string): FaceWorkspaceView | undefined {
+    if (workspaceId === XIANGYANG_WORKSPACE_ID) return undefined;
     const row = this.workspaces.get(workspaceId);
     if (!row) return undefined;
     const trimmed = title.trim();
@@ -152,6 +195,8 @@ export class FaceWorkspaceRegistry {
    * order stay so a later unarchive restores the same workspace slot (dsh
    * parity). Already-archived ids are idempotent. Pin and archive are
    * mutually exclusive — archive drops any pin (DSH parity).
+   * Face also offloads the durable log to `sessions-archive.db` (separate
+   * from this registry flag).
    */
   archiveSession(sessionId: string): { archivedSessionIds: string[]; pinnedSessionIds: string[] } {
     this.archived.add(sessionId);
@@ -221,6 +266,9 @@ export class FaceWorkspaceRegistry {
    * directories stay untouched.
    */
   delete(workspaceId: string): { ok: true; movedSessionIds: string[] } | { ok: false; reason: string } {
+    if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+      return { ok: false, reason: `reserved workspace ${XIANGYANG_WORKSPACE_ID} cannot be deleted` };
+    }
     if (!this.workspaces.has(workspaceId)) {
       return { ok: false, reason: `unknown workspaceId: ${workspaceId}` };
     }
@@ -477,7 +525,7 @@ export class FaceWorkspaceRegistry {
     this.seq = Math.max(0, doc.seq);
 
     const root = path.resolve(fallbackRoot);
-    const defaultId = "ws_default";
+    const defaultId = XIANGYANG_WORKSPACE_ID;
     const now = new Date().toISOString();
     const persistedDefault = doc.entries[defaultId];
     const wantsDefault =
@@ -487,14 +535,15 @@ export class FaceWorkspaceRegistry {
     if (wantsDefault) {
       const row = persistedDefault ?? {
         path: root,
-        title: defaultWorkspaceTitle(root),
+        title: XIANGYANG_WORKSPACE_TITLE,
         createdAt: now,
         updatedAt: now,
       };
+      // Product default always shows 向阳空间 (never folder basename / "host").
       this.workspaces.set(defaultId, {
         workspaceId: defaultId,
         path: path.resolve(row.path),
-        title: row.title,
+        title: XIANGYANG_WORKSPACE_TITLE,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       });

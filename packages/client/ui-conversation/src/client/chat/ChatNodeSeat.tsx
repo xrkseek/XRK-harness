@@ -20,7 +20,7 @@ type RoutedChatNodeOwner = {
 
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, selectedCallId, cwd, roundByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer,
+  nodeKey, selectedCallId, cwd, roundByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
   loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
@@ -35,6 +35,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       forkAt,
       restoreAt,
       editAt,
+      regenerateAt,
       deleteAt,
       withdrawSteer,
       loadImage,
@@ -42,7 +43,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       renderMessageFiles,
       fileMentions,
     }, [
-    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, deleteAt, withdrawSteer, loadImage,
+    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage,
     renderMessageImages, renderMessageFiles, fileMentions,
   ])
   const streamingAssistant = routedNode?.kind === 'assistant-step'

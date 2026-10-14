@@ -64,6 +64,16 @@ chat.js / MCP
 
 AGT 侧 MCP **执行**仍走 `MCPServer`（经 `MCPToolAdapter`），不改用 SDK `createMcpClient`。
 
+## IM 通道 vs Host Desktop 投影
+
+| 角色 | 职责 |
+|------|------|
+| **AGT `chat.js`** | 厂商入站、群/私聊 `getEventHistoryKey`、`reply` / `mergeWorkflows`、机器人业务 |
+| **Harness Host IM bridge** | 本地 webhook / sidecar 入站 → Face `ws_im`（badge **`im`**）；Desktop / Web 共享同一 transcript；出站仅工具 `im_send`（别名 `im_reply`，支持 text + image/video/file/audio）+ 可 `workspace_list` / `subagent(workspace_id)` 委派。AGT 可 `setImToolPorts` / `createImToolDefinitions({ mapTools, extraTools })` 换发送实现 |
+| **`@xrkseek/harness` 嵌入** | AGT 进程内 agent loop；**不**替代 AGT 通道层 |
+
+Host 侧 `chatKey` 对齐 AGT 粒度（群 / `device_*` / `private_*`），映射到 Face `sessionId`（`im-sessions.json`）。真 fork ≠ 委派；编辑/删除走同会话 truncate。厂商 SDK 长连接仍属 AGT / sidecar，不是 Face 九路 stub。
+
 ## 可选：单独跑 Host
 
 ```bash
@@ -139,6 +149,16 @@ chat.js / MCP
 | `/v1` OpenAI `stream` | Live `assistant/chunk` → SSE; `mcp_tools` with arguments/result; non-OpenAI gateways still full JSON |
 
 AGT MCP **execution** stays on `MCPServer` via `MCPToolAdapter` (not SDK `createMcpClient`).
+
+## IM channel vs Host Desktop projection
+
+| Role | Owns |
+|------|------|
+| **AGT `chat.js`** | Vendor ingress, group/DM `getEventHistoryKey`, `reply` / `mergeWorkflows`, bot business |
+| **Harness Host IM bridge** | Local webhook / sidecar → Face `ws_im` (badge **`im`**); Desktop / Web share the same transcript; outbound only via `im_send` (alias `im_reply`; text + image/video/file/audio) + `workspace_list` / `subagent(workspace_id)`. AGT may `setImToolPorts` / `createImToolDefinitions({ mapTools, extraTools })` to swap send |
+| **`@xrkseek/harness` embed** | In-process agent loop inside AGT — **not** a replacement for AGT’s channel layer |
+
+Host `chatKey` follows AGT grain (group / `device_*` / `private_*`) → Face `sessionId` (`im-sessions.json`). True fork ≠ delegation; edit/delete use in-place truncate. Vendor long-lived SDKs stay on AGT / sidecar, not Face discover stubs.
 
 ## Optional Host-only
 

@@ -49,12 +49,17 @@ export function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettin
     })
   }, [active])
 
+  // Home panel already titles the dialog; skip a second "插件" heading.
+  // With a single contributed tab, omit the tab chrome (list / tasks peers
+  // still get a tab bar when they register).
+  const showTabs = rows.length > 1
+
   return (
     <div className={css.section}>
-      <h2 className={css.heading}>{t('title')}</h2>
       <p className={css.intro}>{t('intro')}</p>
       {rows.length === 0 ? <p className={css.empty}>{t('empty')}</p> : (
         <>
+          {showTabs ? (
           <div className={css.tabs} role="tablist" aria-label={t('tabs')}>
             {rows.map((row, index) => {
               const selected = row.id === active
@@ -92,6 +97,7 @@ export function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettin
               )
             })}
           </div>
+          ) : null}
           {rows
             .filter(row => row.id === active || visitedIds.has(row.id))
             .map((row) => {
@@ -101,8 +107,9 @@ export function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettin
                   key={row.id}
                   id={`${tabsId}-panel-${row.id}`}
                   className={css.panel}
-                  role="tabpanel"
-                  aria-labelledby={`${tabsId}-tab-${row.id}`}
+                  role={showTabs ? 'tabpanel' : 'region'}
+                  aria-labelledby={showTabs ? `${tabsId}-tab-${row.id}` : undefined}
+                  aria-label={showTabs ? undefined : row.label}
                   hidden={!selected}
                 >
                   {renderSlot('settings.plugins.tab', {}, { only: row.id })}

@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.0-rc.1',
+    date: '2026-10-14',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '开启 0.6.x 预览线：归档把日志从热库 sessions.db 分离到 sessions-archive.db；解档迁回；永久删除才抹掉两端；归档页支持批量解档/删除。',
+        en: 'Opens the 0.6.x preview line: archiving offloads logs from hot sessions.db into sessions-archive.db; unarchive restores; permanent delete wipes both; archived page supports bulk unarchive/delete.',
+      },
+      {
+        zh: '向阳空间（默认家）+ 奇创工具面；IM 工作区与 im_send/im_reply；跨工作区 workspace_* 编排；回合开头 session_capability / session_posture。',
+        en: 'Xiangyang default home + Qichuang surface; IM workspace with im_send/im_reply; cross-workspace workspace_* orchestration; turn-start session_capability / session_posture.',
+      },
+      {
+        zh: '侧栏「插件」入口与版本公告同区；Settings → 插件可浏览工具目录与技能文档；去掉 Advanced 堆叠。',
+        en: 'Sidebar Plugins entry shares the utility seat with release notes; Settings → Plugins browses tools/skills catalogs; Advanced stack removed.',
+      },
+      {
+        zh: '站立渐进披露硬规则；种子技能 xrk-presence / xrk-attachment / xrk-craft；分层策展记忆；自动审查权限档。',
+        en: 'Standing progressive-disclosure hard rules; seed skills xrk-presence / xrk-attachment / xrk-craft; layered curated memory; Auto-review permission preset.',
+      },
+      {
+        zh: '社区 Host 热卸（live apply）；Computer-use background 模式；本地 SenseVoice STT 缝；划词翻译；fork 谱系。',
+        en: 'Community Host live dispose; computer-use background mode; local SenseVoice STT seam; selection translate; fork lineage.',
+      },
+      {
+        zh: 'npm 预发布 @xrkseek/harness-cli@0.6.0-rc.1（@rc）；@latest 仍为 0.5.31。完整清单见 docs/releases/v0.6.0-rc.1.md。',
+        en: 'npm prerelease @xrkseek/harness-cli@0.6.0-rc.1 (@rc); @latest stays on 0.5.31. Full list in docs/releases/v0.6.0-rc.1.md.',
+      },
+    ],
+  },
+  {
     version: '0.5.31',
     date: '2026-10-12',
     title: {

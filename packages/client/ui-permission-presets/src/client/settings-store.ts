@@ -45,8 +45,8 @@ interface ConstChoice {
 
 /**
  * Read the dynamic preset enum encoded by the host's `defaultPreset` schema.
- * Auto is never a Settings choice (DSH: General settings do not offer Auto);
- * it is stripped even if a Host descriptor mistakenly lists it.
+ * Includes Auto when the Host descriptor advertises it (Host keeps
+ * `registerAuto` live for the process lifetime).
  * @param view - permission namespace descriptor.
  * @returns current value and selectable options.
  */
@@ -64,8 +64,6 @@ export function permissionDefaultOf(view: SettingsNamespaceView): {
   const options = rawChoices.flatMap((candidate) => {
     const choice = candidate as unknown as ConstChoice
     if (choice.type !== 'const' || typeof choice.value !== 'string') return []
-    // Session-only Auto must not appear as a future-session default.
-    if (choice.value === 'auto') return []
     const described = choice.meta?.description
     return [{
       id: choice.value,

@@ -2,7 +2,23 @@
 
 /** Locale keys these surfaces render. */
 export type PluginsSettingsLocaleKey =
-  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'advancedTab' | 'empty' | 'advancedEmpty'
+  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'toolsTab' | 'skillsTab' | 'empty'
+  | 'catalogNoSession' | 'catalogLoading' | 'catalogError' | 'catalogRetry'
+  | 'catalogSearch' | 'catalogRefresh' | 'catalogFilterAll' | 'catalogNoMatch'
+  | 'catalogWorkspace' | 'catalogNoBody'
+  | 'toolsCatalogMeta' | 'toolsCatalogEmpty'
+  | 'toolsGroupMcpServer' | 'toolsGroupMcpOther'
+  | 'toolsExposureDeferred' | 'toolsExposureHidden'
+  | 'toolsSurface_filesystem' | 'toolsSurface_shell' | 'toolsSurface_browser'
+  | 'toolsSurface_web' | 'toolsSurface_mcp' | 'toolsSurface_agent'
+  | 'toolsSurface_media' | 'toolsSurface_settings' | 'toolsSurface_ui'
+  | 'toolsSurface_other'
+  | 'skillsCatalogMeta' | 'skillsCatalogEmpty'
+  | 'skillsGroupWorkspace' | 'skillsGroupHome' | 'skillsGroupOther'
+  | 'skillsFilterWorkspace' | 'skillsFilterHome' | 'skillsFilterOther'
+  | 'skillsFilterDocuments' | 'skillsDocumentsTitle' | 'skillsDocumentsHint'
+  | 'skillsDocumentBytes' | 'skillsDocumentKindInstruction' | 'skillsDocumentKindCatalog'
+  | 'skillsCatalogPathLabel' | 'skillsUserOnly'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
@@ -66,16 +82,19 @@ export type PluginsSettingsLocaleKey =
   | 'computerUseModeOff' | 'computerUseModeUia' | 'computerUseModeBackground'
   | 'computerUseHelper' | 'computerUseHelperHint'
   | 'computerUseHelperSet' | 'computerUseHelperUnset' | 'computerUseLiveHint'
+  | 'computerUseDetailOff' | 'computerUseDetailUia' | 'computerUseDetailBackground'
   | 'cronTitle' | 'cronDescription' | 'cronEnabled' | 'cronEnabledHint'
   | 'cronEnabledOn' | 'cronEnabledOff' | 'cronLiveHint' | 'cronScheduleNote'
   | 'browserTitle' | 'browserDescription' | 'browserMode' | 'browserModeHint'
   | 'browserModeHttp' | 'browserModeCdp'
   | 'browserCdpUrl' | 'browserCdpUrlHint' | 'browserLiveHint'
   | 'voiceTitle' | 'voiceDescription' | 'voiceMode' | 'voiceModeHint'
-  | 'voiceModeOff' | 'voiceModeOpenai'
+  | 'voiceModeOff' | 'voiceModeOpenai' | 'voiceModeLocal' | 'voiceLocalHint'
   | 'voiceApiKey' | 'voiceApiKeyHint' | 'voiceApiKeySet' | 'voiceApiKeyUnset'
   | 'voiceKeyMissing'
-  | 'voiceBaseUrl' | 'voiceBaseUrlHint' | 'voiceLiveHint' | 'voiceWakeDeferred'
+  | 'voiceBaseUrl' | 'voiceBaseUrlHint'
+  | 'voiceSpeakTools' | 'voiceSpeakToolsHint' | 'voiceSpeakToolsOn' | 'voiceSpeakToolsOff'
+  | 'voiceLiveHint' | 'voiceWakeDeferred'
   | 'imageGenTitle' | 'imageGenDescription' | 'imageGenMode' | 'imageGenModeHint'
   | 'imageGenModeOff' | 'imageGenModeOpenai' | 'imageGenModeFal' | 'imageGenModeXai'
   | 'imageGenModeOpenrouter' | 'imageGenModeDeepinfra' | 'imageGenModeKrea' | 'imageGenModeMeta'
@@ -140,17 +159,66 @@ export type PluginsSettingsLocaleKey =
   | 'externalAgentAppServer' | 'externalAgentAppServerHint'
   | 'externalAgentClaudeCode' | 'externalAgentClaudeCodeHint'
   | 'externalAgentLiveHint'
+  | 'hostTitle' | 'hostDescription'
+  | 'hostAddress' | 'hostWorkspaceRoot' | 'hostPreset' | 'hostCorsOrigin'
+  | 'hostRateLimit' | 'hostPluginsDir' | 'hostWebDist' | 'hostWebDistBuilt' | 'hostWebDistNone'
+  | 'hostApplied' | 'hostWorkflowEngine'
+  | 'channelsTitle' | 'channelsDescription'
+  | 'channelsImGateway' | 'channelsImGatewaySidecar' | 'channelsImGatewayWsClient'
+  | 'channelsImGatewayBridge' | 'channelsProcess' | 'channelsIm' | 'channelsNote' | 'channelsNone'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
   title: 'Plugins',
-  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, video analyze, curated memory, external agents, sandbox, computer use, cron, telemetry, and workspace inject. Advanced holds the auto-review classifier and memory-embed vector sidecar.',
+  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, video analyze, curated memory, external agents, sandbox, computer use, cron, telemetry, workspace inject, auto-review, memory-embed, and Host / channel mirrors.',
   tabs: 'Plugin views',
   configurableTab: 'Plugin configuration',
-  advancedTab: 'Advanced',
+  toolsTab: 'Runtime',
+  skillsTab: 'Inject',
+  catalogNoSession: 'Open a session to inspect its runtime tools and standing inject.',
+  catalogLoading: 'Loading catalog…',
+  catalogError: 'Could not load this catalog.',
+  catalogRetry: 'Retry',
+  catalogSearch: 'Search by name or description',
+  catalogRefresh: 'Refresh',
+  catalogFilterAll: 'All',
+  catalogNoMatch: 'No entries match this search or filter.',
+  catalogWorkspace: 'Workspace · {label}',
+  catalogNoBody: 'No body text.',
+  toolsCatalogMeta: 'Badge {preset} · {count} live tools',
+  toolsCatalogEmpty: 'No tools on this session agent.',
+  toolsGroupMcpServer: 'MCP · {server}',
+  toolsGroupMcpOther: 'MCP · unknown server',
+  toolsExposureDeferred: 'deferred',
+  toolsExposureHidden: 'hidden',
+  toolsSurface_filesystem: 'Filesystem',
+  toolsSurface_shell: 'Shell',
+  toolsSurface_browser: 'Browser',
+  toolsSurface_web: 'Web',
+  toolsSurface_mcp: 'MCP',
+  toolsSurface_agent: 'Agent / team',
+  toolsSurface_media: 'Media',
+  toolsSurface_settings: 'Settings',
+  toolsSurface_ui: 'UI',
+  toolsSurface_other: 'Other',
+  skillsCatalogMeta: '{docs} inject docs · {count} skills on disk',
+  skillsCatalogEmpty: 'No standing inject or skills under this workspace.',
+  skillsGroupWorkspace: 'Workspace skills',
+  skillsGroupHome: 'Home skills',
+  skillsGroupOther: 'Other skills',
+  skillsFilterWorkspace: 'Workspace',
+  skillsFilterHome: 'Home',
+  skillsFilterOther: 'Other',
+  skillsFilterDocuments: 'Prompt inject',
+  skillsDocumentsTitle: 'Standing inject (live)',
+  skillsDocumentsHint: 'What Host actually writes into the system prompt',
+  skillsDocumentBytes: '{bytes} chars · click to open',
+  skillsDocumentKindInstruction: 'rules',
+  skillsDocumentKindCatalog: 'skill catalog',
+  skillsCatalogPathLabel: 'Skill catalog (standing)',
+  skillsUserOnly: 'user only',
   empty: 'This deployment exposes no plugin settings.',
-  advancedEmpty: 'This deployment exposes no advanced plugin settings.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -315,9 +383,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   sandboxWindowsModeDanger: 'Danger full access',
   sandboxLiveHint: 'Applies on the next agent rebuild (live; no Host restart). Docker / Windows need their image or helper available or confine fails closed.',
   computerUseTitle: 'Computer use',
-  computerUseDescription: 'Desktop accessibility / input Provider for the computer_use tool (separate from browser_*). Set XRK_COMPUTER_USE in CI to bypass this card.',
+  computerUseDescription: 'Native desktop GUI for computer_use (AX tree + input). Separate from browser_* page tools. CI may set XRK_COMPUTER_USE to bypass this card.',
   computerUseMode: 'Mode',
-  computerUseModeHint: 'Off: tool stays visible; execute fails until a Provider is on. UIA: Windows UI Automation. Background: helper binary via Credentials.',
+  computerUseModeHint: 'Off: tool stays visible; execute fails until a Provider is on. UIA: Windows UI Automation for capture and act. Background: helper owns act; UIA still captures on Windows.',
   computerUseModeOff: 'Off',
   computerUseModeUia: 'UIA (Windows)',
   computerUseModeBackground: 'Background helper',
@@ -326,6 +394,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   computerUseHelperSet: 'Configured',
   computerUseHelperUnset: 'Not set',
   computerUseLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
+  computerUseDetailOff: 'Tool remains registered. Calls fail until you pick UIA or Background (or set XRK_COMPUTER_USE).',
+  computerUseDetailUia: 'Capture (ax / vision / som), list_windows, and act all go through Windows UI Automation on this Host.',
+  computerUseDetailBackground: 'Act is sent to the helper binary. On Windows, capture and list_windows still use UIA so the model keeps an AX tree. Web pages stay on browser_*.',
   cronTitle: 'Cron',
   cronDescription: 'Host in-process ticker for cronjob (unattended agent / script jobs). Set XRK_CRON=0 in CI to force off and bypass this card.',
   cronEnabled: 'Master switch',
@@ -346,9 +417,11 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   voiceTitle: 'Voice',
   voiceDescription: 'TTS · transcription · realtime session broker (text_to_speech / voice_transcribe / voice_session). API key via Credentials. Set XRK_VOICE in CI to bypass this card.',
   voiceMode: 'Mode',
-  voiceModeHint: 'Off keeps tools visible but execute fails honestly. OpenAI needs a key in Credentials.',
+  voiceModeHint: 'Off keeps tools visible but execute fails honestly. OpenAI needs a key in Credentials. Local uses SenseVoice ONNX under {XRK_HOME}/voice/sensevoice + sherpa-onnx-node.',
   voiceModeOff: 'Off',
   voiceModeOpenai: 'OpenAI-compatible',
+  voiceModeLocal: 'Local (SenseVoice)',
+  voiceLocalHint: 'Place model.int8.onnx (or model.onnx), tokens.txt, and silero_vad.onnx under {XRK_HOME}/voice/sensevoice (or XRK_VOICE_SENSEVOICE_DIR). Install sherpa-onnx-node in the Host runtime. Live session stays unavailable.',
   voiceApiKey: 'OpenAI API key',
   voiceApiKeyHint: 'Stored as XRK_VOICE_OPENAI_KEY (not settings.yaml). OPENAI_API_KEY also works at runtime.',
   voiceApiKeySet: 'Configured',
@@ -356,6 +429,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   voiceKeyMissing: 'OpenAI mode is on but no API key — voice tools will fail until Credentials XRK_VOICE_OPENAI_KEY is set.',
   voiceBaseUrl: 'Base URL',
   voiceBaseUrlHint: 'Optional compatible endpoint (default https://api.openai.com/v1).',
+  voiceSpeakTools: 'Speak tool on all surfaces',
+  voiceSpeakToolsHint: 'When on, binds text_to_speech on Minimal / IM / Frugal too. OpenAI when Mode is OpenAI + key; otherwise local memory TTS.',
+  voiceSpeakToolsOn: 'On',
+  voiceSpeakToolsOff: 'Off',
   voiceLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
   voiceWakeDeferred: 'On-device wake word is not shipped; use push-to-talk / product mic after Voice is enabled.',
   imageGenTitle: 'Image generation',
@@ -435,7 +512,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   videoAnalyzeLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
   videoAnalyzeBoundaryHint: 'Not for live browser pages — use browser_vision. Not for creating videos — use video_generate.',
   curatedMemoryTitle: 'Curated memory',
-  curatedMemoryDescription: 'Cross-session MEMORY.md / USER.md under ~/.xrk/memories (not Mnemon). Off skips the memory tool and frozen system prompt. Set XRK_CURATED_MEMORY=0 in CI to force off.',
+  curatedMemoryDescription: 'Zoned MEMORY.md / USER.md (global · workspace · session · agent under ~/.xrk/memories; not Mnemon). Off skips the memory tool and frozen system prompt. Set XRK_CURATED_MEMORY=0 in CI to force off.',
   curatedMemoryEnabled: 'Master switch',
   curatedMemoryEnabledHint: 'On freezes MEMORY.md / USER.md into the system prompt and registers the memory tool. Off removes both on the next agent rebuild.',
   curatedMemoryEnabledOn: 'On',
@@ -507,18 +584,83 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   externalAgentClaudeCode: 'Claude Code',
   externalAgentClaudeCodeHint: 'Command for runtime=claude-code. Empty defaults to claude (Host adds -p). Or set XRK_CLAUDE_CODE.',
   externalAgentLiveHint: 'Applies on the next external subagent turn (live; no Host restart).',
+  hostTitle: 'Host runtime',
+  hostDescription: 'What this Host is: listen address, workspace, preset, and applied Host plugins. Read-only; fixed at spawn.',
+  hostAddress: 'Address',
+  hostWorkspaceRoot: 'Workspace root',
+  hostPreset: 'Preset',
+  hostCorsOrigin: 'CORS origin',
+  hostRateLimit: 'Rate limit',
+  hostPluginsDir: 'Plugins directory',
+  hostWebDist: 'Web dist',
+  hostWebDistBuilt: 'Host-served',
+  hostWebDistNone: 'Not wired',
+  hostApplied: 'Applied Host plugins',
+  hostWorkflowEngine: 'Workflow engine',
+  channelsTitle: 'Process & IM channels',
+  channelsDescription: 'What this Host is wired to talk to: process channel plugins, IM stubs, and the resolved IM gateway mode. Fixed at spawn.',
+  channelsImGateway: 'IM gateway',
+  channelsImGatewaySidecar: 'Sidecar',
+  channelsImGatewayWsClient: 'WebSocket client',
+  channelsImGatewayBridge: 'Bridge',
+  channelsProcess: 'Process channels',
+  channelsIm: 'IM vendors',
+  channelsNote: 'Note',
+  channelsNone: 'None',
 }
 
 /** Simplified Chinese copy. */
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
   title: '插件',
-  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、图像/视频生成、视频理解、策展记忆、外部 Agent、沙箱、Computer use、Cron、会话遥测与工作区 inject。「高级」含 Auto-review classifier 与向量记忆 sidecar。',
+  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、图像/视频生成、视频理解、策展记忆、外部 Agent、沙箱、Computer use、Cron、会话遥测、工作区 inject、自动审查、向量记忆，以及 Host / 通道只读镜像。',
   tabs: '插件视图',
   configurableTab: '插件配置',
-  advancedTab: '高级',
+  toolsTab: '运行时',
+  skillsTab: '注入',
+  catalogNoSession: '打开一个会话后，可查看该会话的运行时工具与 Standing 注入。',
+  catalogLoading: '正在加载目录…',
+  catalogError: '无法加载此目录。',
+  catalogRetry: '重试',
+  catalogSearch: '按名称或描述搜索',
+  catalogRefresh: '刷新',
+  catalogFilterAll: '全部',
+  catalogNoMatch: '没有匹配当前搜索或筛选的条目。',
+  catalogWorkspace: '当前工作区 · {label}',
+  catalogNoBody: '没有正文。',
+  toolsCatalogMeta: '徽章 {preset} · 共 {count} 个实机工具',
+  toolsCatalogEmpty: '当前会话 Agent 没有工具。',
+  toolsGroupMcpServer: 'MCP · {server}',
+  toolsGroupMcpOther: 'MCP · 未知服务器',
+  toolsExposureDeferred: '延迟',
+  toolsExposureHidden: '隐藏',
+  toolsSurface_filesystem: '文件系统',
+  toolsSurface_shell: '终端',
+  toolsSurface_browser: 'Browser',
+  toolsSurface_web: '联网',
+  toolsSurface_mcp: 'MCP',
+  toolsSurface_agent: 'Agent / 团队',
+  toolsSurface_media: '媒体',
+  toolsSurface_settings: '设置',
+  toolsSurface_ui: '界面',
+  toolsSurface_other: '其他',
+  skillsCatalogMeta: '{docs} 条注入 · 磁盘上 {count} 个 Skills',
+  skillsCatalogEmpty: '当前工作区没有 Standing 注入或 Skills。',
+  skillsGroupWorkspace: '工作区 Skills',
+  skillsGroupHome: '主目录 Skills',
+  skillsGroupOther: '其他 Skills',
+  skillsFilterWorkspace: '工作区',
+  skillsFilterHome: '主目录',
+  skillsFilterOther: '其他',
+  skillsFilterDocuments: '提示注入',
+  skillsDocumentsTitle: 'Standing 注入（实机）',
+  skillsDocumentsHint: 'Host 实际写入系统提示的规则与 skill 目录',
+  skillsDocumentBytes: '{bytes} 字符 · 点击查看全文',
+  skillsDocumentKindInstruction: '规则',
+  skillsDocumentKindCatalog: 'Skill 目录',
+  skillsCatalogPathLabel: 'Skill 目录（Standing）',
+  skillsUserOnly: '仅用户',
   empty: '本部署没有开放任何插件设置。',
-  advancedEmpty: '本部署没有开放任何高级插件设置。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
@@ -683,9 +825,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   sandboxWindowsModeDanger: '危险全开',
   sandboxLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。Docker / Windows 需镜像或 helper 可用，否则 confine 失败关闭。',
   computerUseTitle: 'Computer use',
-  computerUseDescription: '桌面无障碍 / 键鼠 Provider，供 computer_use 工具（与 browser_* 分开）。CI 可设 XRK_COMPUTER_USE 旁路本卡。',
+  computerUseDescription: '原生桌面 GUI（无障碍树 + 键鼠），供 computer_use；与页面级 browser_* 分开。CI 可设 XRK_COMPUTER_USE 旁路本卡。',
   computerUseMode: '模式',
-  computerUseModeHint: '关：工具仍可见，无 Provider 时 execute 失败。UIA：Windows UI Automation。Background：凭据里的助手二进制。',
+  computerUseModeHint: '关：工具仍可见，无 Provider 时失败。UIA：Windows UI Automation 负责 capture 与 act。Background：助手负责 act；Windows 上 capture 仍走 UIA。',
   computerUseModeOff: '关',
   computerUseModeUia: 'UIA（Windows）',
   computerUseModeBackground: 'Background 助手',
@@ -694,6 +836,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   computerUseHelperSet: '已配置',
   computerUseHelperUnset: '未设置',
   computerUseLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
+  computerUseDetailOff: '工具仍登记。选 UIA / Background（或设 XRK_COMPUTER_USE）后才会真正执行。',
+  computerUseDetailUia: '本机 Windows UI Automation 负责 capture（ax / vision / som）、list_windows 与 act。',
+  computerUseDetailBackground: 'act 交给助手二进制；Windows 上 capture / list_windows 仍走 UIA，模型能继续读 AX 树。网页请用 browser_*。',
   cronTitle: 'Cron',
   cronDescription: 'Host 进程内 ticker，供 cronjob（无人值守 agent / 脚本）。CI 可设 XRK_CRON=0 强制关闭并旁路本卡。',
   cronEnabled: '总开关',
@@ -714,9 +859,11 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   voiceTitle: 'Voice',
   voiceDescription: 'TTS · 听写 · realtime 会话 broker（text_to_speech / voice_transcribe / voice_session）。密钥经凭据落盘。CI 可设 XRK_VOICE 旁路本卡。',
   voiceMode: '模式',
-  voiceModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。',
+  voiceModeHint: '关：工具仍可见，execute 诚实失败。OpenAI：需在凭据里配置密钥。本地：SenseVoice ONNX（{XRK_HOME}/voice/sensevoice）+ sherpa-onnx-node。',
   voiceModeOff: '关',
   voiceModeOpenai: 'OpenAI 兼容',
+  voiceModeLocal: '本地（SenseVoice）',
+  voiceLocalHint: '将 model.int8.onnx（或 model.onnx）、tokens.txt、silero_vad.onnx 放到 {XRK_HOME}/voice/sensevoice（或 XRK_VOICE_SENSEVOICE_DIR）。Host 运行时需安装 sherpa-onnx-node。Realtime 会话仍不可用。',
   voiceApiKey: 'OpenAI API 密钥',
   voiceApiKeyHint: '经凭据落盘为 XRK_VOICE_OPENAI_KEY（不进 settings.yaml）。运行时也可用 OPENAI_API_KEY。',
   voiceApiKeySet: '已配置',
@@ -724,6 +871,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   voiceKeyMissing: '已开 OpenAI 模式但尚未配置密钥 — 在凭据写入 XRK_VOICE_OPENAI_KEY 前，语音工具会诚实失败。',
   voiceBaseUrl: 'Base URL',
   voiceBaseUrlHint: '可选兼容端点（默认 https://api.openai.com/v1）。',
+  voiceSpeakTools: '全工具面说话工具',
+  voiceSpeakToolsHint: '开：在 Minimal / IM / Frugal 等所有工具面也绑定 text_to_speech。Mode=OpenAI 且有密钥时用远程 TTS，否则用本地 memory TTS。',
+  voiceSpeakToolsOn: '开',
+  voiceSpeakToolsOff: '关',
   voiceLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
   voiceWakeDeferred: '本地唤醒词尚未交付；启用 Voice 后请用按住说话 / 产品壳麦克风。',
   imageGenTitle: '图像生成',
@@ -803,7 +954,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   videoAnalyzeLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
   videoAnalyzeBoundaryHint: '不要用于实时浏览器页（用 browser_vision）；不要用于生成视频（用 video_generate）。',
   curatedMemoryTitle: '策展记忆',
-  curatedMemoryDescription: '跨会话 MEMORY.md / USER.md（~/.xrk/memories，不是 Mnemon）。关则跳过 memory 工具与系统提示冻结段。CI 可设 XRK_CURATED_MEMORY=0 强制关。',
+  curatedMemoryDescription: '分区 MEMORY.md / USER.md（global · workspace · session · agent，目录在 ~/.xrk/memories；不是 Mnemon）。关则跳过 memory 工具与系统提示冻结段。CI 可设 XRK_CURATED_MEMORY=0 强制关。',
   curatedMemoryEnabled: '总开关',
   curatedMemoryEnabledHint: '开：冻结 MEMORY.md / USER.md 进系统提示并登记 memory 工具。关：下次 agent 重建后两者都卸下。',
   curatedMemoryEnabledOn: '开',
@@ -875,4 +1026,27 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   externalAgentClaudeCode: 'Claude Code',
   externalAgentClaudeCodeHint: 'runtime=claude-code 命令。留空默认 claude（Host 会加 -p）。或设 XRK_CLAUDE_CODE。',
   externalAgentLiveHint: '下次外部 subagent 回合即生效（热切换，无需重启 Host）。',
+  hostTitle: 'Host 运行时',
+  hostDescription: '当前 Host 是谁：监听地址、工作区、预设与已挂载的 Host 插件。只读；进程启动时固定。',
+  hostAddress: '地址',
+  hostWorkspaceRoot: '工作区根目录',
+  hostPreset: '预设',
+  hostCorsOrigin: 'CORS origin',
+  hostRateLimit: '限流',
+  hostPluginsDir: '插件目录',
+  hostWebDist: 'Web dist',
+  hostWebDistBuilt: '由 Host 提供',
+  hostWebDistNone: '未接线',
+  hostApplied: '已应用 Host 插件',
+  hostWorkflowEngine: '工作流引擎',
+  channelsTitle: '进程与 IM 通道',
+  channelsDescription: 'Host 对外接线：进程通道插件、IM 厂商桩与解析后的 IM gateway 模式。进程启动时固定。',
+  channelsImGateway: 'IM gateway',
+  channelsImGatewaySidecar: 'Sidecar',
+  channelsImGatewayWsClient: 'WebSocket 客户端',
+  channelsImGatewayBridge: 'Bridge',
+  channelsProcess: '进程通道',
+  channelsIm: 'IM 厂商',
+  channelsNote: '备注',
+  channelsNone: '无',
 }

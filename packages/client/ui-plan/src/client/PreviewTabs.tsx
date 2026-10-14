@@ -23,7 +23,7 @@ import {
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
-import { PresenceBall } from './PresenceBall.tsx'
+import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -1726,6 +1726,7 @@ export function PreviewTabs({
   // Details column stays mounted at width 0. Keep the presence rail in layout
   // so expand does not insert a tall ball and shove Status. Engine waits for
   // the header PresenceDock to exit (one EmotionBall at a time).
+  const presenceEnabled = usePresenceEnabled()
   const overviewOpen = useOverviewOpen()
   const [presenceEngineReady, setPresenceEngineReady] = useState(() => overviewOpen)
   const overviewWasOpen = useRef(overviewOpen)
@@ -1778,7 +1779,11 @@ export function PreviewTabs({
   ) as OverviewChangesTurn[] | null | undefined
   const office = loaded.office
   const status = loaded.status
-  const delegatedOverview = sessionOrigin === 'subagent' || Boolean(status?.companionBall)
+  // Only real tool-delegated children show the 委派方 / 被委派方 pair.
+  // UI forks use home presence (origin fork / no companionBall).
+  const delegatedOverview =
+    sessionOrigin === 'subagent' ||
+    (Boolean(status?.companionBall) && Boolean(status?.delegate))
   // Cold empty only — keep prior Status on screen while soft-refreshing.
   const paintPending = !ready && status === null
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
@@ -2209,6 +2214,9 @@ export function PreviewTabs({
       <div className={css.tools} aria-label={t('preview.status.tools')}>
         {renderSlot('details.status.utilities', {})}
       </div>
+      {/* Ambient / delegate emotion balls follow ui-presence master switch.
+          Agent Team roster (ui-workspace) keeps seats with initials when off. */}
+      {presenceEnabled ? (
       <div
         className={css.presenceRail}
         data-overview-presence-rail=""
@@ -2314,31 +2322,34 @@ export function PreviewTabs({
               />
             </div>
           )
-          : (
-            <PresenceBall
-              sessionId={sessionId}
-              {...(status?.presence ? { presence: status.presence } : {})}
-              turnActive={ownTurnActive}
-              runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
-              runningSubs={ownSubs}
-              fleetHealth={status?.fleet.health ?? 'ok'}
-              queued={status?.delivery.queued ?? 0}
-              steering={status?.delivery.steering ?? 0}
-              compactionBusy={status?.compaction.phase === 'busy'}
-              {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
-              activityAt={Math.max(
-                presenceCue.activityAt,
-                status?.presence?.updatedAt ?? 0,
-              )}
-              compact={presenceCollapsed}
-              engineActive={overviewOpen && presenceEngineReady}
-              t={t as (key: string, params?: Record<string, string>) => string}
-              loadingLabel={t('preview.status.presenceLoading')}
-              errorLabel={t('preview.status.presenceError')}
-              clickHint={t('preview.status.presenceClick')}
-            />
-          )}
+          : presenceEnabled
+            ? (
+              <PresenceBall
+                sessionId={sessionId}
+                {...(status?.presence ? { presence: status.presence } : {})}
+                turnActive={ownTurnActive}
+                runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
+                runningSubs={ownSubs}
+                fleetHealth={status?.fleet.health ?? 'ok'}
+                queued={status?.delivery.queued ?? 0}
+                steering={status?.delivery.steering ?? 0}
+                compactionBusy={status?.compaction.phase === 'busy'}
+                {...(presenceCue.toolError ? { toolError: presenceCue.toolError } : {})}
+                activityAt={Math.max(
+                  presenceCue.activityAt,
+                  status?.presence?.updatedAt ?? 0,
+                )}
+                compact={presenceCollapsed}
+                engineActive={overviewOpen && presenceEngineReady}
+                t={t as (key: string, params?: Record<string, string>) => string}
+                loadingLabel={t('preview.status.presenceLoading')}
+                errorLabel={t('preview.status.presenceError')}
+                clickHint={t('preview.status.presenceClick')}
+              />
+            )
+            : null}
       </div>
+      ) : null}
       <div
         ref={bodyRef}
         className={css.body}

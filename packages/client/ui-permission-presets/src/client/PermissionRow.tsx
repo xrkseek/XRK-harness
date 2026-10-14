@@ -12,7 +12,9 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
 import type { PermissionSettingsKey } from './locales.ts'
-import { FULL_ACCESS_PRESET, displayPermissionPreset } from './presentation.ts'
+import {
+  AUTO_REVIEW_PRESET, FULL_ACCESS_PRESET, displayPermissionPreset,
+} from './presentation.ts'
 import css from './PermissionRow.module.css'
 
 /** Registration-side business face for the host-backed preference. */
@@ -166,7 +168,7 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
     sameStringList,
   )
   const [open, setOpen] = useState(false)
-  const [confirmingFullAccess, setConfirmingFullAccess] = useState(false)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
 
   useEffect(() => {
@@ -177,16 +179,17 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
     if (writable && status !== 'unavailable') return
     setOpen(false)
     setAcknowledged(false)
-    setConfirmingFullAccess(false)
+    setConfirming(null)
   }, [status, writable])
 
   if (status === 'unavailable') return null
   const selected = options.find(option => option.id === currentValue)
-  const busy = status === 'loading' || status === 'saving' || confirmingFullAccess
+  const busy = status === 'loading' || status === 'saving' || confirming !== null
   const label = selected === undefined
     ? (busy ? t('loading') : t('unavailable'))
     : displayPermissionPreset(selected.id, selected.label, t)
   const description: string = error ?? t('description')
+  const confirmingAuto = confirming === AUTO_REVIEW_PRESET
 
   return (
     <>
@@ -207,9 +210,9 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
           onSelect={(id) => {
             setOpen(false)
             if (id === currentValue) return
-            if (id === FULL_ACCESS_PRESET) {
+            if (id === FULL_ACCESS_PRESET || id === AUTO_REVIEW_PRESET) {
               setAcknowledged(false)
-              setConfirmingFullAccess(true)
+              setConfirming(id)
               return
             }
             void select(id)
@@ -238,23 +241,24 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
         save={saveRoots}
       />
       <RiskConfirmation
-        open={confirmingFullAccess}
-        title={t('confirm.title')}
-        description={t('confirm.description')}
-        acknowledgeLabel={t('confirm.acknowledge')}
+        open={confirming !== null}
+        title={confirmingAuto ? t('auto.confirm.title') : t('confirm.title')}
+        description={confirmingAuto ? t('auto.confirm.description') : t('confirm.description')}
+        acknowledgeLabel={confirmingAuto ? t('auto.confirm.acknowledge') : t('confirm.acknowledge')}
         cancelLabel={t('confirm.cancel')}
-        confirmLabel={t('confirm.enable')}
+        confirmLabel={confirmingAuto ? t('auto.confirm.enable') : t('confirm.enable')}
         acknowledged={acknowledged}
         disabled={!writable || status === 'saving'}
         onAcknowledgedChange={setAcknowledged}
         onCancel={() => {
           setAcknowledged(false)
-          setConfirmingFullAccess(false)
+          setConfirming(null)
         }}
         onConfirm={() => {
+          const next = confirming
           setAcknowledged(false)
-          setConfirmingFullAccess(false)
-          void select(FULL_ACCESS_PRESET)
+          setConfirming(null)
+          if (next !== null) void select(next)
         }}
       />
     </>

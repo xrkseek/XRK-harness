@@ -635,6 +635,24 @@ export class SessionManager {
   }
 
   /**
+   * Contract session.truncate — in-place log cut; same session id.
+   */
+  async truncate(
+    opts: { sessionId: SessionId; atSeq?: number; beforeSeq?: number },
+  ): Promise<RpcResult<{ sessionId: SessionId; eventCount: number }>> {
+    try {
+      const { result } = await this.api.sessions.truncate({
+        sessionId: opts.sessionId,
+        ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
+        ...opts.beforeSeq === undefined ? {} : { beforeSeq: opts.beforeSeq },
+      })
+      return result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /**
    * Contract session.delete for an archived session. On success, drop the
    * local list row immediately (host/session-removed will echo the same).
    * @param sessionId - archived session to permanently delete.

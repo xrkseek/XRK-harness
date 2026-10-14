@@ -19,6 +19,11 @@ export interface CreateVoiceToolsOptions {
   readonly service?: VoiceService;
   readonly env?: NodeJS.ProcessEnv;
   readonly product?: { readonly mode?: string };
+  /**
+   * When `"speak"`, register only `text_to_speech` (Settings speakTools on
+   * every tool surface). Default registers TTS + STT + live session.
+   */
+  readonly surface?: "all" | "speak";
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -271,4 +276,15 @@ export function createVoiceTools(
   };
 
   return [tts, stt, live];
+}
+
+/**
+ * Only `text_to_speech` — for Settings `voice.speakTools` binding onto every
+ * tool surface (Minimal / IM / Frugal) without voice_transcribe / voice_session.
+ */
+export function createSpeakTool(
+  options: CreateVoiceToolsOptions = {},
+): ToolDefinition {
+  const [tts] = createVoiceTools(options);
+  return tts!;
 }

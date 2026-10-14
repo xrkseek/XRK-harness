@@ -17,6 +17,7 @@ export const agentPresetEntrySchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
   broken: z.string().min(1).optional(),
+  workspaceLocked: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<AgentPresetEntry>>
 
 /** agentPreset.list request payload. */

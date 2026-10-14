@@ -37,7 +37,10 @@ import {
   clearEditStaging,
   requestResubmitConfirm,
 } from './chat/resubmit-intent.ts'
-import { executeResubmitAfterChoice } from './chat/resubmit-execute.ts'
+import {
+  editResubmitNeedsConfirm,
+  executeResubmitAfterChoice,
+} from './chat/resubmit-execute.ts'
 import { ApprovalPanel } from './skeleton/ApprovalPanel.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
@@ -70,6 +73,34 @@ async function deleteFromSeq(
   })
   if (choice === 'cancel') return
   await executeResubmitAfterChoice(sessions, sessionId, { seq, choice })
+}
+
+/** One-click regenerate: truncate after the user prompt and re-prompt same text. */
+async function regenerateFromUserSeq(
+  sessions: ISessions,
+  sessionId: SessionId,
+  seq: number,
+  text: string,
+): Promise<void> {
+  clearEditStaging()
+  const source = sessions.binding(sessionId)?.session
+  const snap = source?.getSnapshot()
+  if (editResubmitNeedsConfirm(snap, seq)) {
+    const choice = await requestResubmitConfirm({
+      sessionId,
+      kind: 'edit',
+      seq,
+      text,
+    })
+    if (choice === 'cancel') return
+    await executeResubmitAfterChoice(sessions, sessionId, { seq, choice, text })
+    return
+  }
+  await executeResubmitAfterChoice(sessions, sessionId, {
+    seq,
+    choice: 'keep-files',
+    text,
+  })
 }
 
 declare module '@xrkseek/client-ui-slots' {
@@ -558,6 +589,9 @@ export function apply(ctx: Context): void {
           shell.setDraft(text)
           beginEditStaging({ sessionId, seq })
           shell.focus()
+        },
+        regenerateAt: (seq, text) => {
+          void regenerateFromUserSeq(sessions, sessionId, seq, text).catch(() => undefined)
         },
         deleteAt: (seq) => {
           void deleteFromSeq(sessions, sessionId, seq).catch(() => undefined)

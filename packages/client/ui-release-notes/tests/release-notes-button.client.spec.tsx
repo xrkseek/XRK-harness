@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
-import type { SidebarFooterActionOwnerProps } from '@xrkseek/client-ui-sidebar/client'
+import type { SidebarUtilityOwnerProps } from '@xrkseek/client-ui-sidebar/client'
 import { ReleaseNotesButton } from '../src/client/ReleaseNotesButton.tsx'
 import type { ReleaseNotesButtonProps } from '../src/client/ReleaseNotesButton.tsx'
 import { ReleaseNotesStore } from '../src/client/release-notes-store.ts'
@@ -50,7 +50,7 @@ function mount({ wide = true, marker }: { wide?: boolean; marker?: string } = {}
     },
   }
   const controller = new ReleaseNotesStore(api as never)
-  const owner: SidebarFooterActionOwnerProps = { wide }
+  const owner: SidebarUtilityOwnerProps = { wide }
   const props = {
     ...owner,
     controller,

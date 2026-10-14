@@ -1,5 +1,6 @@
 /**
  * IM message send/receive + webhook ingress (local bridge — not vendor long-connection).
+ * Media is normalized as {@link ImAttachment} on the row; vendor SDKs stay out of Host.
  */
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -9,14 +10,154 @@ import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
+/** Bridge-normalized media kinds (video/audio ride here; Face maps to image/file). */
+export type ImAttachmentKind = "image" | "video" | "file" | "audio";
+
+export interface ImAttachment {
+  readonly kind: ImAttachmentKind;
+  readonly name?: string;
+  readonly mediaType?: string;
+  /** Remote URL the sidecar / vendor can fetch. */
+  readonly url?: string;
+  /** Absolute local path (Desktop / Host-side). */
+  readonly path?: string;
+  /** Face AttachmentStore id when bytes already live in-process. */
+  readonly attachmentId?: string;
+  readonly bytes?: number;
+  readonly caption?: string;
+}
+
 export interface ImMessageRow {
   readonly id: string;
   readonly channel: string;
   readonly botId?: string;
   readonly direction: "inbound" | "outbound";
   readonly text: string;
+  readonly attachments?: readonly ImAttachment[];
   readonly raw?: Record<string, unknown>;
   readonly createdAt: string;
+}
+
+const IM_ATTACHMENT_KINDS = new Set<ImAttachmentKind>([
+  "image",
+  "video",
+  "file",
+  "audio",
+]);
+
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const t = value.trim();
+  return t || undefined;
+}
+
+function coerceAttachmentKind(value: unknown): ImAttachmentKind | undefined {
+  if (typeof value !== "string") return undefined;
+  const k = value.trim().toLowerCase();
+  if (IM_ATTACHMENT_KINDS.has(k as ImAttachmentKind)) {
+    return k as ImAttachmentKind;
+  }
+  if (k === "photo" || k === "img" || k === "picture") return "image";
+  if (k === "voice" || k === "sound") return "audio";
+  if (k === "document" || k === "doc" || k === "attachment") return "file";
+  return undefined;
+}
+
+function coerceOneAttachment(raw: unknown): ImAttachment | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const row = raw as Record<string, unknown>;
+  const kind =
+    coerceAttachmentKind(row.kind) ??
+    coerceAttachmentKind(row.type) ??
+    coerceAttachmentKind(row.mediaType) ??
+    (asNonEmptyString(row.url) || asNonEmptyString(row.path)
+      ? "file"
+      : undefined);
+  if (!kind) return undefined;
+  const name = asNonEmptyString(row.name) ?? asNonEmptyString(row.filename);
+  const mediaType =
+    asNonEmptyString(row.mediaType) ?? asNonEmptyString(row.mimeType);
+  const url =
+    asNonEmptyString(row.url) ??
+    asNonEmptyString(row.href) ??
+    asNonEmptyString(row.src);
+  const path =
+    asNonEmptyString(row.path) ??
+    asNonEmptyString(row.filePath) ??
+    asNonEmptyString(row.localPath);
+  const attachmentId = asNonEmptyString(row.attachmentId);
+  const caption = asNonEmptyString(row.caption);
+  const bytes =
+    typeof row.bytes === "number" && Number.isFinite(row.bytes)
+      ? Math.max(0, Math.floor(row.bytes))
+      : typeof row.size === "number" && Number.isFinite(row.size)
+        ? Math.max(0, Math.floor(row.size))
+        : undefined;
+  if (!url && !path && !attachmentId && !name) return undefined;
+  return {
+    kind,
+    ...(name ? { name } : {}),
+    ...(mediaType ? { mediaType } : {}),
+    ...(url ? { url } : {}),
+    ...(path ? { path } : {}),
+    ...(attachmentId ? { attachmentId } : {}),
+    ...(bytes !== undefined ? { bytes } : {}),
+    ...(caption ? { caption } : {}),
+  };
+}
+
+/**
+ * Normalize `attachments` (or common single-media vendor keys) from a send /
+ * relay / webhook payload.
+ */
+export function normalizeImAttachments(
+  payload: Record<string, unknown>,
+): ImAttachment[] {
+  const out: ImAttachment[] = [];
+  const seen = new Set<string>();
+  const push = (att: ImAttachment | undefined): void => {
+    if (!att) return;
+    const key = [
+      att.kind,
+      att.attachmentId ?? "",
+      att.url ?? "",
+      att.path ?? "",
+      att.name ?? "",
+    ].join("|");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(att);
+  };
+
+  const list = payload.attachments;
+  if (Array.isArray(list)) {
+    for (const item of list) push(coerceOneAttachment(item));
+  } else if (list && typeof list === "object") {
+    push(coerceOneAttachment(list));
+  }
+
+  const singles: Array<{ kind: ImAttachmentKind; keys: string[] }> = [
+    { kind: "image", keys: ["imageUrl", "image_url", "image", "photo"] },
+    { kind: "video", keys: ["videoUrl", "video_url", "video"] },
+    { kind: "audio", keys: ["audioUrl", "audio_url", "audio", "voice"] },
+    { kind: "file", keys: ["fileUrl", "file_url", "file", "document"] },
+  ];
+  for (const { kind, keys } of singles) {
+    for (const key of keys) {
+      const v = payload[key];
+      if (typeof v === "string" && v.trim()) {
+        push({ kind, url: v.trim() });
+      } else if (v && typeof v === "object" && !Array.isArray(v)) {
+        push(
+          coerceOneAttachment({
+            kind,
+            ...(v as Record<string, unknown>),
+          }),
+        );
+      }
+    }
+  }
+  return out;
 }
 
 interface ImMessagingDoc {
@@ -63,7 +204,8 @@ export function sendImMessage(
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
   const text = messageText(payload).trim();
-  if (!text) {
+  const attachments = normalizeImAttachments(payload);
+  if (!text && attachments.length === 0) {
     return { ok: false, code: "empty-message", channel };
   }
   const botId =
@@ -78,6 +220,7 @@ export function sendImMessage(
     ...(botId ? { botId } : {}),
     direction: "outbound",
     text,
+    ...(attachments.length ? { attachments } : {}),
     raw: payload,
     createdAt: new Date().toISOString(),
   };
@@ -89,6 +232,7 @@ export function sendImMessage(
     messageId: row.id,
     channel,
     botId,
+    ...(attachments.length ? { attachmentCount: attachments.length } : {}),
     mode: "xrk-bridge",
     adapter: DSH_COMPAT_ADAPTER,
     note: "Message queued locally; vendor tunnel not required for bridge send ack.",
@@ -118,23 +262,52 @@ export function listImMessages(
   };
 }
 
+/** Optional Face admit after inbound persist (Host wires; no Face → messages only). */
+export type ImFaceAdmitHook = (row: ImMessageRow) => void | Promise<void>;
+
+let imFaceAdmitHook: ImFaceAdmitHook | undefined;
+
+export function setImFaceAdmitHook(hook: ImFaceAdmitHook | undefined): void {
+  imFaceAdmitHook = hook;
+}
+
+function scheduleImFaceAdmit(row: ImMessageRow): void {
+  if (!imFaceAdmitHook) return;
+  void Promise.resolve(imFaceAdmitHook(row)).catch((err: unknown) => {
+    console.warn(
+      "[im-messaging] Face admit failed:",
+      err instanceof Error ? err.message : err,
+    );
+  });
+}
+
 export function ingestImWebhook(
   xrkHome: string | undefined,
   channel: string,
   body: Record<string, unknown>,
   botId?: string,
 ): ImMessageRow {
-  const text = messageText(body).trim() || JSON.stringify(body).slice(0, 4000);
+  const attachments = normalizeImAttachments(body);
+  const text =
+    messageText(body).trim() ||
+    (attachments.length
+      ? attachments
+          .map((a) => a.caption || a.name || `${a.kind}`)
+          .filter(Boolean)
+          .join(" · ") || `[${attachments.length} attachment(s)]`
+      : JSON.stringify(body).slice(0, 4000));
   const row: ImMessageRow = {
     id: randomUUID(),
     channel,
     ...(botId ? { botId } : {}),
     direction: "inbound",
     text,
+    ...(attachments.length ? { attachments } : {}),
     raw: body,
     createdAt: new Date().toISOString(),
   };
   writeMessages(xrkHome, [row, ...readMessages(xrkHome)]);
+  scheduleImFaceAdmit(row);
   return row;
 }
 

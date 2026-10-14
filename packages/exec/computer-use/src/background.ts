@@ -1,6 +1,9 @@
 /**
  * Background input Provider. Separate from Windows UIA and from browser_*.
  * When the helper binary is not installed, every call returns unavailable.
+ *
+ * Product `mode=background` composes this with UIA for capture/listWindows
+ * (see {@link composeBackgroundWithCapture}); this module owns act only.
  */
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -8,6 +11,7 @@ import { ComputerUseError } from "./types.js";
 import type {
   ComputerUseActRequest,
   ComputerUseActResult,
+  ComputerUseCaptureRequest,
   ComputerUseService,
 } from "./types.js";
 
@@ -110,5 +114,25 @@ export function createBackgroundInputProvider(
         delivery: "background",
       };
     },
+  };
+}
+
+/**
+ * DSH-aligned background delivery: act via helper, capture/listWindows via a
+ * desktop Provider (Windows UIA). Without a capture backend, capture keeps
+ * failing honestly as in {@link createBackgroundInputProvider}.
+ */
+export function composeBackgroundWithCapture(
+  act: ComputerUseService,
+  capture: ComputerUseService | undefined,
+): ComputerUseService {
+  if (capture === undefined) return act;
+  return {
+    providerId: "background",
+    delivery: "background",
+    capture: (request?: ComputerUseCaptureRequest, signal?: AbortSignal) =>
+      capture.capture(request, signal),
+    listWindows: (signal?: AbortSignal) => capture.listWindows(signal),
+    act: (request, signal) => act.act(request, signal),
   };
 }

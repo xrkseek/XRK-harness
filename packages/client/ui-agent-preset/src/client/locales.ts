@@ -2,9 +2,11 @@
 
 /** Locale keys these surfaces render. */
 export type AgentPresetSettingsKey =
-  | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'headerHint'
+  | 'title' | 'description' | 'loading' | 'error' | 'userTrust' | 'seatHint' | 'seatLockedIm' | 'seatLockedQichuang' | 'headerHint'
   | 'nav' | 'sectionIntro' | 'builtIn' | 'setDefault' | 'view'
   | 'presetMinimalName' | 'presetMinimalDescription'
+  | 'presetImName' | 'presetImDescription'
+  | 'presetQichuangName' | 'presetQichuangDescription'
   | 'presetShellName' | 'presetShellDescription'
   | 'presetFrugalName' | 'presetFrugalDescription'
   | 'presetShallowName' | 'presetShallowDescription'
@@ -12,6 +14,7 @@ export type AgentPresetSettingsKey =
   | 'duplicate' | 'duplicateUnavailable' | 'delete' | 'presetId' | 'presetIdPlaceholder' | 'copyOf'
   | 'displayName' | 'displayNamePlaceholder'
   | 'inUse' | 'noDescription' | 'builtInGroup' | 'customGroup'
+  | 'workspaceLockedGroup' | 'workspaceLockedBadge' | 'lockedNotSelectable'
   | 'brokenBadge' | 'brokenNoCopy'
   | 'composition' | 'cancel' | 'close' | 'retry'
   | 'copyTitle' | 'copyIntro' | 'create' | 'creating' | 'creatorDraft'
@@ -22,22 +25,30 @@ export type AgentPresetSettingsKey =
 /** English copy. */
 export const en: Record<AgentPresetSettingsKey, string> = {
   title: 'Agent preset',
-  description: 'Applies to sessions you start from now on. Running sessions keep the preset they began with.',
+  description: 'Default tool surface for new coding-workspace sessions. IM / Qichuang are workspace-locked and ignore this default. Running sessions keep the preset they began with.',
   loading: 'Loading presets…',
   error: 'Could not load agent presets.',
   userTrust: 'Custom',
   seatHint: 'Tool surface for the session you are about to start',
+  seatLockedIm: 'IM channel surface — locked for this workspace',
+  seatLockedQichuang: 'Qichuang surface — locked to Xiangyang',
   headerHint: 'Tool surface this session runs, fixed when it started',
   nav: 'Agent presets',
   sectionIntro:
-    'XRK ships five built-in tool surfaces — Minimal, Shell, Frugal, Shallow, and XRK Harness. '
-    + 'A session badge picks tools and subagents; use /plan for collaboration mode. Workspace seeds under .xrk feed personality and rules separately.',
+    'Built-in tool surfaces for coding workspaces (Minimal, Shell, Frugal, Shallow, Harness). '
+    + 'IM and Qichuang are workspace-locked (full access) and ignore this default. /plan is collaboration mode.',
   builtIn: 'Built-in',
   setDefault: 'Set as default',
   view: 'View',
   presetMinimalName: 'Minimal',
   presetMinimalDescription:
     'Filesystem, skill, and std tools only — no bash, web, lsp, PTY, or subagents.',
+  presetImName: 'IM',
+  presetImDescription:
+    'IM channel: im_send / team / session_query / workspace list·create·session_prompt + subagent(workspace_id) into coding workspaces — no bash, web, lsp, PTY, presence, or thread UI.',
+  presetQichuangName: 'Qichuang',
+  presetQichuangDescription:
+    'Xiangyang surface: team roster + workspace list·create·session_prompt (peer coding sessions) — no nested subagents, no bash/web/lsp/PTY.',
   presetShellName: 'Shell',
   presetShellDescription:
     'Filesystem, bash, and terminal (PTY) — no web, lsp, or subagents.',
@@ -60,6 +71,10 @@ export const en: Record<AgentPresetSettingsKey, string> = {
   inUse: 'In use',
   builtInGroup: 'Built-in',
   customGroup: 'Custom',
+  workspaceLockedGroup: 'Workspace-locked',
+  workspaceLockedBadge: 'Workspace lock',
+  lockedNotSelectable:
+    'Pinned by IM / Xiangyang — not a coding-workspace Settings default',
   noDescription: 'No description.',
   brokenBadge: 'Failed to load',
   brokenNoCopy: 'A preset that failed to load cannot be duplicated',
@@ -91,21 +106,29 @@ export const en: Record<AgentPresetSettingsKey, string> = {
 /** Simplified Chinese copy. */
 export const zh: Record<AgentPresetSettingsKey, string> = {
   title: 'Agent 预设',
-  description: '对此后新建的会话生效。运行中的会话保持它开始时的预设。',
+  description: '仅作用于编码工作区新会话的默认工具面。IM / 奇创由工作区锁定，不受此项影响。运行中会话保持开始时的预设。',
   loading: '正在加载预设…',
   error: '无法加载 Agent 预设。',
   userTrust: '自定义',
   seatHint: '即将开始的这个会话所用的工具面',
+  seatLockedIm: 'IM 通道面 — 本工作区锁定',
+  seatLockedQichuang: '奇创工具面 — 锁定向阳空间',
   headerHint: '本会话的工具面，开始时即固定',
   nav: 'Agent 预设',
   sectionIntro:
-    'XRK 内置五种工具面：Minimal、Shell、Frugal、Shallow、XRK Harness。'
-    + '会话徽章决定工具与子代理；计划模式用 /plan。工作区 .xrk 种子另路喂人格与规则。',
+    '编码工作区内置工具面（Minimal、Shell、Frugal、Shallow、Harness）。'
+    + 'IM / 奇创由工作区锁定（完全访问），不受此项默认影响。计划模式用 /plan。',
   builtIn: '内置',
   setDefault: '设为默认',
   view: '查看',
   presetMinimalName: 'Minimal',
   presetMinimalDescription: '仅文件系统、skill 与 std 工具；无 bash / 联网 / lsp / PTY / 子代理。',
+  presetImName: 'IM',
+  presetImDescription:
+    'IM 通道：im_send / team / session_query / workspace 列表·建区·开会话，并可 subagent(workspace_id) 委派到编码区；无 bash / 联网 / lsp / PTY / presence / thread UI。',
+  presetQichuangName: '奇创',
+  presetQichuangDescription:
+    '向阳空间工具面：团队名册 + workspace 列表·建区·开会话派任务（peer，非嵌套子代理）；无 bash / 联网 / lsp / PTY。',
   presetShellName: 'Shell',
   presetShellDescription: '文件系统、bash 与终端（PTY）；无联网 / lsp / 子代理。',
   presetFrugalName: 'Frugal',
@@ -125,6 +148,9 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
   inUse: '当前使用',
   builtInGroup: '内置',
   customGroup: '自定义',
+  workspaceLockedGroup: '工作区锁定',
+  workspaceLockedBadge: '工作区锁定',
+  lockedNotSelectable: '由 IM / 向阳空间锁定 — 不能设为编码区默认',
   noDescription: '暂无描述。',
   brokenBadge: '加载失败',
   brokenNoCopy: '预设加载失败，不能复制',
@@ -175,9 +201,11 @@ interface PresetLocaleKeys {
   readonly description: AgentPresetSettingsKey
 }
 
-/** Face catalog ids XRK ships (five tiers; plan mode is /plan). */
+/** Face catalog ids XRK ships (plan mode is /plan). */
 const BUILT_IN_PRESET_KEYS: Readonly<Partial<Record<string, PresetLocaleKeys>>> = {
   minimal: { name: 'presetMinimalName', description: 'presetMinimalDescription' },
+  im: { name: 'presetImName', description: 'presetImDescription' },
+  qichuang: { name: 'presetQichuangName', description: 'presetQichuangDescription' },
   shell: { name: 'presetShellName', description: 'presetShellDescription' },
   frugal: { name: 'presetFrugalName', description: 'presetFrugalDescription' },
   shallow: { name: 'presetShallowName', description: 'presetShallowDescription' },
@@ -198,4 +226,20 @@ export function presetDisplayText(
     name: preset.name ?? preset.id,
     ...preset.description === undefined ? {} : { description: preset.description },
   }
+}
+
+/**
+ * Label for a session/seat badge id when the selectable roster omitted it
+ * (IM / Qichuang are workspace-locked and filtered from Settings pickers).
+ * Always prefers locale for known built-ins — never leave raw `qichuang` in zh UI.
+ */
+export function resolvePresetDisplayText(
+  id: string,
+  option: PresetDisplaySource | undefined,
+  t: (key: AgentPresetSettingsKey) => string,
+): PresetDisplayText {
+  if (option !== undefined) return presetDisplayText(option, t)
+  const keys = BUILT_IN_PRESET_KEYS[id]
+  if (keys !== undefined) return { name: t(keys.name), description: t(keys.description) }
+  return { name: id }
 }

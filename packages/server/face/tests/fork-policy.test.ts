@@ -463,6 +463,9 @@ describe("Face session.fork", () => {
 
   it("marks UI forks as origin=fork and keeps them out of delegated lists", async () => {
     const store = createMemorySessionStore();
+    // Unique child id — forkLineage persists under product home and reuses
+    // fixed ids across runs (attach is idempotent on child).
+    const childId = `ui-fork-${Date.now().toString(36)}`;
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
@@ -477,20 +480,126 @@ describe("Face session.fork", () => {
     appendCompletedTurn(store, parentId, 1, "A");
     const forked = await dispatchFaceMethod(runtime, "session.fork", "f", {
       sessionId: parentId,
-      newSessionId: "ui-fork",
+      newSessionId: childId,
     });
     expect(forked.result.ok).toBe(true);
     if (!forked.result.ok) return;
-    const link = runtime.subagents.getByChild("ui-fork");
-    expect(link?.mode).toBe("fork");
+    // UI fork must not enter the subagent/delegation graph.
+    expect(runtime.subagents.getByChild(childId)).toBeUndefined();
     expect(runtime.subagents.listDelegated(parentId)).toEqual([]);
+    expect(runtime.forkLineage.getByChild(childId)?.parentSessionId).toBe(
+      parentId,
+    );
     const listed = await dispatchFaceMethod(runtime, "session.list", "l", {});
     expect(listed.result.ok).toBe(true);
     if (!listed.result.ok) return;
-    const items = (listed.result.value as { items: { sessionId: string; origin?: string }[] })
-      .items;
-    const child = items.find((i) => i.sessionId === "ui-fork");
+    const items = (
+      listed.result.value as {
+        items: {
+          sessionId: string;
+          origin?: string;
+          parentSessionId?: string;
+          mainlineId?: string;
+        }[];
+      }
+    ).items;
+    const child = items.find((i) => i.sessionId === childId);
     expect(child?.origin).toBe("fork");
+    expect(child?.parentSessionId).toBe(parentId);
+  });
+
+  it("copies 主线 bind to the UI fork child and leaves the parent bound", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const parentId = (created.result.value as { sessionId: string }).sessionId;
+    appendCompletedTurn(store, parentId, 1, "hello");
+    const wsId = runtime.workspaces.workspaceIdOf(parentId) ?? runtime.workspaces.defaultId();
+    const thread = runtime.sessionThreads.upsert(wsId, { title: "mainline-a" });
+    expect(thread).toBeTruthy();
+    if (!thread) return;
+    runtime.sessionThreads.switchTo(wsId, parentId, thread.id);
+    runtime.sessionThreads.setSideline(wsId, parentId, "working");
+
+    const forked = await dispatchFaceMethod(runtime, "session.fork", "f", {
+      sessionId: parentId,
+      newSessionId: "fork-thread",
+    });
+    expect(forked.result.ok).toBe(true);
+    if (!forked.result.ok) return;
+
+    expect(runtime.sessionThreads.bindOf(wsId, parentId)).toEqual({
+      threadId: thread.id,
+      sideline: "working",
+    });
+    expect(runtime.sessionThreads.bindOf(wsId, "fork-thread")).toEqual({
+      threadId: thread.id,
+      sideline: "working",
+    });
+
+    const status = await dispatchFaceMethod(runtime, "session.status", "st", {
+      sessionId: "fork-thread",
+    });
+    expect(status.result.ok).toBe(true);
+    if (!status.result.ok) return;
+    const snap = status.result.value as {
+      companionBall?: unknown;
+      delegate?: unknown;
+    };
+    expect(snap.companionBall).toBeUndefined();
+    expect(snap.delegate).toBeUndefined();
+  });
+});
+
+describe("Face session.truncate", () => {
+  it("cuts the same session in place without creating a child", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    appendCompletedTurn(store, sessionId, 1, "keep");
+    appendCompletedTurn(store, sessionId, 2, "drop");
+    const before = store.get(sessionId).events.length;
+
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t1", {
+      sessionId,
+      beforeSeq: 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    if (!cut.result.ok) return;
+    const value = cut.result.value as { sessionId: string; eventCount: number };
+    expect(value.sessionId).toBe(sessionId);
+    expect(value.eventCount).toBeLessThan(before);
+    expect(store.list()).toEqual([sessionId]);
+    expect(
+      store.get(sessionId).events.some(
+        (e) =>
+          e.type === "user/message" &&
+          (e as { content?: string }).content === "drop",
+      ),
+    ).toBe(false);
   });
 });
 

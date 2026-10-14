@@ -4,23 +4,25 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 760px;
+  /* Fill the Plugins home panel — avoid a left strip with empty right gutter. */
+  width: 100%;
+  max-width: none;
   color: var(--dsw-alias-label-primary);
 }
 
 .heading {
   margin: 0;
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 20px;
+  line-height: 28px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
 .intro {
-  margin: 0;
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--dsw-alias-label-tertiary);
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .tabs {
@@ -78,7 +80,9 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* Separated cards (not a fused list): each plugin owns its own chrome. */
+  gap: 8px;
+  width: 100%;
 }
 
 .empty {

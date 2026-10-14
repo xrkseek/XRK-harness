@@ -134,7 +134,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
 }) {
   const row = group
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
-  const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
+  // Xiangyang wire title is English; zh UI remaps via locale.
+  const label = row.workspaceId === undefined
+    ? t('group.ungrouped')
+    : row.workspaceId === 'ws_default'
+      ? t('workspace.xiangyang')
+      : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
   const [longPressArmed, setLongPressArmed] = useState(false)
@@ -148,14 +153,21 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
     }
     longPressOrigin.current = null
   }
+  const isImWorkspace = row.workspaceId === 'ws_im'
+  const isXiangyangWorkspace = row.workspaceId === 'ws_default'
+  // 向阳空间: product home — no rename/delete. IM: deletable (recreated on connect).
   const workspaceMenuItems = [
-    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+    ...(!isXiangyangWorkspace
+      ? [{ id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> }]
+      : []),
     {
       id: 'pin',
       label: t(row.pinned ? 'menu.unpinWorkspace' : 'menu.pinWorkspace'),
       icon: <IconPinOutline16 />,
     },
-    { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
+    ...(!isXiangyangWorkspace
+      ? [{ id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true }]
+      : []),
   ]
   const ownRow = (
     <div
@@ -252,6 +264,12 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
+        {isImWorkspace && (
+          <span className={css.imBadge} aria-label="IM">IM</span>
+        )}
+        {isXiangyangWorkspace && (
+          <span className={css.xiangyangBadge} aria-label={t('badge.qichuang')}>{t('badge.qichuang')}</span>
+        )}
         {row.pinned && (
           <span className={css.pinBadge} aria-hidden="true">
             <IconPinOutline16 />
@@ -282,9 +300,9 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
                 // not inherit the destructive branch as an else fallback.
                 /* v8 ignore next -- workspaceMenuItems carries exactly these three rows today. */
                 if (id !== 'rename' && id !== 'pin' && id !== 'delete') return
-                if (id === 'rename') actions.rename()
+                if (id === 'rename' && !isXiangyangWorkspace) actions.rename()
                 else if (id === 'pin') actions.pinToggle()
-                else actions.delete()
+                else if (id === 'delete' && !isXiangyangWorkspace) actions.delete()
               }}
               portal
               closeOnPointerLeave
@@ -568,8 +586,20 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         </span>
       )}
       <span className={css.titleStack}>
-        <span className={css.title}>{title}</span>
-        {row.sideline ? <span className={css.sideline}>{row.sideline}</span> : null}
+        <span
+          className={css.title}
+          title={row.mainline ? t('hint.mainline') : t('hint.sessionTitle')}
+        >
+          {title}
+        </span>
+        {row.sideline ? (
+          <span className={css.sideline} title={t('hint.sideline')}>
+            <span className={css.sidelineMark} aria-hidden>
+              {t('mark.sideline')}
+            </span>
+            {row.sideline}
+          </span>
+        ) : null}
       </span>
       {/* A blank New Session row is a provisional placeholder: nothing has
           happened in it yet, so a "now" timestamp and the row verbs

@@ -104,6 +104,61 @@ function reasoningOf(value: unknown): CommunitySyncReasoning | undefined {
   };
 }
 
+/**
+ * Community Cordis LLM providers that publish an ephemeral loopback OpenAI
+ * shim/forward. Their Face `baseURL`s must not collide (WB CN vs OFM).
+ */
+export const COMMUNITY_LOOPBACK_LLM_PROVIDERS = [
+  "workbuddy",
+  "workbuddy-ai",
+  "our-free-model",
+  "our-free-model-region",
+] as const;
+
+export type CommunityLoopbackLlmProviderId =
+  (typeof COMMUNITY_LOOPBACK_LLM_PROVIDERS)[number];
+
+export function isCommunityLoopbackLlmProvider(
+  providerId: string,
+): providerId is CommunityLoopbackLlmProviderId {
+  return (COMMUNITY_LOOPBACK_LLM_PROVIDERS as readonly string[]).includes(
+    providerId,
+  );
+}
+
+/**
+ * When syncing a community loopback provider, refuse a `baseURL` already owned
+ * by another community loopback row (stale port after OFM/WB listen reshuffle).
+ * @returns colliding provider id, or `undefined` when safe.
+ */
+export function communityLoopbackBaseUrlCollision(
+  providerId: string,
+  baseUrl: string,
+  llmPiAiValue: unknown,
+): string | undefined {
+  if (!isCommunityLoopbackLlmProvider(providerId)) return undefined;
+  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  if (!normalized) return undefined;
+  if (!llmPiAiValue || typeof llmPiAiValue !== "object") return undefined;
+  const providers = (llmPiAiValue as { providers?: unknown }).providers;
+  if (!providers || typeof providers !== "object" || Array.isArray(providers)) {
+    return undefined;
+  }
+  for (const [otherId, row] of Object.entries(
+    providers as Record<string, unknown>,
+  )) {
+    const id = otherId.trim().toLowerCase();
+    if (!id || id === providerId || !isCommunityLoopbackLlmProvider(id)) {
+      continue;
+    }
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const otherBase = (row as { baseURL?: unknown }).baseURL;
+    if (typeof otherBase !== "string" || !otherBase.trim()) continue;
+    if (otherBase.trim().replace(/\/+$/, "") === normalized) return id;
+  }
+  return undefined;
+}
+
 /** Existing `llm-pi-ai.providers.<id>` row from Face settings (merged layers). */
 export function existingPiAiProvider(
   llmPiAiValue: unknown,

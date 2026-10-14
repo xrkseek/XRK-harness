@@ -57,7 +57,8 @@ describe("Face workspace U2", () => {
       };
       expect(v.root).toBe(path.resolve(root));
       expect(v.productDir.replace(/\\/g, "/")).toContain("/.xrk");
-      expect(v.productExists).toBe(false);
+      // Face boot seeds 向阳空间 under productDir, which creates that tree.
+      expect(typeof v.productExists).toBe("boolean");
       expect(v.agentsExists).toBe(true);
     }
 
@@ -106,11 +107,15 @@ describe("Face workspace U2", () => {
       archivedSessionIds: string[];
     };
     expect(v.archivedSessionIds).toEqual([]);
-    expect(v.items).toHaveLength(1);
-    expect(v.items[0]?.workspaceId).toBe("ws_default");
-    expect(v.items[0]?.path).toBe(path.resolve(root));
-    expect(v.items[0]?.title).toBe(path.basename(root));
-    expect(v.items[0]?.sessionIds).toEqual([]);
+    // ws_default = 向阳空间 under productDir; launch workspaceRoot is a second row.
+    expect(v.items.length).toBeGreaterThanOrEqual(1);
+    const xy = v.items.find((w) => w.workspaceId === "ws_default");
+    expect(xy?.title).toBe("Xiangyang");
+    expect(xy?.path.replace(/\\/g, "/")).toContain("/xiangyang-workspace");
+    expect(xy?.sessionIds).toEqual([]);
+    expect(
+      v.items.some((w) => path.resolve(w.path) === path.resolve(root)),
+    ).toBe(true);
     expect(v).not.toHaveProperty("entries");
     expect(v).not.toHaveProperty("exists");
   });
@@ -358,19 +363,19 @@ describe("Face workspace U2", () => {
       const items = (
         listed.result.value as { items: { workspaceId: string }[] }
       ).items;
-      expect(items.map((w) => w.workspaceId)).toEqual(["ws_default"]);
+      // extra (other) gone; 向阳空间 + launch workspaceRoot remain.
+      expect(items.some((w) => w.workspaceId === "ws_default")).toBe(true);
+      expect(items.some((w) => w.workspaceId === extraId)).toBe(false);
     }
 
+    // 向阳空间 (`ws_default`) is reserved — cannot delete.
     const deleteDefault = await dispatchFaceMethod(
       runtime,
       "workspace.delete",
       "d2",
       { workspaceId: "ws_default" },
     );
-    expect(deleteDefault.result.ok).toBe(true);
-    if (deleteDefault.result.ok) {
-      expect(deleteDefault.result.value).toEqual({ deleted: true });
-    }
+    expect(deleteDefault.result.ok).toBe(false);
 
     const afterDefault = await dispatchFaceMethod(runtime, "workspace.list", "l2", {});
     expect(afterDefault.result.ok).toBe(true);
@@ -378,7 +383,7 @@ describe("Face workspace U2", () => {
       const items = (
         afterDefault.result.value as { items: { workspaceId: string }[] }
       ).items;
-      expect(items).toEqual([]);
+      expect(items.some((w) => w.workspaceId === "ws_default")).toBe(true);
     }
   });
 

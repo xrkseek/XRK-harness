@@ -310,6 +310,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     forkAt,
     restoreAt,
     editAt: vi.fn(),
+    regenerateAt: vi.fn(),
     deleteAt: vi.fn(),
     withdrawSteer: vi.fn(),
     // Absent-service default; mention tests override with a real resolver.

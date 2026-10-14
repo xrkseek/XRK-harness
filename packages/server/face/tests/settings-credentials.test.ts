@@ -110,7 +110,15 @@ describe("Face settings U2", () => {
       "frugal",
       "shallow",
       "harness",
+      "im",
+      "qichuang",
     ]);
+    expect(presets.find((p) => p.id === "im")).toMatchObject({
+      workspaceLocked: true,
+    });
+    expect(presets.find((p) => p.id === "qichuang")).toMatchObject({
+      workspaceLocked: true,
+    });
     expect(presets.find((p) => p.id === "harness")?.isDefault).toBe(true);
     expect(presets.find((p) => p.id === "minimal")?.isDefault).toBe(false);
 
@@ -537,7 +545,7 @@ describe("Face settings U2", () => {
     expect(mut.result.value).toMatchObject({
       ns: "permission",
       value: { defaultPreset: "workspace-write" },
-      schema: { uid: 7 },
+      schema: { uid: 8 },
     });
     // Mutating only defaultPreset must keep schema-base extraWritableRoots
     // (product home) — old settings.yaml without that key still backfills.
@@ -555,14 +563,17 @@ describe("Face settings U2", () => {
       expect(bad.result.error.code).toBe("settings-rejected");
     }
 
-    // DSH: General Settings never offer Auto (session-catalog only).
+    // Auto is a valid Settings default (Host keeps registerAuto live).
     const autoAsDefault = await dispatchFaceMethod(rt, "settings.mutate", "pa", {
       ns: "permission",
       ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
     });
-    expect(autoAsDefault.result.ok).toBe(false);
-    if (!autoAsDefault.result.ok) {
-      expect(autoAsDefault.result.error.code).toBe("settings-rejected");
+    expect(autoAsDefault.result.ok).toBe(true);
+    if (autoAsDefault.result.ok) {
+      expect(autoAsDefault.result.value).toMatchObject({
+        ns: "permission",
+        value: { defaultPreset: "auto" },
+      });
     }
   });
 

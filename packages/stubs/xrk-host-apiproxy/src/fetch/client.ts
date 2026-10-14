@@ -22,6 +22,7 @@ import {
 import {
   sessionCancelValueSchema,
   sessionDeleteValueSchema,
+  sessionToolsValueSchema,
   sessionAttachmentValueSchema,
   sessionCreateValueSchema,
   sessionForkValueSchema,
@@ -48,7 +49,7 @@ import {
   workspaceListValueSchema,
   workspaceRenameValueSchema,
 } from '../api/workspace.schema.ts'
-import { skillListValueSchema } from '../api/skills.schema.ts'
+import { skillListValueSchema, skillReadValueSchema } from '../api/skills.schema.ts'
 import {
   agentPresetCopyValueSchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
   agentPresetReadValueSchema, agentPresetRemoveValueSchema, agentPresetSelectValueSchema,
@@ -114,6 +115,7 @@ export interface IApiClient {
     updateQueue(payload: RequestPayload<'session.updateQueue'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.updateQueue'>>>
     cancel(payload: RequestPayload<'session.cancel'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.cancel'>>>
     delete(payload: RequestPayload<'session.delete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.delete'>>>
+    tools(payload: RequestPayload<'session.tools'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'session.tools'>>>
   }
   subagents: {
     list(payload: RequestPayload<'subagent.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.list'>>>
@@ -150,6 +152,7 @@ export interface IApiClient {
   }
   skills: {
     list(payload: RequestPayload<'skill.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.list'>>>
+    read(payload: RequestPayload<'skill.read'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'skill.read'>>>
   }
   agentPresets: {
     list(payload: RequestPayload<'agentPreset.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'agentPreset.list'>>>
@@ -215,6 +218,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'session.updateQueue': sessionUpdateQueueValueSchema,
   'session.cancel': sessionCancelValueSchema,
   'session.delete': sessionDeleteValueSchema,
+  'session.tools': sessionToolsValueSchema,
   'subagent.list': subagentListValueSchema,
   'subagent.history': subagentHistoryValueSchema,
   'subagent.prompt': subagentPromptValueSchema,
@@ -241,6 +245,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'workspace.pinWorkspace': workspacePinWorkspaceValueSchema,
   'workspace.unpinWorkspace': workspaceUnpinWorkspaceValueSchema,
   'skill.list': skillListValueSchema,
+  'skill.read': skillReadValueSchema,
   'agentPreset.list': agentPresetListValueSchema,
   'agentPreset.select': agentPresetSelectValueSchema,
   'agentPreset.read': agentPresetReadValueSchema,
@@ -542,6 +547,7 @@ export abstract class AbstractApiClient implements IApiClient {
     updateQueue: (payload, signal) => this.callUnary('session.updateQueue', payload, signal),
     cancel: (payload, signal) => this.callUnary('session.cancel', payload, signal),
     delete: (payload, signal) => this.callUnary('session.delete', payload, signal),
+    tools: (payload, signal) => this.callUnary('session.tools', payload, signal),
   }
 
   readonly subagents: IApiClient['subagents'] = {
@@ -587,6 +593,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly skills: IApiClient['skills'] = {
     list: (payload, signal) => this.callUnary('skill.list', payload, signal),
+    read: (payload, signal) => this.callUnary('skill.read', payload, signal),
   }
 
   // Annotated like every sibling, and load-bearing rather than cosmetic:

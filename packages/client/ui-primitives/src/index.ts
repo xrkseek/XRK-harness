@@ -10,6 +10,8 @@ export { DisclosureRow } from './DisclosureRow.tsx'
 export type { DisclosureRowProps } from './DisclosureRow.tsx'
 export { Button } from './Button.tsx'
 export type { ButtonVariant } from './Button.tsx'
+export { Switch } from './Switch.tsx'
+export type { SwitchProps } from './Switch.tsx'
 export { Pill } from './Pill.tsx'
 export { InspectAction } from './InspectAction.tsx'
 export type { InspectActionProps } from './InspectAction.tsx'
@@ -36,6 +38,13 @@ export type {
   ContextMenuSelectionBookmark,
 } from './context-menu.ts'
 export { domContextMenuActions } from './contextMenuGestures.ts'
+export { translateSelectionText } from './selection-translate.ts'
+export type {
+  SelectionTranslateError,
+  SelectionTranslateProvider,
+  SelectionTranslateResult,
+  SelectionTranslateTarget,
+} from './selection-translate.ts'
 export { useAnchoredMaxHeight } from './useAnchoredMaxHeight.ts'
 export { useAnchoredPosition } from './useAnchoredPosition.ts'
 export type { AnchoredPositionOptions } from './useAnchoredPosition.ts'

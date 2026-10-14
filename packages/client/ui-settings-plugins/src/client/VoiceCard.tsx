@@ -3,6 +3,7 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SecretField, SelectField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { modeMasterSwitch } from './plugin-master-switch.ts'
 import type { VoiceCardFace } from './voice-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -26,6 +27,7 @@ export function VoiceCard(props: VoiceCardProps) {
       titleKey="voiceTitle"
       descriptionKey="voiceDescription"
       state={state}
+      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'openai')}
       onSave={props.save}
       onDiscard={props.discard}
     >
@@ -38,9 +40,13 @@ export function VoiceCard(props: VoiceCardProps) {
         options={[
           { value: 'off', label: t('voiceModeOff') },
           { value: 'openai', label: t('voiceModeOpenai') },
+          { value: 'local', label: t('voiceModeLocal') },
         ]}
         onChange={(value) => { props.edit('mode', value) }}
       />
+      {mode === 'local'
+        ? <p className={css.note} role="note">{t('voiceLocalHint')}</p>
+        : null}
       {showOpenAi
         ? (
           <>
@@ -72,6 +78,18 @@ export function VoiceCard(props: VoiceCardProps) {
           </>
         )
         : null}
+      <SelectField
+        id="plugin-config-voice-speak-tools"
+        label={t('voiceSpeakTools')}
+        hint={t('voiceSpeakToolsHint')}
+        disabled={disabled}
+        value={state.speakTools.text || 'false'}
+        options={[
+          { value: 'false', label: t('voiceSpeakToolsOff') },
+          { value: 'true', label: t('voiceSpeakToolsOn') },
+        ]}
+        onChange={(value) => { props.edit('speakTools', value) }}
+      />
       <p className={css.note} role="note">{t('voiceLiveHint')}</p>
       <p className={css.note} role="note">{t('voiceWakeDeferred')}</p>
     </PluginCard>

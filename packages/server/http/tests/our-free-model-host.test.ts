@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,10 +14,12 @@ import {
   tryApplyOurFreeModelHost,
 } from "../src/dsh-compat/our-free-model-host.js";
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
+import { resetLiveHostApply } from "../src/dsh-compat/live-host-apply.js";
 
 const temps: string[] = [];
 
 afterEach(() => {
+  resetLiveHostApply();
   resetHostApplyRegistry();
   delete (globalThis as { __ofmExpandModels?: boolean }).__ofmExpandModels;
   delete (globalThis as { __ofmTestEmit?: () => void }).__ofmTestEmit;
@@ -333,5 +341,42 @@ describe("our-free-model-host", () => {
     expect(
       await tryApplyOurFreeModelHost(pkgRoot, "dsh-something-else", {}),
     ).toBeUndefined();
+  });
+
+  it("seeds forward settings with distribution managed", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "ofm-managed-"));
+    const xrkHome = mkdtempSync(path.join(tmpdir(), "ofm-home-managed-"));
+    temps.push(pkgRoot, xrkHome);
+    writeFileSync(
+      path.join(pkgRoot, "index.js"),
+      `export function apply(ctx) {
+  ctx.llm.registerAdapter(["our-free-model"], {
+    async listModels() { return []; },
+  });
+}
+`,
+    );
+    mkdirSync(path.join(xrkHome, "our-free-model"), { recursive: true });
+    writeFileSync(
+      path.join(xrkHome, "our-free-model", "settings.json"),
+      JSON.stringify({
+        version: 1,
+        distribution: "self",
+        forward: { enabled: false, host: "127.0.0.1", port: 0 },
+      }),
+    );
+
+    await tryApplyOurFreeModelHost(pkgRoot, "dsh-our-free-model", { xrkHome });
+    const seeded = JSON.parse(
+      readFileSync(
+        path.join(xrkHome, "our-free-model", "settings.json"),
+        "utf8",
+      ),
+    ) as {
+      distribution?: string;
+      forward?: { enabled?: boolean };
+    };
+    expect(seeded.distribution).toBe("managed");
+    expect(seeded.forward?.enabled).toBe(true);
   });
 });

@@ -157,12 +157,25 @@ export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, pa
   if (!entryId) {
     return { ok: false, error: { code: "invalid-payload", message: "entryId required" } };
   }
+  const before = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   const result = setFacePluginInventoryEnabled(runtime, entryId, enabled);
   if (!result.ok) {
     return { ok: false, error: { code: "refused", message: result.error } };
   }
   // Process half applies in-process; client half still needs a page reload.
   await runtime.syncManagedProcessPlugins?.();
+  // Community Cordis host halves (WB / OFM / host.mjs) live outside the
+  // process-plugin loader — soft-disable must dispose / re-apply them here.
+  const hostNames = reloadIdsForEntry(before ?? { entryId });
+  if (enabled) {
+    for (const name of hostNames) {
+      await runtime.cordisHostBridge?.applyHostHalf?.(name);
+    }
+  } else {
+    for (const name of hostNames) {
+      await runtime.cordisHostBridge?.stopHostHalf?.(name);
+    }
+  }
   return { ok: true, value: { entryId, enabled } };
 };
 
@@ -214,6 +227,9 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
   // Refresh boot overlay; orphan soft-disable markers are pruned here too.
   reconcileManagedClientBoot(runtime);
   await runtime.syncManagedProcessPlugins?.();
+  for (const name of reloadIdsForEntry(entry)) {
+    await runtime.cordisHostBridge?.stopHostHalf?.(name);
+  }
   return { ok: true, value: { entryId, removed: true as const } };
 };
 
@@ -319,9 +335,15 @@ export const pluginInventoryReload: FaceHandler = async (runtime, _rpcId, payloa
       },
     };
   }
+  const reloadIds = reloadIdsForEntry(entry);
   await runtime.syncManagedProcessPlugins({
-    reloadIds: reloadIdsForEntry(entry),
+    reloadIds,
   });
+  // Remount staged Cordis / host.mjs half when present (no-op if none).
+  for (const name of reloadIds) {
+    await runtime.cordisHostBridge?.stopHostHalf?.(name);
+    await runtime.cordisHostBridge?.applyHostHalf?.(name);
+  }
   return { ok: true, value: { entryId, reloaded: true as const } };
 };
 

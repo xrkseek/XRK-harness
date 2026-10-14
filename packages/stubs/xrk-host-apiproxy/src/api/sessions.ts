@@ -406,6 +406,14 @@ export interface SessionsApi {
   Promise<RpcResponse<{ sessionId: SessionId }>>
 
   /**
+   * Truncate this session's durable log in place (Cursor-style edit/delete).
+   * Same `sessionId`; exclusive `beforeSeq` or turn-cut `atSeq` (same cut rules
+   * as fork). Does not create a child session.
+   */
+  truncate(request: RpcRequest<{ sessionId: SessionId; atSeq?: number; beforeSeq?: number }>):
+  Promise<RpcResponse<{ sessionId: SessionId; eventCount: number }>>
+
+  /**
    * Sends text and temporary image bytes to an ordinary session Agent after durable host admission.
    * Browser callers attach their current IANA zone;
    * the Host validates, canonicalizes, and records it on that exact user message. Omission remains
@@ -452,4 +460,41 @@ export interface SessionsApi {
    */
   delete(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ deleted: true }>>
 
+  /**
+   * Live tool catalog for the session agent after Face bind (preset / MCP groups).
+   * Hidden `exposure` rows are omitted. Unknown ids fail with `session-not-found`.
+   */
+  tools(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SessionToolsValue>>
+
+}
+
+/** Coarse tool surface for Settings catalog chips. */
+export type SessionToolSurface =
+  | 'filesystem'
+  | 'shell'
+  | 'browser'
+  | 'web'
+  | 'mcp'
+  | 'agent'
+  | 'media'
+  | 'settings'
+  | 'ui'
+  | 'other'
+
+/** One row of `session.tools`. */
+export interface SessionToolEntry {
+  readonly name: string
+  readonly description: string
+  readonly group: 'preset' | 'mcp'
+  readonly surface: SessionToolSurface
+  readonly mcpServer?: string
+  readonly exposure: 'direct' | 'deferred' | 'hidden'
+}
+
+/** `session.tools` response value. */
+export interface SessionToolsValue {
+  readonly agentPreset: string
+  readonly cwd: string
+  readonly workspaceLabel: string
+  readonly tools: readonly SessionToolEntry[]
 }

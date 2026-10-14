@@ -1,11 +1,98 @@
-/* Presence shape row — same cube rhythm as Appearance (settings.theme). */
+/* Presence plugin card — Plugins home rhythm (matches PluginCard chrome). */
 
-.group {
+.card {
+  list-style: none;
+  margin: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xl, 12px);
+  background: var(--dsw-alias-bg-layer-3);
+  transition: border-color .16s, background .16s, box-shadow .16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+}
+
+.cardOpen {
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-label-dimmed);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.headerMain {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+}
+
+.headerMain:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0.5px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: var(--dsw-radius-lg, 10px);
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.description {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.body {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  margin: 0 14px;
+  padding: 10px 0 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .title {

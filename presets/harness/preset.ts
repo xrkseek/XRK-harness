@@ -84,7 +84,9 @@ import {
 } from "@xrkseek/exec-video-analyze";
 import {
   CURATED_MEMORY_PROMPT_TEXT,
+  SCOPED_CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryTools,
+  createScopedCuratedMemoryTools,
   resolveMemoryProvider,
   writeReusableNotesAfterTurn,
   runCuratedMemoryConsolidate,
@@ -1077,7 +1079,21 @@ export function createHarnessComposition(
       ? undefined
       : (options.curatedMemory ?? resolveMemoryProvider());
   if (curatedMemory) {
-    for (const tool of createCuratedMemoryTools(curatedMemory)) {
+    const layered =
+      curatedMemory &&
+      typeof curatedMemory === "object" &&
+      "layers" in curatedMemory &&
+      Array.isArray(
+        (curatedMemory as { layers?: unknown }).layers,
+      ) &&
+      (curatedMemory as { layers: unknown[] }).layers.length > 1
+        ? (curatedMemory as Parameters<
+            typeof createScopedCuratedMemoryTools
+          >[0])
+        : undefined;
+    for (const tool of layered
+      ? createScopedCuratedMemoryTools(layered)
+      : createCuratedMemoryTools(curatedMemory)) {
       tools.register(tool);
     }
   }
@@ -1425,10 +1441,18 @@ export function createHarnessComposition(
   if (curatedMemory) {
     // Policy is always present (even with empty files) so a new session does not
     // treat leftover MEMORY.md WIP as a task queue — Codex-style isolation.
+    const layeredPolicy =
+      typeof curatedMemory === "object" &&
+      "layers" in curatedMemory &&
+      Array.isArray((curatedMemory as { layers?: unknown }).layers) &&
+      (curatedMemory as { layers: unknown[] }).layers.length > 1;
     prompts.register({
       id: "curated-memory-policy",
       order: 1,
-      content: () => CURATED_MEMORY_PROMPT_TEXT,
+      content: () =>
+        layeredPolicy
+          ? SCOPED_CURATED_MEMORY_PROMPT_TEXT
+          : CURATED_MEMORY_PROMPT_TEXT,
     });
     const frozenMemory = curatedMemory.frozenSystemBlock();
     if (frozenMemory.trim()) {

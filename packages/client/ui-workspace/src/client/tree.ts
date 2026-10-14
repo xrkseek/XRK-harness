@@ -32,8 +32,10 @@ export interface SessionNode {
   /** In the registry-global pin set (leads its section). */
   pinned: boolean
   updatedAt: number
-  /** Per-session 支线 caption (current work). */
+  /** Per-session 支线 caption (current work); independent of Overview ball chrome. */
   sideline?: string
+  /** True when {@link title} comes from a bound workspace 主线. */
+  mainline?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -324,6 +326,7 @@ function sessionNode(
     pinned: !archived.has(s.id) && pinned.has(s.id),
     updatedAt: s.updatedAt,
     ...(s.sideline ? { sideline: s.sideline } : {}),
+    ...(s.mainline ? { mainline: true } : {}),
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
 }

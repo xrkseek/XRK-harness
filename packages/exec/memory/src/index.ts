@@ -39,6 +39,22 @@ export {
   createCuratedMemoryTools,
 } from "./tools.js";
 export {
+  curatedMemoryDirFor,
+  canOpenCuratedMemoryScope,
+  curatedMemoryHome,
+  CURATED_MEMORY_SCOPE_KINDS,
+  type CuratedMemoryScopeKind,
+  type CuratedMemoryScopeIds,
+} from "./scopes.js";
+export {
+  openCuratedMemoryLayers,
+  createLayeredCuratedMemoryStore,
+  createScopedCuratedMemoryTools,
+  SCOPED_CURATED_MEMORY_PROMPT_TEXT,
+  type MemoryScopeLayer,
+  type CreateLayeredCuratedMemoryStoreOptions,
+} from "./layered.js";
+export {
   CONSOLIDATE_LEASE_FILE,
   CONSOLIDATE_REPORT_FILE,
   tryClaimConsolidateLease,

@@ -12,7 +12,7 @@
 
 - **投影**（`@xrkseek/session-projection` 状态/视图分离）：Face 默认 `title` · `sessionListMetadata` · `todos` · `permissions` · `plan` · **`sessionStats`** · **`tokenUsage`** · **`contextPressure`** · **`contextBreakdown`**（StatsLine / ContextMeter）。Provider usage 入事件后可累计；压力结合 usage 与 surface 估算；`context/compaction.shadowedTokenCount` 可缩小 meter 窗口（缺字段不缩小）。压缩预算用 `estimateTokens`，与 meter 估算分开。详见 [session-compaction.md](./session-compaction.md) · [modules/session-projection.md](./modules/session-projection.md) · [protocol-events.md](./protocol-events.md)。
 
-- **权限预设**：三档配置表（`sandbox/mode` + `approval/policy`）+ 可选 `auto`，折叠为路径轴 `pathAccessMode`（`jailed` / `allowlisted` / `open`）。`read-only` → deny 写/shell；`workspace-write`（默认）→ 工作区 + 会话路径白名单，盘外写/读触发约 5s 路径越权确认（白名单是**路径对象**，不是工具名）；`danger-full-access` / `auto` → `pathAccessMode: open`（fs 与 shell 同宽，无 path-jail）。`auto` 另挂每调用预审（Guardian / `registerAuto` 挂载后才进**当前会话** catalog；Settings `defaultPreset` **永不**列 `auto`）。turn 开头注入短 `<session_capability>`（permission · tool_surface · path_allowlist）。子代理继承父会话 path 配置后再削弱工具面。`session.create` 钉默认；`/permission` 切换当前会话。
+- **权限预设**：三档配置表（`sandbox/mode` + `approval/policy`）+ 可选 **自动审查**（id `auto`），折叠为路径轴 `pathAccessMode`（`jailed` / `allowlisted` / `open`）。`read-only` → deny 写/shell；`workspace-write`（默认）→ 工作区 + 会话路径白名单，盘外写/读触发约 5s 路径越权确认（白名单是**路径对象**，不是工具名）；`danger-full-access` / **自动审查** → `pathAccessMode: open`（fs 与 shell 同宽，无 path-jail）。**自动审查**另挂每调用预审（无沙箱 + 分类器评审；Guardian / `registerAuto` 挂载后才进**当前会话** Access / `/permission` catalog；Host 进程内常驻挂载，Settings → Permissions `defaultPreset` 也可选 **自动审查**）。turn 开头注入短 `<session_capability>`（permission · tool_surface · path_allowlist）。子代理继承父会话 path 配置后再削弱工具面。`session.create` 钉默认；`/permission` 切换当前会话。
 
 - **Plan mode**：`/plan` · `/plan off` · `/plan <message>`（suffix steer）；idle 立即钉 `plan/mode`，开 turn 则下一 step 提交。激活时短 `<plan_turn>` 软姿态（多读少改、交付物上工作区 Canvas）；**不**挡回合结束。Overview Canvas 在 Plan on 时可点 **Build**（`/plan off` + 可选实现 steer）；芯片 × / `/plan off` 只退出姿态。`exit_plan_mode` 仍可用（兼容），主路径不依赖全屏 plan-review。不改沙箱/审批。
 
@@ -26,14 +26,16 @@
 
 - **Session cwd**：`session.create({ workspaceId })` 钉 `sessionCwds`；Host agent factory 用会话 cwd（非仅 serve `--workspace` 根）。Glob/bash 读会话 cwd；skill 多根导入；工作区根 `AGENTS.md` · `.cursor/rules` 等经 `agent-instructions` 注入（见 [workspace-inject](./workspace-inject.md)）。
 
+- **向阳空间 / IM**：产品默认工作区 id `ws_default`、标题「向阳空间」、路径 `~/.xrk/xiangyang-workspace`（不可删/改名）；会话锁工具面 **奇创**（`qichuang`：团队 + `workspace_list` / `workspace_create` / `workspace_session_prompt`，无嵌套子代理）；专用 skills 只在该工作区 `.xrk/skills`。**IM**（`ws_im`）仅网关连接或首次挂会话时生成，可删（下次连接再建）；编排建区/开会话/派任务仅 **IM** 与 **奇创**；编码徽章不得 `subagent(workspace_id)` 跨区。
+
 - **新会话继承模型**：`session.create({ inheritFrom })` 把源会话的**有效**路由（已 pin，或与 Status / `session.models` 相同的默认解析）拷给新会话，只写内存 override（**不**进 `session-models.json`）；源未知则仍走默认链。侧栏「新会话」经 `workspaces.connectWorkspace` 带上当前会话；从**非空**会话点「新会话」时不复用工作区里已有的空白会话（避免触发器停在「选择模型」）。subagent 的 `parentSessionId` 继承更近、仍然优先。
 
 - **Face wire / 历史**：`turn/end` wire 必带 `reason`（协议必填）。`session.history` 按 **message 边界**分页（`user/message` + `assistant/message`，默认 50），并在约 **1.5MiB** 字符预算内从更旧一侧收缩（`hasMore` 仍可续拉）；丢弃已固化 chunk / 裁切后 **保留绝对 seq**（勿按页内下标重编号，否则「加载更早」会断）；chunk/turn 脚手架跟消息组一起走，不是按原始事件条数切页。
 
 - **取消流式**：abort 时把已落库 `assistant/chunk` 固化为 `assistant/message`（**字段** `interrupted: true`），`turn/end.reason` 仍是 **`aborted`**（带 `AgentCancelCause`）。进程崩溃留下的开洞 turn 由 `repairOpenTurnEvents` 闭合为 **`interrupted`**（无 cancel cause）。对照表见 [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted)。
 
-- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从列表隐藏、**不删** SQLite 日志（无硬删除按钮）。归档保留工作区 membership，解档后回到原位。
-- **解档**：Settings →「已归档会话」（`workspace.unarchiveSession`）。
+- **会话归档**：侧栏会话行 `⋯` →「归档会话」（`workspace.archiveSession`）；从侧栏隐藏，并把该会话日志从热库 `sessions.db` **分离**到 `sessions-archive.db`（减轻热库；不是永久删除）。归档保留工作区 membership，解档后回到原位并迁回热库。
+- **解档**：Settings →「已归档会话」（`workspace.unarchiveSession`）。**永久删除**（仅已归档）走 `session.delete`，热库与归档库行一起抹掉。
 
 - **组合叶**：`@xrkseek/compose` C0·C1·C2（`interceptInject` / `openSubagentRealm`）能跑；presets 只接线。
 
@@ -113,7 +115,7 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **Projection** (`@xrkseek/session-projection` state/view split): Face defaults include `title` · `sessionListMetadata` · `todos` · `permissions` · `plan` · **`sessionStats`** · **`tokenUsage`** · **`contextPressure`** · **`contextBreakdown`** (StatsLine / ContextMeter). Provider usage accumulates after it enters events; pressure combines usage and surface estimates; `context/compaction.shadowedTokenCount` can shrink the meter window (missing field does not shrink). Compaction budget uses `estimateTokens`, separate from meter estimates. See [session-compaction.md](./session-compaction.md) · [modules/session-projection.md](./modules/session-projection.md) · [protocol-events.md](./protocol-events.md).
 
-- **Permission presets**: Three configured bundles (`sandbox/mode` + `approval/policy`) plus optional `auto`, folded into `pathAccessMode` (`jailed` / `allowlisted` / `open`). `read-only` denies write/shell; `workspace-write` (default) uses the workspace plus a session path allowlist — off-root reads/writes ask for ≈5s path-overreach confirmation (allowlist entries are **path objects**, not tool names); `danger-full-access` / `auto` → `pathAccessMode: open` (fs and shell equally wide, no path-jail). `auto` also runs per-call review (current-session catalog only after Guardian / `registerAuto`; Settings `defaultPreset` **never** lists `auto`). Each turn starts with a short `<session_capability>` snapshot (permission · tool_surface · path_allowlist). Subagents inherit the parent path gate, then weaken the tool surface. `session.create` pins the default; `/permission` switches the live session.
+- **Permission presets**: Three configured bundles (`sandbox/mode` + `approval/policy`) plus optional **Auto review** (id `auto`), folded into `pathAccessMode` (`jailed` / `allowlisted` / `open`). `read-only` denies write/shell; `workspace-write` (default) uses the workspace plus a session path allowlist — off-root reads/writes ask for ≈5s path-overreach confirmation (allowlist entries are **path objects**, not tool names); `danger-full-access` / **Auto review** → `pathAccessMode: open` (fs and shell equally wide, no path-jail). **Auto review** also runs per-call review (no sandbox + classifier; current-session Access / `/permission` catalog after Guardian / `registerAuto`; Host keeps that mounted for the process lifetime, and Settings → Permissions `defaultPreset` may also choose **Auto review**). Each turn starts with a short `<session_capability>` snapshot (permission · tool_surface · path_allowlist). Subagents inherit the parent path gate, then weaken the tool surface. `session.create` pins the default; `/permission` switches the live session.
 
 - **Plan mode**: `/plan` · `/plan off` · `/plan <message>` (suffix steer); idle pins `plan/mode` immediately, an open turn commits on the next step. While active, a short `<plan_turn>` soft posture (prefer read/explore; put the path on a workspace Canvas) does **not** gate turn end. Overview Canvas can show **Build** when Plan is on (`/plan off` + optional implement steer); chip × / `/plan off` only leave the posture. `exit_plan_mode` remains available (compat); the main path does not require full-screen plan-review. Does not change sandbox/approval.
 
@@ -127,14 +129,16 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **Session cwd**: `session.create({ workspaceId })` pins `sessionCwds`; the Host agent factory uses the session cwd (not only the serve `--workspace` root). Glob/bash read the session cwd; skill multi-root import; workspace-root `AGENTS.md` and `.cursor/rules` inject via `agent-instructions` ([workspace-inject](./workspace-inject.md)).
 
+- **Xiangyang space / IM**: Product default workspace id `ws_default`, title 「向阳空间」, path `~/.xrk/xiangyang-workspace` (undeletable / unrenamable); sessions lock to **奇创** (`qichuang`: team + `workspace_list` / `workspace_create` / `workspace_session_prompt`, no nested subagents); dedicated skills only under that workspace `.xrk/skills`. **IM** (`ws_im`) is created only when a gateway connects or a session attaches — deletable (recreated on next connect). Cross-workspace create / session / dispatch is **IM + 奇创 only**; coding badges may not `subagent(workspace_id)` across workspaces.
+
 - **New Session model inheritance**: `session.create({ inheritFrom })` copies the source session's **effective** route (an explicit pin, or the same default resolution Status / `session.models` already shows) onto the new one, in-memory override only (**not** written to `session-models.json`); an unknown source still falls back to the default chain. Sidebar New Session passes the current session through `workspaces.connectWorkspace`; from a **non-blank** chat it does not reuse a leftover workspace blank (that blank never inherited, so the trigger stayed on “Select model”). A subagent `parentSessionId` stays the nearer relation and still wins.
 
 - **Face wire / history**: `turn/end` wire must include `reason` (protocol-required). `session.history` paginates on **message boundaries** (`user/message` + `assistant/message`, default 50) and shrinks from the older side under a ~**1.5MiB** char budget (`hasMore` still loads older pages); after dropping superseded chunks / trimming, keep **absolute seq** (do not renumber by in-page index, or “Load earlier” breaks); chunk/turn scaffolding travels with the message group, not by raw event count.
 
 - **Cancel streaming**: On abort, persisted `assistant/chunk` solidifies into `assistant/message` (`interrupted: true`); `turn/end.reason` remains **`aborted`** (with `AgentCancelCause`). Crash-open turns are closed by `repairOpenTurnEvents` as **`interrupted`** (no cancel cause). See the table in [protocol-events.md](./protocol-events.md#结束原因aborted-vs-interrupted--end-reasons-aborted-vs-interrupted).
 
-- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the list and **does not delete** the SQLite log (no hard-delete button). Archive keeps workspace membership so unarchive restores the same slot.
-- **Unarchive**: Settings → “Archived sessions” (`workspace.unarchiveSession`).
+- **Session archive**: Sidebar session row `⋯` → “Archive session” (`workspace.archiveSession`); hides from the sidebar and **moves** that session’s log from hot `sessions.db` into `sessions-archive.db` (lightens the hot file; not a permanent wipe). Archive keeps workspace membership so unarchive restores the same slot and rehydrates the hot DB.
+- **Unarchive**: Settings → “Archived sessions” (`workspace.unarchiveSession`). **Permanent delete** (archived only) is `session.delete`, which drops rows from both hot and archive DBs.
 
 - **Compose leaf**: `@xrkseek/compose` C0·C1·C2 (`interceptInject` / `openSubagentRealm`) work; presets only wire.
 

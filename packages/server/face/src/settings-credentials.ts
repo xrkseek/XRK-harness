@@ -22,7 +22,7 @@ import {
   FACE_MCP_SCHEMA,
   FACE_LOCALE_SCHEMA,
   FACE_THEME_SCHEMA,
-  isFacePermissionPreset,
+  isFacePermissionSettingsPreset,
 } from "./face-schema.js";
 import { applyLivePermissionDefaultPreset } from "./permissions.js";
 import {
@@ -952,7 +952,7 @@ function validateNamespaceValue(
   if (fromDoc) return fromDoc;
   if (ns === "permission") {
     const preset = value.defaultPreset;
-    if (preset !== undefined && !isFacePermissionPreset(preset)) {
+    if (preset !== undefined && !isFacePermissionSettingsPreset(preset)) {
       return `unknown permission preset: ${String(preset)}`;
     }
   }

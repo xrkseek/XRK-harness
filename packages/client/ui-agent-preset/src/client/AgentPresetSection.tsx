@@ -233,51 +233,71 @@ export function AgentPresetSection(props: AgentPresetSectionProps): ReactNode {
       <h2 className={css.title}>{t('nav')}</h2>
       <p className={css.intro}>{t('sectionIntro')}</p>
       {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
-      {([['system', t('builtInGroup')], ['user', t('customGroup')]] as const).map(([trust, heading]) => {
+      {([
+        ['system', t('builtInGroup'), false],
+        ['system', t('workspaceLockedGroup'), true],
+        ['user', t('customGroup'), false],
+      ] as const).map(([trust, heading, lockedOnly]) => {
         const group = state.rows
-          .filter(row => row.trust === trust)
+          .filter(row => row.trust === trust
+            && (lockedOnly ? row.workspaceLocked === true : row.workspaceLocked !== true))
           .map(row => ({ row, text: presetDisplayText(row, t) }))
         // The custom group is where a preset of one's own will appear, so it
         // stays on screen even while empty: heading plus the creator entry.
-        const tail = trust === 'user' ? creatorButton : null
+        const tail = trust === 'user' && !lockedOnly ? creatorButton : null
         if (group.length === 0 && tail === null) return null
         return (
-          <section key={trust} className={css.group}>
+          <section key={`${trust}-${lockedOnly ? 'locked' : 'open'}`} className={css.group}>
             <h3 className={css.groupHead}>{heading}</h3>
             {group.length === 0 ? null : (
               <ul className={css.cards}>
-                {group.map(({ row, text }) => (
-                  <li
-                    key={row.id}
-                    className={row.broken !== undefined
-                      ? `${css.card} ${css.cardBroken}`
-                      : row.isDefault ? `${css.card} ${css.cardActive}` : css.card}
-                  >
+                {group.map(({ row, text }) => {
+                  const locked = row.workspaceLocked === true
+                  const cardClass = row.broken !== undefined
+                    ? `${css.card} ${css.cardBroken}`
+                    : locked
+                      ? `${css.card} ${css.cardLocked}`
+                      : row.isDefault ? `${css.card} ${css.cardActive}` : css.card
+                  const bodyDisabled = locked || row.isDefault || row.broken !== undefined
+                  const bodyTitle = row.broken
+                    ?? (locked ? t('lockedNotSelectable') : row.isDefault ? t('inUse') : t('setDefault'))
+                  const ariaVerb = row.broken !== undefined
+                    ? t('brokenBadge')
+                    : locked
+                      ? t('workspaceLockedBadge')
+                      : row.isDefault ? t('inUse') : t('setDefault')
+                  return (
+                  <li key={row.id} className={cardClass}>
                     {/* The card body IS the control: picking a preset is the
                       common act, so it should not hide behind a small button.
                       The action row sits outside it — nesting buttons is
                       invalid, and these act on the card rather than select it.
                       A broken preset cannot compose a session, so its body is
-                      disabled and the card says why instead of offering it. */}
+                      disabled and the card says why instead of offering it.
+                      Workspace-locked badges (IM / Qichuang) are discovery-only. */}
                     <button
                       type="button"
                       className={css.cardMain}
-                      aria-pressed={row.isDefault}
-                      disabled={row.isDefault || row.broken !== undefined}
+                      aria-pressed={locked ? undefined : row.isDefault}
+                      disabled={bodyDisabled}
                       // Without this the name is the whole card read aloud —
                       // title, badge, description, id.
-                      aria-label={`${row.broken !== undefined ? t('brokenBadge') : row.isDefault ? t('inUse') : t('setDefault')}: ${text.name}`}
-                      title={row.broken ?? (row.isDefault ? t('inUse') : t('setDefault'))}
-                      onClick={() => { void props.makeDefault(row.id) }}
+                      aria-label={`${ariaVerb}: ${text.name}`}
+                      title={bodyTitle}
+                      onClick={locked ? undefined : () => { void props.makeDefault(row.id) }}
                     >
                       <span className={css.cardHead}>
                         <span className={css.cardName}>{text.name}</span>
                         {row.broken !== undefined
                           ? <span className={css.brokenBadge}>{t('brokenBadge')}</span>
                           : null}
-                        <span className={css.badge}>
-                          {row.trust === 'user' ? t('userTrust') : t('builtIn')}
-                        </span>
+                        {locked
+                          ? <span className={css.lockedBadge}>{t('workspaceLockedBadge')}</span>
+                          : (
+                            <span className={css.badge}>
+                              {row.trust === 'user' ? t('userTrust') : t('builtIn')}
+                            </span>
+                          )}
                         {row.isDefault ? <span className={css.inUse}>{t('inUse')}</span> : null}
                       </span>
                       <CardDescription text={text.description ?? t('noDescription')} />
@@ -354,7 +374,8 @@ export function AgentPresetSection(props: AgentPresetSectionProps): ReactNode {
                         </p>
                       )}
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             )}
             {tail}

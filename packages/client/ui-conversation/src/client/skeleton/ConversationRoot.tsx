@@ -360,37 +360,49 @@ export function ConversationRoot({
   //      flash on refresh (empty cwd → placeholder);
   //   5. list ready but no owning workspace (deleted from the sidebar) →
   //      placeholder, never the deleted folder's name via cwd.
-  const chipTitle = pendingWorkspace?.title
+  const chipWorkspaceId = pendingWorkspace?.workspaceId ?? sessionWorkspace?.workspaceId
+  const rawChipTitle = pendingWorkspace?.title
     ?? (sessionId === undefined
       ? undefined
       : sessionWorkspace?.title
         ?? (workspaces.phase === 'ready' || cwd === undefined || cwd === ''
           ? undefined
           : workspaceLabel(cwd)))
+  const chipTitle = chipWorkspaceId === 'ws_default'
+    ? t('workspace.xiangyang')
+    : rawChipTitle
 
+  const heroOrch =
+    (pendingWorkspace?.workspaceId ?? sessionWorkspace?.workspaceId) === 'ws_default'
+    || (pendingWorkspace?.workspaceId ?? sessionWorkspace?.workspaceId) === 'ws_im'
   const heroWorkspaceRow = (
-    <div className={css.heroWorkspaceRow}>
-      <WorkspaceChip
-        buttonRef={pickerAnchor}
-        label={chipTitle}
-        menuOpen={pickerOpen}
-        onClick={() => { setPickerOpen(open => !open) }}
-        t={t}
-      />
-      {renderSlot('conversation.hero.workspace', {
-        open: pickerOpen,
-        anchorRef: pickerAnchor,
-        selectedId: pendingWorkspaceId ?? sessionWorkspace?.workspaceId,
-        onPick: (workspaceId) => {
-          setPickerOpen(false)
-          setPendingWorkspaceId(workspaceId)
-          void selectWorkspace(workspaceId).catch(() => {
-            setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
-          })
-        },
-        onClose: () => { setPickerOpen(false) },
-      })}
-      {renderSlot('conversation.hero.agentPreset', {})}
+    <div className={css.heroWorkspaceBlock}>
+      <div className={css.heroWorkspaceRow}>
+        <WorkspaceChip
+          buttonRef={pickerAnchor}
+          label={chipTitle}
+          menuOpen={pickerOpen}
+          onClick={() => { setPickerOpen(open => !open) }}
+          t={t}
+        />
+        {renderSlot('conversation.hero.workspace', {
+          open: pickerOpen,
+          anchorRef: pickerAnchor,
+          selectedId: pendingWorkspaceId ?? sessionWorkspace?.workspaceId,
+          onPick: (workspaceId) => {
+            setPickerOpen(false)
+            setPendingWorkspaceId(workspaceId)
+            void selectWorkspace(workspaceId).catch(() => {
+              setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
+            })
+          },
+          onClose: () => { setPickerOpen(false) },
+        })}
+        {renderSlot('conversation.hero.agentPreset', {})}
+      </div>
+      {heroOrch && (
+        <p className={css.heroAccessHint}>{t('hero.access.orch')}</p>
+      )}
     </div>
   )
 
@@ -404,8 +416,23 @@ export function ConversationRoot({
   // one disabled textarea, never a second tree. The no-workspace state wins
   // when both hold — picking a workspace is the earlier prerequisite.
   const blocked = !inert && composerBlock !== undefined
+  // Directional copy + locked Access: IM / 向阳空间 ≠ coding Settings surfaces.
+  const workspaceDirectionId =
+    pendingWorkspace?.workspaceId ?? sessionWorkspace?.workspaceId
+  const orchSurface =
+    workspaceDirectionId === 'ws_default' || workspaceDirectionId === 'ws_im'
+  const directionPlaceholder = ((): string | undefined => {
+    if (workspaceDirectionId === 'ws_default') {
+      return t(heroChrome ? 'placeholder.hero.xiangyang' : 'placeholder.default.xiangyang')
+    }
+    if (workspaceDirectionId === 'ws_im') {
+      return t(heroChrome ? 'placeholder.hero.im' : 'placeholder.default.im')
+    }
+    return undefined
+  })()
   const inputBar = renderSlot('conversation.composer.bar', {
     variant: heroChrome ? 'hero' : 'composer',
+    ...(orchSurface ? { accessLocked: true } : {}),
     ...(inert
       ? {
         disabled: true,
@@ -418,7 +445,9 @@ export function ConversationRoot({
         // block keeps the model seat live because choosing a model is how the
         // user clears it.
         ? { blocked: composerBlock, placeholder: composerBlock.reason }
-        : heroChrome ? { placeholder: t('placeholder.hero') } : {}),
+        : directionPlaceholder !== undefined
+          ? { placeholder: directionPlaceholder }
+          : heroChrome ? { placeholder: t('placeholder.hero') } : {}),
     overlay: renderSlot('conversation.input.overlay', {}),
     leftItems: zone === undefined ? null : renderSlot('conversation.input.left', zone),
     rightItems: zone === undefined ? null : renderSlot('conversation.input.right', zone),

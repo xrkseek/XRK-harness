@@ -8,6 +8,7 @@
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_ENABLED,
   DEFAULT_PRESENCE_SHAPE,
   isPresenceColor,
   isPresenceShape,
@@ -31,6 +32,15 @@ let presenceSettingsRuntime: PresenceSettingsRuntime | undefined
 /** Wire the Host-backed presence prefs into PresenceBall. */
 export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): void {
   presenceSettingsRuntime = runtime
+}
+
+/** Master switch from Settings → General; false hides header dock + Overview rail. */
+export function usePresenceEnabled(): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
+    () => presenceSettingsRuntime?.getEnabled() ?? DEFAULT_PRESENCE_ENABLED,
+    () => DEFAULT_PRESENCE_ENABLED,
+  )
 }
 
 function usePresenceShape(): PresenceShape {

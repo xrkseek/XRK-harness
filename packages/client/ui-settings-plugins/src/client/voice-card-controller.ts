@@ -4,6 +4,7 @@ import type { IApiClient } from '@xrkseek/client-connection/client'
 import type { SettingsScope, SnapshotStore } from '@xrkseek/client-runtime/client'
 import {
   CardForm,
+  booleanField,
   textField,
   type CardActions,
   type CardFieldState,
@@ -19,12 +20,14 @@ export const VOICE_NS = 'voice'
 export const VOICE_OPENAI_REF = 'XRK_VOICE_OPENAI_KEY'
 
 /** Modes the card may stage. */
-export type VoiceMode = 'off' | 'openai'
+export type VoiceMode = 'off' | 'openai' | 'local'
 
 /** Host-served voice section. */
 export interface VoiceSettings {
   readonly mode?: VoiceMode | string
   readonly baseUrl?: string
+  /** Bind text_to_speech on every tool surface when true. */
+  readonly speakTools?: boolean
 }
 
 interface CredentialState {
@@ -36,6 +39,7 @@ interface CredentialState {
 export interface VoiceCardState extends CardShell {
   readonly mode: CardFieldState
   readonly baseUrl: CardFieldState
+  readonly speakTools: CardFieldState
   readonly apiKey: CardFieldState
   readonly apiKeyConfigured: boolean
   readonly apiKeyWritable: boolean
@@ -53,7 +57,7 @@ export interface VoiceCardFace extends CardActions {
   }
 }
 
-const MODES: readonly VoiceMode[] = ['off', 'openai']
+const MODES: readonly VoiceMode[] = ['off', 'openai', 'local']
 const KEY_FIELD = 'apiKey'
 
 function modeField(): CardFieldSpec {
@@ -80,7 +84,7 @@ export class VoiceCardController {
   ) {
     this.form = new CardForm(
       scope,
-      [modeField(), textField('baseUrl')],
+      [modeField(), textField('baseUrl'), booleanField('speakTools')],
       [{ field: KEY_FIELD, write: (text) => this.writeKey(text) }],
     )
     this.store = this.form.bind(() => this.projection())
@@ -94,6 +98,7 @@ export class VoiceCardController {
       ...this.form.shell(),
       mode,
       baseUrl: this.form.field('baseUrl'),
+      speakTools: this.form.field('speakTools'),
       apiKey: this.form.field(KEY_FIELD),
       apiKeyConfigured: this.key.configured,
       apiKeyWritable: this.key.writable,

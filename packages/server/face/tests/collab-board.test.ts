@@ -64,4 +64,37 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("Skill-load");
     expect(text).not.toContain("spawn `subagent`");
   });
+
+  it("IM surface omits 主线 mail and points subagent at coding workspaces", () => {
+    const text = formatCollabBoardText({
+      now,
+      surface: "im",
+      membersCatalog: "- mem_x coder",
+      threads: [
+        {
+          id: "th_x",
+          title: "should hide",
+          brief: "",
+          updatedAt: now,
+          sessions: [{ sessionId: "s1" }],
+        },
+      ],
+    });
+    expect(text).toContain("into a coding workspace");
+    expect(text).not.toContain("thread_message");
+    expect(text).not.toContain("th_x");
+  });
+
+  it("奇创 surface prefers workspace_session_prompt over nested subagents", () => {
+    const text = formatCollabBoardText({
+      now,
+      surface: "qichuang",
+      canSpawn: false,
+      membersCatalog: "- mem_y",
+      threads: [],
+    });
+    expect(text).toContain("workspace_session_prompt");
+    expect(text).not.toContain("thread_message");
+    expect(text).not.toContain("spawn `subagent`");
+  });
 });

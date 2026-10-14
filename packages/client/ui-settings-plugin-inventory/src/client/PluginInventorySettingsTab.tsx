@@ -12,6 +12,7 @@ import {
   Menu,
   Modal,
   StateDot,
+  Switch,
   TerminalBlock,
   Toast,
 } from '@xrkseek/client-ui-primitives'
@@ -866,15 +867,11 @@ export function PluginInventorySettingsTab({
                     <div className={css.optionalBundleTitle}>{t('gitWorktreesTitle')}</div>
                     <div className={css.optionalBundleHint}>{t('gitWorktreesHint')}</div>
                   </div>
-                  <button
-                    type="button"
-                    className={css.optionalBundleSwitch}
-                    role="switch"
-                    aria-checked={gitWt.enabled}
+                  <Switch
+                    checked={gitWt.enabled}
                     aria-label={t('gitWorktreesSwitch')}
                     disabled={busy}
-                    onClick={() => {
-                      const next = !gitWt.enabled
+                    onCheckedChange={(next) => {
                       void runManaged(
                         gitWt.entryId,
                         () => setEnabled(gitWt.entryId, next),
@@ -886,15 +883,7 @@ export function PluginInventorySettingsTab({
                         },
                       )
                     }}
-                  >
-                    <span
-                      className={css.optionalBundleTrack}
-                      data-on={gitWt.enabled || undefined}
-                      aria-hidden="true"
-                    >
-                      <span className={css.optionalBundleThumb} />
-                    </span>
-                  </button>
+                  />
                 </div>
               )
             })() : null}
@@ -904,19 +893,22 @@ export function PluginInventorySettingsTab({
           {state.snapshot.entries.length > 0 && filteredEntries.length === 0
             ? <p className={css.status}>{t('emptySearch')}</p>
             : null}
-          {filteredEntries.length > 0 ? (
+          {(() => {
+            // git-worktrees already has the optional-bundle Switch row above.
+            const listEntries = filteredEntries.filter((entry) => entry.entryId !== 'git-worktrees')
+            if (listEntries.length === 0) return null
+            const managedRows = listEntries.filter((entry) => entry.managed === true)
+            const builtinRows = listEntries.filter((entry) => entry.managed !== true)
+            const showGroups = filter === 'all' && managedRows.length > 0 && builtinRows.length > 0
+            const sections: { readonly label: string | null; readonly rows: typeof listEntries }[] = showGroups
+              ? [
+                { label: t('groupInstalled'), rows: managedRows },
+                { label: t('groupBuiltin'), rows: builtinRows },
+              ]
+              : [{ label: null, rows: listEntries }]
+            return (
             <ul className={css.cards}>
-              {(() => {
-                const managedRows = filteredEntries.filter((entry) => entry.managed === true)
-                const builtinRows = filteredEntries.filter((entry) => entry.managed !== true)
-                const showGroups = filter === 'all' && managedRows.length > 0 && builtinRows.length > 0
-                const sections: { readonly label: string | null; readonly rows: typeof filteredEntries }[] = showGroups
-                  ? [
-                    { label: t('groupInstalled'), rows: managedRows },
-                    { label: t('groupBuiltin'), rows: builtinRows },
-                  ]
-                  : [{ label: null, rows: filteredEntries }]
-                return sections.flatMap((section) => [
+              {sections.flatMap((section) => [
                   ...(section.label !== null
                     ? [(
                       <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
@@ -1016,12 +1008,35 @@ export function PluginInventorySettingsTab({
                                 />
                               )
                               : null}
-                          <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
-                            {configuration}
-                          </span>
+                          {!managed
+                            ? (
+                              <span className={css.configTag} data-enabled={entry.enabled ? 'true' : 'false'}>
+                                {configuration}
+                              </span>
+                            )
+                            : null}
                           <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
                         </span>
                       </button>
+                      {managed ? (
+                        <div className={css.switchSlot}>
+                          <Switch
+                            checked={entry.enabled}
+                            aria-label={title}
+                            disabled={busy || installBusy}
+                            onCheckedChange={(next) => {
+                              void runManaged(
+                                entry.entryId,
+                                () => setEnabled(entry.entryId, next),
+                                {
+                                  notice: t(next ? 'toastEnabled' : 'toastDisabled', { name: title }),
+                                  clientRefresh: true,
+                                },
+                              )
+                            }}
+                          />
+                        </div>
+                      ) : null}
                       {managed ? (
                         <div className={css.moreSlot}>
                           <Menu
@@ -1050,26 +1065,13 @@ export function PluginInventorySettingsTab({
                                 <IconEllipsisOutline16 size={14} />
                               </button>
                             )}
-                            items={entry.entryId === 'git-worktrees'
-                              ? [
-                                {
-                                  id: 'toggle',
-                                  label: entry.enabled ? t('disable') : t('enable'),
-                                  disabled: busy || installBusy,
-                                },
-                              ]
-                              : [
-                                { id: 'edit', label: t('edit'), disabled: busy || installBusy },
-                                { id: 'reload', label: t('reload'), disabled: busy || installBusy },
-                                { id: 'update', label: t('update'), disabled: busy || installBusy },
-                                {
-                                  id: 'toggle',
-                                  label: entry.enabled ? t('disable') : t('enable'),
-                                  disabled: busy || installBusy,
-                                },
-                                { type: 'separator', id: 'remove-sep' },
-                                { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
-                              ]}
+                            items={[
+                              { id: 'edit', label: t('edit'), disabled: busy || installBusy },
+                              { id: 'reload', label: t('reload'), disabled: busy || installBusy },
+                              { id: 'update', label: t('update'), disabled: busy || installBusy },
+                              { type: 'separator', id: 'remove-sep' },
+                              { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
+                            ]}
                             onSelect={(id) => {
                               setMenuEntryId(null)
                               const name = title
@@ -1114,18 +1116,6 @@ export function PluginInventorySettingsTab({
                                   setBusyId(null)
                                 }
                               })()
-                              return
-                            }
-                            if (id === 'toggle') {
-                              const next = !entry.enabled
-                              void runManaged(
-                                entry.entryId,
-                                () => setEnabled(entry.entryId, next),
-                                {
-                                  notice: t(next ? 'toastEnabled' : 'toastDisabled', { name }),
-                                  clientRefresh: true,
-                                },
-                              )
                               return
                             }
                               if (id === 'remove') setRemoveTarget(entry)
@@ -1191,10 +1181,10 @@ export function PluginInventorySettingsTab({
                   </li>
                 )
                   }),
-                ])
-              })()}
+                ])}
             </ul>
-          ) : null}
+            )
+          })()}
               </div>
             ) : null}
           </section>

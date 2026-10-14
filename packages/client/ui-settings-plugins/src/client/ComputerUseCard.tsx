@@ -3,7 +3,9 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SecretField, SelectField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { modeMasterSwitch } from './plugin-master-switch.ts'
 import type { ComputerUseCardFace } from './computer-use-card-controller.ts'
+import type { PluginsSettingsLocaleKey } from './locales.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
 
@@ -12,6 +14,18 @@ export type ComputerUseCardProps =
   PropsRuntime<'settings.plugin.item'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<ComputerUseCardFace>
+
+function modeBadgeKey(mode: string): PluginsSettingsLocaleKey {
+  if (mode === 'uia') return 'computerUseModeUia'
+  if (mode === 'background') return 'computerUseModeBackground'
+  return 'computerUseModeOff'
+}
+
+function modeDetailKey(mode: string): PluginsSettingsLocaleKey {
+  if (mode === 'uia') return 'computerUseDetailUia'
+  if (mode === 'background') return 'computerUseDetailBackground'
+  return 'computerUseDetailOff'
+}
 
 /**
  * Render the computer-use card.
@@ -30,6 +44,8 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
       titleKey="computerUseTitle"
       descriptionKey="computerUseDescription"
       state={state}
+      badge={mode === 'off' ? undefined : t(modeBadgeKey(mode))}
+      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'uia')}
       onSave={props.save}
       onDiscard={props.discard}
     >
@@ -60,6 +76,7 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
           />
         )
         : null}
+      <p className={css.note} role="note">{t(modeDetailKey(mode))}</p>
       <p className={css.note} role="note">{t('computerUseLiveHint')}</p>
     </PluginCard>
   )

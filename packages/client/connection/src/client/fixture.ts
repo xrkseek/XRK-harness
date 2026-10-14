@@ -2493,6 +2493,43 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { sessionId: child.sessionId })
       },
+      truncate: (request) => {
+        const { sessionId, atSeq, beforeSeq } = request.payload
+        const source = summaryOf(sessionId)
+        if (source === undefined) {
+          return err(request, {
+            code: 'session-not-found',
+            message: `no session ${sessionId}`,
+            details: { sessionId },
+          })
+        }
+        const log = logs.get(sessionId) ?? []
+        let cut: number
+        if (beforeSeq !== undefined) {
+          cut = Math.max(0, Math.min(Math.floor(beforeSeq), log.length))
+        } else {
+          const lastSeq = log.at(-1)?.seq ?? -1
+          const anchoredBoundary = atSeq === undefined
+            ? undefined
+            : log.find(e => e.type === 'turn/end' && e.seq >= atSeq)
+          const boundary = anchoredBoundary
+            ?? (atSeq === undefined || atSeq > lastSeq
+              ? log.findLast(e => e.type === 'turn/end')
+              : undefined)
+          if (boundary === undefined) {
+            return err(request, {
+              code: 'fork-unavailable',
+              message: `session ${sessionId} has no completed turn to truncate to`,
+              details: { sessionId },
+            })
+          }
+          cut = boundary.seq + 1
+          while (cut < log.length && log[cut]?.type !== 'turn/start') cut++
+        }
+        logs.set(sessionId, log.slice(0, cut))
+        source.updatedAt = Date.now()
+        return ok(request, { sessionId, eventCount: cut })
+      },
       history: async (request) => {
         const log = logs.get(request.payload.sessionId) ?? []
         // Snapshot at request time, deliver after the transit delay (mirrors a real host under latency).
@@ -2667,6 +2704,39 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         logs.delete(id)
         replays.delete(id)
         return ok(request, { deleted: true as const })
+      },
+      tools: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        return ok(request, {
+          agentPreset: 'default',
+          cwd: '/tmp/fixture',
+          workspaceLabel: 'fixture',
+          tools: [
+            {
+              name: 'read_file',
+              description: 'Read a file from the workspace',
+              group: 'preset' as const,
+              surface: 'filesystem' as const,
+              exposure: 'direct' as const,
+            },
+            {
+              name: 'bash',
+              description: 'Run a shell command',
+              group: 'preset' as const,
+              surface: 'shell' as const,
+              exposure: 'direct' as const,
+            },
+            {
+              name: 'mcp__demo__search',
+              description: 'Search via the demo MCP server',
+              group: 'mcp' as const,
+              surface: 'mcp' as const,
+              mcpServer: 'demo',
+              exposure: 'direct' as const,
+            },
+          ],
+        })
       },
     },
     subagents: {
@@ -3051,10 +3121,51 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         const missing = requireSession(request)
         if (missing !== undefined) return missing
         return ok(request, {
-          skills: [
-            { name: 'fixture-demo', description: 'fixture 技能样本', whenToUse: '仅供 UI 目录渲染验收', modelInvocable: true },
-            { name: 'fixture-user-only', description: 'fixture 仅用户技能样本', modelInvocable: false },
+          workspace: { cwd: '/tmp/fixture', label: 'fixture' },
+          documents: [
+            { path: 'AGENTS.md', layer: 'workspace' as const, kind: 'instruction' as const, bytes: 120 },
+            { path: '.agents/AGENTS.md', layer: 'workspace' as const, kind: 'instruction' as const, bytes: 80 },
+            { path: 'skills://catalog', layer: 'workspace' as const, kind: 'skill-catalog' as const, bytes: 40 },
           ],
+          skills: [
+            {
+              name: 'fixture-demo',
+              description: 'fixture 技能样本',
+              whenToUse: '仅供 UI 目录渲染验收',
+              modelInvocable: true,
+              source: { layer: 'workspace' as const, vendor: 'xrk' as const, root: '.xrk/skills' },
+            },
+            {
+              name: 'fixture-agents',
+              description: 'workspace agents skill sample',
+              modelInvocable: true,
+              source: { layer: 'workspace' as const, vendor: 'agents' as const, root: '.agents/skills' },
+            },
+            {
+              name: 'fixture-user-only',
+              description: 'fixture 仅用户技能样本',
+              modelInvocable: false,
+              source: { layer: 'home' as const, vendor: 'claude' as const, root: '~/.claude/skills' },
+            },
+          ],
+        })
+      },
+      read: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        if (request.payload.document) {
+          return ok(request, {
+            kind: 'document' as const,
+            path: request.payload.document,
+            content: `# ${request.payload.document}\n\nfixture inject document body.`,
+          })
+        }
+        return ok(request, {
+          kind: 'skill' as const,
+          name: request.payload.name ?? 'fixture-demo',
+          description: 'fixture 技能样本',
+          content: '# fixture-demo\n\nFull skill body for catalog preview.',
+          source: { layer: 'workspace' as const, vendor: 'xrk' as const, root: '.xrk/skills' },
         })
       },
     },
@@ -3394,11 +3505,13 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)
       case 'session.fork': return this.api.sessions.fork(request)
+      case 'session.truncate': return this.api.sessions.truncate(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)
       case 'session.updateQueue': return this.api.sessions.updateQueue(request)
       case 'session.cancel': return this.api.sessions.cancel(request)
       case 'session.delete': return this.api.sessions.delete(request)
+      case 'session.tools': return this.api.sessions.tools(request)
       case 'subagent.list': return this.api.subagents.list(request)
       case 'subagent.history': return this.api.subagents.history(request)
       case 'subagent.prompt': return this.api.subagents.prompt(request, signal)
@@ -3425,6 +3538,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.pinWorkspace': return this.api.workspace.pinWorkspace(request)
       case 'workspace.unpinWorkspace': return this.api.workspace.unpinWorkspace(request)
       case 'skill.list': return this.api.skills.list(request)
+      case 'skill.read': return this.api.skills.read(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
       case 'agentPreset.read': return this.api.agentPresets.read(request)

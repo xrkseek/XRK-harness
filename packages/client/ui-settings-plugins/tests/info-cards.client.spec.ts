@@ -7,7 +7,7 @@
  * Face describes both with an empty-object schema because nothing in them can
  * be written. These specs pin the parts that schema cannot state — the row
  * projection a user reads, the decoder that stands in for the schema path, and
- * the fact that both cards reach the Advanced tab under their namespace key.
+ * the fact that both cards reach the Plugins configuration list under their namespace key.
  */
 // @vitest-environment jsdom
 import { Context } from '@xrkseek/cordis'
@@ -15,7 +15,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SettingsScope, SettingsScopeSnapshot } from '@xrkseek/client-runtime/client'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
-import { SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
+import { SettingsNavBinder, SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
 import { apply, inject } from '../src/client/index.ts'
 import {
   HOST_NS,
@@ -257,29 +257,85 @@ async function bench(served: string[]) {
   stubRemote(ctx)
   ctx.provide('connection', {
     isLoopback: true,
-    api: { settings: { describe: describeSettings } },
+    api: {
+      settings: { describe: describeSettings },
+      sessions: {
+        tools: () => Promise.resolve({
+          rpcId: 'st',
+          result: {
+            ok: true,
+            value: {
+              agentPreset: 'default',
+              cwd: '/tmp',
+              workspaceLabel: 'tmp',
+              tools: [],
+            },
+          },
+        }),
+      },
+      skills: {
+        list: () => Promise.resolve({
+          rpcId: 'sk',
+          result: {
+            ok: true,
+            value: {
+              skills: [],
+              workspace: { cwd: '/tmp', label: 'tmp' },
+              documents: [],
+            },
+          },
+        }),
+        read: () => Promise.resolve({
+          rpcId: 'skr',
+          result: { ok: true, value: { kind: 'document', path: 'AGENTS.md', content: '' } },
+        }),
+      },
+    },
+  } as never)
+  ctx.provide('sessions', {
+    list: {
+      getSnapshot: () => ({ current: undefined, byId: {}, order: [] }),
+      subscribe: () => () => {},
+    },
   } as never)
   await ctx.plugin(SettingsScopeBinder).await()
+  new SettingsNavBinder(ctx)
   return { ctx, slots: ctx.get('slots') as SlotRegistry }
 }
 
 function declareRoot(slots: SlotRegistry): () => void {
-  return slots.register({
+  const offRoot = slots.register({
     name: 'root',
-    children: { 'settings.section': { kind: 'list', scope: 'root' } },
+    children: {
+      'settings.section': { kind: 'list', scope: 'root' },
+      sidebar: { kind: 'single', scope: 'root' },
+    },
   } as never, () => null)
+  const offSidebar = slots.register({
+    name: 'sidebar',
+    children: { 'sidebar.utility': { kind: 'list', scope: 'root' } },
+  } as never, () => null)
+  return () => {
+    offSidebar()
+    offRoot()
+  }
 }
 
 describe('ui-settings-plugins registration of the read-only cards', () => {
-  it('keys both read-only mirrors on the namespace they read', async () => {
+  const MIRROR_KEYS = ['auto-review', 'memory-embed', HOST_NS, PROCESS_CHANNELS_NS] as const
+
+  it('keys Host / channel mirrors on the shared configuration list', async () => {
     const { ctx, slots } = await bench([HOST_NS, PROCESS_CHANNELS_NS])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     await vi.waitFor(() => {
-      expect(slots.entries('settings.plugin.advanced.item').map(entry => entry.options.key))
-        .toEqual(['auto-review', 'memory-embed', HOST_NS, PROCESS_CHANNELS_NS])
+      const keys = slots.entries('settings.plugin.item').map(entry => entry.options.key)
+      expect(keys).toEqual(expect.arrayContaining([...MIRROR_KEYS]))
     })
+    expect(slots.entries('settings.plugins.tab').map(e => e.options.id)).toEqual([
+      'configurable', 'tools', 'skills',
+    ])
   })
 
   it('registers every mirror as a card whose face exposes one store', async () => {
@@ -287,25 +343,38 @@ describe('ui-settings-plugins registration of the read-only cards', () => {
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
-    await vi.waitFor(() => { expect(slots.entries('settings.plugin.advanced.item')).toHaveLength(4) })
-    for (const entry of slots.entries('settings.plugin.advanced.item')) {
+    await vi.waitFor(() => {
+      expect(slots.entries('settings.plugin.item').map(e => e.options.key))
+        .toEqual(expect.arrayContaining([...MIRROR_KEYS]))
+    })
+    for (const key of MIRROR_KEYS) {
+      const entry = slots.entries('settings.plugin.item').find(e => e.options.key === key)!
       const face = (entry as { inject?: () => unknown }).inject?.() as { hooks: Record<string, unknown> }
       expect(Object.keys(face.hooks)).toHaveLength(1)
     }
   })
 
-  it('leaves the advanced tab empty when this deployment composes no such Host', async () => {
+  it('keeps cards registered when this deployment composes no such Host', async () => {
     const { ctx, slots } = await bench([])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
-    // Cards register by namespace key regardless of what is served; the tab's
-    // served-namespace intersection is what keeps an unserved one off screen.
-    await vi.waitFor(() => { expect(slots.entries('settings.plugin.advanced.item')).toHaveLength(4) })
-    const tab = slots.entries('settings.plugins.tab').find(entry => entry.options.id === 'advanced')!
+    // Cards register by namespace key regardless of what is served; each card
+    // self-hides via `state.available` when Face does not publish that ns.
+    await vi.waitFor(() => {
+      expect(slots.entries('settings.plugin.item').map(e => e.options.key))
+        .toEqual(expect.arrayContaining([...MIRROR_KEYS]))
+    })
+    const tab = slots.entries('settings.plugins.tab').find(entry => entry.options.id === 'configurable')!
     const face = (tab.inject as unknown as () => {
-      hooks: { advancedPlugins: { getSnapshot(): { namespaces: string[] } } }
+      hooks: { configurablePlugins: { getSnapshot(): { loaded: boolean; namespaces: string[] } } }
     })()
-    expect(face.hooks.advancedPlugins.getSnapshot().namespaces).toEqual([])
+    await vi.waitFor(() => {
+      expect(face.hooks.configurablePlugins.getSnapshot().loaded).toBe(true)
+    })
+    // After Host answers once, every registered card key is dispatched (cards
+    // still self-hide via `state.available` when Face omits that ns).
+    expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
+      .toEqual(expect.arrayContaining([...MIRROR_KEYS]))
   })
 })

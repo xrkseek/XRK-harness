@@ -1,21 +1,46 @@
-/* Plugin card: a header that names the plugin, disclosing its controls in place. */
+/* Plugin card: DSH-style separated row — icon + name/desc, disclosure in place. */
 
 .card {
   list-style: none;
+  margin: 0;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-xl, 12px);
   background: var(--dsw-alias-bg-layer-3);
-  transition: border-color .16s, background .16s;
+  transition: border-color .16s, background .16s, box-shadow .16s;
 }
 
 .card:hover {
-  border-color: var(--dsw-alias-label-dimmed);
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-3));
 }
 
 /* An open card reads as the one being worked on, not merely taller. */
 .cardOpen {
   background: var(--dsw-alias-bg-layer-2);
   border-color: var(--dsw-alias-label-dimmed);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.cardOpen:hover {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* Fused Advanced list: parent owns the outer chrome. */
+.embedded {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.embedded:hover {
+  border-color: transparent;
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+}
+
+.embedded.cardOpen,
+.embedded.cardOpen:hover {
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 .header {
@@ -29,37 +54,117 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: inherit;
 }
 
 .header:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
-/* Name over description: the description is what tells two plugins apart, so
-   it gets its own line rather than trailing the name. */
+/* Header + master switch: disclose without toggling the module. */
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.headerMain {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+}
+
+.headerMain:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0.5px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: var(--dsw-radius-lg, 10px);
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
+}
+
+/* Name over description: the description is what tells two plugins apart. */
 .headText {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .name {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge,
+.badgeMuted {
+  flex: none;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary)) 14%, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.badgeMuted {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .description {
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .chevron {
@@ -74,8 +179,15 @@
 
 .body {
   border-top: 1px solid var(--dsw-alias-border-l2);
-  margin: 0 16px;
-  padding-bottom: 8px;
+  margin: 0 14px;
+  padding: 4px 0 10px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
 }
 
 .readOnly {
@@ -152,6 +264,6 @@
 
 .discard:focus-visible,
 .save:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }

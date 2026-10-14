@@ -1322,15 +1322,24 @@ export function buildSessionStatusSnapshotUncached(
     };
   };
   const presence = listedPresence(sessionId);
-  const childLink = runtime.subagents.getByChild(sessionId);
+  const childLinkRaw = runtime.subagents.getByChild(sessionId);
+  // Legacy mode:"fork" links and UI forkLineage must not drive the
+  // 委派方 / 被委派方 Overview pair — those sessions use home presence.
+  const childLink =
+    childLinkRaw && childLinkRaw.mode !== "fork" ? childLinkRaw : undefined;
   const parentLink = childLink
     ? runtime.subagents.getByChild(childLink.parentSessionId)
     : undefined;
+  const parentDelegated =
+    parentLink && parentLink.mode !== "fork" ? parentLink : undefined;
   const dressing = dressingFromPresence(
     runtime.settingsNamespaces.view("ui-presence").value as Record<string, unknown>,
   );
   const companionBall = companionBallForChild(childLink, dressing.stickers);
-  const parentCompanionBall = companionBallForChild(parentLink, dressing.stickers);
+  const parentCompanionBall = companionBallForChild(
+    parentDelegated,
+    dressing.stickers,
+  );
   const homeId =
     childLink?.parentSessionId ??
     team.edges.find((e) => e.kind === "delegates" && e.to === sessionId)?.from;
@@ -1363,7 +1372,9 @@ export function buildSessionStatusSnapshotUncached(
     ? {
         parentSessionId: childLink.parentSessionId,
         childLabel: childLink.label,
-        ...(parentLink?.label ? { parentLabel: parentLink.label } : {}),
+        ...(parentDelegated?.label
+          ? { parentLabel: parentDelegated.label }
+          : {}),
       }
     : undefined;
 

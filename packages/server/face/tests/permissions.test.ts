@@ -30,6 +30,25 @@ function bareRuntime(store = createMemorySessionStore()) {
   });
 }
 
+/** Coding-workspace session — bare `session.create` lands on Xiangyang (full access). */
+async function createCodingSession(
+  runtime: ReturnType<typeof bareRuntime>,
+  id = "c",
+): Promise<string> {
+  const coding = runtime.workspaces
+    .list(runtime.store.list())
+    .items.find(
+      (w) => w.workspaceId !== "ws_default" && w.workspaceId !== "ws_im",
+    );
+  const created = await dispatchFaceMethod(runtime, "session.create", id, {
+    ...(coding
+      ? { workspaceId: coding.workspaceId }
+      : { cwd: runtime.workspaceRoot }),
+  });
+  if (!created.result.ok) throw new Error("create coding session");
+  return (created.result.value as { sessionId: string }).sessionId;
+}
+
 describe("Face permission presets", () => {
   it("maps danger-full-access to open pathAccessMode", () => {
     expect(pathAccessModeFromSandbox("danger-full-access")).toBe("open");
@@ -54,10 +73,7 @@ describe("Face permission presets", () => {
 
   it("pins workspace-write on session.create and projects permissions", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    expect(created.result.ok).toBe(true);
-    if (!created.result.ok) return;
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     expect(runtime.store.get(sessionId).events.map((e) => e.type)).toEqual([
       "permission/preset",
@@ -79,9 +95,7 @@ describe("Face permission presets", () => {
 
   it("registerAuto publishes auto in catalog; unload withdraws it", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     expect(
       (
@@ -301,9 +315,7 @@ describe("Face permission presets", () => {
 
   it("closes admission before migrateAway observers can re-select Auto", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     let sawClosedAdmit = false;
     const stop = runtime.permissionAuto.registerAuto(
@@ -338,9 +350,7 @@ describe("Face permission presets", () => {
 
   it("/permission switches preset; empty reports current; unknown errors", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     const empty = await dispatchFaceMethod(runtime, "commands/execute", "e0", {
       args: { agentId: sessionId, line: "/permission" },
@@ -398,9 +408,7 @@ describe("Face permission presets", () => {
       resolveAgent: admittingAgentResolve(store),
       hasPtyActivity: () => true,
     });
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     const blocked = await dispatchFaceMethod(runtime, "commands/execute", "b", {
       args: { agentId: sessionId, line: "/permission read-only" },
@@ -428,9 +436,7 @@ describe("Face permission presets", () => {
     });
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     await dispatchFaceMethod(runtime, "commands/execute", "sw", {
       args: { agentId: sessionId, line: "/permission danger-full-access" },
@@ -489,9 +495,7 @@ describe("Face permission presets", () => {
   it("session read-only pre tracks live sandbox knob (no stale ask path)", async () => {
     const store = createMemorySessionStore();
     const runtime = bareRuntime(store);
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
 
     let readOnly = false;
     const pipeline = createToolPipeline();
@@ -543,9 +547,7 @@ describe("Face permission presets", () => {
         invalidated.push(id);
       },
     });
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const sessionId = await createCodingSession(runtime);
     expect(
       runtime.projections.snapshot(sessionId).values.permissions,
     ).toMatchObject({ currentValue: "workspace-write" });
@@ -583,8 +585,8 @@ describe("Face permission presets", () => {
 });
 
 /**
- * Loop checklist: Auto is session-catalog-only while registerAuto is live;
- * Settings defaultPreset never offers auto; dispose migrates to Full access.
+ * Loop checklist: Auto appears in the session catalog while registerAuto is
+ * live; Settings defaultPreset also accepts auto; dispose migrates to Full access.
  */
 describe("Auto catalog / Settings defaultPreset / dispose migrate", () => {
   it("omits auto from catalogNames until registerAuto; withdraws on dispose", () => {
@@ -611,44 +613,31 @@ describe("Auto catalog / Settings defaultPreset / dispose migrate", () => {
     expect(gate.catalogNames()).not.toContain("auto");
   });
 
-  it("Settings defaultPreset rejects auto (schema has no auto)", async () => {
+  it("Settings defaultPreset accepts auto when the schema lists it", async () => {
     const runtime = bareRuntime();
-    const rejected = await dispatchFaceMethod(runtime, "settings.mutate", "pa", {
+    runtime.permissionAuto.registerAuto(() => {});
+    const accepted = await dispatchFaceMethod(runtime, "settings.mutate", "pa", {
       ns: "permission",
       ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
     });
-    expect(rejected.result.ok).toBe(false);
-    if (!rejected.result.ok) {
-      expect(rejected.result.error.code).toBe("settings-rejected");
+    expect(accepted.result.ok).toBe(true);
+    if (accepted.result.ok) {
+      expect(accepted.result.value).toMatchObject({
+        value: { defaultPreset: "auto" },
+      });
     }
 
-    // Even with session-catalog Auto live, Settings still list configured presets only.
-    runtime.permissionAuto.registerAuto(() => {});
     const ok = await dispatchFaceMethod(runtime, "settings.mutate", "pw", {
       ns: "permission",
       ops: [{ op: "set", path: ["defaultPreset"], value: "workspace-write" }],
     });
     expect(ok.result.ok).toBe(true);
-
-    const stillRejected = await dispatchFaceMethod(
-      runtime,
-      "settings.mutate",
-      "pa2",
-      {
-        ns: "permission",
-        ops: [{ op: "set", path: ["defaultPreset"], value: "auto" }],
-      },
-    );
-    expect(stillRejected.result.ok).toBe(false);
   });
 
   it("dispose migrateAway moves Auto sessions to danger-full-access", async () => {
     const runtime = bareRuntime();
-    const a = await dispatchFaceMethod(runtime, "session.create", "a", {});
-    const b = await dispatchFaceMethod(runtime, "session.create", "b", {});
-    if (!a.result.ok || !b.result.ok) throw new Error("create");
-    const sessionA = (a.result.value as { sessionId: string }).sessionId;
-    const sessionB = (b.result.value as { sessionId: string }).sessionId;
+    const sessionA = await createCodingSession(runtime, "a");
+    const sessionB = await createCodingSession(runtime, "b");
 
     const stop = runtime.permissionAuto.registerAuto(
       () => {

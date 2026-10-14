@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
+import { Switch } from '@xrkseek/client-ui-primitives'
 import type { SidebarAgentPushState } from './sidebar-agent-push-store.ts'
 import type { SidebarAgentPushPrefKey } from './sidebar-prefs-api.ts'
 import css from './SidebarAgentPushRows.module.css'
@@ -89,19 +90,12 @@ function PushSwitchRow(props: {
         <div className={css.title}>{props.title}</div>
         <div className={css.desc} role={props.error ? 'alert' : undefined}>{props.description}</div>
       </div>
-      <button
-        type="button"
-        className={css.switch}
-        role="switch"
-        aria-checked={props.checked}
+      <Switch
+        checked={props.checked}
         aria-label={props.switchLabel}
         disabled={props.disabled}
-        onClick={() => { props.onChange(!props.checked) }}
-      >
-        <span className={css.track} data-on={props.checked || undefined} aria-hidden="true">
-          <span className={css.thumb} />
-        </span>
-      </button>
+        onCheckedChange={props.onChange}
+      />
     </div>
   )
 }

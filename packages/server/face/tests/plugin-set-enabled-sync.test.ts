@@ -34,12 +34,15 @@ describe("pluginInventory/setEnabled", () => {
       }),
     );
     const syncManagedProcessPlugins = vi.fn(async () => undefined);
+    const stopHostHalf = vi.fn(async () => undefined);
+    const applyHostHalf = vi.fn(async () => ({ ok: true }));
     const runtime = {
       productDir,
       plugins: [{ id: "proc-tools", kind: "tools" }],
       webPlugins: [],
       hostPublic: { pluginsDir: plugins },
       syncManagedProcessPlugins,
+      cordisHostBridge: { stopHostHalf, applyHostHalf },
     } as never;
 
     const result = await pluginInventorySetEnabled(runtime, "rpc-1", {
@@ -48,5 +51,14 @@ describe("pluginInventory/setEnabled", () => {
     });
     expect(result.ok).toBe(true);
     expect(syncManagedProcessPlugins).toHaveBeenCalledTimes(1);
+    expect(stopHostHalf).toHaveBeenCalledWith("proc-tools");
+    expect(applyHostHalf).not.toHaveBeenCalled();
+
+    const reenable = await pluginInventorySetEnabled(runtime, "rpc-2", {
+      entryId: "proc-tools",
+      enabled: true,
+    });
+    expect(reenable.ok).toBe(true);
+    expect(applyHostHalf).toHaveBeenCalledWith("proc-tools");
   });
 });

@@ -29,6 +29,8 @@ import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-layout/client'
 // Type-only: ctx.settingsScope (Host user-settings namespaces).
 import type {} from '@xrkseek/client-ui-settings/client'
+// Type-only: `settings.plugin.item` SlotMap (presence is a Plugins-home card).
+import type {} from '@xrkseek/client-ui-settings-plugins/client'
 // Type-only: pulls the `plan` SessionProjectionMap merge for useProjection.
 import type {} from '@xrkseek/xrk-plan-mode/client'
 import {
@@ -92,6 +94,7 @@ export function apply(ctx: ClientContext): void {
   let presencePrefsBound: BoundActions<typeof presencePrefsStore> | undefined
   const syncPresencePrefs = (): void => {
     presencePrefsBound?.sync(
+      presenceSettings.getEnabled(),
       presenceSettings.getShape(),
       presenceSettings.getColor(),
       presenceSettings.getKit(),
@@ -112,6 +115,7 @@ export function apply(ctx: ClientContext): void {
     presencePrefsBound = actions
     syncPresencePrefs()
     return {
+      setEnabled: (enabled) => { presenceSettings.setEnabled(enabled) },
       setShape: (shape) => { presenceSettings.setShape(shape) },
       setColor: (color) => { presenceSettings.setColor(color) },
       setSlot: (slot, pick) => { presenceSettings.setSlot(slot, pick) },
@@ -119,10 +123,10 @@ export function apply(ctx: ClientContext): void {
       removeSticker: (id) => { presenceSettings.removeSticker(id) },
     }
   }
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
-    id: 'presence-shape',
-    order: 12,
+  // Presence ball is a first-class Plugins-home module (hot toggle), not General.
+  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
+    name: 'settings.plugin.item',
+    key: PRESENCE_SETTINGS_NAMESPACE,
     store: presencePrefsStore,
     locale: NS,
     inject: presencePrefsInjected,

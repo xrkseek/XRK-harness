@@ -20,6 +20,8 @@ export interface ContextMenuLabels {
   readonly delete: string;
   readonly selectAll: string;
   readonly copyLink: string;
+  /** Right-click selection → anonymous Bing translate (DSH-style). */
+  readonly translate: string;
 }
 
 /**
@@ -81,6 +83,11 @@ export interface ContextMenuActions {
   redo(hit: ContextMenuHit): void;
   copyText(text: string): void;
   paste(hit: ContextMenuHit, plainText: boolean): void;
+  /**
+   * Translate the hit's selection and surface the result (typically copy +
+   * optional toast). Async work is owned by the host.
+   */
+  translate?(hit: ContextMenuHit): void;
 }
 
 /** Clipboard shape as far as the menu cares: enough to grey out paste rows. */
@@ -342,6 +349,16 @@ export function buildContextMenuEntries(options: {
     entries.push(
       row("copy", labels.copy, false, () => {
         actions.copy(hit);
+      }),
+    );
+  }
+
+  const selectedText = hit.selectionText.trim();
+  if (selectedText && actions.translate) {
+    if (entries.length > 0) entries.push(separator("translate-separator"));
+    entries.push(
+      row("translate", labels.translate, false, () => {
+        actions.translate!(hit);
       }),
     );
   }

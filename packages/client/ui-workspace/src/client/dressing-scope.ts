@@ -15,6 +15,8 @@ import {
 } from './dressing-library.ts'
 
 type PresenceNs = {
+  /** Master switch shared with Settings → Plugins presence card. */
+  readonly enabled?: boolean
   readonly stickers?: string
   readonly kitHat?: string
   readonly kitGlasses?: string
@@ -22,6 +24,8 @@ type PresenceNs = {
 }
 
 const EMPTY_STICKERS: readonly DressingSticker[] = []
+/** Match ui-plan DEFAULT_PRESENCE_ENABLED when Host has not answered yet. */
+const DEFAULT_PRESENCE_MODULE_ON = true
 
 let host: SettingsScope<PresenceNs> | undefined
 let stickersCache: { readonly raw: unknown; readonly rows: readonly DressingSticker[] } | undefined
@@ -39,6 +43,12 @@ function readStickers(): readonly DressingSticker[] {
   return rows
 }
 
+function readPresenceModuleEnabled(): boolean {
+  if (!host) return DEFAULT_PRESENCE_MODULE_ON
+  const value = host.getSnapshot().value?.enabled
+  return typeof value === 'boolean' ? value : DEFAULT_PRESENCE_MODULE_ON
+}
+
 export function bindDressingHost(scope: SettingsScope<PresenceNs>): void {
   host = scope
   stickersCache = undefined
@@ -49,6 +59,18 @@ export function useDressingStickers(): readonly DressingSticker[] {
     (onStoreChange) => host?.subscribe(onStoreChange) ?? (() => {}),
     readStickers,
     () => EMPTY_STICKERS,
+  )
+}
+
+/**
+ * Whether the presence / emotion-ball module is on.
+ * When false, Agent Team roster shows initials instead of CompanionBalls.
+ */
+export function usePresenceModuleEnabled(): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => host?.subscribe(onStoreChange) ?? (() => {}),
+    readPresenceModuleEnabled,
+    () => DEFAULT_PRESENCE_MODULE_ON,
   )
 }
 

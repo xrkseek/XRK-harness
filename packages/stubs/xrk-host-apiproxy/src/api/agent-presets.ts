@@ -40,6 +40,11 @@ export interface AgentPresetEntry {
    * only defer this reason to a failed session start.
    */
   readonly broken?: string
+  /**
+   * IM / Qichuang — workspace-locked surfaces. Listed for discovery, never a
+   * Settings coding-workspace default or hero picker option.
+   */
+  readonly workspaceLocked?: boolean
 }
 
 /** agent-preset-domain unary methods (the map key agentPreset.* of RpcMethodMap). */

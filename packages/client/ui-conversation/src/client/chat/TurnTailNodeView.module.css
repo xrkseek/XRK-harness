@@ -8,6 +8,19 @@
   margin-left: -6px;
 }
 
+/* Tip turns keep actions visible; mid-history tails reveal on hover (DSH). */
+@media (hover: hover) {
+  .root[data-actions-reveal='hover'] .actions {
+    opacity: 0;
+    transition: opacity 80ms ease;
+  }
+
+  .root[data-actions-reveal='hover']:hover .actions,
+  .root[data-actions-reveal='hover']:focus-within .actions {
+    opacity: 1;
+  }
+}
+
 /* Same quiet marker as AssistantMarkdown.stopped — Stop / cut with no text. */
 .stopped {
   align-self: flex-start;

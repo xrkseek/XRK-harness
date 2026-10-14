@@ -5,6 +5,7 @@
 import type { SettingsScope } from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
+  DEFAULT_PRESENCE_ENABLED,
   DEFAULT_PRESENCE_KIT,
   DEFAULT_PRESENCE_SHAPE,
   encodeStickers,
@@ -15,6 +16,7 @@ import {
   parseSlotPick,
   parseStickers,
   PRESENCE_COLOR_FIELD,
+  PRESENCE_ENABLED_FIELD,
   PRESENCE_GLASSES_KITS,
   PRESENCE_HAT_KITS,
   PRESENCE_HELD_KITS,
@@ -42,6 +44,7 @@ export type DressingSlot = 'hat' | 'glasses' | 'held'
 
 /** Owns persisted companion look and notifies browser listeners. */
 export class PresenceSettingsRuntime {
+  private enabled = DEFAULT_PRESENCE_ENABLED
   private shape: PresenceShape = DEFAULT_PRESENCE_SHAPE
   private color: PresenceColor = DEFAULT_PRESENCE_COLOR
   private kit: PresenceKit = DEFAULT_PRESENCE_KIT
@@ -58,6 +61,19 @@ export class PresenceSettingsRuntime {
   constructor(private readonly host: SettingsScope<PresenceSettings>) {
     this.adopt()
     this.host.subscribe(() => { this.adopt() })
+  }
+
+  /** When false, header dock and Overview rail hide the ball. */
+  getEnabled(): boolean {
+    return this.enabled
+  }
+
+  setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) return
+    this.enabled = enabled
+    this.revision += 1
+    void this.host.set(PRESENCE_ENABLED_FIELD, enabled)
+    this.publish()
   }
 
   getShape(): PresenceShape {
@@ -231,6 +247,9 @@ export class PresenceSettingsRuntime {
 
   private adopt(): void {
     const section = this.host.getSnapshot().value
+    const nextEnabled = typeof section?.enabled === 'boolean'
+      ? section.enabled
+      : DEFAULT_PRESENCE_ENABLED
     const nextShape = isPresenceShape(section?.shape)
       ? section.shape
       : DEFAULT_PRESENCE_SHAPE
@@ -249,7 +268,8 @@ export class PresenceSettingsRuntime {
     const nextOverlayGlasses = parsePresenceOverlay(section?.overlayGlasses) ?? ''
     const nextOverlayHeld = parsePresenceOverlay(section?.overlayHeld) ?? ''
     if (
-      this.shape === nextShape
+      this.enabled === nextEnabled
+      && this.shape === nextShape
       && this.color === nextColor
       && this.kit === nextKit
       && this.kitHat === nextHat
@@ -260,6 +280,7 @@ export class PresenceSettingsRuntime {
       && this.overlayHeld === nextOverlayHeld
       && encodeStickers(this.stickers) === encodeStickers(stickers)
     ) return
+    this.enabled = nextEnabled
     this.shape = nextShape
     this.color = nextColor
     this.kit = nextKit

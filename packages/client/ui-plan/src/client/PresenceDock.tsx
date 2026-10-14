@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-conversation/client'
-import { PresenceBall } from './PresenceBall.tsx'
+import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
 import { useOverviewOpen } from './overview-open.ts'
 import {
   PRESENCE_DOCK_ENTER_MS,
@@ -49,6 +49,7 @@ export function PresenceDock({
   useSessions,
   t,
 }: PresenceDockProps) {
+  const presenceEnabled = usePresenceEnabled()
   const overviewOpen = useOverviewOpen()
   const [phase, setPhase] = useState<DockPhase>(() => (overviewOpen ? 'gone' : 'idle'))
   const phaseRef = useRef(phase)
@@ -125,7 +126,7 @@ export function PresenceDock({
     }
   }, [overviewOpen])
 
-  const visible = phase !== 'gone'
+  const visible = presenceEnabled && phase !== 'gone'
 
   useEffect(() => {
     if (!visible || phase === 'exit') return
@@ -175,6 +176,9 @@ export function PresenceDock({
     )
     return () => { alive = false }
   }, [visible, sessionId, statusTick])
+
+  // Settings master switch: hide seat entirely so chat / header pills stay put.
+  if (!presenceEnabled) return null
 
   // Width-only seat in the title row; taller chip is absolutely centered so
   // Status / preset pills do not reflow when Overview opens.

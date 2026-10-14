@@ -11,11 +11,11 @@ import { InfoRows } from './InfoRows.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import { READ_ONLY_SHELL } from './info-card-model.ts'
 import type { HostInfoCardFace } from './host-info-card-controller.ts'
-import type {} from './advanced-slot-contract.ts'
+import type {} from './slot-contract.ts'
 
 /** Props the renderer binds for the Host runtime card. */
 export type HostInfoCardProps =
-  PropsRuntime<'settings.plugin.advanced.item'>
+  PropsRuntime<'settings.plugin.item'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<HostInfoCardFace>
 

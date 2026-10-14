@@ -6,7 +6,7 @@ export const PERMISSION_ACCESS_NS = 'permission.access'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'title': '权限',
-  'description': '选择新会话的默认权限模式',
+  'description': '仅作用于编码工作区的新会话默认权限。IM / 向阳空间固定完全访问，不受此项影响。对话中可用 /permission 切换当前编码会话。',
   'boundary': '注意：完全访问不改变文件工具的范围——相对路径仍限于工作区；绝对路径可读产品家目录，可写范围由「额外可写目录」决定（默认含 ~/.xrk）。',
   'roots.label': '额外可写目录',
   'roots.hint': '工作区以外、文件工具可写的绝对路径（默认可读/可写产品家目录）。添加或删除后立即生效。',
@@ -24,6 +24,10 @@ export const zh = {
   'confirm.acknowledge': '我已了解风险，并愿意继续',
   'confirm.cancel': '取消',
   'confirm.enable': '启用完全权限',
+  'auto.confirm.title': '确认启用自动审查（实验）？',
+  'auto.confirm.description': '自动审查 = 无沙箱 + 每调用评审。新会话默认每次原生工具与 PTC 内层调用前由分类器审查；拒绝的调用仍需你批准。此功能仍属实验性，可能误放行或误拒绝，并会消耗额外 token。',
+  'auto.confirm.acknowledge': '我已了解这些风险，并愿意继续',
+  'auto.confirm.enable': '启用自动审查',
 } satisfies Record<string, string>
 
 /** The settings.permission namespace key union. */
@@ -32,7 +36,7 @@ export type PermissionSettingsKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'title': 'Permission',
-  'description': 'Choose the default permission mode for new sessions',
+  'description': 'Default permission for new coding-workspace sessions only. IM / Xiangyang stay full access and ignore this setting. In chat use /permission on a coding session.',
   'boundary': 'Note: Full access does not widen file-tool scope — relative paths stay in the workspace; absolute reads use product home, and absolute writes follow Extra writable roots (defaults include ~/.xrk).',
   'roots.label': 'Extra writable roots',
   'roots.hint': 'Absolute directories outside the workspace that file tools may write (product home is readable/writable by default). Changes apply immediately.',
@@ -50,6 +54,10 @@ export const en = {
   'confirm.acknowledge': 'I understand the risks and want to continue',
   'confirm.cancel': 'Cancel',
   'confirm.enable': 'Enable Full access',
+  'auto.confirm.title': 'Enable Auto review (experimental)?',
+  'auto.confirm.description': 'Auto review = no sandbox + per-call review. New sessions review every native tool and PTC inner call before run; denials still ask you. Experimental — can falsely allow or deny, and uses extra tokens.',
+  'auto.confirm.acknowledge': 'I understand these risks and want to continue',
+  'auto.confirm.enable': 'Enable Auto review',
 } satisfies Record<PermissionSettingsKey, string>
 
 /** Simplified Chinese dictionary for the current-session popup gate. */

@@ -7,7 +7,13 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'group.ungrouped': '未分组',
+  'workspace.xiangyang': '向阳空间',
+  'badge.qichuang': '奇创',
   'session.new': '新会话',
+  'hint.mainline': '主线 — 本会话绑定的协作任务名',
+  'hint.sessionTitle': '会话名 — 未绑主线时多为首条用户消息',
+  'hint.sideline': '支线 — 当前在做什么（与表情球开关无关）',
+  'mark.sideline': '支线',
   'section.workspaces': '工作区',
   'section.sessions': '会话',
   'viewOptions.label': '视图选项',
@@ -115,6 +121,7 @@ export const zh = {
   'team.toolsNamesPlaceholder': '工具名，逗号分隔，如 bash,read,grep,glob',
   'team.toolsFileSet': '文件四件套',
   'team.look': '外观',
+  'team.presenceOff': '表情球已关闭：名册显示首字母；可在设置 → 插件里重新打开。',
   'team.saveOverride': '保存为工作区覆盖',
   'team.savePromote': '提升到全局',
   'team.dispatch': '派发',
@@ -199,7 +206,13 @@ export type WorkspaceKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'group.ungrouped': 'Ungrouped',
+  'workspace.xiangyang': 'Xiangyang',
+  'badge.qichuang': 'Qichuang',
   'session.new': 'New Session',
+  'hint.mainline': 'Mainline — collaboration pin bound to this session',
+  'hint.sessionTitle': 'Session name — usually the first user message when no mainline is bound',
+  'hint.sideline': 'Sideline — what you are doing now (independent of the presence ball)',
+  'mark.sideline': 'Sideline',
   'section.workspaces': 'Workspaces',
   'section.sessions': 'Sessions',
   'viewOptions.label': 'View options',
@@ -307,6 +320,7 @@ export const en = {
   'team.toolsNamesPlaceholder': 'Tool names, comma-separated, e.g. bash,read,grep,glob',
   'team.toolsFileSet': 'File quartet',
   'team.look': 'Look',
+  'team.presenceOff': 'Presence ball is off: roster shows initials. Turn it back on under Settings → Plugins.',
   'team.saveOverride': 'Save as workspace overlay',
   'team.savePromote': 'Promote to global',
   'team.dispatch': 'Dispatch',

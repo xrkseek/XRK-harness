@@ -90,7 +90,7 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 | 目的 | 放哪 |
 |------|------|
 | 跨项目默认偏好（产品种子） | `~/.xrk/AGENTS.md`（`xrkh web` 写入；人格向薄说明，对标 Codex；**不**自动种 SOUL/IDENTITY） |
-| 跨项目人格 / 语气（可选） | 自写 `~/.xrk/SOUL.md` · `IDENTITY.md` · `TOOLS.md`；或 `~/.agents/AGENTS.md` · `rules/` |
+| 跨项目 / 本仓人格 / 语气（可选） | 工作区 `.agents/SOUL.md` · `IDENTITY.md`（推荐）；或 `~/.agents/AGENTS.md` · `rules/`。家目录 `~/.xrk/SOUL.md` 是产品种子（fingerprint 刷新），勿当用户可编辑落点 |
 | 跨项目「用户是谁」事实 | **策展** `{XRK_HOME}/memories/USER.md`（`memory` 工具；**不是**站立 `~/.xrk/USER.md`） |
 | 站立可选 `USER.md` | 仅人格草稿 inject；与策展 `memories/USER.md` 分文件，勿混写 |
 | 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
@@ -223,7 +223,7 @@ Low → high priority (later rows closer to the turn). Skill **bodies** remain a
 | Goal | Location |
 |------|----------|
 | Cross-project defaults (product seed) | `~/.xrk/AGENTS.md` (`xrkh web`; thin Codex-style persona guidance; **does not** auto-seed SOUL/IDENTITY) |
-| Cross-project persona / tone (optional) | Hand-authored `~/.xrk/SOUL.md` · `IDENTITY.md` · `TOOLS.md`; or `~/.agents/AGENTS.md` · `rules/` |
+| Cross-project / workspace persona / tone (optional) | Workspace `.agents/SOUL.md` · `IDENTITY.md` (preferred); or `~/.agents/AGENTS.md` · `rules/`. Home `~/.xrk/SOUL.md` is a product seed (fingerprint refresh) — not a user-edit landing zone |
 | Cross-project “who the user is” facts | **Curated** `{XRK_HOME}/memories/USER.md` (`memory` tool; **not** standing `~/.xrk/USER.md`) |
 | Standing optional `USER.md` | Persona-draft inject only; separate file from curated `memories/USER.md` |
 | Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |

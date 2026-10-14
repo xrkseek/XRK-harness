@@ -41,4 +41,4 @@ thread_delete({ id })                         # 任务结束且不再需要被�
 - 每个子任务建一条主线 —— 一件工作一条。
 - 指望别的会话主动来读你：未被 `thread_list` 看到的，等于不存在。
 
-**支线**（`sideline_set` / `presence_set` `tips`）是同一会话的状态说明，Agent Team 不编辑主线，两者是不同面。
+**支线**（`sideline_set` / `presence_set` `tips`）是同一会话的状态说明 — playbook: skill `xrk-presence`。Agent Team 不编辑主线；两者是不同面。

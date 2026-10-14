@@ -22,6 +22,11 @@ import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { registerDshCompatUpgrade } from "./dsh-compat-upgrades.js";
 import { registerHostApply } from "./host-apply-registry.js";
+import {
+  gateLiveHostHttp,
+  gateLiveHostRpc,
+  registerLiveHostApply,
+} from "./live-host-apply.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 
 export interface XrkWebServerRoute {
@@ -276,8 +281,15 @@ export async function tryApplyHostModule(
     return undefined;
   }
 
+  await registerLiveHostApply(packageName, async () => {
+    for (const d of collection.disposers.reverse()) await d();
+  });
+
+  const gatedHttp = gateLiveHostHttp(packageName, collection.http);
+  const gatedRpc = gateLiveHostRpc(packageName, collection.rpc);
+
   const id = packageName.replace(/^@/, "").replace(/\//g, "-");
-  const httpPrefixes = collection.http
+  const httpPrefixes = gatedHttp
     .map((row) => {
       const probe = ["/_dsh/", "/api/", "/sidebar/"];
       for (const p of probe) {
@@ -292,10 +304,10 @@ export async function tryApplyHostModule(
       id: `${id}-apply`,
       package: packageName,
       httpPrefixes,
-      rpcChannels: Object.keys(collection.rpc),
+      rpcChannels: Object.keys(gatedRpc),
     },
-    ...(collection.http.length ? { http: collection.http } : {}),
-    ...(Object.keys(collection.rpc).length ? { rpc: collection.rpc } : {}),
+    ...(gatedHttp.length ? { http: gatedHttp } : {}),
+    ...(Object.keys(gatedRpc).length ? { rpc: gatedRpc } : {}),
   };
 }
 

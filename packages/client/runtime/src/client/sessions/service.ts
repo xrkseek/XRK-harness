@@ -616,6 +616,28 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Truncate this session's durable log in place, then resync the local window.
+   */
+  async truncate(opts: {
+    sessionId: SessionId
+    atSeq?: number
+    beforeSeq?: number
+  }): Promise<void> {
+    const result = await this.manager.truncate({
+      sessionId: opts.sessionId,
+      ...(opts.atSeq === undefined ? {} : { atSeq: Math.floor(opts.atSeq) }),
+      ...(opts.beforeSeq === undefined ? {} : { beforeSeq: Math.floor(opts.beforeSeq) }),
+    })
+    if (!result.ok) {
+      throw new Error(
+        `session truncate failed: ${result.error.code}: ${result.error.message}`,
+      )
+    }
+    const session = this.binding(opts.sessionId)?.session
+    if (session !== undefined) await session.resync()
+  }
+
+  /**
    * Permanently delete an archived session.
    * @param sessionId - archived session to delete.
    * @throws when the Host rejects the delete.

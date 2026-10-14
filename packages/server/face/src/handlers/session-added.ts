@@ -17,20 +17,27 @@ export function sessionAddedFrame(
   const cwd = resolveSessionCwd(runtime, sessionId);
   const agentPreset = effectiveSessionAgentPreset(runtime, sessionId);
   const lineage = runtime.subagents.getByChild(sessionId);
+  const forkParent = runtime.forkLineage.getByChild(sessionId);
+  const parentOrigin =
+    lineage && lineage.mode !== "fork"
+      ? {
+          parentSessionId: lineage.parentSessionId,
+          origin: "subagent" as const,
+        }
+      : forkParent || (lineage && lineage.mode === "fork")
+        ? {
+            parentSessionId:
+              forkParent?.parentSessionId ?? lineage!.parentSessionId,
+            origin: "fork" as const,
+          }
+        : undefined;
   return {
     type: "host/session-added",
     sessionId,
     blank,
     cwd,
     agentPreset,
-    ...(lineage
-      ? {
-          parentSessionId: lineage.parentSessionId,
-          ...(lineage.mode !== "fork"
-            ? { origin: "subagent" as const }
-            : { origin: "fork" as const }),
-        }
-      : {}),
+    ...(parentOrigin ?? {}),
   };
 }
 

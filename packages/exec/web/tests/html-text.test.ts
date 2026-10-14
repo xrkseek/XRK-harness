@@ -18,4 +18,14 @@ describe("htmlToText", () => {
     expect(out.truncated).toBe(true);
     expect(out.text.length).toBe(4);
   });
+
+  it("omits hidden / aria-hidden markup", () => {
+    const out = htmlToText(
+      '<p>visible</p><div hidden>secret</div><span aria-hidden="true">ghost</span>',
+      10_000,
+    );
+    expect(out.text).toContain("visible");
+    expect(out.text).not.toContain("secret");
+    expect(out.text).not.toContain("ghost");
+  });
 });

@@ -61,7 +61,7 @@ export const InputBar = memo(function InputBar({
   renderSlot, useBusyEnter, useNotices, useLexicon, useMenuLauncher, useFileUploads,
   useProjection, useConnectionState, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
-  placeholder, accessory, overlay, leftItems, rightItems, footer,
+  placeholder, accessLocked = false, accessory, overlay, leftItems, rightItems, footer,
 }: InputBarProps) {
   const input = useInput(s => s)
   const notice = useNotices(s => s)
@@ -513,7 +513,16 @@ export const InputBar = memo(function InputBar({
   // or while the command face is absent with the session).
   const accessSelect: ReactNode = command === undefined
     ? null
-    : <PermissionSelect key={sessionId} value={permissions} locked={locked} command={command} t={t} />
+    : (
+      <PermissionSelect
+        key={sessionId}
+        value={permissions}
+        locked={locked}
+        accessLocked={accessLocked}
+        command={command}
+        t={t}
+      />
+    )
 
   // Claim ghost hint: rendered by CSS as generated content after the last
   // paragraph while the claim's args are blank (a hint implies a single-line

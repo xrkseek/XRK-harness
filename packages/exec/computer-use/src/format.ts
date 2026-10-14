@@ -110,6 +110,11 @@ export function formatActResult(result: ComputerUseActResult): string {
     `message=${result.message}`,
     "next=capture again before the next click/type — indices go stale after UI changes.",
   ];
+  if (result.delivery === "background") {
+    lines.push(
+      "note=background delivery: input was handed to the helper; verify outcome with a fresh capture (UIA AX on Windows).",
+    );
+  }
   return lines.join("\n");
 }
 
@@ -150,9 +155,12 @@ export function formatComputerUseGuidance(available: ToolNameSet): string {
   return [
     "Desktop GUI (native apps):",
     "- Loop: `list_windows` → `capture` → `click`/`type`/`key`/`scroll` by element index → `capture` to verify.",
+    "- A new capture invalidates earlier element indices/tokens; always re-capture after UI changes or cancellation.",
     "- `capture mode=ax` = accessibility tree; `vision`/`som` adds an inline screenshot (`attachmentId=sha256:…`, not a path).",
-    "- Prefer element indices from the last capture. Optional `coordinate=[x,y]` for pixel click when vision is active.",
-    "- Enable: Settings → Plugins → Computer use, or `XRK_COMPUTER_USE=1` (Windows UIA).",
+    "- Prefer element indices from the last capture. Optional `coordinate=[x,y]` for pixel click when vision/som is active.",
+    "- Delivery: Settings mode=background prefers helper act (UIA still captures on Windows). A refusal does not authorize a different delivery.",
+    "- Concurrent sessions and other apps share the same desktop — inspect fresh state before retrying.",
+    "- Web pages → `browser_*`. Enable: Settings → Plugins → Computer use, or `XRK_COMPUTER_USE=1` (Windows UIA).",
   ].join("\n");
 }
 

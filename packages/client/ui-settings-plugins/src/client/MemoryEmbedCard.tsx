@@ -4,12 +4,12 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-s
 import { SecretField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { MemoryEmbedCardFace } from './memory-embed-card-controller.ts'
-import type {} from './advanced-slot-contract.ts'
+import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
 
 /** Props the renderer binds for the memory-embed card. */
 export type MemoryEmbedCardProps =
-  PropsRuntime<'settings.plugin.advanced.item'>
+  PropsRuntime<'settings.plugin.item'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<MemoryEmbedCardFace>
 

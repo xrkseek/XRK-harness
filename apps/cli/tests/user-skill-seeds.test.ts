@@ -231,7 +231,7 @@ describe("ensureUserSkillSeeds", () => {
     });
   });
 
-  it("seeds AGENTS.md (refreshable) and SOUL.md (create-once) under home", async () => {
+  it("seeds AGENTS.md and SOUL.md as fingerprint-refreshable under home", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "xrk-home-seed-"));
     try {
       const all = await ensureUserHomeSeeds(home);
@@ -241,14 +241,24 @@ describe("ensureUserSkillSeeds", () => {
       expect(agents).toContain("XRK-Harness");
       expect(agents).toContain("YAGNI");
       expect(agents).toContain("## Craft");
-      expect(await readFile(path.join(home, "SOUL.md"), "utf8")).toContain(
-        "presence_set",
-      );
+      expect(agents).toContain("xrk-presence");
+      const soul = await readFile(path.join(home, "SOUL.md"), "utf8");
+      expect(soul).toContain(".agents/SOUL.md");
+      expect(soul).toContain("fingerprint");
       expect(all.recipes.installed.length).toBeGreaterThan(0);
       expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
         true,
       );
       expect(existsSync(path.join(home, "IDENTITY.md"))).toBe(false);
+      expect(existsSync(path.join(home, "skills", "xrk-presence", "SKILL.md"))).toBe(
+        true,
+      );
+      expect(existsSync(path.join(home, "skills", "xrk-craft", "SKILL.md"))).toBe(
+        true,
+      );
+      expect(
+        existsSync(path.join(home, "skills", "xrk-attachment", "SKILL.md")),
+      ).toBe(true);
 
       const again = await ensureUserStandingSeeds(home);
       expect(again.installed).toEqual([]);
@@ -256,13 +266,35 @@ describe("ensureUserSkillSeeds", () => {
         expect.arrayContaining(["AGENTS.md", "SOUL.md"]),
       );
 
+      // Same as AGENTS: seed fingerprint unchanged → skip (edit .agents, not home).
       await writeFile(path.join(home, "SOUL.md"), "# my soul\n", "utf8");
-      const third = await ensureUserStandingSeeds(home);
-      expect(third.refreshed).not.toContain("SOUL.md");
-      expect(third.installed).not.toContain("SOUL.md");
+      const sticky = await ensureUserStandingSeeds(home);
+      expect(sticky.refreshed).not.toContain("SOUL.md");
       expect(await readFile(path.join(home, "SOUL.md"), "utf8")).toBe(
         "# my soul\n",
       );
+
+      // Seed fingerprint move → overwrite (create-once used to preserve forever).
+      const seedDir = await mkdtemp(path.join(os.tmpdir(), "xrk-standing-seed-"));
+      try {
+        await writeFile(
+          path.join(seedDir, "AGENTS.md"),
+          await readFile(path.join(home, "AGENTS.md"), "utf8"),
+          "utf8",
+        );
+        await writeFile(
+          path.join(seedDir, "SOUL.md"),
+          "# Soul\nv2 product seed\n.agents/SOUL.md\n",
+          "utf8",
+        );
+        const bumped = await ensureUserStandingSeeds(home, seedDir);
+        expect(bumped.refreshed).toContain("SOUL.md");
+        expect(await readFile(path.join(home, "SOUL.md"), "utf8")).toContain(
+          "v2 product seed",
+        );
+      } finally {
+        await rm(seedDir, { recursive: true, force: true });
+      }
     } finally {
       await rm(home, { recursive: true, force: true });
     }

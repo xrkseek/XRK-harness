@@ -151,14 +151,28 @@ export async function beginRosterRead<S extends { status: string; error: string 
  * @returns one option per selectable preset, in roster order.
  */
 export function presetOptions(
-  presets: readonly { id: string; trust: 'system' | 'user'; name?: string; description?: string; broken?: string }[],
+  presets: readonly {
+    id: string
+    trust: 'system' | 'user'
+    name?: string
+    description?: string
+    broken?: string
+    workspaceLocked?: boolean
+  }[],
 ): AgentPresetOption[] {
-  return presets.filter(preset => preset.broken === undefined).map(preset => ({
-    id: preset.id,
-    trust: preset.trust,
-    ...preset.name === undefined ? {} : { name: preset.name },
-    ...preset.description === undefined ? {} : { description: preset.description },
-  }))
+  // Settings / hero: coding badges only — IM / Qichuang are workspace-locked.
+  return presets
+    .filter(preset =>
+      preset.broken === undefined
+      && preset.workspaceLocked !== true
+      && preset.id !== 'im'
+      && preset.id !== 'qichuang')
+    .map(preset => ({
+      id: preset.id,
+      trust: preset.trust,
+      ...preset.name === undefined ? {} : { name: preset.name },
+      ...preset.description === undefined ? {} : { description: preset.description },
+    }))
 }
 
 /** Agent-preset settings-row snapshot. */

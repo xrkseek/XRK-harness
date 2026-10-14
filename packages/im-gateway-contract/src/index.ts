@@ -34,6 +34,11 @@ export interface ImGatewayRelayInbound {
   readonly botId?: string;
   /** Preferred message text; Host falls back to JSON slice of the body. */
   readonly text?: string;
+  /**
+   * Optional media (image|video|file|audio). Host normalizes onto the message
+   * row; Face admit maps to ContentBlocks / model-only handles. Still contract v1.
+   */
+  readonly attachments?: readonly Record<string, unknown>[];
   /** Opaque vendor payload kept on the message row as `raw`. */
   readonly [key: string]: unknown;
 }

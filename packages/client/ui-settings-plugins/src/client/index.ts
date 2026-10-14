@@ -7,8 +7,9 @@
  * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search,
  * session-telemetry, sandbox, computer-use, browser, voice, image-gen, video-gen,
  * video-analyze, curated-memory, a2a-inbound, external-agent, cron.
- * Advanced tab: auto-review classifier · memory-embed · Host runtime · process
- * & IM channels (the last two read-only mirrors of what the Host serves).
+ * Also auto-review · memory-embed · Host runtime · process & IM channels
+ * (the last two read-only mirrors) on the same configuration list — no
+ * separate Advanced tab.
  * General 「远程」: ssh-remote (restart).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
@@ -22,12 +23,14 @@ import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
 import type {} from '@xrkseek/xrk-api-remotes/client'
-import { AdvancedPluginsTab } from './AdvancedPluginsTab.tsx'
+import { PluginsHomeButton } from './PluginsHomeButton.tsx'
 import { AgentLoopCard } from './AgentLoopCard.tsx'
 import { AutoReviewCard } from './AutoReviewCard.tsx'
 import { BashCard } from './BashCard.tsx'
 import { BrowserCard } from './BrowserCard.tsx'
 import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
+import { ToolsCatalogTab } from './ToolsCatalogTab.tsx'
+import { SkillsCatalogTab } from './SkillsCatalogTab.tsx'
 import { ComputerUseCard } from './ComputerUseCard.tsx'
 import { CronCard } from './CronCard.tsx'
 import { CuratedMemoryCard } from './CuratedMemoryCard.tsx'
@@ -82,17 +85,17 @@ import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF 
 import { VOICE_NS, VoiceCardController, VOICE_OPENAI_REF } from './voice-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_TAVILY_REF } from './web-search-card-controller.ts'
 import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-inject-card-controller.ts'
-import {
-  AdvancedPluginsTabController,
-  asAdvancedPluginsTabFace,
-} from './advanced-tab-store.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
+import { fetchSessionSkills, fetchSessionTools, fetchSkillContent } from './catalog-fetch.ts'
 import { en, zh } from './locales.ts'
+import type { ISessions } from '@xrkseek/client-runtime/client'
+import type { SessionId } from '@xrkseek/xrk-api-remotes/client'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
 export type { ConfigurablePluginsTabProps } from './ConfigurablePluginsTab.tsx'
 export type { ConfigurablePluginsTabFace, ConfigurablePluginsTabState } from './tab-store.ts'
-export type { PluginCardProps } from './PluginCard.tsx'
+export type { PluginCardProps, PluginCardMasterSwitch } from './PluginCard.tsx'
+export { booleanMasterSwitch, modeMasterSwitch } from './plugin-master-switch.ts'
 export type { SettingsPluginItemOwnerProps } from './slot-contract.ts'
 export type { FieldProps } from './fields.tsx'
 export type {
@@ -115,8 +118,6 @@ export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-con
 export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
 export type { AutoReviewCardFace, AutoReviewCardState } from './auto-review-card-controller.ts'
 export type { MemoryEmbedCardFace, MemoryEmbedCardState } from './memory-embed-card-controller.ts'
-export type { AdvancedPluginsTabFace, AdvancedPluginsTabState } from './advanced-tab-store.ts'
-export type { SettingsPluginAdvancedItemOwnerProps } from './advanced-slot-contract.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
 export type { VideoGenCardFace, VideoGenCardState } from './video-gen-card-controller.ts'
 export type { VideoAnalyzeCardFace, VideoAnalyzeCardState } from './video-analyze-card-controller.ts'
@@ -149,7 +150,9 @@ export { VIDEO_ANALYZE_NS, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card
 const NS = 'settings.plugins'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
+export const inject = [
+  'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav', 'sessions',
+]
 
 /**
  * Mount the plugin configuration section and the cards this package ships.
@@ -157,6 +160,9 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope
  */
 export function apply(ctx: ClientContext): void {
   const { api } = ctx.get('connection') as ConnectionHandle
+  const sessions = ctx.get('sessions') as ISessions
+  const currentSessionId = (): string | undefined =>
+    sessions.list.getSnapshot().current
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugins: section dictionaries')
 
@@ -234,23 +240,18 @@ export function apply(ctx: ClientContext): void {
   // changed composition: a settings document commit and a reconnect.
   const configurable = new ConfigurablePluginsTabController(
     api, () => ctx.slots.entries('settings.plugin.item'))
-  const advanced = new AdvancedPluginsTabController(
-    api, () => ctx.slots.entries('settings.plugin.advanced.item'))
   ctx.effect(() => () => {
     configurable.dispose()
-    advanced.dispose()
   }, 'ui-settings-plugins: tab directory')
   ctx.effect(
     () => ctx.remote.$on('settings/document-updated', () => {
       void configurable.load()
-      void advanced.load()
     }),
     'ui-settings-plugins: served-namespace invalidations',
   )
   ctx.effect(
     () => ctx.on('connection/reset', () => {
       void configurable.load()
-      void advanced.load()
     }),
     'ui-settings-plugins: served-namespace reconnect',
   )
@@ -281,12 +282,7 @@ export function apply(ctx: ClientContext): void {
     () => ctx.slots.subscribe('settings.plugin.item', () => { configurable.refresh() }),
     'ui-settings-plugins: card ledger',
   )
-  ctx.effect(
-    () => ctx.slots.subscribe('settings.plugin.advanced.item', () => { advanced.refresh() }),
-    'ui-settings-plugins: advanced card ledger',
-  )
   void configurable.load()
-  void advanced.load()
 
   let tabsVersion = -1
   let tabsRevision = -1
@@ -323,8 +319,24 @@ export function apply(ctx: ClientContext): void {
     },
   })
 
-  // This package owns the one Plugins navigation entry and the tab chrome;
-  // feature plugins contribute pages without competing for Settings nav rows.
+  // DSH seat: Plugins under New Session / above Workspace (release-notes /
+  // 公告 shares the same utility list at order 10). The gear Settings nav
+  // does NOT list Plugins — SettingsRoot treats id `plugins` as home-only
+  // (full-bleed panel).
+  ctx.slots.inject('sidebar.utility', () => ctx.slots.register({
+    name: 'sidebar.utility',
+    id: 'plugins',
+    order: 0,
+    label: () => t('nav'),
+    locale: NS,
+    inject: () => ({
+      openPlugins: () => { ctx.settingsNav.openSection('plugins') },
+    }),
+  }, PluginsHomeButton))
+
+  // Still a settings.section so tabs / cards stay on the settings slot tree
+  // (feature plugins inject `settings.plugin.item` here). The shell hides it
+  // from the gear nav; only sidebar.utility opens it.
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'plugins',
@@ -353,44 +365,51 @@ export function apply(ctx: ClientContext): void {
     },
   }, ConfigurablePluginsTab))
 
-  // Advanced: classifier / memory-embed / low-traffic Host knobs (not the everyday plugin cards).
+  // Read-only live catalogs for the current session (Face session.tools · skill.list).
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',
-    id: 'advanced',
-    order: 10,
-    label: () => t('advancedTab'),
+    id: 'tools',
+    order: 4,
+    label: () => t('toolsTab'),
     locale: NS,
-    inject: () => asAdvancedPluginsTabFace(advanced.inject()),
-    children: { 'settings.plugin.advanced.item': { kind: 'keyed', scope: 'root' } },
-  }, AdvancedPluginsTab))
+    inject: () => ({
+      currentSessionId,
+      listTools: (sessionId: SessionId, signal?: AbortSignal) =>
+        fetchSessionTools(
+          (req, sig) => api.sessions.tools(req, sig),
+          sessionId,
+          signal,
+        ),
+    }),
+  }, ToolsCatalogTab))
 
-  ctx.slots.inject('settings.plugin.advanced.item', function* () {
-    yield ctx.slots.register({
-      name: 'settings.plugin.advanced.item',
-      key: AUTO_REVIEW_NS,
-      locale: NS,
-      inject: () => autoReview.inject(),
-    }, AutoReviewCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.advanced.item',
-      key: MEMORY_EMBED_NS,
-      locale: NS,
-      inject: () => memoryEmbed.inject(),
-    }, MemoryEmbedCard)
-    // Read-only: what this Host is, and what it is wired to talk to.
-    yield ctx.slots.register({
-      name: 'settings.plugin.advanced.item',
-      key: HOST_NS,
-      locale: NS,
-      inject: () => hostInfo.inject(),
-    }, HostInfoCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.advanced.item',
-      key: PROCESS_CHANNELS_NS,
-      locale: NS,
-      inject: () => processChannels.inject(),
-    }, ProcessChannelsCard)
-  })
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
+    id: 'skills',
+    order: 5,
+    label: () => t('skillsTab'),
+    locale: NS,
+    inject: () => ({
+      currentSessionId,
+      listSkills: (sessionId: SessionId, signal?: AbortSignal) =>
+        fetchSessionSkills(
+          (req, sig) => api.skills.list(req, sig),
+          sessionId,
+          signal,
+        ),
+      readSkill: (
+        sessionId: SessionId,
+        selector: { name: string } | { document: string },
+        signal?: AbortSignal,
+      ) =>
+        fetchSkillContent(
+          (req, sig) => api.skills.read(req, sig),
+          sessionId,
+          selector,
+          signal,
+        ),
+    }),
+  }, SkillsCatalogTab))
 
   // SSH remote on General 「远程」 — world is fixed at Host spawn (restart).
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
@@ -401,109 +420,39 @@ export function apply(ctx: ClientContext): void {
     inject: () => sshRemote.inject(),
   }, SshRemoteCard))
 
-  // MCP first: Trae/Cursor users open Plugins looking for servers, not bash knobs.
-  ctx.slots.inject('settings.plugin.item', function* () {
-    yield ctx.slots.register({
+  // One inject per Host plugin card (true pluginization). No separate Advanced
+  // tab — auto-review / memory-embed / host / process-channels sit in this list.
+  const pluginCard = <C,>(
+    key: string,
+    face: () => object,
+    component: C,
+  ): void => {
+    ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
       name: 'settings.plugin.item',
-      key: MCP_NS,
+      key,
       locale: NS,
-      inject: () => mcp.inject(),
-    }, McpCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: WEB_SEARCH_NS,
-      locale: NS,
-      inject: () => webSearch.inject(),
-    }, WebSearchCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: SHELL_NS,
-      locale: NS,
-      inject: () => bash.inject(),
-    }, BashCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: AGENT_LOOP_NS,
-      locale: NS,
-      inject: () => agentLoop.inject(),
-    }, AgentLoopCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: WORKSPACE_INJECT_NS,
-      locale: NS,
-      inject: () => workspaceInject.inject(),
-    }, WorkspaceInjectCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: SESSION_TELEMETRY_NS,
-      locale: NS,
-      inject: () => telemetry.inject(),
-    }, TelemetryCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: SANDBOX_NS,
-      locale: NS,
-      inject: () => sandbox.inject(),
-    }, SandboxCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: COMPUTER_USE_NS,
-      locale: NS,
-      inject: () => computerUse.inject(),
-    }, ComputerUseCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: BROWSER_NS,
-      locale: NS,
-      inject: () => browser.inject(),
-    }, BrowserCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: VOICE_NS,
-      locale: NS,
-      inject: () => voice.inject(),
-    }, VoiceCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: IMAGE_GEN_NS,
-      locale: NS,
-      inject: () => imageGen.inject(),
-    }, ImageGenCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: VIDEO_GEN_NS,
-      locale: NS,
-      inject: () => videoGen.inject(),
-    }, VideoGenCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: VIDEO_ANALYZE_NS,
-      locale: NS,
-      inject: () => videoAnalyze.inject(),
-    }, VideoAnalyzeCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: CURATED_MEMORY_NS,
-      locale: NS,
-      inject: () => curatedMemory.inject(),
-    }, CuratedMemoryCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: A2A_INBOUND_NS,
-      locale: NS,
-      inject: () => a2aInbound.inject(),
-    }, A2aInboundCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: EXTERNAL_AGENT_NS,
-      locale: NS,
-      inject: () => externalAgent.inject(),
-    }, ExternalAgentCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: CRON_NS,
-      locale: NS,
-      inject: () => cron.inject(),
-    }, CronCard)
-  })
+      inject: face,
+    }, component as never))
+  }
+  pluginCard(MCP_NS, () => mcp.inject(), McpCard)
+  pluginCard(WEB_SEARCH_NS, () => webSearch.inject(), WebSearchCard)
+  pluginCard(SHELL_NS, () => bash.inject(), BashCard)
+  pluginCard(AGENT_LOOP_NS, () => agentLoop.inject(), AgentLoopCard)
+  pluginCard(WORKSPACE_INJECT_NS, () => workspaceInject.inject(), WorkspaceInjectCard)
+  pluginCard(SESSION_TELEMETRY_NS, () => telemetry.inject(), TelemetryCard)
+  pluginCard(SANDBOX_NS, () => sandbox.inject(), SandboxCard)
+  pluginCard(COMPUTER_USE_NS, () => computerUse.inject(), ComputerUseCard)
+  pluginCard(BROWSER_NS, () => browser.inject(), BrowserCard)
+  pluginCard(VOICE_NS, () => voice.inject(), VoiceCard)
+  pluginCard(IMAGE_GEN_NS, () => imageGen.inject(), ImageGenCard)
+  pluginCard(VIDEO_GEN_NS, () => videoGen.inject(), VideoGenCard)
+  pluginCard(VIDEO_ANALYZE_NS, () => videoAnalyze.inject(), VideoAnalyzeCard)
+  pluginCard(CURATED_MEMORY_NS, () => curatedMemory.inject(), CuratedMemoryCard)
+  pluginCard(A2A_INBOUND_NS, () => a2aInbound.inject(), A2aInboundCard)
+  pluginCard(EXTERNAL_AGENT_NS, () => externalAgent.inject(), ExternalAgentCard)
+  pluginCard(CRON_NS, () => cron.inject(), CronCard)
+  pluginCard(AUTO_REVIEW_NS, () => autoReview.inject(), AutoReviewCard)
+  pluginCard(MEMORY_EMBED_NS, () => memoryEmbed.inject(), MemoryEmbedCard)
+  pluginCard(HOST_NS, () => hostInfo.inject(), HostInfoCard)
+  pluginCard(PROCESS_CHANNELS_NS, () => processChannels.inject(), ProcessChannelsCard)
 }

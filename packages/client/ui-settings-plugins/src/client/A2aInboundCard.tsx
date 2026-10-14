@@ -1,8 +1,9 @@
 /** A2A inbound card (Face `a2a-inbound`): Agent Card + message/send → Face inject. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { SelectField, ValueField } from './fields.tsx'
+import { ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { A2aInboundCardFace } from './a2a-inbound-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -22,28 +23,18 @@ export function A2aInboundCard(props: A2aInboundCardProps) {
   const { t } = props
   const state = props.useA2aInboundCard(snapshot => snapshot)
   const disabled = !state.writable
-  const enabled = state.enabled.text === 'true' ? 'true' : 'false'
+  const enabled = state.enabled.text === 'true'
   return (
     <PluginCard
       t={t}
       titleKey="a2aInboundTitle"
       descriptionKey="a2aInboundDescription"
       state={state}
+      masterSwitch={booleanMasterSwitch(enabled, (value) => { props.edit('enabled', value) })}
       onSave={props.save}
       onDiscard={props.discard}
     >
-      <SelectField
-        id="plugin-config-a2a-inbound-enabled"
-        label={t('a2aInboundEnabled')}
-        hint={t('a2aInboundEnabledHint')}
-        disabled={disabled}
-        value={enabled}
-        options={[
-          { value: 'false', label: t('a2aInboundEnabledOff') },
-          { value: 'true', label: t('a2aInboundEnabledOn') },
-        ]}
-        onChange={(value) => { props.edit('enabled', value) }}
-      />
+      <p className={css.note} role="note">{t('a2aInboundEnabledHint')}</p>
       <ValueField
         id="plugin-config-a2a-inbound-session"
         label={t('a2aInboundSession')}
@@ -51,7 +42,7 @@ export function A2aInboundCard(props: A2aInboundCardProps) {
         overriddenLabel={t('overridden')}
         resetLabel={t('reset')}
         invalidLabel={t('invalidNumber')}
-        disabled={disabled || enabled === 'false'}
+        disabled={disabled || !enabled}
         {...state.sessionId}
         onEdit={(text) => { props.edit('sessionId', text) }}
         onReset={() => { props.resetField('sessionId') }}
@@ -63,7 +54,7 @@ export function A2aInboundCard(props: A2aInboundCardProps) {
         overriddenLabel={t('overridden')}
         resetLabel={t('reset')}
         invalidLabel={t('invalidNumber')}
-        disabled={disabled || enabled === 'false'}
+        disabled={disabled || !enabled}
         {...state.timeoutMs}
         onEdit={(text) => { props.edit('timeoutMs', text) }}
         onReset={() => { props.resetField('timeoutMs') }}

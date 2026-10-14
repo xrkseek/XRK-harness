@@ -3,7 +3,7 @@
 Voice Host seam: TTS · dictation (STT) · realtime voice session broker.
 
 - **Definition**: `VoiceService` (`synthesize` · `transcribe` · `createLiveSession` · `liveStatus`)
-- **Provider**: `createMemoryVoiceProvider` · `createOpenAiVoiceProvider` · Host-injected
+- **Provider**: `createMemoryVoiceProvider` · `createOpenAiVoiceProvider` · `createSenseVoiceLocalProvider` · Host-injected
 - **Consumer**: `createVoiceTools` → `text_to_speech` · `voice_transcribe` · `voice_session`
 
 Mic/speaker and WebRTC stay on the client. Tools stay registered when no Provider is configured; execute fails honestly (`describeVoiceAccess` / `voiceUnavailableMessage` share the same copy with Settings and `xrkh doctor`).

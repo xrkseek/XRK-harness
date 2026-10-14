@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconEditOutline16,
-  IconRefreshOutline16, IconTrashOutline16, Tooltip, writeClipboard,
+  IconFolderOpenOutline16, IconRefreshOutline16, IconTrashOutline16, Tooltip, writeClipboard,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -27,7 +27,9 @@ export interface MessageIconActionsProps {
   onRestore?: (() => void) | undefined
   /** Load this user message into the composer for edit-resubmit. */
   onEdit?: (() => void) | undefined
-  /** Truncate lineage before this message (fork beforeSeq) — delete/recall. */
+  /** Truncate after this user prompt and re-run the same text (assistant regenerate). */
+  onRegenerate?: (() => void) | undefined
+  /** Truncate this session in place before this message (delete this + later). */
   onDelete?: (() => void) | undefined
   /** Withdraw a still-pending mid-turn steer (Host inbox remove). */
   onWithdraw?: (() => void) | undefined
@@ -55,7 +57,7 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, onRestore, onEdit, onDelete, onWithdraw, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, onEdit, onRegenerate, onDelete, onWithdraw, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
@@ -92,7 +94,10 @@ export function MessageIconActions({
     </span>
   )
   return (
-    <div className={className === undefined ? css.actions : `${css.actions} ${className}`}>
+    <div
+      className={className === undefined ? css.actions : `${css.actions} ${className}`}
+      data-clock={clock}
+    >
       {clock === 'start' ? clockEl : null}
       <Tooltip label={copied ? t('copied') : t('copy')} side="bottom">
         <button type="button" className={css.action} aria-label={copied ? t('copied') : t('copy')} onClick={onCopy}>
@@ -104,6 +109,20 @@ export function MessageIconActions({
         <Tooltip label={t('message.edit')} side="bottom">
           <button type="button" className={css.action} aria-label={t('message.edit')} onClick={onEdit}>
             <IconEditOutline16 />
+          </button>
+        </Tooltip>
+      )}
+      {onRegenerate !== undefined && (
+        <Tooltip label={branchUnavailable ? t('message.regenerateUnavailable') : t('message.regenerate')} side="bottom">
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.regenerate')}
+            aria-disabled={branchUnavailable || undefined}
+            data-unavailable={branchUnavailable || undefined}
+            onClick={branchUnavailable ? undefined : onRegenerate}
+          >
+            <IconRefreshOutline16 />
           </button>
         </Tooltip>
       )}
@@ -131,7 +150,7 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onRestore}
           >
-            <IconRefreshOutline16 />
+            <IconFolderOpenOutline16 />
           </button>
         </Tooltip>
       )}
@@ -154,8 +173,9 @@ export function MessageIconActions({
       {onBranch !== undefined && branchUnavailable && (
         <span id={reasonId} className={css.visuallyHidden}>{t('message.branchUnavailable')}</span>
       )}
-      {usageAction}
-      {clock === 'end' ? clockEl : null}
+      {clock === 'end'
+        ? <span className={css.endInfo}>{usageAction}{clockEl}</span>
+        : usageAction}
     </div>
   )
 }

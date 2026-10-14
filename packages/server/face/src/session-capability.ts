@@ -1,6 +1,7 @@
 /**
- * Turn-start `<session_capability>` — short two-axis snapshot for the model
- * (permission path gate × tool-surface badge). Orthogonal to collab board.
+ * Turn-start `<session_capability>` — permission × tool-surface snapshot
+ * plus short briefs. Standing AGENTS stays common; this fragment is the
+ * per-session axes. Orthogonal to collab board / session_posture.
  */
 
 import { readSessionEvents } from "@xrkseek/core-session";
@@ -11,13 +12,58 @@ import {
   pathAccessModeFromSandbox,
 } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
-import { permissionSelectFromEvents } from "./permissions.js";
+import {
+  FACE_PERMISSION_TABLE,
+  permissionSelectFromEvents,
+  resolvePermissionPresetSpec,
+} from "./permissions.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
 import { countExposures } from "@xrkseek/core-tools";
 import { resolveSessionCwd } from "./session-cwd.js";
 
+/** Affirmative permission copy for the model (path gate only). */
+function permissionBrief(permission: string): string {
+  const known = resolvePermissionPresetSpec(permission, true)
+    ?? resolvePermissionPresetSpec(permission, false);
+  if (known) return known.description;
+  if (permission === "custom") {
+    return "Sandbox/approval do not match a named preset — honor the live path= and approval= lines.";
+  }
+  const table = FACE_PERMISSION_TABLE[permission as keyof typeof FACE_PERMISSION_TABLE];
+  return table?.description ?? `Live permission=${permission}; honor path= and approval=.`;
+}
+
+/** Affirmative tool-surface copy (which tools / role). */
+function surfaceBrief(badge: string): string {
+  switch (badge) {
+    case "minimal":
+      return "Coding · fs/skill/std only — ship with this catalog; load skills for playbooks.";
+    case "shell":
+      return "Coding · fs + bash + PTY — no web, lsp, or subagents.";
+    case "frugal":
+      return "Coding · full tools, no subagents — prefer one session; xrk-plan-build for large work.";
+    case "shallow":
+      return "Coding · full tools + one-level subagents — spawn when parallel helps (xrk-delegate).";
+    case "harness":
+      return "Coding · full tools + nested subagents (Face caps) — prefer team_list member_id when spawning.";
+    case "im":
+      return "IM channel · reply on-channel; dispatch coding via workspace_* / subagent — see <session_posture>.";
+    case "qichuang":
+      return "Xiangyang · orchestrate peers/team; implement in coding workspaces — see <session_posture>.";
+    default:
+      return `Tool surface=${badge}; use only tools in your catalog.`;
+  }
+}
+
 function toolSurfaceSummary(badge: string): string {
+  // Orchestration badges: fs bits alone mislead — call out the real surface.
+  if (badge === "im") {
+    return "im (full-access · channel+list/create/session_prompt+subagent→coding)";
+  }
+  if (badge === "qichuang") {
+    return "qichuang (full-access · team+list/create/session_prompt · no nested subagents)";
+  }
   const profile = resolveAgentPresetProfile(badge);
   const bits: string[] = ["fs"];
   if (profile.composition === "harness") bits.push("bash");
@@ -32,7 +78,7 @@ function toolSurfaceSummary(badge: string): string {
 }
 
 /**
- * Compact machine-readable capability block (≤ ~200 chars ideal).
+ * Compact machine-readable capability block + brief lines.
  */
 export function formatSessionCapability(
   runtime: FaceRuntime,
@@ -57,7 +103,9 @@ export function formatSessionCapability(
   const cwd = resolveSessionCwd(runtime, sessionId);
   const lines = [
     `permission: ${permission} (path=${pathMode}) · approval=${approval}`,
+    `permission_brief: ${permissionBrief(permission)}`,
     `tool_surface: ${toolSurfaceSummary(badge)}`,
+    `surface_brief: ${surfaceBrief(badge)}`,
     `cwd: ${cwd}`,
     `path_allowlist: ${allowN} objects (session+settings)`,
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,

@@ -36,7 +36,7 @@
 | `recipes/*.yaml` | `/id` 斜杠配方 |
 | `skills/*/SKILL.md` | Skill 目录 |
 
-**Identity 产品决策（保持薄）**：默认只种人格向薄 `AGENTS.md`（对标 Codex 全局说明：语气、做事方式、边界）。更深的人设语气用可选 `SOUL.md` / `IDENTITY.md`；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
+**Identity 产品决策（保持薄）**：家目录种 `AGENTS.md` + `SOUL.md`（均 fingerprint 随产品刷新）。用户自定人设写工作区 `.agents/SOUL.md` / `IDENTITY.md`（覆盖注入）；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
 
 ## Skills（运行时）
 
@@ -140,7 +140,7 @@ Optional directories; **never auto-created**. Common files:
 | `recipes/*.yaml` | `/id` slash recipes |
 | `skills/*/SKILL.md` | Skill trees |
 
-**Identity product decision (stay thin)**: seed only a persona-shaped thin `AGENTS.md` (Codex-style global guidance: voice, working agreements, boundaries). Optional `SOUL.md` / `IDENTITY.md` for a stronger tone; factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
+**Identity product decision (stay thin)**: home seeds `AGENTS.md` + `SOUL.md` (both fingerprint-refreshed with the product). User-authored persona lives in workspace `.agents/SOUL.md` / `IDENTITY.md` (overlay wins); factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
 
 ## Skills (runtime)
 

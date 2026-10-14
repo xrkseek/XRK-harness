@@ -8,6 +8,8 @@ import { formatRosterCatalog } from "./agent-roster-store.js";
 import { listWorkspaceThreadCatalog } from "./session-thread-tools.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
+import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 
 /** Parent 主线 rows whose thread was updated in the last day. */
 export const COLLAB_BOARD_THREAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -27,40 +29,54 @@ export interface CollabBoardThreadRow {
   }>;
 }
 
+/** How the parent session should read the team + 主线 board. */
+export type CollabBoardSurface = "coding" | "im" | "qichuang";
+
 export function formatCollabBoardText(input: {
   readonly membersCatalog: string;
   readonly threads: readonly CollabBoardThreadRow[];
   readonly now?: number;
   /** False for Frugal / badges with `subagents.mode === "off"`. */
   readonly canSpawn?: boolean;
+  /** Defaults to coding (full board + thread mail). */
+  readonly surface?: CollabBoardSurface;
 }): string {
   const now = input.now ?? Date.now();
   const cutoff = now - COLLAB_BOARD_THREAD_WINDOW_MS;
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
   const canSpawn = input.canSpawn !== false;
-  const lines = [
-    canSpawn
-      ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits (see session_capability for permission × tool_surface). Standing skills are for that member after spawn. Playbooks stay on the member."
-      : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here; see session_capability). Members:",
-    input.membersCatalog,
-    "",
-    "主线 (parent sessions, last 24h) — `thread_message` the peer's session_id; reply returns here. Do not thread_switch to send mail (that moves *this* session onto their pin). Not a subagent.",
-  ];
-  if (recent.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const thread of recent) {
-      const sessions = thread.sessions
-        .map((s) => {
-          const mark = s.self ? "*" : "";
-          const tip = s.sideline ? ` · ${clipBrief(s.sideline)}` : "";
-          return `${s.sessionId}${mark}${tip}`;
-        })
-        .join("; ");
-      const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
-      lines.push(
-        `- ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
-      );
+  const surface = input.surface ?? "coding";
+  const teamLead =
+    surface === "im"
+      ? "Agent Team — from IM, spawn `subagent` with member_id into a coding workspace (workspace_id from workspace_list). Standing skills apply on that child."
+      : surface === "qichuang"
+        ? "Agent Team — Qichuang has no nested subagents; match members for playbooks, then open peer work with workspace_session_prompt (or Skill-load here)."
+        : canSpawn
+          ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits (see session_capability for permission × tool_surface). Standing skills are for that member after spawn. Playbooks stay on the member."
+          : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here; see session_capability). Members:";
+  const lines = [teamLead, input.membersCatalog];
+  // IM / 奇创 have no thread UI — omit 主线 mail instructions.
+  if (surface === "coding") {
+    lines.push(
+      "",
+      "主线 (parent sessions, last 24h) — `thread_message` the peer's session_id; reply returns here. Do not thread_switch to send mail (that moves *this* session onto their pin). Not a subagent.",
+    );
+    if (recent.length === 0) {
+      lines.push("(none)");
+    } else {
+      for (const thread of recent) {
+        const sessions = thread.sessions
+          .map((s) => {
+            const mark = s.self ? "*" : "";
+            const tip = s.sideline ? ` · ${clipBrief(s.sideline)}` : "";
+            return `${s.sessionId}${mark}${tip}`;
+          })
+          .join("; ");
+        const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
+        lines.push(
+          `- ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
+        );
+      }
     }
   }
   return lines.join("\n").slice(0, BOARD_MAX_CHARS);
@@ -79,15 +95,24 @@ export function formatCollabBoard(
 ): string {
   if (runtime.subagents.getByChild(sessionId)) return "";
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
-  const canSpawn =
-    resolveAgentPresetProfile(effectiveSessionAgentPreset(runtime, sessionId))
-      .subagents.mode === "on";
+  const badge = effectiveSessionAgentPreset(runtime, sessionId);
+  const canSpawn = resolveAgentPresetProfile(badge).subagents.mode === "on";
+  const surface: CollabBoardSurface =
+    badge === "im" || workspaceId === IM_WORKSPACE_ID
+      ? "im"
+      : badge === "qichuang" || workspaceId === XIANGYANG_WORKSPACE_ID
+        ? "qichuang"
+        : "coding";
   return formatCollabBoardText({
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
     ),
-    threads: listWorkspaceThreadCatalog(runtime, workspaceId, sessionId),
+    threads:
+      surface === "coding"
+        ? listWorkspaceThreadCatalog(runtime, workspaceId, sessionId)
+        : [],
     canSpawn,
+    surface,
     now,
   });
 }

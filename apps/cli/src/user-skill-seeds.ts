@@ -3,9 +3,13 @@
  * Called from `xrkh serve` / `web` and Desktop Host boot after install/update.
  *
  * Refresh policies:
- * - **fingerprint** (skills · recipes · `AGENTS.md`): rewrite when the bundled
- *   fingerprint moves (or the home copy is missing).
- * - **create-once** (`SOUL.md`): install only when missing; never overwrite.
+ * - **fingerprint** (skills · recipes · `AGENTS.md` · `SOUL.md`): rewrite when
+ *   the bundled fingerprint moves (or the home copy is missing).
+ * - **create-once**: install only when missing; never overwrite (kept for
+ *   future flat seeds; standing no longer uses it).
+ *
+ * User persona edits belong in workspace `.agents/SOUL.md` (or `.agents/`),
+ * not `~/.xrk/SOUL.md` — home standing is a product seed and will refresh.
  */
 import {
   access,
@@ -65,7 +69,7 @@ type FlatSeedEntry = {
 /** Standing files under `{XRK_HOME}` (README.md in the seed dir is docs-only). */
 const STANDING_SEED_ENTRIES: readonly FlatSeedEntry[] = [
   { name: "AGENTS.md", policy: "fingerprint" },
-  { name: "SOUL.md", policy: "create-once" },
+  { name: "SOUL.md", policy: "fingerprint" },
 ];
 
 function emptySeedResult(targetDir: string): EnsureUserSkillSeedsResult {

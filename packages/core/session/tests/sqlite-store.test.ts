@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createPersistentSessionStore,
   forkSession,
+  SESSION_ARCHIVE_DB_FILENAME,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
   SessionsDirInUseError,
@@ -519,5 +520,56 @@ describe("createPersistentSessionStore", () => {
     expect(
       b.readEvents("forked").map((e) => ("content" in e ? e.content : undefined)),
     ).toEqual(Array.from({ length: 12 }, (_, i) => `m${i}`));
+  });
+
+  it("offloads archived logs to sessions-archive.db and restores on demand", () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir));
+    const id = store.create("arch-me").id;
+    store.append(id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: "keep me cold",
+    });
+    store.flush();
+    expect(store.isOffloaded(id)).toBe(false);
+
+    store.offloadToArchive(id);
+    expect(store.isOffloaded(id)).toBe(true);
+    expect(store.has(id)).toBe(true);
+    expect(store.list()).toContain(id);
+    expect(store.readEvents(id)).toHaveLength(1);
+    expect(() =>
+      store.append(id, {
+        type: "user/message",
+        ts: 2,
+        turnId: "t2",
+        content: "nope",
+      }),
+    ).toThrow(/archived offload/);
+    expect(existsSync(path.join(dir, SESSION_ARCHIVE_DB_FILENAME))).toBe(true);
+
+    store.close();
+    const reloaded = track(createPersistentSessionStore(dir));
+    expect(reloaded.isOffloaded(id)).toBe(true);
+    expect(reloaded.readEvents(id)[0]).toMatchObject({ content: "keep me cold" });
+
+    reloaded.restoreFromArchive(id);
+    expect(reloaded.isOffloaded(id)).toBe(false);
+    reloaded.append(id, {
+      type: "user/message",
+      ts: 3,
+      turnId: "t3",
+      content: "hot again",
+    });
+    expect(reloaded.readEvents(id)).toHaveLength(2);
+
+    reloaded.offloadToArchive(id);
+    reloaded.delete(id);
+    expect(reloaded.has(id)).toBe(false);
+    reloaded.close();
+    const afterDelete = track(createPersistentSessionStore(dir));
+    expect(afterDelete.has(id)).toBe(false);
   });
 });

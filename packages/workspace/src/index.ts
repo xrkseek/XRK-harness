@@ -25,6 +25,20 @@ import { computeInjectFingerprint } from "./inject-fingerprint.js";
 
 export type { WorkspaceBudgetEvent } from "./durable-inject.js";
 
+export {
+  collectEcosystemInstructions,
+  sectionsToInstructionBlocks,
+  sectionsToInstructionChanges,
+  type CollectEcosystemInstructionsOptions,
+  type InstructionSection,
+} from "./ecosystem-instructions.js";
+
+export {
+  createInjectBudget,
+  MAX_INSTRUCTION_FILE_BYTES,
+  type InjectBudget,
+} from "./inject-budget.js";
+
 export type { RuntimeSurface } from "./workspace-anchor.js";
 export {
   formatRuntimeSurfaceAnchor,

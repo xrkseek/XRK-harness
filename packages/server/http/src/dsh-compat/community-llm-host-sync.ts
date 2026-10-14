@@ -308,3 +308,87 @@ export function scheduleCommunityLlmSyncRetries(
     timer.unref?.();
   }
 }
+
+/** Face sync fingerprint (provider · loopback · model ids · effort menus). */
+export function communityLlmSyncFingerprint(
+  providerId: string,
+  baseUrl: string,
+  models: readonly CommunityLlmSyncModelRow[],
+): string {
+  return `${providerId}|${baseUrl}|${models
+    .map(
+      (m) =>
+        `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
+    )
+    .join(",")}|c2`;
+}
+
+/** Drop stale fingerprints for a provider when its loopback port moves. */
+export function dropStaleCommunityLlmFingerprints(
+  fingerprints: Set<string>,
+  providerId: string,
+  baseUrl: string,
+): void {
+  const keepPrefix = `${providerId}|${baseUrl}|`;
+  const providerPrefix = `${providerId}|`;
+  for (const fp of [...fingerprints]) {
+    if (fp.startsWith(providerPrefix) && !fp.startsWith(keepPrefix)) {
+      fingerprints.delete(fp);
+    }
+  }
+}
+
+export type CommunityLlmSyncer = () => Promise<boolean>;
+
+/**
+ * Shared Face-sync batching for Cordis community LLM hosts (WB · OFM · …).
+ * `settled` is true only after every registered syncer returns ok once.
+ */
+export function createCommunityLlmSyncScheduler(options: {
+  readonly isDisposed: () => boolean;
+  readonly onBatchError?: (error: unknown) => void;
+}): {
+  readonly fingerprints: Set<string>;
+  readonly settled: () => boolean;
+  markUnsettled(): void;
+  addSyncer(sync: CommunityLlmSyncer): void;
+  runAll(): Promise<void>;
+  scheduleRetries(): void;
+} {
+  const syncers: CommunityLlmSyncer[] = [];
+  const fingerprints = new Set<string>();
+  let settled = false;
+  let chain: Promise<void> = Promise.resolve();
+
+  const runAll = async (): Promise<void> => {
+    chain = chain
+      .then(async () => {
+        if (options.isDisposed()) return;
+        let allOk = syncers.length > 0;
+        for (const sync of syncers) {
+          if (!(await sync())) allOk = false;
+        }
+        if (allOk) settled = true;
+      })
+      .catch((error: unknown) => {
+        options.onBatchError?.(error);
+      });
+    await chain;
+  };
+
+  return {
+    fingerprints,
+    settled: () => settled,
+    markUnsettled() {
+      settled = false;
+    },
+    addSyncer(sync) {
+      syncers.push(sync);
+      settled = false;
+    },
+    runAll,
+    scheduleRetries() {
+      scheduleCommunityLlmSyncRetries(runAll, options.isDisposed);
+    },
+  };
+}

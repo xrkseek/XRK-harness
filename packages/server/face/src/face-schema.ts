@@ -84,23 +84,26 @@ export const FACE_PERMISSION_PRESETS = [
 
 export type FacePermissionPreset = (typeof FACE_PERMISSION_PRESETS)[number];
 
-/**
- * Settings → Permissions `defaultPreset` choices (future sessions only).
- * Identical to {@link FACE_PERMISSION_PRESETS}: Auto is session-catalog-only
- * (DSH: General settings never offer Auto).
- */
-export const FACE_PERMISSION_SETTINGS_PRESETS = FACE_PERMISSION_PRESETS;
-
 /** Canonical identity of the Auto (per-call review) preset — DSH `AUTO_PRESET`. */
 export const AUTO_PERMISSION_PRESET = "auto" as const;
 
 /**
- * `defaultPreset` Settings schema — configured presets only (no `auto`).
- * Current-session Access / `/permission` may still list Auto while Guardian
- * `registerAuto` is live.
+ * Settings → Permissions `defaultPreset` choices (future sessions).
+ * Includes Auto; Host keeps `registerAuto` live for the process lifetime so
+ * new sessions can pin Auto from Settings the same way `/permission auto` does.
+ */
+export const FACE_PERMISSION_SETTINGS_PRESETS = [
+  ...FACE_PERMISSION_PRESETS,
+  AUTO_PERMISSION_PRESET,
+] as const;
+
+/**
+ * `defaultPreset` Settings schema — configured presets + Auto review.
+ * Session Access / `/permission` still list Auto only while Guardian
+ * `registerAuto` is live; Host wires that for the process lifetime.
  */
 export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
-  uid: 7,
+  uid: 8,
   refs: {
     1: {
       type: "const",
@@ -117,18 +120,23 @@ export const FACE_PERMISSION_SCHEMA: FaceSchemaEnvelope = {
       meta: { description: "Full access" },
       value: "danger-full-access",
     },
-    4: { type: "union", list: [1, 2, 3] },
-    5: {
+    4: {
+      type: "const",
+      meta: { description: "Auto review" },
+      value: "auto",
+    },
+    5: { type: "union", list: [1, 2, 3, 4] },
+    6: {
       type: "string",
       meta: {
         description:
           "Absolute extra writable root. Schema base defaults to product home (`{XRK_HOME}`); relative paths stay under the workspace.",
       },
     },
-    6: { type: "array", inner: 5 },
-    7: {
+    7: { type: "array", inner: 6 },
+    8: {
       type: "object",
-      dict: { defaultPreset: 4, extraWritableRoots: 6 },
+      dict: { defaultPreset: 5, extraWritableRoots: 7 },
     },
   },
 };
@@ -195,5 +203,15 @@ export function isFacePermissionPreset(
   return (
     typeof value === "string" &&
     (FACE_PERMISSION_PRESETS as readonly string[]).includes(value)
+  );
+}
+
+/** Whether `value` is a Settings `defaultPreset` choice (table presets + Auto). */
+export function isFacePermissionSettingsPreset(
+  value: unknown,
+): value is (typeof FACE_PERMISSION_SETTINGS_PRESETS)[number] {
+  return (
+    typeof value === "string" &&
+    (FACE_PERMISSION_SETTINGS_PRESETS as readonly string[]).includes(value)
   );
 }

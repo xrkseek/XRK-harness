@@ -21,7 +21,7 @@
     │
     └─ 侧栏里每一条 Session（一次对话）
            │
-           ├─ agentPreset = minimal|shell|frugal|shallow|harness
+           ├─ agentPreset = minimal|im|shell|frugal|shallow|harness
            └─ 读 workspace/.xrk/*               ← 种子喂什么话
 ```
 
@@ -29,17 +29,19 @@
 
 | 层 | 名字 | 落点 | 决定什么 |
 |----|------|------|----------|
-| **Session 工具面** | 五档徽章（UI 名见下表） | 会话徽章 / Face `agentPreset` | **实际工具组合与子代理策略** |
+| **Session 工具面** | 编码五档 + IM 通道徽章（UI 名见下表） | 会话徽章 / Face `agentPreset` | **实际工具组合与子代理策略** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | 进程启动 | 新会话默认徽章种子；`server` = Host 工厂名 |
 | **工作区 Agent 层** | 仓库 `.agents/` · 用户 `~/.agents/` · `{workspace}/.xrk` | inject + skills | 人格 / 规则 / 插件开发喂法 |
 
 Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。产品 UI **不**单独展示 Server。
 
-## Session 工具面（五档）
+## Session 工具面
 
 | id | UI 名 | 工具面 | 用途 |
 |----|-------|--------|------|
 | **minimal** | Minimal | fs + skill + std | 最小，无 shell / 联网（烟测 / `run` 默认） |
+| **im** | IM | minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_list`·`create`·`session_prompt` / `subagent`（无 bash / web / presence / thread） | IM 通道（`ws_im`）；可删工作区；复杂任务可 `workspace_id` 委派到编码区；AGT 可换 `setImToolPorts` |
+| **qichuang** | 奇创 | minimal + team / session_query / `workspace_list`·`create`·`session_prompt`（无 subagent / bash / web） | 向阳空间锁定徽章；建区 / 开会话 / 派任务（peer，非嵌套子代理） |
 | **shell** | Shell | + bash + PTY | 本机 shell 专注 |
 | **frugal** | Frugal | 完整工具，无子代理（`delegation: explicit`，无子代理工具时不生效） | 控制支出（省钱） |
 | **shallow** | Shallow | 完整工具，一层子代理（徽章深度上限=1；并发见 Settings；`delegation: proactive`） | 浅委派 |
@@ -53,18 +55,18 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 
 实现包：`presets/minimal` · `presets/harness`。`presets/server` **不是**第三套工具表，只导出 Host `AgentFactory`（内部调用 harness，并按会话徽章套用 profile）。
 
-**Session 是什么**：侧栏里的一条对话线程（有 id、事件日志、可选子代理）。创建时钉上 `agentPreset`（内存 + `~/.xrk/session-agent-presets.json`）；已跑着的会话保持开始时的工具面，Host 重启与会话 LRU 驱逐不丢徽章。Frugal / Minimal / Shell **不绑定**子代理工具；误绑时工具执行也会拒绝。
+**Session 是什么**：侧栏里的一条对话线程（有 id、事件日志、可选子代理）。创建时钉上 `agentPreset`（内存 + `~/.xrk/session-agent-presets.json`）；已跑着的会话保持开始时的工具面，Host 重启与会话 LRU 驱逐不丢徽章。Frugal / Minimal / Shell **不绑定**子代理工具；误绑时工具执行也会拒绝。IM（`ws_im`）绑定 `subagent` / team / `workspace_list`·`create`·`session_prompt`（无 presence / thread / canvas），跨工作区 spawn 默认子徽章 **harness**；编码徽章不得带 `workspace_id`。IM 会话由 Host admit 钉 **`im`**（不必用 CLI `--preset im`）。
 
 ## Host CLI 入口
 
 | Host `--preset` | 含义 |
 |-----------------|------|
-| `minimal` · `shell` · `frugal` · `shallow` · `harness` | 新会话默认徽章 = 该 id |
+| `minimal` · `im` · `shell` · `frugal` · `shallow` · `harness` | 新会话默认徽章 = 该 id |
 | `server` · `plan`（遗留） | 与 harness **同一套工具**；计划模式请用 `/plan` |
 
 `web` / `serve` / `restart` 默认 **harness**。`run` / `dump-config` 默认 **minimal**。Host `--preset` **不会**覆盖已有会话徽章。
 
-CLI 缩写（对标 DSH `dsh <name>`）：**`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**。`<preset>` 必须是 Host 真源 id（`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`）：`minimal` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`。
+CLI 缩写（对标 DSH `dsh <name>`）：**`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**。`<preset>` 必须是 Host 真源 id（`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`）：`minimal` · `im` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`。
 
 ```bash
 xrkh frugal
@@ -124,7 +126,19 @@ node apps/cli/dist/bin.js web --preset frugal
 2. 更新 UI locale 与本页、[status.md](./status.md)。
 3. 一般**不必**新建 `presets/<id>/` 包——复用 `minimal` / `harness` composition。
 
-相关：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md)
+## 向阳空间 · 奇创（产品默认）
+
+| 名 | 契约 |
+|----|------|
+| **向阳空间** | id `ws_default`；标题固定「向阳空间」；路径 `~/.xrk/xiangyang-workspace`；初次启动默认存在；**不可删除 / 改名** |
+| **奇创**（`qichuang`） | 向阳空间会话锁定徽章：团队名册 + `workspace_list` / `workspace_create` / `workspace_session_prompt`；**无**嵌套子代理；空间内不可切换工具面 |
+| **专用 skills** | 仅落在向阳空间 `.xrk/skills`（如 `xrk-xrk-cleanup` · `xrk-skill-merge` · `xrk-memory-polish` · `xrk-plugin-dev-care`） |
+| **IM**（`ws_im`） | 仅网关连接或首次挂 IM 会话时生成；**可删**（下次连接再建）；空且无网关时侧栏隐藏 |
+| **编排边界** | 建工作区 / 新会话 / 跨区派任务：仅 **IM** 与 **奇创**；编码徽章（harness 等）不得 `subagent(workspace_id)` 跨区 |
+
+CLI / Desktop `--workspace` 若不是向阳空间路径，会另登记为一个编码工作区。
+
+相关：[workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md) · [status.md](./status.md)
 
 ---
 
@@ -151,7 +165,7 @@ You open web
     │
     └─ Each Session in the sidebar (one conversation)
            │
-           ├─ agentPreset = minimal|shell|frugal|shallow|harness
+           ├─ agentPreset = minimal|im|shell|frugal|shallow|harness
            └─ reads workspace/.xrk/*            ← what seeds inject
 ```
 
@@ -159,17 +173,19 @@ You open web
 
 | Layer | Name | Location | Controls |
 |-------|------|----------|----------|
-| **Session tool surface** | Five badges (UI names below) | Session badge / Face `agentPreset` | **Actual tool composition and subagent policy** |
+| **Session tool surface** | Five coding badges + IM channel (UI names below) | Session badge / Face `agentPreset` | **Actual tool composition and subagent policy** |
 | **Host CLI** | `--preset` / `XRK_PRESET` | Process startup | Default badge seed for new sessions; `server` = Host factory name |
 | **Workspace agent layer** | Repo `.agents/` · user `~/.agents/` · `{workspace}/.xrk` | Inject + skills | Persona / rules / plugin-authoring |
 
 Legacy wire value **`server`** normalizes to **`harness`** for storage and badges. The product UI does **not** show Server as its own badge.
 
-## Session tool surfaces (five tiers)
+## Session tool surfaces
 
 | `agentPreset` | UI name | Tools / policy | Use when |
 |---------------|---------|----------------|----------|
 | **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents | Smoke tests; no shell |
+| **im** | IM | Minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_list`·`create`·`session_prompt` / `subagent` (no bash / web / presence / thread) | IM channel (`ws_im`); deletable workspace; complex asks may `workspace_id` into coding workspaces; AGT may swap via `setImToolPorts` |
+| **qichuang** | 奇创 | Minimal + team / session_query / `workspace_list`·`create`·`session_prompt` (no subagent / bash / web) | Locked badge for 向阳空间; create workspace / open peer sessions / dispatch (not nested subagents) |
 | **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents off | Local shell focus |
 | **frugal** | Frugal | Full coding tools; **subagents off** (`delegation: explicit`, unused while tools are unbound) | Control spend |
 | **shallow** | Shallow | Full tools; subagents **depth ≤1** (badge ceiling; concurrency from Settings; `delegation: proactive`) | Light helper tasks |
@@ -183,18 +199,18 @@ Badge `delegation` (while subagents `mode: on`): **`explicit`** = spawn only whe
 
 Implementation packages: `presets/minimal` · `presets/harness`. `presets/server` is **not** a third tool table; it only exports the Host `AgentFactory` (calls harness and applies the session badge profile).
 
-**What a Session is**: one conversation thread in the sidebar (id, event log, optional subagents). `agentPreset` is pinned at create time (memory + `~/.xrk/session-agent-presets.json`); running sessions keep the tool surface they started with across Host restart and session LRU eviction. Frugal / Minimal / Shell do **not** bind subagent tools; a stale bind still refuses at execute time.
+**What a Session is**: one conversation thread in the sidebar (id, event log, optional subagents). `agentPreset` is pinned at create time (memory + `~/.xrk/session-agent-presets.json`); running sessions keep the tool surface they started with across Host restart and session LRU eviction. Frugal / Minimal / Shell do **not** bind subagent tools; a stale bind still refuses at execute time. IM (`ws_im`) binds `subagent` / team / `workspace_list`·`create`·`session_prompt` (no presence / thread / canvas); cross-workspace spawn defaults the child badge to **harness**; coding badges must not pass `workspace_id`. IM sessions are pinned to **`im`** by Host admit (CLI `--preset im` is optional).
 
 ## Host CLI entry
 
 | Host `--preset` | Meaning |
 |-----------------|---------|
-| `minimal` · `shell` · `frugal` · `shallow` · `harness` | New-session default badge = that id |
+| `minimal` · `im` · `shell` · `frugal` · `shallow` · `harness` | New-session default badge = that id |
 | `server` · `plan` (legacy) | **Same tools** as harness; use `/plan` for plan mode |
 
 `web` / `serve` / `restart` default to **harness**. `run` / `dump-config` default to **minimal**. Host `--preset` does **not** override badges on existing sessions.
 
-CLI shortcut (DSH-style `dsh <name>`): **`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**. `<preset>` must be a Host truth-source id (`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`): `minimal` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`.
+CLI shortcut (DSH-style `dsh <name>`): **`xrkh <preset>`** ≡ **`xrkh web --preset <preset>`**. `<preset>` must be a Host truth-source id (`HOST_RUNTIME_PRESET_IDS` / `XRK_PRESET`): `minimal` · `im` · `shell` · `frugal` · `shallow` · `harness` · `server` · `plan`.
 
 ```bash
 xrkh frugal
@@ -254,4 +270,16 @@ node apps/cli/dist/bin.js web --preset frugal
 2. Update UI locales, this page, and [status.md](./status.md).
 3. Usually **do not** add a new `presets/<id>/` package — reuse `minimal` / `harness` composition.
 
-Related: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md)
+## Xiangyang space · Qichuang (product default)
+
+| Name | Contract |
+|------|----------|
+| **Xiangyang space** | id `ws_default`; fixed title 「向阳空间»; path `~/.xrk/xiangyang-workspace`; present on first launch; **undeletable / unrenamable** |
+| **Qichuang** (`qichuang`) | Locked badge for Xiangyang sessions: team roster + `workspace_list` / `workspace_create` / `workspace_session_prompt`; **no** nested subagents; tool surface not user-switchable |
+| **Dedicated skills** | Only under Xiangyang `.xrk/skills` (e.g. `xrk-xrk-cleanup` · `xrk-skill-merge` · `xrk-memory-polish` · `xrk-plugin-dev-care`) |
+| **IM** (`ws_im`) | Created only when a gateway connects or an IM session attaches; **deletable** (recreated on next connect); hidden when empty with no gateway |
+| **Orchestration boundary** | Create workspace / new session / cross-ws dispatch: **IM + 奇创 only**; coding badges must not `subagent(workspace_id)` across workspaces |
+
+CLI / Desktop `--workspace`, when not the Xiangyang path, is registered as an extra coding workspace.
+
+Related: [workspace-inject.md](./workspace-inject.md) · [plugin-development.md](./plugin-development.md) · [code-mode.md](./code-mode.md) · [status.md](./status.md)

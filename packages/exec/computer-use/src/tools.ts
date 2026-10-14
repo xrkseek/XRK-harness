@@ -116,8 +116,9 @@ export function createComputerUseTools(
   }> = {
     name: "computer_use",
     description:
-      "Native desktop GUI. Loop: list_windows → capture → click/type/key/scroll by element index → capture. " +
-      "capture mode=ax|vision|som (vision/som add an inline screenshot). Web pages: browser_*.",
+      "Native desktop GUI (not browser_*). Loop: list_windows → capture → click/type/key/scroll by element index → capture to verify. " +
+      "capture mode=ax|vision|som (vision/som add an inline screenshot; attachmentId is not a path). " +
+      "A new capture invalidates earlier indices. Background delivery: helper act + UIA capture on Windows.",
     parameters: {
       type: "object",
       properties: {

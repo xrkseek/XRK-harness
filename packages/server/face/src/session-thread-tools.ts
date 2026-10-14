@@ -402,8 +402,8 @@ export function bindSessionThreadTools(
     name: "sideline_set",
     description:
       "Write this session's 支线 caption (same as presence_set tips). " +
-      "Shows under the session name and on the Overview ball so the user sees what you are doing now. " +
-      "Does not change the session name. Does not require a 主线. Prefer presence_set when also changing emotion.",
+      "Shows under the session name in the sidebar (primary). Overview ball may mirror mood when that chrome is on. " +
+      "Does not change the session name / 主线. Prefer presence_set when also changing emotion.",
     parameters: {
       type: "object",
       properties: {

@@ -93,11 +93,15 @@ export {
 export {
   asCommunityLlmModelRows,
   baseUrlFromCommunityModels,
+  communityLlmSyncFingerprint,
+  createCommunityLlmSyncScheduler,
+  dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
   reasoningFromUnknown,
   scheduleCommunityLlmSyncRetries,
   type CommunityLlmSyncModelRow,
   type CommunityLlmSyncReasoning,
+  type CommunityLlmSyncer,
 } from "./community-llm-host-sync.js";
 export {
   baselineHttpRoutes,
@@ -149,6 +153,7 @@ export {
 export {
   composeApplyBridgeContributions,
   applyHostPackageByName,
+  stopHostPackage,
   stopHostPackageFiber,
 } from "./host-apply-bridge.js";
 export {
@@ -271,6 +276,30 @@ export {
   type AutoReviewSourceRole,
   type FilterAutoReviewSessionHistoryOptions,
 } from "./auto-review-history.js";
+
+// —— IM bridge session bind / admit hook ——
+export {
+  imChatKey,
+  isImNewSessionCommand,
+} from "./im-chat-key.js";
+export {
+  bindImSession,
+  lookupImSession,
+  lookupImSessionBySessionId,
+  listImSessionBindings,
+  hasImSessionBindings,
+  type ImSessionMapEntry,
+} from "./im-session-map.js";
+export {
+  sendImMessage,
+  listImMessages,
+  ingestImWebhook,
+  setImFaceAdmitHook,
+  normalizeImAttachments,
+  type ImMessageRow,
+  type ImAttachment,
+  type ImAttachmentKind,
+} from "./im-messaging-bridge.js";
 
 // —— mobile-access Host contract ——
 export {

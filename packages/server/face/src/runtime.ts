@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   forkSession,
@@ -93,8 +94,22 @@ import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
-import { hydrateWorkspaceRegistry } from "./workspace-store.js";
+import {
+  hydrateWorkspaceRegistry,
+  persistWorkspaceDoc,
+} from "./workspace-store.js";
+import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import { bindImWorkspaceTools } from "./im-workspace-tools.js";
+import {
+  XIANGYANG_WORKSPACE_ID,
+  XIANGYANG_WORKSPACE_TITLE,
+  xiangyangWorkspacePath,
+} from "./xiangyang-workspace.js";
+import { seedXiangyangSkills } from "./xiangyang-skills.js";
+import { bindXiangyangWorkspaceTools } from "./xiangyang-workspace-tools.js";
+import { runXiangyangCodingSessionMigrate } from "./xiangyang-session-migrate.js";
 import { FaceSubagentRegistry, subagentOwnedEvents } from "./subagent-registry.js";
+import { FaceForkLineageStore } from "./fork-lineage.js";
 import { ExternalAgentSessionRegistry, externalAgentHandlesPath } from "./external-agent-runtime.js";
 import { AgentTeamGraph, agentTeamGraphPath } from "./agent-team-graph.js";
 import {
@@ -409,6 +424,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const goals = new FaceGoalStore(options.goalPersistPath);
   const canvases = new FaceCanvasStore(productHome);
   const sessionThreads = new FaceSessionThreadStore(productHome);
+  const forkLineage = new FaceForkLineageStore(
+    options.subagentPersistPath
+      ? path.join(path.dirname(options.subagentPersistPath), "fork-lineage.json")
+      : undefined,
+  );
   const agentRoster = new FaceAgentRosterStore(productHome);
   const presence = new FacePresenceStore();
   const wireIds = new FaceWireIdMaps();
@@ -721,47 +741,87 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       if (runtime) {
         sessionToolsBound.add(agent.tools);
         rememberedTools.set(sessionId, agent.tools);
-        bindAskUserTool(agent.tools, (qs, signal) =>
-          questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
-        );
-        bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
-          questions.ask(sessionId, qs, signal),
-        );
-        bindSettingsTools(agent.tools, runtime);
-        bindSessionQueryTools(agent.tools, {
-          runtime,
-          parentSessionId: sessionId,
-        });
-        bindGoalTools(agent.tools, {
-          runtime,
-          sessionId,
-        });
-        bindCanvasTools(agent.tools, {
-          runtime,
-          sessionId,
-        });
-        const childLink = runtime.subagents.getByChild(sessionId);
-        if (!childLink) {
-          bindSessionThreadTools(agent.tools, {
+        // IM projection: no presence / thread / canvas / ask_user UI.
+        // Roster + session_query + workspace_list let IM summon a coding team
+        // in another workspace (Host binds im_send + subagent).
+        const wsId = runtime.workspaces.workspaceIdOf(sessionId);
+        if (wsId === IM_WORKSPACE_ID) {
+          bindSessionQueryTools(agent.tools, {
             runtime,
-            sessionId,
+            parentSessionId: sessionId,
           });
-        }
-        if (!childLink || childLink.role === "lead") {
           bindAgentRosterTools(agent.tools, {
             runtime,
             sessionId,
           });
+          bindImWorkspaceTools(agent.tools, { runtime, sessionId });
+        } else if (wsId === XIANGYANG_WORKSPACE_ID) {
+          // 奇创: list/create/peer-session dispatch — no nested subagents.
+          // Still bind presence_set: tips = 支线 (sidebar); Overview ball is
+          // optional chrome (Settings can hide it) and is not IM-universal.
+          bindSessionQueryTools(agent.tools, {
+            runtime,
+            parentSessionId: sessionId,
+          });
+          bindAgentRosterTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+          bindXiangyangWorkspaceTools(agent.tools, { runtime, sessionId });
+          bindAskUserTool(agent.tools, (qs, signal) =>
+            questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+          );
+          bindSettingsTools(agent.tools, runtime);
+          bindPresenceTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+        } else {
+          bindAskUserTool(agent.tools, (qs, signal) =>
+            questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+          );
+          bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
+            questions.ask(sessionId, qs, signal),
+          );
+          bindSettingsTools(agent.tools, runtime);
+          bindSessionQueryTools(agent.tools, {
+            runtime,
+            parentSessionId: sessionId,
+          });
+          bindGoalTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+          bindCanvasTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+          // Only tool-delegated children skip thread tools. UI forks keep them
+          // (and are tracked in forkLineage, not subagents).
+          const childLink = runtime.subagents.getByChild(sessionId);
+          const delegatedChild = childLink && childLink.mode !== "fork";
+          if (!delegatedChild) {
+            bindSessionThreadTools(agent.tools, {
+              runtime,
+              sessionId,
+            });
+          }
+          if (!delegatedChild || childLink?.role === "lead") {
+            bindAgentRosterTools(agent.tools, {
+              runtime,
+              sessionId,
+            });
+          }
+          bindPresenceTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
+          bindProposeSkillTool(agent.tools, {
+            workspaceRoot: options.workspaceRoot,
+            sessionId,
+            ask: (qs, signal) => questions.ask(sessionId, qs, signal),
+          });
         }
-        bindPresenceTools(agent.tools, {
-          runtime,
-          sessionId,
-        });
-        bindProposeSkillTool(agent.tools, {
-          workspaceRoot: options.workspaceRoot,
-          sessionId,
-          ask: (qs, signal) => questions.ask(sessionId, qs, signal),
-        });
       }
     }
     bindAgentJobs(sessionId, agent);
@@ -1086,6 +1146,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     sessionImageScanned,
     workspaces,
     subagents,
+    forkLineage,
     externalAgents,
     agentTeams,
     agentTeamTasks,
@@ -1203,5 +1264,55 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   void hydrateCredentialsFromSecretStore(runtime);
   hydrateFaceHostSettings(runtime);
   hydrateWorkspaceRegistry(runtime, workspaces);
+  // Pre-offload installs kept archived logs in hot sessions.db — move them once.
+  if (typeof runtime.store.offloadToArchive === "function") {
+    const archived = workspaces.list(runtime.store.list()).archivedSessionIds;
+    for (const sessionId of archived) {
+      if (!runtime.store.has(sessionId)) continue;
+      if (runtime.store.isOffloaded?.(sessionId)) continue;
+      try {
+        runtime.store.offloadToArchive(sessionId);
+      } catch {
+        /* best-effort per id */
+      }
+    }
+    try {
+      runtime.store.reclaimStorage?.();
+    } catch {
+      /* best-effort */
+    }
+  }
+  // Product default: 向阳空间 under ~/.xrk (always present; never folder basename).
+  // IM (`ws_im`) is created only when a gateway connects / admits — not here.
+  {
+    const xyPath = xiangyangWorkspacePath(productHome);
+    const ensured = workspaces.ensureReserved(
+      XIANGYANG_WORKSPACE_ID,
+      xyPath,
+      XIANGYANG_WORKSPACE_TITLE,
+    );
+    // Keep CLI / Desktop `--workspace` as an extra coding workspace when it
+    // is not the reserved 向阳空间 path.
+    const launchRoot = path.resolve(options.workspaceRoot);
+    if (launchRoot !== path.resolve(xyPath)) {
+      workspaces.create(launchRoot);
+    }
+    if (ensured.created || ensured.workspace.title !== XIANGYANG_WORKSPACE_TITLE) {
+      void persistWorkspaceDoc(runtime, workspaces).catch(() => {
+        /* fail closed: in-memory default still usable */
+      });
+    } else if (launchRoot !== path.resolve(xyPath)) {
+      void persistWorkspaceDoc(runtime, workspaces).catch(() => {
+        /* best-effort */
+      });
+    }
+    void seedXiangyangSkills(xyPath).catch(() => {
+      /* skills seed is best-effort */
+    });
+    // Pre-Xiangyang installs pinned coding chats on ws_default — move them off.
+    void runXiangyangCodingSessionMigrate(runtime, launchRoot).catch(() => {
+      /* membership repair is best-effort */
+    });
+  }
   return runtime;
 }

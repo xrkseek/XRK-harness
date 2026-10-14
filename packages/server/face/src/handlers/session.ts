@@ -3,6 +3,7 @@ import {
   listPendingAdmits,
   readSessionEvents,
   sessionEventCount,
+  truncateSession,
   withdrawAdmit,
 } from "@xrkseek/core-session";
 import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
@@ -33,6 +34,13 @@ import { tryFaceSlashCommand } from "../slash.js";
 import { commitPlanMode } from "../plan-mode.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
+import { IM_AGENT_PRESET_ID, IM_WORKSPACE_ID } from "../im-workspace.js";
+import { ensureImWorkspace } from "../im-workspace-ensure.js";
+import {
+  QICHUANG_AGENT_PRESET_ID,
+  XIANGYANG_WORKSPACE_ID,
+  isOrchestrationWorkspaceId,
+} from "../xiangyang-workspace.js";
 import {
   durablePromptContent,
   hasPromptContent,
@@ -119,6 +127,14 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     }
   }
 
+  // Materialize ws_im only when something actually attaches to it.
+  if (
+    typeof p.workspaceId === "string" &&
+    p.workspaceId.trim() === IM_WORKSPACE_ID
+  ) {
+    await ensureImWorkspace(runtime);
+  }
+
   const inheritParent =
     parentSessionId && !p.workspaceId && !p.cwd
       ? resolveParentWorkspaceAttach(runtime, parentSessionId)
@@ -155,7 +171,13 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     attach.workspaceId === undefined
       ? undefined
       : runtime.workspaces.attachSession(sessionId, attach.workspaceId);
-  if (agentPreset) {
+  // 向阳空间 locks 奇创; IM locks im (Host admit also pins im).
+  const attachWs = attach.workspaceId;
+  if (attachWs === XIANGYANG_WORKSPACE_ID) {
+    pinSessionAgentPreset(runtime, sessionId, QICHUANG_AGENT_PRESET_ID);
+  } else if (attachWs === IM_WORKSPACE_ID) {
+    pinSessionAgentPreset(runtime, sessionId, IM_AGENT_PRESET_ID);
+  } else if (agentPreset) {
     pinSessionAgentPreset(
       runtime,
       sessionId,
@@ -193,11 +215,12 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
         : "subagent";
     const memberId =
       typeof p.memberId === "string" ? p.memberId.trim() : "";
+    const memberRosterWs =
+      typeof p.workspaceId === "string" && p.workspaceId.trim()
+        ? p.workspaceId.trim()
+        : canvasWorkspaceIdForSession(runtime, parentSessionId);
     const member = memberId
-      ? runtime.agentRoster.get(
-          canvasWorkspaceIdForSession(runtime, parentSessionId),
-          memberId,
-        )
+      ? runtime.agentRoster.get(memberRosterWs, memberId)
       : undefined;
     runtime.subagents.attach({
       parentSessionId,
@@ -242,10 +265,14 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       runtime.pathAllowlist.hydrate(runtime.store, parentSessionId);
     }
     runtime.pathAllowlist.hydrate(runtime.store, sessionId);
+    // Settings permission.defaultPreset applies to coding workspaces only.
+    // IM / 向阳空间 lock to full access (path open).
     pinInitialPermission(
       runtime.store,
       sessionId,
-      defaultPermissionPreset(runtime),
+      isOrchestrationWorkspaceId(attachWs)
+        ? "danger-full-access"
+        : defaultPermissionPreset(runtime),
       { autoGate: runtime.permissionAuto },
     );
   } catch (err) {
@@ -309,12 +336,28 @@ export const sessionList: FaceHandler = async (runtime) => {
     const wsRow = wsId ? runtime.workspaces.get(wsId) : undefined;
     const agentPreset = effectiveSessionAgentPreset(runtime, sessionId);
     const lineage = runtime.subagents.getByChild(sessionId);
+    const forkParent = runtime.forkLineage.getByChild(sessionId);
     const workspaceKey = canvasWorkspaceIdForSession(runtime, sessionId);
     const bind = runtime.sessionThreads.bindOf(workspaceKey, sessionId);
     const thread = bind
       ? runtime.sessionThreads.get(workspaceKey, bind.threadId)
       : undefined;
     const sideline = bind?.sideline ?? runtime.presence.get(sessionId)?.tips;
+    const parentOrigin =
+      lineage && lineage.mode !== "fork"
+        ? {
+            parentSessionId: lineage.parentSessionId,
+            origin: "subagent" as const,
+          }
+        : forkParent || (lineage && lineage.mode === "fork")
+          ? {
+              parentSessionId:
+                forkParent?.parentSessionId ?? lineage!.parentSessionId,
+              origin: "fork" as const,
+            }
+          : wsId === IM_WORKSPACE_ID
+            ? { origin: "im" as const }
+            : undefined;
     return {
       sessionId,
       updatedAt,
@@ -324,14 +367,7 @@ export const sessionList: FaceHandler = async (runtime) => {
       ...(wsId ? { workspaceId: wsId } : {}),
       ...(wsRow?.title ? { workspaceTitle: wsRow.title } : {}),
       agentPreset,
-      ...(lineage
-        ? {
-            parentSessionId: lineage.parentSessionId,
-            ...(lineage.mode !== "fork"
-              ? { origin: "subagent" as const }
-              : { origin: "fork" as const }),
-          }
-        : {}),
+      ...(parentOrigin ?? {}),
       title: snap?.values.title ?? null,
       ...(thread ? { mainline: thread.title, mainlineId: thread.id } : {}),
       ...(sideline ? { sideline } : {}),
@@ -601,7 +637,8 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
 
   if (mode === "queue") {
     const child = runtime.subagents.getByChild(sessionId);
-    if (child) {
+    // Delegated children stay off the 主线; UI forks keep their inherited bind.
+    if (child && child.mode !== "fork") {
       runtime.sessionThreads.unbind(
         canvasWorkspaceIdForSession(runtime, sessionId),
         sessionId,
@@ -759,13 +796,21 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   runtime.externalAgents.detach(sessionId);
+  runtime.forkLineage.detach(sessionId);
   try {
     await runtime.invalidateAgent?.(sessionId);
   } catch {
     /* ignore */
   }
 
+  // Permanent wipe: drops hot and/or cold archive rows. VACUUM when freelist
+  // is large enough so sessions.db / sessions-archive.db can shrink soon.
   runtime.store.delete(sessionId);
+  try {
+    runtime.store.reclaimStorage?.();
+  } catch {
+    /* best-effort */
+  }
   forgetRequestHeaderCache(sessionId);
   const sets = runtime.workspaces.forgetSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
@@ -957,20 +1002,38 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     ? runtime.workspaces.attachSession(child.id, parentWs)
     : undefined;
   const title = runtime.projections.snapshot(sessionId).values.title;
-  runtime.subagents.attach({
-    parentSessionId: sessionId,
-    childSessionId: child.id,
-    mode: linkMode,
-    label:
-      typeof p.label === "string" && p.label.trim()
-        ? p.label.trim()
-        : typeof title === "string" && title.trim()
-          ? title.trim()
-          : linkMode === "fork"
-            ? "fork"
+  if (linkMode === "fork") {
+    // Exploratory UI fork: lineage only — never the subagent/delegation graph.
+    runtime.forkLineage.attach({
+      parentSessionId: sessionId,
+      childSessionId: child.id,
+    });
+    const wsKey = canvasWorkspaceIdForSession(runtime, sessionId);
+    const parentBind = runtime.sessionThreads.bindOf(wsKey, sessionId);
+    if (parentBind) {
+      runtime.sessionThreads.switchTo(wsKey, child.id, parentBind.threadId);
+      if (parentBind.sideline) {
+        runtime.sessionThreads.setSideline(
+          wsKey,
+          child.id,
+          parentBind.sideline,
+        );
+      }
+    }
+  } else {
+    runtime.subagents.attach({
+      parentSessionId: sessionId,
+      childSessionId: child.id,
+      mode: linkMode,
+      label:
+        typeof p.label === "string" && p.label.trim()
+          ? p.label.trim()
+          : typeof title === "string" && title.trim()
+            ? title.trim()
             : "subagent",
-    ...(isAgentTeamSpawnRole(p.role) ? { role: p.role } : {}),
-  });
+      ...(isAgentTeamSpawnRole(p.role) ? { role: p.role } : {}),
+    });
+  }
   publishSessionAdded(runtime, child.id);
   if (workspace) {
     runtime.bus.publishHost({
@@ -985,6 +1048,88 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
       sessionId: child.id,
       parentSessionId: sessionId,
       eventCount: sessionEventCount(runtime.store, child.id),
+      ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
+      ...(cut.beforeSeq !== undefined ? { beforeSeq: cut.beforeSeq } : {}),
+    },
+  };
+};
+
+/**
+ * Cursor-style in-place truncate: same sessionId, drop the tail after the cut.
+ * Cancels a live turn first so an open turn/end cannot re-enter the log.
+ */
+export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => {
+  const p = asRecord(payload);
+  const sessionId = String(p.sessionId ?? "");
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "sessionId required" },
+    };
+  }
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  if (typeof runtime.store.replacePrefix !== "function") {
+    return {
+      ok: false,
+      error: {
+        code: "truncate-unsupported",
+        message: "session store does not support replacePrefix",
+      },
+    };
+  }
+
+  const atSeq =
+    typeof p.atSeq === "number" && Number.isFinite(p.atSeq)
+      ? Math.floor(p.atSeq)
+      : undefined;
+  const beforeSeq =
+    typeof p.beforeSeq === "number" && Number.isFinite(p.beforeSeq)
+      ? Math.floor(p.beforeSeq)
+      : undefined;
+
+  if (runtime.drain.isActive(sessionId)) {
+    await runtime.drain.cancel(sessionId);
+  }
+
+  const parentEvents = readSessionEvents(runtime.store, sessionId);
+  const cut = resolveForkCut(parentEvents, {
+    ...(atSeq !== undefined ? { atSeq } : {}),
+    ...(beforeSeq !== undefined ? { beforeSeq } : {}),
+  });
+  if (!cut.ok) {
+    return {
+      ok: false,
+      error: { code: cut.code, message: cut.message },
+    };
+  }
+
+  try {
+    truncateSession(runtime.store, sessionId, cut.cut);
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        code: "truncate-failed",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
+
+  const n = sessionEventCount(runtime.store, sessionId);
+  runtime.seq.ensureAtLeast(sessionId, n);
+  void runtime.projections.snapshot(sessionId);
+  forgetRequestHeaderCache(sessionId);
+
+  return {
+    ok: true,
+    value: {
+      sessionId,
+      eventCount: n,
       ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
       ...(cut.beforeSeq !== undefined ? { beforeSeq: cut.beforeSeq } : {}),
     },
@@ -1302,6 +1447,8 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
 };
 
 /** Shared Status snapshot (`/status` · Overview Status tab). */
+export { sessionTools } from "../session-tools.js";
+
 export const sessionStatus: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
   const sessionId = String(p.sessionId ?? "").trim();

@@ -50,6 +50,7 @@ export type {
   HistoryEntry, ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   ModelReasoningEffort, ModelSelection, PromptContentPart, QueueAction, SessionModels,
   SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionsApi, SessionSummary,
+  SessionToolEntry, SessionToolsValue, SessionToolSurface,
   TurnOutlineEntry, WorkspaceChangesProjected,
 } from './sessions.ts'
 export type { DirectoryEntry, DirectoryListing, HostApi } from './host.ts'
@@ -59,7 +60,11 @@ export type {
 } from './subagents.ts'
 export type { JobView, JobsApi, JobKillOutcome, JobBackgroundReceipt } from './jobs.ts'
 export type { WorkspaceApi, WorkspaceId, WorkspaceView } from './workspace.ts'
-export type { SkillsApi, SkillEntry } from './skills.ts'
+export type {
+  SkillsApi, SkillEntry, SkillListSource, SkillListLayer, SkillListVendor,
+  SkillListValue, SkillListWorkspace, InjectDocumentEntry, InjectDocumentLayer,
+  InjectDocumentKind, SkillReadValue, SkillReadSkillValue, SkillReadDocumentValue,
+} from './skills.ts'
 export type { AgentPresetsApi, AgentPresetEntry } from './agent-presets.ts'
 export type { EventsApi, MuxFrame, HostFrame, QueuedInboxItem, ToolCallView, ToolEventView, ToolResultView } from './events.ts'
 export type { GoalsApi, GoalId, GoalRef } from './goals.ts'

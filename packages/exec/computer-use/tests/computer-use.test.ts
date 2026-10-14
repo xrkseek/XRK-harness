@@ -190,6 +190,26 @@ describe("background input provider", () => {
     expect(acted.delivery).toBe("background");
     expect(sent).toEqual(["key"]);
   });
+
+  it("composes UIA capture with background act", async () => {
+    const { composeBackgroundWithCapture, createBackgroundInputProvider } =
+      await import("../src/background.js");
+    const sent: string[] = [];
+    const act = createBackgroundInputProvider({
+      installed: true,
+      send: async (request) => {
+        sent.push(request.action);
+      },
+    });
+    const capture = createMemoryComputerUseProvider();
+    const svc = composeBackgroundWithCapture(act, capture);
+    const snap = await svc.capture({ mode: "ax" });
+    expect(snap.text).toContain("[1]");
+    expect(svc.delivery).toBe("background");
+    const acted = await svc.act({ action: "click", element: 1 });
+    expect(acted.delivery).toBe("background");
+    expect(sent).toEqual(["click"]);
+  });
 });
 
 describe("createDefaultComputerUseAccess", () => {
@@ -573,6 +593,8 @@ describe("COMPUTER_USE_PROMPT_TEXT", () => {
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("list_windows");
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("coordinate");
     expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/click|type|key|scroll/);
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("invalidates");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("background");
     expect(COMPUTER_USE_PROMPT_TEXT).not.toContain("browser_open");
   });
 
@@ -611,6 +633,16 @@ describe("formatCaptureEnvelope / formatActResult", () => {
     });
     expect(act).toContain("ok=true");
     expect(act).toContain("capture again");
+    expect(act).not.toContain("background delivery");
+
+    const bg = formatActResult({
+      ok: true,
+      action: "key",
+      message: "background key",
+      delivery: "background",
+    });
+    expect(bg).toContain("delivery=background");
+    expect(bg).toContain("background delivery");
   });
 });
 

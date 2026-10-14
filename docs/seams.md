@@ -24,7 +24,7 @@ Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿�
 
 策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`（别名缝 `MemoryProvider`）；默认 `file`，可选 `http` / `sqlite` 样板；Consumer `createCuratedMemoryTools` → `memory`。系统提示带策略段与会话开始冻结快照。回合后启发式写入；会话结束 Phase1 巩固 + 可选 Phase2 LLM（`phase2Llm`）。与 Mnemon / memory-embed 分开。规格：[curated-memory.md](./curated-memory.md)。
 
-语音 Host：`@xrkseek/exec-voice` — Definition `VoiceService`；Provider memory / OpenAI HTTP（`XRK_VOICE`）；Consumer `createVoiceTools`（TTS · STT · live broker）。mic/WebRTC 在客户端，浏览器传输 `@xrkseek/exec-voice/browser`。规格：[voice.md](./voice.md)。
+语音 Host：`@xrkseek/exec-voice` — Definition `VoiceService`；Provider memory / OpenAI HTTP / SenseVoice local（`XRK_VOICE`）；Consumer `createVoiceTools`（TTS · STT · live broker）。mic/WebRTC 在客户端，浏览器传输 `@xrkseek/exec-voice/browser`。规格：[voice.md](./voice.md)。
 
 图像生成：`@xrkseek/exec-image-gen` — Definition `ImageGenService`（含可选 `capabilities()`）；Provider memory / OpenAI Images / FAL / xAI（`XRK_IMAGE_GEN`）；Consumer `createImageGenTools` → `image_generate`（`dynamicSchema` ← caps）。规格：[image-gen.md](./image-gen.md)。
 
@@ -101,7 +101,7 @@ Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseSe
 
 Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore` (seam alias `MemoryProvider`); default `file`, optional `http` / `sqlite` samples; Consumer `createCuratedMemoryTools` → `memory`. System prompt carries policy + session-start freeze. After-turn heuristics; session-end Phase1 + optional Phase2 LLM (`phase2Llm`). Separate from Mnemon / memory-embed. Spec: [curated-memory.md](./curated-memory.md).
 
-Voice Host: `@xrkseek/exec-voice` — Definition `VoiceService`; Provider memory / OpenAI HTTP (`XRK_VOICE`); Consumer `createVoiceTools` (TTS · STT · live broker). Mic/WebRTC on the client, browser transport `@xrkseek/exec-voice/browser`. Spec: [voice.md](./voice.md).
+Voice Host: `@xrkseek/exec-voice` — Definition `VoiceService`; Provider memory / OpenAI HTTP / SenseVoice local (`XRK_VOICE`); Consumer `createVoiceTools` (TTS · STT · live broker). Mic/WebRTC on the client, browser transport `@xrkseek/exec-voice/browser`. Spec: [voice.md](./voice.md).
 
 Image generation: `@xrkseek/exec-image-gen` — Definition `ImageGenService` (optional `capabilities()`); Provider memory / OpenAI Images / FAL / xAI (`XRK_IMAGE_GEN`); Consumer `createImageGenTools` → `image_generate` (`dynamicSchema` ← caps). Spec: [image-gen.md](./image-gen.md).
 

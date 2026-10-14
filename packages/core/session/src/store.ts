@@ -36,10 +36,34 @@ export interface SessionStore {
    */
   seed?(id: string | undefined, events: readonly SessionEvent[]): SessionRecord;
   /**
-   * Permanently drop one session log (memory and durable rows when present).
-   * Idempotent for an unknown id. Optional on lightweight test doubles.
+   * Replace an existing session's log with `events` (same id). Used by
+   * Cursor-style edit/delete truncate — not fork. Optional on lightweight
+   * test doubles.
+   */
+  replacePrefix?(id: string, events: readonly SessionEvent[]): SessionRecord;
+  /**
+   * Permanently drop one session log (memory and durable rows when present,
+   * including cold archive rows). Idempotent for an unknown id. Optional on
+   * lightweight test doubles. File shrink needs {@link reclaimStorage} / close.
    */
   delete?(id: string): void;
+  /**
+   * Best-effort reclaim of freelist pages in a durable store (VACUUM when the
+   * free share is large enough). No-op / false for memory stores. Optional.
+   */
+  reclaimStorage?(): boolean;
+  /**
+   * Move a durable session log into the cold archive DB (lighten hot
+   * `sessions.db`). Idempotent when already offloaded. Optional — memory
+   * stores omit this (archive is registry-only).
+   */
+  offloadToArchive?(id: string): void;
+  /**
+   * Move a cold archive log back into the hot DB. Idempotent when already hot.
+   */
+  restoreFromArchive?(id: string): void;
+  /** True when the durable log sits in the archive DB. */
+  isOffloaded?(id: string): boolean;
   list(): readonly string[];
   /**
    * Half-open event range `[fromSeq, toSeqExclusive)`.

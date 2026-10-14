@@ -33,4 +33,5 @@ export const en = {
   'pastePlainText': 'Paste as Plain Text',
   'selectAll': 'Select All',
   'copyLink': 'Copy Link Address',
+  'translate': 'Translate',
 } satisfies Record<CommonKey, string>

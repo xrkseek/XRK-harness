@@ -26,6 +26,14 @@
   white-space: nowrap;
 }
 
+/* DSH endInfo: usage pills + clock share one trailing cluster. */
+.endInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 2px;
+}
+
 /* Separator between the clock and the run-time label (time · Ran for 15s). */
 .runTimeDot {
   margin: 0 10px;

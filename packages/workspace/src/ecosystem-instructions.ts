@@ -163,7 +163,8 @@ async function pushMarkdownDir(
 
 const PRODUCT_STANDING_FILES = [
   // Persona / standing drafts under `{XRK_HOME}` (and workspace `.xrk/`).
-  // Host may seed `SOUL.md` once (create-once); users edit freely afterward.
+  // Host seeds home `SOUL.md` with fingerprint refresh (same as AGENTS.md).
+  // User-authored persona: workspace `.agents/SOUL.md` (overlay wins).
   // Standing USER.md ≠ curated `{XRK_HOME}/memories/USER.md` (exec-memory).
   "SOUL.md",
   "USER.md",

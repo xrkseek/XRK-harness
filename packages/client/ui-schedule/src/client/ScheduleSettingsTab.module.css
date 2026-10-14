@@ -2,8 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* DSH TaskManager / 插件配置: fill the panel, avoid a left-biased strip. */
   width: 100%;
-  max-width: 920px;
+  max-width: none;
+  margin: 0 auto;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -104,23 +106,35 @@
 .cards {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
+  width: 100%;
 }
 
 .card {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-xl, 12px);
   background: var(--dsw-alias-bg-layer-3);
+  transition: border-color .16s, background .16s, box-shadow .16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-3));
 }
 
 .card[data-open='true'] {
-  border-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-shadow-lv1);
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-label-dimmed);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.card[data-open='true']:hover {
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 .cardContent {
@@ -147,7 +161,7 @@
 
 .cardContent:hover,
 .card[data-open='true'] > .cardContent {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background: transparent;
 }
 
 .cardContent:focus-visible {

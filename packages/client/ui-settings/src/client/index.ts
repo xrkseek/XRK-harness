@@ -10,12 +10,16 @@
  */
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { SettingsScopeBinder } from './settings-scope.ts'
+import { SettingsNavBinder } from './settings-nav.ts'
 
 export type {
   SettingsGeneralItemOwnerProps, SettingsHeaderOwnerProps, SettingsOnboardingOwnerProps,
   SettingsPluginsTabOwnerProps, SettingsSectionOwnerProps, SettingsTriggerOwnerProps,
 } from './contract/slots.ts'
 export { SettingsScopeController, SettingsScopeBinder } from './settings-scope.ts'
+export {
+  openSettingsSection, bindSettingsOpenSection, SettingsNavBinder,
+} from './settings-nav.ts'
 
 /**
  * Required services: none. The transport is resolved per caller through
@@ -24,7 +28,7 @@ export { SettingsScopeController, SettingsScopeBinder } from './settings-scope.t
 export const inject = []
 
 /**
- * Provide the settings-namespace scope service.
+ * Provide the settings-namespace scope service and the openSection binder.
  *
  * Constructing the service in this plugin's fiber keeps its traced methods
  * bound to each consuming plugin's context.
@@ -32,4 +36,5 @@ export const inject = []
  */
 export function apply(ctx: ClientContext): void {
   new SettingsScopeBinder(ctx)
+  new SettingsNavBinder(ctx)
 }

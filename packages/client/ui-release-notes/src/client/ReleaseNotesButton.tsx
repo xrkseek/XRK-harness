@@ -1,12 +1,12 @@
 /**
- * Sidebar-foot release-notes button: a label + bell that carries a red dot
- * while the newest bundled version is unread. Opening the dialog lists every
- * published version as an accordion; expanding the newest entry marks notes
- * read (clears the dot). Older rows stay collapsible for reading without
- * changing the marker.
+ * Sidebar utility release-notes button (with Plugins, under New Session): a
+ * label + bell that carries a red dot while the newest bundled version is
+ * unread. Opening the dialog lists every published version as an accordion;
+ * expanding the newest entry marks notes read (clears the dot). Older rows stay
+ * collapsible for reading without changing the marker.
  *
- * The button follows the sidebar's own trigger geometry (SidebarRoot.module.css
- * `.footerActions`): wide is the labelled row, collapsed is the 36px rail icon.
+ * Geometry matches the Plugins utility row: wide labelled list chrome,
+ * collapsed 36px rail icon.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
@@ -38,10 +38,10 @@ export interface ReleaseNotesButtonInjected {
 
 /** Sidebar owner state plus this button's injected face. */
 export type ReleaseNotesButtonProps =
-  PropsRuntime<'sidebar.footer.action'> & InjectFace<ReleaseNotesButtonInjected>
+  PropsRuntime<'sidebar.utility'> & InjectFace<ReleaseNotesButtonInjected>
 
 /**
- * Render the sidebar-foot release-notes row.
+ * Render the sidebar utility release-notes row.
  * @param props - sidebar owner state (wide / rail) and release-notes dependencies.
  * @returns the button row, its unread dot, and the notes dialog.
  */
@@ -84,8 +84,10 @@ export function ReleaseNotesButton({
         onClick={reveal}
       >
         <span className={css.dot} data-unread={state.unread} aria-hidden />
-        <IconBellOutline16 className={css.bell} size={wide ? 16 : 18} />
-        {wide && <span className={css.label}>{t('button')}</span>}
+        <span className={css.icon} aria-hidden>
+          <IconBellOutline16 size={wide ? 16 : 18} />
+        </span>
+        {wide ? <span className={css.label}>{t('button')}</span> : null}
       </button>
 
       <Modal

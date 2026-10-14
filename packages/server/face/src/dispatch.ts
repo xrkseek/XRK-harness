@@ -37,6 +37,7 @@ import {
   mcpOauthStatus,
 } from "./mcp-oauth.js";
 import { skillList } from "./skill-list.js";
+import { skillRead } from "./skill-read.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import {
   bindPayload,
@@ -58,6 +59,7 @@ import {
   sessionCreate,
   sessionDelete,
   sessionFork,
+  sessionTruncate,
   sessionHistory,
   sessionList,
   sessionModels,
@@ -68,6 +70,7 @@ import {
   sessionSelectModel,
   sessionSetWorkingDirectory,
   sessionStatus,
+  sessionTools,
   sessionRolloutTrace,
   sessionUpdateQueue,
 } from "./handlers/session.js";
@@ -164,6 +167,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.rename": sessionRename,
   "session.updateQueue": sessionUpdateQueue,
   "session.fork": sessionFork,
+  "session.truncate": sessionTruncate,
   "session.checkpoint.list": sessionCheckpointList,
   "session.checkpoint.planRestore": sessionCheckpointPlanRestore,
   "session.checkpoint.restore": sessionCheckpointRestore,
@@ -171,6 +175,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.respondApproval": sessionRespondApproval,
   "session.attachment": sessionAttachment,
   "session.status": sessionStatus,
+  "session.tools": sessionTools,
   "session.rolloutTrace": sessionRolloutTrace,
   "agentPreset.list": agentPresetList,
   "agentPreset.select": agentPresetSelect,
@@ -218,6 +223,15 @@ const HANDLERS: Record<string, FaceHandler> = {
       ? resolveSessionCwd(runtime, sessionId)
       : runtime.workspaceRoot;
     return skillList(root, payload);
+  }),
+  "skill.read": bindPayload((runtime, payload) => {
+    const sessionId = String(
+      (payload as Record<string, unknown> | null)?.sessionId ?? "",
+    ).trim();
+    const root = sessionId
+      ? resolveSessionCwd(runtime, sessionId)
+      : runtime.workspaceRoot;
+    return skillRead(root, payload);
   }),
   "subagent.list": subagentList,
   "subagent.history": subagentHistory,

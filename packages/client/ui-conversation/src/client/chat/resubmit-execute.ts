@@ -1,6 +1,6 @@
 /**
- * Shared truncate / optional rollback / fork / optional re-prompt after the
- * user confirms a past-message edit or delete.
+ * Shared truncate / optional rollback / optional re-prompt after the
+ * user confirms a past-message edit or delete (Cursor-style, same session).
  */
 import type {
   ConversationSnapshot, ISessions, SessionId,
@@ -45,10 +45,9 @@ export function editResubmitNeedsConfirm(
 }
 
 /**
- * After keep/revert: fork before the message, open the child, stop a still-
- * running original (after the cut so a cancel `turn/end` cannot enter the
- * seed), then re-prompt (edit path). Delete path omits `text`. Idle originals
- * are left alone — canceling them stamps 「已停止」 into a one-message log.
+ * After keep/revert: truncate in place before the message, stop a still-
+ * running turn (Face truncate also cancels), then re-prompt (edit path).
+ * Delete path omits `text`. Stays on the same sessionId.
  */
 export async function executeResubmitAfterChoice(
   sessions: ISessions,
@@ -64,23 +63,19 @@ export async function executeResubmitAfterChoice(
   if (opts.choice === 'revert-files' && source !== undefined) {
     await source.command(`/rollback seq:${opts.seq}`).catch(() => undefined)
   }
-  // Face beforeSeq is exclusive; Face then drops the open turn whose
-  // `turn/start` sits before this user row so the child cannot repair it
-  // into a ghost 「已停止」.
-  const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)
-  const childId = await sessions.fork({
-    sessionId, beforeSeq, increaseTitle: true,
-  })
-  await sessions.open(childId)
-  // Stop leftover drain only when the original was actually live. Do this
-  // after the fork cut: finalizing an open turn first would copy 「已停止」.
+  // Stop a live turn before the cut so an interrupted turn/end cannot land
+  // after truncate (Face also cancels when active).
   if (sourceLive && source !== undefined) {
     await source.cancel().catch(() => undefined)
   }
+  // Face beforeSeq is exclusive; Face then drops the open turn whose
+  // `turn/start` sits before this user row.
+  const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)
+  await sessions.truncate({ sessionId, beforeSeq })
   if (opts.text === undefined) return
-  const child = sessions.binding(childId)?.session
-  if (child === undefined) {
-    throw new Error(`edit-resubmit child "${childId}" is not locally addressable`)
+  const session = sessions.binding(sessionId)?.session
+  if (session === undefined) {
+    throw new Error(`edit-resubmit session "${sessionId}" is not locally addressable`)
   }
-  await child.prompt([{ type: 'text', text: opts.text }], 'queue')
+  await session.prompt([{ type: 'text', text: opts.text }], 'queue')
 }

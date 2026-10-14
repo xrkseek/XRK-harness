@@ -1,4 +1,8 @@
-import { createBackgroundInputProvider, backgroundInputInstalled } from "./background.js";
+import {
+  backgroundInputInstalled,
+  composeBackgroundWithCapture,
+  createBackgroundInputProvider,
+} from "./background.js";
 import { createMemoryComputerUseProvider } from "./memory.js";
 import { createComputerUseProviderRegistry } from "./registry.js";
 import { createWindowsUiAutomationProvider } from "./windows-uia.js";
@@ -35,6 +39,7 @@ export {
 export { mapKeysToSendKeys, escapeSendKeys } from "./keys.js";
 export {
   createBackgroundInputProvider,
+  composeBackgroundWithCapture,
   backgroundInputInstalled,
   type BackgroundInputOptions,
 } from "./background.js";
@@ -133,10 +138,14 @@ export function createDefaultComputerUseAccess(
     registry.register("background");
     const command = env.XRK_COMPUTER_USE_BACKGROUND?.trim();
     const installed = backgroundInputInstalled(env);
+    const act = createBackgroundInputProvider(
+      installed && command ? { installed: true, command } : { installed: false },
+    );
+    // Docs + DSH: background owns act; Windows UIA still owns capture/list.
+    const capture =
+      process.platform === "win32" ? createWindowsUiAutomationProvider() : undefined;
     return {
-      service: createBackgroundInputProvider(
-        installed && command ? { installed: true, command } : { installed: false },
-      ),
+      service: composeBackgroundWithCapture(act, capture),
       providerName: "background",
       unavailableMessage: installed
         ? unavailableMessage

@@ -24,6 +24,7 @@ import {
   addDressingSticker,
   removeDressingSticker,
   useDressingStickers,
+  usePresenceModuleEnabled,
 } from './dressing-scope.ts'
 import {
   FACE_MAX,
@@ -90,12 +91,53 @@ function splitToolNames(raw: string): string[] {
   return raw.split(/[\s,]+/).map(n => n.trim().toLowerCase()).filter(Boolean)
 }
 
+function memberInitial(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return '?'
+  return trimmed.slice(0, 1).toLocaleUpperCase()
+}
+
+function MemberGlyph({
+  presenceOn,
+  name,
+  look,
+}: {
+  presenceOn: boolean
+  name: string
+  look: ReturnType<typeof appearanceOf>
+}) {
+  if (!presenceOn) {
+    return (
+      <span
+        className={css.initialGlyph}
+        style={{ background: companionPaint(look.color, false).body }}
+        aria-hidden
+      >
+        {memberInitial(name)}
+      </span>
+    )
+  }
+  return (
+    <CompanionBall
+      shape={look.shape}
+      color={look.color}
+      kitHat={look.engineHat}
+      kitGlasses={look.engineGlasses}
+      kitHeld={look.engineHeld}
+      {...(look.overlayHat ? { overlayHat: look.overlayHat } : {})}
+      {...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {})}
+      {...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {})}
+    />
+  )
+}
+
 function MemberBall({
   member,
   stickers,
   selected,
   disabled,
   seedLabel,
+  presenceOn,
   onSelect,
 }: {
   member: AgentTeamMemberRow
@@ -103,6 +145,7 @@ function MemberBall({
   selected: boolean
   disabled: boolean
   seedLabel: string
+  presenceOn: boolean
   onSelect: () => void
 }) {
   const look = appearanceOf(member, stickers)
@@ -117,16 +160,7 @@ function MemberBall({
       aria-label={title}
       title={title}
     >
-      <CompanionBall
-        shape={look.shape}
-        color={look.color}
-        kitHat={look.engineHat}
-        kitGlasses={look.engineGlasses}
-        kitHeld={look.engineHeld}
-        {...(look.overlayHat ? { overlayHat: look.overlayHat } : {})}
-        {...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {})}
-        {...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {})}
-      />
+      <MemberGlyph presenceOn={presenceOn} name={member.name} look={look} />
       <span className={css.ballCaption}>
         <span className={css.ballName}>{member.name}</span>
         {member.catalog === true || member.seed === true
@@ -146,12 +180,14 @@ function NewMemberBall({
   disabled,
   caption,
   label,
+  presenceOn,
   onSelect,
 }: {
   selected: boolean
   disabled: boolean
   caption: string
   label: string
+  presenceOn: boolean
   onSelect: () => void
 }) {
   return (
@@ -163,7 +199,9 @@ function NewMemberBall({
       aria-pressed={selected}
       aria-label={label}
     >
-      <CompanionBall shape="blob" color="cream" empty />
+      {presenceOn
+        ? <CompanionBall shape="blob" color="cream" empty />
+        : <span className={`${css.initialGlyph} ${css.initialGlyphEmpty}`} aria-hidden>+</span>}
       <span className={css.ballName}>{caption}</span>
     </button>
   )
@@ -199,6 +237,7 @@ export function TeamRoster({
   dispatchTeam: NonNullable<WorkspaceBrowserProps['dispatchTeam']>
 }) {
   const stickers = useDressingStickers()
+  const presenceOn = usePresenceModuleEnabled()
   const workspaces = useWorkspaces(state => state.items)
   const currentWorkspace = useMemo(
     () => sessionId === undefined
@@ -372,6 +411,7 @@ export function TeamRoster({
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
+                      presenceOn={presenceOn}
                       onSelect={() => {
                         setSelectedId(member.id)
                         loadMember(member)
@@ -383,6 +423,7 @@ export function TeamRoster({
                     disabled={busy}
                     caption={t('team.memberNew')}
                     label={t('team.memberNewGlobal')}
+                    presenceOn={presenceOn}
                     onSelect={() => {
                       setSelectedId('new-global')
                       loadMember(undefined)
@@ -439,6 +480,7 @@ export function TeamRoster({
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
+                      presenceOn={presenceOn}
                       onSelect={() => {
                         setSelectedId(member.id)
                         loadMember(member)
@@ -450,6 +492,7 @@ export function TeamRoster({
                     disabled={busy}
                     caption={t('team.memberNew')}
                     label={t('team.memberNewWorkspace')}
+                    presenceOn={presenceOn}
                     onSelect={() => {
                       setSelectedId('new-workspace')
                       loadMember(undefined)
@@ -599,6 +642,10 @@ export function TeamRoster({
                   </div>
                   <div className={css.field}>
                     <span className={css.label}>{t('team.look')}</span>
+                    {!presenceOn ? (
+                      <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
+                    ) : (
+                    <>
                     <CompanionBall
                       shape={shape}
                       color={color}
@@ -718,6 +765,8 @@ export function TeamRoster({
                         </div>
                       </div>
                     ))}
+                    </>
+                    )}
                   </div>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-playbook">{t('team.memberPlaybook')}</label>

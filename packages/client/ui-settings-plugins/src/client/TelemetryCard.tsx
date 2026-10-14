@@ -3,6 +3,7 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SelectField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { modeMasterSwitch } from './plugin-master-switch.ts'
 import type { TelemetryCardFace } from './telemetry-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -30,6 +31,7 @@ export function TelemetryCard(props: TelemetryCardProps) {
       titleKey="telemetryTitle"
       descriptionKey="telemetryDescription"
       state={state}
+      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'memory')}
       onSave={props.save}
       onDiscard={props.discard}
     >

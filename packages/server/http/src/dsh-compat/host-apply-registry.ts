@@ -17,6 +17,11 @@ export function registerHostApply(record: HostApplyRecord): void {
   applied.set(record.packageName, record);
 }
 
+/** Drop a package from the applied set after live dispose / soft-disable. */
+export function unregisterHostApply(packageName: string): void {
+  applied.delete(packageName.trim());
+}
+
 export function listHostAppliedPackages(): readonly HostApplyRecord[] {
   return [...applied.values()];
 }

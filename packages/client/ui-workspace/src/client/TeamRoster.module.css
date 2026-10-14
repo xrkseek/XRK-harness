@@ -213,6 +213,35 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Presence module off: initials stand in for CompanionBall. */
+.initialGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--dsw-alias-label-primary);
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);
+}
+
+.initialGlyphEmpty {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.presenceOff {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .ballName {
   max-width: 72px;
   overflow: hidden;

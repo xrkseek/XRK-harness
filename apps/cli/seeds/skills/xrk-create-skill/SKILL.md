@@ -27,7 +27,8 @@ description: >-
 | 跨项目习惯（非种子名） | 也可 `~/.xrk/skills/<custom-name>/`（不会被 bundled 列表覆盖） |
 
 Host 启动把产品种子镜像到 `~/.xrk/skills/`：指纹与 bundled 不一致（或缺文件）→ 覆盖写入。  
-**自定义 skill / AGENTS 写工作区** `.agents/skills/` 或 `.agents/AGENTS.md`（或 `.xrk/`），不要改 home 里的默认种子副本。
+**自定义 skill / AGENTS / SOUL 写工作区** `.agents/skills/` · `.agents/AGENTS.md` · `.agents/SOUL.md`（或 `.xrk/`）。  
+Home `~/.xrk/AGENTS.md` · `SOUL.md` · bundled `skills/` 是产品种子，Host 按指纹覆盖 — 不要当用户可编辑人格落点。
 
 ## Frontmatter
 

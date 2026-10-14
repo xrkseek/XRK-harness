@@ -2,10 +2,10 @@
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
- * everything between the section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
- * `sidebar.settings` registrant's (ui-settings), followed by optional footer
- * actions in `sidebar.footer.action`.
+ * optional `sidebar.utility` rows (Plugins, release notes, …) sit between New Session and the workspace
+ * browser (DSH panellist seat); everything between that and the foot is the
+ * `sidebar.workspaces` registrant's (ui-workspace); the foot is
+ * `sidebar.settings` plus optional `sidebar.footer.action`.
  */
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
 // Type-only: pulls ui-layout's SlotMap merge (the 'sidebar' entry) into every
@@ -22,6 +22,12 @@ declare module '@xrkseek/client-ui-slots' {
      * registers the browser.
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    /**
+     * Compact utility rows between New Session and the workspace browser
+     * (Plugins, schedules, …). Declared by this package's `sidebar` entry;
+     * each action receives only the column state.
+     */
+    'sidebar.utility': { kind: 'list'; scope: 'root'; owner: SidebarUtilityOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -56,6 +62,12 @@ export interface SidebarSettingsOwnerProps {
   wide: boolean
 }
 
+/** Owner share of a utility row between New Session and workspaces. */
+export interface SidebarUtilityOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
 /** Owner share of an action rendered beside Settings at the sidebar foot. */
 export interface SidebarFooterActionOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
@@ -85,5 +97,5 @@ export type SidebarRootInjected = {
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
-  & PropsRenderSlots<'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
+  & PropsRenderSlots<'sidebar.utility' | 'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
   & SidebarRootInjected & PropsLocale<'sidebar'>

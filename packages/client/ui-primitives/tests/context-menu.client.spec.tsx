@@ -42,6 +42,7 @@ const EN: Record<string, string> = {
   delete: "Delete",
   selectAll: "Select All",
   copyLink: "Copy Link Address",
+  translate: "Translate",
 };
 
 /** Stable identity: the host keys its document listener on `t`. */
@@ -292,6 +293,7 @@ describe("ContextMenuHost row copy", () => {
       delete: "删除",
       selectAll: "全选",
       copyLink: "复制链接地址",
+      translate: "翻译",
     };
     render(
       <>

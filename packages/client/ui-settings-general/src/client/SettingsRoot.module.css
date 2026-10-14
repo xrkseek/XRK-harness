@@ -106,6 +106,24 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* Plugins home: full-bleed content, no Settings nav rail. */
+.homePanel {
+  width: min(920px, calc(100vw - 48px));
+}
+
+.homeTitle {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @supports (height: 100dvh) {
   .panel {
     height: min(800px, calc(100dvh - 48px));

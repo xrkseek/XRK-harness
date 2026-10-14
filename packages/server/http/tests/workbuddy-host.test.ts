@@ -6,14 +6,17 @@ import {
   ensureWorkBuddyAiElectronBin,
   hasWorkBuddyHostLib,
   isWorkBuddyConnectPackage,
+  listModelsForSync,
   tryApplyWorkBuddyHost,
 } from "../src/dsh-compat/workbuddy-host.js";
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
+import { resetLiveHostApply } from "../src/dsh-compat/live-host-apply.js";
 
 const temps: string[] = [];
 const prevAiElectron = process.env.WORKBUDDY_AI_ELECTRON_BIN;
 
 afterEach(() => {
+  resetLiveHostApply();
   resetHostApplyRegistry();
   for (const d of temps.splice(0)) {
     rmSync(d, { recursive: true, force: true });
@@ -175,5 +178,149 @@ export function apply(ctx) {
     expect(
       await tryApplyWorkBuddyHost(pkgRoot, "dsh-something-else", {}),
     ).toBeUndefined();
+  });
+
+  it("listModelsForSync prefers full catalog over visibility-filtered listModels", async () => {
+    let visible = false;
+    const adapter = {
+      async listModels() {
+        if (!visible) return [];
+        // Mimic WorkBuddyPiAiAdapter: only non-hidden ids.
+        return [
+          {
+            id: "hy4-preview-f",
+            name: "Hy4 preview · F",
+            baseUrl: "http://127.0.0.1:63949/v1",
+          },
+        ];
+      },
+      catalog: {
+        isVisible: () => visible,
+        setVisible: (next: boolean) => {
+          visible = next;
+        },
+        current: () =>
+          visible
+            ? [
+                { id: "hy4-preview-f", name: "Hy4 preview · F" },
+                { id: "hy3", name: "Hy3" },
+                { id: "deep-model", name: "Deep" },
+              ]
+            : [],
+        fallback: () => [
+          { id: "hy4-preview-f", name: "Hy4 preview · F" },
+          { id: "hy3", name: "Hy3" },
+          { id: "deep-model", name: "Deep" },
+        ],
+      },
+    };
+
+    const rows = await listModelsForSync(adapter, "workbuddy");
+    expect(visible).toBe(false); // peek restored
+    expect(rows).toEqual([
+      {
+        id: "hy4-preview-f",
+        name: "Hy4 preview · F",
+        baseUrl: "http://127.0.0.1:63949/v1",
+      },
+      {
+        id: "hy3",
+        name: "Hy3",
+        baseUrl: "http://127.0.0.1:63949/v1",
+      },
+      {
+        id: "deep-model",
+        name: "Deep",
+        baseUrl: "http://127.0.0.1:63949/v1",
+      },
+    ]);
+  });
+
+  it("keeps nudging Face sync until every variant succeeds", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "wb-nudge-"));
+    temps.push(pkgRoot);
+    mkdirSync(path.join(pkgRoot, "lib"), { recursive: true });
+    writeFileSync(
+      path.join(pkgRoot, "lib", "index.js"),
+      `let cnReady = false;
+setTimeout(() => { cnReady = true; }, 400);
+export function apply(ctx) {
+  ctx.llm.registerAdapter(["workbuddy-ai"], {
+    async listModels() {
+      return [{
+        id: "ai-flash",
+        baseUrl: "http://127.0.0.1:63950/v1",
+      }];
+    },
+    async resolveApiKey() { return "ai"; },
+  });
+  ctx.llm.registerAdapter(["workbuddy"], {
+    async listModels() {
+      if (!cnReady) return [];
+      return [{
+        id: "hy4-preview-f",
+        baseUrl: "http://127.0.0.1:63949/v1",
+      }];
+    },
+    async resolveApiKey() { return "cn"; },
+  });
+  ctx.webServer.register({
+    kind: "prefix",
+    path: "/plugins/dsh-workbuddy-connect/",
+    methods: ["GET"],
+    handler: async (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ status: "signed-in" }));
+    },
+  });
+}
+`,
+    );
+
+    const syncCommunityLlmProvider = vi.fn(async () => undefined);
+    const contribution = await tryApplyWorkBuddyHost(
+      pkgRoot,
+      "dsh-workbuddy-connect",
+      { syncCommunityLlmProvider },
+    );
+    expect(contribution?.http?.length).toBe(1);
+    const handle = contribution!.http![0]!.handle;
+
+    await vi.waitFor(() => {
+      expect(syncCommunityLlmProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ providerId: "workbuddy-ai" }),
+      );
+    });
+
+    // AI already synced; old logic stopped status nudges here. Poll status
+    // until CN lands.
+    await vi.waitFor(
+      async () => {
+        await new Promise<void>((resolve, reject) => {
+          const res = {
+            writeHead() {
+              return res;
+            },
+            end() {
+              resolve();
+            },
+          };
+          void handle(
+            { method: "GET" } as never,
+            res as never,
+            "/plugins/dsh-workbuddy-connect/status",
+          ).then((ok) => {
+            if (!ok) reject(new Error("status unhandled"));
+          });
+        });
+        expect(syncCommunityLlmProvider).toHaveBeenCalledWith(
+          expect.objectContaining({
+            providerId: "workbuddy",
+            baseUrl: "http://127.0.0.1:63949/v1",
+          }),
+        );
+      },
+      { timeout: 5_000 },
+    );
   });
 });

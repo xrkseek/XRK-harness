@@ -1,8 +1,9 @@
 /**
- * Release notes plugin, browser half: the sidebar-foot `sidebar.footer.action`
- * entry. Owns one piece of durable state — the "newest version this user has
- * opened" marker in Host settings — and no content: the notes are bundle copy
- * (release-notes.ts), so the list can never disagree with the installed build.
+ * Release notes plugin, browser half: a `sidebar.utility` row beside Plugins
+ * (under New Session / above Workspace). Owns one piece of durable state — the
+ * "newest version this user has opened" marker in Host settings — and no
+ * content: the notes are bundle copy (release-notes.ts), so the list can never
+ * disagree with the installed build.
  *
  * Read-on-expand, not read-on-load or read-on-dialog: loading the shell or
  * merely opening the list must not consume notes. The dot clears when the user
@@ -13,7 +14,7 @@ import type { ConnectionHandle } from '@xrkseek/xrk-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type { LocalizedText } from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-locale/client'
-// Type-only: pulls the ui-sidebar SlotMap merge (the footer.action entry).
+// Type-only: pulls the ui-sidebar SlotMap merge (the utility entry).
 import type {} from '@xrkseek/client-ui-sidebar/client'
 import { ReleaseNotesButton } from './ReleaseNotesButton.tsx'
 import type { ReleaseNotesButtonInjected } from './ReleaseNotesButton.tsx'
@@ -76,8 +77,9 @@ export function apply(ctx: ClientContext): void {
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-release-notes: pushed invalidations')
 
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-    name: 'sidebar.footer.action',
+  // Beside Plugins in the utility panellist (Plugins order 0; notes after).
+  ctx.slots.inject('sidebar.utility', () => ctx.slots.register({
+    name: 'sidebar.utility',
     id: 'release-notes',
     order: 10,
     locale: NS,

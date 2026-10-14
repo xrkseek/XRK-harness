@@ -65,6 +65,22 @@ export interface PersistentSessionStore extends SessionStore {
    * Face writes list-tier checkpoints here, then clears projection cells.
    */
   bindSessionEviction(handler: (sessionId: string) => void): void;
+  /**
+   * VACUUM when freelist is meaningful after deletes or archive offload.
+   */
+  reclaimStorage(): boolean;
+  /**
+   * Move one session's durable rows from {@link SESSION_DB_FILENAME} into
+   * {@link SESSION_ARCHIVE_DB_FILENAME}. Idempotent when already offloaded.
+   * Reads (`get` / `list` / search) still see the id; mutates (`append`) throw.
+   */
+  offloadToArchive(id: string): void;
+  /**
+   * Move one offloaded session back into the hot DB. Idempotent when already hot.
+   */
+  restoreFromArchive(id: string): void;
+  /** True when the durable log sits in the archive DB (not the hot file). */
+  isOffloaded(id: string): boolean;
 }
 
 export interface PersistentSessionStoreOptions {
@@ -87,16 +103,74 @@ const ID_RE = /^[A-Za-z0-9._-]+$/;
 /** Physical schema v3: durable rows may be packed chunk rows (expanded on load). */
 const SCHEMA_VERSION = SQLITE_SCHEMA_CURRENT;
 const DB_NAME = "sessions.db";
+/** Cold sibling of {@link DB_NAME}: archived session logs live here. */
+const ARCHIVE_DB_NAME = "sessions-archive.db";
 const DEFAULT_MAX_RESIDENT_SESSIONS = 8;
 /**
- * On exclusive `close()`, reclaim freelist when it is both large and a big
- * share of the file (deleted / compacted sessions leave empty pages that still
- * cost mmap / Working Set). Skip small DBs and shared readers.
+ * Reclaim freelist when it is both large and a big share of the file (deleted
+ * sessions leave empty pages that still cost mmap / Working Set). Skip small
+ * DBs and shared readers. Used on exclusive `close()` and after Face deletes.
  */
 const VACUUM_MIN_FREE_BYTES = 64 * 1024 * 1024;
 const VACUUM_MIN_FREE_RATIO = 0.2;
+/** Explicit reclaim after delete / archive offload: lower bar so bulk ops shrink sooner. */
+const VACUUM_EXPLICIT_MIN_FREE_BYTES = 16 * 1024 * 1024;
+const VACUUM_EXPLICIT_MIN_FREE_RATIO = 0.1;
 
-function maybeVacuumOnClose(db: DatabaseSync): void {
+function deleteSessionRows(db: DatabaseSync, id: string): void {
+  db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(id);
+  db.prepare("DELETE FROM events WHERE session_id = ?").run(id);
+  db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+}
+
+/** Copy one session's sessions/events/FTS rows from `from` into `to` (replace). */
+function copySessionRows(
+  from: DatabaseSync,
+  to: DatabaseSync,
+  id: string,
+): void {
+  const eventRows = from
+    .prepare(
+      "SELECT seq, ts, payload FROM events WHERE session_id = ? ORDER BY seq ASC",
+    )
+    .all(id) as { seq: number; ts: number; payload: string }[];
+  const ftsRows = from
+    .prepare("SELECT seq, text FROM search_fts WHERE session_id = ?")
+    .all(id) as { seq: number; text: string }[];
+  to.exec("BEGIN IMMEDIATE");
+  try {
+    deleteSessionRows(to, id);
+    to.prepare("INSERT INTO sessions (id) VALUES (?)").run(id);
+    const insertEvent = to.prepare(
+      "INSERT INTO events (session_id, seq, ts, payload) VALUES (?, ?, ?, ?)",
+    );
+    for (const row of eventRows) {
+      insertEvent.run(id, row.seq, row.ts, row.payload);
+    }
+    const insertFts = to.prepare(
+      "INSERT INTO search_fts (session_id, seq, text) VALUES (?, ?, ?)",
+    );
+    for (const row of ftsRows) {
+      insertFts.run(id, row.seq, row.text);
+    }
+    to.exec("COMMIT");
+  } catch (err) {
+    try {
+      to.exec("ROLLBACK");
+    } catch {
+      /* already rolled back / closed */
+    }
+    throw err;
+  }
+}
+
+function maybeVacuum(
+  db: DatabaseSync,
+  options: {
+    readonly minFreeBytes: number;
+    readonly minFreeRatio: number;
+  },
+): boolean {
   try {
     const pageSize = Number(
       (db.prepare("PRAGMA page_size").get() as { page_size: number }).page_size,
@@ -115,18 +189,20 @@ function maybeVacuumOnClose(db: DatabaseSync): void {
       !Number.isFinite(freelist) ||
       pageCount <= 0
     ) {
-      return;
+      return false;
     }
     const freeBytes = freelist * pageSize;
     if (
-      freeBytes < VACUUM_MIN_FREE_BYTES ||
-      freelist / pageCount < VACUUM_MIN_FREE_RATIO
+      freeBytes < options.minFreeBytes ||
+      freelist / pageCount < options.minFreeRatio
     ) {
-      return;
+      return false;
     }
     db.exec("VACUUM");
+    return true;
   } catch {
-    /* best-effort: never fail Host shutdown on vacuum */
+    /* best-effort: never fail Host / Face on vacuum */
+    return false;
   }
 }
 
@@ -346,10 +422,11 @@ function loadSessionIds(db: DatabaseSync): Set<string> {
 }
 
 /**
- * Durable SessionStore: one workspace SQLite file (`sessions.db`) with WAL.
+ * Durable SessionStore: hot `sessions.db` + cold `sessions-archive.db` (WAL).
  * Lazy session load; batched chunk writes packed as `text-chunks` (≥3);
  * tool-call argument deltas pack as `tool-call-chunks` (≥3);
  * FTS5 trigram search. In-memory API stays flat SessionEvent[].
+ * Archive offload moves rows to the cold file so the hot DB can shrink.
  */
 export function createPersistentSessionStore(
   dir: string,
@@ -364,11 +441,17 @@ export function createPersistentSessionStore(
     ? undefined
     : acquireSessionsDirLock(root);
   const dbPath = path.join(root, DB_NAME);
+  const archivePath = path.join(root, ARCHIVE_DB_NAME);
   let db: DatabaseSync;
+  let archiveDb: DatabaseSync;
   try {
     db = openDatabase(dbPath, shared);
     if (!shared) {
       initSchema(db);
+    }
+    archiveDb = openDatabase(archivePath, shared);
+    if (!shared) {
+      initSchema(archiveDb);
     }
   } catch (err) {
     writeLock?.release();
@@ -383,7 +466,20 @@ export function createPersistentSessionStore(
     }
   };
 
-  const sessionIds = loadSessionIds(db);
+  const hotIds = loadSessionIds(db);
+  const coldIds = loadSessionIds(archiveDb);
+  // Incomplete move left the id in both files — keep hot, drop cold copy.
+  for (const id of [...coldIds]) {
+    if (hotIds.has(id)) {
+      try {
+        deleteSessionRows(archiveDb, id);
+      } catch {
+        /* best-effort */
+      }
+      coldIds.delete(id);
+    }
+  }
+  const sessionIds = new Set<string>([...hotIds, ...coldIds]);
   const sessions = new Map<string, SessionEvent[]>();
   const residentOrder: string[] = [];
   let onEvict: ((sessionId: string) => void) | undefined;
@@ -520,6 +616,16 @@ export function createPersistentSessionStore(
     }
   };
 
+  const sourceDbFor = (id: string): DatabaseSync =>
+    coldIds.has(id) ? archiveDb : db;
+
+  const dropResident = (id: string): void => {
+    sessions.delete(id);
+    nextSeqBySession.delete(id);
+    const idx = residentOrder.indexOf(id);
+    if (idx >= 0) residentOrder.splice(idx, 1);
+  };
+
   const ensureLoaded = (id: string): SessionEvent[] => {
     const cached = sessions.get(id);
     if (cached !== undefined) {
@@ -529,13 +635,15 @@ export function createPersistentSessionStore(
 
     evictResidents(id);
 
-    const events = loadSessionEvents(db, id);
+    const offloaded = coldIds.has(id);
+    const events = loadSessionEvents(sourceDbFor(id), id);
     const repairs = repairOpenTurnEvents(events);
     if (repairs.length > 0) {
       const frozenRepairs = repairs.map((ev) =>
         deepFreeze(structuredClone(assertSessionEvent(ev))),
       );
-      if (!shared) {
+      // Cold / shared: memory-only repair (archive is read for turns; shared is RO).
+      if (!shared && !offloaded) {
         const seqSnapshot = new Map(nextSeqBySession);
         db.exec("BEGIN IMMEDIATE");
         try {
@@ -553,13 +661,19 @@ export function createPersistentSessionStore(
           throw err;
         }
       }
-      // Shared: apply repair in memory only (read-only DB). Exclusive: durable
+      // Shared / cold: apply repair in memory only. Exclusive hot: durable
       // first, then memory — crash between COMMIT and push re-repairs on reload.
       events.push(...frozenRepairs);
     }
     sessions.set(id, events);
     touchResident(id);
     return events;
+  };
+
+  const assertHotMutable = (id: string): void => {
+    if (coldIds.has(id)) {
+      throw new Error(`session is archived offload (read-only): ${id}`);
+    }
   };
 
   return {
@@ -570,6 +684,7 @@ export function createPersistentSessionStore(
         throw new Error(`session already exists: ${sid}`);
       }
       sessionIds.add(sid);
+      hotIds.add(sid);
       evictResidents(sid);
       sessions.set(sid, []);
       touchResident(sid);
@@ -595,14 +710,73 @@ export function createPersistentSessionStore(
       const sid = assertSafeId(id);
       if (!sessionIds.has(sid)) return;
       flushPending();
-      db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(sid);
-      db.prepare("DELETE FROM events WHERE session_id = ?").run(sid);
-      db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
+      if (hotIds.has(sid)) {
+        deleteSessionRows(db, sid);
+        hotIds.delete(sid);
+      }
+      if (coldIds.has(sid)) {
+        deleteSessionRows(archiveDb, sid);
+        coldIds.delete(sid);
+      }
       sessionIds.delete(sid);
-      sessions.delete(sid);
-      nextSeqBySession.delete(sid);
-      const idx = residentOrder.indexOf(sid);
-      if (idx >= 0) residentOrder.splice(idx, 1);
+      dropResident(sid);
+    },
+
+    reclaimStorage(): boolean {
+      if (shared) return false;
+      assertWritable();
+      flushPending();
+      const hot = maybeVacuum(db, {
+        minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
+        minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
+      });
+      const cold = maybeVacuum(archiveDb, {
+        minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
+        minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
+      });
+      return hot || cold;
+    },
+
+    offloadToArchive(id: string): void {
+      assertWritable();
+      const sid = assertSafeId(id);
+      if (!sessionIds.has(sid)) {
+        throw new Error(`session not found: ${sid}`);
+      }
+      if (coldIds.has(sid)) return;
+      flushPending();
+      copySessionRows(db, archiveDb, sid);
+      deleteSessionRows(db, sid);
+      hotIds.delete(sid);
+      coldIds.add(sid);
+      dropResident(sid);
+      maybeVacuum(db, {
+        minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
+        minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
+      });
+    },
+
+    restoreFromArchive(id: string): void {
+      assertWritable();
+      const sid = assertSafeId(id);
+      if (!sessionIds.has(sid)) {
+        throw new Error(`session not found: ${sid}`);
+      }
+      if (!coldIds.has(sid)) return;
+      flushPending();
+      copySessionRows(archiveDb, db, sid);
+      deleteSessionRows(archiveDb, sid);
+      coldIds.delete(sid);
+      hotIds.add(sid);
+      dropResident(sid);
+      maybeVacuum(archiveDb, {
+        minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
+        minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
+      });
+    },
+
+    isOffloaded(id: string): boolean {
+      return coldIds.has(id);
     },
 
     append(id: string, event: SessionEvent): SessionEvent {
@@ -610,6 +784,7 @@ export function createPersistentSessionStore(
       if (!sessionIds.has(id)) {
         throw new Error(`session not found: ${id}`);
       }
+      assertHotMutable(id);
       const events = ensureLoaded(id);
       const parsed = assertSessionEvent(event);
       const frozen = deepFreeze(structuredClone(parsed));
@@ -644,6 +819,7 @@ export function createPersistentSessionStore(
       // Create + one packed transaction (not N persistEvent flushes). Chunk
       // runs pack the same way as flushPending so fork seed matches live shape.
       sessionIds.add(sid);
+      hotIds.add(sid);
       evictResidents(sid);
       sessions.set(sid, frozen);
       touchResident(sid);
@@ -668,10 +844,8 @@ export function createPersistentSessionStore(
         }
         restoreSeqMap(seqSnapshot);
         sessionIds.delete(sid);
-        sessions.delete(sid);
-        nextSeqBySession.delete(sid);
-        const idx = residentOrder.indexOf(sid);
-        if (idx >= 0) residentOrder.splice(idx, 1);
+        hotIds.delete(sid);
+        dropResident(sid);
         try {
           db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
         } catch {
@@ -679,6 +853,45 @@ export function createPersistentSessionStore(
         }
         throw err;
       }
+      return { id: sid, events: frozen };
+    },
+
+    replacePrefix(id: string, eventsInput: readonly SessionEvent[] = []): SessionRecord {
+      assertWritable();
+      const sid = assertSafeId(id);
+      if (!sessionIds.has(sid)) {
+        throw new Error(`session not found: ${sid}`);
+      }
+      assertHotMutable(sid);
+      flushPending();
+      const frozen: SessionEvent[] = [];
+      for (const event of eventsInput) {
+        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+      }
+      const seqSnapshot = new Map(nextSeqBySession);
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(sid);
+        db.prepare("DELETE FROM events WHERE session_id = ?").run(sid);
+        nextSeqBySession.set(sid, 0);
+        if (frozen.length > 0) {
+          const packed = packChunkRunsForExport(frozen);
+          for (const record of packed) {
+            writeRecord(sid, record);
+          }
+        }
+        db.exec("COMMIT");
+      } catch (err) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+          /* already rolled back / closed */
+        }
+        restoreSeqMap(seqSnapshot);
+        throw err;
+      }
+      sessions.set(sid, frozen);
+      touchResident(sid);
       return { id: sid, events: frozen };
     },
 
@@ -694,10 +907,11 @@ export function createPersistentSessionStore(
       if (cached !== undefined) {
         return computeListHints(cached);
       }
+      const source = sourceDbFor(id);
       return {
-        lastEventTs: lastEventTsFromDb(db, id),
-        hasTurnStart: hasTurnStartInDb(db, id),
-        hasCommandRun: hasCommandRunInDb(db, id),
+        lastEventTs: lastEventTsFromDb(source, id),
+        hasTurnStart: hasTurnStartInDb(source, id),
+        hasCommandRun: hasCommandRunInDb(source, id),
       };
     },
 
@@ -709,16 +923,22 @@ export function createPersistentSessionStore(
       flushPending();
       const match = ftsMatchQuery(query);
       if (match === '""') return [];
-      try {
-        const rows = db
-          .prepare(
-            "SELECT DISTINCT session_id AS id FROM search_fts WHERE search_fts MATCH ?",
-          )
-          .all(match) as { id: string }[];
-        return rows.map((r) => r.id);
-      } catch {
-        return [];
-      }
+      const ids = new Set<string>();
+      const run = (target: DatabaseSync): void => {
+        try {
+          const rows = target
+            .prepare(
+              "SELECT DISTINCT session_id AS id FROM search_fts WHERE search_fts MATCH ?",
+            )
+            .all(match) as { id: string }[];
+          for (const row of rows) ids.add(row.id);
+        } catch {
+          /* corrupt / missing FTS — skip that DB */
+        }
+      };
+      run(db);
+      run(archiveDb);
+      return [...ids];
     },
 
     flush() {
@@ -728,10 +948,24 @@ export function createPersistentSessionStore(
     close() {
       try {
         flushPending();
-        if (!shared) maybeVacuumOnClose(db);
+        if (!shared) {
+          maybeVacuum(db, {
+            minFreeBytes: VACUUM_MIN_FREE_BYTES,
+            minFreeRatio: VACUUM_MIN_FREE_RATIO,
+          });
+          maybeVacuum(archiveDb, {
+            minFreeBytes: VACUUM_MIN_FREE_BYTES,
+            minFreeRatio: VACUUM_MIN_FREE_RATIO,
+          });
+        }
       } finally {
         try {
           db.close();
+        } catch {
+          /* already closed */
+        }
+        try {
+          archiveDb.close();
         } catch {
           /* already closed */
         }
@@ -770,6 +1004,9 @@ export function createPersistentSessionStore(
 
 /** SQLite database filename under a sessions directory. */
 export const SESSION_DB_FILENAME = DB_NAME;
+
+/** Archive SQLite filename (cold session logs after `offloadToArchive`). */
+export const SESSION_ARCHIVE_DB_FILENAME = ARCHIVE_DB_NAME;
 
 /** Current durable schema version (text-chunks physical packing). */
 export const SESSION_SCHEMA_VERSION = SCHEMA_VERSION;

@@ -2446,6 +2446,15 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return ok(request, { sessionId: childId })
       },
 
+      async truncate(request) {
+        // Cordis in-process proxy has no replacePrefix; Face Host owns truncate.
+        return err(request, {
+          code: 'truncate-unsupported',
+          message: 'session.truncate requires the Face Host session store',
+          details: { sessionId: request.payload.sessionId },
+        })
+      },
+
       async prompt(request) {
         const { sessionId, mode, content, clientTimeZone } = request.payload
         const canonicalTimeZone = clientTimeZone === undefined
@@ -3145,6 +3154,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             ...preset.name === undefined ? {} : { name: preset.name },
             ...preset.description === undefined ? {} : { description: preset.description },
             ...preset.broken === undefined ? {} : { broken: preset.broken },
+            ...('workspaceLocked' in preset && preset.workspaceLocked === true)
+              ? { workspaceLocked: true as const }
+              : (preset.id === 'im' || preset.id === 'qichuang')
+                ? { workspaceLocked: true as const }
+                : {},
           })),
           authorable: presets.authorable,
           hasDocument: canOpenPaths(),

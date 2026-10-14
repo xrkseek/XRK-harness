@@ -65,6 +65,7 @@
    render stays static. */
 .railIn .iconButton,
 .railIn .newSession,
+.railIn .utilityList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
 }
@@ -209,6 +210,45 @@
   gap: 0;
   border-color: transparent;
   background: transparent;
+}
+
+/* Utility rows between New Session and workspaces (DSH panellist geometry).
+   Inset hairline separates the panellist from the workspace tree. */
+.utilityList {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border: 0;
+}
+
+.utilityList::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 1px;
+  background: var(--dsw-alias-border-l2);
+  pointer-events: none;
+}
+
+.utilityList:empty {
+  display: none;
+}
+
+.collapsed .utilityList {
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+}
+
+.collapsed .utilityList::after {
+  left: 4px;
+  right: 4px;
 }
 
 /* Phone drawer (AppFrame always feeds wide chrome below PHONE_MAX): enlarge

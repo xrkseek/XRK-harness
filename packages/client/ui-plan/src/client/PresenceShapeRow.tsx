@@ -1,11 +1,13 @@
 /**
- * Presence companion prefs row in Settings → General.
- * Feature-owned (ui-plan); shape + color persist via Host `ui-presence`.
+ * Presence companion card on Plugins home (Host `ui-presence`).
+ * Master switch hot-hides the ball; dressers stay feature-owned here.
  */
 import { useState } from 'react'
 import clsx from 'clsx'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-settings/client'
+import type {} from '@xrkseek/client-ui-settings-plugins/client'
+import { IconSparkle16, Switch } from '@xrkseek/client-ui-primitives'
 import {
   PRESENCE_COLORS,
   PRESENCE_COLOR_PALETTES,
@@ -27,6 +29,7 @@ import css from './PresenceShapeRow.module.css'
 
 /** Injected write face for shape + color pickers. */
 export interface PresenceShapeRowInjected {
+  setEnabled: (enabled: boolean) => void
   setShape: (shape: PresenceShape) => void
   setColor: (color: PresenceColor) => void
   setSlot: (slot: DressingSlot, pick: string) => void
@@ -35,7 +38,7 @@ export interface PresenceShapeRowInjected {
 }
 
 export type PresenceShapeRowComponentProps =
-  PropsRuntime<'settings.general.item'>
+  PropsRuntime<'settings.plugin.item'>
   & PropsStore<ReturnType<typeof createPresencePrefsRowStore>>
   & PropsLocale<'plan'>
   & PresenceShapeRowInjected
@@ -270,6 +273,7 @@ function SlotRow({
 /** Render the presence shape + color row. */
 export function PresenceShapeRow({
   t,
+  setEnabled,
   setShape,
   setColor,
   setSlot,
@@ -277,6 +281,7 @@ export function PresenceShapeRow({
   removeSticker,
   useStore,
 }: PresenceShapeRowComponentProps) {
+  const enabled = useStore((s) => s.enabled)
   const shape = useStore((s) => s.shape)
   const color = useStore((s) => s.color)
   const kitHat = useStore((s) => s.kitHat)
@@ -286,9 +291,36 @@ export function PresenceShapeRow({
   const [overlayErr, setOverlayErr] = useState<string | null>(null)
   const tooBig = t('presenceOverlay.tooBig')
   const markTooBig = () => { setOverlayErr(tooBig) }
+  const [open, setOpen] = useState(enabled)
   return (
-    <div className={css.group}>
-      <div className={css.title}>{t('presenceShape.title')}</div>
+    <li className={clsx(css.card, open && css.cardOpen)}>
+      <div className={css.header}>
+        <button
+          type="button"
+          className={css.headerMain}
+          aria-expanded={open}
+          onClick={() => { setOpen(!open) }}
+        >
+          <span className={css.icon} aria-hidden="true">
+            <IconSparkle16 size={16} />
+          </span>
+          <span className={css.headText}>
+            <span className={css.name}>{t('presenceEnabled.title')}</span>
+            <span className={css.description}>{t('presenceEnabled.hint')}</span>
+          </span>
+        </button>
+        <Switch
+          checked={enabled}
+          aria-label={t('presenceEnabled.title')}
+          onCheckedChange={(next) => {
+            setEnabled(next)
+            if (next) setOpen(true)
+          }}
+        />
+      </div>
+      {!open || !enabled ? null : (
+        <div className={css.body}>
+      <div className={css.subtitle}>{t('presenceShape.title')}</div>
       <p className={css.hint}>{t('presenceShape.hint')}</p>
       <div className={css.cubeRow}>
         {PRESENCE_SHAPES.map((id) => (
@@ -371,6 +403,8 @@ export function PresenceShapeRow({
         onDelete={removeSticker}
         onTooBig={markTooBig}
       />
-    </div>
+        </div>
+      )}
+    </li>
   )
 }

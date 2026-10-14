@@ -9,6 +9,8 @@ export type AgentToolComposition = "minimal" | "harness";
  */
 export type CatalogAgentPresetId =
   | "minimal"
+  | "im"
+  | "qichuang"
   | "shell"
   | "frugal"
   | "shallow"
@@ -74,6 +76,16 @@ export interface AgentPresetInfo {
   readonly displayName: string;
   readonly description: string;
   readonly profile: AgentPresetProfile;
+  /**
+   * IM / Qichuang — pinned by workspace, never a Settings coding default.
+   * Absent / false for normal coding badges.
+   */
+  readonly workspaceLocked?: boolean;
+}
+
+/** Settings / hero pickers only offer coding badges (not IM / Qichuang). */
+export function isWorkspaceLockedAgentPreset(id: string): boolean {
+  return id === "im" || id === "qichuang";
 }
 
 /** Face / tool default: nesting depth cap (Hermes-style tighter than historical 3). */
@@ -172,6 +184,41 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
       planModeDefault: false,
     },
   },
+  // Workspace-locked — catalog tail; Settings default never selects these.
+  {
+    id: "im",
+    displayName: "IM",
+    description:
+      "IM channel (`ws_im`): im_send / team / session_query / workspace_list·create·session_prompt + subagent(workspace_id) into coding workspaces — no bash, web, lsp, PTY, presence, or thread UI",
+    workspaceLocked: true,
+    profile: {
+      id: "im",
+      composition: "minimal",
+      tools: MINIMAL_TOOLS,
+      // Complex IM asks may summon a coding team in another workspace.
+      subagents: { mode: "on" },
+      subagentRouting: true,
+      delegation: "proactive",
+      planModeDefault: false,
+    },
+  },
+  {
+    id: "qichuang",
+    displayName: "Qichuang",
+    description:
+      "Xiangyang locked surface: team roster + workspace_list·create·session_prompt (peer coding sessions) — no nested subagents, no bash/web/lsp/PTY",
+    workspaceLocked: true,
+    profile: {
+      id: "qichuang",
+      composition: "minimal",
+      tools: MINIMAL_TOOLS,
+      // Drives Agent Team + peer sessions elsewhere — not parent/child subagents.
+      subagents: SUBAGENTS_OFF,
+      subagentRouting: false,
+      delegation: "explicit",
+      planModeDefault: false,
+    },
+  },
 ];
 
 const PROFILE_BY_ID = new Map(
@@ -187,6 +234,14 @@ export const HOST_CLI_PRESET_IDS = [
 
 /** Ids accepted on the wire (includes legacy `server` / `plan` → harness). */
 export const FACE_AGENT_PRESET_IDS = new Set<string>(HOST_CLI_PRESET_IDS);
+
+/** Reject or coerce Settings `agent-presets.default` away from locked badges. */
+export function isCodingAgentPresetSettingsId(id: string): boolean {
+  const raw = id.trim();
+  if (!raw || isWorkspaceLockedAgentPreset(raw)) return false;
+  if (raw === "server" || raw === "plan") return true;
+  return FACE_AGENT_PRESET_IDS.has(raw);
+}
 
 /**
  * Normalize wire / Host `--preset` to a catalog profile.

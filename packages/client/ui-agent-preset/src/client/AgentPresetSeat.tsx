@@ -19,7 +19,7 @@ import { IconAgentPresetOutline16, IconChevronDownOutline14, Menu } from '@xrkse
 // Type-only: pulls the ui-conversation SlotMap merge (the hero seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type { AgentPresetSeatState } from './seat-store.ts'
-import { presetDisplayText } from './locales.ts'
+import { presetDisplayText, resolvePresetDisplayText } from './locales.ts'
 import css from './AgentPresetSeat.module.css'
 
 /** Registration-side business face for the hero chip. */
@@ -76,10 +76,13 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
     void load()
   }, [load])
 
+  // IM / 奇创 are workspace-locked — chip is informative only; they are filtered
+  // out of selectable options, so label resolves via built-in locale keys.
+  const lockedSurface = state.current === 'im' || state.current === 'qichuang'
   const chosen = state.options.find(option => option.id === state.current)
-  const chosenText = chosen === undefined ? undefined : presetDisplayText(chosen, t)
-  const label = chosenText?.name ?? state.current
-  const ready = state.options.length > 0 && state.current !== ''
+  const chosenText = resolvePresetDisplayText(state.current, chosen, t)
+  const label = chosenText.name
+  const ready = state.current !== '' && (state.options.length > 0 || lockedSurface)
 
   // The introduce cue: the pick was staged from another screen (the settings
   // creator entry), so the chip announces it — the icon eases in and each
@@ -125,6 +128,28 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
     )
     : label
 
+  const seatButton = (
+    <button
+      type="button"
+      className={css.seat}
+      aria-haspopup={lockedSurface ? undefined : 'menu'}
+      aria-expanded={lockedSurface ? undefined : open}
+      title={
+        lockedSurface
+          ? (state.current === 'qichuang' ? t('seatLockedQichuang') : t('seatLockedIm'))
+          : (state.error ?? t('seatHint'))
+      }
+      disabled={state.busy || lockedSurface}
+      onClick={lockedSurface ? undefined : () => { setOpen(value => !value) }}
+    >
+      <IconAgentPresetOutline16 className={introducing ? `${css.seatIcon} ${css.introIcon}` : css.seatIcon} />
+      {shownLabel}
+      {!lockedSurface && <IconChevronDownOutline14 className={css.chevron} />}
+    </button>
+  )
+
+  if (lockedSurface) return seatButton
+
   return (
     <Menu
       open={open}
@@ -150,21 +175,7 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
       }}
       align="start"
       portal
-      anchor={(
-        <button
-          type="button"
-          className={css.seat}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          title={state.error ?? t('seatHint')}
-          disabled={state.busy}
-          onClick={() => { setOpen(value => !value) }}
-        >
-          <IconAgentPresetOutline16 className={introducing ? `${css.seatIcon} ${css.introIcon}` : css.seatIcon} />
-          {shownLabel}
-          <IconChevronDownOutline14 className={css.chevron} />
-        </button>
-      )}
+      anchor={seatButton}
     />
   )
 }

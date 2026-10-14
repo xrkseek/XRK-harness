@@ -15,10 +15,12 @@ import {
   AUTO_PERMISSION_PRESET,
   FACE_PERMISSION_PRESETS,
   isFacePermissionPreset,
+  isFacePermissionSettingsPreset,
   type FacePermissionPreset,
 } from "./face-schema.js";
 import type { FacePermissionAutoGate } from "./permission-auto.js";
 import type { FaceRuntime } from "./context.js";
+import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
 
 export const CUSTOM_PERMISSION_PRESET = "custom" as const;
 
@@ -209,12 +211,20 @@ export function permissionSelectFromEvents(
   return derivePermissionSelect(foldPermissionKnobs(events), {}, options);
 }
 
-export function defaultPermissionPreset(runtime: FaceRuntime): FacePermissionPreset {
+/** Settings `defaultPreset` for a fresh session (table presets or Auto). */
+export type FaceDefaultPermissionPreset =
+  | FacePermissionPreset
+  | typeof AUTO_PERMISSION_PRESET;
+
+export function defaultPermissionPreset(
+  runtime: FaceRuntime,
+): FaceDefaultPermissionPreset {
   const viewed = runtime.settingsNamespaces.view(
     "permission",
     { defaultPreset: "workspace-write" },
   );
   const raw = (viewed.value as { defaultPreset?: unknown }).defaultPreset;
+  if (raw === AUTO_PERMISSION_PRESET) return AUTO_PERMISSION_PRESET;
   return isFacePermissionPreset(raw) ? raw : "workspace-write";
 }
 
@@ -235,7 +245,7 @@ function hasAnyKnob(events: readonly SessionEvent[]): boolean {
 export function pinInitialPermission(
   store: SessionStore,
   sessionId: string,
-  preset: FacePermissionPreset,
+  preset: FaceDefaultPermissionPreset,
   options?: { readonly autoGate?: FacePermissionAutoGate },
 ): void {
   const events = readSessionEvents(store, sessionId);
@@ -252,12 +262,26 @@ export function pinInitialPermission(
     return;
   }
   if (hasAnyKnob(events)) return;
-  const spec = FACE_PERMISSION_TABLE[preset];
+  // Settings may default to Auto; Host keeps registerAuto live. Without a live
+  // gate (bare Face tests), fall back to Full access (same open path bundle).
+  let pinned: FacePermissionPreset | typeof AUTO_PERMISSION_PRESET = preset;
+  if (pinned === AUTO_PERMISSION_PRESET) {
+    if (options?.autoGate?.isLive() !== true) {
+      pinned = "danger-full-access";
+    } else {
+      const applied = applyPermissionPreset(store, sessionId, AUTO_PERMISSION_PRESET, {
+        autoGate: options.autoGate,
+      });
+      if (!applied.ok) throw new Error(applied.message);
+      return;
+    }
+  }
+  const spec = FACE_PERMISSION_TABLE[pinned];
   const ts = now();
   store.append(sessionId, {
     type: "permission/preset",
     ts,
-    preset,
+    preset: pinned,
   });
   store.append(sessionId, {
     type: "sandbox/mode",
@@ -458,19 +482,30 @@ export async function applyLivePermissionDefaultPreset(
     nextValue && typeof nextValue === "object"
       ? (nextValue as { defaultPreset?: unknown }).defaultPreset
       : undefined;
-  if (!isFacePermissionPreset(nextRaw)) return;
+  if (!isFacePermissionSettingsPreset(nextRaw)) return;
+  if (
+    nextRaw === AUTO_PERMISSION_PRESET &&
+    runtime.permissionAuto.isLive() !== true
+  ) {
+    return;
+  }
   const prevRaw =
     previousUser && typeof previousUser === "object"
       ? (previousUser as { defaultPreset?: unknown }).defaultPreset
       : undefined;
-  const previousPreset: FacePermissionPreset = isFacePermissionPreset(prevRaw)
-    ? prevRaw
-    : "workspace-write";
+  const previousPreset: FaceDefaultPermissionPreset =
+    isFacePermissionSettingsPreset(prevRaw) ? prevRaw : "workspace-write";
   if (previousPreset === nextRaw) return;
 
+  const autoLive = runtime.permissionAuto.isLive() === true;
   for (const sessionId of runtime.store.list()) {
+    // IM / 向阳空间 keep locked full access — Settings default is coding-only.
+    if (isOrchestrationWorkspaceId(runtime.workspaces.workspaceIdOf(sessionId))) {
+      continue;
+    }
     const current = permissionSelectFromEvents(
       readSessionEvents(runtime.store, sessionId),
+      { autoLive },
     ).currentValue;
     if (current !== previousPreset) continue;
     const applied = applyPermissionPreset(runtime.store, sessionId, nextRaw, {

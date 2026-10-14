@@ -72,6 +72,7 @@ function mount(options: {
   const connectionListeners = new Set<() => void>()
   const phaseListeners = new Set<() => void>()
   const reconnect = vi.fn()
+  let openSection: ((id: string) => void) | undefined
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
@@ -91,6 +92,12 @@ function mount(options: {
     useWorkspaces: unusedHook,
     wide,
     reconnect,
+    bindOpenSection: (next) => {
+      openSection = next
+      return () => {
+        if (openSection === next) openSection = undefined
+      }
+    },
     t,
     useConnectionState: (select) => {
       const [, force] = useState(0)
@@ -141,7 +148,19 @@ function mount(options: {
       for (const fn of [...phaseListeners]) fn()
     })
   }
-  return { view, renderSlot, bump, listeners, reconnect, setConnectionState, setConnectionPhase }
+  return {
+    view,
+    renderSlot,
+    bump,
+    listeners,
+    reconnect,
+    setConnectionState,
+    setConnectionPhase,
+    openSection: (id: string) => {
+      if (openSection === undefined) throw new Error('openSection unbound')
+      act(() => { openSection!(id) })
+    },
+  }
 }
 
 function openPanel() {
@@ -344,20 +363,37 @@ describe('SettingsPanel navigation', () => {
         { id: 'general', order: 0, label: 'General' },
         { id: 'models', order: 10, label: 'Models' },
         { id: 'agent-presets', order: 20, label: 'Agent presets' },
-        { id: 'plugins', order: 30, label: 'Plugins' },
         { id: 'contributed', order: 40, label: 'Contributed' },
       ],
     })
     openPanel()
     // Glyphs carry no id of their own, so the drawn paths are what tells them apart.
-    const glyphs = ['General', 'Models', 'Agent presets', 'Plugins', 'Contributed']
+    const glyphs = ['General', 'Models', 'Agent presets', 'Contributed']
       .map(name => screen.getByRole('button', { name }).querySelector('svg')?.innerHTML)
 
     expect(glyphs.every(glyph => glyph !== undefined && glyph !== '')).toBe(true)
-    // The three ids the shell names get their own glyph; every other section
-    // including one this package never heard of — shares the gear.
-    expect(new Set(glyphs.slice(0, 4)).size).toBe(4)
-    expect(glyphs[4]).toBe(glyphs[0])
+    // Known ids get their own glyph; an unknown section shares the gear with General.
+    expect(new Set(glyphs.slice(0, 3)).size).toBe(3)
+    expect(glyphs[3]).toBe(glyphs[0])
+  })
+
+  it('keeps Plugins off the gear nav and opens it as a home panel via openSection', () => {
+    const { openSection } = mount({
+      onboardingActive: false,
+      rows: [
+        { id: 'general', order: 0, label: 'General' },
+        { id: 'plugins', order: 15, label: 'Plugins' },
+        { id: 'models', order: 20, label: 'Models' },
+      ],
+    })
+    openPanel()
+    expect(screen.queryByRole('button', { name: 'Plugins' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'General' })).toBeTruthy()
+    openSection('plugins')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'General' })).toBeNull()
+    expect(screen.getByTestId('section-plugins')).toBeTruthy()
+    expect(screen.getByText('Plugins')).toBeTruthy()
   })
 
   it('switches the rendered section on nav click', () => {

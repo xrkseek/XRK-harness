@@ -3,6 +3,7 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SecretField, SelectField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { modeMasterSwitch } from './plugin-master-switch.ts'
 import type { ImageGenCardFace } from './image-gen-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -35,6 +36,7 @@ export function ImageGenCard(props: ImageGenCardProps) {
       titleKey="imageGenTitle"
       descriptionKey="imageGenDescription"
       state={state}
+      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'openai')}
       onSave={props.save}
       onDiscard={props.discard}
     >

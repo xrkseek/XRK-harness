@@ -3,6 +3,7 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SelectField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { CuratedMemoryCardFace } from './curated-memory-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -22,7 +23,7 @@ export function CuratedMemoryCard(props: CuratedMemoryCardProps) {
   const { t } = props
   const state = props.useCuratedMemoryCard(snapshot => snapshot)
   const disabled = !state.writable
-  const enabled = state.enabled.text === 'false' ? 'false' : 'true'
+  const enabled = state.enabled.text !== 'false'
   const phase2Llm = state.phase2Llm.text === 'true' ? 'true' : 'false'
   return (
     <PluginCard
@@ -30,26 +31,16 @@ export function CuratedMemoryCard(props: CuratedMemoryCardProps) {
       titleKey="curatedMemoryTitle"
       descriptionKey="curatedMemoryDescription"
       state={state}
+      masterSwitch={booleanMasterSwitch(enabled, (value) => { props.edit('enabled', value) })}
       onSave={props.save}
       onDiscard={props.discard}
     >
-      <SelectField
-        id="plugin-config-curated-memory-enabled"
-        label={t('curatedMemoryEnabled')}
-        hint={t('curatedMemoryEnabledHint')}
-        disabled={disabled}
-        value={enabled}
-        options={[
-          { value: 'true', label: t('curatedMemoryEnabledOn') },
-          { value: 'false', label: t('curatedMemoryEnabledOff') },
-        ]}
-        onChange={(value) => { props.edit('enabled', value) }}
-      />
+      <p className={css.note} role="note">{t('curatedMemoryEnabledHint')}</p>
       <SelectField
         id="plugin-config-curated-memory-phase2"
         label={t('curatedMemoryPhase2')}
         hint={t('curatedMemoryPhase2Hint')}
-        disabled={disabled || enabled === 'false'}
+        disabled={disabled || !enabled}
         value={phase2Llm}
         options={[
           { value: 'false', label: t('curatedMemoryPhase2Off') },

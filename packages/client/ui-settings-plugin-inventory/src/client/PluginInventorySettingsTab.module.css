@@ -2,8 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Match 插件配置: fill the home panel; avoid a left strip + empty gutter. */
   width: 100%;
-  max-width: 760px;
+  max-width: none;
+  margin: 0 auto;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -420,7 +422,6 @@
 }
 
 .groupHeading {
-  grid-column: 1 / -1;
   margin: 8px 0 0;
   padding: 4px 2px;
   list-style: none;
@@ -540,10 +541,18 @@
 .optionalBundleRow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 4px;
-  padding: 10px 0;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  gap: 14px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xl, 12px);
+  background: var(--dsw-alias-bg-layer-3);
+  transition: border-color .16s, background .16s;
+}
+
+.optionalBundleRow:hover {
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-3));
 }
 
 .optionalBundleText {
@@ -564,60 +573,6 @@
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
-}
-
-.optionalBundleSwitch {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.optionalBundleSwitch:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.optionalBundleTrack {
-  position: relative;
-  width: 40px;
-  height: 24px;
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-module-platform);
-  transition-property: background-color;
-  transition-duration: 120ms;
-  transition-timing-function: ease-out;
-}
-
-.optionalBundleTrack[data-on] {
-  background: var(--dsw-alias-label-primary);
-}
-
-.optionalBundleThumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--dsw-alias-bg-primary, #fff);
-  transition-property: transform;
-  transition-duration: 120ms;
-  transition-timing-function: ease-out;
-}
-
-.optionalBundleTrack[data-on] .optionalBundleThumb {
-  transform: translateX(16px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .optionalBundleTrack,
-  .optionalBundleThumb {
-    transition: none;
-  }
 }
 
 .scopeBody {
@@ -689,23 +644,29 @@
   background: transparent;
 }
 
+/* One plugin per row — same separated cards as 插件配置 / PluginCard. */
 .cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
+  width: 100%;
 }
 
 .card {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-xl, 12px);
   background: var(--dsw-alias-bg-layer-3);
-  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+  transition: opacity 160ms ease, border-color .16s, background .16s, box-shadow .16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-3));
 }
 
 .card[data-busy='true'] {
@@ -722,8 +683,13 @@
 }
 
 .card[data-open='true'] {
-  border-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-shadow-lv1);
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-label-dimmed);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+}
+
+.card[data-open='true']:hover {
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 .recommendRow {
@@ -801,11 +767,18 @@
   width: auto;
 }
 
+.switchSlot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0 4px 0 0;
+}
+
 .moreSlot {
   display: flex;
   flex: none;
   align-items: center;
-  padding: 0 8px 0 0;
+  padding: 0 10px 0 0;
 }
 
 .moreTrigger {
@@ -841,11 +814,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
-  color: var(--dsw-alias-label-secondary);
+  width: 40px;
+  height: 40px;
+  border: 0.5px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+  border-radius: var(--dsw-radius-lg, 10px);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
+  color: var(--dsw-alias-label-primary);
 }
 
 .artwork[data-kind='client'] {
@@ -867,11 +841,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   /* Full width only when this is the sole card child (preset / builtin).
    * Managed cards nest under .cardHead — see width:auto override there. */
   width: 100%;
-  min-height: 52px;
+  min-height: 56px;
   border: 0;
   padding: 12px 14px;
   background: transparent;
@@ -882,8 +856,9 @@
 }
 
 .cardContent:hover,
-.card[data-open='true'] > .cardHead > .cardContent {
-  background: var(--dsw-alias-interactive-bg-hover);
+.card[data-open='true'] > .cardHead > .cardContent,
+.card[data-open='true'] > .cardContent {
+  background: transparent;
 }
 
 .cardContent:focus-visible {
@@ -896,7 +871,7 @@
   overflow: hidden;
   font-size: 14px;
   line-height: 20px;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1060,8 +1035,9 @@
   white-space: nowrap;
 }
 
-.card[data-managed='true'] {
-  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, var(--dsw-alias-border-l2));
+.card[data-managed='true'] .artwork {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent);
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .builtinHint,
@@ -1108,8 +1084,3 @@
   }
 }
 
-@media (max-width: 680px) {
-  .cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}

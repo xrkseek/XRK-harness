@@ -225,7 +225,7 @@ TongFlow 装包：`POST /tongflow/plugins` → `runPluginMutate`（`xrkh plugin 
 |------------|----------|
 | 智能体团队 | Face `agentTeams` · Status 任务板 · `team_graph` |
 | 自动授权审查 | Settings Auto-review · `/auto-review`（社区 `dsh-auto-review` 同表） |
-| 语音输入 | Settings → Voice · `voice_transcribe`（SenseVoice 本地模型 / 唤醒词未做） |
+| 语音输入 | Settings → Voice · `voice_transcribe`（`mode=local` SenseVoice 本地 STT 缝已接；资源准备 / 唤醒词仍未做） |
 | 终端 | Sidebar `/sidebar/ws/terminal` · Settings shell |
 | Agent Loop | Settings → agent-loop |
 | 子代理 | Face `subagent.*` · Sidebar live |
@@ -508,7 +508,7 @@ TongFlow install: `POST /tongflow/plugins` → `runPluginMutate` (`xrkh plugin a
 |-------------------|-------------|
 | Agent Teams | Face `agentTeams` · Status task board · `team_graph` · `agentRoster` (`team_list` / `team_save` / `subagent member_id`) |
 | Auto authorization review | Settings Auto-review · `/auto-review` (community `dsh-auto-review` in the table above) |
-| Voice input | Settings → Voice · `voice_transcribe` (SenseVoice local model / wake word not shipped) |
+| Voice input | Settings → Voice · `voice_transcribe` (`mode=local` SenseVoice STT seam; asset prepare / wake word still deferred) |
 | Terminal | Sidebar `/sidebar/ws/terminal` · Settings shell |
 | Agent Loop | Settings → agent-loop |
 | Sub-Agent | Face `subagent.*` · Sidebar live |

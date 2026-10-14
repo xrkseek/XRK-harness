@@ -1,6 +1,7 @@
 /** General Settings row: chat tool rows start expanded when enabled. */
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
+import { Switch } from '@xrkseek/client-ui-primitives'
 import css from './EnterBehaviorRow.module.css'
 
 /** Registration-side preference face. */
@@ -37,18 +38,11 @@ export function ToolsExpandRow({
         <div className={css.title}>{t('settings.toolsExpand.title')}</div>
         <div className={css.desc}>{t('settings.toolsExpand.description')}</div>
       </div>
-      <button
-        type="button"
-        className={css.switch}
-        role="switch"
-        aria-checked={expanded}
+      <Switch
+        checked={expanded}
         aria-label={t('settings.toolsExpand.title')}
-        onClick={() => { setToolsDefaultExpanded(!expanded) }}
-      >
-        <span className={css.track} data-on={expanded || undefined} aria-hidden="true">
-          <span className={css.thumb} />
-        </span>
-      </button>
+        onCheckedChange={setToolsDefaultExpanded}
+      />
     </div>
   )
 }

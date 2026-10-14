@@ -157,8 +157,10 @@ export interface FaceRuntime {
   readonly sessionImageScanned: Set<string>;
   /** In-memory workspace registry for the product shell. */
   readonly workspaces: FaceWorkspaceRegistry;
-  /** Direct subagent children (fork / create-with-parent). */
+  /** Direct subagent children (tool spawn / create-with-parent). */
   readonly subagents: FaceSubagentRegistry;
+  /** UI exploratory fork lineage (`origin: fork`); not the delegation graph. */
+  readonly forkLineage: import("./fork-lineage.js").FaceForkLineageStore;
   /**
    * Live ACP / app-server subprocesses keyed by Face child session id.
    * Same list / send / interrupt / wait surface as in-process continuable.

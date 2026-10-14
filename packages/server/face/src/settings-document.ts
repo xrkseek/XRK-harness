@@ -29,9 +29,13 @@ import {
   parseSlotPick,
   parseStickers,
 } from "./presence-dressing.js";
-import { FACE_AGENT_PRESET_IDS, canonicalAgentPresetId } from "./presets-catalog.js";
 import {
-  isFacePermissionPreset,
+  FACE_AGENT_PRESET_IDS,
+  canonicalAgentPresetId,
+  isCodingAgentPresetSettingsId,
+} from "./presets-catalog.js";
+import {
+  isFacePermissionSettingsPreset,
   validateFaceFontSize,
 } from "./face-schema.js";
 import {
@@ -153,10 +157,15 @@ export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
     slot.user,
   );
   const id = merged.default;
-  if (typeof id === "string" && FACE_AGENT_PRESET_IDS.has(id)) {
+  // IM / Qichuang are workspace-locked — never a coding-workspace Settings default.
+  if (typeof id === "string" && isCodingAgentPresetSettingsId(id)) {
     return canonicalAgentPresetId(id);
   }
-  return canonicalAgentPresetId(runtime.defaultAgentPreset ?? "minimal");
+  const boot = runtime.defaultAgentPreset ?? "minimal";
+  if (isCodingAgentPresetSettingsId(boot)) {
+    return canonicalAgentPresetId(boot);
+  }
+  return "minimal";
 }
 
 export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
@@ -348,14 +357,20 @@ export function validateSettingsNamespace(
 ): string | undefined {
   if (ns === "permission") {
     const preset = merged.defaultPreset;
-    if (preset !== undefined && !isFacePermissionPreset(preset)) {
+    if (preset !== undefined && !isFacePermissionSettingsPreset(preset)) {
       return `unknown permission preset: ${String(preset)}`;
     }
   }
   if (ns === "agent-presets") {
     const id = merged.default;
-    if (id !== undefined && !FACE_AGENT_PRESET_IDS.has(String(id))) {
-      return `unknown agent preset: ${String(id)}`;
+    if (id !== undefined) {
+      const raw = String(id);
+      if (!FACE_AGENT_PRESET_IDS.has(raw)) {
+        return `unknown agent preset: ${raw}`;
+      }
+      if (!isCodingAgentPresetSettingsId(raw)) {
+        return `agent preset ${raw} is workspace-locked (IM / Qichuang) — Settings default is coding-only`;
+      }
     }
   }
   if (ns === "ui-theme") {

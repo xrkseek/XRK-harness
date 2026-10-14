@@ -1,43 +1,49 @@
-/* Release-notes sidebar-foot row.
-
-   Geometry is the settings foot trigger's, deliberately: this button sits one
-   row above Settings in the same column, and a second rhythm there reads as a
-   misaligned stack (SidebarRoot.module.css `.footArea` is a plain flex column,
-   so rows do not visually register as one control without identical metrics).
-   Wide = 42px / 12px-radius labelled row; collapsed = the rail's 36px circle. */
+/* Match Plugins utility row (quiet list chrome): wide = 34px / 8px-radius;
+   collapsed = 36px circle. Unread red dot rides the bell. */
 
 .trigger {
   position: relative;
-  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 42px;
+  height: 34px;
   margin: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 10px;
   box-sizing: border-box;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-family: inherit;
+  font: inherit;
   font-size: 14px;
-  line-height: 22px;
+  font-weight: 500;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+  transition-property: background-color, color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
 }
 
 .trigger:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Rail form: the 36x36 circle the other collapsed rail controls use. */
+.trigger:active {
+  background: var(--dsw-alias-interactive-bg-pressed);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary));
+  outline-offset: -2px;
+}
+
 .rail {
-  flex: none;
   width: 36px;
   height: 36px;
+  min-height: 36px;
   justify-content: center;
   gap: 0;
   padding: 0;
@@ -49,30 +55,40 @@
   left: 21px;
 }
 
-/* Phone drawer (AppFrame always feeds wide chrome below PHONE_MAX): enlarge
-   for thumb reach without changing the desktop rail. */
 @media (max-width: 767px) {
   .trigger {
     min-height: 44px;
   }
 }
 
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-secondary);
+  transition-property: color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.trigger:hover .icon,
+.rail .icon {
+  color: var(--dsw-alias-label-primary);
+}
+
 .label {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bell {
-  flex: none;
-}
-
-/* Unread dot: rides the bell's top-right corner rather than taking its own row
-   space, so the label never reflows when the dot appears or clears. Purely
-   decorative — the button's aria-label carries the unread state. */
 .dot {
   position: absolute;
-  top: 9px;
-  left: 20px;
+  top: 6px;
+  left: 18px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -86,12 +102,10 @@
   opacity: 1;
 }
 
-/* Wider than the default Modal 380px so multi-bullet notes breathe. */
 .dialogWide {
   width: min(560px, 100%);
 }
 
-/* Dialog body: one bordered card per released version, newest first. */
 .dialogBody {
   display: flex;
   flex-direction: column;
@@ -163,7 +177,6 @@
   transform: rotate(180deg);
 }
 
-/* Pinned notice: same card geometry, no version/date — sits above version rows. */
 .pinned {
   border-color: var(--dsw-alias-border-l2, var(--dsw-alias-border-l1));
   background: var(--dsw-alias-interactive-bg-hover, transparent);

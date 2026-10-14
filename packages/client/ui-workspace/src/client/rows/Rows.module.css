@@ -145,6 +145,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.sidelineMark {
+  margin-right: 4px;
+  opacity: 0.75;
+}
+
 .flatSessionRowWithoutStatus .title {
   margin-left: 0;
 }
@@ -208,6 +213,26 @@
   width: 14px;
   height: 14px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Compact channel mark for reserved ws_im — not a card or promo chip. */
+.imBadge {
+  flex: none;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.04em;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* Product-home mark for 向阳空间 — locked 奇创 surface. */
+.xiangyangBadge {
+  flex: none;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
 }
 
 .projectLongPress {

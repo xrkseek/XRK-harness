@@ -1,4 +1,7 @@
 const BLOCK_TAGS = /<(script|style|noscript|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi;
+/** DSH-aligned: drop elements that are hidden from visual presentation. */
+const HIDDEN_TAGS =
+  /<[^>]+\b(?:hidden(?:\s|=|>)|aria-hidden\s*=\s*["']?true["']?)[^>]*>[\s\S]*?<\/[^>]+>/gi;
 const TAG = /<[^>]+>/g;
 const BLOCK = /<\/?(p|div|br|h[1-6]|li|tr|pre|blockquote|hr|ul|ol|table|section|article|header|footer)[^>]*>/gi;
 
@@ -43,6 +46,7 @@ export function htmlToText(html: string, maxChars: number): {
   const stripped = html
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(BLOCK_TAGS, " ")
+    .replace(HIDDEN_TAGS, " ")
     .replace(BLOCK, "\n")
     .replace(TAG, " ");
   const decoded = decodeEntities(stripped)

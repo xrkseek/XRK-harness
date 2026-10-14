@@ -3,7 +3,7 @@
  * Mic/speaker stay client-side; this package owns Provider contracts + tools.
  */
 
-export type VoiceDelivery = "memory" | "openai" | "unavailable";
+export type VoiceDelivery = "memory" | "openai" | "local" | "unavailable";
 
 export type VoiceErrorCode =
   | "VOICE_UNAVAILABLE"

@@ -31,6 +31,7 @@ export const zh = {
   'pastePlainText': '粘贴为纯文本',
   'selectAll': '全选',
   'copyLink': '复制链接地址',
+  'translate': '翻译',
 } satisfies Record<string, string>
 
 /** The common vocabulary key union (zh is the key-set source of truth). */

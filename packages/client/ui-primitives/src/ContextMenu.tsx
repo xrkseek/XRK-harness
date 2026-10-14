@@ -39,6 +39,7 @@ const FALLBACK_LABELS: ContextMenuLabels = {
   delete: "Delete",
   selectAll: "Select All",
   copyLink: "Copy Link Address",
+  translate: "Translate",
 };
 
 /** Locale keys per row (the common namespace). */
@@ -52,6 +53,7 @@ const LABEL_KEYS = {
   delete: "delete",
   selectAll: "selectAll",
   copyLink: "copyLink",
+  translate: "translate",
 } as const satisfies Record<keyof ContextMenuLabels, string>;
 
 /** Host props: the product's translate seat plus optional gestures. */

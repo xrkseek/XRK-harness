@@ -9,14 +9,24 @@ import {
 } from "../src/presets-catalog.js";
 
 describe("agentPreset catalog", () => {
-  it("UI catalog is five tiers light → full (plan is /plan, not a badge)", () => {
+  it("UI catalog is coding light→full then workspace-locked IM / Qichuang", () => {
     expect(FACE_AGENT_PRESETS.map((p) => p.id)).toEqual([
       "minimal",
       "shell",
       "frugal",
       "shallow",
       "harness",
+      "im",
+      "qichuang",
     ]);
+    expect(FACE_AGENT_PRESETS.find((p) => p.id === "im")?.workspaceLocked).toBe(true);
+    expect(FACE_AGENT_PRESETS.find((p) => p.id === "qichuang")?.workspaceLocked).toBe(
+      true,
+    );
+    expect(resolveAgentPresetProfile("im").composition).toBe("minimal");
+    expect(resolveAgentPresetProfile("im").subagents.mode).toBe("on");
+    expect(resolveAgentPresetProfile("im").subagentRouting).toBe(true);
+    expect(resolveAgentPresetProfile("im").delegation).toBe("proactive");
   });
 
   it("legacy server / plan map to harness tools", () => {

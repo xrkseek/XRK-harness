@@ -15,6 +15,10 @@ import { canOpenNativePath } from "./host-open-path.js";
 import { fullyQualified } from "./host-directory.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
 import { sessionCancel } from "./handlers/session.js";
+import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
+import { resolveImGatewayWired } from "./process-channels.js";
+import { ensureImWorkspace } from "./im-workspace-ensure.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -291,9 +295,25 @@ export async function workspacePreviewInject(
 export async function workspaceListFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
+  const listed = runtime.workspaces.list(runtime.store.list());
+  const gateway = resolveImGatewayWired();
+  // Create ws_im only when a real gateway is connected (not on Face boot).
+  if (gateway !== "bridge") {
+    await ensureImWorkspace(runtime);
+  }
+  const refreshed = runtime.workspaces.list(runtime.store.list());
+  // Hide empty ws_im on bridge (no external IM); show when gateway wired.
+  const items = refreshed.items.filter((row) => {
+    if (row.workspaceId !== IM_WORKSPACE_ID) return true;
+    if (row.sessionIds.length > 0) return true;
+    return gateway !== "bridge";
+  });
   return {
     ok: true,
-    value: runtime.workspaces.list(runtime.store.list()),
+    value: {
+      ...refreshed,
+      items,
+    },
   };
 }
 
@@ -351,6 +371,16 @@ export async function workspaceRenameFace(
       },
     };
   }
+  // Only 向阳空间 keeps a fixed product title; IM may be renamed / deleted.
+  if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: `reserved workspace ${workspaceId} cannot be renamed`,
+      },
+    };
+  }
   const workspace = runtime.workspaces.rename(workspaceId, title);
   if (!workspace) {
     return {
@@ -385,7 +415,6 @@ export async function workspaceArchiveSessionFace(
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  const result = runtime.workspaces.archiveSession(sessionId);
   // Archive is the sidebar “put this away” path after edit-fork; stop the
   // original turn so a leftover drain does not keep writing behind the child.
   await sessionCancel(runtime, `archive-${sessionId}`, {
@@ -397,6 +426,19 @@ export async function workspaceArchiveSessionFace(
   } catch {
     /* Host Phase1 is best-effort */
   }
+  // Move the durable log into sessions-archive.db so hot sessions.db can shrink.
+  // Registry membership stays; unarchive restores the same slot + hot rows.
+  try {
+    runtime.store.offloadToArchive?.(sessionId);
+  } catch {
+    /* memory stores / missing id — registry archive still proceeds */
+  }
+  try {
+    runtime.store.reclaimStorage?.();
+  } catch {
+    /* best-effort */
+  }
+  const result = runtime.workspaces.archiveSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/archived-sessions-changed",
@@ -431,6 +473,11 @@ export async function workspaceUnarchiveSessionFace(
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
+  try {
+    runtime.store.restoreFromArchive?.(sessionId);
+  } catch {
+    /* memory stores / missing id */
+  }
   const archivedSessionIds = runtime.workspaces.unarchiveSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
@@ -455,6 +502,12 @@ export async function workspacePinSessionFace(
       ok: false,
       error: { code: "invalid-payload", message: "sessionId required" },
     };
+  }
+  // Pin clears archive membership — restore the log to the hot DB first.
+  try {
+    runtime.store.restoreFromArchive?.(sessionId);
+  } catch {
+    /* memory stores / missing id */
   }
   const result = runtime.workspaces.pinSession(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
@@ -592,6 +645,16 @@ export async function workspaceDeleteFace(
     return {
       ok: false,
       error: { code: "invalid-payload", message: "workspaceId required" },
+    };
+  }
+  // 向阳空间 is the undeletable product home; IM may be deleted (recreated on connect).
+  if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: `reserved workspace ${workspaceId} cannot be deleted`,
+      },
     };
   }
   const result = runtime.workspaces.delete(workspaceId);

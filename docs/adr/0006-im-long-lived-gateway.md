@@ -70,7 +70,8 @@ Bridge 与 Gateway **并存**：未配置 WS/sidecar 时默认 `state: bridge`�
 
 - `im-long-lived-gateway` matrix 行 `bridge`；本地 WS ingress（无 env）+ in-process WS client + sidecar relay + webhook/poll 已能跑。  
 - RPC 契约稳定后同步 `community-plugins.md` · `security-checklist.md`（webhook 暴露面）。  
-- Face `processChannels/list` 已暴露 `wired: sidecar` 与 gateway paths；社区 client UI 可选。
+- Face `processChannels/list` 已暴露 `wired: sidecar` 与 gateway paths；社区 client UI 可选。  
+- Host ingest 可 admit 到 Face 保留工作区 `ws_im`（会话绑定见 `im-sessions.json` / [agt-bridge](../integrators/agt-bridge.md)）；厂商业务仍属 AGT / sidecar。
 
 ## 相关
 
@@ -148,9 +149,10 @@ Documented in [modules/references.md](../modules/references.md); **no** codex so
 
 ## Consequences
 
-- Matrix row `im-long-lived-gateway` is `bridge`; local WS ingress (no env) + in-process WS client + sidecar relay + webhook/poll works today.    
-- After RPC contracts stabilize, sync `community-plugins.md` · `security-checklist.md` (webhook exposure).  
+- Matrix row `im-long-lived-gateway` is `bridge`; local WS ingress (no env) + in-process WS client + sidecar relay + webhook/poll works today.
+- After RPC contracts stabilize, sync `community-plugins.md` · `security-checklist.md` (webhook exposure).
 - Face `processChannels/list` surfaces `wired: sidecar` and gateway paths; community client UI optional.
+- Host ingest can admit into reserved Face workspace `ws_im` (session bind via `im-sessions.json` / [agt-bridge](../integrators/agt-bridge.md)); vendor bot business stays on AGT / sidecar.
 
 ## Related
 

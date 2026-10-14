@@ -13,6 +13,7 @@ import type { Wire } from './rpc.schema.ts'
 import type {
   HistoryEntry, ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   ModelReasoningEffort, ModelSelection, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionSummary,
+  SessionToolEntry, SessionToolsValue,
 } from './sessions.ts'
 import type { ToolEventView } from './events.ts'
 import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
@@ -48,13 +49,15 @@ export const sessionEventSchema = z.object({
   ignorable: z.literal(true).optional(),
 }) as unknown as z.ZodType<SessionEvent>
 
-/** Coarse durable origin on list / host frames (Face `subagent` | `fork`). */
+/** Coarse durable origin on list / host frames (Face `subagent` | `fork` | `im`). */
 export const sessionOriginSchema = z
-  .enum(["subagent", "fork"])
+  .enum(["subagent", "fork", "im"])
   .or(z.string())
   .optional()
-  .transform((value): "subagent" | "fork" | undefined =>
-    value === "subagent" || value === "fork" ? value : undefined,
+  .transform((value): "subagent" | "fork" | "im" | undefined =>
+    value === "subagent" || value === "fork" || value === "im"
+      ? value
+      : undefined,
   );
 
 /** SessionSummary row of session.list (`projections` reuses the history block's shape and schema). */
@@ -179,6 +182,19 @@ export const sessionForkRequestSchema = z.object({
 export const sessionForkValueSchema = z.object({
   sessionId: sessionIdSchema,
 }) satisfies z.ZodType<Wire<ResponseValue<'session.fork'>>>
+
+/** session.truncate request payload (same cut knobs as fork; same session id). */
+export const sessionTruncateRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  atSeq: z.number().int().nonnegative().optional(),
+  beforeSeq: z.number().int().nonnegative().optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.truncate'>>>
+
+/** session.truncate response value. */
+export const sessionTruncateValueSchema = z.object({
+  sessionId: sessionIdSchema,
+  eventCount: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.truncate'>>>
 
 /** session.history request payload (beforeSeq/maxMessages page backwards from the window tail). */
 export const sessionHistoryRequestSchema = z.object({
@@ -426,3 +442,28 @@ export const sessionDeleteRequestSchema = z.object({
 export const sessionDeleteValueSchema = z.object({
   deleted: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.delete'>>>
+
+/** session.tools request payload. */
+export const sessionToolsRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'session.tools'>>>
+
+const sessionToolEntrySchema = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  group: z.enum(['preset', 'mcp']),
+  surface: z.enum([
+    'filesystem', 'shell', 'browser', 'web', 'mcp',
+    'agent', 'media', 'settings', 'ui', 'other',
+  ]),
+  mcpServer: z.string().min(1).optional(),
+  exposure: z.enum(['direct', 'deferred', 'hidden']),
+}) satisfies z.ZodType<Wire<SessionToolEntry>>
+
+/** session.tools response value. */
+export const sessionToolsValueSchema = z.object({
+  agentPreset: z.string().min(1),
+  cwd: z.string().min(1),
+  workspaceLabel: z.string().min(1),
+  tools: z.array(sessionToolEntrySchema),
+}) satisfies z.ZodType<Wire<SessionToolsValue>>

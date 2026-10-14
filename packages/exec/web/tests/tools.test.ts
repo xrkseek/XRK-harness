@@ -103,6 +103,7 @@ describe("createWebTools", () => {
     });
     const out = await tools[1]!.execute({ url: "https://example.com/p" });
     expect(out.content).toContain("Fetched https://example.com/p (HTTP 200)");
+    expect(out.content).toContain("untrusted");
     expect(out.content).toContain("Hello world");
     expect(out.meta).toEqual({
       url: "https://example.com/p",

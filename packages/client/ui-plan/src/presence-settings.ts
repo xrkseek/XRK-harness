@@ -63,6 +63,10 @@ export const PRESENCE_KITS = [
 /** Settings namespace owned by the ui-plan presence surface. */
 export const PRESENCE_SETTINGS_NAMESPACE = 'ui-presence'
 
+/** Master switch: hide header dock + Overview rail without touching chat. */
+export const PRESENCE_ENABLED_FIELD = 'enabled'
+export const DEFAULT_PRESENCE_ENABLED = true
+
 export const PRESENCE_SHAPE_FIELD = 'shape'
 export const PRESENCE_COLOR_FIELD = 'color'
 export const PRESENCE_KIT_FIELD = 'kit'
@@ -203,6 +207,7 @@ export type PresenceOverlays = {
 
 /** Durable presence section shared by Face schema and the browser scope. */
 export interface PresenceSettings {
+  enabled: boolean
   shape: PresenceShape
   color: PresenceColor
   kit: PresenceKit
@@ -216,6 +221,7 @@ export interface PresenceSettings {
 }
 
 export const PresenceSettingsSchema: z<PresenceSettings> = z.object({
+  [PRESENCE_ENABLED_FIELD]: z.boolean().default(DEFAULT_PRESENCE_ENABLED),
   [PRESENCE_SHAPE_FIELD]: z.union([...PRESENCE_SHAPES]).default(DEFAULT_PRESENCE_SHAPE),
   [PRESENCE_COLOR_FIELD]: z.union([...PRESENCE_COLORS]).default(DEFAULT_PRESENCE_COLOR),
   [PRESENCE_KIT_FIELD]: z.union([...PRESENCE_KITS]).default(DEFAULT_PRESENCE_KIT),

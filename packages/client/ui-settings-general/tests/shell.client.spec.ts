@@ -2,6 +2,7 @@
 import { Context } from '@xrkseek/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
+import { SettingsNavBinder } from '@xrkseek/client-ui-settings/client'
 import { apply, inject } from '../src/client/index.ts'
 import type { SettingsRootInjected } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
@@ -22,6 +23,7 @@ async function bench() {
     isLoopback: false,
   } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  await ctx.plugin(SettingsNavBinder).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry }
 }
 

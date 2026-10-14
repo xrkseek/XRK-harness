@@ -17,9 +17,11 @@ import {
 import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import {
   asCommunityLlmModelRows,
-  enrichCommunityModelsWithResolve,
   baseUrlFromCommunityModels,
-  scheduleCommunityLlmSyncRetries,
+  communityLlmSyncFingerprint,
+  createCommunityLlmSyncScheduler,
+  dropStaleCommunityLlmFingerprints,
+  enrichCommunityModelsWithResolve,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
@@ -29,6 +31,11 @@ import type {
 } from "./cordis-registry.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 import type { XrkWebServerRoute } from "./xrk-host-apply.js";
+import {
+  gateLiveHostHttp,
+  gateLiveHostRpc,
+  registerLiveHostApply,
+} from "./live-host-apply.js";
 
 const OFM_PACKAGE = "dsh-our-free-model";
 const OFM_DATA_DIR = "our-free-model";
@@ -112,6 +119,8 @@ function ensureForwardSeed(dshHome: string): void {
         version: current.version ?? 1,
         enabled: current.enabled !== false,
         exposeRegionModels: current.exposeRegionModels !== false,
+        // Host-staged: stand down self-updater / hot-reload into pluginsDir.
+        distribution: "managed",
         forward: {
           host: "127.0.0.1",
           port: 0,
@@ -173,31 +182,18 @@ export async function tryApplyOurFreeModelHost(
     },
   });
 
-  const adapterSyncers: Array<() => Promise<boolean>> = [];
-  let syncChain: Promise<void> = Promise.resolve();
   let hostDisposed = false;
-  const syncedFingerprints = new Set<string>();
   /** Survives brief settings.json rewrites while forward rebinds (port:0 window). */
   let lastForward: { baseUrl?: string; apiKey?: string } = {};
-
-  const runAllAdapterSyncers = async (): Promise<void> => {
-    syncChain = syncChain
-      .then(async () => {
-        if (hostDisposed) return;
-        for (const sync of adapterSyncers) {
-          await sync();
-        }
-      })
-      .catch((error) => {
-        logger.warn("adapter sync batch failed", error);
-      });
-    await syncChain;
-  };
+  const syncScheduler = createCommunityLlmSyncScheduler({
+    isDisposed: () => hostDisposed,
+    onBatchError: (error) => logger.warn("adapter sync batch failed", error),
+  });
 
   (root as { on: (event: string, listener: () => void) => unknown }).on(
     "llm/adapters-updated",
     () => {
-      void runAllAdapterSyncers();
+      void syncScheduler.runAll();
     },
   );
 
@@ -216,14 +212,17 @@ export async function tryApplyOurFreeModelHost(
         if (disposed || hostDisposed || !wire.syncCommunityLlmProvider) {
           return false;
         }
-        let anyOk = false;
+        if (ids.length === 0) return true;
+        let allOk = true;
         const fromDisk = forwardEndpointFromHome(dshHome);
         if (fromDisk.baseUrl) {
           lastForward = {
             baseUrl: fromDisk.baseUrl,
-            ...(fromDisk.apiKey ? { apiKey: fromDisk.apiKey } : lastForward.apiKey
-              ? { apiKey: lastForward.apiKey }
-              : {}),
+            ...(fromDisk.apiKey
+              ? { apiKey: fromDisk.apiKey }
+              : lastForward.apiKey
+                ? { apiKey: lastForward.apiKey }
+                : {}),
           };
         }
         const forward = {
@@ -243,19 +242,23 @@ export async function tryApplyOurFreeModelHost(
               forward.baseUrl ??
               undefined;
             if (!baseUrl || models.length === 0) {
+              allOk = false;
               logger.warn(
                 `syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
               );
               continue;
             }
-            // c2: fingerprint includes effort menus so resolveModel enrichment re-syncs.
-            const fingerprint = `${providerId}|${baseUrl}|${models
-              .map((m) =>
-                `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
-              )
-              .join(",")}|c2`;
-            if (syncedFingerprints.has(fingerprint)) {
-              anyOk = true;
+            const fingerprint = communityLlmSyncFingerprint(
+              providerId,
+              baseUrl,
+              models,
+            );
+            dropStaleCommunityLlmFingerprints(
+              syncScheduler.fingerprints,
+              providerId,
+              baseUrl,
+            );
+            if (syncScheduler.fingerprints.has(fingerprint)) {
               continue;
             }
             const apiKey =
@@ -270,24 +273,25 @@ export async function tryApplyOurFreeModelHost(
               models,
             });
             lastForward = { baseUrl, apiKey };
-            syncedFingerprints.add(fingerprint);
-            anyOk = true;
+            syncScheduler.fingerprints.add(fingerprint);
             logger.info(
               `syncCommunityLlmProvider ok ${providerId} models=${models.length} baseUrl=${baseUrl}`,
             );
           } catch (error) {
+            allOk = false;
             logger.warn(
               `syncCommunityLlmProvider failed for ${providerId}`,
               error,
             );
           }
         }
-        return anyOk;
+        return allOk;
       };
-      adapterSyncers.push(sync);
-      void runAllAdapterSyncers();
+      syncScheduler.addSyncer(sync);
+      void syncScheduler.runAll();
       const release = (): void => {
         disposed = true;
+        syncScheduler.markUnsettled();
       };
       return Object.assign(release, {
         replace(next: string[]) {
@@ -296,8 +300,9 @@ export async function tryApplyOurFreeModelHost(
             ids.length,
             ...next.map((p) => p.trim()).filter(Boolean),
           );
-          syncedFingerprints.clear();
-          void runAllAdapterSyncers();
+          syncScheduler.fingerprints.clear();
+          syncScheduler.markUnsettled();
+          void syncScheduler.runAll();
         },
       });
     },
@@ -395,29 +400,43 @@ export async function tryApplyOurFreeModelHost(
 
   // Seal before return so async pack.apply → connection.fetch.register late-binds.
   httpSealed = true;
-  scheduleCommunityLlmSyncRetries(runAllAdapterSyncers, () => hostDisposed);
+  syncScheduler.scheduleRetries();
   disposers.push(() => {
     hostDisposed = true;
   });
 
+  // Until main + region providers have synced Face, status GETs re-nudge.
   for (const row of http) {
     const inner = row.handle;
     row.handle = async (req, res, pathname) => {
       const handled = await inner(req, res, pathname);
       if (
         handled &&
-        syncedFingerprints.size === 0 &&
+        !syncScheduler.settled() &&
         pathname.startsWith(OFM_API_PREFIX) &&
         (req.method ?? "GET").toUpperCase() === "GET"
       ) {
-        void runAllAdapterSyncers();
+        void syncScheduler.runAll();
       }
       return handled;
     };
   }
 
+  await registerLiveHostApply(packageName, async () => {
+    hostDisposed = true;
+    for (const d of disposers.reverse()) await d();
+    try {
+      await root.fiber.dispose();
+    } catch {
+      /* Cordis root may already be torn down */
+    }
+  });
+
+  const gatedHttp = gateLiveHostHttp(packageName, http);
+  const gatedRpc = gateLiveHostRpc(packageName, rpc);
+
   const httpPrefixes = [OFM_API_PREFIX];
-  if (http.some((row) => row.match(OFM_CHANNEL_PACK_PREFIX))) {
+  if (gatedHttp.some((row) => row.match(OFM_CHANNEL_PACK_PREFIX))) {
     httpPrefixes.push(OFM_CHANNEL_PACK_PREFIX);
   }
 
@@ -426,10 +445,10 @@ export async function tryApplyOurFreeModelHost(
       id: "dsh-our-free-model-host",
       package: packageName,
       httpPrefixes,
-      rpcChannels: Object.keys(rpc),
+      rpcChannels: Object.keys(gatedRpc),
       description: `${DSH_COMPAT_ADAPTER}: Our Free Model Cordis host half`,
     },
-    ...(http.length ? { http } : {}),
-    ...(Object.keys(rpc).length ? { rpc } : {}),
+    ...(gatedHttp.length ? { http: gatedHttp } : {}),
+    ...(Object.keys(gatedRpc).length ? { rpc: gatedRpc } : {}),
   };
 }

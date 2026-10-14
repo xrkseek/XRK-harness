@@ -40,6 +40,8 @@ export interface PresetRow {
    * is where both of those live.
    */
   broken?: string
+  /** IM / Qichuang — shown read-only; cannot be the coding Settings default. */
+  workspaceLocked?: boolean
 }
 
 /** The copy dialog: a new id and optional display name over a fixed source. */
@@ -180,7 +182,17 @@ export class AgentPresetSectionController {
       error: null,
       authorable,
       hasDocument,
-      rows: presets.map(preset => ({ ...preset })),
+      rows: presets.map(preset => ({
+        id: preset.id,
+        trust: preset.trust,
+        isDefault: preset.isDefault,
+        ...preset.name === undefined ? {} : { name: preset.name },
+        ...preset.description === undefined ? {} : { description: preset.description },
+        ...preset.broken === undefined ? {} : { broken: preset.broken },
+        ...(preset.workspaceLocked === true || preset.id === 'im' || preset.id === 'qichuang')
+          ? { workspaceLocked: true as const }
+          : {},
+      })),
       revealedPaths: kept,
     })
   }
@@ -338,6 +350,9 @@ export class AgentPresetSectionController {
    * @returns once the write settled and the roster was re-read.
    */
   async makeDefault(id: string): Promise<void> {
+    const row = this.store.getSnapshot().rows.find(candidate => candidate.id === id)
+    // IM / Qichuang cannot be the coding Settings default.
+    if (row?.workspaceLocked === true) return
     const failure = await writeDefaultPreset(this.api, id)
     if (failure !== undefined) {
       this.set({ error: failure })

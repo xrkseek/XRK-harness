@@ -77,25 +77,48 @@ function fallbackDisplayName(name: string): string {
 export interface PermissionSelectProps {
   value: PermissionSelectValue | undefined
   locked: boolean
+  /**
+   * IM / 向阳空间: fixed full-access chip (not a disabled dropdown).
+   * Overrides the projection label so a legacy `workspace-write` pin cannot
+   * paint the wrong mode while the control is locked.
+   */
+  accessLocked?: boolean
   command: (line: string) => Promise<boolean>
   /** The owning bar's locale seat, passed down as a plain prop. */
   t: ComposerBarProps['t']
 }
 
-export function PermissionSelect({ value, locked, command, t }: PermissionSelectProps) {
+export function PermissionSelect({
+  value, locked, accessLocked = false, command, t,
+}: PermissionSelectProps) {
   const [pick, setPick] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
 
   useEffect(() => {
-    if (!locked && value !== undefined) return
+    if (!locked && !accessLocked && value !== undefined) return
     setOpen(false)
     setAcknowledged(false)
     setConfirmation(null)
-  }, [locked, value])
+  }, [locked, accessLocked, value])
 
   if (value === undefined) return null
+
+  // Orchestration workspaces: calm static chip — never a greyed fake select.
+  if (accessLocked) {
+    const fullLabel = t(PRESET_LABEL_KEYS[FULL_ACCESS])
+    return (
+      <span
+        className={css.orchChip}
+        title={t('access.orch.lockedHint')}
+        aria-label={t('input.accessMode', { name: fullLabel })}
+      >
+        <span className={css.triggerIcon} aria-hidden>{permissionGlyphs[FULL_ACCESS]}</span>
+        <span className={css.triggerLabel}>{fullLabel}</span>
+      </span>
+    )
+  }
 
   const labelOf = (option: PermissionSelectValue['options'][number]): string => {
     const key = PRESET_LABEL_KEYS[option.value as keyof typeof PRESET_LABEL_KEYS]

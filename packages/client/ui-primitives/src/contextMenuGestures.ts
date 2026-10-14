@@ -16,6 +16,7 @@ import {
   restoreContextMenuSelection,
 } from "./context-menu.ts";
 import type { ContextMenuActions, ContextMenuHit } from "./context-menu.ts";
+import { translateSelectionText } from "./selection-translate.ts";
 
 /** Clipboard payload pulled for one paste gesture. */
 interface ClipboardContent {
@@ -281,5 +282,16 @@ export const domContextMenuActions: ContextMenuActions = {
   },
   paste(hit, plainText) {
     void pasteAt(hit, plainText);
+  },
+  translate(hit) {
+    const source = hit.selectionText.trim();
+    if (!source) return;
+    void translateSelectionText(source).then((out) => {
+      if (!out.ok) {
+        writeClipboardText(`[translate failed] ${out.error}`);
+        return;
+      }
+      writeClipboardText(out.text);
+    });
   },
 };

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
 import { SlotRegistry } from '@xrkseek/client-runtime/client'
 import { LocaleRuntime } from '@xrkseek/client-locale/client'
-import { SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
+import { SettingsNavBinder, SettingsScopeBinder } from '@xrkseek/client-ui-settings/client'
 import { apply, inject } from '@xrkseek/client-ui-settings-plugins/client'
 import type {
   ConfigurablePluginsTabFace, PluginsSettingsSectionInjected,
@@ -71,22 +71,74 @@ async function bench(served?: string[]) {
     api: {
       settings: { describe: describeSettings },
       credentials: { describe: describeCredentials },
+      sessions: {
+        tools: () => Promise.resolve({
+          rpcId: 'st',
+          result: {
+            ok: true,
+            value: {
+              agentPreset: 'default',
+              cwd: '/tmp',
+              workspaceLabel: 'tmp',
+              tools: [],
+            },
+          },
+        }),
+      },
+      skills: {
+        list: () => Promise.resolve({
+          rpcId: 'sk',
+          result: {
+            ok: true,
+            value: {
+              skills: [],
+              workspace: { cwd: '/tmp', label: 'tmp' },
+              documents: [],
+            },
+          },
+        }),
+        read: () => Promise.resolve({
+          rpcId: 'skr',
+          result: { ok: true, value: { kind: 'document', path: 'AGENTS.md', content: '' } },
+        }),
+      },
+    },
+  } as never)
+  ctx.provide('sessions', {
+    list: {
+      getSnapshot: () => ({ current: undefined, byId: {}, order: [] }),
+      subscribe: () => () => {},
     },
   } as never)
   await ctx.plugin(SettingsScopeBinder).await()
+  new SettingsNavBinder(ctx)
   return { ctx, slots: ctx.get('slots') as SlotRegistry, describeCredentials, describeSettings }
 }
 
 function declareRoot(slots: SlotRegistry): () => void {
-  return slots.register({
+  const offRoot = slots.register({
     name: 'root',
-    children: { 'settings.section': { kind: 'list', scope: 'root' } },
+    children: {
+      'settings.section': { kind: 'list', scope: 'root' },
+      sidebar: { kind: 'single', scope: 'root' },
+    },
   } as never, () => null)
+  // Declared so Plugins home can inject into the DSH-style utility seat.
+  const offSidebar = slots.register({
+    name: 'sidebar',
+    children: { 'sidebar.utility': { kind: 'list', scope: 'root' } },
+  } as never, () => null)
+  return () => {
+    offSidebar()
+    offRoot()
+  }
 }
 
 describe('ui-settings-plugins apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
+    expect(inject).toEqual([
+      'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav', 'sessions',
+    ])
   })
 
   it('registers one Plugins section and declares the tab and card slots', async () => {
@@ -100,6 +152,8 @@ describe('ui-settings-plugins apply', () => {
     // The nav label is a locale-following thunk; owners resolve it at read time.
     expect(resolveSlotLabel(section.options.label)).toBe('插件')
     expect(slots.spec('settings.plugins.tab')).toMatchObject({ kind: 'list', scope: 'root' })
+    const tabIds = slots.entries('settings.plugins.tab').map(e => e.options.id)
+    expect(tabIds).toEqual(['configurable', 'tools', 'skills'])
     const tab = slots.entries('settings.plugins.tab')[0]!
     expect(tab.options).toMatchObject({ id: 'configurable', order: 0 })
     expect(resolveSlotLabel(tab.options.label)).toBe('插件配置')
@@ -118,7 +172,8 @@ describe('ui-settings-plugins apply', () => {
     const initialTabs = sectionFace.hooks.tabs.getSnapshot()
     expect(initialTabs).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
-      { id: 'advanced', order: 10, label: '高级' },
+      { id: 'tools', order: 4, label: '运行时' },
+      { id: 'skills', order: 5, label: '注入' },
     ])
     expect(sectionFace.hooks.tabs.getSnapshot()).toBe(initialTabs)
 
@@ -128,7 +183,8 @@ describe('ui-settings-plugins apply', () => {
     expect(sectionFace.hooks.tabs.getSnapshot()).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
       { id: 'plain', order: 0, label: '' },
-      { id: 'advanced', order: 10, label: '高级' },
+      { id: 'tools', order: 4, label: '运行时' },
+      { id: 'skills', order: 5, label: '注入' },
     ])
     unsubscribe()
 
@@ -161,17 +217,18 @@ describe('ui-settings-plugins apply', () => {
     })
   })
 
-  it('registers an Advanced tab with the cards it ships there', async () => {
+  it('ships former Advanced cards on the configuration list (no Advanced tab)', async () => {
     const { ctx, slots } = await bench(['auto-review'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     const tabIds = slots.entries('settings.plugins.tab').map(e => e.options.id)
-    expect(tabIds).toContain('advanced')
-    await vi.waitFor(() => {
-      expect(slots.entries('settings.plugin.advanced.item').map(e => e.options.key))
-        .toEqual(['auto-review', 'memory-embed', 'host', 'process-channels'])
-    })
+    expect(tabIds).not.toContain('advanced')
+    expect(tabIds).toEqual(['configurable', 'tools', 'skills'])
+    const keys = slots.entries('settings.plugin.item').map(e => e.options.key)
+    expect(keys).toEqual(expect.arrayContaining([
+      'auto-review', 'memory-embed', 'host', 'process-channels',
+    ]))
   })
 
   it('keys each card it ships on the settings namespace that card edits', async () => {
@@ -186,6 +243,7 @@ describe('ui-settings-plugins apply', () => {
         'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
         'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
         'a2a-inbound', 'external-agent', 'cron',
+        'auto-review', 'memory-embed', 'host', 'process-channels',
       ])
   })
 
@@ -206,6 +264,7 @@ describe('ui-settings-plugins apply', () => {
           'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
           'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
           'a2a-inbound', 'external-agent', 'cron',
+          'auto-review', 'memory-embed', 'host', 'process-channels',
         ])
     })
   })
@@ -278,7 +337,7 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(17)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(21)
 
     await fiber.dispose()
 
@@ -286,6 +345,5 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.spec('settings.plugins.tab')).toBeUndefined()
     expect(slots.spec('settings.plugin.item')).toBeUndefined()
     expect(slots.spec('plugins.bundle.config')).toBeUndefined()
-    expect(slots.spec('settings.plugin.advanced.item')).toBeUndefined()
   })
 })

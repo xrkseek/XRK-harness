@@ -18,6 +18,7 @@ import { clientRequestSchema, clientResponseSchema } from '../api/rpc.schema.ts'
 import {
   sessionCancelRequestSchema,
   sessionDeleteRequestSchema,
+  sessionToolsRequestSchema,
   sessionAttachmentRequestSchema,
   sessionCreateRequestSchema,
   sessionForkRequestSchema,
@@ -50,7 +51,7 @@ import {
   workspaceListRequestSchema,
   workspaceRenameRequestSchema,
 } from '../api/workspace.schema.ts'
-import { skillListRequestSchema } from '../api/skills.schema.ts'
+import { skillListRequestSchema, skillReadRequestSchema } from '../api/skills.schema.ts'
 import {
   agentPresetCopyRequestSchema, agentPresetListRequestSchema, agentPresetOpenDocumentRequestSchema,
   agentPresetReadRequestSchema, agentPresetRemoveRequestSchema, agentPresetSelectRequestSchema,
@@ -115,6 +116,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'session.updateQueue': { schema: sessionUpdateQueueRequestSchema, invoke: (api, r) => api.sessions.updateQueue(r) },
   'session.cancel': { schema: sessionCancelRequestSchema, invoke: (api, r) => api.sessions.cancel(r) },
   'session.delete': { schema: sessionDeleteRequestSchema, invoke: (api, r) => api.sessions.delete(r) },
+  'session.tools': { schema: sessionToolsRequestSchema, invoke: (api, r) => api.sessions.tools(r) },
   'subagent.list': { schema: subagentListRequestSchema, invoke: (api, r, signal) => api.subagents.list(r, signal) },
   'subagent.history': { schema: subagentHistoryRequestSchema, invoke: (api, r, signal) => api.subagents.history(r, signal) },
   'subagent.prompt': { schema: subagentPromptRequestSchema, invoke: (api, r, signal) => api.subagents.prompt(r, signal) },
@@ -141,6 +143,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'workspace.pinWorkspace': { schema: workspacePinWorkspaceRequestSchema, invoke: (api, r) => api.workspace.pinWorkspace(r) },
   'workspace.unpinWorkspace': { schema: workspaceUnpinWorkspaceRequestSchema, invoke: (api, r) => api.workspace.unpinWorkspace(r) },
   'skill.list': { schema: skillListRequestSchema, invoke: (api, r) => api.skills.list(r) },
+  'skill.read': { schema: skillReadRequestSchema, invoke: (api, r) => api.skills.read(r) },
   'agentPreset.list': { schema: agentPresetListRequestSchema, invoke: (api, r) => api.agentPresets.list(r) },
   'agentPreset.select': { schema: agentPresetSelectRequestSchema, invoke: (api, r) => api.agentPresets.select(r) },
   'agentPreset.read': { schema: agentPresetReadRequestSchema, invoke: (api, r) => api.agentPresets.read(r) },

@@ -38,6 +38,12 @@ export interface SettingsOnboardingStep {
 export type SettingsRootInjected = {
   /** Request a fresh generation and skip the current backoff delay. */
   reconnect: () => void
+  /**
+   * Bind this shell's openSection for home surfaces (Plugins) / peers
+   * (`ctx.settingsNav` — no cross-plugin value import). Home-only section
+   * ids open a full-bleed panel without the Settings nav rail.
+   */
+  bindOpenSection: (open: (id: string) => void) => () => void
   hooks: {
     /** settings.section ledger projected into ordered nav rows. */
     sections: HostObservable<readonly SettingsSectionRow[]>

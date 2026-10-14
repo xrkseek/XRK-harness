@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  communityLoopbackBaseUrlCollision,
   defaultSoftBudgetMaxTokens,
   existingPiAiProvider,
   mergeCommunityProviderModels,
@@ -115,5 +116,39 @@ describe("mergeCommunityProviderModels", () => {
   it("omits a default when context is below the 8k floor", () => {
     expect(defaultSoftBudgetMaxTokens(4_000)).toBeUndefined();
     expect(defaultSoftBudgetMaxTokens(8_000)).toBe(8_000);
+  });
+
+  it("detects community loopback baseURL collisions (WB vs OFM)", () => {
+    const llm = {
+      providers: {
+        "our-free-model": {
+          baseURL: "http://127.0.0.1:58969/v1",
+        },
+        workbuddy: {
+          baseURL: "http://127.0.0.1:63949/v1",
+        },
+      },
+    };
+    expect(
+      communityLoopbackBaseUrlCollision(
+        "workbuddy",
+        "http://127.0.0.1:58969/v1",
+        llm,
+      ),
+    ).toBe("our-free-model");
+    expect(
+      communityLoopbackBaseUrlCollision(
+        "workbuddy",
+        "http://127.0.0.1:63949/v1/",
+        llm,
+      ),
+    ).toBeUndefined();
+    expect(
+      communityLoopbackBaseUrlCollision(
+        "custom-openai",
+        "http://127.0.0.1:58969/v1",
+        llm,
+      ),
+    ).toBeUndefined();
   });
 });

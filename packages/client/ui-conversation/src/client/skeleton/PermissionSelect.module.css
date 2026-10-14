@@ -1,3 +1,20 @@
+/* IM / 向阳空间: read-only full-access mark — same metrics as .trigger, no chevron. */
+.orchChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  user-select: none;
+}
+
 .trigger {
   display: inline-flex;
   align-items: center;

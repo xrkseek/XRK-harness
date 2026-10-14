@@ -488,6 +488,21 @@
   pointer-events: none;
 }
 
+.heroWorkspaceBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.heroAccessHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
 .heroWorkspaceRow {
   display: flex;
   align-items: center;

@@ -28,6 +28,8 @@ import { subagentOwnedEvents } from "./subagent-registry.js";
 import {
   DEFAULT_MAX_ACTIVE_CHILDREN,
   DEFAULT_MAX_DEPTH,
+  FACE_AGENT_PRESET_IDS,
+  canonicalAgentPresetId,
   resolveAgentPresetProfile,
 } from "./presets-catalog.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
@@ -37,6 +39,8 @@ import {
 } from "./session-cwd.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { formatRosterCatalog } from "./agent-roster-store.js";
+import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import { resolveDefaultAgentPreset } from "./settings-document.js";
 import {
   ExternalAgentError,
   parseExternalAgentKind,
@@ -585,13 +589,14 @@ function createSubagentTool(
   };
   const foregroundWaitMs = options.foregroundWaitMs ?? FOREGROUND_WAIT_MS;
   const description =
-    "Delegate a self-contained task to a teammate subagent (separate session, same workspace as this session unless worktree:true). " +
+    "Delegate a self-contained task to a teammate subagent (separate session; same workspace as this session by default, unless workspace_id / cwd / worktree:true). " +
     "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
     "so it does not consume this conversation's context. " +
+    "Cross-workspace spawn (`workspace_id` / `cwd`) is **IM-only** — call workspace_list then pass workspace_id so the child lands in a coding workspace; coding badges stay in-workspace. " +
     "By default the child cannot see this chat — give a complete standalone prompt (paths, goals, constraints, persona). " +
     "Do not tell the child to read AGENTS.md to discover who it is; Face prepends parent/child session ids, mode, role, and cwd. " +
     "Set inherit_context true to seed the child with this session's completed turns only " +
-    "(the current in-flight turn is excluded). " +
+    "(the current in-flight turn is excluded; incompatible with workspace_id / cwd). " +
     "By default waits for the result (one-shot, no later human messages on that child). " +
     "That foreground wait is bounded (10 min by default): on expiry the child is NOT discarded — " +
     "whatever answer it already wrote is salvaged into this result and the child id stays readable " +
@@ -649,6 +654,24 @@ function createSubagentTool(
           type: "string",
           description:
             "Agent Team member id. Face applies that member's tools, inject, and playbook — the same three surfaces the parent already edits. Prefer this over restating those in prompt.",
+        },
+        workspace_id: {
+          type: "string",
+          description:
+            "Face workspace id for the child (from workspace_list). Overrides parent workspace inheritance. " +
+            "Requires inherit_context=false. Prefer this over cwd when the workspace already exists.",
+        },
+        cwd: {
+          type: "string",
+          description:
+            "Absolute path for the child workspace when workspace_id is omitted (adopt/create by path). " +
+            "Requires inherit_context=false. Ignored when workspace_id is set.",
+        },
+        agent_preset: {
+          type: "string",
+          description:
+            "Child session badge (minimal|shell|frugal|shallow|harness). " +
+            "When omitted and the parent is IM targeting another workspace, Face defaults to harness (not im).",
         },
         run_in_background: {
           type: "boolean",
@@ -732,6 +755,9 @@ function createSubagentTool(
         role?: string;
         agent_type?: string;
         member_id?: string;
+        workspace_id?: string;
+        cwd?: string;
+        agent_preset?: string;
         task_id?: string;
         task_name?: string;
         output_schema?: unknown;
@@ -739,6 +765,60 @@ function createSubagentTool(
         model?: string;
         reasoning_effort?: string;
       };
+      const workspaceIdArg = String(a.workspace_id ?? "").trim();
+      const cwdArg = String(a.cwd ?? "").trim();
+      const agentPresetArg = String(a.agent_preset ?? "").trim();
+      const parentWs = options.runtime.workspaces.workspaceIdOf(
+        options.parentSessionId,
+      );
+      // Only IM may dispatch a child into another Face workspace.
+      if (
+        (workspaceIdArg || cwdArg) &&
+        parentWs !== IM_WORKSPACE_ID
+      ) {
+        return {
+          content:
+            "subagent: workspace_id/cwd only allowed from IM (ws_im); coding sessions stay in-workspace",
+          isError: true,
+        };
+      }
+      if ((workspaceIdArg || cwdArg) && a.inherit_context === true) {
+        return {
+          content:
+            "subagent: workspace_id/cwd require inherit_context=false",
+          isError: true,
+        };
+      }
+      if (workspaceIdArg && !options.runtime.workspaces.get(workspaceIdArg)) {
+        return {
+          content: `subagent: unknown workspace_id "${workspaceIdArg}" (workspace_list first)`,
+          isError: true,
+        };
+      }
+      if (agentPresetArg && !FACE_AGENT_PRESET_IDS.has(agentPresetArg)) {
+        return {
+          content: `subagent: unknown agent_preset "${agentPresetArg}"`,
+          isError: true,
+        };
+      }
+      const createAttach: {
+        workspaceId?: string;
+        cwd?: string;
+        agentPreset?: string;
+      } = {};
+      if (workspaceIdArg) createAttach.workspaceId = workspaceIdArg;
+      else if (cwdArg) createAttach.cwd = cwdArg;
+      const leaveIm =
+        parentWs === IM_WORKSPACE_ID &&
+        Boolean(createAttach.workspaceId || createAttach.cwd) &&
+        createAttach.workspaceId !== IM_WORKSPACE_ID;
+      if (agentPresetArg) {
+        createAttach.agentPreset = canonicalAgentPresetId(agentPresetArg);
+      } else if (leaveIm) {
+        const def = resolveDefaultAgentPreset(options.runtime);
+        createAttach.agentPreset =
+          def === "im" || def === "minimal" ? "harness" : def;
+      }
       // Defense in depth: Host should not bind this tool when the badge is
       // Frugal/minimal/shell. If a stale AgentHandle still carries it, refuse.
       const badge = effectiveSessionAgentPreset(
@@ -775,10 +855,12 @@ function createSubagentTool(
         | ReturnType<typeof options.runtime.agentRoster.get>
         | undefined;
       if (memberId) {
-        const workspaceId = canvasWorkspaceIdForSession(
-          options.runtime,
-          options.parentSessionId,
-        );
+        const workspaceId =
+          workspaceIdArg ||
+          canvasWorkspaceIdForSession(
+            options.runtime,
+            options.parentSessionId,
+          );
         rosterMember = options.runtime.agentRoster.get(workspaceId, memberId);
         if (!rosterMember) {
           return {
@@ -810,14 +892,13 @@ function createSubagentTool(
       }
       if (runtimeKind !== "in-process") {
         const background = a.run_in_background === true;
-        // One cwd for every external branch. `resolveSessionCwd` already
-        // falls back to the workspace root, so the child runs where the
-        // parent runs instead of always at the root (which silently broke
-        // any session that had moved into another workspace).
-        const externalCwd = resolveSessionCwd(
-          options.runtime,
-          options.parentSessionId,
-        );
+        // Prefer explicit workspace_id / cwd (IM → coding WS); else parent cwd.
+        const externalCwd =
+          (workspaceIdArg
+            ? options.runtime.workspaces.get(workspaceIdArg)?.path
+            : undefined) ||
+          cwdArg ||
+          resolveSessionCwd(options.runtime, options.parentSessionId);
         if (background && !supportsExternalContinuable(runtimeKind)) {
           return {
             content:
@@ -878,6 +959,7 @@ function createSubagentTool(
                 label,
                 mode: "continuable",
                 ...memberSpawn,
+                ...createAttach,
                 ...(spawnRole && spawnRole !== "default"
                   ? { role: spawnRole }
                   : {}),
@@ -1026,10 +1108,12 @@ function createSubagentTool(
         String(a.task_name ?? "").trim() ||
         (background ? "subagent" : "subagent-task");
       const linkMode = background ? "continuable" : "one-shot";
-      const parentCwd = resolveSessionCwd(
-        options.runtime,
-        options.parentSessionId,
-      );
+      const parentCwd =
+        (workspaceIdArg
+          ? options.runtime.workspaces.get(workspaceIdArg)?.path
+          : undefined) ||
+        cwdArg ||
+        resolveSessionCwd(options.runtime, options.parentSessionId);
       const taskTitle = String(a.task_name ?? "").trim() || label;
       const taskIdHint = String(a.task_id ?? "").trim() || undefined;
       // Before anything is allocated: reusing a task_id another child owns
@@ -1183,6 +1267,7 @@ function createSubagentTool(
                 label,
                 mode: linkMode,
                 ...memberSpawn,
+                ...createAttach,
                 ...(spawnRole && spawnRole !== "default"
                   ? { role: spawnRole }
                   : {}),
@@ -1226,6 +1311,7 @@ function createSubagentTool(
             label,
             mode: linkMode,
             ...memberSpawn,
+            ...createAttach,
             ...(spawnRole && spawnRole !== "default"
               ? { role: spawnRole }
               : {}),

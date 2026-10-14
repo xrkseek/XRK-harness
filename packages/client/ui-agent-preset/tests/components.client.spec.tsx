@@ -381,12 +381,19 @@ describe('the session-header label', () => {
     expect(screen.getByTitle(en.headerHint).textContent).toBe('mine')
   })
 
-  it('shows the id until the roster resolves it', () => {
+  it('shows locale for known built-ins even before the roster arrives', () => {
     renderLabel({ blank: false, agentPreset: 'harness' }, { options: [] })
 
-    // The session's own summary is the authority on which preset it runs; the
-    // roster only supplies the display name, and its arrival is a later frame.
-    expect(screen.getByTitle(en.headerHint).textContent).toBe('harness')
+    // Built-in ids must not flash raw wire ids (e.g. qichuang) while roster loads.
+    expect(screen.getByTitle(en.presetHarnessDescription).textContent).toBe(
+      en.presetHarnessName,
+    )
+  })
+
+  it('shows the id until the roster resolves an unknown preset', () => {
+    renderLabel({ blank: false, agentPreset: 'mine' }, { options: [] })
+
+    expect(screen.getByTitle(en.headerHint).textContent).toBe('mine')
   })
 
   it('renders nothing, and reads no roster, when the session records no preset', async () => {

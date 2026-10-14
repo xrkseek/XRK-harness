@@ -20,9 +20,10 @@ Host 语音缝：`@xrkseek/exec-voice`。麦克风 / 扬声器 / WebRTC **留在
 | ----------- | ------------------------------------------------------------------------ |
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
 | `memory`（仅 env） | 内存 Provider（CI / 演示） |
+| `local` / SenseVoice | 本地 STT：`{XRK_HOME}/voice/sensevoice`（或 `XRK_VOICE_SENSEVOICE_DIR`）放 `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx`；Host 需 `sherpa-onnx-node`。TTS 用内存 stub；live 不可用 |
 | `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_VOICE_OPENAI_KEY`；可选 Settings / `XRK_VOICE_BASE_URL` |
 
-不覆盖本地 faster-whisper / Piper / 原生 voice-host 子进程（Codex 式）；那是后续 Provider。
+SenseVoice 资源准备（下载 / SHA）与 Silero 分段工作进程仍对齐 DSH 实验包语义逐步补齐；当前切片为磁盘 inspect + 可选 in-process 推理。
 
 **唤醒词**：未交付。对标 Hermes `wake_word` / on-device hotword 的产品化放在 Voice Settings 开关与缺钥诚实失败稳定之后；当前请用按住说话（browser transport）或产品壳麦克风。
 
@@ -64,9 +65,10 @@ Host voice seam: `@xrkseek/exec-voice`. Mic / speaker / WebRTC stay **on the cli
 | ----------- | ------------------------------------------------------------------------------- |
 | (unset / off) | Tools still register; execute **fails honestly** |
 | `memory` (env only) | In-memory Provider (CI / demos) |
+| `local` / SenseVoice | Local STT: place `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx` under `{XRK_HOME}/voice/sensevoice` (or `XRK_VOICE_SENSEVOICE_DIR`); Host needs `sherpa-onnx-node`. TTS uses memory stub; live unsupported |
 | `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_VOICE_OPENAI_KEY`; optional Settings / `XRK_VOICE_BASE_URL` |
 
-Local faster-whisper / Piper / native voice-host subprocess (Codex-style) are out of MVP — add as later Providers.
+SenseVoice asset prepare (download / SHA) and Silero worker process will follow the DSH experimental package; this slice is disk inspect + optional in-process inference.
 
 **Wake word**: not shipped. Hermes-style on-device hotword comes after Settings Voice switches and missing-key honesty are stable; use push-to-talk (browser transport) or the product-shell mic for now.
 

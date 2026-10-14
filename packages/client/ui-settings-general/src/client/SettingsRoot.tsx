@@ -1,529 +1,311 @@
 /**
-
  * Settings shell root: the sidebar-foot trigger row plus the centered modal
-
  * panel (figma 501:29947, 1080x700) with the section nav rail. The shell is
-
  * a pure composition face — every piece of text (trigger label, panel title,
-
  * close label, sections) arrives from registrants through slots; accessible
-
  * names resolve to that content (trigger: its own text; dialog:
-
  * aria-labelledby the title node; close: visually-hidden slot text). Modal
-
  * open state and the active section id are component-local viewing state;
-
  * the onboarding coordinator mounts exactly one ordered registrant while the
-
  * sessions-derived empty-Hero fact is active. Visible dialog chrome belongs
-
  * to the step, so a mounted-but-deciding step paints nothing here.
-
+ *
+ * Home-only sections (Plugins today) stay off the Settings nav rail: the
+ * sidebar utility opens them as a full-bleed home panel (DSH panellist seat),
+ * while the gear menu only lists ordinary preference pages.
  */
-
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-
 import { createPortal } from 'react-dom'
-
 import clsx from 'clsx'
-
 import {
-
   ConnectionIndicator,
-
   IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
-
-  IconPersonalizationOutline16, IconSettingsOutline16,
-
+  IconSettingsOutline16,
 } from '@xrkseek/client-ui-primitives'
-
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
 import {
   connectionChromeBusy,
   connectionChromeHalted,
   connectionChromePhaseKey,
 } from './connection-chrome.ts'
-
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
-
 import { DesktopReleaseFooter } from './DesktopReleaseFooter.tsx'
-
 import css from './SettingsRoot.module.css'
-
-
 
 const RECOVERY_CONFIRMATION_MS = 2_000
 
-
+/**
+ * Sections opened from outside Settings (sidebar utility) — not listed in the
+ * gear nav. Keep this set small; new home surfaces register here deliberately.
+ */
+const HOME_ONLY_SECTIONS = new Set(['plugins'])
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
-
 function navIcon(id: string) {
-
   if (id === 'models') return <IconDataOutline16 className={css.navIcon} size={16} />
-
   if (id === 'agent-presets') return <IconAgentPresetOutline16 className={css.navIcon} size={16} />
-
-  if (id === 'plugins') return <IconPersonalizationOutline16 className={css.navIcon} size={16} />
-
   return <IconSettingsOutline16 className={css.navIcon} size={16} />
-
 }
-
-
 
 type PanelProps = {
-
-  rows: readonly SettingsSectionRow[]
-
+  /** Rows shown in the Settings nav rail (home-only sections excluded). */
+  navRows: readonly SettingsSectionRow[]
+  /** Full ledger — home sections remain reachable via openSection. */
+  allRows: readonly SettingsSectionRow[]
   renderSlot: SettingsRootComponentProps['renderSlot']
-
   activeId: string | undefined
-
   onSelect: (id: string) => void
-
   onClose: () => void
-
   /** Sidebar trigger — focus returns here when the panel unmounts. */
-
   openerRef: RefObject<HTMLElement | null>
-
 }
 
-
-
 /**
-
  * The modal layer: full-viewport mask + centered panel. Close paths: the
-
  * header button, a mask click, and document-level Escape (mounted only while
-
  * open, so the listener lifetime is the panel's). Focus enters on the close
-
  * control and returns to the opener on unmount (same restore contract as
-
  * ImageLightbox).
-
  */
-
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, openerRef }: PanelProps) {
-
+function SettingsPanel({
+  navRows, allRows, renderSlot, activeId, onSelect, onClose, openerRef,
+}: PanelProps) {
+  const homeRow = activeId !== undefined && HOME_ONLY_SECTIONS.has(activeId)
+    ? allRows.find(r => r.id === activeId)
+    : undefined
+  const homeMode = homeRow !== undefined
   // Entries can unmount underneath the requested id, so the render-time
-
-  // projection falls back to the first row when the id is gone.
-
-  const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
-
+  // projection falls back to the first nav row when the id is gone (never to
+  // a home-only section — those only open via openSection).
+  const active = homeMode
+    ? homeRow.id
+    : (navRows.find(r => r.id === activeId)?.id ?? navRows[0]?.id)
   const titleId = useId()
-
   const closeButton = useRef<HTMLButtonElement | null>(null)
-
   const navListRef = useRef<HTMLDivElement | null>(null)
 
-
-
   useEffect(() => {
-
     closeButton.current?.focus()
-
     const onKeyDown = (e: KeyboardEvent) => {
-
       if (e.key === 'Escape') onClose()
-
     }
-
     document.addEventListener('keydown', onKeyDown)
-
     return () => {
-
       document.removeEventListener('keydown', onKeyDown)
-
       openerRef.current?.focus()
-
     }
-
   }, [onClose, openerRef])
 
-
-
   // Keep the active section tab in view when the phone nav scroller overflows.
-
   useEffect(() => {
-
+    if (homeMode) return
     const list = navListRef.current
-
     if (list === null || active === undefined) return
-
     const cell = list.querySelector<HTMLElement>('[aria-current="true"]')
-
     if (cell === null || typeof cell.scrollIntoView !== 'function') return
-
     const reduce = typeof matchMedia === 'function'
-
       && matchMedia('(prefers-reduced-motion: reduce)').matches
-
     cell.scrollIntoView({
-
       inline: 'nearest',
-
       block: 'nearest',
-
       behavior: reduce ? 'auto' : 'smooth',
-
     })
-
-  }, [active])
-
-
+  }, [active, homeMode])
 
   // Portal to body: the settings trigger lives in the sidebar foot, and phone
-
   // AppFrame draws the drawer with `transform`, which would otherwise become
-
   // the containing block for `position: fixed` and crush the panel to the
-
   // drawer width (~280px). Same escape hatch as Modal / ImageLightbox.
-
   return createPortal((
-
     <div className={css.overlay} role="presentation">
-
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
-
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-
-        <nav className={css.nav}>
-
-          <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
-
-          <div ref={navListRef} className={css.navList}>
-
-            {rows.map(row => (
-
-              <button
-
-                key={row.id}
-
-                type="button"
-
-                className={clsx(css.navCell, row.id === active && css.active)}
-
-                aria-current={row.id === active ? 'true' : undefined}
-
-                onClick={() => { onSelect(row.id) }}
-
-              >
-
-                {navIcon(row.id)}
-
-                <span className={css.navLabel}>{row.label}</span>
-
-              </button>
-
-            ))}
-
-          </div>
-
-        </nav>
-
+      <div
+        className={clsx(css.panel, homeMode && css.homePanel)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        {!homeMode ? (
+          <nav className={css.nav}>
+            <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
+            <div ref={navListRef} className={css.navList}>
+              {navRows.map(row => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className={clsx(css.navCell, row.id === active && css.active)}
+                  aria-current={row.id === active ? 'true' : undefined}
+                  onClick={() => { onSelect(row.id) }}
+                >
+                  {navIcon(row.id)}
+                  <span className={css.navLabel}>{row.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+        ) : null}
         <div className={css.content}>
-
           <div className={css.header}>
-
-            <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-
+            {homeMode
+              ? <div className={css.homeTitle} id={titleId}>{homeRow.label}</div>
+              : <div className={css.actions}>{renderSlot('settings.action', {})}</div>}
             <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
-
               <IconCloseOutline16 size={14} />
-
               <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
-
             </button>
-
           </div>
-
           <div className={css.options}>
-
             {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
-
           </div>
-
         </div>
-
       </div>
-
     </div>
-
   ), document.body)
-
 }
 
-
-
 /**
-
  * Render the settings trigger and panel.
-
  * @param props - composed slot props (contract/slots.ts).
-
  * @returns the settings shell element tree.
-
  */
-
 export function SettingsRoot(props: SettingsRootComponentProps) {
-
   const {
-
-    wide, reconnect, useConnectionState, useConnectionPhase, useSections, useOnboardingSteps, useSessions, renderSlot, t,
-
+    wide, reconnect, bindOpenSection, useConnectionState, useConnectionPhase, useSections, useOnboardingSteps, useSessions, renderSlot, t,
   } = props
-
   const [open, setOpen] = useState(false)
-
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
-
   const [completedOnboarding, setCompletedOnboarding] = useState<ReadonlySet<string>>(() => new Set())
-
   const [showRecovery, setShowRecovery] = useState(false)
-
   const triggerRef = useRef<HTMLButtonElement | null>(null)
 
   const close = useCallback(() => {
-
     setOpen(false)
-
     setActiveId(undefined)
-
   }, [])
 
   const openSection = useCallback((id: string) => {
-
     setActiveId(id)
-
     setOpen(true)
-
   }, [])
 
-
+  useEffect(() => bindOpenSection(openSection), [bindOpenSection, openSection])
 
   // The ledger tick keeps the nav rows fresh: registrants re-register with
-
   // freshly localized text on locale change, and the trigger/header/close
-
   // seats re-render through their own outlets' subscriptions.
-
   const rows = useSections(s => s)
-
+  const navRows = useMemo(
+    () => rows.filter(row => !HOME_ONLY_SECTIONS.has(row.id)),
+    [rows],
+  )
   const connectionState = useConnectionState(state => state)
-
   const connectionPhase = useConnectionPhase(state => state)
-
   const previousConnectionState = useRef(connectionState)
-
   const onboardingSteps = useOnboardingSteps(s => s)
-
   const onboardingActive = useSessions(state =>
-
     state.phase === 'ready'
-
     && (state.current === undefined || state.byId[state.current]?.blank === true))
-
   const onboardingStep = onboardingActive
-
     ? onboardingSteps.find(step => !completedOnboarding.has(step.id))
-
     : undefined
 
-
-
   useEffect(() => {
-
     if (onboardingActive) return
-
     setCompletedOnboarding(new Set())
-
   }, [onboardingActive])
 
-
-
   // Flash a brief recovered confirmation after an outage clears (DSH alpha.2).
-
   useLayoutEffect(() => {
-
     const previous = previousConnectionState.current
-
     previousConnectionState.current = connectionState
-
     if (connectionState !== 'connected') {
-
       setShowRecovery(false)
-
       return
-
     }
-
     if (previous !== 'reconnecting') return
-
     setShowRecovery(true)
-
     const timeout = window.setTimeout(() => { setShowRecovery(false) }, RECOVERY_CONFIRMATION_MS)
-
     return () => { window.clearTimeout(timeout) }
-
   }, [connectionState])
 
-
-
   const completeOnboardingStep = useCallback((id: string) => {
-
     setCompletedOnboarding((previous) => {
-
       if (previous.has(id)) return previous
-
       return new Set([...previous, id])
-
     })
-
   }, [])
-
-
 
   // Spinner stays up through wire handshake and first session-list ready
   // (shared Web + Desktop; see connection-chrome.ts).
-
   const sessionsPhase = useSessions(state => state.phase)
-
   const chromeFacts = {
-
     connectionState,
-
     connectionPhase,
-
     sessionsPhase,
-
     showRecovery,
-
   }
-
   let connectionIndicator: ConnectionIndicatorState | undefined
-
   if (showRecovery) {
-
     connectionIndicator = 'recovered'
-
   } else if (connectionChromeHalted(chromeFacts)) {
-
     // Desktop Host budget exhausted — outage chrome, not a forever spinner.
-
     connectionIndicator = 'disconnected'
-
   } else if (connectionChromeBusy(chromeFacts)) {
-
     connectionIndicator = 'connecting'
-
   }
-
   const phaseKey = connectionChromePhaseKey(chromeFacts)
-
   const phaseLabel = phaseKey === undefined ? t('connection.phase.initial') : t(phaseKey)
 
-
-
   return (
-
     <>
-
       <div className={clsx(css.triggerRow, !wide && css.railRow)}>
-
         <button
-
           ref={triggerRef}
-
           type="button"
-
           className={clsx(css.trigger, !wide && css.rail)}
-
           aria-haspopup="dialog"
-
           aria-expanded={open}
-
-          onClick={() => { setOpen(true) }}
-
+          onClick={() => {
+            // Gear opens ordinary Settings — never a leftover home surface.
+            setActiveId(undefined)
+            setOpen(true)
+          }}
         >
-
           {renderSlot('settings.trigger', { wide })}
-
         </button>
-
         <ConnectionIndicator
-
           state={wide ? connectionIndicator : undefined}
-
           disconnectedLabel={t('connection.error')}
-
           reconnectLabel={t('connection.retry')}
-
           connectingLabel={t('connection.connecting')}
-
           phaseLabel={connectionIndicator === 'connecting' ? phaseLabel : undefined}
-
           recoveredLabel={t('connection.connected')}
-
           reconnectActionLabel={t('connection.reconnect')}
-
           restartActionLabel={t('connection.restart')}
-
           onReconnect={reconnect}
-
         />
-
         {wide && connectionIndicator === undefined ? <DesktopReleaseFooter t={t} /> : null}
-
       </div>
-
       {open && (
-
         <SettingsPanel
-
-          rows={rows}
-
+          navRows={navRows}
+          allRows={rows}
           renderSlot={renderSlot}
-
           activeId={activeId}
-
           onSelect={setActiveId}
-
           onClose={close}
-
           openerRef={triggerRef}
-
         />
-
       )}
-
       {/* Dialog chrome and `#root` inert ownership live inside each step's
-
           visible branch. A step still deciding (private facts loading)
-
           renders null, so nothing paints or blocks while it decides. */}
-
       {onboardingStep !== undefined && renderSlot('settings.onboarding', {
-
         stepId: onboardingStep.id,
-
         complete: () => { completeOnboardingStep(onboardingStep.id) },
-
         openSection,
-
       }, { only: onboardingStep.id })}
-
     </>
-
   )
-
 }
-
-

@@ -19,6 +19,8 @@ import {
 import { FaceSubagentRegistry } from "../src/subagent-registry.js";
 import type { FaceDrain } from "../src/context.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
+import { ensureImWorkspace } from "../src/im-workspace-ensure.js";
+import { IM_WORKSPACE_ID } from "../src/im-workspace.js";
 
 function stubAgent(): AgentHandle {
   return {
@@ -677,5 +679,97 @@ describe("subagent tools", () => {
     expect(formatChildOutcome(readSessionEvents(store, open), now)).toBe(
       "turn still open · last event 30s ago",
     );
+  });
+
+  it("spawns into workspace_id with harness badge from an IM parent", async () => {
+    const codingRoot = mkdtempSync(path.join(tmpdir(), "xrk-sa-im-code-"));
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-sa-im-home-"));
+    try {
+      const store = createMemorySessionStore();
+      const runtime = createFaceRuntime({
+        store,
+        workspaceRoot: process.cwd(),
+        productDir,
+        drain: drain(),
+        resolveAgent: async () => stubAgent(),
+        defaultAgentPreset: "harness",
+      });
+      const { workspace: coding } = runtime.workspaces.create(codingRoot);
+      await ensureImWorkspace(runtime);
+      const parent = runtime.ensureSession("im-parent");
+      runtime.workspaces.attachSession(parent, IM_WORKSPACE_ID);
+      runtime.sessionAgentPresets.set(parent, "im");
+      expect(runtime.workspaces.workspaceIdOf(parent)).toBe(IM_WORKSPACE_ID);
+
+      const tools = createToolRegistry();
+      bindSubagentTools(tools, { runtime, parentSessionId: parent });
+      const props = (tools.get("subagent")!.parameters as {
+        properties: Record<string, unknown>;
+      }).properties;
+      expect(props.workspace_id).toBeTruthy();
+      expect(props.cwd).toBeTruthy();
+      expect(props.agent_preset).toBeTruthy();
+
+      const refused = await tools.get("subagent")!.execute({
+        prompt: "nope",
+        workspace_id: coding.workspaceId,
+        inherit_context: true,
+      });
+      expect(refused.isError).toBe(true);
+      expect(refused.content).toMatch(/inherit_context=false/);
+
+      const out = await tools.get("subagent")!.execute({
+        prompt: "implement the feature",
+        workspace_id: coding.workspaceId,
+        run_in_background: true,
+        description: "coding task",
+      });
+      expect(out.isError).not.toBe(true);
+      const childId = String(out.content).match(/`([^`]+)`/)?.[1];
+      expect(childId).toBeTruthy();
+      expect(runtime.workspaces.workspaceIdOf(childId!)).toBe(
+        coding.workspaceId,
+      );
+      expect(runtime.sessionAgentPresets.get(childId!)).toBe("harness");
+    } finally {
+      rmSync(codingRoot, { recursive: true, force: true });
+      rmSync(productDir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses workspace_id from a coding (non-IM) parent", async () => {
+    const codingRoot = mkdtempSync(path.join(tmpdir(), "xrk-sa-code-"));
+    const peerRoot = mkdtempSync(path.join(tmpdir(), "xrk-sa-peer-"));
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-sa-home-"));
+    try {
+      const store = createMemorySessionStore();
+      const runtime = createFaceRuntime({
+        store,
+        workspaceRoot: process.cwd(),
+        productDir,
+        drain: drain(),
+        resolveAgent: async () => stubAgent(),
+        defaultAgentPreset: "harness",
+      });
+      const { workspace: coding } = runtime.workspaces.create(codingRoot);
+      const { workspace: peer } = runtime.workspaces.create(peerRoot);
+      const parent = runtime.ensureSession("code-parent");
+      runtime.workspaces.attachSession(parent, coding.workspaceId);
+      runtime.sessionAgentPresets.set(parent, "harness");
+
+      const tools = createToolRegistry();
+      bindSubagentTools(tools, { runtime, parentSessionId: parent });
+      const out = await tools.get("subagent")!.execute({
+        prompt: "elsewhere",
+        workspace_id: peer.workspaceId,
+        run_in_background: true,
+      });
+      expect(out.isError).toBe(true);
+      expect(out.content).toMatch(/IM \(ws_im\)/);
+    } finally {
+      rmSync(codingRoot, { recursive: true, force: true });
+      rmSync(peerRoot, { recursive: true, force: true });
+      rmSync(productDir, { recursive: true, force: true });
+    }
   });
 });

@@ -101,6 +101,11 @@ export interface ISessions {
    */
   fork(opts: { sessionId: SessionId; atSeq?: number; beforeSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
   /**
+   * Truncate this session's durable log in place (Cursor-style edit/delete).
+   * Same session id; exclusive `beforeSeq` or turn-cut `atSeq`.
+   */
+  truncate(opts: { sessionId: SessionId; atSeq?: number; beforeSeq?: number }): Promise<void>
+  /**
    * Permanently delete an archived session (durable log + list row).
    * @param sessionId - archived session to delete.
    * @throws when the Host rejects the delete.

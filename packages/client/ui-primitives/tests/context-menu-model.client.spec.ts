@@ -26,6 +26,7 @@ const labels: ContextMenuLabels = {
   delete: 'Delete',
   selectAll: 'Select All',
   copyLink: 'Copy Link Address',
+  translate: 'Translate',
 }
 
 const actions: ContextMenuActions = {
@@ -147,6 +148,27 @@ describe('context menu rows', () => {
     document.body.append(paragraph)
     const hit = hitOn(anchor, { selectionText: 'ADR-0008', linkUrl: 'https://example.com/adr' })
     expect(rowsOf(hit)).toEqual(['copy', 'copy-link'])
+  })
+
+  it('offers translate when the host provides a translate gesture', () => {
+    const paragraph = document.createElement('p')
+    paragraph.textContent = 'hello world'
+    document.body.append(paragraph)
+    const hit = hitOn(paragraph, { selectionText: 'hello world' })
+    const translate = vi.fn()
+    const entries = buildContextMenuEntries({
+      hit,
+      labels,
+      clipboard: { hasText: false, hasFiles: false },
+      actions: { ...actions, translate },
+    })
+    expect(
+      entries.filter(e => e.kind === 'row').map(e => (e.kind === 'row' ? e.id : '')),
+    ).toEqual(['copy', 'translate'])
+    const row = entries.find(e => e.kind === 'row' && e.id === 'translate')
+    expect(row?.kind === 'row').toBe(true)
+    if (row?.kind === 'row') row.run()
+    expect(translate).toHaveBeenCalledWith(hit)
   })
 
   it('does not repeat a link row when the selection already is the URL', () => {

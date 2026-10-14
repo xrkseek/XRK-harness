@@ -44,6 +44,7 @@ export interface HostCredentials {
 /** Host `--preset` / `XRK_PRESET` ids (mirrors Face `HOST_CLI_PRESET_IDS`). */
 export const HOST_RUNTIME_PRESET_IDS = [
   "minimal",
+  "im",
   "shell",
   "frugal",
   "shallow",

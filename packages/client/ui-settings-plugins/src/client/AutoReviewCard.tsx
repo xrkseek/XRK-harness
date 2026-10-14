@@ -1,15 +1,16 @@
 /** Auto-review classifier card (Face `auto-review`) on Plugins → Advanced. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { SecretField, SelectField, ValueField } from './fields.tsx'
+import { SecretField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
+import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { AutoReviewCardFace } from './auto-review-card-controller.ts'
-import type {} from './advanced-slot-contract.ts'
+import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
 
 /** Props the renderer binds for the auto-review card. */
 export type AutoReviewCardProps =
-  PropsRuntime<'settings.plugin.advanced.item'>
+  PropsRuntime<'settings.plugin.item'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<AutoReviewCardFace>
 
@@ -18,28 +19,18 @@ export function AutoReviewCard(props: AutoReviewCardProps) {
   const { t } = props
   const state = props.useAutoReviewCard(snapshot => snapshot)
   const disabled = !state.writable
-  const enabled = state.enabled.text === 'true' ? 'true' : 'false'
+  const enabled = state.enabled.text === 'true'
   return (
     <PluginCard
       t={t}
       titleKey="autoReviewTitle"
       descriptionKey="autoReviewDescription"
       state={state}
+      masterSwitch={booleanMasterSwitch(enabled, (value) => { props.edit('enabled', value) })}
       onSave={props.save}
       onDiscard={props.discard}
     >
-      <SelectField
-        id="plugin-advanced-auto-review-enabled"
-        label={t('autoReviewEnabled')}
-        hint={t('autoReviewEnabledHint')}
-        disabled={disabled}
-        value={enabled}
-        options={[
-          { value: 'false', label: t('autoReviewEnabledOff') },
-          { value: 'true', label: t('autoReviewEnabledOn') },
-        ]}
-        onChange={(value) => { props.edit('enabled', value) }}
-      />
+      <p className={css.note} role="note">{t('autoReviewEnabledHint')}</p>
       <ValueField
         id="plugin-advanced-auto-review-url"
         label={t('autoReviewClassifierUrl')}

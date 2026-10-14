@@ -20,6 +20,8 @@ import {
 import { readSessionAttachment } from "../session-attachment.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishRemoteEvent } from "../remote-event.js";
+import { IM_WORKSPACE_ID } from "../im-workspace.js";
+import { XIANGYANG_WORKSPACE_ID } from "../xiangyang-workspace.js";
 
 export const agentPresetList: FaceHandler = async (runtime) => {
   const defaultId = canonicalAgentPresetId(resolveDefaultAgentPreset(runtime));
@@ -32,6 +34,7 @@ export const agentPresetList: FaceHandler = async (runtime) => {
         isDefault: p.id === defaultId,
         name: p.displayName,
         description: p.description,
+        ...(p.workspaceLocked ? { workspaceLocked: true as const } : {}),
       })),
       authorable: false,
       hasDocument: false,
@@ -125,6 +128,19 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
     return {
       ok: false,
       error: { code: "session-not-found", message: sessionId },
+    };
+  }
+  const wsId = runtime.workspaces.workspaceIdOf(sessionId);
+  if (wsId === XIANGYANG_WORKSPACE_ID || wsId === IM_WORKSPACE_ID) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message:
+          wsId === XIANGYANG_WORKSPACE_ID
+            ? "Xiangyang sessions are locked to Qichuang (qichuang)"
+            : "IM sessions are locked to the im tool surface",
+      },
     };
   }
   pinSessionAgentPreset(runtime, sessionId, agentPreset);

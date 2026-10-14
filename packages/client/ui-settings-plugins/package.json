@@ -33,6 +33,7 @@
         "@xrkseek/client-locale",
         "@xrkseek/client-runtime",
         "@xrkseek/client-ui-settings",
+        "@xrkseek/client-ui-sidebar",
         "@xrkseek/xrk-api-remotes"
       ],
       "platform": "web"
@@ -51,6 +52,7 @@
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
+    "@xrkseek/client-ui-sidebar": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-web-react": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
@@ -65,6 +67,7 @@
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
+    "@xrkseek/client-ui-sidebar": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/client-web-react": "workspace:^",
     "@xrkseek/cordis": "workspace:^",

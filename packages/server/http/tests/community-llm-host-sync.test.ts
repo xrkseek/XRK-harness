@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   asCommunityLlmModelRows,
+  communityLlmSyncFingerprint,
+  createCommunityLlmSyncScheduler,
+  dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
   reasoningFromUnknown,
 } from "../src/dsh-compat/community-llm-host-sync.js";
@@ -112,5 +115,44 @@ describe("community-llm-host-sync reasoning", () => {
         defaultEffort: "deep",
       },
     });
+  });
+
+  it("fingerprints include effort menus and drop stale ports", () => {
+    const models = [
+      {
+        id: "hy4",
+        reasoning: { efforts: [{ id: "high", name: "High" }] },
+      },
+    ];
+    const a = communityLlmSyncFingerprint(
+      "workbuddy",
+      "http://127.0.0.1:1/v1",
+      models,
+    );
+    const b = communityLlmSyncFingerprint(
+      "workbuddy",
+      "http://127.0.0.1:2/v1",
+      models,
+    );
+    expect(a).not.toBe(b);
+    const set = new Set([a]);
+    dropStaleCommunityLlmFingerprints(set, "workbuddy", "http://127.0.0.1:2/v1");
+    expect(set.size).toBe(0);
+  });
+
+  it("sync scheduler settles only after every syncer succeeds", async () => {
+    let disposed = false;
+    let cnReady = false;
+    const scheduler = createCommunityLlmSyncScheduler({
+      isDisposed: () => disposed,
+    });
+    scheduler.addSyncer(async () => true);
+    scheduler.addSyncer(async () => cnReady);
+    await scheduler.runAll();
+    expect(scheduler.settled()).toBe(false);
+    cnReady = true;
+    await scheduler.runAll();
+    expect(scheduler.settled()).toBe(true);
+    disposed = true;
   });
 });

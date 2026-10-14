@@ -107,7 +107,7 @@ export function WorkspacePickFlow({
   const items: MenuEntry[] = pinAdd
     ? workspaces.map(workspace => ({
       id: workspace.workspaceId,
-      label: workspace.title,
+      label: workspace.workspaceId === 'ws_default' ? t('workspace.xiangyang') : workspace.title,
       icon: <IconFolderClose16 size={16} />,
       disabled: flowBusy,
     }))

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   createDefaultVoiceAccess,
   createMemoryVoiceProvider,
   createOpenAiVoiceProvider,
+  createSenseVoiceLocalProvider,
+  createSpeakTool,
   createVoiceTools,
   describeVoiceAccess,
+  inspectSenseVoiceAssets,
   minimalWavBytes,
 } from "../src/index.js";
 
@@ -50,6 +56,61 @@ describe("exec-voice", () => {
       ).kind,
     ).toBe("openai-ready");
     expect(describeVoiceAccess({ XRK_VOICE: "memory" }).kind).toBe("memory");
+    expect(describeVoiceAccess({ XRK_VOICE: "local" }).kind).toBe("local");
+    expect(describeVoiceAccess({}, { mode: "local" }).kind).toBe("local");
+  });
+
+  it("SenseVoice local inspect + honest STT without assets/sherpa", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-sv-"));
+    try {
+      const empty = inspectSenseVoiceAssets({ dataRoot: root });
+      expect(empty.ready).toBe(false);
+      expect(empty.missing.length).toBeGreaterThan(0);
+
+      const unprepared = createSenseVoiceLocalProvider({ dataRoot: root });
+      await expect(
+        unprepared.transcribe({ bytes: minimalWavBytes() }),
+      ).rejects.toThrow(/not prepared|Missing/i);
+
+      writeFileSync(path.join(root, "model.int8.onnx"), "x");
+      writeFileSync(path.join(root, "tokens.txt"), "x");
+      writeFileSync(path.join(root, "silero_vad.onnx"), "x");
+      expect(inspectSenseVoiceAssets({ dataRoot: root }).ready).toBe(true);
+
+      const voice = createSenseVoiceLocalProvider({ dataRoot: root });
+      const spoken = await voice.synthesize({ text: "hi" });
+      expect(spoken.delivery).toBe("local");
+      // Assets ready; CI typically lacks sherpa-onnx-node (or empty WAV fails PCM).
+      await expect(
+        voice.transcribe({ bytes: minimalWavBytes() }),
+      ).rejects.toThrow(/sherpa-onnx-node|WAV|no PCM|SenseVoice/i);
+      expect(voice.liveStatus().available).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("createDefaultVoiceAccess resolves local SenseVoice", () => {
+    expect(
+      createDefaultVoiceAccess({ env: { XRK_VOICE: "local" } }).service,
+    ).toBeTruthy();
+    expect(
+      createDefaultVoiceAccess({
+        env: {},
+        product: { mode: "local" },
+      }).service,
+    ).toBeTruthy();
+  });
+
+  it("createSpeakTool is text_to_speech only", async () => {
+    const speak = createSpeakTool({
+      service: createMemoryVoiceProvider(),
+      env: { XRK_VOICE: "memory" },
+    });
+    expect(speak.name).toBe("text_to_speech");
+    const out = await speak.execute({ text: "ping" });
+    expect(out.isError).toBeFalsy();
+    expect(out.content).toMatch(/provider=memory/);
   });
 
   it("tools work with memory Provider", async () => {

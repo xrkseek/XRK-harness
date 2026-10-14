@@ -1,5 +1,6 @@
 import { createMemoryVoiceProvider } from "./memory.js";
 import { createOpenAiVoiceProvider } from "./openai-http.js";
+import { createSenseVoiceLocalProvider } from "./sensevoice-local.js";
 import type { VoiceService } from "./types.js";
 import { voiceUnavailableMessage } from "./readiness.js";
 
@@ -28,7 +29,15 @@ export {
   type OpenAiVoiceOptions,
 } from "./openai-http.js";
 export {
+  createSenseVoiceLocalProvider,
+  inspectSenseVoiceAssets,
+  senseVoiceDataRoot,
+  type SenseVoiceInspectResult,
+  type SenseVoiceLocalOptions,
+} from "./sensevoice-local.js";
+export {
   createVoiceTools,
+  createSpeakTool,
   describeVoiceAccess,
   voiceUnavailableMessage,
   type CreateVoiceToolsOptions,
@@ -37,7 +46,7 @@ export {
 } from "./tools.js";
 
 /** Face `voice` product modes (Settings SoT). `memory` stays env-only. */
-export type VoiceProductMode = "off" | "openai";
+export type VoiceProductMode = "off" | "openai" | "local";
 
 /** Face `voice` product shape. */
 export interface VoiceProductConfig {
@@ -85,15 +94,24 @@ export function createDefaultVoiceAccess(
     return { service: options.service, unavailableMessage };
   }
   const envRaw = String(env.XRK_VOICE ?? "").trim();
+  const productMode = options.product?.mode;
   const flag =
     envRaw !== ""
       ? envRaw.toLowerCase()
-      : options.product?.mode === "openai"
+      : productMode === "openai"
         ? "1"
-        : "";
+        : productMode === "local"
+          ? "local"
+          : "";
   if (flag === "memory") {
     return {
       service: createMemoryVoiceProvider(),
+      unavailableMessage,
+    };
+  }
+  if (flag === "local" || flag === "sensevoice") {
+    return {
+      service: createSenseVoiceLocalProvider({ env }),
       unavailableMessage,
     };
   }

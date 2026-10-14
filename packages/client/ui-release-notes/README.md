@@ -2,11 +2,11 @@
 
 English | 中文
 
-Release-notes surface plugin, browser half: the bell button in the sidebar foot
-(`sidebar.footer.action`, order 10 — the row above Settings). It carries a red dot
-while the newest bundled version is unread and opens a wider modal: pinned notice
-on top, then an accordion per version. Expanding the newest version writes the
-read marker (opening the dialog alone does not).
+Release-notes surface plugin, browser half: the bell button in the sidebar
+utility list (`sidebar.utility`, order 10 — under New Session, beside Plugins).
+It carries a red dot while the newest bundled version is unread and opens a
+wider modal: pinned notice on top, then an accordion per version. Expanding the
+newest version writes the read marker (opening the dialog alone does not).
 
 ## Where the content lives
 

@@ -6,6 +6,7 @@
 export type VoiceAccessKind =
   | "off"
   | "memory"
+  | "local"
   | "openai-ready"
   | "openai-missing-key"
   | "unknown";
@@ -27,6 +28,7 @@ function resolveFlag(
   const envRaw = String(env.XRK_VOICE ?? "").trim();
   if (envRaw !== "") return envRaw.toLowerCase();
   if (product?.mode === "openai") return "1";
+  if (product?.mode === "local") return "local";
   return "";
 }
 
@@ -52,8 +54,8 @@ export function describeVoiceAccess(
       ready: false,
       message:
         "Error: voice Host is not enabled. Use Settings → Plugins → Voice, or set " +
-        "XRK_VOICE=memory (CI/demo) / XRK_VOICE=1 with OPENAI_API_KEY / XRK_VOICE_OPENAI_KEY. " +
-        "See docs/voice.md.",
+        "XRK_VOICE=memory (CI/demo) / XRK_VOICE=local (SenseVoice) / XRK_VOICE=1 with " +
+        "OPENAI_API_KEY / XRK_VOICE_OPENAI_KEY. See docs/voice.md.",
       summary:
         "off — tools registered; execute fails honestly until Settings Voice or XRK_VOICE",
     };
@@ -65,6 +67,16 @@ export function describeVoiceAccess(
       message:
         "Error: no VoiceService Provider is configured. Inject a service or set XRK_VOICE.",
       summary: "memory (CI/demo Provider)",
+    };
+  }
+  if (flag === "local" || flag === "sensevoice") {
+    return {
+      kind: "local",
+      ready: true,
+      message:
+        "Error: SenseVoice local STT is enabled but not usable. Place ONNX assets under " +
+        "{XRK_HOME}/voice/sensevoice (or XRK_VOICE_SENSEVOICE_DIR) and install sherpa-onnx-node.",
+      summary: "local SenseVoice Provider (assets + sherpa-onnx-node required for STT)",
     };
   }
   if (flag === "1" || flag === "openai") {

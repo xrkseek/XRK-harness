@@ -86,6 +86,28 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
+/* IM / Qichuang: discovery cards — not a Settings default target. */
+.cardLocked {
+  border-style: dashed;
+  opacity: 0.92;
+}
+
+.cardLocked:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.lockedBadge {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  font-weight: 500;
+  border: 1px dashed var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 70%, transparent);
+}
+
 .brokenBadge {
   border-radius: 999px;
   padding: 1px 8px;

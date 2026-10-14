@@ -18,8 +18,10 @@ import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import {
   asCommunityLlmModelRows,
   baseUrlFromCommunityModels,
+  communityLlmSyncFingerprint,
+  createCommunityLlmSyncScheduler,
+  dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
-  scheduleCommunityLlmSyncRetries,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
@@ -29,6 +31,11 @@ import type {
 } from "./cordis-registry.js";
 import { resolveCompatHome } from "./underlying/json-store.js";
 import type { XrkWebServerRoute } from "./xrk-host-apply.js";
+import {
+  gateLiveHostHttp,
+  gateLiveHostRpc,
+  registerLiveHostApply,
+} from "./live-host-apply.js";
 
 const WORKBUDDY_PACKAGE = "dsh-workbuddy-connect";
 /** Plugin env that skips Windows registry discovery for the international app. */
@@ -76,28 +83,55 @@ interface WorkBuddyApplyModule {
   Config?: unknown;
 }
 
-/** WorkBuddy hides the catalog until credentials exist; peek fallback for Face sync. */
-async function listModelsForSync(
-  adapter: {
-    listModels?: (provider: string) => Promise<readonly unknown[]>;
-    catalog?: {
-      isVisible?: () => boolean;
-      setVisible?: (visible: boolean) => unknown;
-    };
-  },
+type WorkBuddySyncCatalog = {
+  isVisible?: () => boolean;
+  setVisible?: (visible: boolean) => unknown;
+  /** Full roster while visible (credential gate). */
+  current?: () => readonly unknown[];
+  /** Same roster ignoring visibility (boot / signed-out peek). */
+  fallback?: () => readonly unknown[];
+};
+
+type WorkBuddySyncAdapter = {
+  listModels?: (provider: string) => Promise<readonly unknown[]>;
+  catalog?: WorkBuddySyncCatalog;
+};
+
+/**
+ * Snapshot models for Face sync.
+ *
+ * WorkBuddy's `listModels` hides per-account disabled ids and returns [] while
+ * `catalog` is credential-gated off — both leave Face on a stale/partial
+ * `llm-pi-ai` row (wrong loopback port after OFM/WB port reshuffle, or "half"
+ * the roster). Prefer `catalog.current` / `fallback` with the live shim
+ * `baseUrl` from a filtered listModels peek.
+ */
+export async function listModelsForSync(
+  adapter: WorkBuddySyncAdapter,
   providerId: string,
 ): Promise<readonly unknown[]> {
-  const listed = (await adapter.listModels?.(providerId)) ?? [];
-  if (listed.length > 0) return listed;
   const catalog = adapter.catalog;
-  if (!catalog?.setVisible || !catalog.isVisible) return listed;
-  const wasVisible = catalog.isVisible();
-  if (wasVisible) return listed;
-  catalog.setVisible(true);
+  const wasVisible = catalog?.isVisible?.();
+  const peeked =
+    catalog?.setVisible !== undefined &&
+    typeof wasVisible === "boolean" &&
+    wasVisible === false;
+  if (peeked) catalog!.setVisible!(true);
   try {
-    return (await adapter.listModels?.(providerId)) ?? [];
+    const listed = (await adapter.listModels?.(providerId)) ?? [];
+    const baseUrl = baseUrlFromCommunityModels(listed);
+    const current = catalog?.current?.() ?? [];
+    const full = current.length > 0 ? current : (catalog?.fallback?.() ?? []);
+    if (full.length === 0) return listed;
+    return full.map((info) => {
+      if (!info || typeof info !== "object" || Array.isArray(info)) return info;
+      if (!baseUrl) return info;
+      const row = info as Record<string, unknown>;
+      if (typeof row.baseUrl === "string" && row.baseUrl.trim()) return info;
+      return { ...row, baseUrl };
+    });
   } finally {
-    catalog.setVisible(wasVisible);
+    if (peeked) catalog!.setVisible!(wasVisible!);
   }
 }
 
@@ -147,52 +181,38 @@ export async function tryApplyWorkBuddyHost(
     },
   });
 
-  const adapterSyncers: Array<() => Promise<boolean>> = [];
-  let syncChain: Promise<void> = Promise.resolve();
   let hostDisposed = false;
-  const syncedFingerprints = new Set<string>();
   /** Per-provider last good loopback baseUrl (shim port can briefly vanish). */
   const lastBaseUrlByProvider = new Map<string, string>();
-
-  const runAllAdapterSyncers = async (): Promise<void> => {
-    syncChain = syncChain
-      .then(async () => {
-        if (hostDisposed) return;
-        for (const sync of adapterSyncers) {
-          await sync();
-        }
-      })
-      .catch((error) => {
-        logger.warn("adapter sync batch failed", error);
-      });
-    await syncChain;
-  };
+  const syncScheduler = createCommunityLlmSyncScheduler({
+    isDisposed: () => hostDisposed,
+    onBatchError: (error) => logger.warn("adapter sync batch failed", error),
+  });
 
   // WorkBuddy emits this community event; Cordis Events map has no ambient key here.
   (root as { on: (event: string, listener: () => void) => unknown }).on(
     "llm/adapters-updated",
     () => {
-      void runAllAdapterSyncers();
+      void syncScheduler.runAll();
     },
   );
 
   root.provide("llm", {
-    registerAdapter(providers: string[], adapter: {
-      listModels?: (provider: string) => Promise<readonly unknown[]>;
-      resolveModel?: (provider: string, model: string) => Promise<unknown>;
-      resolveApiKey?: () => Promise<string | undefined>;
-      catalog?: {
-        isVisible?: () => boolean;
-        setVisible?: (visible: boolean) => unknown;
-      };
-    }) {
+    registerAdapter(
+      providers: string[],
+      adapter: WorkBuddySyncAdapter & {
+        resolveModel?: (provider: string, model: string) => Promise<unknown>;
+        resolveApiKey?: () => Promise<string | undefined>;
+      },
+    ) {
       const ids = providers.map((p) => p.trim()).filter(Boolean);
       let disposed = false;
       const sync = async (): Promise<boolean> => {
         if (disposed || hostDisposed || !wire.syncCommunityLlmProvider) {
           return false;
         }
-        let anyOk = false;
+        if (ids.length === 0) return true;
+        let allOk = true;
         for (const providerId of ids) {
           try {
             const listed = await listModelsForSync(adapter, providerId);
@@ -205,19 +225,23 @@ export async function tryApplyWorkBuddyHost(
               baseUrlFromCommunityModels(listed) ??
               lastBaseUrlByProvider.get(providerId);
             if (!baseUrl || models.length === 0) {
+              allOk = false;
               logger.warn(
                 `syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
               );
               continue;
             }
-            // c2: include effort menus so resolveModel enrichment re-syncs.
-            const fingerprint = `${providerId}|${baseUrl}|${models
-              .map((m) =>
-                `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
-              )
-              .join(",")}|c2`;
-            if (syncedFingerprints.has(fingerprint)) {
-              anyOk = true;
+            const fingerprint = communityLlmSyncFingerprint(
+              providerId,
+              baseUrl,
+              models,
+            );
+            dropStaleCommunityLlmFingerprints(
+              syncScheduler.fingerprints,
+              providerId,
+              baseUrl,
+            );
+            if (syncScheduler.fingerprints.has(fingerprint)) {
               continue;
             }
             const apiKey =
@@ -232,30 +256,32 @@ export async function tryApplyWorkBuddyHost(
               models,
             });
             lastBaseUrlByProvider.set(providerId, baseUrl);
-            syncedFingerprints.add(fingerprint);
-            anyOk = true;
+            syncScheduler.fingerprints.add(fingerprint);
             logger.info(
               `syncCommunityLlmProvider ok ${providerId} models=${models.length} baseUrl=${baseUrl}`,
             );
           } catch (error) {
+            allOk = false;
             logger.warn(
               `syncCommunityLlmProvider failed for ${providerId}`,
               error,
             );
           }
         }
-        return anyOk;
+        return allOk;
       };
-      adapterSyncers.push(sync);
-      void runAllAdapterSyncers();
+      syncScheduler.addSyncer(sync);
+      void syncScheduler.runAll();
       const release = (): void => {
         disposed = true;
+        syncScheduler.markUnsettled();
       };
       return Object.assign(release, {
         replace(next: string[]) {
           ids.splice(0, ids.length, ...next.map((p) => p.trim()).filter(Boolean));
-          syncedFingerprints.clear();
-          void runAllAdapterSyncers();
+          syncScheduler.fingerprints.clear();
+          syncScheduler.markUnsettled();
+          void syncScheduler.runAll();
         },
       });
     },
@@ -355,28 +381,42 @@ export async function tryApplyWorkBuddyHost(
   // Identity/catalog hydrate is async inside WorkBuddy; first registerAdapter
   // sync often skips. Retries cover boot-with-saved-credentials without waiting
   // solely on llm/adapters-updated delivery.
-  scheduleCommunityLlmSyncRetries(runAllAdapterSyncers, () => hostDisposed);
+  syncScheduler.scheduleRetries();
   disposers.push(() => {
     hostDisposed = true;
   });
 
-  // Until the first Face sync sticks, status polls (post-login) re-nudge.
-  // After that, fingerprint short-circuit keeps this cheap.
+  // Until every variant has synced Face, status polls (post-login) re-nudge.
+  // Do not stop after the first variant succeeds — CN/AI register separately,
+  // and a settled AI fingerprint used to silence CN's stale baseURL forever.
   for (const row of http) {
     const inner = row.handle;
     row.handle = async (req, res, pathname) => {
       const handled = await inner(req, res, pathname);
       if (
         handled &&
-        syncedFingerprints.size === 0 &&
+        !syncScheduler.settled() &&
         /\/status\/?$/i.test(pathname) &&
         (req.method ?? "GET").toUpperCase() === "GET"
       ) {
-        void runAllAdapterSyncers();
+        void syncScheduler.runAll();
       }
       return handled;
     };
   }
+
+  await registerLiveHostApply(packageName, async () => {
+    hostDisposed = true;
+    for (const d of disposers.reverse()) await d();
+    try {
+      await root.fiber.dispose();
+    } catch {
+      /* Cordis root may already be torn down */
+    }
+  });
+
+  const gatedHttp = gateLiveHostHttp(packageName, http);
+  const gatedRpc = gateLiveHostRpc(packageName, rpc);
 
   return {
     meta: {
@@ -385,10 +425,10 @@ export async function tryApplyWorkBuddyHost(
       httpPrefixes: [
         "/plugins/dsh-workbuddy-connect/",
       ],
-      rpcChannels: Object.keys(rpc),
+      rpcChannels: Object.keys(gatedRpc),
       description: `${DSH_COMPAT_ADAPTER}: WorkBuddy Cordis host half`,
     },
-    ...(http.length ? { http } : {}),
-    ...(Object.keys(rpc).length ? { rpc } : {}),
+    ...(gatedHttp.length ? { http: gatedHttp } : {}),
+    ...(Object.keys(gatedRpc).length ? { rpc: gatedRpc } : {}),
   };
 }

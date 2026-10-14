@@ -59,7 +59,7 @@ const NS = 'settings'
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; registrations depend on their slots through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'connection']
+export const inject = ['slots', 'locale', 'connection', 'settingsNav']
 
 /**
  * Register the `settings` dictionaries, the chrome content, and the General
@@ -105,6 +105,7 @@ export function apply(ctx: ClientContext): void {
   let onboardingSteps: readonly SettingsOnboardingStep[] = []
   const shellInjected = (): SettingsRootInjected => ({
     reconnect: () => { connection.reconnect() },
+    bindOpenSection: (open) => ctx.settingsNav.bindOpenSection(open),
     hooks: {
       sections: {
         getSnapshot: () => {

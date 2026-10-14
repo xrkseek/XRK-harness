@@ -61,7 +61,7 @@ describe('permission settings store', () => {
       .toEqual([{ id: 'read-only', label: 'Read Only' }])
   })
 
-  it('strips Auto from Settings defaultPreset options (session-only)', () => {
+  it('keeps Auto in Settings defaultPreset options when the Host advertises it', () => {
     const withAuto = {
       uid: 6,
       refs: {
@@ -79,11 +79,18 @@ describe('permission settings store', () => {
         { id: 'read-only', label: 'Read Only' },
         { id: 'workspace-write', label: 'Workspace Write' },
         { id: 'danger-full-access', label: 'Full access' },
+        { id: 'auto', label: 'Auto review' },
       ],
     })
-    expect(() => permissionDefaultOf(view('auto', 0, withAuto))).toThrow(
-      /does not advertise/,
-    )
+    expect(permissionDefaultOf(view('auto', 0, withAuto))).toEqual({
+      currentValue: 'auto',
+      options: [
+        { id: 'read-only', label: 'Read Only' },
+        { id: 'workspace-write', label: 'Workspace Write' },
+        { id: 'danger-full-access', label: 'Full access' },
+        { id: 'auto', label: 'Auto review' },
+      ],
+    })
   })
 
   it('rejects malformed values and dynamic enums at the wire boundary', () => {

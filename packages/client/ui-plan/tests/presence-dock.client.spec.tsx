@@ -8,7 +8,55 @@ import {
   PRESENCE_DOCK_EXIT_MS,
   PresenceDock,
 } from '../src/client/PresenceDock.tsx'
+import { bindPresenceSettingsRuntime } from '../src/client/PresenceBall.tsx'
+import { PresenceSettingsRuntime } from '../src/client/presence-settings-runtime.ts'
 import { zh } from '../src/client/locales.ts'
+import {
+  DEFAULT_PRESENCE_ENABLED,
+  type PresenceSettings,
+} from '../src/presence-settings.ts'
+import type { SettingsScope, SettingsScopeSnapshot } from '@xrkseek/client-runtime/client'
+
+function presenceScope(
+  initial?: Partial<PresenceSettings>,
+): SettingsScope<PresenceSettings> {
+  let snapshot: SettingsScopeSnapshot<PresenceSettings> = {
+    status: 'ready',
+    value: {
+      enabled: DEFAULT_PRESENCE_ENABLED,
+      shape: 'blob',
+      color: 'cream',
+      kit: 'none',
+      kitHat: 'none',
+      kitGlasses: 'none',
+      kitHeld: 'none',
+      overlayHat: '',
+      overlayGlasses: '',
+      overlayHeld: '',
+      stickers: '[]',
+      ...initial,
+    },
+    revision: 0,
+    writable: true,
+  }
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    set: async (field, value) => {
+      snapshot = {
+        ...snapshot,
+        value: { ...snapshot.value!, [field]: value } as PresenceSettings,
+        revision: snapshot.revision + 1,
+      }
+      for (const listener of listeners) listener()
+    },
+    unset: async () => undefined,
+  }
+}
 
 const SID = 's-dock' as SessionId
 const EMPTY_CUES = { activityAt: 0 } as const
@@ -50,9 +98,12 @@ describe('PresenceDock', () => {
     document.querySelector('[data-dsh-frame]')?.remove()
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    // Reset to default-on so other specs see an enabled ball.
+    bindPresenceSettingsRuntime(new PresenceSettingsRuntime(presenceScope()))
   })
 
   beforeEach(() => {
+    bindPresenceSettingsRuntime(new PresenceSettingsRuntime(presenceScope()))
     vi.stubGlobal('fetch', vi.fn(async () => ({
       json: async () => ({
         result: {
@@ -104,6 +155,20 @@ describe('PresenceDock', () => {
       expect(ball).toBeTruthy()
       expect(ball?.getAttribute('data-density')).toBe('header')
     })
+  })
+
+  it('unmounts entirely when presence is disabled', () => {
+    const runtime = new PresenceSettingsRuntime(presenceScope({ enabled: false }))
+    bindPresenceSettingsRuntime(runtime)
+
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    renderDock()
+    expect(document.querySelector('[data-presence-dock]')).toBeNull()
+    expect(document.querySelector('[data-overview-presence]')).toBeNull()
   })
 
   it('keeps a zero-width seat (no ball) when Overview is already open', async () => {
