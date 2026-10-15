@@ -77,8 +77,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Fixes Plugins skills catalog peek: truncated skill names no longer surface as “session not found”; attachment/path misses stop masquerading as dead sessions.',
       },
       {
-        zh: 'Desktop 热修 0.6.0-rc.2（未发 npm；npm @rc 仍为 0.6.0-rc.1）。完整清单见 docs/releases/v0.6.0-rc.2.md。',
-        en: 'Desktop hotfix 0.6.0-rc.2 (not on npm; npm @rc stays 0.6.0-rc.1). Full list in docs/releases/v0.6.0-rc.2.md.',
+        zh: 'npm 预发布 @xrkseek/harness-cli@0.6.0-rc.2（@rc）；@latest 仍为 0.5.31。完整清单见 docs/releases/v0.6.0-rc.2.md。',
+        en: 'npm prerelease @xrkseek/harness-cli@0.6.0-rc.2 (@rc); @latest stays on 0.5.31. Full list in docs/releases/v0.6.0-rc.2.md.',
       },
     ],
   },
