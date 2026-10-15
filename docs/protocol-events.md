@@ -32,7 +32,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `todo/write` | `todos`（`content` + `status`） | **Log-only** — `todo_write` 工具；Face `todos` 投影（跨回合保留至下次 `todo/write`） |
 | `permission/preset` | `preset` | **Log-only** — Face `permissions` 投影 · `/permission` |
 | `sandbox/mode` | `mode`（read-only\|workspace-write\|danger-full-access） | **Log-only** — 与 preset 同捆 |
-| `approval/policy` | `policy`（ask\|never） | **Log-only** — `never` 时审批自动放行 |
+| `approval/policy` | `policy`（ask\|never） | **Log-only** — `ask` → Face 弹窗；`never` 拒绝残余 ask（无弹窗；DSH） |
 | `plan/mode` | `active` | **Log-only** — Face `plan` 投影 · `/plan`；last-wins，缺省 inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`；不进 `deriveMessages`；捕获壳无专用卡（wire `ignorable`） |
 | `working-directory/change` | `cwd` | **Log-only** — Face `session.setWorkingDirectory` / 模型工具 `working_directory`；header/项目锚点不变；有效 cwd 走 `sessionCwds` + 本事件 |
@@ -123,7 +123,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `todo/write` | `todos` (`content` + `status`) | **Log-only** — `todo_write` tool; Face `todos` projection (persists across turns until the next `todo/write`) |
 | `permission/preset` | `preset` | **Log-only** — Face `permissions` projection · `/permission` |
 | `sandbox/mode` | `mode` (read-only\|workspace-write\|danger-full-access) | **Log-only** — bundled with preset |
-| `approval/policy` | `policy` (ask\|never) | **Log-only** — `never` auto-allows approvals |
+| `approval/policy` | `policy` (ask\|never) | **Log-only** — `ask` → Face prompt; `never` rejects residual asks (no prompt; DSH) |
 | `plan/mode` | `active` | **Log-only** — Face `plan` projection · `/plan`; last-wins, default inactive |
 | `feedback/record` | `text` | **Log-only** — `/feedback`; not in `deriveMessages`; capture shell has no dedicated card (wire `ignorable`) |
 | `working-directory/change` | `cwd` | **Log-only** — Face `session.setWorkingDirectory` / model tool `working_directory`; project header unchanged; effective cwd via `sessionCwds` + this event |

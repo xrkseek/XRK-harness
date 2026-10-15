@@ -132,7 +132,7 @@ node apps/cli/dist/bin.js web --preset frugal
 |----|------|
 | **向阳空间** | id `ws_default`；标题固定「向阳空间」；路径 `~/.xrk/xiangyang-workspace`；初次启动默认存在；**不可删除 / 改名** |
 | **奇创**（`qichuang`） | 向阳空间会话锁定徽章：团队名册 + `workspace_*` + `thread_*`（可给别处开会话定主线）；**无**嵌套子代理；空间内不可切换工具面 |
-| **专用 skills** | 仅落在向阳空间 `.xrk/skills`（如 `xrk-xrk-cleanup` · `xrk-skill-merge` · `xrk-memory-polish` · `xrk-plugin-dev-care`） |
+| **专用 skills** | 仅落在向阳空间 `.xrk/skills`：`xrk-demand-translate`（模糊需求转化）· `xrk-plugin-dev-care`（无源码写插件）· `xrk-home-config` · `xrk-xrk-cleanup` · `xrk-memory-polish` · `xrk-mainline-sideline` · `xrk-skill-merge`；seed 正文变更会刷新 |
 | **IM**（`ws_im`） | 仅网关连接或首次挂 IM 会话时生成；**可删**（下次连接再建）；空且无网关时侧栏隐藏；可 `subagent(workspace_id)` 派进编码区 |
 | **编排边界** | `workspace_list` / `workspace_create` / `workspace_session_prompt`：**奇创 · IM · 编码**均有；主线只做发现，`thread_message` 不要求挂钉；仅 **IM** 可 `subagent(workspace_id)` 跨区；编码徽章的嵌套子代理仍限本工作区 |
 
@@ -276,7 +276,7 @@ node apps/cli/dist/bin.js web --preset frugal
 |------|----------|
 | **Xiangyang space** | id `ws_default`; fixed title 「向阳空间»; path `~/.xrk/xiangyang-workspace`; present on first launch; **undeletable / unrenamable** |
 | **Qichuang** (`qichuang`) | Locked badge for Xiangyang sessions: team roster + `workspace_*` + `thread_*` (may pin peers opened elsewhere); **no** nested subagents; tool surface not user-switchable |
-| **Dedicated skills** | Only under Xiangyang `.xrk/skills` (e.g. `xrk-xrk-cleanup` · `xrk-skill-merge` · `xrk-memory-polish` · `xrk-plugin-dev-care`) |
+| **Dedicated skills** | Only under Xiangyang `.xrk/skills`: `xrk-demand-translate` (fuzzy-demand hub) · `xrk-plugin-dev-care` (plugins without monorepo) · `xrk-home-config` · `xrk-xrk-cleanup` · `xrk-memory-polish` · `xrk-mainline-sideline` · `xrk-skill-merge`; seed refreshes when bodies change |
 | **IM** (`ws_im`) | Created only when a gateway connects or an IM session attaches; **deletable** (recreated on next connect); hidden when empty with no gateway; may `subagent(workspace_id)` into coding |
 | **Orchestration boundary** | `workspace_list` / `workspace_create` / `workspace_session_prompt`: **Qichuang · IM · coding**; 主线 is discovery only — `thread_message` needs no pin; only **IM** may `subagent(workspace_id)` across workspaces; coding nested subagents stay in-workspace |
 

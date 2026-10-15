@@ -92,7 +92,14 @@ bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent
 
 ## 与 permission preset
 
-`sandbox/mode` 仍由 session 事件控制是否套 confine（`workspace-write` 套、`danger-full-access` 不套）。Docker / bwrap / windows 是 **confine 的实现**，不是第四档 permission。
+两条正交边界：
+
+| 轴 | 谁定 | 作用 |
+|----|------|------|
+| **Access / permission** | 会话 `/permission` · Settings 默认档 | **是否**套 confine · fs `pathAccessMode`（`allowlisted` / `open`） |
+| **Sandbox Backend** | Settings → Plugins → Sandbox | **如何**套 confine（Workspace / Docker / bwrap / Windows） |
+
+`workspace-write` / `read-only` → 套 confine（用当前 Backend）。`danger-full-access` / Auto → **不套** confine，Backend 对本会话空转。Docker / bwrap / windows 是 confine 的 Provider，**不是**第四档 permission。
 
 ---
 
@@ -190,4 +197,11 @@ Select with `resolveExecEnvironment` / `XRK_EXEC_ENVIRONMENT=local|memory|http` 
 
 ## vs permission presets
 
-`sandbox/mode` still decides whether confine runs (`workspace-write` yes, `danger-full-access` no). Docker / bwrap / windows are **confine implementations**, not a fourth permission tier.
+Two orthogonal axes:
+
+| Axis | Who sets it | Role |
+|------|-------------|------|
+| **Access / permission** | Session `/permission` · Settings default | **Whether** confine runs · fs `pathAccessMode` (`allowlisted` / `open`) |
+| **Sandbox Backend** | Settings → Plugins → Sandbox | **How** confine runs (Workspace / Docker / bwrap / Windows) |
+
+`workspace-write` / `read-only` → confine on (current Backend). `danger-full-access` / Auto → confine **off**; Backend is idle for that session. Docker / bwrap / windows are confine Providers, **not** a fourth permission tier.

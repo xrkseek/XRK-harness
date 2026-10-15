@@ -9,6 +9,13 @@
 - 默认同步等待；长任务才 `run_in_background` + `send_message` / `interrupt_agent`。
 - **Frugal** 徽章无子代理工具；省钱就选它或少 spawn。**Shallow** 仅一层。
 
+## 输出落盘（长结论）
+
+`subagent` / `wait_agent` 返回前，face 会把超过 **12k 字节**的输出 spill 到
+`~/.xrk/spill/tool-outputs/`（约中文 4k 字）。工具正文里的 `notice` 会带路径，
+但**模型经常无视 notice 里的路径**——所以 `tool` description 与返回正文里都要硬写
+一句 `MUST read_file <path>`，不能只靠 notice。
+
 ## 剧本
 
 | 意图 | Skill |

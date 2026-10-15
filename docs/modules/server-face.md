@@ -329,7 +329,7 @@ Driver registry lives in `@xrkseek/session-projection` (spec: [session-projectio
 | `tests/turn-outline.test.ts` | turnOutline fold: wire number · seq · prompt/response · FaceWireIdMaps alignment |
 | `tests/session-stats.test.ts` | sessionStats: step/end counts · llm/ttft/tool wall clock · usage→decode · cancel excluded from llmMs |
 | `tests/token-usage.test.ts` | tokenUsage same-step replace; contextPressure surface projected; contextBreakdown; toolCalls; shadowedTokenCount shrink |
-| `tests/permissions.test.ts` | pin · `/permission` · never auto-allow · read-only deny |
+| `tests/permissions.test.ts` | pin · `/permission` · never rejects residual asks · read-only deny |
 | `tests/settings-credentials.test.ts` | settings mutate · MCP · **custom provider → selectModel** |
 | `tests/llm-resolve.test.ts` | settings + vault → live adapter |
 

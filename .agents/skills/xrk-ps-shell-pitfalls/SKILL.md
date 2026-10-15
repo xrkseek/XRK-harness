@@ -47,6 +47,12 @@ pnpm workspace 下裸 ESM `import '@scope/pkg'` 从 `scripts/` 或任意位置�
 
 ## Pitfalls
 
+- **GBK 终端打 emoji 会炸**：`print("✅ …")` 在默认 GBK 控制台报
+  `UnicodeEncodeError: 'gbk' codec can't encode character '\u2705'`。脚本开头加
+  `sys.stdout.reconfigure(encoding="utf-8")`（Python 3.7+），或干脆别在 stdout 打 emoji。
+- **被占用的文件写不进去**：WPS / Office 开着 `*.pptx` / `*.pdf` 时写入报
+  `PermissionError`。写之前先试探测（`try: open(path,"ab")`），拿不到就落
+  `-v2` 后缀，别把用户的原文件覆盖坏。
 - `Select-Object -First N` 截断输出会吃掉报错尾部——压测/测试先看 `EXIT=$LASTEXITCODE` 再信 stdout。
 - PowerShell `2>&1 | Select` 会把 stderr 包成 `NativeCommandError` 显示，不是命令真的挂了。
 - `git diff --no-index` 当文件不同时 exit 1（`[exit code: 1]` 是正常差异信号，不是失败）。
