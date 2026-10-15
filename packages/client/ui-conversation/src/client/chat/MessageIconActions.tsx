@@ -27,7 +27,7 @@ export interface MessageIconActionsProps {
   onRestore?: (() => void) | undefined
   /** Load this user message into the composer for edit-resubmit. */
   onEdit?: (() => void) | undefined
-  /** Truncate after this user prompt and re-run the same text (assistant regenerate). */
+  /** Re-run from the turn-opening user prompt (not mid-turn 插话). */
   onRegenerate?: (() => void) | undefined
   /** Truncate this session in place before this message (delete this + later). */
   onDelete?: (() => void) | undefined

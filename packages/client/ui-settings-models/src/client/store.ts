@@ -7,7 +7,8 @@
  */
 
 import type {
-  ConfigurableProviderView, CredentialView, IApiClient, SettingsNamespaceView,
+  ConfigurableProviderView, CredentialView, IApiClient, ModelProviderGroup,
+  SettingsNamespaceView,
 } from '@xrkseek/xrk-api-remotes/client'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
@@ -18,6 +19,70 @@ import { getPath, hasPath, nodeAtPath, rehydrateSchema } from '@xrkseek/client-s
  * names one that cannot collide with a configured route.
  */
 const PROBE_ROUTE = '\u0000probe'
+
+/** Settings namespace for the fleet default New Session falls back to. */
+export const AGENT_DEFAULT_MODEL_NS = 'agent-default-model'
+
+/** One selectable default-model row (`provider/model`). */
+export interface DefaultModelOption {
+  readonly value: string
+  readonly label: string
+}
+
+/** Resolved `agent-default-model` selection. */
+export interface DefaultModelSelection {
+  readonly provider: string
+  readonly model: string
+}
+
+/** Encode a catalog route as the select value. */
+export function defaultModelRoute(provider: string, model: string): string {
+  return `${provider}/${model}`
+}
+
+/** Parse a select value back into provider + model. */
+export function parseDefaultModelRoute(value: string): DefaultModelSelection | undefined {
+  const slash = value.indexOf('/')
+  if (slash <= 0 || slash === value.length - 1) return undefined
+  return { provider: value.slice(0, slash), model: value.slice(slash + 1) }
+}
+
+function selectionFromNamespace(view: SettingsNamespaceView | undefined): DefaultModelSelection | null {
+  if (view === undefined || view.value === null || typeof view.value !== 'object') return null
+  const raw = view.value as { provider?: unknown; model?: unknown }
+  const provider = typeof raw.provider === 'string' ? raw.provider.trim() : ''
+  const model = typeof raw.model === 'string' ? raw.model.trim() : ''
+  if (!provider || !model) return null
+  return { provider, model }
+}
+
+function optionsFromCatalog(
+  groups: readonly ModelProviderGroup[],
+  current: DefaultModelSelection | null,
+): DefaultModelOption[] {
+  const rows: DefaultModelOption[] = []
+  const seen = new Set<string>()
+  for (const group of groups) {
+    for (const model of group.models) {
+      const value = defaultModelRoute(group.id, model.id)
+      if (seen.has(value)) continue
+      seen.add(value)
+      rows.push({
+        value,
+        label: model.name === model.id
+          ? `${group.name} · ${model.id}`
+          : `${group.name} · ${model.name}`,
+      })
+    }
+  }
+  if (current !== null) {
+    const value = defaultModelRoute(current.provider, current.model)
+    if (!seen.has(value)) {
+      rows.unshift({ value, label: `${current.provider}/${current.model}` })
+    }
+  }
+  return rows
+}
 
 /** One provider row the page renders. */
 export interface ProviderRow {
@@ -46,6 +111,14 @@ export interface ModelsSettingsState {
   rows: readonly ProviderRow[]
   /** Namespace views by ns, for the editor's schema/layers/secrets. */
   namespaces: ReadonlyMap<string, SettingsNamespaceView>
+  /** Fleet default model (New Session when inherit has no source). */
+  defaultModel: DefaultModelSelection | null
+  /** True when the user layer overrides the composition base. */
+  defaultModelOverridden: boolean
+  /** Revision of `agent-default-model` for mutate CAS. */
+  defaultModelRevision: number
+  /** Catalog rows for the default-model select. */
+  defaultModelOptions: readonly DefaultModelOption[]
 }
 
 /**
@@ -99,7 +172,16 @@ function apiKeyEnvOf(namespace: SettingsNamespaceView | undefined, path: readonl
 export class ModelsSettingsStore {
   /** The snapshot the section renders from (uSES-safe store). */
   readonly store: SnapshotStore<ModelsSettingsState> = createSnapshotStore<ModelsSettingsState>({
-    status: 'idle', error: null, credentialError: null, writable: false, rows: [], namespaces: new Map(),
+    status: 'idle',
+    error: null,
+    credentialError: null,
+    writable: false,
+    rows: [],
+    namespaces: new Map(),
+    defaultModel: null,
+    defaultModelOverridden: false,
+    defaultModelRevision: 0,
+    defaultModelOptions: [],
   })
 
   /** Latest load wins; an older response never overwrites a newer one. */
@@ -111,9 +193,9 @@ export class ModelsSettingsStore {
   constructor(private readonly api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>) {}
 
   /**
-   * Refresh the whole page snapshot: directory and namespaces in parallel,
-   * then one batched credential describe over every referenced ref. A
-   * failure keeps the last good rows and surfaces the error.
+   * Refresh the whole page snapshot: directory, namespaces, and catalog in
+   * parallel, then one batched credential describe over every referenced ref.
+   * A failure keeps the last good rows and surfaces the error.
    * @returns nothing; the snapshot carries the outcome.
    */
   async load(): Promise<void> {
@@ -122,16 +204,21 @@ export class ModelsSettingsStore {
     let providers: ConfigurableProviderView[]
     let writable: boolean
     let views: SettingsNamespaceView[]
+    let catalogGroups: readonly ModelProviderGroup[] = []
     try {
-      const [providersResponse, settingsResponse] = await Promise.all([
+      const [providersResponse, settingsResponse, modelsResponse] = await Promise.all([
         this.api.llm.providers({}),
         this.api.settings.describe({}),
+        this.api.llm.models({}),
       ])
       if (!providersResponse.result.ok) throw new Error(providersResponse.result.error.message)
       if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
       providers = providersResponse.result.value.providers
       writable = settingsResponse.result.value.writable
       views = settingsResponse.result.value.namespaces
+      if (modelsResponse.result.ok) {
+        catalogGroups = modelsResponse.result.value.groups
+      }
     } catch (error) {
       if (generation !== this.generation) return
       this.store.update((s) => {
@@ -141,6 +228,11 @@ export class ModelsSettingsStore {
       return
     }
     const namespaces = new Map(views.map(view => [view.ns, view]))
+    const defaultNs = namespaces.get(AGENT_DEFAULT_MODEL_NS)
+    const defaultModel = selectionFromNamespace(defaultNs)
+    const defaultModelOverridden = defaultNs !== undefined && (
+      hasPath(defaultNs.user, ['provider']) || hasPath(defaultNs.user, ['model'])
+    )
     const rows: ProviderRow[] = providers.map((entry) => {
       const namespace = namespaces.get(entry.settingsNs)
       const configured = namespace !== undefined
@@ -185,7 +277,59 @@ export class ModelsSettingsStore {
           : {},
       }))
       s.namespaces = namespaces
+      s.defaultModel = defaultModel
+      s.defaultModelOverridden = defaultModelOverridden
+      s.defaultModelRevision = defaultNs?.revision ?? 0
+      s.defaultModelOptions = optionsFromCatalog(catalogGroups, defaultModel)
     })
+  }
+
+  /**
+   * Persist the fleet default model (`agent-default-model`).
+   * @param selection - provider + model from the catalog select.
+   * @returns failure text, or undefined on success.
+   */
+  async setDefaultModel(selection: DefaultModelSelection): Promise<string | undefined> {
+    const snap = this.store.getSnapshot()
+    try {
+      const response = await this.api.settings.mutate({
+        ns: AGENT_DEFAULT_MODEL_NS,
+        expectedRevision: snap.defaultModelRevision,
+        ops: [
+          { op: 'set', path: ['provider'], value: selection.provider },
+          { op: 'set', path: ['model'], value: selection.model },
+        ],
+      })
+      if (!response.result.ok) return response.result.error.message
+    } catch (error) {
+      return messageOf(error)
+    }
+    await this.load()
+    return undefined
+  }
+
+  /**
+   * Clear the user override so the composition base default returns.
+   * @returns failure text, or undefined on success.
+   */
+  async resetDefaultModel(): Promise<string | undefined> {
+    const snap = this.store.getSnapshot()
+    try {
+      const response = await this.api.settings.mutate({
+        ns: AGENT_DEFAULT_MODEL_NS,
+        expectedRevision: snap.defaultModelRevision,
+        ops: [
+          { op: 'unset', path: ['provider'] },
+          { op: 'unset', path: ['model'] },
+          { op: 'unset', path: ['reasoningEffort'] },
+        ],
+      })
+      if (!response.result.ok) return response.result.error.message
+    } catch (error) {
+      return messageOf(error)
+    }
+    await this.load()
+    return undefined
   }
 }
 

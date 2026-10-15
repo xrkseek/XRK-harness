@@ -20,6 +20,7 @@ interface InboxSplice {
   readonly start: number
   readonly removedCount?: number
   readonly inserted: readonly InboxIdentity[]
+  readonly removed?: readonly InboxIdentity[]
   readonly outcome?: 'canceled'
 }
 
@@ -37,9 +38,10 @@ function applySplice(
   const pending = [...(previous?.state.pending ?? [])]
   const claimed = new Set(previous?.state.claimed ?? [])
   const removed = pending.splice(splice.start, splice.removedCount ?? 0, ...splice.inserted)
+  const removedIdentities = removed.length > 0 ? removed : (splice.removed ?? [])
   for (const identity of splice.inserted) claimed.delete(identity.id)
   if (splice.outcome !== 'canceled') {
-    for (const identity of removed) claimed.add(identity.id)
+    for (const identity of removedIdentities) claimed.add(identity.id)
   }
   return { pending, claimed }
 }

@@ -323,8 +323,7 @@ describe('AgentLoopCard', () => {
       llmRetryMaxRetries: field('5'),
       compactionStrategy: field('prune-summary'),
       toolResultMaxInlineBytes: field('64000'),
-      maxSubagentDepth: field('2'),
-      maxActiveSubagents: field('2'),
+      maxConcurrentModelSessions: field('5'),
       subagentModel: field(''),
     })
     const actions = cardActions()
@@ -355,8 +354,7 @@ describe('AgentLoopCard', () => {
       llmRetryMaxRetries: field('5'),
       compactionStrategy: field('prune-summary'),
       toolResultMaxInlineBytes: field('64000'),
-      maxSubagentDepth: field('2'),
-      maxActiveSubagents: field('2'),
+      maxConcurrentModelSessions: field('5'),
       subagentModel: field(''),
     })
     const actions = cardActions()

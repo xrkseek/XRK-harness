@@ -10,7 +10,7 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly useSession: ChatViewSlotProps['useSession']
   readonly renderSlot: ChatViewSlotProps['renderSlot']
   readonly t: ChatViewSlotProps['t']
-  /** Whole-log 轮次 by Host turn; only the opener row paints a label. */
+  /** Whole-log 轮次 by Host turn; opener paints 「第 N 轮」, 插话 paints 「第 N 轮 插话」. */
   readonly roundByTurn: ReadonlyMap<number, number>
 }
 
@@ -53,11 +53,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const postStreamLive = usePostStreamLive(streamingAssistant === true)
   if (routedNode === undefined || owner === null) return null
   const location = routedNode.location
-  const turn = routedNode.kind === 'steering'
-    ? undefined
-    : location.kind === 'turn' || location.kind === 'step'
-      ? location.turn.turn
-      : undefined
+  const hostTurn = location.kind === 'turn' || location.kind === 'step'
+    ? location.turn.turn
+    : undefined
+  // Round label may cite the Host turn for 插话, but rail jump anchors stay on
+  // the opener only (`data-chat-turn` omitted for steering).
+  const turn = routedNode.kind === 'steering' ? undefined : hostTurn
   // Runtime dispatch owns the correlation: every Node's discriminant is the
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.
@@ -66,7 +67,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // materializes a tall ChangedFiles card in one paint, and content-visibility
   // auto/skip has left a second ghost copy of that card in Chromium.
   const live = postStreamLive || routedNode.kind === 'turn-tail'
-  const round = turn === undefined ? undefined : roundByTurn.get(turn)
+  const round = hostTurn === undefined ? undefined : roundByTurn.get(hostTurn)
+  const roundLabelKey = routedNode.kind === 'steering'
+    ? 'chat.turnNavigation.steer'
+    : routedNode.kind === 'user'
+      ? 'chat.turnNavigation.turn'
+      : null
   return (
     <div
       className={css.flowItem}
@@ -77,8 +83,8 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-round={round}
       data-live={live || undefined}
     >
-      {routedNode.kind === 'user' && round !== undefined ? (
-        <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: round })}</div>
+      {roundLabelKey !== null && round !== undefined ? (
+        <div className={css.roundLabel}>{t(roundLabelKey, { turn: round })}</div>
       ) : null}
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,

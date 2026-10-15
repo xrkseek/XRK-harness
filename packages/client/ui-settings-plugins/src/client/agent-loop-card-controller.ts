@@ -99,10 +99,11 @@ export interface AgentLoopSettings {
   compactionStrategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
   /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
   toolResultMaxInlineBytes?: number
-  /** Max subagent nesting depth (parent = 0). */
-  maxSubagentDepth?: number
-  /** Max concurrently draining direct children under one parent. */
-  maxActiveSubagents?: number
+  /**
+   * Default max live sessions per provider/model (parent + subagent).
+   * Per-model catalog `maxConcurrentSessions` overrides this.
+   */
+  maxConcurrentModelSessions?: number
   /**
    * Fleet-wide subagent route as `provider/model` (optionally with an
    * effort in parentheses). Empty / omit → each child inherits its parent's
@@ -131,10 +132,8 @@ export interface AgentLoopCardState extends CardShell {
   compactionStrategy: CardFieldState
   /** Tool-result spill ceiling. */
   toolResultMaxInlineBytes: CardFieldState
-  /** Subagent nesting depth cap. */
-  maxSubagentDepth: CardFieldState
-  /** Concurrent active subagent cap. */
-  maxActiveSubagents: CardFieldState
+  /** Default max live sessions per provider/model. */
+  maxConcurrentModelSessions: CardFieldState
   /** Fleet-wide subagent route (`provider/model`); empty inherits the parent. */
   subagentModel: CardFieldState
 }
@@ -164,8 +163,7 @@ export class AgentLoopCardController {
       numberField('llmRetryMaxRetries'),
       compactionStrategyField(),
       numberField('toolResultMaxInlineBytes'),
-      numberField('maxSubagentDepth'),
-      numberField('maxActiveSubagents'),
+      numberField('maxConcurrentModelSessions'),
       subagentModelField(),
     ])
     this.store = this.form.bind(() => this.projection())
@@ -183,8 +181,7 @@ export class AgentLoopCardController {
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
       compactionStrategy: this.form.field('compactionStrategy'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
-      maxSubagentDepth: this.form.field('maxSubagentDepth'),
-      maxActiveSubagents: this.form.field('maxActiveSubagents'),
+      maxConcurrentModelSessions: this.form.field('maxConcurrentModelSessions'),
       subagentModel: this.form.field('subagentModel'),
     }
   }

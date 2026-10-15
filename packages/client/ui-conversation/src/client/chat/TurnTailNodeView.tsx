@@ -63,6 +63,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   // Host busy latch is outside the event timeline — only the tip footer waits.
   const suppressTipWhileRunning = useSession(snapshot =>
     snapshot.running && latestTurnNumber(snapshot.chat.timeline) === data.turn)
+  // Regenerate re-runs the turn opener only — skip `steering` 插话 (step inject).
   const regenerateSource = useSession((snapshot) => {
     const keys = snapshot.chat.locations.getTurn(data.turn)
     for (const key of keys) {

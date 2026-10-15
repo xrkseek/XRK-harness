@@ -66,7 +66,7 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     version: '0.6.0-rc.1',
-    date: '2026-10-14',
+    date: '2026-10-15',
     title: {
       zh: '版本变更公告',
       en: 'What’s new',
@@ -77,8 +77,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Opens the 0.6.x preview line: archiving offloads logs from hot sessions.db into sessions-archive.db; unarchive restores; permanent delete wipes both; archived page supports bulk unarchive/delete.',
       },
       {
-        zh: '向阳空间（默认家）+ 奇创工具面；IM 工作区与 im_send/im_reply；跨工作区 workspace_* 编排；回合开头 session_capability / session_posture。',
-        en: 'Xiangyang default home + Qichuang surface; IM workspace with im_send/im_reply; cross-workspace workspace_* orchestration; turn-start session_capability / session_posture.',
+        zh: '向阳空间（默认家）+ 奇创工具面；IM 工作区与 im_send/im_reply；奇创/IM/编码均有 workspace_*；主线做发现、thread_message 不要求挂钉；回合开头 session_capability / session_posture。',
+        en: 'Xiangyang default home + Qichuang surface; IM workspace with im_send/im_reply; workspace_* on Qichuang/IM/coding; 主线 is discovery — thread_message needs no pin; turn-start session_capability / session_posture.',
       },
       {
         zh: '侧栏「插件」入口与版本公告同区；Settings → 插件可浏览工具目录与技能文档；去掉 Advanced 堆叠。',
@@ -91,6 +91,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       {
         zh: '社区 Host 热卸（live apply）；Computer-use background 模式；本地 SenseVoice STT 缝；划词翻译；fork 谱系。',
         en: 'Community Host live dispose; computer-use background mode; local SenseVoice STT seam; selection translate; fork lineage.',
+      },
+      {
+        zh: '每模型会话上限只计进行中会话；Settings → 模型可下拉改默认模型；新建会话 inherit 失败时回落该默认（不再被历史会话误卡）。',
+        en: 'Per-model session cap counts running sessions only; Settings → Models select sets the default; New Session falls back there when inherit has no source (idle history no longer blocks).',
       },
       {
         zh: 'npm 预发布 @xrkseek/harness-cli@0.6.0-rc.1（@rc）；@latest 仍为 0.5.31。完整清单见 docs/releases/v0.6.0-rc.1.md。',

@@ -760,6 +760,36 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('classifies a mid-turn steer when promote carries removed and admit insert is absent', () => {
+    // History pages may cut after prompt/admitted; Face stamps `removed` on
+    // promote so the claim (and 插话 kind) still reconstructs.
+    const follow = textMessage('steer-no-claim', 'change direction')
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('assistant-tooling', 'running a tool'),
+      }, { surfaceOp: 'append' }),
+      at(4, 'step/end', { turn: 1, step: 1 }),
+      at(5, 'agent/inbox/spliced', {
+        target: 'next-step',
+        start: 0,
+        removedCount: 1,
+        inserted: [],
+        removed: [follow],
+      }),
+      at(6, 'user/message', follow, { surfaceOp: 'append' }),
+    ])
+
+    expect(node(snapshot(value), 'user')).toBeUndefined()
+    expect(node(snapshot(value), 'steering')?.data).toMatchObject({
+      kind: 'steering',
+      messageId: 'steer-no-claim',
+    })
+  })
+
   it('classifies a promoted steer by echoed rpcId when the durable id is freshly minted', () => {
     // Production shape: the transient next-step row is keyed by `admitId`,
     // while the promoted `user/message` carries a fresh `umsg_<uuid>` and the

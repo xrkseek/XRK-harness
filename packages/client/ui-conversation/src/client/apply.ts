@@ -38,7 +38,7 @@ import {
   requestResubmitConfirm,
 } from './chat/resubmit-intent.ts'
 import {
-  editResubmitNeedsConfirm,
+  confirmAndExecuteResubmit,
   executeResubmitAfterChoice,
 } from './chat/resubmit-execute.ts'
 import { ApprovalPanel } from './skeleton/ApprovalPanel.tsx'
@@ -75,7 +75,7 @@ async function deleteFromSeq(
   await executeResubmitAfterChoice(sessions, sessionId, { seq, choice })
 }
 
-/** One-click regenerate: truncate after the user prompt and re-prompt same text. */
+/** Turn-tail regenerate: confirm+truncate+resend from the turn-opening user row. */
 async function regenerateFromUserSeq(
   sessions: ISessions,
   sessionId: SessionId,
@@ -83,23 +83,11 @@ async function regenerateFromUserSeq(
   text: string,
 ): Promise<void> {
   clearEditStaging()
-  const source = sessions.binding(sessionId)?.session
-  const snap = source?.getSnapshot()
-  if (editResubmitNeedsConfirm(snap, seq)) {
-    const choice = await requestResubmitConfirm({
-      sessionId,
-      kind: 'edit',
-      seq,
-      text,
-    })
-    if (choice === 'cancel') return
-    await executeResubmitAfterChoice(sessions, sessionId, { seq, choice, text })
-    return
-  }
-  await executeResubmitAfterChoice(sessions, sessionId, {
+  await confirmAndExecuteResubmit(sessions, {
+    sessionId,
     seq,
-    choice: 'keep-files',
     text,
+    kind: 'regenerate',
   })
 }
 

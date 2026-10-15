@@ -1,10 +1,18 @@
 /**
  * Shared truncate / optional rollback / optional re-prompt after the
- * user confirms a past-message edit or delete (Cursor-style, same session).
+ * user confirms regenerate, edit-resubmit, or delete (Cursor-style, same session).
+ *
+ * Truncate uses exclusive `beforeSeq = seq - 1`, so the row at `seq` and
+ * everything after it are dropped; re-prompt (when `text` is set) resends.
+ *
+ * Targets differ; confirm+execute is one path (copy via `kind` only):
+ * - regenerate → turn-opening `user` (never mid-turn `steering` / 插话)
+ * - edit → that same opener, or a step-injected `steering` 插话
  */
 import type {
   ConversationSnapshot, ISessions, SessionId,
 } from '@xrkseek/client-runtime/client'
+import { requestResubmitConfirm } from './resubmit-intent.ts'
 
 /** True when the loaded chat window has any node after `seq`. */
 export function chatHasEventsAfterSeq(
@@ -42,6 +50,42 @@ export function editResubmitNeedsConfirm(
   if (editResubmitSourceIsLive(snapshot)) return true
   if (snapshot === undefined) return false
   return chatHasEventsAfterSeq(snapshot, seq)
+}
+
+/**
+ * One confirm+execute path for regenerate and edit-resubmit.
+ * Regenerate (turn opener) always asks keep/revert. Edit (opener or 插话)
+ * asks when live or when anything follows `seq`; else keep-files + run.
+ *
+ * @returns `'cancel'` when the user dismisses; `'done'` after truncate(+prompt).
+ */
+export async function confirmAndExecuteResubmit(
+  sessions: ISessions,
+  opts: {
+    readonly sessionId: SessionId
+    readonly seq: number
+    readonly text: string
+    readonly kind: 'edit' | 'regenerate'
+  },
+): Promise<'done' | 'cancel'> {
+  const snapshot = sessions.binding(opts.sessionId)?.session?.getSnapshot()
+  const needsConfirm = opts.kind === 'regenerate'
+    || editResubmitNeedsConfirm(snapshot, opts.seq)
+  const choice = needsConfirm
+    ? await requestResubmitConfirm({
+      sessionId: opts.sessionId,
+      kind: opts.kind,
+      seq: opts.seq,
+      text: opts.text,
+    })
+    : 'keep-files'
+  if (choice === 'cancel') return 'cancel'
+  await executeResubmitAfterChoice(sessions, opts.sessionId, {
+    seq: opts.seq,
+    choice,
+    text: opts.text,
+  })
+  return 'done'
 }
 
 /**

@@ -18,7 +18,14 @@ import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
 import { Button, IconPlusOutline16, Modal } from '@xrkseek/client-ui-primitives'
 import type { SnapshotSelectorHook } from '@xrkseek/client-web-react'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
-import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
+import {
+  defaultModelRoute,
+  deriveKeyRef,
+  messageOf,
+  parseDefaultModelRoute,
+  protocolChoices,
+  providerUsable,
+} from './store.ts'
 import type { ModelsSettingsState, ModelsSettingsStore, ProviderRow } from './store.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import type { en } from './locales.ts'
@@ -185,6 +192,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
   const [declaring, setDeclaring] = useState(false)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
+  const [defaultModelBusy, setDefaultModelBusy] = useState(false)
+  const [defaultModelError, setDefaultModelError] = useState<string | undefined>(undefined)
 
   const announceSaved = (target: ProviderIdentity): void => {
     // Announced only once the refreshed directory is in the snapshot the
@@ -283,6 +292,70 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
             {providerCopy(t('savedProvider'), savedIdentity)}
           </p>
         )}
+      {state.status === 'ready' && state.defaultModelOptions.length > 0
+        ? (
+          <div className={styles['field']}>
+            <div className={styles['fieldLabel']}>
+              <label htmlFor="models-default-model">{t('defaultModel')}</label>
+              {state.defaultModelOverridden && state.writable
+                ? (
+                  <button
+                    type="button"
+                    className={styles['linkButton']}
+                    disabled={defaultModelBusy}
+                    onClick={() => {
+                      setDefaultModelBusy(true)
+                      setDefaultModelError(undefined)
+                      void controller.resetDefaultModel()
+                        .then((failure) => {
+                          if (failure !== undefined) setDefaultModelError(failure)
+                        })
+                        .finally(() => { setDefaultModelBusy(false) })
+                    }}
+                  >
+                    {t('resetDefaultModel')}
+                  </button>
+                )
+                : null}
+            </div>
+            <select
+              id="models-default-model"
+              className={`${styles['input']} ${styles['selectInput']}`}
+              aria-label={t('defaultModel')}
+              disabled={!state.writable || defaultModelBusy || state.defaultModelOptions.length === 0}
+              value={state.defaultModel === null
+                ? ''
+                : defaultModelRoute(state.defaultModel.provider, state.defaultModel.model)}
+              onChange={(event) => {
+                const next = parseDefaultModelRoute(event.target.value)
+                if (next === undefined) return
+                setDefaultModelBusy(true)
+                setDefaultModelError(undefined)
+                void controller.setDefaultModel(next)
+                  .then((failure) => {
+                    if (failure !== undefined) setDefaultModelError(failure)
+                  })
+                  .finally(() => { setDefaultModelBusy(false) })
+              }}
+            >
+              {state.defaultModel === null
+                ? <option value="" disabled>{t('defaultModel')}</option>
+                : null}
+              {state.defaultModelOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <p className={styles['advancedHint']}>{t('defaultModelHint')}</p>
+            {defaultModelError === undefined
+              ? null
+              : (
+                <p role="alert" className={styles['error']}>
+                  {`${t('defaultModelSaveFailed')}: ${defaultModelError}`}
+                </p>
+              )}
+          </div>
+        )
+        : null}
       <ul className={styles['rows']}>
         {configured.map((row) => {
           const target = targetOf(row)

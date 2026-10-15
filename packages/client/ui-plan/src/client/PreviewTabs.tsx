@@ -911,9 +911,9 @@ function StatusPanel({
           <>
             {liveSubs.length}/{status.subagents.live.length} live ·{' '}
             {t('preview.status.subagentQuota')}{' '}
+            {status.subagents.quota.provider ?? '?'}/
+            {status.subagents.quota.model ?? '?'}{' '}
             {status.subagents.quota.active}/{status.subagents.quota.maxActive}
-            {' · '}
-            depth {status.subagents.quota.depth}/{status.subagents.quota.maxDepth}
             {' · '}
             {status.subagents.graph.nodes.length}n/{status.subagents.graph.edges.length}e
           </>

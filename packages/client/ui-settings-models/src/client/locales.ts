@@ -101,6 +101,10 @@ export const en = {
   welcomeContinue: WELCOME_NOTICE_COPY.en.continueLabel,
   welcomeError: 'The acknowledgement could not be saved. Please try again.',
   keyRequired: 'Enter an API key to continue.',
+  defaultModel: 'Default model',
+  defaultModelHint: 'Used when New Session has no session to inherit from. New Session otherwise copies the current session’s model.',
+  resetDefaultModel: 'Restore composition default',
+  defaultModelSaveFailed: 'Could not save the default model',
 }
 
 /** The settings.models namespace key union. */
@@ -205,4 +209,8 @@ export const zh: { [Key in keyof typeof en]: string } = {
   welcomeContinue: WELCOME_NOTICE_COPY.zh.continueLabel,
   welcomeError: '暂时无法保存确认状态，请重试。',
   keyRequired: '请输入 API 密钥后继续。',
+  defaultModel: '默认模型',
+  defaultModelHint: '新建会话没有可继承的当前会话时使用。有当前会话时，新建会话会复制其模型。',
+  resetDefaultModel: '恢复组合默认',
+  defaultModelSaveFailed: '无法保存默认模型',
 }

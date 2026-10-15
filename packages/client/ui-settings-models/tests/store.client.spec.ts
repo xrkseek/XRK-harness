@@ -37,21 +37,41 @@ const NAMESPACES = [
     secrets: [],
     revision: 0,
   },
+  {
+    ns: 'agent-default-model',
+    schema: {},
+    value: { provider: 'opencode', model: 'mimo-v2.6-flash-free' },
+    base: { provider: 'deepseek', model: 'deepseek-flash' },
+    user: { provider: 'opencode', model: 'mimo-v2.6-flash-free' },
+    applies: 'live' as const,
+    secrets: [],
+    revision: 3,
+  },
 ]
 
 function api(overrides: {
   providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
   describeSettings?: () => Promise<RpcResponse<{ writable: boolean; namespaces: typeof NAMESPACES }>>
   describeCredentials?: (refs: string[]) => Promise<RpcResponse<{ credentials: Record<string, unknown> }>>
+  models?: () => Promise<RpcResponse<{ groups: { id: string; name: string; models: { id: string; name: string }[] }[]; failures: unknown[] }>>
+  mutate?: (payload: unknown) => Promise<RpcResponse<unknown>>
 } = {}) {
   const seenRefs: string[][] = []
   const face = {
     llm: {
       providers: overrides.providers ?? (() => Promise.resolve(ok({ providers: DIRECTORY }))),
-      models: () => Promise.resolve(ok({ groups: [], failures: [] })),
+      models: overrides.models ?? (() => Promise.resolve(ok({
+        groups: [{
+          id: 'deepseek',
+          name: 'DeepSeek',
+          models: [{ id: 'deepseek-flash', name: 'Flash' }],
+        }],
+        failures: [],
+      }))),
     },
     settings: {
       describe: overrides.describeSettings ?? (() => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: NAMESPACES }))),
+      mutate: overrides.mutate ?? (() => Promise.resolve(ok({}))),
       update: () => Promise.resolve(fail('unused')),
       replace: () => Promise.resolve(fail('unused')),
     },
@@ -96,6 +116,35 @@ describe('ModelsSettingsStore', () => {
     expect(byProvider.get('anthropic')?.apiKeyEnv).toBeUndefined()
     expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
     expect(state.namespaces.get('llm-pi-ai')?.ns).toBe('llm-pi-ai')
+    expect(state.defaultModel).toEqual({ provider: 'opencode', model: 'mimo-v2.6-flash-free' })
+    expect(state.defaultModelOverridden).toBe(true)
+    expect(state.defaultModelRevision).toBe(3)
+    expect(state.defaultModelOptions).toEqual([
+      { value: 'opencode/mimo-v2.6-flash-free', label: 'opencode/mimo-v2.6-flash-free' },
+      { value: 'deepseek/deepseek-flash', label: 'DeepSeek · Flash' },
+    ])
+  })
+
+  it('setDefaultModel writes agent-default-model and reloads', async () => {
+    const ops: unknown[] = []
+    const { face } = api({
+      mutate: (payload) => {
+        ops.push(payload)
+        return Promise.resolve(ok({}))
+      },
+    })
+    const store = new ModelsSettingsStore(face)
+    await store.load()
+    const failure = await store.setDefaultModel({ provider: 'deepseek', model: 'deepseek-v4-pro' })
+    expect(failure).toBeUndefined()
+    expect(ops).toEqual([{
+      ns: 'agent-default-model',
+      expectedRevision: 3,
+      ops: [
+        { op: 'set', path: ['provider'], value: 'deepseek' },
+        { op: 'set', path: ['model'], value: 'deepseek-v4-pro' },
+      ],
+    }])
   })
 
   it('degrades the credential badge, not the page, when the credential domain fails', async () => {

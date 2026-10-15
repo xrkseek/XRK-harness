@@ -16,6 +16,7 @@ import {
 } from '../src/client/chat/resubmit-intent.ts'
 import {
   chatHasEventsAfterSeq,
+  confirmAndExecuteResubmit,
   editResubmitNeedsConfirm,
   editResubmitSourceIsLive,
 } from '../src/client/chat/resubmit-execute.ts'
@@ -124,5 +125,71 @@ describe('resubmit confirm', () => {
     completeResubmitConfirm('keep-files')
     await expect(pending).resolves.toBe('keep-files')
     expect(getResubmitIntent()).toBeNull()
+  })
+})
+
+describe('confirmAndExecuteResubmit', () => {
+  const idleTailSnapshot = {
+    running: false,
+    runningCalls: [] as const,
+    partial: null,
+    chat: {
+      order: ['a'],
+      nodes: new Map([['a', { anchorSeq: 1, data: { seq: 1 } }]]),
+    },
+  }
+
+  function mockSessions(calls: {
+    truncate: Array<{ sessionId: string; beforeSeq: number }>
+    prompt: string[]
+    rollback: string[]
+  }) {
+    const session = {
+      getSnapshot: () => idleTailSnapshot,
+      cancel: async () => undefined,
+      command: async (line: string) => {
+        calls.rollback.push(line)
+      },
+      prompt: async (content: readonly { type: string; text: string }[]) => {
+        calls.prompt.push(content.map((c) => c.text).join(''))
+      },
+    }
+    return {
+      binding: () => ({ session }),
+      truncate: async (opts: { sessionId: string; beforeSeq: number }) => {
+        calls.truncate.push(opts)
+      },
+    }
+  }
+
+  it('regenerate always opens keep/revert confirm even on idle tip', async () => {
+    const calls = { truncate: [], prompt: [], rollback: [] as string[] }
+    const sessions = mockSessions(calls)
+    const pending = confirmAndExecuteResubmit(sessions as never, {
+      sessionId: 's1',
+      seq: 1,
+      text: 'hi',
+      kind: 'regenerate',
+    })
+    expect(getResubmitIntent()?.kind).toBe('regenerate')
+    completeResubmitConfirm('keep-files')
+    await expect(pending).resolves.toBe('done')
+    expect(calls.truncate).toEqual([{ sessionId: 's1', beforeSeq: 0 }])
+    expect(calls.prompt).toEqual(['hi'])
+    expect(calls.rollback).toEqual([])
+  })
+
+  it('edit skips confirm on idle tip and still truncates+prompts', async () => {
+    const calls = { truncate: [], prompt: [], rollback: [] as string[] }
+    const sessions = mockSessions(calls)
+    await expect(confirmAndExecuteResubmit(sessions as never, {
+      sessionId: 's1',
+      seq: 1,
+      text: 'edited',
+      kind: 'edit',
+    })).resolves.toBe('done')
+    expect(getResubmitIntent()).toBeNull()
+    expect(calls.truncate).toEqual([{ sessionId: 's1', beforeSeq: 0 }])
+    expect(calls.prompt).toEqual(['edited'])
   })
 })

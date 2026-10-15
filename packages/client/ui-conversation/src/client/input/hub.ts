@@ -21,13 +21,9 @@ import {
   clearEditStaging,
   getEditStaging,
   peekEditStagingFor,
-  requestResubmitConfirm,
   takeEditStagingFor,
 } from '../chat/resubmit-intent.ts'
-import {
-  editResubmitNeedsConfirm,
-  executeResubmitAfterChoice,
-} from '../chat/resubmit-execute.ts'
+import { confirmAndExecuteResubmit } from '../chat/resubmit-execute.ts'
 
 /** Structural command face for per-session popup resolution. */
 interface CommandFace {
@@ -188,16 +184,19 @@ export class InputHub implements SessionInputResolver {
       clearEditStaging()
       return false
     }
-    const choice = await this.decideEditResubmitChoice(sessionId, staged.seq, text)
-    if (choice === 'cancel') return true
     const imageIds = [...shell.snapshot.imageIds]
     try {
       clearEditStaging()
-      await executeResubmitAfterChoice(this.sessions(), sessionId, {
+      const outcome = await confirmAndExecuteResubmit(this.sessions(), {
+        sessionId,
         seq: staged.seq,
-        choice,
         text,
+        kind: 'edit',
       })
+      if (outcome === 'cancel') {
+        beginEditStaging({ sessionId, seq: staged.seq })
+        return true
+      }
       shell.setDraft('')
       this.releaseDraftImages(shell, imageIds)
       return true
@@ -238,17 +237,17 @@ export class InputHub implements SessionInputResolver {
     text: string,
     imageIds: readonly DraftAttachmentId[],
   ): Promise<SubmitOutcome> {
-    const choice = await this.decideEditResubmitChoice(sessionId, seq, text)
-    if (choice === 'cancel') {
-      beginEditStaging({ sessionId, seq })
-      return { kind: 'error' }
-    }
     try {
-      await executeResubmitAfterChoice(this.sessions(), sessionId, {
+      const outcome = await confirmAndExecuteResubmit(this.sessions(), {
+        sessionId,
         seq,
-        choice,
         text,
+        kind: 'edit',
       })
+      if (outcome === 'cancel') {
+        beginEditStaging({ sessionId, seq })
+        return { kind: 'error' }
+      }
       this.releaseDraftImages(undefined, imageIds)
       return { kind: 'success' }
     } catch (error) {
@@ -256,17 +255,6 @@ export class InputHub implements SessionInputResolver {
       const message = error instanceof Error ? error.message : String(error)
       return { kind: 'error', text: message }
     }
-  }
-
-  /** Open the truncate/revert modal when the edit would drop a tail or a live turn. */
-  private async decideEditResubmitChoice(
-    sessionId: SessionId,
-    seq: number,
-    text: string,
-  ): Promise<'cancel' | 'keep-files' | 'revert-files'> {
-    const snapshot = this.sessions().binding(sessionId)?.session?.getSnapshot()
-    if (!editResubmitNeedsConfirm(snapshot, seq)) return 'keep-files'
-    return requestResubmitConfirm({ sessionId, kind: 'edit', seq, text })
   }
 
   /** Drop draft image previews after a successful edit-resubmit. */

@@ -14,6 +14,8 @@ interface InboxSplice {
   readonly start: number
   readonly removedCount?: number
   readonly inserted: readonly PendingIdentity[]
+  /** Present when history omitted the matching admit insert. */
+  readonly removed?: readonly PendingIdentity[]
   readonly outcome?: 'canceled'
 }
 
@@ -55,10 +57,11 @@ export class SteeringHistory {
   }
 
   /** Replay one host-validated inbox splice. */
-  private applySplice({ target, start, removedCount = 0, inserted, outcome }: InboxSplice): void {
+  private applySplice({ target, start, removedCount = 0, inserted, removed: stamped, outcome }: InboxSplice): void {
     const removed = this.inbox[target].splice(start, removedCount, ...inserted)
+    const removedIdentities = removed.length > 0 ? removed : (stamped ?? [])
     for (const identity of inserted) this.claimedNextStep.delete(identity.id)
     if (target !== 'next-step' || outcome === 'canceled') return
-    for (const identity of removed) this.claimedNextStep.add(identity.id)
+    for (const identity of removedIdentities) this.claimedNextStep.add(identity.id)
   }
 }

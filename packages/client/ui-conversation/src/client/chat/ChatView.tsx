@@ -1244,8 +1244,20 @@ export function ChatView({
       )}
       <ResubmitConfirm
         open={resubmitOpen}
-        title={t(resubmitIntent?.kind === 'delete' ? 'message.delete.title' : 'message.resubmit.title')}
-        description={t(resubmitIntent?.kind === 'delete' ? 'message.delete.description' : 'message.resubmit.description')}
+        title={t(
+          resubmitIntent?.kind === 'delete'
+            ? 'message.delete.title'
+            : resubmitIntent?.kind === 'regenerate'
+              ? 'message.regenerate.title'
+              : 'message.resubmit.title',
+        )}
+        description={t(
+          resubmitIntent?.kind === 'delete'
+            ? 'message.delete.description'
+            : resubmitIntent?.kind === 'regenerate'
+              ? 'message.regenerate.description'
+              : 'message.resubmit.description',
+        )}
         cancelLabel={t('message.resubmit.cancel')}
         keepFilesLabel={t('message.resubmit.keepFiles')}
         revertFilesLabel={t('message.resubmit.revertFiles')}

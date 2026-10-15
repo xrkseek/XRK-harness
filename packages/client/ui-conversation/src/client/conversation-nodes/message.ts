@@ -82,6 +82,9 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     // — including the post-`step/end` vacuum whose Location is `turn` —
     // stay steering so Chat can park 「权衡方案中」 above 「插队中」, until
     // the Host runs the step that promotes them into the next opener.
+    // Classification stays claim-gated: loadOlder repairs missing admit inserts
+    // via Face promote `removed` identities (see inbox applySplice), not by
+    // guessing from location.
     const loc = match.location
     const turnOpening = loc.kind === 'turn'
       && !loc.turn.steps.some(step => step.start !== undefined)

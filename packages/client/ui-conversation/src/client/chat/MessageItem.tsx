@@ -470,7 +470,11 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
   )
 }
 
-/** User and admitted-steering keyed Chat renderer. */
+/**
+ * User and admitted-steering keyed Chat renderer.
+ * Edit/delete apply to both the turn opener (`user`) and mid-turn 插话
+ * (`steering`); regenerate lives on the turn-tail and never targets steering.
+ */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
   node, editAt, deleteAt, withdrawSteer, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {

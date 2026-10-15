@@ -429,31 +429,28 @@ describe('AgentLoopCardController', () => {
     })
   })
 
-  it('saves subagent depth and active caps when edited', async () => {
+  it('saves maxConcurrentModelSessions when edited', async () => {
     const host = stubSettingsScope<AgentLoopSettings>()
     acceptWrites(host)
     const controller = new AgentLoopCardController(host.scope)
     host.publish({
       status: 'ready',
       writable: true,
-      value: { maxSubagentDepth: 2, maxActiveSubagents: 2 },
-      base: { maxSubagentDepth: 2, maxActiveSubagents: 2 },
+      value: { maxConcurrentModelSessions: 5 },
+      base: { maxConcurrentModelSessions: 5 },
       user: {},
     })
     const face = controller.inject()
 
-    face.edit('maxSubagentDepth', '1')
-    face.edit('maxActiveSubagents', '3')
+    face.edit('maxConcurrentModelSessions', '8')
     face.save()
     await vi.waitFor(() => {
-      expect(host.set).toHaveBeenCalledWith('maxSubagentDepth', 1)
-      expect(host.set).toHaveBeenCalledWith('maxActiveSubagents', 3)
+      expect(host.set).toHaveBeenCalledWith('maxConcurrentModelSessions', 8)
     })
 
     expect(face.hooks.agentLoopCard.getSnapshot()).toMatchObject({
       dirty: false,
-      maxSubagentDepth: { text: '1', overridden: true },
-      maxActiveSubagents: { text: '3', overridden: true },
+      maxConcurrentModelSessions: { text: '8', overridden: true },
     })
   })
 

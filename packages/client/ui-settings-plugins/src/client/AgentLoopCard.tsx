@@ -156,30 +156,17 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onReset={() => { props.resetField('toolResultMaxInlineBytes') }}
       />
       <ValueField
-        id="plugin-config-agent-loop-max-subagent-depth"
-        label={t('agentLoopMaxSubagentDepth')}
-        hint={t('agentLoopMaxSubagentDepthHint')}
+        id="plugin-config-agent-loop-max-concurrent-model-sessions"
+        label={t('agentLoopMaxConcurrentModelSessions')}
+        hint={t('agentLoopMaxConcurrentModelSessionsHint')}
         overriddenLabel={t('overridden')}
         resetLabel={t('reset')}
         invalidLabel={t('invalidNumber')}
         numeric
         disabled={!state.writable}
-        {...state.maxSubagentDepth}
-        onEdit={(text) => { props.edit('maxSubagentDepth', text) }}
-        onReset={() => { props.resetField('maxSubagentDepth') }}
-      />
-      <ValueField
-        id="plugin-config-agent-loop-max-active-subagents"
-        label={t('agentLoopMaxActiveSubagents')}
-        hint={t('agentLoopMaxActiveSubagentsHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
-        numeric
-        disabled={!state.writable}
-        {...state.maxActiveSubagents}
-        onEdit={(text) => { props.edit('maxActiveSubagents', text) }}
-        onReset={() => { props.resetField('maxActiveSubagents') }}
+        {...state.maxConcurrentModelSessions}
+        onEdit={(text) => { props.edit('maxConcurrentModelSessions', text) }}
+        onReset={() => { props.resetField('maxConcurrentModelSessions') }}
       />
       <ValueField
         id="plugin-config-agent-loop-subagent-model"

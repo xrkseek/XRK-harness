@@ -31,6 +31,8 @@ interface InboxSplice {
   readonly start: number
   readonly removedCount?: number
   readonly inserted: readonly InboxIdentity[]
+  /** Promote may stamp this when the admit insert is outside the history page. */
+  readonly removed?: readonly InboxIdentity[]
   readonly outcome?: 'canceled'
 }
 
@@ -47,6 +49,11 @@ function applySplice(
   const pending = [...(previous?.state.pending ?? [])]
   const claimed = new Set(previous?.state.claimed ?? [])
   const removed = pending.splice(splice.start, splice.removedCount ?? 0, ...splice.inserted)
+  // History pages that start after `prompt/admitted` still ship promote with
+  // `removed` identities so mid-turn 插话 keeps its claim across loadOlder.
+  const removedIdentities = removed.length > 0
+    ? removed
+    : (splice.removed ?? [])
   for (const identity of splice.inserted) {
     for (const key of identityKeys(identity)) claimed.delete(key)
   }
@@ -55,7 +62,7 @@ function applySplice(
     // `admitId`, the promoted `user/message` to its minted `messageId` /
     // echoed prompt rpcId. A claim keyed under only one of them is invisible
     // to the message classifier and silently degrades to an ordinary send.
-    for (const identity of removed) {
+    for (const identity of removedIdentities) {
       for (const key of identityKeys(identity)) claimed.add(key)
     }
   }

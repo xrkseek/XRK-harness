@@ -37,8 +37,7 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopCompactionPruneSummary' | 'agentLoopCompactionPruneOnly'
   | 'agentLoopCompactionSummaryOnly' | 'agentLoopCompactionOff'
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
-  | 'agentLoopMaxSubagentDepth' | 'agentLoopMaxSubagentDepthHint'
-  | 'agentLoopMaxActiveSubagents' | 'agentLoopMaxActiveSubagentsHint'
+  | 'agentLoopMaxConcurrentModelSessions' | 'agentLoopMaxConcurrentModelSessionsHint'
   | 'agentLoopSubagentModel' | 'agentLoopSubagentModelHint'
   | 'agentLoopSubagentModelInvalid'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
@@ -266,10 +265,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopCompactionOff: 'Off (no soft/overflow auto path)',
   agentLoopToolResultMaxInline: 'Tool result spill ceiling (bytes)',
   agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
-  agentLoopMaxSubagentDepth: 'Max subagent depth',
-  agentLoopMaxSubagentDepthHint: 'Nesting depth (parent = 0). Default 2 (max 3). Session badges may impose a tighter ceiling (Shallow = 1).',
-  agentLoopMaxActiveSubagents: 'Max active subagents',
-  agentLoopMaxActiveSubagentsHint: 'Concurrent draining direct children under one parent. Default 2.',
+  agentLoopMaxConcurrentModelSessions: 'Max sessions per model',
+  agentLoopMaxConcurrentModelSessionsHint: 'Running sessions (parent + subagent) on one provider/model. Blank and idle history do not count. Default 5. Routes are independent. Per-model override: Settings → Models → maxConcurrentSessions.',
   agentLoopSubagentModel: 'Subagent model',
   agentLoopSubagentModelHint: 'Fleet-wide route for delegated subagents, as provider/model (e.g. deepseek/deepseek-flash). Leave empty (default) so every child uses the same model as the parent that spawned it. A subagent call can still override this per call.',
   agentLoopSubagentModelInvalid: 'Use provider/model, e.g. deepseek/deepseek-flash',
@@ -708,10 +705,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopCompactionOff: '关闭（无软压/overflow 自动路径）',
   agentLoopToolResultMaxInline: '工具结果 spill 上限（字节）',
   agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
-  agentLoopMaxSubagentDepth: '子代理最大深度',
-  agentLoopMaxSubagentDepthHint: '嵌套深度（父会话 = 0）。默认 2（上限 3）。会话徽章可再收紧（Shallow = 1）。',
-  agentLoopMaxActiveSubagents: '同时存活子代理数',
-  agentLoopMaxActiveSubagentsHint: '同一父会话下同时 draining 的直接子代理上限。默认 2。',
+  agentLoopMaxConcurrentModelSessions: '每模型最大会话数',
+  agentLoopMaxConcurrentModelSessionsHint: '同一「供应商/模型」下进行中的会话（主会话 + 子代理都算；blank / 闲置历史不计）。默认 5。不同路由互不影响。单模型可在 Settings → Models 配 maxConcurrentSessions。',
   agentLoopSubagentModel: '子代理模型',
   agentLoopSubagentModelHint: '委派子代理的统一线路，写作 provider/model（如 deepseek/deepseek-flash）。留空（默认）则每个子代理与委派它的父会话用同一个模型。单次 subagent 调用仍可覆盖。',
   agentLoopSubagentModelInvalid: '请写作 provider/model，如 deepseek/deepseek-flash',
