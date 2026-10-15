@@ -92,4 +92,24 @@ describe("mapFaceRpcError", () => {
       details: { provider: "x", model: "y" },
     });
   });
+
+  it("keeps model-session-cap on the closed set with route details", () => {
+    expect(
+      mapFaceRpcError("model-session-cap", "route full", {
+        provider: "deepseek",
+        model: "deepseek-flash",
+        using: 5,
+        max: 5,
+      }),
+    ).toEqual({
+      code: "model-session-cap",
+      message: "route full",
+      details: {
+        provider: "deepseek",
+        model: "deepseek-flash",
+        using: 5,
+        max: 5,
+      },
+    });
+  });
 });

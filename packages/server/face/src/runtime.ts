@@ -100,6 +100,8 @@ import {
 } from "./workspace-store.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { bindImWorkspaceTools } from "./im-workspace-tools.js";
+import { bindWorkspaceOrchestrateTools } from "./workspace-orchestrate-tools.js";
+import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import {
   XIANGYANG_WORKSPACE_ID,
   XIANGYANG_WORKSPACE_TITLE,
@@ -741,9 +743,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       if (runtime) {
         sessionToolsBound.add(agent.tools);
         rememberedTools.set(sessionId, agent.tools);
-        // IM projection: no presence / thread / canvas / ask_user UI.
-        // Roster + session_query + workspace_list let IM summon a coding team
-        // in another workspace (Host binds im_send + subagent).
+        // Tool surfaces:
+        // - IM: channel + roster + orchestrate + thread (pin/mail peers) + search
+        //   (Host binds im_send + subagent→coding). No canvas / ask_user.
+        // - 奇创: orchestrate + thread + roster + presence + settings; no nested subagents.
+        // - coding: full local tools + orchestrate (create/prompt peers) + thread.
+        // 主线 = discovery pin only; thread_message works without it.
         const wsId = runtime.workspaces.workspaceIdOf(sessionId);
         if (wsId === IM_WORKSPACE_ID) {
           bindSessionQueryTools(agent.tools, {
@@ -755,10 +760,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             sessionId,
           });
           bindImWorkspaceTools(agent.tools, { runtime, sessionId });
+          bindSessionThreadTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
         } else if (wsId === XIANGYANG_WORKSPACE_ID) {
-          // 奇创: list/create/peer-session dispatch — no nested subagents.
-          // Still bind presence_set: tips = 支线 (sidebar); Overview ball is
-          // optional chrome (Settings can hide it) and is not IM-universal.
           bindSessionQueryTools(agent.tools, {
             runtime,
             parentSessionId: sessionId,
@@ -768,6 +774,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             sessionId,
           });
           bindXiangyangWorkspaceTools(agent.tools, { runtime, sessionId });
+          bindSessionThreadTools(agent.tools, {
+            runtime,
+            sessionId,
+          });
           bindAskUserTool(agent.tools, (qs, signal) =>
             questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
           );
@@ -796,14 +806,23 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             runtime,
             sessionId,
           });
-          // Only tool-delegated children skip thread tools. UI forks keep them
+          // Only tool-delegated children skip thread / orchestrate. UI forks keep them
           // (and are tracked in forkLineage, not subagents).
+          // minimal/shell stay local-only — no workspace_* / thread_* peer surface.
           const childLink = runtime.subagents.getByChild(sessionId);
           const delegatedChild = childLink && childLink.mode !== "fork";
-          if (!delegatedChild) {
+          const badge = effectiveSessionAgentPreset(runtime, sessionId);
+          const peerCollab =
+            badge !== "minimal" && badge !== "shell";
+          if (!delegatedChild && peerCollab) {
             bindSessionThreadTools(agent.tools, {
               runtime,
               sessionId,
+            });
+            bindWorkspaceOrchestrateTools(agent.tools, {
+              runtime,
+              sessionId,
+              mode: "coding",
             });
           }
           if (!delegatedChild || childLink?.role === "lead") {

@@ -26,8 +26,6 @@ import {
 export { boundChildAnswer, SUBAGENT_ANSWER_INLINE_BYTES };
 import { subagentOwnedEvents } from "./subagent-registry.js";
 import {
-  DEFAULT_MAX_ACTIVE_CHILDREN,
-  DEFAULT_MAX_DEPTH,
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
@@ -64,6 +62,10 @@ import {
   resolveSessionModelSelection,
   resolveSubagentModelSetting,
 } from "./model-catalog.js";
+import {
+  modelSessionCapProblem,
+  resolveModelSessionQuota,
+} from "./model-session-cap.js";
 import { selectSessionModel } from "./select-session-model.js";
 import {
   appendOutputContract,
@@ -89,9 +91,13 @@ const WAIT_AGENT_DEFAULT_MS = 5 * 60 * 1000;
 const WAIT_AGENT_MIN_MS = 1_000;
 const POLL_MS = 50;
 
-export { SUBAGENT_ROUTING_PROMPT_TEXT, DEFAULT_MAX_ACTIVE_CHILDREN, DEFAULT_MAX_DEPTH };
+export { SUBAGENT_ROUTING_PROMPT_TEXT };
 
-/** Effective Face + badge ceilings for subagent depth / concurrency. */
+/**
+ * Status / `analytics` quota — per provider/model live session cap.
+ * `depth` is lineage info only (no longer a hard ceiling).
+ * `active`/`maxActive`/`slotsFree` map to that route's session usage.
+ */
 export interface SubagentQuotaCaps {
   readonly depth: number;
   readonly maxDepth: number;
@@ -99,66 +105,73 @@ export interface SubagentQuotaCaps {
   readonly maxActive: number;
   readonly delegated: number;
   readonly slotsFree: number;
+  readonly provider: string;
+  readonly model: string;
+}
+
+/** Predicted child route before spawn (parent inherit or fleet/call override). */
+export function predictChildModelSelection(
+  runtime: FaceRuntime,
+  parentSessionId: string,
+  args?: {
+    readonly provider?: string;
+    readonly model?: string;
+    readonly reasoningEffort?: string;
+  },
+): { provider: string; model: string; reasoningEffort?: string } {
+  const providerRaw = args?.provider?.trim() ?? "";
+  const modelRaw = args?.model?.trim() ?? "";
+  const effortRaw = args?.reasoningEffort?.trim() ?? "";
+  const fleet =
+    providerRaw || modelRaw || effortRaw
+      ? undefined
+      : resolveSubagentModelSetting(runtime);
+  const parent = resolveSessionModelSelection(runtime, parentSessionId);
+  const model = modelRaw || fleet?.model || parent.model;
+  const provider = providerRaw || fleet?.provider || parent.provider;
+  const effort =
+    effortRaw || fleet?.reasoningEffort || parent.reasoningEffort || "";
+  return {
+    provider,
+    model,
+    ...(effort ? { reasoningEffort: effort } : {}),
+  };
 }
 
 /**
- * Resolve live quota for Status / `analytics` (Face agent-loop ∩ badge ceiling).
+ * Resolve live quota for Status / `analytics` (per-model session cap).
  */
 export function resolveSubagentQuota(
   runtime: FaceRuntime,
   sessionId: string,
 ): SubagentQuotaCaps {
-  const loopValue = runtime.settingsNamespaces.view("agent-loop").value as Record<
-    string,
-    unknown
-  >;
-  const faceDepth =
-    typeof loopValue.maxSubagentDepth === "number" &&
-    Number.isFinite(loopValue.maxSubagentDepth) &&
-    loopValue.maxSubagentDepth >= 1
-      ? Math.min(3, Math.floor(loopValue.maxSubagentDepth))
-      : DEFAULT_MAX_DEPTH;
-  const faceActive =
-    typeof loopValue.maxActiveSubagents === "number" &&
-    Number.isFinite(loopValue.maxActiveSubagents) &&
-    loopValue.maxActiveSubagents >= 1
-      ? Math.min(16, Math.floor(loopValue.maxActiveSubagents))
-      : DEFAULT_MAX_ACTIVE_CHILDREN;
+  const depth = subagentDepth(runtime, sessionId);
+  const delegated = runtime.subagents.listDelegated(sessionId).length;
+  const selection = resolveSessionModelSelection(runtime, sessionId);
+  const modelQ = resolveModelSessionQuota(runtime, selection);
   const presetId = effectiveSessionAgentPreset(runtime, sessionId);
   const profile = resolveAgentPresetProfile(presetId);
   if (profile.subagents.mode === "off") {
-    const depth = subagentDepth(runtime, sessionId);
-    const active =
-      countActiveChildren(runtime, sessionId) + pendingSpawnCount(sessionId);
-    const delegated = runtime.subagents.listDelegated(sessionId).length;
     return {
       depth,
       maxDepth: 0,
-      active,
+      active: modelQ.using,
       maxActive: 0,
       delegated,
       slotsFree: 0,
+      provider: modelQ.provider,
+      model: modelQ.model,
     };
   }
-  const maxDepth =
-    profile.subagents.maxDepth !== undefined
-      ? Math.min(faceDepth, profile.subagents.maxDepth)
-      : faceDepth;
-  const maxActive =
-    profile.subagents.maxActiveChildren !== undefined
-      ? Math.min(faceActive, profile.subagents.maxActiveChildren)
-      : faceActive;
-  const depth = subagentDepth(runtime, sessionId);
-  const active =
-    countActiveChildren(runtime, sessionId) + pendingSpawnCount(sessionId);
-  const delegated = runtime.subagents.listDelegated(sessionId).length;
   return {
     depth,
-    maxDepth,
-    active,
-    maxActive,
+    maxDepth: 0,
+    active: modelQ.using,
+    maxActive: modelQ.max,
     delegated,
-    slotsFree: Math.max(0, maxActive - active),
+    slotsFree: modelQ.slotsFree,
+    provider: modelQ.provider,
+    model: modelQ.model,
   };
 }
 
@@ -386,12 +399,6 @@ function formatSubagentAbortReason(reason: unknown): string {
 export interface BindSubagentToolsOptions {
   readonly runtime: FaceRuntime;
   readonly parentSessionId: string;
-  readonly maxDepth?: number;
-  /**
-   * Max concurrent *active* (draining) direct children under this parent.
-   * Omit → {@link DEFAULT_MAX_ACTIVE_CHILDREN} (4).
-   */
-  readonly maxActiveChildren?: number;
   /** Override spawn for external runtimes (tests). */
   readonly externalSpawn?: ExternalSpawn;
   /** Override env for external launch resolution (tests). */
@@ -405,39 +412,19 @@ export interface BindSubagentToolsOptions {
   readonly foregroundWaitMs?: number;
 }
 
-function countActiveChildren(
-  runtime: FaceRuntime,
-  parentSessionId: string,
-): number {
-  let n = 0;
-  for (const link of runtime.subagents.listDelegated(parentSessionId)) {
-    if (isChildSessionActive(runtime, link.childSessionId)) n += 1;
-  }
-  return n;
-}
-
-/**
- * In-flight spawn reservations (sync). Two parallel `subagent` settles both
- * read `countActiveChildren` before either child's drain latches — without
- * this, both can pass `active < maxActive` and overshoot the cap.
- */
-const pendingSpawnSlots = new Map<string, number>();
-
-function pendingSpawnCount(parentSessionId: string): number {
-  return pendingSpawnSlots.get(parentSessionId) ?? 0;
-}
-
-function reserveSpawnSlot(parentSessionId: string): void {
-  pendingSpawnSlots.set(
-    parentSessionId,
-    pendingSpawnCount(parentSessionId) + 1,
-  );
-}
-
-function releaseSpawnSlot(parentSessionId: string): void {
-  const n = pendingSpawnCount(parentSessionId);
-  if (n <= 1) pendingSpawnSlots.delete(parentSessionId);
-  else pendingSpawnSlots.set(parentSessionId, n - 1);
+/** Create-payload pin so `session.create` reserves the child's real route. */
+function childRouteCreatePin(route: {
+  readonly provider: string;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+}): Record<string, string> {
+  return {
+    provider: route.provider,
+    model: route.model,
+    ...(route.reasoningEffort
+      ? { reasoningEffort: route.reasoningEffort }
+      : {}),
+  };
 }
 
 /**
@@ -566,27 +553,6 @@ async function applySubagentModelOverride(
 function createSubagentTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
-  /**
-   * Ceilings for one call. Resolved live (not frozen at bind time) so the
-   * numbers `analytics` / `list_agents` report are the numbers spawn
-   * enforces — a Settings change takes effect on the next call instead of
-   * at the next agent rebuild. The bind options are a test-only override.
-   */
-  const caps = (): {
-    maxDepth: number;
-    maxActive: number;
-    active: number;
-  } => {
-    const quota = resolveSubagentQuota(
-      options.runtime,
-      options.parentSessionId,
-    );
-    return {
-      maxDepth: options.maxDepth ?? quota.maxDepth,
-      maxActive: options.maxActiveChildren ?? quota.maxActive,
-      active: quota.active,
-    };
-  };
   const foregroundWaitMs = options.foregroundWaitMs ?? FOREGROUND_WAIT_MS;
   const description =
     "Delegate a self-contained task to a teammate subagent (separate session; same workspace as this session by default, unless workspace_id / cwd / worktree:true). " +
@@ -917,30 +883,21 @@ function createSubagentTool(
             isError: true,
           };
         }
-        const depth = subagentDepth(
+        const childRoute = predictChildModelSelection(
           options.runtime,
           options.parentSessionId,
+          {
+            ...(typeof a.provider === "string" ? { provider: a.provider } : {}),
+            ...(typeof a.model === "string" ? { model: a.model } : {}),
+            ...(typeof a.reasoning_effort === "string"
+              ? { reasoningEffort: a.reasoning_effort }
+              : {}),
+          },
         );
-        const { maxDepth, maxActive: maxActiveChildren, active } = caps();
-        if (depth >= maxDepth) {
-          return {
-            content: `subagent: max depth ${maxDepth} reached (current depth ${depth})`,
-            isError: true,
-          };
+        const capProblem = modelSessionCapProblem(options.runtime, childRoute);
+        if (capProblem) {
+          return { content: `subagent: ${capProblem}`, isError: true };
         }
-        if (active >= maxActiveChildren) {
-          return {
-            content: `subagent: max active children ${maxActiveChildren} reached (active ${active})`,
-            isError: true,
-          };
-        }
-        reserveSpawnSlot(options.parentSessionId);
-        let externalSlotHeld = true;
-        const dropExternalSlot = (): void => {
-          if (!externalSlotHeld) return;
-          externalSlotHeld = false;
-          releaseSpawnSlot(options.parentSessionId);
-        };
         try {
           const product = parseExternalAgentProduct(
             options.runtime.settingsNamespaces.view("external-agent").value,
@@ -960,6 +917,7 @@ function createSubagentTool(
                 mode: "continuable",
                 ...memberSpawn,
                 ...createAttach,
+                ...childRouteCreatePin(childRoute),
                 ...(spawnRole && spawnRole !== "default"
                   ? { role: spawnRole }
                   : {}),
@@ -1033,8 +991,6 @@ function createSubagentTool(
                 ? { spawnImpl: options.externalSpawn }
                 : {}),
             });
-            // Child is busy in externalAgents; pending slot no longer needed.
-            dropExternalSlot();
             return {
               content: [
                 `Started background external subagent \`${childId}\` (${label} · ${runtimeKind}).`,
@@ -1047,9 +1003,6 @@ function createSubagentTool(
               ].join("\n"),
             };
           }
-          // One-shot external has no Face child latch — do not hold the slot
-          // for the whole print turn (would starve parallel in-process spawns).
-          dropExternalSlot();
           const result = await runExternalAgentTurn({
             kind: runtimeKind,
             cwd: externalCwd,
@@ -1072,35 +1025,23 @@ function createSubagentTool(
                 ? err.message
                 : String(err);
           return { content: `subagent external: ${msg}`, isError: true };
-        } finally {
-          dropExternalSlot();
         }
       }
-      const depth = subagentDepth(
+      const childRoute = predictChildModelSelection(
         options.runtime,
         options.parentSessionId,
+        {
+          ...(typeof a.provider === "string" ? { provider: a.provider } : {}),
+          ...(typeof a.model === "string" ? { model: a.model } : {}),
+          ...(typeof a.reasoning_effort === "string"
+            ? { reasoningEffort: a.reasoning_effort }
+            : {}),
+        },
       );
-      const { maxDepth, maxActive: maxActiveChildren, active } = caps();
-      if (depth >= maxDepth) {
-        return {
-          content: `subagent: max depth ${maxDepth} reached (current depth ${depth})`,
-          isError: true,
-        };
+      const capProblem = modelSessionCapProblem(options.runtime, childRoute);
+      if (capProblem) {
+        return { content: `subagent: ${capProblem}`, isError: true };
       }
-      if (active >= maxActiveChildren) {
-        return {
-          content: `subagent: max active children ${maxActiveChildren} reached (active ${active})`,
-          isError: true,
-        };
-      }
-      reserveSpawnSlot(options.parentSessionId);
-      let spawnSlotHeld = true;
-      const dropSpawnSlot = (): void => {
-        if (!spawnSlotHeld) return;
-        spawnSlotHeld = false;
-        releaseSpawnSlot(options.parentSessionId);
-      };
-      try {
       const background = a.run_in_background === true;
       const inherit = a.inherit_context === true;
       const label =
@@ -1268,6 +1209,7 @@ function createSubagentTool(
                 mode: linkMode,
                 ...memberSpawn,
                 ...createAttach,
+                ...childRouteCreatePin(childRoute),
                 ...(spawnRole && spawnRole !== "default"
                   ? { role: spawnRole }
                   : {}),
@@ -1312,6 +1254,7 @@ function createSubagentTool(
             mode: linkMode,
             ...memberSpawn,
             ...createAttach,
+            ...childRouteCreatePin(childRoute),
             ...(spawnRole && spawnRole !== "default"
               ? { role: spawnRole }
               : {}),
@@ -1442,9 +1385,6 @@ function createSubagentTool(
       }
       // Spawn accepted — the child is no longer a half-made shell.
       started = true;
-      // Drain (or busy latch) now counts in active; drop the pending slot so
-      // a sibling parallel `subagent` is not double-charged during wait.
-      dropSpawnSlot();
       if (background) {
         return {
           content: [
@@ -1597,9 +1537,6 @@ function createSubagentTool(
           .join("\n"),
         ...(schemaValid === false ? { isError: true } : {}),
       };
-      } finally {
-        dropSpawnSlot();
-      }
     },
   };
 }
@@ -1645,10 +1582,10 @@ function createListAgentsTool(
         options.parentSessionId,
       );
       const header =
-        `quota depth ${quota.depth}/${quota.maxDepth}` +
-        ` · active ${quota.active}/${quota.maxActive}` +
+        `quota ${quota.provider}/${quota.model} sessions ${quota.active}/${quota.maxActive}` +
         ` · slots_free ${quota.slotsFree}` +
-        ` · delegated ${quota.delegated}`;
+        ` · delegated ${quota.delegated}` +
+        (quota.depth > 0 ? ` · lineage_depth ${quota.depth}` : "");
       if (!entries.length) {
         return { content: `${header}\n(no subagents)` };
       }
@@ -2223,10 +2160,11 @@ function createAnalyticsTool(
       }
       const lines = [
         `purpose: local-debug`,
-        `depth: ${quota.depth}/${quota.maxDepth}`,
-        `active: ${quota.active}/${quota.maxActive}`,
+        `model: ${quota.provider}/${quota.model}`,
+        `sessions: ${quota.active}/${quota.maxActive}`,
         `slots_free: ${quota.slotsFree}`,
         `delegated: ${quota.delegated}`,
+        `lineage_depth: ${quota.depth}`,
         `parent_inbox: queue=${parentQueued} steer=${parentSteer}`,
         "children:",
       ];

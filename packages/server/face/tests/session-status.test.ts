@@ -20,6 +20,23 @@ function bareRuntime(store = createMemorySessionStore()) {
   });
 }
 
+/** Coding workspace — bare `session.create` lands on Xiangyang (奇创). */
+async function createCodingSession(
+  runtime: ReturnType<typeof bareRuntime>,
+  payload: Record<string, unknown> = {},
+  rpcId = "c",
+): Promise<string> {
+  const coding = runtime.workspaces.create(
+    `${runtime.workspaceRoot}/code-${rpcId}`,
+  ).workspace;
+  const created = await dispatchFaceMethod(runtime, "session.create", rpcId, {
+    workspaceId: coding.workspaceId,
+    ...payload,
+  });
+  if (!created.result.ok) throw new Error("create coding session");
+  return (created.result.value as { sessionId: string }).sessionId;
+}
+
 describe("session status snapshot", () => {
   beforeEach(() => {
     resetStatusSnapshotCacheForTests();
@@ -27,6 +44,7 @@ describe("session status snapshot", () => {
 
   it("builds shared facts for /status and session.status", async () => {
     const runtime = bareRuntime();
+    // Bare create lands on Xiangyang → 奇创 (subagents off → zero slots).
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -37,8 +55,7 @@ describe("session status snapshot", () => {
     expect(snap.plan).toBe("off");
     expect(snap.jobs).toEqual([]);
     expect(snap.subagents.live).toEqual([]);
-    // Bare create pins the settings/CLI default (minimal) — subagents off → zero caps.
-    expect(snap.badge).toBe("minimal");
+    expect(snap.badge).toBe("qichuang");
     expect(snap.subagents.quota.maxDepth).toBe(0);
     expect(snap.subagents.quota.maxActive).toBe(0);
     expect(snap.subagents.quota.slotsFree).toBe(0);
@@ -48,7 +65,7 @@ describe("session status snapshot", () => {
     expect(text).toContain("theme: system");
     expect(text).toContain("jobs: 0 total");
     expect(text).toContain("subagents:");
-    expect(text).toMatch(/quota depth/);
+    expect(text).toMatch(/quota .+\/.+ sessions /);
     expect(text).toContain("cost:");
     expect(text).toContain("billing:");
     expect(text).toContain("timeline:");
@@ -98,69 +115,68 @@ describe("session status snapshot", () => {
     }
   });
 
-  it("reports positive subagent caps for harness badges", async () => {
+  it("reports positive per-model session caps for harness badges", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+    const sessionId = await createCodingSession(runtime, {
       agentPreset: "harness",
     });
-    if (!created.result.ok) throw new Error("create");
-    const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const snap = buildSessionStatusSnapshot(runtime, sessionId);
     expect(snap.badge).toBe("harness");
-    expect(snap.subagents.quota.maxDepth).toBeGreaterThanOrEqual(1);
+    expect(snap.subagents.quota.maxDepth).toBe(0);
     expect(snap.subagents.quota.maxActive).toBeGreaterThanOrEqual(1);
-    expect(snap.subagents.quota.slotsFree).toBe(snap.subagents.quota.maxActive);
+    expect(snap.subagents.quota.slotsFree).toBe(
+      Math.max(0, snap.subagents.quota.maxActive - snap.subagents.quota.active),
+    );
   });
 
-  it("keeps depth-at-cap at warn when no child is live or queued", async () => {
-    // Depth-at-cap is a lineage fact that outlives the child. A session that
-    // already reached its badge cap must not stay "critical" once nothing is
-    // running: the operator glance would read an idle session as a fault.
+  it("flags fleet:slots warn when the model session route is full", async () => {
+    // Cap counts drain-active sessions only. A quiet blank does not fill the
+    // route; mark the session active so Status shows slots_free=0 (warn).
     const store = createMemorySessionStore();
-    let turnActive = false;
+    const active = new Set<string>();
     const runtime = createBareFaceRuntime({
       store,
       resolveAgent: admittingAgentResolve(store),
       defaultAgentPreset: "shallow",
       drain: {
         ...idleFaceDrain,
-        isActive: () => turnActive,
+        isActive: (sessionId: string) => active.has(sessionId),
       },
     });
 
-    // `depth` is the subject session's own lineage level (root 0, child 1),
-    // so the cap-scoped session here is the child: Shallow maxDepth 1.
-    const parent = runtime.ensureSession("depth-parent");
-    runtime.sessionAgentPresets.set(parent, "shallow");
-    const child = runtime.ensureSession("depth-child");
-    runtime.sessionAgentPresets.set(child, "shallow");
-    runtime.subagents.attach({
-      parentSessionId: parent,
-      childSessionId: child,
-      mode: "continuable",
-      label: "c",
+    const cap = await dispatchFaceMethod(runtime, "settings.mutate", "cap", {
+      ns: "agent-loop",
+      ops: [
+        {
+          op: "set",
+          path: ["maxConcurrentModelSessions"],
+          value: 1,
+        },
+      ],
     });
+    expect(cap.result.ok).toBe(true);
 
-    // Lineage sits at the cap, but nothing is running → warn, not critical.
-    turnActive = false;
-    const idle = buildSessionStatusSnapshot(runtime, child);
-    expect(idle.subagents.quota.depth).toBe(1);
-    expect(idle.subagents.quota.maxDepth).toBe(1);
-    expect(idle.fleet.alerts.find((a) => a.id === "fleet:depth")?.severity).toBe("warn");
-    expect(idle.fleet.health).not.toBe("critical");
+    const sessionId = await createCodingSession(
+      runtime,
+      { agentPreset: "shallow" },
+      "cap",
+    );
+    runtime.sessionModels.set(sessionId, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
+    active.add(sessionId);
 
-    // Same lineage, now actually working → real pressure → critical.
-    turnActive = true;
-    const busy = buildSessionStatusSnapshot(runtime, child);
-    expect(busy.fleet.alerts.find((a) => a.id === "fleet:depth")?.severity).toBe("critical");
-    expect(busy.fleet.health).toBe("critical");
-
-    // Pressure gone again → falls back to warn.
-    turnActive = false;
-    expect(
-      buildSessionStatusSnapshot(runtime, child).fleet.alerts.find((a) => a.id === "fleet:depth")
-        ?.severity,
-    ).toBe("warn");
+    const snap = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(snap.subagents.quota.maxDepth).toBe(0);
+    expect(snap.subagents.quota.maxActive).toBe(1);
+    expect(snap.subagents.quota.active).toBe(1);
+    expect(snap.subagents.quota.slotsFree).toBe(0);
+    expect(snap.fleet.alerts.find((a) => a.id === "fleet:slots")?.severity).toBe(
+      "warn",
+    );
+    expect(snap.fleet.health).toBe("warn");
+    expect(snap.fleet.alerts.find((a) => a.id === "fleet:depth")).toBeUndefined();
   });
 
   it("folds prune→summary pipeline and delivery mutex into Status", async () => {

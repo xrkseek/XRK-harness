@@ -129,6 +129,14 @@ describe("Face inbox wire + session/queue DSH shapes", () => {
       start: 0,
       removedCount: 1,
       inserted: [],
+      removed: [
+        {
+          id: "a2",
+          role: "user",
+          content: [{ type: "text", text: "steered" }],
+          source: { kind: "user", rpcId: "rpc-b" },
+        },
+      ],
     });
     expect(promoted.data).not.toHaveProperty("outcome");
   });

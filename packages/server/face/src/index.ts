@@ -534,6 +534,18 @@ export {
   type FaceModelSelection,
 } from "./model-catalog.js";
 export {
+  DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS,
+  resolveModelSessionCap,
+  resolveModelSessionQuota,
+  modelSessionCapProblem,
+  reserveModelSessionSlot,
+  countSessionsUsingModel,
+  resetModelSessionCapPendingForTests,
+  type ModelSessionCapDetails,
+  type ModelSessionQuota,
+  type ModelSessionSlot,
+} from "./model-session-cap.js";
+export {
   readProviderApiKey,
   readProviderRoute,
   providerHasUsableCredential,

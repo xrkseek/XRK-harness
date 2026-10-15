@@ -1,6 +1,6 @@
 /**
  * Golden track: fan-out
- * Parallel subagent children honor maxActiveChildren (delegation fan-out cap).
+ * Parallel subagent children honor the per-model live session cap.
  */
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
@@ -51,7 +51,7 @@ function drain(active: Set<string>): FaceDrain {
 }
 
 describe("golden/fan-out", () => {
-  it("rejects a third active child when maxActiveChildren=2", async () => {
+  it("rejects a third active child when the model route is full", async () => {
     const store = createMemorySessionStore();
     const active = new Set<string>();
     const runtime = createFaceRuntime({
@@ -61,9 +61,23 @@ describe("golden/fan-out", () => {
       resolveAgent: async () => stubAgent(),
       defaultAgentPreset: "harness",
     });
+    runtime.settingsNamespaces.ensure("agent-loop").user = {
+      maxConcurrentModelSessions: 2,
+    };
     const parent = runtime.ensureSession("eval-fanout-parent");
+    runtime.sessionAgentPresets.set(parent, "harness");
+    runtime.sessionModels.set(parent, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
     const childA = runtime.ensureSession("eval-fanout-a");
     const childB = runtime.ensureSession("eval-fanout-b");
+    for (const id of [childA, childB]) {
+      runtime.sessionModels.set(id, {
+        provider: "deepseek",
+        model: "deepseek-flash",
+      });
+    }
     runtime.subagents.attach({
       parentSessionId: parent,
       childSessionId: childA,
@@ -84,12 +98,11 @@ describe("golden/fan-out", () => {
     bindSubagentTools(tools, {
       runtime,
       parentSessionId: parent,
-      maxActiveChildren: 2,
     });
     const out = await tools.get("subagent")!.execute({
       prompt: "third parallel child must fail",
     });
     expect(out.isError).toBe(true);
-    expect(String(out.content)).toMatch(/max active children/);
+    expect(String(out.content)).toMatch(/model session cap/);
   });
 });

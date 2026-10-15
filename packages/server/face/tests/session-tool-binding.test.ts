@@ -27,6 +27,9 @@ const FACE_SESSION_TOOLS = [
   "thread_message",
   "thread_switch",
   "thread_upsert",
+  "workspace_list",
+  "workspace_create",
+  "workspace_session_prompt",
 ];
 
 /** Agent shaped like the Host factory's: tools + a jobs registry. */
@@ -47,11 +50,20 @@ function hostShapedAgent(tools: ReturnType<typeof createToolRegistry>): AgentHan
 
 describe("FaceRuntime.bindSessionAgent", () => {
   it("binds the full Face tool set on a Host-resolved agent", () => {
-    const runtime = createBareFaceRuntime();
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "harness" });
     const tools = createToolRegistry();
     // Host rebuilds the agent on the drain path — no resolveAgent in sight.
     runtime.bindSessionAgent("sess-host", hostShapedAgent(tools));
     expect(FACE_SESSION_TOOLS.filter((name) => !tools.get(name))).toEqual([]);
+  });
+
+  it("keeps minimal badge off peer workspace/thread tools", () => {
+    const runtime = createBareFaceRuntime({ defaultAgentPreset: "minimal" });
+    const tools = createToolRegistry();
+    runtime.bindSessionAgent("sess-min", hostShapedAgent(tools));
+    expect(tools.get("workspace_list")).toBeUndefined();
+    expect(tools.get("thread_message")).toBeUndefined();
+    expect(tools.get("presence_set")).toBeDefined();
   });
 
   it("is idempotent per registry and keeps tool identity (no stale settle)", async () => {

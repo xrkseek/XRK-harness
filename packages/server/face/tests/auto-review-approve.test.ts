@@ -54,6 +54,7 @@ describe("auto-review approve pending", () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);
@@ -109,6 +110,7 @@ describe("auto-review approve pending", () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);

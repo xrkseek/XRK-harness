@@ -26,7 +26,7 @@
 
 - **Session cwd**：`session.create({ workspaceId })` 钉 `sessionCwds`；Host agent factory 用会话 cwd（非仅 serve `--workspace` 根）。Glob/bash 读会话 cwd；skill 多根导入；工作区根 `AGENTS.md` · `.cursor/rules` 等经 `agent-instructions` 注入（见 [workspace-inject](./workspace-inject.md)）。
 
-- **向阳空间 / IM**：产品默认工作区 id `ws_default`、标题「向阳空间」、路径 `~/.xrk/xiangyang-workspace`（不可删/改名）；会话锁工具面 **奇创**（`qichuang`：团队 + `workspace_list` / `workspace_create` / `workspace_session_prompt`，无嵌套子代理）；专用 skills 只在该工作区 `.xrk/skills`。**IM**（`ws_im`）仅网关连接或首次挂会话时生成，可删（下次连接再建）；编排建区/开会话/派任务仅 **IM** 与 **奇创**；编码徽章不得 `subagent(workspace_id)` 跨区。
+- **向阳空间 / IM / 主线**：产品默认工作区 id `ws_default`、标题「向阳空间」、路径 `~/.xrk/xiangyang-workspace`（不可删/改名）；会话锁 **奇创**（`qichuang`：团队 + `workspace_*` + `thread_*`，无嵌套子代理；可给别处开会话定主线）。**IM**（`ws_im`）仅网关连接或首次挂会话时生成，可删；可 `subagent(workspace_id)` 派进编码区。**编码工作区**同样有 `workspace_*` / `thread_message`。主线是发现钉（collab board / `thread_list`），**不是**发信门槛；`thread_message` 任意父会话可互发。
 
 - **新会话继承模型**：`session.create({ inheritFrom })` 把源会话的**有效**路由（已 pin，或与 Status / `session.models` 相同的默认解析）拷给新会话，只写内存 override（**不**进 `session-models.json`）；源未知则仍走默认链。侧栏「新会话」经 `workspaces.connectWorkspace` 带上当前会话；从**非空**会话点「新会话」时不复用工作区里已有的空白会话（避免触发器停在「选择模型」）。subagent 的 `parentSessionId` 继承更近、仍然优先。
 
@@ -129,7 +129,7 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **Session cwd**: `session.create({ workspaceId })` pins `sessionCwds`; the Host agent factory uses the session cwd (not only the serve `--workspace` root). Glob/bash read the session cwd; skill multi-root import; workspace-root `AGENTS.md` and `.cursor/rules` inject via `agent-instructions` ([workspace-inject](./workspace-inject.md)).
 
-- **Xiangyang space / IM**: Product default workspace id `ws_default`, title 「向阳空间」, path `~/.xrk/xiangyang-workspace` (undeletable / unrenamable); sessions lock to **奇创** (`qichuang`: team + `workspace_list` / `workspace_create` / `workspace_session_prompt`, no nested subagents); dedicated skills only under that workspace `.xrk/skills`. **IM** (`ws_im`) is created only when a gateway connects or a session attaches — deletable (recreated on next connect). Cross-workspace create / session / dispatch is **IM + 奇创 only**; coding badges may not `subagent(workspace_id)` across workspaces.
+- **Xiangyang / IM / 主线**: Product default workspace id `ws_default`, title 「向阳空间」, path `~/.xrk/xiangyang-workspace` (undeletable / unrenamable); sessions lock to **奇创** (`qichuang`: team + `workspace_*` + `thread_*`, no nested subagents; may pin peers opened elsewhere). **IM** (`ws_im`) is created on gateway connect / first attach — deletable; may `subagent(workspace_id)` into coding. **Coding workspaces** also get `workspace_*` / `thread_message`. 主线 is a discovery pin (collab board / `thread_list`), **not** a messaging gate — any parent may `thread_message` any parent.
 
 - **New Session model inheritance**: `session.create({ inheritFrom })` copies the source session's **effective** route (an explicit pin, or the same default resolution Status / `session.models` already shows) onto the new one, in-memory override only (**not** written to `session-models.json`); an unknown source still falls back to the default chain. Sidebar New Session passes the current session through `workspaces.connectWorkspace`; from a **non-blank** chat it does not reuse a leftover workspace blank (that blank never inherited, so the trigger stayed on “Select model”). A subagent `parentSessionId` stays the nearer relation and still wins.
 

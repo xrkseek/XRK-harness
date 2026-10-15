@@ -206,10 +206,7 @@ export {
   resolveA2aInboundEnabled,
   type A2aInboundProductSettings,
 } from "./a2a-inbound-public.js";
-import {
-  admitImInboundToFace,
-  createImFaceAdmitHook,
-} from "./im-face-admit.js";
+import { createImFaceAdmitHook } from "./im-face-admit.js";
 import {
   bindImTools,
   setImToolPorts,
@@ -1288,8 +1285,6 @@ export function createHostManager(): HostManager {
               | "off";
           };
           toolResultMaxInlineBytes?: number;
-          maxSubagentDepth?: number;
-          maxActiveSubagents?: number;
           webSearch?: import("@xrkseek/exec-web").SearchAccessConfig;
           workspaceInject?: {
             readonly maxChars?: number;
@@ -2454,18 +2449,6 @@ export function createHostManager(): HostManager {
           loop.toolResultMaxInlineBytes >= 0
             ? Math.floor(loop.toolResultMaxInlineBytes)
             : undefined;
-        const maxSubagentDepth =
-          typeof loop.maxSubagentDepth === "number" &&
-          Number.isFinite(loop.maxSubagentDepth) &&
-          loop.maxSubagentDepth >= 1
-            ? Math.min(3, Math.floor(loop.maxSubagentDepth))
-            : undefined;
-        const maxActiveSubagents =
-          typeof loop.maxActiveSubagents === "number" &&
-          Number.isFinite(loop.maxActiveSubagents) &&
-          loop.maxActiveSubagents >= 1
-            ? Math.min(16, Math.floor(loop.maxActiveSubagents))
-            : undefined;
         const timeoutMs =
           typeof bash.timeoutMs === "number" &&
           Number.isFinite(bash.timeoutMs) &&
@@ -2838,8 +2821,6 @@ export function createHostManager(): HostManager {
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }
             : {}),
-          ...(maxSubagentDepth !== undefined ? { maxSubagentDepth } : {}),
-          ...(maxActiveSubagents !== undefined ? { maxActiveSubagents } : {}),
           bashLimits: {
             ...(timeoutMs !== undefined ? { timeoutMs } : {}),
             maxOutputBytes,

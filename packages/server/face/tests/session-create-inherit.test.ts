@@ -40,7 +40,11 @@ describe("session.create model inheritance", () => {
     const fromGhost = await create(runtime, { inheritFrom: "sess-ghost" });
     const fromPlain = await create(runtime, { inheritFrom: "sess-plain" });
 
-    expect(runtime.sessionModels.has(fromGhost)).toBe(false);
+    // Ghost inherit still pins the predicted (default) route so Status /
+    // occupancy match the slot reserved at create time.
+    expect(runtime.sessionModels.get(fromGhost)).toEqual(
+      resolveSessionModelSelection(runtime, ""),
+    );
     expect(runtime.sessionModels.get(fromPlain)).toEqual(
       resolveSessionModelSelection(runtime, "sess-plain"),
     );

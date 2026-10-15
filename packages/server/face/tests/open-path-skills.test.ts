@@ -116,7 +116,7 @@ whenToUse: when testing skill.list
     ]);
 
     const runtime = bareRuntime(ws);
-    const created = await dispatchFaceMethod(runtime, "session.create", "c1", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c1", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) throw new Error("create failed");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;

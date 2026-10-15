@@ -77,7 +77,7 @@ describe("Face adapt / slash / queue / presets", () => {
 
   it("session.prompt recipe slash admits so assemble can expand", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const slash = await dispatchFaceMethod(runtime, "session.prompt", "p", {
@@ -98,7 +98,7 @@ describe("Face adapt / slash / queue / presets", () => {
 
   it("session.prompt unknown slash admits as text (shell command schema is success-only)", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const slash = await dispatchFaceMethod(runtime, "session.prompt", "p", {
@@ -118,6 +118,7 @@ describe("Face adapt / slash / queue / presets", () => {
     const store = createMemorySessionStore();
     const runtime = bareRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     if (!created.result.ok) throw new Error("create");
@@ -171,6 +172,8 @@ describe("Face adapt / slash / queue / presets", () => {
         "frugal",
         "shallow",
         "harness",
+        "im",
+        "qichuang",
       ]);
       expect(v.presets.find((p) => p.id === "minimal")?.name).toBe("Minimal");
       expect(v).not.toHaveProperty("items");
@@ -280,7 +283,7 @@ describe("Face adapt / slash / queue / presets", () => {
     runtime.bus.subscribeMux((_id, frame) => {
       mux.push(frame);
     });
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 

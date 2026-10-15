@@ -5,52 +5,39 @@ import {
 } from "../src/session-thread-message.js";
 
 describe("peerThreadMessageProblem", () => {
-  it("rejects self, unbound sides, and subagent targets", () => {
+  it("rejects self, missing, and subagent targets — not unbound 主线", () => {
     expect(
       peerThreadMessageProblem({
         selfId: "sess_a",
         targetId: "sess_a",
-        selfBound: true,
-        targetBound: true,
+        targetExists: true,
         targetIsChild: false,
       }),
     ).toContain("cannot message this session");
     expect(
       peerThreadMessageProblem({
         selfId: "sess_a",
-        targetId: "sess_b",
-        selfBound: false,
-        targetBound: true,
+        targetId: "sess_missing",
+        targetExists: false,
         targetIsChild: false,
       }),
-    ).toContain("no 主线");
+    ).toContain("unknown session_id");
     expect(
       peerThreadMessageProblem({
         selfId: "sess_a",
         targetId: "sess_child",
-        selfBound: true,
-        targetBound: true,
+        targetExists: true,
         targetIsChild: true,
       }),
     ).toContain("subagent");
-    expect(
-      peerThreadMessageProblem({
-        selfId: "sess_a",
-        targetId: "sess_b",
-        selfBound: true,
-        targetBound: false,
-        targetIsChild: false,
-      }),
-    ).toContain("not a 主线 parent");
   });
 
-  it("allows two 主线 parents", () => {
+  it("allows any existing parent peer without 主线", () => {
     expect(
       peerThreadMessageProblem({
         selfId: "sess_a",
         targetId: "sess_b",
-        selfBound: true,
-        targetBound: true,
+        targetExists: true,
         targetIsChild: false,
       }),
     ).toBeUndefined();
@@ -67,6 +54,7 @@ describe("formatPeerCollabPrompt", () => {
     expect(text).toContain("sess_a");
     expect(text).toContain("0.5.12 发版");
     expect(text).toContain("Need the changelog draft.");
+    expect(text).toContain("会话协作");
     expect(text).toContain("Do not spawn a subagent");
   });
 });

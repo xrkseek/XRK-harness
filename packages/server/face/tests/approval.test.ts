@@ -43,6 +43,7 @@ describe("Face approval ask/respond", () => {
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);
@@ -114,6 +115,7 @@ describe("Face approval ask/respond", () => {
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);
@@ -168,7 +170,7 @@ describe("Face approval ask/respond", () => {
   it("deny skips tool body", async () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);
-    const created = await dispatchFaceMethod(runtime, "session.create", "c2", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c2", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -209,7 +211,7 @@ describe("Face approval ask/respond", () => {
     const runtime = await isolatedRuntime(store);
     runtime.bus.subscribeMux((_id, frame) => mux.push(frame));
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c3", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c3", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -269,6 +271,7 @@ describe("Face approval ask/respond", () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);

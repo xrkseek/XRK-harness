@@ -79,7 +79,7 @@ describe("face dispatch", () => {
 
   it("create list history prompt", async () => {
     const { runtime } = await harness();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c1", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c1", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) throw new Error("fail");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -184,7 +184,7 @@ describe("face dispatch", () => {
 
   it("threads and team remotes bind a 主线 and list seeded 干员", async () => {
     const { runtime } = await harness();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c-team", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c-team", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) throw new Error("fail");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -291,7 +291,7 @@ describe("face dispatch", () => {
 
   it("selectModel + llm.providers", async () => {
     const { runtime } = await harness();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
@@ -337,7 +337,7 @@ describe("face dispatch", () => {
       });
     }
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "sa1", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "sa1", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const listed = await dispatchFaceMethod(runtime, "subagent.list", "sa2", {

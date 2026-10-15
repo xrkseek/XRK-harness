@@ -76,29 +76,35 @@ export const DEFAULT_DEEPSEEK_MODELS: ReadonlyArray<{
   },
 ];
 
+const DeepSeekCatalogModelSchema = Schema.object({
+  id: Schema.string().required(),
+  name: Schema.string(),
+  description: Schema.string(),
+  contextWindow: Schema.number().step(1).min(1),
+  maxTokens: Schema.number().step(1).min(1),
+  /** Soft-budget ceiling; omit → no proactive compact for this model. */
+  softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
+  /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
+  softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
+  softBudgetBufferTokens: Schema.number().step(500).min(0),
+  /** Live sessions on this route; omit → agent-loop.maxConcurrentModelSessions. */
+  maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
+  // Empty = unset (UI treats as text); do not use .min(1) — legacy rows
+  // with `[]` must not block unrelated settings.mutate (community LLM sync).
+  inputModalities: Schema.array(Schema.union(["text", "image"])),
+});
+
 const DeepSeekConfig = Schema.object({
   apiKeyEnv: Schema.string().role("credential-ref"),
   baseURL: Schema.string(),
   reasoningEffort: Schema.union(["off", "low", "high", "max"]),
   defaultContextWindow: Schema.number().step(1).min(1),
   maxTokens: Schema.number().step(1).min(1),
-  models: Schema.array(
-    Schema.object({
-      id: Schema.string().required(),
-      name: Schema.string(),
-      description: Schema.string(),
-      contextWindow: Schema.number().step(1).min(1),
-      maxTokens: Schema.number().step(1).min(1),
-      /** Soft-budget ceiling; omit → no proactive compact for this model. */
-      softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
-      /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
-      softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
-      softBudgetBufferTokens: Schema.number().step(500).min(0),
-      // Empty = unset (UI treats as text); do not use .min(1) — legacy rows
-      // with `[]` must not block unrelated settings.mutate (community LLM sync).
-      inputModalities: Schema.array(Schema.union(["text", "image"])),
-    }),
-  ).default([...DEFAULT_DEEPSEEK_MODELS]),
+  models: Schema.array(DeepSeekCatalogModelSchema).default(
+    [...DEFAULT_DEEPSEEK_MODELS] as unknown as Schemastery.TypeT<
+      typeof DeepSeekCatalogModelSchema
+    >[],
+  ),
 });
 
 const PiAiProvider = Schema.object({
@@ -125,6 +131,7 @@ const PiAiProvider = Schema.object({
       softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
       softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
       softBudgetBufferTokens: Schema.number().step(500).min(0),
+      maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
       // Same modality toggle the Models → Capacities row edits (DeepSeek catalog too).
       inputModalities: Schema.array(Schema.union(["text", "image"])),
     }),
@@ -208,14 +215,11 @@ const AgentLoopConfig = Schema.object({
    */
   toolResultMaxInlineBytes: Schema.number().step(1_000).min(0).default(64_000),
   /**
-   * Max subagent nesting depth (parent=0). Hermes-style tighter default than
-   * historical 3. Badge ceilings (e.g. Shallow=1) still apply via min().
+   * Default max live sessions per provider/model route (parent + subagent
+   * count equally). Per-model `maxConcurrentSessions` in the Models catalog
+   * overrides this. Routes are independent (A/x ≠ B/x).
    */
-  maxSubagentDepth: Schema.number().step(1).min(1).max(3).default(2),
-  /**
-   * Max concurrently draining direct children under one parent.
-   */
-  maxActiveSubagents: Schema.number().step(1).min(1).max(16).default(2),
+  maxConcurrentModelSessions: Schema.number().step(1).min(1).max(64).default(5),
   /**
    * Fleet-wide route for delegated subagents, as `provider/model` (the shape
    * `/status` prints, so a route copied from there works verbatim).
@@ -586,8 +590,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         llmRetryMaxRetries: 5,
         compactionStrategy: "prune-summary",
         toolResultMaxInlineBytes: 64_000,
-        maxSubagentDepth: 2,
-        maxActiveSubagents: 2,
+        maxConcurrentModelSessions: 5,
         subagentModel: "",
       },
       applies: "live",

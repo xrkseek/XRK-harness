@@ -17,6 +17,8 @@ import {
 } from "./session-model-store.js";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import { resolveLlmForSelection } from "./llm-resolve.js";
+import { reserveModelSessionSlot } from "./model-session-cap.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
 
 function sessionHasImageContent(
   runtime: FaceRuntime,
@@ -96,10 +98,30 @@ export async function selectSessionModel(
       ? { reasoningEffort: args.reasoningEffort.trim() }
       : {}),
   };
+  const current = resolveSessionModelSelection(runtime, sessionId);
+  const routeChanged =
+    current.provider !== selected.provider || current.model !== selected.model;
+  // Switching onto a full route must refuse; staying on the same route is free.
+  const switchSlot = routeChanged
+    ? reserveModelSessionSlot(runtime, selected, {
+        excludeSessionId: sessionId,
+      })
+    : ({ ok: true as const, release: () => undefined });
+  if (!switchSlot.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "model-session-cap",
+        message: switchSlot.problem,
+        details: { ...switchSlot.details },
+      },
+    };
+  }
   let resolved;
   try {
     resolved = resolveLlmForSelection(runtime, selected);
   } catch (err) {
+    switchSlot.release();
     const message = err instanceof Error ? err.message : String(err);
     if (/unknown provider/i.test(message)) {
       return {
@@ -121,6 +143,7 @@ export async function selectSessionModel(
   }
   const modalities = resolved.adapter.inputModalities ?? ["text"];
   if (sessionHasImageContent(runtime, sessionId) && !modalities.includes("image")) {
+    switchSlot.release();
     return {
       ok: false,
       error: {
@@ -142,6 +165,8 @@ export async function selectSessionModel(
   } catch {
     /* disk persist best-effort */
   }
+  // Live pin now counts — drop the pending credit.
+  switchSlot.release();
   // Per-session only — do NOT write Settings `agent-default-model` here.
   // That publish used to fan out `settings/document-updated` → Host
   // `invalidateAgents()` and remount / cut other sessions mid-flight.

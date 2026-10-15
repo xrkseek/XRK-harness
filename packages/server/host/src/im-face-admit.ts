@@ -59,7 +59,7 @@ async function ensureImSession(
 
 function rowAttachments(row: ImMessageRow): ImAttachment[] {
   if (row.attachments?.length) return [...row.attachments];
-  return normalizeImAttachments((row.raw ?? {}) as Record<string, unknown>);
+  return normalizeImAttachments(row.raw ?? {});
 }
 
 function attachmentHandleLine(att: ImAttachment): string {
@@ -159,7 +159,7 @@ export async function admitImInboundToFace(
   readonly skippedPrompt?: boolean;
 }> {
   const xrkHome = options?.xrkHome;
-  const raw = (row.raw ?? {}) as Record<string, unknown>;
+  const raw = row.raw ?? {};
   const chatKey = imChatKey(row.channel, raw, row.botId);
   const forceNew = isImNewSessionCommand(row.text);
   const existing = forceNew ? undefined : lookupImSession(xrkHome, chatKey);

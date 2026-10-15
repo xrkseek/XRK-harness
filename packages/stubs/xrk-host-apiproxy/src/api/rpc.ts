@@ -37,6 +37,17 @@ export interface RpcErrorDetailsMap {
   'session-not-archived': { sessionId: SessionId }
   'model-unavailable': { provider: string; model: string }
   /**
+   * Opening / switching onto a provider+model route would exceed the live
+   * session ceiling (`agent-loop.maxConcurrentModelSessions` or per-model
+   * `maxConcurrentSessions`). Routes are independent.
+   */
+  'model-session-cap': {
+    provider: string
+    model: string
+    using: number
+    max: number
+  }
+  /**
    * Host / Face / sidebar policy gate refused the action (`deny`, or `ask`
    * rejected by the user). `kind` is the policy subject kind; `reason` mirrors
    * `message`.

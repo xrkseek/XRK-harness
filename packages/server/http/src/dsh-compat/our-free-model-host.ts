@@ -22,6 +22,7 @@ import {
   createCommunityLlmSyncScheduler,
   dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
+  isUsableCommunityLoopbackBaseUrl,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
@@ -82,8 +83,16 @@ function forwardEndpointFromHome(dshHome: string): {
       typeof raw.forwardKey === "string" && raw.forwardKey.trim()
         ? raw.forwardKey.trim()
         : undefined;
+    const baseUrl = `http://${host}:${Math.trunc(port)}/v1`.replace(
+      /\/+$/,
+      "",
+    );
+    // port:0 (pre-listen seed) is not a usable Face loopback.
+    if (Math.trunc(port) < 1 || !isUsableCommunityLoopbackBaseUrl(baseUrl)) {
+      return key ? { apiKey: key } : {};
+    }
     return {
-      baseUrl: `http://${host}:${Math.trunc(port)}/v1`.replace(/\/+$/, ""),
+      baseUrl,
       ...(key ? { apiKey: key } : {}),
     };
   } catch {
@@ -237,10 +246,13 @@ export async function tryApplyOurFreeModelHost(
               providerId,
               asCommunityLlmModelRows(listed),
             );
-            const baseUrl =
+            const baseUrlCandidate =
               baseUrlFromCommunityModels(listed) ??
               forward.baseUrl ??
               undefined;
+            const baseUrl = isUsableCommunityLoopbackBaseUrl(baseUrlCandidate)
+              ? baseUrlCandidate.trim().replace(/\/+$/, "")
+              : undefined;
             if (!baseUrl || models.length === 0) {
               allOk = false;
               logger.warn(

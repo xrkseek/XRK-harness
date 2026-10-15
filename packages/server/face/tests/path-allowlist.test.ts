@@ -70,6 +70,7 @@ describe("path-overreach approval", () => {
     const store = createMemorySessionStore();
     const runtime = await isolatedRuntime(store);
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "minimal",
     });
     expect(created.result.ok).toBe(true);
@@ -130,6 +131,7 @@ describe("path-overreach approval", () => {
       const store = createMemorySessionStore();
       const runtime = await isolatedRuntime(store);
       const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+        cwd: runtime.workspaceRoot,
         agentPreset: "minimal",
       });
       expect(created.result.ok).toBe(true);

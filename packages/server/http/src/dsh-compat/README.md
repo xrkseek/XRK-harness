@@ -72,9 +72,9 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | `tongflow-node-runtime.ts` | Built-in node execution |
 | `cordis-fiber-runner.ts` · `host-apply-bridge.ts` | `host.mjs` apply / subprocess |
 | `host-module-remap*.ts` | Cordis host `import` remap：`@deepseek-ai/dsh-*` → `@xrkseek/xrk-*`（约定）+ 特例（`cordis` · `schemastery` · `pi-ai` · `secrets` · `workspace` · `core-agent-loop` …）；`xrk-pi-ai` 再导出真包时跳过 remap 以免自环 |
-| `workbuddy-host.ts` | `dsh-workbuddy-connect` stage `lib/`：await inject fibers · settings stub · loopback + `syncCommunityLlmProvider`（全量 catalog 同步；CN/AI 均 settled 前 status nudge；共享 `createCommunityLlmSyncScheduler`） |
-| `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：await inject fibers · forward 默认开启 · seed `distribution: managed` · `/api/our-free-model` · Face sync（端口内存兜底；settled 前 GET nudge；同调度器） |
-| `community-llm-host-sync.ts` | Face sync 公共：fingerprint · settled 调度 · resolveModel enrichment |
+| `workbuddy-host.ts` | `dsh-workbuddy-connect` stage `lib/`：await inject fibers · settings stub · loopback + `syncCommunityLlmProvider`（全量 catalog 同步；CN/AI 均 settled 前 status nudge；signed-in 且 `models` 空时用 fallback 补全；共享调度器） |
+| `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：await inject fibers · forward 默认开启 · seed `distribution: managed` · `/api/our-free-model` · Face sync（拒绝 port:0；端口内存兜底；settled 前 GET nudge；同调度器） |
+| `community-llm-host-sync.ts` | Face sync 公共：可用 loopback URL · catalog peek/`fallback` · fingerprint · settled 调度 · resolveModel enrichment |
 
 ## 社区 client 契约形状 / Community Client Contract Shapes
 

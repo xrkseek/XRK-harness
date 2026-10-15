@@ -128,7 +128,7 @@ describe("thread_* tools", () => {
     });
   });
 
-  it("delivers thread_message as steer, not Settings queue", async () => {
+  it("delivers thread_message as steer without either side on a 主线", async () => {
     const store = createMemorySessionStore();
     const runtime = createBareFaceRuntime({
       store,
@@ -145,10 +145,6 @@ describe("thread_* tools", () => {
 
     const toolsA = createToolRegistry();
     bindSessionThreadTools(toolsA, { runtime, sessionId: a! });
-    const toolsB = createToolRegistry();
-    bindSessionThreadTools(toolsB, { runtime, sessionId: b! });
-    expect((await toolsA.get("thread_upsert")!.execute({ title: "发信方" })).isError).toBeFalsy();
-    expect((await toolsB.get("thread_upsert")!.execute({ title: "收信方" })).isError).toBeFalsy();
 
     const sent = await toolsA.get("thread_message")!.execute({
       session_id: b,
@@ -161,5 +157,28 @@ describe("thread_* tools", () => {
     expect(pending).toHaveLength(1);
     expect(pending[0]?.delivery).toBe("steer");
     expect(String(pending[0]?.content)).toContain("hello peer");
+    expect(String(pending[0]?.content)).toContain("会话协作");
+  });
+
+  it("thread_upsert can pin another session in its workspace", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({ store });
+    newSession(store);
+    newSession(store);
+    const [a, b] = store.list();
+    const ws = runtime.workspaces.defaultId();
+    runtime.workspaces.attachSession(a!, ws);
+    runtime.workspaces.attachSession(b!, ws);
+    const tools = createToolRegistry();
+    bindSessionThreadTools(tools, { runtime, sessionId: a! });
+    const out = await tools.get("thread_upsert")!.execute({
+      title: "远端施工",
+      session_id: b,
+      workspace_id: ws,
+    });
+    expect(out.isError).toBeFalsy();
+    const bind = runtime.sessionThreads.bindOf(ws, b!);
+    expect(bind?.threadId).toBeTruthy();
+    expect(runtime.sessionThreads.get(ws, bind!.threadId)?.title).toBe("远端施工");
   });
 });

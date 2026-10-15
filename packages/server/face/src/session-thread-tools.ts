@@ -1,13 +1,18 @@
 /**
  * Model-facing thread_* / sideline_set — workspace 主线 catalog + session 支线.
+ * 主线 = discovery pin (collab board / thread_list). Messaging does not require it.
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { dispatchFaceMethod } from "./dispatch.js";
-import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
-import { isChildSessionActive } from "./external-agent-runtime.js";
+import {
+  clampPeerWaitMs,
+  PEER_WAIT_DEFAULT_MS,
+  PEER_WAIT_MIN_MS,
+  waitForPeerAssistantReply,
+} from "./peer-session-wait.js";
 import {
   formatPeerCollabPrompt,
   peerThreadMessageProblem,
@@ -18,10 +23,6 @@ import {
   sessionIdsOnThread,
 } from "./session-thread-publish.js";
 import { SIDELINE_MAX } from "./session-thread-store.js";
-
-const PEER_WAIT_DEFAULT_MS = 10 * 60 * 1000;
-const PEER_WAIT_MIN_MS = 1_000;
-const PEER_POLL_MS = 300;
 
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
@@ -99,26 +100,38 @@ export function bindSessionThreadTools(
   registerTool(tools, {
     name: "thread_list",
     description:
-      "List this workspace's 主线 catalog only (not other workspaces). " +
-      "A 主线 is an AI-owned collaboration pin: what this parent session is for, so sibling " +
-      "parent sessions in the same workspace can notice it, read it, or thread_message a session on it. " +
-      "It is not the user's message text. Do not mint from a greeting, a one-shot question, or a steer. " +
-      "When this session becomes a lasting mission, call thread_upsert yourself — do not wait to be asked. " +
-      "Each row lists parent sessions already attached. Unbound sessions do not appear. " +
-      "Message a sibling with thread_message session_id (their assistant reply comes back here). " +
-      "Keep this session's 主线. Do not thread_switch just to talk — switch only when this chat should share that pin (sidebar name changes). " +
-      "That is not a subagent. Use session_search / session_read only to recall history. " +
-      "Host may inject with session.prompt. Use thread_upsert / thread_delete yourself — never copy the user verbatim.",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
+      "List a workspace 主线 catalog (discovery pin of lasting missions + attached parent session ids). " +
+      "Default: this session's workspace. Pass workspace_id to inspect another workspace (e.g. after workspace_session_prompt). " +
+      "主线 is not a gate for messaging — any parent can thread_message any parent by session_id. " +
+      "Unbound sessions stay off this list; find them with session_search. " +
+      "Do not mint a 主线 from a greeting or one-shot Q&A.",
+    parameters: {
+      type: "object",
+      properties: {
+        workspace_id: {
+          type: "string",
+          description: "Optional Face workspace id (default: this session's workspace).",
+        },
+      },
+      additionalProperties: false,
+    },
     isConcurrencySafe: () => true,
-    presentCall: () => ({
+    presentCall: (args) => ({
       card: "generic",
       title: "thread_list",
       kind: "search",
-      rawInput: {},
+      rawInput: args ?? {},
     }),
-    execute: async () => {
-      const workspaceId = ws();
+    execute: async (args) => {
+      const a = readArgs(args);
+      const requested = String(a.workspace_id ?? "").trim();
+      const workspaceId = requested || ws();
+      if (requested && !runtime.workspaces.get(workspaceId)) {
+        return {
+          content: `thread_list: unknown workspace_id ${workspaceId}`,
+          isError: true,
+        };
+      }
       return {
         content: JSON.stringify({
           workspaceId,
@@ -132,11 +145,11 @@ export function bindSessionThreadTools(
   registerTool(tools, {
     name: "thread_upsert",
     description:
-      "Create or revise a workspace 主线 (title + optional brief) that you choose as the collaboration pin. " +
-      "When the work is a lasting mission, call this without waiting for the user to ask. " +
-      "Do not paste or paraphrase the user's latest message as the title. " +
-      "Skip greetings, one-shot Q&A, and mid-turn steers. " +
-      "Write a durable mission label siblings can anchor on. Pass id to revise. Default switch=true attaches this session.",
+      "Create or revise a 主线 pin (title + optional brief) so siblings can find the mission on the collab board / thread_list. " +
+      "Default attaches this session in this workspace. " +
+      "Orchestrators (向阳 / IM / coding): pass session_id (+ workspace_id) to pin a peer session you opened elsewhere — " +
+      "e.g. after workspace_session_prompt returns a coding session_id. " +
+      "Not required before thread_message. Skip greetings / one-shot Q&A. Pass id to revise.",
     parameters: {
       type: "object",
       properties: {
@@ -145,7 +158,16 @@ export function bindSessionThreadTools(
         brief: { type: "string", description: "What siblings should know this 主线 is for." },
         switch: {
           type: "boolean",
-          description: "If true (default), attach this session to the 主线.",
+          description:
+            "If true (default), attach the target session (this session, or session_id when set).",
+        },
+        workspace_id: {
+          type: "string",
+          description: "Workspace whose catalog to write (default: this session's, or owner of session_id).",
+        },
+        session_id: {
+          type: "string",
+          description: "Parent session to bind (default: this session). Must live in workspace_id.",
         },
       },
       required: ["title"],
@@ -163,7 +185,35 @@ export function bindSessionThreadTools(
       const brief = typeof a.brief === "string" ? a.brief : "";
       const id = typeof a.id === "string" ? a.id : undefined;
       const shouldSwitch = a.switch !== false;
-      const workspaceId = ws();
+      const targetSession = String(a.session_id ?? "").trim() || sessionId;
+      const requestedWs = String(a.workspace_id ?? "").trim();
+      if (!runtime.store.has(targetSession)) {
+        return {
+          content: `thread_upsert: unknown session_id ${targetSession}`,
+          isError: true,
+        };
+      }
+      const childLink = runtime.subagents.getByChild(targetSession);
+      if (childLink && childLink.mode !== "fork") {
+        return {
+          content: "thread_upsert: cannot pin a subagent — pin the parent",
+          isError: true,
+        };
+      }
+      const ownerWs = runtime.workspaces.workspaceIdOf(targetSession);
+      const workspaceId = requestedWs || ownerWs || ws();
+      if (requestedWs && !runtime.workspaces.get(requestedWs)) {
+        return {
+          content: `thread_upsert: unknown workspace_id ${requestedWs}`,
+          isError: true,
+        };
+      }
+      if (ownerWs && ownerWs !== workspaceId) {
+        return {
+          content: `thread_upsert: session ${targetSession} is in ${ownerWs}, not ${workspaceId}`,
+          isError: true,
+        };
+      }
       const thread = runtime.sessionThreads.upsert(workspaceId, {
         title,
         brief,
@@ -173,12 +223,20 @@ export function bindSessionThreadTools(
         return { content: "thread_upsert: title required", isError: true };
       }
       if (shouldSwitch) {
-        runtime.sessionThreads.switchTo(workspaceId, sessionId, thread.id);
+        runtime.sessionThreads.switchTo(workspaceId, targetSession, thread.id);
       }
-      const affected = new Set(sessionIdsOnThread(runtime, workspaceId, thread.id));
-      affected.add(sessionId);
+      const affected = new Set(
+        sessionIdsOnThread(runtime, workspaceId, thread.id),
+      );
+      affected.add(targetSession);
       publishSessionThreads(runtime, workspaceId, [...affected]);
-      return { content: JSON.stringify({ workspaceId, thread }) };
+      return {
+        content: JSON.stringify({
+          workspaceId,
+          thread,
+          sessionId: targetSession,
+        }),
+      };
     },
   });
 
@@ -255,16 +313,18 @@ export function bindSessionThreadTools(
   registerTool(tools, {
     name: "thread_message",
     description:
-      "Talk to another parent session_id that already has its own 主线 (may be a different pin). " +
-      "Do not thread_switch first — this call does not change either session's bind. " +
-      "Not a subagent: the peer keeps its own chat. Face wakes that session as steer (next tool-step / turn boundary), not Settings busyEnter queue. wait=true (default) " +
-      "returns its next assistant message here. Children use send_message / followup_task instead.",
+      "Message another parent session by session_id (same or other workspace). " +
+      "主线 is optional — use it to discover peers quickly; messaging does not require either side to be pinned. " +
+      "Do not thread_switch first — this does not change either bind. " +
+      "Not a subagent: peer keeps its own chat. Delivery is steer (not Settings busyEnter queue). " +
+      "wait=true (default) returns the peer's next assistant message. Children use send_message / followup_task.",
     parameters: {
       type: "object",
       properties: {
         session_id: {
           type: "string",
-          description: "Target parent session id from thread_list / the collab board.",
+          description:
+            "Target parent session id (thread_list, collab board, workspace_session_prompt, or session_search).",
         },
         message: { type: "string", description: "What the peer should do or answer." },
         wait: {
@@ -289,21 +349,21 @@ export function bindSessionThreadTools(
       const a = readArgs(args);
       const targetId = String(a.session_id ?? "").trim();
       const message = String(a.message ?? "").trim();
-      const workspaceId = ws();
+      const childLink = runtime.subagents.getByChild(targetId);
       const problem = peerThreadMessageProblem({
         selfId: sessionId,
         targetId,
-        selfBound: Boolean(runtime.sessionThreads.bindOf(workspaceId, sessionId)),
-        targetBound: Boolean(runtime.sessionThreads.bindOf(workspaceId, targetId)),
-        targetIsChild: Boolean(runtime.subagents.getByChild(targetId)),
+        targetExists: Boolean(targetId && runtime.store.has(targetId)),
+        targetIsChild: Boolean(childLink && childLink.mode !== "fork"),
       });
       if (problem) return { content: problem, isError: true };
       if (!message) {
         return { content: "thread_message requires message", isError: true };
       }
-      const selfThread = runtime.sessionThreads.bindOf(workspaceId, sessionId);
+      const selfWs = ws();
+      const selfThread = runtime.sessionThreads.bindOf(selfWs, sessionId);
       const fromTitle = selfThread
-        ? runtime.sessionThreads.get(workspaceId, selfThread.threadId)?.title
+        ? runtime.sessionThreads.get(selfWs, selfThread.threadId)?.title
         : undefined;
       const rpcId = `tool-th-msg-${sessionId}-${targetId}`;
       const seqAtSend = readSessionEvents(runtime.store, targetId).length;
@@ -333,68 +393,18 @@ export function bindSessionThreadTools(
       if (!wait) {
         return { content: `delivered to ${targetId} (steer)` };
       }
-      let timeoutMs = PEER_WAIT_DEFAULT_MS;
-      if (typeof a.timeout_ms === "number" && Number.isFinite(a.timeout_ms)) {
-        timeoutMs = Math.min(
-          PEER_WAIT_DEFAULT_MS,
-          Math.max(PEER_WAIT_MIN_MS, Math.floor(a.timeout_ms)),
-        );
+      const timeoutMs = clampPeerWaitMs(a.timeout_ms);
+      const waited = await waitForPeerAssistantReply(
+        runtime,
+        targetId,
+        seqAtSend,
+        timeoutMs,
+        signal,
+      );
+      if ("reply" in waited) {
+        return { content: `reply from ${targetId}:\n${waited.reply}` };
       }
-      const deadline = Date.now() + timeoutMs;
-      const stillRunning = () => isChildSessionActive(runtime, targetId);
-      while (stillRunning() || Date.now() < deadline) {
-        if (signal?.aborted) {
-          throw new DOMException("aborted", "AbortError");
-        }
-        if (!stillRunning()) {
-          const events = readSessionEvents(runtime.store, targetId);
-          if (events.length > seqAtSend) {
-            const reply = lastAssistantBodyText(events.slice(seqAtSend)).trim();
-            if (reply) {
-              return {
-                content: `reply from ${targetId}:\n${reply}`,
-              };
-            }
-            if (Date.now() > deadline) break;
-          }
-        }
-        if (Date.now() > deadline) break;
-        const remaining = Math.max(0, deadline - Date.now());
-        if (
-          stillRunning() &&
-          runtime.drain.run &&
-          !runtime.externalAgents.has(targetId)
-        ) {
-          try {
-            await Promise.race([
-              runtime.drain.run(targetId),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("wait slice")),
-                  Math.min(PEER_POLL_MS * 20, remaining),
-                ),
-              ),
-            ]);
-          } catch {
-            /* keep polling */
-          }
-        } else {
-          await new Promise((r) =>
-            setTimeout(r, Math.min(PEER_POLL_MS, remaining)),
-          );
-        }
-      }
-      const events = readSessionEvents(runtime.store, targetId);
-      const reply = lastAssistantBodyText(events.slice(seqAtSend)).trim();
-      if (reply) {
-        return { content: `reply from ${targetId}:\n${reply}` };
-      }
-      return {
-        content: stillRunning()
-          ? `thread_message: ${targetId} still running after ${timeoutMs}ms`
-          : `thread_message: ${targetId} idle with no assistant reply`,
-        isError: true,
-      };
+      return { content: `thread_message: ${waited.error}`, isError: true };
     },
   });
 

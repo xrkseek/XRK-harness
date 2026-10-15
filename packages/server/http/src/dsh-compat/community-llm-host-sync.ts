@@ -279,18 +279,106 @@ export async function enrichCommunityModelsWithResolve(
   );
 }
 
-/** First non-empty `baseUrl` on adapter model rows (loopback / catalog). */
+/**
+ * Absolute http(s) loopback/OpenAI base for Face sync.
+ * Rejects relative stubs (`/v1`) and pre-listen `undefined/v1` from shim races.
+ */
+export function isUsableCommunityLoopbackBaseUrl(
+  value: string | undefined,
+): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return false;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    if (!url.hostname) return false;
+    // Explicit :0 is the pre-listen seed; clients cannot reach it.
+    if (url.port === "0") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** First usable `baseUrl` on adapter model rows (loopback / catalog). */
 export function baseUrlFromCommunityModels(
   models: readonly unknown[],
 ): string | undefined {
   for (const row of models) {
     if (!row || typeof row !== "object" || Array.isArray(row)) continue;
     const u = (row as { baseUrl?: unknown }).baseUrl;
-    if (typeof u === "string" && u.trim()) {
-      return u.trim().replace(/\/+$/, "");
-    }
+    if (typeof u !== "string") continue;
+    const normalized = u.trim().replace(/\/+$/, "");
+    if (isUsableCommunityLoopbackBaseUrl(normalized)) return normalized;
   }
   return undefined;
+}
+
+/** Catalog gate used by WorkBuddy (and similar Cordis LLM hosts). */
+export type CommunityLlmSyncCatalog = {
+  isVisible?: () => boolean;
+  setVisible?: (visible: boolean) => unknown;
+  current?: () => readonly unknown[];
+  /** Full roster ignoring visibility (WB: `this.models`). */
+  fallback?: () => readonly unknown[];
+};
+
+/**
+ * Snapshot models for Face sync.
+ * Peeks credential-gated catalogs, prefers the full fallback roster when
+ * `current()` is empty, and stamps a usable loopback `baseUrl`.
+ */
+export async function listModelsForCommunitySync(
+  adapter: {
+    listModels?: (provider: string) => Promise<readonly unknown[]>;
+    catalog?: CommunityLlmSyncCatalog;
+  },
+  providerId: string,
+  options?: { readonly lastBaseUrl?: string },
+): Promise<readonly unknown[]> {
+  const catalog = adapter.catalog;
+  const setVisible = catalog?.setVisible;
+  const wasVisible = catalog?.isVisible?.();
+  const peeked =
+    setVisible !== undefined &&
+    typeof wasVisible === "boolean" &&
+    wasVisible === false;
+  if (peeked) setVisible(true);
+  try {
+    let listed: readonly unknown[] = [];
+    try {
+      listed = (await adapter.listModels?.(providerId)) ?? [];
+    } catch {
+      listed = [];
+    }
+    const cachedBase = options?.lastBaseUrl;
+    const baseUrl =
+      baseUrlFromCommunityModels(listed) ??
+      (cachedBase !== undefined && isUsableCommunityLoopbackBaseUrl(cachedBase)
+        ? cachedBase.trim().replace(/\/+$/, "")
+        : undefined);
+    const current = catalog?.current?.() ?? [];
+    const fallback = catalog?.fallback?.() ?? [];
+    // Prefer visible current (promotions); else full fallback; else listModels.
+    const full =
+      current.length > 0 ? current : fallback.length > 0 ? fallback : listed;
+    if (full.length === 0) return listed;
+    if (!baseUrl) return full;
+    return full.map((info) => {
+      if (!info || typeof info !== "object" || Array.isArray(info)) return info;
+      const row = info as Record<string, unknown>;
+      if (
+        typeof row.baseUrl === "string" &&
+        isUsableCommunityLoopbackBaseUrl(row.baseUrl)
+      ) {
+        return info;
+      }
+      return { ...row, baseUrl };
+    });
+  } finally {
+    if (peeked) setVisible(wasVisible);
+  }
 }
 
 /** Catalog/shim often lag `registerAdapter`; retry until Face sync sticks. */

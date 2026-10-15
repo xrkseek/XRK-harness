@@ -22,6 +22,9 @@ import {
   createCommunityLlmSyncScheduler,
   dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
+  isUsableCommunityLoopbackBaseUrl,
+  listModelsForCommunitySync,
+  type CommunityLlmSyncCatalog,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
@@ -83,56 +86,72 @@ interface WorkBuddyApplyModule {
   Config?: unknown;
 }
 
-type WorkBuddySyncCatalog = {
-  isVisible?: () => boolean;
-  setVisible?: (visible: boolean) => unknown;
-  /** Full roster while visible (credential gate). */
-  current?: () => readonly unknown[];
-  /** Same roster ignoring visibility (boot / signed-out peek). */
-  fallback?: () => readonly unknown[];
-};
-
 type WorkBuddySyncAdapter = {
   listModels?: (provider: string) => Promise<readonly unknown[]>;
-  catalog?: WorkBuddySyncCatalog;
+  catalog?: CommunityLlmSyncCatalog;
 };
 
 /**
- * Snapshot models for Face sync.
- *
- * WorkBuddy's `listModels` hides per-account disabled ids and returns [] while
- * `catalog` is credential-gated off — both leave Face on a stale/partial
- * `llm-pi-ai` row (wrong loopback port after OFM/WB port reshuffle, or "half"
- * the roster). Prefer `catalog.current` / `fallback` with the live shim
- * `baseUrl` from a filtered listModels peek.
+ * Snapshot models for Face sync (WorkBuddy catalog peek + fallback roster).
+ * @see {@link listModelsForCommunitySync}
  */
 export async function listModelsForSync(
   adapter: WorkBuddySyncAdapter,
   providerId: string,
+  options?: { readonly lastBaseUrl?: string },
 ): Promise<readonly unknown[]> {
-  const catalog = adapter.catalog;
-  const wasVisible = catalog?.isVisible?.();
-  const peeked =
-    catalog?.setVisible !== undefined &&
-    typeof wasVisible === "boolean" &&
-    wasVisible === false;
-  if (peeked) catalog!.setVisible!(true);
-  try {
-    const listed = (await adapter.listModels?.(providerId)) ?? [];
-    const baseUrl = baseUrlFromCommunityModels(listed);
-    const current = catalog?.current?.() ?? [];
-    const full = current.length > 0 ? current : (catalog?.fallback?.() ?? []);
-    if (full.length === 0) return listed;
-    return full.map((info) => {
-      if (!info || typeof info !== "object" || Array.isArray(info)) return info;
-      if (!baseUrl) return info;
-      const row = info as Record<string, unknown>;
-      if (typeof row.baseUrl === "string" && row.baseUrl.trim()) return info;
-      return { ...row, baseUrl };
+  return listModelsForCommunitySync(adapter, providerId, options);
+}
+
+/** Map catalog rows into the WB status `models` field shape. */
+function statusModelsFromCatalog(
+  rows: readonly unknown[],
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const o = row as Record<string, unknown>;
+    const id = typeof o.id === "string" ? o.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof o.name === "string" && o.name.trim() ? o.name.trim() : undefined;
+    const contextWindow =
+      typeof o.contextWindow === "number" &&
+      Number.isFinite(o.contextWindow) &&
+      o.contextWindow > 0
+        ? o.contextWindow
+        : undefined;
+    out.push({
+      id,
+      ...(name !== undefined ? { name } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
     });
-  } finally {
-    if (peeked) catalog!.setVisible!(wasVisible!);
   }
+  return out;
+}
+
+/**
+ * When signed-in but `catalog.current()` is still gated empty, fill status
+ * `models` from the adapter fallback/peek so the Settings card is not "0".
+ */
+export function enrichWorkBuddyStatusBody(
+  body: unknown,
+  roster: readonly unknown[],
+): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const o = body as Record<string, unknown>;
+  if (o.status !== "signed-in") return body;
+  if (Array.isArray(o.models) && o.models.length > 0) return body;
+  const models = statusModelsFromCatalog(roster);
+  if (models.length === 0) return body;
+  return { ...o, models };
+}
+
+function providerIdForWorkBuddyStatusPath(pathname: string): string | undefined {
+  const p = pathname.replace(/\/+$/, "");
+  if (p === "/plugins/dsh-workbuddy-connect/ai/status") return "workbuddy-ai";
+  if (p === "/plugins/dsh-workbuddy-connect/status") return "workbuddy";
+  return undefined;
 }
 
 /**
@@ -184,6 +203,8 @@ export async function tryApplyWorkBuddyHost(
   let hostDisposed = false;
   /** Per-provider last good loopback baseUrl (shim port can briefly vanish). */
   const lastBaseUrlByProvider = new Map<string, string>();
+  /** Live adapters for status enrichment (signed-in + empty models). */
+  const adaptersByProvider = new Map<string, WorkBuddySyncAdapter>();
   const syncScheduler = createCommunityLlmSyncScheduler({
     isDisposed: () => hostDisposed,
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
@@ -206,6 +227,7 @@ export async function tryApplyWorkBuddyHost(
       },
     ) {
       const ids = providers.map((p) => p.trim()).filter(Boolean);
+      for (const id of ids) adaptersByProvider.set(id, adapter);
       let disposed = false;
       const sync = async (): Promise<boolean> => {
         if (disposed || hostDisposed || !wire.syncCommunityLlmProvider) {
@@ -215,7 +237,10 @@ export async function tryApplyWorkBuddyHost(
         let allOk = true;
         for (const providerId of ids) {
           try {
-            const listed = await listModelsForSync(adapter, providerId);
+            const lastBaseUrl = lastBaseUrlByProvider.get(providerId);
+            const listed = await listModelsForSync(adapter, providerId, {
+              ...(lastBaseUrl !== undefined ? { lastBaseUrl } : {}),
+            });
             const models = await enrichCommunityModelsWithResolve(
               adapter,
               providerId,
@@ -224,7 +249,10 @@ export async function tryApplyWorkBuddyHost(
             const baseUrl =
               baseUrlFromCommunityModels(listed) ??
               lastBaseUrlByProvider.get(providerId);
-            if (!baseUrl || models.length === 0) {
+            if (
+              !isUsableCommunityLoopbackBaseUrl(baseUrl) ||
+              models.length === 0
+            ) {
               allOk = false;
               logger.warn(
                 `syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
@@ -274,11 +302,22 @@ export async function tryApplyWorkBuddyHost(
       void syncScheduler.runAll();
       const release = (): void => {
         disposed = true;
+        for (const id of ids) {
+          if (adaptersByProvider.get(id) === adapter) {
+            adaptersByProvider.delete(id);
+          }
+        }
         syncScheduler.markUnsettled();
       };
       return Object.assign(release, {
         replace(next: string[]) {
+          for (const id of ids) {
+            if (adaptersByProvider.get(id) === adapter) {
+              adaptersByProvider.delete(id);
+            }
+          }
           ids.splice(0, ids.length, ...next.map((p) => p.trim()).filter(Boolean));
+          for (const id of ids) adaptersByProvider.set(id, adapter);
           syncScheduler.fingerprints.clear();
           syncScheduler.markUnsettled();
           void syncScheduler.runAll();
@@ -389,15 +428,94 @@ export async function tryApplyWorkBuddyHost(
   // Until every variant has synced Face, status polls (post-login) re-nudge.
   // Do not stop after the first variant succeeds — CN/AI register separately,
   // and a settled AI fingerprint used to silence CN's stale baseURL forever.
+  // Also fill signed-in + empty `models` from catalog fallback (visibility gate).
   for (const row of http) {
     const inner = row.handle;
     row.handle = async (req, res, pathname) => {
-      const handled = await inner(req, res, pathname);
+      const method = (req.method ?? "GET").toUpperCase();
+      const isStatusGet =
+        method === "GET" && /\/status\/?$/i.test(pathname);
+      if (!isStatusGet) {
+        const handled = await inner(req, res, pathname);
+        return handled;
+      }
+
+      let statusCode = 200;
+      let headers: Record<string, unknown> = {};
+      const chunks: Buffer[] = [];
+      let ended = false;
+      const proxy = {
+        writeHead(
+          code: number,
+          reasonOrHeaders?: unknown,
+          maybeHeaders?: unknown,
+        ) {
+          statusCode = code;
+          if (
+            reasonOrHeaders &&
+            typeof reasonOrHeaders === "object" &&
+            !Array.isArray(reasonOrHeaders)
+          ) {
+            headers = reasonOrHeaders as Record<string, unknown>;
+          } else if (
+            maybeHeaders &&
+            typeof maybeHeaders === "object" &&
+            !Array.isArray(maybeHeaders)
+          ) {
+            headers = maybeHeaders as Record<string, unknown>;
+          }
+          return proxy;
+        },
+        write(chunk: unknown) {
+          if (chunk !== undefined && chunk !== null) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+          }
+          return true;
+        },
+        end(chunk?: unknown) {
+          if (ended) return proxy;
+          ended = true;
+          if (chunk !== undefined && chunk !== null) {
+            chunks.push(
+              Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)),
+            );
+          }
+          const raw = Buffer.concat(chunks);
+          let out = raw;
+          try {
+            const parsed = JSON.parse(raw.toString("utf8")) as unknown;
+            const providerId = providerIdForWorkBuddyStatusPath(pathname);
+            const adapter =
+              providerId !== undefined
+                ? adaptersByProvider.get(providerId)
+                : undefined;
+            const catalog = adapter?.catalog;
+            const roster =
+              (catalog?.current?.()?.length ?? 0) > 0
+                ? (catalog?.current?.() ?? [])
+                : (catalog?.fallback?.() ?? []);
+            const enriched = enrichWorkBuddyStatusBody(parsed, roster);
+            if (enriched !== parsed) {
+              out = Buffer.from(JSON.stringify(enriched), "utf8");
+              headers = {
+                ...headers,
+                "content-type": "application/json; charset=utf-8",
+                "content-length": String(out.byteLength),
+              };
+            }
+          } catch {
+            /* pass through */
+          }
+          res.writeHead(statusCode, headers as never);
+          res.end(out);
+          return proxy;
+        },
+      };
+
+      const handled = await inner(req, proxy as never, pathname);
       if (
         handled &&
-        !syncScheduler.settled() &&
-        /\/status\/?$/i.test(pathname) &&
-        (req.method ?? "GET").toUpperCase() === "GET"
+        !syncScheduler.settled()
       ) {
         void syncScheduler.runAll();
       }

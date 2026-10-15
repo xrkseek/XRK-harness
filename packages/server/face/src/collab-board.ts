@@ -1,5 +1,6 @@
 /**
  * Turn-start collab board: live Agent Team catalog + parent 主线 sessions.
+ * 主线 rows are a discovery aid — messaging does not require a pin.
  * Seed AGENTS.md / skills stay on standing inject — this fragment is ids only.
  */
 import type { FaceRuntime } from "./context.js";
@@ -48,35 +49,34 @@ export function formatCollabBoardText(input: {
   const surface = input.surface ?? "coding";
   const teamLead =
     surface === "im"
-      ? "Agent Team — from IM, spawn `subagent` with member_id into a coding workspace (workspace_id from workspace_list). Standing skills apply on that child."
+      ? "Agent Team — from IM, spawn `subagent` with member_id into a coding workspace (workspace_id from workspace_list). Standing skills apply on that child. Peers: workspace_session_prompt → keep session_id → thread_message."
       : surface === "qichuang"
-        ? "Agent Team — Qichuang has no nested subagents; match members for playbooks, then open peer work with workspace_session_prompt (or Skill-load here)."
+        ? "Agent Team — Qichuang has no nested subagents; match members for playbooks, then workspace_session_prompt (keep session_id) + thread_message. Optional thread_upsert pins the peer for discovery."
         : canSpawn
           ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits (see session_capability for permission × tool_surface). Standing skills are for that member after spawn. Playbooks stay on the member."
           : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here; see session_capability). Members:";
   const lines = [teamLead, input.membersCatalog];
-  // IM / 奇创 have no thread UI — omit 主线 mail instructions.
-  if (surface === "coding") {
-    lines.push(
-      "",
-      "主线 (parent sessions, last 24h) — `thread_message` the peer's session_id; reply returns here. Do not thread_switch to send mail (that moves *this* session onto their pin). Not a subagent.",
-    );
-    if (recent.length === 0) {
-      lines.push("(none)");
-    } else {
-      for (const thread of recent) {
-        const sessions = thread.sessions
-          .map((s) => {
-            const mark = s.self ? "*" : "";
-            const tip = s.sideline ? ` · ${clipBrief(s.sideline)}` : "";
-            return `${s.sessionId}${mark}${tip}`;
-          })
-          .join("; ");
-        const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
-        lines.push(
-          `- ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
-        );
-      }
+  lines.push(
+    "",
+    "主线 (last 24h) — discovery pin so you can lock collaborators quickly. " +
+      "`thread_message` any parent session_id (pin optional; reply returns here). " +
+      "Do not thread_switch just to talk. Unpinned ids: session_search. Not a subagent.",
+  );
+  if (recent.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const thread of recent) {
+      const sessions = thread.sessions
+        .map((s) => {
+          const mark = s.self ? "*" : "";
+          const tip = s.sideline ? ` · ${clipBrief(s.sideline)}` : "";
+          return `${s.sessionId}${mark}${tip}`;
+        })
+        .join("; ");
+      const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
+      lines.push(
+        `- ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
+      );
     }
   }
   return lines.join("\n").slice(0, BOARD_MAX_CHARS);
@@ -107,10 +107,7 @@ export function formatCollabBoard(
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
     ),
-    threads:
-      surface === "coding"
-        ? listWorkspaceThreadCatalog(runtime, workspaceId, sessionId)
-        : [],
+    threads: listWorkspaceThreadCatalog(runtime, workspaceId, sessionId),
     canSpawn,
     surface,
     now,

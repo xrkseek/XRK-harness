@@ -80,14 +80,20 @@ export interface SessionStatusSubagentLive {
   readonly externalResume?: "live" | "cold";
 }
 
-/** Depth / concurrency caps for Status + model `analytics`. */
+/** Per-model live session cap for Status + model `analytics`. */
 export interface SessionStatusSubagentQuota {
+  /** Lineage depth (informational; not a hard ceiling). */
   readonly depth: number;
+  /** Always 0 — depth is no longer capped. */
   readonly maxDepth: number;
+  /** Live sessions on this session's provider/model. */
   readonly active: number;
+  /** Cap for that route (default 5). */
   readonly maxActive: number;
   readonly delegated: number;
   readonly slotsFree: number;
+  readonly provider?: string;
+  readonly model?: string;
 }
 
 export interface SessionStatusGraph {
@@ -658,10 +664,14 @@ function buildFleet(input: {
   );
   const alerts: SessionStatusFleetAlert[] = [...input.channelAlerts];
   if (input.quota.slotsFree <= 0 && input.quota.maxActive > 0) {
+    const route =
+      input.quota.provider && input.quota.model
+        ? `${input.quota.provider}/${input.quota.model}`
+        : "model";
     alerts.unshift({
       id: "fleet:slots",
       severity: "warn",
-      message: `Subagent slots full (${input.quota.active}/${input.quota.maxActive})`,
+      message: `${route} session cap full (${input.quota.active}/${input.quota.maxActive})`,
     });
   }
   if (queuedInbox > 0) {
@@ -669,22 +679,6 @@ function buildFleet(input: {
       id: "fleet:inbox",
       severity: "warn",
       message: `${queuedInbox} child inbox admit(s) waiting (queue/steer)`,
-    });
-  }
-  // Depth-at-cap is a lineage fact, not a live fault: once a session has ever
-  // delegated to its badge's max depth, `depth` stays there forever (the
-  // parent→child link survives the child finishing). Raising critical on the
-  // bare comparison would keep an idle session permanently "critical". Only
-  // escalate while there is real pressure — an active child or a queued inbox
-  // — and otherwise report the ceiling as a warn so the operator still sees
-  // that the session is at its depth cap.
-  if (input.quota.depth >= input.quota.maxDepth && input.quota.maxDepth > 0) {
-    const underPressure =
-      runningSubagents > 0 || queuedInbox > 0 || input.turnActive;
-    alerts.unshift({
-      id: "fleet:depth",
-      severity: underPressure ? "critical" : "warn",
-      message: `Delegation depth at cap (${input.quota.depth}/${input.quota.maxDepth})`,
     });
   }
   let health: SessionStatusFleetHealth = "ok";
@@ -1463,7 +1457,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
   lines.push(
     `subagents: ${snap.subagents.live.length} delegated` +
       (runningSubs.length > 0 ? `, ${runningSubs.length} live` : "") +
-      ` · quota depth ${q.depth}/${q.maxDepth} active ${q.active}/${q.maxActive}` +
+      ` · quota ${q.provider ?? "?"}/${q.model ?? "?"} sessions ${q.active}/${q.maxActive}` +
       ` · slots_free ${q.slotsFree}` +
       (queuedSubs > 0 ? ` · child_inbox ${queuedSubs}` : "") +
       `; graph ${snap.subagents.graph.nodes.length} nodes / ${snap.subagents.graph.edges.length} edges`,

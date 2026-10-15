@@ -248,7 +248,8 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off`；软上限见下方 Models |
 | Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；留空 = 不主动软压 |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
-| `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | 子代理嵌套深度（默认 2）与同父并发上限（默认 2） |
+| `agent-loop` | `maxConcurrentModelSessions` | 同一供应商/模型路由上**进行中**会话上限（默认 **5**；主会话与子代理同等计数；blank / 闲置历史不计） |
+| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `maxConcurrentSessions`（可选） | 覆盖该模型的进行中会话上限；省略 → `agent-loop.maxConcurrentModelSessions` |
 | `agent-loop` | `subagentModel` | 委派子代理的统一线路 `provider/model`（可带 `(effort)`）；**留空（默认）跟父会话**；单次 `subagent` 仍可覆盖 |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
 | `session-telemetry` | `mode` · `endpoint` | **重启 Host** 后挂 sink（关 / memory / OTLP）；`XRK_TELEMETRY` 可 CI 旁路 |
@@ -556,7 +557,8 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off`; soft ceiling is per model (below) |
 | Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; omit = no proactive soft compact |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
-| `agent-loop` | `maxSubagentDepth` · `maxActiveSubagents` | Subagent nesting depth (default 2) and concurrent children under one parent (default 2) |
+| `agent-loop` | `maxConcurrentModelSessions` | Running sessions on one provider/model route (default **5**; parent + subagent count equally; blank / idle history do not count) |
+| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `maxConcurrentSessions` (optional) | Override the live-session ceiling for that model; omit → `agent-loop.maxConcurrentModelSessions` |
 | `agent-loop` | `subagentModel` | Fleet-wide child route `provider/model` (optional `(effort)`); **empty (default) inherits the parent**; a single `subagent` call may still override |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 | `session-telemetry` | `mode` · `endpoint` | **Host restart** mounts the sink (off / memory / OTLP); `XRK_TELEMETRY` may CI-bypass |

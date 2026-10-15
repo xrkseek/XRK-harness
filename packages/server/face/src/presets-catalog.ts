@@ -19,18 +19,6 @@ export type CatalogAgentPresetId =
 /** Subagent policy for a session badge (Host binds tools from this). */
 export interface AgentSubagentPolicy {
   readonly mode: "off" | "on";
-  /**
-   * Optional badge ceiling on nesting depth when mode is on.
-   * Live cap is Face `agent-loop.maxSubagentDepth` (default
-   * {@link DEFAULT_MAX_DEPTH}); effective = min(face, this) when set.
-   */
-  readonly maxDepth?: number;
-  /**
-   * Optional badge ceiling on concurrent active children under one parent.
-   * Live cap is Face `agent-loop.maxActiveSubagents` (default
-   * {@link DEFAULT_MAX_ACTIVE_CHILDREN}).
-   */
-  readonly maxActiveChildren?: number;
 }
 
 /** Harness-plane tool switches (ignored when composition is minimal). */
@@ -48,7 +36,7 @@ export interface AgentToolFlags {
  * - `explicit` — spawn only when the user, AGENTS.md, or the task itself asks
  *   for delegation. "Go deeper / investigate more" is NOT authorization.
  * - `proactive` — spawning is an approved strategy; spawn when it actually
- *   helps. Depth and concurrency caps still apply.
+ *   helps. Live sessions still share the per-model concurrent cap.
  */
 export type DelegationMode = "explicit" | "proactive";
 
@@ -88,10 +76,10 @@ export function isWorkspaceLockedAgentPreset(id: string): boolean {
   return id === "im" || id === "qichuang";
 }
 
-/** Face / tool default: nesting depth cap (Hermes-style tighter than historical 3). */
-export const DEFAULT_MAX_DEPTH = 2;
-/** Face / tool default: concurrent active children under one parent. */
-export const DEFAULT_MAX_ACTIVE_CHILDREN = 2;
+/** @deprecated Prefer {@link DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS} in model-session-cap. */
+export const DEFAULT_MAX_DEPTH = 0;
+/** @deprecated Prefer per-model concurrent session cap. */
+export const DEFAULT_MAX_ACTIVE_CHILDREN = 0;
 
 const FULL_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
 const SHELL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: true };
@@ -153,15 +141,12 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "shallow",
     displayName: "Shallow",
     description:
-      "Full coding tools with one-level subagents only (maxDepth 1, concurrency capped by Face)",
+      "Full coding tools with subagents (same per-model session cap as Harness; prefer lighter delegation)",
     profile: {
       id: "shallow",
       composition: "harness",
       tools: FULL_TOOLS,
-      subagents: {
-        mode: "on",
-        maxDepth: 1,
-      },
+      subagents: { mode: "on" },
       subagentRouting: true,
       delegation: "proactive",
       planModeDefault: false,
@@ -171,14 +156,12 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "harness",
     displayName: "XRK Harness",
     description:
-      "Full coding agent: fs + bash + web + lsp + PTY + nested subagents (capped by Face depth/active limits)",
+      "Full coding agent: fs + bash + web + lsp + PTY + subagents + workspace/thread collab (per-model live session cap)",
     profile: {
       id: "harness",
       composition: "harness",
       tools: FULL_TOOLS,
-      subagents: {
-        mode: "on",
-      },
+      subagents: { mode: "on" },
       subagentRouting: true,
       delegation: "proactive",
       planModeDefault: false,
@@ -189,13 +172,12 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "im",
     displayName: "IM",
     description:
-      "IM channel (`ws_im`): im_send / team / session_query / workspace_list·create·session_prompt + subagent(workspace_id) into coding workspaces — no bash, web, lsp, PTY, presence, or thread UI",
+      "IM channel (`ws_im`): im_send / team / session_query / workspace_* / thread_* + subagent(workspace_id) into coding — no bash, web, lsp, PTY, or presence",
     workspaceLocked: true,
     profile: {
       id: "im",
       composition: "minimal",
       tools: MINIMAL_TOOLS,
-      // Complex IM asks may summon a coding team in another workspace.
       subagents: { mode: "on" },
       subagentRouting: true,
       delegation: "proactive",
@@ -206,13 +188,12 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "qichuang",
     displayName: "Qichuang",
     description:
-      "Xiangyang locked surface: team roster + workspace_list·create·session_prompt (peer coding sessions) — no nested subagents, no bash/web/lsp/PTY",
+      "Xiangyang locked surface: team + workspace_* / thread_* peer collab — no nested subagents, no bash/web/lsp/PTY",
     workspaceLocked: true,
     profile: {
       id: "qichuang",
       composition: "minimal",
       tools: MINIMAL_TOOLS,
-      // Drives Agent Team + peer sessions elsewhere — not parent/child subagents.
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
       delegation: "explicit",

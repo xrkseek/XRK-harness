@@ -3,11 +3,10 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,
-  DEFAULT_MAX_ACTIVE_CHILDREN,
-  DEFAULT_MAX_DEPTH,
   canonicalAgentPresetId,
   resolveAgentPresetProfile,
 } from "../presets-catalog.js";
+import { DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS } from "../model-session-cap.js";
 import { resolveDefaultAgentPreset } from "../settings-document.js";
 import { pinSessionAgentPreset } from "../session-agent-preset.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
@@ -76,7 +75,7 @@ export const agentPresetRead: FaceHandler = async (_runtime, _rpcId, payload) =>
   const subagentLine =
     profile.subagents.mode === "off"
       ? "subagents: off"
-      : `subagents: on (Face agent-loop caps default ${DEFAULT_MAX_DEPTH}/${DEFAULT_MAX_ACTIVE_CHILDREN}; badge ceiling depth=${profile.subagents.maxDepth ?? "face"}, active=${profile.subagents.maxActiveChildren ?? "face"})`;
+      : `subagents: on (per-model live session cap, default ${DEFAULT_MAX_CONCURRENT_MODEL_SESSIONS}; routes are independent)`;
   const content = [
     `# ${info.displayName}`,
     "",

@@ -34,7 +34,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("mem_68a69c0a9fdc4b53");
     expect(text).toContain("spawn `subagent`");
     expect(text).toContain("thread_message");
-    expect(text).toContain("Do not thread_switch to send mail");
+    expect(text).toContain("pin optional");
     expect(text).toContain("th_fresh");
     expect(text).toContain("sess_parent*");
     expect(text).toContain("写 changelog");
@@ -65,7 +65,7 @@ describe("formatCollabBoardText", () => {
     expect(text).not.toContain("spawn `subagent`");
   });
 
-  it("IM surface omits 主线 mail and points subagent at coding workspaces", () => {
+  it("IM surface keeps thread_message and points subagent at coding workspaces", () => {
     const text = formatCollabBoardText({
       now,
       surface: "im",
@@ -73,7 +73,7 @@ describe("formatCollabBoardText", () => {
       threads: [
         {
           id: "th_x",
-          title: "should hide",
+          title: "visible pin",
           brief: "",
           updatedAt: now,
           sessions: [{ sessionId: "s1" }],
@@ -81,8 +81,8 @@ describe("formatCollabBoardText", () => {
       ],
     });
     expect(text).toContain("into a coding workspace");
-    expect(text).not.toContain("thread_message");
-    expect(text).not.toContain("th_x");
+    expect(text).toContain("thread_message");
+    expect(text).toContain("th_x");
   });
 
   it("奇创 surface prefers workspace_session_prompt over nested subagents", () => {
@@ -94,7 +94,7 @@ describe("formatCollabBoardText", () => {
       threads: [],
     });
     expect(text).toContain("workspace_session_prompt");
-    expect(text).not.toContain("thread_message");
+    expect(text).toContain("thread_message");
     expect(text).not.toContain("spawn `subagent`");
   });
 });

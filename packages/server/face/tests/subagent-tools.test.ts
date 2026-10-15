@@ -122,12 +122,12 @@ describe("subagent tools", () => {
     expect(tools.get("ralph")).toBeTruthy();
 
     const analytics = await tools.get("analytics")!.execute({});
-    expect(analytics.content).toMatch(/depth: 0\//);
-    expect(analytics.content).toMatch(/active: 0\//);
+    expect(analytics.content).toMatch(/lineage_depth: 0/);
+    expect(analytics.content).toMatch(/sessions: 0\//);
     expect(analytics.content).toContain(child);
 
     const listOut = await tools.get("list_agents")!.execute({});
-    expect(listOut.content).toMatch(/quota depth/);
+    expect(listOut.content).toMatch(/quota .+ sessions /);
     expect(listOut.content).toContain(child);
 
     const linked = await tools.get("team_graph")!.execute({
@@ -160,20 +160,16 @@ describe("subagent tools", () => {
     expect(waitOk.isError).not.toBe(true);
     expect(waitOk.content).toMatch(/wait_agent completed/);
 
-    const denied = createToolRegistry();
-    bindSubagentTools(denied, {
+    // Depth is informational only; spawn still works under the model cap.
+    const deeper = createToolRegistry();
+    bindSubagentTools(deeper, {
       runtime,
       parentSessionId: grand,
-      maxDepth: 2,
     });
-    const out = await denied.get("subagent")!.execute({
-      prompt: "should fail",
-    });
-    expect(out.isError).toBe(true);
-    expect(out.content).toMatch(/max depth/);
+    expect(deeper.get("subagent")).toBeTruthy();
   });
 
-  it("caps concurrent active children under one parent", async () => {
+  it("refuses spawn when the model session route is full", async () => {
     const store = createMemorySessionStore();
     const active = new Set<string>();
     const runtime = createFaceRuntime({
@@ -191,10 +187,25 @@ describe("subagent tools", () => {
       resolveAgent: async () => stubAgent(),
       defaultAgentPreset: "harness",
     });
+    runtime.settingsNamespaces.ensure("agent-loop").user = {
+      maxConcurrentModelSessions: 2,
+    };
     const parent = runtime.ensureSession("parent");
     runtime.sessionAgentPresets.set(parent, "harness");
+    runtime.sessionModels.set(parent, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
     const childA = runtime.ensureSession("child-a");
     const childB = runtime.ensureSession("child-b");
+    runtime.sessionModels.set(childA, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
+    runtime.sessionModels.set(childB, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
     runtime.subagents.attach({
       parentSessionId: parent,
       childSessionId: childA,
@@ -214,11 +225,10 @@ describe("subagent tools", () => {
     bindSubagentTools(tools, {
       runtime,
       parentSessionId: parent,
-      maxActiveChildren: 2,
     });
     const out = await tools.get("subagent")!.execute({ prompt: "third" });
     expect(out.isError).toBe(true);
-    expect(out.content).toMatch(/max active children/);
+    expect(out.content).toMatch(/model session cap/);
   });
 
   it("refuses spawn when the session badge has subagents off", async () => {

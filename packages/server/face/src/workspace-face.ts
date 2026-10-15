@@ -295,7 +295,6 @@ export async function workspacePreviewInject(
 export async function workspaceListFace(
   runtime: FaceRuntime,
 ): Promise<FaceRpcResult<unknown>> {
-  const listed = runtime.workspaces.list(runtime.store.list());
   const gateway = resolveImGatewayWired();
   // Create ws_im only when a real gateway is connected (not on Face boot).
   if (gateway !== "bridge") {

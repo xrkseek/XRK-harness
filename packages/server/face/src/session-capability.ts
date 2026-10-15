@@ -38,15 +38,15 @@ function permissionBrief(permission: string): string {
 function surfaceBrief(badge: string): string {
   switch (badge) {
     case "minimal":
-      return "Coding · fs/skill/std only — ship with this catalog; load skills for playbooks.";
+      return "Coding · fs/skill/std only — no peer workspace/thread tools; load skills for playbooks.";
     case "shell":
-      return "Coding · fs + bash + PTY — no web, lsp, or subagents.";
+      return "Coding · fs + bash + PTY — no web, lsp, subagents, or peer workspace/thread tools.";
     case "frugal":
-      return "Coding · full tools, no subagents — prefer one session; xrk-plan-build for large work.";
+      return "Coding · full tools + workspace/thread peer collab, no subagents — prefer one session; xrk-plan-build for large work.";
     case "shallow":
-      return "Coding · full tools + one-level subagents — spawn when parallel helps (xrk-delegate).";
+      return "Coding · full tools + subagents + workspace/thread — spawn when parallel helps (per-model live session cap).";
     case "harness":
-      return "Coding · full tools + nested subagents (Face caps) — prefer team_list member_id when spawning.";
+      return "Coding · full tools + subagents + workspace/thread (per-model live session cap) — prefer team_list member_id when spawning.";
     case "im":
       return "IM channel · reply on-channel; dispatch coding via workspace_* / subagent — see <session_posture>.";
     case "qichuang":
@@ -59,10 +59,10 @@ function surfaceBrief(badge: string): string {
 function toolSurfaceSummary(badge: string): string {
   // Orchestration badges: fs bits alone mislead — call out the real surface.
   if (badge === "im") {
-    return "im (full-access · channel+list/create/session_prompt+subagent→coding)";
+    return "im (full-access · channel+list/create/session_prompt+subagent→coding+thread_message)";
   }
   if (badge === "qichuang") {
-    return "qichuang (full-access · team+list/create/session_prompt · no nested subagents)";
+    return "qichuang (full-access · team+list/create/session_prompt+thread · no nested subagents)";
   }
   const profile = resolveAgentPresetProfile(badge);
   const bits: string[] = ["fs"];

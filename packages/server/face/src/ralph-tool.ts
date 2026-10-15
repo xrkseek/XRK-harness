@@ -12,10 +12,8 @@ import {
   appendOutputContract,
   extractJsonCandidate,
 } from "./agent-team-output.js";
-import {
-  resolveSubagentQuota,
-  type SubagentQuotaCaps,
-} from "./subagent-tools.js";
+import { modelSessionCapProblem } from "./model-session-cap.js";
+import { predictChildModelSelection } from "./subagent-tools.js";
 
 const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
 const POLL_MS = 50;
@@ -25,18 +23,6 @@ export const RALPH_HARD_MAX_ROUNDS = 32;
 export const RALPH_MAX_HANDOFF_CHARS = 16_384;
 /** Parent-facing terminal text ceiling (DSH tool-ralph default). */
 export const RALPH_MAX_RESULT_CHARS = 16_384;
-
-function subagentDepth(runtime: FaceRuntime, sessionId: string): number {
-  let depth = 0;
-  let cur = sessionId;
-  for (;;) {
-    const link = runtime.subagents.getByChild(cur);
-    if (!link) break;
-    if (link.mode !== "fork") depth += 1;
-    cur = link.parentSessionId;
-  }
-  return depth;
-}
 
 const REPORT_SCHEMA = {
   type: "object",
@@ -222,32 +208,11 @@ function formatTerminal(input: {
 export interface BindRalphToolOptions {
   readonly runtime: FaceRuntime;
   readonly parentSessionId: string;
-  readonly maxDepth?: number;
-  readonly maxActiveChildren?: number;
   /** Override default/ceiling for tests. */
   readonly maxRoundsCeiling?: number;
 }
 
 export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
-  /**
-   * Resolved per round, not frozen at bind time: one SoT with the quota the
-   * subagent tools enforce, so a Settings change lands on the next round.
-   */
-  const caps = (): {
-    readonly maxDepth: number;
-    readonly maxActive: number;
-    readonly active: number;
-  } => {
-    const quota: SubagentQuotaCaps = resolveSubagentQuota(
-      options.runtime,
-      options.parentSessionId,
-    );
-    return {
-      maxDepth: options.maxDepth ?? quota.maxDepth,
-      maxActive: options.maxActiveChildren ?? quota.maxActive,
-      active: quota.active,
-    };
-  };
   const ceiling = Math.min(
     options.maxRoundsCeiling ?? RALPH_HARD_MAX_ROUNDS,
     RALPH_HARD_MAX_ROUNDS,
@@ -293,14 +258,6 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
         return { content: "ralph: maxRounds must be >= 1", isError: true };
       }
       const maxRounds = Math.min(requested, ceiling);
-      const depth = subagentDepth(options.runtime, options.parentSessionId);
-      const { maxDepth, maxActive: maxActiveChildren } = caps();
-      if (depth >= maxDepth) {
-        return {
-          content: `ralph: max depth ${maxDepth} reached (current depth ${depth})`,
-          isError: true,
-        };
-      }
 
       let previous: RalphRoundReport | undefined;
       let roundsStarted = 0;
@@ -316,14 +273,18 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
             isError: true,
           };
         }
-        const active = caps().active;
-        if (active >= maxActiveChildren) {
+        const childRoute = predictChildModelSelection(
+          options.runtime,
+          options.parentSessionId,
+        );
+        const capProblem = modelSessionCapProblem(options.runtime, childRoute);
+        if (capProblem) {
           return {
             content: formatTerminal({
               status: "round-failed",
               roundsStarted,
               ...(previous ? { report: previous } : {}),
-              error: `max active children ${maxActiveChildren} reached`,
+              error: capProblem,
             }),
             isError: true,
           };
@@ -337,6 +298,11 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
             parentSessionId: options.parentSessionId,
             label: `ralph-r${round}`,
             mode: "one-shot",
+            provider: childRoute.provider,
+            model: childRoute.model,
+            ...(childRoute.reasoningEffort
+              ? { reasoningEffort: childRoute.reasoningEffort }
+              : {}),
           },
         );
         if (!created.result.ok) {

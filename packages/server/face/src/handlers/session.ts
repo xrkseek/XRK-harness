@@ -72,6 +72,7 @@ import {
   resolveSessionModelSelection,
   routeServed,
 } from "../model-catalog.js";
+import { reserveModelSessionSlot } from "../model-session-cap.js";
 import { liveRouteAllowsImageInput } from "../llm-resolve.js";
 import { selectSessionModel } from "../select-session-model.js";
 import {
@@ -155,10 +156,63 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: attach.error },
     };
   }
-  const sessionId =
+  const requestedId =
     typeof p.sessionId === "string" && p.sessionId.trim()
-      ? runtime.ensureSession(p.sessionId.trim())
+      ? p.sessionId.trim()
+      : "";
+  const inheritFromEarly =
+    typeof p.inheritFrom === "string" ? p.inheritFrom.trim() : "";
+  const routeSource =
+    parentSessionId ||
+    (inheritFromEarly && inheritFromEarly !== requestedId
+      ? inheritFromEarly
+      : "");
+  // Explicit provider/model (subagent child route) wins over parent inherit
+  // so the cap reserves the route the session will actually use.
+  const pinProvider =
+    typeof p.provider === "string" ? p.provider.trim() : "";
+  const pinModel = typeof p.model === "string" ? p.model.trim() : "";
+  const pinEffort =
+    typeof p.reasoningEffort === "string" ? p.reasoningEffort.trim() : "";
+  const predictedRoute =
+    pinProvider && pinModel
+      ? {
+          provider: pinProvider,
+          model: pinModel,
+          ...(pinEffort ? { reasoningEffort: pinEffort } : {}),
+        }
+      : routeSource
+        ? resolveSessionModelSelection(runtime, routeSource)
+        : resolveSessionModelSelection(runtime, "");
+  const reuseExisting = Boolean(requestedId && runtime.store.has(requestedId));
+  const slot = reserveModelSessionSlot(runtime, predictedRoute, {
+    ...(reuseExisting ? { excludeSessionId: requestedId } : {}),
+  });
+  if (!slot.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "model-session-cap",
+        message: slot.problem,
+        details: { ...slot.details },
+      },
+    };
+  }
+  let sessionId: string;
+  try {
+    sessionId = requestedId
+      ? runtime.ensureSession(requestedId)
       : runtime.ensureSession();
+  } catch (err) {
+    slot.release();
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
   runtime.watchSession(sessionId);
   runtime.sessionCwds.set(
     sessionId,
@@ -278,6 +332,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   } catch (err) {
     runtime.store.delete?.(sessionId);
     forgetRequestHeaderCache(sessionId);
+    slot.release();
     return {
       ok: false,
       error: {
@@ -285,6 +340,17 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
         message: err instanceof Error ? err.message : String(err),
       },
     };
+  }
+  // Pin the reserved route when callers named it (or nothing inherited yet)
+  // so Status / occupancy match the slot we held.
+  if (pinProvider && pinModel) {
+    runtime.sessionModels.set(sessionId, {
+      provider: pinProvider,
+      model: pinModel,
+      ...(pinEffort ? { reasoningEffort: pinEffort } : {}),
+    });
+  } else if (!runtime.sessionModels.has(sessionId)) {
+    runtime.sessionModels.set(sessionId, { ...predictedRoute });
   }
   const boundPreset =
     runtime.sessionAgentPresets.get(sessionId) ??
@@ -303,6 +369,8 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     });
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
+  // Live session now counts in occupancy — drop the pending credit.
+  slot.release();
   return {
     ok: true,
     value: {
@@ -418,6 +486,21 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     : raw.startIndex + 1;
   const pageStartIndex = pageStartSeq - 1;
   const inbox = runtime.inboxWire.fresh();
+  // Seed pending admits from the prefix so in-page prompt/promoted resolves to
+  // agent/inbox/spliced (fresh projector otherwise drops the promote as ignorable
+  // when prompt/admitted fell before this page's cut — loadOlder then lost the
+  // claim and painted mid-turn 插话 as a plain opener).
+  for (let i = 0; i < pageStartIndex; i++) {
+    const prior = events[i];
+    if (
+      prior !== undefined
+      && (prior.type === "prompt/admitted"
+        || prior.type === "prompt/promoted"
+        || prior.type === "prompt/withdrawn")
+    ) {
+      inbox.project(prior);
+    }
+  }
   const toolArgs = collectToolCallArgsForPage(events, pageEvents, seqByEvent);
   const wireCtxBase = {
     sessionId,
@@ -935,21 +1018,53 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
 
-  const child = runtime.forkSession(sessionId, cut.cut, preferredChild);
-  const seed = readSessionEvents(runtime.store, child.id);
-
   // Turn-cut forks (`atSeq`): seed from the prefix only — a selectModel made
   // after the cut must not leak into an exploratory branch.
   // Edit-resubmit forks (`beforeSeq`): prefer the parent's live composer
   // selection so a recovery switch (broken API key → another route) survives
   // into the child; fall back to the prefix when the parent never overrode.
   const parentLive = runtime.sessionModels.get(sessionId);
+  const seedModelPreview =
+    beforeSeq !== undefined
+      ? (parentLive ??
+        modelSelectionFromPrefix(parentEvents.slice(0, cut.cut)))
+      : modelSelectionFromPrefix(parentEvents.slice(0, cut.cut));
+  const forkRoute =
+    seedModelPreview ?? resolveSessionModelSelection(runtime, sessionId);
+  const forkSlot = reserveModelSessionSlot(runtime, forkRoute);
+  if (!forkSlot.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "model-session-cap",
+        message: forkSlot.problem,
+        details: { ...forkSlot.details },
+      },
+    };
+  }
+
+  let child: ReturnType<FaceRuntime["forkSession"]>;
+  try {
+    child = runtime.forkSession(sessionId, cut.cut, preferredChild);
+  } catch (err) {
+    forkSlot.release();
+    return {
+      ok: false,
+      error: {
+        code: "fork-failed",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
+  const seed = readSessionEvents(runtime.store, child.id);
   const seedModel =
     beforeSeq !== undefined
       ? (parentLive ?? modelSelectionFromPrefix(seed))
       : modelSelectionFromPrefix(seed);
   if (seedModel) {
     runtime.sessionModels.set(child.id, { ...seedModel });
+  } else {
+    runtime.sessionModels.set(child.id, { ...forkRoute });
   }
   // Agent preset stays with the source composition so seeded tool calls remain
   // resolvable; durable knob events after the cut are already excluded.
@@ -976,6 +1091,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   } catch (err) {
     runtime.store.delete?.(child.id);
     forgetRequestHeaderCache(child.id);
+    forkSlot.release();
     return {
       ok: false,
       error: {
@@ -1042,6 +1158,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     });
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
+  forkSlot.release();
   return {
     ok: true,
     value: {

@@ -11,6 +11,8 @@ export const FACE_RPC_ERROR_CODES = [
   "session-not-found",
   "session-not-archived",
   "model-unavailable",
+  /** Per-route live session ceiling (`agent-loop.maxConcurrentModelSessions`). */
+  "model-session-cap",
   "session-conflict",
   "invalid-time-zone",
   "workspace-attach-failed",
@@ -159,6 +161,18 @@ export function mapFaceRpcError(
         details: {
           provider: typeof hint?.provider === "string" ? hint.provider : "",
           model: typeof hint?.model === "string" ? hint.model : message,
+        },
+      };
+
+    case "model-session-cap":
+      return {
+        code: "model-session-cap",
+        message,
+        details: {
+          provider: typeof hint?.provider === "string" ? hint.provider : "",
+          model: typeof hint?.model === "string" ? hint.model : "",
+          using: typeof hint?.using === "number" ? hint.using : 0,
+          max: typeof hint?.max === "number" ? hint.max : 0,
         },
       };
 

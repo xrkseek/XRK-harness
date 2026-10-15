@@ -12,13 +12,13 @@ import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   im: [
     "Role: IM channel operator · permission=full access (path open).",
-    "Reply on-channel. Coding work: workspace_list → subagent(workspace_id) or workspace_session_prompt into a coding workspace.",
-    "This surface is dispatch + conversation — implement in the coding peer, not in ws_im.",
+    "Reply on-channel. Coding: workspace_list → subagent(workspace_id) or workspace_session_prompt (keep session_id) → thread_message; optional thread_upsert to pin the peer.",
+    "主线 is discovery only — not required to message. Implement in the coding peer, not in ws_im.",
   ].join("\n"),
   qichuang: [
     "Role: Xiangyang / Qichuang orchestrator · permission=full access (path open).",
-    "Orchestrate: workspace_create · workspace_session_prompt · team · care of ~/.xrk and project .xrk.",
-    "No nested subagents here — implement inside coding workspaces you open or prompt.",
+    "Orchestrate: workspace_create · workspace_session_prompt (keep session_id, wait for reply) · thread_message · optional thread_upsert on that peer · team · care of ~/.xrk and project .xrk.",
+    "No nested subagents here — implement inside coding workspaces you open or prompt. 主线 is discovery only.",
   ].join("\n"),
 };
 

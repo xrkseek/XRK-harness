@@ -22,10 +22,10 @@ describe("plugin agentPresets composition inventory", () => {
     const shallow = FACE_AGENT_PRESETS.find((p) => p.id === "shallow")!;
     const shallowRows = compositionRowsForProfile(shallow.profile);
     expect(shallowRows.find((r) => r.moduleName === "composition:web")?.enabled).toBe(true);
-    // shallow enables subagents with a depth condition
+    // shallow enables subagents; ceiling is per-model live sessions (not depth)
     const sub = shallowRows.find((r) => r.moduleName === "composition:subagents");
-    expect(sub?.enabled).toBe("conditional");
-    expect(sub?.condition).toBe("maxDepth<=1");
+    expect(sub?.enabled).toBe(true);
+    expect(sub?.condition).toBeUndefined();
   });
 
   it("lists every catalog badge and marks the Face default", () => {

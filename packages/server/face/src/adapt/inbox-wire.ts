@@ -45,6 +45,11 @@ export interface FaceInboxSplice {
   readonly start: number;
   readonly removedCount?: number;
   readonly inserted: readonly FaceWireUserMessage[];
+  /**
+   * Identities removed by promote. History pages that cut after
+   * `prompt/admitted` still need these to claim the durable `user/message`.
+   */
+  readonly removed?: readonly FaceWireUserMessage[];
   readonly outcome?: "canceled";
 }
 
@@ -118,14 +123,17 @@ export class FaceInboxWireProjector {
       }
       case "prompt/promoted": {
         // Claim-style pure deletion (no outcome) — matches Face claim splices.
+        // Stamp `removed` so a history page that cut after `prompt/admitted`
+        // can still claim the durable user/message without replaying the insert.
         const hit = this.locate(event.admitId);
         if (!hit) return undefined;
-        hit.list.splice(hit.index, 1);
+        const [removedMsg] = hit.list.splice(hit.index, 1);
         return {
           target: hit.target,
           start: hit.index,
           removedCount: 1,
           inserted: [],
+          ...(removedMsg !== undefined ? { removed: [removedMsg] } : {}),
         };
       }
       default:

@@ -412,8 +412,8 @@ describe("Face settings U2", () => {
     expect(
       ((permission.value as { extraWritableRoots: string[] }).extraWritableRoots).length,
     ).toBeGreaterThan(0);
-    expect(permission.schema.uid).toBe(7);
-    expect(permission.schema.refs["7"]?.type).toBe("object");
+    expect(permission.schema.uid).toBe(8);
+    expect(permission.schema.refs["8"]?.type).toBe("object");
 
     const locale = (
       desc.result.value as {
@@ -601,9 +601,10 @@ describe("Face settings U2", () => {
     expect(permission!.value.extraWritableRoots!.length).toBeGreaterThan(0);
   });
 
-  it("permission Settings schema enumerates configured presets only (no auto)", async () => {
+  it("permission Settings schema enumerates configured presets including auto", async () => {
     const rt = runtime();
-    // Even with Guardian Auto live for the session catalog…
+    // Settings always advertises Auto; Session Access / `/permission` still
+    // gates the live Auto option on Guardian `registerAuto`.
     rt.permissionAuto.registerAuto(() => {});
     const desc = await dispatchFaceMethod(rt, "settings.describe", "ps", {});
     expect(desc.result.ok).toBe(true);
@@ -624,7 +625,7 @@ describe("Face settings U2", () => {
     if (!permission) return;
     expect(permission.value.defaultPreset).toBe("workspace-write");
     const refs = permission.schema.refs;
-    const union = refs["4"];
+    const union = refs["5"];
     expect(union?.type).toBe("union");
     const constValues = (union?.list ?? [])
       .map((id) => refs[String(id)]?.value)
@@ -633,8 +634,8 @@ describe("Face settings U2", () => {
       "read-only",
       "workspace-write",
       "danger-full-access",
+      "auto",
     ]);
-    expect(constValues).not.toContain("auto");
   });
 
   it("describe lists MCP connected overlay; mutate persists desired servers", async () => {

@@ -97,8 +97,11 @@ export {
   createCommunityLlmSyncScheduler,
   dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
+  isUsableCommunityLoopbackBaseUrl,
+  listModelsForCommunitySync,
   reasoningFromUnknown,
   scheduleCommunityLlmSyncRetries,
+  type CommunityLlmSyncCatalog,
   type CommunityLlmSyncModelRow,
   type CommunityLlmSyncReasoning,
   type CommunityLlmSyncer,
@@ -161,6 +164,8 @@ export {
   isWorkBuddyConnectPackage,
   hasWorkBuddyHostLib,
   ensureWorkBuddyAiElectronBin,
+  listModelsForSync,
+  enrichWorkBuddyStatusBody,
 } from "./workbuddy-host.js";
 export {
   tryApplyOurFreeModelHost,

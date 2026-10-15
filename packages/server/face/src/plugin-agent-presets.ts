@@ -51,10 +51,6 @@ export function compositionRowsForProfile(
 ): readonly FaceAgentPresetPluginRow[] {
   const harness = profile.composition === "harness";
   const subOn = profile.subagents.mode === "on";
-  const depth =
-    profile.subagents.maxDepth === undefined
-      ? undefined
-      : `maxDepth<=${String(profile.subagents.maxDepth)}`;
   const im = profile.id === "im";
   return [
     capabilityRow("composition:base", true),
@@ -62,7 +58,7 @@ export function compositionRowsForProfile(
     capabilityRow("composition:web", harness && profile.tools.web),
     capabilityRow("composition:lsp", harness && profile.tools.lsp),
     capabilityRow("composition:pty", harness && profile.tools.pty),
-    capabilityRow("composition:subagents", subOn, depth),
+    capabilityRow("composition:subagents", subOn),
     capabilityRow("composition:im-send", im),
     capabilityRow("composition:im-binding", im),
   ];

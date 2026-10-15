@@ -34,6 +34,11 @@ export interface FaceModelEntry {
   readonly softBudgetMaxTokens?: number;
   readonly softBudgetKeepTokens?: number;
   readonly softBudgetBufferTokens?: number;
+  /**
+   * Max live sessions on this provider/model (parent + subagent).
+   * Omit → agent-loop.maxConcurrentModelSessions (default 5).
+   */
+  readonly maxConcurrentSessions?: number;
   /** Declared intake modalities (Settings-editable; adapter may still gate). */
   readonly inputModalities?: readonly ("text" | "image")[];
   /** DeepSeek-style thinking intensity when the route exposes it. */
@@ -199,6 +204,7 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       row,
       "softBudgetBufferTokens",
     );
+    const maxConcurrentSessions = positiveIntField(row, "maxConcurrentSessions");
     const modsRaw = (row as { inputModalities?: unknown }).inputModalities;
     const inputModalities = Array.isArray(modsRaw)
       ? modsRaw
@@ -217,6 +223,9 @@ function asModelRows(raw: unknown): FaceModelEntry[] {
       ...(softBudgetKeepTokens !== undefined ? { softBudgetKeepTokens } : {}),
       ...(softBudgetBufferTokens !== undefined
         ? { softBudgetBufferTokens }
+        : {}),
+      ...(maxConcurrentSessions !== undefined
+        ? { maxConcurrentSessions }
         : {}),
       ...(inputModalities && inputModalities.length > 0
         ? { inputModalities: [...new Set(inputModalities)] }

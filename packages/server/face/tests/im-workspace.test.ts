@@ -166,10 +166,12 @@ describe("ws_im workspace", () => {
     expect(tools.get("workspace_list")).toBeTruthy();
     expect(tools.get("workspace_create")).toBeTruthy();
     expect(tools.get("workspace_session_prompt")).toBeTruthy();
+    expect(tools.get("thread_list")).toBeTruthy();
+    expect(tools.get("thread_message")).toBeTruthy();
+    expect(tools.get("thread_upsert")).toBeTruthy();
     expect(tools.get("team_list")).toBeTruthy();
     expect(tools.get("session_search")).toBeTruthy();
     expect(tools.get("ask_user")).toBeFalsy();
     expect(tools.get("presence_set")).toBeFalsy();
-    expect(tools.get("thread_list")).toBeFalsy();
   });
 });

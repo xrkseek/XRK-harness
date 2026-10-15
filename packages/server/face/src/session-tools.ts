@@ -6,7 +6,6 @@
 
 import path from "node:path";
 import { parsePublicToolName } from "@xrkseek/mcp";
-import type { FaceRuntime } from "./context.js";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { asRecord, type FaceHandler } from "./handlers/types.js";

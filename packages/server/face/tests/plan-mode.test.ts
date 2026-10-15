@@ -22,6 +22,7 @@ describe("Face plan mode", () => {
   it("legacy plan agentPreset maps to harness without seeding plan mode", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
       agentPreset: "plan",
     });
     expect(created.result.ok).toBe(true);
@@ -38,7 +39,7 @@ describe("Face plan mode", () => {
 
   it("pins inactive plan projection; /plan commits between turns", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -81,7 +82,7 @@ describe("Face plan mode", () => {
   it("/plan <message> steers the suffix", async () => {
     const store = createMemorySessionStore();
     const runtime = bareRuntime(store);
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
@@ -108,7 +109,7 @@ describe("Face plan mode", () => {
         return { ...handle, tools };
       },
     });
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     await dispatchFaceMethod(runtime, "commands/execute", "p", {

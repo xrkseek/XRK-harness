@@ -56,7 +56,7 @@ describe("host session agentPreset → tool composition", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         rpcId: "c1",
-        payload: { agentPreset: "harness" },
+        payload: { agentPreset: "harness", cwd: dir },
       }),
     });
     expect(createRes.status).toBe(200);

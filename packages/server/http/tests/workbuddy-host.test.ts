@@ -4,11 +4,16 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ensureWorkBuddyAiElectronBin,
+  enrichWorkBuddyStatusBody,
   hasWorkBuddyHostLib,
   isWorkBuddyConnectPackage,
   listModelsForSync,
   tryApplyWorkBuddyHost,
 } from "../src/dsh-compat/workbuddy-host.js";
+import {
+  baseUrlFromCommunityModels,
+  isUsableCommunityLoopbackBaseUrl,
+} from "../src/dsh-compat/community-llm-host-sync.js";
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
 import { resetLiveHostApply } from "../src/dsh-compat/live-host-apply.js";
 
@@ -180,6 +185,47 @@ export function apply(ctx) {
     ).toBeUndefined();
   });
 
+  it("rejects unusable loopback baseUrl stubs", () => {
+    expect(isUsableCommunityLoopbackBaseUrl("/v1")).toBe(false);
+    expect(isUsableCommunityLoopbackBaseUrl("undefined/v1")).toBe(false);
+    expect(isUsableCommunityLoopbackBaseUrl("http://127.0.0.1:0/v1")).toBe(false);
+    expect(isUsableCommunityLoopbackBaseUrl("http://127.0.0.1:3921/v1")).toBe(
+      true,
+    );
+    expect(
+      baseUrlFromCommunityModels([{ id: "x", baseUrl: "/v1" }]),
+    ).toBeUndefined();
+    expect(
+      baseUrlFromCommunityModels([
+        { id: "x", baseUrl: "http://127.0.0.1:3921/v1/" },
+      ]),
+    ).toBe("http://127.0.0.1:3921/v1");
+  });
+
+  it("enrichWorkBuddyStatusBody fills models when signed-in roster is gated empty", () => {
+    expect(
+      enrichWorkBuddyStatusBody(
+        { status: "signed-in", models: [] },
+        [
+          { id: "hy3", name: "Hy3", contextWindow: 192_000 },
+          { id: "hy4-preview", name: "Hy4" },
+        ],
+      ),
+    ).toEqual({
+      status: "signed-in",
+      models: [
+        { id: "hy3", name: "Hy3", contextWindow: 192_000 },
+        { id: "hy4-preview", name: "Hy4" },
+      ],
+    });
+    expect(
+      enrichWorkBuddyStatusBody(
+        { status: "signed-out" },
+        [{ id: "hy3" }],
+      ),
+    ).toEqual({ status: "signed-out" });
+  });
+
   it("listModelsForSync prefers full catalog over visibility-filtered listModels", async () => {
     let visible = false;
     const adapter = {
@@ -232,6 +278,37 @@ export function apply(ctx) {
         id: "deep-model",
         name: "Deep",
         baseUrl: "http://127.0.0.1:63949/v1",
+      },
+    ]);
+  });
+
+  it("listModelsForSync stamps lastBaseUrl when listModels is empty", async () => {
+    const adapter = {
+      async listModels() {
+        return [];
+      },
+      catalog: {
+        isVisible: () => true,
+        current: () => [],
+        fallback: () => [
+          { id: "hy3", name: "Hy3" },
+          { id: "hy4-preview", name: "Hy4" },
+        ],
+      },
+    };
+    const rows = await listModelsForSync(adapter, "workbuddy", {
+      lastBaseUrl: "http://127.0.0.1:51635/v1",
+    });
+    expect(rows).toEqual([
+      {
+        id: "hy3",
+        name: "Hy3",
+        baseUrl: "http://127.0.0.1:51635/v1",
+      },
+      {
+        id: "hy4-preview",
+        name: "Hy4",
+        baseUrl: "http://127.0.0.1:51635/v1",
       },
     ]);
   });

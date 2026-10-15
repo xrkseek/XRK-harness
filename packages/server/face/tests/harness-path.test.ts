@@ -135,7 +135,7 @@ describe("Face harness path polish", () => {
       ]),
     });
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -188,7 +188,7 @@ describe("Face harness path polish", () => {
       host.push(frame as { type: string; running?: boolean });
     });
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
@@ -219,10 +219,10 @@ describe("Face harness path polish", () => {
       host.push(frame as { type: string; sessionId?: string; running?: boolean });
     });
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const parent = (created.result.value as { sessionId: string }).sessionId;
-    const childCreated = await dispatchFaceMethod(runtime, "session.create", "c2", {});
+    const childCreated = await dispatchFaceMethod(runtime, "session.create", "c2", { cwd: runtime.workspaceRoot });
     if (!childCreated.result.ok) throw new Error("create child");
     const child = (childCreated.result.value as { sessionId: string }).sessionId;
     runtime.subagents.attach({
@@ -272,7 +272,7 @@ describe("Face harness path polish", () => {
       }),
     });
 
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 

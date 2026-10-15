@@ -73,8 +73,11 @@ export function resolveImToolPorts(
     lookupBinding:
       local?.lookupBinding ??
       globalPorts?.lookupBinding ??
-      defaultPorts.lookupBinding,
-    send: local?.send ?? globalPorts?.send ?? defaultPorts.send,
+      ((sessionId, xrkHome) => defaultPorts.lookupBinding(sessionId, xrkHome)),
+    send:
+      local?.send ??
+      globalPorts?.send ??
+      ((request, xrkHome) => defaultPorts.send(request, xrkHome)),
   };
 }
 

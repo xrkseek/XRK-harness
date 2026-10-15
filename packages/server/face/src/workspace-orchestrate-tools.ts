@@ -1,18 +1,26 @@
 /**
- * Cross-workspace orchestration tools — **only** for IM (`ws_im`) and 奇创 (向阳空间).
- * Coding badges (harness/shallow/…) stay inside one workspace: no list/create/dispatch here.
+ * Cross-workspace orchestration tools — IM (`ws_im`), 奇创 (向阳空间), and coding.
  *
- * | Tool | IM | 奇创 |
- * |---|---|---|
- * | workspace_list | yes | yes |
- * | workspace_create | yes | yes |
- * | workspace_session_prompt | yes (peer session) | yes (peer session; no nested subagent) |
- * | subagent + workspace_id | Host binds for IM only | never |
+ * | Tool | IM | 奇创 | coding |
+ * |---|---|---|---|
+ * | workspace_list / workspace_create | yes | yes | yes |
+ * | workspace_session_prompt (peer + wait reply) | yes | yes | yes |
+ * | subagent + workspace_id | Host binds for IM only | never | never (local nested only) |
+ *
+ * Ongoing tasking to a known session_id: prefer `thread_message` (works without 主线).
+ * Pin a peer for discovery: `thread_upsert` with session_id + workspace_id.
  */
 
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
+import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import {
+  clampPeerWaitMs,
+  PEER_WAIT_DEFAULT_MS,
+  PEER_WAIT_MIN_MS,
+  waitForPeerAssistantReply,
+} from "./peer-session-wait.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { dispatchFaceMethod } from "./dispatch.js";
 
@@ -21,7 +29,7 @@ function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   tools.register(tool);
 }
 
-export type WorkspaceOrchestrateMode = "im" | "qichuang";
+export type WorkspaceOrchestrateMode = "im" | "qichuang" | "coding";
 
 export interface BindWorkspaceOrchestrateToolsOptions {
   readonly runtime: FaceRuntime;
@@ -41,8 +49,14 @@ function listItems(runtime: FaceRuntime) {
   }));
 }
 
+function fromLabel(mode: WorkspaceOrchestrateMode): string {
+  if (mode === "im") return "IM";
+  if (mode === "qichuang") return "Xiangyang";
+  return "coding";
+}
+
 /**
- * Bind list / create / peer-session dispatch for IM or 奇创.
+ * Bind list / create / peer-session dispatch.
  * Does not bind `subagent` — Host does that for IM only.
  */
 export function bindWorkspaceOrchestrateTools(
@@ -50,17 +64,18 @@ export function bindWorkspaceOrchestrateTools(
   options: BindWorkspaceOrchestrateToolsOptions,
 ): void {
   const { runtime, sessionId, mode } = options;
-  const fromLabel = mode === "im" ? "IM" : "Xiangyang";
+  const label = fromLabel(mode);
   const dispatchHint =
     mode === "im"
-      ? "Prefer `subagent` + workspace_id for a coding child; use `workspace_session_prompt` for a peer session without parent/child linkage."
-      : "Use `workspace_session_prompt` to open a peer coding session (Qichuang has no nested subagents).";
+      ? "Prefer `subagent` + workspace_id for a coding child; use `workspace_session_prompt` for a peer session without parent/child linkage, then `thread_message` with the returned session_id."
+      : mode === "qichuang"
+        ? "Qichuang has no nested subagents — open peers with `workspace_session_prompt`, keep the session_id, then `thread_message` / optional `thread_upsert` to pin them."
+        : "Open or prompt a peer coding workspace with `workspace_session_prompt`; continue with `thread_message` by session_id (主线 optional).";
 
   registerTool(tools, {
     name: "workspace_list",
     description:
       "List Face workspaces (id, title, path, session count). " +
-      "Only available on IM / Qichuang. " +
       dispatchHint,
     parameters: {
       type: "object",
@@ -83,7 +98,7 @@ export function bindWorkspaceOrchestrateTools(
     name: "workspace_create",
     description:
       "Create (or adopt) a coding Face workspace by absolute path. " +
-      "Only IM / Qichuang may create workspaces. Returns workspaceId for later session dispatch. " +
+      "Returns workspaceId for later session dispatch. " +
       "Refuse paths that would become Xiangyang or IM.",
     parameters: {
       type: "object",
@@ -154,9 +169,10 @@ export function bindWorkspaceOrchestrateTools(
   registerTool(tools, {
     name: "workspace_session_prompt",
     description:
-      "Create (or reuse) a session in another Face workspace and send a prompt. " +
-      `Dispatch from ${fromLabel} into a coding workspace — peer session, not a nested subagent. ` +
-      "Pass workspace_id from workspace_list; optional session_id to continue.",
+      "Create (or reuse) a session in a coding Face workspace and send a prompt. " +
+      `Dispatch from ${label} — peer session, not a nested subagent. ` +
+      "Returns sessionId — keep it for follow-up `thread_message` / `thread_upsert`. " +
+      "wait=true (default) steers and returns the peer assistant reply; wait=false queues without waiting.",
     parameters: {
       type: "object",
       properties: {
@@ -164,6 +180,14 @@ export function bindWorkspaceOrchestrateTools(
         prompt: { type: "string" },
         session_id: { type: "string" },
         label: { type: "string" },
+        wait: {
+          type: "boolean",
+          description: "If true (default), wait for the peer's assistant reply.",
+        },
+        timeout_ms: {
+          type: "number",
+          description: `Wait budget in ms (default ${PEER_WAIT_DEFAULT_MS}; min ${PEER_WAIT_MIN_MS}).`,
+        },
       },
       required: ["workspace_id", "prompt"],
       additionalProperties: false,
@@ -175,12 +199,13 @@ export function bindWorkspaceOrchestrateTools(
       kind: "other",
       rawInput: args ?? {},
     }),
-    async execute(args) {
+    async execute(args, signal) {
       const a = (args ?? {}) as Record<string, unknown>;
       const workspaceId = String(a.workspace_id ?? "").trim();
       const prompt = String(a.prompt ?? "").trim();
       const sessionIdArg = String(a.session_id ?? "").trim();
-      const label = String(a.label ?? "").trim();
+      const sessionLabel = String(a.label ?? "").trim();
+      const wait = a.wait !== false;
       if (!workspaceId || !prompt) {
         return {
           content: "workspace_session_prompt: workspace_id and prompt required",
@@ -225,7 +250,7 @@ export function bindWorkspaceOrchestrateTools(
           {
             ...(targetId ? { sessionId: targetId } : {}),
             workspaceId,
-            ...(label ? { label } : {}),
+            ...(sessionLabel ? { label: sessionLabel } : {}),
             agentPreset: "harness",
           },
         );
@@ -248,17 +273,18 @@ export function bindWorkspaceOrchestrateTools(
         }
       }
 
+      const seqAtSend = readSessionEvents(runtime.store, targetId).length;
       const prompted = await dispatchFaceMethod(
         runtime,
         "session.prompt",
         `orch-sp-${Date.now().toString(36)}`,
         {
           sessionId: targetId,
-          mode: "queue",
+          mode: wait ? "steer" : "queue",
           content: [
             {
               type: "text",
-              text: `[from ${fromLabel} session ${sessionId}]\n\n${prompt}`,
+              text: `[from ${label} session ${sessionId}]\n\n${prompt}`,
             },
           ],
         },
@@ -269,12 +295,38 @@ export function bindWorkspaceOrchestrateTools(
           isError: true,
         };
       }
+      if (!wait) {
+        return {
+          content: JSON.stringify({
+            workspaceId,
+            sessionId: targetId,
+            ok: true,
+            wait: false,
+          }),
+        };
+      }
+      const timeoutMs = clampPeerWaitMs(a.timeout_ms);
+      const waited = await waitForPeerAssistantReply(
+        runtime,
+        targetId,
+        seqAtSend,
+        timeoutMs,
+        signal,
+      );
+      if ("reply" in waited) {
+        return {
+          content: JSON.stringify({
+            workspaceId,
+            sessionId: targetId,
+            ok: true,
+            wait: true,
+            reply: waited.reply,
+          }),
+        };
+      }
       return {
-        content: JSON.stringify({
-          workspaceId,
-          sessionId: targetId,
-          ok: true,
-        }),
+        content: `workspace_session_prompt: ${waited.error}`,
+        isError: true,
       };
     },
   });

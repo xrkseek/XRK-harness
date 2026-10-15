@@ -50,13 +50,11 @@ describe("agentPreset catalog", () => {
     expect(frugal.tools).toEqual({ web: true, lsp: true, pty: true });
 
     const shallow = resolveAgentPresetProfile("shallow");
-    expect(shallow.subagents).toEqual({
-      mode: "on",
-      maxDepth: 1,
-    });
+    expect(shallow.subagents).toEqual({ mode: "on" });
     const harness = resolveAgentPresetProfile("harness");
     expect(harness.subagents).toEqual({ mode: "on" });
-    expect(DEFAULT_MAX_DEPTH).toBe(2);
-    expect(DEFAULT_MAX_ACTIVE_CHILDREN).toBe(2);
+    // Legacy exports kept for importers; live ceiling is per-model sessions.
+    expect(DEFAULT_MAX_DEPTH).toBe(0);
+    expect(DEFAULT_MAX_ACTIVE_CHILDREN).toBe(0);
   });
 });
