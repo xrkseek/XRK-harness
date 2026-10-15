@@ -65,17 +65,17 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.5.31** | `0.5.x` 正式线 npm 当前；`npm i -g @xrkseek/harness-cli@latest` |
-| **预览（@rc）**     | **0.6.0-rc.2** | `0.6.x` 预览热修；`npm i -g @xrkseek/harness-cli@0.6.0-rc.2` 或 `@rc` |
-| **上一正式线**      | **0.3.11** | npm 另留此号供回退                                           |
+| **当前（@latest）** | **0.6.0** | `0.6.x` 预览线收口并接管 `@latest`；`npm i -g @xrkseek/harness-cli@latest` |
+| **过程号（历史）**  | **0.6.0-rc.2** | `0.6.x` 预览过程号；npm `@rc` 仍停在此号，仅留档               |
+| **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.5.x` 以 **0.5.31** 接管 `@latest`；`0.6.0-rc.2` 走 **`@rc`**，不抢 latest。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 接管 `@latest`；`0.6.0-rc.1` / `0.6.0-rc.2` 走 **`@rc`**，不抢 latest。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.5.31**（当前）与 **v0.3.11**（上一正式线）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.6.0**（当前）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -148,16 +148,16 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.5.31** | `0.5.x` formal-line npm current; `npm i -g @xrkseek/harness-cli@latest`   |
-| **Preview (@rc)**         | **0.6.0-rc.2** | `0.6.x` preview hotfix; `npm i -g @xrkseek/harness-cli@0.6.0-rc.2` or `@rc` |
-| **Previous formal line**  | **0.3.11** | Only other npm pin kept for rollback                                         |
+| **Current (@latest)**     | **0.6.0**  | `0.6.x` preview line closed and takes `@latest`; `npm i -g @xrkseek/harness-cli@latest` |
+| **Process numbers (past)**| **0.6.0-rc.2** | `0.6.x` preview process number; npm `@rc` still points here, archive only  |
+| **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.5.x` owns `@latest` at **0.5.31**; `0.6.0-rc.2` uses dist-tag **`rc`** and does not take latest. GitHub Release notes may retain historical tags.
+`0.6.x` owns `@latest` at **0.6.0**; `0.6.0-rc.1` / `0.6.0-rc.2` use dist-tag **`rc`** and do not take latest. GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.5.31** (current) and **v0.3.11** (previous formal line); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.6.0** (current) and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

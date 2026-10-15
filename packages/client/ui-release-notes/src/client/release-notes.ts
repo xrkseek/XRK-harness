@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.0',
+    date: '2026-10-15',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '0.6.x 收口正式版：归档把日志从热库 sessions.db 分离到 sessions-archive.db；向阳空间（默认家）+ 奇创工具面；IM 工作区与 im_send/im_reply；奇创/IM/编码均有 workspace_*；回合开头 session_capability / session_posture。',
+        en: '0.6.x closes as a formal release: archiving offloads logs from hot sessions.db into sessions-archive.db; Xiangyang default home + Qichuang surface; IM workspace with im_send/im_reply; workspace_* on Qichuang/IM/coding; turn-start session_capability / session_posture.',
+      },
+      {
+        zh: '向阳专用 skills 扩到 7 条并分文件维护（模糊需求转化 / 无源码写插件 / 家目录配置 / 清理 / 分层记忆 / 主线支线 / 技能合并），产品正文变更即刷新落盘。',
+        en: 'Seven Xiangyang-only skills now live in split source files (fuzzy-demand translation / plugins without a monorepo / home config / cleanup / layered memory / 主线·支线 / skill merge) and refresh on disk when bodies change.',
+      },
+      {
+        zh: '权限与沙箱正交：完全访问 / 自动审查不套 shell 沙箱也不弹审批窗，残余请求直接拒绝；grep/glob 与 read_file 同一路径闸；多工作区下 bash 默认 cwd 认会话工作区。',
+        en: 'Permission and sandbox are orthogonal: Full access / Auto skip shell confine and prompts (residual asks reject); grep/glob share the read_file path gate; in multi-workspace Hosts bash defaults to the session’s own workspace.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.0 已接管 @latest（不再发 rc）。完整清单见 docs/releases/v0.6.0.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.0 now owns @latest (no more rc). Full list in docs/releases/v0.6.0.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.0-rc.2',
     date: '2026-10-15',
     title: {
