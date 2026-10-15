@@ -430,6 +430,75 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('keeps guiding text anchored before tools when assistant/message finalizes later', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: '先读一下配置' },
+      }),
+    ])
+    const streaming = snapshot(value)
+    const streamingAssistant = node(streaming, 'assistant-step')
+    expect(streamingAssistant?.anchorSeq).toBe(3)
+    expect(streaming.order.map(key => streaming.nodes.get(key)?.kind)).toEqual(['assistant-step'])
+
+    value.append(at(4, 'assistant/chunk', {
+      turn: 1,
+      step: 1,
+      chunk: {
+        type: 'tool-call-delta',
+        index: 1,
+        id: 'read-1',
+        name: 'read',
+        argumentsDelta: '{"path":"a"}',
+      },
+    }))
+    value.append(at(5, 'tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'read-1',
+      name: 'read',
+      arguments: '{"path":"a"}',
+    }))
+    value.flush()
+
+    const withTool = snapshot(value)
+    expect(node(withTool, 'assistant-step')?.anchorSeq).toBe(3)
+    expect(withTool.order.map(key => withTool.nodes.get(key)?.kind)).toEqual([
+      'assistant-step',
+      'tool-call',
+    ])
+
+    value.append(at(6, 'assistant/message', {
+      turn: 1,
+      step: 1,
+      message: {
+        ...assistantMessage('assistant-guide', '先读一下配置'),
+        content: [
+          { type: 'text', text: '先读一下配置' },
+          { type: 'tool-call', id: 'read-1', name: 'read', arguments: '{"path":"a"}' },
+        ],
+      },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+
+    const settled = snapshot(value)
+    const assistant = node(settled, 'assistant-step')
+    expect(assistant?.anchorSeq).toBe(3)
+    expect(assistant?.data).toMatchObject({ status: 'settled' })
+    expect((assistant?.data as AssistantChatData).blocks[0]).toMatchObject({
+      kind: 'text',
+      text: '先读一下配置',
+    })
+    expect(settled.order.map(key => settled.nodes.get(key)?.kind)).toEqual([
+      'assistant-step',
+      'tool-call',
+    ])
+  })
+
   it('opens a Tool shell on the first named tool-call-delta and fills args before tool/call', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

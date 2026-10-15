@@ -5,7 +5,6 @@ import { SecretField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { MemoryEmbedCardFace } from './memory-embed-card-controller.ts'
 import type {} from './slot-contract.ts'
-import css from './McpCard.module.css'
 
 /** Props the renderer binds for the memory-embed card. */
 export type MemoryEmbedCardProps =
@@ -63,7 +62,6 @@ export function MemoryEmbedCard(props: MemoryEmbedCardProps) {
           : t('memoryEmbedTokenUnset')}
         onEdit={(text) => { props.edit('token', text) }}
       />
-      <p className={css.note} role="note">{t('memoryEmbedLiveHint')}</p>
     </PluginCard>
   )
 }

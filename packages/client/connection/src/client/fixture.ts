@@ -776,7 +776,7 @@ function planViewOf(log: readonly SessionEvent[]): { active: boolean; pending: b
 /** Fixture preset table (the host PermissionPresetService defaults). */
 const PERMISSION_PRESETS: Record<string, { sandbox: string; approval: string; description: string }> = {
   'workspace-write': { sandbox: 'workspace-write', approval: 'ask', description: 'Write inside the workspace and permitted temporary directories; wider retries require approval.' },
-  'danger-full-access': { sandbox: 'danger-full-access', approval: 'never', description: 'Full file access without approval prompts.' },
+  'danger-full-access': { sandbox: 'danger-full-access', approval: 'never', description: 'Full file access; residual approval asks are rejected without prompts.' },
 }
 
 /** Host permissions-unit parallel: fold the three knob events, derive the select over the fixture defaults. */

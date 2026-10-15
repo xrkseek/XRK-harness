@@ -152,7 +152,6 @@ export type PluginsSettingsLocaleKey =
   | 'memoryEmbedCollection' | 'memoryEmbedCollectionHint'
   | 'memoryEmbedToken' | 'memoryEmbedTokenHint'
   | 'memoryEmbedTokenSet' | 'memoryEmbedTokenUnset'
-  | 'memoryEmbedLiveHint'
   | 'externalAgentTitle' | 'externalAgentDescription'
   | 'externalAgentAcp' | 'externalAgentAcpHint'
   | 'externalAgentAppServer' | 'externalAgentAppServerHint'
@@ -360,9 +359,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   telemetryEndpointHint: 'Logs URL (for example http://localhost:4318/v1/logs). Optional when OTEL_EXPORTER_OTLP_* is set.',
   telemetryRestartHint: 'Applies on Host restart (store wrap is fixed at spawn).',
   sandboxTitle: 'Sandbox',
-  sandboxDescription: 'How agent shell / PTY commands are confined. Docker image and Windows mode apply with the backend. Helper paths stay env-only. Set XRK_SANDBOX_BACKEND in CI to bypass this card.',
+  sandboxDescription: 'How shell / PTY argv is confined when the session permission allows confinement. Orthogonal to Access permission: danger-full-access / Auto skip confine entirely — this card only chooses the Provider for workspace-write / read-only. Helper paths stay env-only. Set XRK_SANDBOX_BACKEND in CI to bypass this card.',
   sandboxBackend: 'Backend',
-  sandboxBackendHint: 'Workspace is the default cwd jail. Docker / bubblewrap / Windows swap the confine Provider.',
+  sandboxBackendHint: 'Used only when permission confines shell. Workspace = host DenyList + cwd jail; Docker / bubblewrap / Windows = alternate confine Providers. Idle under full access.',
   sandboxBackendWorkspace: 'Workspace',
   sandboxBackendDocker: 'Docker',
   sandboxBackendBwrap: 'bubblewrap (Linux)',
@@ -378,7 +377,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   sandboxWindowsModeWorkspaceWrite: 'Workspace write',
   sandboxWindowsModeReadOnly: 'Read only',
   sandboxWindowsModeDanger: 'Danger full access',
-  sandboxLiveHint: 'Applies on the next agent rebuild (live; no Host restart). Docker / Windows need their image or helper available or confine fails closed.',
+  sandboxLiveHint: 'Provider swaps on the next agent rebuild (live; no Host restart). Under full access / Auto the session never calls confine. Docker / Windows need image or helper, else confine fails closed.',
   computerUseTitle: 'Computer use',
   computerUseDescription: 'Native desktop GUI for computer_use (AX tree + input). Separate from browser_* page tools. CI may set XRK_COMPUTER_USE to bypass this card.',
   computerUseMode: 'Mode',
@@ -561,16 +560,15 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewLiveHint: 'Enable and classifier apply on the next tool call / classify (live; no Host restart). xrkh doctor probes heuristic|http|session-llm with a sample read_file payload.',
   memoryEmbedTitle: 'Memory embed sidecar',
   memoryEmbedDescription:
-    'Optional external vector HTTP for embedding.search (Qdrant-style /search). Leave URL empty for the embedded host under ~/.xrk/memory-embeddings. Non-empty XRK_MEMORY_EMBED_URL still bypasses this card for CI.',
+    'Optional vector HTTP for embedding.search. Empty URL keeps the embedded index (~/.xrk/memory-embeddings). Saves apply on the next search.',
   memoryEmbedUrl: 'Sidecar URL',
-  memoryEmbedUrlHint: 'http(s) base (Host POSTs /search and probes /health). Empty keeps embedded host only.',
+  memoryEmbedUrlHint: 'http(s) base for /search and /health. Empty = embedded only. Non-empty XRK_MEMORY_EMBED_URL bypasses this card.',
   memoryEmbedCollection: 'Collection',
-  memoryEmbedCollectionHint: 'Optional collection / index name sent with /search. Empty omits the field.',
+  memoryEmbedCollectionHint: 'Optional name sent with /search. Empty omits it.',
   memoryEmbedToken: 'Sidecar token',
-  memoryEmbedTokenHint: 'Optional Bearer; stored in Credentials as XRK_MEMORY_EMBED_TOKEN (not settings.yaml).',
+  memoryEmbedTokenHint: 'Optional Bearer → Credentials (XRK_MEMORY_EMBED_TOKEN), not settings.yaml.',
   memoryEmbedTokenSet: 'Configured',
   memoryEmbedTokenUnset: 'Not set',
-  memoryEmbedLiveHint: 'Applies on the next embedding.search (live; no Host restart).',
   externalAgentTitle: 'External agents',
   externalAgentDescription:
     'Spawn commands for subagent.runtime=acp / app-server / claude-code. Non-empty XRK_ACP_AGENT · XRK_CODEX_APP_SERVER · XRK_CLAUDE_CODE still bypass these fields for CI.',
@@ -800,9 +798,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   telemetryEndpointHint: 'logs URL（例如 http://localhost:4318/v1/logs）。已设 OTEL_EXPORTER_OTLP_* 时可留空。',
   telemetryRestartHint: '需重启 Host 后生效（store wrap 在启动时固定）。',
   sandboxTitle: '沙箱',
-  sandboxDescription: '约束 agent 的 shell / PTY 命令如何隔离。Docker 镜像与 Windows mode 随后端一起生效；helper 路径仍仅环境变量。CI 可设 XRK_SANDBOX_BACKEND 旁路本卡。',
+  sandboxDescription: '在会话权限允许套 confine 时，决定 shell / PTY 的 argv 如何隔离。与 Access 权限正交：完全访问 / 自动审查不套 confine——本卡只为 workspace-write / read-only 选 Provider。helper 路径仍仅环境变量。CI 可设 XRK_SANDBOX_BACKEND 旁路本卡。',
   sandboxBackend: '后端',
-  sandboxBackendHint: 'Workspace 为默认 cwd 狱。Docker / bubblewrap / Windows 切换 confine Provider。',
+  sandboxBackendHint: '仅当权限会套 shell confine 时生效。Workspace = 本机 DenyList + cwd 狱；Docker / bubblewrap / Windows = 换 confine Provider。完全访问下本会话不调用。',
   sandboxBackendWorkspace: 'Workspace',
   sandboxBackendDocker: 'Docker',
   sandboxBackendBwrap: 'bubblewrap（Linux）',
@@ -818,7 +816,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   sandboxWindowsModeWorkspaceWrite: '工作区可写',
   sandboxWindowsModeReadOnly: '只读',
   sandboxWindowsModeDanger: '危险全开',
-  sandboxLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。Docker / Windows 需镜像或 helper 可用，否则 confine 失败关闭。',
+  sandboxLiveHint: '下次 agent 重建后热切换 Provider（无需重启 Host）。完全访问 / 自动审查不会调用 confine。Docker / Windows 需镜像或 helper，否则 confine 失败关闭。',
   computerUseTitle: 'Computer use',
   computerUseDescription: '原生桌面 GUI（无障碍树 + 键鼠），供 computer_use；与页面级 browser_* 分开。CI 可设 XRK_COMPUTER_USE 旁路本卡。',
   computerUseMode: '模式',
@@ -1001,16 +999,15 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   autoReviewLiveHint: '启用与 classifier 在下次工具调用 / classify 即生效（热切换，无需重启 Host）。xrkh doctor 用样例 read_file 探活启发式|http|会话 LLM 三档。',
   memoryEmbedTitle: '向量记忆 sidecar',
   memoryEmbedDescription:
-    '可选外接向量 HTTP，供 embedding.search（类 Qdrant：POST /search）。URL 留空则只用 ~/.xrk/memory-embeddings 内嵌索引。CI 可设非空 XRK_MEMORY_EMBED_URL 旁路本卡。',
+    '可选向量 HTTP，供 embedding.search。URL 留空则用内嵌索引（~/.xrk/memory-embeddings）。保存后下次搜索即生效。',
   memoryEmbedUrl: 'Sidecar URL',
-  memoryEmbedUrlHint: 'http(s) 基址（Host POST /search，探测 /health）。留空则仅内嵌 host。',
+  memoryEmbedUrlHint: 'http(s) 基址（/search、/health）。留空仅内嵌。非空 XRK_MEMORY_EMBED_URL 会旁路本卡。',
   memoryEmbedCollection: '集合名',
-  memoryEmbedCollectionHint: '可选；随 /search 一并发送。留空则不传该字段。',
+  memoryEmbedCollectionHint: '可选；随 /search 发送。留空则不传。',
   memoryEmbedToken: 'Sidecar token',
-  memoryEmbedTokenHint: '可选 Bearer；经凭据落盘为 XRK_MEMORY_EMBED_TOKEN（不进 settings.yaml）。',
+  memoryEmbedTokenHint: '可选 Bearer → 凭据 XRK_MEMORY_EMBED_TOKEN（不进 settings.yaml）。',
   memoryEmbedTokenSet: '已配置',
   memoryEmbedTokenUnset: '未设置',
-  memoryEmbedLiveHint: '下次 embedding.search 即生效（热切换，无需重启 Host）。',
   externalAgentTitle: '外部 Agent',
   externalAgentDescription:
     'subagent.runtime=acp / app-server / claude-code 的 spawn 命令。CI 可设非空 XRK_ACP_AGENT · XRK_CODEX_APP_SERVER · XRK_CLAUDE_CODE 旁路本卡。',

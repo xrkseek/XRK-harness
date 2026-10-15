@@ -16,10 +16,15 @@
 }
 
 .note {
-  margin: 12px 0 0;
+  margin: 0;
+  padding: 4px 0 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.note + .note {
+  padding-top: 2px;
 }
 
 .empty {

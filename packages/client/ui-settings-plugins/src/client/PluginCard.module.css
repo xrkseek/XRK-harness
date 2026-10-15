@@ -186,8 +186,8 @@
 .fields {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 4px;
+  gap: 0;
+  padding-top: 0;
 }
 
 .readOnly {

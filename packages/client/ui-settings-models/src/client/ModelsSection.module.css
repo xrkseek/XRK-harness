@@ -47,8 +47,8 @@
 
 .rows {
   list-style: none;
-  /* Extra air between the title/intro block and the first provider card. */
-  margin: 12px 0 0;
+  /* Section gap already separates intro / default-model from the list. */
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -210,6 +210,47 @@
   line-height: 18px;
   font-weight: 500;
   color: var(--dsw-alias-label-secondary);
+}
+
+/* Default model: same chrome as provider row cards + plugin ChoiceField. */
+.defaultModel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.defaultModelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.defaultModelLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.defaultModelSelect {
+  max-width: none;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  border-color: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+}
+
+.defaultModelHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .linkButton {

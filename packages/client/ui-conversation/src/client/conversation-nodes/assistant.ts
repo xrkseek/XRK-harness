@@ -249,8 +249,17 @@ function projectAssistant(context: ConversationNodeContext<AssistantState>): Ass
   const status = settled?.interrupted === true
     ? 'interrupted'
     : settled === undefined ? 'running' : 'settled'
-  const anchorSeq = settled?.seq ?? state.firstVisibleSeq ?? context.matches[0]?.event.seq ?? 0
-  const time = settled?.time ?? state.firstVisibleTime ?? context.matches[0]?.event.time ?? 0
+  // Prefer first visible stream seq over the finalized assistant/message seq.
+  // Hosts often append tool/call(+result) before the durable assistant/message;
+  // anchoring on settled.seq then jumps the guiding text below those tool rows.
+  const anchorSeq = state.firstVisibleSeq
+    ?? settled?.seq
+    ?? context.matches[0]?.event.seq
+    ?? 0
+  const time = state.firstVisibleTime
+    ?? settled?.time
+    ?? context.matches[0]?.event.time
+    ?? 0
   return {
     anchorSeq,
     visible,

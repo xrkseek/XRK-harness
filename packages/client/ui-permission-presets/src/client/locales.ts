@@ -7,7 +7,7 @@ export const PERMISSION_ACCESS_NS = 'permission.access'
 export const zh = {
   'title': '权限',
   'description': '仅作用于编码工作区的新会话默认权限。IM / 向阳空间固定完全访问，不受此项影响。对话中可用 /permission 切换当前编码会话。',
-  'boundary': '注意：完全访问不改变文件工具的范围——相对路径仍限于工作区；绝对路径可读产品家目录，可写范围由「额外可写目录」决定（默认含 ~/.xrk）。',
+  'boundary': '注意：完全访问跳过 shell 沙箱且不弹审批窗；若仍有需批准的操作则直接拒绝。相对路径仍落在会话工作区，绝对读写跟「额外可写目录」/ 产品家目录。Sandbox Provider 只在工作区写入 / 只读时生效。',
   'roots.label': '额外可写目录',
   'roots.hint': '工作区以外、文件工具可写的绝对路径（默认可读/可写产品家目录）。添加或删除后立即生效。',
   'roots.placeholder': '绝对路径（默认含 ~/.xrk）',
@@ -37,7 +37,7 @@ export type PermissionSettingsKey = keyof typeof zh
 export const en = {
   'title': 'Permission',
   'description': 'Default permission for new coding-workspace sessions only. IM / Xiangyang stay full access and ignore this setting. In chat use /permission on a coding session.',
-  'boundary': 'Note: Full access does not widen file-tool scope — relative paths stay in the workspace; absolute reads use product home, and absolute writes follow Extra writable roots (defaults include ~/.xrk).',
+  'boundary': 'Note: Full access skips shell confine and approval prompts; residual asks are rejected. Relative paths stay in the session workspace; absolute I/O follows Extra writable roots / product home. Sandbox Provider applies only under Workspace write / Read only.',
   'roots.label': 'Extra writable roots',
   'roots.hint': 'Absolute directories outside the workspace that file tools may write (product home is readable/writable by default). Changes apply immediately.',
   'roots.placeholder': 'Absolute path (defaults include ~/.xrk)',

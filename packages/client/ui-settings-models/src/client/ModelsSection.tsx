@@ -294,9 +294,11 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
         )}
       {state.status === 'ready' && state.defaultModelOptions.length > 0
         ? (
-          <div className={styles['field']}>
-            <div className={styles['fieldLabel']}>
-              <label htmlFor="models-default-model">{t('defaultModel')}</label>
+          <div className={styles['defaultModel']}>
+            <div className={styles['defaultModelHead']}>
+              <label className={styles['defaultModelLabel']} htmlFor="models-default-model">
+                {t('defaultModel')}
+              </label>
               {state.defaultModelOverridden && state.writable
                 ? (
                   <button
@@ -320,7 +322,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
             </div>
             <select
               id="models-default-model"
-              className={`${styles['input']} ${styles['selectInput']}`}
+              className={`${styles['input']} ${styles['selectInput']} ${styles['defaultModelSelect']}`}
               aria-label={t('defaultModel')}
               disabled={!state.writable || defaultModelBusy || state.defaultModelOptions.length === 0}
               value={state.defaultModel === null
@@ -345,7 +347,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <p className={styles['advancedHint']}>{t('defaultModelHint')}</p>
+            <p className={styles['defaultModelHint']}>{t('defaultModelHint')}</p>
             {defaultModelError === undefined
               ? null
               : (

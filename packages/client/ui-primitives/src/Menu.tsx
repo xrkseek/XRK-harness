@@ -20,6 +20,8 @@ import css from './Menu.module.css'
 export interface MenuItem {
   id: string
   label: ReactNode
+  /** Optional second line under the label (permission posture, etc.). */
+  description?: ReactNode
   disabled?: boolean
   /** Leading icon (figma .Menu_cell gap 8). */
   icon?: ReactNode
@@ -273,7 +275,12 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
         <button
           type="button"
           role="menuitem"
-          className={clsx(css.item, selected && css.selected, entry.danger === true && css.danger)}
+          className={clsx(
+            css.item,
+            entry.description !== undefined && css.itemDescribed,
+            selected && css.selected,
+            entry.danger === true && css.danger,
+          )}
           disabled={entry.disabled}
           aria-haspopup={hasSub ? 'menu' : undefined}
           aria-expanded={hasSub ? subOpen : undefined}
@@ -287,7 +294,14 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
           }}
         >
           {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
-          <span className={css.itemLabel}>{entry.label}</span>
+          {entry.description !== undefined
+            ? (
+              <span className={css.itemCopy}>
+                <span className={css.itemLabel}>{entry.label}</span>
+                <span className={css.itemDescription}>{entry.description}</span>
+              </span>
+            )
+            : <span className={css.itemLabel}>{entry.label}</span>}
           {/* Selection marker is a trailing check (figma .Menu_cell), not a fill. */}
           {selected && <IconCheckOutline16 className={css.check} />}
         </button>

@@ -141,7 +141,13 @@ export function PermissionSelect({
     .filter(o => o.value !== 'custom')
     .map((option) => {
       const icon = permissionGlyph(option.value)
-      return { id: option.value, label: labelOf(option), ...icon === undefined ? {} : { icon } }
+      const desc = descOf(option)
+      return {
+        id: option.value,
+        label: labelOf(option),
+        ...(desc.length > 0 ? { description: desc } : {}),
+        ...icon === undefined ? {} : { icon },
+      }
     })
 
   const submit = (id: string): void => {
