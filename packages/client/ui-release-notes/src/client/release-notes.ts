@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.0-rc.2',
+    date: '2026-10-15',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '修复插件页技能文档预览：读错 skill 名时不再误报「会话不存在」；附件/路径等资源缺失也不再冒充会话丢失。',
+        en: 'Fixes Plugins skills catalog peek: truncated skill names no longer surface as “session not found”; attachment/path misses stop masquerading as dead sessions.',
+      },
+      {
+        zh: 'Desktop 热修 0.6.0-rc.2（未发 npm；npm @rc 仍为 0.6.0-rc.1）。完整清单见 docs/releases/v0.6.0-rc.2.md。',
+        en: 'Desktop hotfix 0.6.0-rc.2 (not on npm; npm @rc stays 0.6.0-rc.1). Full list in docs/releases/v0.6.0-rc.2.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.0-rc.1',
     date: '2026-10-15',
     title: {
