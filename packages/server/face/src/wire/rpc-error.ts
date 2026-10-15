@@ -99,13 +99,20 @@ export function mapFaceRpcError(
       };
 
     case "not-found":
+      // Only session-shaped misses become `session-not-found`. Resource misses
+      // (skill / path / plugin entry / attachment) used to stuff `message` into
+      // `details.sessionId` and confuse Settings / host.open callers.
+      if (typeof hint?.sessionId === "string") {
+        return {
+          code: "session-not-found",
+          message,
+          details: { sessionId: hint.sessionId },
+        };
+      }
       return {
-        code: "session-not-found",
-        message,
-        details: {
-          sessionId:
-            typeof hint?.sessionId === "string" ? hint.sessionId : message,
-        },
+        code: "bad-request",
+        message: `not-found: ${message}`,
+        details: { issues: [] },
       };
 
     case "session-not-archived":

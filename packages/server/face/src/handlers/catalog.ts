@@ -343,7 +343,11 @@ export const sessionAttachment: FaceHandler = async (runtime, _rpcId, payload) =
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "not-found", message: "session not found" },
+      error: {
+        code: "session-not-found",
+        message: sessionId,
+        details: { sessionId },
+      },
     };
   }
   const events = readSessionEvents(runtime.store, sessionId);

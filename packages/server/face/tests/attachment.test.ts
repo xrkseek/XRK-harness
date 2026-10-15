@@ -333,7 +333,7 @@ describe("Face session.attachment / image prompt", () => {
       attachmentId: "sha256:deadbeef",
     });
     expect(att.result.ok).toBe(false);
-    if (!att.result.ok) expect(att.result.error.code).toBe("session-not-found");
+    if (!att.result.ok) expect(att.result.error.code).toBe("attachment-error");
   });
 
   it("numbers images session-wide so later messages continue 图N", async () => {

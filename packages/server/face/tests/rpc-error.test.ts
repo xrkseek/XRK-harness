@@ -52,6 +52,26 @@ describe("mapFaceRpcError", () => {
     });
   });
 
+  it("maps Face not-found to session-not-found only when sessionId is present", () => {
+    expect(
+      mapFaceRpcError("not-found", "gone", { sessionId: "s1" }),
+    ).toEqual({
+      code: "session-not-found",
+      message: "gone",
+      details: { sessionId: "s1" },
+    });
+    expect(mapFaceRpcError("not-found", "story-to-handdrawn-video")).toEqual({
+      code: "bad-request",
+      message: "not-found: story-to-handdrawn-video",
+      details: { issues: [] },
+    });
+    expect(mapFaceRpcError("not-found", "path not found: /tmp/x")).toEqual({
+      code: "bad-request",
+      message: "not-found: path not found: /tmp/x",
+      details: { issues: [] },
+    });
+  });
+
   it("maps policy-denied / policy-ask without collapsing to model-unavailable", () => {
     expect(
       mapFaceRpcError("policy-denied", "provider.use denied", {

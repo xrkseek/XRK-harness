@@ -12,6 +12,10 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-s
 import type { PluginsSettingsLocaleKey } from './locales.ts'
 import css from './CatalogListTab.module.css'
 
+/** Selection-key prefixes for catalog rows (must match `slice` lengths below). */
+const DOC_ITEM_PREFIX = 'doc:'
+const SKILL_ITEM_PREFIX = 'skill:'
+
 /** Injected face for the skills catalog tab. */
 export interface SkillsCatalogTabInjected {
   currentSessionId: () => string | undefined
@@ -169,9 +173,9 @@ export function SkillsCatalogTab({
     let current = true
     const abort = new AbortController()
     setBody({ status: 'loading' })
-    const selector = activeKey.startsWith('doc:')
-      ? { document: activeKey.slice(4) }
-      : { name: activeKey.slice(7) }
+    const selector = activeKey.startsWith(DOC_ITEM_PREFIX)
+      ? { document: activeKey.slice(DOC_ITEM_PREFIX.length) }
+      : { name: activeKey.slice(SKILL_ITEM_PREFIX.length) }
     void readSkill(sessionId as SessionId, selector, abort.signal).then(
       (value) => {
         if (!current) return
@@ -346,7 +350,7 @@ export function SkillsCatalogTab({
           {expanded.has('documents') ? (
             <ul className={css.list}>
               {documents.map((doc) => {
-                const key = `doc:${doc.path}`
+                const key = `${DOC_ITEM_PREFIX}${doc.path}`
                 const open = activeKey === key
                 const title = doc.path === 'skills://catalog'
                   ? t('skillsCatalogPathLabel')
@@ -411,7 +415,7 @@ export function SkillsCatalogTab({
               {open ? (
                 <ul className={css.list}>
                   {group.skills.map((skill) => {
-                    const key = `skill:${skill.name}`
+                    const key = `${SKILL_ITEM_PREFIX}${skill.name}`
                     const detailOpen = activeKey === key
                     return (
                       <li key={skill.name} className={css.row}>

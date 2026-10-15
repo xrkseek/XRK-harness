@@ -97,7 +97,7 @@ export async function readSessionAttachment(input: {
   if (!referencedAttachmentIds(input.events).has(id)) {
     return {
       ok: false,
-      code: "not-found",
+      code: "attachment-unavailable",
       message: "attachment not referenced by this session",
     };
   }
@@ -128,7 +128,7 @@ export async function readSessionAttachment(input: {
     if (isAttachmentError(err) && err.code === "NOT_FOUND") {
       return {
         ok: false,
-        code: "not-found",
+        code: "attachment-unavailable",
         message: "attachment bytes missing",
       };
     }
