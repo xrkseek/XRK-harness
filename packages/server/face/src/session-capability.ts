@@ -10,6 +10,7 @@ import {
   effectiveSandboxMode,
   foldPlanMode,
   pathAccessModeFromSandbox,
+  shouldConfineSandbox,
 } from "@xrkseek/protocol";
 import type { FaceRuntime } from "./context.js";
 import {
@@ -50,7 +51,7 @@ function surfaceBrief(badge: string): string {
     case "im":
       return "IM channel · reply on-channel; dispatch coding via workspace_* / subagent — see <session_posture>.";
     case "qichuang":
-      return "Xiangyang · orchestrate peers/team; implement in coding workspaces — see <session_posture>.";
+      return "Xiangyang · orchestrate peers/team; path=open for fs incl. grep/glob; implement in coding workspaces — see <session_posture>.";
     default:
       return `Tool surface=${badge}; use only tools in your catalog.`;
   }
@@ -101,8 +102,9 @@ export function formatSessionCapability(
   const expanded = runtime.toolDisclosure.count(sessionId);
 
   const cwd = resolveSessionCwd(runtime, sessionId);
+  const shellConfine = shouldConfineSandbox(sandbox) ? "on" : "off";
   const lines = [
-    `permission: ${permission} (path=${pathMode}) · approval=${approval}`,
+    `permission: ${permission} (path=${pathMode}) · approval=${approval} · shell_confine=${shellConfine}`,
     `permission_brief: ${permissionBrief(permission)}`,
     `tool_surface: ${toolSurfaceSummary(badge)}`,
     `surface_brief: ${surfaceBrief(badge)}`,

@@ -5,6 +5,8 @@ import { resolveWithinRoot } from "./paths.js";
 
 export interface FsGlobOptions {
   readonly maxResults?: number;
+  /** Directory scope (relative or absolute — provider applies the path gate). */
+  readonly path?: string;
 }
 
 export interface FsGrepHit {

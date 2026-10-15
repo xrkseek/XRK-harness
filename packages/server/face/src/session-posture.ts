@@ -1,7 +1,7 @@
 /**
- * Turn-start `<session_posture>` — role brief for IM / 奇创 parents.
- * Coding badges use session_capability surface_brief only.
- * Standing AGENTS/SOUL stay common; surface role lives here.
+ * Turn-start `<session_posture>` — short role brief for IM / 奇创 parents.
+ * Coding badges use session_capability only. Playbook detail lives in skills
+ * (do not duplicate here).
  */
 
 import type { FaceRuntime } from "./context.js";
@@ -11,14 +11,14 @@ import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   im: [
-    "Role: IM channel operator · permission=full access (path open).",
-    "Reply on-channel. Coding: workspace_list → subagent(workspace_id) or workspace_session_prompt (keep session_id) → thread_message; optional thread_upsert to pin the peer.",
-    "主线 is discovery only — not required to message. Implement in the coding peer, not in ws_im.",
+    "Role: IM channel · path=open.",
+    "Reply on-channel. Coding: workspace_list → subagent(workspace_id) or workspace_session_prompt (keep session_id) → thread_message; optional thread_upsert.",
+    "Implement in the coding peer, not in ws_im.",
   ].join("\n"),
   qichuang: [
-    "Role: Xiangyang / Qichuang orchestrator · permission=full access (path open).",
-    "Orchestrate: workspace_create · workspace_session_prompt (keep session_id, wait for reply) · thread_message · optional thread_upsert on that peer · team · care of ~/.xrk and project .xrk.",
-    "No nested subagents here — implement inside coding workspaces you open or prompt. 主线 is discovery only.",
+    "Role: Xiangyang / Qichuang · path=open · shell_confine=off (Sandbox Backend unused this session).",
+    "Vague asks → skill xrk-demand-translate. Care: xrk-plugin-dev-care · xrk-home-config · xrk-xrk-cleanup · xrk-memory-polish · xrk-mainline-sideline.",
+    "Dispatch: workspace_session_prompt (keep session_id) → thread_upsert + presence_set; no nested subagents — implement in coding peers.",
   ].join("\n"),
 };
 

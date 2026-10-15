@@ -50,6 +50,7 @@ describe("session_capability", () => {
 
     const text = formatSessionCapability(runtime, sessionId);
     expect(text).toMatch(/permission: .*path=/);
+    expect(text).toMatch(/shell_confine=/);
     expect(text).toMatch(/permission_brief:/);
     expect(text).toMatch(/tool_surface: harness \(/);
     expect(text).toMatch(/surface_brief: Coding/);
@@ -79,9 +80,10 @@ describe("session_capability", () => {
     expect(xy.result.ok).toBe(true);
     if (!xy.result.ok) return;
     const xyId = (xy.result.value as { sessionId: string }).sessionId;
-    expect(formatSessionCapability(runtime, xyId)).toMatch(
-      /tool_surface: qichuang \(full-access/,
-    );
+    const xyText = formatSessionCapability(runtime, xyId);
+    expect(xyText).toMatch(/tool_surface: qichuang \(full-access/);
+    expect(xyText).toMatch(/path=open/);
+    expect(xyText).toMatch(/shell_confine=off/);
   });
 
   it("preamble includes inherited permission and weakened tool_surface", () => {

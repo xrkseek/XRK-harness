@@ -65,7 +65,14 @@ export {
   bindXiangyangWorkspaceTools,
   type BindXiangyangWorkspaceToolsOptions,
 } from "./xiangyang-workspace-tools.js";
-export { seedXiangyangSkills } from "./xiangyang-skills.js";
+export {
+  seedXiangyangSkills,
+  XIANGYANG_SKILL_SEEDS,
+  XIANGYANG_SKILL_IDS,
+  XIANGYANG_SKILLS_REVISION,
+  type SeedXiangyangSkillsResult,
+  type XiangyangSkillSeed,
+} from "./xiangyang-skills.js";
 export {
   listFacePluginInventory,
   readDisabledPluginIdsAt,

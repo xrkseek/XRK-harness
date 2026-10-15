@@ -1,6 +1,7 @@
 /**
  * Face permission presets — DSH permission-presets over session knobs.
- * Projection `permissions` + `/permission` write path; approval `never` auto-allows.
+ * Projection `permissions` + `/permission` write path; approval `never`
+ * rejects residual asks without prompting (DSH user-approval).
  */
 
 import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
@@ -44,7 +45,7 @@ export const AUTO_PRESET_SPEC: PermissionPresetSpec = {
   // DSH product name; Codex status/permission chrome says "Approve for me".
   name: "Auto review",
   description:
-    "Open path gate (no workspace jail) with per-call Auto Review; denials still ask the user.",
+    "path=open · shell confine off · per-call Auto Review (denials still ask).",
 };
 
 /**
@@ -80,21 +81,21 @@ export const FACE_PERMISSION_TABLE: Readonly<
     approval: "ask",
     name: "read-only",
     description:
-      "Read tools only (workspace + readable allowlist). Writes, bash, and mutating terminals are denied.",
+      "path=allowlisted · shell confine on · read tools only. Writes, bash, and mutating terminals are denied.",
   },
   "workspace-write": {
     sandbox: "workspace-write",
     approval: "ask",
     name: "workspace-write",
     description:
-      "Read/write inside the workspace and object allowlist roots; shell confined. Paths outside need allowlist or overreach approval.",
+      "path=allowlisted · shell confine on (Settings → Sandbox Provider). Outside paths need allowlist or overreach approval.",
   },
   "danger-full-access": {
     sandbox: "danger-full-access",
     approval: "never",
     name: "danger-full-access",
     description:
-      "No approval prompts; shell and file tools share an open path gate (no workspace jail).",
+      "path=open · shell confine off · approval never (residual asks reject, no prompt). fs/bash share the open gate; relative paths still resolve under cwd.",
   },
 };
 

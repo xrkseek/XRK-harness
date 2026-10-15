@@ -107,6 +107,13 @@ export { BoundedTextBuffer, splitUtf16Safe } from "./bounded-text-buffer.js";
 
 export interface DefaultPtyAccessOptions {
   readonly workspaceRoot: string;
+  /**
+   * Per-session workspace root for cwd jail (multi-workspace Host).
+   * Defaults to {@link workspaceRoot}.
+   */
+  readonly resolveWorkspaceRoot?: (
+    ownerSessionId?: string,
+  ) => string;
   readonly spawnTerminal?: SpawnTerminalFn;
   readonly config?: Partial<PtyBackendConfig>;
   readonly wrapArgv?: (
@@ -135,6 +142,9 @@ export function createDefaultPtyAccess(
     createBashTerminalBackend({
       config,
       workspaceRoot: options.workspaceRoot,
+      ...(options.resolveWorkspaceRoot
+        ? { resolveWorkspaceRoot: options.resolveWorkspaceRoot }
+        : {}),
       spawnTerminal: options.spawnTerminal ?? spawnNodePtyTerminal,
       ...(options.wrapArgv ? { wrapArgv: options.wrapArgv } : {}),
       ...(options.confine ? { confine: options.confine } : {}),

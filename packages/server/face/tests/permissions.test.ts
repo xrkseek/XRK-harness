@@ -55,7 +55,10 @@ describe("Face permission presets", () => {
     expect(pathAccessModeFromSandbox("workspace-write")).toBe("allowlisted");
     expect(pathAccessModeFromSandbox("read-only")).toBe("allowlisted");
     expect(FACE_PERMISSION_TABLE["danger-full-access"].description).toMatch(
-      /open path gate/i,
+      /path=open/i,
+    );
+    expect(FACE_PERMISSION_TABLE["danger-full-access"].description).toMatch(
+      /residual asks reject/i,
     );
   });
 
@@ -427,7 +430,7 @@ describe("Face permission presets", () => {
     ).toMatchObject({ currentValue: "workspace-write" });
   });
 
-  it("approval never auto-allows without approval/requested", async () => {
+  it("approval never rejects residual asks without approval/requested (DSH)", async () => {
     const store = createMemorySessionStore();
     const mux: unknown[] = [];
     const runtime = createBareFaceRuntime({
@@ -459,8 +462,8 @@ describe("Face permission presets", () => {
       call: { id: "call_1", name: "danger", arguments: {} },
       pipeline,
     });
-    expect(body).toHaveBeenCalled();
-    expect(out.result.content).toBe("ran");
+    expect(body).not.toHaveBeenCalled();
+    expect(out.result.isError).toBe(true);
     expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
     expect(
       mux.some(
@@ -511,9 +514,8 @@ describe("Face permission presets", () => {
       parameters: {},
       execute: body,
     });
-    pipeline.onPre(async () => ({ action: "ask", reason: "need?" }));
 
-    // Not read-only yet: ask path → approval never after danger preset.
+    // Full access: no read-only gate → write proceeds (no residual ask).
     await dispatchFaceMethod(runtime, "commands/execute", "sw", {
       args: { agentId: sessionId, line: "/permission danger-full-access" },
     });
@@ -562,6 +564,7 @@ describe("Face permission presets", () => {
     ).toMatchObject({ currentValue: "danger-full-access" });
     expect(invalidated).toContain(sessionId);
 
+    // Live preset switch applied: residual ask under never rejects (DSH).
     const pipeline = createToolPipeline();
     pipeline.setApprovalHandler(runtime.approvals.handlerFor(sessionId));
     pipeline.onPre(async () => ({ action: "ask", reason: "need human" }));
@@ -578,8 +581,8 @@ describe("Face permission presets", () => {
       call: { id: "call_live", name: "danger", arguments: {} },
       pipeline,
     });
-    expect(body).toHaveBeenCalled();
-    expect(out.result.content).toBe("ran");
+    expect(body).not.toHaveBeenCalled();
+    expect(out.result.isError).toBe(true);
     expect(runtime.approvals.listPending(sessionId)).toHaveLength(0);
   });
 });

@@ -67,6 +67,33 @@ describe("FsService", () => {
     expect((await fs.read(outside)).content).toBe("open gate");
   });
 
+  it("pathAccessMode open lets grep/glob use absolute paths outside the workspace", async () => {
+    const base = await mkdtemp(path.join(tmpdir(), "xrk-fs-open-search-"));
+    const root = path.join(base, "ws");
+    const other = path.join(base, "other");
+    await mkdir(path.join(other, "pkg"), { recursive: true });
+    await mkdir(root, { recursive: true });
+    await writeFile(path.join(other, "pkg", "hit.ts"), "const OPEN_GREP_MARK = 1;\n", "utf8");
+    const open = createFsLocalProvider({ root, pathAccessMode: "open" });
+    const hits = await open.grep("OPEN_GREP_MARK", {
+      path: path.join(other, "pkg"),
+      glob: "**/*.ts",
+    });
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.text).toContain("OPEN_GREP_MARK");
+    expect(hits[0]!.path.replace(/\\/g, "/")).toMatch(/pkg\/hit\.ts$/);
+
+    const files = await open.glob("**/*.ts", { path: path.join(other, "pkg") });
+    expect(files.some((f) => f.replace(/\\/g, "/").endsWith("pkg/hit.ts"))).toBe(
+      true,
+    );
+
+    const jailed = createFsLocalProvider({ root, pathAccessMode: "jailed" });
+    await expect(
+      jailed.grep("OPEN_GREP_MARK", { path: path.join(other, "pkg") }),
+    ).rejects.toBeInstanceOf(PathEscapeError);
+  });
+
   it("pathAccessMode jailed ignores extraWritableRoots", async () => {
     const base = path.resolve(tmpdir());
     const root = path.join(base, "xrk-ws-jail");

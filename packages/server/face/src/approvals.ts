@@ -159,8 +159,10 @@ export class FaceApprovalBroker {
     },
     signal?: AbortSignal,
   ): Promise<boolean> {
+    // DSH user-approval: `never` rejects before interactive dispatch (CI /
+    // full-access residual asks fail closed — never auto-allow).
     if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
-      return true;
+      return false;
     }
     const synthetic: Pick<ToolPipelineContext, "call" | "args" | "signal"> = {
       call: {
@@ -178,7 +180,7 @@ export class FaceApprovalBroker {
   handlerFor(sessionId: string): ApprovalHandler {
     return async (ctx, reason, displayReason) => {
       if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
-        return true;
+        return false;
       }
       return this.request(sessionId, ctx, reason, displayReason);
     };
@@ -192,8 +194,9 @@ export class FaceApprovalBroker {
   ): Promise<boolean> {
     // Defense in depth: every ask path honors approval/policy never
     // (handlerFor / requestHostGate also check; callers must not bypass).
+    // DSH: never = deterministic reject, no mux prompt (not auto-allow).
     if (effectiveApprovalPolicy(readSessionEvents(this.store, sessionId)) === "never") {
-      return true;
+      return false;
     }
 
     const classified = classifyApproval({

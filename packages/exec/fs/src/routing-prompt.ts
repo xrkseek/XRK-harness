@@ -60,7 +60,9 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
     names.has("present")
   ) {
     lines.push(
-      "- Paths may be workspace-relative or absolute under the workspace root.",
+      names.has("read_file")
+        ? "- Paths: workspace-relative by default; absolute allowed when path=open (full access / auto) or under host-readable roots — `grep`/`glob` share the same gate as `read_file`."
+        : "- Paths: workspace-relative by default; absolute allowed when path=open (full access / auto) or under host-readable roots.",
     );
   }
   if (lines.length === 0) return "";
@@ -73,13 +75,13 @@ export function formatShellRoutingPrompt(available: ToolNameSet): string {
   const lines: string[] = [];
   if (names.has("bash")) {
     lines.push(
-      "- `bash` runs in the session workspace cwd by default (pwd should be the workspace).",
+      "- `bash` default cwd = session workspace. path=open → shell confine off (Settings Sandbox Provider idle); path=allowlisted → confine on via that Provider.",
     );
     lines.push(
       "- Use `bash` for builds, git, package managers, and one-shot commands.",
     );
     lines.push(
-      "- Screenshots / downloads from tools: write under the workspace (or an absolute path you control), then `read_image` / `present` that path — do not assume Desktop or Host cwd.",
+      "- Tool screenshots/downloads: write under the workspace (or an absolute path you control), then `read_image` / `present` — not Desktop/Host cwd.",
     );
   }
   const hasTerminal =

@@ -57,8 +57,12 @@ describe("session_posture", () => {
       const xyId = (xy.result.value as { sessionId: string }).sessionId;
       const xyText = formatSessionPosture(runtime, xyId);
       expect(xyText).toMatch(/Xiangyang|Qichuang/);
-      expect(xyText).toMatch(/full access/);
+      expect(xyText).toMatch(/path=open/);
+      expect(xyText).toMatch(/shell_confine=off/);
       expect(xyText).toMatch(/workspace_session_prompt/);
+      expect(xyText).toMatch(/xrk-demand-translate/);
+      expect(xyText).toMatch(/xrk-plugin-dev-care/);
+      expect(xyText).toMatch(/thread_upsert/);
 
       await ensureImWorkspace(runtime);
       const im = await dispatchFaceMethod(runtime, "session.create", "im", {
@@ -69,7 +73,7 @@ describe("session_posture", () => {
       const imId = (im.result.value as { sessionId: string }).sessionId;
       const imText = formatSessionPosture(runtime, imId);
       expect(imText).toMatch(/IM channel/);
-      expect(imText).toMatch(/full access/);
+      expect(imText).toMatch(/path=open/);
       expect(imText).toMatch(/subagent\(workspace_id\)|workspace_session_prompt/);
 
       const frags = createSessionPostureFragmentProvider(runtime).produce({

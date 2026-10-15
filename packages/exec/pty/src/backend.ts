@@ -12,6 +12,13 @@ import {
 export interface BashTerminalBackendOptions {
   readonly config: PtyBackendConfig;
   readonly workspaceRoot: string;
+  /**
+   * Per-session jail root (multi-workspace Host). Falls back to
+   * {@link workspaceRoot} when omitted.
+   */
+  readonly resolveWorkspaceRoot?: (
+    ownerSessionId?: string,
+  ) => string;
   readonly spawnTerminal: SpawnTerminalFn;
   /** Sync wrap (legacy). Prefer {@link confine} when available. */
   readonly wrapArgv?: (
@@ -51,11 +58,15 @@ export function createBashTerminalBackend(
   options: BashTerminalBackendOptions,
 ): TerminalBackend {
   const { config, workspaceRoot, spawnTerminal, wrapArgv, confine } = options;
+  const resolveRoot =
+    options.resolveWorkspaceRoot ??
+    ((_ownerSessionId?: string) => workspaceRoot);
   return {
     type: config.backendType,
     async spawn(spec) {
       spec.signal?.throwIfAborted();
-      const cwd = resolvePtyCwd(workspaceRoot, spec.cwd);
+      const root = resolveRoot(spec.ownerSessionId);
+      const cwd = resolvePtyCwd(root, spec.cwd);
       const rawArgv = [config.shellPath, ...config.shellArgs];
       const argv = confine
         ? [...(await confine(rawArgv, cwd, spec.signal))]

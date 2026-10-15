@@ -20,6 +20,7 @@ import { isDocumentExtractPath, textFromReadBuffer } from "./document-extract.js
 import { formatReadWindow } from "./read-window.js";
 import {
   PathEscapeError,
+  isLexicallyInside,
   resolveOpenPath,
   resolveUnderHostRoots,
   resolveWritablePath,
@@ -344,6 +345,46 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       pathAccessMode,
     );
 
+  /**
+   * Grep/glob historically jailed to `root` even when pathAccessMode is open.
+   * Resolve the scope with the same gate as read_file, then re-root the search
+   * when the target lies outside the workspace.
+   */
+  const resolveSearchTarget = async (
+    scope: string | undefined,
+  ): Promise<{
+    readonly searchRoot: string;
+    readonly relPath?: string;
+    readonly outside: boolean;
+  }> => {
+    if (scope === undefined || scope === "." || scope === "") {
+      return { searchRoot: root, outside: false };
+    }
+    const abs = readPath(scope);
+    if (isLexicallyInside(root, abs)) {
+      return { searchRoot: root, relPath: scope, outside: false };
+    }
+    try {
+      const st = await fsStat(abs);
+      if (st.isFile()) {
+        return {
+          searchRoot: path.dirname(abs),
+          relPath: path.basename(abs),
+          outside: true,
+        };
+      }
+      return { searchRoot: abs, outside: true };
+    } catch {
+      return {
+        searchRoot: path.dirname(abs),
+        relPath: path.basename(abs),
+        outside: true,
+      };
+    }
+  };
+
+  const toPosixAbs = (abs: string): string => abs.replace(/\\/g, "/");
+
   return {
     root,
     resolvePath(userPath) {
@@ -451,10 +492,33 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       await mkdir(abs, { recursive: true });
     },
     async glob(pattern, options) {
-      return globUnderRoot(root, pattern, options);
+      const target = await resolveSearchTarget(options?.path);
+      const scopedPattern =
+        target.relPath !== undefined && !target.outside
+          ? `${String(target.relPath).replace(/\\/g, "/").replace(/\/+$/, "")}/${pattern.replace(/^\.\//, "")}`
+          : pattern;
+      const hits = await globUnderRoot(target.searchRoot, scopedPattern, {
+        ...(typeof options?.maxResults === "number"
+          ? { maxResults: options.maxResults }
+          : {}),
+      });
+      if (!target.outside) return hits;
+      return hits.map((rel) =>
+        toPosixAbs(path.join(target.searchRoot, rel)),
+      );
     },
     async grep(pattern, options) {
-      return grepUnderRoot(root, pattern, options);
+      const target = await resolveSearchTarget(options?.path);
+      const { path: _scope, ...rest } = options ?? {};
+      const hits = await grepUnderRoot(target.searchRoot, pattern, {
+        ...rest,
+        ...(target.relPath !== undefined ? { path: target.relPath } : {}),
+      });
+      if (!target.outside) return hits;
+      return hits.map((h) => ({
+        ...h,
+        path: toPosixAbs(path.join(target.searchRoot, h.path)),
+      }));
     },
     onIntent(handler) {
       intentHandlers.add(handler);
@@ -746,11 +810,12 @@ export function createFsTools(
         };
         try {
           const pattern = String(a.pattern ?? "");
-          const scoped =
+          const pathArg =
             a.path !== undefined && String(a.path).trim().length > 0
-              ? `${String(a.path).replace(/\\/g, "/").replace(/\/+$/, "")}/${pattern.replace(/^\.\//, "")}`
-              : pattern;
-          const files = await fs.glob(scoped, {
+              ? String(a.path).trim()
+              : undefined;
+          const files = await fs.glob(pattern, {
+            ...(pathArg !== undefined ? { path: pathArg } : {}),
             ...(typeof a.max_results === "number"
               ? { maxResults: a.max_results }
               : {}),
@@ -771,7 +836,8 @@ export function createFsTools(
       name: "grep",
       description:
         "Search file contents with ripgrep (path:line:text). Respects .gitignore; " +
-        "skips node_modules/dist/VCS. Optional path scopes a file/dir; glob filters names (e.g. **/*.ts). " +
+        "skips node_modules/dist/VCS. Optional path scopes a file/dir (same path gate as read_file — " +
+        "absolute OK when path=open / under readable roots); glob filters names (e.g. **/*.ts). " +
         "Default cap ~100 hits.",
       parameters: {
         type: "object",

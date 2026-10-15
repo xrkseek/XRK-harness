@@ -371,7 +371,19 @@ function resolveMcpAllowConnect(
  * otherwise run bash completely unsandboxed.
  */
 export function createHostShellPrepareArgv(options: {
+  /**
+   * Fallback jail root when {@link readWorkspaceRoot} is omitted or returns
+   * nothing (Host process root / single-workspace).
+   */
   readonly workspaceRoot: string;
+  /**
+   * Per-session workspace root (coding project / worktree). Multi-workspace
+   * Hosts must supply this — otherwise bash cwd under session A fails
+   * `cwd escapes` against Host root B.
+   */
+  readonly readWorkspaceRoot?: (
+    sessionId: string | undefined,
+  ) => string | undefined;
   readonly readSandboxSettings: () => Record<string, unknown> | undefined;
   readonly readSandboxMode: (sessionId: string | undefined) => import("@xrkseek/protocol").SandboxMode;
   /**
@@ -391,14 +403,17 @@ export function createHostShellPrepareArgv(options: {
   let cachedStack: SandboxService | undefined;
   let cachedStackKey = "";
   return async (argv, cwd, signal, ctx) => {
+    const sessionRoot =
+      options.readWorkspaceRoot?.(ctx?.ownerSessionId)?.trim() ||
+      options.workspaceRoot;
     const settings = options.readSandboxSettings();
     const product = parseSandboxProduct(settings);
     const extraRoots =
       options.readExtraWritableRoots?.(ctx?.ownerSessionId) ?? [];
-    const stackKey = `${JSON.stringify(product ?? null)}|${JSON.stringify(extraRoots)}`;
+    const stackKey = `${path.resolve(sessionRoot)}|${JSON.stringify(product ?? null)}|${JSON.stringify(extraRoots)}`;
     if (!cachedStack || cachedStackKey !== stackKey) {
       cachedStack = createSandboxStack({
-        workspaceRoot: options.workspaceRoot,
+        workspaceRoot: sessionRoot,
         ...(extraRoots.length ? { extraWritableRoots: extraRoots } : {}),
         ...(product ? { product } : {}),
         env: options.env,
@@ -1080,12 +1095,23 @@ export function createHostManager(): HostManager {
         return [...new Set(cleaned)];
       };
 
+      // Filled after Face attaches — closures below read it at spawn time.
+      const sessionCwdBox: {
+        get?: (sessionId: string) => string | undefined;
+      } = {};
+      const sessionWorkspaceRoot = (
+        sessionId: string | undefined,
+      ): string =>
+        (sessionId ? sessionCwdBox.get?.(sessionId)?.trim() : undefined) ||
+        config.runtime.workspaceRoot;
+
       const sharedPty =
         !sshWorld &&
         (config.runtime.preset === "harness" ||
           config.runtime.preset === "server")
           ? createDefaultPtyAccess({
               workspaceRoot: config.runtime.workspaceRoot,
+              resolveWorkspaceRoot: sessionWorkspaceRoot,
             })
           : undefined;
 
@@ -1101,12 +1127,13 @@ export function createHostManager(): HostManager {
               // Same dir as hostReadableRoots — job_output spill paths are tool-readable.
               spillDir: defaultSpillDir(),
               // Host-wide shared registry — sandbox confine resolves lazily so
-              // Face settings + per-session sandboxMode are read at spawn time,
-              // not at shell creation (faceBox.runtime arrives later). This is
-              // the production path the harness preset's `sharedShell ??`
-              // branch would otherwise bypass entirely.
+              // Face settings + per-session sandboxMode / session cwd are read
+              // at spawn time, not at shell creation (faceBox / sessionCwd
+              // arrive later). This is the production path the harness
+              // preset's `sharedShell ??` branch would otherwise bypass.
               prepareArgv: createHostShellPrepareArgv({
                 workspaceRoot: config.runtime.workspaceRoot,
+                readWorkspaceRoot: sessionWorkspaceRoot,
                 readSandboxSettings: () => {
                   const rt = faceBox.runtime;
                   if (!rt) return undefined;
@@ -1307,9 +1334,6 @@ export function createHostManager(): HostManager {
           /** Face `locale.preference` — reasoning/reply language directive. */
           locale?: "zh" | "en";
         };
-      } = {};
-      const sessionCwdBox: {
-        get?: (sessionId: string) => string | undefined;
       } = {};
       const sessionPresetBox: {
         get?: (sessionId: string) => string | undefined;

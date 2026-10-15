@@ -107,4 +107,30 @@ describe("createHostShellPrepareArgv", () => {
       prepare(argv, workspaceRoot, undefined, {}),
     ).rejects.toThrow(/docker sandbox requires/);
   });
+
+  it("jails bash cwd against the per-session workspace root, not Host root", async () => {
+    const sessionRoot = mkdtempSync(path.join(tmpdir(), "xrk-sb-sess-"));
+    const prepare = createHostShellPrepareArgv({
+      workspaceRoot,
+      readWorkspaceRoot: (sessionId) =>
+        sessionId === "sess-project" ? sessionRoot : workspaceRoot,
+      readSandboxSettings: () => undefined,
+      readSandboxMode: () => "workspace-write",
+      remoteExecution: false,
+      env: {},
+    });
+    const argv = ["bash", "-lc", "echo hi"];
+    // Session project cwd must pass when the jail root matches the session.
+    await expect(
+      prepare(argv, sessionRoot, undefined, {
+        ownerSessionId: "sess-project",
+      }),
+    ).resolves.toEqual(argv);
+    // Same cwd against Host root (no session map) still escapes.
+    await expect(
+      prepare(argv, sessionRoot, undefined, {
+        ownerSessionId: "sess-other",
+      }),
+    ).rejects.toThrow(/cwd escapes workspace root/);
+  });
 });

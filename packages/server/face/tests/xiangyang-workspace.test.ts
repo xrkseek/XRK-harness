@@ -2,6 +2,7 @@
  * 向阳空间 default workspace + 奇创 lock + dedicated skills seed.
  */
 import { mkdtempSync, rmSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -166,7 +167,32 @@ describe("向阳空间 workspace", () => {
     const root = xiangyangWorkspacePath(home);
     const first = await seedXiangyangSkills(root);
     expect(first.installed.length).toBeGreaterThan(0);
+    expect(first.revision).toBeGreaterThanOrEqual(2);
+    expect(first.installed).toContain("xrk-demand-translate");
+    expect(first.installed).toContain("xrk-plugin-dev-care");
+    expect(first.installed).toContain("xrk-home-config");
+    expect(first.installed).toContain("xrk-memory-polish");
+    expect(first.installed).toContain("xrk-mainline-sideline");
+    const pluginBody = await readFile(
+      path.join(root, ".xrk", "skills", "xrk-plugin-dev-care", "SKILL.md"),
+      "utf8",
+    );
+    expect(pluginBody).toMatch(/createPlugin/);
+    expect(pluginBody).toMatch(/xrkh plugin add/);
     const second = await seedXiangyangSkills(root);
     expect(second.installed).toEqual([]);
+  });
+
+  it("refreshes product skill bodies when the seed text changes", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xy-sk-refresh-"));
+    homes.push(home);
+    const root = xiangyangWorkspacePath(home);
+    await seedXiangyangSkills(root);
+    const file = path.join(root, ".xrk", "skills", "xrk-memory-polish", "SKILL.md");
+    await writeFile(file, "---\nname: stale\n---\n", "utf8");
+    const refreshed = await seedXiangyangSkills(root);
+    expect(refreshed.installed).toContain("xrk-memory-polish");
+    const body = await readFile(file, "utf8");
+    expect(body).toMatch(/scope=global\|workspace\|session\|agent/);
   });
 });
