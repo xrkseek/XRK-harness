@@ -65,6 +65,44 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.1',
+    date: '2026-10-16',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'xrkh tui 命令面加厚：/model /resume /details /approve /deny /whitelist /thinking /status，忙时输入自动转插话；16 色调色板尊重 NO_COLOR；未指定 --port 时自动连上最新仍存活的 Host 锁（桌面内置 Host 也能直接连）。',
+        en: 'xrkh tui grows a real command surface: /model /resume /details /approve /deny /whitelist /thinking /status, and a line typed mid-turn becomes a steer. A 16-color palette honors NO_COLOR. With no --port it attaches to the newest live Host lock — including the Host embedded in Desktop.',
+      },
+      {
+        zh: 'Desktop 接管全局 xrkh 命令：Settings → 通用一键把桌面自管 bin 目录放到用户 PATH 最前（关闭即解除），Windows 改走 .NET Environment API 读写 PATH，不再被 reg query 折行毁掉整条 Path。',
+        en: 'Desktop can own the global xrkh command: a Settings → General switch puts the desktop-managed bin dir first on the user PATH (turn it off to unlink). Windows now reads and writes PATH through the .NET Environment API, so reg query line-wrapping can no longer truncate the whole value.',
+      },
+      {
+        zh: '权限档与可写根热切换：/permission 或 Settings 改路径闸后无需重建 Agent，工具立刻按新闸解析；向阳 / IM 编排工作区的 shell 不再套 confine，与「完全访问」显示一致。',
+        en: 'Permission tiers and writable roots now apply live: /permission or a Settings edit takes effect without rebuilding the agent. IM / Xiangyang orchestration sessions drop the shell confine so behavior matches the Full-access label.',
+      },
+      {
+        zh: '会话库被占用时的报错可操作：给出锁文件路径、持有者 PID 与它是否仍存活，并提示该退出哪些 Host；持有者已死会自动清掉陈旧锁。cron 启动失败也如实抛出首个原因。',
+        en: 'Session-store lock contention now names the lock file, the holder PID and whether it is alive, and tells you which Hosts to quit; a dead holder’s stale lock is cleared automatically. Cron start failures rethrow the real first cause.',
+      },
+      {
+        zh: 'ACP 服务端补齐 session/load 与 session/cancel（通知或带 id 的请求均可中止），session/update 不再重复推送已发文本。定时任务目录上移到会话顶栏，只显示本工作区的 agent 任务。',
+        en: 'The ACP server completes session/load and session/cancel (abort works as a notification or an id-bearing request), and session/update no longer re-streams text. The cron directory moves into the session header, filtered to this workspace’s agent jobs.',
+      },
+      {
+        zh: '对话与注入打磨：回合注入片段可作为 session://capability · session://posture · session://collab-board 在注入目录读到；session.tools 显示 onModel 与渐进披露计数；侧栏悬停卡带支线与 badge；划词翻译以 toast 给出译文；图片卡不再复读模型信封文本；本地 echo 与持久化用户消息同组件，回合标签不再闪动。',
+        en: 'Conversation and inject polish: turn-start fragments read as session://capability · session://posture · session://collab-board; session.tools shows onModel plus progressive-disclosure counts; the sidebar hover card carries sideline and badge; selection translate surfaces the result as a toast; the image card no longer echoes the model-facing envelope; local echo and the durable user node share one component, so round labels stop flickering.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.1 接管 @latest。完整清单见 docs/releases/v0.6.1.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.1 now owns @latest. Full list in docs/releases/v0.6.1.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.0',
     date: '2026-10-15',
     title: {
