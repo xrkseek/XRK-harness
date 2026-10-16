@@ -34,4 +34,5 @@ export const en = {
   'selectAll': 'Select All',
   'copyLink': 'Copy Link Address',
   'translate': 'Translate',
+  'translateFailed': 'Translate failed',
 } satisfies Record<CommonKey, string>

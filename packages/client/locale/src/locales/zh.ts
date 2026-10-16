@@ -32,6 +32,7 @@ export const zh = {
   'selectAll': '全选',
   'copyLink': '复制链接地址',
   'translate': '翻译',
+  'translateFailed': '翻译失败',
 } satisfies Record<string, string>
 
 /** The common vocabulary key union (zh is the key-set source of truth). */

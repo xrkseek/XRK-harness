@@ -189,12 +189,39 @@ async function pasteAt(hit: ContextMenuHit, plainText: boolean): Promise<void> {
   dispatchPasteEvent(el, plainText ? { text: content.text, files: [] } : content);
 }
 
-/** Write text when a synthetic clipboard event cannot reach the OS clipboard. */
+/**
+ * Best-effort write to the OS clipboard.
+ * Async translate finishes outside the user-gesture window, so
+ * `navigator.clipboard.writeText` often rejects — fall back to execCommand.
+ */
 function writeClipboardText(text: string): void {
   if (text === "") return;
-  void navigator.clipboard?.writeText(text).catch(() => {
-    // Clipboard blocked: the row already ran; nothing more to offer.
-  });
+  const clipboard = navigator.clipboard;
+  if (clipboard?.writeText) {
+    void clipboard.writeText(text).catch(() => {
+      fallbackCopyText(text);
+    });
+    return;
+  }
+  fallbackCopyText(text);
+}
+
+/** Synchronous copy path for when the async Clipboard API is blocked. */
+function fallbackCopyText(text: string): void {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.setAttribute("readonly", "");
+  el.style.position = "fixed";
+  el.style.left = "-9999px";
+  document.body.appendChild(el);
+  el.select();
+  try {
+    document.execCommand("copy");
+  } catch {
+    /* nothing more to offer */
+  } finally {
+    el.remove();
+  }
 }
 
 /**

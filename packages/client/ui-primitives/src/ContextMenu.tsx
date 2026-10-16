@@ -6,10 +6,11 @@
  * the same rows a native menu would have offered (arrows, Home/End, Escape,
  * outside click, focus returned to the caret).
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Menu } from "./Menu.tsx";
 import type { MenuEntry } from "./Menu.tsx";
+import { Toast } from "./Toast.tsx";
 import { domContextMenuActions } from "./contextMenuGestures.ts";
 import {
   buildContextMenuEntries,
@@ -22,6 +23,7 @@ import type {
   ContextMenuHit,
   ContextMenuLabels,
 } from "./context-menu.ts";
+import { translateSelectionText } from "./selection-translate.ts";
 
 /**
  * English row copy, used when the product locale is not wired yet (or a
@@ -111,11 +113,54 @@ export function ContextMenuHost({
   actions = domContextMenuActions,
 }: ContextMenuHostProps): ReactNode {
   const [request, setRequest] = useState<OpenRequest | null>(null);
+  const [toast, setToast] = useState<{ seq: number; text: string } | null>(null);
+  const toastSeq = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   /** Who owned the caret before the menu opened; gets it back on close. */
   const restoreRef = useRef<HTMLElement | null>(null);
   /** Monotonic ticket so a slow clipboard probe cannot open a stale menu. */
   const probeRef = useRef(0);
+
+  const showToast = useCallback((text: string): void => {
+    toastSeq.current += 1;
+    setToast({ seq: toastSeq.current, text });
+  }, []);
+
+  const dismissToast = useCallback((): void => {
+    setToast(null);
+  }, []);
+
+  /**
+   * Default translate only copied to the clipboard after an async fetch, so
+   * the gesture window was already gone and the user saw nothing. Keep test
+   * doubles intact; for the product path, toast the result (and still copy).
+   */
+  const wiredActions = useMemo((): ContextMenuActions => {
+    if (actions.translate !== domContextMenuActions.translate) return actions;
+    return {
+      ...actions,
+      translate(hit) {
+        const source = hit.selectionText.trim();
+        if (!source) return;
+        void translateSelectionText(source).then((out) => {
+          if (!out.ok) {
+            const prefix = t?.("translateFailed");
+            const label =
+              typeof prefix === "string" && prefix !== "" && prefix !== "translateFailed"
+                ? prefix
+                : "Translate failed";
+            showToast(`${label}: ${out.error}`);
+            return;
+          }
+          // Reuse the clipboard path (with execCommand fallback) from gestures.
+          actions.copyText(out.text);
+          const preview =
+            out.text.length > 160 ? `${out.text.slice(0, 157)}…` : out.text;
+          showToast(preview);
+        });
+      },
+    };
+  }, [actions, showToast, t]);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent): void => {
@@ -153,7 +198,7 @@ export function ContextMenuHost({
             hit,
             labels: resolveLabels(t),
             clipboard,
-            actions,
+            actions: wiredActions,
           }),
         });
       });
@@ -162,7 +207,7 @@ export function ContextMenuHost({
     return () => {
       document.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [actions, t]);
+  }, [wiredActions, t]);
 
   const close = useCallback((): void => {
     probeRef.current++;
@@ -228,16 +273,27 @@ export function ContextMenuHost({
     if (entry?.kind === "row") entry.run();
   };
 
-  return request === null ? null : (
-    <Menu
-      open
-      anchor={null}
-      items={toMenuEntries(request.entries)}
-      portal
-      listRef={listRef}
-      getAnchorRect={getAnchorRect}
-      onSelect={onSelect}
-      onClose={close}
-    />
+  return (
+    <>
+      {request === null ? null : (
+        <Menu
+          open
+          anchor={null}
+          items={toMenuEntries(request.entries)}
+          portal
+          listRef={listRef}
+          getAnchorRect={getAnchorRect}
+          onSelect={onSelect}
+          onClose={close}
+        />
+      )}
+      {toast !== null ? (
+        <Toast
+          key={toast.seq}
+          text={toast.text}
+          onDone={dismissToast}
+        />
+      ) : null}
+    </>
   );
 }
