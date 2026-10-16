@@ -241,7 +241,18 @@ describe("orchestration permission lock", () => {
     }
   });
 
-  it("does not append duplicate knobs when ensure runs twice", async () => {
+  const knobEvents = (
+    store: ReturnType<typeof createMemorySessionStore>,
+    sessionId: string,
+  ): number =>
+    readSessionEvents(store, sessionId).filter(
+      (event) =>
+        event.type === "permission/preset" ||
+        event.type === "sandbox/mode" ||
+        event.type === "approval/policy",
+    ).length;
+
+  it("keeps a fully pinned orchestration session append-free on re-lock", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({
       store,
@@ -258,29 +269,66 @@ describe("orchestration permission lock", () => {
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
-    const locked = readSessionEvents(store, sessionId).filter(
-      (event) =>
-        event.type === "permission/preset" ||
-        event.type === "sandbox/mode" ||
-        event.type === "approval/policy",
-    ).length;
+    const locked = knobEvents(store, sessionId);
     expect(locked).toBeGreaterThan(0);
+    expect(
+      permissionSelectFromEvents(readSessionEvents(store, sessionId))
+        .currentValue,
+    ).toBe("danger-full-access");
 
-    // Re-entering the lock (drag back into 向阳, migrator retry) must be a
-    // no-op: the durable identity already says full access.
+    // Drag back into 向阳 / migrator retry: already fully locked → no writes.
+    ensureOrchestrationFullAccess(store, sessionId, {
+      autoGate: runtime.permissionAuto,
+    });
+    expect(knobEvents(store, sessionId)).toBe(locked);
+  });
+
+  /**
+   * Regression pin for the fork-seed shape. A UI fork of an orchestration
+   * session seeds the parent's log, which can carry the preset identity while
+   * sandbox / approval are still inherited from composition defaults. The
+   * derived select then reads `custom`, so "am I already full access?" must be
+   * answered from the durable preset knob — otherwise every re-lock appends a
+   * fresh preset + sandbox + approval trio and the child's log grows on a
+   * operation that is supposed to be a no-op.
+   */
+  it("does not re-append knobs when only the preset identity is pinned", () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const sessionId = "seed-partial";
+    store.create(sessionId);
+    store.append(sessionId, {
+      type: "permission/preset",
+      ts: 1,
+      preset: "danger-full-access",
+    });
+
+    // Shape check: preset alone derives to `custom`, so an implementation that
+    // trusts the derived select would still write here.
+    const derived = permissionSelectFromEvents(
+      readSessionEvents(store, sessionId),
+    ).currentValue;
+    expect(derived).not.toBe("danger-full-access");
+
     ensureOrchestrationFullAccess(store, sessionId, {
       autoGate: runtime.permissionAuto,
     });
     ensureOrchestrationFullAccess(store, sessionId, {
       autoGate: runtime.permissionAuto,
     });
+
+    expect(knobEvents(store, sessionId)).toBe(1);
     expect(
       readSessionEvents(store, sessionId).filter(
-        (event) =>
-          event.type === "permission/preset" ||
-          event.type === "sandbox/mode" ||
-          event.type === "approval/policy",
+        (event) => event.type === "permission/preset",
       ).length,
-    ).toBe(locked);
+    ).toBe(1);
   });
 });
