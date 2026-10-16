@@ -590,6 +590,13 @@ describe('ChatView', () => {
     const h = makeHarness({ pendingSubmissions: [pending], running: true })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('本地回显').closest('[data-submission-echo]')).not.toBeNull()
+    // Same flow row from echo through durable: round / inject / edit-delete stay put.
+    expect(view.getByText('第 1 轮')).toBeTruthy()
+    expect(view.container.querySelector('[data-pending-inject]')).not.toBeNull()
+    expect(view.getByRole('button', { name: '编辑并重新发送' }).getAttribute('aria-disabled')).toBe('true')
+    expect(view.getByRole('button', { name: '删除此消息及之后' }).getAttribute('aria-disabled')).toBe('true')
+    const echoRow = view.container.querySelector('[data-send-flow="rpc:req-local-transcript"]')
+    expect(echoRow).not.toBeNull()
 
     act(() => {
       h.set({
@@ -603,6 +610,32 @@ describe('ChatView', () => {
     })
     expect(view.getAllByText('本地回显')).toHaveLength(1)
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
+    expect(view.container.querySelector('[data-pending-inject]')).toBeNull()
+    // Stable rpc React key — same flow item across echo → durable handoff.
+    expect(view.container.querySelector('[data-send-flow="rpc:req-local-transcript"]')).toBe(echoRow)
+  })
+
+  it('does not reserve an inject header when the window already has context rows', () => {
+    const pending = {
+      requestId: 'req-later-round' as RpcId,
+      placement: 'transcript' as const,
+      time: 2,
+      text: '续聊',
+      attachments: [] as const,
+    }
+    const h = makeHarness({
+      pendingSubmissions: [pending],
+      running: true,
+      nodes: [{
+        kind: 'context', seq: 1, time: 500,
+        content: [], source: null,
+        provenance: { role: 'inject', label: 'skill-catalog' },
+        form: null,
+      } as const satisfies ConversationNode],
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('续聊').closest('[data-submission-echo]')).not.toBeNull()
+    expect(view.container.querySelector('[data-pending-inject]')).toBeNull()
   })
 
   it('leaves queued submission echoes to QueueDock', () => {
@@ -2247,6 +2280,18 @@ describe('ChatView', () => {
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
     act(() => { h.set({ loadingOlder: true }) })
     expect(view.getByText('加载中…')).toBeTruthy()
+  })
+
+  it('hides load earlier when the outlined first round is already on screen', () => {
+    const h = makeHarness({
+      nodes: [{ ...user(2, '开场'), turn: 1 } as never, assistant(3, '答', 1)],
+      hasMore: true,
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    h.setTurnOutline([{ turn: 1, seq: 1, round: 1, prompt: '开场', response: '答' }])
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByText('加载更早')).toBeNull()
+    expect(view.getByText('开场')).toBeTruthy()
   })
 
   it('keeps an unloaded jump armed when the repage returns the same window head', async () => {

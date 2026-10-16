@@ -277,6 +277,46 @@ describe('MessageItem arms', () => {
     expect(view.container.textContent).toContain('then run /plan-build now.')
   })
 
+  it('hides file handle captions that include a source path (model-only wire)', () => {
+    const caption = '[文件附件 notes.docx（sha256:abcd1234；源路径 C:\\Users\\x\\notes.docx）。需内容时用 read_file path=attachment:sha256:abcd1234 读取]'
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [
+          {
+            type: 'file',
+            attachment: {
+              attachmentId: 'sha256:abcd1234',
+              name: 'notes.docx',
+              bytes: 12,
+              mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            },
+          },
+          { type: 'text', text: caption, modelOnly: true },
+        ] as never,
+        source: null,
+      }}
+      />,
+    )
+    expect(view.container.textContent).not.toContain('sha256:abcd1234')
+    expect(view.container.textContent).not.toContain('源路径')
+    expect(view.container.textContent).toContain('notes.docx')
+  })
+
+  it('hides source-path file captions even when modelOnly was dropped on the wire', () => {
+    const caption = '[文件附件 notes.docx（sha256:abcd1234；源路径 C:\\Users\\x\\notes.docx）。需内容时用 read_file path=attachment:sha256:abcd1234 读取]'
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [{ type: 'text', text: caption }] as never,
+        source: null,
+      }}
+      />,
+    )
+    expect(view.container.querySelector('[class*="bubble"]')).toBeNull()
+    expect(view.container.textContent).not.toContain('源路径')
+  })
+
   it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {

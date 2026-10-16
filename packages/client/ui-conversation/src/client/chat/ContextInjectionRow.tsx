@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { ContextMessageNode } from '@xrkseek/client-runtime/client'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { DisclosureRow, IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'
@@ -29,6 +29,24 @@ export interface ContextInjectionRowProps {
  * @param props - Durable content, its projected producer role/name and form, and the locale seat.
  * @returns A collapsed context row with a bounded, form-specific body.
  */
+/**
+ * Same collapsed header as a logged inject row, painted with the local echo
+ * so the bubble does not jump when `beforeUserMessage` finishes writing.
+ */
+export function ContextInjectionPending({ t }: { t: ChatViewSlotProps['t'] }): ReactNode {
+  return (
+    <DisclosureRow
+      className={css.root}
+      icon={<IconBrowseOutline16 size={14} />}
+      chevronClassName={css.chevron}
+      title={t('message.contextInjection')}
+      open={false}
+      expandable={false}
+      onToggle={() => {}}
+    />
+  )
+}
+
 export function ContextInjectionRow({ content, source, provenance, form, t }: ContextInjectionRowProps) {
   const [open, setOpen] = useState(false)
   // Resolved rather than declared: a form whose fields are unreadable renders

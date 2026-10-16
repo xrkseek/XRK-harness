@@ -109,6 +109,38 @@ describe('keymap keydown routing', () => {
     expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe('unsent draft')
   })
 
+  it('pastes clipboard files without also inserting text/plain path', () => {
+    const editor = createEditor({ namespace: 'paste-files', onError: (e) => { throw e } })
+    const root = document.createElement('div')
+    root.contentEditable = 'true'
+    document.body.appendChild(root)
+    onTestFinished(() => { editor.setRootElement(null); root.remove() })
+    editor.setRootElement(root)
+    onTestFinished(registerPlainText(editor))
+    const intakeFiles = vi.fn()
+    const pasteText = vi.fn()
+    onTestFinished(registerComposerKeymap(editor, {
+      arbitrate: () => 'pass',
+      space: () => false,
+      dismissPopup: () => {},
+      canSubmit: () => false,
+      submit: () => {},
+      intakeFiles,
+      pasteText,
+    }))
+    const file = new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' })
+    const clipboardData = {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+      getData: (type: string) => (type === 'text/plain' ? 'C:\\Users\\x\\shot.png' : ''),
+    }
+    const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData })
+    root.dispatchEvent(event)
+    expect(intakeFiles).toHaveBeenCalledWith([file])
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
   it('routes Tab through arbitration and passes when unconsumed', () => {
     const editor = createEditor({ namespace: 'keymap-routing', onError: (e) => { throw e } })
     const root = document.createElement('div')

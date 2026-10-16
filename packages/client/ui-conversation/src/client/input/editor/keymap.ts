@@ -161,13 +161,17 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
         .filter(item => item.kind === 'file')
         .map(item => item.getAsFile())
         .filter((file): file is File => file !== null)
-      if (files.length > 0) handlers.intakeFiles(files)
-      const text = clipboardData.getData('text/plain')
-      if (text === '') {
-        if (files.length === 0) return false
+      // File / image paste owns the gesture. Explorer and some screenshot
+      // tools also put a path in text/plain — pasting that too dumps a raw
+      // path into the draft. Oversized files become `@path` chips inside
+      // intakeFiles; never also insert the path as plain text.
+      if (files.length > 0) {
+        handlers.intakeFiles(files)
         event.preventDefault()
         return true
       }
+      const text = clipboardData.getData('text/plain')
+      if (text === '') return false
       event.preventDefault()
       handlers.pasteText(text)
       return true

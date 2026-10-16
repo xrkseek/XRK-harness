@@ -13,7 +13,7 @@
 // ChatNodeSeat subscribes to one Node key, so Assistant deltas and Tool
 // lifecycle updates replace only their own row without remounting it.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type {
   ChatSnapshot,
   PendingSubmission,
@@ -27,8 +27,9 @@ import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
+import { ContextInjectionPending } from './ContextInjectionRow.tsx'
 import {
-  collectUserShapedSeqs, collectUserShapedTimes, durableSteerPending, groupPendingByChrome,
+  collectUserShapedSeqs, durableSteerPending, groupPendingByChrome,
   hasAgentWorkBefore, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn, isTurnInFlight,
   latestTurnNumber, rowSteerIdentity, runningTurnStartTime,
   turnsAreSettled,
@@ -36,7 +37,7 @@ import {
 import { isAtFlowFloor, readingLineY, resolveActiveTurn } from './active-turn.ts'
 import { shouldShowFlowWaiting, hasActiveTurnSurface } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
-import { ChatNodeSeat } from './ChatNodeSeat.tsx'
+import { ChatNodeSeat, UserSendFlow } from './ChatNodeSeat.tsx'
 import { ResubmitConfirm } from './ResubmitConfirm.tsx'
 import {
   completeResubmitConfirm,
@@ -60,6 +61,19 @@ const TURN_STATUS_PHRASES = [
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
+}
+
+/** Smallest host turn cited by the turn-outline projection, if it is an array. */
+function outlineEarliestTurn(outline: unknown): number | null {
+  if (!Array.isArray(outline)) return null
+  let earliest: number | null = null
+  for (const raw of outline) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const turn = (raw as { readonly turn?: unknown }).turn
+    if (typeof turn !== 'number' || !Number.isSafeInteger(turn)) continue
+    if (earliest === null || turn < earliest) earliest = turn
+  }
+  return earliest
 }
 
 interface PagingAnchor {
@@ -233,6 +247,19 @@ function isOpenerDuplicateSteer(
     }
   }
   return openerText !== '' && openerText === text
+}
+
+function promptRpcId(node: ReturnType<ChatSnapshot['nodes']['get']>): string | undefined {
+  if (node === undefined || node.kind !== 'user') return undefined
+  const source = node.data.source
+  if (source === null || typeof source !== 'object' || !('rpcId' in source)) return undefined
+  const rpc = (source as { rpcId?: unknown }).rpcId
+  return typeof rpc === 'string' && rpc.length > 0 ? rpc : undefined
+}
+
+function hostTurnOf(node: NonNullable<ReturnType<ChatSnapshot['nodes']['get']>>): number | undefined {
+  const location = node.location
+  return location.kind === 'turn' || location.kind === 'step' ? location.turn.turn : undefined
 }
 
 function isLiveSteerRow(
@@ -426,6 +453,13 @@ export function ChatView({
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
+  // The outline's first round is already on screen (its turn/start is in the
+  // window). hasMore can still be set for preamble events the chat never
+  // paints — don't offer 「加载更早」 there.
+  const historyHead = railItems[0]
+  const historyAtHead = historyHead?.anchor.kind === 'loaded'
+    && timeline.turns.get(historyHead.turn)?.start !== undefined
+    && outlineEarliestTurn(turnOutline) === historyHead.turn
   const selectedCallId = useStore(s => s.selection?.callId)
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
@@ -564,23 +598,14 @@ export function ChatView({
     }
     for (const [rpcId, submission] of local) {
       if (consumed.has(rpcId)) continue
-      const humans = [...nodeStore.values()].filter(node => node.kind === 'user' || node.kind === 'steering')
-      const durableText = new Set(humans.flatMap((node) => {
-        const data = node.data as { readonly content?: readonly { readonly type?: string; readonly text?: string }[] }
-        return (data.content ?? []).flatMap(block => (
-          block.type === 'text' && typeof block.text === 'string' && block.text !== '' ? [block.text] : []
-        ))
-      }))
-      if (submission.text !== '' && durableText.has(submission.text)) continue
-      const onTurn = collectUserShapedTimes(humans).filter(time => (
-        runningTurnStart === null || time >= runningTurnStart
-      ))
-      const at = submission.time
-      if (onTurn.length > 0 && (at === undefined || !onTurn.some(time => time < at))) continue
+      // Retire only when this submission's rpcId is on a durable row. Text /
+      // time equality wrongly hides the echo once an inject user/message
+      // lands before the human durable bubble.
+      if (observed.has(rpcId)) continue
       pending.push({ kind: 'echo', submission })
     }
     return pending
-  }, [pendingSteering, echoBook, steeringPreviews, order, nodeStore, runningTurnStart])
+  }, [pendingSteering, echoBook, steeringPreviews, order, nodeStore])
   // 插队中 follows Host `running` (same latch as Stop). Draining tools after
   // cancel must not keep follow-ups painted as 插队.
   const agentLive = running
@@ -630,6 +655,9 @@ export function ChatView({
     break
   }
   const lastDurable = lastDurableKey === null ? undefined : nodeStore.get(lastDurableKey)
+  const nextSendRound = railItems.length === 0
+    ? 1
+    : (railItems[railItems.length - 1]?.round ?? railItems.length) + 1
   const pendingGroups = useMemo(
     () => groupPendingByChrome(pendingInputs, (input) => {
       // 排队 never paints here. Host FIFO-claim promotes a flushed 排队
@@ -644,6 +672,24 @@ export function ChatView({
     }),
     [pendingInputs, steerPendingChrome, agentLive, turnOpen, turnsSettled],
   )
+  // First-turn injects land before the human user/message. When the window
+  // still has no context rows, keep a same-height header under the echo so
+  // the bubble does not drop when the log write lands. Later turns often
+  // skip inject — do not paint a phantom row there.
+  const contextCount = bodyOrder.reduce((count, key) => (
+    nodeStore.get(key)?.kind === 'context' ? count + 1 : count
+  ), 0)
+  const sendEchoLive = pendingGroups.some(group => (
+    group.chrome === 'send' && group.items.some(input => input.kind === 'echo')
+  ))
+  const injectHold = useRef<{ active: boolean; baseline: number }>({ active: false, baseline: 0 })
+  if (!sendEchoLive) injectHold.current.active = false
+  else if (!injectHold.current.active) {
+    injectHold.current = { active: true, baseline: contextCount }
+  }
+  const reserveInject = sendEchoLive
+    && injectHold.current.baseline === 0
+    && contextCount === 0
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -1117,9 +1163,83 @@ export function ChatView({
     t,
   }
 
-  const renderPendingGroup = (group: (typeof pendingGroups)[number]) => {
-    const steer = group.chrome === 'steer'
-    if (steer || group.items.length === 1) {
+  // One list so a send keeps `rpc:<id>` from the echo through the durable
+  // user node. A second list would unmount the row when the log write lands.
+  const columnRows: ReactNode[] = []
+  const seenSendRpc = new Set<string>()
+  for (const nodeKey of bodyOrder) {
+    const node = nodeStore.get(nodeKey)
+    const rpc = promptRpcId(node)
+    if (rpc !== undefined && node?.kind === 'user') {
+      seenSendRpc.add(rpc)
+      const hostTurn = hostTurnOf(node)
+      const round = hostTurn === undefined ? nextSendRound : (roundByTurn.get(hostTurn) ?? nextSendRound)
+      columnRows.push(
+        <UserSendFlow
+          key={`rpc:${rpc}`}
+          flowKey={`rpc:${rpc}`}
+          nodeKey={nodeKey}
+          round={round}
+          {...nodeSeat}
+        />,
+      )
+      continue
+    }
+    columnRows.push(<ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} />)
+  }
+  if (reserveInject) {
+    columnRows.push(
+      <div key="pending-inject" className={css.flowItem} data-pending-inject="">
+        <ContextInjectionPending t={t} />
+      </div>,
+    )
+  }
+  for (const group of pendingGroups) {
+    if (group.chrome !== 'send') continue
+    const live = group.items.flatMap((input) => (
+      input.kind === 'echo' && !seenSendRpc.has(input.submission.requestId)
+        ? [input]
+        : []
+    ))
+    if (live.length === 0) continue
+    // One echo → stable `rpc:` seat through durable handoff. Several idle
+    // echoes still stack in one bubble (queue-before-turn), like before.
+    if (live.length === 1) {
+      const rpc = live[0]!.submission.requestId
+      columnRows.push(
+        <UserSendFlow
+          key={`rpc:${rpc}`}
+          flowKey={`rpc:${rpc}`}
+          submission={live[0]!.submission}
+          round={nextSendRound}
+          {...nodeSeat}
+        />,
+      )
+      continue
+    }
+    const key = live.map((input) => input.submission.requestId).join('+')
+    const content = live.flatMap(pendingInputContent)
+    const preview = live.find((input) => input.submission.attachments.length > 0)
+    const previewAttachments = preview === undefined
+      ? undefined
+      : previewAttachmentsOf(preview.submission.attachments)
+    columnRows.push(
+      <div key={key} className={css.flowItem} data-chat-round={nextSendRound}>
+        <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: nextSendRound })}</div>
+        <PendingSteeringBubble
+          content={content}
+          {...(previewAttachments === undefined ? {} : { previewAttachments })}
+          renderMessageImages={renderMessageImages}
+          renderMessageFiles={renderMessageFiles}
+          t={t}
+        />
+      </div>,
+    )
+  }
+
+  /** Mid-turn 插队 only — ordinary sends stay in `columnRows` under a stable rpc key. */
+  const renderSteerGroup = (group: (typeof pendingGroups)[number]) => {
+    if (group.items.length === 1) {
       return group.items.map((input) => {
         const itemId = pendingWithdrawId(input)
         const onWithdraw = itemId === undefined ? undefined : () => { withdrawSteer(itemId) }
@@ -1128,7 +1248,7 @@ export function ChatView({
             <PendingSubmissionBubble
               key={input.submission.requestId}
               submission={input.submission}
-              steer={steer}
+              steer
               onWithdraw={onWithdraw}
               renderMessageImages={renderMessageImages}
               renderMessageFiles={renderMessageFiles}
@@ -1140,7 +1260,7 @@ export function ChatView({
           <PendingSteeringBubble
             key={input.item.id}
             content={input.item.content}
-            steer={steer}
+            steer
             onWithdraw={onWithdraw}
             {...(input.submission === undefined
               ? {}
@@ -1193,22 +1313,19 @@ export function ChatView({
               {t('chat.loadError', { message: openError.message, code: openError.code })}
             </div>
           )}
-          {hasMore && (
+          {hasMore && !historyAtHead && (
             <div className={css.older}>
               <button type="button" disabled={loadingOlder} onClick={loadOlderAnchored}>
                 {loadingOlder ? t('loading') : t('chat.loadOlder')}
               </button>
             </div>
           )}
-          {bodyOrder.map(nodeKey => (
-            <ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} />
-          ))}
-          {pendingGroups.filter(group => group.chrome === 'send').flatMap(renderPendingGroup)}
+          {columnRows}
           <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} sessionId={sessionId} t={t} />
           {trailingSteerOrder.map(nodeKey => (
             <ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} />
           ))}
-          {pendingGroups.filter(group => group.chrome === 'steer').flatMap(renderPendingGroup)}
+          {pendingGroups.filter(group => group.chrome === 'steer').flatMap(renderSteerGroup)}
         </div>
         {!atBottom && (
           <div className={css.toBottomSlot}>

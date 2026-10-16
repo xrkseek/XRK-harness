@@ -1,7 +1,9 @@
 import { memo, useMemo } from 'react'
+import type { PendingSubmission } from '@xrkseek/client-runtime/client'
 import { JsonBlock } from '@xrkseek/client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
+import { PendingSubmissionBubble, userMessageHasReaderSurface } from './MessageItem.tsx'
 import { usePostStreamLive } from './use-post-stream-live.ts'
 import css from './ChatView.module.css'
 
@@ -52,6 +54,12 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // ends lets content-visibility:auto blank an expanded Think row briefly.
   const postStreamLive = usePostStreamLive(streamingAssistant === true)
   if (routedNode === undefined || owner === null) return null
+  // Caption-only user rows (model handle text, no card) must not keep a
+  // round label and an action strip — that is a second bubble per file.
+  if ((routedNode.kind === 'user' || routedNode.kind === 'steering')
+    && !userMessageHasReaderSurface(routedNode.data.content)) {
+    return null
+  }
   const location = routedNode.location
   const hostTurn = location.kind === 'turn' || location.kind === 'step'
     ? location.turn.turn
@@ -97,6 +105,76 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
           />
         ),
       })}
+    </div>
+  )
+})
+
+/**
+ * One send row from the local echo through the durable user node.
+ * Same component and key so the round label and action row stay mounted
+ * when the log write replaces the echo.
+ */
+export const UserSendFlow = memo(function UserSendFlow({
+  flowKey, nodeKey, submission, round, onWithdraw,
+  selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
+  loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
+}: Omit<ChatNodeSeatProps, 'nodeKey' | 'roundByTurn'> & {
+  readonly flowKey: string
+  readonly nodeKey?: string
+  readonly submission?: PendingSubmission
+  readonly round: number
+  readonly onWithdraw?: () => void
+}) {
+  const node = useSession(snapshot => (
+    nodeKey === undefined ? undefined : snapshot.chat.nodes.get(nodeKey)
+  ))
+  const routed = node?.kind === 'user' || node?.kind === 'steering' ? node : undefined
+  const visible = routed === undefined || userMessageHasReaderSurface(routed.data.content)
+  const owner = useMemo<ChatNodeOwnerProps | null>(() => routed === undefined
+    ? null
+    : {
+      selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
+      loadImage, renderMessageImages, renderMessageFiles, fileMentions,
+    }, [
+    routed, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
+    loadImage, renderMessageImages, renderMessageFiles, fileMentions,
+  ])
+  if (!visible) return null
+  const routedOwner = routed === undefined || owner === null
+    ? null
+    : { ...owner, node: routed } as RoutedChatNodeOwner
+  // Anchor follows the durable node once it exists (rail jumps). The React
+  // key stays on `flowKey` (`rpc:…`) so this div is not remounted on handoff.
+  return (
+    <div
+      className={css.flowItem}
+      data-chat-anchor-key={routed?.key ?? flowKey}
+      data-chat-flow-key={routed?.key ?? flowKey}
+      data-chat-flow-kind={routed?.kind ?? 'user'}
+      data-chat-round={round}
+      data-send-flow={flowKey}
+    >
+      <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: round })}</div>
+      {routedOwner !== null && routed !== undefined ? renderSlot('conversation.chat.node', routedOwner, {
+        entryKey: routed.kind,
+        hookContext: nodeKey ?? flowKey,
+        fallback: (
+          <JsonBlock
+            label={t('message.unknownSurface', { type: routed.kind })}
+            payload={routed.data}
+            truncatedLabel={total => t('json.truncated', { total })}
+          />
+        ),
+      }) : submission !== undefined ? (
+        <PendingSubmissionBubble
+          submission={submission}
+          reserveActions
+          {...(onWithdraw === undefined ? {} : { onWithdraw })}
+          renderMessageImages={renderMessageImages}
+          renderMessageFiles={renderMessageFiles}
+          t={t}
+        />
+      ) : null}
     </div>
   )
 })

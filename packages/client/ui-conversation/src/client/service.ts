@@ -304,7 +304,8 @@ export class ConversationController extends Service implements IConversation {
     })
     let parts: Parameters<SessionFace['prompt']>[0]
     try {
-      await nextPaint()
+      // Do not gate the RPC on a paint frame — beginSubmission already
+      // marked the echo dirty; waiting here only delays Host admit / bubble.
       parts = await serializeParts()
     } catch (error) {
       submission.abandon()

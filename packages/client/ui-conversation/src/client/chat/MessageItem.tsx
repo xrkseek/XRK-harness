@@ -66,14 +66,44 @@ function isFileAttachment(value: unknown): value is FileAttachmentRef {
     && (o.mediaType === undefined || typeof o.mediaType === 'string')
 }
 
-/** Hide attachment handle captions even when an older wire dropped `modelOnly`. */
+/**
+ * Hide attachment handle captions even when an older wire dropped `modelOnly`.
+ * Digest may be followed by `；源路径 …` before the closing paren — match the
+ * protocol heuristic, not a tight `digest）` shape that leaks path captions.
+ */
 function looksLikeAttachmentHandleCaption(text: string): boolean {
   const t = text.trim()
   return (
-    /^\[文件附件 .+（sha256:[a-f0-9]+）/u.test(t)
+    /^\[文件附件 .+（sha256:[a-f0-9]+/u.test(t)
     || /^\[图\d+\s+sha256:[a-f0-9]+/u.test(t)
-    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+\)/u.test(t)
+    || /^\[File '.+' \(\d+ bytes, sha256:[a-f0-9]+/u.test(t)
   )
+}
+
+/** Model-only / handle captions — not reader-typed prose. */
+function isHiddenUserText(block: { readonly type?: string; readonly text?: string; readonly modelOnly?: boolean }): boolean {
+  return block.type === 'text'
+    && typeof block.text === 'string'
+    && (block.modelOnly === true || looksLikeAttachmentHandleCaption(block.text))
+}
+
+/** Reader-visible text blocks in prompt order (bubble uses `\n\n`, edit uses concat). */
+function visibleUserTexts(content: readonly unknown[]): string[] {
+  const texts: string[] = []
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const b = block as { type?: string; text?: string; modelOnly?: boolean }
+    if (b.type !== 'text' || typeof b.text !== 'string') continue
+    if (isHiddenUserText(b)) continue
+    texts.push(b.text)
+  }
+  return texts
+}
+
+/** Reader-visible user payload. Model-only attachment captions do not count. */
+export function userMessageHasReaderSurface(content: readonly unknown[]): boolean {
+  const parts = contentParts(content)
+  return parts.text !== '' || parts.attachments.length > 0 || parts.rest.length > 0
 }
 
 function contentParts(content: readonly unknown[]): {
@@ -82,18 +112,13 @@ function contentParts(content: readonly unknown[]): {
   attachments: PresentedAttachment[]
   rest: unknown[]
 } {
-  const texts: string[] = []
+  const texts = visibleUserTexts(content)
   const attachments: PresentedAttachment[] = []
   const rest: unknown[] = []
   for (const block of content) {
     const b = block as { type?: string; text?: string; modelOnly?: boolean; attachment?: unknown }
-    if (b.type === 'text' && typeof b.text === 'string') {
-      // Harness-injected handle text (image/file attachment ids) reaches the
-      // model but is not what the reader typed — keep it out of the bubble.
-      if (b.modelOnly === true || looksLikeAttachmentHandleCaption(b.text)) continue
-      texts.push(b.text)
-    }
-    else if (b.type === 'image' && b.attachment !== undefined) {
+    if (b.type === 'text' && typeof b.text === 'string') continue
+    if (b.type === 'image' && b.attachment !== undefined) {
       attachments.push({ type: 'image', image: { attachment: (b as UserImage).attachment } })
     }
     else if (b.type === 'file' && isFileAttachment(b.attachment)) {
@@ -431,12 +456,14 @@ export function PendingSteeringBubble({ content, previewAttachments, renderMessa
  * @param props - the session snapshot's pending submission and render seats.
  * @returns the echoed user bubble.
  */
-export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, steer = false, onWithdraw, t }: {
+export function PendingSubmissionBubble({ submission, renderMessageImages, renderMessageFiles, steer = false, onWithdraw, reserveActions = false, t }: {
   submission: PendingSubmission
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
   renderMessageFiles?: ChatNodeOwnerProps['renderMessageFiles']
   steer?: boolean
   onWithdraw?: (() => void) | undefined
+  /** Hold edit/delete slots until the durable user row replaces this echo. */
+  reserveActions?: boolean
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const content = useMemo(
@@ -464,6 +491,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
           className={css.actions}
           t={t}
           onWithdraw={onWithdraw}
+          reserveEditDelete={reserveActions}
         />
       )}
     />
@@ -489,18 +517,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       || (typeof messageId === 'string' && (row.messageId === messageId || row.id === messageId))
     ))?.id
   })
-  const text = useMemo(() => {
-    const parts: string[] = []
-    for (const block of data.content) {
-      if (block !== null && typeof block === 'object' && 'type' in block && block.type === 'text' && typeof (block as { text?: unknown }).text === 'string') {
-        // Model-only handle text never enters copy/edit — same rule as the bubble.
-        const text = (block as { text: string }).text
-        if ((block as { modelOnly?: unknown }).modelOnly === true || looksLikeAttachmentHandleCaption(text)) continue
-        parts.push(text)
-      }
-    }
-    return parts.join('')
-  }, [data.content])
+  const text = useMemo(() => visibleUserTexts(data.content).join(''), [data.content])
   const canEdit = text.trim() !== ''
   const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
   const editing = editStaging !== null && editStaging.seq === data.seq

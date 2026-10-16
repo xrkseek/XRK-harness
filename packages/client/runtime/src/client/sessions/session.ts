@@ -558,7 +558,7 @@ export class Session implements SessionFace {
     if (!result.ok) return // keep the window as-is; do not overwrite openError
     const older = result.value.events
     if (older.length === 0) {
-      this.hasMore = result.value.hasMore
+      this.hasMore = result.value.hasMore && this.baseSeq > 1
       this.conversation.prepend([], this.hasMore)
       return
     }
@@ -573,7 +573,7 @@ export class Session implements SessionFace {
     this.views = [...older.map(e => e.view), ...this.views]
     /* v8 ignore next -- the ?? arm needs older[0] undefined, but the empty-page branch above already returned. */
     this.baseSeq = older[0]?.event.seq ?? this.baseSeq
-    this.hasMore = result.value.hasMore
+    this.hasMore = result.value.hasMore && this.baseSeq > 1
     this.conversation.prepend(older.map(conversationInput), this.hasMore)
   }
 
@@ -859,7 +859,7 @@ export class Session implements SessionFace {
     this.events = entries.map(e => e.event)
     this.views = entries.map(e => e.view)
     this.baseSeq = this.events[0]?.seq ?? 0
-    this.hasMore = hasMore
+    this.hasMore = hasMore && this.baseSeq > 1
     if (this.events.some(event => event.type === 'turn/start')) this.firstPromptPendingTurn = false
     if (this.blankBit && this.events.some(event =>
       event.type === 'turn/start' || event.type === 'command/run')) {

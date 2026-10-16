@@ -33,6 +33,12 @@ export interface MessageIconActionsProps {
   onDelete?: (() => void) | undefined
   /** Withdraw a still-pending mid-turn steer (Host inbox remove). */
   onWithdraw?: (() => void) | undefined
+  /**
+   * Keep edit/delete in the row while this bubble is still a local echo.
+   * The buttons stay unavailable until the durable seq exists, so the
+   * icon row does not grow when the log write lands.
+   */
+  reserveEditDelete?: boolean | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
@@ -57,7 +63,7 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, onRestore, onEdit, onRegenerate, onDelete, onWithdraw, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, onEdit, onRegenerate, onDelete, onWithdraw, reserveEditDelete = false, branchUnavailable = false, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
@@ -105,9 +111,16 @@ export function MessageIconActions({
         </button>
       </Tooltip>
       {extraActions}
-      {onEdit !== undefined && (
+      {(onEdit !== undefined || reserveEditDelete) && (
         <Tooltip label={t('message.edit')} side="bottom">
-          <button type="button" className={css.action} aria-label={t('message.edit')} onClick={onEdit}>
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.edit')}
+            aria-disabled={onEdit === undefined || undefined}
+            data-unavailable={onEdit === undefined || undefined}
+            onClick={onEdit}
+          >
             <IconEditOutline16 />
           </button>
         </Tooltip>
@@ -133,9 +146,16 @@ export function MessageIconActions({
           </button>
         </Tooltip>
       )}
-      {onDelete !== undefined && (
+      {(onDelete !== undefined || reserveEditDelete) && (
         <Tooltip label={t('message.delete')} side="bottom">
-          <button type="button" className={css.action} aria-label={t('message.delete')} onClick={onDelete}>
+          <button
+            type="button"
+            className={css.action}
+            aria-label={t('message.delete')}
+            aria-disabled={onDelete === undefined || undefined}
+            data-unavailable={onDelete === undefined || undefined}
+            onClick={onDelete}
+          >
             <IconTrashOutline16 />
           </button>
         </Tooltip>
