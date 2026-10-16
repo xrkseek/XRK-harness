@@ -9,7 +9,10 @@ import { createToolRegistry } from "@xrkseek/core-tools";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { classifySkillSource } from "../src/skill-source.js";
-import { classifySessionToolName } from "../src/session-tools.js";
+import {
+  classifySessionToolName,
+  classifySessionToolSurface,
+} from "../src/session-tools.js";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 describe("classifySkillSource", () => {
@@ -33,6 +36,24 @@ describe("classifySkillSource", () => {
       vendor: "claude",
       root: "~/.claude/skills",
     });
+  });
+});
+
+describe("classifySessionToolSurface", () => {
+  it("keeps builtin collab and file tools out of other", () => {
+    expect(classifySessionToolSurface("glob")).toBe("filesystem");
+    expect(classifySessionToolSurface("list_agents")).toBe("agent");
+    expect(classifySessionToolSurface("session_search")).toBe("agent");
+    expect(classifySessionToolSurface("session_read")).toBe("agent");
+    expect(classifySessionToolSurface("thread_message")).toBe("agent");
+    expect(classifySessionToolSurface("thread_delete")).toBe("agent");
+    expect(classifySessionToolSurface("sideline_set")).toBe("agent");
+    expect(classifySessionToolSurface("presence_set")).toBe("agent");
+    expect(classifySessionToolSurface("workspace_session_prompt")).toBe("agent");
+    expect(classifySessionToolSurface("workspace_list")).toBe("workspace");
+    expect(classifySessionToolSurface("propose_skill")).toBe("system");
+    expect(classifySessionToolSurface("present")).toBe("system");
+    expect(classifySessionToolSurface("canvas_read")).toBe("ui");
   });
 });
 
@@ -105,17 +126,22 @@ describe("session.tools Face RPC", () => {
       agentPreset: string;
       cwd: string;
       workspaceLabel: string;
+      disclosure: { direct: number; deferred: number; expanded: number };
       tools: readonly {
         name: string;
         group: string;
         surface: string;
         mcpServer?: string;
         exposure: string;
+        onModel: boolean;
       }[];
     };
     expect(value.agentPreset).toBeTruthy();
     expect(value.cwd).toBeTruthy();
     expect(value.workspaceLabel).toBeTruthy();
+    expect(value.disclosure.deferred).toBeGreaterThanOrEqual(1);
+    expect(value.disclosure.expanded).toBe(0);
+    expect(value.disclosure.direct).toBeGreaterThanOrEqual(1);
     const names = value.tools.map((t) => t.name);
     // Face bindSessionAgent also mounts presence / canvas / team / … — assert ours.
     expect(names).toContain("read_file");
@@ -126,13 +152,15 @@ describe("session.tools Face RPC", () => {
       surface: "mcp",
       mcpServer: "demo",
       exposure: "deferred",
+      onModel: false,
     });
     expect(value.tools.find((t) => t.name === "read_file")).toMatchObject({
       group: "preset",
       surface: "filesystem",
       exposure: "direct",
+      onModel: true,
     });
-    // MCP rows sort after preset within the catalog.
+    // On-model (direct) rows sort before deferred MCP within the catalog.
     expect(names.indexOf("read_file")).toBeLessThan(names.indexOf("mcp__demo__search"));
   });
 });

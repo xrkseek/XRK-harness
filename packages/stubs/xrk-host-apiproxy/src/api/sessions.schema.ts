@@ -454,10 +454,11 @@ const sessionToolEntrySchema = z.object({
   group: z.enum(['preset', 'mcp']),
   surface: z.enum([
     'filesystem', 'shell', 'browser', 'web', 'mcp',
-    'agent', 'media', 'settings', 'ui', 'other',
+    'agent', 'media', 'settings', 'ui', 'system', 'workspace', 'other',
   ]),
   mcpServer: z.string().min(1).optional(),
   exposure: z.enum(['direct', 'deferred', 'hidden']),
+  onModel: z.boolean(),
 }) satisfies z.ZodType<Wire<SessionToolEntry>>
 
 /** session.tools response value. */
@@ -465,5 +466,10 @@ export const sessionToolsValueSchema = z.object({
   agentPreset: z.string().min(1),
   cwd: z.string().min(1),
   workspaceLabel: z.string().min(1),
+  disclosure: z.object({
+    direct: z.number().int().nonnegative(),
+    deferred: z.number().int().nonnegative(),
+    expanded: z.number().int().nonnegative(),
+  }),
   tools: z.array(sessionToolEntrySchema),
 }) satisfies z.ZodType<Wire<SessionToolsValue>>

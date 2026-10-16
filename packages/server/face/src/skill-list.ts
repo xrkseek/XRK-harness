@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { listSkillsFromWorkspace, type SkillSummary } from "@xrkseek/workspace";
 import {
@@ -16,6 +17,8 @@ import {
   listInjectDocuments,
   type InjectDocumentEntry,
 } from "./skill-documents.js";
+import { listSessionInjectDocuments } from "./session-inject-documents.js";
+import { resolveSessionCwd } from "./session-cwd.js";
 
 export type SkillEntry = Pick<
   SkillSummary,
@@ -63,7 +66,7 @@ function workspaceLabel(cwd: string): SkillListWorkspace {
 }
 
 export async function skillList(
-  workspaceRoot: string,
+  runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<SkillListValue>> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -81,13 +84,18 @@ export async function skillList(
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  const root = path.resolve(workspaceRoot);
-  const [skills, documents] = await Promise.all([
+  const root = path.resolve(resolveSessionCwd(runtime, sessionId));
+  const [skills, standing] = await Promise.all([
     listSkillsFromWorkspace(root).then((rows) =>
       rows.map((s) => toEntry(s, root)),
     ),
     listInjectDocuments(root),
   ]);
+  // Session turn-start fragments first so badge / permission are visible.
+  const documents = [
+    ...listSessionInjectDocuments(runtime, sessionId),
+    ...standing,
+  ];
   return {
     ok: true,
     value: {

@@ -26,8 +26,14 @@ export const skillEntrySchema = z.object({
 
 const injectDocumentEntrySchema = z.object({
   path: z.string().min(1),
-  layer: z.enum(['workspace', 'home']),
-  kind: z.enum(['instruction', 'skill-catalog']),
+  layer: z.enum(['workspace', 'home', 'session']),
+  kind: z.enum([
+    'instruction',
+    'skill-catalog',
+    'session-capability',
+    'session-posture',
+    'collab-board',
+  ]),
   bytes: z.number().int().nonnegative(),
 })
 

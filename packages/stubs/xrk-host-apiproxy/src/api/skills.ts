@@ -43,10 +43,15 @@ export interface SkillEntry {
 }
 
 /** Inject document layer on `skill.list`. */
-export type InjectDocumentLayer = 'workspace' | 'home'
+export type InjectDocumentLayer = 'workspace' | 'home' | 'session'
 
-/** Kind of standing inject payload. */
-export type InjectDocumentKind = 'instruction' | 'skill-catalog'
+/** Kind of standing / turn-start inject payload. */
+export type InjectDocumentKind =
+  | 'instruction'
+  | 'skill-catalog'
+  | 'session-capability'
+  | 'session-posture'
+  | 'collab-board'
 
 /** Standing inject document Host actually puts on the prompt. */
 export interface InjectDocumentEntry {

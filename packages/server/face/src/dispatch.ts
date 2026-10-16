@@ -38,7 +38,6 @@ import {
 } from "./mcp-oauth.js";
 import { skillList } from "./skill-list.js";
 import { skillRead } from "./skill-read.js";
-import { resolveSessionCwd } from "./session-cwd.js";
 import {
   bindPayload,
   bindRuntime,
@@ -215,24 +214,8 @@ const HANDLERS: Record<string, FaceHandler> = {
   "mcp.oauth.status": bindPayload(mcpOauthStatus),
   "mcp.oauth.login": bindPayload(mcpOauthLogin),
   "mcp.oauth.logout": bindPayload(mcpOauthLogout),
-  "skill.list": bindPayload((runtime, payload) => {
-    const sessionId = String(
-      (payload as Record<string, unknown> | null)?.sessionId ?? "",
-    ).trim();
-    const root = sessionId
-      ? resolveSessionCwd(runtime, sessionId)
-      : runtime.workspaceRoot;
-    return skillList(root, payload);
-  }),
-  "skill.read": bindPayload((runtime, payload) => {
-    const sessionId = String(
-      (payload as Record<string, unknown> | null)?.sessionId ?? "",
-    ).trim();
-    const root = sessionId
-      ? resolveSessionCwd(runtime, sessionId)
-      : runtime.workspaceRoot;
-    return skillRead(root, payload);
-  }),
+  "skill.list": bindPayload((runtime, payload) => skillList(runtime, payload)),
+  "skill.read": bindPayload((runtime, payload) => skillRead(runtime, payload)),
   "subagent.list": subagentList,
   "subagent.history": subagentHistory,
   "subagent.prompt": subagentPrompt,

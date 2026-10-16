@@ -12,10 +12,15 @@ import {
 } from "@xrkseek/workspace";
 
 /** Catalog layer for one inject document. */
-export type InjectDocumentLayer = "workspace" | "home";
+export type InjectDocumentLayer = "workspace" | "home" | "session";
 
-/** Kind of standing inject payload. */
-export type InjectDocumentKind = "instruction" | "skill-catalog";
+/** Kind of standing / turn-start inject payload. */
+export type InjectDocumentKind =
+  | "instruction"
+  | "skill-catalog"
+  | "session-capability"
+  | "session-posture"
+  | "collab-board";
 
 /** One inject document row (exists in the live inject set). */
 export interface InjectDocumentEntry {

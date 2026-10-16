@@ -4,9 +4,12 @@
 
 import path from "node:path";
 import { loadSkill } from "@xrkseek/workspace";
+import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { classifySkillSource } from "./skill-source.js";
 import { readInjectDocument } from "./skill-documents.js";
+import { readSessionInjectDocument } from "./session-inject-documents.js";
+import { resolveSessionCwd } from "./session-cwd.js";
 
 const MAX_SKILL_CHARS = 200_000;
 
@@ -30,7 +33,7 @@ export type SkillReadValue =
  * Exactly one of `name` / `document` is required.
  */
 export async function skillRead(
-  workspaceRoot: string,
+  runtime: FaceRuntime,
   payload: unknown,
 ): Promise<FaceRpcResult<SkillReadValue>> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -59,9 +62,20 @@ export async function skillRead(
     };
   }
 
-  const root = path.resolve(workspaceRoot);
+  const root = path.resolve(resolveSessionCwd(runtime, sessionId));
 
   if (document) {
+    const sessionDoc = readSessionInjectDocument(runtime, sessionId, document);
+    if (sessionDoc) {
+      return {
+        ok: true,
+        value: {
+          kind: "document",
+          path: sessionDoc.path,
+          content: sessionDoc.content,
+        },
+      };
+    }
     const loaded = await readInjectDocument(root, document);
     if (!loaded) {
       return {

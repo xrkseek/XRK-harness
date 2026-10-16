@@ -53,6 +53,30 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("no Agent Team members yet");
   });
 
+  it("lists unpinned parents when the 主线 window is empty", () => {
+    const text = formatCollabBoardText({
+      now,
+      membersCatalog: "(no Agent Team members yet)",
+      threads: [],
+      unboundPeers: [
+        {
+          sessionId: "sess_peer",
+          title: "写注入目录",
+          sideline: "补 collab board",
+          running: true,
+        },
+        { sessionId: "sess_self", title: "当前会话", self: true },
+      ],
+    });
+    expect(text).toContain("(none)");
+    expect(text).toContain("Unpinned parents");
+    expect(text).toContain("sess_peer");
+    expect(text).toContain("写注入目录");
+    expect(text).toContain("补 collab board");
+    expect(text).toContain("running");
+    expect(text).toContain("sess_self*");
+  });
+
   it("tells Frugal badges to Skill-load instead of spawn", () => {
     const text = formatCollabBoardText({
       now: 1_700_000_000_000,

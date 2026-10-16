@@ -30,8 +30,20 @@ export interface CollabBoardThreadRow {
   }>;
 }
 
+/** Unpinned parent peer shown when the 主线 window is empty. */
+export interface CollabBoardPeerRow {
+  readonly sessionId: string;
+  readonly title?: string;
+  readonly sideline?: string;
+  readonly self?: boolean;
+  readonly running?: boolean;
+}
+
 /** How the parent session should read the team + 主线 board. */
 export type CollabBoardSurface = "coding" | "im" | "qichuang";
+
+/** Cap unbound peer rows so the board stays scannable. */
+const UNBOUND_PEER_MAX = 8;
 
 export function formatCollabBoardText(input: {
   readonly membersCatalog: string;
@@ -41,6 +53,8 @@ export function formatCollabBoardText(input: {
   readonly canSpawn?: boolean;
   /** Defaults to coding (full board + thread mail). */
   readonly surface?: CollabBoardSurface;
+  /** Parent peers with no 主线 pin — listed when the pin window is empty. */
+  readonly unboundPeers?: readonly CollabBoardPeerRow[];
 }): string {
   const now = input.now ?? Date.now();
   const cutoff = now - COLLAB_BOARD_THREAD_WINDOW_MS;
@@ -60,10 +74,24 @@ export function formatCollabBoardText(input: {
     "",
     "主线 (last 24h) — discovery pin so you can lock collaborators quickly. " +
       "`thread_message` any parent session_id (pin optional; reply returns here). " +
-      "Do not thread_switch just to talk. Unpinned ids: session_search. Not a subagent.",
+      "Do not thread_switch just to talk. Unpinned ids below / session_search. Not a subagent.",
   );
   if (recent.length === 0) {
     lines.push("(none)");
+    const peers = input.unboundPeers ?? [];
+    if (peers.length > 0) {
+      lines.push(
+        "Unpinned parents here — `thread_message` by session_id (pin optional). " +
+          "`*` is you. Sideline = what they are doing now:",
+      );
+      for (const peer of peers) {
+        const mark = peer.self ? "*" : "";
+        const title = peer.title ? ` 「${clipBrief(peer.title)}」` : "";
+        const tip = peer.sideline ? ` · ${clipBrief(peer.sideline)}` : "";
+        const run = peer.running ? " · running" : "";
+        lines.push(`- ${peer.sessionId}${mark}${title}${tip}${run}`);
+      }
+    }
   } else {
     for (const thread of recent) {
       const sessions = thread.sessions
@@ -87,6 +115,57 @@ function clipBrief(value: string): string {
   return one.length <= BRIEF_MAX ? one : `${one.slice(0, BRIEF_MAX - 1)}…`;
 }
 
+/**
+ * Parent sessions in this workspace with no 主线 bind — so agents can still
+ * collaborate when the pin catalog is empty.
+ */
+export function listUnboundParentPeers(
+  runtime: FaceRuntime,
+  workspaceId: string,
+  selfId: string,
+): CollabBoardPeerRow[] {
+  const bound = new Set(
+    runtime.sessionThreads
+      .listBinds(workspaceId)
+      .map((row) => row.sessionId),
+  );
+  const archived = new Set(
+    runtime.workspaces.list(runtime.store.list()).archivedSessionIds,
+  );
+  const scored: Array<CollabBoardPeerRow & { readonly sortAt: number }> = [];
+  for (const id of runtime.store.list()) {
+    if (runtime.workspaces.workspaceIdOf(id) !== workspaceId) continue;
+    if (bound.has(id)) continue;
+    if (runtime.subagents.getByChild(id)) continue;
+    if (archived.has(id)) continue;
+    const meta = runtime.projections.stateOf(id, "sessionListMetadata") as
+      | { readonly blank?: boolean; readonly lastPromptAt?: number | null }
+      | undefined;
+    if (meta?.blank === true) continue;
+    const titleRaw = runtime.projections.stateOf(id, "title") as
+      | string
+      | null
+      | undefined;
+    const title =
+      typeof titleRaw === "string" && titleRaw.trim() ? titleRaw.trim() : undefined;
+    const bind = runtime.sessionThreads.bindOf(workspaceId, id);
+    const tip = bind?.sideline ?? runtime.presence.get(id)?.tips;
+    const sideline = tip ? tip : undefined;
+    const hints = runtime.store.listHints?.(id);
+    const sortAt = Math.max(hints?.lastEventTs ?? 0, meta?.lastPromptAt ?? 0);
+    scored.push({
+      sessionId: id,
+      ...(title ? { title } : {}),
+      ...(sideline ? { sideline } : {}),
+      ...(id === selfId ? { self: true } : {}),
+      ...(runtime.drain.isActive(id) ? { running: true } : {}),
+      sortAt,
+    });
+  }
+  scored.sort((a, b) => b.sortAt - a.sortAt || a.sessionId.localeCompare(b.sessionId));
+  return scored.slice(0, UNBOUND_PEER_MAX).map(({ sortAt: _sortAt, ...row }) => row);
+}
+
 /** Live board for a parent session. Empty string for delegated children. */
 export function formatCollabBoard(
   runtime: FaceRuntime,
@@ -103,11 +182,18 @@ export function formatCollabBoard(
       : badge === "qichuang" || workspaceId === XIANGYANG_WORKSPACE_ID
         ? "qichuang"
         : "coding";
+  const threads = listWorkspaceThreadCatalog(runtime, workspaceId, sessionId);
+  const recent = threads.filter(
+    (row) => row.updatedAt >= now - COLLAB_BOARD_THREAD_WINDOW_MS,
+  );
   return formatCollabBoardText({
     membersCatalog: formatRosterCatalog(
       runtime.agentRoster.listVisible(workspaceId),
     ),
-    threads: listWorkspaceThreadCatalog(runtime, workspaceId, sessionId),
+    threads,
+    ...(recent.length === 0
+      ? { unboundPeers: listUnboundParentPeers(runtime, workspaceId, sessionId) }
+      : {}),
     canSpawn,
     surface,
     now,

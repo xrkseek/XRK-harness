@@ -10,7 +10,7 @@ export type {
   ApprovalResponsePayload, QuestionResponsePayload, HistoryEntry, ToolEventView,
   DirectoryEntry, DirectoryListing,
   ResponseValue, WorkspaceApi, WorkspaceId, WorkspaceView,
-  SessionToolEntry, SessionToolsValue, SessionToolSurface,
+  SessionToolEntry, SessionToolsValue, SessionToolsDisclosure, SessionToolSurface,
   SkillsApi, SkillEntry, SkillListValue, SkillListWorkspace,
   InjectDocumentEntry, InjectDocumentLayer, InjectDocumentKind, SkillReadValue,
   ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,

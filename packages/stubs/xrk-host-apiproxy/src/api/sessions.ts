@@ -479,6 +479,8 @@ export type SessionToolSurface =
   | 'media'
   | 'settings'
   | 'ui'
+  | 'system'
+  | 'workspace'
   | 'other'
 
 /** One row of `session.tools`. */
@@ -489,6 +491,15 @@ export interface SessionToolEntry {
   readonly surface: SessionToolSurface
   readonly mcpServer?: string
   readonly exposure: 'direct' | 'deferred' | 'hidden'
+  /** True when currently on the model wire (direct, or deferred after tool_search). */
+  readonly onModel: boolean
+}
+
+/** Progressive-disclosure counts on `session.tools`. */
+export interface SessionToolsDisclosure {
+  readonly direct: number
+  readonly deferred: number
+  readonly expanded: number
 }
 
 /** `session.tools` response value. */
@@ -496,5 +507,6 @@ export interface SessionToolsValue {
   readonly agentPreset: string
   readonly cwd: string
   readonly workspaceLabel: string
+  readonly disclosure: SessionToolsDisclosure
   readonly tools: readonly SessionToolEntry[]
 }
