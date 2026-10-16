@@ -1,4 +1,4 @@
-/** Plugins tab: live session tool catalog with search, surface chips, collapsible groups. */
+/** Session header Runtime tab: live tool catalog with search, surface chips, groups. */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import type {
@@ -25,6 +25,8 @@ function surfaceLabel(
     case 'media': return t('toolsSurface_media')
     case 'settings': return t('toolsSurface_settings')
     case 'ui': return t('toolsSurface_ui')
+    case 'system': return t('toolsSurface_system')
+    case 'workspace': return t('toolsSurface_workspace')
     default: return t('toolsSurface_other')
   }
 }
@@ -39,9 +41,9 @@ export interface ToolsCatalogTabInjected {
 }
 
 export type ToolsCatalogTabProps =
-  PropsRuntime<'settings.plugins.tab'>
-  & PropsLocale<'settings.plugins'>
+  PropsLocale<'settings.plugins'>
   & InjectFace<ToolsCatalogTabInjected>
+  & Partial<PropsRuntime<'settings.plugins.tab'>>
 
 type ViewState =
   | { readonly status: 'idle' }
@@ -49,7 +51,8 @@ type ViewState =
   | { readonly status: 'error'; readonly message?: string }
   | { readonly status: 'ready'; readonly value: SessionToolsValue }
 
-type ToolFilter = 'all' | SessionToolSurface
+/** Surface chips plus progressive-disclosure filters (on-model / deferred). */
+type ToolFilter = 'all' | 'on-model' | 'deferred-pending' | SessionToolSurface
 
 type ToolGroup = {
   readonly key: string
@@ -59,8 +62,13 @@ type ToolGroup = {
 }
 
 const SURFACE_ORDER: readonly SessionToolSurface[] = [
-  'filesystem', 'shell', 'browser', 'web', 'agent', 'media', 'settings', 'ui', 'mcp', 'other',
+  'filesystem', 'shell', 'browser', 'web', 'agent', 'workspace',
+  'media', 'settings', 'ui', 'system', 'mcp', 'other',
 ]
+
+function toolOnModel(tool: SessionToolEntry): boolean {
+  return tool.onModel === true || tool.exposure === 'direct'
+}
 
 function matchesQuery(tool: SessionToolEntry, query: string): boolean {
   if (!query) return true
@@ -69,6 +77,15 @@ function matchesQuery(tool: SessionToolEntry, query: string): boolean {
     || tool.description.toLowerCase().includes(q)
     || tool.surface.toLowerCase().includes(q)
     || (tool.mcpServer?.toLowerCase().includes(q) ?? false)
+}
+
+function matchesFilter(tool: SessionToolEntry, filter: ToolFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'on-model') return toolOnModel(tool)
+  if (filter === 'deferred-pending') {
+    return tool.exposure === 'deferred' && !toolOnModel(tool)
+  }
+  return tool.surface === filter
 }
 
 function groupTools(
@@ -80,7 +97,7 @@ function groupTools(
   labelMcpOther: string,
 ): readonly ToolGroup[] {
   const filtered = tools.filter((tool) => {
-    if (filter !== 'all' && tool.surface !== filter) return false
+    if (!matchesFilter(tool, filter)) return false
     return matchesQuery(tool, query)
   })
   const byKey = new Map<string, {
@@ -110,7 +127,12 @@ function groupTools(
       key,
       surface: row.surface,
       label: row.label,
-      tools: row.tools.toSorted((a, b) => a.name.localeCompare(b.name)),
+      tools: row.tools.toSorted((a, b) => {
+        const aOn = toolOnModel(a)
+        const bOn = toolOnModel(b)
+        if (aOn !== bOn) return aOn ? -1 : 1
+        return a.name.localeCompare(b.name)
+      }),
     }))
     .toSorted((a, b) => {
       const bySurface = surfaceRank(a.surface) - surfaceRank(b.surface)
@@ -153,8 +175,12 @@ export function ToolsCatalogTab({
         if (!current) return
         const cancelled = error instanceof DOMException && error.name === 'AbortError'
         if (cancelled) return
-        const message = error instanceof Error ? error.message : undefined
-        setState({ status: 'error', message })
+        setState({
+          status: 'error',
+          ...(error instanceof Error && error.message
+            ? { message: error.message }
+            : {}),
+        })
       },
     )
     return () => {
@@ -194,14 +220,25 @@ export function ToolsCatalogTab({
   }
 
   if (!sessionId) {
-    return <p className={css.status}>{t('catalogNoSession')}</p>
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{t('toolsCatalogLead')}</p>
+        <p className={css.status}>{t('catalogNoSession')}</p>
+      </div>
+    )
   }
   if (state.status === 'loading' || state.status === 'idle') {
-    return <p className={css.status}>{t('catalogLoading')}</p>
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{t('toolsCatalogLead')}</p>
+        <p className={css.status}>{t('catalogLoading')}</p>
+      </div>
+    )
   }
   if (state.status === 'error') {
     return (
       <div className={css.root}>
+        <p className={css.lead}>{t('toolsCatalogLead')}</p>
         <p className={css.status} role="alert">{t('catalogError')}</p>
         {state.message ? <p className={css.errorDetail}>{state.message}</p> : null}
         <button type="button" className={css.retry} onClick={() => setTick((n) => n + 1)}>
@@ -211,8 +248,24 @@ export function ToolsCatalogTab({
     )
   }
 
+  const disclosure = state.value.disclosure ?? {
+    direct: state.value.tools.filter((tool) => tool.exposure === 'direct').length,
+    deferred: state.value.tools.filter((tool) => tool.exposure === 'deferred').length,
+    expanded: state.value.tools.filter(
+      (tool) => tool.exposure === 'deferred' && toolOnModel(tool),
+    ).length,
+  }
+  const onModelCount = disclosure.direct + disclosure.expanded
+  const deferredPendingCount = Math.max(0, disclosure.deferred - disclosure.expanded)
+
   const filters: { id: ToolFilter; label: string; count: number }[] = [
     { id: 'all', label: t('catalogFilterAll'), count: state.value.tools.length },
+    { id: 'on-model', label: t('toolsFilterOnModel'), count: onModelCount },
+    {
+      id: 'deferred-pending',
+      label: t('toolsFilterDeferredPending'),
+      count: deferredPendingCount,
+    },
     ...SURFACE_ORDER
       .filter((surface) => (surfaceCounts.get(surface) ?? 0) > 0)
       .map((surface) => ({
@@ -224,6 +277,7 @@ export function ToolsCatalogTab({
 
   return (
     <div className={css.root}>
+      <p className={css.lead}>{t('toolsCatalogLead')}</p>
       <p className={css.workspace} title={state.value.cwd}>
         {t('catalogWorkspace', { label: state.value.workspaceLabel })}
         <span className={css.workspacePath}>{state.value.cwd}</span>
@@ -234,6 +288,9 @@ export function ToolsCatalogTab({
           {t('toolsCatalogMeta', {
             preset: state.value.agentPreset,
             count: String(state.value.tools.length),
+            direct: String(disclosure.direct),
+            deferred: String(disclosure.deferred),
+            expanded: String(disclosure.expanded),
           })}
         </p>
         <button
@@ -311,7 +368,11 @@ export function ToolsCatalogTab({
                             <p className={css.name}>{tool.name}</p>
                             <span className={css.badgeMuted}>{surfaceLabel(t, tool.surface)}</span>
                             {tool.exposure === 'deferred' ? (
-                              <span className={css.badge}>{t('toolsExposureDeferred')}</span>
+                              <span className={css.badge}>
+                                {toolOnModel(tool)
+                                  ? t('toolsExposureExpanded')
+                                  : t('toolsExposureDeferred')}
+                              </span>
                             ) : null}
                           </div>
                           {tool.description && !detailOpen ? (

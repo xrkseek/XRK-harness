@@ -458,6 +458,7 @@ export function TrajectoryView({
       data-conversation-composer-overlay=""
       data-trajectory-density={density}
     >
+      <p className={css.lead}>{t('toolbar.lead')}</p>
       <TrajectoryToolbar
         actualDuration={actualDuration}
         onActualDurationChange={(nextActualDuration) => {
@@ -487,6 +488,7 @@ export function TrajectoryView({
         onLoadEarlier={loadEarlierHistory}
         selectedIndex={selectedTimelineIndex}
         searchMatchIndexes={searchMatchIndexes}
+        emptyLabel={t('timeline.empty')}
         onRangeChange={handleTimelineRangeChange}
         onRecordSelect={handleTimelineRecordSelect}
         onRecordFocus={handleTimelineRecordFocus}

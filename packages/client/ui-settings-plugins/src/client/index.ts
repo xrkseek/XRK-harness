@@ -1,16 +1,15 @@
 /**
- * Plugins settings surface, browser half — one section whose feature-owned
- * tabs include configurable Host plugin cards and read-only inventory.
+ * Plugins settings surface, browser half — one section of configurable Host
+ * plugin cards, plus session-header Runtime / Inject catalogs.
  *
- * The section declares `settings.plugins.tab`; its own `configurable` tab then
- * declares `settings.plugin.item` and renders whatever cards were registered
- * into it. Shipped cards: MCP, shell (`bash`), agent-loop, workspace-inject, web-search,
- * session-telemetry, sandbox, computer-use, browser, voice, image-gen, video-gen,
- * video-analyze, curated-memory, a2a-inbound, external-agent, cron.
- * Also auto-review · memory-embed · Host runtime · process & IM channels
- * (the last two read-only mirrors) on the same configuration list — no
- * separate Advanced tab.
- * General 「远程」: ssh-remote (restart).
+ * The section declares `settings.plugins.tab` with a single `configurable` tab
+ * that owns `settings.plugin.item`. Shipped cards: MCP, shell (`bash`),
+ * agent-loop, workspace-inject, web-search, session-telemetry, sandbox,
+ * computer-use, browser, voice, image-gen, video-gen, video-analyze,
+ * curated-memory, a2a-inbound, external-agent, cron, auto-review,
+ * memory-embed, Host runtime, process & IM channels.
+ * Session header also registers `conversation.view` tools (运行时) and skills
+ * (注入). General 「远程」: ssh-remote (restart).
  */
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -19,6 +18,7 @@ import type {} from '@xrkseek/client-locale/client'
 // and the ctx.settingsScope Context merge. Cross-plugin collaboration goes
 // through the service, never a value import (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
+import type {} from '@xrkseek/client-ui-conversation/client'
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
@@ -88,7 +88,6 @@ import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { fetchSessionSkills, fetchSessionTools, fetchSkillContent } from './catalog-fetch.ts'
 import { en, zh } from './locales.ts'
-import type { ISessions } from '@xrkseek/client-runtime/client'
 import type { SessionId } from '@xrkseek/xrk-api-remotes/client'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
@@ -151,7 +150,7 @@ const NS = 'settings.plugins'
 
 /** Required services (cordis fiber inject). */
 export const inject = [
-  'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav', 'sessions',
+  'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav',
 ]
 
 /**
@@ -160,9 +159,6 @@ export const inject = [
  */
 export function apply(ctx: ClientContext): void {
   const { api } = ctx.get('connection') as ConnectionHandle
-  const sessions = ctx.get('sessions') as ISessions
-  const currentSessionId = (): string | undefined =>
-    sessions.list.getSnapshot().current
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugins: section dictionaries')
 
@@ -365,36 +361,36 @@ export function apply(ctx: ClientContext): void {
     },
   }, ConfigurablePluginsTab))
 
-  // Read-only live catalogs for the current session (Face session.tools · skill.list).
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
+  // Session header tabs (beside 对话 / 轨迹): live tool catalog and skill inject.
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
     id: 'tools',
-    order: 4,
+    order: 15,
     label: () => t('toolsTab'),
     locale: NS,
-    inject: () => ({
-      currentSessionId,
-      listTools: (sessionId: SessionId, signal?: AbortSignal) =>
+    inject: (sessionId: SessionId) => ({
+      currentSessionId: () => sessionId,
+      listTools: (id: SessionId, signal?: AbortSignal) =>
         fetchSessionTools(
           (req, sig) => api.sessions.tools(req, sig),
-          sessionId,
+          id,
           signal,
         ),
     }),
   }, ToolsCatalogTab))
 
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
     id: 'skills',
-    order: 5,
+    order: 16,
     label: () => t('skillsTab'),
     locale: NS,
-    inject: () => ({
-      currentSessionId,
-      listSkills: (sessionId: SessionId, signal?: AbortSignal) =>
+    inject: (sessionId: SessionId) => ({
+      currentSessionId: () => sessionId,
+      listSkills: (id: SessionId, signal?: AbortSignal) =>
         fetchSessionSkills(
           (req, sig) => api.skills.list(req, sig),
-          sessionId,
+          id,
           signal,
         ),
       readSkill: (

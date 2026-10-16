@@ -334,7 +334,7 @@ describe('ui-settings-plugins registration of the read-only cards', () => {
       expect(keys).toEqual(expect.arrayContaining([...MIRROR_KEYS]))
     })
     expect(slots.entries('settings.plugins.tab').map(e => e.options.id)).toEqual([
-      'configurable', 'tools', 'skills',
+      'configurable',
     ])
   })
 

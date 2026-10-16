@@ -101,6 +101,18 @@ describe('deriveGroups', () => {
     expect(groups[0]!.sessions[0]!.sideline).toBe('写发行说明')
   })
 
+  it('carries agentPreset onto session nodes for hover scan', () => {
+    const sessions = list({
+      ...summary('shown', 3),
+      displayTitle: '发版',
+      agentPreset: 'harness',
+    })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['shown'])], noArchive, view(['first']),
+    )
+    expect(groups[0]!.sessions[0]!.agentPreset).toBe('harness')
+  })
+
   it('keeps a non-current blank session visible when it still holds a draft', () => {
     const current = summary('current', 6)
     const draftedBlank = { ...summary('drafted-blank', 5), blank: true, hasDraft: true }

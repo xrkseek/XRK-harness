@@ -1,4 +1,4 @@
-/** Plugins tab: skill.list + inject docs, with searchable groups and full-body peek. */
+/** Session header Inject tab: skill.list + inject docs, searchable groups, body peek. */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import type {
@@ -31,9 +31,9 @@ export interface SkillsCatalogTabInjected {
 }
 
 export type SkillsCatalogTabProps =
-  PropsRuntime<'settings.plugins.tab'>
-  & PropsLocale<'settings.plugins'>
+  PropsLocale<'settings.plugins'>
   & InjectFace<SkillsCatalogTabInjected>
+  & Partial<PropsRuntime<'settings.plugins.tab'>>
 
 type ViewState =
   | { readonly status: 'idle' }
@@ -41,11 +41,23 @@ type ViewState =
   | { readonly status: 'error'; readonly message?: string }
   | { readonly status: 'ready'; readonly value: SkillListValue }
 
-type SkillFilter = 'all' | 'workspace' | 'home' | 'other' | 'documents'
+/** Filter chips: product roots (.xrk / .agents) plus catch-all other vendors. */
+type SkillFilter =
+  | 'all'
+  | 'documents'
+  | 'workspace-xrk'
+  | 'workspace-agents'
+  | 'home-xrk'
+  | 'home-agents'
+  | 'other'
+
+type SkillLayer = 'workspace' | 'home' | 'other'
+type SkillVendor = 'xrk' | 'agents' | 'cursor' | 'claude' | 'codex' | 'other'
 
 type SkillGroup = {
   readonly key: string
-  readonly layer: Exclude<SkillFilter, 'all' | 'documents'>
+  readonly layer: SkillLayer
+  readonly vendor: SkillVendor
   readonly label: string
   readonly path: string
   readonly skills: readonly SkillEntry[]
@@ -56,10 +68,84 @@ type BodyState =
   | { readonly status: 'error'; readonly message: string }
   | { readonly status: 'ready'; readonly content: string }
 
-function skillLayer(skill: SkillEntry): Exclude<SkillFilter, 'all' | 'documents'> {
+function skillLayer(skill: SkillEntry): SkillLayer {
   const layer = skill.source?.layer
   if (layer === 'workspace' || layer === 'home' || layer === 'other') return layer
   return 'other'
+}
+
+function skillVendor(skill: SkillEntry): SkillVendor {
+  const vendor = skill.source?.vendor
+  if (
+    vendor === 'xrk'
+    || vendor === 'agents'
+    || vendor === 'cursor'
+    || vendor === 'claude'
+    || vendor === 'codex'
+  ) {
+    return vendor
+  }
+  return 'other'
+}
+
+/** Map a skill onto a filter chip (xrk/agents get dedicated chips; rest → other). */
+function skillFilterId(skill: SkillEntry): Exclude<SkillFilter, 'all' | 'documents'> {
+  const layer = skillLayer(skill)
+  const vendor = skillVendor(skill)
+  if (layer === 'workspace' && vendor === 'xrk') return 'workspace-xrk'
+  if (layer === 'workspace' && vendor === 'agents') return 'workspace-agents'
+  if (layer === 'home' && vendor === 'xrk') return 'home-xrk'
+  if (layer === 'home' && vendor === 'agents') return 'home-agents'
+  return 'other'
+}
+
+function vendorMark(
+  vendor: SkillVendor,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
+): string {
+  if (vendor === 'xrk') return t('skillsVendorXrk')
+  if (vendor === 'agents') return t('skillsVendorAgents')
+  if (vendor === 'cursor') return t('skillsVendorCursor')
+  if (vendor === 'claude') return t('skillsVendorClaude')
+  if (vendor === 'codex') return t('skillsVendorCodex')
+  return t('skillsVendorOther')
+}
+
+/** Group title: 「工作区 .xrk Skills」/「主 .agents Skills」— mirrors the disk root. */
+function skillGroupLabel(
+  layer: SkillLayer,
+  vendor: SkillVendor,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
+): string {
+  if (layer === 'other' && vendor === 'other') return t('skillsGroupOther')
+  const scope = layer === 'workspace'
+    ? t('skillsScopeWorkspace')
+    : layer === 'home'
+      ? t('skillsScopeHome')
+      : t('skillsScopeOther')
+  const mark = vendorMark(vendor, t)
+  return mark
+    ? t('skillsGroupByRoot', { scope, vendor: mark })
+    : t('skillsGroupOther')
+}
+
+/** Standing-doc badge: prefer .xrk / .agents when the path says so. */
+function documentOriginLabel(
+  doc: InjectDocumentEntry,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
+): string {
+  if (doc.layer === 'session') return t('skillsFilterSession')
+  const p = doc.path.replace(/\\/g, '/')
+  const agents = /(^|\/)\.agents(\/|$)/.test(p) || p.startsWith('~/.agents')
+  const xrk = /(^|\/)\.xrk(\/|$)/.test(p) || p.startsWith('~/.xrk')
+  if (doc.layer === 'home') {
+    if (agents) return t('skillsFilterHomeAgents')
+    if (xrk) return t('skillsFilterHomeXrk')
+    return t('skillsFilterHome')
+  }
+  if (agents) return t('skillsFilterWorkspaceAgents')
+  if (xrk) return t('skillsFilterWorkspaceXrk')
+  return t('skillsFilterWorkspace')
 }
 
 function matchesSkill(skill: SkillEntry, query: string): boolean {
@@ -71,6 +157,28 @@ function matchesSkill(skill: SkillEntry, query: string): boolean {
     || (skill.source?.vendor.toLowerCase().includes(q) ?? false)
 }
 
+function documentTitle(
+  doc: InjectDocumentEntry,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
+): string {
+  if (doc.path === 'skills://catalog') return t('skillsCatalogPathLabel')
+  if (doc.path === 'session://capability') return t('skillsCapabilityPathLabel')
+  if (doc.path === 'session://posture') return t('skillsPosturePathLabel')
+  if (doc.path === 'session://collab-board') return t('skillsCollabPathLabel')
+  return doc.path
+}
+
+function documentKindLabel(
+  doc: InjectDocumentEntry,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
+): string {
+  if (doc.kind === 'skill-catalog') return t('skillsDocumentKindCatalog')
+  if (doc.kind === 'session-capability') return t('skillsDocumentKindCapability')
+  if (doc.kind === 'session-posture') return t('skillsDocumentKindPosture')
+  if (doc.kind === 'collab-board') return t('skillsDocumentKindCollab')
+  return t('skillsDocumentKindInstruction')
+}
+
 function matchesDocument(doc: InjectDocumentEntry, query: string): boolean {
   if (!query) return true
   return doc.path.toLowerCase().includes(query.toLowerCase())
@@ -80,40 +188,61 @@ function groupSkills(
   skills: readonly SkillEntry[],
   filter: SkillFilter,
   query: string,
-  labelFor: (layer: Exclude<SkillFilter, 'all' | 'documents'>) => string,
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string,
 ): readonly SkillGroup[] {
   if (filter === 'documents') return []
   const buckets = new Map<string, SkillEntry[]>()
-  const meta = new Map<string, { layer: Exclude<SkillFilter, 'all' | 'documents'>; root: string; label: string }>()
+  const meta = new Map<string, {
+    layer: SkillLayer
+    vendor: SkillVendor
+    root: string
+    label: string
+  }>()
   for (const skill of skills) {
     const layer = skillLayer(skill)
-    if (filter !== 'all' && layer !== filter) continue
+    const vendor = skillVendor(skill)
+    if (filter !== 'all' && skillFilterId(skill) !== filter) continue
     if (!matchesSkill(skill, query)) continue
     const root = skill.source?.root ?? 'skills'
-    const key = `${layer}:${root}`
+    const key = `${layer}:${vendor}:${root}`
     const list = buckets.get(key) ?? []
     list.push(skill)
     buckets.set(key, list)
     if (!meta.has(key)) {
-      meta.set(key, { layer, root, label: labelFor(layer) })
+      meta.set(key, {
+        layer,
+        vendor,
+        root,
+        label: skillGroupLabel(layer, vendor, t),
+      })
     }
   }
-  const order = (layer: string) =>
+  const layerOrder = (layer: SkillLayer) =>
     layer === 'workspace' ? 0 : layer === 'home' ? 1 : 2
+  const vendorOrder = (vendor: SkillVendor) =>
+    vendor === 'xrk' ? 0
+      : vendor === 'agents' ? 1
+        : vendor === 'cursor' ? 2
+          : vendor === 'claude' ? 3
+            : vendor === 'codex' ? 4
+              : 5
   return [...buckets.entries()]
     .map(([key, rows]) => {
       const info = meta.get(key)!
       return {
         key,
         layer: info.layer,
+        vendor: info.vendor,
         label: info.label,
         path: info.root,
         skills: rows.toSorted((a, b) => a.name.localeCompare(b.name)),
       }
     })
     .toSorted((a, b) => {
-      const byLayer = order(a.layer) - order(b.layer)
+      const byLayer = layerOrder(a.layer) - layerOrder(b.layer)
       if (byLayer !== 0) return byLayer
+      const byVendor = vendorOrder(a.vendor) - vendorOrder(b.vendor)
+      if (byVendor !== 0) return byVendor
       return a.path.localeCompare(b.path)
     })
 }
@@ -129,7 +258,7 @@ export function SkillsCatalogTab({
   const [tick, setTick] = useState(0)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<SkillFilter>('all')
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['documents']))
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['session-docs', 'documents']))
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [body, setBody] = useState<BodyState | null>(null)
   const [state, setState] = useState<ViewState>({ status: 'idle' })
@@ -147,7 +276,7 @@ export function SkillsCatalogTab({
       (value) => {
         if (!current) return
         setState({ status: 'ready', value })
-        setExpanded(new Set(['documents']))
+        setExpanded(new Set(['session-docs', 'documents']))
         setActiveKey(null)
         setBody(null)
       },
@@ -201,11 +330,7 @@ export function SkillsCatalogTab({
       state.value.skills,
       filter,
       query.trim(),
-      (layer) => {
-        if (layer === 'home') return t('skillsGroupHome')
-        if (layer === 'workspace') return t('skillsGroupWorkspace')
-        return t('skillsGroupOther')
-      },
+      t,
     )
   }, [state, filter, query, t])
 
@@ -216,25 +341,21 @@ export function SkillsCatalogTab({
   }, [state, filter, query])
 
   const counts = useMemo(() => {
-    if (state.status !== 'ready') {
-      return { all: 0, workspace: 0, home: 0, other: 0, documents: 0 }
+    const empty = {
+      all: 0,
+      'workspace-xrk': 0,
+      'workspace-agents': 0,
+      'home-xrk': 0,
+      'home-agents': 0,
+      other: 0,
+      documents: 0,
     }
-    let workspace = 0
-    let home = 0
-    let other = 0
+    if (state.status !== 'ready') return empty
+    const next = { ...empty, documents: state.value.documents.length, all: state.value.skills.length }
     for (const skill of state.value.skills) {
-      const layer = skillLayer(skill)
-      if (layer === 'workspace') workspace += 1
-      else if (layer === 'home') home += 1
-      else other += 1
+      next[skillFilterId(skill)] += 1
     }
-    return {
-      all: state.value.skills.length,
-      workspace,
-      home,
-      other,
-      documents: state.value.documents.length,
-    }
+    return next
   }, [state])
 
   const toggleGroup = (key: string) => {
@@ -251,14 +372,25 @@ export function SkillsCatalogTab({
   }
 
   if (!sessionId) {
-    return <p className={css.status}>{t('catalogNoSession')}</p>
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{t('skillsCatalogLead')}</p>
+        <p className={css.status}>{t('catalogNoSession')}</p>
+      </div>
+    )
   }
   if (state.status === 'loading' || state.status === 'idle') {
-    return <p className={css.status}>{t('catalogLoading')}</p>
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{t('skillsCatalogLead')}</p>
+        <p className={css.status}>{t('catalogLoading')}</p>
+      </div>
+    )
   }
   if (state.status === 'error') {
     return (
       <div className={css.root}>
+        <p className={css.lead}>{t('skillsCatalogLead')}</p>
         <p className={css.status} role="alert">{t('catalogError')}</p>
         {state.message ? <p className={css.errorDetail}>{state.message}</p> : null}
         <button type="button" className={css.retry} onClick={() => setTick((n) => n + 1)}>
@@ -271,13 +403,16 @@ export function SkillsCatalogTab({
   const filters: { id: SkillFilter; label: string; count: number }[] = [
     { id: 'all', label: t('catalogFilterAll'), count: counts.all },
     { id: 'documents', label: t('skillsFilterDocuments'), count: counts.documents },
-    { id: 'workspace', label: t('skillsFilterWorkspace'), count: counts.workspace },
-    { id: 'home', label: t('skillsFilterHome'), count: counts.home },
+    { id: 'workspace-xrk', label: t('skillsFilterWorkspaceXrk'), count: counts['workspace-xrk'] },
+    { id: 'workspace-agents', label: t('skillsFilterWorkspaceAgents'), count: counts['workspace-agents'] },
+    { id: 'home-xrk', label: t('skillsFilterHomeXrk'), count: counts['home-xrk'] },
+    { id: 'home-agents', label: t('skillsFilterHomeAgents'), count: counts['home-agents'] },
     { id: 'other', label: t('skillsFilterOther'), count: counts.other },
   ]
 
   return (
     <div className={css.root}>
+      <p className={css.lead}>{t('skillsCatalogLead')}</p>
       <p className={css.workspace} title={state.value.workspace.cwd}>
         {t('catalogWorkspace', { label: state.value.workspace.label })}
         <span className={css.workspacePath}>{state.value.workspace.cwd}</span>
@@ -328,7 +463,45 @@ export function SkillsCatalogTab({
         ))}
       </div>
 
-      {documents.length > 0 ? (
+      {documents.some((doc) => doc.layer === 'session') ? (
+        <section className={css.group} data-layer="session">
+          <button
+            type="button"
+            className={css.groupHeader}
+            aria-expanded={expanded.has('session-docs')}
+            onClick={() => { toggleGroup('session-docs') }}
+          >
+            <span
+              className={css.groupChevron}
+              data-open={expanded.has('session-docs') ? 'true' : undefined}
+              aria-hidden="true"
+            />
+            <span className={css.groupTitleBlock}>
+              <span className={css.groupTitle}>{t('skillsSessionDocumentsTitle')}</span>
+              <span className={css.groupPath}>{t('skillsSessionDocumentsHint')}</span>
+            </span>
+            <span className={css.groupCount}>
+              {documents.filter((doc) => doc.layer === 'session').length}
+            </span>
+          </button>
+          {expanded.has('session-docs') ? (
+            <ul className={css.list}>
+              {documents.filter((doc) => doc.layer === 'session').map((doc) => (
+                <DocumentRow
+                  key={doc.path}
+                  doc={doc}
+                  open={activeKey === `${DOC_ITEM_PREFIX}${doc.path}`}
+                  body={body}
+                  t={t}
+                  onOpen={() => { openItem(`${DOC_ITEM_PREFIX}${doc.path}`) }}
+                />
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
+      {documents.some((doc) => doc.layer !== 'session') ? (
         <section className={css.group} data-layer="documents">
           <button
             type="button"
@@ -345,44 +518,22 @@ export function SkillsCatalogTab({
               <span className={css.groupTitle}>{t('skillsDocumentsTitle')}</span>
               <span className={css.groupPath}>{t('skillsDocumentsHint')}</span>
             </span>
-            <span className={css.groupCount}>{documents.length}</span>
+            <span className={css.groupCount}>
+              {documents.filter((doc) => doc.layer !== 'session').length}
+            </span>
           </button>
           {expanded.has('documents') ? (
             <ul className={css.list}>
-              {documents.map((doc) => {
-                const key = `${DOC_ITEM_PREFIX}${doc.path}`
-                const open = activeKey === key
-                const title = doc.path === 'skills://catalog'
-                  ? t('skillsCatalogPathLabel')
-                  : doc.path
-                return (
-                  <li key={doc.path} className={css.row}>
-                    <button
-                      type="button"
-                      className={css.rowButton}
-                      aria-expanded={open}
-                      onClick={() => { openItem(key) }}
-                    >
-                      <div className={css.rowHead}>
-                        <p className={css.name}>{title}</p>
-                        <span className={css.badge}>
-                          {doc.kind === 'skill-catalog'
-                            ? t('skillsDocumentKindCatalog')
-                            : t('skillsDocumentKindInstruction')}
-                        </span>
-                        <span className={css.badgeMuted}>
-                          {doc.layer === 'home' ? t('skillsFilterHome') : t('skillsFilterWorkspace')}
-                        </span>
-                      </div>
-                      <p className={css.desc}>
-                        {doc.path === 'skills://catalog' ? null : `${doc.path} · `}
-                        {t('skillsDocumentBytes', { bytes: String(doc.bytes) })}
-                      </p>
-                    </button>
-                    {open ? <BodyPanel body={body} t={t} /> : null}
-                  </li>
-                )
-              })}
+              {documents.filter((doc) => doc.layer !== 'session').map((doc) => (
+                <DocumentRow
+                  key={doc.path}
+                  doc={doc}
+                  open={activeKey === `${DOC_ITEM_PREFIX}${doc.path}`}
+                  body={body}
+                  t={t}
+                  onOpen={() => { openItem(`${DOC_ITEM_PREFIX}${doc.path}`) }}
+                />
+              ))}
             </ul>
           ) : null}
         </section>
@@ -398,7 +549,12 @@ export function SkillsCatalogTab({
         groups.map((group) => {
           const open = expanded.has(group.key)
           return (
-            <section key={group.key} className={css.group} data-layer={group.layer}>
+            <section
+              key={group.key}
+              className={css.group}
+              data-layer={group.layer}
+              data-vendor={group.vendor}
+            >
               <button
                 type="button"
                 className={css.groupHeader}
@@ -449,6 +605,43 @@ export function SkillsCatalogTab({
         })
       )}
     </div>
+  )
+}
+
+function DocumentRow({
+  doc,
+  open,
+  body,
+  t,
+  onOpen,
+}: {
+  doc: InjectDocumentEntry
+  open: boolean
+  body: BodyState | null
+  t: (key: PluginsSettingsLocaleKey, params?: Record<string, string>) => string
+  onOpen: () => void
+}): ReactNode {
+  const layerLabel = documentOriginLabel(doc, t)
+  return (
+    <li className={css.row}>
+      <button
+        type="button"
+        className={css.rowButton}
+        aria-expanded={open}
+        onClick={onOpen}
+      >
+        <div className={css.rowHead}>
+          <p className={css.name}>{documentTitle(doc, t)}</p>
+          <span className={css.badge}>{documentKindLabel(doc, t)}</span>
+          <span className={css.badgeMuted}>{layerLabel}</span>
+        </div>
+        <p className={css.desc}>
+          {doc.path === 'skills://catalog' ? null : `${doc.path} · `}
+          {t('skillsDocumentBytes', { bytes: String(doc.bytes) })}
+        </p>
+      </button>
+      {open ? <BodyPanel body={body} t={t} /> : null}
+    </li>
   )
 }
 

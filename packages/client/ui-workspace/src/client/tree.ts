@@ -36,6 +36,8 @@ export interface SessionNode {
   sideline?: string
   /** True when {@link title} comes from a bound workspace 主线. */
   mainline?: boolean
+  /** Host agent preset id (harness / qichuang / im / …) for at-a-glance scan. */
+  agentPreset?: string
 }
 
 /** Session order selected by the Workspace browser. */
@@ -327,6 +329,7 @@ function sessionNode(
     updatedAt: s.updatedAt,
     ...(s.sideline ? { sideline: s.sideline } : {}),
     ...(s.mainline ? { mainline: true } : {}),
+    ...(s.agentPreset ? { agentPreset: s.agentPreset } : {}),
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
 }

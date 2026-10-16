@@ -6,19 +6,31 @@ export type PluginsSettingsLocaleKey =
   | 'catalogNoSession' | 'catalogLoading' | 'catalogError' | 'catalogRetry'
   | 'catalogSearch' | 'catalogRefresh' | 'catalogFilterAll' | 'catalogNoMatch'
   | 'catalogWorkspace' | 'catalogNoBody'
-  | 'toolsCatalogMeta' | 'toolsCatalogEmpty'
+  | 'toolsCatalogLead' | 'toolsCatalogMeta' | 'toolsCatalogEmpty'
+  | 'skillsCatalogLead'
   | 'toolsGroupMcpServer' | 'toolsGroupMcpOther'
-  | 'toolsExposureDeferred' | 'toolsExposureHidden'
+  | 'toolsExposureDeferred' | 'toolsExposureExpanded' | 'toolsExposureHidden'
+  | 'toolsFilterOnModel' | 'toolsFilterDeferredPending'
   | 'toolsSurface_filesystem' | 'toolsSurface_shell' | 'toolsSurface_browser'
   | 'toolsSurface_web' | 'toolsSurface_mcp' | 'toolsSurface_agent'
   | 'toolsSurface_media' | 'toolsSurface_settings' | 'toolsSurface_ui'
+  | 'toolsSurface_system'
+  | 'toolsSurface_workspace'
   | 'toolsSurface_other'
   | 'skillsCatalogMeta' | 'skillsCatalogEmpty'
   | 'skillsGroupWorkspace' | 'skillsGroupHome' | 'skillsGroupOther'
+  | 'skillsScopeWorkspace' | 'skillsScopeHome' | 'skillsScopeOther'
+  | 'skillsVendorXrk' | 'skillsVendorAgents' | 'skillsVendorCursor' | 'skillsVendorClaude' | 'skillsVendorCodex' | 'skillsVendorOther'
+  | 'skillsGroupByRoot'
   | 'skillsFilterWorkspace' | 'skillsFilterHome' | 'skillsFilterOther'
+  | 'skillsFilterWorkspaceXrk' | 'skillsFilterWorkspaceAgents'
+  | 'skillsFilterHomeXrk' | 'skillsFilterHomeAgents'
   | 'skillsFilterDocuments' | 'skillsDocumentsTitle' | 'skillsDocumentsHint'
   | 'skillsDocumentBytes' | 'skillsDocumentKindInstruction' | 'skillsDocumentKindCatalog'
-  | 'skillsCatalogPathLabel' | 'skillsUserOnly'
+  | 'skillsDocumentKindCapability' | 'skillsDocumentKindPosture' | 'skillsDocumentKindCollab'
+  | 'skillsCatalogPathLabel' | 'skillsCapabilityPathLabel' | 'skillsPosturePathLabel' | 'skillsCollabPathLabel'
+  | 'skillsSessionDocumentsTitle' | 'skillsSessionDocumentsHint'
+  | 'skillsFilterSession' | 'skillsUserOnly'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
@@ -184,37 +196,67 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   catalogNoMatch: 'No entries match this search or filter.',
   catalogWorkspace: 'Workspace · {label}',
   catalogNoBody: 'No body text.',
-  toolsCatalogMeta: 'Badge {preset} · {count} live tools',
+  toolsCatalogLead: 'Live tools on this session. Direct schemas stay on the model; deferred (often MCP) wait until tool_search expands them — open a row for detail.',
+  toolsCatalogMeta: 'Badge {preset} · {count} tools · direct {direct} · deferred {deferred} · expanded {expanded}',
   toolsCatalogEmpty: 'No tools on this session agent.',
   toolsGroupMcpServer: 'MCP · {server}',
   toolsGroupMcpOther: 'MCP · unknown server',
   toolsExposureDeferred: 'deferred',
+  toolsExposureExpanded: 'on model',
   toolsExposureHidden: 'hidden',
+  toolsFilterOnModel: 'On model',
+  toolsFilterDeferredPending: 'Deferred',
   toolsSurface_filesystem: 'Filesystem',
   toolsSurface_shell: 'Shell',
   toolsSurface_browser: 'Browser',
   toolsSurface_web: 'Web',
   toolsSurface_mcp: 'MCP',
-  toolsSurface_agent: 'Agent / team',
+  toolsSurface_agent: 'Team',
   toolsSurface_media: 'Media',
   toolsSurface_settings: 'Settings',
   toolsSurface_ui: 'UI',
+  toolsSurface_system: 'System',
+  toolsSurface_workspace: 'Workspace',
   toolsSurface_other: 'Other',
+  skillsCatalogLead: 'This-turn inject (badge · permission · posture · board) plus standing rules and on-disk skills — open a row for the exact body Host sends.',
   skillsCatalogMeta: '{docs} inject docs · {count} skills on disk',
   skillsCatalogEmpty: 'No standing inject or skills under this workspace.',
   skillsGroupWorkspace: 'Workspace skills',
   skillsGroupHome: 'Home skills',
   skillsGroupOther: 'Other skills',
+  skillsScopeWorkspace: 'Workspace',
+  skillsScopeHome: 'Home',
+  skillsScopeOther: 'Other',
+  skillsVendorXrk: '.xrk',
+  skillsVendorAgents: '.agents',
+  skillsVendorCursor: '.cursor',
+  skillsVendorClaude: '.claude',
+  skillsVendorCodex: '.codex',
+  skillsVendorOther: '',
+  skillsGroupByRoot: '{scope} {vendor} skills',
   skillsFilterWorkspace: 'Workspace',
   skillsFilterHome: 'Home',
   skillsFilterOther: 'Other',
+  skillsFilterWorkspaceXrk: 'Workspace .xrk',
+  skillsFilterWorkspaceAgents: 'Workspace .agents',
+  skillsFilterHomeXrk: 'Home .xrk',
+  skillsFilterHomeAgents: 'Home .agents',
+  skillsFilterSession: 'Session',
   skillsFilterDocuments: 'Prompt inject',
-  skillsDocumentsTitle: 'Standing inject (live)',
-  skillsDocumentsHint: 'What Host actually writes into the system prompt',
+  skillsDocumentsTitle: 'Standing rules',
+  skillsDocumentsHint: 'Workspace and home .xrk / .agents rule files, plus the skill catalog Host injects every turn',
   skillsDocumentBytes: '{bytes} chars · click to open',
   skillsDocumentKindInstruction: 'rules',
   skillsDocumentKindCatalog: 'skill catalog',
+  skillsDocumentKindCapability: 'badge · permission',
+  skillsDocumentKindPosture: 'session posture',
   skillsCatalogPathLabel: 'Skill catalog (standing)',
+  skillsCapabilityPathLabel: 'Session capability (badge · permission)',
+  skillsPosturePathLabel: 'Session posture',
+  skillsCollabPathLabel: 'Team · mainline board',
+  skillsDocumentKindCollab: 'collab board',
+  skillsSessionDocumentsTitle: 'This turn',
+  skillsSessionDocumentsHint: 'Badge, permission, posture, and the live team board Host sends at turn start',
   skillsUserOnly: 'user only',
   empty: 'This deployment exposes no plugin settings.',
   overridden: 'Overridden',
@@ -623,37 +665,67 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   catalogNoMatch: '没有匹配当前搜索或筛选的条目。',
   catalogWorkspace: '当前工作区 · {label}',
   catalogNoBody: '没有正文。',
-  toolsCatalogMeta: '徽章 {preset} · 共 {count} 个实机工具',
+  toolsCatalogLead: '当前会话挂着的工具。直连 schema 一直在模型表里；延迟工具（多为 MCP）要等 tool_search 展开后才上线——点开看说明。',
+  toolsCatalogMeta: '徽章 {preset} · {count} 个 · 直连 {direct} · 延迟 {deferred} · 已展开 {expanded}',
   toolsCatalogEmpty: '当前会话 Agent 没有工具。',
   toolsGroupMcpServer: 'MCP · {server}',
   toolsGroupMcpOther: 'MCP · 未知服务器',
-  toolsExposureDeferred: '延迟',
+  toolsExposureDeferred: '延迟待命',
+  toolsExposureExpanded: '已上线',
   toolsExposureHidden: '隐藏',
+  toolsFilterOnModel: '模型可见',
+  toolsFilterDeferredPending: '延迟待命',
   toolsSurface_filesystem: '文件系统',
   toolsSurface_shell: '终端',
   toolsSurface_browser: 'Browser',
   toolsSurface_web: '联网',
   toolsSurface_mcp: 'MCP',
-  toolsSurface_agent: 'Agent / 团队',
+  toolsSurface_agent: '团队',
   toolsSurface_media: '媒体',
   toolsSurface_settings: '设置',
   toolsSurface_ui: '界面',
+  toolsSurface_system: '系统',
+  toolsSurface_workspace: '工作区',
   toolsSurface_other: '其他',
+  skillsCatalogLead: '本回合注入（徽章 · 权限 · 姿态 · 看板）加上 Standing 规则与磁盘 Skills——点开即见 Host 实发正文。',
   skillsCatalogMeta: '{docs} 条注入 · 磁盘上 {count} 个 Skills',
   skillsCatalogEmpty: '当前工作区没有 Standing 注入或 Skills。',
   skillsGroupWorkspace: '工作区 Skills',
   skillsGroupHome: '主目录 Skills',
   skillsGroupOther: '其他 Skills',
+  skillsScopeWorkspace: '工作区',
+  skillsScopeHome: '主',
+  skillsScopeOther: '其他',
+  skillsVendorXrk: '.xrk',
+  skillsVendorAgents: '.agents',
+  skillsVendorCursor: '.cursor',
+  skillsVendorClaude: '.claude',
+  skillsVendorCodex: '.codex',
+  skillsVendorOther: '',
+  skillsGroupByRoot: '{scope} {vendor} Skills',
   skillsFilterWorkspace: '工作区',
   skillsFilterHome: '主目录',
   skillsFilterOther: '其他',
+  skillsFilterWorkspaceXrk: '工作区 .xrk',
+  skillsFilterWorkspaceAgents: '工作区 .agents',
+  skillsFilterHomeXrk: '主 .xrk',
+  skillsFilterHomeAgents: '主 .agents',
+  skillsFilterSession: '会话',
   skillsFilterDocuments: '提示注入',
-  skillsDocumentsTitle: 'Standing 注入（实机）',
-  skillsDocumentsHint: 'Host 实际写入系统提示的规则与 skill 目录',
+  skillsDocumentsTitle: 'Standing 规则',
+  skillsDocumentsHint: '工作区与主目录的 .xrk / .agents 规则，以及每回合注入的 Skill 目录',
   skillsDocumentBytes: '{bytes} 字符 · 点击查看全文',
   skillsDocumentKindInstruction: '规则',
   skillsDocumentKindCatalog: 'Skill 目录',
+  skillsDocumentKindCapability: '徽章 · 权限',
+  skillsDocumentKindPosture: '会话姿态',
   skillsCatalogPathLabel: 'Skill 目录（Standing）',
+  skillsCapabilityPathLabel: '会话能力（徽章 · 权限）',
+  skillsPosturePathLabel: '会话姿态',
+  skillsCollabPathLabel: '团队 · 主线看板',
+  skillsDocumentKindCollab: '协作看板',
+  skillsSessionDocumentsTitle: '本回合',
+  skillsSessionDocumentsHint: '徽章、权限、姿态，以及回合开头实发的团队与主线看板',
   skillsUserOnly: '仅用户',
   empty: '本部署没有开放任何插件设置。',
   overridden: '已覆盖',

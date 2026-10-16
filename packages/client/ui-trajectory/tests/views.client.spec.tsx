@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 /**
  * View registration acceptance on the real framework stack: the plugin fiber
  * registers Trajectory into a real SlotRegistry view ring, tabs
@@ -9,7 +9,7 @@
  */
 import { Context } from '@xrkseek/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement, type ComponentProps, type FC, type ReactNode } from 'react'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import { resolveSlotLabel } from '@xrkseek/client-ui-slots'
@@ -336,7 +336,9 @@ describe('plugin registration', () => {
     expect(second.hooks.duration).toBe(first.hooks.duration)
     first.setActualDuration(true)
     expect(second.hooks.duration.getSnapshot()).toBe(true)
-    expect(localStorage.getItem('xrk.trajectory.duration')).toBe('true')
+    await waitFor(() => {
+      expect(localStorage.getItem('xrk.trajectory.duration')).toBe('true')
+    })
     expect(localStorage.getItem(`xrk.trajectory.duration.${SID}`)).toBeNull()
   })
 
@@ -372,9 +374,9 @@ describe('tab switching in ConversationRoot', () => {
     expect(screen.getByRole('toolbar', { name: '轨迹工具栏' })).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Trajectory timeline' })).toBeTruthy()
     expect(view.container.querySelector('[data-conversation-composer-overlay]')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse turns' }))
+    fireEvent.click(screen.getByRole('button', { name: zh['toolbar.collapseTurns'] }))
     expect(view.container.querySelector('[data-collapsed-summary="turn"]')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Expand turns' }))
+    fireEvent.click(screen.getByRole('button', { name: zh['toolbar.expandTurns'] }))
     expect(screen.getByRole('row', { name: /USER/ })).toBeTruthy()
     expect(screen.queryByTestId('chat-body')).toBeNull()
     expect(b.loadOlder).not.toHaveBeenCalled()
@@ -582,12 +584,13 @@ describe('tab switching in ConversationRoot', () => {
     mount(b.slots)
     fireEvent.click(screen.getByRole('tab', { name: 'Trajectory' }))
     expect(screen.getByRole('toolbar', { name: '轨迹工具栏' })).toBeTruthy()
-    expect(screen.getByText('No timing data')).toBeTruthy()
+    expect(screen.getByText(zh['toolbar.lead'])).toBeTruthy()
+    expect(screen.getByText(zh['timeline.empty'])).toBeTruthy()
     expect(screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Collapse turns',
+      name: zh['toolbar.collapseTurns'],
     }).disabled).toBe(false)
     expect(screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Collapse calls',
+      name: zh['toolbar.collapseCalls'],
     }).disabled).toBe(false)
     expect(screen.queryByRole('row')).toBeNull()
     expect(screen.queryByText(/turns ·/)).toBeNull()
@@ -1136,7 +1139,7 @@ describe('timeline projection', () => {
 })
 
 describe('TrajectoryView state', () => {
-  it('persists the duration preference through the runtime snapshot-store seam', () => {
+  it('persists the duration preference through the runtime snapshot-store seam', async () => {
     const firstDuration = createTrajectoryDurationStore()
     const commonProps = {
       ...standaloneProps(NODES),
@@ -1149,11 +1152,13 @@ describe('TrajectoryView state', () => {
         setActualDuration={(value) => { firstDuration.set(value) }}
       />,
     )
-    const duration = screen.getByRole('button', { name: 'Use actual duration' })
+    const duration = screen.getByRole('button', { name: zh['toolbar.useActualDuration'] })
 
     expect(duration.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(duration)
-    expect(localStorage.getItem('xrk.trajectory.duration')).toBe('true')
+    await waitFor(() => {
+      expect(localStorage.getItem('xrk.trajectory.duration')).toBe('true')
+    })
     first.unmount()
 
     const restoredDuration = createTrajectoryDurationStore()
@@ -1164,7 +1169,7 @@ describe('TrajectoryView state', () => {
         setActualDuration={(value) => { restoredDuration.set(value) }}
       />,
     )
-    expect(screen.getByRole('button', { name: 'Use actual duration' }).getAttribute('aria-pressed'))
+    expect(screen.getByRole('button', { name: zh['toolbar.useActualDuration'] }).getAttribute('aria-pressed'))
       .toBe('true')
   })
 

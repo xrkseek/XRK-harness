@@ -417,12 +417,24 @@ function SessionStatusDots({ statuses }: { statuses: readonly [SessionStatus, ..
   )
 }
 
-/** Hover-card body: full title, relative time, and every relevant live status. */
+/** Hover-card body: title, optional 支线 / 主线, badge, time, live status. */
 function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number; t: RowTranslate }) {
   const statuses = sessionStatuses(node, t)
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
+      {node.sideline ? (
+        <div className={css.hoverSideline} title={t('hint.sideline')}>
+          <span className={css.hoverSidelineMark} aria-hidden>{t('mark.sideline')}</span>
+          {node.sideline}
+        </div>
+      ) : null}
+      {node.mainline ? (
+        <div className={css.hoverMeta} title={t('hint.mainline')}>{node.mainline}</div>
+      ) : null}
+      {!node.blank && node.agentPreset ? (
+        <div className={css.hoverMeta}>{t('hover.agent', { id: node.agentPreset })}</div>
+      ) : null}
       {/* Same placeholder rule as the row's trailing cell: no timestamp
           before the first prompt. */}
       {!node.blank && <div className={css.hoverTime}>{hoverTimeLabel(node.updatedAt, now, t)}</div>}

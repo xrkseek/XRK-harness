@@ -144,6 +144,8 @@ export interface TrajectoryTimelineProps {
   onRecordSelect?: (index: number) => void
   /** Bring the nearest record into view after clicking timeline whitespace. */
   onRecordFocus?: (index: number) => void
+  /** Localized empty-plot copy (defaults to English for isolated mounts). */
+  emptyLabel?: string
 }
 
 function orderedRange(left: number, right: number): FractionRange {
@@ -243,6 +245,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({
   onRangeChange,
   onRecordSelect,
   onRecordFocus,
+  emptyLabel = 'No timing data',
 }: TrajectoryTimelineProps) {
   const model = useMemo(() => deriveTrajectoryTimeline(turns, mode), [mode, turns])
   const detailByIndex = useMemo(
@@ -384,7 +387,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({
         <div className={css.plot}>
           <LaneLabels />
           <div className={css.track}>
-            <span className={css.empty}>No timing data</span>
+            <span className={css.empty}>{emptyLabel}</span>
             {hasEarlierRecords && (
               <EarlierHistoryBoundary
                 loading={loadingEarlier}

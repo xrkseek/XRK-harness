@@ -120,6 +120,7 @@ function declareRoot(slots: SlotRegistry): () => void {
     name: 'root',
     children: {
       'settings.section': { kind: 'list', scope: 'root' },
+      'conversation.view': { kind: 'list', scope: 'session' },
       sidebar: { kind: 'single', scope: 'root' },
     },
   } as never, () => null)
@@ -137,7 +138,7 @@ function declareRoot(slots: SlotRegistry): () => void {
 describe('ui-settings-plugins apply', () => {
   it('declares the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav', 'sessions',
+      'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsNav',
     ])
   })
 
@@ -153,7 +154,7 @@ describe('ui-settings-plugins apply', () => {
     expect(resolveSlotLabel(section.options.label)).toBe('插件')
     expect(slots.spec('settings.plugins.tab')).toMatchObject({ kind: 'list', scope: 'root' })
     const tabIds = slots.entries('settings.plugins.tab').map(e => e.options.id)
-    expect(tabIds).toEqual(['configurable', 'tools', 'skills'])
+    expect(tabIds).toEqual(['configurable'])
     const tab = slots.entries('settings.plugins.tab')[0]!
     expect(tab.options).toMatchObject({ id: 'configurable', order: 0 })
     expect(resolveSlotLabel(tab.options.label)).toBe('插件配置')
@@ -172,8 +173,6 @@ describe('ui-settings-plugins apply', () => {
     const initialTabs = sectionFace.hooks.tabs.getSnapshot()
     expect(initialTabs).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
-      { id: 'tools', order: 4, label: '运行时' },
-      { id: 'skills', order: 5, label: '注入' },
     ])
     expect(sectionFace.hooks.tabs.getSnapshot()).toBe(initialTabs)
 
@@ -183,8 +182,6 @@ describe('ui-settings-plugins apply', () => {
     expect(sectionFace.hooks.tabs.getSnapshot()).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
       { id: 'plain', order: 0, label: '' },
-      { id: 'tools', order: 4, label: '运行时' },
-      { id: 'skills', order: 5, label: '注入' },
     ])
     unsubscribe()
 
@@ -224,7 +221,8 @@ describe('ui-settings-plugins apply', () => {
 
     const tabIds = slots.entries('settings.plugins.tab').map(e => e.options.id)
     expect(tabIds).not.toContain('advanced')
-    expect(tabIds).toEqual(['configurable', 'tools', 'skills'])
+    expect(tabIds).toEqual(['configurable'])
+    expect(slots.entries('conversation.view').map(e => e.options.id)).toEqual(['tools', 'skills'])
     const keys = slots.entries('settings.plugin.item').map(e => e.options.key)
     expect(keys).toEqual(expect.arrayContaining([
       'auto-review', 'memory-embed', 'host', 'process-channels',

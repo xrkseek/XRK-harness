@@ -20,6 +20,8 @@ export type TrajectoryKey =
   | 'toolbar.density'
   | 'toolbar.densityCompact'
   | 'toolbar.densityDetailed'
+  | 'toolbar.lead'
+  | 'timeline.empty'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -47,6 +49,8 @@ export const zh: Record<TrajectoryKey, string> = {
   'toolbar.density': '密度',
   'toolbar.densityCompact': '紧凑',
   'toolbar.densityDetailed': '详细',
+  'toolbar.lead': '按回合复盘：时间线在上，账本在下。点一块看当时的输入、工具和耗时。',
+  'timeline.empty': '还没有可复盘的时间线',
 }
 
 /** English dictionary. */
@@ -68,4 +72,6 @@ export const en: Record<TrajectoryKey, string> = {
   'toolbar.density': 'Density',
   'toolbar.densityCompact': 'Compact',
   'toolbar.densityDetailed': 'Detailed',
+  'toolbar.lead': 'Review by turn: timeline above, ledger below. Select a block for the prompt, tools, and timing.',
+  'timeline.empty': 'No timing data',
 }

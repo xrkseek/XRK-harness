@@ -395,6 +395,26 @@
   color: #CFD3D6;
 }
 
+.hoverSideline {
+  font-size: 12px;
+  line-height: 18px;
+  color: #E8EAED;
+  overflow-wrap: break-word;
+}
+
+.hoverSidelineMark {
+  margin-right: 6px;
+  color: #9AA0A6;
+}
+
+.hoverHint,
+.hoverMeta {
+  font-size: 12px;
+  line-height: 16px;
+  color: #ADB2B8;
+  overflow-wrap: break-word;
+}
+
 .hoverStatus {
   display: flex;
   align-items: center;
