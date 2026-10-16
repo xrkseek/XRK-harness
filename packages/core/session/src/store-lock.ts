@@ -22,20 +22,34 @@ export const SESSIONS_WRITE_LOCK_FILENAME = "sessions.write.lock";
 
 /**
  * Another Host (or process) already holds the exclusive write lease.
- * User-facing copy matches DSH `error.sessionInUse` / writer-held UX.
+ * Message names the lock file so zero-experience users know what blocked boot.
  */
 export class SessionsDirInUseError extends Error {
   readonly code = "sessions-dir-in-use" as const;
   readonly dir: string;
+  readonly lockPath: string;
   readonly holderPid: number | undefined;
 
   constructor(dir: string, holderPid?: number) {
+    const root = path.resolve(dir);
+    const lockPath = path.join(root, SESSIONS_WRITE_LOCK_FILENAME);
+    const pidAlive =
+      holderPid !== undefined ? isProcessAlive(holderPid) : false;
+    const holderLine =
+      holderPid !== undefined
+        ? pidAlive
+          ? ` Holder process PID ${String(holderPid)} is still running.`
+          : ` Lock file names PID ${String(holderPid)}, but that process is gone.`
+        : "";
+    const tip = pidAlive
+      ? " Quit other XRK Hosts (Desktop app, or `xrkh serve` / `xrkh web` in a terminal), then try again."
+      : " No live holder was found — if this keeps happening, delete the lock file and start again.";
     super(
-      "This session store is already in use, possibly by another running XRK Host " +
-        "(such as xrkh web or the desktop app). Quit other running XRK instances and try again.",
+      `Session store lock: data folder already in use.${holderLine}${tip}\nLock file: ${lockPath}`,
     );
     this.name = "SessionsDirInUseError";
-    this.dir = dir;
+    this.dir = root;
+    this.lockPath = lockPath;
     this.holderPid = holderPid;
   }
 }
@@ -70,6 +84,20 @@ function readHolderPid(lockPath: string): number | undefined {
   }
 }
 
+/** Best-effort remove a lock whose holder is dead or missing. */
+function unlinkStaleLock(lockPath: string): boolean {
+  const holderPid = readHolderPid(lockPath);
+  if (holderPid !== undefined && isProcessAlive(holderPid)) {
+    return false;
+  }
+  try {
+    unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Sync backoff without timers (lock acquire is sync). */
 function spinWaitMs(ms: number): void {
   const sab = new SharedArrayBuffer(4);
@@ -79,6 +107,8 @@ function spinWaitMs(ms: number): void {
 
 /**
  * Acquire exclusive write ownership of `dir`.
+ * Dead holder PIDs (crash / Cursor force-quit of a test Host) reclaim the
+ * lock file automatically — no manual delete for the common case.
  * @throws {SessionsDirInUseError} when another live process (or this process)
  *   already holds the lease.
  */
@@ -142,12 +172,39 @@ export function acquireSessionsDirLock(dir: string): SessionsDirLock {
         }
       }
       // Dead holder, or empty lock still after retries — remove and retry.
-      try {
-        unlinkSync(lockPath);
-      } catch {
-        /* race with another locker */
-      }
+      unlinkStaleLock(lockPath);
       spinWaitMs(5);
+    }
+  }
+
+  // Last chance: if the named PID is gone, force-unlink once more.
+  const finalPid = readHolderPid(lockPath);
+  if (finalPid === undefined || !isProcessAlive(finalPid)) {
+    if (unlinkStaleLock(lockPath)) {
+      try {
+        writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
+        if (readHolderPid(lockPath) === process.pid) {
+          let released = false;
+          const lock: SessionsDirLock = {
+            release() {
+              if (released) return;
+              released = true;
+              localExclusive.delete(root);
+              try {
+                if (readHolderPid(lockPath) === process.pid) {
+                  unlinkSync(lockPath);
+                }
+              } catch {
+                /* ignore */
+              }
+            },
+          };
+          localExclusive.set(root, lock);
+          return lock;
+        }
+      } catch {
+        /* fall through to error */
+      }
     }
   }
 

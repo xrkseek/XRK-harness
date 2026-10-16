@@ -221,8 +221,10 @@ interface PendingEvent {
  * - an explicit `flush()` (host drain idle / close / search / evict).
  * Model-interior events (`assistant/*`, `step/*`, `tool/*`, `llm/*`) batch:
  * a crash loses at most this window of model output, and
- * `repairOpenTurnEvents` still closes the turn on reload. User input is
- * never batched, so no user-visible state is lost.
+ * `repairOpenTurnEvents` still closes the turn on reload. Durability
+ * boundaries (`user/message`, `turn/*`, `prompt/*`, `command/*`) still flush
+ * before the next macrotask via `queueMicrotask` so Face can mux-publish in
+ * the same turn without waiting on sqlite COMMIT (idle/close still `flush()`).
  */
 const MICRO_BATCH_MAX_PENDING = 64;
 
@@ -596,11 +598,15 @@ export function createPersistentSessionStore(
   };
 
   /**
-   * Events that must be durable before `append` returns — user input and
+   * Events that must reach disk before the next macrotask — user input and
    * turn lifecycle edges. Crash repair (`repairOpenTurnEvents`) closes every
    * `turn/start` that never got a `turn/end`, but it can only settle what
    * reached disk; a queued user message would be silently lost, and a missing
    * `turn/start` would open a turn the repair pass cannot see.
+   *
+   * Flush is scheduled on a microtask (not sync) so Face mux publish can run
+   * in the same call stack after `append` returns; host idle/close `flush()`
+   * and the pending-length cap still drain synchronously.
    */
   const isDurabilityBoundary = (frozen: SessionEvent): boolean =>
     frozen.type === "user/message" ||
@@ -609,10 +615,30 @@ export function createPersistentSessionStore(
     frozen.type.startsWith("command/") ||
     frozen.type.startsWith("prompt/");
 
+  let flushMicrotaskQueued = false;
+  let storeClosed = false;
+  const scheduleFlushPending = (): void => {
+    if (shared || storeClosed || flushMicrotaskQueued) return;
+    flushMicrotaskQueued = true;
+    queueMicrotask(() => {
+      flushMicrotaskQueued = false;
+      if (storeClosed) return;
+      try {
+        flushPending();
+      } catch {
+        /* pending restored inside flushPending; close()/flush() retries */
+      }
+    });
+  };
+
   const persistEvent = (id: string, frozen: SessionEvent): void => {
     pending.push({ sessionId: id, event: frozen });
-    if (isDurabilityBoundary(frozen) || pending.length >= MICRO_BATCH_MAX_PENDING) {
+    if (pending.length >= MICRO_BATCH_MAX_PENDING) {
       flushPending();
+      return;
+    }
+    if (isDurabilityBoundary(frozen)) {
+      scheduleFlushPending();
     }
   };
 
@@ -946,6 +972,7 @@ export function createPersistentSessionStore(
     },
 
     close() {
+      storeClosed = true;
       try {
         flushPending();
         if (!shared) {

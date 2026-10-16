@@ -60,7 +60,9 @@ describe("sessions dir write lock", () => {
 
   it("user message tells operators to quit other Hosts", () => {
     const err = new SessionsDirInUseError("/tmp/x", 42);
-    expect(err.message).toMatch(/Quit other running XRK instances/);
+    expect(err.message).toMatch(/Session store lock/);
+    expect(err.message).toMatch(/PID 42/);
+    expect(err.message).toMatch(/sessions\.write\.lock/);
     expect(err.code).toBe("sessions-dir-in-use");
     expect(err.holderPid).toBe(42);
   });

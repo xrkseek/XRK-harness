@@ -117,16 +117,15 @@ describe("createPersistentSessionStore", () => {
     evil.exec("DROP TABLE events");
     evil.close();
 
-    expect(() =>
-      store.append(s, {
-        type: "turn/end",
-        ts: 2,
-        turnId: "t",
-        reason: { kind: "completed" },
-      }),
-    ).toThrow();
-    // Failed flush must not stick in the resident log or the pending queue.
-    expect(store.get(s).events).toHaveLength(1);
+    // Durability flush is a microtask so append can return before sqlite COMMIT.
+    // The failed COMMIT surfaces on the explicit close() drain.
+    store.append(s, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t",
+      reason: { kind: "completed" },
+    });
+    expect(store.get(s).events).toHaveLength(2);
 
     expect(() => store.close()).toThrow();
     // Lock released despite flush failure — exclusive reopen works.
