@@ -242,6 +242,36 @@ function hasAnyKnob(events: readonly SessionEvent[]): boolean {
   );
 }
 
+/**
+ * IM / 向阳空间: only one permission — full access (path open).
+ * Upgrades inherited or legacy `workspace-write` pins; **no-op when the durable
+ * identity already says full access**, so re-entering this path (fork seed that
+ * carries only the preset knob, drag-into-workspace, migrator retry) never
+ * appends a second copy of the same knobs.
+ *
+ * Keying off `foldPermissionKnobs().preset` rather than the derived select is
+ * deliberate: a fork seed can hold the preset alone, and `derivePermissionSelect`
+ * then reports `custom` (sandbox / approval still at composition defaults) —
+ * which would make this re-append every time.
+ */
+export function ensureOrchestrationFullAccess(
+  store: SessionStore,
+  sessionId: string,
+  options?: { readonly autoGate?: FacePermissionAutoGate },
+): void {
+  const events = readSessionEvents(store, sessionId);
+  if (foldPermissionKnobs(events).preset === "danger-full-access") {
+    return;
+  }
+  const applied = applyPermissionPreset(
+    store,
+    sessionId,
+    "danger-full-access",
+    options?.autoGate ? { autoGate: options.autoGate } : undefined,
+  );
+  if (!applied.ok) throw new Error(applied.message);
+}
+
 /** Pin durable knobs on a fresh session (settings defaultPreset). */
 export function pinInitialPermission(
   store: SessionStore,
@@ -472,7 +502,8 @@ export function applyPermissionPreset(
 /**
  * Settings `permission.defaultPreset` is `applies: live`. Push the new default
  * onto sessions still on the previous default (not manually customized via
- * Access / `/permission`), then invalidate so sandbox/approval rebuild.
+ * Access / `/permission`). Fs / shell / approval gates read knobs live — no
+ * agent invalidate required for the path open/allowlisted flip.
  */
 export async function applyLivePermissionDefaultPreset(
   runtime: FaceRuntime,
@@ -509,14 +540,11 @@ export async function applyLivePermissionDefaultPreset(
       { autoLive },
     ).currentValue;
     if (current !== previousPreset) continue;
-    const applied = applyPermissionPreset(runtime.store, sessionId, nextRaw, {
+    applyPermissionPreset(runtime.store, sessionId, nextRaw, {
       ...(runtime.hasPtyActivity
         ? { hasPtyActivity: () => runtime.hasPtyActivity!() }
         : {}),
       autoGate: runtime.permissionAuto,
     });
-    if (applied.ok && applied.changed) {
-      await runtime.invalidateAgent?.(sessionId);
-    }
   }
 }

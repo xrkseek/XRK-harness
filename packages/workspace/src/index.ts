@@ -20,6 +20,7 @@ import {
   formatWorkspaceRootAnchor,
   resolveRuntimeSurface,
   type RuntimeSurface,
+  type SessionPolicyAnchor,
 } from "./workspace-anchor.js";
 import { computeInjectFingerprint } from "./inject-fingerprint.js";
 
@@ -39,9 +40,10 @@ export {
   type InjectBudget,
 } from "./inject-budget.js";
 
-export type { RuntimeSurface } from "./workspace-anchor.js";
+export type { RuntimeSurface, SessionPolicyAnchor } from "./workspace-anchor.js";
 export {
   formatRuntimeSurfaceAnchor,
+  formatSessionPolicyAnchor,
   normalizeRuntimeSurface,
   RUNTIME_SURFACE_ENV,
 } from "./workspace-anchor.js";
@@ -346,6 +348,11 @@ export interface ResolveWorkspaceInjectOptions {
    */
   readonly surface?: RuntimeSurface;
   /**
+   * Session badge (agent preset) + permission line for the model.
+   * When set, disk-unchanged early skip is disabled so policy changes re-inject.
+   */
+  readonly sessionPolicy?: SessionPolicyAnchor;
+  /**
    * Who this inject is for. `user` (default) gets the full standing persona
    * (home SOUL.md / USER.md / IDENTITY.md / home AGENTS.md). `subagent` skips
    * that persona layer — a delegated child's identity is its spawn preamble,
@@ -389,6 +396,7 @@ export async function resolveWorkspaceInject(
     options.root,
     options.displayTitle,
     options.surface ?? resolveRuntimeSurface(),
+    options.sessionPolicy,
   );
   const instructionBlocks = anchor
     ? [anchor, ...out.instructionBlocks]
@@ -448,9 +456,15 @@ export async function appendWorkspaceInjectsIfChanged(input: {
   const previous = foldLatestWorkspaceInjectDigests(log);
 
   // DSH / Codex: disk unchanged and session already has a standing inject → skip
-  // full resolve (instructions and/or skill-catalog).
+  // full resolve (instructions and/or skill-catalog). Session policy (badge /
+  // permission) is not on disk — when present, always re-resolve so digests move.
+  const policy = input.injectOptions.sessionPolicy;
+  const hasSessionPolicy = Boolean(
+    policy?.badge?.trim() || policy?.permission?.trim(),
+  );
   if (
-    input.injector !== undefined
+    !hasSessionPolicy
+    && input.injector !== undefined
     && (await input.injector.isDiskUnchanged())
     && (previous.instructions !== undefined
       || previous.skillCatalog !== undefined)

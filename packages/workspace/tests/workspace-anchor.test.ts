@@ -36,6 +36,16 @@ describe("workspace root anchor", () => {
   it("omits the surface paragraph when the surface is unknown", () => {
     expect(formatWorkspaceRootAnchor("/repo/app")).not.toContain("Runtime surface");
   });
+
+  it("appends badge and permission when a session policy is given", () => {
+    const text = formatWorkspaceRootAnchor("/repo/app", undefined, "desktop", {
+      badge: "harness",
+      permission: "Auto review (Approve for me) · no sandbox · per-call review",
+    });
+    expect(text).toContain("## Session policy");
+    expect(text).toContain("Badge (agent preset): `harness`");
+    expect(text).toContain("Permission: Auto review");
+  });
 });
 
 describe("runtime surface resolution", () => {

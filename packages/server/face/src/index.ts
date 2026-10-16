@@ -195,6 +195,7 @@ export {
   createCollabBoardFragmentProvider,
   formatCollabBoard,
   formatCollabBoardText,
+  listUnboundParentPeers,
 } from "./collab-board.js";
 export {
   createSessionCapabilityFragmentProvider,
@@ -270,6 +271,7 @@ export {
   applyLivePermissionDefaultPreset,
   defaultPermissionPreset,
   derivePermissionSelect,
+  ensureOrchestrationFullAccess,
   formatPermissionStatusLabel,
   permissionSelectFromEvents,
   pinInitialPermission,

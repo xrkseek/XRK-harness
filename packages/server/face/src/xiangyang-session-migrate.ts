@@ -14,7 +14,7 @@ import {
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
 import {
-  applyPermissionPreset,
+  ensureOrchestrationFullAccess,
   permissionSelectFromEvents,
 } from "./permissions.js";
 
@@ -85,16 +85,12 @@ export function repairOrchestrationSessionPermissions(
   for (const [sessionId, wsId] of runtime.workspaces.listMembership()) {
     if (!isOrchestrationWorkspaceId(wsId)) continue;
     if (!runtime.store.has(sessionId)) continue;
-    const current = permissionSelectFromEvents(
+    const before = permissionSelectFromEvents(
       readSessionEvents(runtime.store, sessionId),
     ).currentValue;
-    if (current === "danger-full-access") continue;
-    const applied = applyPermissionPreset(
-      runtime.store,
-      sessionId,
-      "danger-full-access",
-    );
-    if (applied.ok && applied.changed) fixed += 1;
+    if (before === "danger-full-access") continue;
+    ensureOrchestrationFullAccess(runtime.store, sessionId);
+    fixed += 1;
   }
   return fixed;
 }

@@ -332,9 +332,8 @@ export async function executeFaceCommand(
         text: applied.message,
       });
     }
-    if (applied.changed) {
-      await runtime.invalidateAgent?.(sessionId);
-    }
+    // Path / approval / read-only gates read session knobs live — no agent
+    // invalidate. Mid-turn /permission stays seamless.
     return appendCommandPair(runtime, sessionId, parsed, {
       kind: "success",
       text: `permission mode ${name}`,

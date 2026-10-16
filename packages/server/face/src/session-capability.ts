@@ -15,6 +15,7 @@ import {
 import type { FaceRuntime } from "./context.js";
 import {
   FACE_PERMISSION_TABLE,
+  formatPermissionStatusLabel,
   permissionSelectFromEvents,
   resolvePermissionPresetSpec,
 } from "./permissions.js";
@@ -104,7 +105,9 @@ export function formatSessionCapability(
   const cwd = resolveSessionCwd(runtime, sessionId);
   const shellConfine = shouldConfineSandbox(sandbox) ? "on" : "off";
   const lines = [
+    `badge: ${badge}`,
     `permission: ${permission} (path=${pathMode}) · approval=${approval} · shell_confine=${shellConfine}`,
+    `permission_label: ${formatPermissionStatusLabel(permission)}`,
     `permission_brief: ${permissionBrief(permission)}`,
     `tool_surface: ${toolSurfaceSummary(badge)}`,
     `surface_brief: ${surfaceBrief(badge)}`,

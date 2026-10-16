@@ -238,6 +238,9 @@ export interface FsService {
   onIntent(handler: FsIntentHandler): () => void;
 }
 
+/** Static list or a getter re-read on every resolve (Settings hot switch). */
+export type FsLiveRoots = readonly string[] | (() => readonly string[]);
+
 export interface FsLocalOptions {
   readonly root: string;
   readonly defaultMaxBytes?: number;
@@ -246,20 +249,23 @@ export interface FsLocalOptions {
    * addition to `root` (Settings `permission.extraWritableRoots`). Relative
    * paths always resolve under `root`. Symlink escape denied.
    * Ignored when `pathAccessMode` is `open` or `jailed`.
+   * A getter is invoked on every resolve so Settings can change without
+   * recreating the provider.
    */
-  readonly extraWritableRoots?: readonly string[];
+  readonly extraWritableRoots?: FsLiveRoots;
   /**
    * Absolute host directories whose files may be read by absolute path
    * (`hostReadableRoots`). Host default is product home (`{XRK_HOME}`).
    * Containment is lexical + realpath (symlink escape denied).
    * Ignored when `pathAccessMode` is `open`.
    */
-  readonly hostReadableRoots?: readonly string[];
+  readonly hostReadableRoots?: FsLiveRoots;
   /**
    * Path gate. Default `allowlisted` (workspace + extra/host roots).
    * `open` skips the jail (danger-full-access / Auto).
+   * Prefer a live getter so `/permission` takes effect without recreating fs.
    */
-  readonly pathAccessMode?: PathAccessMode;
+  readonly pathAccessMode?: PathAccessMode | (() => PathAccessMode);
   /**
    * Live session object-path allowlist (Once / Whitelist overreach grants).
    * Merged into readable + writable roots on every resolve.
@@ -307,15 +313,24 @@ function resolveWritePath(
 }
 
 /** Provider — local disk bound to workspace root. */
+function resolveLiveRoots(roots: FsLiveRoots | undefined): readonly string[] {
+  const raw = typeof roots === "function" ? roots() : (roots ?? []);
+  return raw.map((r) => path.resolve(r));
+}
+
 export function createFsLocalProvider(options: FsLocalOptions): FsService {
   const root = path.resolve(options.root);
-  const pathAccessMode = options.pathAccessMode ?? "allowlisted";
-  const extraWritableRoots = (options.extraWritableRoots ?? []).map((r) =>
-    path.resolve(r),
-  );
-  const hostReadableRoots = (options.hostReadableRoots ?? []).map((r) =>
-    path.resolve(r),
-  );
+  const pathAccessModeOf = (): PathAccessMode => {
+    const mode =
+      typeof options.pathAccessMode === "function"
+        ? options.pathAccessMode()
+        : options.pathAccessMode;
+    return mode ?? "allowlisted";
+  };
+  const extraWritableRootsOf = (): readonly string[] =>
+    resolveLiveRoots(options.extraWritableRoots);
+  const hostReadableRootsOf = (): readonly string[] =>
+    resolveLiveRoots(options.hostReadableRoots);
   const defaultMaxBytes = options.defaultMaxBytes ?? 512_000;
   const intentHandlers = new Set<FsIntentHandler>();
 
@@ -332,17 +347,17 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
   const readPath = (userPath: string) =>
     resolveReadablePath(
       root,
-      hostReadableRoots,
-      [...extraWritableRoots, ...sessionRoots()],
+      hostReadableRootsOf(),
+      [...extraWritableRootsOf(), ...sessionRoots()],
       userPath,
-      pathAccessMode,
+      pathAccessModeOf(),
     );
   const writePath = (userPath: string) =>
     resolveWritePath(
       root,
-      [...extraWritableRoots, ...sessionRoots()],
+      [...extraWritableRootsOf(), ...sessionRoots()],
       userPath,
-      pathAccessMode,
+      pathAccessModeOf(),
     );
 
   /**

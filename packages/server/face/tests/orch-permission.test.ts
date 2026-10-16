@@ -10,6 +10,7 @@ import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
   applyLivePermissionDefaultPreset,
+  ensureOrchestrationFullAccess,
   permissionSelectFromEvents,
 } from "../src/permissions.js";
 import { XIANGYANG_WORKSPACE_ID } from "../src/xiangyang-workspace.js";
@@ -95,6 +96,107 @@ describe("orchestration permission lock", () => {
     }
   });
 
+  it("upgrades inherited coding knobs when creating under 向阳", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-orch-inherit-"));
+    try {
+      const runtime = createFaceRuntime({
+        store: createMemorySessionStore(),
+        workspaceRoot: process.cwd(),
+        productDir: home,
+        drain: drain(),
+        resolveAgent: async () => {
+          throw new Error("unused");
+        },
+      });
+
+      const coding = runtime.workspaces
+        .list(runtime.store.list())
+        .items.find((w) => w.workspaceId !== XIANGYANG_WORKSPACE_ID);
+      expect(coding).toBeTruthy();
+      const parent = await dispatchFaceMethod(runtime, "session.create", "p", {
+        workspaceId: coding!.workspaceId,
+      });
+      expect(parent.result.ok).toBe(true);
+      if (!parent.result.ok) return;
+      const parentId = (parent.result.value as { sessionId: string }).sessionId;
+      expect(
+        permissionSelectFromEvents(readSessionEvents(runtime.store, parentId))
+          .currentValue,
+      ).toBe("workspace-write");
+
+      const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+        parentSessionId: parentId,
+        workspaceId: XIANGYANG_WORKSPACE_ID,
+      });
+      expect(child.result.ok).toBe(true);
+      if (!child.result.ok) return;
+      const childId = (child.result.value as { sessionId: string }).sessionId;
+      expect(
+        permissionSelectFromEvents(readSessionEvents(runtime.store, childId))
+          .currentValue,
+      ).toBe("danger-full-access");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("locks full access when a coding session is dragged into 向阳", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-orch-drag-"));
+    try {
+      const runtime = createFaceRuntime({
+        store: createMemorySessionStore(),
+        workspaceRoot: process.cwd(),
+        productDir: home,
+        drain: drain(),
+        resolveAgent: async () => {
+          throw new Error("unused");
+        },
+      });
+
+      const coding = runtime.workspaces
+        .list(runtime.store.list())
+        .items.find((w) => w.workspaceId !== XIANGYANG_WORKSPACE_ID);
+      expect(coding).toBeTruthy();
+
+      const codingSess = await dispatchFaceMethod(runtime, "session.create", "c", {
+        workspaceId: coding!.workspaceId,
+      });
+      expect(codingSess.result.ok).toBe(true);
+      if (!codingSess.result.ok) return;
+      const codingId = (codingSess.result.value as { sessionId: string })
+        .sessionId;
+
+      const xySess = await dispatchFaceMethod(runtime, "session.create", "x", {
+        workspaceId: XIANGYANG_WORKSPACE_ID,
+      });
+      expect(xySess.result.ok).toBe(true);
+      if (!xySess.result.ok) return;
+      const xyId = (xySess.result.value as { sessionId: string }).sessionId;
+
+      expect(
+        permissionSelectFromEvents(readSessionEvents(runtime.store, codingId))
+          .currentValue,
+      ).toBe("workspace-write");
+
+      const moved = await dispatchFaceMethod(
+        runtime,
+        "workspace.insertSessionBefore",
+        "drag",
+        { sessionId: codingId, beforeSessionId: xyId },
+      );
+      expect(moved.result.ok).toBe(true);
+      expect(runtime.workspaces.workspaceIdOf(codingId)).toBe(
+        XIANGYANG_WORKSPACE_ID,
+      );
+      expect(
+        permissionSelectFromEvents(readSessionEvents(runtime.store, codingId))
+          .currentValue,
+      ).toBe("danger-full-access");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("repairs legacy workspace-write pins on orchestration sessions", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xrk-orch-repair-"));
     try {
@@ -137,5 +239,48 @@ describe("orchestration permission lock", () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it("does not append duplicate knobs when ensure runs twice", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      workspaceId: XIANGYANG_WORKSPACE_ID,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const locked = readSessionEvents(store, sessionId).filter(
+      (event) =>
+        event.type === "permission/preset" ||
+        event.type === "sandbox/mode" ||
+        event.type === "approval/policy",
+    ).length;
+    expect(locked).toBeGreaterThan(0);
+
+    // Re-entering the lock (drag back into 向阳, migrator retry) must be a
+    // no-op: the durable identity already says full access.
+    ensureOrchestrationFullAccess(store, sessionId, {
+      autoGate: runtime.permissionAuto,
+    });
+    ensureOrchestrationFullAccess(store, sessionId, {
+      autoGate: runtime.permissionAuto,
+    });
+    expect(
+      readSessionEvents(store, sessionId).filter(
+        (event) =>
+          event.type === "permission/preset" ||
+          event.type === "sandbox/mode" ||
+          event.type === "approval/policy",
+      ).length,
+    ).toBe(locked);
   });
 });

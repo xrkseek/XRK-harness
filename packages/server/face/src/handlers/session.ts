@@ -52,6 +52,7 @@ import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
 import {
   defaultPermissionPreset,
+  ensureOrchestrationFullAccess,
   pinInheritedPermission,
   pinInitialPermission,
 } from "../permissions.js";
@@ -320,15 +321,20 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     }
     runtime.pathAllowlist.hydrate(runtime.store, sessionId);
     // Settings permission.defaultPreset applies to coding workspaces only.
-    // IM / 向阳空间 lock to full access (path open).
-    pinInitialPermission(
-      runtime.store,
-      sessionId,
-      isOrchestrationWorkspaceId(attachWs)
-        ? "danger-full-access"
-        : defaultPermissionPreset(runtime),
-      { autoGate: runtime.permissionAuto },
-    );
+    // IM / 向阳空间: one locked permission (full access / path open).
+    // Must run after inherit — pinInitialPermission no-ops when knobs exist.
+    if (isOrchestrationWorkspaceId(attachWs)) {
+      ensureOrchestrationFullAccess(runtime.store, sessionId, {
+        autoGate: runtime.permissionAuto,
+      });
+    } else {
+      pinInitialPermission(
+        runtime.store,
+        sessionId,
+        defaultPermissionPreset(runtime),
+        { autoGate: runtime.permissionAuto },
+      );
+    }
   } catch (err) {
     runtime.store.delete?.(sessionId);
     forgetRequestHeaderCache(sessionId);
@@ -1080,26 +1086,6 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   }
 
   runtime.watchSession(child.id);
-  // Fork seed may carry Auto — refuse without live Guardian (DSH pinInitial).
-  try {
-    pinInitialPermission(
-      runtime.store,
-      child.id,
-      defaultPermissionPreset(runtime),
-      { autoGate: runtime.permissionAuto },
-    );
-  } catch (err) {
-    runtime.store.delete?.(child.id);
-    forgetRequestHeaderCache(child.id);
-    forkSlot.release();
-    return {
-      ok: false,
-      error: {
-        code: "invalid-payload",
-        message: err instanceof Error ? err.message : String(err),
-      },
-    };
-  }
   const parentCwd = resolveSessionCwd(runtime, sessionId);
   runtime.sessionCwds.set(child.id, parentCwd);
   if (prefixHasImageContent(seed)) {
@@ -1113,6 +1099,36 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   } else {
     const target = runtime.workspaces.resolveAttachTarget(parentAttach);
     if (!("error" in target)) parentWs = target.workspaceId;
+  }
+  // Fork seed may carry Auto — refuse without live Guardian (DSH pinInitial).
+  // Orch workspaces stay locked full access after attach (ignore Settings).
+  // The seed usually already carries the full-access identity, and
+  // ensureOrchestrationFullAccess is a no-op then, so re-locking here cannot
+  // append a second copy of the knobs into the child's log.
+  try {
+    if (isOrchestrationWorkspaceId(parentWs)) {
+      ensureOrchestrationFullAccess(runtime.store, child.id, {
+        autoGate: runtime.permissionAuto,
+      });
+    } else {
+      pinInitialPermission(
+        runtime.store,
+        child.id,
+        defaultPermissionPreset(runtime),
+        { autoGate: runtime.permissionAuto },
+      );
+    }
+  } catch (err) {
+    runtime.store.delete?.(child.id);
+    forgetRequestHeaderCache(child.id);
+    forkSlot.release();
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
   const workspace = parentWs
     ? runtime.workspaces.attachSession(child.id, parentWs)

@@ -1311,16 +1311,19 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       XIANGYANG_WORKSPACE_TITLE,
     );
     // Keep CLI / Desktop `--workspace` as an extra coding workspace when it
-    // is not the reserved 向阳空间 path.
+    // is not the reserved 向阳空间 path. Packaged desktop used to pass
+    // `resources/host` as cwd — never auto-create that install directory.
     const launchRoot = path.resolve(options.workspaceRoot);
-    if (launchRoot !== path.resolve(xyPath)) {
+    const xyResolved = path.resolve(xyPath);
+    const packagedHostCwd = isPackagedHostInstallDir(launchRoot);
+    if (launchRoot !== xyResolved && !packagedHostCwd) {
       workspaces.create(launchRoot);
     }
     if (ensured.created || ensured.workspace.title !== XIANGYANG_WORKSPACE_TITLE) {
       void persistWorkspaceDoc(runtime, workspaces).catch(() => {
         /* fail closed: in-memory default still usable */
       });
-    } else if (launchRoot !== path.resolve(xyPath)) {
+    } else if (launchRoot !== xyResolved && !packagedHostCwd) {
       void persistWorkspaceDoc(runtime, workspaces).catch(() => {
         /* best-effort */
       });
@@ -1334,4 +1337,13 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     });
   }
   return runtime;
+}
+
+/** Packaged desktop host cwd: `{install}/resources/host`. Not a user workspace. */
+function isPackagedHostInstallDir(absPath: string): boolean {
+  const abs = path.resolve(absPath);
+  return (
+    path.basename(abs) === "host" &&
+    path.basename(path.dirname(abs)) === "resources"
+  );
 }

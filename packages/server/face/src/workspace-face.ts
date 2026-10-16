@@ -5,6 +5,7 @@
 
 import { access, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { readSessionEvents } from "@xrkseek/core-session";
 import {
   resolveWorkspaceInject,
 } from "@xrkseek/workspace";
@@ -19,6 +20,13 @@ import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { resolveImGatewayWired } from "./process-channels.js";
 import { ensureImWorkspace } from "./im-workspace-ensure.js";
+import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
+import {
+  ensureOrchestrationFullAccess,
+  formatPermissionStatusLabel,
+  permissionSelectFromEvents,
+} from "./permissions.js";
+import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -251,21 +259,35 @@ export async function workspacePreviewInject(
     };
   }
 
-  const resolved = await resolveWorkspaceInject({
-    root,
-    productDir,
-    maxChars,
-    ...(typeof p.displayTitle === "string" && p.displayTitle.trim()
-      ? { displayTitle: p.displayTitle.trim() }
+  const sessionId = payloadSessionId(payload);
+  const displayTitle =
+    typeof p.displayTitle === "string" && p.displayTitle.trim()
+      ? p.displayTitle.trim()
       : (() => {
-          const sessionId = payloadSessionId(payload);
-          if (!sessionId) return {};
+          if (!sessionId) return undefined;
           const wsId = runtime.workspaces.workspaceIdOf(sessionId);
           const title = wsId
             ? runtime.workspaces.get(wsId)?.title
             : undefined;
-          return title?.trim() ? { displayTitle: title.trim() } : {};
-        })()),
+          return title?.trim() || undefined;
+        })();
+  const sessionPolicy = sessionId && runtime.store.has(sessionId)
+    ? {
+        badge: effectiveSessionAgentPreset(runtime, sessionId),
+        permission: formatPermissionStatusLabel(
+          permissionSelectFromEvents(
+            readSessionEvents(runtime.store, sessionId),
+          ).currentValue,
+        ),
+      }
+    : undefined;
+
+  const resolved = await resolveWorkspaceInject({
+    root,
+    productDir,
+    maxChars,
+    ...(displayTitle ? { displayTitle } : {}),
+    ...(sessionPolicy ? { sessionPolicy } : {}),
   });
 
   const blocks = resolved.blocks.map((text, index) => ({
@@ -776,6 +798,15 @@ export async function workspaceInsertSessionBeforeFace(
         message: "session not in a live workspace",
       },
     };
+  }
+  // Drag into IM / 向阳空间: lock the only allowed permission (full access).
+  if (
+    isOrchestrationWorkspaceId(workspace.workspaceId) &&
+    runtime.store.has(sessionId)
+  ) {
+    ensureOrchestrationFullAccess(runtime.store, sessionId, {
+      autoGate: runtime.permissionAuto,
+    });
   }
   runtime.bus.publishHost({
     type: "host/workspace-changed",

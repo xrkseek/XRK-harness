@@ -9,7 +9,9 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { FaceRuntime } from "./context.js";
+import { ensureOrchestrationFullAccess } from "./permissions.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
+import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
 
 export function resolveSessionCwd(
   runtime: FaceRuntime,
@@ -117,6 +119,14 @@ async function setSessionWorkingDirectoryUnlocked(
   }
   if (attach.workspaceId) {
     runtime.workspaces.attachSession(sessionId, attach.workspaceId);
+    if (
+      isOrchestrationWorkspaceId(attach.workspaceId) &&
+      runtime.store.has(sessionId)
+    ) {
+      ensureOrchestrationFullAccess(runtime.store, sessionId, {
+        autoGate: runtime.permissionAuto,
+      });
+    }
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
 

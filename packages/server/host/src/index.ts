@@ -93,6 +93,7 @@ import {
   IM_WORKSPACE_ID,
   QICHUANG_AGENT_PRESET_ID,
   XIANGYANG_WORKSPACE_ID,
+  isOrchestrationWorkspaceId,
   effectiveHostApiKey,
   ensureMcpLiveIfIdle,
   isLoopbackAddress,
@@ -472,14 +473,17 @@ export type AgentFactory = (input: {
    * addition to the workspace root. Host fills this from Settings
    * `permission.extraWritableRoots` (default includes `{XRK_HOME}`).
    * Symlink escape out of a listed root is denied; relative paths always
-   * resolve under the workspace root.
+   * resolve under the workspace root. Prefer a live getter for Settings
+   * hot switch without agent rebuild.
    */
-  extraWritableRoots?: readonly string[];
+  extraWritableRoots?:
+    | readonly string[]
+    | (() => readonly string[]);
   /**
    * Path gate from session sandbox. `open` when danger-full-access / Auto so
-   * file tools match shell (no workspace jail).
+   * file tools match shell (no workspace jail). Live getter preferred.
    */
-  pathAccessMode?: PathAccessMode;
+  pathAccessMode?: PathAccessMode | (() => PathAccessMode);
   /** Live session object-path allowlist (path-overreach Once / Whitelist). */
   readSessionPathAllowlist?: () => readonly string[];
   /** Clear ephemeral Once grants after each tool settle. */
@@ -1154,12 +1158,22 @@ export function createHostManager(): HostManager {
                       : [];
                   return session.length > 0 ? [...base, ...session] : base;
                 },
-                readSandboxMode: (sessionId) =>
-                  effectiveSandboxMode(
-                    sessionId
-                      ? readSessionEvents(store, sessionId)
-                      : [],
-                  ),
+                readSandboxMode: (sessionId) => {
+                  const rt = faceBox.runtime;
+                  // IM / 向阳空间: shell matches locked full access (no confine).
+                  if (
+                    sessionId &&
+                    rt &&
+                    isOrchestrationWorkspaceId(
+                      rt.workspaces.workspaceIdOf(sessionId),
+                    )
+                  ) {
+                    return "danger-full-access";
+                  }
+                  return effectiveSandboxMode(
+                    sessionId ? readSessionEvents(store, sessionId) : [],
+                  );
+                },
                 remoteExecution: sshWorld !== undefined,
                 env: process.env,
               }),
@@ -1380,19 +1394,9 @@ export function createHostManager(): HostManager {
                   ? effectiveSessionAgentPreset(faceBox.runtime, sessionId)
                   : undefined) ??
                 config.runtime.preset;
-        // Settings `permission.extraWritableRoots` (schema base includes
-        // product home). Re-read live so the next agent resolve picks up
-        // changes; agentCache keys on sessionId so a bound agent keeps its
-        // composition until invalidated. Empty → fall back to `{XRK_HOME}`
-        // (same default as Settings base / harness composition).
-        const permissionExtraWritableRoots = readPermissionExtraWritableRoots();
-        const extraWritableRoots =
-          permissionExtraWritableRoots.length > 0
-            ? permissionExtraWritableRoots
-            : [resolveXrkHome()];
-        const pathAccessMode = pathAccessModeFromSandbox(
-          effectiveSandboxMode(readSessionEvents(store, sessionId)),
-        );
+        // Settings `permission.extraWritableRoots` + session pathAccessMode
+        // are live getters inside the composition — /permission and Settings
+        // hot-switch without agentCache invalidate mid-turn.
         return agentCache.resolve(
           sessionId,
           async () => {
@@ -1422,8 +1426,26 @@ export function createHostManager(): HostManager {
               attachments,
               // Existing fs options — product home covers spill / attachments / memories.
               hostReadableRoots: [resolveXrkHome()],
-              extraWritableRoots,
-              pathAccessMode,
+              extraWritableRoots: () => {
+                const roots = readPermissionExtraWritableRoots();
+                return roots.length > 0 ? roots : [resolveXrkHome()];
+              },
+              // Live gate: chip / Settings flip without agent recreate.
+              // IM / 向阳空间 have one locked permission — always path open.
+              pathAccessMode: () => {
+                const rt = faceBox.runtime;
+                if (
+                  rt &&
+                  isOrchestrationWorkspaceId(
+                    rt.workspaces.workspaceIdOf(sessionId),
+                  )
+                ) {
+                  return "open";
+                }
+                return pathAccessModeFromSandbox(
+                  effectiveSandboxMode(readSessionEvents(store, sessionId)),
+                );
+              },
               readSessionPathAllowlist: () =>
                 faceBox.runtime?.pathAllowlist.list(sessionId) ?? [],
               clearSessionPathOnce: () => {

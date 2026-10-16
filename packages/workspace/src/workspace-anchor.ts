@@ -77,16 +77,55 @@ export function formatRuntimeSurfaceAnchor(
   ].join("\n");
 }
 
+/** Session badge (agent preset) + permission line for model-facing inject. */
+export interface SessionPolicyAnchor {
+  /** Agent preset id shown as the session badge (e.g. harness / frugal). */
+  readonly badge?: string;
+  /**
+   * Human-readable permission label (same string Status / `/status` print).
+   * Prefer Face `formatPermissionStatusLabel`.
+   */
+  readonly permission?: string;
+}
+
+/**
+ * Model-facing badge + permission paragraph (session policy).
+ * @param policy - badge and/or permission; empty fields are omitted.
+ * @returns markdown block, or "" when both absent.
+ */
+export function formatSessionPolicyAnchor(
+  policy: SessionPolicyAnchor | undefined,
+): string {
+  if (!policy) return "";
+  const badge = policy.badge?.trim();
+  const permission = policy.permission?.trim();
+  if (!badge && !permission) return "";
+  const lines = ["## Session policy"];
+  if (badge) {
+    lines.push(
+      `Badge (agent preset): \`${badge}\` — this session's tool composition and ceilings follow that preset.`,
+    );
+  }
+  if (permission) {
+    lines.push(
+      `Permission: ${permission} — honor this approval / sandbox posture; do not assume a looser mode.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 /**
  * Durable inject anchor: absolute workspace root (+ optional runtime surface).
  * @param root - workspace root path.
  * @param displayTitle - sidebar label (display-only).
  * @param surface - runtime surface; appends the `## Runtime surface` paragraph.
+ * @param sessionPolicy - optional badge + permission paragraph.
  */
 export function formatWorkspaceRootAnchor(
   root: string,
   displayTitle?: string,
   surface?: RuntimeSurface,
+  sessionPolicy?: SessionPolicyAnchor,
 ): string {
   const path = root.trim();
   if (!path) return "";
@@ -100,5 +139,7 @@ export function formatWorkspaceRootAnchor(
   ];
   const surfaceBlock = formatRuntimeSurfaceAnchor(surface);
   if (surfaceBlock) lines.push("", surfaceBlock);
+  const policyBlock = formatSessionPolicyAnchor(sessionPolicy);
+  if (policyBlock) lines.push("", policyBlock);
   return lines.join("\n");
 }

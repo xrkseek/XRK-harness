@@ -553,6 +553,8 @@ describe("Face permission presets", () => {
     expect(
       runtime.projections.snapshot(sessionId).values.permissions,
     ).toMatchObject({ currentValue: "workspace-write" });
+    // session.create clears any stale agent — that is unrelated to Settings.
+    invalidated.length = 0;
 
     const mutated = await dispatchFaceMethod(runtime, "settings.mutate", "m", {
       ns: "permission",
@@ -562,7 +564,8 @@ describe("Face permission presets", () => {
     expect(
       runtime.projections.snapshot(sessionId).values.permissions,
     ).toMatchObject({ currentValue: "danger-full-access" });
-    expect(invalidated).toContain(sessionId);
+    // Path/approval gates read knobs live — no agent rebuild on preset flip.
+    expect(invalidated).toEqual([]);
 
     // Live preset switch applied: residual ask under never rejects (DSH).
     const pipeline = createToolPipeline();

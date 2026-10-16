@@ -507,20 +507,29 @@ export interface HarnessCompositionOptions {
    * Absolute host directories `read_file` may open outside the workspace.
    * Host / composition default is product home (`{XRK_HOME}` — spill,
    * attachments, memories). Writes use `extraWritableRoots`.
+   * Getter is re-read on every resolve.
    */
-  readonly hostReadableRoots?: readonly string[];
+  readonly hostReadableRoots?:
+    | readonly string[]
+    | (() => readonly string[]);
   /**
    * Absolute directories the file tools may WRITE by absolute path, in
    * addition to the workspace root. Host fills this from Settings
    * `permission.extraWritableRoots` (base includes product home). Symlink
    * escape stays denied; relative paths always resolve under the workspace.
+   * Getter is re-read on every resolve (Settings hot switch, no agent rebuild).
    */
-  readonly extraWritableRoots?: readonly string[];
+  readonly extraWritableRoots?:
+    | readonly string[]
+    | (() => readonly string[]);
   /**
    * Path gate from session sandbox (`pathAccessModeFromSandbox`).
    * `open` = danger-full-access / Auto (no workspace jail on fs).
+   * Live getter preferred so `/permission` matches without agent rebuild.
    */
-  readonly pathAccessMode?: import("@xrkseek/protocol").PathAccessMode;
+  readonly pathAccessMode?:
+    | import("@xrkseek/protocol").PathAccessMode
+    | (() => import("@xrkseek/protocol").PathAccessMode);
   /**
    * Live session object-path allowlist (Once / Whitelist overreach grants).
    * Merged into fs + path-overreach pre on every resolve.
@@ -742,6 +751,27 @@ function formatToolSurfacePack(input: {
   return lines.join("\n");
 }
 
+/** Prefer a live getter / non-empty list; else product-home fallback. */
+function rootsOrHome(
+  roots: readonly string[] | (() => readonly string[]) | undefined,
+  productHome: string,
+): readonly string[] | (() => readonly string[]) {
+  if (typeof roots === "function") return roots;
+  if (roots && roots.length > 0) return roots;
+  return [productHome];
+}
+
+function resolveRootsNow(
+  roots: readonly string[] | (() => readonly string[]) | undefined,
+  productHome: string,
+): readonly string[] {
+  if (typeof roots === "function") {
+    const live = roots();
+    return live.length > 0 ? live : [productHome];
+  }
+  return roots && roots.length > 0 ? roots : [productHome];
+}
+
 /** Composition: fs + shell + sandbox guards + workspace inject. */
 export function createHarnessComposition(
   options: HarnessCompositionOptions,
@@ -752,12 +782,8 @@ export function createHarnessComposition(
     createFsLocalProvider({
       root: options.workspaceRoot,
       // Same options Host wires: product home is readable/writable by absolute path.
-      hostReadableRoots: options.hostReadableRoots?.length
-        ? options.hostReadableRoots
-        : [productHome],
-      extraWritableRoots: options.extraWritableRoots?.length
-        ? options.extraWritableRoots
-        : [productHome],
+      hostReadableRoots: rootsOrHome(options.hostReadableRoots, productHome),
+      extraWritableRoots: rootsOrHome(options.extraWritableRoots, productHome),
       ...(options.pathAccessMode
         ? { pathAccessMode: options.pathAccessMode }
         : {}),
@@ -902,8 +928,15 @@ export function createHarnessComposition(
         : {}),
       // Same allowlist as the fs tools: `bash` cwd may land in a whitelisted
       // out-of-workspace project (empty default = single-root jail).
-      ...(options.extraWritableRoots?.length
-        ? { extraWritableRoots: options.extraWritableRoots }
+      // Snapshot at compose time — Host shared shell re-reads Settings live.
+      ...(typeof options.extraWritableRoots === "function" ||
+      (options.extraWritableRoots?.length ?? 0) > 0
+        ? {
+            extraWritableRoots: resolveRootsNow(
+              options.extraWritableRoots,
+              productHome,
+            ),
+          }
         : {}),
       ...(options.remoteExecution ? { remoteExecution: true } : {}),
     });
@@ -1297,28 +1330,28 @@ export function createHarnessComposition(
     ),
   );
   // Path overreach (workspace-write / read-only reads) → Face 5s ask.
+  // Roots + pathAccessMode are live so /permission and Settings apply mid-turn.
   {
-    const writableBase = options.extraWritableRoots?.length
-      ? options.extraWritableRoots
-      : [productHome];
-    const readableBase = options.hostReadableRoots?.length
-      ? options.hostReadableRoots
-      : [productHome];
     pipeline.onPre(
       createPathOverreachPre({
         root: () => options.workspaceRoot,
-        pathAccessMode: () =>
-          options.pathAccessMode ??
-          pathAccessModeFromSandbox(
-            effectiveSandboxMode(readSessionEvents(store, sessionId)),
-          ),
+        pathAccessMode: () => {
+          const mode = options.pathAccessMode;
+          if (typeof mode === "function") return mode();
+          return (
+            mode ??
+            pathAccessModeFromSandbox(
+              effectiveSandboxMode(readSessionEvents(store, sessionId)),
+            )
+          );
+        },
         listWritableAllowlist: () => [
-          ...writableBase,
+          ...resolveRootsNow(options.extraWritableRoots, productHome),
           ...(options.readSessionPathAllowlist?.() ?? []),
         ],
         listReadableAllowlist: () => [
-          ...readableBase,
-          ...writableBase,
+          ...resolveRootsNow(options.hostReadableRoots, productHome),
+          ...resolveRootsNow(options.extraWritableRoots, productHome),
           ...(options.readSessionPathAllowlist?.() ?? []),
         ],
       }),

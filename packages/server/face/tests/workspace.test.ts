@@ -120,6 +120,35 @@ describe("Face workspace U2", () => {
     expect(v).not.toHaveProperty("exists");
   });
 
+  it("does not register packaged resources/host as a coding workspace", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-pkg-"));
+    const hostCwd = path.join(root, "resources", "host");
+    await mkdir(hostCwd, { recursive: true });
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: hostCwd,
+      productDir: path.join(root, ".xrk"),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+
+    const listed = await dispatchFaceMethod(runtime, "workspace.list", "wl-pkg", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const v = listed.result.value as {
+      items: { workspaceId: string; path: string; title: string }[];
+    };
+    expect(v.items.some((w) => w.workspaceId === "ws_default")).toBe(true);
+    expect(
+      v.items.some(
+        (w) => path.resolve(w.path) === path.resolve(hostCwd) || w.title === "host",
+      ),
+    ).toBe(false);
+  });
+
   it("workspace.create rejects paths that are not fully qualified", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-face-ws-fq-"));
     const store = createMemorySessionStore();

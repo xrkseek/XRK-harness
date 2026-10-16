@@ -67,6 +67,45 @@ describe("FsService", () => {
     expect((await fs.read(outside)).content).toBe("open gate");
   });
 
+  it("live pathAccessMode getter flips allowlisted → open without recreate", async () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws-live");
+    const outside = path.join(base, "outside-live", "note.txt");
+    await mkdir(path.dirname(outside), { recursive: true });
+    let mode: "allowlisted" | "open" = "allowlisted";
+    const fs = createFsLocalProvider({
+      root,
+      pathAccessMode: () => mode,
+    });
+    await expect(fs.write(outside, "blocked")).rejects.toBeInstanceOf(
+      PathEscapeError,
+    );
+    mode = "open";
+    await fs.write(outside, "opened");
+    expect((await fs.read(outside)).content).toBe("opened");
+  });
+
+  it("live extraWritableRoots getter grants a new root without recreate", async () => {
+    const base = path.resolve(tmpdir());
+    const root = path.join(base, "xrk-ws-roots");
+    const extraA = path.join(base, "extra-a");
+    const extraB = path.join(base, "extra-b");
+    await mkdir(extraA, { recursive: true });
+    await mkdir(extraB, { recursive: true });
+    let roots: readonly string[] = [extraA];
+    const fs = createFsLocalProvider({
+      root,
+      extraWritableRoots: () => roots,
+    });
+    const inA = path.join(extraA, "a.txt");
+    const inB = path.join(extraB, "b.txt");
+    await fs.write(inA, "a");
+    await expect(fs.write(inB, "b")).rejects.toBeInstanceOf(PathEscapeError);
+    roots = [extraA, extraB];
+    await fs.write(inB, "b");
+    expect((await fs.read(inB)).content).toBe("b");
+  });
+
   it("pathAccessMode open lets grep/glob use absolute paths outside the workspace", async () => {
     const base = await mkdtemp(path.join(tmpdir(), "xrk-fs-open-search-"));
     const root = path.join(base, "ws");
