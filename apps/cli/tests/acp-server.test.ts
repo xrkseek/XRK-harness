@@ -118,4 +118,82 @@ describe("createAcpServer", () => {
     expect(body).toContain("echo:hi");
     expect(body).toContain("end_turn");
   });
+
+  it("loads a live session, cancels with an id, and does not repeat streamed text", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const lines: string[] = [];
+    let buf = "";
+    output.on("data", (c: Buffer) => {
+      buf += c.toString("utf8");
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        lines.push(buf.slice(0, nl));
+        buf = buf.slice(nl + 1);
+      }
+    });
+    const server = createAcpServer({
+      input,
+      output,
+      runner: async ({ text, notify, signal }) => {
+        notify?.(text);
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) {
+            resolve();
+            return;
+          }
+          signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { text };
+      },
+    });
+    const done = server.start();
+    const waitId = (id: number): Promise<Record<string, unknown>> =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`no id ${id}`)), 2000);
+        const poll = setInterval(() => {
+          const hit = lines
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+            .find((frame) => frame.id === id);
+          if (hit) {
+            clearInterval(poll);
+            clearTimeout(timer);
+            resolve(hit);
+          }
+        }, 10);
+      });
+    input.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/tmp" } })}\n`,
+    );
+    const created = await waitId(1);
+    const sessionId = (created.result as { sessionId: string }).sessionId;
+    input.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "session/load", params: { sessionId, cwd: "/work" } })}\n`,
+    );
+    const loaded = await waitId(2);
+    expect((loaded.result as { sessionId: string }).sessionId).toBe(sessionId);
+    input.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "session/prompt",
+        params: { sessionId, prompt: [{ type: "resource", resource: { text: "file" } }] },
+      })}\n`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    input.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 4, method: "session/cancel", params: { sessionId } })}\n`,
+    );
+    const cancelled = await waitId(4);
+    expect(cancelled.result).toEqual({});
+    input.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 5, method: "session/load", params: { sessionId: "missing" } })}\n`,
+    );
+    const missing = await waitId(5);
+    expect((missing.error as { code: number }).code).toBe(-32002);
+    input.end();
+    await done;
+    const updates = lines.filter((line) => line.includes("agent_message_chunk") && line.includes("file"));
+    expect(updates).toHaveLength(1);
+  });
 });

@@ -18,10 +18,11 @@ xrkh acp --workspace <dir>
 | `initialize` | `protocolVersion: 1` · `agentInfo.name = xrk-harness` |
 | `authenticate` | 空成功（凭据仍走 Host / env，不在 ACP 里再登一次） |
 | `session/new` | 返回 `sessionId`（cwd 来自 params） |
-| `session/prompt` | 跑 harness 回合；期间可发 `session/update`；结束 `stopReason: end_turn` |
-| `session/cancel` | 通知（无 id）中止进行中的 prompt |
+| `session/load` | 本进程仍持有的 `sessionId` 可继续；未知 id 返回错误，调用方再 `session/new` |
+| `session/prompt` | 跑 harness 回合；`session/update` 只发尚未推过的文本；结束 `stopReason: end_turn` |
+| `session/cancel` | 通知或带 id 的请求都中止进行中的 prompt |
 
-`session/load` · fork · 图片 prompt **未**做。外部 Agent 委托（本进程作 client，把回合交给 ACP / app-server / Claude Code 子进程）见 [external-agent.md](./external-agent.md)。Python `StdioHarnessClient`（`sdks/python`）只拉起本命令做轮次，不另写宿主。
+fork · 图片 prompt **未**做。外部 Agent 委托（本进程作 client，把回合交给 ACP / app-server / Claude Code 子进程）见 [external-agent.md](./external-agent.md)。Python `StdioHarnessClient`（`sdks/python`）只拉起本命令做轮次，不另写宿主。
 
 ---
 
@@ -45,8 +46,9 @@ xrkh acp --workspace <dir>
 | `initialize` | `protocolVersion: 1` · `agentInfo.name = xrk-harness` |
 | `authenticate` | Empty success (credentials stay on Host / env) |
 | `session/new` | Returns `sessionId` (cwd from params) |
-| `session/prompt` | Runs a harness turn; may emit `session/update`; finishes with `stopReason: end_turn` |
-| `session/cancel` | Notification (no id) aborts an in-flight prompt |
+| `session/load` | Resumes a `sessionId` this process still holds; an unknown id errors so the caller can `session/new` |
+| `session/prompt` | Runs a harness turn; `session/update` carries only text not already streamed; finishes with `stopReason: end_turn` |
+| `session/cancel` | Notification or request (with id) aborts an in-flight prompt |
 
-`session/load`, fork, and image prompts are **not** shipped. Handing a turn to an external ACP / app-server / Claude Code subprocess (this process as client) is in [external-agent.md](./external-agent.md). Python `StdioHarnessClient` (`sdks/python`) only spawns this command for a turn; it is not another host.
+Fork and image prompts are **not** shipped. Handing a turn to an external ACP / app-server / Claude Code subprocess (this process as client) is in [external-agent.md](./external-agent.md). Python `StdioHarnessClient` (`sdks/python`) only spawns this command for a turn; it is not another host.
 

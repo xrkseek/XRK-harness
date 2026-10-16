@@ -42,7 +42,7 @@ interface JsonRpcRequest {
 
 interface SessionState {
   readonly id: string;
-  readonly cwd: string;
+  cwd: string;
   abort?: AbortController;
 }
 
@@ -52,9 +52,18 @@ function textFromPrompt(prompt: unknown): string {
   const parts: string[] = [];
   for (const block of prompt) {
     if (!block || typeof block !== "object") continue;
-    const rec = block as { type?: string; text?: string };
+    const rec = block as {
+      type?: string;
+      text?: string;
+      uri?: string;
+      resource?: { text?: string };
+    };
     if (rec.type === "text" && typeof rec.text === "string") {
       parts.push(rec.text);
+    } else if (rec.type === "resource" && typeof rec.resource?.text === "string") {
+      parts.push(rec.resource.text);
+    } else if (rec.type === "resource_link" && typeof rec.uri === "string") {
+      parts.push(rec.uri);
     }
   }
   return parts.join("\n").trim();
@@ -106,22 +115,24 @@ export function createAcpServer(options: AcpServerOptions): {
         ? (msg.params as Record<string, unknown>)
         : {};
 
-    if (id === undefined || id === null) {
-      if (method === "session/cancel") {
-        const sid = String(params.sessionId ?? "");
-        sessions.get(sid)?.abort?.abort();
-      }
+    if (method === "session/cancel") {
+      const sid = String(params.sessionId ?? "");
+      sessions.get(sid)?.abort?.abort();
+      if (id !== undefined && id !== null) respond(id, {});
       return;
     }
+
+    if (id === undefined || id === null) return;
 
     if (method === "initialize") {
       respond(id, {
         protocolVersion: ACP_PROTOCOL_VERSION,
         agentInfo: { name: agentName, version: agentVersion },
         agentCapabilities: {
-          loadSession: false,
+          loadSession: true,
           promptCapabilities: { image: false, embeddedContext: true },
         },
+        authMethods: [],
       });
       return;
     }
@@ -142,6 +153,20 @@ export function createAcpServer(options: AcpServerOptions): {
       return;
     }
 
+    if (method === "session/load") {
+      const sessionId = String(params.sessionId ?? "");
+      const session = sessions.get(sessionId);
+      if (!session) {
+        respondError(id, -32002, `unknown session: ${sessionId}`);
+        return;
+      }
+      if (typeof params.cwd === "string" && params.cwd.length > 0) {
+        session.cwd = params.cwd;
+      }
+      respond(id, { sessionId: session.id });
+      return;
+    }
+
     if (method === "session/prompt") {
       const sessionId = String(params.sessionId ?? "");
       const session = sessions.get(sessionId);
@@ -156,16 +181,24 @@ export function createAcpServer(options: AcpServerOptions): {
       }
       const abort = new AbortController();
       session.abort = abort;
+      let streamed = "";
       try {
         const result = await options.runner({
           sessionId,
           cwd: session.cwd,
           text,
           signal: abort.signal,
-          notify: (chunk) => notifyUpdate(sessionId, chunk),
+          notify: (chunk) => {
+            if (!chunk) return;
+            streamed += chunk;
+            notifyUpdate(sessionId, chunk);
+          },
         });
-        if (!abort.signal.aborted) {
-          notifyUpdate(sessionId, result.text);
+        if (!abort.signal.aborted && result.text && result.text !== streamed) {
+          const extra = streamed.length > 0 && result.text.startsWith(streamed)
+            ? result.text.slice(streamed.length)
+            : result.text;
+          if (extra) notifyUpdate(sessionId, extra);
         }
         respond(id, {
           stopReason: abort.signal.aborted ? "cancelled" : "end_turn",
