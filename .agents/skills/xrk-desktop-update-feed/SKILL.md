@@ -153,4 +153,8 @@ SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 - 半截 exe（传断）必须删掉再传；`HEAD` Content-Length 必须等于 yml `size`。
 - 同版本重打覆盖同名产物与 `nightly.yml`。
 - Node ≥26；不用 Cursor helper `node.exe`。
+- 官网 `xrk.siphot.com` 在部分本机 / 网络下 **DNS 直接 NXDOMAIN**（`Resolve-DnsName` 报"DNS 名称不存在"，
+  curl 直连与 `-x` 代理都 `http=000`）。这时**不要**判定"更新源没生效"：壳内 electron-updater 与下载页真正读的是
+  AGT 明文源 `http://<IP>:6969/api/harness/releases`，先打它核对（`version` / `bytes` / `available`）。
+  2026-10-16 发 v0.6.1 时即如此：6969 已返回 0.6.1，siphot 侧 000 属解析问题，与本轮发布无关。
 - 密钥、SSH 密码、VPS 路径、本机盘符不入库、不回显。

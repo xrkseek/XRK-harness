@@ -41,7 +41,28 @@ PowerShell 整段是解析期编译的：一行语法错 → 整段失败（exit
 `pnpm --filter <pkg> exec vitest run <file>` 会把 `<file>` 当 include 过滤器（匹配不到 → "No test files found"）且包内 spawn 可能 `ENOENT`。稳的是：
 `pnpm exec vitest run packages/<pkg>/tests/<file>.test.ts`（根工作区跑，能正确匹配 include 模式）
 
-### 6. workspace 包名解析
+### 6. commit message 一律写文件用 `-F`
+
+双引号里的 `` ` `` 是 PowerShell 转义符：`git commit -m "…\`xrkh\`…"` 会把反引号吞掉甚至吃掉后续内容，
+`git rebase` 一侧还会报出难读的 "corrupt"/瞬时 `unable to resolve` 假象。
+长 message / 多行 message 先 `write_file` 到 `.tmp/cm-N.txt`，再 `git commit -F .tmp/cm-N.txt`。
+同理 `git grep -n pat -A 5`：pwsh 把 `-A` 交给 git 当 revision，报 `unable to resolve revision: -A`
+—— 取上下文用 `Select-String -Pattern pat -Context 0,5`。
+
+### 7. `git checkout <sha> -- <path>` 会同时写 index
+
+之后 `git status` 显示 `MM`（暂存区 + 工作区各有差异），容易误判成"文件被别人改了"。
+恢复基线看行为：`git checkout <sha> -- <path>` → 测完 `git checkout HEAD -- <path>` 还原，
+必要时 `git reset -- <path>` 清 index。改测试文件做调试注入（`console.log`）后**务必**
+`git diff <file>` 确认干净再提交，否则 DBG 会跟着 commit 进历史。
+
+### 8. 别在 subst 盘符路径上递归删除
+
+`Remove-Item -Recurse -Force 'X:\.release\stage-0.6.1'` 会被拦成
+`hardline: recursive force delete of drive root (PowerShell)`。路径改写成**工作区相对**
+（`.release\stage-0.6.1`）即可；`subst X: /d` 单独执行不受影响。
+
+### 9. workspace 包名解析
 
 pnpm workspace 下裸 ESM `import '@scope/pkg'` 从 `scripts/` 或任意位置跑 → `ERR_MODULE_NOT_FOUND`。临时脚本 import 包 `dist/index.js` 的**相对/绝对路径**，或用包内 cwd + 包导出。`.mjs` 不能有 TS 类型注解，写纯 JS。
 

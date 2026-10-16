@@ -144,3 +144,16 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
   是否真在传（见 `xrk-github-npm-net`）。
 - `package-plan.json` 里中文根目录被写成 `\X` 之类无效转义，`ConvertFrom-Json` 会报
   「无法识别的转义序列」——那是旧 plan 的编码问题，**不是打包失败**，别据此重跑。
+- **权限档热切换会让编排锁重入**：`exec/fs` 改 live getter 后 `/permission` 不再 invalidateAgent，但
+  IM / 向阳的 `ensureOrchestrationFullAccess` 若直接落 `applyPermissionPreset`，**fork 会把权限事件重复写进
+  child 日志**——seed 常只带 `permission/preset` 一条，此时 `derivePermissionSelect` 读成 `custom`，于是每次
+  重入补一整组 preset+sandbox+approval。v0.6.1 实测由
+  `fork-policy.test.ts > keeps legacy beforeSeq as a raw exclusive offset` 的 `eventCount` 1→4 暴露。
+  判据认 `foldPermissionKnobs().preset` 这个**持久身份**，不是派生 select。
+- **给「幂等」写的钉子测试要先做变异验证**：v0.6.1 第一版钉子拿「完整锁定的会话」当前提，撤掉 guard 后仍全绿
+  （`applyPermissionPreset` 对完整锁定本来就幂等）——假绿。钉子必须复刻被修的形状（只带 `permission/preset`
+  的 seed），并先断言派生值**不等于** full access 把前提钉死。收尾前临时注释掉修复本体，确认目标用例变红再恢复。
+- **flaky 判定不能只看一次隔离复跑**：`packages/server/face/tests/session-tools-skill-source.test.ts`
+  在全量并发下报 `create failed`，隔离与 face 目录复跑都绿（957s collect / 并发抢 temp 目录）；同轮
+  `hot-plugin-shapes > billing endpoints` 5000ms timeout 亦属此类。判真实回归的硬标准是**隔离复跑仍红**
+  （如 v0.6.1 的 fork-policy），否则不阻塞发版。
