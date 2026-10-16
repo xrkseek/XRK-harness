@@ -80,5 +80,17 @@ export function createXrkDesktopBridgeApi(
     files: {
       pathForFile: () => undefined,
     },
+    cliCommand: {
+      get: () =>
+        ipc.invoke(DESKTOP_IPC.cliCommandGet) as Promise<{
+          linked: boolean;
+          binDir: string;
+        }>,
+      set: (linked: boolean) =>
+        ipc.invoke(DESKTOP_IPC.cliCommandSet, linked) as Promise<{
+          linked: boolean;
+          binDir: string;
+        }>,
+    },
   };
 }

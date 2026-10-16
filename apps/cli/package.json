@@ -14,6 +14,11 @@
       "types": "./dist/user-skill-seeds.d.ts",
       "import": "./dist/user-skill-seeds.js",
       "default": "./dist/user-skill-seeds.js"
+    },
+    "./host-lock": {
+      "types": "./dist/host-lock.d.ts",
+      "import": "./dist/host-lock.js",
+      "default": "./dist/host-lock.js"
     }
   },
   "files": [

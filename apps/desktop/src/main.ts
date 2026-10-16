@@ -8,7 +8,8 @@
  */
 
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   app,
@@ -69,6 +70,15 @@ import {
   resolveDesktopWebRoot,
   resolveDesktopWindowIconPath,
 } from "./web-root.js";
+import {
+  applyCliCommandLink,
+  cliCommandBinDir,
+  cliCommandPrefPath,
+  mergePosixProfile,
+  POSIX_CLI_PROFILES,
+  readCliCommandEnabled,
+  writeCliCommandEnabled,
+} from "./cli-command.js";
 import { DesktopHostProcess } from "./host-process.js";
 import {
   resolvePackagedDesktopHostRuntime,
@@ -218,9 +228,10 @@ async function startDesktopHostCarrier(
     desktopHost = host;
     return host;
   } catch (error) {
-    // Mid-restart failures must not ErrorBox-spam; final onFailed may dialog.
+    // Scheduler retries, then onFailed shows this message. Swallowing it
+    // replaced the real cause (session lock, missing node) with a generic line.
     console.error(error);
-    return undefined;
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
@@ -337,7 +348,124 @@ app.on("will-quit", () => {
   }
 });
 
+/**
+ * User PATH via the Environment API.
+ * `reg query` wraps long values at the console width; writing that fragment
+ * back replaces the whole user Path.
+ */
+function queryWindowsUserPath(): string {
+  const out = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "[Environment]::GetEnvironmentVariable('Path','User')",
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  if (out.status !== 0) {
+    throw new Error("xrk desktop: could not read the user PATH");
+  }
+  return (out.stdout ?? "").replace(/\r?\n$/, "");
+}
+
+function writeWindowsUserPath(next: string): void {
+  const result = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "[Environment]::SetEnvironmentVariable('Path', $env:XRK_USER_PATH, 'User')",
+    ],
+    {
+      windowsHide: true,
+      env: { ...process.env, XRK_USER_PATH: next },
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error("xrk desktop: could not update the user PATH");
+  }
+}
+
+function persistPosixCliPath(binDir: string, enabled: boolean): void {
+  const home = app.getPath("home");
+  for (const name of POSIX_CLI_PROFILES) {
+    const file = path.join(home, name);
+    let existing = "";
+    try {
+      existing = readFileSync(file, "utf8");
+    } catch {
+      if (!enabled) continue;
+    }
+    const next = mergePosixProfile(existing, binDir, enabled);
+    if (next !== existing) writeFileSync(file, next);
+  }
+}
+
+/**
+ * Rewrite `{XRK_HOME}/bin/xrkh` to this install and put that directory first
+ * on the user PATH. Missing pref means linked. Failures stay off the UI boot path.
+ */
+function syncDesktopCliCommand(enabled?: boolean): { linked: boolean; binDir: string } {
+  const xrkHome = resolveDesktopHarnessHome({
+    isPackaged: app.isPackaged,
+    desktopAppRoot: DESKTOP_APP_ROOT,
+  });
+  const binDir = cliCommandBinDir(xrkHome);
+  const pref = cliCommandPrefPath(xrkHome);
+  if (enabled !== undefined) {
+    mkdirSync(xrkHome, { recursive: true });
+    writeFileSync(pref, writeCliCommandEnabled(enabled));
+  }
+  let raw: string | undefined;
+  try {
+    raw = readFileSync(pref, "utf8");
+  } catch {
+    raw = undefined;
+  }
+  const linked = readCliCommandEnabled(raw);
+  let nodePath = "";
+  let cliBinPath = "";
+  try {
+    const runtime = app.isPackaged
+      ? resolvePackagedDesktopHostRuntime(process.resourcesPath)
+      : resolveUnpackagedDesktopHostRuntime({
+          desktopAppRoot: DESKTOP_APP_ROOT,
+          ...(desktopWebRoot !== undefined ? { webDist: desktopWebRoot } : {}),
+        });
+    nodePath = runtime.nodeExecutable;
+    cliBinPath = runtime.harnessCliBin;
+  } catch (error) {
+    console.error(error);
+    if (linked) return { linked: false, binDir };
+  }
+  const result = applyCliCommandLink({
+    xrkHome,
+    nodePath,
+    cliBinPath,
+    platform: process.platform,
+    enabled: linked,
+    readUserPath: process.platform === "win32"
+      ? queryWindowsUserPath
+      : () => process.env.PATH ?? "",
+    writeUserPath: process.platform === "win32"
+      ? writeWindowsUserPath
+      : () => {},
+  });
+  if (process.platform !== "win32") {
+    persistPosixCliPath(result.binDir, result.linked);
+  }
+  return { linked: result.linked, binDir: result.binDir };
+}
+
 function registerDesktopShellIpc(): void {
+  try {
+    syncDesktopCliCommand();
+  } catch (error) {
+    console.error(error);
+  }
   registerDesktopIpcHandlers(ipcMain, {
     getLocale: () => app.getLocale(),
     getAppVersion: () => app.getVersion(),
@@ -369,6 +497,8 @@ function registerDesktopShellIpc(): void {
     rebringHost: () => {
       desktopHostBringUp?.rebring();
     },
+    getCliCommand: () => syncDesktopCliCommand(),
+    setCliCommand: (linked) => syncDesktopCliCommand(linked),
   });
 
   installDesktopApplicationMenu({

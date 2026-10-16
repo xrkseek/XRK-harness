@@ -17,6 +17,7 @@ import {
 } from "@xrkseek/server-config";
 import { createServerAgentFactory } from "@xrkseek/preset-server";
 import { establishProductHomeSeeds } from "@xrkseek/harness-cli/home-seeds";
+import { clearHostLock, writeHostLock } from "@xrkseek/harness-cli/host-lock";
 
 export const DESKTOP_HOST_PACKAGE_NAME =
   "@xrkseek/harness-desktop-host" as const;
@@ -101,14 +102,16 @@ export async function bootXrkDesktopHost(options: {
     process.env.XRK_WEB_DIST?.trim() ||
     path.resolve(options.projectDir, "web-dist");
 
+  // Packaged desktop cwd is `resources/host`; never treat that as a coding
+  // workspace. Default to 向阳空间 so Face `create(launchRoot)` is a no-op.
   const workspaceRoot =
     options.workspaceRoot?.trim() ||
     process.env.XRK_WORKSPACE_ROOT?.trim() ||
-    undefined;
+    path.join(resolveXrkHome(), "xiangyang-workspace");
 
   const config = loadHostConfig({
     patch: {
-      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+      workspaceRoot,
       webDist,
       // DSH Desktop posture: loopback only — never 0.0.0.0.
       host: "127.0.0.1",
@@ -162,12 +165,24 @@ export async function bootXrkDesktopHost(options: {
     );
   }
   const origin = `http://127.0.0.1:${String(port)}`;
+  try {
+    writeHostLock(port);
+  } catch (error) {
+    process.stderr.write(
+      `${DESKTOP_HOST_PACKAGE_NAME} warn: host lock not written: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
+  }
 
   return {
     instance,
     hostVersion: packageVersion(),
     origin,
     fetch: (request) => instance.http.fetch(request),
-    dispose: () => instance.stop(),
+    dispose: () => {
+      clearHostLock(port);
+      return instance.stop();
+    },
   };
 }

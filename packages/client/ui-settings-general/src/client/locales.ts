@@ -42,6 +42,10 @@ export const zh = {
   'release.downloading': '正在下载 {version}',
   'release.progress': '{percent}%',
   'release.failed': '检查或安装更新失败',
+  'cliCommand.title': '命令行 xrkh',
+  'cliCommand.description':
+    '把本应用自带的 xrkh 放到用户 PATH 最前（~/.xrk/bin）。每次启动会改写这个命令，使终端、ACP 和子代理用到当前安装版本，而不是更早的 npm 全局包。关掉后只撤掉本应用写的命令。',
+  'cliCommand.saveFailed': '未能更新命令行 xrkh',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -89,4 +93,8 @@ export const en = {
   'release.downloading': 'Downloading {version}',
   'release.progress': '{percent}%',
   'release.failed': 'Could not check or install the update',
+  'cliCommand.title': 'Command-line xrkh',
+  'cliCommand.description':
+    'Put this app’s xrkh first on your user PATH (~/.xrk/bin). Each launch rewrites that command so terminals, ACP, and subagents use the current install instead of an older npm-global copy. Turning this off removes only the command this app wrote.',
+  'cliCommand.saveFailed': 'Could not update command-line xrkh',
 } satisfies Record<SettingsKey, string>

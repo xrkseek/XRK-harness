@@ -55,6 +55,8 @@ export interface RegisterDesktopIpcOptions {
   getHostPhase?: () => "starting" | "attaching" | "ready";
   /** Manual Host rebring after restart budget exhaustion. */
   rebringHost?: () => void;
+  getCliCommand?: () => { linked: boolean; binDir: string };
+  setCliCommand?: (linked: boolean) => { linked: boolean; binDir: string };
 }
 
 const idleUpdate: DesktopUpdateState = { phase: "idle" };
@@ -135,5 +137,11 @@ export function registerDesktopIpcHandlers(
   });
   ipcMain.handle(DESKTOP_IPC.hostRebring, (): void => {
     options.rebringHost?.();
+  });
+  ipcMain.handle(DESKTOP_IPC.cliCommandGet, () => {
+    return options.getCliCommand?.() ?? { linked: false, binDir: "" };
+  });
+  ipcMain.handle(DESKTOP_IPC.cliCommandSet, (_event, linked) => {
+    return options.setCliCommand?.(linked === true) ?? { linked: false, binDir: "" };
   });
 }

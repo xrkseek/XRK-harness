@@ -30,6 +30,8 @@ export const DESKTOP_IPC = {
   hostPhase: "xrk-desktop:host-phase",
   /** After restart budget exhaustion: clear sticky and schedule bring-up again. */
   hostRebring: "xrk-desktop:host-rebring",
+  cliCommandGet: "xrk-desktop:cli-command-get",
+  cliCommandSet: "xrk-desktop:cli-command-set",
 } as const;
 
 /** Renderer bridge marker (≠ Host framed-pipe protocol version). */
@@ -90,5 +92,13 @@ export interface XrkDesktopApi {
   readonly files: {
     /** Absolute OS path for a dropped/picked File, or undefined when unavailable. */
     pathForFile(file: File): string | undefined;
+  };
+  /**
+   * Desktop-owned `xrkh` on the user PATH. Missing on older bridges.
+   * Default is linked; turning it off removes only this app's shim.
+   */
+  readonly cliCommand?: {
+    get(): Promise<{ linked: boolean; binDir: string }>;
+    set(linked: boolean): Promise<{ linked: boolean; binDir: string }>;
   };
 }
