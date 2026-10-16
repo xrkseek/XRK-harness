@@ -103,6 +103,24 @@ describe('MessageImage', () => {
     expect(smallFrame.getAttribute('style')).toContain('height: 100px')
   })
 
+  it('grows a downscaled attachment up to the preview box once the bitmap loads', async () => {
+    const load = vi.fn().mockResolvedValue('blob:full')
+    const view = render(
+      <MessageImage image={{ attachment: { ...attachment, width: 10, height: 10 } }} load={load} variant="single" labels={labels} />,
+    )
+    const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
+    expect(frame.getAttribute('style')).toContain('width: 10px')
+    const img = await view.findByAltText('history.png')
+    Object.defineProperty(img, 'naturalWidth', { value: 800, configurable: true })
+    Object.defineProperty(img, 'naturalHeight', { value: 400, configurable: true })
+    fireEvent.load(img)
+    await waitFor(() => {
+      expect(frame.getAttribute('style')).toContain('width: 240px')
+    })
+    fireEvent.click(frame)
+    expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
+  })
+
   it('pins a dimension-less preview to the bounded fallback box and promotes on load', async () => {
     // The submission echo's first frame carries no intrinsic size; without a
     // fixed box the raster would render at its natural resolution. The frame

@@ -55,7 +55,7 @@ describe('imageCardModel', () => {
     const model = imageCardModel(settled({ content: imageContent }), '/ws')
     expect(model).toEqual({
       label: 'shots/ui.png',
-      text: envelope,
+      text: '',
       images: [{
         attachment: {
           attachmentId: 'sha256:abc',

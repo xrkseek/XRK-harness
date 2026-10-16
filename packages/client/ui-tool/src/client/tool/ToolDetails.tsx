@@ -34,7 +34,7 @@ export function ToolDetails({ block, cwd, useHostDescription, t }: ToolDetailsPr
     return (
       <div className={css.read}>
         <div className={css.description}>{image.label}</div>
-        <pre className={css.code}>{image.text}</pre>
+        {image.text !== '' ? <pre className={css.code}>{image.text}</pre> : null}
       </div>
     )
   }

@@ -104,15 +104,11 @@ function imageReferences(content: readonly unknown[]): ImageAttachmentRef[] | nu
   return refs.length > 0 ? refs : null
 }
 
-function imageTexts(content: readonly { type: string; text?: string }[]): string | null {
-  const parts: string[] = []
-  let sawEnvelope = false
-  for (const part of content) {
-    if (part.type !== 'text' || typeof part.text !== 'string') continue
-    if (IMAGE_ENVELOPE.test(part.text)) sawEnvelope = true
-    parts.push(part.text)
-  }
-  return sawEnvelope && parts.length > 0 ? parts.join('\n') : null
+/** Settled read_image results carry the model envelope; the UI never shows it. */
+function hasImageEnvelope(content: readonly { type: string; text?: string }[]): boolean {
+  return content.some(part => (
+    part.type === 'text' && typeof part.text === 'string' && IMAGE_ENVELOPE.test(part.text)
+  ))
 }
 
 function fullyRendered(content: readonly unknown[]): boolean {
@@ -147,11 +143,10 @@ export function imageCardModel(
   if (!fullyRendered(block.content)) return null
   const refs = imageReferences(block.content)
   if (refs === null) return null
-  const text = imageTexts(block.content)
-  if (text === null) return null
+  if (!hasImageEnvelope(block.content)) return null
   return {
     label: displayImagePath(path, sessionCwd, home),
     images: refs.map(ref => ({ attachment: ref, role: 'result' as const })),
-    text,
+    text: '',
   }
 }

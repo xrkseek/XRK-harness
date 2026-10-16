@@ -129,11 +129,26 @@ export function MessageImage({ image, load, variant, labels }: {
   const request = useCallback(() => { setAttempt(a => a + 1) }, [])
   const close = useCallback(() => { setOpen(false) }, [])
   const dimensions = useMemo(() => dimensionsOf(image), [image])
+  // Protocol width/height are the model-facing raster, often a downscale.
+  // Once the loaded bitmap is larger, fit the preview to that bitmap (still
+  // capped by singleFit) so a tool expand is not stuck on the thumb size.
+  const [decoded, setDecoded] = useState<{ readonly width: number; readonly height: number } | null>(null)
+  const promoteDecoded = useCallback((width: number, height: number) => {
+    if (!(width > 0) || !(height > 0)) return
+    setDecoded(current => (
+      current?.width === width && current.height === height ? current : { width, height }
+    ))
+  }, [])
   // Promote the probe-resolved raster size into the single-image fit as soon
   // as it is known (preview arm; the durable arm carries exact dimensions).
   // `?? undefined` pins the null initial state to the undefined sentinel so
   // the fit stays unset until a real size arrives.
-  const fitSource = dimensions ?? natural ?? undefined
+  const declared = dimensions ?? natural ?? undefined
+  const fitSource = decoded !== null && (
+    declared === undefined
+    || decoded.width > declared.width
+    || decoded.height > declared.height
+  ) ? decoded : declared
   const fit = useMemo(
     () => variant === 'single' && fitSource !== undefined ? singleFit(fitSource) : undefined,
     [fitSource, variant],
@@ -175,7 +190,10 @@ export function MessageImage({ image, load, variant, labels }: {
         style={frameStyle}
         title={labels.open}
         aria-label={labels.openNamed(label)}
-        onClick={() => { if (src !== null) setOpen(true) }}
+        onClick={(event) => {
+          event.stopPropagation()
+          if (src !== null) setOpen(true)
+        }}
       >
         {src === null
           ? <span className={css.loading}>{labels.loading}</span>
@@ -185,7 +203,16 @@ export function MessageImage({ image, load, variant, labels }: {
               alt={label}
               onPromote={promote}
             />
-            : <img src={src} alt={label} style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }} />}
+            : (
+              <img
+                src={src}
+                alt={label}
+                style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }}
+                onLoad={(event) => {
+                  promoteDecoded(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
+                }}
+              />
+            )}
       </button>
       {open && src !== null && <ImageLightbox src={src} alt={label} labels={labels.lightbox} onClose={close} />}
     </>

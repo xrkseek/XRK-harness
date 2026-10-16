@@ -243,6 +243,11 @@
   margin: 4px 0 4px 4px;
 }
 
+/* Expanded image tools show the bitmap, not another cropped thumb. */
+.imageBody img {
+  object-fit: contain;
+}
+
 /* The recovery footer for a capped search: the result text (its `Full 閳?stored
    at 閳ヮ泦 locator) below the card in the muted tone, since the card holds only the
    retained rows. Same column indent as the card body. */
