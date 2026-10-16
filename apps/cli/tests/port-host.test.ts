@@ -3,6 +3,7 @@ import { looksLikeXrkHostCommand } from "../src/port.js";
 import {
   clearHostLock,
   hostLockPath,
+  newestLiveHostLock,
   readHostLock,
   writeHostLock,
 } from "../src/host-lock.js";
@@ -38,6 +39,9 @@ describe("host lock", () => {
       expect(fs.existsSync(hostLockPath(8787, env))).toBe(true);
       clearHostLock(8787, env);
       expect(readHostLock(8787, env)).toBeNull();
+      writeHostLock(8787, env);
+      expect(newestLiveHostLock(env)?.port).toBe(8787);
+      clearHostLock(8787, env);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

@@ -1,7 +1,10 @@
 /**
  * Terminal projection of Face mux frames for `xrkh tui`.
- * Stream deltas + a one-line tool rail (Hermes/Codex-style thin CLI; not Ink).
+ * Stream deltas + tool rail + approval capture (dsh-tui-style thin CLI; not Ink).
  */
+
+import type { PendingApproval } from "./tui-commands.js";
+import { createTuiPalette, type TuiPalette } from "./tui-style.js";
 
 export interface ToolRailEntry {
   readonly callId: string;
@@ -13,11 +16,22 @@ export interface ToolRailEntry {
 export interface TuiRenderState {
   /** True while streaming assistant text for the current turn. */
   streamingText: boolean;
+  /** When true, dim reasoning chunks appear on the stream. */
+  showReasoning: boolean;
   readonly tools: Map<string, ToolRailEntry>;
+  pendingApproval?: PendingApproval | undefined;
+  readonly palette: TuiPalette;
 }
 
-export function createTuiRenderState(): TuiRenderState {
-  return { streamingText: false, tools: new Map() };
+export function createTuiRenderState(
+  palette: TuiPalette = createTuiPalette(),
+): TuiRenderState {
+  return {
+    streamingText: false,
+    showReasoning: false,
+    tools: new Map(),
+    palette,
+  };
 }
 
 export interface TuiWriter {
@@ -27,6 +41,8 @@ export interface TuiWriter {
 export interface HandleMuxResult {
   /** True when this session's turn ended (or slash command settled). */
   readonly turnIdle?: boolean;
+  /** Approval frame just observed (also stored on state). */
+  readonly approval?: PendingApproval;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -60,11 +76,89 @@ function endStreamLine(out: TuiWriter, state: TuiRenderState): void {
   }
 }
 
-function writeToolRail(out: TuiWriter, entry: ToolRailEntry): void {
+function writeToolRail(
+  out: TuiWriter,
+  entry: ToolRailEntry,
+  palette: TuiPalette,
+): void {
   const mark =
-    entry.status === "running" ? "…" : entry.status === "ok" ? "ok" : "ERR";
-  const detail = entry.detail ? `  ${truncate(entry.detail, 80)}` : "";
-  out.write(`  [tool] ${entry.name}  ${mark}${detail}\n`);
+    entry.status === "running"
+      ? palette.warning("…")
+      : entry.status === "ok"
+        ? palette.success("ok")
+        : palette.error("ERR");
+  const name = palette.dim(entry.name);
+  const detail = entry.detail
+    ? palette.dim(`  ${truncate(entry.detail, 80)}`)
+    : "";
+  out.write(`  ${palette.dim("▸")} ${name}  ${mark}${detail}\n`);
+}
+
+function approvalFromFrame(
+  frame: Record<string, unknown>,
+): PendingApproval | undefined {
+  const approvalId =
+    typeof frame.approvalId === "string"
+      ? frame.approvalId
+      : typeof frame.id === "string"
+        ? frame.id
+        : undefined;
+  if (!approvalId) return undefined;
+  const toolName =
+    typeof frame.toolName === "string" && frame.toolName.length > 0
+      ? frame.toolName
+      : "tool";
+  let reason: string | undefined;
+  if (typeof frame.reason === "string") {
+    reason = frame.reason;
+  } else if (typeof frame.displayReason === "string") {
+    reason = frame.displayReason;
+  } else {
+    const dr = asRecord(frame.displayReason);
+    if (dr && typeof dr.en === "string") reason = dr.en;
+  }
+  return {
+    approvalId,
+    toolName,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+function writeApprovalNotice(
+  out: TuiWriter,
+  pending: PendingApproval,
+  palette: TuiPalette,
+): void {
+  out.write(
+    `  ${palette.warning("!")} ${palette.bold("approval")} ${pending.toolName}` +
+      palette.dim(` id=${pending.approvalId}`) +
+      "\n",
+  );
+  if (pending.reason) {
+    out.write(`    ${palette.dim(truncate(pending.reason, 100))}\n`);
+  }
+  out.write(
+    `    ${palette.accent("/approve")} · ${palette.accent("/deny")} · ${palette.accent("/whitelist")}\n`,
+  );
+}
+
+function noteApproval(
+  out: TuiWriter,
+  state: TuiRenderState,
+  frame: Record<string, unknown>,
+): HandleMuxResult {
+  endStreamLine(out, state);
+  const pending = approvalFromFrame(frame);
+  if (!pending) {
+    out.write(
+      `  ${state.palette.warning("!")} approval needed` +
+        `  (${state.palette.accent("/cancel")})\n`,
+    );
+    return {};
+  }
+  state.pendingApproval = pending;
+  writeApprovalNotice(out, pending, state.palette);
+  return { approval: pending };
 }
 
 /**
@@ -81,18 +175,20 @@ export function handleMuxPayload(
   if (frame.sessionId !== sessionId) return {};
 
   if (frame.type === "approval/requested") {
-    endStreamLine(out, state);
-    const tool =
-      typeof frame.toolName === "string" ? frame.toolName : "tool";
-    out.write(
-      `  ! approval needed: ${tool} (respond in product UI, or /cancel)\n`,
-    );
+    return noteApproval(out, state, frame);
+  }
+
+  if (frame.type === "approval/resolved") {
+    state.pendingApproval = undefined;
     return {};
   }
 
   if (frame.type === "question/requested") {
     endStreamLine(out, state);
-    out.write("  ! question pending (respond in product UI)\n");
+    out.write(
+      `  ${state.palette.warning("!")} question pending ` +
+        `${state.palette.dim("(answer in product UI)")}\n`,
+    );
     return {};
   }
 
@@ -106,15 +202,16 @@ export function handleMuxPayload(
       const kind = typeof event.kind === "string" ? event.kind : "text";
       if (kind === "usage" || kind === "tool-call") return {};
       if (kind === "reasoning") {
-        // Keep the main stream clean; reasoning stays in the product shell.
+        if (!state.showReasoning) return {};
+        const text = typeof event.text === "string" ? event.text : "";
+        if (!text) return {};
+        endStreamLine(out, state);
+        out.write(`  ${state.palette.dim(`~ ${truncate(text, 120)}`)}\n`);
         return {};
       }
       const text = typeof event.text === "string" ? event.text : "";
       if (!text) return {};
-      if (!state.streamingText) {
-        out.write("");
-        state.streamingText = true;
-      }
+      state.streamingText = true;
       out.write(text);
       return {};
     }
@@ -129,7 +226,7 @@ export function handleMuxPayload(
       const name = toolCallName(call);
       const entry: ToolRailEntry = { callId: id, name, status: "running" };
       state.tools.set(id, entry);
-      writeToolRail(out, entry);
+      writeToolRail(out, entry, state.palette);
       return {};
     }
     case "tool/result": {
@@ -165,7 +262,7 @@ export function handleMuxPayload(
         ...(detail ? { detail } : {}),
       };
       state.tools.set(id, entry);
-      writeToolRail(out, entry);
+      writeToolRail(out, entry, state.palette);
       return {};
     }
     case "command/result": {
@@ -178,10 +275,16 @@ export function handleMuxPayload(
       endStreamLine(out, state);
       const reason = typeof event.reason === "string" ? event.reason : "";
       if (reason && reason !== "completed" && reason !== "stop") {
-        out.write(`  (turn end: ${reason})\n`);
+        out.write(`  ${state.palette.dim(`(turn end: ${reason})`)}\n`);
       }
       state.tools.clear();
       return { turnIdle: true };
+    }
+    case "approval/asked":
+      return noteApproval(out, state, event);
+    case "approval/decided": {
+      state.pendingApproval = undefined;
+      return {};
     }
     default:
       return {};

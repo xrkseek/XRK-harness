@@ -80,6 +80,42 @@ export function clearHostLock(
   }
 }
 
+export function listHostLocks(
+  env: NodeJS.ProcessEnv = process.env,
+): HostLockRecord[] {
+  const dir = hostRunDir(env);
+  if (!fs.existsSync(dir)) return [];
+  const records: HostLockRecord[] = [];
+  for (const name of fs.readdirSync(dir)) {
+    const match = /^host-(\d+)\.pid\.json$/.exec(name);
+    if (!match) continue;
+    const rec = readHostLock(Number(match[1]), env);
+    if (rec) records.push(rec);
+  }
+  return records;
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Newest lock whose process is still running. */
+export function newestLiveHostLock(
+  env: NodeJS.ProcessEnv = process.env,
+): HostLockRecord | null {
+  let best: HostLockRecord | null = null;
+  for (const rec of listHostLocks(env)) {
+    if (!pidAlive(rec.pid)) continue;
+    if (best === null || rec.startedAt >= best.startedAt) best = rec;
+  }
+  return best;
+}
+
 /** True when this process still owns the lock file for `port`. */
 export function ownsHostLock(
   port: number,

@@ -9,7 +9,10 @@ import {
   formatToolRailSummary,
   handleMuxPayload,
 } from "../src/tui-render.js";
+import { createTuiPalette, formatBusyPrompt, tuiColorEnabled } from "../src/tui-style.js";
 import { parseArgs, helpText } from "../src/parse-args.js";
+
+const plain = createTuiPalette(false);
 
 describe("face-client", () => {
   it("resolveFaceBaseUrl defaults and trims", () => {
@@ -64,7 +67,7 @@ describe("face-client", () => {
 describe("tui-render", () => {
   it("streams assistant/chunk text and closes on turn/end", () => {
     const chunks: string[] = [];
-    const state = createTuiRenderState();
+    const state = createTuiRenderState(plain);
     const out = { write: (s: string) => chunks.push(s) };
 
     handleMuxPayload(
@@ -107,7 +110,7 @@ describe("tui-render", () => {
 
   it("prints tool rail for call and result", () => {
     const chunks: string[] = [];
-    const state = createTuiRenderState();
+    const state = createTuiRenderState(plain);
     const out = { write: (s: string) => chunks.push(s) };
 
     handleMuxPayload(
@@ -142,14 +145,14 @@ describe("tui-render", () => {
     );
 
     const text = chunks.join("");
-    expect(text).toMatch(/\[tool\] bash\s+…/);
-    expect(text).toMatch(/\[tool\] bash\s+ok/);
+    expect(text).toMatch(/▸ bash\s+…/);
+    expect(text).toMatch(/▸ bash\s+ok/);
     expect(formatToolRailSummary(state)).toBe("");
   });
 
   it("ignores other sessions", () => {
     const chunks: string[] = [];
-    const state = createTuiRenderState();
+    const state = createTuiRenderState(plain);
     handleMuxPayload(
       "s1",
       {
@@ -162,6 +165,63 @@ describe("tui-render", () => {
       state,
     );
     expect(chunks).toEqual([]);
+  });
+
+  it("captures approval frames for local /approve", () => {
+    const chunks: string[] = [];
+    const state = createTuiRenderState(plain);
+    const res = handleMuxPayload(
+      "s1",
+      {
+        type: "approval/requested",
+        sessionId: "s1",
+        approvalId: "ap1",
+        toolName: "bash",
+        reason: "network",
+      },
+      { write: (s: string) => chunks.push(s) },
+      state,
+    );
+    expect(res.approval?.approvalId).toBe("ap1");
+    expect(state.pendingApproval?.toolName).toBe("bash");
+    expect(chunks.join("")).toMatch(/\/approve/);
+  });
+
+  it("prints reasoning only when showReasoning is on", () => {
+    const chunks: string[] = [];
+    const state = createTuiRenderState(plain);
+    handleMuxPayload(
+      "s1",
+      {
+        type: "session/event",
+        sessionId: "s1",
+        event: { type: "assistant/chunk", kind: "reasoning", text: "think" },
+      },
+      { write: (s: string) => chunks.push(s) },
+      state,
+    );
+    expect(chunks).toEqual([]);
+    state.showReasoning = true;
+    handleMuxPayload(
+      "s1",
+      {
+        type: "session/event",
+        sessionId: "s1",
+        event: { type: "assistant/chunk", kind: "reasoning", text: "think" },
+      },
+      { write: (s: string) => chunks.push(s) },
+      state,
+    );
+    expect(chunks.join("")).toMatch(/think/);
+  });
+});
+
+describe("tui-style", () => {
+  it("honors NO_COLOR and formats the busy prompt", () => {
+    expect(tuiColorEnabled({ NO_COLOR: "1" }, true)).toBe(false);
+    expect(tuiColorEnabled({ FORCE_COLOR: "1" }, false)).toBe(true);
+    expect(formatBusyPrompt(false, "", plain)).toBe("› ");
+    expect(formatBusyPrompt(true, "bash", plain)).toBe("… bash › ");
   });
 });
 

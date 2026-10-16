@@ -69,12 +69,17 @@ xrkh tui --port 8787
 
 ### 薄 TUI（`xrkh tui`）
 
-挂到已运行的 Host（默认 `http://127.0.0.1:8787`），复用 Face unary + `/api/events.mux`：助手流式文本、工具轨一行、本地 `/status`（与 Overview / Face slash 同源 `session.status`）。不是第二套 agent 运行时；先 `xrkh web` 再另开终端跑 `xrkh tui`。
+挂到已运行的 Host（未指定 `--port` 时取 `~/.xrk/run` 里最新仍存活的 Host 锁，否则 `http://127.0.0.1:8787`）。复用 Face unary + `/api/events.mux`。命令面参考社区 [dsh-tui](https://github.com/dsh-tui/dsh-tui)（`/model` · `/resume` · 审批），但仍是薄终端壳，不是 Ink / 第二套 agent 运行时。
 
 | 输入 | 行为 |
 |------|------|
-| 普通行 | `session.prompt`（`mode=queue`） |
-| `/status` | Face `session.status` → 同 slash 文本 |
+| 普通行 | 空闲 `session.prompt` `queue`；忙碌时 `steer` |
+| `/status` · `/details` | Status 文本 · 会话/模型/工具/审批摘要 |
+| `/model [provider/]model [effort]` | `session.models` / `session.selectModel` |
+| `/resume [sessionId]` | `session.list` 或 `session.create` 切会话 |
+| `/approve` · `/deny` · `/whitelist` | `session.respondApproval` |
+| `/compact` · `/plan` 等 | 原样走 Face slash（`session.prompt`） |
+| `/thinking on\|off` | 是否打印 reasoning chunk |
 | `/cancel` | `session.cancel` |
 | `/quit` · Ctrl+D | 退出；回合中 Ctrl+C 先 cancel |
 

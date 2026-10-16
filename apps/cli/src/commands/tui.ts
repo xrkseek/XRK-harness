@@ -1,6 +1,6 @@
 /**
- * `xrkh tui` — thin product TUI: Face HTTP unary + mux stream, tool rail, /status.
- * Attaches to a running Host (`xrkh web` / `serve`); not a second agent runtime.
+ * `xrkh tui` — thin Face TUI (stream + tool rail + dsh-tui-style slash cmds).
+ * Attaches to a running Host; not a second agent runtime / not Ink.
  */
 
 import * as readline from "node:readline";
@@ -8,6 +8,7 @@ import {
   formatSessionStatusText,
   type SessionStatusSnapshot,
 } from "@xrkseek/server-face";
+import { newestLiveHostLock } from "../host-lock.js";
 import type { ParsedArgs } from "../parse-args.js";
 import {
   faceCall,
@@ -18,39 +19,98 @@ import {
   type MuxEnvelope,
 } from "../face-client.js";
 import {
+  formatDetails,
+  formatModelCatalog,
+  formatSessionList,
+  parseTuiSlash,
+  resolveModelArg,
+  type FaceModelsValue,
+  type ListedSession,
+} from "../tui-commands.js";
+import {
   createTuiRenderState,
+  formatToolRailSummary,
   handleMuxPayload,
   type TuiRenderState,
 } from "../tui-render.js";
+import {
+  createTuiPalette,
+  formatBusyPrompt,
+  type TuiPalette,
+} from "../tui-style.js";
 
-const HELP = `xrkh tui — thin Face terminal (stream + tool rail + /status)
+const HELP = `xrkh tui — Face terminal (stream + tool rail; dsh-tui-style commands)
 
 Commands:
-  /status     Session Status (same facts as Face slash / Overview)
-  /cancel     Abort the in-flight turn
-  /help       This help
-  /quit       Leave the TUI (also: /exit, Ctrl+D)
+  /status              Session Status (Face slash / Overview facts)
+  /details             Session, model, tools, pending approval
+  /model [p/m] [effort] List or select model (Face session.models)
+  /resume [sessionId]  List recent sessions or switch (session.create)
+  /approve|/deny|/whitelist   Answer pending tool approval
+  /compact · /plan …   Forwarded as Face slash via session.prompt
+  /thinking on|off     Show or hide reasoning chunks
+  /cancel              Abort the in-flight turn
+  /help                This help
+  /quit                Leave (also: /exit, Ctrl+D)
 
-Anything else is sent as session.prompt (mode=queue), including Face slash lines
-like /plan. Requires a running Host (default http://127.0.0.1:8787).
+Plain lines → session.prompt (queue when idle, steer when busy).
+Host: newest ~/.xrk/run lock, or http://127.0.0.1:8787.
 `;
 
 function outWrite(text: string): void {
   process.stdout.write(text);
 }
 
+function notice(palette: TuiPalette, text: string): void {
+  outWrite(`  ${palette.dim(text)}\n`);
+}
+
+function fail(palette: TuiPalette, text: string): void {
+  outWrite(`  ${palette.error(text)}\n`);
+}
+
 async function printStatus(
   client: FaceClientOptions,
   sessionId: string,
+  palette: TuiPalette,
 ): Promise<void> {
   const res = await faceCall<SessionStatusSnapshot>(client, "session.status", {
     sessionId,
   });
   if (!res.ok) {
-    outWrite(`status failed: ${res.message}\n`);
+    fail(palette, `status failed: ${res.message}`);
     return;
   }
   outWrite(`${formatSessionStatusText(res.value)}\n`);
+}
+
+async function loadModels(
+  client: FaceClientOptions,
+  sessionId: string,
+  palette: TuiPalette,
+): Promise<FaceModelsValue | null> {
+  const res = await faceCall<FaceModelsValue>(client, "session.models", {
+    sessionId,
+  });
+  if (!res.ok) {
+    fail(palette, `models failed: ${res.message}`);
+    return null;
+  }
+  return res.value;
+}
+
+function modelLabel(value: FaceModelsValue | null | undefined): string | undefined {
+  const cur = value?.current;
+  if (!cur) return undefined;
+  return cur.reasoningEffort
+    ? `${cur.provider}/${cur.model} · ${cur.reasoningEffort}`
+    : `${cur.provider}/${cur.model}`;
+}
+
+function parseThinkingArg(arg: string): boolean | undefined {
+  if (arg === "on" || arg === "1" || arg === "true") return true;
+  if (arg === "off" || arg === "0" || arg === "false") return false;
+  return undefined;
 }
 
 export async function runTui(args: ParsedArgs): Promise<number> {
@@ -61,7 +121,9 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     return 1;
   }
 
-  const baseUrl = resolveFaceBaseUrl(args.host, args.port);
+  const palette = createTuiPalette();
+  const attached = args.port === undefined ? newestLiveHostLock() : null;
+  const baseUrl = resolveFaceBaseUrl(args.host, args.port ?? attached?.port);
   const apiKey = resolveFaceApiKey();
   const client: FaceClientOptions = {
     baseUrl,
@@ -96,12 +158,12 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     process.stderr.write(`session.create failed: ${created.message}\n`);
     return 1;
   }
-  const sessionId = created.value.sessionId;
+  let sessionId = created.value.sessionId;
   const badge = created.value.agentPreset ?? args.preset;
 
-  const render: TuiRenderState = createTuiRenderState();
+  const render: TuiRenderState = createTuiRenderState(palette);
   let busy = false;
-  let wakePrompt: (() => void) | undefined;
+  let modelsCache: FaceModelsValue | null = null;
 
   const mux = openFaceMux(client, (env: MuxEnvelope) => {
     const result = handleMuxPayload(
@@ -110,11 +172,7 @@ export async function runTui(args: ParsedArgs): Promise<number> {
       { write: outWrite },
       render,
     );
-    if (result.turnIdle) {
-      busy = false;
-      wakePrompt?.();
-      wakePrompt = undefined;
-    }
+    if (result.turnIdle) busy = false;
   });
 
   try {
@@ -127,25 +185,22 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     return 1;
   }
 
+  const banner = [
+    palette.bold(palette.accent("xrkh tui")),
+    palette.dim(baseUrl),
+    palette.dim(sessionId),
+    ...(badge ? [palette.dim(String(badge))] : []),
+  ].join(palette.dim(" · "));
+  outWrite(`${banner}\n`);
   outWrite(
-    `xrkh tui · ${baseUrl} · session ${sessionId}` +
-      (badge ? ` · ${badge}` : "") +
-      "\n",
+    `${palette.dim(" /help · /model · /resume · /status · busy lines steer")}\n`,
   );
-  outWrite("Type /help · /status · /quit. Stream + tool rail reuse Face mux.\n");
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true,
   });
-
-  const waitIdle = (): Promise<void> => {
-    if (!busy) return Promise.resolve();
-    return new Promise((resolve) => {
-      wakePrompt = resolve;
-    });
-  };
 
   const ask = (prompt: string): Promise<string | null> =>
     new Promise((resolve) => {
@@ -161,7 +216,8 @@ export async function runTui(args: ParsedArgs): Promise<number> {
   const onSigInt = (): void => {
     if (busy) {
       void faceCall(client, "session.cancel", { sessionId }).then(() => {
-        outWrite("\n  (cancel requested)\n");
+        outWrite(`\n`);
+        notice(palette, "cancel requested");
       });
       return;
     }
@@ -170,50 +226,183 @@ export async function runTui(args: ParsedArgs): Promise<number> {
   };
   process.on("SIGINT", onSigInt);
 
+  const respondApproval = async (
+    decision: "allow" | "deny" | "whitelist",
+  ): Promise<void> => {
+    const pending = render.pendingApproval;
+    if (!pending) {
+      notice(palette, "no pending approval");
+      return;
+    }
+    const res = await faceCall(client, "session.respondApproval", {
+      sessionId,
+      approvalId: pending.approvalId,
+      decision,
+    });
+    if (!res.ok) {
+      fail(palette, `approval failed: ${res.message}`);
+      return;
+    }
+    render.pendingApproval = undefined;
+    notice(palette, `approval ${decision}`);
+  };
+
   try {
     while (running) {
-      await waitIdle();
-      if (!running) break;
-      const line = await ask("> ");
+      const line = await ask(
+        formatBusyPrompt(busy, formatToolRailSummary(render), palette),
+      );
       if (line === null) break;
       const text = line.trim();
       if (text.length === 0) continue;
 
-      const lower = text.toLowerCase();
-      if (lower === "/quit" || lower === "/exit" || lower === "/q") {
-        break;
-      }
-      if (lower === "/help" || lower === "/?") {
-        outWrite(HELP);
-        continue;
-      }
-      if (lower === "/status") {
-        await printStatus(client, sessionId);
-        continue;
-      }
-      if (lower === "/cancel") {
-        const c = await faceCall(client, "session.cancel", { sessionId });
-        outWrite(
-          c.ok ? "  (cancel accepted)\n" : `  cancel failed: ${c.message}\n`,
-        );
-        busy = false;
-        continue;
+      const slash = parseTuiSlash(text);
+      if (slash) {
+        if (slash.name === "quit" || slash.name === "exit" || slash.name === "q") {
+          break;
+        }
+        if (slash.name === "help" || slash.name === "?") {
+          outWrite(HELP);
+          continue;
+        }
+        if (slash.name === "status") {
+          await printStatus(client, sessionId, palette);
+          continue;
+        }
+        if (slash.name === "details") {
+          if (!modelsCache) {
+            modelsCache = await loadModels(client, sessionId, palette);
+          }
+          outWrite(
+            formatDetails({
+              sessionId,
+              baseUrl,
+              busy,
+              toolSummary: formatToolRailSummary(render),
+              pending: render.pendingApproval,
+              modelLabel: modelLabel(modelsCache),
+            }),
+          );
+          continue;
+        }
+        if (slash.name === "thinking" || slash.name === "reason") {
+          const next = parseThinkingArg(slash.arg);
+          if (next === undefined) {
+            notice(
+              palette,
+              `thinking ${render.showReasoning ? "on" : "off"}  (usage: /thinking on|off)`,
+            );
+          } else {
+            render.showReasoning = next;
+            notice(palette, `thinking ${next ? "on" : "off"}`);
+          }
+          continue;
+        }
+        if (slash.name === "cancel") {
+          const c = await faceCall(client, "session.cancel", { sessionId });
+          if (c.ok) notice(palette, "cancel accepted");
+          else fail(palette, `cancel failed: ${c.message}`);
+          busy = false;
+          continue;
+        }
+        if (
+          slash.name === "approve" ||
+          slash.name === "allow" ||
+          slash.name === "deny" ||
+          slash.name === "whitelist"
+        ) {
+          const decision =
+            slash.name === "deny"
+              ? "deny"
+              : slash.name === "whitelist"
+                ? "whitelist"
+                : "allow";
+          await respondApproval(decision);
+          continue;
+        }
+        if (slash.name === "model") {
+          const catalog = await loadModels(client, sessionId, palette);
+          if (!catalog) continue;
+          modelsCache = catalog;
+          const resolved = resolveModelArg(slash.arg, catalog);
+          if (resolved.kind === "list") {
+            outWrite(formatModelCatalog(catalog));
+            continue;
+          }
+          if (resolved.kind === "error") {
+            fail(palette, resolved.message);
+            continue;
+          }
+          const sel = await faceCall(client, "session.selectModel", {
+            sessionId,
+            provider: resolved.provider,
+            model: resolved.model,
+            ...(resolved.reasoningEffort
+              ? { reasoningEffort: resolved.reasoningEffort }
+              : {}),
+          });
+          if (!sel.ok) {
+            fail(palette, `selectModel failed: ${sel.message}`);
+            continue;
+          }
+          modelsCache = await loadModels(client, sessionId, palette);
+          const effort = resolved.reasoningEffort
+            ? ` · effort ${resolved.reasoningEffort}`
+            : "";
+          notice(
+            palette,
+            `model ${resolved.provider}/${resolved.model}${effort}  (next turns)`,
+          );
+          continue;
+        }
+        if (slash.name === "resume") {
+          if (!slash.arg) {
+            const listed = await faceCall<{ items: ListedSession[] }>(
+              client,
+              "session.list",
+              {},
+            );
+            if (!listed.ok) {
+              fail(palette, `list failed: ${listed.message}`);
+              continue;
+            }
+            outWrite(formatSessionList(listed.value.items ?? [], sessionId));
+            continue;
+          }
+          if (busy) {
+            fail(palette, "finish or /cancel the current turn before /resume");
+            continue;
+          }
+          const next = await faceCall<{ sessionId: string }>(
+            client,
+            "session.create",
+            { sessionId: slash.arg, cwd: args.workspace },
+          );
+          if (!next.ok) {
+            fail(palette, `resume failed: ${next.message}`);
+            continue;
+          }
+          sessionId = next.value.sessionId;
+          render.tools.clear();
+          render.pendingApproval = undefined;
+          modelsCache = null;
+          notice(palette, `attached session ${sessionId}`);
+          continue;
+        }
+        // Other slashes (/compact, /plan, …) fall through to session.prompt.
       }
 
-      busy = true;
+      const mode = busy ? "steer" : "queue";
+      if (!busy) busy = true;
       const promptRes = await faceCall(client, "session.prompt", {
         sessionId,
-        mode: "queue",
+        mode,
         content: [{ type: "text", text }],
       });
       if (!promptRes.ok) {
-        busy = false;
-        outWrite(`prompt failed: ${promptRes.message}\n`);
-        continue;
+        if (mode === "queue") busy = false;
+        fail(palette, `prompt failed: ${promptRes.message}`);
       }
-      // Slash handlers (e.g. /plan) may settle without a turn/end — wait briefly
-      // then fall through if still busy (mux will clear on turnIdle).
-      await waitIdle();
     }
   } catch (err) {
     exitCode = 1;
