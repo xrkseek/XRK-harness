@@ -25,13 +25,22 @@ import css from './ScheduleSettingsTab.module.css'
 export interface ScheduleSettingsTabInjected {
   /** Browser data client for the Host cron API. */
   api: CronApiClient
+  /**
+   * When set (session header), keep only agent jobs stamped with this
+   * workspace. Script jobs stay on the global ledger and are hidden here.
+   */
+  filterWorkspaceId?: string
 }
 
-/** Full props assembled by the Settings slot renderer. */
+/**
+ * Props for Settings Plugins tab or conversation.view — locale + inject only.
+ * Slot runtime kit is unused by this presentational directory.
+ */
 export type ScheduleSettingsTabProps =
-  PropsRuntime<'settings.plugins.tab'>
-  & PropsLocale<'schedule'>
+  PropsLocale<'schedule'>
   & InjectFace<ScheduleSettingsTabInjected>
+  // Optional when mounted under either slot (keeps inject typing happy).
+  & Partial<PropsRuntime<'settings.plugins.tab'>>
 
 type ViewState =
   | { readonly status: 'loading' }
@@ -52,8 +61,20 @@ function modelLabel(job: CronJobView, t: ScheduleT): string {
   return t('modelUnset')
 }
 
+function jobVisibleInWorkspace(
+  job: CronJobView,
+  filterWorkspaceId: string | undefined,
+): boolean {
+  if (!filterWorkspaceId) return true
+  return job.run.kind === 'agent' && job.run.workspaceId === filterWorkspaceId
+}
+
 /** Render the scheduled-task directory (jobs + expanded run history). */
-export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): ReactNode {
+export function ScheduleSettingsTab({
+  api,
+  t,
+  filterWorkspaceId,
+}: ScheduleSettingsTabProps): ReactNode {
   const runsId = useId()
   const [request, setRequest] = useState(0)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
@@ -86,7 +107,9 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
     }
   }, [api, request])
 
-  const jobs = state.status === 'ready' ? state.jobs : []
+  const jobs = state.status === 'ready'
+    ? state.jobs.filter((job) => jobVisibleInWorkspace(job, filterWorkspaceId))
+    : []
   useEffect(() => {
     if (expandedId !== null && !jobs.some(job => job.id === expandedId)) {
       setExpandedId(null)
@@ -104,6 +127,7 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
 
   return (
     <div className={css.section} aria-busy={state.status === 'loading'}>
+      <p className={css.lead}>{t('lead')}</p>
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
       {state.status === 'error' ? (
         <div className={css.failure}>
@@ -124,7 +148,11 @@ export function ScheduleSettingsTab({ api, t }: ScheduleSettingsTabProps): React
               {t('refresh')}
             </button>
           </div>
-          {jobs.length === 0 ? <p className={css.status}>{t('empty')}</p> : null}
+          {jobs.length === 0 ? (
+            <p className={css.status}>
+              {filterWorkspaceId ? t('emptyWorkspace') : t('empty')}
+            </p>
+          ) : null}
           {jobs.length > 0 ? (
             <ul className={css.cards}>
               {jobs.map((job) => {

@@ -1,5 +1,5 @@
 /**
- * Scheduled-task directory registered into the Plugins settings section.
+ * Scheduled-task directory on the session header (beside Chat and Trajectory).
  *
  * The cron scheduler lives in the Host process, so this half talks to the Host
  * cron API (`/api/cron/*`, docs/cron.md) over the same loopback gate the Face
@@ -8,8 +8,8 @@
  */
 
 import type {} from '@xrkseek/client-locale/client'
-import type { ClientContext } from '@xrkseek/client-runtime/client'
-import type {} from '@xrkseek/client-ui-settings/client'
+import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
+import type {} from '@xrkseek/client-ui-conversation/client'
 import { createCronApiClient, type CronApiClient } from './cron-api.ts'
 import { en, zh, type ScheduleLocaleKey } from './locales.ts'
 import {
@@ -47,7 +47,7 @@ export const NS = 'schedule'
 /** Services required by the tab registration. */
 export const inject = ['slots', 'locale']
 
-/** Contribute the read-only task directory tab to the Plugins settings section. */
+/** Contribute the read-only task directory to the session header. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-schedule: dictionaries')
 
@@ -55,14 +55,29 @@ export function apply(ctx: ClientContext): void {
   // One client per plugin instance: the tab re-reads through it on mount and
   // retry, and every call carries its own AbortSignal.
   const api: CronApiClient = createCronApiClient()
-  const injected = (): ScheduleSettingsTabInjected => ({ api })
 
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
+  // Session header (对话 / 轨迹 / 任务). Host jobs.json is global; this view
+  // keeps agent jobs stamped with the session's workspace.
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
     id: 'schedule',
     order: 20,
     label: () => t('tab'),
     locale: NS,
-    inject: injected,
+    inject: (sessionId: SessionId): ScheduleSettingsTabInjected => {
+      let filterWorkspaceId: string | undefined
+      try {
+        const items = ctx.workspaces.list.getSnapshot().items
+        filterWorkspaceId = items.find((item) =>
+          item.sessionIds.includes(sessionId),
+        )?.workspaceId
+      } catch {
+        filterWorkspaceId = undefined
+      }
+      return {
+        api,
+        ...(filterWorkspaceId !== undefined ? { filterWorkspaceId } : {}),
+      }
+    },
   }, ScheduleSettingsTab))
 }

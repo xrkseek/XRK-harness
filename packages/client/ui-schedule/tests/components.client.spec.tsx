@@ -120,6 +120,37 @@ describe('ScheduleSettingsTab', () => {
     expect(view.container.querySelector('[data-job-count]')?.getAttribute('data-job-count')).toBe('1')
   })
 
+  it('session view keeps only agent jobs for that workspace', async () => {
+    const mine = {
+      ...JOB,
+      id: 'job-ws',
+      name: 'this workspace',
+      run: { kind: 'agent' as const, prompt: 'hi', workspaceId: 'ws_a' },
+    }
+    const other = {
+      ...JOB,
+      id: 'job-other',
+      name: 'other workspace',
+      run: { kind: 'agent' as const, prompt: 'hi', workspaceId: 'ws_b' },
+    }
+    const script = {
+      ...JOB,
+      id: 'job-script',
+      name: 'script job',
+      run: { kind: 'script' as const, command: 'echo hi' },
+    }
+    const api = stubApi({
+      listJobs: vi.fn(async () => ({ jobs: [mine, other, script] })),
+    })
+    const view = render(
+      <ScheduleSettingsTab {...props(api)} filterWorkspaceId="ws_a" />,
+    )
+    await waitFor(() => expect(screen.getByText('this workspace')).toBeTruthy())
+    expect(screen.queryByText('other workspace')).toBeNull()
+    expect(screen.queryByText('script job')).toBeNull()
+    expect(view.container.querySelector('[data-job-count]')?.getAttribute('data-job-count')).toBe('1')
+  })
+
   it('shows the retry surface on a failed catalog read', async () => {
     const api = stubApi({
       listJobs: vi.fn(async () => { throw new Error('network down') }),

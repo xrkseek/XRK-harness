@@ -31,7 +31,8 @@
       "inject": [
         "@xrkseek/client-runtime",
         "@xrkseek/client-locale",
-        "@xrkseek/client-ui-settings"
+        "@xrkseek/client-ui-settings",
+        "@xrkseek/client-ui-conversation"
       ],
       "platform": "web"
     }
@@ -46,6 +47,7 @@
     "@xrkseek/client-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@xrkseek/cordis": "workspace:^",
@@ -57,6 +59,7 @@
     "@xrkseek/client-test-runtime": "workspace:^",
     "@xrkseek/client-ui-primitives": "workspace:^",
     "@xrkseek/client-ui-settings": "workspace:^",
+    "@xrkseek/client-ui-conversation": "workspace:^",
     "@xrkseek/client-ui-slots": "workspace:^",
     "@xrkseek/xrk-invariants": "workspace:^",
     "@testing-library/react": "^16.1.0",

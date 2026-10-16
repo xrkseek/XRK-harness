@@ -1561,6 +1561,9 @@ importers:
       '@xrkseek/client-test-runtime':
         specifier: workspace:^
         version: link:../../stubs/xrk-client-test-runtime
+      '@xrkseek/client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
@@ -1798,6 +1801,9 @@ importers:
       '@xrkseek/client-test-runtime':
         specifier: workspace:^
         version: link:../../stubs/xrk-client-test-runtime
+      '@xrkseek/client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
       '@xrkseek/client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives

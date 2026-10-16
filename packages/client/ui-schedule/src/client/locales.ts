@@ -3,12 +3,14 @@
 /** Simplified Chinese dictionary and key source of truth. */
 export const zh = {
   tab: '任务',
+  lead: '本工作区的定时 Agent 任务。创建走会话里的 cronjob；总开关仍在插件配置 · Cron。',
   loading: '正在读取任务…',
   error: '暂时无法读取任务。',
   errorHint: '任务目录只在 Host 运行 Cron ticker 时可用（Settings → Plugins → Cron 总开关）。',
   retry: '重试',
   refresh: '刷新',
   empty: '暂无定时任务。可在会话里用 cronjob 工具创建。',
+  emptyWorkspace: '当前工作区还没有定时任务。用 cronjob 在本会话创建即可；脚本任务在全局账本，不在此列出。',
   summary: '{count} 个任务',
   jobNameFallback: '（未命名任务）',
   enabledTag: '已启用',
@@ -59,12 +61,14 @@ export type ScheduleLocaleKey = keyof typeof zh
 /** English dictionary checked against the Chinese key set. */
 export const en = {
   tab: 'Tasks',
+  lead: 'Agent cron jobs for this workspace. Create with the session cronjob tool; the master switch stays under Plugins · Cron.',
   loading: 'Reading tasks…',
   error: 'Tasks are temporarily unavailable.',
   errorHint: 'The task directory needs the Host cron ticker (Settings → Plugins → Cron master switch).',
   retry: 'Retry',
   refresh: 'Refresh',
   empty: 'No scheduled tasks yet. Create one with the cronjob tool in a session.',
+  emptyWorkspace: 'No agent cron jobs for this workspace yet. Create with cronjob here; script jobs stay on the global ledger and are not listed.',
   summary: '{count} tasks',
   jobNameFallback: '（unnamed job）',
   enabledTag: 'Enabled',

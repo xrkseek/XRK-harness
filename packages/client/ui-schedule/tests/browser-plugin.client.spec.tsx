@@ -29,7 +29,7 @@ async function bench() {
 function declare(slots: SlotRegistry): () => void {
   return slots.register({
     name: 'root',
-    children: { 'settings.plugins.tab': { kind: 'list', scope: 'root' } },
+    children: { 'conversation.view': { kind: 'list', scope: 'session' } },
   } as never, () => null)
 }
 
@@ -43,9 +43,8 @@ describe('ui-schedule browser plugin', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
-    const entry = b.slots.entries('settings.plugins.tab')[0]!
+    const entry = b.slots.entries('conversation.view')[0]!
     expect(entry.component).toBe(ScheduleSettingsTab)
-    // After configurable (0) and the inventory / advanced tabs (10).
     expect(entry.options).toMatchObject({ id: 'schedule', order: 20 })
     expect(entry.locale).toBe(NS)
     expect(resolveSlotLabel(entry.options.label)).toBe('任务')
@@ -61,22 +60,22 @@ describe('ui-schedule browser plugin', () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
+    expect(b.slots.entries('conversation.view')).toHaveLength(0)
 
     const stop = declare(b.slots)
-    await vi.waitFor(() => { expect(b.slots.entries('settings.plugins.tab')).toHaveLength(1) })
+    await vi.waitFor(() => { expect(b.slots.entries('conversation.view')).toHaveLength(1) })
     b.locale.setLocale('en')
-    expect(resolveSlotLabel(b.slots.entries('settings.plugins.tab')[0]!.options.label)).toBe('Tasks')
+    expect(resolveSlotLabel(b.slots.entries('conversation.view')[0]!.options.label)).toBe('Tasks')
 
     stop()
-    expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
+    expect(b.slots.entries('conversation.view')).toHaveLength(0)
     declare(b.slots)
     await vi.waitFor(() => {
-      expect(b.slots.entries('settings.plugins.tab')[0]?.component).toBe(ScheduleSettingsTab)
+      expect(b.slots.entries('conversation.view')[0]?.component).toBe(ScheduleSettingsTab)
     })
 
     await fiber.dispose()
-    expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
+    expect(b.slots.entries('conversation.view')).toHaveLength(0)
     // The dictionary namespace is released with the plugin.
     expect(() => b.locale.register(NS, 'zh', {})).not.toThrow()
     await b.ctx.fiber.dispose()
