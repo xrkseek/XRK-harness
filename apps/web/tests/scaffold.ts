@@ -73,11 +73,11 @@ import { REPO_ROOT, requireDist } from './support.ts'
 // } from '@xrkseek/client-ui-settings-models'
 export const WELCOME_NOTICE_SETTINGS_NAMESPACE = 'ui-onboarding'
 export const WELCOME_NOTICE_ACK_FIELD = 'welcomeNoticeVersion'
-export const WELCOME_NOTICE_VERSION = '2026-08-23.1'
+export const WELCOME_NOTICE_VERSION = '2026-10-16.1'
 export const WELCOME_NOTICE_COPY = {
   zh: {
     title: '欢迎使用 XRK-Harness',
-    body: 'XRK-Harness 是本仓库的 Agent 宿主与产品壳：Session 可重建、工具可走策略，社区 DSH 插件经 dsh-compat 兼容器接入（不嵌入 Cordis Host）。\n\n0.1.0 是首个公开发版，CLI 与 serve 主路径可用；真 IM 隧道、Cordis fiber 子进程等缺口见 docs/status。欢迎通过 GitHub 反馈与共建。',
+    body: 'XRK-Harness 是 Agent 宿主和产品壳。会话可以从日志重建，工具按策略放行，社区插件经 dsh-compat 接入。\n\n在对话里直接开干。模型、技能和工具都在设置里。当前公开版本是 0.6。',
     continueLabel: '继续',
   },
 } as const
