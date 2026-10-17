@@ -68,7 +68,7 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 
 ## 学习环（`propose_skill`）
 
-复杂任务后，模型可调用 **`propose_skill`** 提交一份 class-level `SKILL.md` 草案（When to Use / Procedure / Pitfalls，不是聊天日志）。Face 弹出确认（`Write skill` / `Reject`，详情展示全文）；**只有用户批准后**才校验并写入工作区 `.agents/skills/<name>/`（复用 `installSkillFromLocalDir` 失败关闭路径）。复杂多工具回合结束后，下一回合 turn-start 可能注入一条 `context-fragment` 提示调用该工具（对标 Hermes write_approval；本切片**不做** background review fork）。
+复杂任务后，模型可调用 **`propose_skill`** 提交一份 class-level `SKILL.md` 草案（When to Use / Procedure / Pitfalls，不是聊天日志）。Face 弹出确认（`Write skill` / `Reject`，详情展示全文）；**只有用户批准后**才校验并写入。`scope=workspace`（默认）写**当前会话工作区** `.agents/skills/<name>/`，`scope=global` 写用户主目录 `~/.agents/skills/<name>/`（复用 `installSkillFromLocalDir` 失败关闭路径）。这不是 Agent Team 干员；干员走 `team_save`。复杂多工具回合结束后，下一回合 turn-start 可能注入一条 `context-fragment` 提示调用该工具（对标 Hermes write_approval；本切片**不做** background review fork）。
 
 **Skill curator**（确定性）：`runSkillCurator` 按 `SKILL.md` mtime 把过期工作区 skill 移到 `.agents/skills/.archive/`（可 pin、dry-run；**不删除**、无 aux LLM）。
 
@@ -172,7 +172,7 @@ Installs **fail closed**: a missing `SKILL.md`, illegal boolean frontmatter, or 
 
 ## Learning loop (`propose_skill`)
 
-After a complex task, the model may call **`propose_skill`** with a class-level `SKILL.md` draft (When to Use / Procedure / Pitfalls — not a chat log). Face asks for confirmation (`Write skill` / `Reject`, detail shows the full markdown); **only after approval** does the Host validate and write under workspace `.agents/skills/<name>/` (same fail-closed path as `installSkillFromLocalDir`). After enough complex multi-tool turns, the next turn-start may inject a `context-fragment` nudge to call the tool (Hermes-style write_approval; this slice has **no** background review fork).
+After a complex task, the model may call **`propose_skill`** with a class-level `SKILL.md` draft (When to Use / Procedure / Pitfalls — not a chat log). Face asks for confirmation (`Write skill` / `Reject`, detail shows the full markdown); **only after approval** does the Host validate and write. `scope=workspace` (default) writes the **current session workspace** `.agents/skills/<name>/`; `scope=global` writes the user-home `~/.agents/skills/<name>/` (same fail-closed path as `installSkillFromLocalDir`). An Agent Team member is `team_save`, not this tool. After enough complex multi-tool turns, the next turn-start may inject a `context-fragment` nudge to call the tool (Hermes-style write_approval; this slice has **no** background review fork).
 
 **Skill curator** (deterministic): `runSkillCurator` archives stale workspace skills by `SKILL.md` mtime into `.agents/skills/.archive/` (pin + dry-run; **never deletes**; no aux LLM).
 

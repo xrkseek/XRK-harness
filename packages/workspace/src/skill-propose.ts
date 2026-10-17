@@ -5,12 +5,11 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import {
   installSkillFromLocalDir,
-  resolveInstalledSkillsRoot,
   SkillInstallError,
   WORKSPACE_SKILLS_REL_DIR,
   type SkillInstallResult,
@@ -18,6 +17,23 @@ import {
 import { isSkillName, parseSkillMarkdown } from "./skills.js";
 
 export const PROPOSE_SKILL_TOOL = "propose_skill";
+
+/** Where a proposed skill is written. */
+export type ProposeSkillScope = "workspace" | "global";
+
+/** `workspace` (default) or `global`. Anything else is refused. */
+export function parseProposeSkillScope(
+  raw: unknown,
+): ProposeSkillScope | undefined {
+  if (raw === undefined || raw === "workspace") return "workspace";
+  if (raw === "global") return "global";
+  return undefined;
+}
+
+/** Home `~/.agents/skills` — global scope, not the product `~/.xrk` tree. */
+export function defaultGlobalSkillsRoot(): string {
+  return path.join(homedir(), ".agents", "skills");
+}
 
 /** Default tool-call count on one turn that counts as "complex" for a nudge. */
 export const LEARNING_LOOP_COMPLEX_TOOL_THRESHOLD = 5;
@@ -149,8 +165,10 @@ export function presentProposeSkillCall(args: {
  * Without `askConfirm` the tool refuses (no silent disk writes).
  */
 export function createProposeSkillTool(options: {
+  /** Current session workspace. */
   readonly resolveWorkspaceRoot: () => string;
-  readonly resolveSkillsRoot?: () => string | undefined;
+  /** Home `~/.agents/skills`. Defaults to {@link defaultGlobalSkillsRoot}. */
+  readonly resolveGlobalSkillsRoot?: () => string;
   readonly askConfirm?: (
     draft: ProposeSkillDraft,
     signal?: AbortSignal,
@@ -159,9 +177,12 @@ export function createProposeSkillTool(options: {
   return {
     name: PROPOSE_SKILL_TOOL,
     description:
-      "Propose a reusable product skill (SKILL.md) after a complex task. " +
+      "Propose a reusable SKILL.md playbook after a complex task. " +
+      "This is not an Agent Team member. If the user asked for a 干员, 成员, teammate, or 子代理团队的一员, call `team_save` instead. " +
       "Pass name, description, and markdown body (lessons / procedure — not a chat log). " +
-      "The user must approve before anything is written under .agents/skills.",
+      "scope=workspace (default) writes the current workspace `.agents/skills`; " +
+      "scope=global writes the home directory `~/.agents/skills`. " +
+      "The user must approve before anything is written.",
     parameters: {
       type: "object",
       properties: {
@@ -179,6 +200,11 @@ export function createProposeSkillTool(options: {
           type: "string",
           description:
             "Markdown body after frontmatter: When to Use, Procedure, Pitfalls. Class-level lessons, not incident logs.",
+        },
+        scope: {
+          type: "string",
+          description:
+            "workspace (default): current workspace .agents/skills. global: home ~/.agents/skills. Not an Agent Team roster.",
         },
         force: {
           type: "boolean",
@@ -201,8 +227,16 @@ export function createProposeSkillTool(options: {
         name?: string;
         description?: string;
         body?: string;
+        scope?: string;
         force?: boolean;
       };
+      const scope = parseProposeSkillScope(a.scope);
+      if (scope === undefined) {
+        return {
+          content: 'Error: scope must be "workspace" or "global"',
+          isError: true,
+        };
+      }
       const name = String(a.name ?? "").trim();
       const description = String(a.description ?? "").trim();
       const body = String(a.body ?? "");
@@ -232,17 +266,18 @@ export function createProposeSkillTool(options: {
       }
 
       const workspaceRoot = options.resolveWorkspaceRoot();
-      const skillsRootOverride = options.resolveSkillsRoot?.();
-      const skillsRoot = resolveInstalledSkillsRoot({
-        workspaceRoot,
-        ...(skillsRootOverride !== undefined
-          ? { skillsRoot: skillsRootOverride }
-          : {}),
-      });
-      const targetRel = path
-        .join(WORKSPACE_SKILLS_REL_DIR, name, "SKILL.md")
-        .split(path.sep)
-        .join("/");
+      const skillsRoot = path.resolve(
+        scope === "global"
+          ? (options.resolveGlobalSkillsRoot?.() ?? defaultGlobalSkillsRoot())
+          : path.join(workspaceRoot, WORKSPACE_SKILLS_REL_DIR),
+      );
+      const targetRel =
+        scope === "global"
+          ? path.join(skillsRoot, name, "SKILL.md")
+          : path
+              .join(WORKSPACE_SKILLS_REL_DIR, name, "SKILL.md")
+              .split(path.sep)
+              .join("/");
 
       const draft: ProposeSkillDraft = {
         name,
@@ -281,10 +316,8 @@ export function createProposeSkillTool(options: {
         const result = writeProposedSkill({
           workspaceRoot,
           markdown,
+          skillsRoot,
           ...(a.force === true ? { force: true } : {}),
-          ...(skillsRootOverride !== undefined
-            ? { skillsRoot: skillsRootOverride }
-            : {}),
         });
         return {
           content: JSON.stringify({
@@ -293,6 +326,7 @@ export function createProposeSkillTool(options: {
             directory: result.directory,
             targetRel,
             skillsRoot,
+            scope,
           }),
         };
       } catch (err) {
@@ -350,7 +384,9 @@ export function learningLoopNudgeText(): string {
     "Learning loop: this session just finished a complex multi-tool turn. " +
     "If you produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft " +
     "(When to Use + Procedure + Pitfalls — not a chat transcript). " +
-    "The user must approve before anything is written under `.agents/skills`."
+    "scope=workspace writes the current workspace `.agents/skills`; scope=global writes home `~/.agents/skills`. " +
+    "A 干员 / 成员 / 子代理团队的一员 is `team_save`, not this tool. " +
+    "The user must approve before anything is written."
   );
 }
 

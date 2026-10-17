@@ -38,7 +38,7 @@ describe("bindProposeSkillTool", () => {
       ],
     }));
     bindProposeSkillTool(tools, {
-      workspaceRoot: process.cwd(),
+      resolveWorkspaceRoot: () => process.cwd(),
       sessionId: "sess-1",
       ask,
     });

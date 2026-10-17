@@ -93,6 +93,7 @@ import { bindAgentRosterTools } from "./agent-roster-tools.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
+import { resolveSessionCwd } from "./session-cwd.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
 import {
   hydrateWorkspaceRegistry,
@@ -835,12 +836,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             runtime,
             sessionId,
           });
-          bindProposeSkillTool(agent.tools, {
-            workspaceRoot: options.workspaceRoot,
-            sessionId,
-            ask: (qs, signal) => questions.ask(sessionId, qs, signal),
-          });
         }
+        bindProposeSkillTool(agent.tools, {
+          resolveWorkspaceRoot: () => resolveSessionCwd(runtime, sessionId),
+          sessionId,
+          ask: (qs, signal) => questions.ask(sessionId, qs, signal),
+        });
       }
     }
     bindAgentJobs(sessionId, agent);

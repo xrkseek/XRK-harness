@@ -272,12 +272,15 @@ export {
   LEARNING_LOOP_COMPLEX_TOOL_THRESHOLD,
   learningLoopNudgeText,
   noteLearningLoopTurn,
+  defaultGlobalSkillsRoot,
+  parseProposeSkillScope,
   presentProposeSkillCall,
   PROPOSE_SKILL_TOOL,
   resetLearningLoopNudgeStateForTests,
   writeProposedSkill,
   type ProposeSkillConfirmResult,
   type ProposeSkillDraft,
+  type ProposeSkillScope,
   type WriteProposedSkillOptions,
 } from "./skill-propose.js";
 

@@ -42,9 +42,11 @@ export function proposeSkillQuestions(
 }
 
 export interface BindProposeSkillToolOptions {
-  readonly workspaceRoot: string;
+  /** Current session workspace. */
+  readonly resolveWorkspaceRoot: () => string;
+  /** Home `~/.agents/skills` for scope=global. */
+  readonly resolveGlobalSkillsRoot?: () => string;
   readonly sessionId: string;
-  readonly skillsRoot?: string;
   readonly ask: (
     questions: readonly FaceQuestionItem[],
     signal?: AbortSignal,
@@ -57,9 +59,9 @@ export function bindProposeSkillTool(
   options: BindProposeSkillToolOptions,
 ): void {
   const bound = createProposeSkillTool({
-    resolveWorkspaceRoot: () => options.workspaceRoot,
-    ...(options.skillsRoot !== undefined
-      ? { resolveSkillsRoot: () => options.skillsRoot }
+    resolveWorkspaceRoot: options.resolveWorkspaceRoot,
+    ...(options.resolveGlobalSkillsRoot !== undefined
+      ? { resolveGlobalSkillsRoot: options.resolveGlobalSkillsRoot }
       : {}),
     async askConfirm(draft, signal) {
       try {

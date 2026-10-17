@@ -1602,7 +1602,7 @@ export function createHarnessComposition(
     order: 112.5,
     content: () =>
       availableToolNames().has("propose_skill")
-        ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft. The user must approve before anything is written under `.agents/skills`."
+        ? "After a complex multi-step task that produced a reusable procedure, call `propose_skill` with a class-level SKILL.md draft (scope=workspace writes the current workspace `.agents/skills`; scope=global writes home `~/.agents/skills`). A 干员 / 成员 / 子代理团队的一员 is `team_save`, not a skill. The user must approve before anything is written."
         : "",
   });
   if (options.lspTools !== false) {

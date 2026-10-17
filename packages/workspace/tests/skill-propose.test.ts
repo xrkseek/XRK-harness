@@ -63,6 +63,58 @@ describe("propose_skill / learning loop", () => {
     expect(written).toContain("Ping the office printer.");
   });
 
+  it("writes workspace scope under the session root and global scope under home .agents", async () => {
+    const sessionRoot = await workspace();
+    const hostRoot = await workspace();
+    const homeSkills = await mkdtemp(path.join(tmpdir(), "xrk-propose-home-"));
+    roots.push(homeSkills);
+    const tool = createProposeSkillTool({
+      resolveWorkspaceRoot: () => sessionRoot,
+      resolveGlobalSkillsRoot: () => homeSkills,
+      askConfirm: async () => ({ approved: true }),
+    });
+    const workspaceWrite = await tool.execute({
+      name: "fn-job",
+      description: "Do the function workspace job.",
+      body: "# Job\n\n## Procedure\n\n1. Stay here.\n",
+      scope: "workspace",
+    });
+    expect(workspaceWrite.isError).toBeFalsy();
+    expect(JSON.parse(String(workspaceWrite.content)).skillsRoot).toBe(
+      path.resolve(sessionRoot, WORKSPACE_SKILLS_REL_DIR),
+    );
+    await readFile(
+      path.join(sessionRoot, WORKSPACE_SKILLS_REL_DIR, "fn-job", "SKILL.md"),
+      "utf8",
+    );
+    expect(
+      await readFile(
+        path.join(hostRoot, WORKSPACE_SKILLS_REL_DIR, "fn-job", "SKILL.md"),
+        "utf8",
+      ).catch(() => ""),
+    ).toBe("");
+
+    const globalWrite = await tool.execute({
+      name: "fn-job",
+      description: "Do the function workspace job.",
+      body: "# Job\n\n## Procedure\n\n1. Stay global.\n",
+      scope: "global",
+    });
+    expect(globalWrite.isError).toBeFalsy();
+    const globalBody = await readFile(path.join(homeSkills, "fn-job", "SKILL.md"), "utf8");
+    expect(globalBody).toContain("Stay global.");
+    expect(JSON.parse(String(globalWrite.content)).scope).toBe("global");
+
+    const bad = await tool.execute({
+      name: "fn-job",
+      description: "Do the function workspace job.",
+      body: "# Job\n",
+      scope: "xiangyang",
+    });
+    expect(bad.isError).toBe(true);
+    expect(bad.content).toContain("workspace");
+  });
+
   it("refuses to write when the user rejects or confirm is missing", async () => {
     const root = await workspace();
     const rejected = createProposeSkillTool({
