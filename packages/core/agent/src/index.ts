@@ -346,7 +346,10 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
       }
 
       const turnAbort = new AbortController();
-      abortTurnRef = () => turnAbort.abort();
+      // Typed cause — bare abort() leaves signal.reason undefined and
+      // finalizeCancelledTurn records aborted/legacy (UI 「已停止」).
+      abortTurnRef = () =>
+        turnAbort.abort({ kind: "hook", reason: "loop_hard" });
 
       const signal = mergeSignals(latchSignal, input.signal, turnAbort.signal);
 

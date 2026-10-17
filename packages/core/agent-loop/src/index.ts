@@ -17,12 +17,15 @@ import {
 } from "@xrkseek/core-tools";
 import {
   finalizeLlmChatResponse,
+  CONTEXT_WINDOW_EXCEEDED_CODE,
   ContextOverflowError,
+  describeUnknownError,
   isContextOverflowError,
   isEmptyResponseError,
   isIncompleteToolCallError,
   isLlmError,
   isProviderFinishError,
+  isUnsupportedContentError,
   isUnsupportedReasoningEffortError,
   UnsupportedContentError,
   type LlmAdapter,
@@ -899,7 +902,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     {
       const route =
         input.llm.ensureRoute?.() ?? input.llm.peekRoute?.();
-      const softBudget = resolveSoftBudgetTokens({
+      let softBudget = resolveSoftBudgetTokens({
         ...(compaction?.maxRequestTokens !== undefined
           ? { maxRequestTokens: compaction.maxRequestTokens }
           : {}),
@@ -919,6 +922,26 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           ? { softBudgetBufferTokens: route.softBudgetBufferTokens }
           : {}),
       });
+      // Soft budget stays orthogonal to a *larger* context window (1M + 300k
+      // soft is valid). Cap only when soft/maxRequestTokens exceed the
+      // advertised window — otherwise pressure can climb past the provider
+      // limit and fail closed as a mysterious mid-step abort.
+      const windowCap =
+        typeof route?.contextWindow === "number" &&
+        Number.isFinite(route.contextWindow) &&
+        route.contextWindow >= 8_000
+          ? Math.floor(route.contextWindow)
+          : undefined;
+      if (
+        softBudget !== undefined &&
+        windowCap !== undefined &&
+        softBudget.maxRequestTokens > windowCap
+      ) {
+        softBudget = {
+          ...softBudget,
+          maxRequestTokens: windowCap,
+        };
+      }
       if (
         compaction &&
         compaction.auto !== false &&
@@ -983,6 +1006,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
                   reason: "auto",
                   keepTokens: softBudget.keepTokens,
                   turnId,
+                  stepId,
+                  retry: llmRetryPolicy,
                   ...(input.signal ? { signal: input.signal } : {}),
                   now,
                 });
@@ -1118,7 +1143,20 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
             ...(req.system?.trim() ? { system: req.system } : {}),
             ...(req.tools.length ? { tools: req.tools } : {}),
           });
-          return invokeLlm(input, req, onChunk);
+          // Same retry budget as the step that hit overflow — bare invokeLlm
+          // used to drop TRANSPORT/SERVER after a successful compact.
+          return invokeLlmWithRetry({
+            invoke: (onBuffered) => invokeLlm(input, req, onBuffered),
+            flushChunk: onChunk,
+            store: input.store,
+            sessionId: input.sessionId,
+            turnId,
+            stepId,
+            now,
+            ...(input.signal ? { signal: input.signal } : {}),
+            policy: llmRetryPolicy,
+            ...(input.llm.id ? { provider: input.llm.id } : {}),
+          });
         };
 
         const summarizeOverflow = async (
@@ -1135,6 +1173,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
               keepTokens:
                 compaction.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
               turnId,
+              stepId,
+              retry: llmRetryPolicy,
               ...(input.signal ? { signal: input.signal } : {}),
               now,
             });
@@ -1440,6 +1480,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
       isProviderFinishError(err) ||
       isIncompleteToolCallError(err) ||
       isUnsupportedReasoningEffortError(err) ||
+      isContextOverflowError(err) ||
+      isUnsupportedContentError(err) ||
       isLlmError(err)
     ) {
       if (activeStepId !== undefined) {
@@ -1450,22 +1492,16 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           stepId: activeStepId,
         });
       }
-      const code = (err as { code: string }).code;
-      const rawMessage = err instanceof Error ? err.message : undefined;
-      const message =
-        typeof rawMessage === "string" &&
-        rawMessage.length > 0 &&
-        rawMessage !== "[object Object]"
-          ? rawMessage
-          : (() => {
-              try {
-                const json = JSON.stringify(err);
-                if (typeof json === "string" && json.length > 0) return json;
-              } catch {
-                /* ignore */
-              }
-              return "turn failed";
-            })();
+      // ContextOverflowError / UnsupportedContentError are classified families
+      // (see classifyCaughtStreamError) but are not LlmError — without an
+      // explicit code they used to fall through to aborted/legacy and the UI
+      // painted 「已停止」 instead of a turn error.
+      const code = isContextOverflowError(err)
+        ? CONTEXT_WINDOW_EXCEEDED_CODE
+        : isUnsupportedContentError(err)
+          ? "UNSUPPORTED_CONTENT"
+          : ((err as { code?: string }).code ?? "UNKNOWN");
+      const message = describeUnknownError(err);
       emitWorkspaceChanges();
       append(input.store, input.sessionId, {
         type: "turn/end",
@@ -1480,17 +1516,29 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
         },
       });
     } else {
-      // Unknown failure after turn/start: still close the turn so drain idle
-      // cannot leave an open turn (false-idle /「熔断」UX — send looks idle
-      // while history still has turn/start without turn/end).
+      // Unexpected throw after turn/start: close as turn/end *error*, never
+      // aborted/legacy. Legacy painted 「已停止」 and hid the real failure
+      // (invariant, tool pipeline bugs, unclassified throws).
+      if (activeStepId !== undefined) {
+        append(input.store, input.sessionId, {
+          type: "step/end",
+          ts: now(),
+          turnId,
+          stepId: activeStepId,
+        });
+      }
       emitWorkspaceChanges();
-      finalizeCancelledTurn({
-        store: input.store,
-        sessionId: input.sessionId,
+      append(input.store, input.sessionId, {
+        type: "turn/end",
+        ts: now(),
         turnId,
-        ...(activeStepId !== undefined ? { stepId: activeStepId } : {}),
-        now,
-        cancelCause: { kind: "legacy" },
+        reason: {
+          kind: "error",
+          error: {
+            message: describeUnknownError(err),
+            code: "UNKNOWN",
+          },
+        },
       });
     }
     throw err;

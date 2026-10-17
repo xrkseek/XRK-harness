@@ -151,6 +151,7 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
     ...candidate.name === undefined ? {} : { name: candidate.name },
     ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
     ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
+    ...candidate.softBudgetMaxTokens === undefined ? {} : { softBudgetMaxTokens: candidate.softBudgetMaxTokens },
   }
 }
 
@@ -277,7 +278,22 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       // Keyed by id, so a half-typed row whose id is still empty is not a
       // match and the candidate joins as its own row — correct, since a row
       // without an id is not yet a model and the create/apply gates refuse it.
-      byId.set(candidate.id, byId.get(candidate.id) ?? adopt(candidate))
+      // Blank soft budget is the one gap we still fill: leave a hand-set
+      // ceiling alone, but stamp the derived one when the field was never set.
+      const existing = byId.get(candidate.id)
+      if (existing === undefined) {
+        byId.set(candidate.id, adopt(candidate))
+        continue
+      }
+      if (
+        numberOf(existing, 'softBudgetMaxTokens') === undefined
+        && candidate.softBudgetMaxTokens !== undefined
+      ) {
+        byId.set(candidate.id, {
+          ...existing,
+          softBudgetMaxTokens: candidate.softBudgetMaxTokens,
+        })
+      }
     }
     onChange([...byId.values()])
     closePicker()

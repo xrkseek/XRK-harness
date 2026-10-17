@@ -72,10 +72,15 @@ export const InputBar = memo(function InputBar({
   const promptError = useSession(s => s.promptError) ?? null
   // Delivery / 插队 follow Host `running` only (same latch as Stop). Tools
   // still draining after cancel must not keep busy-Enter / 插队中 painted.
-  const deliveryBusy = useSession(s => composerDeliveryBusy(
-    s.running ?? false,
-    collectUserShapedSeqs([...s.chat.nodes.values()], latestTurnNumber(s.chat.timeline)),
-  ))
+  // Skip the full-node scan while Host is idle — stream flushes must not pay
+  // collectUserShapedSeqs on every animation-frame notify when Stop is already off.
+  const deliveryBusy = useSession(s => {
+    if (!(s.running ?? false)) return false
+    return composerDeliveryBusy(
+      true,
+      collectUserShapedSeqs([...s.chat.nodes.values()], latestTurnNumber(s.chat.timeline)),
+    )
+  })
   // Boolean latch — do not select `partial` itself (new identity every chunk).
   const agentActive = useSession(s => isComposerAgentActive({
     running: s.running ?? false,

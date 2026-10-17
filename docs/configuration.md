@@ -243,10 +243,10 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `maxSteps` | 单次用户 turn 的 LLM 步数上限（默认 32） |
 | `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | 达输出 token 上限时是否自动续写（**默认开**）及每 turn 续写上限（默认 2） |
 | `agent-loop` | `toolSettle` | `parallel`（默认，按 `isConcurrencySafe`）或 `serial` |
-| `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 5；`0` 关闭） |
+| `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 8；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
 | `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off`；软上限见下方 Models |
-| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；留空 = 不主动软压 |
+| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；留空 = 不主动软压。从「获取模型」采纳且列表带了 `contextWindow` 时：窗口 ≥100k → `max(100k, 75%)`（千位取整，上限 300k）；窗口 &lt;100k → 仅 75%；&lt;8k 不写。再拉取只补空白软预算，手填不覆盖 |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxConcurrentModelSessions` | 同一供应商/模型路由上**进行中**会话上限（默认 **5**；主会话与子代理同等计数；blank / 闲置历史不计） |
 | Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `maxConcurrentSessions`（可选） | 覆盖该模型的进行中会话上限；省略 → `agent-loop.maxConcurrentModelSessions` |
@@ -552,10 +552,10 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `maxSteps` | Max LLM steps per user turn (default 32) |
 | `agent-loop` | `autoContinueOnMaxTokens` · `autoContinueMaxRounds` | Auto-resume when the model hits its output token cap (**default on**) and per-turn continuation cap (default 2) |
 | `agent-loop` | `toolSettle` | `parallel` (default, by `isConcurrencySafe`) or `serial` |
-| `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 5; `0` disables) |
+| `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 8; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |
 | `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off`; soft ceiling is per model (below) |
-| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; omit = no proactive soft compact |
+| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; omit = no proactive soft compact. Adopting a fetched model that discloses `contextWindow`: window ≥100k → `max(100k, 75%)` (stepped to 1k, cap 300k); window &lt;100k → 75% only; under 8k left blank. A later fetch only fills a blank soft budget; hand-tuned values stay |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxConcurrentModelSessions` | Running sessions on one provider/model route (default **5**; parent + subagent count equally; blank / idle history do not count) |
 | Models (`llm-deepseek` / `llm-pi-ai` model rows) | `maxConcurrentSessions` (optional) | Override the live-session ceiling for that model; omit → `agent-loop.maxConcurrentModelSessions` |

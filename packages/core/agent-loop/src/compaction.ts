@@ -3,13 +3,20 @@
  * Logs `shadowedTokenCount` from the same surface estimator Face meter uses.
  */
 
-import { DEFAULT_COMPACTION_KEEP_TOKENS, prepareCompactionPayload, priceCurrentSurfaceWindow, type CompactionOptions, readSessionEvents } from "@xrkseek/core-session";
-import type { SessionStore } from "@xrkseek/core-session";
-import type { LlmAdapter } from "@xrkseek/llm";
+import {
+  DEFAULT_COMPACTION_KEEP_TOKENS,
+  prepareCompactionPayload,
+  priceCurrentSurfaceWindow,
+  type CompactionOptions,
+  type SessionStore,
+  readSessionEvents,
+} from "@xrkseek/core-session";
+import type { LlmAdapter, ResolvedRetryPolicy } from "@xrkseek/llm";
 import type {
   CompactionReason,
   ContextCompactionEvent,
 } from "@xrkseek/protocol";
+import { invokeLlmWithRetry, resolveRetryPolicy } from "./llm-retry.js";
 
 export interface RunCompactionInput {
   readonly store: SessionStore;
@@ -18,6 +25,13 @@ export interface RunCompactionInput {
   readonly reason: CompactionReason;
   readonly keepTokens?: number;
   readonly turnId?: string;
+  /** When set with `turnId` + `retry`, summarizer failures use llm/retry. */
+  readonly stepId?: string;
+  /**
+   * Same policy as the step's main provider call. Omit / `false` → one shot
+   * (manual `/compact` and tests).
+   */
+  readonly retry?: false | Partial<ResolvedRetryPolicy>;
   readonly signal?: AbortSignal;
   readonly now?: () => number;
 }
@@ -36,17 +50,45 @@ export async function runCompaction(
   if (!payload) return { compacted: false };
 
   const shadowedTokenCount = priceCurrentSurfaceWindow(events);
+  const now = input.now ?? Date.now;
 
-  const response = await input.llm.chat({
-    messages: [{ role: "user", content: payload.prompt }],
-    ...(input.signal ? { signal: input.signal } : {}),
-  });
+  const invokeChat = async () =>
+    input.llm.chat({
+      messages: [{ role: "user", content: payload.prompt }],
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+
+  // Soft-budget / overflow summarizer used to call llm.chat bare — OFM/free
+  // lanes often 502 on tool-less summarizer prompts, and the turn failed with
+  // SERVER and zero llm/retry chrome. Reuse the step retry policy when wired.
+  const retryPolicy =
+    input.retry === undefined ? false : resolveRetryPolicy(input.retry);
+  const response =
+    retryPolicy !== false &&
+    input.turnId !== undefined &&
+    input.stepId !== undefined
+      ? await invokeLlmWithRetry({
+          invoke: async () => invokeChat(),
+          flushChunk: () => {
+            /* summarizer is non-streaming */
+          },
+          store: input.store,
+          sessionId: input.sessionId,
+          turnId: input.turnId,
+          stepId: input.stepId,
+          now,
+          ...(input.signal ? { signal: input.signal } : {}),
+          policy: retryPolicy,
+          ...(input.llm.id ? { provider: input.llm.id } : {}),
+        })
+      : await invokeChat();
+
   const summary = response.content.trim();
   if (!summary) return { compacted: false };
 
   const event: ContextCompactionEvent = {
     type: "context/compaction",
-    ts: (input.now ?? Date.now)(),
+    ts: now(),
     reason: input.reason,
     summary,
     recent: payload.recent,

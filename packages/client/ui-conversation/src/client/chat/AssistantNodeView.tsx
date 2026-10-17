@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
+import { stopLabelKey, turnAbortCause } from '../conversation-nodes/common.ts'
 import { AssistantMarkdown } from './AssistantMarkdown.tsx'
 
 /** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
@@ -20,11 +21,15 @@ export const AssistantNodeView = memo(function AssistantNodeView({
     () => owner === undefined ? undefined : fileMentions(owner),
     [fileMentions, owner],
   )
+  const interruptedLabelKey = data.status === 'interrupted'
+    ? stopLabelKey(turnAbortCause(turn?.end))
+    : undefined
   return (
     <AssistantMarkdown
       blocks={data.blocks}
       streaming={data.status === 'running'}
       interrupted={data.status === 'interrupted'}
+      stoppedLabelKey={interruptedLabelKey}
       thinkPersistKey={`${data.turn}:${data.step}`}
       renderMessageImages={renderMessageImages}
       mentions={mentions}

@@ -223,7 +223,7 @@ export function classifyCaughtLlmError(err: unknown, label: string): never {
   }
   // Node abort with typed reason: fetch / throwIfAborted may surface the
   // plain `{ kind: "user" }` object. Map to ABORTED so Stop never schedules
-  // llm/retry (TRANSPORT would burn the 1/5…5/5 backoff UI).
+  // llm/retry (TRANSPORT would burn the 1/N…N/N backoff UI).
   if (isAgentCancelCause(err)) {
     throw new LlmError(
       `${label}: ${formatAgentCancelCause(err as { kind: string; reason?: string })}`,

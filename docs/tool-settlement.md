@@ -45,7 +45,7 @@
 
 已标 concurrency-safe（只读）：`web_search` · `web_fetch` · `browser_snapshot` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output`（`wait≠true`）。写副作用工具默认独占。MCP 工具仅当 `annotations.readOnlyHint === true` 时标 safe。
 
-步内 LLM 重试：Face `agent-loop.llmRetryMaxRetries`（默认 5；`0` 关闭）→ Host → harness → `runTurn.llmRetry`。
+步内 LLM 重试：Face `agent-loop.llmRetryMaxRetries`（默认 8；`0` 关闭）→ Host → harness → `runTurn.llmRetry`（主调用与 soft/overflow 摘要器共用同一策略）。OpenAI 兼容流在 HTTP 200 上若收到 SSE `{error}`（免密网关 decoy / 上游拒绝），适配器升为可重试的 `SERVER`（或按 `type` 映射 AUTH/QUOTA/…），写入 `llm/retry`。
 
 ### 双屏障
 
@@ -128,7 +128,7 @@ Default `toolSettle: "parallel"`: within a step, all `tool/call` rows are durabl
 
 Marked concurrency-safe (read-only): `web_search` · `web_fetch` · `browser_snapshot` · `read_file` · `glob` · `grep` · `lsp` · `skill` · `terminal_list` · `terminal_read` · `job_list` · `job_output` (`wait≠true`). Side-effect tools are exclusive by default. MCP tools are safe only when `annotations.readOnlyHint === true`.
 
-In-step LLM retry: Face `agent-loop.llmRetryMaxRetries` (default 5; `0` disables) → Host → harness → `runTurn.llmRetry`.
+In-step LLM retry: Face `agent-loop.llmRetryMaxRetries` (default 8; `0` disables) → Host → harness → `runTurn.llmRetry` (shared by the main provider call and soft/overflow summarizer). OpenAI-compatible streams that receive an SSE `{error}` on HTTP 200 (free-lane decoy / upstream refusal) are raised as retryable `SERVER` (or AUTH/QUOTA/… from `type`) so `llm/retry` fires.
 
 ### Dual barriers
 

@@ -87,6 +87,36 @@ describe("cancel mid-stream prefix finalize (DSH rc.8)", () => {
     ]);
   });
 
+  it("unexpected throw closes as turn/end error UNKNOWN, not aborted/legacy", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "go",
+        store,
+        llm: {
+          id: "boom",
+          async chat() {
+            throw new TypeError("unexpected pipeline boom");
+          },
+        },
+        tools: createToolRegistry(),
+        llmRetry: false,
+      }),
+    ).rejects.toBeInstanceOf(TypeError);
+
+    const turnEnd = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(turnEnd?.type).toBe("turn/end");
+    if (turnEnd?.type === "turn/end") {
+      expect(turnEnd.reason).toMatchObject({
+        kind: "error",
+        error: { code: "UNKNOWN", message: "unexpected pipeline boom" },
+      });
+    }
+  });
+
   it("user cancel cause ends as aborted, never turn/end error [object Object]", async () => {
     const store = createMemorySessionStore();
     const session = store.create();

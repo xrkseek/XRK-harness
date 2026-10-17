@@ -1027,6 +1027,55 @@ describe("openai-compatible stream failure boundary", () => {
     });
   });
 
+  it("maps SSE {error:server_error} on HTTP 200 to retryable SERVER", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(
+          'data: {"error":{"message":"the model answered by calling read instead of writing an answer, and this request declared no such tool — re-send it with that tool declared","type":"server_error"}}\n\ndata: [DONE]\n\n',
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        )) as unknown as typeof fetch,
+    });
+    const err = await (async () => {
+      for await (const _ of llm.stream!({
+        messages: [{ role: "user", content: "hi" }],
+      })) {
+        /* drain */
+      }
+    })().catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      name: "LlmError",
+      code: "SERVER",
+      status: 502,
+    });
+    expect(String((err as Error).message)).toMatch(/calling read/);
+    expect(isRetryableFailure(failureFromUnknown(err))).toBe(true);
+  });
+
+  it("maps chat JSON {error} on HTTP 200 to retryable SERVER", async () => {
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "the model answered by calling read instead of writing an answer",
+              type: "server_error",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )) as unknown as typeof fetch,
+    });
+    const err = await llm
+      .chat({ messages: [{ role: "user", content: "hi" }] })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: "LlmError", code: "SERVER", status: 502 });
+    expect(isRetryableFailure(failureFromUnknown(err))).toBe(true);
+  });
+
   it("turns a silent body into a retryable TIMEOUT, not a hang", async () => {
     // Registry-built adapters never pass `timeoutMs`, so before the idle
     // watchdog a body that simply stopped talking hung the whole turn with no

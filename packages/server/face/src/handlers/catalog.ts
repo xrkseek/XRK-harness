@@ -1,4 +1,5 @@
 import { discoverOpenAiChatModels } from "@xrkseek/llm-registry";
+import { defaultSoftBudgetMaxTokens } from "../community-llm-sync.js";
 import { readSessionEvents } from "@xrkseek/core-session";
 import {
   FACE_AGENT_PRESETS,
@@ -297,12 +298,19 @@ export const llmDiscoverModels: FaceHandler = async (runtime, _rpcId, payload) =
   const key = resolveDiscoveryKey(runtime, provider, apiKey);
 
   try {
-    const models = await discoverOpenAiChatModels({
+    const listed = await discoverOpenAiChatModels({
       ...(provider ? { provider } : {}),
       ...(resolved.baseUrl ? { baseUrl: resolved.baseUrl } : {}),
       ...(api ? { api } : {}),
       ...(key ? { apiKey: key } : {}),
       ...(resolved.authMode ? { authMode: resolved.authMode } : {}),
+    });
+    const models = listed.map((model) => {
+      const softBudgetMaxTokens = defaultSoftBudgetMaxTokens(model.contextWindow);
+      return {
+        ...model,
+        ...(softBudgetMaxTokens !== undefined ? { softBudgetMaxTokens } : {}),
+      };
     });
     return { ok: true, value: { models } };
   } catch (err) {

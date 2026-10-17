@@ -1,6 +1,7 @@
 // Notifier: subscription + batched notification primitive shared by Session and
 // SessionManager. Semantics: N markDirty calls collapse into one microtask flush, while
-// N markFrameDirty calls collapse into one animation-frame flush;
+// N markFrameDirty calls collapse into one animation-frame flush (with a stream paint
+// budget so heavy Think/Markdown work cannot stack at display refresh rate);
 // the flush rebuilds the snapshot cache BEFORE notifying (useSyncExternalStore requires a stable
 // getSnapshot reference). With no listeners the rebuild is skipped and only the dirty bit is set
 // (keeps frame storms cheap); the next getSnapshot rebuilds lazily.
@@ -26,6 +27,15 @@
  * re-scheduling per chunk.
  */
 const FRAME_STALL_MS = 250
+
+/**
+ * Minimum gap between stream (animation-frame) paints. Token deltas often arrive
+ * faster than the main thread can parse Markdown / layout a long transcript; at
+ * 60Hz the UI falls behind the durable log ("Think still typing" while Host already
+ * spawned subagents). ~20fps keeps cumulative text catching up without starving
+ * input. Structural markDirty / notifyNow still flush immediately.
+ */
+const STREAM_PAINT_MIN_MS = 48
 
 /** Frame publications whose rAF callback has not landed yet (wake-edge recovery targets). */
 const strandedFramePublications = new Set<() => void>()
@@ -70,6 +80,10 @@ export class Notifier {
   private strandedFrame: (() => void) | null = null
   /** When the outstanding frame publication was armed (stall detection). */
   private frameArmedAt = 0
+  /** Last completed frame flush (stream paint budget). */
+  private lastFrameFlushAt = 0
+  /** Deferred arm when a frame flush happened too recently. */
+  private delayedFrameTimer: ReturnType<typeof setTimeout> | null = null
 
   /** @param rebuild - snapshot rebuild function injected by the owner (writes the owner's snapshotCache). */
   constructor(private readonly rebuild: () => void) {}
@@ -91,10 +105,15 @@ export class Notifier {
     this.dirty = true
     this.notifyPending = true
     if (this.scheduled === 'microtask') return
+    this.clearDelayedFrame()
     this.schedule('microtask')
   }
 
-  /** Stream-change entry: mark dirty and publish the cumulative state at most once per frame. */
+  /**
+   * Stream-change entry: mark dirty and publish the cumulative state at most
+   * once per paint budget (~20fps). Coalesces token storms so the renderer can
+   * catch the durable log instead of painting every delta behind.
+   */
   markFrameDirty(): void {
     this.dirty = true
     this.notifyPending = true
@@ -103,7 +122,25 @@ export class Notifier {
     // window the outstanding callback is presumed dead and a fresh one is armed
     // (the generation bump retires the straggler).
     if (this.scheduled === 'frame' && Date.now() - this.frameArmedAt < FRAME_STALL_MS) return
-    this.schedule(typeof globalThis.requestAnimationFrame === 'function' ? 'frame' : 'microtask')
+    if (this.delayedFrameTimer !== null) return
+
+    const useFrame = typeof globalThis.requestAnimationFrame === 'function'
+    if (!useFrame) {
+      this.schedule('microtask')
+      return
+    }
+
+    const wait = STREAM_PAINT_MIN_MS - (Date.now() - this.lastFrameFlushAt)
+    if (wait > 0) {
+      this.delayedFrameTimer = setTimeout(() => {
+        this.delayedFrameTimer = null
+        if (!this.notifyPending) return
+        if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
+        this.schedule('frame')
+      }, wait)
+      return
+    }
+    this.schedule('frame')
   }
 
   /**
@@ -127,6 +164,12 @@ export class Notifier {
     this.rebuild()
   }
 
+  private clearDelayedFrame(): void {
+    if (this.delayedFrameTimer === null) return
+    clearTimeout(this.delayedFrameTimer)
+    this.delayedFrameTimer = null
+  }
+
   private schedule(kind: 'microtask' | 'frame'): void {
     const generation = ++this.scheduleGeneration
     this.scheduled = kind
@@ -138,8 +181,10 @@ export class Notifier {
     }
     const publish = () => {
       if (generation !== this.scheduleGeneration) return
+      const wasFrame = this.scheduled === 'frame'
       this.scheduled = 'none'
       this.flush()
+      if (wasFrame) this.lastFrameFlushAt = Date.now()
     }
     if (kind === 'frame') {
       bindFrameWake()
@@ -163,6 +208,7 @@ export class Notifier {
   private invalidateSchedule(): void {
     this.scheduleGeneration++
     this.scheduled = 'none'
+    this.clearDelayedFrame()
     if (this.strandedFrame !== null) strandedFramePublications.delete(this.strandedFrame)
     this.strandedFrame = null
   }

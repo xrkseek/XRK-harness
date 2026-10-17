@@ -15,10 +15,19 @@ function firstLine(text: string): string {
 }
 
 function latestLine(text: string): string {
-  const visible = text.trimEnd()
-  const newline = visible.lastIndexOf('\n')
-  return newline === -1 ? visible : visible.slice(newline + 1)
+  let end = text.length
+  while (end > 0) {
+    const code = text.charCodeAt(end - 1)
+    if (code !== 10 && code !== 13 && code !== 32 && code !== 9) break
+    end -= 1
+  }
+  const newline = text.lastIndexOf('\n', Math.max(0, end - 1))
+  return newline === -1 ? text.slice(0, end) : text.slice(newline + 1, end)
 }
+
+/** Live Think body cap. Full transcript stays in the log; the open row only
+ *  lays out the tail so a long reasoning stream cannot pin the main thread. */
+const LIVE_THINK_CHARS = 12_000
 
 /**
  * Render one assistant reasoning block as the Think disclosure row.
@@ -43,6 +52,9 @@ export function ReasoningRow({
   ))
   const summaryRef = useRef<HTMLSpanElement>(null)
   const summary = running ? latestLine(text) : firstLine(text)
+  const bodyText = running && text.length > LIVE_THINK_CHARS
+    ? text.slice(text.length - LIVE_THINK_CHARS)
+    : text
   const scheduleSummaryScroll = useThrottledVisualUpdate(() => {
     const element = summaryRef.current
     if (element === null) return
@@ -81,7 +93,7 @@ export function ReasoningRow({
           </>
         )}
       >
-        <div className={css.thinkBody}>{text}</div>
+        <div className={css.thinkBody}>{bodyText}</div>
       </DisclosureRow>
     </div>
   )

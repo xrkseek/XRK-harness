@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from 'react'
 import type { PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
-import { turnEndedAsStop } from '../conversation-nodes/common.ts'
+import { stopLabelKey, turnAbortCause, turnEndedAsStop } from '../conversation-nodes/common.ts'
 import { latestTurnNumber } from './pending-input-chrome.ts'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import { TurnTimePanel, TurnUsagePanel } from './TurnUsagePanel.tsx'
@@ -84,13 +84,14 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const tail = renderSlotChain('conversation.chat.turnTail', owner)
   const runMs = turnEndRunMs(turn, closing?.time ?? data.time)
   const stopped = turnEndedAsStop(turn.end)
+  const stoppedText = stopped ? t(stopLabelKey(turnAbortCause(turn.end))) : undefined
   const assistantAlreadyStopped = turn.steps.some((step) => {
     const assistant = step.data.get('assistant-step') as
       | { readonly status?: string; readonly finalNode?: { readonly interrupted?: boolean } }
       | undefined
     return assistant?.status === 'interrupted' || assistant?.finalNode?.interrupted === true
   })
-  const showStopped = stopped && !assistantAlreadyStopped
+  const showStopped = stopped && !assistantAlreadyStopped && stoppedText !== undefined
   let usageAction: ReactNode
   if (data.tokenUsage === undefined && runMs === undefined) {
     usageAction = undefined
@@ -116,7 +117,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
     return (
       <div className={css.root} data-turn-tail={data.turn} data-time-hover-root data-actions-reveal="always">
         {tail}
-        {showStopped ? <span className={css.stopped} role="status">{t('message.stopped')}</span> : null}
+        {showStopped ? <span className={css.stopped} role="status">{stoppedText}</span> : null}
         {usageAction !== undefined && (
           <MessageIconActions
             text=""
@@ -147,7 +148,7 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
       data-actions-reveal={actionsUnavailable ? 'hover' : 'always'}
     >
       {tail}
-      {showStopped ? <span className={css.stopped} role="status">{t('message.stopped')}</span> : null}
+      {showStopped ? <span className={css.stopped} role="status">{stoppedText}</span> : null}
       <MessageIconActions
         text={assistantText(closing.blocks)}
         time={closing.time}

@@ -1185,7 +1185,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '已达到输出 token 上限回答被截断，已有输出保留在对话中。发送“继续”可让模型接着输出。',
+      '已达到输出 token 上限回答被截断，已有输出保留在对话中。若本轮已自动续写仍停在这里，说明已达 Settings「自动续写次数」上限；再发送「继续」可手动接着输出。',
     ])
     expect(view.queryByText('本轮运行失败')).toBeNull()
   })
@@ -1323,7 +1323,7 @@ describe('ChatView', () => {
     expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
   })
 
-  it('turn/end interrupted matches aborted Stop chrome on a child session', () => {
+  it('turn/end interrupted matches Stop chrome on a child session', () => {
     const thinkOnly: AssistantMessageNode = {
       kind: 'assistant',
       seq: 2,
@@ -1335,7 +1335,7 @@ describe('ChatView', () => {
     }
     const h = makeHarness({
       chat: chatSnapshotFixture({
-        nodes: [user(1, '111'), thinkOnly],
+        nodes: [user(1, 'fix'), thinkOnly],
         turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
         turnEnds: new Map([[1, 4]]),
         turnEndReasons: new Map([[1, { kind: 'interrupted' }]]),
@@ -1350,7 +1350,8 @@ describe('ChatView', () => {
       },
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.getAllByText('已停止')).toHaveLength(1)
+    // Crash-orphan `interrupted` uses dedicated copy (not user Stop 「已停止」).
+    expect(view.getAllByText('会话中断后恢复')).toHaveLength(1)
     expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
     expect(view.getByRole('button', { name: /用时 7秒/ })).toBeTruthy()
   })

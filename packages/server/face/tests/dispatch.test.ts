@@ -382,7 +382,7 @@ describe("face dispatch", () => {
       if (!res.result.ok) throw new Error("discover failed");
       expect(res.result.value).toEqual({
         models: [
-          { id: "acme-large", name: "Acme Large", contextWindow: 65536 },
+          { id: "acme-large", name: "Acme Large", contextWindow: 65536, softBudgetMaxTokens: 49_000 },
           { id: "acme-small", name: "acme-small" },
         ],
       });

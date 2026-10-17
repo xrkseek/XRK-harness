@@ -198,6 +198,12 @@ function ModelRetryItem({ node, active, t }: {
           <span className={css.retryDetailLabel}>{t('message.retry.failure')}</span>
           {node.failure.message}
         </div>
+        {node.failure.code !== undefined && node.failure.code !== '' && (
+          <div>
+            <span className={css.retryDetailLabel}>{t('message.retry.code')}</span>
+            <code>{node.failure.code}</code>
+          </div>
+        )}
       </div>
     </details>
   )

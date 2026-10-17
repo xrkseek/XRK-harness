@@ -92,4 +92,10 @@ export interface DiscoveredModelView {
   contextWindow?: number
   /** Maximum output tokens, when disclosed. */
   maxTokens?: number
+  /**
+   * Proactive compact ceiling derived from `contextWindow` when the listing
+   * discloses one: `max(100k, 75%)` for windows ≥100k (stepped to 1k, cap 300k);
+   * 75% only when the window is smaller. Absent when missing or below 8k.
+   */
+  softBudgetMaxTokens?: number
 }

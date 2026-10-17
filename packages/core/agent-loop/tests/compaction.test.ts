@@ -10,6 +10,7 @@ import {
 import { createToolRegistry } from "@xrkseek/core-tools";
 import {
   ContextOverflowError,
+  LlmError,
   type LlmAdapter,
   type LlmChatRequest,
   type LlmChatResponse,
@@ -132,6 +133,55 @@ describe("runTurn compaction / overflow", () => {
     expect(surface).toBe(
       estimateMessageContent(formatCompactionForModel(did.event!)),
     );
+  });
+
+  it("retries summarizer SERVER failures when retry policy is wired", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 6; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    let chats = 0;
+    const llm: LlmAdapter = {
+      id: "summarizer-flaky",
+      async chat() {
+        chats += 1;
+        if (chats === 1) {
+          throw new LlmError("openai-compatible HTTP 502: tool-less summarizer", "SERVER", {
+            status: 502,
+          });
+        }
+        return { content: "## Objective\n- after-retry" };
+      },
+    };
+    const did = await runCompaction({
+      store,
+      sessionId: session.id,
+      llm,
+      reason: "auto",
+      keepTokens: 8,
+      turnId: "turn_retry",
+      stepId: "step_retry",
+      retry: { maxRetries: 2, initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+    });
+    expect(did.compacted).toBe(true);
+    expect(chats).toBe(2);
+    const retryEv = store
+      .get(session.id)
+      .events.find((e) => e.type === "llm/retry");
+    expect(retryEv?.type === "llm/retry" && retryEv.failure.code).toBe("SERVER");
   });
 
   it("does not retry overflow twice", async () => {
@@ -288,6 +338,8 @@ describe("runTurn compaction / overflow", () => {
         llm,
         tools: createToolRegistry(),
         compaction: { keepTokens: 40 },
+        // One-shot summarizer: this case asserts overflow masking, not retry.
+        llmRetry: false,
       }),
     ).rejects.toBeInstanceOf(ContextOverflowError);
     expect(conversationCalls).toBeGreaterThanOrEqual(1);
@@ -481,6 +533,61 @@ describe("runTurn compaction / overflow", () => {
     ).toBe(true);
   });
 
+  it("caps soft maxRequestTokens by route contextWindow when soft exceeds window", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const fatParams = {
+      type: "object",
+      properties: Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [
+          `p${i}`,
+          { type: "string", description: "x".repeat(200) },
+        ]),
+      ),
+    };
+    const tools = createToolRegistry();
+    for (let i = 0; i < 30; i++) {
+      tools.register({
+        name: `fat_tool_${i}`,
+        description: "d".repeat(100),
+        parameters: fatParams,
+        async execute() {
+          return { content: "ok" };
+        },
+      });
+    }
+
+    await expect(
+      runTurn({
+        sessionId: session.id,
+        userText: "hi",
+        store,
+        llm: {
+          id: "window-cap",
+          // Floor for clamp is 8k (same as soft catalog minimum).
+          peekRoute: () => ({ contextWindow: 8_000 }),
+          ensureRoute: () => ({ contextWindow: 8_000 }),
+          async chat() {
+            throw new Error("LLM must not run when window-capped soft budget fails");
+          },
+        },
+        tools,
+        // Explicit soft far above the advertised window — must clamp to 8k.
+        compaction: {
+          maxRequestTokens: 200_000,
+          keepTokens: 50,
+          bufferTokens: 0,
+        },
+      }),
+    ).rejects.toBeInstanceOf(ContextOverflowError);
+
+    const turnEnd = store.get(session.id).events.find((e) => e.type === "turn/end");
+    expect(turnEnd?.type === "turn/end" && turnEnd.reason).toMatchObject({
+      kind: "error",
+      error: { code: "CONTEXT_WINDOW_EXCEEDED" },
+    });
+  });
+
   it("fail-closes soft budget when tool schemas alone exceed the ceiling", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
@@ -524,6 +631,23 @@ describe("runTurn compaction / overflow", () => {
         },
       }),
     ).rejects.toBeInstanceOf(ContextOverflowError);
+
+    const turnEnd = store
+      .get(session.id)
+      .events.find((e) => e.type === "turn/end");
+    expect(turnEnd?.type).toBe("turn/end");
+    if (turnEnd?.type === "turn/end") {
+      expect(turnEnd.reason).toMatchObject({
+        kind: "error",
+        error: { code: "CONTEXT_WINDOW_EXCEEDED" },
+      });
+      expect(
+        turnEnd.reason.kind === "error" &&
+          String(
+            (turnEnd.reason.error as { message?: string }).message ?? "",
+          ),
+      ).toMatch(/soft budget/i);
+    }
   });
 
   it("does not false-kill when bufferTokens >= maxRequestTokens", async () => {

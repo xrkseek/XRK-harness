@@ -84,6 +84,61 @@ describe('Notifier', () => {
     expect(order).toEqual(['rebuild', 'notify'])
   })
 
+  it('defers the next stream paint when the previous frame flush was recent', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    let notifications = 0
+    const notifier = new Notifier(() => undefined)
+    notifier.subscribe(() => { notifications++ })
+
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(1)
+    frames.shift()!(0)
+    expect(notifications).toBe(1)
+
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(0) // budget: not armed yet
+    vi.advanceTimersByTime(48)
+    expect(frames).toHaveLength(1)
+    frames.shift()!(0)
+    expect(notifications).toBe(2)
+    vi.useRealTimers()
+  })
+
+  it('keeps stream paints bounded under a token storm', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    let paints = 0
+    const notifier = new Notifier(() => { paints += 1 })
+    notifier.subscribe(() => undefined)
+
+    const drain = (): void => {
+      while (frames.length > 0) frames.shift()!(0)
+    }
+
+    // ~200 Hz for 2s. Unbounded rAF would paint ~400 times; the budget is ~20 Hz.
+    for (let i = 0; i < 400; i++) {
+      notifier.markFrameDirty()
+      drain()
+      vi.advanceTimersByTime(5)
+    }
+    drain()
+    vi.advanceTimersByTime(48)
+    drain()
+
+    expect(paints).toBeGreaterThan(10)
+    expect(paints).toBeLessThan(80)
+    vi.useRealTimers()
+  })
+
   it('lets a structural microtask publication supersede a pending frame', async () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {

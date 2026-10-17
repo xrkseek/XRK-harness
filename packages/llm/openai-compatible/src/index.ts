@@ -8,6 +8,7 @@ import {
   collectLlmStream,
   classifyCaughtStreamError,
   ContextOverflowError,
+  LlmError,
   throwHttpLlmError,
   withExtraAbortSignal,
   withOpenAiFinishReason,
@@ -507,6 +508,37 @@ async function buildBody(
   return body;
 }
 
+/** Map OpenAI `{ error: { message, type } }` (HTTP body or SSE frame) to LlmError. */
+function throwOpenAiWireError(error: unknown, via: "chat" | "stream"): never {
+  const errObj =
+    typeof error === "object" && error !== null
+      ? (error as { message?: unknown; type?: unknown })
+      : undefined;
+  const msg =
+    typeof errObj?.message === "string"
+      ? errObj.message
+      : typeof error === "string"
+        ? error
+        : String(error);
+  const errType =
+    typeof errObj?.type === "string" ? errObj.type.toLowerCase() : "";
+  const code =
+    errType === "invalid_request_error" || errType === "invalid_request"
+      ? "INVALID_REQUEST"
+      : errType === "authentication_error" || errType === "auth_error"
+        ? "AUTH"
+        : errType === "insufficient_quota" || errType === "quota_exceeded"
+          ? "QUOTA"
+          : errType === "rate_limit_error" || errType === "rate_limit"
+            ? "RATE_LIMIT"
+            : "SERVER";
+  throw new LlmError(
+    `openai-compatible ${via} error: ${msg.slice(0, 800)}`,
+    code,
+    code === "SERVER" || code === "RATE_LIMIT" ? { status: 502 } : undefined,
+  );
+}
+
 function parseChatJson(text: string): LlmChatResponse {
   let json: unknown;
   try {
@@ -517,7 +549,10 @@ function parseChatJson(text: string): LlmChatResponse {
       { cause: err },
     );
   }
-  const root = json as { choices?: unknown[]; usage?: unknown };
+  const root = json as { choices?: unknown[]; usage?: unknown; error?: unknown };
+  if (root.error !== undefined && root.error !== null) {
+    throwOpenAiWireError(root.error, "chat");
+  }
   const choice = root?.choices?.[0] as
     | {
         finish_reason?: unknown;
@@ -588,7 +623,18 @@ async function* streamSse(
     } catch {
       return;
     }
-    const root = json as { choices?: unknown[]; usage?: unknown };
+    const root = json as {
+      choices?: unknown[];
+      usage?: unknown;
+      error?: unknown;
+    };
+    // Free-lane / OFM: status line is already 200 when the gateway refuses a
+    // turn (decoy tool-only answer, upstream flake). The only honest signal
+    // left is an SSE `{ error }` frame. Ignoring it used to finalize as empty
+    // stop → EMPTY_RESPONSE; map like HTTP errors so llm/retry sees SERVER.
+    if (root.error !== undefined && root.error !== null) {
+      throwOpenAiWireError(root.error, "stream");
+    }
     const parsedUsage = tryParseOpenAiUsage(root.usage);
     if (parsedUsage) {
       usage = parsedUsage;

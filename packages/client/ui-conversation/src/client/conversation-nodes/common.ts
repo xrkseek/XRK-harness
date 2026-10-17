@@ -74,9 +74,66 @@ export function coordinate(value: unknown): number | undefined {
  */
 export function turnEndedAsStop(end: {
   readonly type?: string
-  readonly data?: { readonly reason?: { readonly kind?: string } }
+  readonly data?: { readonly reason?: { readonly kind?: string; readonly reason?: { readonly kind?: string } } }
 } | undefined): boolean {
   if (end?.type !== 'turn/end') return false
   const kind = end.data?.reason?.kind
   return kind === 'aborted' || kind === 'interrupted'
+}
+
+/** Nested cancel cause on `turn/end` aborted (`user` / `disposed` / …). */
+export type TurnAbortCauseKind =
+  | 'user'
+  | 'parent'
+  | 'disposed'
+  | 'legacy'
+  | 'hook'
+  | 'interrupted'
+
+/**
+ * Durable cancel cause for Stop chrome. Crash-orphaned `interrupted` and bare
+ * aborted without a nested cause read as user-facing Stop.
+ */
+export function turnAbortCause(end: {
+  readonly type?: string
+  readonly data?: {
+    readonly reason?: {
+      readonly kind?: string
+      readonly reason?: { readonly kind?: string }
+    }
+  }
+} | undefined): TurnAbortCauseKind | undefined {
+  if (!turnEndedAsStop(end)) return undefined
+  const outer = end?.data?.reason?.kind
+  if (outer === 'interrupted') return 'interrupted'
+  const nested = end?.data?.reason?.reason?.kind
+  if (
+    nested === 'user'
+    || nested === 'parent'
+    || nested === 'disposed'
+    || nested === 'legacy'
+    || nested === 'hook'
+  ) {
+    return nested
+  }
+  return 'user'
+}
+
+/** Locale key for interrupted / Stop chrome by cancel cause. */
+export function stopLabelKey(cause: TurnAbortCauseKind | undefined): string {
+  switch (cause) {
+    case 'disposed':
+      return 'message.stopped.disposed'
+    case 'legacy':
+      return 'message.stopped.abnormal'
+    case 'parent':
+      return 'message.stopped.parent'
+    case 'hook':
+      return 'message.stopped.hook'
+    case 'interrupted':
+      return 'message.stopped.interrupted'
+    case 'user':
+    default:
+      return 'message.stopped'
+  }
 }

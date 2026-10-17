@@ -16,7 +16,7 @@ describe("mergeCommunityProviderModels", () => {
       id: "wb-flash",
       name: "Flash",
       contextWindow: 128_000,
-      softBudgetMaxTokens: 96_000,
+      softBudgetMaxTokens: 100_000,
     });
   });
 
@@ -116,6 +116,13 @@ describe("mergeCommunityProviderModels", () => {
   it("omits a default when context is below the 8k floor", () => {
     expect(defaultSoftBudgetMaxTokens(4_000)).toBeUndefined();
     expect(defaultSoftBudgetMaxTokens(8_000)).toBe(8_000);
+  });
+
+  it("floors soft budget at 100k once the window is large enough", () => {
+    expect(defaultSoftBudgetMaxTokens(65_536)).toBe(49_000);
+    expect(defaultSoftBudgetMaxTokens(128_000)).toBe(100_000);
+    expect(defaultSoftBudgetMaxTokens(200_000)).toBe(150_000);
+    expect(defaultSoftBudgetMaxTokens(1_000_000)).toBe(300_000);
   });
 
   it("detects community loopback baseURL collisions (WB vs OFM)", () => {

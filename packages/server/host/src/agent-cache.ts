@@ -34,6 +34,8 @@ export interface HostAgentCache {
     create: () => Promise<AgentHandle>,
     opts?: AgentResolveOpts,
   ): Promise<AgentHandle>;
+  /** True while the cached agent latch is mid-turn (stream / tools). */
+  isBusy(sessionId: string): boolean;
   /** Drop cached agent with compose Ordering (abort via scope effects). */
   invalidate(sessionId: string): Promise<void>;
   /** Drop every cached agent (e.g. MCP tools/list_changed). */
@@ -164,6 +166,10 @@ export function createHostAgentCache(
         throw new Error(`agent scope failed to materialize: ${sessionId}`);
       }
       return agent;
+    },
+
+    isBusy(sessionId) {
+      return agents.get(sessionId)?.isBusy() === true;
     },
 
     invalidate,

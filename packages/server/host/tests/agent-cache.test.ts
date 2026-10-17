@@ -3,15 +3,21 @@ import type { AgentHandle } from "@xrkseek/core-agent";
 import { ScopeState } from "@xrkseek/compose";
 import { createHostAgentCache, HOST_PLUGINS_KEY } from "../src/agent-cache.js";
 
-function fakeAgent(): AgentHandle & { aborted: boolean } {
+function fakeAgent(opts?: {
+  busy?: boolean;
+}): AgentHandle & { aborted: boolean; busy: boolean } {
   const a = {
     aborted: false,
+    busy: opts?.busy === true,
     abort() {
       a.aborted = true;
     },
+    isBusy() {
+      return a.busy;
+    },
     setApprovalHandler() {},
   };
-  return a as unknown as AgentHandle & { aborted: boolean };
+  return a as unknown as AgentHandle & { aborted: boolean; busy: boolean };
 }
 
 describe("createHostAgentCache", () => {
@@ -51,6 +57,18 @@ describe("createHostAgentCache", () => {
     const create = vi.fn(async () => fakeAgent());
     await cache.resolve("s1", create);
     expect(create).toHaveBeenCalledTimes(1);
+    await cache.dispose();
+  });
+
+  it("isBusy reports latch state for cached agents", async () => {
+    const cache = createHostAgentCache([]);
+    const busy = fakeAgent({ busy: true });
+    const idle = fakeAgent({ busy: false });
+    await cache.resolve("busy", async () => busy);
+    await cache.resolve("idle", async () => idle);
+    expect(cache.isBusy("busy")).toBe(true);
+    expect(cache.isBusy("idle")).toBe(false);
+    expect(cache.isBusy("missing")).toBe(false);
     await cache.dispose();
   });
 

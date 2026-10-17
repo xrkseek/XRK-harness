@@ -38,6 +38,8 @@ selectHeadRecent(messages, keepTokens)
 
 // Write the log (@xrkseek/core-agent-loop)
 runCompaction({ store, sessionId, llm, reason })
+// Soft / overflow from runTurn also pass turnId · stepId · retry
+// (same llmRetry as the step provider call → llm/retry on SERVER etc.)
 
 runTurn({
   compaction: {
@@ -60,7 +62,7 @@ createAgent({ compaction: {} }).compactNow() // Face `/compact`: idle · reason 
 
 ### Harness 默认软压缩与 tool-result prune
 
-`presets/harness`（及 server）默认 `compaction: {}`（开 overflow + `/compact`）。**主动软压天花板**在 Settings → **Models** 每模型的 `softBudgetMaxTokens`（与 `contextWindow` 正交；官方 DeepSeek 目录默认 300k）。策略仍在 Face `agent-loop.compactionStrategy`：
+`presets/harness`（及 server）默认 `compaction: {}`（开 overflow + `/compact`）。**主动软压天花板**在 Settings → **Models** 每模型的 `softBudgetMaxTokens`（与 `contextWindow` 正交：窗可以更大；若软压/`maxRequestTokens` **高于** 路由 `contextWindow`，loop 会在步前把软压封顶到窗口，避免压到提供方拒识）。官方 DeepSeek 目录默认 300k。策略仍在 Face `agent-loop.compactionStrategy`：
 
 ```ts
 // SDK / 测例仍可显式传预算；产品路径读当前路由的 softBudget*
@@ -91,9 +93,9 @@ compaction: {
 1. Provider 抛 `ContextOverflowError`
 2. `off` → 原样抛出（不做自动恢复）
 3. 允许 prune 时：对超大 `tool/result` 做 model-free prune → 重建请求再 chat（仅当确有剪枝）
-4. 仍溢出且允许 summary → `runCompaction({ reason: "overflow" })` 摘要换窗 → 再 chat **恰好一次**
+4. 仍溢出且允许 summary → `runCompaction({ reason: "overflow" })` 摘要换窗（摘要 LLM 与步内主调用共用 `llmRetry`；可重试失败写 `llm/retry`）→ 再 chat **恰好一次**
 5. `prune-only` 且仍溢出 / 无可剪 → **保留原始** `ContextOverflowError`
-6. 摘要失败或空结果 → **保留原始** `ContextOverflowError`（不掩盖成摘要错误）
+6. 摘要重试耗尽 / 空结果 → **保留原始** `ContextOverflowError`（不掩盖成摘要错误）
 7. 再次溢出 → 原样抛出（不再二次恢复）
 
 仅 prune 就可能清除溢出，**不必**写入 `context/compaction`。
@@ -113,7 +115,7 @@ Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compact
 
 ## Soft budget（模型 `softBudgetMaxTokens`）
 
-产品路径：Settings → **Models** → 模型行 `softBudgetMaxTokens`（可选 `softBudgetKeepTokens` / `softBudgetBufferTokens`）。与 `contextWindow`（meter 分母 / 路由容量）**正交**——例如 1M 窗 + 300k 软压。未填软预算 → 不主动软压（仅 overflow + `/compact`）。keep/buffer 未填时由 `resolveSoftBudgetTokens` 按软上限比例推导（贴近旧 24k/4k@100k）。
+产品路径：Settings → **Models** → 模型行 `softBudgetMaxTokens`（可选 `softBudgetKeepTokens` / `softBudgetBufferTokens`）。与 `contextWindow`（meter 分母 / 路由容量）**正交**——例如 1M 窗 + 300k 软压。未填软预算 → 不主动软压（仅 overflow + `/compact`）。从「获取模型」新采纳、且列表披露了 `contextWindow` 的行：窗口 ≥100k → `max(100k, 75%)`（千位取整，上限 300k）；&lt;100k → 仅 75%；&lt;8k 不写。再拉取只补空白软预算，手填值不动。keep/buffer 未填时由 `resolveSoftBudgetTokens` 按软上限比例推导（贴近旧 24k/4k@100k）。
 
 SDK 仍可在 `compaction.maxRequestTokens` 等字段显式覆盖。策略（`prune-summary` 等）在 **Settings → Plugins → Agent 循环** 的 `compactionStrategy`。
 
@@ -173,6 +175,8 @@ selectHeadRecent(messages, keepTokens)
 
 // Write the log (@xrkseek/core-agent-loop)
 runCompaction({ store, sessionId, llm, reason })
+// Soft / overflow from runTurn also pass turnId · stepId · retry
+// (same llmRetry as the step provider call → llm/retry on SERVER etc.)
 
 runTurn({
   compaction: {
@@ -195,7 +199,7 @@ Without `compaction` (or with `false`), the loop does **not** recover from overf
 
 ### Soft compact & tool-result prune (Harness defaults)
 
-`presets/harness` (and server) default `compaction: {}` (overflow + `/compact`). The **proactive soft ceiling** is per-model `softBudgetMaxTokens` under Settings → **Models** (orthogonal to `contextWindow`; official DeepSeek catalog defaults to 300k). Strategy stays on Face `agent-loop.compactionStrategy`:
+`presets/harness` (and server) default `compaction: {}` (overflow + `/compact`). The **proactive soft ceiling** is per-model `softBudgetMaxTokens` under Settings → **Models** (orthogonal to `contextWindow`: the window may be larger; if soft/`maxRequestTokens` **exceeds** the route `contextWindow`, the loop caps soft to the window before the step so pressure cannot climb past the provider limit). Official DeepSeek catalog defaults to 300k. Strategy stays on Face `agent-loop.compactionStrategy`:
 
 ```ts
 // SDK / tests may still pass an explicit budget; product path reads route softBudget*
@@ -225,9 +229,9 @@ Overflow recovery shares **`compactionStrategy`** with soft budget — **one** r
 1. Provider throws `ContextOverflowError`
 2. `off` → rethrow as-is (no auto recovery)
 3. When prune is allowed: model-free prune oversized `tool/result` → rebuild request and chat again (only when something was pruned)
-4. Still overflowing and summary allowed → `runCompaction({ reason: "overflow" })` to summarize/window → chat **exactly once** more
+4. Still overflowing and summary allowed → `runCompaction({ reason: "overflow" })` to summarize/window (summarizer LLM shares step `llmRetry`; retriable failures append `llm/retry`) → chat **exactly once** more
 5. `prune-only` still overflowing / nothing to prune → **keep the original** `ContextOverflowError`
-6. Summarize failure or empty result → **keep the original** `ContextOverflowError` (do not mask it as a summarize error)
+6. Summarizer retries exhausted / empty result → **keep the original** `ContextOverflowError` (do not mask it as a summarize error)
 7. Overflow again → rethrow as-is (no second recovery)
 
 Prune alone may clear overflow with **no** `context/compaction` event.
@@ -247,7 +251,7 @@ Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `con
 
 ## Soft budget (model `softBudgetMaxTokens`)
 
-Product path: Settings → **Models** → per-model `softBudgetMaxTokens` (optional `softBudgetKeepTokens` / `softBudgetBufferTokens`). Orthogonal to `contextWindow` (meter denominator / route capacity) — e.g. 1M window + 300k soft budget. Omit soft budget → no proactive compact (overflow + `/compact` only). When keep/buffer are omitted, `resolveSoftBudgetTokens` derives them from the soft max (near the old 24k/4k @ 100k ratios).
+Product path: Settings → **Models** → per-model `softBudgetMaxTokens` (optional `softBudgetKeepTokens` / `softBudgetBufferTokens`). Orthogonal to `contextWindow` (meter denominator / route capacity) — e.g. 1M window + 300k soft budget. Omit soft budget → no proactive compact (overflow + `/compact` only). A model newly adopted from **Fetch models**, when the listing discloses `contextWindow`: window ≥100k → `max(100k, 75%)` (stepped to 1k, cap 300k); &lt;100k → 75% only; under 8k stay blank. A later fetch only fills a blank soft budget; hand-tuned values stay. When keep/buffer are omitted, `resolveSoftBudgetTokens` derives them from the soft max (near the old 24k/4k @ 100k ratios).
 
 SDK callers may still override via `compaction.maxRequestTokens` etc. Strategy (`prune-summary`, …) lives under **Settings → Plugins → Agent loop** `compactionStrategy`.
 

@@ -29,6 +29,11 @@ function promptText(node: ChatNode): string {
 
 function responseText(node: ChatNode): string {
   if (node.kind !== 'assistant-step') return ''
+  // Skip live streaming text. Updating the rail preview every token republishes
+  // `navigation.items()` (new array identity) and re-renders ChatView's full
+  // column — seats already subscribe to their own node. Settled / interrupted
+  // steps still feed the preview once.
+  if (node.data.status === 'running') return ''
   return preview(node.data.blocks.flatMap(block => block.kind === 'text' ? [block.text] : []))
 }
 

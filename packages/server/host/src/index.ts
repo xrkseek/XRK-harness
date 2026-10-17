@@ -1010,7 +1010,15 @@ export function createHostManager(): HostManager {
       invalidateAgents = async () => {
         await agentCache.invalidateAll({
           skip: (sessionId) => {
-            if (!drainActiveBox.isActive(sessionId)) return false;
+            // Drain-active: mid-turn on the Hub bookkeeping path.
+            // isBusy: subagent / edge cases where latch is live but drain
+            // was not marked — disposing those was painting disposed 「已停止」.
+            if (
+              !drainActiveBox.isActive(sessionId) &&
+              !agentCache.isBusy(sessionId)
+            ) {
+              return false;
+            }
             pendingAgentInvalidate.add(sessionId);
             return true;
           },
@@ -1956,6 +1964,19 @@ export function createHostManager(): HostManager {
                 pendingAgentInvalidate.delete(sid);
                 void agentCache.invalidate(sid).then(() => mcpDeferred.flush());
               } else if (!running) {
+                // Flush stragglers skipped via isBusy when their drain never
+                // opened (subagent edge) but the agent latch has since idled.
+                for (const pending of [...pendingAgentInvalidate]) {
+                  if (pending === sid) continue;
+                  if (
+                    drainActiveBox.isActive(pending) ||
+                    agentCache.isBusy(pending)
+                  ) {
+                    continue;
+                  }
+                  pendingAgentInvalidate.delete(pending);
+                  void agentCache.invalidate(pending);
+                }
                 void mcpDeferred.flush();
               }
               hostStatusBox.publish?.(sid, running);

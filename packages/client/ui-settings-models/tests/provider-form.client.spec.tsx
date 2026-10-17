@@ -607,6 +607,59 @@ describe('endpoint interrogation', () => {
     // A disclosed output cap rides along with the candidate that has one.
     expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])
   })
+
+  it('adopts a disclosed context window together with its derived soft budget', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{ id: 'wide', contextWindow: 128_000, softBudgetMaxTokens: 100_000 }],
+    })))
+    const { mutate } = await mountSection({ discover })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'wide',
+      contextWindow: 128_000,
+      softBudgetMaxTokens: 100_000,
+    }])
+  })
+
+  it('fills a blank soft budget on re-fetch without overwriting a set one', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [
+        { id: 'blank', contextWindow: 128_000, softBudgetMaxTokens: 100_000 },
+        { id: 'tuned', contextWindow: 128_000, softBudgetMaxTokens: 100_000 },
+      ],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [
+            { id: 'blank', contextWindow: 128_000 },
+            { id: 'tuned', contextWindow: 128_000, softBudgetMaxTokens: 30_000 },
+          ],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([
+      { id: 'blank', contextWindow: 128_000, softBudgetMaxTokens: 100_000 },
+      { id: 'tuned', contextWindow: 128_000, softBudgetMaxTokens: 30_000 },
+    ])
+  })
 })
 
 describe('provider rows', () => {

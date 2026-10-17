@@ -35,7 +35,11 @@ export interface CommunitySyncModelOut {
   readonly reasoning?: CommunitySyncReasoning;
 }
 
-/** Soft ceiling from context when the catalog omits one (DeepSeek-ish 75%, ≥8k). */
+/**
+ * Soft ceiling from context when the catalog omits one.
+ * Floor 100k; otherwise 75% of the window (1k steps, cap 300k).
+ * Windows under 100k stay at 75% (cannot raise the soft ceiling above the window).
+ */
 export function defaultSoftBudgetMaxTokens(
   contextWindow: number | undefined,
 ): number | undefined {
@@ -46,9 +50,10 @@ export function defaultSoftBudgetMaxTokens(
   ) {
     return undefined;
   }
-  const raw = Math.min(300_000, Math.floor(contextWindow * 0.75));
-  const stepped = Math.floor(raw / 1_000) * 1_000;
-  return stepped >= 8_000 ? stepped : 8_000;
+  const pct = Math.floor((contextWindow * 0.75) / 1_000) * 1_000;
+  const floored =
+    contextWindow >= 100_000 ? Math.max(100_000, pct) : Math.max(8_000, pct);
+  return Math.min(300_000, floored);
 }
 
 function positiveInt(value: unknown): number | undefined {

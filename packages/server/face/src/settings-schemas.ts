@@ -195,9 +195,9 @@ const AgentLoopConfig = Schema.object({
   toolSettle: Schema.union(["parallel", "serial"]).default("parallel"),
   /**
    * Max provider retries within one LLM step (`0` disables).
-   * Omit → kernel default (5).
+   * Omit → kernel default (8).
    */
-  llmRetryMaxRetries: Schema.number().step(1).min(0).default(5),
+  llmRetryMaxRetries: Schema.number().step(1).min(0).default(8),
   /**
    * Soft-budget strategy family (DSH prune→summary posture).
    * Soft ceiling numbers live on Models catalog (`softBudgetMaxTokens`).
@@ -587,7 +587,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         autoContinueOnMaxTokens: true,
         autoContinueMaxRounds: 2,
         toolSettle: "parallel",
-        llmRetryMaxRetries: 5,
+        llmRetryMaxRetries: 8,
         compactionStrategy: "prune-summary",
         toolResultMaxInlineBytes: 64_000,
         maxConcurrentModelSessions: 5,

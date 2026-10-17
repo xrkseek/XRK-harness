@@ -737,7 +737,9 @@ describe("runTurn", () => {
     const events = store.get(session.id).events;
     expect(events.some((e) => e.type === "turn/start")).toBe(true);
     const end = events.find((e) => e.type === "turn/end");
-    expect(end?.type === "turn/end" && end.reason.kind).toBe("aborted");
+    // Unclassified throws close as turn/end error. aborted/legacy painted
+    // 「已停止」 and hid the failure.
+    expect(end?.type === "turn/end" && end.reason.kind).toBe("error");
     expect(sessionHasOpenTurn(events)).toBe(false);
   });
 
