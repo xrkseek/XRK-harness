@@ -65,6 +65,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.3',
+    date: '2026-10-17',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '免费通道即使返回 HTTP 200，只要流里带错误就会按服务端失败重试，不再当成空回复结束。压缩摘要与本步模型调用共用同一套重试。',
+        en: 'A free lane that returns HTTP 200 with an error inside the stream is retried as a server failure instead of ending as an empty reply. Compaction summaries share that retry with the step’s model call.',
+      },
+      {
+        zh: '步内重试默认次数从 5 提到 8（填 0 仍关闭）。从「获取模型」采纳带上下文窗口的新模型时，会按窗口写出软压缩预算；手填过的值再拉取不会被覆盖。',
+        en: 'In-step retries default to 8 instead of 5 (0 still turns them off). Adopting a fetched model that discloses a context window fills a soft compact budget from that window; a later fetch does not overwrite a hand-tuned value.',
+      },
+      {
+        zh: '思考流大约每 48ms 刷新一帧，正在生成的思考只排版尾部，侧栏轮次预览不再跟着每个 token 重画整页。',
+        en: 'Think paints about every 48ms, a live Think body lays out only its tail, and the turn rail no longer redraws the page on every token.',
+      },
+      {
+        zh: '点停止仍是「已停止」。会话被释放、父会话停下、安全策略中止等情况会用各自的文案，不再一律写成已停止。进行中的会话也不会因为改设置被拆掉。',
+        en: 'Clicking Stop still reads Stopped. Session release, a parent stop, and a safety-policy stop each have their own line. A running session is not torn down by a settings change.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.3 接管 @latest。完整清单见 docs/releases/v0.6.3.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.3 now owns @latest. Full list in docs/releases/v0.6.3.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.2',
     date: '2026-10-17',
     title: {
