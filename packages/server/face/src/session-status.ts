@@ -678,7 +678,7 @@ function buildFleet(input: {
     alerts.unshift({
       id: "fleet:inbox",
       severity: "warn",
-      message: `${queuedInbox} child inbox admit(s) waiting (queue/steer)`,
+      message: `${queuedInbox} child inbox admit(s) waiting (steer/interrupt)`,
     });
   }
   let health: SessionStatusFleetHealth = "ok";

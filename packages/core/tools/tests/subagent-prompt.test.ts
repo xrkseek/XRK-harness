@@ -41,4 +41,12 @@ describe("subagent routing prompt", () => {
     expect(prompt).toContain("only when no catalog member fits");
     expect(prompt).not.toContain("发版");
   });
+
+  it("explains when to end the turn after a background handoff", () => {
+    const prompt = subagentRoutingPrompt("proactive");
+    expect(prompt).toContain("handed work to a child");
+    expect(prompt).toContain("end the turn");
+    expect(prompt).toContain("steers a completion notice");
+    expect(prompt).toContain("delivery=steer");
+  });
 });

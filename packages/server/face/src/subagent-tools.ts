@@ -342,10 +342,10 @@ function abortError(reason?: unknown): Error {
  */
 export function childResumeHint(childId: string): string {
   return (
-    `Child session \`${childId}\` is not gone: \`wait_agent\` keeps waiting for it, ` +
-    `\`session_read\` replays its history, \`session_trace\` shows its lineage, ` +
-    `\`list_agents\` its state, and \`followup_task\` wakes a new turn on it. Read it ` +
-    `before spawning a replacement so the new task does not repeat work it already did.`
+    `Child \`${childId}\` is running. When it settles, Host steers a completion notice into this session. ` +
+    `If this turn has nothing else to do, end it and wait for that notice; if the next step needs the answer now, use \`wait_agent\`. ` +
+    `Later: \`followup_task\` / \`send_message\` / \`list_agents\` / \`session_read\` / \`interrupt_agent\`. ` +
+    `Read the child before spawning a replacement.`
   );
 }
 
@@ -568,7 +568,8 @@ function createSubagentTool(
     "whatever answer it already wrote is salvaged into this result and the child id stays readable " +
     "(session_read / followup_task), so prefer run_in_background for genuinely long work instead of retrying blind. " +
     "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
-    "Prefer Agent Team member_id from the turn-start collab board (and this tool / team_list) over restating playbook, skills, or AGENTS.md; " +
+    "Prefer Agent Team member_id (干员 / 成员 / 子代理团队的一员) from the turn-start collab board (and this tool / team_list) over restating playbook, skills, or AGENTS.md; " +
+    "to add that person to the roster, call team_save — propose_skill only writes a SKILL.md; " +
     "match the live catalog by name and brief — if a member fits the user ask, spawn that member_id this turn instead of Skill-loading the same job yourself; " +
     "optional role (worker|researcher|reviewer|lead) is only the fallback when no member fits; " +
     "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
@@ -619,7 +620,7 @@ function createSubagentTool(
         member_id: {
           type: "string",
           description:
-            "Agent Team member id. Face applies that member's tools, inject, and playbook — the same three surfaces the parent already edits. Prefer this over restating those in prompt.",
+            "Agent Team member id (干员 / 成员 / 子代理团队的一员). Face applies that member's tools, inject, and playbook — the same three surfaces the parent already edits. Prefer this over restating those in prompt. Missing member: team_save, not propose_skill.",
         },
         workspace_id: {
           type: "string",
@@ -998,8 +999,7 @@ function createSubagentTool(
                   (spawnRole && spawnRole !== "default"
                     ? ` · role ${spawnRole}`
                     : ""),
-                "Use followup_task / send_message / wait_agent / interrupt_agent / list_agents / analytics.",
-                "Keep working; do not busy-poll.",
+                childResumeHint(childId),
               ].join("\n"),
             };
           }
@@ -1398,8 +1398,6 @@ function createSubagentTool(
               ? "OUTPUT CONTRACT attached; result will be schema-checked on idle."
               : undefined,
             childResumeHint(childId),
-            "Use followup_task to wake a new task, send_message (delivery queue|steer) to continue, wait_agent for results, interrupt_agent (takeover true to pause for human) to stop, analytics for quota.",
-            "Keep working; do not busy-poll.",
             worktreeLine(true) || undefined,
           ]
             .filter(Boolean)
@@ -1624,12 +1622,12 @@ function createSendMessageTool(
   return {
     name: "send_message",
     description:
-      "Pass a message to a continuable background subagent without forcing a new task turn by default. " +
-      "delivery=queue (default): land in the child's inbox if it is still working. " +
-      "delivery=steer: nudge at the next tool-step / turn boundary. " +
-      "For a new task that should trigger a turn, prefer `followup_task`. " +
+      "Pass a follow-up to a continuable background subagent. " +
+      "Default delivery=steer (插队): lands at the child's next tool-step / turn boundary. " +
+      "delivery=queue waits until the child is idle. " +
+      "For a new task that should open a turn, prefer `followup_task`. " +
       "Clears human takeover pause on the Agent Teams task board. " +
-      "Returns delivery confirmation only — not the child's answer (use `wait_agent`).",
+      "Returns delivery confirmation only — the child's later answer arrives as a Host steer notice.",
     parameters: {
       type: "object",
       properties: {
@@ -1640,7 +1638,7 @@ function createSendMessageTool(
         message: { type: "string", description: "Follow-up text for the child." },
         delivery: {
           type: "string",
-          description: "queue (default) or steer.",
+          description: "steer (default) or queue.",
         },
       },
       required: ["agent_id", "message"],
@@ -1660,7 +1658,7 @@ function createSendMessageTool(
         };
       }
       const delivery =
-        a.delivery === "steer" || a.delivery === "queue" ? a.delivery : "queue";
+        a.delivery === "queue" || a.delivery === "steer" ? a.delivery : "steer";
       const prompted = await dispatchFaceMethod(
         options.runtime,
         "subagent.prompt",
@@ -1697,7 +1695,7 @@ function createTeamGraphTool(
       "action=view (default) returns the connected component with roles and depth; " +
       "neighbors lists adjacency; link/unlink peer edges; role sets delegator|worker|observer; " +
       "remove drops peer edges + role override for a node; " +
-      "announce fans a message to peer neighbors via send_message (delivery queue|steer).",
+      "announce fans a message to peer neighbors via send_message (steer by default).",
     parameters: {
       type: "object",
       properties: {
@@ -1727,7 +1725,7 @@ function createTeamGraphTool(
         },
         delivery: {
           type: "string",
-          description: "announce delivery: queue (default) or steer.",
+          description: "announce delivery: steer (default) or queue.",
         },
       },
     },
@@ -1850,9 +1848,9 @@ function createTeamGraphTool(
           };
         }
         const delivery =
-          a.delivery === "steer" || a.delivery === "queue"
+          a.delivery === "queue" || a.delivery === "steer"
             ? a.delivery
-            : "queue";
+            : "steer";
         const peers = graph.neighbors(root, "peer");
         if (!peers.length) {
           return { content: "no peer neighbors to announce to", isError: true };
@@ -1924,9 +1922,9 @@ function createFollowupTaskTool(
   return {
     name: "followup_task",
     description:
-      "Give an existing continuable subagent a new task and trigger a turn (Codex followup_task / TriggerTurn). " +
-      "Unlike `send_message` (default queue-only), this always wakes the child. " +
-      "Returns delivery confirmation only — use `wait_agent` for the answer.",
+      "Give an existing continuable subagent a new task and wake a turn (steer). " +
+      "Prefer this over `send_message` when the child should start fresh work. " +
+      "Returns delivery confirmation only. When the child settles, Host steers the result into this session.",
     parameters: {
       type: "object",
       properties: {
@@ -1998,9 +1996,9 @@ function createWaitAgentTool(
   return {
     name: "wait_agent",
     description:
-      "Wait until listed child subagents become idle (Codex wait_agent targets). " +
-      "Returns each child's final status and last assistant text when idle. " +
-      "Prefer longer timeouts (minutes) over busy-polling with list_agents. " +
+      "Wait until listed children are idle, then return their last assistant text. " +
+      "Use when the next step in this turn needs that answer. " +
+      "After a background handoff with nothing else to do here, end the turn instead — Host steers a completion notice when the child settles. " +
       "Answer sizing matches subagent (inline when short; spill only over ~12KB).",
     parameters: {
       type: "object",

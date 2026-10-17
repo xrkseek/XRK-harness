@@ -131,7 +131,7 @@ describe("Face subagent", () => {
       content: [{ type: "text", text: "插话" }],
     });
     expect(steered.result.ok).toBe(true);
-    expect(admits.map((a) => a.delivery)).toEqual(["queue", "steer"]);
+    expect(admits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
     expect(admits[1]?.content).toBe("插话");
 
     const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {

@@ -172,8 +172,9 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     };
   }
   const deliveryRaw = p.delivery
+  // Session collaboration defaults to steer (插队 at the next tool boundary).
   const delivery =
-    deliveryRaw === "steer" || deliveryRaw === "queue" ? deliveryRaw : "queue"
+    deliveryRaw === "queue" || deliveryRaw === "steer" ? deliveryRaw : "steer"
   if (runtime.externalAgents.has(childSessionId)) {
     const message = contentPartsToText(p.content);
     if (!message) {
@@ -186,13 +187,12 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       };
     }
     try {
-      // queue while busy: reject honestly (model should wait_agent); steer interrupts first.
       if (delivery === "queue" && runtime.externalAgents.isBusy(childSessionId)) {
         return {
           ok: false,
           error: {
             code: "subagent-busy",
-            message: `${childSessionId} is busy; use wait_agent or delivery=steer`,
+            message: `${childSessionId} is busy; use delivery=steer`,
             details: { parentSessionId, childSessionId },
           },
         };
