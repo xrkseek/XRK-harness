@@ -157,6 +157,12 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const roleRaw = typeof args.role === "string" ? args.role : "worker";
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);
+  if (scope === undefined) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: 'scope must be "workspace" or "global"' },
+    };
+  }
   const appearanceArg =
     args.appearance && typeof args.appearance === "object"
       ? args.appearance
@@ -217,6 +223,12 @@ export const teamRemove: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);
+  if (scope === undefined) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: 'scope must be "workspace" or "global"' },
+    };
+  }
   const workspaceId = scope === "global" ? "global" : canvasId;
   const ok = runtime.agentRoster.remove(workspaceId, id);
   if (!ok) {
@@ -239,6 +251,12 @@ export const teamCapture: FaceHandler = async (runtime, _rpcId, payload) => {
   const args = remoteArgs(payload);
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
   const scope = parseRosterScope(args.scope);
+  if (scope === undefined) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: 'scope must be "workspace" or "global"' },
+    };
+  }
   const name = String(args.name ?? "").trim() || captured.name;
   const member = runtime.agentRoster.upsertAtScope(canvasId, scope, {
     name,

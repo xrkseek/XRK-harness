@@ -321,4 +321,28 @@ describe("FaceAgentRosterStore", () => {
     });
     expect(held?.appearance.kitHeld).toBe("flower");
   });
+
+  it("promoting to global drops the same id from every workspace roster", () => {
+    const store = new FaceAgentRosterStore(home());
+    const member = store.upsert("ws_default", {
+      name: "发版员",
+      playbook: "Ship from the default canvas.",
+      role: "worker",
+    });
+    expect(member?.id).toBeTruthy();
+    // A later edit from another canvas must not leave the old overlay behind.
+    const promoted = store.upsertAtScope("ws_9", "global", {
+      id: member!.id,
+      name: "发版员",
+      playbook: "Now global.",
+      role: "worker",
+    });
+    expect(promoted?.id).toBe(member!.id);
+    expect(store.get(GLOBAL_ROSTER_ID, member!.id)?.scope).toBe("global");
+    expect(store.list("ws_default")).toEqual([]);
+    expect(store.list("ws_9")).toEqual([]);
+    expect(store.listVisible("ws_default").find((row) => row.id === member!.id)?.scope).toBe(
+      "global",
+    );
+  });
 });

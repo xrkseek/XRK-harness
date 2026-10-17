@@ -42,9 +42,9 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_list",
     description:
-      "List Agent Team members (global + this workspace). The same short catalog is " +
-      "injected at turn-start. A member is the child's tools, inject, and playbook. " +
-      "Seed AGENTS.md / skills stay on standing inject. Spawn with subagent member_id.",
+      "List Agent Team members (干员 / 成员 / 子代理团队的一员), global plus this workspace. " +
+      "The same short catalog is injected at turn-start. A member is the child's tools, inject, and playbook — not a SKILL.md. " +
+      "Seed AGENTS.md / skills stay on standing inject. Spawn with subagent member_id. Create one with team_save.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     isConcurrencySafe: () => true,
     presentCall: () => ({
@@ -55,7 +55,7 @@ export function bindAgentRosterTools(
     }),
     dynamicSchema: () => ({
       description:
-        "List Agent Team members. Spawn with subagent member_id.\n" +
+        "List Agent Team members (干员 / 成员). Spawn with subagent member_id. Create with team_save.\n" +
         formatRosterCatalog(runtime.agentRoster.listVisible(ws())),
     }),
     execute: async () => {
@@ -70,7 +70,8 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_save",
     description:
-      "Publish a user-owned child profile onto Agent Team (tools + inject + playbook). " +
+      "Create or update an Agent Team member (干员 / 成员 / 子代理团队的一员): tools + inject + playbook. " +
+      "Use this when the user says 干员, 成员, teammate, or wants someone on the subagent team — not propose_skill, which only writes a SKILL.md. " +
       "Built-in catalog ids (mem_seed_*) cannot be updated — omit id to mint a new role, copying fields from a catalog member if you want that template. " +
       "Use after a repeatable process (release, review, deploy) so later `subagent member_id` " +
       "does not rediscover it. from_session=true fills name/playbook from this chat. " +
@@ -141,6 +142,12 @@ export function bindAgentRosterTools(
       const roleRaw = typeof a.role === "string" ? a.role : "worker";
       const canvasId = ws();
       const scope = parseRosterScope(a.scope);
+      if (scope === undefined) {
+        return {
+          content: 'team_save: scope must be "workspace" or "global"',
+          isError: true,
+        };
+      }
       const tools = parseMemberToolPolicy(a.tools);
       const appearancePatch = {
         ...(typeof a.shape === "string" ? { shape: a.shape } : {}),

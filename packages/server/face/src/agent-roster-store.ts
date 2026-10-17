@@ -4,7 +4,7 @@
  * message; a 干员 is the same three surfaces for `subagent`.
  * Global members live in `global.json`; workspace members overlay per canvas.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveXrkHome } from "@xrkseek/server-config";
@@ -198,8 +198,11 @@ export function memberIdProblem(raw: unknown): string | undefined {
 /** Default allow-list for a file-only 干员 (release / inspect). */
 export const MEMBER_FILE_TOOLS = ["bash", "read", "grep", "glob"] as const;
 
-export function parseRosterScope(raw: unknown): RosterScope {
-  return raw === "global" ? "global" : "workspace";
+/** `workspace` when omitted. Any other string is refused. */
+export function parseRosterScope(raw: unknown): RosterScope | undefined {
+  if (raw === undefined || raw === "workspace") return "workspace";
+  if (raw === "global") return "global";
+  return undefined;
 }
 
 export function rosterRoot(productHome?: string): string {
@@ -775,9 +778,29 @@ export class FaceAgentRosterStore {
     return minted;
   }
 
+  /** Workspace roster file ids on disk (`global.json` is the other home). */
+  private listWorkspaceRosterIds(): readonly string[] {
+    const dir = rosterRoot(this.productHome);
+    if (!existsSync(dir)) return [];
+    const out: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(".json")) continue;
+      const id = name.slice(0, -".json".length);
+      if (!id || id === GLOBAL_ROSTER_ID) continue;
+      try {
+        sanitizeWorkspaceId(id);
+      } catch {
+        continue;
+      }
+      out.push(id);
+    }
+    return out;
+  }
+
   /**
-   * Write into global.json or the canvas file. Promoting to global drops a
-   * same-id workspace overlay so the global record is visible again.
+   * Write into global.json or the canvas file.
+   * Global scope is one home: drop that id from every workspace roster.
+   * Workspace scope writes only that canvas (it may overlay a global row).
    */
   upsertAtScope(
     canvasWorkspaceId: string,
@@ -786,12 +809,10 @@ export class FaceAgentRosterStore {
   ): AgentRosterMember | undefined {
     const target = scope === "global" ? GLOBAL_ROSTER_ID : canvasWorkspaceId;
     const member = this.upsert(target, input);
-    if (
-      member &&
-      scope === "global" &&
-      canvasWorkspaceId !== GLOBAL_ROSTER_ID
-    ) {
-      this.remove(canvasWorkspaceId, member.id);
+    if (member && scope === "global") {
+      for (const workspaceId of this.listWorkspaceRosterIds()) {
+        this.remove(workspaceId, member.id);
+      }
     }
     return member;
   }
