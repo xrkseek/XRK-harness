@@ -41,11 +41,17 @@ export class FaceWireIdMaps {
     return n;
   }
 
+  /** True after a successful whole-log prime. Live mux must not assign turn 1 on a cold map. */
+  isPrimed(sessionId: string): boolean {
+    return this.primedLen.has(sessionId);
+  }
+
   /**
-   * Number every turn/step in durable log order. History must call this
-   * before wiring a tail page — otherwise the first `turn/start` in the
-   * window becomes wire `1`, and a later loadOlder assigns the real first
-   * 轮次 a late number (the 0.5.11 opener showing as 第 5 轮).
+   * Number every turn/step in durable log order. History and the first live
+   * append of a session must call this before wiring — otherwise the first
+   * `turn/start` seen after process start or LRU eviction becomes wire `1`,
+   * and the shell paints that opener as 第 1 轮 while `turnOutline` / stats
+   * still count the whole log (the post-crash 「接着」 showing as 第 1 轮).
    *
    * Append-friendly: same length is a no-op; growth only walks the new
    * suffix; shrink / replace clears and rewalks (append-only logs never shrink).

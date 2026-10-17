@@ -64,7 +64,7 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 
 | 字段 | 含义 |
 | --- | --- |
-| `turn` | Face wire 轮次号（**整段日志**首次见到的 `turnId` 顺序，从 **1** 起；跳转键，不是用户看到的第 N 轮）。`session.history` 接线任何一页之前按全日志预分配，尾页先到不得把后出现的 turn 编成 1 |
+| `turn` | Face wire 轮次号（**整段日志**首次见到的 `turnId` 顺序，从 **1** 起；跳转键，不是用户看到的第 N 轮）。`session.history` 接线任何一页之前、以及该会话冷启动后的第一条实时 `append`，都按全日志预分配。尾页先到、或 Host 重启 / 驱逐之后先发的下一轮，都不得编成 1 |
 | `round` | 已发布 opener 上的无空隙 轮次（从 **1** 起）。空 prompt 的 Host turn 不占号 |
 | `seq` | 该轮 `turn/start` 的 Face seq（`Session.loadThrough(seq)` 目标） |
 | `prompt` | 首条人类提示预览（有界） |
@@ -159,7 +159,7 @@ Whole-log turn ladder for the shell chat rail. Clients do **not** rebuild the fu
 
 | Field | Meaning |
 | --- | --- |
-| `turn` | Face wire turn number (order of first-seen `turnId` in the **whole log**; starts at **1**; jump key, not the user-facing 轮次). `session.history` primes those numbers from the full log before wiring any page, so a tail-first open cannot renumber later turns as 1 |
+| `turn` | Face wire turn number (order of first-seen `turnId` in the **whole log**; starts at **1**; jump key, not the user-facing 轮次). `session.history` primes those numbers before wiring any page, and the first live `append` after a cold start does the same. A tail-first open, or the next turn after a Host restart / eviction, cannot be numbered 1 |
 | `round` | Gapless 轮次 among published openers (starts at **1**). Host turns with no opener do not occupy a number |
 | `seq` | Face seq of that turn's `turn/start` (`Session.loadThrough(seq)` target) |
 | `prompt` | First human-prompt preview (bounded) |

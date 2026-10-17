@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   FaceWireIdMaps,
   presentToolView,
   toFaceWireSessionEvent,
   wireNumericId,
 } from "../src/adapt/index.js";
+import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 describe("Face DSH wire-event adapt", () => {
   it("wireNumericId is stable and maps numeric strings as numbers", () => {
@@ -22,6 +24,37 @@ describe("Face DSH wire-event adapt", () => {
     expect(ids.step("s1", "t-a", "s-y")).toBe(2);
     expect(ids.step("s1", "t-b", "s-x")).toBe(1);
     expect(ids.turn("s2", "t-a")).toBe(1);
+  });
+
+  it("live append after a cold start numbers the next turn from the durable log", () => {
+    const store = createMemorySessionStore();
+    const session = store.create("sess-resume");
+    for (const turnId of ["t1", "t2", "t3"]) {
+      store.append(session.id, { type: "turn/start", ts: 1, turnId });
+    }
+    const runtime = createBareFaceRuntime({ store });
+    const frames: Array<{ event?: { type?: string; data?: { turn?: number } } }> = [];
+    runtime.bus.subscribeMux((_id, frame) => {
+      frames.push(frame as (typeof frames)[number]);
+    });
+    store.append(session.id, { type: "turn/start", ts: 4, turnId: "t4" });
+    runtime.wireIds.clear(session.id);
+    store.append(session.id, { type: "turn/start", ts: 5, turnId: "t5" });
+    const turns = frames
+      .filter((frame) => frame.event?.type === "turn/start")
+      .map((frame) => frame.event?.data?.turn);
+    expect(turns).toEqual([4, 5]);
+  });
+
+  it("isPrimed only after a non-empty prime and clears with the session", () => {
+    const ids = new FaceWireIdMaps();
+    expect(ids.isPrimed("s1")).toBe(false);
+    ids.primeFromLog("s1", []);
+    expect(ids.isPrimed("s1")).toBe(false);
+    ids.primeFromLog("s1", [{ type: "turn/start", turnId: "first" }]);
+    expect(ids.isPrimed("s1")).toBe(true);
+    ids.clear("s1");
+    expect(ids.isPrimed("s1")).toBe(false);
   });
 
   it("primeFromLog numbers turns in durable order even after a tail-first glance", () => {

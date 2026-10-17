@@ -963,6 +963,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     }
     const eventSeq = seq.next(id);
     toolArgMaps.remember(id, frozen);
+    // Cold map (process start or session eviction) would number this turnId
+    // from 1. The shell keys 「第 N 轮」 by that wire turn, while turnOutline
+    // and sessionStats already folded the durable log — prime before adapt.
+    if (!wireIds.isPrimed(id)) {
+      wireIds.primeFromLog(id, readEvents(id));
+    }
     // Keep the live route map ahead of mux so assistant/message source matches
     // this attempt's request/header (cost-meter samples stay gated below).
     if (frozen.type === "request/header") {
