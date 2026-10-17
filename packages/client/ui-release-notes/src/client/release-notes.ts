@@ -65,6 +65,44 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.2',
+    date: '2026-10-17',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'propose_skill 新增 scope：workspace（默认，写当前会话工作区 .agents/skills）/ global（写主目录 ~/.agents/skills）。非法值直接拒绝，不再静默当 workspace；多工作区 Host 下也不会再统一落到启动 Host 的那个仓。要的是干员 / 成员仍走 team_save，两者文案已分开写明。',
+        en: 'propose_skill gains scope: workspace (default, the current session’s .agents/skills) or global (home ~/.agents/skills). Bad values are refused instead of silently becoming workspace, and a multi-workspace Host no longer files every proposal into whichever repo booted it. A 干员 / member is still team_save — the two are now spelled apart.',
+      },
+      {
+        zh: 'Agent Team 成员提升到 global 现在会清掉所有工作区 roster 里的同名 id（此前只清当前画布），别处残留的工作区行不再遮蔽全局记录。',
+        en: 'Promoting an Agent Team member to global now drops that id from every workspace roster (previously only the current canvas), so a stale overlay in another repository can no longer shadow the global record.',
+      },
+      {
+        zh: '子代理跟进默认改插话：send_message 与 team_graph announce 不带 delivery 即走 steer（下一个工具步落地），queue 变成显式的「等空闲」。忙碌子代理的提示不再让你误以为排队根本送不进去。',
+        en: 'Child follow-ups default to steer: send_message and team_graph announce land at the child’s next tool step when delivery is omitted, and queue is now the explicit “wait until idle”. The busy-child message no longer implies the queued path cannot reach it.',
+      },
+      {
+        zh: '交接文案给出结束条件：背景 spawn 后子代理落定时 Host 会把完成通知插进本会话——本回合没别的可做就结束等通知，这一步就要答案则用 wait_agent。',
+        en: 'Handoff copy states how it ends: a background spawn’s result is steered back as a completion notice, so finish the turn if nothing else is useful and call wait_agent only when this step needs the answer.',
+      },
+      {
+        zh: '修复崩溃 / 重启后接着聊显示「第 1 轮」：轮次号此前懒分配，会话冷启动后进程见到的第一条 turn/start 被编成 1，而 turnOutline 与统计已折进整段日志。现按持久日志先预分配再接线。',
+        en: 'Fixed a resumed session restarting its round counter at 第 1 轮: turn numbers were assigned lazily, so the first turn seen after a Host restart or eviction became wire 1 while turnOutline and stats had already folded the whole log. The map now primes from the durable log before wiring.',
+      },
+      {
+        zh: '修复 wait_agent 期间工具行显示「已中断」：step 关闭但所属回合仍打开时不再判成结束，聊天与轨迹同规则，也不再与 Host 的「深潜中」互相矛盾。',
+        en: 'Fixed wait_agent painting its row Interrupted while pending: a closed step inside an open turn is no longer treated as finished, chat and trajectory share one rule, and the two panels stop contradicting the Host’s 深潜中 state.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.2 接管 @latest。完整清单见 docs/releases/v0.6.2.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.2 now owns @latest. Full list in docs/releases/v0.6.2.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.1',
     date: '2026-10-16',
     title: {

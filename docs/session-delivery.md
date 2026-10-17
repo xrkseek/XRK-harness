@@ -24,7 +24,9 @@
 | `promotePendingSteers` | **`runTurn` 工具步边界**：只 promote pending steer |
 | `promoteAdmitsForTurn` | **turn 入口**：全部 pending steer 合并，否则一条 queue |
 
-未传 `delivery` 时默认 **queue**。
+未传 `delivery` 时，**协议层**默认 **queue**（`prompt/admitted` 与 `admit()` 的 `effectiveDelivery`：非 `steer` 即 `queue`）；`session.prompt` 同理。
+
+**模型工具层自 v0.6.2 起默认 `steer`**：`send_message` 与 `team_graph announce` 省略 `delivery` 时按插话投递（显式 `queue` 才是「等空闲」）。即默认值取决于你在哪一层调用——写插件 / 直连 Face 仍以 queue 为默认，别按工具层的预期去猜。
 
 ## 3. Promote 规则（规格）
 
@@ -93,7 +95,9 @@ These are first-class product semantics, not a UI copy difference or an alias of
 | `promotePendingSteers` | **`runTurn` tool-step boundary**: pending steers only |
 | `promoteAdmitsForTurn` | **Turn entry**: merge all pending steers, else one queue item |
 
-Default `delivery` is **queue**.
+At the **protocol layer** an omitted `delivery` defaults to **queue** (`prompt/admitted` and `admit()`’s `effectiveDelivery`: anything that is not `steer` becomes `queue`); `session.prompt` behaves the same.
+
+The **model tool layer defaults to `steer` since v0.6.2**: `send_message` and `team_graph announce` deliver as a steer when `delivery` is omitted (explicit `queue` means “wait until idle”). The default therefore depends on which layer you call from — plugins and direct Face clients still get queue, so do not assume the tool-layer default there.
 
 ## 3. Promote rules
 
