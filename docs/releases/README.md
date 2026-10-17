@@ -8,7 +8,7 @@
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.6.2](./v0.6.2.md)                   | `0.6.x` 补丁：**propose_skill 双 scope · 干员提升清全部工作区 · 跟进默认插话 · wait_agent 不再误画中途中断 · 冷启动轮次号** |
+| **当前（@latest）** | [v0.6.2](./v0.6.2.md)                   | `0.6.x` 补丁：**技能可选全局落点 · 干员升全局只留一份 · 跟进默认插话 · 等子代理不再误标中断 · 重启后轮次接着数** |
 | **上一补丁**        | [v0.6.1](./v0.6.1.md)                   | `0.6.x` 补丁：**TUI 命令面 · ACP load/cancel · Desktop 全局 xrkh · 权限热切 · 会话锁可读报错** |
 | **本线收口号**      | [v0.6.0](./v0.6.0.md)                   | `0.6.x` 收口：**归档减负 · 向阳/IM 编排 · 插件页重组 · 站立披露 · 分层记忆 · 多工作区 cwd 狱 · 搜索同路径闸** |
 | **过程号（文稿）**  | [v0.6.0-rc.2](./v0.6.0-rc.2.md) · [rc.1](./v0.6.0-rc.1.md) | 预览热修与首 rc；已并入本线 |
@@ -49,7 +49,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.6.2](./v0.6.2.md) | `0.6.x` patch: **propose_skill dual scope · global promote clears every workspace roster · follow-ups default to steer · wait_agent stops reading as interrupted · cold-start turn numbering** |
+| **Current (@latest)** | [v0.6.2](./v0.6.2.md) | `0.6.x` patch: **skills can land globally · one home after global promote · follow-ups default to steer · waiting on a child no longer looks Interrupted · resumed round numbers** |
 | **Previous patch** | [v0.6.1](./v0.6.1.md) | `0.6.x` patch: **TUI command surface · ACP load/cancel · Desktop-owned `xrkh` · live permission flips · actionable session-lock error** |
 | **Line closing number** | [v0.6.0](./v0.6.0.md) | `0.6.x` close: **archive offload · Xiangyang/IM orchestration · Plugins reshape · standing disclosure · layered memory · per-workspace cwd jail · search shares the path gate** |
 | **Process numbers (doc)** | [v0.6.0-rc.2](./v0.6.0-rc.2.md) · [rc.1](./v0.6.0-rc.1.md) | Preview hotfix and first rc; folded into this line |
