@@ -250,11 +250,13 @@ function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
 
 function interruption(context: ConversationNodeContext<ToolState>): { seq: number; time: number } | undefined {
   const location = context.start?.location
-  if (location?.kind === 'step' && location.step.status === 'closed') return location.step.end
-  if ((location?.kind === 'step' || location?.kind === 'turn') && location.turn.status === 'closed') {
-    return location.turn.end
-  }
-  return undefined
+  if (location?.kind !== 'step' && location?.kind !== 'turn') return undefined
+  // A closed step is not a tool result. wait_agent stays inside the open turn
+  // until it returns; painting Interrupted here stops the running sweep while
+  // Host `running` still shows 深潜中.
+  if (location.turn.status !== 'closed') return undefined
+  if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
+  return location.turn.end
 }
 
 function fallbackState(context: ConversationNodeContext<ToolState>): ToolState | undefined {

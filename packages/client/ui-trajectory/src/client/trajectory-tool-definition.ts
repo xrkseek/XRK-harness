@@ -161,10 +161,11 @@ function interruption(
   context: ConversationNodeContext<ToolState>,
 ): { seq: number; time: number } | undefined {
   const location = context.start?.location
-  if (location?.kind === 'step' && location.step.status === 'closed') return location.step.end
-  if ((location?.kind === 'step' || location?.kind === 'turn')
-    && location.turn.status === 'closed') return location.turn.end
-  return undefined
+  if (location?.kind !== 'step' && location?.kind !== 'turn') return undefined
+  // Match chat: a closed step with an open turn is still an in-flight call.
+  if (location.turn.status !== 'closed') return undefined
+  if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
+  return location.turn.end
 }
 
 function projectCall(

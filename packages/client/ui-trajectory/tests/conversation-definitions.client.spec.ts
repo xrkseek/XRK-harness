@@ -175,6 +175,7 @@ describe('Trajectory conversation Definitions', () => {
         content: [{ type: 'text', text: 'contents' }],
       }),
       at(7, 'step/end', { turn: 1, step: 1 }),
+      at(8, 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }),
     ]))
 
     const tools = current.eventNodes.filter(node => node.kind === 'tool-result')

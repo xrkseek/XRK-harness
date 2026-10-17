@@ -241,6 +241,20 @@ describe('built-in conversation node Definitions', () => {
       name: 'read',
     })
     expect(node(toolOnlySnapshot, 'assistant-step')?.visibility).toBe('hidden')
+
+    const stepClosedStillRunning = snapshot(assembler([
+      at(34, 'turn/start', { turn: 12 }),
+      at(35, 'step/start', { turn: 12, step: 1 }),
+      at(36, 'tool/call', {
+        turn: 12, step: 1, callId: 'wait-1', name: 'wait_agent', arguments: '{}',
+      }),
+      at(37, 'step/end', { turn: 12, step: 1 }),
+    ]))
+    expect((node(stepClosedStillRunning, 'tool-call')?.data as ToolChatData).root).toMatchObject({
+      callId: 'wait-1',
+      name: 'wait_agent',
+    })
+    expect('kind' in (node(stepClosedStillRunning, 'tool-call')?.data as ToolChatData).root).toBe(false)
     expect(toolOnlySnapshot.legacy.nodes).toMatchObject([{
       kind: 'assistant',
       seq: 33,
