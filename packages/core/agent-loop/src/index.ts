@@ -197,12 +197,12 @@ export interface RunTurnInput {
   /**
    * Auto-continue on max-tokens truncation: when the model hits its output
    * token cap mid-turn, inject a synthetic `user/message` ("继续") instead of
-   * ending the turn with `max-tokens`. Default off. Face
-   * `agent-loop.autoContinueOnMaxTokens`.
+   * ending the turn with `max-tokens`. Default on at Face
+   * (`agent-loop.autoContinueOnMaxTokens`); loop still requires the flag.
    */
   readonly autoContinueOnMaxTokens?: boolean;
   /**
-   * Cap on consecutive auto-continues within one turn (default 4). Guards
+   * Cap on consecutive auto-continues within one turn (default 10). Guards
    * against infinite loop when the provider keeps truncating at its cap.
    */
   readonly autoContinueMaxRounds?: number;
@@ -755,7 +755,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   /** Consecutive auto-continues injected this turn (0 when disabled). */
   let autoContinueRounds = 0;
   const autoContinueMaxRounds =
-    input.autoContinueMaxRounds ?? 4;
+    input.autoContinueMaxRounds ?? 10;
 
   try {
   if (input.beforeUserMessage) {

@@ -195,7 +195,7 @@ const AgentLoopConfig = Schema.object({
    */
   autoContinueOnMaxTokens: Schema.boolean().default(true),
   /** Maximum automatic continuations per turn (independent of maxSteps). */
-  autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(4),
+  autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(10),
   /**
    * DSH toolOrder: tool name list with exactly one `' '` rest marker.
    * Empty / omit → lexicographic wire order. Editable via Settings → Plugins.
@@ -208,9 +208,9 @@ const AgentLoopConfig = Schema.object({
   toolSettle: Schema.union(["parallel", "serial"]).default("parallel"),
   /**
    * Max provider retries within one LLM step (`0` disables).
-   * Omit → kernel default (8).
+   * Omit → kernel default (30).
    */
-  llmRetryMaxRetries: Schema.number().step(1).min(0).default(8),
+  llmRetryMaxRetries: Schema.number().step(1).min(0).default(30),
   /**
    * Soft-budget strategy family (DSH prune→summary posture).
    * Soft ceiling numbers live on Models catalog (`softBudgetMaxTokens`).
@@ -611,9 +611,9 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       base: {
         maxSteps: 32,
         autoContinueOnMaxTokens: true,
-        autoContinueMaxRounds: 4,
+        autoContinueMaxRounds: 10,
         toolSettle: "parallel",
-        llmRetryMaxRetries: 8,
+        llmRetryMaxRetries: 30,
         compactionStrategy: "prune-summary",
         softBudgetTriggerPercent: 90,
         compactRecentMaxTokens: 20_000,

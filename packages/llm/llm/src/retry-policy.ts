@@ -60,7 +60,7 @@ export const DEFAULT_NON_RETRYABLE_CODES = [
 export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
   mode: "normal",
   /** Transient transport / 5xx / empty-body hangs often need more than 5. */
-  maxRetries: 8,
+  maxRetries: 30,
   nonRetryableCodes: [...DEFAULT_NON_RETRYABLE_CODES],
   initialDelayMs: 1_000,
   maxDelayMs: 60_000,

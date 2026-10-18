@@ -154,10 +154,10 @@ export interface CreateAgentOptions {
   readonly maxSteps?: number;
   /**
    * Auto-continue on max-tokens truncation within a turn
-   * (Face `agent-loop.autoContinueOnMaxTokens`). Default off.
+   * (Face `agent-loop.autoContinueOnMaxTokens`). Product default on.
    */
   readonly autoContinueOnMaxTokens?: boolean;
-  /** Cap on consecutive auto-continues per turn (default 4). */
+  /** Cap on consecutive auto-continues per turn (default 10). */
   readonly autoContinueMaxRounds?: number;
   /**
    * Session-side mistake/loop trackers. Default enabled.
