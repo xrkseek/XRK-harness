@@ -518,7 +518,9 @@ describe("subagent completion delivery", () => {
     await new Promise<void>((resolve) => {
       queueMicrotask(() => queueMicrotask(resolve));
     });
-    expect(admits).toHaveLength(0);
+    expect(admits).toHaveLength(1);
+    expect(admits[0]!.content).toContain("stopped by the user");
+    expect(admits[0]!.content).not.toContain("finished a turn");
 
     // Resume clears suppress; a later natural idle may notify again.
     runtime.onSessionDrainStatus(childId, true);
@@ -526,8 +528,8 @@ describe("subagent completion delivery", () => {
     await new Promise<void>((resolve) => {
       queueMicrotask(() => queueMicrotask(resolve));
     });
-    expect(admits).toHaveLength(1);
-    expect(admits[0]!.content).toContain("should not steer after interrupt");
+    expect(admits).toHaveLength(2);
+    expect(admits[1]!.content).toContain("should not steer after interrupt");
   });
 
   it("parent session.cancel does not abort a delegated worker", async () => {

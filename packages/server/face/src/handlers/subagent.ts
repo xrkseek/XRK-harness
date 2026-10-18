@@ -272,7 +272,14 @@ export const subagentInterrupt: FaceHandler = async (runtime, rpcId, payload) =>
       },
     };
   }
-  runtime.suppressOwnedSubagentCompletion(childSessionId);
+  const reasonRaw = typeof p.reason === "string" ? p.reason : "";
+  const stopReason =
+    p.takeover === true || reasonRaw === "takeover"
+      ? "takeover"
+      : reasonRaw === "parent"
+        ? "parent"
+        : "user";
+  runtime.notifyOwnedSubagentStopped(childSessionId, stopReason);
   if (runtime.externalAgents.has(childSessionId)) {
     await interruptExternalContinuable(runtime, childSessionId, {
       dispose: true,

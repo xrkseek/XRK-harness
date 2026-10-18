@@ -385,6 +385,14 @@ export interface FaceRuntime {
    * Cleared when the child drain goes running again (resume via send_message).
    */
   suppressOwnedSubagentCompletion(childSessionId: string): void;
+  /**
+   * Tell the parent why a continuable child was stopped, and suppress the
+   * later idle "finished a turn" steer for this stretch.
+   */
+  notifyOwnedSubagentStopped(
+    childSessionId: string,
+    reason: "user" | "parent" | "takeover",
+  ): void;
   /** Shared shell registry for session-scoped job kill / background RPC. */
   readonly shell?: ShellService;
 }

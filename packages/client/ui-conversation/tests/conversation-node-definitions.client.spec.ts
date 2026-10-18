@@ -989,6 +989,23 @@ describe('built-in conversation node Definitions', () => {
     expect(second?.anchorSeq).toBeGreaterThan(steeringNode?.anchorSeq ?? Number.POSITIVE_INFINITY)
   })
 
+  it('shows an auto-continue 继续 as a user message, not a hidden inject', () => {
+    const value = assembler([
+      at(1, 'user/message', {
+        ...textMessage('cont', '继续'),
+        source: { kind: 'auto-continue', round: 1 },
+      }, { surfaceOp: 'append' }),
+    ])
+    const row = node(snapshot(value), 'user')
+    expect(row?.visibility).toBe('visible')
+    expect(row?.data).toMatchObject({
+      kind: 'user',
+      content: [{ type: 'text', text: '继续' }],
+      source: { kind: 'auto-continue', round: 1 },
+    })
+    expect(node(snapshot(value), 'context')).toBeUndefined()
+  })
+
   it('classifies appended producer context from durable source metadata', () => {
     const value = assembler([
       at(1, 'user/message', {

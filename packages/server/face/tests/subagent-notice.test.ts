@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatSubagentCompletionNotice,
+  formatSubagentStopNotice,
   lastAssistantBodyText,
 } from "../src/adapt/subagent-notice.js";
 
@@ -107,9 +108,9 @@ describe("formatSubagentCompletionNotice", () => {
       },
       [],
     );
-    expect(text).toBe(
-      "background subagent `child-2` (task) finished a turn. Follow up with send_message, interrupt_agent when done, or list_agents.",
-    );
+    expect(text).toContain("finished a turn");
+    expect(text).toContain("send_message");
+    expect(text).not.toContain("Partial / last answer");
   });
 
   it("omits preview when child only produced reasoning", () => {
@@ -132,9 +133,8 @@ describe("formatSubagentCompletionNotice", () => {
       ],
     );
     expect(text).not.toContain("internal scratchpad");
-    expect(text).toBe(
-      "background subagent `child-3` (thinker) finished a turn. Follow up with send_message, interrupt_agent when done, or list_agents.",
-    );
+    expect(text).toContain("finished a turn");
+    expect(text).toContain("send_message");
   });
 
   it("marks abnormal abort and still includes truncated preview", () => {
@@ -189,5 +189,74 @@ describe("formatSubagentCompletionNotice", () => {
     );
     expect(text).toContain(long);
     expect(text).not.toContain("\n…\n\nFollow up");
+  });
+});
+
+describe("formatSubagentStopNotice", () => {
+  const link = {
+    parentSessionId: "parent",
+    childSessionId: "child-9",
+    mode: "continuable" as const,
+    label: "worker",
+  };
+
+  it("names who stopped the child and how to resume", () => {
+    const events = [
+      {
+        type: "step/end" as const,
+        ts: 1,
+        turnId: "t1",
+        stepId: "s1",
+      },
+      {
+        type: "assistant/message" as const,
+        ts: 2,
+        turnId: "t1",
+        stepId: "s1",
+        content: "draft so far",
+      },
+    ];
+    const text = formatSubagentStopNotice(link, "user", events, "draft so far");
+    expect(text).toContain("stopped by the user (Stop on the child session)");
+    expect(text).toContain("Already ran: 1 step");
+    expect(text).toContain("send_message");
+    expect(text).toContain("do not spawn a duplicate");
+    expect(formatSubagentStopNotice(link, "parent", [])).toContain(
+      "interrupted by the parent (interrupt_agent)",
+    );
+    expect(formatSubagentStopNotice(link, "takeover", [])).toContain(
+      "paused for human takeover",
+    );
+  });
+
+  it("tells the parent how many automatic 继续 messages already landed", () => {
+    const text = formatSubagentCompletionNotice(
+      link,
+      [
+        {
+          type: "user/message",
+          ts: 1,
+          turnId: "t1",
+          content: "继续",
+          source: { kind: "auto-continue", round: 1 },
+        },
+        {
+          type: "user/message",
+          ts: 2,
+          turnId: "t1",
+          content: "继续",
+          source: { kind: "auto-continue", round: 2 },
+        },
+        {
+          type: "turn/end",
+          ts: 3,
+          turnId: "t1",
+          reason: { kind: "max-tokens" },
+        },
+      ],
+    );
+    expect(text).toContain("ended abnormally (stopped at max tokens)");
+    expect(text).toContain('already sent "继续" as a user message 2 time(s)');
+    expect(text).toContain('send_message(agent_id, "继续")');
   });
 });

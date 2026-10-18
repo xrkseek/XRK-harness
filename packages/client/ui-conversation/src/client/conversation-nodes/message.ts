@@ -49,6 +49,17 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   start: (_context, match, reader) => {
     if (match.event.type !== 'user/message') throw new Error('input-message start requires user/message')
     const event = match.event
+    // Auto-continue is a real user-identity "继续" the loop already sent.
+    // Keep it on the transcript as that message; other producers stay context.
+    if (event.data.source.kind === 'auto-continue') {
+      return {
+        kind: 'user',
+        seq: event.seq,
+        time: event.time,
+        content: event.data.content,
+        source: event.data.source,
+      }
+    }
     if (event.data.source.kind !== 'user') {
       return {
         kind: 'context',

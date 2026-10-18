@@ -145,9 +145,9 @@ export type UserMessageSource =
     }
   | {
       /**
-       * Loop-injected continuation prompt after a max-tokens truncation
-       * (Face `agent-loop.autoContinueOnMaxTokens`). Rendered as a grey
-       * "已自动继续" strip, not as a real human message.
+       * Loop-injected continuation after a max-tokens truncation
+       * (`agent-loop.autoContinueOnMaxTokens`). Content is the user text
+       * "继续"; the transcript shows that message, not a hidden inject row.
        */
       readonly kind: "auto-continue";
       /** Which consecutive auto-continue this is (1-based). */

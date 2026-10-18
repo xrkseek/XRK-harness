@@ -48,7 +48,10 @@ import {
 } from "./adapt/job-view.js";
 import {
   formatSubagentCompletionNotice,
+  formatSubagentStopNotice,
   lastAssistantBodyText,
+  lastTurnEndReason,
+  type SubagentStopReason,
 } from "./adapt/subagent-notice.js";
 import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import { validateOutputAgainstSchema } from "./agent-team-output.js";
@@ -591,6 +594,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const subagentIdleEpoch = new Map<string, number>();
   /** Failed deliver attempts in the current epoch (cap 1 auto-retry). */
   const subagentIdleFailCount = new Map<string, number>();
+  /** One stop steer per idle stretch. A second cancel must not admit again. */
+  const stopNoticeSent = new Set<string>();
 
   /**
    * Mirror job completions: when a continuable child drain goes idle, admit a
@@ -621,19 +626,20 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         if (suppressSubagentCompletion.has(childSessionId)) return;
         if (!reportedSubagentIdle.has(childSessionId)) return;
         const idle = !parent.isBusy();
-        // Idle parent still gets woken (under the shared auto-wake budget):
-        // an idle parent here normally means it spawned background children and
-        // ended its turn — queue-only would strand the result until the human
-        // happened to type. Codex's `trigger_turn=false` is NOT portable: it
-        // rides a separate mailbox consumer, we have none.
-        const spent = spentWakes.get(parentId) ?? 0;
-        const followup = idle && spent < JOB_COMPLETION_MAX_WAKES;
-        if (followup) spentWakes.set(parentId, spent + 1);
         const events = readEvents(childSessionId);
         // A seeded child's log starts with the parent's transcript: answer
         // extraction must slice at the fork boundary or the parent's own last
         // reply is reported as the child's. Mirrors the foreground path.
         const owned = subagentOwnedEvents(link, events);
+        // Unexpected ends (max-tokens, abort, error, interrupt) always wake an
+        // idle parent. A clean finish stays under the shared auto-wake budget.
+        const endReason = lastTurnEndReason(owned);
+        const unexpected = endReason !== undefined && endReason.kind !== "completed";
+        const spent = spentWakes.get(parentId) ?? 0;
+        const followup = idle && (unexpected || spent < JOB_COMPLETION_MAX_WAKES);
+        if (followup && spent < JOB_COMPLETION_MAX_WAKES) {
+          spentWakes.set(parentId, spent + 1);
+        }
         const preview = lastAssistantBodyText(owned);
         const answer = preview
           ? boundChildAnswer(link.parentSessionId, childSessionId, preview)
@@ -696,6 +702,38 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     );
     reportedSubagentIdle.add(childSessionId);
     subagentIdleFailCount.delete(childSessionId);
+  };
+
+  const notifyOwnedSubagentStopped = (
+    childSessionId: string,
+    reason: SubagentStopReason,
+  ): void => {
+    suppressOwnedSubagentCompletion(childSessionId);
+    const link = subagents.getByChild(childSessionId);
+    if (!link || link.mode !== "continuable") return;
+    if (stopNoticeSent.has(childSessionId)) return;
+    stopNoticeSent.add(childSessionId);
+    const parentId = link.parentSessionId;
+    void resolveAgent(parentId)
+      .then((parent) => {
+        if (!suppressSubagentCompletion.has(childSessionId)) return;
+        const events = readEvents(childSessionId);
+        const owned = subagentOwnedEvents(link, events);
+        const preview = lastAssistantBodyText(owned);
+        const answer = preview
+          ? boundChildAnswer(parentId, childSessionId, preview)
+          : "";
+        const receipt = parent.admit(
+          formatSubagentStopNotice(link, reason, owned, answer),
+          { delivery: "steer" },
+        );
+        noticeAdmitIds.add(receipt.admitId);
+        // A human or parent stop is not a job-completion burst. Always wake,
+        // even when the auto-wake budget is already spent, so an idle parent
+        // actually receives the user-identity notice.
+        options.drain.wake(parentId);
+      })
+      .catch(() => undefined);
   };
 
   const getTool = (sessionId: string, name: string) => {
@@ -1266,12 +1304,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         subagentIdleFailCount.delete(sessionId);
         // A fresh running stretch may complete naturally again.
         suppressSubagentCompletion.delete(sessionId);
+        stopNoticeSent.delete(sessionId);
         return;
       }
       turnUiIdle.delete(sessionId);
       deliverOwnedSubagentCompletion(sessionId);
     },
     suppressOwnedSubagentCompletion,
+    notifyOwnedSubagentStopped,
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),

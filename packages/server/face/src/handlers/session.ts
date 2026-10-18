@@ -21,6 +21,8 @@ import {
 } from "../presets-catalog.js";
 import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
 import { appearanceLookWire } from "../agent-roster-store.js";
+import { formatPeerCollabStopNotice } from "../session-thread-message.js";
+import { sessionIdsOnThread } from "../session-thread-publish.js";
 import { dressingFromPresence } from "../presence-dressing.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import { rewritePendingAdmit } from "../update-queue-rewrite.js";
@@ -762,6 +764,38 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
  * Live `agent.abort` only accepts {@link AgentCancelCause} — `legacy` is a
  * durable turn/end fallback, so map it to `user` for the latch.
  */
+function collabStopWhy(cause: AgentCancelCause): string {
+  if (cause.kind === "user") return "stopped by the user";
+  if (cause.kind === "parent") return "interrupted by the parent";
+  if (cause.kind === "disposed") return "was disposed";
+  return `stopped by a hook (${cause.reason})`;
+}
+
+/** Steer every other parent on the same 主线 when this session is cut off. */
+function notifyThreadCollabStopped(
+  runtime: FaceRuntime,
+  sessionId: string,
+  cause: AgentCancelCause,
+): void {
+  const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
+  if (!workspaceId) return;
+  const bind = runtime.sessionThreads.bindOf(workspaceId, sessionId);
+  if (!bind) return;
+  const peers = sessionIdsOnThread(runtime, workspaceId, bind.threadId)
+    .filter((id) => id !== sessionId && !runtime.subagents.getByChild(id));
+  if (peers.length === 0) return;
+  const text = formatPeerCollabStopNotice({
+    sessionId,
+    why: collabStopWhy(cause),
+  });
+  for (const peerId of peers) {
+    void runtime.resolveAgent(peerId).then((peer) => {
+      peer.admit(text, { delivery: "steer" });
+      runtime.drain.wake(peerId);
+    }).catch(() => undefined);
+  }
+}
+
 function cancelCauseFromPayload(payload: unknown): AgentCancelCause {
   const raw = asRecord(payload).cause;
   if (raw === undefined) return { kind: "user" };
@@ -803,6 +837,15 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   //    floating "background job finished" toasts.
   killLiveSessionJobs(runtime.shell, sessionId);
   runtime.publishJobs(sessionId);
+  const childLink = runtime.subagents.getByChild(sessionId);
+  if (
+    childLink?.mode === "continuable" &&
+    (cause.kind === "user" || cause.kind === "parent")
+  ) {
+    runtime.notifyOwnedSubagentStopped(sessionId, cause.kind);
+  } else if (!childLink) {
+    notifyThreadCollabStopped(runtime, sessionId, cause);
+  }
   // Delegated workers are independent sessions. Stopping, archiving, or
   // deleting this session must not abort them; they finish and reply on
   // their own (inline tool result, spill file, or a later user message).

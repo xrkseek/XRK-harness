@@ -320,6 +320,7 @@ export {
   jobViews,
   formatJobCompletionNotice,
   formatSubagentCompletionNotice,
+  formatSubagentStopNotice,
   describeChildOutcome,
   lastAssistantBodyText,
   boundChildAnswer,

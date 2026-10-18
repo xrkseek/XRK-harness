@@ -45,11 +45,14 @@ export {
   type JobViewStatus,
 } from "./job-view.js";
 export {
+  childProgressLine,
   describeChildOutcome,
   formatSubagentCompletionNotice,
+  formatSubagentStopNotice,
   lastAssistantBodyText,
   type ChildOutcome,
   type ChildOutcomeKind,
+  type SubagentStopReason,
 } from "./subagent-notice.js";
 export {
   boundChildAnswer,

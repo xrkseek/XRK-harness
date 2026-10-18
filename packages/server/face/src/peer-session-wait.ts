@@ -5,7 +5,11 @@
 
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
-import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
+import {
+  describeChildOutcome,
+  formatDescribedChildOutcome,
+  lastAssistantBodyText,
+} from "./adapt/subagent-notice.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
 import { raceDrainRunSlice } from "./wait-drain-idle.js";
 
@@ -69,11 +73,13 @@ export async function waitForPeerAssistantReply(
     }
   }
   const events = readSessionEvents(runtime.store, targetId);
-  const reply = lastAssistantBodyText(events.slice(seqAtSend)).trim();
+  const slice = events.slice(seqAtSend);
+  const reply = lastAssistantBodyText(slice).trim();
   if (reply) return { reply };
+  const detail = formatDescribedChildOutcome(describeChildOutcome(slice));
   return {
     error: stillRunning()
-      ? `${targetId} still running after ${timeoutMs}ms`
-      : `${targetId} idle with no assistant reply`,
+      ? `${targetId} still running after ${timeoutMs}ms (${detail})`
+      : `${targetId} stopped without an assistant reply (${detail})`,
   };
 }

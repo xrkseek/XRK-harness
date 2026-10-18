@@ -181,6 +181,145 @@ export function formatChildOutcome(
   return formatDescribedChildOutcome(describeChildOutcome(events, now));
 }
 
+/** Steps / tool results already spent on the child — so the parent can judge sunk cost. */
+export function childProgressLine(
+  events: readonly SessionEvent[],
+): string | undefined {
+  let steps = 0;
+  let toolResults = 0;
+  let chars = 0;
+  for (const ev of events) {
+    if (ev.type === "step/end") steps += 1;
+    if (ev.type === "tool/result") toolResults += 1;
+    if (ev.type === "assistant/message" && ev.content.trim()) {
+      chars += ev.content.trim().length;
+    }
+  }
+  if (steps === 0 && toolResults === 0 && chars === 0) return undefined;
+  const parts: string[] = [];
+  if (steps > 0) parts.push(`${steps} step${steps === 1 ? "" : "s"}`);
+  if (toolResults > 0) {
+    parts.push(`${toolResults} tool result${toolResults === 1 ? "" : "s"}`);
+  }
+  if (chars > 0) {
+    parts.push(
+      chars >= 1000
+        ? `~${Math.round(chars / 1000)}k chars written`
+        : `${chars} chars written`,
+    );
+  }
+  return `Already ran: ${parts.join(", ")}.`;
+}
+
+/** Why a continuable child was cut off before a natural turn end. */
+export type SubagentStopReason = "user" | "parent" | "takeover";
+
+/** Loop-injected user messages `继续` already written into this child log. */
+export function autoContinueRounds(events: readonly SessionEvent[]): number {
+  let count = 0;
+  for (const ev of events) {
+    if (ev.type === "user/message" && ev.source?.kind === "auto-continue") {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function resumeHint(
+  outcome: ChildOutcome,
+  events: readonly SessionEvent[],
+  stop?: SubagentStopReason,
+): string {
+  const idHint = "Reuse the same agent_id — do not spawn a duplicate worker.";
+  if (stop === "takeover") {
+    return (
+      "Task is paused for a human. Open the child session in the UI, or " +
+      `send_message to resume as the model. list_agents shows status. ${idHint}`
+    );
+  }
+  if (outcome.kind === "max-tokens") {
+    const rounds = autoContinueRounds(events);
+    const sent = rounds > 0
+      ? `The child already sent "继续" as a user message ${rounds} time(s) inside this turn and still hit the output cap, so the turn stopped.`
+      : 'The child hit the output cap and did not auto-send "继续" (auto-continue off, or this truncation never entered continuation).';
+    return (
+      `${sent} If you still need the rest, call send_message(agent_id, "继续") ` +
+      `for another turn. session_read / list_agents shows what it already wrote. ${idHint}`
+    );
+  }
+  if (
+    stop !== undefined ||
+    outcome.kind === "aborted" ||
+    outcome.kind === "interrupted" ||
+    outcome.kind === "none"
+  ) {
+    return (
+      "Child session and transcript are kept. send_message to resume, " +
+      `wait_agent if you need the next answer, or list_agents. ${idHint}`
+    );
+  }
+  if (outcome.kind === "error" || outcome.kind === "blocked") {
+    return (
+      "Inspect with session_read / list_agents, then send_message to recover " +
+      `or interrupt_agent when done. ${idHint}`
+    );
+  }
+  return "Follow up with send_message, interrupt_agent when done, or list_agents.";
+}
+
+function assembleParentNotice(
+  head: string,
+  events: readonly SessionEvent[],
+  answerBody: string | undefined,
+  follow: string,
+): string {
+  const progress = childProgressLine(events);
+  const outcome = formatDescribedChildOutcome(describeChildOutcome(events));
+  const retry = lastModelRetryNotice(events);
+  const preview = (answerBody !== undefined
+    ? answerBody
+    : lastAssistantBodyText(events)).trim();
+  const lines = [head];
+  if (progress) lines.push(progress);
+  lines.push(`Outcome: ${outcome}.`);
+  if (retry) lines.push(retry);
+  if (preview) {
+    lines.push("", "Partial / last answer:", preview, "");
+  } else {
+    lines.push("");
+  }
+  lines.push(follow);
+  return lines.join("\n");
+}
+
+/**
+ * Parent inbox notice when a child is stopped on purpose.
+ * Distinct from {@link formatSubagentCompletionNotice}: Stop / interrupt_agent
+ * / takeover each say who cut the turn, so the parent does not read a kill as
+ * "finished a turn".
+ */
+export function formatSubagentStopNotice(
+  link: FaceSubagentLink,
+  reason: SubagentStopReason,
+  events: readonly SessionEvent[],
+  answerBody?: string,
+): string {
+  const why =
+    reason === "user"
+      ? "stopped by the user (Stop on the child session)"
+      : reason === "takeover"
+        ? "paused for human takeover"
+        : "interrupted by the parent (interrupt_agent)";
+  const head = `background subagent \`${link.childSessionId}\` (${link.label}) ${why}.`;
+  const outcome = describeChildOutcome(events);
+  return assembleParentNotice(
+    head,
+    events,
+    answerBody,
+    resumeHint(outcome, events, reason),
+  );
+}
+
 /**
  * Parent inbox notice when a background (continuable) child drain goes idle.
  * Normal idle → "finished a turn". Abnormal `turn/end` (abort / error / …)
@@ -203,11 +342,11 @@ export function formatSubagentCompletionNotice(
   const head = abnormal
     ? `background subagent \`${link.childSessionId}\` (${link.label}) ended abnormally (${abnormal}).`
     : `background subagent \`${link.childSessionId}\` (${link.label}) finished a turn.`;
-  const preview = (answerBody !== undefined
-    ? answerBody
-    : lastAssistantBodyText(events)).trim();
-  const follow =
-    "Follow up with send_message, interrupt_agent when done, or list_agents.";
-  if (!preview) return `${head} ${follow}`;
-  return `${head}\n\n${preview}\n\n${follow}`;
+  const outcome = describeChildOutcome(events);
+  return assembleParentNotice(
+    head,
+    events,
+    answerBody,
+    resumeHint(outcome, events),
+  );
 }

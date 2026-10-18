@@ -1180,13 +1180,14 @@ describe('ChatView', () => {
     ])
   })
 
-  it('renders the max-tokens notice with localized guidance, distinct from turn errors', () => {
+  it('renders the max-tokens notice without asking the user to type 继续', () => {
     const h = makeHarness({ nodes: [user(1, 'try'), assistant(2, 'truncated'), turnMaxTokens(3)] })
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '已达到输出 token 上限回答被截断，已有输出保留在对话中。若本轮已自动续写仍停在这里，说明已达 Settings「自动续写次数」上限；再发送「继续」可手动接着输出。',
+      '已达到输出 token 上限已有输出保留在对话中。本轮没有自动发出「继续」（自动续写关闭，或这次截断没有进入续写）。',
     ])
+    expect(view.queryByRole('button', { name: '继续' })).toBeNull()
     expect(view.queryByText('本轮运行失败')).toBeNull()
   })
 

@@ -2122,9 +2122,9 @@ function createInterruptAgentTool(
     name: "interrupt_agent",
     description:
       "Interrupt a running child subagent by session id. " +
-      "Suppresses the automatic parent completion steer for this idle stretch. " +
-      "Set takeover true to mark the Agent Teams task as paused for human ownership " +
-      "(open the child session in the UI; resume later with send_message).",
+      "Steers the parent with why it stopped, how much it already ran, and how to resume " +
+      "(send_message / list_agents); suppresses the later idle \"finished a turn\" notice. " +
+      "Set takeover true to pause the Agent Teams task for human ownership.",
     parameters: {
       type: "object",
       properties: {
@@ -2135,7 +2135,7 @@ function createInterruptAgentTool(
         takeover: {
           type: "boolean",
           description:
-            "If true, pause the task board entry and hand the child to a human (no auto completion notice).",
+            "If true, pause the task board entry and hand the child to a human; parent still gets a takeover notice.",
         },
       },
       required: ["agent_id"],
@@ -2155,11 +2155,16 @@ function createInterruptAgentTool(
           parentSessionId: options.parentSessionId,
           childSessionId: childId,
           mode: "continuable",
-          ...(takeover ? { takeover: true } : {}),
+          ...(takeover ? { takeover: true, reason: "takeover" } : { reason: "parent" }),
         },
       );
       if (!stopped.result.ok) {
-        // one-shot children: fall back to session.cancel
+        // one-shot children: fall back to session.cancel. Notify first so the
+        // cancel's default user cause does not overwrite this parent/takeover reason.
+        options.runtime.notifyOwnedSubagentStopped(
+          childId,
+          takeover ? "takeover" : "parent",
+        );
         const cancelled = await dispatchFaceMethod(
           options.runtime,
           "session.cancel",
@@ -2172,15 +2177,14 @@ function createInterruptAgentTool(
             isError: true,
           };
         }
-        options.runtime.suppressOwnedSubagentCompletion(childId);
       }
       if (takeover) {
         options.runtime.agentTeamTasks.markTakeover(childId);
       }
       return {
         content: takeover
-          ? `interrupted ${childId} (human takeover — task paused)`
-          : `interrupted ${childId}`,
+          ? `interrupted ${childId} (human takeover — task paused; parent was notified)`
+          : `interrupted ${childId} (parent was notified with progress)`,
       };
     },
   };

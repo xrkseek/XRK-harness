@@ -23,6 +23,18 @@ export function peerThreadMessageProblem(input: {
   return undefined;
 }
 
+/** User-identity steer back to peers when a collaborating session is cut off. */
+export function formatPeerCollabStopNotice(input: {
+  readonly sessionId: string;
+  readonly why: string;
+}): string {
+  return [
+    `[会话协作] Session ${input.sessionId} ${input.why}.`,
+    "Their reply will not arrive on the turn that was waiting.",
+    "thread_message them again if you still need an answer. Do not assume the work finished.",
+  ].join("\n");
+}
+
 export function formatPeerCollabPrompt(input: {
   readonly fromSessionId: string;
   readonly fromThreadTitle?: string;
