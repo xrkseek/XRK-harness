@@ -23,14 +23,14 @@
  *   14/5/23 斜眼 · 7/16 怒目 · 15/9/20/12/18 扫读 · 10/1 聆听 · 24 羞怯
  * ============================================================ */
 
-window.EMOTION_GROUPS = [
+globalThis.EMOTION_GROUPS = [
   { key: 'life',    name: '生命周期',     en: 'Lifecycle' },
   { key: 'emotion', name: '情绪反应',     en: 'Emotions' },
   { key: 'agent',   name: '代理工作状态', en: 'Agent States' },
   { key: 'custom',  name: '自定义',       en: 'Custom' }
 ];
 
-window.EMOTION_SEED = [
+globalThis.EMOTION_SEED = [
 
   /* ==================== 1）生命周期（8 个） ==================== */
 

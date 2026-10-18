@@ -4,7 +4,7 @@
  *   SHAPES：身体形状环（blob 圆胖 / wedge 三角 / gem 菱形）+ 脸部拟合参数
  *   坐标系：viewBox -15 -15 259 259，头部中心 114.2705
  * ============================================================ */
-window.EB_RINGS = {
+globalThis.EB_RINGS = {
   HEAD_C: 114.2705,
   EYE_HALF: 21,
   STAR_GOLD: '#f4c34e',
@@ -158,5 +158,5 @@ window.EB_RINGS = {
     face: { x: 0, y: -4, sx: 0.78, sy: 0.74, eye: 0.84 },
     tiltScale: 0.5,
   }
-})(window.EB_RINGS)
+})(globalThis.EB_RINGS)
 

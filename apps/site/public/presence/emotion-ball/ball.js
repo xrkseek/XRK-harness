@@ -17,8 +17,8 @@
 (function () {
   'use strict';
 
-  var EB = (window.EmotionBall = window.EmotionBall || {});
-  var RD = window.EB_RINGS;
+  var EB = (globalThis.EmotionBall = globalThis.EmotionBall || {});
+  var RD = globalThis.EB_RINGS;
   var SVGNS = 'http://www.w3.org/2000/svg';
   var uid = 0;
   var TAU = Math.PI * 2;
@@ -119,12 +119,14 @@
     }
 
     /* ---- SVG 骨架 ---- */
+    /* Top pad to y=-100: bounce peak ≈ -58, halo ≈ -28 → about -86. */
     var svg = el('svg', {
-      viewBox: '-15 -15 259 259',
+      viewBox: '-15 -100 259 344',
       width: '100%',
       height: '100%',
       role: 'img',
-      'aria-label': opts.label || 'AI 表情小球'
+      'aria-label': opts.label || 'AI 表情小球',
+      preserveAspectRatio: 'xMidYMid meet',
     });
     svg.style.display = 'block';
     svg.style.overflow = 'visible';
@@ -526,7 +528,9 @@
       return 'round';
     }
 
-    var HAT_Y_OFF = { halo: -12, visor: 16, cap: 11, beanie: 8, bow: 6 };
+    /* Negative lifts above silMinY (SVG y grows down). Caps sit on the crown;
+     * halo floats well clear so bounce/spin never looks welded into the head. */
+    var HAT_Y_OFF = { halo: -28, visor: 6, cap: 2, beanie: 0, bow: -4 };
     var KIT_ROLE_FILL = {
       brim: 'brim', crown: 'crown', accent: 'accent', bow: 'bow', knot: 'knot',
     };
@@ -803,6 +807,11 @@
         'translate(' + r2(slot.x) + ' ' + r2(slot.y) + ') scale(' + r2(sx) + ' ' + r2(sz.ry) + ')');
     }
 
+    /** A lens still counts as visible only while it has real foreshortened width. */
+    function facingSlot(slot) {
+      return !!(slot && slot.on && slot.rx > 1.5);
+    }
+
     function layoutGlasses() {
       if (!isSpecsKit(kitGlasses) && !glassesImage) {
         specsG.style.display = 'none';
@@ -810,14 +819,15 @@
       }
       var L = eyeL.slot;
       var R = eyeR.slot;
-      if (!L && !R) {
+      var Lvis = facingSlot(L);
+      var Rvis = facingSlot(R);
+      /* Turned past the silhouette: both lenses are gone, so the glasses SVG goes too. */
+      if (!Lvis && !Rvis) {
         specsG.style.display = 'none';
         return;
       }
-      if (glassesImage && (!L || !L.on) && (!R || !R.on)) {
-        specsG.style.display = 'none';
-        return;
-      }
+      if (!Lvis && L) L = { on: false, x: L.x, y: L.y, rx: L.rx, ry: L.ry };
+      if (!Rvis && R) R = { on: false, x: R.x, y: R.y, rx: R.rx, ry: R.ry };
       specsG.style.display = '';
       /* 内置椭圆 / 贴纸半幅 image 都走 lens-L/R，每片大小跟该眼 rx·ry。 */
       specsG.removeAttribute('transform');
@@ -861,25 +871,30 @@
       }
       var yaw = lastYaw;
       var cn = Math.cos(yaw);
-      if (cn <= 0.08) {
+      var isHalo = kitHat === 'halo';
+      /* Halo floats above the crown — keep it through spin/bounce. Solid hats
+       * only hide once fully behind the silhouette (still room while |yaw|≈90°). */
+      if (!isHalo && cn <= -0.12) {
         hatG.style.display = 'none';
         return;
       }
       hatG.style.display = '';
-      /* 贴图走中性贴顶偏移；内置按件调高，否则 bow 会被塞进身体里 */
-      var yOff = hatImage ? 6
-        : (HAT_Y_OFF[kitHat] !== undefined ? HAT_Y_OFF[kitHat] : 6);
+      var yOff = hatImage ? -2
+        : (HAT_Y_OFF[kitHat] !== undefined ? HAT_Y_OFF[kitHat] : -2);
       var y = silMinY + yOff;
       var sampleY = Math.min(silMaxY - 4, Math.max(silMinY + 6, y + 14));
       var band = silAt(sampleY);
       var hw = Math.max((band[1] - band[0]) / 2, 14);
       var cx = (band[0] + band[1]) / 2;
-      var x = cx + hw * Math.sin(yaw) * 0.74;
-      var sx = 0.4 + 0.6 * cn;
-      var fit = hw / 54;
+      var x = cx + hw * Math.sin(yaw) * (isHalo ? 0.22 : 0.74);
+      var cnAbs = Math.abs(cn);
+      var sx = isHalo
+        ? (0.55 + 0.45 * cnAbs)
+        : (0.45 + 0.55 * Math.max(cn, 0));
+      var fit = hw / (isHalo ? 48 : 54);
       hatG.setAttribute('transform',
         'translate(' + r2(x) + ' ' + r2(y) + ') scale(' + r2(fit * sx) + ' ' + r2(fit) + ')' +
-        (kitHat === 'halo' ? ' rotate(-12)' : ''));
+        (isHalo ? ' rotate(-8)' : ''));
     }
 
     function layoutHeld() {

@@ -128,9 +128,10 @@ function usePresencePaint(): PresencePaint {
 }
 
 const SCRIPT_BASE = '/presence/emotion-ball'
-const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
-/** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '29'
+/** Worker host first; SVG stack loads via EmotionBall.loadLegacySvg when needed. */
+const SCRIPT_ORDER = ['presence-worker-host.js'] as const
+/** Bump when worker / canvas render path changes so cached scripts reload. */
+const PRESENCE_BALL_REV = '40'
 
 /** Emotions that get a short celebrate FX when AI sticky-sets them. */
 const CELEBRATE_IDS = new Set(['10', '33'])
@@ -195,6 +196,8 @@ type EmotionBallHandle = {
   setKit?: (kit: string) => void
   setDressing?: (hat: string, glasses: string, held?: string, images?: string | DressingImages) => void
   destroy: () => void
+  /** Worker bridge: `fatal` means the render thread died. */
+  on?: (evt: string, cb: (payload?: { message?: string }) => void) => void
 }
 
 type EmotionBallNs = {
@@ -224,6 +227,10 @@ type EmotionBallNs = {
       heldImage?: string
     },
   ) => EmotionBallHandle
+  /** True when OffscreenCanvas + Worker path is available. */
+  canOffscreen?: () => boolean
+  /** Load SVG rings/emotions/ball/engine when Worker path is unavailable. */
+  loadLegacySvg?: () => Promise<void>
 }
 
 export type SessionBallPersona = {
@@ -252,6 +259,20 @@ declare global {
 
 let scriptsPromise: Promise<void> | undefined
 
+function loadScript(name: string): Promise<void> {
+  const src = `${SCRIPT_BASE}/${name}?v=${PRESENCE_BALL_REV}`
+  document.querySelector(`script[data-xrk-presence="${name}"]`)?.remove()
+  return new Promise<void>((resolve, reject) => {
+    const el = document.createElement('script')
+    el.src = src
+    el.async = false
+    el.dataset.xrkPresence = name
+    el.onload = () => { resolve() }
+    el.onerror = () => { reject(new Error(`failed to load ${src}`)) }
+    document.head.appendChild(el)
+  })
+}
+
 function loadEmotionBallScripts(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
   if (
@@ -262,22 +283,19 @@ function loadEmotionBallScripts(): Promise<void> {
   }
   if (scriptsPromise) return scriptsPromise
   scriptsPromise = (async () => {
-    const names = SCRIPT_ORDER
-    for (const name of names) {
-      const src = `${SCRIPT_BASE}/${name}?v=${PRESENCE_BALL_REV}`
-      document.querySelector(`script[data-xrk-presence="${name}"]`)?.remove()
-      await new Promise<void>((resolve, reject) => {
-        const el = document.createElement('script')
-        el.src = src
-        el.async = false
-        el.dataset.xrkPresence = name
-        el.onload = () => { resolve() }
-        el.onerror = () => { reject(new Error(`failed to load ${src}`)) }
-        document.head.appendChild(el)
-      })
+    // Worker host owns EmotionBall.create (Offscreen). SVG stack is lazy.
+    for (const name of SCRIPT_ORDER) {
+      await loadScript(name)
     }
-    if (!window.EmotionBall?.create) {
+    const sdk = window.EmotionBall
+    if (!sdk?.create) {
       throw new Error('EmotionBall SDK missing after script load')
+    }
+    if (sdk.canOffscreen?.() !== true) {
+      if (typeof sdk.loadLegacySvg !== 'function') {
+        throw new Error('EmotionBall.loadLegacySvg missing')
+      }
+      await sdk.loadLegacySvg()
     }
     document.documentElement.dataset.xrkPresenceRev = PRESENCE_BALL_REV
   })().catch((err) => {
@@ -640,6 +658,7 @@ export const PresenceBall = memo(function PresenceBall({
   const perfLiteRef = useRef(false)
   const accentLiteTimerRef = useRef<number | undefined>(undefined)
   const clickIndexRef = useRef(0)
+  const [renderGen, setRenderGen] = useState(0)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
   const [phase, setPhase] = useState(0)
@@ -713,15 +732,12 @@ export const PresenceBall = memo(function PresenceBall({
     const el = mountRef.current
     if (!el || !engineActive) return
     let cancelled = false
-    void loadEmotionBallScripts().then(
-      () => {
+    void loadEmotionBallScripts()
+      .then(async () => {
         if (cancelled || !mountRef.current || !window.EmotionBall?.create) return
-        mountRef.current.replaceChildren()
-        // idle:false — engine must not auto-sleep over activity / sticky labels.
-        // Seed lite from current workBusy; later toggles use setLite (no remount).
-        const ball = window.EmotionBall.create(mountRef.current, {
+        const opts = {
           emotion: emotion.emotionId,
-          idle: false,
+          idle: false as const,
           lite: workBusy,
           eyeScale: 1.2,
           shape,
@@ -734,17 +750,42 @@ export const PresenceBall = memo(function PresenceBall({
           hatImage: overlayHat,
           glassesImage: overlayGlasses,
           heldImage: overlayHeld,
+        }
+        const open = async (): Promise<EmotionBallHandle> => {
+          const node = mountRef.current
+          if (!node || !window.EmotionBall?.create) {
+            throw new Error('EmotionBall mount missing')
+          }
+          node.replaceChildren()
+          try {
+            return window.EmotionBall.create(node, opts)
+          } catch (err) {
+            await window.EmotionBall.loadLegacySvg?.()
+            const retry = mountRef.current
+            if (!retry || !window.EmotionBall.create) throw err
+            retry.replaceChildren()
+            return window.EmotionBall.create(retry, opts)
+          }
+        }
+        const ball = await open()
+        ball.on?.('fatal', () => {
+          if (cancelled) return
+          const remount = (): void => {
+            if (!cancelled) setRenderGen((n) => n + 1)
+          }
+          const load = window.EmotionBall?.loadLegacySvg
+          if (load) void load().then(remount, remount)
+          else remount()
         })
         ballRef.current = ball
         setReady(true)
         setError(undefined)
-      },
-      (err: unknown) => {
+      })
+      .catch((err: unknown) => {
         if (cancelled) return
         setError(err instanceof Error ? err.message : String(err))
         setReady(false)
-      },
-    )
+      })
     return () => {
       cancelled = true
       if (accentLiteTimerRef.current !== undefined) {
@@ -758,7 +799,7 @@ export const PresenceBall = memo(function PresenceBall({
     // Remount when Settings shape/color, chrome scheme, session seed, or engine
     // gate changes. Emotion id is applied in the follow-up effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld])
+  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld, renderGen])
 
   // Runtime FX budget — never remount for lite toggles. While a heavy accent
   // holds full FX, skip; the timer restores from perfLiteRef when it ends.
@@ -819,6 +860,8 @@ export const PresenceBall = memo(function PresenceBall({
   ])
 
   // Gaze: coalesce pointer samples to one setGaze per animation frame.
+  // Keep tracking during a turn — parking gaze at origin froze the face
+  // exactly while the model was working.
   useEffect(() => {
     if (!ready) return
     let raf = 0

@@ -18,12 +18,11 @@
 (function () {
   'use strict';
 
-  var EB = (window.EmotionBall = window.EmotionBall || {});
-  var RD = window.EB_RINGS;
+  var EB = (globalThis.EmotionBall = globalThis.EmotionBall || {});
+  var RD = globalThis.EB_RINGS;
   var EXPR = RD.EXPRESSIONS;
   var TAU = Math.PI * 2;
   var FALLBACK_ID = '02';
-
   /* ---------------- 基础工具 ---------------- */
 
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -216,7 +215,7 @@
 
   /* ---------------- 配置注册中心 ---------------- */
 
-  var GROUPS = (window.EMOTION_GROUPS || [
+  var GROUPS = (globalThis.EMOTION_GROUPS || [
     { key: 'life', name: '生命周期' },
     { key: 'emotion', name: '情绪反应' },
     { key: 'agent', name: '代理工作状态' },
@@ -343,7 +342,9 @@
 
   function Engine(target, opts) {
     opts = opts || {};
-    var el = typeof target === 'string' ? document.querySelector(target) : target;
+    var el = typeof target === 'string'
+      ? (typeof document !== 'undefined' ? document.querySelector(target) : null)
+      : target;
     if (!el) throw new Error('EmotionBall.create：找不到容器元素');
 
     this.ball = EB.createBall(el, Object.assign({}, opts, {
@@ -363,6 +364,8 @@
       : null;
     this._eyeScale = opts.eyeScale || 1;
     this._lastTick = 0;
+    /* lite: ball skips ribbons/confetti; engine still poses every frame. */
+    this._lite = opts.lite != null ? !!opts.lite : opts.autostart === false;
     this._spin = null;   /* { x, v, t }：弹簧驱动的整圈自旋（彩带触发源） */
 
     /* ---- 表情形变系统 ---- */
@@ -573,9 +576,16 @@
     /**
      * Runtime FX budget — forwards to ball.setLite (no remount).
      * lite: body + eyes + breathe; skips ribbons / orbit / confetti.
+     * Pose (yaw / gaze / blink) still updates every frame.
      */
     setLite: function (on) {
-      if (this.ball.setLite) this.ball.setLite(on);
+      var next = !!on;
+      if (next === this._lite) {
+        if (this.ball.setLite) this.ball.setLite(next);
+        return this;
+      }
+      this._lite = next;
+      if (this.ball.setLite) this.ball.setLite(next);
       return this;
     },
     /* 弹跳（4 段递减抛物线） */
@@ -645,6 +655,8 @@
 
     /* ---------- 每帧 ---------- */
     _tick: function (now) {
+      /* Lite skips ribbons/confetti inside the ball. Pose (yaw, gaze, blink)
+       * still runs every frame — a 12fps skip froze the turn and the stare. */
       this._dt = this._lastTick ? clamp((now - this._lastTick) / 1000, 0.001, 0.05) : 1 / 60;
       this._lastTick = now;
       if (this._idle && !this._touring) this._checkIdle(now);
@@ -861,8 +873,8 @@
   EB.version = '1.0.0';
 
   /* 载入种子配置（emotions.js 在本脚本之前加载） */
-  if (Array.isArray(window.EMOTION_SEED)) {
-    window.EMOTION_SEED.forEach(function (raw) {
+  if (Array.isArray(globalThis.EMOTION_SEED)) {
+    globalThis.EMOTION_SEED.forEach(function (raw) {
       var r = register(raw);
       if (!r.ok) console.warn('[EmotionBall] 种子配置无效：', r.id, r.errors);
     });
