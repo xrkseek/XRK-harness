@@ -151,10 +151,15 @@ function capacitySpelling(value: number | undefined): string {
   return value === undefined ? '' : formatCapacity(value)
 }
 
+/** Capacities a listing may disclose. Existing numbers stay; blanks fill in. */
+const DISCLOSED_CAPACITIES = ['contextWindow', 'maxTokens', 'softBudgetMaxTokens'] as const
+
 /**
  * Refresh only the rows the user already configured.
  * - Missing from the provider listing → drop.
- * - Still listed → keep id / display name / capacities; refresh thinking only.
+ * - Still listed → keep id / display name and any capacity already set.
+ * - Blank capacity the listing disclosed → fill it.
+ * - Thinking menu the listing disclosed → replace.
  * - Blank id → draft still being typed, keep.
  * Never copies upstream `name` onto a hand-edited display name.
  */
@@ -172,11 +177,17 @@ function syncListedModels(
     }
     const upstream = byId.get(id)
     if (upstream === undefined) continue
-    if (upstream.reasoning === undefined) {
-      next.push(row)
-      continue
+    let merged: ModelDraft = row
+    if (upstream.reasoning !== undefined) {
+      merged = { ...merged, reasoning: upstream.reasoning }
     }
-    next.push({ ...row, reasoning: upstream.reasoning })
+    for (const field of DISCLOSED_CAPACITIES) {
+      const disclosed = upstream[field]
+      if (numberOf(merged, field) === undefined && typeof disclosed === 'number') {
+        merged = { ...merged, [field]: disclosed }
+      }
+    }
+    next.push(merged)
   }
   return next
 }
@@ -355,15 +366,19 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         byId.set(candidate.id, adopt(candidate))
         continue
       }
+      // Keep hand-tuned capacities / display names; still refresh the thinking
+      // menu (same rule as Refresh list) and fill a blank soft-budget ceiling.
+      let next = existing
       if (
         numberOf(existing, 'softBudgetMaxTokens') === undefined
         && candidate.softBudgetMaxTokens !== undefined
       ) {
-        byId.set(candidate.id, {
-          ...existing,
-          softBudgetMaxTokens: candidate.softBudgetMaxTokens,
-        })
+        next = { ...next, softBudgetMaxTokens: candidate.softBudgetMaxTokens }
       }
+      if (candidate.reasoning !== undefined) {
+        next = { ...next, reasoning: candidate.reasoning }
+      }
+      if (next !== existing) byId.set(candidate.id, next)
     }
     onChange([...byId.values()])
     closePicker()
@@ -553,6 +568,31 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     aria-label={`${t('softBudgetKeepTokens')} ${index + 1}`}
                     disabled={disabled}
                     onChange={(event) => { editCapacity(index, 'softBudgetKeepTokens', event.target.value) }}
+                  />
+                </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('maxConcurrentSessions')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    inputMode="numeric"
+                    value={typeof model['maxConcurrentSessions'] === 'number'
+                      ? String(model['maxConcurrentSessions'])
+                      : ''}
+                    placeholder={t('maxConcurrentSessionsPlaceholder')}
+                    aria-label={`${t('maxConcurrentSessions')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const text = event.target.value.trim()
+                      if (text.length === 0) {
+                        patch(index, { maxConcurrentSessions: undefined })
+                        return
+                      }
+                      const parsed = Number(text)
+                      patch(index, {
+                        maxConcurrentSessions: Number.isInteger(parsed) ? parsed : Number.NaN,
+                      })
+                    }}
                   />
                 </label>
                 <label className={styles['modelField']}>

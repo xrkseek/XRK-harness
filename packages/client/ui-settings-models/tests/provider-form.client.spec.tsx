@@ -465,7 +465,17 @@ describe('endpoint interrogation', () => {
 
   it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
     const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'kept', contextWindow: 999 }, { id: 'fresh', contextWindow: 4096, name: 'Fresh' }],
+      models: [
+        {
+          id: 'kept',
+          contextWindow: 999,
+          reasoning: {
+            efforts: [{ id: 'high', name: 'High' }],
+            defaultEffort: 'high',
+          },
+        },
+        { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
+      ],
     })))
     const { mutate } = await mountSection({
       discover,
@@ -487,7 +497,14 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
-      { id: 'kept', contextWindow: 111 },
+      {
+        id: 'kept',
+        contextWindow: 111,
+        reasoning: {
+          efforts: [{ id: 'high', name: 'High' }],
+          defaultEffort: 'high',
+        },
+      },
       { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
     ])
   })
@@ -497,6 +514,9 @@ describe('endpoint interrogation', () => {
       models: [{
         id: 'kept',
         name: 'Upstream Label',
+        contextWindow: 999,
+        maxTokens: 8192,
+        softBudgetMaxTokens: 100_000,
         reasoning: {
           efforts: [{ id: 'high', name: 'High' }],
           defaultEffort: 'high',
@@ -535,6 +555,8 @@ describe('endpoint interrogation', () => {
       id: 'kept',
       name: 'My Nickname',
       contextWindow: 111,
+      maxTokens: 8192,
+      softBudgetMaxTokens: 100_000,
       reasoning: {
         efforts: [{ id: 'high', name: 'High' }],
         defaultEffort: 'high',

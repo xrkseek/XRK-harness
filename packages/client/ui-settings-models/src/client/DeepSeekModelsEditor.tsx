@@ -25,6 +25,7 @@ type CatalogField =
   | 'softBudgetMaxTokens'
   | 'softBudgetKeepTokens'
   | 'softBudgetBufferTokens'
+  | 'maxConcurrentSessions'
   | 'inputModalities'
 
 /** Token counts edited as K/M-suffixed text behind a row's disclosure. */
@@ -151,6 +152,14 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
         || !Number.isInteger(softBudgetBufferTokens)
         || softBudgetBufferTokens < 0)) {
       return { index, key: 'modelSoftBudgetBufferInvalid' }
+    }
+    const maxConcurrentSessions = model['maxConcurrentSessions']
+    if (maxConcurrentSessions !== undefined
+      && (typeof maxConcurrentSessions !== 'number'
+        || !Number.isInteger(maxConcurrentSessions)
+        || maxConcurrentSessions < 1
+        || maxConcurrentSessions > 64)) {
+      return { index, key: 'modelMaxConcurrentInvalid' }
     }
   }
   return undefined
@@ -410,6 +419,29 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                       {capacityField(model, index, 'softBudgetMaxTokens', undefined)}
                       {capacityField(model, index, 'softBudgetKeepTokens', undefined)}
                       {capacityField(model, index, 'softBudgetBufferTokens', undefined)}
+                      <label className={styles['modelField']}>
+                        <span className={styles['modelFieldLabel']}>{props.t('maxConcurrentSessions')}</span>
+                        <input
+                          className={styles['input']}
+                          type="text"
+                          inputMode="numeric"
+                          value={typeof model['maxConcurrentSessions'] === 'number'
+                            ? String(model['maxConcurrentSessions'])
+                            : ''}
+                          placeholder={props.t('maxConcurrentSessionsPlaceholder')}
+                          aria-label={`${props.t('maxConcurrentSessions')} ${index + 1}`}
+                          disabled={props.disabled}
+                          onChange={(event) => {
+                            const text = event.target.value.trim()
+                            if (text.length === 0) {
+                              update(index, 'maxConcurrentSessions', undefined)
+                              return
+                            }
+                            const parsed = Number(text)
+                            update(index, 'maxConcurrentSessions', Number.isInteger(parsed) ? parsed : Number.NaN)
+                          }}
+                        />
+                      </label>
                       <div className={styles['modelField']}>
                         <span className={styles['modelFieldLabel']}>{props.t('inputModalities')}</span>
                         <div className={styles['modalityRow']}>
