@@ -170,6 +170,19 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
   前者非零退出后者根本不会跑。补救不是重跑 `pnpm release`（会重 stage 十几分钟并撞已存在的 CLI 版本），
   而是手动在 `.release/harness` 用同款凭据补：写 `.npmrc`（`//registry.npmjs.org/:_authToken=$env:NPM_TOKEN`）
   → `npx --yes npm@10.9.2 pack` → `npx --yes npm@10.9.2 publish <tgz> --access public`。
+  手里没有 `NPM_TOKEN` 时，`.release/harness-cli/.npmrc`（`publishStage(CLI)` 写的）里就是同一枚 token，
+  `Copy-Item` 到 `.release/harness/.npmrc` 即可、不必回显；`npm whoami` 出账号名且上一版同包 tarball
+  `HEAD 200` 就说明凭据可用（`.release/` 已 gitignore，token 不会入库）。
+- **PUT 返回 `202 Accepted` 是异步接收，不等于落地**：npm 仍会照打 `+ <pkg>@<ver>` / `exit 0` / `info ok`
+  （debug 日志 `http fetch PUT 202 … 14125ms`），但紧随其后的**数分钟**里 `npm view` 的 `versions` 查不到、
+  version doc 与 tarball 全 404 —— v0.6.4 的 SDK（36.5 MB）实测约 **4 分钟**后才出现。**别在这个窗口里
+  判失败重发**（会 `E409 Cannot publish over previously staged version`）。终态判据只有两条：
+  `curl -s -o NUL -w "%{http_code}" https://registry.npmjs.org/@scope%2Fname/<ver>` = 200，且
+  `npm view <pkg>@<ver> dist.shasum` 与上传时 npm notice 的 `shasum` **逐字一致**（v0.6.4 是
+  `3a9161abce8fa09c4559b868cc93ac5d8109d8cf`）；`time.<ver>` 这类字段可能更晚才补上，别当判据。
+- **tag 里的 `apps/site/releases.json` 恒落后一版，是预期而非漏发**：下载页要等桌面 exe 打出来才能填
+  真实 filename，所以 `chore(site)` commit 必然落在 tag 之后（v0.6.4 的 tag 里写着 0.6.3，v0.6.3 的 tag 里
+  写着 0.6.2）。核版本别拿 tag 里的 releases.json 当判据，看 **main HEAD**。
 - **GH Release 的 SDK tgz 与 npm 上发布的 tarball 不是同一份字节**：`stage-sdk-release.mjs` 生成
   `.release/xrkseek-harness-<ver>.tgz`，`publishStage` 内部又 `npm pack` 一次（`<stage>/…tgz`），两者
   size/hash 都不同（v0.6.4：36856813 vs 36542179）。这是固有现象，别当成错版。
