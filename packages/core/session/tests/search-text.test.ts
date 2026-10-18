@@ -11,4 +11,18 @@ describe("extractEventSearchText", () => {
     expect(extractSessionSearchTexts(events)).toEqual(["hello world", "plan"]);
     expect(extractEventSearchText(events[1]!)).toBe("plan");
   });
+
+  it("indexes assistant text chunks like FTS packing", () => {
+    expect(
+      extractEventSearchText({
+        type: "assistant/chunk",
+        ts: 1,
+        turnId: "t",
+        stepId: "s",
+        text: "stream-token",
+        kind: "text",
+        index: 0,
+      }),
+    ).toBe("stream-token");
+  });
 });

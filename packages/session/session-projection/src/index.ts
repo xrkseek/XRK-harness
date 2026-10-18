@@ -147,6 +147,17 @@ export interface SessionProjectionRegistry {
     value: unknown,
     seq: number,
   ): void;
+  /**
+   * Replace one unit's live fold without appending a log event.
+   * Host facts that are not session events (the selected model's context
+   * window) publish through here. Does not move `observedSeq`.
+   * No-op when `key` is not a registered unit or `patch` returns the same state.
+   */
+  revise(
+    sessionId: string,
+    key: string,
+    patch: (state: unknown) => unknown,
+  ): void;
   /** Drop cached fold state for one session (SQLite LRU eviction). */
   evictSession(sessionId: string): void;
 }
@@ -462,6 +473,20 @@ export function createSessionProjectionRegistry(
       }
       for (const listener of listeners) {
         listener(sessionId, key, value ?? null, seq);
+      }
+    },
+
+    revise(sessionId, key, patch) {
+      const registration = registrations.get(key);
+      if (registration === undefined) return;
+      const cell = cellFor(registration, sessionId);
+      const next = patch(cell.state);
+      if (Object.is(next, cell.state)) return;
+      cell.state = next;
+      if (!registration.def.wired || listeners.size === 0) return;
+      const value = registration.def.parse(registration.def.view(next));
+      for (const listener of listeners) {
+        listener(sessionId, key, value, cell.observedSeq);
       }
     },
 

@@ -44,8 +44,11 @@ function openDatabase(dbPath: string, readOnly = false): DatabaseSync {
 }
 
 export interface PersistentSessionStore extends SessionStore {
-  /** Flush batched chunk writes (also called from {@link close}). */
-  flush(): void;
+  /**
+   * Flush batched writes. No argument drains every session (close / search /
+   * eviction). A session id commits only that session's pending batch.
+   */
+  flush(sessionId?: string): void;
   /** Release the database handle (required on Windows before deleting the file). */
   close(): void;
   /**
@@ -216,9 +219,14 @@ interface PendingEvent {
  * - a durability boundary event arrives (`user/message`, `turn/*`,
  *   `command/*`, `prompt/*` — user inputs / lifecycle edges that must not
  *   be lost on crash; crash repair relies on them to close open turns),
- * - the pending queue crosses this ceiling (model-output bursts inside one
- *   very long turn), or
- * - an explicit `flush()` (host drain idle / close / search / evict).
+ * - that session's own pending count crosses this ceiling (model-output
+ *   bursts inside one very long turn), or
+ * - an explicit no-arg `flush()` (close / whole-DB vacuum). Drain idle,
+ *   eviction, delete, archive, and replacePrefix pass a session id.
+ *   Search matches `pending` in memory and does not flush.
+ * Automatic flushes write only the session that tripped them. Another
+ * session's interior batch stays in memory until its own boundary, its own
+ * ceiling, or an explicit `flush()`.
  * Model-interior events (`assistant/*`, `step/*`, `tool/*`, `llm/*`) batch:
  * a crash loses at most this window of model output, and
  * `repairOpenTurnEvents` still closes the turn on reload. Durability
@@ -240,6 +248,50 @@ export function ftsMatchQuery(query: string): string {
   const trimmed = query.trim();
   if (!trimmed) return '""';
   return `"${trimmed.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Join text chunks so a token split across indexes stays searchable after flush.
+ * `prefix` is the nearest earlier text chunk before this batch (flush boundary).
+ * Non-text events between the two chunks are skipped.
+ */
+function textChunkSearchJoin(
+  events: readonly SessionEvent[],
+  prefix = "",
+): string | null {
+  let parts = prefix ? 1 : 0;
+  let text = prefix;
+  for (const event of events) {
+    if (
+      event.type === "assistant/chunk"
+      && event.kind === "text"
+      && event.text
+    ) {
+      parts += 1;
+      text += event.text;
+    }
+  }
+  if (parts < 2) return null;
+  return text;
+}
+
+function previousTextChunk(
+  events: readonly SessionEvent[],
+  first: SessionEvent,
+): string {
+  const idx = events.indexOf(first);
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const prev = events[i]!;
+    if (
+      prev.type === "assistant/chunk"
+      && prev.kind === "text"
+      && typeof prev.text === "string"
+      && prev.text
+    ) {
+      return prev.text;
+    }
+  }
+  return "";
 }
 
 function extractStorageSearchText(record: PackedStorageRecord): string | null {
@@ -512,8 +564,9 @@ export function createPersistentSessionStore(
         return events === undefined || !sessionHasOpenTurn(events);
       });
       if (victim === undefined) break;
-      // Drain chunk batches before Face checkpoints / drops the resident log.
-      flushPending();
+      // Drain this victim's batches before Face checkpoints / drops the log.
+      // Other sessions stay pending so eviction does not stall their turns.
+      flushPending(victim);
       // Notify while still resident so Face can checkpoint. Do not remove from
       // residentOrder yet — onEvict may touchResident via readEvents/get; splice
       // only after the callback so a re-touch cannot leave a stale LRU entry.
@@ -554,10 +607,47 @@ export function createPersistentSessionStore(
     if (text) insertFts!.run(sessionId, seq, text);
   };
 
-  const flushPending = (): void => {
+  const indexJoinedTextChunks = (sessionId: string, events: readonly SessionEvent[]): void => {
+    const firstText = events.find(
+      (event) =>
+        event.type === "assistant/chunk"
+        && event.kind === "text"
+        && event.text,
+    );
+    const prefix = firstText
+      ? previousTextChunk(sessions.get(sessionId) ?? [], firstText)
+      : "";
+    const joined = textChunkSearchJoin(events, prefix);
+    if (!joined) return;
+    const seq = Math.max(0, (nextSeqBySession.get(sessionId) ?? 1) - 1);
+    insertFts!.run(sessionId, seq, joined);
+  };
+
+  /** Per-session pending length. Avoids scanning the whole queue on every append. */
+  const pendingCount = new Map<string, number>();
+  const notePending = (sessionId: string, delta: number): void => {
+    const next = (pendingCount.get(sessionId) ?? 0) + delta;
+    if (next <= 0) pendingCount.delete(sessionId);
+    else pendingCount.set(sessionId, next);
+  };
+
+  const flushPending = (onlySessionId?: string): void => {
     if (shared || pending.length === 0) return;
-    const batch = pending;
-    pending = [];
+    const batch: PendingEvent[] = [];
+    if (onlySessionId === undefined) {
+      batch.push(...pending);
+      pending = [];
+      pendingCount.clear();
+    } else {
+      const rest: PendingEvent[] = [];
+      for (const row of pending) {
+        if (row.sessionId === onlySessionId) batch.push(row);
+        else rest.push(row);
+      }
+      if (batch.length === 0) return;
+      pending = rest;
+      notePending(onlySessionId, -batch.length);
+    }
     const order: string[] = [];
     const bySession = new Map<string, SessionEvent[]>();
     for (const row of batch) {
@@ -573,10 +663,12 @@ export function createPersistentSessionStore(
     db.exec("BEGIN IMMEDIATE");
     try {
       for (const sessionId of order) {
-        const packed = packChunkRunsForExport(bySession.get(sessionId)!);
+        const events = bySession.get(sessionId)!;
+        const packed = packChunkRunsForExport(events);
         for (const record of packed) {
           writeRecord(sessionId, record);
         }
+        indexJoinedTextChunks(sessionId, events);
       }
       db.exec("COMMIT");
     } catch (err) {
@@ -586,8 +678,9 @@ export function createPersistentSessionStore(
         /* already rolled back / closed */
       }
       restoreSeqMap(seqSnapshot);
-      // Prepend failed batch so later flush/close can retry; keep any events
-      // appended while this flush ran.
+      // Prepend this flush's batch so later flush/close can retry; keep any
+      // events appended while this flush ran, including other sessions.
+      for (const row of batch) notePending(row.sessionId, 1);
       pending = batch.concat(pending);
       throw err;
     }
@@ -606,7 +699,9 @@ export function createPersistentSessionStore(
    *
    * Flush is scheduled on a microtask (not sync) so Face mux publish can run
    * in the same call stack after `append` returns; host idle/close `flush()`
-   * and the pending-length cap still drain synchronously.
+   * and that session's pending-length cap still drain synchronously.
+   * The microtask writes only sessions that hit a boundary, not every
+   * session sharing the queue.
    */
   const isDurabilityBoundary = (frozen: SessionEvent): boolean =>
     frozen.type === "user/message" ||
@@ -615,30 +710,41 @@ export function createPersistentSessionStore(
     frozen.type.startsWith("command/") ||
     frozen.type.startsWith("prompt/");
 
+  const flushMicrotaskIds = new Set<string>();
   let flushMicrotaskQueued = false;
   let storeClosed = false;
-  const scheduleFlushPending = (): void => {
-    if (shared || storeClosed || flushMicrotaskQueued) return;
+  const scheduleFlushPending = (sessionId: string): void => {
+    if (shared || storeClosed) return;
+    flushMicrotaskIds.add(sessionId);
+    if (flushMicrotaskQueued) return;
     flushMicrotaskQueued = true;
     queueMicrotask(() => {
       flushMicrotaskQueued = false;
-      if (storeClosed) return;
-      try {
-        flushPending();
-      } catch {
-        /* pending restored inside flushPending; close()/flush() retries */
+      if (storeClosed) {
+        flushMicrotaskIds.clear();
+        return;
+      }
+      const ids = [...flushMicrotaskIds];
+      flushMicrotaskIds.clear();
+      for (const id of ids) {
+        try {
+          flushPending(id);
+        } catch {
+          /* pending restored inside flushPending; close()/flush() retries */
+        }
       }
     });
   };
 
   const persistEvent = (id: string, frozen: SessionEvent): void => {
     pending.push({ sessionId: id, event: frozen });
-    if (pending.length >= MICRO_BATCH_MAX_PENDING) {
-      flushPending();
+    notePending(id, 1);
+    if ((pendingCount.get(id) ?? 0) >= MICRO_BATCH_MAX_PENDING) {
+      flushPending(id);
       return;
     }
     if (isDurabilityBoundary(frozen)) {
-      scheduleFlushPending();
+      scheduleFlushPending(id);
     }
   };
 
@@ -735,7 +841,7 @@ export function createPersistentSessionStore(
       assertWritable();
       const sid = assertSafeId(id);
       if (!sessionIds.has(sid)) return;
-      flushPending();
+      flushPending(sid);
       if (hotIds.has(sid)) {
         deleteSessionRows(db, sid);
         hotIds.delete(sid);
@@ -770,7 +876,7 @@ export function createPersistentSessionStore(
         throw new Error(`session not found: ${sid}`);
       }
       if (coldIds.has(sid)) return;
-      flushPending();
+      flushPending(sid);
       copySessionRows(db, archiveDb, sid);
       deleteSessionRows(db, sid);
       hotIds.delete(sid);
@@ -789,7 +895,7 @@ export function createPersistentSessionStore(
         throw new Error(`session not found: ${sid}`);
       }
       if (!coldIds.has(sid)) return;
-      flushPending();
+      flushPending(sid);
       copySessionRows(archiveDb, db, sid);
       deleteSessionRows(archiveDb, sid);
       coldIds.delete(sid);
@@ -824,6 +930,7 @@ export function createPersistentSessionStore(
         for (let i = pending.length - 1; i >= 0; i -= 1) {
           if (pending[i]!.event === frozen) {
             pending.splice(i, 1);
+            notePending(id, -1);
             break;
           }
         }
@@ -861,6 +968,7 @@ export function createPersistentSessionStore(
         for (const record of packed) {
           writeRecord(sid, record);
         }
+        indexJoinedTextChunks(sid, frozen);
         db.exec("COMMIT");
       } catch (err) {
         try {
@@ -889,7 +997,7 @@ export function createPersistentSessionStore(
         throw new Error(`session not found: ${sid}`);
       }
       assertHotMutable(sid);
-      flushPending();
+      flushPending(sid);
       const frozen: SessionEvent[] = [];
       for (const event of eventsInput) {
         frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
@@ -905,6 +1013,7 @@ export function createPersistentSessionStore(
           for (const record of packed) {
             writeRecord(sid, record);
           }
+          indexJoinedTextChunks(sid, frozen);
         }
         db.exec("COMMIT");
       } catch (err) {
@@ -946,7 +1055,6 @@ export function createPersistentSessionStore(
     },
 
     searchSessionIds(query: string): readonly string[] {
-      flushPending();
       const match = ftsMatchQuery(query);
       if (match === '""') return [];
       const ids = new Set<string>();
@@ -964,11 +1072,47 @@ export function createPersistentSessionStore(
       };
       run(db);
       run(archiveDb);
+      // Pending batches are not in FTS yet. Match them in memory so a search
+      // does not COMMIT every other session's interior events.
+      const needle = query.trim().toLowerCase();
+      const chunkText = new Map<string, string>();
+      for (const row of pending) {
+        const text = extractEventSearchText(row.event);
+        if (text && text.toLowerCase().includes(needle)) {
+          ids.add(row.sessionId);
+          continue;
+        }
+        if (
+          row.event.type === "assistant/chunk"
+          && row.event.kind === "text"
+          && row.event.text
+        ) {
+          chunkText.set(
+            row.sessionId,
+            (chunkText.get(row.sessionId) ?? "") + row.event.text,
+          );
+        }
+      }
+      for (const [sessionId, text] of chunkText) {
+        let hay = text;
+        const firstPending = pending.find(
+          (row) =>
+            row.sessionId === sessionId
+            && row.event.type === "assistant/chunk"
+            && row.event.kind === "text"
+            && row.event.text,
+        )?.event;
+        if (firstPending) {
+          hay =
+            previousTextChunk(sessions.get(sessionId) ?? [], firstPending) + hay;
+        }
+        if (hay.toLowerCase().includes(needle)) ids.add(sessionId);
+      }
       return [...ids];
     },
 
-    flush() {
-      flushPending();
+    flush(sessionId?: string) {
+      flushPending(sessionId);
     },
 
     close() {

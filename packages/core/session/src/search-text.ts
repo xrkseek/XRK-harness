@@ -11,6 +11,14 @@ export function extractEventSearchText(event: SessionEvent): string {
   if (event.type === "assistant/message" && typeof event.content === "string") {
     return event.content;
   }
+  // Match FTS packing of text chunks so unflushed stream text stays searchable.
+  if (
+    event.type === "assistant/chunk"
+    && event.kind === "text"
+    && typeof event.text === "string"
+  ) {
+    return event.text;
+  }
   if (event.type === "prompt/admitted") {
     return readerText(event.content);
   }

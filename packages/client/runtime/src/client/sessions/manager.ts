@@ -349,9 +349,9 @@ export class SessionManager {
     let store = this.projectionStores.get(sessionId)
     if (store === undefined) {
       store = new ProjectionValueStore()
-      // List rows project off store keys (title); any-key changes re-enter
-      // the manager's own batched rebuild channel.
-      store.subscribeAny(() => { this.notifier.markDirty() })
+      // List rows read `title` only. Other keys (context pressure, timeline)
+      // must not rebuild the sidebar on every streaming frame.
+      store.faceOf('title').subscribe(() => { this.notifier.markDirty() })
       this.projectionStores.set(sessionId, store)
     }
     return store
@@ -768,11 +768,10 @@ export class SessionManager {
     }
     if (frame.type === 'session/projection') {
       // Finished host-computed value: land it in the resident store whether or
-      // not the Session is instantiated (list rows read the 'title' key). The
-      // synchronous markDirty keeps the list snapshot same-tick fresh (the
-      // store's own any-key channel is microtask-batched).
+      // not the Session is instantiated. Only `title` is on the list row, so
+      // only that key rebuilds the snapshot in this turn.
       this.projectionStore(frame.sessionId).apply(frame.key, frame.value, frame.seq)
-      this.notifier.markDirty()
+      if (frame.key === 'title') this.notifier.markDirty()
       return
     }
     if (frame.type === 'session/jobs') {

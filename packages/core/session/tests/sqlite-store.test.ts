@@ -189,6 +189,16 @@ describe("createPersistentSessionStore", () => {
     });
     expect(store.searchSessionIds("unique-fts-token")).toEqual(["hit"]);
     expect(store.searchSessionIds("no-such-token")).toEqual([]);
+    store.append(miss.id, {
+      type: "assistant/chunk",
+      ts: 3,
+      turnId: "t2",
+      stepId: "s2",
+      text: "pending-only-token",
+      kind: "text",
+      index: 0,
+    });
+    expect(store.searchSessionIds("pending-only-token")).toEqual(["miss"]);
     store.close();
 
     const reloaded = track(createPersistentSessionStore(dir));
@@ -319,6 +329,81 @@ describe("createPersistentSessionStore", () => {
 
     const b = track(createPersistentSessionStore(dir));
     expect(b.get("flush-me").events).toHaveLength(1);
+  });
+
+  it("A durability boundary does not persist B interior events", async () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir));
+    const a = store.create("sess-a").id;
+    const b = store.create("sess-b").id;
+
+    store.append(b, {
+      type: "assistant/chunk",
+      ts: 1,
+      turnId: "tb",
+      stepId: "sb",
+      text: "only-b",
+      kind: "text",
+      index: 0,
+    });
+    store.append(a, {
+      type: "user/message",
+      ts: 2,
+      turnId: "ta",
+      content: "hi-a",
+    });
+
+    // Durability flush is a microtask scoped to the session that hit the boundary.
+    await Promise.resolve();
+
+    expect(store.get(b).events).toHaveLength(1);
+
+    const { DatabaseSync } = process.getBuiltinModule(
+      "node:sqlite",
+    ) as typeof import("node:sqlite");
+    const db = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      const aRows = db
+        .prepare("SELECT payload FROM events WHERE session_id = ? ORDER BY seq")
+        .all(a) as { payload: string }[];
+      const bRows = db
+        .prepare("SELECT payload FROM events WHERE session_id = ? ORDER BY seq")
+        .all(b) as { payload: string }[];
+      expect(aRows).toHaveLength(1);
+      expect(JSON.parse(aRows[0]!.payload)).toMatchObject({
+        type: "user/message",
+        content: "hi-a",
+      });
+      expect(bRows).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+
+    store.flush(a);
+    const dbIdle = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      const bRows = dbIdle
+        .prepare("SELECT COUNT(*) AS n FROM events WHERE session_id = ?")
+        .get(b) as { n: number };
+      expect(bRows.n).toBe(0);
+    } finally {
+      dbIdle.close();
+    }
+
+    store.flush(b);
+    const db2 = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      const bRows = db2
+        .prepare("SELECT payload FROM events WHERE session_id = ? ORDER BY seq")
+        .all(b) as { payload: string }[];
+      expect(bRows).toHaveLength(1);
+      expect(JSON.parse(bRows[0]!.payload)).toMatchObject({
+        type: "assistant/chunk",
+        text: "only-b",
+      });
+    } finally {
+      db2.close();
+    }
   });
 
   it("reloads pending queue and steer admits after Host-style reopen", () => {
@@ -570,5 +655,173 @@ describe("createPersistentSessionStore", () => {
     reloaded.close();
     const afterDelete = track(createPersistentSessionStore(dir));
     expect(afterDelete.has(id)).toBe(false);
+  });
+
+  it("keeps a token searchable across a flush boundary and after archive restore", () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir));
+    const id = store.create("span-flush").id;
+    const span = "crossflushtoken";
+    store.append(id, {
+      type: "assistant/chunk",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      text: span.slice(0, 7),
+      kind: "text",
+      index: 0,
+    });
+    store.flush(id);
+    expect(store.searchSessionIds(span)).toEqual([]);
+
+    store.append(id, {
+      type: "assistant/chunk",
+      ts: 2,
+      turnId: "t",
+      stepId: "s",
+      text: span.slice(7),
+      kind: "text",
+      index: 1,
+    });
+    expect(store.searchSessionIds(span)).toEqual([id]);
+
+    store.flush(id);
+    expect(store.searchSessionIds(span)).toEqual([id]);
+
+    store.offloadToArchive(id);
+    expect(store.searchSessionIds(span)).toEqual([id]);
+
+    store.close();
+    const reloaded = track(createPersistentSessionStore(dir));
+    expect(reloaded.isOffloaded(id)).toBe(true);
+    expect(reloaded.searchSessionIds(span)).toEqual([id]);
+    reloaded.restoreFromArchive(id);
+    expect(reloaded.searchSessionIds(span)).toEqual([id]);
+  });
+
+  it("keeps a split token searchable when a non-text event sits on the flush boundary", () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir));
+    const id = store.create("span-gap").id;
+    const span = "gapflushtoken";
+    store.append(id, {
+      type: "assistant/chunk",
+      ts: 1,
+      turnId: "t",
+      stepId: "s",
+      text: span.slice(0, 8),
+      kind: "text",
+      index: 0,
+    });
+    store.flush(id);
+    store.append(id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t2",
+      content: "between",
+    });
+    store.append(id, {
+      type: "assistant/chunk",
+      ts: 3,
+      turnId: "t",
+      stepId: "s",
+      text: span.slice(8),
+      kind: "text",
+      index: 1,
+    });
+    expect(store.searchSessionIds(span)).toEqual([id]);
+    store.flush(id);
+    expect(store.searchSessionIds(span)).toEqual([id]);
+  });
+
+  it("stress: 24 sessions isolate flushes and keep split chunk text searchable", async () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir, { maxResidentSessions: 32 }));
+    const sessionCount = 24;
+    const ids = Array.from({ length: sessionCount }, (_, i) => store.create(`stress-${i}`).id);
+    const span = "spanboundarytoken";
+    const left = span.slice(0, 8);
+    const right = span.slice(8);
+
+    for (const id of ids) {
+      for (let i = 0; i < 63; i++) {
+        const text = i === 10 ? left : i === 11 ? right : `pad-${id}-${i}-zzzz`;
+        store.append(id, {
+          type: "assistant/chunk",
+          ts: i + 1,
+          turnId: "t",
+          stepId: "s",
+          text,
+          kind: "text",
+          index: i,
+        });
+      }
+    }
+
+    const found = store.searchSessionIds(span);
+    expect([...found].sort()).toEqual([...ids].sort());
+    expect(store.searchSessionIds("no-such-span-xyz")).toEqual([]);
+
+    const { DatabaseSync } = process.getBuiltinModule(
+      "node:sqlite",
+    ) as typeof import("node:sqlite");
+    const eventCount = (db: import("node:sqlite").DatabaseSync, id: string): number =>
+      (db.prepare("SELECT COUNT(*) AS n FROM events WHERE session_id = ?").get(id) as { n: number }).n;
+
+    const before = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      for (const id of ids) expect(eventCount(before, id)).toBe(0);
+    } finally {
+      before.close();
+    }
+
+    store.append(ids[0]!, {
+      type: "user/message",
+      ts: 100,
+      turnId: "t",
+      content: "boundary-only-a",
+    });
+    await Promise.resolve();
+
+    const afterBoundary = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      expect(eventCount(afterBoundary, ids[0]!)).toBeGreaterThan(0);
+      for (let i = 1; i < sessionCount; i++) {
+        expect(eventCount(afterBoundary, ids[i]!)).toBe(0);
+      }
+    } finally {
+      afterBoundary.close();
+    }
+
+    store.append(ids[1]!, {
+      type: "assistant/chunk",
+      ts: 64,
+      turnId: "t",
+      stepId: "s",
+      text: "ceiling-flush",
+      kind: "text",
+      index: 63,
+    });
+
+    const afterCeiling = new DatabaseSync(path.join(dir, SESSION_DB_FILENAME));
+    try {
+      expect(eventCount(afterCeiling, ids[1]!)).toBeGreaterThan(0);
+      for (let i = 2; i < sessionCount; i++) {
+        expect(eventCount(afterCeiling, ids[i]!)).toBe(0);
+      }
+    } finally {
+      afterCeiling.close();
+    }
+
+    expect(store.get(ids[0]!).events).toHaveLength(64);
+    expect(store.get(ids[1]!).events).toHaveLength(64);
+    expect(store.get(ids[2]!).events).toHaveLength(63);
+
+    store.flush();
+    store.close();
+    const reloaded = track(createPersistentSessionStore(dir));
+    expect(reloaded.get(ids[2]!).events).toHaveLength(63);
+    expect(reloaded.get(ids[1]!).events).toHaveLength(64);
+    expect([...reloaded.searchSessionIds(span)].sort()).toEqual([...ids].sort());
   });
 });

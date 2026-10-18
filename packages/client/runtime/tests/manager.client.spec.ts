@@ -212,6 +212,13 @@ describe('list lifecycle', () => {
     expect(titled.items[0]?.title).toBe('Newest')
     expect(titled.items[1]?.title).toBeUndefined()
 
+    const stable = manager.getListSnapshot()
+    manager.handleMuxEnvelope({
+      rpcId: 'pressure' as never,
+      payload: { type: 'session/projection', sessionId: S1, key: 'contextPressure', value: { used: 1 }, seq: 8 } as never,
+    })
+    expect(manager.getListSnapshot()).toBe(stable)
+
     manager.handleHostEnvelope({ rpcId: 'removed' as never, payload: { type: 'host/session-removed', sessionId: S1 } })
     manager.handleHostEnvelope({ rpcId: 'readded' as never, payload: { type: 'host/session-added', blank: true, sessionId: S1 } })
     expect(manager.getListSnapshot().items.find(item => item.sessionId === S1)?.title).toBeUndefined()
