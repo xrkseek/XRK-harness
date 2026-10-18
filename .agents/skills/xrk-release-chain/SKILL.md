@@ -156,4 +156,28 @@ pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.
 - **flaky 判定不能只看一次隔离复跑**：`packages/server/face/tests/session-tools-skill-source.test.ts`
   在全量并发下报 `create failed`，隔离与 face 目录复跑都绿（957s collect / 并发抢 temp 目录）；同轮
   `hot-plugin-shapes > billing endpoints` 5000ms timeout 亦属此类。判真实回归的硬标准是**隔离复跑仍红**
-  （如 v0.6.1 的 fork-policy），否则不阻塞发版。
+  （如 v0.6.1 的 fork-policy），否则不阻塞发版。v0.6.4 一次全量报 4 红
+  （`host/tests/workflow-engine-mount`、`http/tests/dsh-update`、`http/tests/git-graph`、
+  `http/tests/hot-plugin-shapes`），全是 `Test timed out in 5000ms`（collect 1293s），**逐文件隔离复跑
+  30/30 全绿** → 同一家族，不阻塞。
+- **`release.mjs` 的真实顺序**：stage-cli → stage-sdk → **建 GitHub Release（挂两个 tgz）** →
+  `publishStage(CLI)` → `publishStage(SDK)`。所以 GH Release 存在 ≠ npm 已发。
+- **`FETCH_ERROR` / `network timeout` 不等于发布失败**：CLI tarball 约 138 MB，PUT 完成后 npm 客户端
+  还要拉 packument 做确认，这一步超时就报 `npm error code FETCH_ERROR`，但**上传往往已经成功**。
+  判真伪只认 `npm view <pkg> dist-tags`（真发了就别重发，会 `E409 Cannot publish over previously
+  staged version`）。踩过：被告知失败 → 重发 → E409。
+- **CLI publish 报错 exit 1 会连坐跳过 SDK publish**：`publishStage(CLI)` 与 `publishStage(SDK)` 串行，
+  前者非零退出后者根本不会跑。补救不是重跑 `pnpm release`（会重 stage 十几分钟并撞已存在的 CLI 版本），
+  而是手动在 `.release/harness` 用同款凭据补：写 `.npmrc`（`//registry.npmjs.org/:_authToken=$env:NPM_TOKEN`）
+  → `npx --yes npm@10.9.2 pack` → `npx --yes npm@10.9.2 publish <tgz> --access public`。
+- **GH Release 的 SDK tgz 与 npm 上发布的 tarball 不是同一份字节**：`stage-sdk-release.mjs` 生成
+  `.release/xrkseek-harness-<ver>.tgz`，`publishStage` 内部又 `npm pack` 一次（`<stage>/…tgz`），两者
+  size/hash 都不同（v0.6.4：36856813 vs 36542179）。这是固有现象，别当成错版。
+- **`pnpm install` 会自己往 `pnpm-workspace.yaml` 追加 `minimumReleaseAgeExclude`**（v0.6.4 是三条
+  `@rollup/rollup-*@4.64.8`）。它是 pnpm 为绕过 minimumReleaseAge 闸门一次性写入的，**不入库**：
+  `git checkout -- pnpm-workspace.yaml` 后 `CI=true pnpm install --frozen-lockfile` 仍 exit 0 且不会重写。
+- **`upload:desktop` 产出的 mirror 文件名仍带 `-unsigned`**，且 yml 的 `url`/`path` 也指向
+  `…-unsigned.exe`。上 AGT 前必须**复制改名去 `unsigned`** 并手写 `nightly.yml` / `latest.yml`
+  （`version`/`files[0].url`/`path`/`sha512`/`size`/`releaseDate`，LF 行尾、url 用明文 IP 绝对路径），
+  再**先传 `desktop/bin` 后传 `desktop/win-x64`**（yml 最后，避免更新端拿到 yml 却 404 到 exe）。
+  收尾核对三处：本地 exe sha512 == yml sha512 == 远端 `Content-Length` == `package-complete` 的 size。
