@@ -172,8 +172,9 @@ function withRowDefaultEffort(
   efforts: FaceModelReasoning["efforts"][number][],
   source: Record<string, unknown>,
 ): FaceModelReasoning {
+  // OFM openai-gateway uses `default`; Face / DSH also use defaultEffort.
   const defaultRaw =
-    source.defaultEffort ?? source.defaultReasoningEffort;
+    source.defaultEffort ?? source.defaultReasoningEffort ?? source.default;
   const defaultEffort =
     typeof defaultRaw === "string" &&
     defaultRaw.trim() &&

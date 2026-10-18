@@ -26,11 +26,23 @@ const LISTABLE_APIS = new Set([
   "anthropic-messages",
 ]);
 
+/** Selectable thinking intensity when the listing advertises one (OFM / DSH). */
+export interface DiscoveredLlmReasoning {
+  readonly efforts: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+  }[];
+  readonly defaultEffort?: string;
+}
+
 export interface DiscoveredLlmModel {
   readonly id: string;
   readonly name?: string;
   readonly contextWindow?: number;
   readonly maxTokens?: number;
+  /** Thinking menu from OpenAI-compatible gateways that extend `/models`. */
+  readonly reasoning?: DiscoveredLlmReasoning;
 }
 
 export interface DiscoverModelsRequest {
@@ -100,6 +112,76 @@ interface ListingEntry {
   readonly maxTokens?: unknown;
   readonly limit?: ListingLimit | null;
   readonly top_provider?: ListingTopProvider | null;
+  readonly reasoning?: unknown;
+  readonly reasoningEfforts?: unknown;
+  readonly efforts?: unknown;
+  readonly defaultEffort?: unknown;
+  readonly defaultReasoningEffort?: unknown;
+  readonly default?: unknown;
+}
+
+/**
+ * OFM openai-gateway and DSH pi-ai put thinking menus on listing rows.
+ * Keep ids as the provider's wire values (`on`/`off`, not only OpenAI canonical).
+ */
+function reasoningFromListing(entry: ListingEntry): DiscoveredLlmReasoning | undefined {
+  const nested = entry.reasoning;
+  const source =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : (entry as Record<string, unknown>);
+
+  if (source.reasoningEfforts === false) return undefined;
+
+  const list = Array.isArray(source.efforts)
+    ? source.efforts
+    : Array.isArray(source.reasoningEfforts)
+      ? source.reasoningEfforts
+      : undefined;
+  if (!list || list.length === 0) return undefined;
+
+  const efforts: DiscoveredLlmReasoning["efforts"][number][] = [];
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) {
+      const id = item.trim();
+      efforts.push({
+        id,
+        name: id.charAt(0).toUpperCase() + id.slice(1),
+      });
+      continue;
+    }
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof row.name === "string" && row.name.trim()
+        ? row.name.trim()
+        : id.charAt(0).toUpperCase() + id.slice(1);
+    const description =
+      typeof row.description === "string" && row.description.trim()
+        ? row.description.trim()
+        : undefined;
+    efforts.push({
+      id,
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+  if (efforts.length === 0) return undefined;
+
+  const defaultRaw =
+    source.defaultEffort ?? source.defaultReasoningEffort ?? source.default;
+  const defaultEffort =
+    typeof defaultRaw === "string" &&
+    defaultRaw.trim() &&
+    efforts.some((effort) => effort.id === defaultRaw.trim())
+      ? defaultRaw.trim()
+      : undefined;
+  return {
+    efforts,
+    ...(defaultEffort !== undefined ? { defaultEffort } : {}),
+  };
 }
 
 /**
@@ -157,11 +239,13 @@ function readListing(body: unknown): DiscoveredLlmModel[] {
       entry.limit?.output,
       entry.top_provider?.max_completion_tokens,
     );
+    const reasoning = reasoningFromListing(entry);
     models.push({
       id,
       name,
       ...(contextWindow !== undefined ? { contextWindow } : {}),
       ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
     });
   }
   return models;

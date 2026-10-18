@@ -114,7 +114,12 @@ function IconTrash(): ReactNode {
 }
 
 /** Token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens'
+type CapacityField =
+  | 'contextWindow'
+  | 'maxTokens'
+  | 'softBudgetMaxTokens'
+  | 'softBudgetKeepTokens'
+  | 'softBudgetBufferTokens'
 
 /**
  * What an empty capacity field is worth, shown as its placeholder so a row left
@@ -131,6 +136,8 @@ const CAPACITY_HINT: Readonly<Record<CapacityField, string>> = {
   contextWindow: '256K',
   maxTokens: '32K',
   softBudgetMaxTokens: '300K',
+  softBudgetKeepTokens: '24K',
+  softBudgetBufferTokens: '4K',
 }
 
 /**
@@ -144,6 +151,36 @@ function capacitySpelling(value: number | undefined): string {
   return value === undefined ? '' : formatCapacity(value)
 }
 
+/**
+ * Refresh only the rows the user already configured.
+ * - Missing from the provider listing → drop.
+ * - Still listed → keep id / display name / capacities; refresh thinking only.
+ * - Blank id → draft still being typed, keep.
+ * Never copies upstream `name` onto a hand-edited display name.
+ */
+function syncListedModels(
+  rows: readonly ModelDraft[],
+  listed: readonly DiscoveredModelView[],
+): ModelDraft[] {
+  const byId = new Map(listed.map(model => [model.id, model]))
+  const next: ModelDraft[] = []
+  for (const row of rows) {
+    const id = textOf(row, 'id')
+    if (id === '') {
+      next.push(row)
+      continue
+    }
+    const upstream = byId.get(id)
+    if (upstream === undefined) continue
+    if (upstream.reasoning === undefined) {
+      next.push(row)
+      continue
+    }
+    next.push({ ...row, reasoning: upstream.reasoning })
+  }
+  return next
+}
+
 /** Adopt a candidate, keeping whatever capacities the provider disclosed. */
 function adopt(candidate: DiscoveredModelView): ModelDraft {
   return {
@@ -152,6 +189,8 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
     ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
     ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
     ...candidate.softBudgetMaxTokens === undefined ? {} : { softBudgetMaxTokens: candidate.softBudgetMaxTokens },
+    // OFM / community listings carry a thinking menu on the row.
+    ...candidate.reasoning === undefined ? {} : { reasoning: candidate.reasoning },
   }
 }
 
@@ -162,8 +201,10 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
  */
 export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const { models, onChange, probe, api, t, disabled } = props
-  const [busy, setBusy] = useState(false)
+  const [probeKind, setProbeKind] = useState<'fetch' | 'refresh' | undefined>(undefined)
+  const busy = probeKind !== undefined
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [notice, setNotice] = useState<string | undefined>(undefined)
   const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   // Rows carry an id and a name; capacities are the exception, so they stay
@@ -229,9 +270,11 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     }))
   }
 
-  const fetchModels = async (): Promise<void> => {
-    setBusy(true)
+  const askListing = async (options?: {
+    readonly allowEmpty?: boolean
+  }): Promise<readonly DiscoveredModelView[] | undefined> => {
     setFailure(undefined)
+    setNotice(undefined)
     try {
       const response = await api.llm.discoverModels({
         settingsNs: probe.settingsNs,
@@ -242,24 +285,51 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       })
       if (!response.result.ok) {
         setFailure(response.result.error.message)
-        return
+        return undefined
       }
       const found: readonly DiscoveredModelView[] = response.result.value.models
-      if (found.length === 0) {
+      if (found.length === 0 && options?.allowEmpty !== true) {
         setFailure(t('fetchEmpty'))
-        return
+        return undefined
       }
+      return found
+    } catch (error) {
+      // The transport rejected rather than answering; without this the button
+      // would stay busy with nothing shown.
+      setFailure(messageOf(error))
+      return undefined
+    }
+  }
+
+  const fetchModels = async (): Promise<void> => {
+    setProbeKind('fetch')
+    try {
+      const found = await askListing()
+      if (found === undefined) return
       // Default every discovered model to checked; the user can deselect
       // before adopting. Already-configured rows are merged without
       // overwriting tuned capacities.
       setCandidates(found)
       setPicked(new Set(found.map(model => model.id)))
-    } catch (error) {
-      // The transport rejected rather than answering; without this the button
-      // would stay busy with nothing shown.
-      setFailure(messageOf(error))
     } finally {
-      setBusy(false)
+      setProbeKind(undefined)
+    }
+  }
+
+  const refreshModels = async (): Promise<void> => {
+    setProbeKind('refresh')
+    try {
+      // Empty listing is a real answer: every configured id is gone upstream.
+      const found = await askListing({ allowEmpty: true })
+      if (found === undefined) return
+      onChange(syncListedModels(models, found))
+      // Row positions move when stale ids leave, so open capacity editors
+      // and half-typed buffers would land on the wrong row.
+      setExpanded(new Set())
+      setEditing(new Map())
+      setNotice(t('refreshModelsDone'))
+    } finally {
+      setProbeKind(undefined)
     }
   }
 
@@ -335,29 +405,42 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               </span>
             )}
         </div>
-        {props.overridden === true && props.onReset !== undefined
-          ? (
-            <button
-              type="button"
-              className={styles['linkButton']}
-              disabled={disabled}
-              onClick={props.onReset}
-            >
-              {t('resetModels')}
-            </button>
-          )
-          : null}
-        <button
-          type="button"
-          className={styles['linkButton']}
-          disabled={disabled || busy || !askable || props.probeBlocked !== undefined}
-          title={props.probeBlocked !== undefined
-            ? t(props.probeBlocked)
-            : askable ? undefined : t('fetchNeedsBaseUrl')}
-          onClick={() => { void fetchModels() }}
-        >
-          {busy ? t('fetching') : t('fetchModels')}
-        </button>
+        <div className={styles['modelListActions']}>
+          {props.overridden === true && props.onReset !== undefined
+            ? (
+              <button
+                type="button"
+                className={styles['linkButton']}
+                disabled={disabled}
+                onClick={props.onReset}
+              >
+                {t('resetModels')}
+              </button>
+            )
+            : null}
+          <button
+            type="button"
+            className={styles['linkButton']}
+            disabled={disabled || busy || !askable || props.probeBlocked !== undefined}
+            title={props.probeBlocked !== undefined
+              ? t(props.probeBlocked)
+              : askable ? t('refreshModelsHint') : t('fetchNeedsBaseUrl')}
+            onClick={() => { void refreshModels() }}
+          >
+            {probeKind === 'refresh' ? t('refreshingModels') : t('refreshModels')}
+          </button>
+          <button
+            type="button"
+            className={styles['linkButton']}
+            disabled={disabled || busy || !askable || props.probeBlocked !== undefined}
+            title={props.probeBlocked !== undefined
+              ? t(props.probeBlocked)
+              : askable ? undefined : t('fetchNeedsBaseUrl')}
+            onClick={() => { void fetchModels() }}
+          >
+            {probeKind === 'fetch' ? t('fetching') : t('fetchModels')}
+          </button>
+        </div>
       </div>
       {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
       {models.map((model, index) => (
@@ -459,6 +542,32 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'softBudgetMaxTokens', event.target.value) }}
                   />
                 </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('softBudgetKeepTokens')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    inputMode="numeric"
+                    value={capacityText(model, index, 'softBudgetKeepTokens')}
+                    placeholder={t('softBudgetKeepTokensPlaceholder')}
+                    aria-label={`${t('softBudgetKeepTokens')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => { editCapacity(index, 'softBudgetKeepTokens', event.target.value) }}
+                  />
+                </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('softBudgetBufferTokens')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    inputMode="numeric"
+                    value={capacityText(model, index, 'softBudgetBufferTokens')}
+                    placeholder={t('softBudgetBufferTokensPlaceholder')}
+                    aria-label={`${t('softBudgetBufferTokens')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => { editCapacity(index, 'softBudgetBufferTokens', event.target.value) }}
+                  />
+                </label>
                 <div className={styles['modelField']}>
                   <span className={styles['modelFieldLabel']}>{t('inputModalities')}</span>
                   <div className={styles['modalityRow']}>
@@ -516,6 +625,9 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         {t('addModel')}
       </button>
       {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
+      {notice !== undefined && failure === undefined
+        ? <p className={styles['advancedHint']}>{notice}</p>
+        : null}
       <Modal
         open={candidates !== undefined}
         onClose={closePicker}

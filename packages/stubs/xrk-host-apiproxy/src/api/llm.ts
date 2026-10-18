@@ -82,6 +82,16 @@ export interface LlmApi {
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
 }
 
+/** Thinking intensity menu when a gateway extends `/models` with `reasoning`. */
+export interface DiscoveredModelReasoningView {
+  efforts: Array<{
+    id: string
+    name: string
+    description?: string
+  }>
+  defaultEffort?: string
+}
+
 /** Wire view of one model an interrogated endpoint advertises. */
 export interface DiscoveredModelView {
   /** Model id the endpoint accepts. */
@@ -98,4 +108,6 @@ export interface DiscoveredModelView {
    * 75% only when the window is smaller. Absent when missing or below 8k.
    */
   softBudgetMaxTokens?: number
+  /** Thinking menu when the listing advertises one (OFM channel rows, …). */
+  reasoning?: DiscoveredModelReasoningView
 }

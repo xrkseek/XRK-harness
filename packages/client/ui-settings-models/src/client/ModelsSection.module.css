@@ -437,6 +437,15 @@
   gap: 12px;
 }
 
+.modelListActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .modelEntry {
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;

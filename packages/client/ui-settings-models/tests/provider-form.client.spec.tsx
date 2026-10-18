@@ -492,6 +492,56 @@ describe('endpoint interrogation', () => {
     ])
   })
 
+  it('refresh drops models the provider no longer lists and updates thinking levels', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{
+        id: 'kept',
+        name: 'Upstream Label',
+        reasoning: {
+          efforts: [{ id: 'high', name: 'High' }],
+          defaultEffort: 'high',
+        },
+      }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [
+            {
+              id: 'kept',
+              name: 'My Nickname',
+              contextWindow: 111,
+              reasoning: { efforts: [{ id: 'low', name: 'Low' }] },
+            },
+            { id: 'gone', contextWindow: 8 },
+          ],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.refreshModels }))
+    await screen.findByText(en.refreshModelsDone)
+    expect(screen.queryByDisplayValue('gone')).toBeNull()
+    expect(screen.getByDisplayValue('kept')).toBeTruthy()
+    expect(screen.getByDisplayValue('My Nickname')).toBeTruthy()
+    expect(screen.queryByDisplayValue('Upstream Label')).toBeNull()
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'kept',
+      name: 'My Nickname',
+      contextWindow: 111,
+      reasoning: {
+        efforts: [{ id: 'high', name: 'High' }],
+        defaultEffort: 'high',
+      },
+    }])
+  })
+
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
     const discover = vi.fn(() => Promise.resolve(
       fail('https://proxy.example/v1/models answered 401; check the API key', 'model-discovery-failed'),

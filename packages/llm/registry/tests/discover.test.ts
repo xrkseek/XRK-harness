@@ -56,6 +56,55 @@ describe("discoverOpenAiChatModels", () => {
     ]);
   });
 
+  it("keeps OFM-style reasoning menus from /v1/models", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "beam-free",
+              context_window: 131_072,
+            },
+            {
+              id: "codearts/deepseek-v4-flash",
+              name: "deepseek-v4-flash",
+              context_window: 1_048_576,
+              reasoning: {
+                efforts: [
+                  { id: "on", name: "开启", canonical: "high" },
+                  { id: "off", name: "关闭", canonical: "none" },
+                ],
+                default: "on",
+                openai_efforts: ["high", "none"],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const models = await discoverOpenAiChatModels({
+      baseUrl: "http://127.0.0.1:18900/v1",
+      apiKey: "ofm-test",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    expect(models).toEqual([
+      { id: "beam-free", name: "beam-free", contextWindow: 131_072 },
+      {
+        id: "codearts/deepseek-v4-flash",
+        name: "deepseek-v4-flash",
+        contextWindow: 1_048_576,
+        reasoning: {
+          efforts: [
+            { id: "on", name: "开启" },
+            { id: "off", name: "关闭" },
+          ],
+          defaultEffort: "on",
+        },
+      },
+    ]);
+  });
+
   it("parses an enriched models object (gateway map)", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

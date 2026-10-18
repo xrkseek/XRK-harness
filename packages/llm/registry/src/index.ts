@@ -30,6 +30,7 @@ export {
   ModelDiscoveryError,
   type DiscoverModelsRequest,
   type DiscoveredLlmModel,
+  type DiscoveredLlmReasoning,
 } from "./discover.js";
 export {
   createRoutingLlmAdapter,

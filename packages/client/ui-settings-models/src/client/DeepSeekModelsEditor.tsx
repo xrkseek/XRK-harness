@@ -17,10 +17,23 @@ import styles from './ModelsSection.module.css'
 export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
-type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens' | 'inputModalities'
+type CatalogField =
+  | 'id'
+  | 'name'
+  | 'contextWindow'
+  | 'maxTokens'
+  | 'softBudgetMaxTokens'
+  | 'softBudgetKeepTokens'
+  | 'softBudgetBufferTokens'
+  | 'inputModalities'
 
 /** Token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens' | 'softBudgetMaxTokens'
+type CapacityField =
+  | 'contextWindow'
+  | 'maxTokens'
+  | 'softBudgetMaxTokens'
+  | 'softBudgetKeepTokens'
+  | 'softBudgetBufferTokens'
 
 /** Row index encoded in an editing-buffer key. */
 function rowOf(key: string): number {
@@ -124,6 +137,20 @@ export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidation
         || !Number.isInteger(softBudgetMaxTokens)
         || softBudgetMaxTokens < 8_000)) {
       return { index, key: 'modelSoftBudgetInvalid' }
+    }
+    const softBudgetKeepTokens = model['softBudgetKeepTokens']
+    if (softBudgetKeepTokens !== undefined
+      && (typeof softBudgetKeepTokens !== 'number'
+        || !Number.isInteger(softBudgetKeepTokens)
+        || softBudgetKeepTokens < 2_000)) {
+      return { index, key: 'modelSoftBudgetKeepInvalid' }
+    }
+    const softBudgetBufferTokens = model['softBudgetBufferTokens']
+    if (softBudgetBufferTokens !== undefined
+      && (typeof softBudgetBufferTokens !== 'number'
+        || !Number.isInteger(softBudgetBufferTokens)
+        || softBudgetBufferTokens < 0)) {
+      return { index, key: 'modelSoftBudgetBufferInvalid' }
     }
   }
   return undefined
@@ -241,19 +268,35 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   /** One capacity field of one row, rendered inside the row's disclosure. */
-  const capacityLabel = (field: CapacityField): keyof typeof en =>
-    field === 'contextWindow'
-      ? 'contextWindow'
-      : field === 'maxTokens'
-        ? 'maxTokens'
-        : 'softBudgetMaxTokens'
+  const capacityLabel = (field: CapacityField): keyof typeof en => {
+    switch (field) {
+      case 'contextWindow':
+        return 'contextWindow'
+      case 'maxTokens':
+        return 'maxTokens'
+      case 'softBudgetMaxTokens':
+        return 'softBudgetMaxTokens'
+      case 'softBudgetKeepTokens':
+        return 'softBudgetKeepTokens'
+      case 'softBudgetBufferTokens':
+        return 'softBudgetBufferTokens'
+    }
+  }
 
-  const capacityPlaceholder = (field: CapacityField): keyof typeof en =>
-    field === 'contextWindow'
-      ? 'contextWindowPlaceholder'
-      : field === 'maxTokens'
-        ? 'maxTokensPlaceholder'
-        : 'softBudgetMaxTokensPlaceholder'
+  const capacityPlaceholder = (field: CapacityField): keyof typeof en => {
+    switch (field) {
+      case 'contextWindow':
+        return 'contextWindowPlaceholder'
+      case 'maxTokens':
+        return 'maxTokensPlaceholder'
+      case 'softBudgetMaxTokens':
+        return 'softBudgetMaxTokensPlaceholder'
+      case 'softBudgetKeepTokens':
+        return 'softBudgetKeepTokensPlaceholder'
+      case 'softBudgetBufferTokens':
+        return 'softBudgetBufferTokensPlaceholder'
+    }
+  }
 
   const capacityField = (
     model: DeepSeekModelDraft,
@@ -365,6 +408,8 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                       {capacityField(model, index, 'contextWindow', props.defaultContextWindow)}
                       {capacityField(model, index, 'maxTokens', props.defaultMaxTokens)}
                       {capacityField(model, index, 'softBudgetMaxTokens', undefined)}
+                      {capacityField(model, index, 'softBudgetKeepTokens', undefined)}
+                      {capacityField(model, index, 'softBudgetBufferTokens', undefined)}
                       <div className={styles['modelField']}>
                         <span className={styles['modelFieldLabel']}>{props.t('inputModalities')}</span>
                         <div className={styles['modalityRow']}>
