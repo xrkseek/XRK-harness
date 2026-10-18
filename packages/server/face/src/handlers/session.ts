@@ -462,6 +462,9 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   const events = readSessionEvents(runtime.store, sessionId);
   runtime.wireIds.primeFromLog(sessionId, events);
+  // Resident eviction drops the in-memory allowlist; durable `path/allowlisted`
+  // rows live in the log — refill before any tool path gate runs.
+  runtime.pathAllowlist.hydrate(runtime.store, sessionId);
 
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;
@@ -800,29 +803,10 @@ export const sessionCancel: FaceHandler = async (runtime, _rpcId, payload) => {
   //    floating "background job finished" toasts.
   killLiveSessionJobs(runtime.shell, sessionId);
   runtime.publishJobs(sessionId);
-  // 3) Cascade to delegated children (fire-and-forget) — **user Stop only**.
-  //    A parent turn that completes on its own must NOT cancel background
-  //    children (they keep draining and still report natural / abnormal idle).
-  //    Manual parent Stop: stop the tree, stamp cause.kind "parent", and
-  //    suppressOwnedSubagentCompletion *before* child cancel so cancel→idle
-  //    does not steer a "finished a turn" notice with truncated body back
-  //    (interrupt_agent already suppresses; Stop cascade must match).
-  const cascade = asRecord(payload).cascade !== false;
-  if (cascade) {
-    for (const link of runtime.subagents.listDelegated(sessionId)) {
-      runtime.suppressOwnedSubagentCompletion(link.childSessionId);
-      void sessionCancel(
-        runtime,
-        `tool-sa-c-${link.childSessionId}`,
-        {
-          sessionId: link.childSessionId,
-          cascade: true,
-          cause: { kind: "parent" },
-        },
-      ).catch(() => undefined);
-    }
-  }
-  // 4) Bounded drain join in the background. Returning accepted here unblocks
+  // Delegated workers are independent sessions. Stopping, archiving, or
+  // deleting this session must not abort them; they finish and reply on
+  // their own (inline tool result, spill file, or a later user message).
+  // 3) Bounded drain join in the background. Returning accepted here unblocks
   //    the client Stop click immediately; Host already published running:false
   //    and aborted the turn. The latch keeps its entry on timeout so a message
   //    admitted during teardown still drains once the stuck chain settles.
@@ -907,6 +891,8 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.listProjectionCache.forget(sessionId);
   runtime.wireIds.clear(sessionId);
   runtime.inboxWire.clear(sessionId);
+  runtime.toolDisclosure.forget(sessionId);
+  runtime.pathAllowlist.forget(sessionId);
   runtime.sessionModels.delete(sessionId);
   try {
     clearSessionModelSelection(
@@ -1088,6 +1074,13 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   runtime.watchSession(child.id);
   const parentCwd = resolveSessionCwd(runtime, sessionId);
   runtime.sessionCwds.set(child.id, parentCwd);
+  // Seed may carry durable path grants; subagent children also inherit the
+  // parent's live allowlist (same as session.create with parentSessionId).
+  if (linkMode !== "fork") {
+    runtime.pathAllowlist.inherit(child.id, sessionId);
+    runtime.pathAllowlist.hydrate(runtime.store, sessionId);
+  }
+  runtime.pathAllowlist.hydrate(runtime.store, child.id);
   if (prefixHasImageContent(seed)) {
     runtime.sessionHasImage.add(child.id);
     runtime.sessionImageScanned.add(child.id);
@@ -1255,6 +1248,20 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
 
   const n = sessionEventCount(runtime.store, sessionId);
   runtime.seq.ensureAtLeast(sessionId, n);
+  // Edit-resubmit cuts the log in place; wire turn numbers must follow the
+  // kept prefix (or restart at 1). Leaving the pre-cut map marks the next
+  // turnId as 第 2 轮 even when the first opener was removed.
+  runtime.wireIds.clear(sessionId);
+  runtime.wireIds.primeFromLog(
+    sessionId,
+    readSessionEvents(runtime.store, sessionId),
+  );
+  runtime.inboxWire.clear(sessionId);
+  // Expanded MCP schemas are not in the log. Leaving them keeps the next
+  // resubmit over the soft budget after the conversation itself was cut.
+  runtime.toolDisclosure.forget(sessionId);
+  runtime.pathAllowlist.forget(sessionId);
+  runtime.pathAllowlist.hydrate(runtime.store, sessionId);
   void runtime.projections.snapshot(sessionId);
   forgetRequestHeaderCache(sessionId);
 
