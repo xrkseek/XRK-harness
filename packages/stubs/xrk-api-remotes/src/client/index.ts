@@ -34,6 +34,7 @@ const FACE_REMOTES: FaceRemoteSpec = {
     selectModel: 'args',
     rename: 'args',
     fork: 'args',
+    truncate: 'args',
     prompt: 'args',
     cancel: 'args',
     delete: 'args',

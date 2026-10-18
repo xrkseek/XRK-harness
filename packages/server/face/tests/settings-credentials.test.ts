@@ -1501,4 +1501,72 @@ describe("Face credentials U2", () => {
       selected: { provider: "xyt", model: "gemini-3.5-flash" },
     });
   });
+
+  it("session.selectModel publishes the catalog context window onto the occupancy projections", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const created = await dispatchFaceMethod(rt, "session.create", "cw0", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    rt.store.append(sessionId, {
+      type: "request/header",
+      ts: 1,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: {
+          provider: "deepseek",
+          model: "deepseek-v4-flash",
+          contextWindow: 1_000_000,
+        },
+      },
+    });
+    expect(rt.projections.snapshot(sessionId).values.contextPressure).toMatchObject({
+      contextWindow: 1_000_000,
+    });
+
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "cw1", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "xyt"],
+          value: {
+            apiKeyEnv: "XYT_WINDOW_KEY",
+            api: "openai-chat",
+            baseURL: "https://xyt.example/v1",
+            displayName: "小鱼源",
+            models: [{
+              id: "small-window",
+              name: "small-window",
+              contextWindow: 131_072,
+            }],
+          },
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+
+    const set = await dispatchFaceMethod(rt, "credentials.set", "cw2", {
+      ref: "XYT_WINDOW_KEY",
+      value: "sk-xyt-window",
+    });
+    expect(set.result.ok).toBe(true);
+
+    const sel = await dispatchFaceMethod(rt, "session.selectModel", "cw3", {
+      sessionId,
+      provider: "xyt",
+      model: "small-window",
+    });
+    expect(sel.result.ok).toBe(true);
+    expect(rt.projections.snapshot(sessionId).values.contextPressure).toMatchObject({
+      contextWindow: 131_072,
+    });
+    expect(rt.projections.snapshot(sessionId).values.contextTimeline).toMatchObject({
+      contextWindow: 131_072,
+      model: "small-window",
+      provider: "xyt",
+    });
+  });
 });

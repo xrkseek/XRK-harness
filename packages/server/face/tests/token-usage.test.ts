@@ -132,6 +132,47 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
     });
   });
 
+  it("revise publishes a selected-model context window without a new header", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    registry.register(createContextPressureProjectionUnit());
+    store.append(session.id, {
+      type: "request/header",
+      ts: 1,
+      turnId: "t1",
+      reason: "initial",
+      header: {
+        config: {
+          provider: "deepseek",
+          model: "deepseek-v4-flash",
+          contextWindow: 1_000_000,
+        },
+      },
+    });
+    driveAll(registry, session.id, store);
+
+    const seen: unknown[] = [];
+    registry.onChanged((_id, key, value) => {
+      if (key === "contextPressure") seen.push(value);
+    });
+    registry.revise(session.id, "contextPressure", (state) => ({
+      ...(state as object),
+      contextWindow: 131_072,
+    }));
+    expect(registry.snapshot(session.id).values.contextPressure).toMatchObject({
+      contextWindow: 131_072,
+    });
+    expect(seen).toEqual([
+      expect.objectContaining({ contextWindow: 131_072 }),
+    ]);
+
+    registry.revise(session.id, "contextPressure", (state) => state);
+    expect(seen).toHaveLength(1);
+  });
+
   it("prices system/tools from request/header and messages on the surface", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

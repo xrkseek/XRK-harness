@@ -601,6 +601,97 @@ describe("Face session.truncate", () => {
       ),
     ).toBe(false);
   });
+
+  it("resets wire turn numbers so edit-resubmit of the first opener is 第 1 轮 again", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    appendCompletedTurn(store, sessionId, 1, "edit me");
+    // Simulate live wiring of the first turn (maps t1 → wire 1).
+    runtime.wireIds.primeFromLog(sessionId, store.get(sessionId).events);
+    expect(runtime.wireIds.turn(sessionId, "t1")).toBe(1);
+    runtime.toolDisclosure.expand(sessionId, ["mcp__s__fat"]);
+    expect(runtime.toolDisclosure.count(sessionId)).toBe(1);
+
+    // Edit-resubmit the opener: exclusive beforeSeq = userSeq - 1 → 1.
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t2", {
+      sessionId,
+      beforeSeq: 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    if (!cut.result.ok) return;
+    // Seed events (e.g. permission/preset) may remain; turn log is empty.
+    expect(
+      store.get(sessionId).events.some((e) => e.type === "turn/start"),
+    ).toBe(false);
+    // Next turnId must renumber from 1, not continue as 2.
+    expect(runtime.wireIds.turn(sessionId, "t-resubmit")).toBe(1);
+    expect(runtime.toolDisclosure.count(sessionId)).toBe(0);
+  });
+
+  it("rehydrates durable path grants after truncate and clears Once grants", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const durable = runtime.pathAllowlist.addPermanent(
+      sessionId,
+      "C:\\tmp\\durable-grant",
+      { persist: true, store },
+    );
+    runtime.pathAllowlist.addOnce(sessionId, "C:\\tmp\\once-grant");
+    // Keep the grant in the prefix; drop only a later turn.
+    const keepThrough = store.get(sessionId).events.length;
+    appendCompletedTurn(store, sessionId, 1, "later turn");
+
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t3", {
+      sessionId,
+      beforeSeq: keepThrough + 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    if (!cut.result.ok) return;
+    // Durable path/allowlisted in the kept prefix survives; Once does not.
+    expect(runtime.pathAllowlist.list(sessionId)).toContain(durable);
+    expect(
+      runtime.pathAllowlist.list(sessionId).some((p) => p.includes("once-grant")),
+    ).toBe(false);
+
+    runtime.pathAllowlist.forget(sessionId);
+    expect(runtime.pathAllowlist.list(sessionId)).toEqual([]);
+    // Drain/cron path: hydrate without session.history (same as Host getter).
+    runtime.pathAllowlist.hydrate(runtime.store, sessionId);
+    expect(runtime.pathAllowlist.list(sessionId)).toContain(durable);
+
+    runtime.pathAllowlist.forget(sessionId);
+    const hist = await dispatchFaceMethod(runtime, "session.history", "h1", {
+      sessionId,
+    });
+    expect(hist.result.ok).toBe(true);
+    expect(runtime.pathAllowlist.list(sessionId)).toContain(durable);
+  });
 });
 
 describe("Face policy provider.use", () => {

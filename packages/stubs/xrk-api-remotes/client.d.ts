@@ -142,6 +142,7 @@ declare module '@xrkseek/xrk-typert-protocol' {
       selectModel: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       rename: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       fork: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+      truncate: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       prompt: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       cancel: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       delete: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
