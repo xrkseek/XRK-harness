@@ -50,8 +50,8 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Thanks to everyone on the XRK-Harness team.',
     },
     {
-      zh: '感谢何润景、文具盒、刘雅婷、雨木木、炫彩马桶。',
-      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 雨木木, and 炫彩马桶.',
+      zh: '感谢何润景、文具盒、刘雅婷、雨木木、炫彩马桶、乔晨欣、张利民。',
+      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 雨木木, 炫彩马桶, 乔晨欣, and 张利民.',
     },
   ],
 }
