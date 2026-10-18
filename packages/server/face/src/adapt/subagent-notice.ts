@@ -185,7 +185,8 @@ export function formatChildOutcome(
  * Parent inbox notice when a background (continuable) child drain goes idle.
  * Normal idle → "finished a turn". Abnormal `turn/end` (abort / error / …)
  * still reports back with a clear head so the parent can recover — except when
- * Face suppressed delivery after a **user** parent Stop (cascade cancel).
+ * Face suppressed delivery (e.g. `interrupt_agent` / explicit suppress).
+ * Parent Stop does **not** cascade-cancel delegated workers.
  *
  * @param answerBody - optional already-bound child answer (see
  *   {@link boundChildAnswer}). When omitted, the raw last assistant text is

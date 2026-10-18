@@ -325,6 +325,37 @@ export type CommunityLlmSyncCatalog = {
 };
 
 /**
+ * Temporarily show a credential-gated catalog. Call through the catalog object
+ * so plugin methods keep `this` (unbound `setVisible` crashes Cordis hosts that
+ * read `this.*.visible`). Failures are swallowed — half-init plugins must not
+ * abort Face sync.
+ */
+function beginCommunityCatalogPeek(
+  catalog: CommunityLlmSyncCatalog | undefined,
+): (() => void) | undefined {
+  if (!catalog || typeof catalog.setVisible !== "function") return undefined;
+  let wasVisible: boolean | undefined;
+  try {
+    wasVisible = catalog.isVisible?.();
+  } catch {
+    return undefined;
+  }
+  if (wasVisible !== false) return undefined;
+  try {
+    catalog.setVisible(true);
+  } catch {
+    return undefined;
+  }
+  return () => {
+    try {
+      catalog.setVisible?.(wasVisible!);
+    } catch {
+      /* plugin half-init / dispose mid-sync */
+    }
+  };
+}
+
+/**
  * Snapshot models for Face sync.
  * Peeks credential-gated catalogs, prefers the full fallback roster when
  * `current()` is empty, and stamps a usable loopback `baseUrl`.
@@ -338,13 +369,7 @@ export async function listModelsForCommunitySync(
   options?: { readonly lastBaseUrl?: string },
 ): Promise<readonly unknown[]> {
   const catalog = adapter.catalog;
-  const setVisible = catalog?.setVisible;
-  const wasVisible = catalog?.isVisible?.();
-  const peeked =
-    setVisible !== undefined &&
-    typeof wasVisible === "boolean" &&
-    wasVisible === false;
-  if (peeked) setVisible(true);
+  const endPeek = beginCommunityCatalogPeek(catalog);
   try {
     let listed: readonly unknown[] = [];
     try {
@@ -358,8 +383,18 @@ export async function listModelsForCommunitySync(
       (cachedBase !== undefined && isUsableCommunityLoopbackBaseUrl(cachedBase)
         ? cachedBase.trim().replace(/\/+$/, "")
         : undefined);
-    const current = catalog?.current?.() ?? [];
-    const fallback = catalog?.fallback?.() ?? [];
+    let current: readonly unknown[] = [];
+    let fallback: readonly unknown[] = [];
+    try {
+      current = catalog?.current?.() ?? [];
+    } catch {
+      current = [];
+    }
+    try {
+      fallback = catalog?.fallback?.() ?? [];
+    } catch {
+      fallback = [];
+    }
     // Prefer visible current (promotions); else full fallback; else listModels.
     const full =
       current.length > 0 ? current : fallback.length > 0 ? fallback : listed;
@@ -377,7 +412,7 @@ export async function listModelsForCommunitySync(
       return { ...row, baseUrl };
     });
   } finally {
-    if (peeked) setVisible(wasVisible);
+    endPeek?.();
   }
 }
 

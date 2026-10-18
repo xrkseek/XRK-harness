@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
+  countSessionsUsingModel,
   modelSessionCapProblem,
   reserveModelSessionSlot,
   resetModelSessionCapPendingForTests,
@@ -173,5 +174,48 @@ describe("model session cap", () => {
     // openai may be unavailable as a catalog brand — cap still admits the slot;
     // create itself should succeed (pin is in-memory).
     expect(b.result.ok).toBe(true);
+  });
+
+  it("stress: 12 live sessions cannot overshoot a cap of 3 when switching routes", () => {
+    const store = createMemorySessionStore();
+    const active = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      drain: activeDrain(active),
+    });
+    runtime.settingsNamespaces.ensure("agent-loop").user = {
+      maxConcurrentModelSessions: 3,
+    };
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const id = store.create(`switch-${i}`).id;
+      runtime.sessionModels.set(id, {
+        provider: "deepseek",
+        model: "deepseek-flash",
+      });
+      active.add(id);
+      ids.push(id);
+    }
+    const target = { provider: "deepseek", model: "deepseek-v4-pro" };
+    let admitted = 0;
+    let refused = 0;
+    for (const id of ids) {
+      const slot = reserveModelSessionSlot(runtime, target, {
+        excludeSessionId: id,
+      });
+      if (!slot.ok) {
+        refused += 1;
+        continue;
+      }
+      runtime.sessionModels.set(id, target);
+      slot.release();
+      admitted += 1;
+    }
+    expect(admitted).toBe(3);
+    expect(refused).toBe(9);
+    expect(countSessionsUsingModel(runtime, target.provider, target.model)).toBe(3);
+    expect(
+      countSessionsUsingModel(runtime, "deepseek", "deepseek-flash"),
+    ).toBe(9);
   });
 });

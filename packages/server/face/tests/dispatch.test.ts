@@ -365,6 +365,18 @@ describe("face dispatch", () => {
           data: [
             { id: "acme-large", name: "Acme Large", context_window: 65536 },
             { id: "acme-small" },
+            {
+              id: "codearts/flash",
+              name: "flash",
+              context_window: 128_000,
+              reasoning: {
+                efforts: [
+                  { id: "on", name: "On" },
+                  { id: "off", name: "Off" },
+                ],
+                default: "on",
+              },
+            },
           ],
         }),
         { status: 200 },
@@ -384,6 +396,19 @@ describe("face dispatch", () => {
         models: [
           { id: "acme-large", name: "Acme Large", contextWindow: 65536, softBudgetMaxTokens: 49_000 },
           { id: "acme-small", name: "acme-small" },
+          {
+            id: "codearts/flash",
+            name: "flash",
+            contextWindow: 128_000,
+            softBudgetMaxTokens: 100_000,
+            reasoning: {
+              efforts: [
+                { id: "on", name: "On" },
+                { id: "off", name: "Off" },
+              ],
+              defaultEffort: "on",
+            },
+          },
         ],
       });
     } finally {

@@ -1,7 +1,6 @@
 import type { AgentHandle } from "@xrkseek/core-agent";
 import {
   createRootScope,
-  openSubagentRealm,
   ScopeState,
   type Scope,
 } from "@xrkseek/compose";
@@ -12,11 +11,28 @@ export const HOST_PLUGINS_KEY = "host.plugins";
 
 export interface AgentResolveOpts {
   /**
-   * Tool-delegated parent only. Opens a C2 realm under that parent's scope when
-   * the parent is still Active/Loading; otherwise falls back to the host root.
-   * UI/rewind forks must omit this (root `agent:{id}`).
+   * Accepted for callers that still pass a summoning session id. Agent scopes
+   * are never nested under it — session lifetimes stay independent.
    */
   readonly parentSessionId?: string;
+}
+
+/**
+ * Badge / cwd rebuilds share the settings rule: do not dispose a live turn.
+ * The caller invalidates the deferred id once that session's drain goes idle.
+ */
+export function deferBusyAgentInvalidate(input: {
+  readonly sessionId: string;
+  readonly drainActive: boolean;
+  readonly busy: boolean;
+  readonly defer: (sessionId: string) => void;
+  readonly invalidate: (sessionId: string) => Promise<void> | void;
+}): Promise<void> | void {
+  if (input.drainActive || input.busy) {
+    input.defer(input.sessionId);
+    return;
+  }
+  return input.invalidate(input.sessionId);
 }
 
 export interface InvalidateAllOpts {
@@ -25,6 +41,12 @@ export interface InvalidateAllOpts {
    * `settings_mutate`). Caller should invalidate them once the turn is idle.
    */
   readonly skip?: (sessionId: string) => boolean;
+  /**
+   * Sessions held only because a nested child was skipped. Parent dispose
+   * cascades through compose and would abort that busy child — so the parent
+   * stays until the child drains. Same pending-invalidate bookkeeping as skip.
+   */
+  readonly onHold?: (sessionId: string) => void;
 }
 
 export interface HostAgentCache {
@@ -36,6 +58,15 @@ export interface HostAgentCache {
   ): Promise<AgentHandle>;
   /** True while the cached agent latch is mid-turn (stream / tools). */
   isBusy(sessionId: string): boolean;
+  /**
+   * True when a nested child realm under this session is still protected
+   * (busy / drain-active / pending invalidate). Drain flush must not dispose
+   * such a parent — compose cascade would abort that child.
+   */
+  hasProtectedNestedChild(
+    sessionId: string,
+    isProtected: (sessionId: string) => boolean,
+  ): boolean;
   /** Drop cached agent with compose Ordering (abort via scope effects). */
   invalidate(sessionId: string): Promise<void>;
   /** Drop every cached agent (e.g. MCP tools/list_changed). */
@@ -46,7 +77,7 @@ export interface HostAgentCache {
 
 /**
  * Agent cache backed by `@xrkseek/compose` Scopes.
- * Root sessions: `agent:{id}`. Subagent sessions: `openSubagentRealm` (`subagent:{id}`).
+ * Root sessions and delegated workers share one shape: `agent:{id}` under the host scope.
  * Agents depend on `host.plugins`; invalidate/stop unload consumers before
  * withdrawing the provide (Ordering).
  */
@@ -61,36 +92,43 @@ export function createHostAgentCache(
 
   const agents = new Map<string, AgentHandle>();
   const scopes = new Map<string, Scope>();
+  /** Child → parent when the child realm is nested under the parent's scope. */
+  const nestParent = new Map<string, string>();
 
   function pruneDisposed(): void {
     for (const [id, scope] of [...scopes]) {
       if (scope.state === ScopeState.Disposed) {
         scopes.delete(id);
         agents.delete(id);
+        nestParent.delete(id);
       }
     }
-  }
-
-  function parentUsable(scope: Scope | undefined): scope is Scope {
-    return (
-      scope !== undefined &&
-      (scope.state === ScopeState.Active || scope.state === ScopeState.Loading)
-    );
-  }
-
-  function openScope(sessionId: string, parentSessionId?: string): Scope {
-    const depend = [{ name: HOST_PLUGINS_KEY }];
-    const parentId = parentSessionId?.trim();
-    if (parentId) {
-      const parent = scopes.get(parentId);
-      // Unloading / Failed / Disposed parents cannot accept `.child()` —
-      // nest under host instead so a late child resolve still materializes.
-      const root = parentUsable(parent) ? parent : hostScope;
-      return openSubagentRealm(root, { sessionId, depend });
+    for (const [child, parent] of [...nestParent]) {
+      if (!scopes.has(child) || !scopes.has(parent)) nestParent.delete(child);
     }
+  }
+
+  function hasProtectedNestedChild(
+    sessionId: string,
+    isProtected: (id: string) => boolean,
+  ): boolean {
+    for (const [child, parent] of nestParent) {
+      if (parent !== sessionId) continue;
+      if (isProtected(child)) return true;
+      if (hasProtectedNestedChild(child, isProtected)) return true;
+    }
+    return false;
+  }
+
+  function openScope(sessionId: string, _parentSessionId?: string): Scope {
+    // Every session is an independent agent lifetime. Nesting under the
+    // summoning session made parent invalidate/dispose cascade-abort the
+    // worker (`disposed` / 「已停止」) even though the worker's log, wait,
+    // and background reply are their own session.
+    nestParent.delete(sessionId);
     return hostScope.child({
       id: `agent:${sessionId}`,
-      depend,
+      depend: [{ name: HOST_PLUGINS_KEY }],
     });
   }
 
@@ -98,14 +136,37 @@ export function createHostAgentCache(
     const scope = scopes.get(sessionId);
     agents.delete(sessionId);
     scopes.delete(sessionId);
+    nestParent.delete(sessionId);
+    for (const [child, parent] of [...nestParent]) {
+      if (parent === sessionId) nestParent.delete(child);
+    }
     if (scope && scope.state !== ScopeState.Disposed) await scope.dispose();
     pruneDisposed();
   }
 
   async function invalidateAll(opts?: InvalidateAllOpts): Promise<void> {
+    pruneDisposed();
     const ids = [...scopes.keys()];
+    const held = new Set<string>();
     for (const id of ids) {
-      if (opts?.skip?.(id)) continue;
+      if (opts?.skip?.(id)) held.add(id);
+    }
+    // Skip on a nested child must also hold ancestors: parent.scope.dispose()
+    // cascades and would abort the busy child that skip meant to protect.
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const [child, parent] of nestParent) {
+        if (!held.has(child) || held.has(parent) || !scopes.has(parent)) {
+          continue;
+        }
+        held.add(parent);
+        opts?.onHold?.(parent);
+        grew = true;
+      }
+    }
+    for (const id of ids) {
+      if (held.has(id)) continue;
       await invalidate(id);
     }
   }
@@ -171,6 +232,8 @@ export function createHostAgentCache(
     isBusy(sessionId) {
       return agents.get(sessionId)?.isBusy() === true;
     },
+
+    hasProtectedNestedChild,
 
     invalidate,
     invalidateAll,

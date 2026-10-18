@@ -7,6 +7,7 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import {
   clampPeerWaitMs,
   PEER_WAIT_DEFAULT_MS,
@@ -402,7 +403,13 @@ export function bindSessionThreadTools(
         signal,
       );
       if ("reply" in waited) {
-        return { content: `reply from ${targetId}:\n${waited.reply}` };
+        return {
+          content: `reply from ${targetId}:\n${boundChildAnswer(
+            sessionId,
+            targetId,
+            waited.reply,
+          )}`,
+        };
       }
       return { content: `thread_message: ${waited.error}`, isError: true };
     },

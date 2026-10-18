@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import { ScopeState } from "@xrkseek/compose";
-import { createHostAgentCache, HOST_PLUGINS_KEY } from "../src/agent-cache.js";
+import {
+  createHostAgentCache,
+  deferBusyAgentInvalidate,
+  HOST_PLUGINS_KEY,
+} from "../src/agent-cache.js";
 
 function fakeAgent(opts?: {
   busy?: boolean;
@@ -96,7 +100,7 @@ describe("createHostAgentCache", () => {
     await cache.dispose();
   });
 
-  it("opens a nested subagent realm; invalidate parent aborts the child", async () => {
+  it("invalidate parent does not abort an independently resolved worker", async () => {
     const cache = createHostAgentCache([]);
     const parent = fakeAgent();
     const child = fakeAgent();
@@ -105,11 +109,36 @@ describe("createHostAgentCache", () => {
 
     await cache.invalidate("p");
     expect(parent.aborted).toBe(true);
-    expect(child.aborted).toBe(true);
+    expect(child.aborted).toBe(false);
 
     const create = vi.fn(async () => fakeAgent());
     await cache.resolve("c", create, { parentSessionId: "p" });
-    expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(0);
+    await cache.dispose();
+  });
+
+  it("invalidateAll skip on a worker does not require holding its summoner", async () => {
+    const cache = createHostAgentCache([]);
+    const parent = fakeAgent({ busy: false });
+    const child = fakeAgent({ busy: true });
+    const other = fakeAgent({ busy: false });
+    const held: string[] = [];
+    await cache.resolve("p", async () => parent);
+    await cache.resolve("c", async () => child, { parentSessionId: "p" });
+    await cache.resolve("other", async () => other);
+
+    await cache.invalidateAll({
+      skip: (id) => id === "c",
+      onHold: (id) => held.push(id),
+    });
+    expect(child.aborted).toBe(false);
+    expect(parent.aborted).toBe(true);
+    expect(other.aborted).toBe(true);
+    expect(held).toEqual([]);
+    expect(cache.hasProtectedNestedChild("p", () => true)).toBe(false);
+
+    await cache.invalidate("c");
+    expect(child.aborted).toBe(true);
     await cache.dispose();
   });
 
@@ -163,5 +192,31 @@ describe("createHostAgentCache", () => {
     await cache.dispose();
     expect(order).toEqual(["abort", "plugins-alive"]);
     expect(cache.hostScope.state).toBe(ScopeState.Disposed);
+  });
+});
+
+describe("deferBusyAgentInvalidate", () => {
+  it("defers badge rebuilds for busy or draining sessions and rebuilds idle ones", async () => {
+    const deferred: string[] = [];
+    const invalidated: string[] = [];
+    const sessions = [
+      { id: "busy-turn", drainActive: false, busy: true },
+      { id: "draining", drainActive: true, busy: false },
+      { id: "idle", drainActive: false, busy: false },
+      { id: "both", drainActive: true, busy: true },
+    ];
+    for (const row of sessions) {
+      await deferBusyAgentInvalidate({
+        sessionId: row.id,
+        drainActive: row.drainActive,
+        busy: row.busy,
+        defer: (id) => deferred.push(id),
+        invalidate: async (id) => {
+          invalidated.push(id);
+        },
+      });
+    }
+    expect(deferred).toEqual(["busy-turn", "draining", "both"]);
+    expect(invalidated).toEqual(["idle"]);
   });
 });

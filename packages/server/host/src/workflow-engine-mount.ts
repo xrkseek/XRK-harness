@@ -13,10 +13,13 @@ import { createRegistryCodeToolBridge } from "@xrkseek/code-runtime";
 import { Context } from "@xrkseek/cordis";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "@xrkseek/server-face";
-import { dispatchFaceMethod, lastAssistantBodyText } from "@xrkseek/server-face";
-
-const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
-const POLL_MS = 50;
+import {
+  boundChildAnswer,
+  dispatchFaceMethod,
+  isChildSessionActive,
+  lastAssistantBodyText,
+  waitSessionDrainIdle,
+} from "@xrkseek/server-face";
 
 /** Nested orchestrators that must not re-enter from workflow scripts. */
 const WORKFLOW_TOOL_BLOCKLIST = new Set(["run_code", "workflow", "ralph"]);
@@ -84,21 +87,10 @@ async function waitDrainIdle(
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const run = runtime.drain.run?.bind(runtime.drain);
-  if (run) {
-    await run(sessionId);
-    return;
-  }
-  const deadline = Date.now() + FOREGROUND_WAIT_MS;
-  while (runtime.drain.isActive(sessionId)) {
-    if (signal?.aborted) {
-      throw new DOMException("aborted", "AbortError");
-    }
-    if (Date.now() > deadline) {
-      throw new Error(`workflow agent timed out waiting for session ${sessionId}`);
-    }
-    await new Promise((r) => setTimeout(r, POLL_MS));
-  }
+  await waitSessionDrainIdle(runtime, sessionId, {
+    ...(signal ? { signal } : {}),
+    kind: "workflow agent",
+  });
 }
 
 /**
@@ -146,16 +138,21 @@ export function createFaceWorkflowCreateAgent(runtime: FaceRuntime) {
     try {
       await waitDrainIdle(runtime, childId, request.signal);
     } catch (err) {
-      await dispatchFaceMethod(
-        runtime,
-        "session.cancel",
-        `wf-agent-c-${childId}`,
-        { sessionId: childId },
-      ).catch(() => undefined);
+      // One-shot children skip idle notices. Promote before the wait error
+      // surfaces so a later settle still steers into the parent session.
+      if (isChildSessionActive(runtime, childId)) {
+        runtime.subagents.promoteToContinuable(childId);
+      }
       throw err;
     }
-    const text = lastAssistantBodyText(readSessionEvents(runtime.store, childId));
-    return { childId, text, label: call.label };
+    const raw = lastAssistantBodyText(
+      readSessionEvents(runtime.store, childId),
+    );
+    return {
+      childId,
+      text: boundChildAnswer(parentId, childId, raw),
+      label: call.label,
+    };
   };
 }
 

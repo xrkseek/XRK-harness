@@ -322,6 +322,8 @@ export {
   formatSubagentCompletionNotice,
   describeChildOutcome,
   lastAssistantBodyText,
+  boundChildAnswer,
+  SUBAGENT_ANSWER_INLINE_BYTES,
   isSettledJobStatus,
   JOB_COMPLETION_MAX_WAKES,
   presentToolView,
@@ -348,6 +350,13 @@ export {
   type WireAdaptContext,
   type WireHistoryEntry,
 } from "./adapt/index.js";
+export {
+  raceDrainRunSlice,
+  SESSION_DRAIN_POLL_MS,
+  SESSION_DRAIN_WAIT_MS,
+  waitSessionDrainIdle,
+  type WaitSessionDrainIdleOptions,
+} from "./wait-drain-idle.js";
 export {
   FACE_AGENT_PRESETS,
   FACE_AGENT_PRESET_IDS,

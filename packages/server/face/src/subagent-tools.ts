@@ -85,11 +85,17 @@ import {
   type AgentTeamEdgeKind,
 } from "./agent-team-graph.js";
 import { bindRalphTool } from "./ralph-tool.js";
+import {
+  raceDrainRunSlice,
+  SESSION_DRAIN_POLL_MS,
+  SESSION_DRAIN_WAIT_MS,
+  waitSessionDrainIdle,
+} from "./wait-drain-idle.js";
 
-const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
+const FOREGROUND_WAIT_MS = SESSION_DRAIN_WAIT_MS;
 const WAIT_AGENT_DEFAULT_MS = 5 * 60 * 1000;
 const WAIT_AGENT_MIN_MS = 1_000;
-const POLL_MS = 50;
+const POLL_MS = SESSION_DRAIN_POLL_MS;
 
 export { SUBAGENT_ROUTING_PROMPT_TEXT };
 
@@ -239,99 +245,11 @@ async function waitDrainIdle(
   signal?: AbortSignal,
   timeoutMs = FOREGROUND_WAIT_MS,
 ): Promise<void> {
-  const run = runtime.drain.run?.bind(runtime.drain);
-  if (run) {
-    // hub.run is a join on a Promise that no longer observes cancellation,
-    // so it must race the caller signal: a parent turn aborted while waiting
-    // for its child would otherwise hang the tool batch forever. The join
-    // stays attached in the background — the caller cancels the child right
-    // after this rejects, which is what actually drains it.
-    //
-    // The race must also carry the timeout: latch.run() joins until the
-    // child's chain *actually* settles, so a child stuck on a tool that
-    // ignores abort pins the parent's turn for as long as it hangs. The
-    // timeout used to apply only to the polling fallback below — i.e. never
-    // on the Host path, which always has run().
-    await raceDeadline(
-      abortable(run(sessionId), signal),
-      timeoutMs,
-      sessionId,
-    );
-    return;
-  }
-  // Same deadline semantics as the hub.run branch above — one throw site, one
-  // message, so a caller (or a log grep) cannot tell the two paths apart.
-  await raceDeadline(
-    (async () => {
-      while (runtime.drain.isActive(sessionId)) {
-        if (signal?.aborted) {
-          throw new DOMException("aborted", "AbortError");
-        }
-        await new Promise((r) => setTimeout(r, POLL_MS));
-      }
-    })(),
+  await waitSessionDrainIdle(runtime, sessionId, {
+    ...(signal ? { signal } : {}),
     timeoutMs,
-    sessionId,
-  );
-}
-
-/**
- * Reject once `timeoutMs` elapses, naming the session so the failure reads
- * like the polling branch's. The wrapped promise keeps running — the caller
- * cancels the child right after, which is what actually drains it.
- */
-function raceDeadline<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  sessionId: string,
-): Promise<T> {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new Error(`subagent timed out waiting for session ${sessionId}`),
-        ),
-      timeoutMs,
-    );
+    kind: "subagent",
   });
-  return Promise.race([
-    promise.finally(() => {
-      if (timer !== undefined) clearTimeout(timer);
-    }),
-    timedOut,
-  ]);
-}
-
-/** Reject as soon as `signal` aborts; the wrapped promise keeps running. */
-function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    return Promise.reject(abortError(signal.reason));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => {
-      reject(abortError(signal.reason));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (err: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      },
-    );
-  });
-}
-
-function abortError(reason?: unknown): Error {
-  const err = new Error(formatSubagentAbortReason(reason));
-  err.name = "AbortError";
-  return err;
 }
 
 /**
@@ -360,40 +278,6 @@ export function childOwnedEvents(
 ): readonly SessionEvent[] {
   const link = runtime.subagents.getByChild(childId);
   return subagentOwnedEvents(link, readSessionEvents(runtime.store, childId));
-}
-
-function formatSubagentAbortReason(reason: unknown): string {
-  if (reason === undefined || reason === null) return "aborted";
-  if (reason instanceof Error) {
-    const message = reason.message.trim();
-    return message.length > 0 ? message : reason.name || "aborted";
-  }
-  if (reason !== null && typeof reason === "object" && "kind" in reason) {
-    const kind = (reason as { kind?: unknown }).kind;
-    if (kind === "user") return "aborted by user";
-    if (kind === "parent") return "aborted by parent";
-    if (kind === "disposed") return "aborted: session disposed";
-    if (kind === "legacy") return "aborted";
-    if (kind === "hook") {
-      const hookReason = (reason as { reason?: unknown }).reason;
-      if (typeof hookReason === "string") {
-        return `aborted by hook: ${hookReason}`;
-      }
-    }
-  }
-  if (typeof reason === "string") {
-    const trimmed = reason.trim();
-    return trimmed.length > 0 ? trimmed : "aborted";
-  }
-  try {
-    const json = JSON.stringify(reason);
-    if (typeof json === "string" && json.length > 0 && json !== "{}") {
-      return json;
-    }
-  } catch {
-    /* ignore */
-  }
-  return "aborted";
 }
 
 export interface BindSubagentToolsOptions {
@@ -1409,39 +1293,46 @@ function createSubagentTool(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const timedOut = /timed out waiting/i.test(message);
-        // Salvage before cancelling: `session.cancel` drops the chain, so a
-        // child that had already written its answer would bill the parent for
-        // nothing. A child that produced nothing is stuck, so it still gets
-        // cancelled instead of left dangling.
+        // The worker is its own session. A wait timeout or a parent abort
+        // must not cancel it; a later idle still delivers the answer (inline
+        // or spill) as a user message.
+        const stillRunning = isChildSessionActive(options.runtime, childId);
+        // One-shot children skip idle completion notices. If the wait ends
+        // while the worker is still live, promote so a later settle still
+        // steers into the parent (matches the comment below + background).
+        if (stillRunning) {
+          options.runtime.subagents.promoteToContinuable(childId);
+        }
         const owned = childOwnedEvents(options.runtime, childId);
         const salvaged = lastAssistantBodyText(owned);
         const retrying = timedOut
           ? lastModelRetryNotice(owned)
           : undefined;
-        if (!salvaged) {
-          await dispatchFaceMethod(
-            options.runtime,
-            "session.cancel",
-            `tool-sa-c-${childId}`,
-            // `parent`, not the default `user`: a parent that gave up waiting
-            // is not a human hitting Stop. The old default stamped
-            // turn/end `reason: user`, so every timed-out child read as "stopped
-            // by the user" in the child log and in the completion notice.
-            { sessionId: childId, cause: { kind: "parent" } },
-          ).catch(() => undefined);
-        }
         options.runtime.agentTeamTasks.complete(task.id, {
           ok: false,
           preview: message,
         });
-        const extra = worktreeLine(false);
+        // Keep the worktree while the child is still live — reclaiming here
+        // would yank the cwd out from under an independent worker. Matches
+        // the background-spawn path (`worktreeLine(true)`).
+        const extra = worktreeLine(stillRunning);
+        // Same spill ceiling as the success path — never dump a raw multi-MB
+        // salvage into the parent tool result.
+        const salvagedBound = salvaged
+          ? boundChildAnswer(options.parentSessionId, childId, salvaged)
+          : undefined;
+        const salvageLead = salvagedBound
+          ? stillRunning
+            ? `${message}; child still running — last answer so far is salvaged below. Host will steer when it settles.`
+            : `${message}, but the child finished work before the wait expired — its last answer is salvaged below.`
+          : stillRunning
+            ? `${message}; child still running — Host will steer a completion notice when it settles.`
+            : `subagent failed: ${message}`;
         return {
           content: [
-            salvaged
-              ? `${message}, but the child finished work before the wait expired — its last answer is salvaged below.`
-              : `subagent failed: ${message}`,
-            salvaged || undefined,
-            timedOut ? childResumeHint(childId) : undefined,
+            salvageLead,
+            salvagedBound,
+            timedOut || stillRunning ? childResumeHint(childId) : undefined,
             retrying,
             extra,
           ]
@@ -1489,7 +1380,11 @@ function createSubagentTool(
             try {
               await waitDrainIdle(options.runtime, childId, signal);
             } catch {
-              /* keep first answer */
+              // Keep the first answer, but promote so a later settle still
+              // steers if the schema-retry turn outlives this wait.
+              if (isChildSessionActive(options.runtime, childId)) {
+                options.runtime.subagents.promoteToContinuable(childId);
+              }
             }
             owned = readOwned();
             text = lastAssistantBodyText(owned) || text;
@@ -1511,7 +1406,11 @@ function createSubagentTool(
           ? { schemaErrors }
           : {}),
       });
-      const extra = worktreeLine(false);
+      // Schema-retry wait can time out while the child is still live; do not
+      // reclaim the worktree out from under it.
+      const extra = worktreeLine(
+        isChildSessionActive(options.runtime, childId),
+      );
       if (!text) {
         return {
           content: [`(subagent ${childId} finished with no assistant text)`, extra]
@@ -2054,8 +1953,18 @@ function createWaitAgentTool(
       const deadline = Date.now() + timeoutMs;
       const stillRunning = () =>
         targets.some((id) => isChildSessionActive(options.runtime, id));
+      const promoteLiveTargets = () => {
+        for (const childId of targets) {
+          if (isChildSessionActive(options.runtime, childId)) {
+            options.runtime.subagents.promoteToContinuable(childId);
+          }
+        }
+      };
       while (stillRunning()) {
         if (signal?.aborted) {
+          // Parent Stop must not strand one-shot children without a later
+          // completion notice — same promote as the timeout path.
+          promoteLiveTargets();
           throw new DOMException("aborted", "AbortError");
         }
         if (Date.now() > deadline) break;
@@ -2070,16 +1979,18 @@ function createWaitAgentTool(
           !options.runtime.externalAgents.has(activeOnes[0]!)
         ) {
           try {
-            await Promise.race([
-              options.runtime.drain.run(activeOnes[0]!),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("wait slice")),
-                  Math.max(POLL_MS, slice),
-                ),
-              ),
-            ]);
-          } catch {
+            const run = options.runtime.drain.run.bind(options.runtime.drain);
+            const id = activeOnes[0]!;
+            await raceDrainRunSlice({
+              run: () => run(id),
+              sliceMs: Math.max(POLL_MS, slice),
+              ...(signal ? { signal } : {}),
+            });
+          } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") {
+              promoteLiveTargets();
+              throw err;
+            }
             /* keep polling until deadline */
           }
         } else {
@@ -2087,6 +1998,7 @@ function createWaitAgentTool(
         }
       }
       const timedOut = stillRunning();
+      if (timedOut) promoteLiveTargets();
       const lines: string[] = [
         timedOut
           ? `wait_agent timed out after ${timeoutMs}ms`
@@ -2095,14 +2007,12 @@ function createWaitAgentTool(
       for (const childId of targets) {
         const link = options.runtime.subagents.getByChild(childId);
         const running = isChildSessionActive(options.runtime, childId);
-        const text = running
-          ? undefined
-          : lastAssistantBodyText(
-              subagentOwnedEvents(
-                link,
-                readSessionEvents(options.runtime.store, childId),
-              ),
-            );
+        const text = lastAssistantBodyText(
+          subagentOwnedEvents(
+            link,
+            readSessionEvents(options.runtime.store, childId),
+          ),
+        );
         const inbox = childInboxCounts(options.runtime, childId);
         lines.push(
           [

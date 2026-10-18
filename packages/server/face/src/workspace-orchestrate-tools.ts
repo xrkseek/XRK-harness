@@ -15,6 +15,7 @@ import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
+import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import {
   clampPeerWaitMs,
   PEER_WAIT_DEFAULT_MS,
@@ -320,7 +321,7 @@ export function bindWorkspaceOrchestrateTools(
             sessionId: targetId,
             ok: true,
             wait: true,
-            reply: waited.reply,
+            reply: boundChildAnswer(sessionId, targetId, waited.reply),
           }),
         };
       }

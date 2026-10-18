@@ -18,7 +18,50 @@ import {
 import { resolveXrkHome } from "@xrkseek/server-config";
 import { resolveLlmForSelection } from "./llm-resolve.js";
 import { reserveModelSessionSlot } from "./model-session-cap.js";
-import { resolveSessionModelSelection } from "./model-catalog.js";
+import {
+  lookupModelContextWindow,
+  resolveSessionModelSelection,
+} from "./model-catalog.js";
+
+/**
+ * The occupancy ball reads `contextPressure.contextWindow`, and the plan
+ * summary reads `contextTimeline.contextWindow`. Both otherwise move only
+ * when a turn logs `request/header`. A model switch must publish the catalog
+ * window immediately, without inventing a turn-enclosed header.
+ */
+function publishSelectedContextWindow(
+  runtime: FaceRuntime,
+  sessionId: string,
+  selected: FaceModelSelection,
+): void {
+  const contextWindow = lookupModelContextWindow(runtime, selected);
+  if (contextWindow === undefined) return;
+  runtime.projections.revise(sessionId, "contextPressure", (state) => {
+    const prev = (state ?? {}) as { contextWindow?: number };
+    if (prev.contextWindow === contextWindow) return state;
+    return { ...prev, contextWindow };
+  });
+  runtime.projections.revise(sessionId, "contextTimeline", (state) => {
+    const prev = (state ?? {}) as {
+      contextWindow?: number;
+      model?: string;
+      provider?: string;
+    };
+    if (
+      prev.contextWindow === contextWindow &&
+      prev.model === selected.model &&
+      prev.provider === selected.provider
+    ) {
+      return state;
+    }
+    return {
+      ...prev,
+      contextWindow,
+      model: selected.model,
+      provider: selected.provider,
+    };
+  });
+}
 
 function sessionHasImageContent(
   runtime: FaceRuntime,
@@ -154,6 +197,7 @@ export async function selectSessionModel(
     };
   }
   runtime.sessionModels.set(sessionId, selected);
+  publishSelectedContextWindow(runtime, sessionId, selected);
   try {
     saveSessionModelSelection(
       sessionModelsPath(

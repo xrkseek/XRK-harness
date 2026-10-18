@@ -12,11 +12,14 @@ import {
   appendOutputContract,
   extractJsonCandidate,
 } from "./agent-team-output.js";
+import { isChildSessionActive } from "./external-agent-runtime.js";
 import { modelSessionCapProblem } from "./model-session-cap.js";
 import { predictChildModelSelection } from "./subagent-tools.js";
+import {
+  SESSION_DRAIN_WAIT_MS,
+  waitSessionDrainIdle,
+} from "./wait-drain-idle.js";
 
-const FOREGROUND_WAIT_MS = 10 * 60 * 1000;
-const POLL_MS = 50;
 /** Product default / call ceiling (DSH default 256 is too large for Face). */
 export const RALPH_DEFAULT_MAX_ROUNDS = 8;
 export const RALPH_HARD_MAX_ROUNDS = 32;
@@ -57,23 +60,14 @@ async function waitDrainIdle(
   runtime: FaceRuntime,
   sessionId: string,
   signal?: AbortSignal,
-  timeoutMs = FOREGROUND_WAIT_MS,
+  timeoutMs = SESSION_DRAIN_WAIT_MS,
 ): Promise<void> {
-  const run = runtime.drain.run?.bind(runtime.drain);
-  if (run) {
-    await run(sessionId);
-    return;
-  }
-  const deadline = Date.now() + timeoutMs;
-  while (runtime.drain.isActive(sessionId)) {
-    if (signal?.aborted) {
-      throw new DOMException("aborted", "AbortError");
-    }
-    if (Date.now() > deadline) {
-      throw new Error(`ralph round timed out waiting for session ${sessionId}`);
-    }
-    await new Promise((r) => setTimeout(r, POLL_MS));
-  }
+  // Ending the wait must not cancel the round session; only unblocks ralph.
+  await waitSessionDrainIdle(runtime, sessionId, {
+    ...(signal ? { signal } : {}),
+    timeoutMs,
+    kind: "ralph round",
+  });
 }
 
 function normalizedText(value: unknown): value is string {
@@ -363,12 +357,13 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
           await waitDrainIdle(options.runtime, childId, signal);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          await dispatchFaceMethod(
-            options.runtime,
-            "session.cancel",
-            `tool-ralph-c-${childId}`,
-            { sessionId: childId },
-          ).catch(() => undefined);
+          // The round session keeps running; this wait only stops blocking ralph.
+          // One-shot idle notices are skipped — promote so a later settle still
+          // steers the report into this session.
+          const stillRunning = isChildSessionActive(options.runtime, childId);
+          if (stillRunning) {
+            options.runtime.subagents.promoteToContinuable(childId);
+          }
           options.runtime.agentTeamTasks.completeByChild(childId, {
             ok: false,
             preview: message,
@@ -378,7 +373,9 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
               status: "round-failed",
               roundsStarted,
               ...(previous ? { report: previous } : {}),
-              error: message,
+              error: stillRunning
+                ? `${message}; round session still running — Host will steer when it settles.`
+                : message,
             }),
             isError: true,
           };

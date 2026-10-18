@@ -282,6 +282,64 @@ export function apply(ctx) {
     ]);
   });
 
+  it("listModelsForSync keeps plugin setVisible this-binding (Cordis gate)", async () => {
+    // Community plugins read this.display.visible; unbound extraction throws.
+    const gate = {
+      display: { visible: false },
+      isVisible() {
+        return this.display.visible;
+      },
+      setVisible(next: boolean) {
+        this.display.visible = next;
+      },
+      current() {
+        return this.display.visible
+          ? [{ id: "wb-1", name: "WB", baseUrl: "http://127.0.0.1:19090/v1" }]
+          : [];
+      },
+      fallback() {
+        return [{ id: "wb-1", name: "WB" }];
+      },
+    };
+    const rows = await listModelsForSync(
+      {
+        async listModels() {
+          return gate.display.visible
+            ? [{ id: "wb-1", name: "WB", baseUrl: "http://127.0.0.1:19090/v1" }]
+            : [];
+        },
+        catalog: gate,
+      },
+      "workbuddy-ai",
+    );
+    expect(gate.display.visible).toBe(false);
+    expect(rows).toEqual([
+      { id: "wb-1", name: "WB", baseUrl: "http://127.0.0.1:19090/v1" },
+    ]);
+  });
+
+  it("listModelsForSync survives a broken setVisible without aborting sync", async () => {
+    const rows = await listModelsForSync(
+      {
+        async listModels() {
+          return [{ id: "ok", name: "OK", baseUrl: "http://127.0.0.1:19091/v1" }];
+        },
+        catalog: {
+          isVisible: () => false,
+          setVisible: () => {
+            throw new TypeError("Cannot read properties of undefined (reading 'visible')");
+          },
+          current: () => [],
+          fallback: () => [{ id: "ok", name: "OK" }],
+        },
+      },
+      "workbuddy-ai",
+    );
+    expect(rows).toEqual([
+      { id: "ok", name: "OK", baseUrl: "http://127.0.0.1:19091/v1" },
+    ]);
+  });
+
   it("listModelsForSync stamps lastBaseUrl when listModels is empty", async () => {
     const adapter = {
       async listModels() {

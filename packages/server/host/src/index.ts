@@ -147,7 +147,7 @@ import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { createHostAgentCache } from "./agent-cache.js";
+import { createHostAgentCache, deferBusyAgentInvalidate } from "./agent-cache.js";
 import { createHostCron, type CronScheduler } from "@xrkseek/server-cron";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { wireDrainStatus, publishDrainIdle, type SessionDrainControl } from "./drain-status.js";
@@ -196,7 +196,7 @@ import type { HostLogger, HostSpawnOptions } from "./log.js";
 /** True while an unattended cron agent turn is running — skip cron tools to avoid recursion. */
 const cronAgentDepth = new AsyncLocalStorage<boolean>();
 
-export { createHostAgentCache, HOST_PLUGINS_KEY } from "./agent-cache.js";
+export { createHostAgentCache, deferBusyAgentInvalidate, HOST_PLUGINS_KEY } from "./agent-cache.js";
 export type { InvalidateAllOpts } from "./agent-cache.js";
 export { createStandingToolRegistry } from "./standing-tools.js";
 export type { AgentResolveOpts, HostAgentCache } from "./agent-cache.js";
@@ -1022,6 +1022,11 @@ export function createHostManager(): HostManager {
             pendingAgentInvalidate.add(sessionId);
             return true;
           },
+          // Idle parent of a busy nested worker: hold until the child drains,
+          // else parent.dispose cascades and paints the worker 「已停止」.
+          onHold: (sessionId) => {
+            pendingAgentInvalidate.add(sessionId);
+          },
         });
         await mcpDeferred.flush();
       };
@@ -1454,17 +1459,29 @@ export function createHostManager(): HostManager {
                   effectiveSandboxMode(readSessionEvents(store, sessionId)),
                 );
               },
-              readSessionPathAllowlist: () =>
-                faceBox.runtime?.pathAllowlist.list(sessionId) ?? [],
+              readSessionPathAllowlist: () => {
+                const rt = faceBox.runtime;
+                if (!rt) return [];
+                // Resident eviction forgets the in-memory map; cron/IM/drain
+                // turns may never call session.history — refill from the log.
+                rt.pathAllowlist.hydrate(rt.store, sessionId);
+                return rt.pathAllowlist.list(sessionId);
+              },
               clearSessionPathOnce: () => {
                 faceBox.runtime?.pathAllowlist.clearOnce(sessionId);
               },
-              ...(faceBox.runtime
-                ? {
-                    toolSearchState:
-                      faceBox.runtime.toolDisclosure.stateFor(sessionId),
-                  }
-                : {}),
+              // Always register tool_search — even while Face is still booting.
+              // Omitting toolSearchState used to dump every deferred MCP schema
+              // onto the wire (~100k+ tokens). Live getters attach to Face
+              // disclosure once runtime is assigned.
+              toolSearchState: {
+                listExpanded: () =>
+                  faceBox.runtime?.toolDisclosure.listExpanded(sessionId) ??
+                  new Set(),
+                expand: (names) => {
+                  faceBox.runtime?.toolDisclosure.expand(sessionId, names);
+                },
+              },
               routeAllowsImage: () =>
                 faceForModality.current
                   ? liveRouteAllowsImageInput(faceForModality.current, sessionId)
@@ -1956,16 +1973,18 @@ export function createHostManager(): HostManager {
               if (
                 !running &&
                 "flush" in store &&
-                typeof (store as { flush?: () => void }).flush === "function"
+                typeof (store as { flush?: (sessionId?: string) => void }).flush === "function"
               ) {
-                (store as { flush: () => void }).flush();
+                (store as { flush: (sessionId?: string) => void }).flush(sid);
               }
-              if (!running && pendingAgentInvalidate.has(sid)) {
-                pendingAgentInvalidate.delete(sid);
-                void agentCache.invalidate(sid).then(() => mcpDeferred.flush());
-              } else if (!running) {
-                // Flush stragglers skipped via isBusy when their drain never
-                // opened (subagent edge) but the agent latch has since idled.
+              if (!running) {
+                // Invalidate this session if it was deferred mid-turn, then flush
+                // other pending ids that are idle (incl. parents held only to
+                // protect a nested busy child — see agent-cache onHold).
+                if (pendingAgentInvalidate.has(sid)) {
+                  pendingAgentInvalidate.delete(sid);
+                  void agentCache.invalidate(sid).then(() => mcpDeferred.flush());
+                }
                 for (const pending of [...pendingAgentInvalidate]) {
                   if (pending === sid) continue;
                   if (
@@ -1974,10 +1993,23 @@ export function createHostManager(): HostManager {
                   ) {
                     continue;
                   }
+                  // Idle parent held only for a nested worker: wait until that
+                  // child is no longer protected, else parent.dispose cascades.
+                  if (
+                    agentCache.hasProtectedNestedChild(pending, (id) =>
+                      pendingAgentInvalidate.has(id) ||
+                      drainActiveBox.isActive(id) ||
+                      agentCache.isBusy(id),
+                    )
+                  ) {
+                    continue;
+                  }
                   pendingAgentInvalidate.delete(pending);
                   void agentCache.invalidate(pending);
                 }
-                void mcpDeferred.flush();
+                if (!pendingAgentInvalidate.has(sid)) {
+                  void mcpDeferred.flush();
+                }
               }
               hostStatusBox.publish?.(sid, running);
             });
@@ -2356,7 +2388,16 @@ export function createHostManager(): HostManager {
         ...(config.runtime.policyFile
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
-        invalidateAgent: (sessionId) => agentCache.invalidate(sessionId),
+        invalidateAgent: (sessionId) =>
+          deferBusyAgentInvalidate({
+            sessionId,
+            drainActive: drainActiveBox.isActive(sessionId),
+            busy: agentCache.isBusy(sessionId),
+            defer: (id) => {
+              pendingAgentInvalidate.add(id);
+            },
+            invalidate: (id) => agentCache.invalidate(id),
+          }),
         onSessionFinalize: (sessionId) => {
           consolidateCuratedMemoryForSession(sessionId);
           sharedBrowser?.drop(sessionId);
@@ -2509,6 +2550,25 @@ export function createHostManager(): HostManager {
           compactionStrategyRaw === "summary-only" ||
           compactionStrategyRaw === "off"
             ? compactionStrategyRaw
+            : undefined;
+        const softBudgetTriggerPercent =
+          typeof loop.softBudgetTriggerPercent === "number" &&
+          Number.isFinite(loop.softBudgetTriggerPercent) &&
+          loop.softBudgetTriggerPercent >= 50 &&
+          loop.softBudgetTriggerPercent <= 100
+            ? Math.floor(loop.softBudgetTriggerPercent)
+            : undefined;
+        const compactRecentMaxTokens =
+          typeof loop.compactRecentMaxTokens === "number" &&
+          Number.isFinite(loop.compactRecentMaxTokens) &&
+          loop.compactRecentMaxTokens >= 2_000
+            ? Math.floor(loop.compactRecentMaxTokens)
+            : undefined;
+        const softBudgetPeelAttempts =
+          typeof loop.softBudgetPeelAttempts === "number" &&
+          Number.isFinite(loop.softBudgetPeelAttempts) &&
+          loop.softBudgetPeelAttempts >= 0
+            ? Math.floor(loop.softBudgetPeelAttempts)
             : undefined;
         const toolResultMaxInlineBytes =
           typeof loop.toolResultMaxInlineBytes === "number" &&
@@ -2882,8 +2942,29 @@ export function createHostManager(): HostManager {
           ...(toolOrder !== undefined ? { toolOrder } : {}),
           ...(toolSettle !== undefined ? { toolSettle } : {}),
           ...(llmRetryMaxRetries !== undefined ? { llmRetryMaxRetries } : {}),
-          ...(compactionStrategy !== undefined
-            ? { compaction: { strategy: compactionStrategy } }
+          ...(compactionStrategy !== undefined ||
+          softBudgetTriggerPercent !== undefined ||
+          compactRecentMaxTokens !== undefined ||
+          softBudgetPeelAttempts !== undefined
+            ? {
+                compaction: {
+                  ...(compactionStrategy !== undefined
+                    ? { strategy: compactionStrategy }
+                    : {}),
+                  ...(softBudgetTriggerPercent !== undefined
+                    ? {
+                        softBudgetTriggerRatio:
+                          softBudgetTriggerPercent / 100,
+                      }
+                    : {}),
+                  ...(compactRecentMaxTokens !== undefined
+                    ? { compactRecentMaxTokens }
+                    : {}),
+                  ...(softBudgetPeelAttempts !== undefined
+                    ? { softBudgetPeelAttempts }
+                    : {}),
+                },
+              }
             : {}),
           ...(toolResultMaxInlineBytes !== undefined
             ? { toolResultMaxInlineBytes }
@@ -2972,9 +3053,9 @@ export function createHostManager(): HostManager {
           }
         }
       });
-      // Tool-delegated children nest under the parent compose scope. UI/rewind
-      // forks (`mode: "fork"`) stay root `agent:{id}` scopes — nesting them
-      // under a live parent races dispose while the child's create() awaits.
+      // Summoning session id is for identity / workspace inject only.
+      // Agent scopes stay siblings under the host root so one session's
+      // dispose cannot abort another.
       lineage.parentOf = (sessionId) => {
         const link = faceRuntime.subagents.getByChild(sessionId);
         if (!link || link.mode === "fork") return undefined;

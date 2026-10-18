@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
-import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
+import { createBareFaceRuntime, idleFaceDrain } from "./helpers/bare-runtime.js";
+import { countSessionsUsingModel } from "../src/model-session-cap.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { resolveSubagentModelSetting } from "../src/model-catalog.js";
 import { buildSessionStatusSnapshot } from "../src/session-status.js";
@@ -106,5 +107,53 @@ describe("subagent model route", () => {
     expect(agents.content).toContain("deepseek/deepseek-flash");
     const analytics = await tools.get("analytics")!.execute({});
     expect(analytics.content).toContain("deepseek/deepseek-flash");
+  });
+
+  it("stress: parent model switch leaves a live child on its spawn pin", () => {
+    const store = createMemorySessionStore();
+    const active = new Set<string>();
+    const runtime = createBareFaceRuntime({
+      store,
+      drain: {
+        ...idleFaceDrain,
+        isActive(sessionId: string) {
+          return active.has(sessionId);
+        },
+      },
+    });
+    runtime.settingsNamespaces.ensure("agent-loop").user = {
+      maxConcurrentModelSessions: 2,
+    };
+    const parent = runtime.ensureSession("parent-switch");
+    const child = runtime.ensureSession("child-pin");
+    runtime.sessionModels.set(parent, {
+      provider: "deepseek",
+      model: "deepseek-chat",
+    });
+    runtime.sessionModels.set(child, {
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
+    runtime.subagents.attach({
+      parentSessionId: parent,
+      childSessionId: child,
+      mode: "continuable",
+      label: "c",
+    });
+    active.add(parent);
+    active.add(child);
+
+    runtime.sessionModels.set(parent, {
+      provider: "openai",
+      model: "gpt-4o",
+    });
+
+    expect(runtime.sessionModels.get(child)).toEqual({
+      provider: "deepseek",
+      model: "deepseek-flash",
+    });
+    expect(countSessionsUsingModel(runtime, "openai", "gpt-4o")).toBe(1);
+    expect(countSessionsUsingModel(runtime, "deepseek", "deepseek-flash")).toBe(1);
+    expect(countSessionsUsingModel(runtime, "deepseek", "deepseek-chat")).toBe(0);
   });
 });

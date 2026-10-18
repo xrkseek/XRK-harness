@@ -226,6 +226,59 @@ describe("subagent completion delivery", () => {
     expect(admits).toEqual([]);
   });
 
+  it("steers after a one-shot is promoted to continuable", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content, opts) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content, opts);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      mode: "one-shot",
+      label: "worker",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    expect(runtime.subagents.promoteToContinuable(childId)?.mode).toBe(
+      "continuable",
+    );
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "late body after wait gave up",
+    });
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain("late body after wait gave up");
+  });
+
   it("drops stale in-flight idle notify after child re-enters drain (no dup)", async () => {
     const store = createMemorySessionStore();
     const admits: string[] = [];
@@ -477,10 +530,9 @@ describe("subagent completion delivery", () => {
     expect(admits[0]!.content).toContain("should not steer after interrupt");
   });
 
-  it("parent session.cancel suppresses child completion steer (manual Stop)", async () => {
-    // Manual parent Stop must cascade-cancel children without steering a
-    // "finished a turn" notice back — natural parent turn/end does not cancel
-    // children at all (separate path); abnormal child idle still notifies.
+  it("parent session.cancel does not abort a delegated worker", async () => {
+    // Workers are independent sessions. Parent Stop must not cancel them or
+    // suppress a later completion notice.
     const store = createMemorySessionStore();
     const admits: string[] = [];
     const aborts: { sessionId: string; cause: unknown }[] = [];
@@ -538,8 +590,8 @@ describe("subagent completion delivery", () => {
       queueMicrotask(() => queueMicrotask(resolve));
     });
 
-    expect(admits).toHaveLength(0);
-    expect(aborts.some((a) => a.sessionId === childId && (a.cause as { kind?: string })?.kind === "parent")).toBe(
+    expect(aborts.some((a) => a.sessionId === childId)).toBe(false);
+    expect(admits.some((body) => body.includes("finished a turn") || body.includes("bg-worker"))).toBe(
       true,
     );
   });

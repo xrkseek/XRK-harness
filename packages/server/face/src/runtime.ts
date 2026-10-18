@@ -459,6 +459,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       toolArgMaps.clear(sessionId);
       wireIds.clear(sessionId);
       inboxWire.clear(sessionId);
+      toolDisclosure.forget(sessionId);
+      // Once grants are memory-only; permanent rows rehydrate from the log on
+      // next history/open (same pattern as wireIds.primeFromLog).
+      pathAllowlist.forget(sessionId);
       clearStatusSnapshotCache(sessionId);
       costMeterRoutes.delete(sessionId);
       // Keep sessionAgentPresets — pinned badge is tiny and disk-backed; dropping
@@ -742,6 +746,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       // Host may resolve an agent before the runtime box is filled; leave the
       // registry unbound so the next call still lands.
       if (runtime) {
+        // Eviction drops pathAllowlist / cold wire maps; Host drain and cron
+        // may bind without a prior session.history — restore from the log now.
+        if (store.has(sessionId)) {
+          pathAllowlist.hydrate(store, sessionId);
+          if (!wireIds.isPrimed(sessionId)) {
+            wireIds.primeFromLog(sessionId, readEvents(sessionId));
+          }
+        }
         sessionToolsBound.add(agent.tools);
         rememberedTools.set(sessionId, agent.tools);
         // Tool surfaces:

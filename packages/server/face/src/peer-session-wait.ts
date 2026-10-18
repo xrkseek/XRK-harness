@@ -7,6 +7,7 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
+import { raceDrainRunSlice } from "./wait-drain-idle.js";
 
 export const PEER_WAIT_DEFAULT_MS = 10 * 60 * 1000;
 export const PEER_WAIT_MIN_MS = 1_000;
@@ -51,16 +52,14 @@ export async function waitForPeerAssistantReply(
       !runtime.externalAgents.has(targetId)
     ) {
       try {
-        await Promise.race([
-          runtime.drain.run(targetId),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("wait slice")),
-              Math.min(PEER_POLL_MS * 20, remaining),
-            ),
-          ),
-        ]);
-      } catch {
+        const run = runtime.drain.run.bind(runtime.drain);
+        await raceDrainRunSlice({
+          run: () => run(targetId),
+          sliceMs: Math.min(PEER_POLL_MS * 20, remaining),
+          ...(signal ? { signal } : {}),
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") throw err;
         /* keep polling */
       }
     } else {

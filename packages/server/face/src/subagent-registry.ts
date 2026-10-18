@@ -207,13 +207,32 @@ export class FaceSubagentRegistry {
     if (!Number.isSafeInteger(seedEventCount) || seedEventCount <= 0) return link;
     if (link.seedEventCount === seedEventCount) return link;
     const next: FaceSubagentLink = { ...link, seedEventCount };
-    this.byChild.set(childSessionId, next);
-    const bucket = this.byParent.get(link.parentSessionId) ?? [];
-    const at = bucket.findIndex((l) => l.childSessionId === childSessionId);
-    if (at >= 0) bucket[at] = next;
-    this.byParent.set(link.parentSessionId, bucket);
-    this.save();
+    this.replaceLink(next);
     return next;
+  }
+
+  /**
+   * Foreground wait gave up while a one-shot child is still live: promote so
+   * a later idle still steers a completion notice (same surface as
+   * `run_in_background`). No-op for continuable / fork / missing links.
+   */
+  promoteToContinuable(
+    childSessionId: string,
+  ): FaceSubagentLink | undefined {
+    const link = this.byChild.get(childSessionId);
+    if (!link || link.mode !== "one-shot") return link;
+    const next: FaceSubagentLink = { ...link, mode: "continuable" };
+    this.replaceLink(next);
+    return next;
+  }
+
+  private replaceLink(next: FaceSubagentLink): void {
+    this.byChild.set(next.childSessionId, next);
+    const bucket = this.byParent.get(next.parentSessionId) ?? [];
+    const at = bucket.findIndex((l) => l.childSessionId === next.childSessionId);
+    if (at >= 0) bucket[at] = next;
+    this.byParent.set(next.parentSessionId, bucket);
+    this.save();
   }
 
   /**

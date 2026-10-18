@@ -209,7 +209,7 @@ describe("Face harness path polish", () => {
     ).toBe(true);
   });
 
-  it("session.cancel cascades to delegated children and idles them", async () => {
+  it("session.cancel leaves a delegated worker running", async () => {
     const host: { type: string; sessionId?: string; running?: boolean }[] = [];
     const { runtime, hub } = await buildFace({
       llm: createReplayAdapter([{ content: "should-not-finish" }]),
@@ -245,7 +245,8 @@ describe("Face harness path polish", () => {
       sessionId: parent,
     });
     expect(cancel.result).toEqual({ ok: true, value: { accepted: true } });
-    await viWaitUntil(() => !hub.isActive(child));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(hub.isActive(child)).toBe(true);
     expect(
       host.some(
         (f) =>
@@ -253,7 +254,7 @@ describe("Face harness path polish", () => {
           f.sessionId === child &&
           f.running === false,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("policy ask waits for session.respondApproval then runs tool", async () => {

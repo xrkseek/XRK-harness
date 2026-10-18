@@ -492,6 +492,28 @@ describe("subagent tools", () => {
     }
   });
 
+  it("promotes a live one-shot to continuable and persists the mode", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-sa-promote-"));
+    try {
+      const file = path.join(dir, "subagents.json");
+      const reg = new FaceSubagentRegistry(file);
+      reg.attach({
+        parentSessionId: "p",
+        childSessionId: "c",
+        mode: "one-shot",
+        label: "worker",
+      });
+      expect(reg.promoteToContinuable("c")?.mode).toBe("continuable");
+      // Idempotent for already-continuable.
+      expect(reg.promoteToContinuable("c")?.mode).toBe("continuable");
+      expect(new FaceSubagentRegistry(file).getByChild("c")?.mode).toBe(
+        "continuable",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("round-trips the spawn role so tool projection survives a restart", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "xrk-sa-role-persist-"));
     try {
@@ -588,6 +610,74 @@ describe("subagent tools", () => {
       label: "m",
     });
     expect(lastAssistantBodyText(childOwnedEvents(runtime, mute))).toBe("");
+  });
+
+  it("spills an oversized salvaged answer on wait timeout", async () => {
+    const prevHome = process.env.XRK_HOME;
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-sa-salvage-spill-"));
+    process.env.XRK_HOME = home;
+    try {
+      const store = createMemorySessionStore();
+      const fat = "超时前长答。".repeat(4_000);
+      const runtime = createFaceRuntime({
+        store,
+        workspaceRoot: process.cwd(),
+        productDir: mkdtempSync(path.join(tmpdir(), "xrk-sa-salvage-spill-dir-")),
+        drain: {
+          wake() {},
+          async cancel() {},
+          isActive() {
+            return true;
+          },
+          // Join hangs so the foreground wait hits its deadline; the child's
+          // answer is already on disk before the race rejects.
+          async run(sessionId: string) {
+            store.append(sessionId, {
+              type: "assistant/message",
+              ts: Date.now(),
+              turnId: "t1",
+              stepId: "s1",
+              content: fat,
+            } as never);
+            await new Promise(() => {});
+          },
+        },
+        resolveAgent: async () => stubAgent(),
+        defaultAgentPreset: "harness",
+      });
+      const parent = runtime.ensureSession("parent");
+      runtime.sessionAgentPresets.set(parent, "harness");
+      const tools = createToolRegistry();
+      bindSubagentTools(tools, {
+        runtime,
+        parentSessionId: parent,
+        foregroundWaitMs: 40,
+      });
+      const out = await tools.get("subagent")!.execute({
+        prompt: "write a long answer",
+        run_in_background: false,
+      });
+      expect(out.isError).toBe(true);
+      const text = String(out.content);
+      expect(text).toMatch(/timed out waiting/i);
+      expect(text).toContain("child still running");
+      expect(text).toContain("salvaged");
+      expect(text).toContain("read_file");
+      expect(text).toContain("middle omitted");
+      // Preview may keep a head/tail of the answer; the full body must live on disk.
+      expect(text.length).toBeLessThan(fat.length);
+      const locator = text.match(/stored at: (.+?)\. Retrieve/)?.[1];
+      expect(locator).toBeTruthy();
+      expect(readFileSync(locator!, "utf8")).toBe(fat);
+      // Foreground one-shot must promote so a later idle still steers.
+      const children = runtime.subagents.listDelegated(parent);
+      expect(children).toHaveLength(1);
+      expect(children[0]!.mode).toBe("continuable");
+    } finally {
+      if (prevHome === undefined) delete process.env.XRK_HOME;
+      else process.env.XRK_HOME = prevHome;
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("tells a rate-limited child apart from a wedged one", () => {
