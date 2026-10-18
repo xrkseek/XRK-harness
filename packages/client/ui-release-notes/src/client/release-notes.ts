@@ -89,6 +89,14 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'The compaction trigger ratio, post-compact recent cap, and extra halving passes from Settings now reach auto-compaction; the presence ball composes pose every frame under a live stream.',
       },
       {
+        zh: "子代理被停（取消 / 接管 / 打断）时，父会话收到一条交代：谁停的、已经跑了多少步、自动发过几次「继续」、怎么接着跑；同一主线上的其它会话也会知道这轮被停。截断的回合自动续写上限提到 10、步内重试默认 30，发出去的「继续」在对话里显示成一条真实用户消息。",
+        en: "When a child is stopped (cancel / takeover / interrupt), its parent gets a note: who stopped it, how far it had run, how many times it auto-sent 继续, and how to resume; other sessions on the same thread learn the turn was cut off. The auto-continue cap is 10 and the in-step retry default is 30, and each 继续 shows up as a real user message.",
+      },
+      {
+        zh: "模型行新增可选「同时会话数」：留空用 Agent loop 的全局上限，填写则只约束这一个模型；「刷新列表」还会补上上游披露、而该行留空的能力值。",
+        en: "Model rows take an optional session cap: blank uses the Agent-loop global; a value constrains just that model. Refresh list also fills capacities the provider disclosed but the row left blank.",
+      },
+      {
         zh: 'npm @xrkseek/harness-cli@0.6.4 接管 @latest。完整清单见 docs/releases/v0.6.4.md。',
         en: 'npm @xrkseek/harness-cli@0.6.4 now owns @latest. Full list in docs/releases/v0.6.4.md.',
       },
