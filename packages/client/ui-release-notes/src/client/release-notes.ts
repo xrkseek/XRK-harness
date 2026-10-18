@@ -65,6 +65,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.4',
+    date: '2026-10-18',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '多个会话一起流式输出时，一个会话落库不再把旁边还在输出的会话一起写盘，只提交触发的那一个。',
+        en: 'When several sessions stream at once, one commit no longer writes every neighbor to disk — only the session that tripped it.',
+      },
+      {
+        zh: '一个词正好切在两块文本上时，落库后再打开库仍能搜到。「刷新列表」只核对已配置的模型，不会删掉你手填的显示名称。',
+        en: 'A word split across two chunks stays findable after commit and reopen. Refresh list only checks models already configured and leaves hand-edited display names alone.',
+      },
+      {
+        zh: '回合还在输出时换徽章或工作目录，这一轮不再被拆掉，空闲后下一次才换；同一条模型路线被多个会话同时挤满时，只有上限内的能进，其余留在原路线。',
+        en: 'Changing the badge or working directory mid-turn no longer tears the turn down — the swap waits for idle. When many live sessions crowd one model route, only up to the cap get in and the rest stay put.',
+      },
+      {
+        zh: '设置里的压缩触发比例、压缩后保留上限、额外减半次数现在真的进自动压缩；表情球在持续流式输出下每一帧都跟着转。',
+        en: 'The compaction trigger ratio, post-compact recent cap, and extra halving passes from Settings now reach auto-compaction; the presence ball composes pose every frame under a live stream.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.4 接管 @latest。完整清单见 docs/releases/v0.6.4.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.4 now owns @latest. Full list in docs/releases/v0.6.4.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.3',
     date: '2026-10-17',
     title: {
