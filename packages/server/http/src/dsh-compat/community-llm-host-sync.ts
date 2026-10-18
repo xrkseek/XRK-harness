@@ -348,7 +348,7 @@ function beginCommunityCatalogPeek(
   }
   return () => {
     try {
-      catalog.setVisible?.(wasVisible!);
+      catalog.setVisible?.(wasVisible);
     } catch {
       /* plugin half-init / dispose mid-sync */
     }
