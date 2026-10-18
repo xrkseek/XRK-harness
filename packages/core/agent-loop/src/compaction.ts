@@ -113,5 +113,14 @@ export function resolveCompactionOptions(
       ? { bufferTokens: value.bufferTokens }
       : {}),
     ...(value.strategy !== undefined ? { strategy: value.strategy } : {}),
+    ...(value.softBudgetTriggerRatio !== undefined
+      ? { softBudgetTriggerRatio: value.softBudgetTriggerRatio }
+      : {}),
+    ...(value.compactRecentMaxTokens !== undefined
+      ? { compactRecentMaxTokens: value.compactRecentMaxTokens }
+      : {}),
+    ...(value.softBudgetPeelAttempts !== undefined
+      ? { softBudgetPeelAttempts: value.softBudgetPeelAttempts }
+      : {}),
   };
 }

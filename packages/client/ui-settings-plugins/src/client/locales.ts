@@ -48,6 +48,9 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopCompactionStrategyInvalid'
   | 'agentLoopCompactionPruneSummary' | 'agentLoopCompactionPruneOnly'
   | 'agentLoopCompactionSummaryOnly' | 'agentLoopCompactionOff'
+  | 'agentLoopSoftBudgetTrigger' | 'agentLoopSoftBudgetTriggerHint'
+  | 'agentLoopCompactRecentMax' | 'agentLoopCompactRecentMaxHint'
+  | 'agentLoopSoftBudgetPeel' | 'agentLoopSoftBudgetPeelHint'
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxConcurrentModelSessions' | 'agentLoopMaxConcurrentModelSessionsHint'
   | 'agentLoopSubagentModel' | 'agentLoopSubagentModelHint'
@@ -289,7 +292,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopAutoContinueOn: 'On',
   agentLoopAutoContinueOff: 'Off',
   agentLoopAutoContinueMaxRounds: 'Auto-continue cap',
-  agentLoopAutoContinueMaxRoundsHint: 'Maximum automatic continuations within one turn (1–10). Guards against endless resumption when the provider keeps truncating. Default 2.',
+  agentLoopAutoContinueMaxRoundsHint: 'Maximum automatic continuations within one turn (1–10). Guards against endless resumption when the provider keeps truncating. Default 4.',
   agentLoopToolOrder: 'Tool order',
   agentLoopToolOrderHint: 'Comma-separated tool names with exactly one empty slot for the rest (for example bash, , read_file). Leave blank for lexicographic wire order.',
   agentLoopToolOrderInvalid: 'List tool names separated by commas, with exactly one empty slot for the rest, and no duplicates.',
@@ -304,6 +307,12 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopCompactionPruneOnly: 'Prune only',
   agentLoopCompactionSummaryOnly: 'Summary only',
   agentLoopCompactionOff: 'Off (no soft/overflow auto path)',
+  agentLoopSoftBudgetTrigger: 'Soft-budget trigger (%)',
+  agentLoopSoftBudgetTriggerHint: 'Start auto-compact at this percent of the model soft budget (Codex ~90). Soft ceiling itself is per model under Settings → Models. Default 90.',
+  agentLoopCompactRecentMax: 'Compact recent cap (tokens)',
+  agentLoopCompactRecentMaxHint: 'Max tokens kept in the post-compact recent tail (Codex 20k user budget). Default 20000.',
+  agentLoopSoftBudgetPeel: 'Soft-budget peel attempts',
+  agentLoopSoftBudgetPeelHint: 'Extra keep-halving summaries after the standard two passes before fail-closed. Default 3.',
   agentLoopToolResultMaxInline: 'Tool result spill ceiling (bytes)',
   agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
   agentLoopMaxConcurrentModelSessions: 'Max sessions per model',
@@ -758,7 +767,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopAutoContinueOn: '开',
   agentLoopAutoContinueOff: '关',
   agentLoopAutoContinueMaxRounds: '自动续写上限',
-  agentLoopAutoContinueMaxRoundsHint: '单个 turn 内最多自动续写几次（1–10），防止提供方持续截断时无限续写。默认 2。',
+  agentLoopAutoContinueMaxRoundsHint: '单个 turn 内最多自动续写几次（1–10），防止提供方持续截断时无限续写。默认 4。',
   agentLoopToolOrder: '工具线序',
   agentLoopToolOrderHint: '逗号分隔工具名，恰好一个空位表示 rest（例如 bash, , read_file）。留空则按字典序上线。',
   agentLoopToolOrderInvalid: '请用逗号分隔工具名，恰好一个空位作 rest，且名称不重复。',
@@ -773,6 +782,12 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopCompactionPruneOnly: '仅 prune',
   agentLoopCompactionSummaryOnly: '仅 summary',
   agentLoopCompactionOff: '关闭（无软压/overflow 自动路径）',
+  agentLoopSoftBudgetTrigger: '软预算预触发（%）',
+  agentLoopSoftBudgetTriggerHint: '达到模型软预算的该百分比时开始自动压缩（Codex 约 90%）。软上限本身在「设置 → 模型」。默认 90。',
+  agentLoopCompactRecentMax: '压缩 recent 上限（token）',
+  agentLoopCompactRecentMaxHint: '换窗后 recent 尾部最多保留的 token（对齐 Codex 20k user）。默认 20000。',
+  agentLoopSoftBudgetPeel: '软预算 peel 次数',
+  agentLoopSoftBudgetPeelHint: '标准两次摘要后，再把 keep 减半重压的次数，仍超再 fail-closed。默认 3。',
   agentLoopToolResultMaxInline: '工具结果 spill 上限（字节）',
   agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
   agentLoopMaxConcurrentModelSessions: '每模型最大会话数',

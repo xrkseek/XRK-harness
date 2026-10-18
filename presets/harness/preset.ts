@@ -772,6 +772,24 @@ function resolveRootsNow(
   return roots && roots.length > 0 ? roots : [productHome];
 }
 
+/**
+ * In-process disclosure when Host does not pass Face `toolDisclosure`.
+ * `tool_search` must exist so Deferred MCP can be expanded; without it,
+ * `listForModel` keeps Deferred off the wire (no soft-budget schema dump).
+ */
+function ephemeralToolSearchState(): ToolSearchState {
+  const expanded = new Set<string>();
+  return {
+    listExpanded: () => expanded,
+    expand(names) {
+      for (const name of names) {
+        const trimmed = name.trim();
+        if (trimmed) expanded.add(trimmed);
+      }
+    },
+  };
+}
+
 /** Composition: fs + shell + sandbox guards + workspace inject. */
 export function createHarnessComposition(
   options: HarnessCompositionOptions,
@@ -1275,16 +1293,16 @@ export function createHarnessComposition(
       ),
     );
   }
-  // Progressive disclosure meta-tool (Codex tool_search). Absent → listForModel
-  // fail-opens Deferred as Direct.
-  if (options.toolSearchState) {
-    tools.register(
-      createToolSearchTool({
-        listTools: () => tools.list(),
-        state: options.toolSearchState,
-      }),
-    );
-  }
+  // Progressive disclosure meta-tool (Codex tool_search). Always present so
+  // deferred MCP stays off the wire until expand. Host passes Face state;
+  // CLI / tests get an ephemeral set.
+  const toolSearchState = options.toolSearchState ?? ephemeralToolSearchState();
+  tools.register(
+    createToolSearchTool({
+      listTools: () => tools.list(),
+      state: toolSearchState,
+    }),
+  );
   const policyEngine = createPolicyEngineFromPlugins({
     ...(options.policy !== undefined ? { engine: options.policy } : {}),
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
@@ -1797,12 +1815,7 @@ export function createHarnessComposition(
         store,
         llm,
         tools,
-        ...(options.toolSearchState
-          ? {
-              expandedToolNames: () =>
-                options.toolSearchState!.listExpanded(),
-            }
-          : {}),
+        expandedToolNames: () => toolSearchState.listExpanded(),
         pipeline,
         cwd: options.workspaceRoot,
         jobs: {

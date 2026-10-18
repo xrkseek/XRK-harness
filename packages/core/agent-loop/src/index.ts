@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -169,8 +169,8 @@ export interface RunTurnInput {
   readonly tools: ToolRegistry;
   /**
    * Session-expanded Deferred tool names for progressive disclosure
-   * (`tool_search`). Omit → materialize lists only Direct (+ fail-open when
-   * `tool_search` is absent).
+   * (`tool_search`). Omit → materialize lists Direct only (Deferred stays
+   * off the wire when `tool_search` is absent).
    */
   readonly expandedToolNames?: () => ReadonlySet<string>;
   readonly pipeline?: ToolPipeline;
@@ -202,7 +202,7 @@ export interface RunTurnInput {
    */
   readonly autoContinueOnMaxTokens?: boolean;
   /**
-   * Cap on consecutive auto-continues within one turn (default 2). Guards
+   * Cap on consecutive auto-continues within one turn (default 4). Guards
    * against infinite loop when the provider keeps truncating at its cap.
    */
   readonly autoContinueMaxRounds?: number;
@@ -755,7 +755,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   /** Consecutive auto-continues injected this turn (0 when disabled). */
   let autoContinueRounds = 0;
   const autoContinueMaxRounds =
-    input.autoContinueMaxRounds ?? 2;
+    input.autoContinueMaxRounds ?? 4;
 
   try {
   if (input.beforeUserMessage) {
@@ -982,7 +982,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
               : Math.max(estimate, projected);
           };
           let used = measure();
-          if (used > softCeiling) {
+          // Codex auto-compacts near ~90% of the window; Face can override via
+          // agent-loop.softBudgetTriggerPercent (ratio on CompactionOptions).
+          const triggerRatio =
+            typeof compaction?.softBudgetTriggerRatio === "number" &&
+            Number.isFinite(compaction.softBudgetTriggerRatio) &&
+            compaction.softBudgetTriggerRatio > 0 &&
+            compaction.softBudgetTriggerRatio <= 1
+              ? compaction.softBudgetTriggerRatio
+              : SOFT_BUDGET_COMPACT_TRIGGER_RATIO;
+          const softTrigger = Math.max(
+            1,
+            Math.floor(softBudget.maxRequestTokens * triggerRatio),
+          );
+          // Trigger can sit above the buffer ceiling (small windows, or
+          // trigger percent 100). Still compact once usage is over either line.
+          if (used > softTrigger || used > softCeiling) {
             if (strategy === "prune-summary" || strategy === "prune-only") {
               pruneOversizedToolResults(input.store, input.sessionId, {
                 now,
@@ -994,17 +1009,35 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
               used = measure();
             }
             if (strategy === "prune-summary" || strategy === "summary-only") {
+              const recentCap =
+                typeof compaction?.compactRecentMaxTokens === "number" &&
+                Number.isFinite(compaction.compactRecentMaxTokens) &&
+                compaction.compactRecentMaxTokens >= 2_000
+                  ? Math.floor(compaction.compactRecentMaxTokens)
+                  : COMPACT_RECENT_MAX_TOKENS;
+              // Cap recent like Codex COMPACT_USER_MESSAGE_MAX_TOKENS (20k).
+              let keep = Math.min(softBudget.keepTokens, recentCap);
               let compactAttempts = 0;
+              const peelAttempts =
+                typeof compaction?.softBudgetPeelAttempts === "number" &&
+                Number.isFinite(compaction.softBudgetPeelAttempts) &&
+                compaction.softBudgetPeelAttempts >= 0
+                  ? Math.floor(compaction.softBudgetPeelAttempts)
+                  : DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS;
+              const maxAttempts =
+                DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS + peelAttempts;
+              // Proactive: one pass once past softTrigger; peel only while over ceiling.
               while (
-                used > softCeiling &&
-                compactAttempts < DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS
+                compactAttempts < maxAttempts &&
+                (used > softCeiling ||
+                  (compactAttempts === 0 && used > softTrigger))
               ) {
                 const did = await runCompaction({
                   store: input.store,
                   sessionId: input.sessionId,
                   llm: input.llm,
                   reason: "auto",
-                  keepTokens: softBudget.keepTokens,
+                  keepTokens: keep,
                   turnId,
                   stepId,
                   retry: llmRetryPolicy,
@@ -1018,11 +1051,33 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
                 seriesBaselineSystem = undefined;
                 req = await buildReq();
                 used = measure();
+                if (used <= softCeiling) break;
+                // After the standard passes, peel keep (Codex strips until fits).
+                if (compactAttempts >= DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS) {
+                  const next = Math.max(1, Math.floor(keep / 2));
+                  if (next >= keep) break;
+                  keep = next;
+                }
               }
             }
             if (used > softCeiling) {
+              // Surface meter (chat window) is often far smaller than the outbound
+              // request (tools + system + injects). Spell both so Settings → Models
+              // soft-budget raises / tool_search fail-open are obvious when the
+              // conversation looks "tiny".
+              const surface = priceCurrentSurfaceWindow(
+                readSessionEvents(input.store, input.sessionId),
+              );
+              const toolsTok =
+                req.tools?.length ?
+                  estimateTokens(JSON.stringify(req.tools))
+                : 0;
+              const toolsBit =
+                toolsTok > 0 && toolsTok >= Math.max(surface, 1)
+                  ? ` tools ~${toolsTok}`
+                  : "";
               throw new ContextOverflowError(
-                `request ~${used} tokens exceeds soft budget ${softCeiling} after ${strategy}`,
+                `request ~${used} tokens (conversation surface ~${surface}${toolsBit}) exceeds soft budget ${softCeiling} after ${strategy}`,
               );
             }
           }

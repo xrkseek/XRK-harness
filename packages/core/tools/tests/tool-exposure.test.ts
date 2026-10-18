@@ -26,10 +26,10 @@ function tool(
 }
 
 describe("listForModel", () => {
-  it("fail-opens deferred when tool_search is absent", () => {
+  it("hides deferred when tool_search is absent (no schema dump)", () => {
     const tools = [tool("a", "direct"), tool("mcp__x__y", "deferred")];
     const listed = listForModel(tools);
-    expect(listed.map((t) => t.name).sort()).toEqual(["a", "mcp__x__y"]);
+    expect(listed.map((t) => t.name)).toEqual(["a"]);
   });
 
   it("hides deferred until expanded when tool_search is present", () => {

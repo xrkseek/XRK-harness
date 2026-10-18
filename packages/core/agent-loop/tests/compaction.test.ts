@@ -7,7 +7,11 @@ import {
   formatCompactionForModel,
   estimateMessageContent,
 } from "@xrkseek/core-session";
-import { createToolRegistry } from "@xrkseek/core-tools";
+import {
+  createToolRegistry,
+  createToolSearchTool,
+  TOOL_SEARCH_NAME,
+} from "@xrkseek/core-tools";
 import {
   ContextOverflowError,
   LlmError,
@@ -647,7 +651,85 @@ describe("runTurn compaction / overflow", () => {
             (turnEnd.reason.error as { message?: string }).message ?? "",
           ),
       ).toMatch(/soft budget/i);
+      expect(
+        turnEnd.reason.kind === "error" &&
+          String(
+            (turnEnd.reason.error as { message?: string }).message ?? "",
+          ),
+      ).toMatch(/conversation surface ~\d+/i);
+      expect(
+        turnEnd.reason.kind === "error" &&
+          String(
+            (turnEnd.reason.error as { message?: string }).message ?? "",
+          ),
+      ).toMatch(/tools ~\d+/i);
     }
+  });
+
+  it("soft budget ignores deferred MCP schemas when tool_search is on the wire", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    const fatParams = {
+      type: "object",
+      properties: Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [
+          `p${i}`,
+          { type: "string", description: "x".repeat(200) },
+        ]),
+      ),
+    };
+    const tools = createToolRegistry();
+    for (let i = 0; i < 30; i++) {
+      tools.register({
+        name: `mcp__fat__tool_${i}`,
+        description: "d".repeat(100),
+        parameters: fatParams,
+        exposure: "deferred",
+        async execute() {
+          return { content: "ok" };
+        },
+      });
+    }
+    const expanded = new Set<string>();
+    tools.register(
+      createToolSearchTool({
+        listTools: () => tools.list(),
+        state: {
+          listExpanded: () => expanded,
+          expand: (names) => {
+            for (const n of names) expanded.add(n);
+          },
+        },
+      }),
+    );
+    expect(tools.get(TOOL_SEARCH_NAME)).toBeDefined();
+
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "hi",
+      store,
+      llm: {
+        id: "after-defer",
+        async chat(req) {
+          // Deferred MCP must not ride the soft-budget / outbound catalog.
+          expect(req.tools?.some((t) => t.name.startsWith("mcp__"))).toBe(
+            false,
+          );
+          expect(req.tools?.some((t) => t.name === TOOL_SEARCH_NAME)).toBe(
+            true,
+          );
+          return { content: "ok-deferred-hidden" };
+        },
+      },
+      tools,
+      expandedToolNames: () => expanded,
+      compaction: {
+        maxRequestTokens: 2_000,
+        keepTokens: 500,
+        bufferTokens: 0,
+      },
+    });
+    expect(result.assistantText).toBe("ok-deferred-hidden");
   });
 
   it("does not false-kill when bufferTokens >= maxRequestTokens", async () => {
@@ -730,6 +812,119 @@ describe("runTurn compaction / overflow", () => {
         ),
     ).toBe(true);
     expect(result.assistantText).toBe("ok-after-reasoning-compact");
+  });
+
+  it("softBudgetTriggerRatio starts auto-compact before the soft ceiling", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    // Same seed as the soft-budget ceiling case (~exceeds 50 tokens).
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    let summaryCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "soft-trigger",
+        async chat(req) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          if (
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary")
+          ) {
+            summaryCalls += 1;
+            return { content: "## Objective\n- trimmed\n## Next\n1. go" };
+          }
+          return { content: "ok-after-trigger" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: {
+        // Ceiling 500 stays above this seed; trigger at 10% must still compact.
+        maxRequestTokens: 500,
+        keepTokens: 40,
+        bufferTokens: 0,
+        softBudgetTriggerRatio: 0.1,
+        softBudgetPeelAttempts: 0,
+      },
+    });
+    expect(summaryCalls).toBeGreaterThan(0);
+    expect(result.assistantText).toBe("ok-after-trigger");
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+  });
+
+  it("soft budget still auto-compacts when trigger sits above the buffer ceiling", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 8; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "y".repeat(80),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}-` + "z".repeat(40),
+      });
+    }
+    let summaryCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "soft-ceiling-above-trigger",
+        async chat(req) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          if (
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary")
+          ) {
+            summaryCalls += 1;
+            return { content: "## Objective\n- trimmed\n## Next\n1. go" };
+          }
+          return { content: "ok-after-ceiling" };
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: {
+        // softTrigger = 100 * 1.0 = 100, softCeiling = 100 - 40 = 60.
+        // Seed exceeds 60 but stays under 100 — must still compact.
+        maxRequestTokens: 100,
+        keepTokens: 40,
+        bufferTokens: 40,
+        softBudgetTriggerRatio: 1,
+        softBudgetPeelAttempts: 0,
+      },
+    });
+    expect(summaryCalls).toBeGreaterThan(0);
+    expect(result.assistantText).toBe("ok-after-ceiling");
   });
 
   it("strategy off skips soft-budget auto path", async () => {

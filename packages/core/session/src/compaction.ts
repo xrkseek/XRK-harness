@@ -38,6 +38,21 @@ export const DEFAULT_COMPACTION_BUFFER_TOKENS = 4_000;
 export const DEFAULT_COMPACTION_HEAD_TOKENS = 24_000;
 /** Soft-budget auto-compact attempts before fail-closed (DSH-style remeasure loop). */
 export const DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS = 2;
+/**
+ * Codex `COMPACT_USER_MESSAGE_MAX_TOKENS` — cap for post-compact `recent` when
+ * soft-budget auto-compacts (XRK `recent` is fatter than Codex user-only tail).
+ */
+export const COMPACT_RECENT_MAX_TOKENS = 20_000;
+/**
+ * Extra peel passes after the standard soft-budget attempts: halve keep each
+ * time (Codex strips oldest history until the summarizer fits).
+ */
+export const DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS = 3;
+/**
+ * Codex-style pre-trigger: start auto-compact at this fraction of softMax
+ * (before the buffer-adjusted ceiling), so pressure is not already near fail-closed.
+ */
+export const SOFT_BUDGET_COMPACT_TRIGGER_RATIO = 0.9;
 
 /**
  * Budget estimator for `selectHeadRecent` / overflow (`chars/4` via {@link estimateText}).
@@ -504,6 +519,21 @@ export interface CompactionOptions {
    *   (manual `/compact` still works)
    */
   readonly strategy?: CompactionStrategy;
+  /**
+   * Fraction of softMax at which auto-compact starts (Codex ~0.9).
+   * Face: `agent-loop.softBudgetTriggerPercent` / 100.
+   */
+  readonly softBudgetTriggerRatio?: number;
+  /**
+   * Cap for post-compact `recent` (Codex `COMPACT_USER_MESSAGE_MAX_TOKENS`).
+   * Face: `agent-loop.compactRecentMaxTokens`.
+   */
+  readonly compactRecentMaxTokens?: number;
+  /**
+   * Extra keep-halving passes after the standard soft-budget attempts.
+   * Face: `agent-loop.softBudgetPeelAttempts`.
+   */
+  readonly softBudgetPeelAttempts?: number;
 }
 
 /** Soft-budget compaction strategy ids (Face `agent-loop.compactionStrategy`). */

@@ -17,8 +17,12 @@ export function exposureOf(tool: ToolDefinition): ToolExposure {
 }
 
 /**
- * LLM wire catalog. If `tool_search` is absent → fail-open: all non-hidden
- * tools (deferred treated as direct). Never return a half-broken Deferred face.
+ * LLM wire catalog.
+ * - With `tool_search`: Direct + search (+ expanded Deferred).
+ * - Without `tool_search`: Direct only — Deferred stays off the wire.
+ *   (Fail-open used to treat Deferred as Direct and could dump 100k+ MCP
+ *   schemas into every soft-budget estimate; product presets always register
+ *   `tool_search` so expand still works.)
  */
 export function listForModel(
   tools: readonly ToolDefinition[],
@@ -30,7 +34,10 @@ export function listForModel(
   const expanded = options?.expandedNames;
 
   if (!hasSearch) {
-    return tools.filter((t) => exposureOf(t) !== "hidden");
+    return tools.filter((t) => {
+      const e = exposureOf(t);
+      return e !== "hidden" && e !== "deferred";
+    });
   }
 
   return tools.filter((t) => {

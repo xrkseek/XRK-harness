@@ -143,6 +143,48 @@ export function AgentLoopCard(props: AgentLoopCardProps) {
         onReset={() => { props.resetField('compactionStrategy') }}
       />
       <ValueField
+        id="plugin-config-agent-loop-soft-budget-trigger"
+        label={t('agentLoopSoftBudgetTrigger')}
+        hint={t('agentLoopSoftBudgetTriggerHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        placeholder="90"
+        disabled={!state.writable}
+        {...state.softBudgetTriggerPercent}
+        onEdit={(text) => { props.edit('softBudgetTriggerPercent', text) }}
+        onReset={() => { props.resetField('softBudgetTriggerPercent') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-compact-recent-max"
+        label={t('agentLoopCompactRecentMax')}
+        hint={t('agentLoopCompactRecentMaxHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        placeholder="20000"
+        disabled={!state.writable}
+        {...state.compactRecentMaxTokens}
+        onEdit={(text) => { props.edit('compactRecentMaxTokens', text) }}
+        onReset={() => { props.resetField('compactRecentMaxTokens') }}
+      />
+      <ValueField
+        id="plugin-config-agent-loop-soft-budget-peel"
+        label={t('agentLoopSoftBudgetPeel')}
+        hint={t('agentLoopSoftBudgetPeelHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        placeholder="3"
+        disabled={!state.writable}
+        {...state.softBudgetPeelAttempts}
+        onEdit={(text) => { props.edit('softBudgetPeelAttempts', text) }}
+        onReset={() => { props.resetField('softBudgetPeelAttempts') }}
+      />
+      <ValueField
         id="plugin-config-agent-loop-tool-result-inline"
         label={t('agentLoopToolResultMaxInline')}
         hint={t('agentLoopToolResultMaxInlineHint')}

@@ -97,6 +97,12 @@ export interface AgentLoopSettings {
    * `summary-only` · `off`. Soft ceiling is per-model in Settings → Models.
    */
   compactionStrategy?: 'prune-summary' | 'prune-only' | 'summary-only' | 'off'
+  /** Soft-budget pre-trigger as percent of softMax (Codex ~90). */
+  softBudgetTriggerPercent?: number
+  /** Cap for post-compact `recent` tokens (Codex 20k user tail). */
+  compactRecentMaxTokens?: number
+  /** Extra keep-halving passes after the standard two soft-budget summaries. */
+  softBudgetPeelAttempts?: number
   /** Spill plain-text tool results over this UTF-8 ceiling; `0` disables. */
   toolResultMaxInlineBytes?: number
   /**
@@ -130,6 +136,12 @@ export interface AgentLoopCardState extends CardShell {
   llmRetryMaxRetries: CardFieldState
   /** Soft-budget strategy family. */
   compactionStrategy: CardFieldState
+  /** Soft-budget pre-trigger percent. */
+  softBudgetTriggerPercent: CardFieldState
+  /** Post-compact recent token cap. */
+  compactRecentMaxTokens: CardFieldState
+  /** Soft-budget peel attempts after the standard summaries. */
+  softBudgetPeelAttempts: CardFieldState
   /** Tool-result spill ceiling. */
   toolResultMaxInlineBytes: CardFieldState
   /** Default max live sessions per provider/model. */
@@ -162,6 +174,9 @@ export class AgentLoopCardController {
       textField('toolSettle'),
       numberField('llmRetryMaxRetries'),
       compactionStrategyField(),
+      numberField('softBudgetTriggerPercent'),
+      numberField('compactRecentMaxTokens'),
+      numberField('softBudgetPeelAttempts'),
       numberField('toolResultMaxInlineBytes'),
       numberField('maxConcurrentModelSessions'),
       subagentModelField(),
@@ -180,6 +195,9 @@ export class AgentLoopCardController {
       toolSettle: this.form.field('toolSettle'),
       llmRetryMaxRetries: this.form.field('llmRetryMaxRetries'),
       compactionStrategy: this.form.field('compactionStrategy'),
+      softBudgetTriggerPercent: this.form.field('softBudgetTriggerPercent'),
+      compactRecentMaxTokens: this.form.field('compactRecentMaxTokens'),
+      softBudgetPeelAttempts: this.form.field('softBudgetPeelAttempts'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxConcurrentModelSessions: this.form.field('maxConcurrentModelSessions'),
       subagentModel: this.form.field('subagentModel'),

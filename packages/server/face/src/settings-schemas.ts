@@ -134,6 +134,19 @@ const PiAiProvider = Schema.object({
       maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
       // Same modality toggle the Models → Capacities row edits (DeepSeek catalog too).
       inputModalities: Schema.array(Schema.union(["text", "image"])),
+      // Community / discover menus (OFM `reasoning.efforts`, DSH dict form).
+      reasoning: Schema.object({
+        efforts: Schema.array(
+          Schema.object({
+            id: Schema.string().required(),
+            name: Schema.string(),
+            description: Schema.string(),
+          }),
+        ),
+        defaultEffort: Schema.string(),
+      }),
+      reasoningEfforts: Schema.any(),
+      defaultReasoningEffort: Schema.string(),
     }),
   ),
 });
@@ -182,7 +195,7 @@ const AgentLoopConfig = Schema.object({
    */
   autoContinueOnMaxTokens: Schema.boolean().default(true),
   /** Maximum automatic continuations per turn (independent of maxSteps). */
-  autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(2),
+  autoContinueMaxRounds: Schema.number().step(1).min(1).max(10).default(4),
   /**
    * DSH toolOrder: tool name list with exactly one `' '` rest marker.
    * Empty / omit → lexicographic wire order. Editable via Settings → Plugins.
@@ -209,6 +222,19 @@ const AgentLoopConfig = Schema.object({
     "summary-only",
     "off",
   ]).default("prune-summary"),
+  /**
+   * Soft-budget pre-trigger as percent of softMax (Codex ~90%). Soft ceiling
+   * numbers stay on Models; this only advances when auto-compact starts.
+   */
+  softBudgetTriggerPercent: Schema.number().step(1).min(50).max(100).default(90),
+  /**
+   * Cap for post-compact `recent` tokens (Codex user-tail budget). Default 20_000.
+   */
+  compactRecentMaxTokens: Schema.number().step(1_000).min(2_000).default(20_000),
+  /**
+   * Extra keep-halving passes after the standard two soft-budget summaries.
+   */
+  softBudgetPeelAttempts: Schema.number().step(1).min(0).max(8).default(3),
   /**
    * Spill plain-text tool results over this UTF-8 byte ceiling (DSH spill-policy).
    * `0` disables spill (not recommended). Default 64_000.
@@ -585,10 +611,13 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       base: {
         maxSteps: 32,
         autoContinueOnMaxTokens: true,
-        autoContinueMaxRounds: 2,
+        autoContinueMaxRounds: 4,
         toolSettle: "parallel",
         llmRetryMaxRetries: 8,
         compactionStrategy: "prune-summary",
+        softBudgetTriggerPercent: 90,
+        compactRecentMaxTokens: 20_000,
+        softBudgetPeelAttempts: 3,
         toolResultMaxInlineBytes: 64_000,
         maxConcurrentModelSessions: 5,
         subagentModel: "",
