@@ -3,6 +3,7 @@
  * Worktree file restore (shadow git). Distinct from session.fork / fork-cut.
  */
 
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import type { FaceHandler } from "./types.js";
 import { asRecord } from "./types.js";
 import { readSessionEvents } from "@xrkseek/core-session";
@@ -30,7 +31,7 @@ function requireSession(
       ok: false,
       result: {
         ok: false,
-        error: { code: "session-not-found", message: sessionId },
+        error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
       },
     };
   }

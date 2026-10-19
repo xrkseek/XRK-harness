@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatPeerCollabPrompt,
   peerThreadMessageProblem,
+  sameDelegatedParent,
+  teamPeerLinked,
 } from "../src/session-thread-message.js";
 
 describe("peerThreadMessageProblem", () => {
@@ -30,6 +32,27 @@ describe("peerThreadMessageProblem", () => {
         targetIsChild: true,
       }),
     ).toContain("subagent");
+  });
+
+  it("allows sibling children when siblingOk", () => {
+    expect(
+      peerThreadMessageProblem({
+        selfId: "sess_a",
+        targetId: "sess_b",
+        targetExists: true,
+        targetIsChild: false,
+        siblingOk: true,
+      }),
+    ).toBeUndefined();
+    expect(sameDelegatedParent("parent", "parent")).toBe(true);
+    expect(sameDelegatedParent("parent", "other")).toBe(false);
+    expect(
+      teamPeerLinked(
+        [{ kind: "peer", from: "a", to: "b" }],
+        "b",
+        "a",
+      ),
+    ).toBe(true);
   });
 
   it("allows any existing parent peer without 主线", () => {

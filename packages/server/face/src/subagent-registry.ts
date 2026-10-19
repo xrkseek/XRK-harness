@@ -160,6 +160,22 @@ export class FaceSubagentRegistry {
     return [...this.byChild.values()];
   }
 
+  /**
+   * Session that talks to the human. Walk parent links while the session is a
+   * tool-delegated child. Forks stay put. Cycles stop at the start id.
+   */
+  humanFacingSessionId(sessionId: string): string {
+    let id = sessionId;
+    const seen = new Set<string>();
+    while (!seen.has(id)) {
+      seen.add(id);
+      const link = this.byChild.get(id);
+      if (!link || link.mode === "fork") return id;
+      id = link.parentSessionId;
+    }
+    return sessionId;
+  }
+
   /** Tool-delegated children only (excludes UI/rewind `fork` lineage). */
   listDelegated(parentSessionId: string): readonly FaceSubagentLink[] {
     return this.list(parentSessionId).filter((link) => link.mode !== "fork");

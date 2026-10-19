@@ -246,17 +246,6 @@ const AgentLoopConfig = Schema.object({
    * overrides this. Routes are independent (A/x ≠ B/x).
    */
   maxConcurrentModelSessions: Schema.number().step(1).min(1).max(64).default(5),
-  /**
-   * Fleet-wide route for delegated subagents, as `provider/model` (the shape
-   * `/status` prints, so a route copied from there works verbatim).
-   *
-   * Empty (default) leaves every child on whatever its parent resolved at
-   * spawn — same model as the session that delegated, which is what most
-   * setups want. Set it to pin every child onto a different route (a cheap
-   * model for fan-out reads while the parent stays on a strong one). A `subagent`
-   * call's own `model` / `provider` / `reasoning_effort` args still win.
-   */
-  subagentModel: Schema.string().default(""),
 });
 
 const WebSearchConfig = Schema.object({
@@ -620,7 +609,6 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         softBudgetPeelAttempts: 3,
         toolResultMaxInlineBytes: 64_000,
         maxConcurrentModelSessions: 5,
-        subagentModel: "",
       },
       applies: "live",
     },
@@ -697,7 +685,8 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "curated-memory",
       schema: schemasteryJson(CuratedMemoryConfig) as FaceSchemaEnvelope,
       base: { enabled: true, phase2Llm: false },
-      // memory tool + frozen system block rebuild on agent invalidate.
+      // enabled: next idle agent rebuild adds/drops the tool + frozen block.
+      // phase2Llm: read at session end; saving this ns still invalidates idle agents.
       applies: "live",
     },
     {

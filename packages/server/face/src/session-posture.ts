@@ -1,7 +1,7 @@
 /**
- * Turn-start `<session_posture>` — short role brief for IM / 奇创 parents.
- * Coding badges use session_capability only. Playbook detail lives in skills
- * (do not duplicate here).
+ * Turn-start `<session_posture>` — Codex-style verb card for IM / 奇创.
+ * Facts (badge · path · tools) stay in `<session_capability>`. Skills hold
+ * playbooks — this fragment only names the hub skill and the dispatch chain.
  */
 
 import type { FaceRuntime } from "./context.js";
@@ -11,14 +11,16 @@ import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 
 const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   im: [
-    "Role: IM channel · path=open.",
-    "Reply on-channel. Coding: workspace_list → subagent(workspace_id) or workspace_session_prompt (keep session_id) → thread_message; optional thread_upsert.",
-    "Implement in the coding peer, not in ws_im.",
+    "kind=orchestrator (IM) · path=open",
+    "Reply on-channel.",
+    "Coding: workspace_list → subagent(workspace_id) | workspace_session_prompt → keep session_id → thread_message; optional thread_upsert.",
+    "Do not implement in ws_im.",
   ].join("\n"),
   qichuang: [
-    "Role: Xiangyang / Qichuang · path=open · shell_confine=off (Sandbox Backend unused this session).",
-    "Vague asks → skill xrk-demand-translate. Care: xrk-plugin-dev-care · xrk-home-config · xrk-xrk-cleanup · xrk-memory-polish · xrk-mainline-sideline.",
-    "Dispatch: workspace_session_prompt (keep session_id) → thread_upsert + presence_set; no nested subagents — implement in coding peers.",
+    "kind=orchestrator (Qichuang) · path=open · shell_confine=off (Sandbox Backend unused).",
+    "Vague → skill xrk-demand-translate. Care: xrk-plugin-dev-care · xrk-home-config · xrk-xrk-cleanup · xrk-memory-polish · xrk-mainline-sideline · xrk-skill-merge.",
+    "Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.",
+    "No nested subagent. Implement on coding peers only.",
   ].join("\n"),
 };
 

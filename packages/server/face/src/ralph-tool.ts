@@ -7,6 +7,7 @@ import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { formatToolError } from "./face-error-text.js";
 import { lastAssistantBodyText } from "./adapt/subagent-notice.js";
 import {
   appendOutputContract,
@@ -305,7 +306,7 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
               status: "round-failed",
               roundsStarted,
               ...(previous ? { report: previous } : {}),
-              error: created.result.error.message,
+              error: formatToolError(created.result.error),
             }),
             isError: true,
           };
@@ -341,14 +342,14 @@ export function createRalphTool(options: BindRalphToolOptions): ToolDefinition {
         if (!prompted.result.ok) {
           options.runtime.agentTeamTasks.completeByChild(childId, {
             ok: false,
-            preview: prompted.result.error.message,
+            preview: formatToolError(prompted.result.error),
           });
           return {
             content: formatTerminal({
               status: "round-failed",
               roundsStarted,
               ...(previous ? { report: previous } : {}),
-              error: prompted.result.error.message,
+              error: formatToolError(prompted.result.error),
             }),
             isError: true,
           };

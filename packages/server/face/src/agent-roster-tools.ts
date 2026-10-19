@@ -6,19 +6,24 @@ import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { isAgentTeamSpawnRole } from "./agent-team-roles.js";
 import {
-  formatRosterCatalog,
   memberIdProblem,
   catalogMemberWriteProblem,
-  parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
   rosterPublicFields,
 } from "./agent-roster-store.js";
+import { parseAgentMemberCard } from "./agent-member-card.js";
 import { captureSessionPlaybook } from "./capture-member-playbook.js";
+import {
+  liveRosterCatalog,
+  teamListDescription,
+} from "./session-tool-copy.js";
 
 export interface BindAgentRosterToolsOptions {
   readonly runtime: FaceRuntime;
   readonly sessionId: string;
+  /** When true, register `team_list` only (no `team_save`). For non-lead 干员. */
+  readonly listOnly?: boolean;
 }
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
@@ -31,20 +36,17 @@ function readArgs(args: unknown): Record<string, unknown> {
   return args as Record<string, unknown>;
 }
 
-/** Register team_list / team_save. Spawn stays `subagent` + member_id. */
+/** Register team_list / team_save (or list-only). Spawn stays `subagent` + member_id. */
 export function bindAgentRosterTools(
   tools: ToolRegistry,
   options: BindAgentRosterToolsOptions,
 ): void {
-  const { runtime, sessionId } = options;
+  const { runtime, sessionId, listOnly = false } = options;
   const ws = () => canvasWorkspaceIdForSession(runtime, sessionId);
 
   registerTool(tools, {
     name: "team_list",
-    description:
-      "List Agent Team members (干员 / 成员 / 子代理团队的一员), global plus this workspace. " +
-      "The same short catalog is injected at turn-start. A member is the child's tools, inject, and playbook — not a SKILL.md. " +
-      "Seed AGENTS.md / skills stay on standing inject. Spawn with subagent member_id. Create one with team_save.",
+    description: "List Agent Team members (干员) for this workspace + global.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     isConcurrencySafe: () => true,
     presentCall: () => ({
@@ -54,9 +56,10 @@ export function bindAgentRosterTools(
       rawInput: {},
     }),
     dynamicSchema: () => ({
-      description:
-        "List Agent Team members (干员 / 成员). Spawn with subagent member_id. Create with team_save.\n" +
-        formatRosterCatalog(runtime.agentRoster.listVisible(ws())),
+      description: teamListDescription({
+        listOnly,
+        catalog: liveRosterCatalog(runtime, sessionId),
+      }),
     }),
     execute: async () => {
       const workspaceId = ws();
@@ -66,6 +69,8 @@ export function bindAgentRosterTools(
       return { content: JSON.stringify({ workspaceId, members }) };
     },
   });
+
+  if (listOnly) return;
 
   registerTool(tools, {
     name: "team_save",
@@ -97,8 +102,6 @@ export function bindAgentRosterTools(
           type: "boolean",
           description: "If true, mint name/playbook from this session's user+assistant log.",
         },
-        shape: { type: "string" },
-        color: { type: "string" },
         brief: { type: "string" },
         scope: {
           type: "string",
@@ -149,22 +152,10 @@ export function bindAgentRosterTools(
         };
       }
       const tools = parseMemberToolPolicy(a.tools);
-      const appearancePatch = {
-        ...(typeof a.shape === "string" ? { shape: a.shape } : {}),
-        ...(typeof a.color === "string" ? { color: a.color } : {}),
-      };
       const member = runtime.agentRoster.upsertAtScope(canvasId, scope, {
         name,
         playbook,
         role: isAgentTeamSpawnRole(roleRaw) ? roleRaw : "worker",
-        ...(Object.keys(appearancePatch).length > 0
-          ? {
-              appearance: parseMemberAppearance(appearancePatch, {
-                shape: "blob",
-                color: "cream",
-              }),
-            }
-          : {}),
         ...(typeof a.brief === "string" ? { brief: a.brief } : {}),
         ...(a.inject === "subagent" || a.inject === "minimal"
           ? { inject: a.inject }
@@ -175,6 +166,53 @@ export function bindAgentRosterTools(
       if (!member) {
         return { content: "team_save: name and playbook required", isError: true };
       }
+      return {
+        content: JSON.stringify({
+          workspaceId: scope === "global" ? "global" : canvasId,
+          member,
+        }),
+      };
+    },
+  });
+
+  registerTool(tools, {
+    name: "team_import",
+    description:
+      "Import a 干员 from an xrk-agent-member card (JSON). " +
+      "Appearance, dressing, and ids are ignored — a new workspace member is minted. " +
+      "Use when the user pastes or attaches someone else's exported member.",
+    parameters: {
+      type: "object",
+      properties: {
+        card: {
+          type: "string",
+          description: "JSON object with kind xrk-agent-member, name, playbook, optional brief/role/inject/tools.",
+        },
+        scope: {
+          type: "string",
+          description: "global | workspace (default workspace)",
+        },
+      },
+      required: ["card"],
+      additionalProperties: false,
+    },
+    presentCall: (args) => ({
+      card: "generic",
+      title: "team_import",
+      kind: "execute",
+      rawInput: args,
+    }),
+    execute: async (args) => {
+      const a = readArgs(args);
+      const parsed = parseAgentMemberCard(a.card);
+      if (!parsed.ok) return { content: `team_import: ${parsed.error}`, isError: true };
+      const scope = parseRosterScope(a.scope ?? "workspace");
+      if (scope === undefined) {
+        return { content: 'team_import: scope must be "workspace" or "global"', isError: true };
+      }
+      const canvasId = ws();
+      const member = runtime.agentRoster.upsertAtScope(canvasId, scope, parsed.card);
+      if (!member) return { content: "team_import: name and playbook required", isError: true };
       return {
         content: JSON.stringify({
           workspaceId: scope === "global" ? "global" : canvasId,

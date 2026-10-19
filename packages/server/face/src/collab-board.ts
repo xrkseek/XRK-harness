@@ -1,7 +1,8 @@
 /**
- * Turn-start collab board: live Agent Team catalog + parent 主线 sessions.
+ * Turn-start collab board: parent roster + 主线, or delegated-child squad.
  * 主线 rows are a discovery aid — messaging does not require a pin.
  * Seed AGENTS.md / skills stay on standing inject — this fragment is ids only.
+ * Identity matrix: docs/session-identity.md.
  */
 import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
@@ -11,6 +12,7 @@ import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
+import type { FaceSubagentLink } from "./subagent-registry.js";
 
 /** Parent 主线 rows whose thread was updated in the last day. */
 export const COLLAB_BOARD_THREAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -61,28 +63,26 @@ export function formatCollabBoardText(input: {
   const recent = input.threads.filter((row) => row.updatedAt >= cutoff);
   const canSpawn = input.canSpawn !== false;
   const surface = input.surface ?? "coding";
+  // Ids + one spout verb. Dispatch chains live in <session_posture> / capability.
   const teamLead =
     surface === "im"
-      ? "Agent Team — from IM, spawn `subagent` with member_id into a coding workspace (workspace_id from workspace_list). Standing skills apply on that child. Peers: workspace_session_prompt → keep session_id → thread_message."
+      ? "Roster · 主线 · peers. Spawn coding: `subagent` member_id + workspace_id. Peers: workspace_session_prompt → thread_message."
       : surface === "qichuang"
-        ? "Agent Team — Qichuang has no nested subagents; match members for playbooks, then workspace_session_prompt (keep session_id) + thread_message. Optional thread_upsert pins the peer for discovery."
+        ? "Roster · 主线 · peers. No nested subagent — match member, then workspace_session_prompt → thread_message (optional thread_upsert)."
         : canSpawn
-          ? "Agent Team — spawn `subagent` with member_id when a listed name or brief fits (see session_capability for permission × tool_surface). Standing skills are for that member after spawn. Playbooks stay on the member."
-          : "Agent Team catalog (this badge has no subagent tools — Skill-load matching work here; see session_capability). Members:";
+          ? "Roster · 主线 · peers. Spawn: `subagent` member_id when a name/brief fits. Playbooks stay on the member."
+          : "Roster (no subagent tools) — Skill-load matching work here. Members:";
   const lines = [teamLead, input.membersCatalog];
   lines.push(
     "",
-    "主线 (last 24h) — discovery pin so you can lock collaborators quickly. " +
-      "`thread_message` any parent session_id (pin optional; reply returns here). " +
-      "Do not thread_switch just to talk. Unpinned ids below / session_search. Not a subagent.",
+    "主线 (24h) — discovery pin. `thread_message` any parent session_id (pin optional). Unpinned → below / session_search.",
   );
   if (recent.length === 0) {
     lines.push("(none)");
     const peers = input.unboundPeers ?? [];
     if (peers.length > 0) {
       lines.push(
-        "Unpinned parents here — `thread_message` by session_id (pin optional). " +
-          "`*` is you. Sideline = what they are doing now:",
+        "Unpinned parents — `thread_message` by session_id. `*` = you. Sideline = now:",
       );
       for (const peer of peers) {
         const mark = peer.self ? "*" : "";
@@ -166,13 +166,121 @@ export function listUnboundParentPeers(
   return scored.slice(0, UNBOUND_PEER_MAX).map(({ sortAt: _sortAt, ...row }) => row);
 }
 
-/** Live board for a parent session. Empty string for delegated children. */
+/** One sibling row on the delegated-child squad board. */
+export interface TeamMateRow {
+  readonly sessionId: string;
+  readonly label: string;
+  readonly self?: boolean;
+  readonly memberId?: string;
+  readonly role?: string;
+  readonly sideline?: string;
+  readonly running?: boolean;
+}
+
+export interface TeamMateOwnTask {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly resultPreview?: string;
+}
+
+/** Pure formatter for delegated-child squad (testable without a runtime). */
+export function formatTeamMateBoardText(input: {
+  readonly parentSessionId: string;
+  readonly mates: readonly TeamMateRow[];
+  readonly ownTask?: TeamMateOwnTask;
+}): string {
+  const lines = [
+    `squad · parent=${input.parentSessionId} · * = you`,
+    "siblings → thread_message. Parent↔you = send_message / followup_task (on parent). FINAL→parent (capability).",
+    "",
+    "Teammates:",
+  ];
+  if (input.mates.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const mate of input.mates) {
+      const mark = mate.self ? "*" : "";
+      const member = mate.memberId ? ` member=${mate.memberId}` : "";
+      const role = mate.role ? ` role=${mate.role}` : "";
+      const tip = mate.sideline ? ` · ${clipBrief(mate.sideline)}` : "";
+      const run = mate.running ? " · running" : "";
+      lines.push(
+        `- ${mate.sessionId}${mark} 「${clipBrief(mate.label)}」${member}${role}${tip}${run}`,
+      );
+    }
+  }
+  if (input.ownTask) {
+    lines.push(
+      "",
+      `your_task: ${input.ownTask.id} 「${clipBrief(input.ownTask.title)}」 status=${input.ownTask.status}` +
+        (input.ownTask.resultPreview
+          ? ` · ${clipBrief(input.ownTask.resultPreview)}`
+          : ""),
+    );
+  }
+  return lines.join("\n").slice(0, BOARD_MAX_CHARS);
+}
+
+function mateSideline(runtime: FaceRuntime, childId: string): string | undefined {
+  const tip = runtime.presence.get(childId)?.tips;
+  return tip?.trim() ? tip.trim() : undefined;
+}
+
+function linkToMateRow(
+  runtime: FaceRuntime,
+  link: FaceSubagentLink,
+  selfId: string,
+): TeamMateRow {
+  const sideline = mateSideline(runtime, link.childSessionId);
+  return {
+    sessionId: link.childSessionId,
+    label: link.label.trim() || "subagent",
+    ...(link.childSessionId === selfId ? { self: true } : {}),
+    ...(link.memberId ? { memberId: link.memberId } : {}),
+    ...(link.role ? { role: link.role } : {}),
+    ...(sideline ? { sideline } : {}),
+    ...(runtime.drain.isActive(link.childSessionId) ? { running: true } : {}),
+  };
+}
+
+/**
+ * Squad board for a delegated child (same-parent siblings + own task).
+ * Empty when the session is not a tool-delegated child.
+ */
+export function formatTeamMateBoard(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string {
+  const selfLink = runtime.subagents.getByChild(sessionId);
+  if (!selfLink || selfLink.mode === "fork") return "";
+  const siblings = runtime.subagents.listDelegated(selfLink.parentSessionId);
+  const mates = siblings.map((link) => linkToMateRow(runtime, link, sessionId));
+  const task = runtime.agentTeamTasks.findByChild(sessionId);
+  return formatTeamMateBoardText({
+    parentSessionId: selfLink.parentSessionId,
+    mates,
+    ...(task
+      ? {
+          ownTask: {
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            ...(task.resultPreview ? { resultPreview: task.resultPreview } : {}),
+          },
+        }
+      : {}),
+  });
+}
+
+/** Parent roster+主线 board, or delegated-child squad board. */
 export function formatCollabBoard(
   runtime: FaceRuntime,
   sessionId: string,
   now = Date.now(),
 ): string {
-  if (runtime.subagents.getByChild(sessionId)) return "";
+  const childBoard = formatTeamMateBoard(runtime, sessionId);
+  if (childBoard) return childBoard;
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
   const badge = effectiveSessionAgentPreset(runtime, sessionId);
   const canSpawn = resolveAgentPresetProfile(badge).subagents.mode === "on";

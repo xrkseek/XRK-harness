@@ -23,6 +23,8 @@ import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveAgentPresetProfile } from "./presets-catalog.js";
 import { countExposures } from "@xrkseek/core-tools";
 import { resolveSessionCwd } from "./session-cwd.js";
+import { roleCapsHint, roleDeniedTools } from "./agent-team-roles.js";
+import { DELEGATED_INHERIT_DENY } from "./agent-roster-store.js";
 
 /** Affirmative permission copy for the model (path gate only). */
 function permissionBrief(permission: string): string {
@@ -36,25 +38,28 @@ function permissionBrief(permission: string): string {
   return table?.description ?? `Live permission=${permission}; honor path= and approval=.`;
 }
 
-/** Affirmative tool-surface copy (which tools / role). */
+/**
+ * One-line tool-surface brief. Orchestrators: kind only — verbs live in
+ * `<session_posture>`. Coding: what this badge can/cannot do (no skill essays).
+ */
 function surfaceBrief(badge: string): string {
   switch (badge) {
     case "minimal":
-      return "Coding · fs/skill/std only — no peer workspace/thread tools; load skills for playbooks.";
+      return "kind=coding_parent · fs/skill/std only — no workspace/thread peers; load skills for playbooks.";
     case "shell":
-      return "Coding · fs + bash + PTY — no web, lsp, subagents, or peer workspace/thread tools.";
+      return "kind=coding_parent · fs+bash+PTY — no web/lsp/subagents/peers.";
     case "frugal":
-      return "Coding · full tools + workspace/thread peer collab, no subagents — prefer one session; xrk-plan-build for large work.";
+      return "kind=coding_parent · full tools + peers · no subagents — one session; xrk-plan-build for large work.";
     case "shallow":
-      return "Coding · full tools + subagents + workspace/thread — spawn when parallel helps (per-model live session cap).";
+      return "kind=coding_parent · full tools + subagents + peers — spawn when parallel helps (per-model live session cap).";
     case "harness":
-      return "Coding · full tools + subagents + workspace/thread (per-model live session cap) — prefer team_list member_id when spawning.";
+      return "kind=coding_parent · full tools + subagents + peers — prefer team_list member_id (per-model live session cap).";
     case "im":
-      return "IM channel · reply on-channel; dispatch coding via workspace_* / subagent — see <session_posture>.";
+      return "kind=orchestrator · surface=im — verbs in <session_posture>.";
     case "qichuang":
-      return "Xiangyang · orchestrate peers/team; path=open for fs incl. grep/glob; implement in coding workspaces — see <session_posture>.";
+      return "kind=orchestrator · surface=qichuang · path=open (fs incl. grep/glob) — verbs in <session_posture>.";
     default:
-      return `Tool surface=${badge}; use only tools in your catalog.`;
+      return `kind=coding_parent · surface=${badge} — catalog is truth.`;
   }
 }
 
@@ -79,16 +84,62 @@ function toolSurfaceSummary(badge: string): string {
   return `${badge} (${bits.join("+")} · ${sub})`;
 }
 
+/** Short capability for tool-delegated children (not UI forks). */
+function formatDelegatedCapability(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string {
+  const link = runtime.subagents.getByChild(sessionId);
+  if (!link || link.mode === "fork") return "";
+  const role = link.role && link.role !== "default" ? link.role : "default";
+  const cwd = resolveSessionCwd(runtime, sessionId);
+  const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
+  const lines = [
+    "kind: delegated_child",
+    `parent: ${link.parentSessionId}`,
+    `you: ${sessionId}`,
+    `human_face: ${humanFace}`,
+    `role: ${role}`,
+    `caps: ${roleCapsHint(link.role)}`,
+    `cwd: ${cwd}`,
+    ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
+    ...(link.label.trim() ? [`label: ${link.label.trim()}`] : []),
+    "brief: FINAL→parent (only visible result; include hard failures). ask→human_face. siblings→thread_message. catalog=truth. no self-spawn unless tasked.",
+    `omitted: ${omittedChildTools(link.role)}`,
+    ...childGapLines(runtime, sessionId),
+  ];
+  return lines.join("\n");
+}
+
+function omittedChildTools(role: Parameters<typeof roleDeniedTools>[0]): string {
+  const names = new Set<string>([
+    ...roleDeniedTools(role),
+    ...DELEGATED_INHERIT_DENY,
+  ]);
+  return [...names].sort().join(",");
+}
+
+function childGapLines(runtime: FaceRuntime, sessionId: string): string[] {
+  const kids = runtime.subagents.listDelegated(sessionId);
+  if (kids.length === 0) return [];
+  return kids.map((link) => {
+    const role = link.role && link.role !== "default" ? link.role : "default";
+    const who = link.label.trim() || link.childSessionId;
+    return `child_gap: ${who} · ${role} · ${roleCapsHint(link.role)} · omitted=${omittedChildTools(link.role)}`;
+  });
+}
+
 /**
  * Compact machine-readable capability block + brief lines.
+ * Parents / forks: permission × tool_surface. Delegated children: kind=delegated_child.
  */
 export function formatSessionCapability(
   runtime: FaceRuntime,
   sessionId: string,
 ): string {
   if (!runtime.store.has(sessionId)) return "";
-  // Delegated children get identity from spawn preamble, not this fragment.
-  if (runtime.subagents.getByChild(sessionId)) return "";
+  const delegated = formatDelegatedCapability(runtime, sessionId);
+  if (delegated) return delegated;
 
   const events = readSessionEvents(runtime.store, sessionId);
   const permission = permissionSelectFromEvents(events).currentValue;
@@ -116,6 +167,7 @@ export function formatSessionCapability(
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];
   if (planOn) lines.push("plan: on");
+  lines.push(...childGapLines(runtime, sessionId));
   return lines.join("\n");
 }
 

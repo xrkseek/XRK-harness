@@ -13,6 +13,7 @@ import {
   type SessionEvent,
   type WorkspaceFileDiff,
 } from "@xrkseek/protocol";
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import type { FaceRuntime } from "../context.js";
 import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 
@@ -101,7 +102,7 @@ export const changesFileDiff: FaceHandler = async (
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const seqRaw = args.seq ?? flat.seq;

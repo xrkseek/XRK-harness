@@ -17,6 +17,9 @@ import {
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
   searchSessions,
 } from "./session-search.js";
+import { buildSessionStatusSnapshot } from "./session-status.js";
+import { deriveSessionKind } from "./session-kind.js";
+import { sessionInspectDescription } from "./session-tool-copy.js";
 
 export { SESSION_QUERY_ROUTING_PROMPT_TEXT };
 
@@ -340,12 +343,139 @@ export function createSessionTraceTool(
   };
 }
 
-/** Register session_search / session_read / session_trace on a live agent. */
+/**
+ * Thin Status-shaped metadata for any known session_id (no cwd fence).
+ * Transcript stays on `session_read` (same-cwd).
+ */
+export function createSessionInspectTool(
+  options: BindSessionQueryToolsOptions,
+): ToolDefinition {
+  return {
+    name: "session_inspect",
+    description:
+      "Inspect metadata for one known session_id. Not a transcript.",
+    dynamicSchema: () => ({
+      description: sessionInspectDescription(
+        deriveSessionKind(options.runtime, options.parentSessionId),
+      ),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description:
+            "Target session id (collab board, workspace_session_prompt, spawn, or this session).",
+        },
+      },
+      required: ["session_id"],
+    },
+    isConcurrencySafe: () => true,
+    presentCall: (args) => ({
+      card: "generic",
+      title: "session_inspect",
+      kind: "search",
+      rawInput: args,
+    }),
+    async execute(args) {
+      const sessionId = String(
+        (args as { session_id?: string }).session_id ?? "",
+      ).trim();
+      if (!sessionId) {
+        return { content: "session_inspect: session_id required", isError: true };
+      }
+      const { runtime } = options;
+      if (!runtime.store.has(sessionId)) {
+        return {
+          content: `session_inspect: session not found (${sessionId})`,
+          isError: true,
+        };
+      }
+      const snap = buildSessionStatusSnapshot(runtime, sessionId);
+      const link = runtime.subagents.getByChild(sessionId);
+      const memberId =
+        typeof link?.memberId === "string" && link.memberId.trim()
+          ? link.memberId.trim()
+          : undefined;
+      const body = {
+        sessionId: snap.sessionId,
+        badge: snap.badge,
+        permission: snap.permission,
+        plan: snap.plan,
+        model: snap.model,
+        cwd: snap.cwd,
+        events: snap.events,
+        ...(memberId ? { memberId } : {}),
+        ...(link
+          ? {
+              delegate: {
+                parentSessionId: link.parentSessionId,
+                mode: link.mode,
+                ...(link.label ? { label: link.label } : {}),
+                ...(link.role ? { role: link.role } : {}),
+              },
+            }
+          : {}),
+        ...(snap.presence
+          ? {
+              presence: {
+                emotionId: snap.presence.emotionId,
+                ...(snap.presence.tips ? { tips: snap.presence.tips } : {}),
+              },
+            }
+          : {}),
+        delivery: {
+          turnActive: snap.delivery.turnActive,
+          queued: snap.delivery.queued,
+          steering: snap.delivery.steering,
+          note: snap.delivery.note,
+        },
+        fleet: {
+          health: snap.fleet.health,
+          runningSubagents: snap.fleet.runningSubagents,
+          runningJobs: snap.fleet.runningJobs,
+          slotsFree: snap.fleet.slotsFree,
+          queuedInbox: snap.fleet.queuedInbox,
+        },
+        quota: {
+          active: snap.subagents.quota.active,
+          maxActive: snap.subagents.quota.maxActive,
+          depth: snap.subagents.quota.depth,
+          slotsFree: snap.subagents.quota.slotsFree,
+        },
+        childrenRunning: snap.subagents.live.filter(
+          (s) => s.activity === "running",
+        ).length,
+        children: snap.subagents.live.slice(0, 16).map((s) => ({
+          id: s.id,
+          activity: s.activity,
+          mode: s.mode,
+          ...(s.label ? { label: s.label } : {}),
+          ...(s.model ? { model: s.model } : {}),
+          ...(s.liveTool ? { liveTool: s.liveTool } : {}),
+          ...(s.outcome ? { outcome: s.outcome } : {}),
+        })),
+        teamTasks: snap.teamTasks.slice(0, 16).map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          ...(t.childSessionId ? { childSessionId: t.childSessionId } : {}),
+          ...(t.role ? { role: t.role } : {}),
+          ...(t.resultPreview ? { resultPreview: t.resultPreview } : {}),
+        })),
+      };
+      return { content: JSON.stringify(body, null, 2) };
+    },
+  };
+}
+
+/** Register session_inspect / search / read / trace on a live agent. */
 export function bindSessionQueryTools(
   tools: ToolRegistry,
   options: BindSessionQueryToolsOptions,
 ): void {
   for (const tool of [
+    createSessionInspectTool(options),
     createSessionSearchTool(options),
     createSessionReadTool(options),
     createSessionTraceTool(options),

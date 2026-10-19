@@ -384,6 +384,38 @@ export function toolNameDenied(
   return false;
 }
 
+/**
+ * Parent-only tools a delegated child never keeps, even when it inherits the
+ * parent's catalog or an allow-list names them. Nested children use the same
+ * mask. `ask` stays (human questions walk to the human-facing ancestor).
+ */
+export const DELEGATED_INHERIT_DENY = [
+  "ask_user",
+  "team_save",
+  "team_import",
+  "propose_skill",
+  "exit_plan_mode",
+  "settings_*",
+  "workspace_*",
+  "canvas_*",
+] as const;
+
+/** Strip {@link DELEGATED_INHERIT_DENY} from a live registry. Returns removed names. */
+export function applyDelegatedInheritMask(tools: {
+  list(): readonly { readonly name: string }[];
+  unregister(name: string): boolean;
+}): string[] {
+  const denied = new Set(
+    DELEGATED_INHERIT_DENY.map((name) => name.toLowerCase()),
+  );
+  const removed: string[] = [];
+  for (const row of [...tools.list()]) {
+    if (!toolNameDenied(row.name, denied)) continue;
+    if (tools.unregister(row.name)) removed.push(row.name);
+  }
+  return removed;
+}
+
 /** Deny-only: a 干员 may weaken the parent preset, never add tools. */
 export function applyRosterToolPolicy(
   tools: {

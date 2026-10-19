@@ -8,6 +8,7 @@ import path from "node:path";
 import { parsePublicToolName } from "@xrkseek/mcp";
 import { effectiveSessionAgentPreset } from "./session-agent-preset.js";
 import { resolveSessionCwd } from "./session-cwd.js";
+import { sessionNotFoundMessage } from "./face-error-text.js";
 import { asRecord, type FaceHandler } from "./handlers/types.js";
 
 /** Wire group for one catalog row. */
@@ -104,6 +105,7 @@ const AGENT = new Set([
   "followup_task",
   "wait_agent",
   "interrupt_agent",
+  "close_agent",
 ]);
 
 const MEDIA = new Set([
@@ -239,7 +241,7 @@ export const sessionTools: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
 

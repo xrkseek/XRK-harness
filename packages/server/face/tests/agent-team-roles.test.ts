@@ -105,9 +105,12 @@ describe("rootUserAuthorizationBlock", () => {
     expect(denied).not.toContain("bash");
   });
 
-  it("default and lead deny nothing", () => {
-    expect(roleDeniedTools(undefined)).toEqual([]);
-    expect(roleDeniedTools("default")).toEqual([]);
-    expect(roleDeniedTools("lead")).toEqual([]);
+  it("every role denies roster writes; default and lead have no other floor", () => {
+    for (const role of [undefined, "default", "lead", "worker"] as const) {
+      expect(roleDeniedTools(role)).toContain("team_save");
+      expect(roleDeniedTools(role)).toContain("team_import");
+    }
+    expect(roleDeniedTools("default")).toEqual(["team_save", "team_import"]);
+    expect(roleDeniedTools("lead")).toEqual(["team_save", "team_import"]);
   });
 });

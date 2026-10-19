@@ -86,6 +86,7 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
       "send_message",
       "followup_task",
       "interrupt_agent",
+      "close_agent",
       "wait_agent",
       "list_agents",
       "analytics",
@@ -124,6 +125,7 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
       "send_message",
       "followup_task",
       "interrupt_agent",
+      "close_agent",
       "wait_agent",
       "list_agents",
       "analytics",
@@ -220,11 +222,11 @@ export function applySubagentSpawnPreamble(
   const workspaceLine = input.isolatedWorktree
     ? "isolated git worktree (not the parent's checkout). Follow the worktree note in the task."
     : "same as the parent session. File tools and git run here.";
+  // Identity + delivery only. Live axes (ask, omitted tools, siblings) live in
+  // turn-start <session_capability> — do not re-lecture them here.
   const header = [
     "[subagent identity]",
-    `You are a delegated subagent of parent session \`${input.parentSessionId}\`. You are not that parent conversation.`,
-    `- parent_session_id: ${input.parentSessionId}`,
-    `- your_session_id: ${input.childSessionId}`,
+    `Delegated child of \`${input.parentSessionId}\` (you=\`${input.childSessionId}\`).`,
     `- mode: ${modeLine}`,
     `- label: ${input.label.trim() || "subagent"}`,
     `- role: ${role}`,
@@ -235,24 +237,16 @@ export function applySubagentSpawnPreamble(
         ]
       : []),
     ...(input.permissionInherit
-      ? [
-          `- permission: inherited from parent · ${input.permissionInherit}`,
-        ]
+      ? [`- permission: ${input.permissionInherit}`]
       : []),
     ...(input.parentToolSurface
       ? [
-          `- tool_surface: weakened from parent · badge=${input.parentToolSurface} · role=${role} · caps=${roleCapsHint(input.role)}`,
+          `- tool_surface: badge=${input.parentToolSurface} · role=${role} · caps=${roleCapsHint(input.role)}`,
         ]
       : []),
     `- inherit_context: ${inheritLine}`,
-    `- workspace_cwd: ${input.cwd}`,
-    `- workspace: ${workspaceLine}`,
-    "Delivery: your FINAL assistant message is the result handed back to the parent as a tool result — it is the only thing the parent sees from you.",
-    "The parent cannot see your hidden reasoning, intermediate tool output, or this conversation. Anything the parent needs must be in your final message.",
-    "Write that message as a standalone deliverable: lead with the answer or the findings, then the evidence (paths · symbols · quotes · commands). Do not ask the user questions and do not end with 'let me know if you need more'.",
-    "Do not treat repository AGENTS.md / .agents/AGENTS.md as your persona or as proof of who you are. Finish in-scope work yourself; do not bounce ordinary steps back to the parent.",
-    "Hard tool/capability failures (missing tool, unsupported content, denied shell, network/proxy errors you cannot clear) MUST appear in that FINAL message so the parent can act — never hide them.",
-    "Never spawn your own subagents unless the task explicitly requires it.",
+    `- workspace: ${input.cwd} · ${workspaceLine}`,
+    "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Repo AGENTS.md is not your persona.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);
   const body = tasked.trim();
@@ -265,12 +259,18 @@ export function listSpawnRoleIds(): readonly AgentTeamSpawnRole[] {
   return AGENT_TEAM_SPAWN_ROLES;
 }
 
-/** Tools denied for one role (empty for default / lead). */
+/** Roster writes stay on the parent. Every child role loses these. */
+const ROSTER_EDIT_DENY = ["team_save", "team_import"] as const;
+
+/** Tools denied for one role. Default / lead have no extra floor besides roster edits. */
 export function roleDeniedTools(
   role: AgentTeamSpawnRole | undefined,
 ): readonly string[] {
-  if (!role || role === "default" || role === "lead") return [];
-  return TEMPLATES[role].deniedTools ?? [];
+  const base =
+    !role || role === "default" || role === "lead"
+      ? []
+      : (TEMPLATES[role].deniedTools ?? []);
+  return [...base, ...ROSTER_EDIT_DENY];
 }
 
 /** Bounded root-evidence ceiling (mirrors Codex `MAX_ROOT_MESSAGES`). */

@@ -196,7 +196,11 @@ export {
   createCollabBoardFragmentProvider,
   formatCollabBoard,
   formatCollabBoardText,
+  formatTeamMateBoard,
+  formatTeamMateBoardText,
   listUnboundParentPeers,
+  type TeamMateOwnTask,
+  type TeamMateRow,
 } from "./collab-board.js";
 export {
   createSessionCapabilityFragmentProvider,
@@ -206,6 +210,30 @@ export {
   createSessionPostureFragmentProvider,
   formatSessionPosture,
 } from "./session-posture.js";
+export {
+  deriveSessionKind,
+  orchestratorSurface,
+  type OrchestratorSurface,
+  type SessionKind,
+} from "./session-kind.js";
+export {
+  closeAgentDescription,
+  followupTaskDescription,
+  interruptAgentDescription,
+  listAgentsDescription,
+  listSiblingSessionIds,
+  liveRosterCatalog,
+  sendMessageDescription,
+  sessionInspectDescription,
+  sessionToolContext,
+  subagentDescription,
+  teamGraphDescription,
+  teamListDescription,
+  threadMessageDescription,
+  waitAgentDescription,
+  workspaceListDescription,
+  workspaceSessionPromptDescription,
+} from "./session-tool-copy.js";
 export {
   bindAgentRosterTools,
   type BindAgentRosterToolsOptions,
@@ -521,8 +549,14 @@ export {
   fullyQualified,
   hostCreateDirectory,
   hostListDirectory,
+  hostListDirectoryPlaces,
+  parseDarwinFolderPaths,
+  parseXdgUserDirs,
+  profileFolderCandidates,
+  resolveKnownProfileFolders,
   type DirectoryEntryView,
   type DirectoryListingView,
+  type DirectoryPlaceView,
 } from "./host-directory.js";
 export {
   canPickNativeDirectory,
@@ -698,6 +732,7 @@ export {
 export { bindSettingsTools } from "./settings-agent-tools.js";
 export {
   bindSessionQueryTools,
+  createSessionInspectTool,
   createSessionSearchTool,
   createSessionReadTool,
   createSessionTraceTool,

@@ -18,6 +18,7 @@ import {
   resolveProviderBinding,
 } from "../llm-provider-context.js";
 import { readSessionAttachment } from "../session-attachment.js";
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { publishRemoteEvent } from "../remote-event.js";
 import { IM_WORKSPACE_ID } from "../im-workspace.js";
@@ -127,7 +128,7 @@ export const agentPresetSelect: FaceHandler = async (runtime, _rpcId, payload) =
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const wsId = runtime.workspaces.workspaceIdOf(sessionId);
@@ -353,7 +354,7 @@ export const sessionAttachment: FaceHandler = async (runtime, _rpcId, payload) =
       ok: false,
       error: {
         code: "session-not-found",
-        message: sessionId,
+        message: sessionNotFoundMessage(sessionId),
         details: { sessionId },
       },
     };

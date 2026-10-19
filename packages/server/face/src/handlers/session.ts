@@ -23,6 +23,10 @@ import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
 import { appearanceLookWire } from "../agent-roster-store.js";
 import { formatPeerCollabStopNotice } from "../session-thread-message.js";
 import { sessionIdsOnThread } from "../session-thread-publish.js";
+import {
+  queueItemNotFoundMessage,
+  sessionNotFoundMessage,
+} from "../face-error-text.js";
 import { dressingFromPresence } from "../presence-dressing.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import { rewritePendingAdmit } from "../update-queue-rewrite.js";
@@ -126,7 +130,7 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
     if (!runtime.store.has(parentSessionId)) {
       return {
         ok: false,
-        error: { code: "session-not-found", message: parentSessionId },
+        error: { code: "session-not-found", message: sessionNotFoundMessage(parentSessionId) },
       };
     }
   }
@@ -876,7 +880,7 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   if (!runtime.workspaces.isArchived(sessionId)) {
@@ -1008,7 +1012,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
 
@@ -1239,7 +1243,7 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   if (typeof runtime.store.replacePrefix !== "function") {
@@ -1349,7 +1353,7 @@ export const sessionRespondApproval: FaceHandler = async (runtime, _rpcId, paylo
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const out = runtime.approvals.respond(sessionId, approvalId, decisionRaw);
@@ -1385,7 +1389,7 @@ export const sessionSetWorkingDirectory: FaceHandler = async (
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const cdRaw = p.cd;
@@ -1433,7 +1437,7 @@ export const sessionRename: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   try {
@@ -1479,7 +1483,7 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
       ok: false,
       error: {
         code: "subagent-not-resumable",
-        message: sessionId,
+        message: `Session ${sessionId} is a one-shot subagent and cannot take queue edits.`,
         details: {
           parentSessionId: subLink.parentSessionId,
           childSessionId: sessionId,
@@ -1497,7 +1501,7 @@ export const sessionUpdateQueue: FaceHandler = async (runtime, _rpcId, payload) 
   if (!target) {
     return {
       ok: false,
-      error: { code: "queue-item-not-found", message: itemId },
+      error: { code: "queue-item-not-found", message: queueItemNotFoundMessage(itemId) },
     };
   }
 
@@ -1644,7 +1648,7 @@ export const sessionStatus: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   return {
@@ -1673,7 +1677,7 @@ export const sessionRolloutTrace: FaceHandler = async (
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const includeDescendants = p.includeDescendants !== false;

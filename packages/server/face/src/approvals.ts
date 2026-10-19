@@ -16,6 +16,7 @@ import type {
 import type { ApprovalDecisionSource } from "@xrkseek/protocol";
 import { effectiveApprovalPolicy } from "@xrkseek/protocol";
 import type { PermissionRequestDecision } from "@xrkseek/server-loader";
+import { approvalNotFoundMessage } from "./face-error-text.js";
 import {
   classifyApproval,
   type ApprovalCategory,
@@ -389,7 +390,7 @@ export class FaceApprovalBroker {
       return {
         ok: false,
         code: "approval-not-found",
-        message: approvalId,
+        message: approvalNotFoundMessage(approvalId),
       };
     }
     if (waiter.sessionId !== sessionId) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COLLAB_BOARD_THREAD_WINDOW_MS,
   formatCollabBoardText,
+  formatTeamMateBoardText,
 } from "../src/collab-board.js";
 
 describe("formatCollabBoardText", () => {
@@ -32,7 +33,7 @@ describe("formatCollabBoardText", () => {
       ],
     });
     expect(text).toContain("mem_68a69c0a9fdc4b53");
-    expect(text).toContain("spawn `subagent`");
+    expect(text).toContain("Spawn: `subagent`");
     expect(text).toContain("thread_message");
     expect(text).toContain("pin optional");
     expect(text).toContain("th_fresh");
@@ -104,7 +105,7 @@ describe("formatCollabBoardText", () => {
         },
       ],
     });
-    expect(text).toContain("into a coding workspace");
+    expect(text).toContain("workspace_id");
     expect(text).toContain("thread_message");
     expect(text).toContain("th_x");
   });
@@ -119,6 +120,46 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("workspace_session_prompt");
     expect(text).toContain("thread_message");
-    expect(text).not.toContain("spawn `subagent`");
+    expect(text).toContain("No nested subagent");
+    expect(text).not.toContain("Spawn: `subagent`");
+  });
+});
+
+describe("formatTeamMateBoardText", () => {
+  it("lists siblings, marks self, and includes own task", () => {
+    const text = formatTeamMateBoardText({
+      parentSessionId: "sess_parent",
+      mates: [
+        {
+          sessionId: "sess_a",
+          label: "调研",
+          memberId: "mem_scout",
+          role: "researcher",
+          self: true,
+          running: true,
+        },
+        {
+          sessionId: "sess_b",
+          label: "施工",
+          memberId: "mem_worker",
+          role: "worker",
+          sideline: "改 collab",
+        },
+      ],
+      ownTask: {
+        id: "task_1",
+        title: "收集证据",
+        status: "in_progress",
+      },
+    });
+    expect(text).toContain("squad · parent=sess_parent");
+    expect(text).toContain("sess_a*");
+    expect(text).toContain("member=mem_scout");
+    expect(text).toContain("sess_b");
+    expect(text).toContain("改 collab");
+    expect(text).toContain("thread_message");
+    expect(text).toContain("your_task: task_1");
+    expect(text).toContain("收集证据");
+    expect(text).not.toContain("主线 (24h)");
   });
 });

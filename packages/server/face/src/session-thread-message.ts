@@ -1,14 +1,48 @@
 /**
- * Parent↔parent session collab: eligibility + the text Face injects on the peer.
+ * Parent↔parent session collab + sibling child↔child under the same parent.
  * 主线 is a discovery pin (collab board / thread_list), not a messaging gate.
- * Children stay on send_message / followup_task.
+ * Parent→child stays on send_message / followup_task.
  */
+
+/** True when both ids are delegated children of the same parent. */
+export function sameDelegatedParent(
+  selfParentId: string | undefined,
+  targetParentId: string | undefined,
+): boolean {
+  const a = selfParentId?.trim();
+  const b = targetParentId?.trim();
+  return Boolean(a && b && a === b);
+}
+
+/** True when a team graph lists an undirected peer edge between the two sessions. */
+export function teamPeerLinked(
+  edges: readonly { readonly kind: string; readonly from: string; readonly to: string }[],
+  selfId: string,
+  targetId: string,
+): boolean {
+  for (const e of edges) {
+    if (e.kind !== "peer") continue;
+    if (
+      (e.from === selfId && e.to === targetId) ||
+      (e.from === targetId && e.to === selfId)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function peerThreadMessageProblem(input: {
   readonly selfId: string;
   readonly targetId: string;
   readonly targetExists: boolean;
+  /** Target is a tool-delegated child (not a UI fork). */
   readonly targetIsChild: boolean;
+  /**
+   * Caller is also a delegated child and shares a parent with the target
+   * (or a team `peer` edge). Then child↔child messaging is allowed.
+   */
+  readonly siblingOk?: boolean;
 }): string | undefined {
   const selfId = input.selfId.trim();
   const targetId = input.targetId.trim();
@@ -17,8 +51,8 @@ export function peerThreadMessageProblem(input: {
   if (!input.targetExists) {
     return "thread_message: unknown session_id";
   }
-  if (input.targetIsChild) {
-    return "thread_message: target is a subagent — use send_message / followup_task";
+  if (input.targetIsChild && !input.siblingOk) {
+    return "thread_message: target is a subagent — use send_message / followup_task (or sibling thread_message under the same parent)";
   }
   return undefined;
 }
@@ -44,7 +78,7 @@ export function formatPeerCollabPrompt(input: {
     ? ` (主线 「${input.fromThreadTitle.trim()}」)`
     : "";
   return [
-    `[会话协作] From parent session ${input.fromSessionId}${pin}.`,
+    `[会话协作] From session ${input.fromSessionId}${pin}.`,
     "Your next assistant message is the reply they wait for. Do not spawn a subagent for this unless they asked you to.",
     "",
     input.message.trim(),

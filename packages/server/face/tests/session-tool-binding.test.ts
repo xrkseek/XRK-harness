@@ -22,6 +22,7 @@ const FACE_SESSION_TOOLS = [
   "sideline_set",
   "team_list",
   "team_save",
+  "team_import",
   "thread_delete",
   "thread_list",
   "thread_message",
@@ -129,6 +130,14 @@ describe("FaceRuntime.bindSessionAgent", () => {
     runtime.bindSessionAgent("sess-child", hostShapedAgent(tools));
     expect(tools.get("thread_upsert")).toBeUndefined();
     expect(tools.get("team_save")).toBeUndefined();
+    expect(tools.get("team_import")).toBeUndefined();
+    expect(tools.get("ask")).toBeDefined();
+    expect(tools.get("ask_user")).toBeUndefined();
+    expect(tools.get("settings_mutate")).toBeUndefined();
+    expect(tools.get("canvas_upsert")).toBeUndefined();
+    expect(tools.get("propose_skill")).toBeUndefined();
+    expect(tools.get("workspace_create")).toBeUndefined();
     expect(tools.get("presence_set")).toBeDefined();
+    expect(tools.get("team_list")).toBeDefined();
   });
 });

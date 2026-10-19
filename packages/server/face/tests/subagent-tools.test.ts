@@ -119,6 +119,7 @@ describe("subagent tools", () => {
     expect(tools.get("wait_agent")).toBeTruthy();
     expect(tools.get("analytics")).toBeTruthy();
     expect(tools.get("interrupt_agent")).toBeTruthy();
+    expect(tools.get("close_agent")).toBeTruthy();
     expect(tools.get("ralph")).toBeTruthy();
 
     const analytics = await tools.get("analytics")!.execute({});
@@ -271,7 +272,9 @@ describe("subagent tools", () => {
     expect(props.provider).toBeTruthy();
     expect(props.model).toBeTruthy();
     expect(props.reasoning_effort).toBeTruthy();
-    expect(def.description).toMatch(/provider \/ model/);
+    expect(
+      (props.provider as { description?: string }).description,
+    ).toMatch(/provider/i);
     expect(def.dynamicSchema?.()?.description).toContain("mem_seed_researcher");
   });
 

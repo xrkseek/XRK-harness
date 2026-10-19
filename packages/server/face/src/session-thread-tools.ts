@@ -3,10 +3,16 @@
  * 主线 = discovery pin (collab board / thread_list). Messaging does not require it.
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
+import {
+  listSiblingSessionIds,
+  sessionToolContext,
+  threadMessageDescription,
+} from "./session-tool-copy.js";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { formatToolError } from "./face-error-text.js";
 import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import {
   clampPeerWaitMs,
@@ -17,6 +23,8 @@ import {
 import {
   formatPeerCollabPrompt,
   peerThreadMessageProblem,
+  sameDelegatedParent,
+  teamPeerLinked,
 } from "./session-thread-message.js";
 import {
   publishSessionThread,
@@ -28,6 +36,11 @@ import { SIDELINE_MAX } from "./session-thread-store.js";
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
   readonly sessionId: string;
+  /**
+   * Delegated children: only `thread_message` (sibling / peer-edge collab).
+   * Parents keep the full 主线 catalog + sideline tools.
+   */
+  readonly messageOnly?: boolean;
 }
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
@@ -90,13 +103,158 @@ export function listWorkspaceThreadCatalog(
   }));
 }
 
-/** Register thread_list / thread_upsert / thread_switch / thread_delete / sideline_set. */
+/** Register thread_* / sideline_set (or only `thread_message` when `messageOnly`). */
 export function bindSessionThreadTools(
   tools: ToolRegistry,
   options: BindSessionThreadToolsOptions,
 ): void {
-  const { runtime, sessionId } = options;
+  const { runtime, sessionId, messageOnly = false } = options;
   const ws = () => canvasWorkspaceIdForSession(runtime, sessionId);
+
+  const registerThreadMessage = (): void => {
+  registerTool(tools, {
+    name: "thread_message",
+    description:
+      "Message another session by session_id. wait=true (default) returns the next assistant reply.",
+    dynamicSchema: () => {
+      const { kind } = sessionToolContext(runtime, sessionId);
+      const siblingIds =
+        messageOnly || kind === "delegated_child"
+          ? listSiblingSessionIds(runtime, sessionId)
+          : undefined;
+      return {
+        description: threadMessageDescription({
+          kind,
+          messageOnly,
+          ...(siblingIds && siblingIds.length > 0 ? { siblingIds } : {}),
+        }),
+      };
+    },
+    parameters: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: messageOnly
+            ? "Sibling or peer-edge session id (turn-start squad board, session_inspect, or parent spawn ids)."
+            : "Target parent session id (thread_list, collab board, workspace_session_prompt, or session_search).",
+        },
+        message: { type: "string", description: "What the peer should do or answer." },
+        wait: {
+          type: "boolean",
+          description: "If true (default), wait for the peer's assistant reply.",
+        },
+        timeout_ms: {
+          type: "number",
+          description: `Wait budget in ms (default ${PEER_WAIT_DEFAULT_MS}; min ${PEER_WAIT_MIN_MS}).`,
+        },
+      },
+      required: ["session_id", "message"],
+      additionalProperties: false,
+    },
+    presentCall: (args) => ({
+      card: "generic",
+      title: "thread_message",
+      kind: "execute",
+      rawInput: args,
+    }),
+    execute: async (args, signal) => {
+      const a = readArgs(args);
+      const targetId = String(a.session_id ?? "").trim();
+      const message = String(a.message ?? "").trim();
+      const selfLink = runtime.subagents.getByChild(sessionId);
+      const targetLink = runtime.subagents.getByChild(targetId);
+      const selfDelegated = Boolean(selfLink && selfLink.mode !== "fork");
+      const targetDelegated = Boolean(targetLink && targetLink.mode !== "fork");
+      const siblingOk =
+        selfDelegated &&
+        targetDelegated &&
+        (sameDelegatedParent(selfLink?.parentSessionId, targetLink?.parentSessionId) ||
+          teamPeerLinked(
+            runtime.agentTeams.view(selfLink!.parentSessionId).edges,
+            sessionId,
+            targetId,
+          ) ||
+          teamPeerLinked(
+            runtime.agentTeams.view(sessionId).edges,
+            sessionId,
+            targetId,
+          ));
+      const problem = peerThreadMessageProblem({
+        selfId: sessionId,
+        targetId,
+        targetExists: Boolean(targetId && runtime.store.has(targetId)),
+        targetIsChild: targetDelegated && !siblingOk,
+        siblingOk,
+      });
+      if (problem) return { content: problem, isError: true };
+      if (messageOnly && !siblingOk) {
+        return {
+          content:
+            "thread_message: delegated children may only message siblings under the same parent, or a team peer edge",
+          isError: true,
+        };
+      }
+      if (!message) {
+        return { content: "thread_message requires message", isError: true };
+      }
+      const selfWs = ws();
+      const selfThread = runtime.sessionThreads.bindOf(selfWs, sessionId);
+      const fromTitle = selfThread
+        ? runtime.sessionThreads.get(selfWs, selfThread.threadId)?.title
+        : undefined;
+      const rpcId = `tool-th-msg-${sessionId}-${targetId}`;
+      const seqAtSend = readSessionEvents(runtime.store, targetId).length;
+      const prompted = await dispatchFaceMethod(
+        runtime,
+        "session.prompt",
+        rpcId,
+        {
+          sessionId: targetId,
+          mode: "steer",
+          content: [
+            {
+              type: "text",
+              text: formatPeerCollabPrompt({
+                fromSessionId: sessionId,
+                ...(fromTitle ? { fromThreadTitle: fromTitle } : {}),
+                message,
+              }),
+            },
+          ],
+        },
+      );
+      if (!prompted.result.ok) {
+        return { content: formatToolError(prompted.result.error), isError: true };
+      }
+      const wait = a.wait !== false;
+      if (!wait) {
+        return { content: `delivered to ${targetId} (steer)` };
+      }
+      const timeoutMs = clampPeerWaitMs(a.timeout_ms);
+      const waited = await waitForPeerAssistantReply(
+        runtime,
+        targetId,
+        seqAtSend,
+        timeoutMs,
+        signal,
+      );
+      if ("reply" in waited) {
+        return {
+          content: `reply from ${targetId}:\n${boundChildAnswer(
+            sessionId,
+            targetId,
+            waited.reply,
+          )}`,
+        };
+      }
+      return { content: `thread_message: ${waited.error}`, isError: true };
+    },
+  });
+  };
+
+  registerThreadMessage();
+  if (messageOnly) return;
 
   registerTool(tools, {
     name: "thread_list",
@@ -312,115 +470,10 @@ export function bindSessionThreadTools(
   });
 
   registerTool(tools, {
-    name: "thread_message",
-    description:
-      "Message another parent session by session_id (same or other workspace). " +
-      "主线 is optional — use it to discover peers quickly; messaging does not require either side to be pinned. " +
-      "Do not thread_switch first — this does not change either bind. " +
-      "Not a subagent: peer keeps its own chat. Delivery is steer (not Settings busyEnter queue). " +
-      "wait=true (default) returns the peer's next assistant message. Children use send_message / followup_task.",
-    parameters: {
-      type: "object",
-      properties: {
-        session_id: {
-          type: "string",
-          description:
-            "Target parent session id (thread_list, collab board, workspace_session_prompt, or session_search).",
-        },
-        message: { type: "string", description: "What the peer should do or answer." },
-        wait: {
-          type: "boolean",
-          description: "If true (default), wait for the peer's assistant reply.",
-        },
-        timeout_ms: {
-          type: "number",
-          description: `Wait budget in ms (default ${PEER_WAIT_DEFAULT_MS}; min ${PEER_WAIT_MIN_MS}).`,
-        },
-      },
-      required: ["session_id", "message"],
-      additionalProperties: false,
-    },
-    presentCall: (args) => ({
-      card: "generic",
-      title: "thread_message",
-      kind: "execute",
-      rawInput: args,
-    }),
-    execute: async (args, signal) => {
-      const a = readArgs(args);
-      const targetId = String(a.session_id ?? "").trim();
-      const message = String(a.message ?? "").trim();
-      const childLink = runtime.subagents.getByChild(targetId);
-      const problem = peerThreadMessageProblem({
-        selfId: sessionId,
-        targetId,
-        targetExists: Boolean(targetId && runtime.store.has(targetId)),
-        targetIsChild: Boolean(childLink && childLink.mode !== "fork"),
-      });
-      if (problem) return { content: problem, isError: true };
-      if (!message) {
-        return { content: "thread_message requires message", isError: true };
-      }
-      const selfWs = ws();
-      const selfThread = runtime.sessionThreads.bindOf(selfWs, sessionId);
-      const fromTitle = selfThread
-        ? runtime.sessionThreads.get(selfWs, selfThread.threadId)?.title
-        : undefined;
-      const rpcId = `tool-th-msg-${sessionId}-${targetId}`;
-      const seqAtSend = readSessionEvents(runtime.store, targetId).length;
-      const prompted = await dispatchFaceMethod(
-        runtime,
-        "session.prompt",
-        rpcId,
-        {
-          sessionId: targetId,
-          mode: "steer",
-          content: [
-            {
-              type: "text",
-              text: formatPeerCollabPrompt({
-                fromSessionId: sessionId,
-                ...(fromTitle ? { fromThreadTitle: fromTitle } : {}),
-                message,
-              }),
-            },
-          ],
-        },
-      );
-      if (!prompted.result.ok) {
-        return { content: prompted.result.error.message, isError: true };
-      }
-      const wait = a.wait !== false;
-      if (!wait) {
-        return { content: `delivered to ${targetId} (steer)` };
-      }
-      const timeoutMs = clampPeerWaitMs(a.timeout_ms);
-      const waited = await waitForPeerAssistantReply(
-        runtime,
-        targetId,
-        seqAtSend,
-        timeoutMs,
-        signal,
-      );
-      if ("reply" in waited) {
-        return {
-          content: `reply from ${targetId}:\n${boundChildAnswer(
-            sessionId,
-            targetId,
-            waited.reply,
-          )}`,
-        };
-      }
-      return { content: `thread_message: ${waited.error}`, isError: true };
-    },
-  });
-
-  registerTool(tools, {
     name: "sideline_set",
     description:
-      "Write this session's 支线 caption (same as presence_set tips). " +
-      "Shows under the session name in the sidebar (primary). Overview ball may mirror mood when that chrome is on. " +
-      "Does not change the session name / 主线. Prefer presence_set when also changing emotion.",
+      "Alias for writing 支线 caption only — prefer `presence_set` (tips + emotion). " +
+      "Same storage as presence tips under the session name. Does not change 主线.",
     parameters: {
       type: "object",
       properties: {

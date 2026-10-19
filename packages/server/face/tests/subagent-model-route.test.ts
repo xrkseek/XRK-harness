@@ -3,54 +3,14 @@ import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createBareFaceRuntime, idleFaceDrain } from "./helpers/bare-runtime.js";
 import { countSessionsUsingModel } from "../src/model-session-cap.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
-import { resolveSubagentModelSetting } from "../src/model-catalog.js";
 import { buildSessionStatusSnapshot } from "../src/session-status.js";
 import { bindSubagentTools } from "../src/subagent-tools.js";
 import { createToolRegistry } from "@xrkseek/core-tools";
 
-/** Seed the `agent-loop` user layer the way Settings → Plugins would. */
-function setAgentLoop(
-  runtime: ReturnType<typeof createBareFaceRuntime>,
-  user: Record<string, unknown>,
-): void {
-  const slot = runtime.settingsNamespaces.ensure("agent-loop");
-  slot.user = user;
-  slot.revision += 1;
-}
-
 describe("subagent model route", () => {
-  it("reads agent-loop.subagentModel as provider/model, effort optional", () => {
-    const runtime = createBareFaceRuntime();
-    expect(resolveSubagentModelSetting(runtime)).toBeUndefined();
-
-    setAgentLoop(runtime, { subagentModel: "  " });
-    expect(resolveSubagentModelSetting(runtime)).toBeUndefined();
-
-    setAgentLoop(runtime, { subagentModel: "deepseek/deepseek-flash" });
-    expect(resolveSubagentModelSetting(runtime)).toEqual({
-      provider: "deepseek",
-      model: "deepseek-flash",
-    });
-
-    setAgentLoop(runtime, { subagentModel: "openrouter/vendor/model (high)" });
-    expect(resolveSubagentModelSetting(runtime)).toEqual({
-      provider: "openrouter",
-      model: "vendor/model",
-      reasoningEffort: "high",
-    });
-
-    // A draft that is not a route resolves to "inherit" rather than a
-    // half-parsed selection — the card blocks saving such text in the first place.
-    setAgentLoop(runtime, { subagentModel: "deepseek-flash" });
-    expect(resolveSubagentModelSetting(runtime)).toBeUndefined();
-  });
-
   it("freezes the parent's effective route into the child at spawn", async () => {
     const runtime = createBareFaceRuntime({ store: createMemorySessionStore() });
     const parent = runtime.ensureSession("parent-route");
-    // Parent never called selectModel: it resolves through the default chain.
-    const parentRoute = resolveSubagentModelSetting(runtime);
-    expect(parentRoute).toBeUndefined();
 
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
       parentSessionId: parent,

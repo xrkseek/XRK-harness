@@ -14,6 +14,41 @@ function parentAvailable(runtime: Parameters<FaceHandler>[0], parentSessionId: s
   return runtime.store.has(parentSessionId);
 }
 
+/** Model-facing text. The code stays on `error.code`; `message` must not be a bare id. */
+function subagentFail(
+  code:
+    | "subagent-parent-unavailable"
+    | "subagent-not-found"
+    | "subagent-not-resumable",
+  parentSessionId: string,
+  childSessionId = "",
+): {
+  ok: false;
+  error: {
+    code: typeof code;
+    message: string;
+    details: { parentSessionId: string; childSessionId?: string };
+  };
+} {
+  const message =
+    code === "subagent-parent-unavailable"
+      ? `Parent session ${parentSessionId} is gone; cannot reach its children.`
+      : code === "subagent-not-found"
+        ? `No child ${childSessionId} under this parent. Use an id from list_agents or subagent.`
+        : `Child ${childSessionId} is not continuable. followup_task and send_message need a continuable child; one-shot sessions are read-only.`;
+  return {
+    ok: false,
+    error: {
+      code,
+      message,
+      details: {
+        parentSessionId,
+        ...(childSessionId ? { childSessionId } : {}),
+      },
+    },
+  };
+}
+
 export const subagentList: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
   const parentSessionId = String(p.parentSessionId ?? "").trim();
@@ -99,25 +134,11 @@ export const subagentHistory: FaceHandler = async (runtime, rpcId, payload) => {
     };
   }
   if (!parentAvailable(runtime, parentSessionId)) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-parent-unavailable",
-        message: parentSessionId,
-        details: { parentSessionId },
-      },
-    };
+    return subagentFail("subagent-parent-unavailable", parentSessionId);
   }
   const link = runtime.subagents.get(parentSessionId, childSessionId);
   if (!link) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-not-found",
-        message: childSessionId,
-        details: { parentSessionId, childSessionId },
-      },
-    };
+    return subagentFail("subagent-not-found", parentSessionId, childSessionId);
   }
   return sessionHistory(runtime, rpcId, {
     sessionId: childSessionId,
@@ -141,35 +162,14 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     };
   }
   if (!parentAvailable(runtime, parentSessionId)) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-parent-unavailable",
-        message: parentSessionId,
-        details: { parentSessionId },
-      },
-    };
+    return subagentFail("subagent-parent-unavailable", parentSessionId);
   }
   const link = runtime.subagents.get(parentSessionId, childSessionId);
   if (!link) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-not-found",
-        message: childSessionId,
-        details: { parentSessionId, childSessionId },
-      },
-    };
+    return subagentFail("subagent-not-found", parentSessionId, childSessionId);
   }
   if (link.mode !== "continuable" || mode !== "continuable") {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-not-resumable",
-        message: childSessionId,
-        details: { parentSessionId, childSessionId },
-      },
-    };
+    return subagentFail("subagent-not-resumable", parentSessionId, childSessionId);
   }
   const deliveryRaw = p.delivery
   // Session collaboration defaults to steer (插队 at the next tool boundary).
@@ -242,35 +242,14 @@ export const subagentInterrupt: FaceHandler = async (runtime, rpcId, payload) =>
     };
   }
   if (!parentAvailable(runtime, parentSessionId)) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-parent-unavailable",
-        message: parentSessionId,
-        details: { parentSessionId },
-      },
-    };
+    return subagentFail("subagent-parent-unavailable", parentSessionId);
   }
   const link = runtime.subagents.get(parentSessionId, childSessionId);
   if (!link) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-not-found",
-        message: childSessionId,
-        details: { parentSessionId, childSessionId },
-      },
-    };
+    return subagentFail("subagent-not-found", parentSessionId, childSessionId);
   }
   if (link.mode !== "continuable" || (mode && mode !== "continuable")) {
-    return {
-      ok: false,
-      error: {
-        code: "subagent-not-resumable",
-        message: childSessionId,
-        details: { parentSessionId, childSessionId },
-      },
-    };
+    return subagentFail("subagent-not-resumable", parentSessionId, childSessionId);
   }
   const reasonRaw = typeof p.reason === "string" ? p.reason : "";
   const stopReason =

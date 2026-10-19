@@ -14,6 +14,7 @@ import { permissionSelectFromEvents } from "./permissions.js";
 import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
 import type { FaceRuntime } from "./context.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { formatToolError } from "./face-error-text.js";
 import {
   formatChildOutcome,
   lastAssistantBodyText,
@@ -36,7 +37,19 @@ import {
   resolveSessionCwd,
 } from "./session-cwd.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
-import { formatRosterCatalog } from "./agent-roster-store.js";
+import { orchestratorSurface } from "./session-kind.js";
+import {
+  closeAgentDescription,
+  followupTaskDescription,
+  interruptAgentDescription,
+  listAgentsDescription,
+  liveRosterCatalog,
+  sendMessageDescription,
+  sessionToolContext,
+  subagentDescription,
+  teamGraphDescription,
+  waitAgentDescription,
+} from "./session-tool-copy.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { resolveDefaultAgentPreset } from "./settings-document.js";
 import {
@@ -58,10 +71,7 @@ import {
   type SubagentWorktree,
 } from "./subagent-worktree.js";
 import type { ManagedWorktreeLease } from "./managed-worktree.js";
-import {
-  resolveSessionModelSelection,
-  resolveSubagentModelSetting,
-} from "./model-catalog.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
 import {
   modelSessionCapProblem,
   resolveModelSessionQuota,
@@ -115,7 +125,7 @@ export interface SubagentQuotaCaps {
   readonly model: string;
 }
 
-/** Predicted child route before spawn (parent inherit or fleet/call override). */
+/** Predicted child route before spawn (per-call pin, else parent inherit). */
 export function predictChildModelSelection(
   runtime: FaceRuntime,
   parentSessionId: string,
@@ -128,15 +138,10 @@ export function predictChildModelSelection(
   const providerRaw = args?.provider?.trim() ?? "";
   const modelRaw = args?.model?.trim() ?? "";
   const effortRaw = args?.reasoningEffort?.trim() ?? "";
-  const fleet =
-    providerRaw || modelRaw || effortRaw
-      ? undefined
-      : resolveSubagentModelSetting(runtime);
   const parent = resolveSessionModelSelection(runtime, parentSessionId);
-  const model = modelRaw || fleet?.model || parent.model;
-  const provider = providerRaw || fleet?.provider || parent.provider;
-  const effort =
-    effortRaw || fleet?.reasoningEffort || parent.reasoningEffort || "";
+  const model = modelRaw || parent.model;
+  const provider = providerRaw || parent.provider;
+  const effort = effortRaw || parent.reasoningEffort || "";
   return {
     provider,
     model,
@@ -365,9 +370,9 @@ function taskIdConflict(
 /**
  * Optional LLM target for a freshly created child.
  *
- * Precedence: the call's own args → the fleet-wide `agent-loop.subagentModel`
- * setting → the parent's own route. `model` alone inherits the parent's current
- * provider; `provider` alone is rejected.
+ * Precedence: the call's own `provider` / `model` / `reasoning_effort` →
+ * the parent's route (copied at `session.create`). `model` alone inherits the
+ * parent's current provider; `provider` alone is rejected.
  */
 async function applySubagentModelOverride(
   runtime: FaceRuntime,
@@ -399,15 +404,11 @@ async function applySubagentModelOverride(
         "Drop the argument, or use runtime=in-process.",
     };
   }
-  // No per-call pin: the setting owns the route, and an empty setting leaves
-  // the child on the parent's selection that `session.create` copied.
-  const fleet =
-    providerRaw || modelRaw || effortRaw
-      ? undefined
-      : resolveSubagentModelSetting(runtime);
-  if (!providerRaw && !modelRaw && !effortRaw && !fleet) return { ok: true };
-  const model = modelRaw || fleet?.model || "";
-  const effort = effortRaw || fleet?.reasoningEffort || "";
+  // No per-call pin: leave the child on the parent's selection that
+  // `session.create` already copied into sessionModels.
+  if (!providerRaw && !modelRaw && !effortRaw) return { ok: true };
+  const model = modelRaw || "";
+  const effort = effortRaw || "";
   if (!model) {
     return {
       ok: false,
@@ -417,7 +418,6 @@ async function applySubagentModelOverride(
   }
   const provider =
     providerRaw
-    || fleet?.provider
     || resolveSessionModelSelection(runtime, args.parentSessionId).provider;
   const selected = await selectSessionModel(runtime, {
     sessionId: args.childSessionId,
@@ -428,7 +428,7 @@ async function applySubagentModelOverride(
   if (!selected.ok) {
     return {
       ok: false,
-      message: `subagent model: ${selected.error.message}`,
+      message: `subagent model: ${formatToolError(selected.error)}`,
     };
   }
   return { ok: true };
@@ -439,46 +439,24 @@ function createSubagentTool(
 ): ToolDefinition {
   const foregroundWaitMs = options.foregroundWaitMs ?? FOREGROUND_WAIT_MS;
   const description =
-    "Delegate a self-contained task to a teammate subagent (separate session; same workspace as this session by default, unless workspace_id / cwd / worktree:true). " +
-    "Use for focused independent work — research, a scoped implementation, analysis, or read-only review — " +
-    "so it does not consume this conversation's context. " +
-    "Cross-workspace spawn (`workspace_id` / `cwd`) is **IM-only** — call workspace_list then pass workspace_id so the child lands in a coding workspace; coding badges stay in-workspace. " +
-    "By default the child cannot see this chat — give a complete standalone prompt (paths, goals, constraints, persona). " +
-    "Do not tell the child to read AGENTS.md to discover who it is; Face prepends parent/child session ids, mode, role, and cwd. " +
-    "Set inherit_context true to seed the child with this session's completed turns only " +
-    "(the current in-flight turn is excluded; incompatible with workspace_id / cwd). " +
-    "By default waits for the result (one-shot, no later human messages on that child). " +
-    "That foreground wait is bounded (10 min by default): on expiry the child is NOT discarded — " +
-    "whatever answer it already wrote is salvaged into this result and the child id stays readable " +
-    "(session_read / followup_task), so prefer run_in_background for genuinely long work instead of retrying blind. " +
-    "Set run_in_background true for a continuable child (chat companion / long task) and continue via followup_task / send_message. " +
-    "Prefer Agent Team member_id (干员 / 成员 / 子代理团队的一员) from the turn-start collab board (and this tool / team_list) over restating playbook, skills, or AGENTS.md; " +
-    "to add that person to the roster, call team_save — propose_skill only writes a SKILL.md; " +
-    "match the live catalog by name and brief — if a member fits the user ask, spawn that member_id this turn instead of Skill-loading the same job yourself; " +
-    "optional role (worker|researcher|reviewer|lead) is only the fallback when no member fits; " +
-    "optional output_schema appends an OUTPUT CONTRACT and validates the final JSON; " +
-    "optional task_id / task_name register the work on the Agent Teams task board. " +
-    "Optional provider / model / reasoning_effort pin the child's LLM (model alone keeps the parent provider). " +
-    "Optional runtime: omit or in-process (default Face child); acp / app-server / claude-code spawn an external subprocess. " +
-    "acp / app-server support run_in_background + followup_task / send_message / wait_agent / interrupt_agent on the same list surface; claude-code remains one-shot print. " +
-    "The child's answer is returned inline in this tool result when short. " +
-    "Only when the UTF-8 body exceeds ~12KB does Face spill it under ~/.xrk/spill/tool-outputs/ " +
-    "and replace the body with a path + head/tail preview — then read_file that path. " +
-    "An empty or missing tool-outputs directory means nothing spilled; the full answer is already in this result (or the session event log), not on disk.";
+    "Delegate a self-contained task to a subagent (separate session). " +
+    "Default: continuable (run_in_background true) — follow up with followup_task / send_message / close_agent. " +
+    "Set run_in_background false only when the user asked for a one-shot wait (10 min salvage on expiry). " +
+    "Pin provider/model on this call when the child should not inherit the parent route. " +
+    "Child identity is the Face spawn preamble — do not send it to AGENTS.md. " +
+    "Prefer member_id (team_save / team_import on this parent; propose_skill is a SKILL.md). " +
+    "role is the fallback when no member fits. Answers over ~12KB spill to ~/.xrk/spill/tool-outputs/.";
   return {
     name: "subagent",
     description,
     dynamicSchema: () => {
-      const ws = canvasWorkspaceIdForSession(
-        options.runtime,
-        options.parentSessionId,
-      );
-      const catalog = formatRosterCatalog(
-        options.runtime.agentRoster.listVisible(ws),
-      );
+      const { runtime, parentSessionId } = options;
       return {
-        description:
-          `${description}\n\nPrefer member_id from this Agent Team catalog:\n${catalog}`,
+        description: subagentDescription({
+          base: description,
+          surface: orchestratorSurface(runtime, parentSessionId),
+          catalog: liveRosterCatalog(runtime, parentSessionId),
+        }),
       };
     },
     parameters: {
@@ -527,7 +505,7 @@ function createSubagentTool(
         run_in_background: {
           type: "boolean",
           description:
-            "If true, return the child session id immediately (continuable). Default false (wait for the child's final answer). Supported for in-process and external acp / app-server (not claude-code).",
+            "Default true (continuable — return child id immediately). Set false only for an explicit one-shot wait. Supported for in-process and external acp / app-server (not claude-code).",
         },
         role: {
           type: "string",
@@ -742,7 +720,8 @@ function createSubagentTool(
         };
       }
       if (runtimeKind !== "in-process") {
-        const background = a.run_in_background === true;
+        // Default continuable; one-shot only when the caller sets false.
+        const background = a.run_in_background !== false;
         // Prefer explicit workspace_id / cwd (IM → coding WS); else parent cwd.
         const externalCwd =
           (workspaceIdArg
@@ -810,7 +789,7 @@ function createSubagentTool(
             );
             if (!created.result.ok) {
               return {
-                content: `subagent create failed: ${created.result.error.message}`,
+                content: `subagent create failed: ${formatToolError(created.result.error)}`,
                 isError: true,
               };
             }
@@ -926,7 +905,8 @@ function createSubagentTool(
       if (capProblem) {
         return { content: `subagent: ${capProblem}`, isError: true };
       }
-      const background = a.run_in_background === true;
+      // Default continuable; one-shot only when the caller sets false.
+      const background = a.run_in_background !== false;
       const inherit = a.inherit_context === true;
       const label =
         String(a.description ?? "").trim() ||
@@ -1102,7 +1082,7 @@ function createSubagentTool(
             if (!created.result.ok) {
               dropIsolated();
               return {
-                content: `subagent create failed: ${created.result.error.message}`,
+                content: `subagent create failed: ${formatToolError(created.result.error)}`,
                 isError: true,
               };
             }
@@ -1112,7 +1092,7 @@ function createSubagentTool(
           } else {
             dropIsolated();
             return {
-              content: `subagent seed failed: ${forked.result.error.message}`,
+              content: `subagent seed failed: ${formatToolError(forked.result.error)}`,
               isError: true,
             };
           }
@@ -1147,7 +1127,7 @@ function createSubagentTool(
         if (!created.result.ok) {
           dropIsolated();
           return {
-            content: `subagent create failed: ${created.result.error.message}`,
+            content: `subagent create failed: ${formatToolError(created.result.error)}`,
             isError: true,
           };
         }
@@ -1261,7 +1241,7 @@ function createSubagentTool(
         await discardIfUnstarted();
         const extra = worktreeLine(false);
         return {
-          content: [`subagent prompt failed: ${prompted.result.error.message}`, extra]
+          content: [`subagent prompt failed: ${formatToolError(prompted.result.error)}`, extra]
             .filter(Boolean)
             .join("\n"),
           isError: true,
@@ -1443,10 +1423,12 @@ function createListAgentsTool(
 ): ToolDefinition {
   return {
     name: "list_agents",
-    description:
-      "List direct child subagents of this session (id, label, mode, running, model, inbox queue/steer, " +
-      "and how each child's last turn actually ended — finished vs aborted by parent/user vs error, with idle age). " +
-      "Prefaces with depth/active quota. Prefer `analytics` for a fuller quota snapshot.",
+    description: "List direct child subagents of this session.",
+    dynamicSchema: () => ({
+      description: listAgentsDescription(
+        sessionToolContext(options.runtime, options.parentSessionId).kind,
+      ),
+    }),
     parameters: { type: "object", properties: {} },
     isConcurrencySafe: () => true,
     async execute() {
@@ -1458,7 +1440,7 @@ function createListAgentsTool(
       );
       if (!listed.result.ok) {
         return {
-          content: listed.result.error.message,
+          content: formatToolError(listed.result.error),
           isError: true,
         };
       }
@@ -1520,13 +1502,10 @@ function createSendMessageTool(
 ): ToolDefinition {
   return {
     name: "send_message",
-    description:
-      "Pass a follow-up to a continuable background subagent. " +
-      "Default delivery=steer (插队): lands at the child's next tool-step / turn boundary. " +
-      "delivery=queue waits until the child is idle. " +
-      "For a new task that should open a turn, prefer `followup_task`. " +
-      "Clears human takeover pause on the Agent Teams task board. " +
-      "Returns delivery confirmation only — the child's later answer arrives as a Host steer notice.",
+    description: "Follow up a continuable child subagent. Default delivery=steer.",
+    dynamicSchema: () => ({
+      description: sendMessageDescription(),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -1571,8 +1550,9 @@ function createSendMessageTool(
         },
       );
       if (!prompted.result.ok) {
+        const err = prompted.result.error;
         return {
-          content: prompted.result.error.message,
+          content: formatToolError(err),
           isError: true,
         };
       }
@@ -1589,12 +1569,10 @@ function createTeamGraphTool(
   return {
     name: "team_graph",
     description:
-      "Inspect or edit the Agent Teams collaboration graph for this session " +
-      "(delegates from subagent spawn + peer links). " +
-      "action=view (default) returns the connected component with roles and depth; " +
-      "neighbors lists adjacency; link/unlink peer edges; role sets delegator|worker|observer; " +
-      "remove drops peer edges + role override for a node; " +
-      "announce fans a message to peer neighbors via send_message (steer by default).",
+      "Inspect or edit the Agent Teams collaboration graph (delegates + peer).",
+    dynamicSchema: () => ({
+      description: teamGraphDescription(),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -1769,7 +1747,7 @@ function createTeamGraphTool(
             },
           );
           if (!prompted.result.ok) {
-            results.push(`${peer.id}\tfail\t${prompted.result.error.message}`);
+            results.push(`${peer.id}\tfail\t${formatToolError(prompted.result.error)}`);
             continue;
           }
           results.push(`${peer.id}\tok\t${delivery}`);
@@ -1821,9 +1799,10 @@ function createFollowupTaskTool(
   return {
     name: "followup_task",
     description:
-      "Give an existing continuable subagent a new task and wake a turn (steer). " +
-      "Prefer this over `send_message` when the child should start fresh work. " +
-      "Returns delivery confirmation only. When the child settles, Host steers the result into this session.",
+      "Give an existing continuable subagent a new task and wake a turn (steer).",
+    dynamicSchema: () => ({
+      description: followupTaskDescription(),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -1861,8 +1840,9 @@ function createFollowupTaskTool(
         },
       );
       if (!prompted.result.ok) {
+        const err = prompted.result.error;
         return {
-          content: prompted.result.error.message,
+          content: formatToolError(err),
           isError: true,
         };
       }
@@ -1895,10 +1875,10 @@ function createWaitAgentTool(
   return {
     name: "wait_agent",
     description:
-      "Wait until listed children are idle, then return their last assistant text. " +
-      "Use when the next step in this turn needs that answer. " +
-      "After a background handoff with nothing else to do here, end the turn instead — Host steers a completion notice when the child settles. " +
-      "Answer sizing matches subagent (inline when short; spill only over ~12KB).",
+      "Wait until listed children are idle, then return their last assistant text.",
+    dynamicSchema: () => ({
+      description: waitAgentDescription(),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -2115,16 +2095,55 @@ function createAnalyticsTool(
   };
 }
 
+async function interruptChildAgent(
+  options: BindSubagentToolsOptions,
+  childId: string,
+  takeover: boolean,
+  rpcPrefix: string,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> {
+  const stopped = await dispatchFaceMethod(
+    options.runtime,
+    "subagent.interrupt",
+    `${rpcPrefix}-int-${childId}`,
+    {
+      parentSessionId: options.parentSessionId,
+      childSessionId: childId,
+      mode: "continuable",
+      ...(takeover ? { takeover: true, reason: "takeover" } : { reason: "parent" }),
+    },
+  );
+  if (!stopped.result.ok) {
+    // one-shot children: fall back to session.cancel. Notify first so the
+    // cancel's default user cause does not overwrite this parent/takeover reason.
+    options.runtime.notifyOwnedSubagentStopped(
+      childId,
+      takeover ? "takeover" : "parent",
+    );
+    const cancelled = await dispatchFaceMethod(
+      options.runtime,
+      "session.cancel",
+      `${rpcPrefix}-can-${childId}`,
+      { sessionId: childId },
+    );
+    if (!cancelled.result.ok) {
+      return { ok: false, message: formatToolError(stopped.result.error) };
+    }
+  }
+  if (takeover) {
+    options.runtime.agentTeamTasks.markTakeover(childId);
+  }
+  return { ok: true };
+}
+
 function createInterruptAgentTool(
   options: BindSubagentToolsOptions,
 ): ToolDefinition {
   return {
     name: "interrupt_agent",
-    description:
-      "Interrupt a running child subagent by session id. " +
-      "Steers the parent with why it stopped, how much it already ran, and how to resume " +
-      "(send_message / list_agents); suppresses the later idle \"finished a turn\" notice. " +
-      "Set takeover true to pause the Agent Teams task for human ownership.",
+    description: "Interrupt a running child subagent by session id.",
+    dynamicSchema: () => ({
+      description: interruptAgentDescription(),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -2147,39 +2166,14 @@ function createInterruptAgentTool(
         return { content: "interrupt_agent requires agent_id", isError: true };
       }
       const takeover = a.takeover === true;
-      const stopped = await dispatchFaceMethod(
-        options.runtime,
-        "subagent.interrupt",
-        `tool-sa-int-${childId}`,
-        {
-          parentSessionId: options.parentSessionId,
-          childSessionId: childId,
-          mode: "continuable",
-          ...(takeover ? { takeover: true, reason: "takeover" } : { reason: "parent" }),
-        },
+      const result = await interruptChildAgent(
+        options,
+        childId,
+        takeover,
+        "tool-sa",
       );
-      if (!stopped.result.ok) {
-        // one-shot children: fall back to session.cancel. Notify first so the
-        // cancel's default user cause does not overwrite this parent/takeover reason.
-        options.runtime.notifyOwnedSubagentStopped(
-          childId,
-          takeover ? "takeover" : "parent",
-        );
-        const cancelled = await dispatchFaceMethod(
-          options.runtime,
-          "session.cancel",
-          `tool-sa-can-${childId}`,
-          { sessionId: childId },
-        );
-        if (!cancelled.result.ok) {
-          return {
-            content: stopped.result.error.message,
-            isError: true,
-          };
-        }
-      }
-      if (takeover) {
-        options.runtime.agentTeamTasks.markTakeover(childId);
+      if (!result.ok) {
+        return { content: result.message, isError: true };
       }
       return {
         content: takeover
@@ -2188,6 +2182,196 @@ function createInterruptAgentTool(
       };
     },
   };
+}
+
+/**
+ * Codex morph of close_agent: same stop path as interrupt_agent, plus a
+ * salvaged last-assistant snapshot in the tool result.
+ */
+function createCloseAgentTool(
+  options: BindSubagentToolsOptions,
+): ToolDefinition {
+  return {
+    name: "close_agent",
+    description:
+      "Stop a child and return a snapshot (last assistant text).",
+    dynamicSchema: () => ({
+      description: closeAgentDescription(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        agent_id: {
+          type: "string",
+          description: "Child session id from subagent / list_agents.",
+        },
+        takeover: {
+          type: "boolean",
+          description:
+            "If true, pause the task board entry and hand the child to a human.",
+        },
+      },
+      required: ["agent_id"],
+    },
+    async execute(args) {
+      const a = args as { agent_id?: string; takeover?: boolean };
+      const childId = String(a.agent_id ?? "").trim();
+      if (!childId) {
+        return { content: "close_agent requires agent_id", isError: true };
+      }
+      const takeover = a.takeover === true;
+      const result = await interruptChildAgent(
+        options,
+        childId,
+        takeover,
+        "tool-sa-close",
+      );
+      if (!result.ok) {
+        return { content: result.message, isError: true };
+      }
+      const link = options.runtime.subagents.getByChild(childId);
+      const running = isChildSessionActive(options.runtime, childId);
+      const text = lastAssistantBodyText(
+        subagentOwnedEvents(
+          link,
+          readSessionEvents(options.runtime.store, childId),
+        ),
+      );
+      const outcome = formatChildOutcome(
+        readSessionEvents(options.runtime.store, childId),
+      );
+      const lines = [
+        takeover
+          ? `closed ${childId} (human takeover — task paused)`
+          : `closed ${childId}`,
+        running ? "activity: still-running (cancel in flight)" : "activity: idle",
+        `outcome: ${outcome}`,
+      ];
+      if (text) {
+        lines.push(
+          `answer:\n${boundChildAnswer(options.parentSessionId, childId, text)}`,
+        );
+      } else {
+        lines.push("answer: (none yet)");
+      }
+      return { content: lines.join("\n") };
+    },
+  };
+}
+
+/**
+ * Child → parent → human. The question card is raised on the parent session.
+ * Replaces `ask_user` so the child cannot ask on its own composer.
+ */
+export function bindAskParentTool(
+  tools: ToolRegistry,
+  options: {
+    readonly parentSessionId: string;
+    readonly childLabel: string;
+    readonly ask: (
+      questions: readonly {
+        readonly id: string;
+        readonly question: string;
+        readonly header?: string;
+        readonly options?: readonly {
+          readonly label: string;
+          readonly description?: string;
+        }[];
+      }[],
+      signal?: AbortSignal,
+    ) => Promise<string>;
+  },
+): void {
+  tools.unregister("ask_user");
+  const label = (options.childLabel ?? "").trim() || "subagent";
+  const tool: ToolDefinition = {
+    name: "ask",
+    description:
+      "Ask the human one blocker question. Card → human_face (see capability). You get the answer.",
+    parameters: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "One concrete question." },
+        header: {
+          type: "string",
+          description: "Short chip on the card, ≤12 chars. Optional.",
+        },
+        options: {
+          type: "array",
+          description: "Optional choices. Omit for a free-text answer.",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              description: { type: "string" },
+            },
+            required: ["label"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["question"],
+      additionalProperties: false,
+    },
+    dynamicSchema: () => ({
+      description: `ask → human_face via parent ${options.parentSessionId} (${label}). Not ask_user. One blocker.`,
+    }),
+    presentCall: (args) => ({
+      card: "generic",
+      title: "ask",
+      kind: "execute",
+      rawInput: args,
+    }),
+    execute: async (args, signal) => {
+      const a =
+        args && typeof args === "object"
+          ? (args as Record<string, unknown>)
+          : {};
+      const question = typeof a.question === "string" ? a.question.trim() : "";
+      if (!question) return { content: "ask: question required", isError: true };
+      const header =
+        typeof a.header === "string" && a.header.trim()
+          ? a.header.trim().slice(0, 12)
+          : label.slice(0, 12);
+      const optionsRaw = Array.isArray(a.options) ? a.options : [];
+      const choices: { label: string; description?: string }[] = [];
+      for (const row of optionsRaw) {
+        if (!row || typeof row !== "object") continue;
+        const labelText = String(
+          (row as { label?: unknown }).label ?? "",
+        ).trim();
+        if (!labelText) continue;
+        const description = (row as { description?: unknown }).description;
+        choices.push({
+          label: labelText,
+          ...(typeof description === "string" && description.trim()
+            ? { description: description.trim() }
+            : {}),
+        });
+      }
+      try {
+        const text = await options.ask(
+          [
+            {
+              id: "q0",
+              question,
+              header,
+              ...(choices.length > 0 ? { options: choices } : {}),
+            },
+          ],
+          signal,
+        );
+        return { content: text };
+      } catch (err) {
+        return {
+          content: err instanceof Error ? err.message : String(err),
+          isError: true,
+        };
+      }
+    },
+  };
+  if (tools.get("ask")) tools.replace(tool);
+  else tools.register(tool);
 }
 
 /** Register model-facing subagent tools on a live Agent tool registry. */
@@ -2204,6 +2388,7 @@ export function bindSubagentTools(
     createWaitAgentTool(options),
     createAnalyticsTool(options),
     createInterruptAgentTool(options),
+    createCloseAgentTool(options),
   ]) {
     if (tools.get(tool.name)) {
       tools.replace(tool);

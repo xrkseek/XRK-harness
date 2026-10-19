@@ -107,6 +107,7 @@ describe("Face subagent", () => {
     expect(missing.result.ok).toBe(false);
     if (!missing.result.ok) {
       expect(missing.result.error.code).toBe("subagent-not-found");
+      expect(missing.result.error.message).toContain("No child nope");
     }
 
     const prompted = await dispatchFaceMethod(runtime, "subagent.prompt", "pr", {

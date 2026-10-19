@@ -8,6 +8,7 @@ import {
   type SettingsPathOp,
 } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
+import { formatToolError } from "./face-error-text.js";
 import { FACE_PRODUCT_SETTINGS_NAMESPACES } from "./settings-schemas.js";
 import {
   settingsDescribeFace,
@@ -29,7 +30,7 @@ export function bindSettingsTools(
     async get(ns) {
       const described = await settingsDescribeFace(runtime);
       if (!described.ok) {
-        return { ok: false, message: described.error.message };
+        return { ok: false, message: formatToolError(described.error) };
       }
       const namespaces = (described.value as { namespaces?: unknown[] })
         .namespaces;
@@ -84,7 +85,7 @@ export function bindSettingsTools(
         ),
       });
       if (!result.ok) {
-        return { ok: false, message: result.error.message };
+        return { ok: false, message: formatToolError(result.error) };
       }
       const value = result.value as {
         applies?: "live" | "restart";

@@ -93,6 +93,8 @@ import { bindGoalTools } from "./goal-tools.js";
 import { bindCanvasTools } from "./canvas-tools.js";
 import { bindSessionThreadTools } from "./session-thread-tools.js";
 import { bindAgentRosterTools } from "./agent-roster-tools.js";
+import { applyDelegatedInheritMask } from "./agent-roster-store.js";
+import { bindAskParentTool } from "./subagent-tools.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
@@ -875,8 +877,32 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               sessionId,
               mode: "coding",
             });
+          } else if (delegatedChild && peerCollab) {
+            // Sibling collab only — not the parent 主线 catalog.
+            bindSessionThreadTools(agent.tools, {
+              runtime,
+              sessionId,
+              messageOnly: true,
+            });
           }
-          if (!delegatedChild || childLink?.role === "lead") {
+          if (delegatedChild) {
+            // Children list profiles only. Roster edits stay on the parent.
+            bindAskParentTool(agent.tools, {
+              parentSessionId: childLink.parentSessionId,
+              childLabel: childLink.label,
+              ask: (qs, signal) => {
+                const faceId = runtime.subagents.humanFacingSessionId(
+                  childLink.parentSessionId,
+                );
+                return questions.ask(faceId, qs, signal).then(formatQuestionAnswer);
+              },
+            });
+            bindAgentRosterTools(agent.tools, {
+              runtime,
+              sessionId,
+              listOnly: true,
+            });
+          } else {
             bindAgentRosterTools(agent.tools, {
               runtime,
               sessionId,
@@ -892,6 +918,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
           sessionId,
           ask: (qs, signal) => questions.ask(sessionId, qs, signal),
         });
+        const childLink = runtime.subagents.getByChild(sessionId);
+        if (childLink && childLink.mode !== "fork" && agent.tools) {
+          applyDelegatedInheritMask(agent.tools);
+        }
       }
     }
     bindAgentJobs(sessionId, agent);

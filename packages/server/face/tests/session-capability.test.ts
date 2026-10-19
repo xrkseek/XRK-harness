@@ -53,7 +53,8 @@ describe("session_capability", () => {
     expect(text).toMatch(/shell_confine=/);
     expect(text).toMatch(/permission_brief:/);
     expect(text).toMatch(/tool_surface: harness \(/);
-    expect(text).toMatch(/surface_brief: Coding/);
+    expect(text).toMatch(/surface_brief: kind=coding_parent/);
+    expect(text).toMatch(/full tools \+ subagents/);
     expect(text).toMatch(/path_allowlist: \d+ objects/);
 
     const provider = createSessionCapabilityFragmentProvider(runtime);
@@ -102,10 +103,86 @@ describe("session_capability", () => {
       parentToolSurface: "harness",
     });
     expect(out).toContain(
-      "permission: inherited from parent · workspace-write (path=allowlisted) · approval=ask",
+      "permission: workspace-write (path=allowlisted) · approval=ask",
     );
     expect(out).toContain(
-      "tool_surface: weakened from parent · badge=harness · role=researcher · caps=web,read-fs",
+      "tool_surface: badge=harness · role=researcher · caps=web,read-fs",
     );
+    expect(out).toContain("FINAL assistant message");
+    expect(out).not.toContain("turn-start squad board");
+  });
+
+  it("formats kind=delegated for a tool-delegated child", async () => {
+    const store = createMemorySessionStore();
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-cap-child-"));
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const codingRoot = path.join(root, "code-proj");
+    const { workspace: codingWs } = runtime.workspaces.create(codingRoot);
+    const parentCreated = await dispatchFaceMethod(runtime, "session.create", "p", {
+      workspaceId: codingWs.workspaceId,
+      agentPreset: "harness",
+    });
+    expect(parentCreated.result.ok).toBe(true);
+    if (!parentCreated.result.ok) return;
+    const parentId = (parentCreated.result.value as { sessionId: string }).sessionId;
+    const childCreated = await dispatchFaceMethod(runtime, "session.create", "c", {
+      workspaceId: codingWs.workspaceId,
+      agentPreset: "harness",
+    });
+    expect(childCreated.result.ok).toBe(true);
+    if (!childCreated.result.ok) return;
+    const childId = (childCreated.result.value as { sessionId: string }).sessionId;
+    runtime.subagents.attach({
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "one-shot",
+      label: "scout",
+      role: "researcher",
+      memberId: "mem_scout",
+    });
+
+    const text = formatSessionCapability(runtime, childId);
+    expect(text).toContain("kind: delegated_child");
+    expect(text).toContain(`parent: ${parentId}`);
+    expect(text).toContain(`human_face: ${parentId}`);
+    expect(text).toContain("member_id: mem_scout");
+    expect(text).toContain("role: researcher");
+    expect(text).toContain("ask→human_face");
+    expect(text).toContain("omitted:");
+    expect(text).toContain("ask_user");
+    expect(text).not.toMatch(/tool_surface: harness/);
+
+    const parentText = formatSessionCapability(runtime, parentId);
+    expect(parentText).toContain("child_gap:");
+    expect(parentText).toContain("scout");
+
+    // Middle layer: a delegated child that itself has a child still sees child_gap.
+    const grandCreated = await dispatchFaceMethod(runtime, "session.create", "g", {
+      workspaceId: codingWs.workspaceId,
+      agentPreset: "harness",
+    });
+    expect(grandCreated.result.ok).toBe(true);
+    if (!grandCreated.result.ok) return;
+    const grandId = (grandCreated.result.value as { sessionId: string }).sessionId;
+    runtime.subagents.attach({
+      parentSessionId: childId,
+      childSessionId: grandId,
+      mode: "continuable",
+      label: "leaf",
+      role: "worker",
+    });
+    const midText = formatSessionCapability(runtime, childId);
+    expect(midText).toContain("kind: delegated_child");
+    expect(midText).toContain(`human_face: ${parentId}`);
+    expect(midText).toContain("child_gap:");
+    expect(midText).toContain("leaf");
   });
 });

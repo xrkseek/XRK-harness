@@ -8,6 +8,7 @@ import {
   type MessageContent,
 } from "@xrkseek/protocol";
 import { readSessionEvents } from "@xrkseek/core-session";
+import { sessionNotFoundMessage } from "./face-error-text.js";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import type { FaceModelSelection } from "./model-catalog.js";
@@ -104,7 +105,7 @@ export async function selectSessionModel(
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   if (runtime.policy) {

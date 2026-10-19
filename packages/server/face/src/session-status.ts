@@ -984,17 +984,10 @@ export function buildSessionStatusSnapshotUncached(
 
   const jobs = (runtime.jobViewsFor(sessionId) ?? []).map(jobRow);
 
-  // Whole delegated subtree, not just direct children: a grandchild that is
-  // still draining must not read as "done" behind a parent that already parked
-  // after handing work down. A node counts as running while anything below it
-  // runs, and quotes the deepest live descendant's last line (an idle parent's
-  // own text would be stale).
-  //
-  // Two sources describe that tree and either can be a subset: the registry
-  // holds links in memory, the team graph is a durable sidecar that survives a
-  // stale restart or a lost write. Walk their union — activity comes from
-  // drain / external state, never from link presence, so a node the graph
-  // still lists keeps a real verdict instead of carrying no signal at all.
+  // Whole delegated subtree, not just direct children. Walk registry ∪ team
+  // graph so live rows / board edges stay complete. Each node's `activity` is
+  // **own drain only** (sidebar may still aggregate descendants separately;
+  // the Overview graph must not paint an idle parent as running).
   const team = runtime.agentTeams.view(sessionId);
   const latchHeld = runtime.drain.isActive(sessionId);
   const turnActive = latchHeld && !runtime.isTurnUiIdle(sessionId);
@@ -1045,12 +1038,10 @@ export function buildSessionStatusSnapshotUncached(
     levels.push(level);
     frontier = next;
   }
-  // `live` lists this session's own descendants, but the board is also opened
-  // on a child (one-shot preview), where the parent and its siblings sit in
-  // the same tree and still carry their own live signal. Post-order the whole
-  // tree so those nodes get a real verdict, then propagate upward: a node is
-  // running while itself or anything below it runs.
-  const activeSource = new Map<string, string>();
+  // `live` lists this session's own descendants. The board may also open on a
+  // child (one-shot preview) where parent/siblings share the team graph — walk
+  // the whole tree so every node gets an own-drain verdict (no upward bubble).
+  const activeOwn = new Set<string>();
   const ordered: string[] = [];
   const walked = new Set<string>([sessionId]);
   const walk = (id: string): void => {
@@ -1070,11 +1061,7 @@ export function buildSessionStatusSnapshotUncached(
     if (!childIdSet.has(node.id)) walk(node.id);
   }
   for (const id of ordered) {
-    if (isChildSessionActive(runtime, id)) activeSource.set(id, id);
-    for (const child of childrenOf.get(id) ?? []) {
-      const source = activeSource.get(child.id);
-      if (source) activeSource.set(id, activeSource.get(id) ?? source);
-    }
+    if (isChildSessionActive(runtime, id)) activeOwn.add(id);
   }
 
   // One hydrate per child id for this Status build (live rows + graph share it).
@@ -1093,13 +1080,10 @@ export function buildSessionStatusSnapshotUncached(
     for (const node of level) {
       if (!runtime.store.has(node.id)) continue;
       const childEvents = childLog(node.id);
-      const source = activeSource.get(node.id);
-      const activity = source ? ("running" as const) : ("inactive" as const);
-      const line = source
-        ? liveLineText(
-            source === node.id ? childEvents : childLog(source),
-          )
-        : {};
+      const activity = activeOwn.has(node.id)
+        ? ("running" as const)
+        : ("inactive" as const);
+      const line = activeOwn.has(node.id) ? liveLineText(childEvents) : {};
       const pending = listPendingAdmits(childEvents, node.id);
       let queued = 0;
       let steering = 0;
@@ -1145,12 +1129,12 @@ export function buildSessionStatusSnapshotUncached(
 
   const graph: SessionStatusGraph = {
     nodes: team.nodes.map((n) => {
-      // Every node carries a verdict. The current session's own turn counts,
-      // and so does any descendant still draining — a parked parent waiting
-      // on a live child must not render as the client's "inactive → 已完成"
-      // fallback.
+      // Own drain only. Missing activity used to fall through to "done" on the
+      // client — always emit inactive|running from this session's drain latch.
       const running =
-        (n.id === sessionId && turnActive) || activeSource.has(n.id);
+        n.id === sessionId
+          ? turnActive
+          : activeOwn.has(n.id) || isChildSessionActive(runtime, n.id);
       const outcome = outcomeById.get(n.id);
       return {
         id: n.id,
@@ -1357,7 +1341,7 @@ export function buildSessionStatusSnapshotUncached(
           queued: parentQueued,
           steering: parentSteering,
           runningSubs: (childrenOf.get(homeId) ?? []).filter((n) =>
-            activeSource.has(n.id),
+            activeOwn.has(n.id) || isChildSessionActive(runtime, n.id),
           ).length,
         };
       })()

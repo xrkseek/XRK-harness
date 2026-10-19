@@ -72,9 +72,10 @@ describe("session_posture", () => {
       if (!im.result.ok) return;
       const imId = (im.result.value as { sessionId: string }).sessionId;
       const imText = formatSessionPosture(runtime, imId);
-      expect(imText).toMatch(/IM channel/);
+      expect(imText).toMatch(/kind=orchestrator \(IM\)/);
       expect(imText).toMatch(/path=open/);
       expect(imText).toMatch(/subagent\(workspace_id\)|workspace_session_prompt/);
+      expect(imText).toMatch(/thread_message/);
 
       const frags = createSessionPostureFragmentProvider(runtime).produce({
         sessionId: imId,

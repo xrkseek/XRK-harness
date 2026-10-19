@@ -40,14 +40,15 @@ describe("agent team spawn roles", () => {
       isolatedWorktree: false,
     });
     expect(oneShot).toContain("[subagent identity]");
-    expect(oneShot).toContain("parent_session_id: sess_parent");
-    expect(oneShot).toContain("your_session_id: sess_child");
+    expect(oneShot).toContain("sess_parent");
+    expect(oneShot).toContain("sess_child");
     expect(oneShot).toContain("one-shot");
     expect(oneShot).toContain("ROLE: reviewer.");
     expect(oneShot).toContain("same as the parent session");
     expect(oneShot).toContain("Review src/foo.ts");
-    expect(oneShot).not.toMatch(/read AGENTS\.md to discover/i);
-    expect(oneShot).toContain("Hard tool/capability failures");
+    expect(oneShot).toContain("FINAL assistant message");
+    expect(oneShot).not.toContain("ask_user");
+    expect(oneShot).not.toContain("team_save");
     expect(oneShot).not.toContain("Playwright MCP");
 
     const companion = applySubagentSpawnPreamble({

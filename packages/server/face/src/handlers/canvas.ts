@@ -3,6 +3,7 @@
  */
 import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import { isValidCanvasId } from "../canvas-store.js";
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 
 function sessionIdOf(payload: unknown): string {
@@ -24,7 +25,7 @@ export const canvasList: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
@@ -53,7 +54,7 @@ export const canvasGet: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: sessionId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(sessionId) },
     };
   }
   if (!isValidCanvasId(id)) {

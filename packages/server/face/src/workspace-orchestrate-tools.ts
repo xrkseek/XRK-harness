@@ -24,6 +24,12 @@ import {
 } from "./peer-session-wait.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { dispatchFaceMethod } from "./dispatch.js";
+import { formatToolError } from "./face-error-text.js";
+import {
+  workspaceListDescription,
+  workspaceSessionPromptDescription,
+} from "./session-tool-copy.js";
+import { orchestratorSurface } from "./session-kind.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   if (tools.get(tool.name)) return;
@@ -66,18 +72,15 @@ export function bindWorkspaceOrchestrateTools(
 ): void {
   const { runtime, sessionId, mode } = options;
   const label = fromLabel(mode);
-  const dispatchHint =
-    mode === "im"
-      ? "Prefer `subagent` + workspace_id for a coding child; use `workspace_session_prompt` for a peer session without parent/child linkage, then `thread_message` with the returned session_id."
-      : mode === "qichuang"
-        ? "Qichuang has no nested subagents — open peers with `workspace_session_prompt`, keep the session_id, then `thread_message` / optional `thread_upsert` to pin them."
-        : "Open or prompt a peer coding workspace with `workspace_session_prompt`; continue with `thread_message` by session_id (主线 optional).";
 
   registerTool(tools, {
     name: "workspace_list",
-    description:
-      "List Face workspaces (id, title, path, session count). " +
-      dispatchHint,
+    description: "List Face workspaces (id, title, path, session count).",
+    dynamicSchema: () => ({
+      description: workspaceListDescription(
+        orchestratorSurface(runtime, sessionId),
+      ),
+    }),
     parameters: {
       type: "object",
       properties: {},
@@ -132,7 +135,7 @@ export function bindWorkspaceOrchestrateTools(
       );
       if (!created.result.ok) {
         return {
-          content: `workspace_create: ${created.result.error.message}`,
+          content: `workspace_create: ${formatToolError(created.result.error)}`,
           isError: true,
         };
       }
@@ -170,10 +173,13 @@ export function bindWorkspaceOrchestrateTools(
   registerTool(tools, {
     name: "workspace_session_prompt",
     description:
-      "Create (or reuse) a session in a coding Face workspace and send a prompt. " +
-      `Dispatch from ${label} — peer session, not a nested subagent. ` +
-      "Returns sessionId — keep it for follow-up `thread_message` / `thread_upsert`. " +
-      "wait=true (default) steers and returns the peer assistant reply; wait=false queues without waiting.",
+      "Create or reuse a coding-workspace session and send a prompt. Returns sessionId.",
+    dynamicSchema: () => ({
+      description: workspaceSessionPromptDescription({
+        surface: orchestratorSurface(runtime, sessionId),
+        codingLabel: label,
+      }),
+    }),
     parameters: {
       type: "object",
       properties: {
@@ -257,7 +263,7 @@ export function bindWorkspaceOrchestrateTools(
         );
         if (!created.result.ok) {
           return {
-            content: `workspace_session_prompt: create failed — ${created.result.error.message}`,
+            content: `workspace_session_prompt: create failed — ${formatToolError(created.result.error)}`,
             isError: true,
           };
         }
@@ -292,7 +298,7 @@ export function bindWorkspaceOrchestrateTools(
       );
       if (!prompted.result.ok) {
         return {
-          content: `workspace_session_prompt: prompt failed — ${prompted.result.error.message}`,
+          content: `workspace_session_prompt: prompt failed — ${formatToolError(prompted.result.error)}`,
           isError: true,
         };
       }

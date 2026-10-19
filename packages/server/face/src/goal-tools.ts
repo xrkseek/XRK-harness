@@ -6,6 +6,7 @@
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
 import type { FaceRuntime } from "./context.js";
 import type { GoalRef, GoalView } from "./goal-store.js";
+import { formatToolError } from "./face-error-text.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   // Same identity rule as presence_set — see presence-tools.ts.
@@ -105,7 +106,7 @@ export function bindGoalTools(
         const out = runtime.goals.complete(sessionId, ref);
         if (!out.ok) {
           return {
-            content: `update_goal: ${out.error.message}`,
+            content: `update_goal: ${formatToolError(out.error)}`,
             isError: true,
           };
         }
@@ -115,7 +116,7 @@ export function bindGoalTools(
         const out = runtime.goals.pause(sessionId, ref);
         if (!out.ok) {
           return {
-            content: `update_goal: ${out.error.message}`,
+            content: `update_goal: ${formatToolError(out.error)}`,
             isError: true,
           };
         }
@@ -125,7 +126,7 @@ export function bindGoalTools(
         const out = runtime.goals.resume(sessionId, ref);
         if (!out.ok) {
           return {
-            content: `update_goal: ${out.error.message}`,
+            content: `update_goal: ${formatToolError(out.error)}`,
             isError: true,
           };
         }
@@ -138,7 +139,7 @@ export function bindGoalTools(
         });
         if (!out.ok) {
           return {
-            content: `update_goal: ${out.error.message}`,
+            content: `update_goal: ${formatToolError(out.error)}`,
             isError: true,
           };
         }

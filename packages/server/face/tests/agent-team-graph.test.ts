@@ -125,6 +125,53 @@ describe("agent team graph", () => {
     expect(raw.roles).toEqual({ root: "delegator", watcher: "observer" });
   });
 
+  it("auto peer-meshes same-parent siblings without overwriting custom labels", () => {
+    const graph = new AgentTeamGraph();
+    const registry = new FaceSubagentRegistry(undefined, {
+      onAttach: (link) => graph.recordDelegation(link),
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "a",
+      mode: "one-shot",
+      label: "a",
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "b",
+      mode: "continuable",
+      label: "b",
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "c",
+      mode: "one-shot",
+      label: "c",
+    });
+
+    const peersOfA = graph.neighbors("a", "peer").map((n) => n.id).sort();
+    expect(peersOfA).toEqual(["b", "c"]);
+    expect(graph.neighbors("b", "peer").map((n) => n.id).sort()).toEqual([
+      "a",
+      "c",
+    ]);
+    const ab = graph.neighbors("a", "peer").find((n) => n.id === "b");
+    expect(ab?.label).toBe("sibling");
+
+    graph.linkPeers("a", "b", "review");
+    expect(graph.neighbors("a", "peer").find((n) => n.id === "b")?.label).toBe(
+      "review",
+    );
+    // Remesh must not clobber the custom label.
+    graph.rebuildDelegations(registry.entries());
+    expect(graph.neighbors("a", "peer").find((n) => n.id === "b")?.label).toBe(
+      "review",
+    );
+    expect(graph.neighbors("a", "peer").find((n) => n.id === "c")?.label).toBe(
+      "sibling",
+    );
+  });
+
   it("unlinks peers, removes observer nodes, and reports neighbors/depth", () => {
     const graph = new AgentTeamGraph();
     const registry = new FaceSubagentRegistry(undefined, {

@@ -3,6 +3,7 @@ import {
   listSessionReferenceCandidates,
 } from "../reference-discovery.js";
 import { resolveSessionCwd } from "../session-cwd.js";
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
 
 function sessionFromAgentId(
@@ -18,7 +19,7 @@ function sessionFromAgentId(
   if (!runtime.store.has(agentId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: agentId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(agentId) },
     };
   }
   return { ok: true };

@@ -329,12 +329,12 @@ describe("session status snapshot", () => {
     const byId = new Map(snap.subagents.live.map((s) => [s.id, s]));
     expect([...byId.keys()].sort()).toEqual([layer1, layer2].sort());
     expect(byId.get(layer2)?.activity).toBe("running");
-    expect(byId.get(layer1)?.activity).toBe("running");
+    expect(byId.get(layer1)?.activity).toBe("inactive");
     expect(snap.subagents.graph.nodes.find((n) => n.id === layer2)?.activity).toBe(
       "running",
     );
     expect(snap.subagents.graph.nodes.find((n) => n.id === root)?.activity).toBe(
-      "running",
+      "inactive",
     );
 
     draining.clear();
@@ -582,8 +582,8 @@ describe("session status snapshot", () => {
     const activityOf = (id: string): string | undefined =>
       snap.subagents.graph.nodes.find((n) => n.id === id)?.activity;
     expect(activityOf(second)).toBe("running");
-    // The parent reads running through the sibling that is still draining.
-    expect(activityOf(root)).toBe("running");
+    // Parent stays idle while only a sibling drains.
+    expect(activityOf(root)).toBe("inactive");
     expect(activityOf(first)).toBe("inactive");
     expect(activityOf(third)).toBe("inactive");
     expect(snap.parentDelivery).toEqual({

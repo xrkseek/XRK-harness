@@ -1,6 +1,7 @@
 /**
  * Multi-agent team graph beside the parent→child subagent registry.
- * Delegation edges are copied from attach; peer edges are explicit teammate links.
+ * Delegation edges are copied from attach; peer edges are teammate links
+ * (auto-meshed among same-parent siblings, plus explicit `team_graph link`).
  */
 import { readFileSync } from "node:fs";
 import { tryWriteJsonSidecar } from "./json-sidecar.js";
@@ -91,6 +92,9 @@ export class AgentTeamGraph {
       kind: "delegates",
       ...(link.label ? { label: link.label } : {}),
     });
+    // Same-parent siblings get a peer edge so announce / peer-path
+    // thread_message work without an explicit team_graph link.
+    this.meshSiblingPeers(link.parentSessionId);
     this.save();
   }
 
@@ -99,6 +103,7 @@ export class AgentTeamGraph {
     for (const [key, edge] of this.edges) {
       if (edge.kind === "delegates") this.edges.delete(key);
     }
+    const parents = new Set<string>();
     for (const link of links) {
       if (link.mode === "fork") continue;
       this.upsertNode(link.parentSessionId, link.parentSessionId);
@@ -109,7 +114,9 @@ export class AgentTeamGraph {
         kind: "delegates",
         ...(link.label ? { label: link.label } : {}),
       });
+      parents.add(link.parentSessionId);
     }
+    for (const parentId of parents) this.meshSiblingPeers(parentId);
     this.save();
   }
 
@@ -128,6 +135,36 @@ export class AgentTeamGraph {
     this.upsertEdge(edge);
     this.save();
     return edge;
+  }
+
+  /**
+   * Ensure every pair of direct children under `parentId` has a peer edge.
+   * Does not overwrite an existing peer edge (keeps custom labels).
+   */
+  private meshSiblingPeers(parentId: string): void {
+    const children: string[] = [];
+    for (const edge of this.edges.values()) {
+      if (edge.kind !== "delegates" || edge.from !== parentId) continue;
+      children.push(edge.to);
+    }
+    for (let i = 0; i < children.length; i++) {
+      for (let j = i + 1; j < children.length; j++) {
+        const from = children[i]!;
+        const to = children[j]!;
+        const key = edgeKey({
+          from: from < to ? from : to,
+          to: from < to ? to : from,
+          kind: "peer",
+        });
+        if (this.edges.has(key)) continue;
+        this.upsertEdge({
+          from: from < to ? from : to,
+          to: from < to ? to : from,
+          kind: "peer",
+          label: "sibling",
+        });
+      }
+    }
   }
 
   /** Drop a peer edge (no-op when missing). Returns whether an edge was removed. */

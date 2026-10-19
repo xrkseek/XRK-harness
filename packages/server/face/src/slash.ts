@@ -32,6 +32,7 @@ import { approvePendingAutoReview } from "./auto-review-approve.js";
 import { formatMcpInventoryText, settingsMutateFace } from "./settings-credentials.js";
 import { resolveSessionModelSelection } from "./model-catalog.js";
 import { selectSessionModel } from "./select-session-model.js";
+import { formatToolError } from "./face-error-text.js";
 import {
   FEEDBACK_TEXT_MAX_CHARS,
   recordSessionFeedback,
@@ -289,7 +290,7 @@ export async function executeFaceCommand(
     if (!created.ok) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",
-        text: created.error.message,
+        text: formatToolError(created.error),
       });
     }
     return appendCommandPair(runtime, sessionId, parsed, {
@@ -385,7 +386,7 @@ export async function executeFaceCommand(
     if (!mut.ok) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",
-        text: mut.error.message,
+        text: formatToolError(mut.error),
       });
     }
     return appendCommandPair(runtime, sessionId, parsed, {
@@ -426,7 +427,7 @@ export async function executeFaceCommand(
     if (!selected.ok) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",
-        text: selected.error.message,
+        text: formatToolError(selected.error),
       });
     }
     return appendCommandPair(runtime, sessionId, parsed, {

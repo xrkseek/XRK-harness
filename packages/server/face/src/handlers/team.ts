@@ -8,6 +8,7 @@ import {
   effectiveSandboxMode,
   pathAccessModeFromSandbox,
 } from "@xrkseek/protocol";
+import { sessionNotFoundMessage } from "../face-error-text.js";
 import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import {
   applySubagentSpawnPreamble,
@@ -51,7 +52,7 @@ function requireSession(runtime: Parameters<FaceHandler>[0], sessionId: string) 
   if (!runtime.store.has(sessionId)) {
     return {
       ok: false as const,
-      error: { code: "session-not-found" as const, message: sessionId },
+      error: { code: "session-not-found" as const, message: sessionNotFoundMessage(sessionId) },
     };
   }
   return undefined;

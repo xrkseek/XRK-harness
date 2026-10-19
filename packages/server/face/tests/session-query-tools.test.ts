@@ -60,14 +60,57 @@ describe("session query tools", () => {
       childSessionId: other.id,
       mode: "one-shot",
       label: "worker",
+      memberId: "op-alpha",
     });
 
     const tools = createToolRegistry();
     bindSessionQueryTools(tools, { runtime, parentSessionId: parent });
+    expect(tools.get("session_inspect")).toBeTruthy();
     expect(tools.get("session_search")).toBeTruthy();
     expect(tools.get("session_read")).toBeTruthy();
     expect(tools.get("session_trace")).toBeTruthy();
+    expect(SESSION_QUERY_ROUTING_PROMPT_TEXT).toContain("session_inspect");
     expect(SESSION_QUERY_ROUTING_PROMPT_TEXT).toContain("session_search");
+
+    const inspectSelf = await tools.get("session_inspect")!.execute({
+      session_id: parent,
+    });
+    expect(inspectSelf.isError).toBeFalsy();
+    const inspectSelfBody = JSON.parse(String(inspectSelf.content)) as {
+      sessionId: string;
+      badge: string;
+      children: { id: string }[];
+    };
+    expect(inspectSelfBody.sessionId).toBe(parent);
+    expect(inspectSelfBody.badge).toBeTruthy();
+    expect(inspectSelfBody.children.some((c) => c.id === other.id)).toBe(true);
+
+    const inspectChild = await tools.get("session_inspect")!.execute({
+      session_id: other.id,
+    });
+    expect(inspectChild.isError).toBeFalsy();
+    const inspectChildBody = JSON.parse(String(inspectChild.content)) as {
+      memberId?: string;
+      delegate?: { parentSessionId: string; label?: string };
+    };
+    expect(inspectChildBody.memberId).toBe("op-alpha");
+    expect(inspectChildBody.delegate?.parentSessionId).toBe(parent);
+
+    const inspectOutsider = await tools.get("session_inspect")!.execute({
+      session_id: outsider.id,
+    });
+    expect(inspectOutsider.isError).toBeFalsy();
+    const inspectOutsiderBody = JSON.parse(String(inspectOutsider.content)) as {
+      sessionId: string;
+      cwd: string;
+    };
+    expect(inspectOutsiderBody.sessionId).toBe(outsider.id);
+    expect(inspectOutsiderBody.cwd).toContain("elsewhere");
+
+    const inspectMissing = await tools.get("session_inspect")!.execute({
+      session_id: "missing-session",
+    });
+    expect(inspectMissing.isError).toBe(true);
 
     const search = await tools.get("session_search")!.execute({
       query: "ALPHA",
