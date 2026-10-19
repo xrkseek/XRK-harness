@@ -30,6 +30,15 @@ describe("auto-review classifier seam", () => {
     expect(denied.classification.verdict).toBe("deny");
   });
 
+  it("states guardian criteria that judge effects, alternate paths, and untrusted web", () => {
+    expect(AUTO_REVIEW_POLICY).toMatch(/never by the agent's self-description of intent/);
+    expect(AUTO_REVIEW_POLICY).toMatch(/unknown authorization plus high risk/);
+    expect(AUTO_REVIEW_POLICY).toMatch(/already-approved safe route/);
+    expect(AUTO_REVIEW_POLICY).toMatch(/Web and arbitrary domains are untrusted by default/);
+    expect(AUTO_REVIEW_POLICY).toMatch(/sensitive egress is critical/);
+    expect(AUTO_REVIEW_POLICY).toMatch(/Risk vocabulary \(closed\): unknown, high, critical/);
+  });
+
   it("describeAutoReviewAccess reports source honestly", () => {
     expect(describeAutoReviewAccess({}).source).toBe("default");
     expect(describeAutoReviewAccess({}).kind).toBe("heuristic");
