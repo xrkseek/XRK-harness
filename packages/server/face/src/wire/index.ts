@@ -22,7 +22,7 @@ export {
   isFaceRespondPath,
   isFaceWsPath,
 } from "./paths.js";
-export { isLoopbackAddress } from "./loopback.js";
+export { isLoopbackAddress, timingSafeStringEqual } from "./loopback.js";
 export { readHttpBody, sendJson } from "./http-io.js";
 export {
   parseClientResponse,

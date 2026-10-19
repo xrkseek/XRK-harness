@@ -97,6 +97,7 @@ import {
   effectiveHostApiKey,
   ensureMcpLiveIfIdle,
   isLoopbackAddress,
+  timingSafeStringEqual,
   listCredentialSlots,
   peekSettingsYamlSection,
   publishRemoteEvent,
@@ -3093,7 +3094,7 @@ export function createHostManager(): HostManager {
             : undefined;
         const key =
           bearer ?? (typeof headerKey === "string" ? headerKey : undefined);
-        if (key === expected) return true;
+        if (timingSafeStringEqual(key, expected)) return true;
         // DSH Web 同源不带 Authorization；本机回环放行。
         return !key && isLoopbackAddress(r.socket.remoteAddress);
       };
