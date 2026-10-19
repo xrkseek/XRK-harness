@@ -21,10 +21,13 @@ export const CURATED_MEMORY_PROMPT_TEXT =
   + "and does not follow the user into a new session. Do not write session-local WIP, "
   + "numbered task checklists, or 'we were doing X' handoff notes into memory. Do "
   + "not volunteer to resume work that appears only in MEMORY unless the user asks. "
-  + "The `memory` tool supports add / replace / remove / list (or one atomic "
-  + "`operations` batch). list returns live disk entries for the chosen target. "
-  + "Writes hit disk immediately and do not change this session's system prompt. "
-  + "This is not the Mnemon document library.";
+  + "The `memory` tool requires `action` (`add|replace|remove|list`) or a non-empty "
+  + "`operations` batch — do not call it with an empty action. "
+  + "list returns live disk entries for the chosen target. "
+  + "Writes hit disk immediately and do not change this session's frozen block. "
+  + "This block and the memory tool exist only while Settings → Plugins → Curated memory is on; "
+  + "turning it off drops both on the next agent rebuild (idle sessions now, a busy session after its turn). "
+  + "This is not the Mnemon document library and not standing AGENTS.md / SOUL.md.";
 
 const ACTIONS = ["add", "replace", "remove", "list"] as const;
 
@@ -59,7 +62,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
     description:
       "Save durable facts for future sessions (preferences, lasting conventions, who the user is). "
       + "Do NOT store session WIP or todo checklists — use `todo_write` for those. "
-      + "Actions: add, replace, remove, list, or one atomic `operations` batch. "
+      + "Required: `action` (`add|replace|remove|list`) or a non-empty `operations` array. "
       + "replace/remove need `old_text` (a unique substring). "
       + "Writes hit disk immediately; do not change this session's system prompt. "
       + "When the char cap blocks a write the error carries `prune_candidates` — the "
@@ -169,7 +172,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           isError: true,
           content: JSON.stringify({
             success: false,
-            error: `Unknown action '${action}'. Use: add, replace, remove, list`,
+            error: `Unknown action '${action}'. Pass action add|replace|remove|list, or a non-empty operations array.`,
           }),
         };
       }

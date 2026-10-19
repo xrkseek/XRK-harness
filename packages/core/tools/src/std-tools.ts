@@ -55,7 +55,9 @@ export function createStdTools(
   return [
     {
       name: "todo_write",
-      description: "Update the in-session todo list.",
+      description:
+        "Replace the session task list. Send the whole list each call. " +
+        "Skip for a single trivial step.",
       parameters: {
         type: "object",
         properties: {

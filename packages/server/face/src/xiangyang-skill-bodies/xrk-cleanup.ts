@@ -8,54 +8,49 @@ description: >-
   Use when the user says litter, cache, full disk, tidy .xrk, or Harness feels heavy.
 ---
 
-# .xrk 垃圾清理
+# .xrk 清理
 
-范围：产品家目录 \`~/.xrk\`（或 \`XRK_HOME\`）与各**编码工作区**的 \`.xrk\`。  
-向阳有 full access，可本会话处理；跨项目大清理也可 \`workspace_session_prompt\` 派工。
+Scope: \`~/.xrk\` (or \`XRK_HOME\`) + coding workspaces' \`.xrk\`. This session can do it (full access); large cross-project sweeps may \`workspace_session_prompt\`. List → confirm → delete.
 
-## 原则
+## Rules
 
-1. **先清单后删除**：列路径 + 体积（或大致大小），对「可能有用」的征得同意。  
-2. **优先大文件与明确临时产物**。  
-3. **绝不静默删**会话热库、凭据、用户改过的 skills / 记忆正文（除非用户明确要求）。
+1. Inventory first (path + size). Ask before "maybe useful".
+2. Prefer large / clearly temp.
+3. Never silent-delete hot session DB, credentials, user-edited skills/memory bodies.
 
-## \`~/.xrk\` 地图
+## \`~/.xrk\` map
 
-| 路径 | 默认 | 说明 |
-|------|------|------|
-| \`settings.yaml\` · \`host-settings.json\` | **保留** | Host / 设置真源 |
-| \`.credentials.yaml\` | **保留** | 密钥；勿进聊天 |
-| \`sessions/\`（\`sessions.db\` · WAL） | **保留** | 热会话；归档走产品归档，勿手删库图省事 |
-| \`sessions-archive.db\`（若有） | **保留** | 归档冷库 |
-| \`workspaces.json\` · \`session-models.json\` · \`session-agent-presets.json\` | **保留** | 工作区与徽章钉 |
-| \`memories/\` | **保留正文**；可清噪声条目 | 用 \`xrk-memory-polish\`，别整目录 rm |
-| \`skills/\` · \`xiangyang-workspace/.xrk/skills/\` | **保留用户改过的** | 产品 seed 可刷新；勿删用户自建 |
-| \`plugins/\` | **慎删** | 已装插件；确认无用再卸 |
-| \`spill/\` · \`tmp/\` · \`cache/\` · \`logs/\` | **可清** | 工具溢出、临时、缓存、日志 |
-| \`memory-embeddings/\` · \`pubmed-cache/\` 等缓存树 | **可清** | 可再生索引/缓存 |
-| \`mcp-venvs/\` · \`mcp-cwd/\` | **可清闲置** | 确认对应 MCP 不用 |
-| \`community-plugin-mirror/\` | **可清** | 镜像缓存，可再拉 |
-| \`run/\` | **慎** | Host pid；勿在 Host 运行中乱删锁 |
-| \`cron/\` | **慎** | 用户定时任务 |
-| \`attachments/\` · \`canvases/\` · \`checkpoints/\` | **问再删** | 用户产物 |
-| \`xiangyang-workspace/\` | **保留目录** | 向阳家；只清其下明确 temp |
+| Path | Default |
+|------|---------|
+| \`settings.yaml\` · \`host-settings.json\` | keep |
+| \`.credentials.yaml\` | keep — never paste into chat |
+| \`sessions/\` (\`sessions.db\` · WAL) · \`sessions-archive.db\` | keep — archive via product; do not delete the DB to save space |
+| \`workspaces.json\` · \`session-models.json\` · \`session-agent-presets.json\` | keep |
+| \`memories/\` | keep bodies; polish via \`xrk-memory-polish\` |
+| \`skills/\` · \`xiangyang-workspace/.xrk/skills/\` | keep user edits; product seed may refresh |
+| \`plugins/\` | careful uninstall |
+| \`spill/\` · \`tmp/\` · \`cache/\` · \`logs/\` | clear |
+| \`memory-embeddings/\` · \`pubmed-cache/\` | clear (rebuildable) |
+| \`mcp-venvs/\` · \`mcp-cwd/\` | clear idle |
+| \`community-plugin-mirror/\` | clear |
+| \`run/\` · \`cron/\` | careful |
+| \`attachments/\` · \`canvases/\` · \`checkpoints/\` | ask |
+| \`xiangyang-workspace/\` | keep dir; clear only clear temp under it |
 
-## 项目 \`.xrk\`（编码工作区）
+## Project \`.xrk\`
 
-| 可清 | 保留 |
-|------|------|
-| 空 / 过期 recipes、明显 temp、重复草稿 | 用户写的 skills、有意保留的 recipes、工作区 AGENTS |
+Clear: empty/stale recipes, obvious temp. Keep: user skills, intentional recipes, workspace AGENTS.
 
-## 步骤
+## Steps
 
-1. 列候选（路径 + 为何可删）。  
-2. 用户确认或明确授权「清缓存」后删除。  
-3. 大块删除后若热库虚胖，可提醒：归档会话走产品归档；Host 关闭时可能 VACUUM。  
-4. 短摘要回报：删了什么、保留了什么、大约腾出多少。
+1. Candidate list + why.
+2. Delete after confirm / explicit "清缓存".
+3. After big deletes: remind product archive; VACUUM when Host idle.
+4. Short report: deleted / kept / ~bytes freed.
 
-## 反模式
+## Anti
 
-- 为省事 \`rm -rf ~/.xrk\`。  
-- 删 \`sessions.db\` / 凭据当「清理」。  
-- 把策展记忆整目录当缓存删掉。
+- \`rm -rf ~/.xrk\`.
+- Delete \`sessions.db\` / credentials as "cleanup".
+- Treat \`memories/\` as cache.
 `;

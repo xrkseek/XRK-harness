@@ -9,38 +9,36 @@ description: >-
   pinning peers, or when catalog titles look empty / duplicated.
 ---
 
-# 主线 · 支线（奇创）
+# 主线 · 支线
 
-| 概念 | 工具 | 作用 |
-|------|------|------|
-| **主线** | \`thread_upsert\` / \`thread_list\` / \`thread_delete\` | 发现钉：兄弟会话在 collab board 上找到「在做什么」 |
-| **支线** | \`presence_set\` \`tips\` 或 \`sideline_set\` | 本会话侧栏一行近况 |
-| **互信** | \`thread_message\` | 任意父会话互发（可跨工作区）；**不要求**先挂钉 |
-| **派工** | \`workspace_session_prompt\` | 在编码区新建/续用并派第一句；返回 \`session_id\` |
+| Concept | Tool | Role |
+|---------|------|------|
+| 主线 | \`thread_upsert\` / \`thread_list\` / \`thread_delete\` | Discovery pin on collab board |
+| 支线 | \`presence_set\` tips / \`sideline_set\` | One-line "now" in sidebar |
+| Mail | \`thread_message\` | Any parent↔parent (pin **not** required) |
+| Dispatch | \`workspace_session_prompt\` | Open/continue coding peer; returns \`session_id\` |
 
-主线是**加速器**不是门槛；但零基础多会话场景下，**不钉 = 侧栏不可发现 = 体验像没有主线**。
+主线 accelerates discovery — it is not a messaging gate. Skipping pins still leaves zero-foundation users with anonymous sidebars.
 
-## 该钉时
+## Pin
 
-1. \`workspace_session_prompt\` 拿到 \`session_id\` 后立刻：  
-   \`thread_upsert({ title, brief, session_id, workspace_id })\`。  
-2. \`title\` = 短任务名；\`brief\` = 一两句让别人看懂。  
-3. **禁止**空 brief、重复 \`mainline-a\`、把主线当进度日志。  
-4. 本会话开工：\`thread_upsert({ title, brief })\`；结束且不再需要被发现 → \`thread_delete\`。  
-5. 定期 \`thread_list\`：空 brief / 测试残留 / 重复名 → 删或改。
+1. After \`workspace_session_prompt\` → \`thread_upsert({ title, brief, session_id, workspace_id })\`.
+2. \`title\` = short task; \`brief\` = one line others understand.
+3. No empty brief, no \`mainline-a\` spam, no progress-log pins.
+4. Own work: \`thread_upsert({ title, brief })\`; done + unused → \`thread_delete\`.
+5. \`thread_list\` periodically — empty / test / dup → fix.
 
-## 支线
+## Sideline
 
-- 开始、卡住、等回复、收工：\`presence_set({ tips: "…" })\`（可顺带表情）。  
-- 进度细节用 \`todo_write\`；不要把主线当看板。
+Start / blocked / waiting / done → \`presence_set({ tips })\`. Progress detail → \`todo_write\`, not 主线.
 
-## 与需求转化
+## With demand-translate
 
-模糊需求经 \`xrk-demand-translate\` 选定编码工作区后，派工**必须**带主线钉 + 支线更新，用户才能在侧栏感到「主线/支线」。
+After picking a coding workspace, dispatch **must** pin 主线 + update 支线.
 
-## 反模式
+## Anti
 
-- 只 \`workspace_session_prompt\` 不 \`thread_upsert\`。  
-- 每个子任务一条主线。  
-- 以为没钉就不能 \`thread_message\`。
+- Prompt without \`thread_upsert\`.
+- One 主线 per micro-task.
+- Assume no pin ⇒ cannot \`thread_message\`.
 `;

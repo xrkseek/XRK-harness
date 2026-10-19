@@ -9,30 +9,31 @@ description: >-
   to prune / move project facts into workspace memory.
 ---
 
-# 记忆完善（分层）
+# 记忆完善
 
-策展记忆已分层；同一 \`memory\` 工具用 **\`scope\`** 选区（缺省多为 global）。  
-升级前写入的条目往往全在 global——用户说「清没用的 / 做成工作区记忆」时按本 skill 迁。
+Same \`memory\` tool; pick **\`scope\`** (default often global). Pre-upgrade entries may all sit in global — migrate on request.
 
-| scope | 写什么 | 磁盘大致位置 |
-|-------|--------|----------------|
-| \`global\` | 跨项目偏好、身份、长期习惯 | \`~/.xrk/memories/\`（\`USER.md\` 另见） |
-| \`workspace\` | **某一工作区**的项目事实、约定、委派习惯 | \`~/.xrk/memories/workspaces/<wsId>/\` |
-| \`session\` | 仅本会话临时约束 | \`~/.xrk/memories/sessions/<sid>/\` |
-| \`agent\` | 干员私有笔记 | \`~/.xrk/memories/agents/<id>/\` |
+| scope | Write | Where |
+|-------|-------|-------|
+| \`global\` | Cross-project prefs / identity | \`~/.xrk/memories/\` |
+| \`workspace\` | Project facts for one ws | \`…/workspaces/<wsId>/\` |
+| \`session\` | This-session constraints | \`…/sessions/<sid>/\` |
+| \`agent\` | 干员 private notes | \`…/agents/<id>/\` |
 
-## 起手
+Factual "who the user is" → \`memory\` target \`user\` (\`USER.md\`), not a scope row.
 
-1. \`memory({ action: "list", target: "memory", scope: "global" })\`，再 list 相关 \`workspace\`（先 \`workspace_list\` 确认 id）。  
-2. **软删**噪声：一次性调试、格式指令、background job 碎片、过期路径。  
-3. **迁移**：global 里「某仓库/某项目」→ \`scope: "workspace"\` 写入对应区，再从 global \`remove\`。  
-4. 仓库真源（\`.agents/\` · skills）用**一句指针**即可；勿把长手册抄进记忆。  
-5. 不写密钥、绝对本机噪声路径、无关 session 指令。  
-6. 按 scope 短摘要回报（清了什么 / 迁了什么）。
+## Steps
 
-## 反模式
+1. \`memory({ action:"list", target:"memory", scope:"global" })\` then list relevant \`workspace\` (ids from \`workspace_list\`).
+2. Soft-delete noise: one-off debug, format orders, job shards, stale paths.
+3. Migrate project facts → \`scope:"workspace"\` then \`remove\` from global.
+4. Repo truth (\`.agents\` / skills) → one pointer line; no pasted manuals.
+5. Never: secrets, absolute machine noise, unrelated session orders.
+6. Report by scope: pruned / moved.
 
-- 继续无 \`scope\` 往 global 堆项目手册。  
-- 把「应进 workspace」的内容 add 回 global。  
-- 整目录删除 \`memories/\` 当清理（那是 \`xrk-xrk-cleanup\` 的禁区）。
+## Anti
+
+- Heap project manuals into global without \`scope\`.
+- Re-add workspace facts to global.
+- \`rm -rf memories/\` (cleanup skill territory).
 `;

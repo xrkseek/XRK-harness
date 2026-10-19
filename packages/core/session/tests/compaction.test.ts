@@ -375,6 +375,47 @@ describe("deriveMessages compaction window", () => {
     expect(events.filter((e) => e.type === "user/message")).toHaveLength(2);
   });
 
+  it("re-projects an open todo list ahead of the compaction window", () => {
+    const store = createMemorySessionStore();
+    const s = store.create("todos");
+    store.append(s.id, {
+      type: "todo/write",
+      ts: 1,
+      todos: [
+        { content: "ship notes", status: "in_progress" },
+        { content: "bump version", status: "pending" },
+      ],
+    });
+    store.append(s.id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t0",
+      content: "old-ask",
+    });
+    store.append(s.id, {
+      type: "context/compaction",
+      ts: 3,
+      reason: "auto",
+      summary: "## Objective\n- old work",
+      recent: "",
+    });
+    store.append(s.id, {
+      type: "user/message",
+      ts: 4,
+      turnId: "t1",
+      content: "continue",
+    });
+
+    const windowed = deriveMessages(store.get(s.id).events);
+    expect(windowed[0]?.role).toBe("user");
+    expect(windowed[0]?.content).toContain("[in_progress] ship notes");
+    expect(windowed[0]?.content).toContain("[pending] bump version");
+    expect(windowed[0]?.content).not.toContain("old-ask");
+    expect(windowed[1]?.content).toContain("context compacted");
+    expect(windowed.some((m) => m.content === "old-ask")).toBe(false);
+    expect(windowed.at(-1)).toEqual({ role: "user", content: "continue" });
+  });
+
   it("describes shadowed images by id instead of re-attaching them", () => {
     const store = createMemorySessionStore();
     const s = store.create("c-vision");

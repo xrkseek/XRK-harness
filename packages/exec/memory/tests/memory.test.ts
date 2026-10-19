@@ -213,6 +213,6 @@ describe("memory tool", () => {
 
     const search = await tool!.execute({ action: "search", target: "memory" });
     expect(search.isError).toBe(true);
-    expect(String(search.content)).toMatch(/add, replace, remove/);
+    expect(String(search.content)).toMatch(/add\|replace\|remove\|list/);
   });
 });

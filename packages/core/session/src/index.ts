@@ -311,8 +311,10 @@ export function standingPlanMessage(
     return {
       role: "user",
       content:
-        "Current standing plan (re-projected from todo_write each turn; " +
-        "reference state, not a user request):\n" +
+        "Standing plan (re-projected every turn, including after compaction). " +
+        "Open items are unfinished work you own: advance in_progress, mark completed when the step is done, " +
+        "rewrite the list when the latest user ask replaces the goal. " +
+        "Not a new user message — the latest user turn wins on conflict:\n" +
         lines.join("\n"),
     };
   }

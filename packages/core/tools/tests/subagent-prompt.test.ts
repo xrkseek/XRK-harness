@@ -7,7 +7,8 @@ import {
 
 describe("subagent routing prompt", () => {
   it("covers one-shot, continuable, inherit, worktree, and identity", () => {
-    expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("run_in_background: true");
+    expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("Continuable (default");
+    expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("run_in_background: false");
     expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("inherit_context: true");
     expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("worktree: true");
     expect(SUBAGENT_ROUTING_PROMPT_TEXT).toContain("same cwd");
@@ -37,7 +38,8 @@ describe("subagent routing prompt", () => {
     expect(prompt).toContain("Frugal has no subagent tools");
     expect(prompt).toContain("thread_message");
     expect(prompt).toContain("Do not `thread_switch` to send mail");
-    expect(prompt).toContain("standing inject");
+    expect(prompt).toContain("auto peer-linked");
+    expect(prompt).toContain("close_agent");
     expect(prompt).toContain("only when no catalog member fits");
     expect(prompt).not.toContain("发版");
   });
