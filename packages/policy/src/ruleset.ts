@@ -1,4 +1,5 @@
 import type {
+  PolicyDecision,
   PolicyEngine,
   PolicyRule,
   PolicySubjectKind,
@@ -22,6 +23,12 @@ import {
   createPolicyEngine,
   type CreatePolicyEngineOptions,
 } from "./engine.js";
+import {
+  WhenExprError,
+  compileWhenExpr,
+  whenEnvFromSubject,
+  type WhenEnv,
+} from "./when-expr.js";
 
 export const POLICY_RULESET_VERSION = 1 as const;
 
@@ -36,8 +43,14 @@ export interface PolicyRulesetRuleJson {
     /**
      * Name / id / action / scheme / op lists depending on kind.
      * Ignored for mcp.connect / office.connect deny-all rules.
+     * Optional when `when` is set (deny/ask only).
      */
     readonly names?: readonly string[];
+    /**
+     * Restricted boolean expression over the subject (`name`, `args`, …).
+     * Compiled at load; see `compileWhenExpr`. No second engine — filter only.
+     */
+    readonly when?: string;
   };
 }
 
@@ -69,6 +82,56 @@ const ACTIONS = new Set<PolicyRuleAction>(["deny", "ask", "allow-only"]);
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function parseWhen(
+  value: unknown,
+  ruleId: string,
+): ((env: WhenEnv) => boolean) | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new PolicyRulesetParseError(
+      `rule ${ruleId}: match.when must be a non-empty string`,
+    );
+  }
+  try {
+    return compileWhenExpr(value);
+  } catch (err) {
+    if (err instanceof WhenExprError) {
+      throw new PolicyRulesetParseError(`rule ${ruleId}: ${err.message}`);
+    }
+    throw err;
+  }
+}
+
+function withWhen(
+  rule: PolicyRule,
+  when: ((env: WhenEnv) => boolean) | undefined,
+): PolicyRule {
+  if (when === undefined) return rule;
+  return {
+    id: rule.id,
+    match(subject): PolicyDecision | undefined {
+      if (!when(whenEnvFromSubject(subject))) return undefined;
+      return rule.match(subject);
+    },
+  };
+}
+
+/** Kind-wide deny/ask used when `when` is set and `names` is omitted. */
+function kindWide(
+  kind: PolicySubjectKind,
+  action: "deny" | "ask",
+  opts: { readonly id: string; readonly reason?: string },
+): PolicyRule {
+  const reason = opts.reason ?? `${action} ${kind} (when)`;
+  return {
+    id: opts.id,
+    match(subject): PolicyDecision | undefined {
+      if (subject.kind !== kind) return undefined;
+      return { verdict: action, reason, ruleId: opts.id };
+    },
+  };
 }
 
 function parseNames(value: unknown, ruleId: string): string[] {
@@ -126,6 +189,8 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
     id,
     ...(reason !== undefined ? { reason } : {}),
   };
+  const when = parseWhen(raw.match.when, id);
+  const finish = (rule: PolicyRule): PolicyRule => withWhen(rule, when);
 
   if (kind === "mcp.connect") {
     if (action !== "deny") {
@@ -133,7 +198,7 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: mcp.connect only supports action deny`,
       );
     }
-    return denyMcpConnect(opts);
+    return finish(denyMcpConnect(opts));
   }
 
   if (kind === "office.connect") {
@@ -142,7 +207,16 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: office.connect only supports action deny`,
       );
     }
-    return denyOfficeConnect(opts);
+    return finish(denyOfficeConnect(opts));
+  }
+
+  if (raw.match.names === undefined) {
+    if (when === undefined || action === "allow-only") {
+      throw new PolicyRulesetParseError(
+        `rule ${id}: names must be a non-empty string array`,
+      );
+    }
+    return finish(kindWide(kind as PolicySubjectKind, action, opts));
   }
 
   const names = parseNames(raw.match.names, id);
@@ -153,7 +227,7 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: mcp.resource only supports action deny`,
       );
     }
-    return denyMcpResourceServers(names, opts);
+    return finish(denyMcpResourceServers(names, opts));
   }
 
   if (kind === "host.open") {
@@ -162,8 +236,8 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: host.open does not support allow-only (use deny or ask)`,
       );
     }
-    if (action === "ask") return askHostOpenActions(names, opts);
-    return denyHostOpenActions(names, opts);
+    if (action === "ask") return finish(askHostOpenActions(names, opts));
+    return finish(denyHostOpenActions(names, opts));
   }
 
   if (kind === "sidebar.embed") {
@@ -172,7 +246,7 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: sidebar.embed only supports action deny`,
       );
     }
-    return denySidebarEmbedSchemes(names, opts);
+    return finish(denySidebarEmbedSchemes(names, opts));
   }
 
   if (kind === "sidebar.fs") {
@@ -181,13 +255,13 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
         `rule ${id}: sidebar.fs only supports action deny`,
       );
     }
-    return denySidebarFsOps(names, opts);
+    return finish(denySidebarFsOps(names, opts));
   }
 
   if (kind === "tool.call") {
-    if (action === "deny") return denyToolNames(names, opts);
-    if (action === "ask") return askToolNames(names, opts);
-    return allowToolNamesOnly(names, opts);
+    if (action === "deny") return finish(denyToolNames(names, opts));
+    if (action === "ask") return finish(askToolNames(names, opts));
+    return finish(allowToolNamesOnly(names, opts));
   }
 
   // provider.use
@@ -196,8 +270,8 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
       `rule ${id}: provider.use does not support ask (use deny or allow-only)`,
     );
   }
-  if (action === "deny") return denyProviderIds(names, opts);
-  return allowProviderIdsOnly(names, opts);
+  if (action === "deny") return finish(denyProviderIds(names, opts));
+  return finish(allowProviderIdsOnly(names, opts));
 }
 
 /**

@@ -86,3 +86,13 @@ export {
 } from "./load.js";
 
 export { policyRulesetJsonSchema } from "./schema.js";
+
+export {
+  WHEN_EXPR_MAX_CHARS,
+  WHEN_EXPR_MAX_DEPTH,
+  WhenExprError,
+  compileWhenExpr,
+  evalWhenExpr,
+  whenEnvFromSubject,
+  type WhenEnv,
+} from "./when-expr.js";

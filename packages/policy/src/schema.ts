@@ -59,6 +59,13 @@ export const policyRulesetJsonSchema = {
                 items: { type: "string", minLength: 1 },
                 minItems: 1,
               },
+              when: {
+                type: "string",
+                minLength: 1,
+                maxLength: 512,
+                description:
+                  "Optional restricted boolean filter over the subject (name, args, path). Not a second policy engine.",
+              },
             },
           },
         },

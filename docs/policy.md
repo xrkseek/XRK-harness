@@ -95,6 +95,7 @@ assertPolicyAllow(engine, { kind: "provider.use", providerId: llm.id });
 | `policyRulesetJsonSchema` | 导出 schema（`$id` …/policy-ruleset.json） |
 
 `action`：`deny` · `ask` · `allow-only`（名单外 deny）。  
+`match.when` 可选，是规则上的布尔过滤（`name` / `args` / `path` / `url` 等主体字段，字符串方法 `includes` / `startsWith` / `endsWith` / `match`，正则 `.test`）。加载时编译；表达式为假则本条不匹配，继续下一条。不引入第二套策略引擎（不跑 `eval` / `vm`）。`deny` / `ask` 可省略 `names`，此时 `when` 命中即对整个 kind 生效；`allow-only` 仍必须带 `names`。  
 `mcp.connect` / `office.connect` 仅支持 `deny`。`mcp.resource` · `sidebar.embed` · `sidebar.fs` 仅支持 `deny`（`names` = 服务器 id / URL scheme / FS op）。`host.open` 支持 `deny` · `ask`（`names` = `path` \| `url`）。文件格式：`.json` / `.yaml` / `.yml` / `.toml` 同构 v1（解码后仍走 `parsePolicyRuleset`）。热重载：Host 监听 `XRK_POLICY_FILE`，变更后 `loadPolicyRulesetFile` → `composeHostPolicyEngine`（坏文件保留旧引擎）。
 
 ## Host / Face 接线

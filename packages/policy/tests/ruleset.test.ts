@@ -196,4 +196,94 @@ describe("policy ruleset", () => {
     ).toBe("deny");
     expect(engine.evaluate({ kind: "office.connect" }).verdict).toBe("deny");
   });
+
+  it("filters a named rule with match.when and skips it when the expression is false", () => {
+    const engine = createPolicyEngineFromRuleset({
+      version: 1,
+      rules: [
+        {
+          id: "deny-rm",
+          action: "deny",
+          reason: "rm via bash",
+          match: {
+            kind: "tool.call",
+            names: ["bash"],
+            when: 'args.command.includes("rm ") || args.command == "rm"',
+          },
+        },
+      ],
+    });
+    expect(
+      engine.evaluate({
+        kind: "tool.call",
+        name: "bash",
+        args: { command: "rm -rf /tmp/x" },
+      }),
+    ).toMatchObject({ verdict: "deny", ruleId: "deny-rm" });
+    expect(
+      engine.evaluate({
+        kind: "tool.call",
+        name: "bash",
+        args: { command: "ls" },
+      }).verdict,
+    ).toBe("allow");
+    expect(
+      engine.evaluate({
+        kind: "tool.call",
+        name: "read_file",
+        args: { command: "rm " },
+      }).verdict,
+    ).toBe("allow");
+  });
+
+  it("applies deny to a whole kind when names are omitted and when matches", () => {
+    const engine = createPolicyEngineFromRuleset({
+      version: 1,
+      rules: [
+        {
+          id: "deny-outside",
+          action: "deny",
+          match: {
+            kind: "sidebar.fs",
+            when: 'path.startsWith("/etc")',
+          },
+        },
+      ],
+    });
+    expect(
+      engine.evaluate({ kind: "sidebar.fs", op: "read", path: "/etc/passwd" })
+        .verdict,
+    ).toBe("deny");
+    expect(
+      engine.evaluate({ kind: "sidebar.fs", op: "read", path: "/work/a" })
+        .verdict,
+    ).toBe("allow");
+  });
+
+  it("rejects a broken when expression and allow-only without names", () => {
+    expect(() =>
+      parsePolicyRuleset({
+        version: 1,
+        rules: [
+          {
+            id: "bad",
+            action: "deny",
+            match: { kind: "tool.call", names: ["bash"], when: "eval(1)" },
+          },
+        ],
+      }),
+    ).toThrow(PolicyRulesetParseError);
+    expect(() =>
+      parsePolicyRuleset({
+        version: 1,
+        rules: [
+          {
+            id: "wide-allow",
+            action: "allow-only",
+            match: { kind: "tool.call", when: "true" },
+          },
+        ],
+      }),
+    ).toThrow(/names/);
+  });
 });
