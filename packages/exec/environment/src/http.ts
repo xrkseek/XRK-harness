@@ -241,6 +241,8 @@ function createHttpFs(
         newContent,
         ...(options ? { options } : {}),
       });
+      // Remote fsOp does not report match tier; exact is the declared contract.
+      return { matchTier: "exact" as const };
     },
     async remove(userPath) {
       emit("fs/write-intent", userPath);

@@ -168,7 +168,7 @@ export function createFsSshProvider(options: FsSshOptions): FsService {
       const endings = detectLineEndings(raw);
       const currentLf = normalizeLineEndings(raw);
       try {
-        const { content } = applyLiteralEdit(
+        const { content, matchTier } = applyLiteralEdit(
           currentLf,
           String(oldContent),
           String(newContent ?? ""),
@@ -176,6 +176,7 @@ export function createFsSshProvider(options: FsSshOptions): FsService {
           userPath,
         );
         await writeUtf8(userPath, restoreLineEndings(content, endings));
+        return { matchTier };
       } catch (err) {
         if (err instanceof EditAmbiguousError) throw err;
         const message = err instanceof Error ? err.message : String(err);

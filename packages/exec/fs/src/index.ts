@@ -1,7 +1,5 @@
 import {
   mkdir,
-  open as fsOpen,
-  readFile as fsReadFile,
   rm,
   stat as fsStat,
   writeFile,
@@ -15,6 +13,7 @@ import {
   restoreLineEndings,
   stripCarriageReturn,
   EditAmbiguousError,
+  type EditMatchTier,
 } from "./edit-text.js";
 import { isDocumentExtractPath, textFromReadBuffer } from "./document-extract.js";
 import { formatReadWindow } from "./read-window.js";
@@ -26,6 +25,7 @@ import {
   resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
+import { openNoFollowRead, readFileNoFollow } from "./open-nofollow.js";
 import type { PathAccessMode } from "@xrkseek/protocol";
 import {
   globUnderRoot,
@@ -62,6 +62,7 @@ export {
   resolveWritablePath,
   resolveWithinRoot,
 } from "./paths.js";
+export { openNoFollowRead, readFileNoFollow } from "./open-nofollow.js";
 export {
   PATH_OVERREACH_REASON_PREFIX,
   createPathOverreachPre,
@@ -74,6 +75,7 @@ export {
   restoreLineEndings,
   stripCarriageReturn,
   EditAmbiguousError,
+  type EditMatchTier,
   type LineEndings,
 } from "./edit-text.js";
 export {
@@ -217,13 +219,14 @@ export interface FsService {
    * Literal substring replace (DSH-style): match in LF-normalized space,
    * write back preserving on-disk CRLF/LF. `oldContent` is a unique snippet
    * (or the whole file); not a full-file CAS unless the snippet is the file.
+   * Falls back exact → rstrip-per-line → trim when whitespace drifts.
    */
   edit(
     userPath: string,
     oldContent: string,
     newContent: string,
     options?: FsEditOptions,
-  ): Promise<void>;
+  ): Promise<{ matchTier: EditMatchTier }>;
   /** Remove a file (not a directory). Used by `apply_patch` Delete/Move. */
   remove(userPath: string): Promise<void>;
   stat(userPath: string): Promise<FsStatResult>;
@@ -360,6 +363,17 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       pathAccessModeOf(),
     );
 
+  /** Roots for symlink containment at open time; empty in open mode. */
+  const openJailRoots = (): readonly string[] => {
+    if (pathAccessModeOf() === "open") return [];
+    return [
+      root,
+      ...hostReadableRootsOf(),
+      ...extraWritableRootsOf(),
+      ...sessionRoots(),
+    ];
+  };
+
   /**
    * Grep/glob historically jailed to `root` even when pathAccessMode is open.
    * Resolve the scope with the same gate as read_file, then re-root the search
@@ -408,13 +422,25 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     async read(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
       const abs = readPath(userPath);
+      const roots = openJailRoots();
       // Office/notebook extractors need the whole package; plain text reads
       // only the leading maxBytes so a multi-MB source file cannot stall Host.
       if (isDocumentExtractPath(userPath)) {
-        const buf = await fsReadFile(abs);
-        return textFromReadBuffer(buf, userPath, maxBytes);
+        const fh = await openNoFollowRead(abs, roots);
+        try {
+          const st = await fh.stat();
+          const buf = Buffer.allocUnsafe(st.size);
+          const { bytesRead } = await fh.read(buf, 0, st.size, 0);
+          return textFromReadBuffer(
+            buf.subarray(0, bytesRead),
+            userPath,
+            maxBytes,
+          );
+        } finally {
+          await fh.close();
+        }
       }
-      const fh = await fsOpen(abs, "r");
+      const fh = await openNoFollowRead(abs, roots);
       try {
         const st = await fh.stat();
         if (st.size === 0) return { content: "" };
@@ -434,7 +460,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
     async readBytes(userPath, maxBytes = defaultMaxBytes) {
       emit("fs/read-intent", userPath);
       const abs = readPath(userPath);
-      const fh = await fsOpen(abs, "r");
+      const fh = await openNoFollowRead(abs, openJailRoots());
       try {
         const st = await fh.stat();
         if (st.size > maxBytes) {
@@ -462,11 +488,11 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
       }
       emit("fs/write-intent", userPath);
       const abs = writePath(userPath);
-      const raw = await fsReadFile(abs, "utf8");
+      const raw = await readFileNoFollow(abs, openJailRoots());
       const endings = detectLineEndings(raw);
       const currentLf = normalizeLineEndings(raw);
       try {
-        const { content } = applyLiteralEdit(
+        const { content, matchTier } = applyLiteralEdit(
           currentLf,
           String(oldContent),
           String(newContent ?? ""),
@@ -474,6 +500,7 @@ export function createFsLocalProvider(options: FsLocalOptions): FsService {
           userPath,
         );
         await writeFile(abs, restoreLineEndings(content, endings), "utf8");
+        return { matchTier };
       } catch (err) {
         if (err instanceof EditAmbiguousError) throw err;
         const message = err instanceof Error ? err.message : String(err);
@@ -728,10 +755,20 @@ export function createFsTools(
               "old_content is required: pass the exact text to replace (copy it verbatim from the file you read, including indentation).",
             );
           }
-          await fs.edit(p, String(a.old_content), String(a.content ?? ""), {
-            replaceAll: a.replace_all === true,
-          });
-          return { content: `edited ${p}` };
+          const { matchTier } = await fs.edit(
+            p,
+            String(a.old_content),
+            String(a.content ?? ""),
+            {
+              replaceAll: a.replace_all === true,
+            },
+          );
+          return {
+            content:
+              matchTier === "exact"
+                ? `edited ${p}`
+                : `edited ${p} (matched via ${matchTier}: whitespace-tolerant)`,
+          };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { content: message, isError: true };

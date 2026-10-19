@@ -13,9 +13,12 @@ import type {
   FsStatResult,
 } from "@xrkseek/exec-fs";
 import {
+  EditAmbiguousError,
   EditMismatchError,
   EditWithoutOldError,
+  applyLiteralEdit,
   matchGlob,
+  normalizeLineEndings,
 } from "@xrkseek/exec-fs";
 import type {
   SpawnOptions,
@@ -141,21 +144,24 @@ function createMemoryFs(
       if (!oldContent) {
         throw new EditWithoutOldError("edit requires non-empty oldContent");
       }
-      const count = text.split(oldContent).length - 1;
-      if (count === 0) {
-        throw new EditMismatchError("oldContent not found");
-      }
-      if (!options?.replaceAll && count !== 1) {
-        throw new EditMismatchError(
-          `oldContent matched ${count} times; pass replaceAll or unique snippet`,
+      try {
+        const { content, matchTier } = applyLiteralEdit(
+          normalizeLineEndings(text),
+          oldContent,
+          newContent,
+          options?.replaceAll === true,
+          userPath,
         );
+        files.set(abs, content);
+        return { matchTier };
+      } catch (err) {
+        if (err instanceof EditAmbiguousError) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("edit mismatch") || message.includes("not found")) {
+          throw new EditMismatchError(message);
+        }
+        throw err;
       }
-      files.set(
-        abs,
-        options?.replaceAll
-          ? text.split(oldContent).join(newContent)
-          : text.replace(oldContent, newContent),
-      );
     },
     async remove(userPath) {
       emit("fs/write-intent", userPath);

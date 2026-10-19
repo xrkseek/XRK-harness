@@ -194,7 +194,7 @@ describe("FsService", () => {
       read: vi.fn(async () => ({ content: "stub" })),
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
-      edit: vi.fn(async () => {}),
+      edit: vi.fn(async () => ({ matchTier: "exact" as const })),
       remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
@@ -220,7 +220,7 @@ describe("FsService", () => {
       read: vi.fn(async () => ({ content: "a\nb\nc\nd\n" })),
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
-      edit: vi.fn(async () => {}),
+      edit: vi.fn(async () => ({ matchTier: "exact" as const })),
       remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
@@ -249,7 +249,7 @@ describe("FsService", () => {
       read: vi.fn(async () => ({ content: "should-not-run" })),
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
-      edit: vi.fn(async () => {}),
+      edit: vi.fn(async () => ({ matchTier: "exact" as const })),
       remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
@@ -284,7 +284,7 @@ describe("FsService", () => {
       read: vi.fn(async () => ({ content: "should-not-run" })),
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
-      edit: vi.fn(async () => {}),
+      edit: vi.fn(async () => ({ matchTier: "exact" as const })),
       remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
@@ -326,7 +326,7 @@ describe("FsService", () => {
       read: vi.fn(async () => ({ content: "should-not-run" })),
       readBytes: vi.fn(async () => new Uint8Array()),
       write: vi.fn(async () => {}),
-      edit: vi.fn(async () => {}),
+      edit: vi.fn(async () => ({ matchTier: "exact" as const })),
       remove: vi.fn(async () => {}),
       stat: vi.fn(async () => ({
         size: 0,
@@ -507,5 +507,25 @@ describe("FsService", () => {
       return;
     }
     await expect(fs.read(link)).rejects.toThrow(PathEscapeError);
+  });
+
+  it("allows in-workspace symlink reads and rejects out-of-root targets at open", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-fs-link-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "xrk-fs-out-"));
+    const secret = path.join(outside, "secret.txt");
+    await writeFile(secret, "leak\n", "utf8");
+    await writeFile(path.join(root, "ok.txt"), "inside\n", "utf8");
+    const { symlinkSync } = await import("node:fs");
+    const good = path.join(root, "alias.txt");
+    const bad = path.join(root, "escape.txt");
+    try {
+      symlinkSync(path.join(root, "ok.txt"), good);
+      symlinkSync(secret, bad);
+    } catch {
+      return; // no symlink privilege on this Windows session
+    }
+    const fs = createFsLocalProvider({ root });
+    expect((await fs.read(good)).content).toBe("inside\n");
+    await expect(fs.read(bad)).rejects.toThrow(PathEscapeError);
   });
 });
