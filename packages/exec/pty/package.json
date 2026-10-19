@@ -18,7 +18,8 @@
     "postinstall": "node ./scripts/ensure-spawn-helper.mjs"
   },
   "dependencies": {
-    "@xrkseek/core-tools": "workspace:*"
+    "@xrkseek/core-tools": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*"
   },
   "optionalDependencies": {
     "node-pty": "1.2.0-beta.15"

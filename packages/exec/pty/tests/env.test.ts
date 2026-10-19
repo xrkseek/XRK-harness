@@ -46,4 +46,10 @@ describe("childEnv", () => {
     expect(env.API_SECRET).toBeUndefined();
     expect(env.XRK_LEAK).toBeUndefined();
   });
+
+  it("drops a key when the explicit value is undefined", () => {
+    const env = childEnv({ PATH: undefined, KEEP: "1" }, { PATH: "/bin", KEEP: "0" });
+    expect(env.PATH).toBeUndefined();
+    expect(env.KEEP).toBe("1");
+  });
 });

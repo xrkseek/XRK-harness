@@ -2642,6 +2642,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      '@xrkseek/exec-subprocess':
+        specifier: workspace:*
+        version: link:../subprocess
     optionalDependencies:
       node-pty:
         specifier: 1.2.0-beta.15

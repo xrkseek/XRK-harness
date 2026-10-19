@@ -10,6 +10,7 @@ import {
   SUBPROCESS_CAPTURE_MAX_BYTES,
   type SpillOptions,
 } from "./capture.js";
+import { childEnv } from "./env.js";
 
 export {
   appendUtf8TailCap,
@@ -24,6 +25,13 @@ export type {
   SpillFailureReporter,
   SpillOptions,
 } from "./capture.js";
+export {
+  DSH_ENV_PREFIX,
+  SENSITIVE_ENV_PATTERN,
+  XRK_ENV_PREFIX,
+  childEnv,
+  scrubbedParentEnv,
+} from "./env.js";
 
 /**
  * After a stop request (abort / timeout / kill), `close` can be delayed forever
@@ -163,7 +171,9 @@ function startLocal(
   const [cmd, ...args] = argv;
   const child = nodeSpawn(cmd!, args, {
     cwd: opts.cwd,
-    env: opts.env,
+    // Default: scrub credential-shaped / XRK_* / DSH_* ambient names. Explicit
+    // `opts.env` merges after the scrub (same contract as exec-pty childEnv).
+    env: childEnv(opts.env),
     // Non-terminal children: hide the console window on Windows so background
     // bash/cmd/pwsh jobs do not steal focus (terminals stay on the PTY path).
     windowsHide: true,
