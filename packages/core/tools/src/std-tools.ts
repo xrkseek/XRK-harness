@@ -104,7 +104,8 @@ export function createStdTools(
     {
       name: "ask_user",
       description:
-        "Ask the user a question when you need confirmation, a choice, or missing information. " +
+        "Ask the user when the answer would materially change the deliverable and cannot be recovered from context or the inputs. " +
+        "Prefer one blocking ask. With choices, put the recommended label first and append \"(Recommended)\". " +
         "Use `questions` (stable ids, optional options / multi_select / detail) or `question` (free-text shortcut). " +
         "Do not set `intent` on ordinary asks — reserved for exit_plan_mode.",
       parameters: {
