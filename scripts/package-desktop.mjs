@@ -263,6 +263,10 @@ function ensureFreshProductShell() {
     cwd: ROOT,
     stdio: "inherit",
     shell: true,
+    // Without this, pnpm's deps-status check prunes the workspace root's
+    // devDependencies (typescript/eslint/vitest) before `tsc -b` runs, and
+    // apps/desktop build dies with "'tsc' is not recognized".
+    env: { ...process.env, CI: "true", NODE_ENV: "development" },
   });
   if ((build.status ?? 1) !== 0) process.exit(build.status ?? 1);
 }
