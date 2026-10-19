@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.6',
+    date: '2026-10-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '会话工程身份 kind 成文并接线：从 badge / 工作区 / 子代理链路派生 orchestrator · coding_parent · delegated_child · fork_clone，turn-start 板与工具 dynamicSchema 按身份重写动词，模型不用再猜 subagent / workspace_session_prompt / thread_message 该找谁。',
+        en: 'Session engineering identity kind is documented and wired: orchestrator · coding_parent · delegated_child · fork_clone are derived from badge / workspace / subagent lineage, and the turn-start board plus tool dynamicSchemas rewrite their verbs by identity — no more guessing who subagent / workspace_session_prompt / thread_message belongs to.',
+      },
+      {
+        zh: '干员小队板：委托子会话在 turn-start 看到同父队友与自身任务；同父干员 attach 时自动 peer 互连（label=sibling，不覆盖手改）。子代理默认可续、跟父模型，舰队级 subagentModel 设置整项删除。',
+        en: 'Delegated children see their own squad at turn start — same-parent teammates and the assigned task; same-parent children auto-link as peers (label=sibling, never overwriting a manual edit). Children default to continuable and inherit the parent model, and the fleet-level subagentModel setting is gone entirely.',
+      },
+      {
+        zh: '子代理座位改用锁定芯片展示已钉选的模型与权限档，切换被拒绝也不再停在「选择模型」；一次性子会话的输入区只读，占位写清原因，可续子会话仍可 steer / followup。',
+        en: 'Subagent seats show locked chips for the pinned model and permission tier, so a refused switch no longer strands you on "select a model"; one-shot children get a read-only composer with the reason in the placeholder, while continuable ones still accept steer / followup.',
+      },
+      {
+        zh: '添加工作区先落位置磁贴（主目录 / 桌面 / 文档 / 下载 / 磁盘 · 最近），路径走 OS 真源解析（Windows Known Folder / macOS osascript / Linux XDG，英文 / 中文 / OneDrive 作回退）；列浏览 Esc 先回磁贴，上次成功的磁贴本地缓存。',
+        en: 'Add Workspace opens on place tiles (home / desktop / documents / downloads / drives · recent) resolved from the real OS source (Windows Known Folder / macOS osascript / Linux XDG, with English / Chinese / OneDrive fallbacks); Esc steps back from column browsing to the tiles, and the last successful tile is cached locally.',
+      },
+      {
+        zh: '策展记忆缺省写区写清：主会话默认 scope=session，带 memberId 的干员默认 agent；会话结束的 Phase1/2 写入该会话的分层 store，不再误走单独 home-only global provider；action 或非空 operations 必填，报错可直接行动。',
+        en: 'Curated memory default zones are spelled out: main sessions default to scope=session and children with a memberId default to agent; end-of-session Phase1/2 writes land in that session’s layered store instead of a stray home-only global provider, and a missing action or empty operations now errors with something you can act on.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.6 接管 @latest。完整清单见 docs/releases/v0.6.6.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.6 now owns @latest. Full list in docs/releases/v0.6.6.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.5',
     date: '2026-10-19',
     title: {
