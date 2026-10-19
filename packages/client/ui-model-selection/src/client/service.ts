@@ -51,13 +51,20 @@ export class ModelDirectoryResolver extends Service {
     })
     // Either source can change the directory: registry topology commits and
     // settings documents that carry provider catalogs or default selection.
+    // Skip directories mid-select so a fan-out load cannot bump generation and
+    // discard the in-flight selectModel settlement (click feels "stuck").
     const refresh = (): void => {
       for (const directory of this.live.directories.values()) {
+        if (directory.store.getSnapshot().status === 'selecting') continue
         directory.load().catch(() => undefined)
       }
     }
     ctx.remote.$on('llm/adapters-updated', refresh)
-    ctx.remote.$on('settings/document-updated', refresh)
+    ctx.remote.$on('settings/document-updated', (ns) => {
+      if (typeof ns !== 'string') return
+      if (!ns.startsWith('llm-') && ns !== 'agent-default-model') return
+      refresh()
+    })
   }
 
   /**

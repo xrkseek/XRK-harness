@@ -135,6 +135,15 @@ export function ModelSelect(
   const flatModels = useMemo<readonly FlatModel[]>(() => filteredGroups.flatMap(group =>
     group.models.map(model => ({ groupId: group.id, model })),
   ), [filteredGroups])
+  // O(1) highlight lookup — avoid findIndex-per-row (O(n²)) on large catalogs.
+  const flatIndexByKey = useMemo(() => {
+    const map = new Map<string, number>()
+    for (let i = 0; i < flatModels.length; i++) {
+      const row = flatModels[i]!
+      map.set(`${row.groupId}\0${row.model.id}`, i)
+    }
+    return map
+  }, [flatModels])
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -166,7 +175,7 @@ export function ModelSelect(
     load()
   }
 
-  // Mount-time load resolves the trigger label; every open refreshes.
+  // Mount-time load resolves the trigger label; reopen soft-refreshes via show().
   useEffect(() => {
     if (available) {
       lastActionRef.current = 'load'
@@ -478,9 +487,7 @@ export function ModelSelect(
                           <div className={css.groupTitle} id={headingId}>{group.name}</div>
                           {group.models.map((model) => {
                             const selected = state.current?.provider === group.id && state.current.model === model.id
-                            const flatIndex = flatModels.findIndex(
-                              row => row.groupId === group.id && row.model.id === model.id,
-                            )
+                            const flatIndex = flatIndexByKey.get(`${group.id}\0${model.id}`) ?? -1
                             // Virtual highlight only while the search field is mounted
                             // (catalog large enough); otherwise focus-visible carries the cue.
                             const active = modelCount > 5 && flatIndex === highlight

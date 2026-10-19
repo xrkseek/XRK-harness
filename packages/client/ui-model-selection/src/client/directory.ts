@@ -58,12 +58,18 @@ export class ModelDirectory {
   /**
    * Refresh the advisory directory (both entries call this on open).
    * Failure preserves the last good groups and current selection.
+   * When a paintable catalog is already on screen, status stays put so a
+   * composer-seat reopen does not flash the loading strip (perceived lag).
    * @returns the fresh directory value.
    */
   async load(): Promise<SessionModels> {
     this.assertAvailable()
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'loading'; s.error = null })
+    this.store.update((s) => {
+      // Soft-refresh: keep the last good paint while the Host round-trips.
+      if (s.groups.length === 0) s.status = 'loading'
+      s.error = null
+    })
     const { result } = await this.sessions.models({ sessionId: this.sessionId })
     if (this.disposed || generation !== this.generation) {
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
@@ -89,12 +95,21 @@ export class ModelDirectory {
    * Select the complete provider/model/reasoning selection (both entries submit through here). Success
    * updates the shared current; failure surfaces on the store and throws so
    * each entry's own retry surface engages.
+   * Echoes the pending selection immediately so the seat checkmark moves on
+   * the click rather than after the Host round-trip.
    * @param selection - provider, provider-owned model id, and optional adapter-owned effort.
- */
+   */
   async select(selection: ModelSelection): Promise<void> {
     this.assertAvailable()
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'selecting'; s.error = null })
+    const prior = this.store.getSnapshot()
+    const priorCurrent = prior.current
+    const priorRoutable = prior.routable
+    this.store.update((s) => {
+      s.status = 'selecting'
+      s.error = null
+      s.current = selection
+    })
     const { result } = await this.sessions.selectModel({
       sessionId: this.sessionId,
       provider: selection.provider,
@@ -108,7 +123,12 @@ export class ModelDirectory {
       return
     }
     if (!result.ok) {
-      this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
+      this.store.update((s) => {
+        s.current = priorCurrent
+        s.routable = priorRoutable
+        s.status = 'error'
+        s.error = `${result.error.code}: ${result.error.message}`
+      })
       throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
     }
     // The Host validated the route before accepting it, so a selection that

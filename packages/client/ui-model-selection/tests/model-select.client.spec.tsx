@@ -147,7 +147,12 @@ describe('ModelSelect reasoning effort', () => {
     const directory = createSnapshotStore<ModelDirectoryState>(state({ groups }))
     let resolveSelect!: (accepted: boolean) => void
     const select = vi.fn(() => new Promise<boolean>((resolve) => {
-      directory.set(state({ groups, status: 'selecting' }))
+      // Mirror ModelDirectory's optimistic echo so the checkmark moves on click.
+      directory.set(state({
+        groups,
+        status: 'selecting',
+        current: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+      }))
       resolveSelect = resolve
     }))
     render(<ModelSelect
@@ -164,6 +169,7 @@ describe('ModelSelect reasoning effort', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek Reasoner/ }))
     expect((await screen.findByRole('status')).textContent).toBe(zh['status.selecting'])
     expect(screen.getByRole('menu').getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: /DeepSeek Reasoner/ }).getAttribute('aria-checked')).toBe('true')
     // Outside click must not dismiss while selecting.
     fireEvent.mouseDown(document.body)
     expect(screen.getByRole('menu')).toBeTruthy()
