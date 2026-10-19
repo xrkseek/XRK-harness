@@ -91,6 +91,8 @@ Coding Agent 笔记：[AGENTS.md](../AGENTS.md) · `.cursor/rules` · `.cursor/s
 | [modules/session-projection.md](./modules/session-projection.md) | 投影缝 |
 | [http-api.md](./http-api.md) | HTTP / SSE |
 | [host-face.md](./host-face.md) | Host Face（RPC + 双 WS） |
+| [session-identity.md](./session-identity.md) | 会话工程身份 · 协作边界 · 许愿→动词 |
+| [session-identity-scenarios.md](./session-identity-scenarios.md) | 身份场景走查（奇创 / 编码父 / 干员 / IM / 对等父） |
 | [host-preset.md](./host-preset.md) | Host vs preset |
 | [profiles.md](./profiles.md) | Preset 选型 |
 | [plugin-development.md](./plugin-development.md) | 进程插件 |
@@ -248,6 +250,8 @@ New documents: Chinese half starts with `> **读者**：…`; English half with 
 | [modules/session-projection.md](./modules/session-projection.md) | Projection seam |
 | [http-api.md](./http-api.md) | HTTP / SSE |
 | [host-face.md](./host-face.md) | Host Face (RPC + dual WS) |
+| [session-identity.md](./session-identity.md) | Session engineering identity · collab boundaries · intent→verbs |
+| [session-identity-scenarios.md](./session-identity-scenarios.md) | Identity scenario walkthrough (Qichuang / coding parent / 干员 / IM / peer parent) |
 | [host-preset.md](./host-preset.md) | Host vs preset |
 | [profiles.md](./profiles.md) | Preset selection |
 | [plugin-development.md](./plugin-development.md) | Process plugins |

@@ -250,7 +250,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxConcurrentModelSessions` | 同一供应商/模型路由上**进行中**会话上限（默认 **5**；主会话与子代理同等计数；blank / 闲置历史不计） |
 | Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `maxConcurrentSessions`（可选） | 覆盖该模型的进行中会话上限；省略 → `agent-loop.maxConcurrentModelSessions` |
-| `agent-loop` | `subagentModel` | 委派子代理的统一线路 `provider/model`（可带 `(effort)`）；**留空（默认）跟父会话**；单次 `subagent` 仍可覆盖 |
+| `agent-loop` | （已删除 `subagentModel`） | 子代理默认继承父会话模型；换模型在 `subagent` 的 `provider`/`model` 上指定 |
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
 | `session-telemetry` | `mode` · `endpoint` | **重启 Host** 后挂 sink（关 / memory / OTLP）；`XRK_TELEMETRY` 可 CI 旁路 |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **下次 agent 重建**后热切换 confine Provider；helper / bins 仍仅 env；`XRK_SANDBOX_BACKEND` 可 CI 旁路 |
@@ -559,7 +559,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxConcurrentModelSessions` | Running sessions on one provider/model route (default **5**; parent + subagent count equally; blank / idle history do not count) |
 | Models (`llm-deepseek` / `llm-pi-ai` model rows) | `maxConcurrentSessions` (optional) | Override the live-session ceiling for that model; omit → `agent-loop.maxConcurrentModelSessions` |
-| `agent-loop` | `subagentModel` | Fleet-wide child route `provider/model` (optional `(effort)`); **empty (default) inherits the parent**; a single `subagent` call may still override |
+| `agent-loop` | (`subagentModel` removed) | Children inherit the parent model; pin a different route on the `subagent` call's `provider`/`model` |
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 | `session-telemetry` | `mode` · `endpoint` | **Host restart** mounts the sink (off / memory / OTLP); `XRK_TELEMETRY` may CI-bypass |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **Live** on next agent rebuild (confine Provider); helper / bins stay env-only; `XRK_SANDBOX_BACKEND` may CI-bypass |

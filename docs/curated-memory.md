@@ -46,7 +46,47 @@
 
 `list` 返回目标文件当前磁盘条目（便于 replace/remove 前对齐原文），并可含 `stale_entries`。没有搜索；磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
-关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host 按会话叠分区 store（global + workspace + session + 可选 agent）；`memory` 工具可传 `scope`。会话结束 Phase1/2 仍写入 **global** provider（`resolveMemoryProvider`）。
+关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host 按会话叠分区 store（global + workspace + session + 可选 agent）；`memory` 工具可传 `scope`。缺省写区：有干员 `memberId` 时为 `agent`，否则为 `session`。会话结束 Phase1/2 走**该会话的分层 store**（写入缺省区，不是单独再开一份 home-only `resolveMemoryProvider()`）。
+
+## 分层完整性（诚实）
+
+磁盘分区与 Host 接线已落地；「用户说记住 → 本会话立刻按新记忆行事」尚未完整。
+
+| 层 | 状态 | 说明 |
+|----|------|------|
+| 磁盘区 `global` / `workspace` / `session` / `agent` | **能跑** | `{XRK_HOME}/memories` 与子目录；见 `scopes` |
+| Host 按会话叠区 + 缺省 `scope` | **能跑** | 主会话默认 `session`；子代理有 `memberId` 时默认 `agent` |
+| 工具 `scope` + 分区策略段 | **能跑** | 多区时用 `createScopedCuratedMemoryTools`；系统提示用 `SCOPED_CURATED_MEMORY_PROMPT_TEXT` |
+| 组合创建时冻结快照 | **能跑** | 多区正文按区标题拼进 system；本会话内写盘**不**刷新冻结段 |
+| 回合后启发式 / 会话结束 Phase1·2 | **能跑** | 写入分层 store 的缺省区；不刷新本会话冻结段 |
+| 站立 `AGENTS` / `SOUL` / inject `USER` | **能跑** | 与策展分界见上表；站立不经 `memory` 工具 |
+| Mnemon · memory-embed | **分开** | 文档库 / 向量检索，不是策展 `MEMORY.md` |
+| 本会话即时生效的「干预记忆」 | **未做** | 写盘成功后，当前组合的系统提示仍是旧快照；下一会话才读到 |
+| 按主题检索历史会话摘要 | **未做** | 无 rollout summary 索引；只有冻结全文 + `list` |
+| 记忆引用 / 引用块 | **未做** | 模型不必标明用了哪条记忆 |
+
+常见失败：`action` 为空且未传 `operations` → `Unknown action ''`（工具要求 `add|replace|remove|list` 或非空 `operations`）。用户口中的「干预记忆」指策展写入；没有单独同名产品能力。
+
+## 提示词工程现状
+
+| 载体 | 作用 | 评价 |
+|------|------|------|
+| 系统策略段 `CURATED_*_PROMPT_TEXT` | 分工、禁写 WIP、工具用法、分区、开关与冻结 | 开才注入；写盘不改本组合冻结段；关则下次空闲重建卸下 |
+| `memory` 工具描述 | 何时写、`action` 或 `operations` 必填、勿塞 todo | 空 `action` 返回可执行错误 |
+| 站立 `AGENTS.md` | 仅当 `memory` 在工具面上才调用 | 与策展开关分开：站立文件始终注入 |
+| 向阳 skill `xrk-memory-polish` | 分区清理与迁移 | 缺省与 Host 一致：主会话 `session`，干员 `agent` |
+
+## 拟吸收的改进（审阅 · 未改代码）
+
+吸收业界 harness 策展流水线的长处，落点仍用本仓 `memory` / 分区 / 冻结语义（不引入第二套记忆产品名）。以下仅供审阅，**尚未改实现**。
+
+1. **写后可见性** — 用户明确要求「记住 / 以后按这个做」时：要么在工具结果里写清「已落盘，本会话 system 仍是旧快照」；要么提供可选的本会话补充注入（不改冻结契约的前提下）。避免「写成功了却继续踩同一坑」。
+2. **工具防呆** — `action` 与 `operations` 都缺时返回可执行示例（含 `action`+`content`+推荐 `scope`）；schema / 描述强调二选一必填。
+3. **缺省区诚实** — 策略段与 polish skill 与 Host 对齐：主会话默认 `session`，干员默认 `agent`；跨项目偏好才写 `global`。
+4. **巩固质量** — Phase2 从「抽 JSON 短句」升级为「按证据合并 / 删过时 / 区分偏好与单次任务结论」，并限制把过程性排障写进跨会话区。
+5. **读侧克制** — 策略段补一句：冻结记忆不是当前行为的证明；会漂移或后果大的声明先核对源码 / 现配置。
+6. **显式纠正优先** — 用户说「记住 / 改掉 / 忘掉」时优先 `memory` 工具；静默启发式不覆盖用户刚纠正的条目。
+7. **不做什么（刻意）** — 不把 Mnemon / embedding 搜文档并进策展工具；不在子代理里再开一套独立产品记忆名；不把 `todo_write` 与策展合并。
 
 ## 回合结束写入
 
@@ -123,7 +163,47 @@ The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last wr
 
 `list` returns live on-disk entries for the target (use before replace/remove) and may include `stale_entries`. There is no search. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
-Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host stacks zoned stores per session (global + workspace + session + optional agent); the `memory` tool accepts `scope`. Session-end Phase1/2 still writes the **global** provider (`resolveMemoryProvider`).
+Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host stacks zoned stores per session (global + workspace + session + optional agent); the `memory` tool accepts `scope`. Default write zone: `agent` when the child has a roster `memberId`, otherwise `session`. Session-end Phase1/2 uses **that session’s layered store** (writes the default zone — not a separate home-only `resolveMemoryProvider()`).
+
+## Layer completeness (honest)
+
+Disk zones and Host wiring ship; “user said remember → this session immediately obeys” does **not**.
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| Disk zones `global` / `workspace` / `session` / `agent` | **Working** | Under `{XRK_HOME}/memories` (+ subdirs); see `scopes` |
+| Host per-session stack + default `scope` | **Working** | Main session defaults to `session`; child with `memberId` defaults to `agent` |
+| Tool `scope` + zoned policy text | **Working** | Multi-zone → `createScopedCuratedMemoryTools`; prompt → `SCOPED_CURATED_MEMORY_PROMPT_TEXT` |
+| Freeze at composition create | **Working** | Zone bodies joined under headers; mid-session disk writes do **not** refresh the freeze |
+| After-turn heuristics / session-end Phase1·2 | **Working** | Write the layered store’s default zone; freeze unchanged this session |
+| Standing `AGENTS` / `SOUL` / inject `USER` | **Working** | Split as in the table above; standing is not the `memory` tool |
+| Mnemon · memory-embed | **Separate** | Document library / embeddings — not curated `MEMORY.md` |
+| Same-session “intervention memory” | **Not done** | Successful writes hit disk; the live system prompt stays the old freeze until the next composition |
+| Retrieve prior-session summaries by topic | **Not done** | No rollout-summary index; freeze + `list` only |
+| Memory citations | **Not done** | Model need not mark which entries it used |
+
+Common failure: empty `action` and no `operations` → `Unknown action ''` (tool needs `add|replace|remove|list` or a non-empty `operations` batch). Colloquial “干预记忆” means curated writes — there is no separate product capability by that name.
+
+## Prompt-engineering status
+
+| Carrier | Role | Assessment |
+|---------|------|------------|
+| System policy `CURATED_*_PROMPT_TEXT` | Split, no WIP, tool usage, zones, switch vs freeze | Injected only while on; disk writes do not refresh this composition; off drops both on the next idle rebuild |
+| `memory` tool description | When to write; `action` or `operations` required; no todos | Empty `action` returns an actionable error |
+| Standing `AGENTS.md` | Call `memory` only when that tool is on the surface | Separate from the switch: standing files always inject |
+| Xiangyang skill `xrk-memory-polish` | Zone cleanup / migration | Defaults match Host: main session `session`, 干员 `agent` |
+
+## Proposed absorptions (review · not shipped)
+
+Absorb strengths from industry harness curated-memory pipelines; keep this repo’s `memory` / zones / freeze semantics (no second product name). Review only — **not implemented yet**.
+
+1. **Write visibility** — When the user explicitly asks to remember / obey a rule going forward: either state in the tool result that disk updated but this session’s system freeze is unchanged, or offer optional same-session supplemental inject without breaking the freeze contract. Avoid “write succeeded, same mistake continues.”
+2. **Tool guardrails** — If both `action` and `operations` are missing, return a copy-pasteable example (`action`+`content`+recommended `scope`); schema/description require one of the two.
+3. **Honest defaults** — Align policy text and polish skill with Host: main session → `session`, 干员 → `agent`; cross-project preferences → `global`.
+4. **Consolidation quality** — Evolve Phase2 from “JSON short facts” toward evidence-backed merge / drop stale / separate preferences from one-off task conclusions; keep process debugging out of cross-session zones.
+5. **Read-side restraint** — Policy line: frozen memory is not proof of current behavior; for consequential or drift-prone claims, check source/config first.
+6. **Explicit correction wins** — On “remember / fix / forget”, prefer the `memory` tool; silent heuristics must not overwrite a correction the user just made.
+7. **Deliberate non-goals** — Do not fold Mnemon / embedding search into the curated tool; do not invent a second memory product for subagents; do not merge `todo_write` with curated memory.
 
 ## Pluggable providers (`MemoryProvider`)
 

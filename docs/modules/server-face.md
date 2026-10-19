@@ -65,7 +65,12 @@ HTTP/WS (attach-http)
 | `fork-cut.ts` | `session.fork` 完成轮截断 | 只切会话血缘，不碰工作区文件 |
 | `plugin-inventory.ts` | `pluginInventory/list` 投影 | 进程插件 + boot；cordis = failed |
 | `session-search.ts` | `session.search` | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
-| `session-query-tools.ts` | 模型面 `session_search` / `session_read` / `session_trace` | cwd 权威 · 复用 searchSessions · 字节预算快照 · 子代理谱系；与 `@session` prepare 分路 |
+| `session-query-tools.ts` | 模型面 `session_inspect` / `session_search` / `session_read` / `session_trace` | inspect 跨工作区元数据；search/read/trace 同 cwd · 复用 searchSessions · 字节预算快照 · 子代理谱系；与 `@session` prepare 分路 |
+| `collab-board.ts` | turn-start 协作板 | 父：名册+主线；干员：同父小队+自身任务；契约见 [session-identity](../session-identity.md) |
+| `session-capability.ts` | turn-start `<session_capability>` | 父：permission×tool_surface；干员：`kind=delegated` 短块 |
+| `session-posture.ts` | turn-start `<session_posture>` | IM / 奇创编排角色（orchestrator） |
+| `session-kind.ts` | 派生工程身份 | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
+| `session-tool-copy.ts` | 协作工具 `dynamicSchema` 文案 | 按 kind · 名册 · sibling ids · followup/team_graph/interrupt/close/wait；见 [session-identity](../session-identity.md) |
 | `skill-list.ts` | `skill.list` | 扫已存在的 `.xrk|.claude|.cursor|.agents|.codex/skills`（及用户主目录同名）；不强制建目录；模型加载走 `skill` 工具 |
 | `presets-catalog.ts` | agentPreset 列表常量 | `read` 只读；创作面仍 NI |
 | `message-feedback.ts` | `messageFeedback/list/put/delete` | 进程内 CAS；Typert 嵌套 ok；非 transcript |
@@ -78,7 +83,7 @@ HTTP/WS (attach-http)
 
 | 文件 | 作用 | 关键契约 |
 | --- | --- | --- |
-| `host-directory.ts` | list/createDirectory · `fullyQualified` | 绝对路径；条目上限 |
+| `host-directory.ts` | list/createDirectory · listDirectoryPlaces · `fullyQualified` | 绝对路径；条目上限；位置含主目录、桌面/文档/下载（Win Known Folder · macOS osascript · Linux XDG）与磁盘（Win 盘符 · POSIX `/` · macOS `/Volumes`） |
 | `host-open-path.ts` | `host.openPath` · `canOpenNativePath` · `spawnDetached` | 仅绝对路径；Win `cmd /c start`；与 open-in-app 共用 spawn |
 | `host-open-in-app.ts` | `host.listOpenInApps` · `host.openInApp` | 白名单探测；Win 编辑器优先真 `.exe`；`wt` 不用 Apps 别名路径 |
 | `remote-event.ts` | `host/remote-event` 白名单转发 | 无 Cordis inspect/run |
@@ -236,7 +241,12 @@ HTTP/WS (attach-http)
 | `fork-cut.ts` | `session.fork` completed-turn cut | Session lineage only; does not touch worktree files |
 | `plugin-inventory.ts` | `pluginInventory/list` projection | Process plugins + boot; cordis = failed |
 | `session-search.ts` | `session.search` | query 1..500 · no NUL · max 20 · recent activity first · admits admit/safety/command/todo/feedback |
-| `session-query-tools.ts` | Model tools `session_search` / `session_read` / `session_trace` | cwd authority · reuses searchSessions · byte-budget snapshot · subagent lineage; separate from `@session` prepare |
+| `session-query-tools.ts` | Model tools `session_inspect` / `session_search` / `session_read` / `session_trace` | inspect = cross-workspace metadata; search/read/trace = same cwd · reuses searchSessions · byte-budget snapshot · subagent lineage; separate from `@session` prepare |
+| `collab-board.ts` | Turn-start collab board | Parent: roster+主线; child: same-parent squad+own task; see [session-identity](../session-identity.md) |
+| `session-capability.ts` | Turn-start `<session_capability>` | Parent: permission×tool_surface; child: short `kind=delegated` block |
+| `session-posture.ts` | Turn-start `<session_posture>` | IM / Qichuang orchestrator role |
+| `session-kind.ts` | Derived engineering identity | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
+| `session-tool-copy.ts` | Collab-tool `dynamicSchema` copy | By kind · roster · sibling ids · followup/team_graph/interrupt/close/wait; see [session-identity](../session-identity.md) |
 | `skill-list.ts` | `skill.list` | Scan existing `.xrk|.claude|.cursor|.agents|.codex/skills` (and home peers); do not create dirs; model load uses `skill` tool |
 | `presets-catalog.ts` | agentPreset list constants | `read` only; authoring surface still NI |
 | `message-feedback.ts` | `messageFeedback/list/put/delete` | In-process CAS; nested Typert ok; not transcript |
@@ -249,7 +259,7 @@ HTTP/WS (attach-http)
 
 | File | Role | Critical contract |
 | --- | --- | --- |
-| `host-directory.ts` | list/createDirectory · `fullyQualified` | Absolute paths; entry caps |
+| `host-directory.ts` | list/createDirectory · listDirectoryPlaces · `fullyQualified` | Absolute paths; entry caps; places include home, Desktop/Documents/Downloads (Win Known Folder · macOS osascript · Linux XDG), and drives (Win letters · POSIX `/` · macOS `/Volumes`) |
 | `host-open-path.ts` | `host.openPath` · `canOpenNativePath` · `spawnDetached` | Absolute only; Win `cmd /c start`; shared spawn with open-in-app |
 | `host-open-in-app.ts` | `host.listOpenInApps` · `host.openInApp` | Whitelist probe; Win editors prefer real `.exe`; `wt` skips Apps alias paths |
 | `remote-event.ts` | `host/remote-event` allowlisted forward | No Cordis inspect/run |
