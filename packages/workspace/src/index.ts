@@ -335,6 +335,15 @@ export {
   type WorkspaceInjectAppend,
 } from "./durable-inject.js";
 
+export {
+  recordShadowSkillSelection,
+  scoreSkillAgainstQuery,
+  selectSkillsForBudget,
+  type SkillSelectMode,
+  type SkillSelectOptions,
+  type SkillSelectionResult,
+} from "./skill-select.js";
+
 /**
  * Options for resolving product-workspace injects.
  * Default product dir: `{root}/.xrk` plus ecosystem convention paths.

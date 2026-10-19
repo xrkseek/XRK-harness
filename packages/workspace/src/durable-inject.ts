@@ -9,6 +9,12 @@ import type {
   WorkspaceBudgetTruncation,
 } from "@xrkseek/protocol";
 import { clipToBudget, type InjectBudget } from "./inject-budget.js";
+import {
+  recordShadowSkillSelection,
+  selectSkillsForBudget,
+  type SkillSelectMode,
+  type SkillSelectionResult,
+} from "./skill-select.js";
 import type { SkillSummary } from "./skills.js";
 
 export interface WorkspaceBudgetEvent {
@@ -54,6 +60,11 @@ export interface DurableSkillCatalogPayload {
   readonly content: string;
   readonly digest: string;
   readonly source: Extract<UserMessageSource, { kind: "skill-catalog" }>;
+  /**
+   * Present when `selection.mode` is `shadow` or `select` — offline eval /
+   * observability only. Shadow mode never changes {@link content}.
+   */
+  readonly selection?: SkillSelectionResult;
 }
 
 export interface DurableInstructionsPayload {
@@ -80,10 +91,54 @@ export interface InstructionChange {
 export function buildSkillCatalogPayload(
   skills: readonly SkillSummary[],
   budget: InjectBudget,
-  options?: { readonly update?: boolean },
+  options?: {
+    readonly update?: boolean;
+    readonly selection?: {
+      readonly mode?: SkillSelectMode;
+      readonly query?: string;
+    };
+  },
 ): DurableSkillCatalogPayload | undefined {
   const listed = skills.filter((s) => s.modelInvocable);
   if (listed.length === 0) return undefined;
+  const mode = options?.selection?.mode ?? "truncate";
+  const query = options?.selection?.query;
+
+  // `select`: pack by relevance until the remaining budget fits (no mid-entry clip).
+  if (mode === "select") {
+    const packed = selectSkillsForBudget(listed, budget.left, query);
+    const full = formatAvailableSkillsXml(packed.selected);
+    const content = clipToBudget("skills", full, budget, {
+      suffix: "\n[skill catalog truncated] No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
+    });
+    if (!content.trim()) return undefined;
+    const included = listedForClippedCatalog(packed.selected, content);
+    const skillBudget = budget.events.filter((e) => e.section === "skills");
+    const truncations = budgetEventsToTruncations(skillBudget);
+    const digest = digestWorkspaceText(content);
+    return {
+      content,
+      digest,
+      selection: packed,
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: included.map((s) => ({
+          name: s.name,
+          description: s.description,
+        })),
+        digest,
+        ...(options?.update ? { update: true as const } : {}),
+        ...(truncations.length > 0 ? { budgetTruncations: truncations } : {}),
+      },
+    };
+  }
+
+  // `truncate` (default) and `shadow`: same prompt bytes; shadow only records selection.
+  const selection =
+    mode === "shadow"
+      ? recordShadowSkillSelection(listed, budget.left, query)
+      : undefined;
   const full = formatAvailableSkillsXml(listed);
   const content = clipToBudget("skills", full, budget, {
     suffix: "\n[skill catalog truncated] No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
@@ -96,6 +151,7 @@ export function buildSkillCatalogPayload(
   return {
     content,
     digest,
+    ...(selection ? { selection } : {}),
     source: {
       kind: "skill-catalog",
       form: "catalog",

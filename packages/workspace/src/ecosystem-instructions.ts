@@ -14,8 +14,13 @@ import {
 } from "./inject-budget.js";
 import {
   DEFAULT_MARKDOWN_DIR_MAX_DEPTH,
+  claimScanDir,
+  claimScanEntry,
+  claimScanRoot,
+  createScanBudget,
   nextScanDepth,
   shouldSkipScanDir,
+  type ScanBudget,
 } from "./scan-guards.js";
 import {
   resolveUserProductHome,
@@ -114,12 +119,16 @@ async function pushMarkdownDir(
   budget: InjectBudget,
   seen: Set<string>,
   depth: number,
+  scan: ScanBudget,
   options?: { readonly stripMdc?: boolean },
 ): Promise<void> {
-  if (budget.left <= 0) return;
+  if (budget.left <= 0 || scan.stopped) return;
+  if (depth === 0 && !claimScanRoot(scan)) return;
+  if (!claimScanDir(scan)) return;
   if (!(await exists(dir))) return;
   const names = (await readdir(dir)).sort();
   for (const name of names) {
+    if (scan.stopped) break;
     if (shouldSkipScanDir(name)) continue;
     const abs = path.join(dir, name);
     let entryStat;
@@ -138,11 +147,16 @@ async function pushMarkdownDir(
         budget,
         seen,
         nextDepth,
+        scan,
         options,
       );
       continue;
     }
     if (!/\.(md|mdc|markdown)$/i.test(name)) continue;
+    if (!claimScanEntry(scan, entryStat.size)) {
+      if (scan.stopped) break;
+      continue;
+    }
     const raw = await readIfExists(abs);
     if (!raw?.trim()) continue;
     if (name.endsWith(".mdc") && !mdcHostInjectEnabled(raw)) continue;
@@ -181,6 +195,7 @@ async function pushConventionLayer(
   budget: InjectBudget,
   seen: Set<string>,
   profile: ConventionInjectProfile,
+  scan: ScanBudget,
 ): Promise<void> {
   const lp = (suffix: string) =>
     logicalPrefix ? `${logicalPrefix}${suffix}` : suffix;
@@ -219,6 +234,7 @@ async function pushConventionLayer(
       budget,
       seen,
       0,
+      scan,
     );
   }
 
@@ -237,6 +253,7 @@ async function pushConventionLayer(
       budget,
       seen,
       0,
+      scan,
     );
     const agentsCtxDir = path.join(base, ".agents", "context");
     if (await exists(agentsCtxDir)) {
@@ -261,6 +278,7 @@ async function pushConventionLayer(
       budget,
       seen,
       0,
+      scan,
       { stripMdc: true },
     );
   }
@@ -280,6 +298,7 @@ async function pushConventionLayer(
       budget,
       seen,
       0,
+      scan,
     );
   }
 }
@@ -383,6 +402,7 @@ export async function collectEcosystemInstructions(
   const productDir = path.resolve(options.productDir);
   const sections: InstructionSection[] = [];
   const seen = new Set<string>();
+  const scan = createScanBudget();
   const includeUserHome = options.includeUserHome !== false;
   const isSubagent =
     options.audience === "subagent" || options.audience === "minimal";
@@ -396,6 +416,7 @@ export async function collectEcosystemInstructions(
       options.budget,
       seen,
       HOME_CONVENTION_INJECT,
+      scan,
     );
     await pushProductStanding(
       sections,
@@ -413,6 +434,7 @@ export async function collectEcosystemInstructions(
     options.budget,
     seen,
     WORKSPACE_CONVENTION_INJECT,
+    scan,
   );
   await pushProductStanding(sections, productDir, ".xrk/", options.budget, seen);
 
