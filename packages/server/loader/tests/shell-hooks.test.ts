@@ -7,6 +7,8 @@ import {
   loadShellHooksConfig,
   parsePreToolUseHooks,
   parseShellHooksConfig,
+  parseShellHooksConfigWithDiagnostics,
+  resolveShellHookTimeoutMs,
   toolNameMatches,
 } from "../src/shell-hooks.js";
 import { createToolPipeline, createToolRegistry } from "@xrkseek/core-tools";
@@ -48,9 +50,13 @@ describe("parseShellHooksConfig", () => {
     expect(config.PreToolUse).toEqual([
       { command: "node gate.js", matcher: "bash|write_file", timeoutMs: 5000 },
     ]);
-    expect(config.PostToolUse).toEqual([{ command: "echo post", matcher: "*" }]);
-    expect(config.UserPromptSubmit).toEqual([{ command: "echo prompt" }]);
-    expect(config.Stop).toEqual([{ command: "echo stop" }]);
+    expect(config.PostToolUse).toEqual([
+      { command: "echo post", matcher: "*", timeoutMs: 60_000 },
+    ]);
+    expect(config.UserPromptSubmit).toEqual([
+      { command: "echo prompt", timeoutMs: 60_000 },
+    ]);
+    expect(config.Stop).toEqual([{ command: "echo stop", timeoutMs: 60_000 }]);
     expect(config.PreCompact?.[0]?.command).toBe("echo pre-c");
     expect(config.SubagentStart?.[0]?.matcher).toBe("general-purpose");
   });
@@ -63,9 +69,9 @@ describe("parseShellHooksConfig", () => {
         preCompact: [{ hooks: [{ command: "pc.sh" }] }],
       },
     });
-    expect(config.PreToolUse).toEqual([{ command: "pre.sh" }]);
-    expect(config.PostToolUse).toEqual([{ command: "post.sh" }]);
-    expect(config.PreCompact).toEqual([{ command: "pc.sh" }]);
+    expect(config.PreToolUse).toEqual([{ command: "pre.sh", timeoutMs: 60_000 }]);
+    expect(config.PostToolUse).toEqual([{ command: "post.sh", timeoutMs: 60_000 }]);
+    expect(config.PreCompact).toEqual([{ command: "pc.sh", timeoutMs: 60_000 }]);
   });
 
   it("parsePreToolUseHooks stays PreToolUse-only (back-compat)", () => {
@@ -95,7 +101,44 @@ describe("parseShellHooksConfig", () => {
       parsePreToolUseHooks({
         PreToolUse: [{ hooks: [{ command: "deny.sh" }] }],
       }),
-    ).toEqual([{ command: "deny.sh" }]);
+    ).toEqual([{ command: "deny.sh", timeoutMs: 60_000 }]);
+  });
+
+  it("reports unsupported handler types and caps short-lived events", () => {
+    const { config, diagnostics } = parseShellHooksConfigWithDiagnostics({
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [
+              { type: "prompt", command: "nope" },
+              { type: "agent", command: "nope" },
+              { type: "command", command: "ok.sh" },
+            ],
+          },
+        ],
+        SessionEnd: [
+          { hooks: [{ type: "command", command: "end.sh", async: true }] },
+        ],
+        NotAnEvent: [{ hooks: [{ command: "x" }] }],
+      },
+    });
+    expect(config.PreToolUse?.map((c) => c.command)).toEqual(["ok.sh"]);
+    expect(config.SessionEnd).toBeUndefined();
+    const text = diagnostics.map((d) => d.message).join("\n");
+    expect(text).toMatch(/unsupported hook handler type "prompt"/);
+    expect(text).toMatch(/unsupported hook handler type "agent"/);
+    expect(text).toMatch(/SessionEnd forbids async/);
+    expect(diagnostics.some((d) => d.event === "(unknown)")).toBe(true);
+    expect(resolveShellHookTimeoutMs("SessionEnd", undefined)).toBe(1_000);
+    expect(resolveShellHookTimeoutMs("Interrupt", 60_000)).toBe(3_000);
+    const capped = parseShellHooksConfig({
+      hooks: {
+        SessionEnd: [{ hooks: [{ command: "end.sh", timeout: 30 }] }],
+        Interrupt: [{ hooks: [{ command: "int.sh" }] }],
+      },
+    });
+    expect(capped.SessionEnd?.[0]?.timeoutMs).toBe(3_000);
+    expect(capped.Interrupt?.[0]?.timeoutMs).toBe(1_000);
   });
 });
 
@@ -124,8 +167,8 @@ describe("loadShellHooksConfig", () => {
       }),
     );
     const config = loadShellHooksConfig([path.join(dir, "missing.json"), file]);
-    expect(config.PreToolUse).toEqual([{ command: "echo ok" }]);
-    expect(config.PostToolUse).toEqual([{ command: "echo post" }]);
+    expect(config.PreToolUse).toEqual([{ command: "echo ok", timeoutMs: 60_000 }]);
+    expect(config.PostToolUse).toEqual([{ command: "echo post", timeoutMs: 60_000 }]);
   });
 });
 
@@ -290,6 +333,9 @@ describe("createShellLifecycleHooks", () => {
     expect(life.has("Stop")).toBe(false);
     await life.run("UserPromptSubmit", { turn_id: "t1" });
     await life.run("PreCompact", { reason: "manual" });
+    await life.run("SessionEnd", { session_id: "s1" });
+    await life.run("Interrupt", { turn_id: "t1" });
+    await life.run("PreModelRequest", { turn_id: "t1", step_id: "st" });
     expect(runner).toHaveBeenCalledTimes(2);
     expect(JSON.parse(runner.mock.calls[0]![0].stdin)).toMatchObject({
       hook_event_name: "UserPromptSubmit",
@@ -300,6 +346,34 @@ describe("createShellLifecycleHooks", () => {
       hook_event_name: "PreCompact",
       reason: "manual",
     });
+    expect(runner.mock.calls[0]![0].timeoutMs).toBe(60_000);
+  });
+
+  it("runs SessionEnd, Interrupt, and model-request events with event timeout caps", async () => {
+    const seen: string[] = [];
+    const life = createShellLifecycleHooks({
+      config: {
+        SessionEnd: [{ command: "end.sh", timeoutMs: 60_000 }],
+        Interrupt: [{ command: "int.sh" }],
+        PreModelRequest: [{ command: "pre.sh" }],
+        PostModelRequest: [{ command: "post.sh" }],
+      },
+      cwd: "/ws",
+      runner: async (args) => {
+        seen.push(`${args.command}:${args.timeoutMs}`);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    await life.run("SessionEnd");
+    await life.run("Interrupt");
+    await life.run("PreModelRequest", { step_id: "s" });
+    await life.run("PostModelRequest", { step_id: "s" });
+    expect(seen).toEqual([
+      "end.sh:3000",
+      "int.sh:1000",
+      "pre.sh:60000",
+      "post.sh:60000",
+    ]);
   });
 });
 

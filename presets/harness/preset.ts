@@ -680,6 +680,10 @@ function wrapStoreForLifecycleWebhooks(
           trigger: event.reason,
         });
       }
+      const isFirstTurn =
+        id === sessionId &&
+        event.type === "turn/start" &&
+        store.readEvents(id).every((e) => e.type !== "turn/start");
       const logged = store.append(id, event);
       if (id === sessionId) {
         if (event.type === "turn/start") {
@@ -687,6 +691,12 @@ function wrapStoreForLifecycleWebhooks(
             hookEventName: "turn/start",
             turnId: event.turnId,
           });
+          if (isFirstTurn) {
+            shellLifecycle?.fire("SessionStart", {
+              turn_id: event.turnId,
+              source: "startup",
+            });
+          }
           shellLifecycle?.fire("UserPromptSubmit", {
             turn_id: event.turnId,
           });
@@ -700,6 +710,18 @@ function wrapStoreForLifecycleWebhooks(
             turn_id: event.turnId,
             reason: event.reason,
           });
+          const kind =
+            event.reason &&
+            typeof event.reason === "object" &&
+            "kind" in event.reason
+              ? String((event.reason as { kind?: unknown }).kind)
+              : "";
+          if (kind === "aborted" || kind === "interrupted") {
+            shellLifecycle?.fire("Interrupt", {
+              turn_id: event.turnId,
+              reason: event.reason,
+            });
+          }
         } else if (event.type === "context/compaction") {
           shellLifecycle?.fire("PostCompact", {
             turn_id: event.turnId,
@@ -897,7 +919,11 @@ export function createHarnessComposition(
       (shellHooksConfig.PostCompact?.length ?? 0) > 0 ||
       (shellHooksConfig.SubagentStart?.length ?? 0) > 0 ||
       (shellHooksConfig.SubagentStop?.length ?? 0) > 0 ||
-      (shellHooksConfig.SessionStart?.length ?? 0) > 0;
+      (shellHooksConfig.SessionStart?.length ?? 0) > 0 ||
+      (shellHooksConfig.SessionEnd?.length ?? 0) > 0 ||
+      (shellHooksConfig.Interrupt?.length ?? 0) > 0 ||
+      (shellHooksConfig.PreModelRequest?.length ?? 0) > 0 ||
+      (shellHooksConfig.PostModelRequest?.length ?? 0) > 0;
     if (hasLifecycle) {
       shellLifecycle = createShellLifecycleHooks({
         config: shellHooksConfig,
@@ -1865,6 +1891,22 @@ export function createHarnessComposition(
                     phase: "turn-start",
                   });
                 }
+              },
+            }
+          : {}),
+        ...(shellLifecycle
+          ? {
+              beforeLlmRequest: async (ctx) => {
+                shellLifecycle.fire("PreModelRequest", {
+                  turn_id: ctx.turnId,
+                  step_id: ctx.stepId,
+                });
+              },
+              afterLlmRequest: async (ctx) => {
+                shellLifecycle.fire("PostModelRequest", {
+                  turn_id: ctx.turnId,
+                  step_id: ctx.stepId,
+                });
               },
             }
           : {}),

@@ -20,6 +20,8 @@ export const DEFAULT_SHELL_HOOK_TIMEOUT_MS = 60_000;
 /**
  * Upstream-compatible event names (Claude PascalCase).
  * Codex camelCase aliases are normalized at parse time.
+ * SessionEnd / Interrupt / PreModelRequest / PostModelRequest match Codex's
+ * 14-class HookEventName surface (command handlers only in this package).
  */
 export const SHELL_HOOK_EVENTS = [
   "PreToolUse",
@@ -32,6 +34,10 @@ export const SHELL_HOOK_EVENTS = [
   "SubagentStart",
   "SubagentStop",
   "SessionStart",
+  "SessionEnd",
+  "Interrupt",
+  "PreModelRequest",
+  "PostModelRequest",
 ] as const;
 
 export type ShellHookEventName = (typeof SHELL_HOOK_EVENTS)[number];
@@ -50,7 +56,86 @@ const EVENT_ALIASES: Record<string, ShellHookEventName> = {
   subagentStart: "SubagentStart",
   subagentStop: "SubagentStop",
   sessionStart: "SessionStart",
+  sessionEnd: "SessionEnd",
+  interrupt: "Interrupt",
+  preModelRequest: "PreModelRequest",
+  postModelRequest: "PostModelRequest",
 };
+
+/**
+ * Per-event timeout floor / ceiling (Codex: SessionEnd/Interrupt default 1s,
+ * max 3s). Other events keep the Hermes-scale default unless capped.
+ */
+export const SHELL_HOOK_EVENT_TIMEOUT_MS: Record<
+  ShellHookEventName,
+  { readonly defaultMs: number; readonly maxMs: number }
+> = {
+  PreToolUse: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  PostToolUse: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  PermissionRequest: {
+    defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS,
+    maxMs: 600_000,
+  },
+  UserPromptSubmit: {
+    defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS,
+    maxMs: 600_000,
+  },
+  Stop: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  PreCompact: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  PostCompact: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  SubagentStart: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  SubagentStop: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  SessionStart: { defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS, maxMs: 600_000 },
+  SessionEnd: { defaultMs: 1_000, maxMs: 3_000 },
+  Interrupt: { defaultMs: 1_000, maxMs: 3_000 },
+  PreModelRequest: {
+    defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS,
+    maxMs: 600_000,
+  },
+  PostModelRequest: {
+    defaultMs: DEFAULT_SHELL_HOOK_TIMEOUT_MS,
+    maxMs: 600_000,
+  },
+};
+
+/** SessionEnd must run synchronously (Codex forbids async on this event). */
+const SYNC_ONLY_EVENTS = new Set<ShellHookEventName>(["SessionEnd"]);
+
+/**
+ * Events that may contribute `additionalContext` from hook stdout JSON.
+ * Codex limits this to five lifecycle/tool points.
+ */
+export const SHELL_HOOK_ADDITIONAL_CONTEXT_EVENTS = new Set<ShellHookEventName>([
+  "PreToolUse",
+  "UserPromptSubmit",
+  "SessionStart",
+  "SubagentStart",
+  "PreCompact",
+]);
+
+export interface ShellHookParseDiagnostic {
+  readonly event: ShellHookEventName | "(unknown)";
+  readonly level: "error" | "warn";
+  readonly message: string;
+}
+
+export function resolveShellHookTimeoutMs(
+  event: ShellHookEventName,
+  configuredMs: number | undefined,
+  fallbackDefaultMs?: number,
+): number {
+  const tier = SHELL_HOOK_EVENT_TIMEOUT_MS[event];
+  const configured =
+    configuredMs !== undefined && Number.isFinite(configuredMs) && configuredMs > 0
+      ? configuredMs
+      : undefined;
+  const raw =
+    configured ??
+    (tier.defaultMs === DEFAULT_SHELL_HOOK_TIMEOUT_MS
+      ? (fallbackDefaultMs ?? tier.defaultMs)
+      : tier.defaultMs);
+  return Math.min(Math.max(1, Math.floor(raw)), tier.maxMs);
+}
 
 /** Events whose matcher subject is a tool name. */
 const TOOL_MATCH_EVENTS = new Set<ShellHookEventName>([
@@ -164,6 +249,7 @@ function normalizeEventName(raw: string): ShellHookEventName | undefined {
 function parseCommandGroups(
   event: ShellHookEventName,
   groups: unknown,
+  diagnostics: ShellHookParseDiagnostic[],
 ): ShellHookCommand[] {
   if (!Array.isArray(groups)) return [];
   const out: ShellHookCommand[] = [];
@@ -171,7 +257,11 @@ function parseCommandGroups(
     event === "UserPromptSubmit" ||
     event === "Stop" ||
     event === "PreCompact" ||
-    event === "PostCompact";
+    event === "PostCompact" ||
+    event === "SessionEnd" ||
+    event === "Interrupt" ||
+    event === "PreModelRequest" ||
+    event === "PostModelRequest";
   for (const rawGroup of groups) {
     const group = asObject(rawGroup);
     if (!group || !Array.isArray(group.hooks)) continue;
@@ -183,8 +273,30 @@ function parseCommandGroups(
       const hook = asObject(rawHook);
       if (!hook) continue;
       const type = typeof hook.type === "string" ? hook.type : "command";
-      if (type !== "command") continue;
-      if (hook.async === true) continue;
+      if (type !== "command") {
+        diagnostics.push({
+          event,
+          level: "error",
+          message: `unsupported hook handler type "${type}" (only "command" is implemented; prompt/agent/mcpTool are not silent-skipped)`,
+        });
+        continue;
+      }
+      if (hook.async === true) {
+        if (SYNC_ONLY_EVENTS.has(event)) {
+          diagnostics.push({
+            event,
+            level: "error",
+            message: `${event} forbids async handlers`,
+          });
+        } else {
+          diagnostics.push({
+            event,
+            level: "warn",
+            message: `async command handlers are not implemented yet; skipped`,
+          });
+        }
+        continue;
+      }
       if (typeof hook.command !== "string" || !hook.command.trim()) continue;
       const timeoutSec =
         typeof hook.timeout === "number" &&
@@ -196,12 +308,14 @@ function parseCommandGroups(
               hook.timeoutSec > 0
             ? hook.timeoutSec
             : undefined;
+      const timeoutMs =
+        timeoutSec !== undefined
+          ? resolveShellHookTimeoutMs(event, Math.floor(timeoutSec * 1000))
+          : resolveShellHookTimeoutMs(event, undefined);
       out.push({
         command: hook.command,
         ...(matcher !== undefined ? { matcher } : {}),
-        ...(timeoutSec !== undefined
-          ? { timeoutMs: Math.floor(timeoutSec * 1000) }
-          : {}),
+        timeoutMs,
       });
     }
   }
@@ -210,23 +324,43 @@ function parseCommandGroups(
 
 /**
  * Parse Claude/Codex-style `{ hooks: { PreToolUse: [...] } }` or a bare event map.
- * Only `type: command` (default) entries survive; unknown events are ignored.
+ * Only `type: command` (default) entries survive; unsupported handlers are
+ * reported via {@link ShellHookParseDiagnostic} (never silently skipped).
  */
-export function parseShellHooksConfig(raw: unknown): ShellHooksConfig {
+export function parseShellHooksConfigWithDiagnostics(raw: unknown): {
+  readonly config: ShellHooksConfig;
+  readonly diagnostics: readonly ShellHookParseDiagnostic[];
+} {
+  const diagnostics: ShellHookParseDiagnostic[] = [];
   const root = asObject(raw);
   const hooksMap = root ? (asObject(root.hooks) ?? root) : undefined;
-  if (!hooksMap) return {};
+  if (!hooksMap) return { config: {}, diagnostics };
   const out: { [K in ShellHookEventName]?: ShellHookCommand[] } = {};
   for (const [key, groups] of Object.entries(hooksMap)) {
     const event = normalizeEventName(key);
-    if (!event) continue;
-    const commands = parseCommandGroups(event, groups);
+    if (!event) {
+      diagnostics.push({
+        event: "(unknown)",
+        level: "warn",
+        message: `unknown hook event "${key}" ignored`,
+      });
+      continue;
+    }
+    const commands = parseCommandGroups(event, groups, diagnostics);
     if (commands.length === 0) continue;
     const bucket = out[event] ?? [];
     bucket.push(...commands);
     out[event] = bucket;
   }
-  return out;
+  return { config: out, diagnostics };
+}
+
+/**
+ * Parse Claude/Codex-style `{ hooks: { PreToolUse: [...] } }` or a bare event map.
+ * Only `type: command` (default) entries survive; unknown events are ignored.
+ */
+export function parseShellHooksConfig(raw: unknown): ShellHooksConfig {
+  return parseShellHooksConfigWithDiagnostics(raw).config;
 }
 
 /**
@@ -475,7 +609,11 @@ async function runHookList(options: {
         cwd: options.cwd,
         env: options.env,
         stdin: `${JSON.stringify(stdinBase)}\n`,
-        timeoutMs: hook.timeoutMs ?? options.defaultTimeoutMs,
+        timeoutMs: resolveShellHookTimeoutMs(
+          options.event,
+          hook.timeoutMs,
+          options.defaultTimeoutMs,
+        ),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       results.push(result);
@@ -529,6 +667,11 @@ export function createShellHookPre(
         return { action: "deny", reason };
       }
       if (result.exitCode === 0) {
+        if (SHELL_HOOK_ADDITIONAL_CONTEXT_EVENTS.has("PreToolUse")) {
+          for (const text of additionalContextsFromStdout(result.stdout)) {
+            ctx.additionalContexts.push(text);
+          }
+        }
         const fromJson = decisionFromStdout(result.stdout);
         if (fromJson) return fromJson;
       }

@@ -23,6 +23,7 @@ export {
   isFaceRespondPath,
   isFaceWsPath,
   isLoopbackAddress,
+  timingSafeStringEqual,
   mapFaceRpcError,
   okResponse,
   parseClientResponse,

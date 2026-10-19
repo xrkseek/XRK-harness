@@ -1316,9 +1316,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),
     ...(invalidateAgent ? { invalidateAgent } : {}),
-    ...(options.onSessionFinalize
-      ? { onSessionFinalize: options.onSessionFinalize }
-      : {}),
+    onSessionFinalize: async (sessionId) => {
+      shellLifecycle.fire("SessionEnd", { session_id: sessionId });
+      await options.onSessionFinalize?.(sessionId);
+    },
     ...(options.hasPtyActivity
       ? { hasPtyActivity: options.hasPtyActivity }
       : {}),
