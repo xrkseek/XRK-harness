@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import {
   hostCreateDirectory,
   hostListDirectory,
+  hostListDirectoryPlaces,
 } from "../host-directory.js";
 import { canOpenNativePath, hostOpenPath } from "../host-open-path.js";
 import {
@@ -58,6 +59,19 @@ export const hostPickDirectory: FaceHandler = async (runtime) => {
     };
   }
   return hostPickDirectoryRpc(runtime);
+};
+
+export const hostListDirectoryPlacesHandler: FaceHandler = async (runtime) => {
+  if (runtime.directoryBackend || runtime.remoteExecution) {
+    const home = runtime.workspaceRoot;
+    return {
+      ok: true,
+      value: {
+        places: [{ id: "home", kind: "home" as const, label: "Home", path: home }],
+      },
+    };
+  }
+  return hostListDirectoryPlaces();
 };
 
 export const hostListDirectoryHandler: FaceHandler = async (

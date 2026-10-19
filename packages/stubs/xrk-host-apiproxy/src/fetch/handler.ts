@@ -34,7 +34,8 @@ import {
 } from '../api/sessions.schema.ts'
 import {
   hostCreateDirectoryRequestSchema, hostDescribeRequestSchema,
-  hostListDirectoryRequestSchema, hostOpenPathRequestSchema,
+  hostListDirectoryRequestSchema, hostListDirectoryPlacesRequestSchema,
+  hostOpenPathRequestSchema,
   hostListOpenInAppsRequestSchema, hostOpenInAppRequestSchema,
   hostPickDirectoryRequestSchema,
 } from '../api/host.schema.ts'
@@ -128,6 +129,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'host.describe': { schema: hostDescribeRequestSchema, invoke: (api, r) => api.host.describe(r) },
   'host.pickDirectory': { schema: hostPickDirectoryRequestSchema, invoke: (api, r, signal) => api.host.pickDirectory(r, signal) },
   'host.listDirectory': { schema: hostListDirectoryRequestSchema, invoke: (api, r, signal) => api.host.listDirectory(r, signal) },
+  'host.listDirectoryPlaces': { schema: hostListDirectoryPlacesRequestSchema, invoke: (api, r) => api.host.listDirectoryPlaces(r) },
   'host.createDirectory': { schema: hostCreateDirectoryRequestSchema, invoke: (api, r) => api.host.createDirectory(r) },
   'host.openPath': { schema: hostOpenPathRequestSchema, invoke: (api, r, signal) => api.host.openPath(r, signal) },
   'host.listOpenInApps': { schema: hostListOpenInAppsRequestSchema, invoke: (api, r) => api.host.listOpenInApps(r) },

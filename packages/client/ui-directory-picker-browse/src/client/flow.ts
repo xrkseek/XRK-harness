@@ -5,7 +5,7 @@
  */
 import { createElement } from 'react'
 import type { ReactElement } from 'react'
-import type { DirectoryListing } from '@xrkseek/client-runtime/client'
+import type { DirectoryListing, DirectoryPlace } from '@xrkseek/client-runtime/client'
 import type { Translate } from '@xrkseek/client-locale/client'
 // Type-only: the owner contract of the directory-flow holes.
 import type { DirectoryFlowOwnerProps } from '@xrkseek/client-ui-workspace/client'
@@ -17,6 +17,8 @@ export interface BrowseFlowInjected {
   listDirectory: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>
   /** Create one child directory under an existing parent. */
   createDirectory: (path: string, name: string) => Promise<string>
+  /** Places shown before the columns. Absent opens straight at home. */
+  listDirectoryPlaces?: () => Promise<readonly DirectoryPlace[]>
   /** Localized dialog copy (this package's namespace). */
   t: Translate
 }
@@ -36,6 +38,7 @@ export function BrowseDirectoryFlow(props: DirectoryFlowOwnerProps & BrowseFlowI
     busy: props.busy,
     listDirectory: props.listDirectory,
     createDirectory: props.createDirectory,
+    ...(props.listDirectoryPlaces === undefined ? {} : { listDirectoryPlaces: props.listDirectoryPlaces }),
     t: props.t,
     onOpen: props.onPicked,
     onClose: props.onCancel,

@@ -3060,6 +3060,32 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async listDirectoryPlaces(request) {
+        const capability = ctx.directoryPicker.capability()
+        if (capability.kind !== 'browse') {
+          return err(request, {
+            code: 'directory-picker-unavailable',
+            message: `host.listDirectoryPlaces needs the browse capability; the composed picker serves "${capability.kind}"`,
+            details: { capability: capability.kind },
+          })
+        }
+        try {
+          // Stub / DSH browse seams may not expose places: synthesize Home from
+          // an unbound listing so the tile step still has one jump target.
+          const listing = await capability.list(undefined, new AbortController().signal)
+          return ok(request, {
+            places: [{
+              id: 'home',
+              kind: 'home' as const,
+              label: 'Home',
+              path: listing.home || listing.path,
+            }],
+          })
+        } catch (error: unknown) {
+          return err(request, directoryError(error))
+        }
+      },
+
       async openPath(request, signal) {
         if (request.payload.reveal === true) {
           return revealPath(request, request.payload.path, signal)

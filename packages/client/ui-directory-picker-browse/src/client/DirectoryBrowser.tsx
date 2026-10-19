@@ -37,10 +37,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutline16, IconChevronRightOutline14, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
+  Button, IconCheckOutline16, IconChevronLeftOutline14, IconChevronRightOutline14, IconClockOutline16,
+  IconDatabaseOutline16, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
   IconPlusOutline16, Modal,
 } from '@xrkseek/client-ui-primitives'
-import type { DirectoryEntry, DirectoryListing } from '@xrkseek/client-runtime/client'
+import type { DirectoryEntry, DirectoryListing, DirectoryPlace } from '@xrkseek/client-runtime/client'
 import { DirectoryBrowseError } from '@xrkseek/client-runtime/client'
 import type { Translate } from '@xrkseek/client-locale/client'
 import css from './DirectoryBrowser.module.css'
@@ -53,6 +54,11 @@ export interface DirectoryBrowserProps {
   listDirectory: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>
   /** Create one child directory under an existing parent. */
   createDirectory: (path: string, name: string) => Promise<string>
+  /**
+   * Places shown before the columns (home, profile folders, drives).
+   * Absent keeps the dialog opening straight at the Host home directory.
+   */
+  listDirectoryPlaces?: () => Promise<readonly DirectoryPlace[]>
   /** The operator confirmed a directory (the selection, else the listed level). */
   onOpen: (path: string) => void
   /** Close without picking (mask, Escape, Cancel). */
@@ -61,6 +67,131 @@ export interface DirectoryBrowserProps {
   busy: boolean
   /** Localized copy. */
   t: Translate
+}
+
+const RECENT_PLACES_KEY = 'xrk.directory-places.recent.v1'
+const PLACE_CATALOG_KEY = 'xrk.directory-places.catalog.v1'
+
+const PLACE_KINDS = new Set(['home', 'desktop', 'documents', 'downloads', 'drive'])
+
+/** In-memory copy so a remount in the same page still paints before localStorage. */
+let placeCatalogMemory: DirectoryPlace[] | null = null
+
+/** Test-only: drop the in-memory place catalog (localStorage is the caller's). */
+export function resetPlaceCatalogForTests(): void {
+  placeCatalogMemory = null
+}
+
+type PickerPlace = DirectoryPlace | { id: string; kind: 'recent'; label: string; path: string }
+
+function readRecentPlaces(): PickerPlace[] {
+  try {
+    const raw = localStorage.getItem(RECENT_PLACES_KEY)
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((row) => {
+      if (row === null || typeof row !== 'object') return []
+      const path = 'path' in row && typeof row.path === 'string' ? row.path : ''
+      const label = 'label' in row && typeof row.label === 'string' ? row.label : ''
+      if (path === '' || label === '') return []
+      return [{ id: `recent:${path}`, kind: 'recent' as const, label, path }]
+    }).slice(0, 6)
+  } catch {
+    return []
+  }
+}
+
+function parseHostPlaces(raw: string | null): DirectoryPlace[] {
+  if (raw === null) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((row) => {
+      if (row === null || typeof row !== 'object') return []
+      const id = 'id' in row && typeof row.id === 'string' ? row.id : ''
+      const kind = 'kind' in row && typeof row.kind === 'string' ? row.kind : ''
+      const label = 'label' in row && typeof row.label === 'string' ? row.label : ''
+      const path = 'path' in row && typeof row.path === 'string' ? row.path : ''
+      if (id === '' || label === '' || path === '' || !PLACE_KINDS.has(kind)) return []
+      return [{ id, kind: kind as DirectoryPlace['kind'], label, path }]
+    })
+  } catch {
+    return []
+  }
+}
+
+/** Host tiles plus recent, or null when this browser has never loaded places. */
+function readPlaceCatalog(): PickerPlace[] | null {
+  const host = placeCatalogMemory ?? parseHostPlaces(
+    (() => { try { return localStorage.getItem(PLACE_CATALOG_KEY) } catch { return null } })(),
+  )
+  if (host.length === 0) return null
+  const known = new Set(host.map((place) => place.path))
+  const recent = readRecentPlaces().filter((place) => !known.has(place.path))
+  return [...host, ...recent]
+}
+
+function writePlaceCatalog(rows: readonly DirectoryPlace[]): void {
+  placeCatalogMemory = [...rows]
+  try {
+    localStorage.setItem(PLACE_CATALOG_KEY, JSON.stringify(rows.map((place) => ({
+      id: place.id, kind: place.kind, label: place.label, path: place.path,
+    }))))
+  } catch { /* private mode */ }
+}
+
+function rememberPlace(path: string, label: string): void {
+  const next = [
+    { path, label },
+    ...readRecentPlaces().filter((place) => place.path !== path).map((place) => ({ path: place.path, label: place.label })),
+  ].slice(0, 6)
+  try { localStorage.setItem(RECENT_PLACES_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+}
+
+function placeCaption(place: PickerPlace, t: Translate): string {
+  if (place.kind === 'drive' || place.kind === 'recent') return place.label
+  const key = `browser.place.${place.kind}`
+  const text = t(key)
+  return text === key ? place.label : text
+}
+
+/** Compact path for the tile subtitle (home → ~; keep drive letter readable). */
+function placePathHint(path: string, home: string | undefined): string {
+  if (home && (path === home || path.startsWith(`${home}/`) || path.startsWith(`${home}\\`))) {
+    return `~${path.slice(home.length)}` || '~'
+  }
+  return path
+}
+
+function placeIcon(kind: PickerPlace['kind']) {
+  if (kind === 'drive') return <IconDatabaseOutline16 size={22} />
+  if (kind === 'recent') return <IconClockOutline16 size={22} />
+  if (kind === 'home') return <IconFolderOpen16 size={22} />
+  return <IconFolderClose16 size={22} />
+}
+
+function placeMatches(place: PickerPlace, needle: string, t: Translate): boolean {
+  if (needle.length === 0) return true
+  const caption = placeCaption(place, t).toLowerCase()
+  return caption.includes(needle) || place.path.toLowerCase().includes(needle) || place.label.toLowerCase().includes(needle)
+}
+
+type PlaceSection = { id: 'common' | 'drives' | 'recent'; items: PickerPlace[] }
+
+function groupPlaces(rows: readonly PickerPlace[]): PlaceSection[] {
+  const common: PickerPlace[] = []
+  const drives: PickerPlace[] = []
+  const recent: PickerPlace[] = []
+  for (const place of rows) {
+    if (place.kind === 'drive') drives.push(place)
+    else if (place.kind === 'recent') recent.push(place)
+    else common.push(place)
+  }
+  return [
+    ...(common.length > 0 ? [{ id: 'common' as const, items: common }] : []),
+    ...(drives.length > 0 ? [{ id: 'drives' as const, items: drives }] : []),
+    ...(recent.length > 0 ? [{ id: 'recent' as const, items: recent }] : []),
+  ]
 }
 
 /** Failure text: the Host business message when typed, else the throw's text. */
@@ -259,7 +390,9 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
  * @param props - owner-controlled browser props.
  * @returns the dialog element (null while closed, via Modal).
  */
-export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen, onClose, busy, t }: DirectoryBrowserProps) {
+export function DirectoryBrowser({
+  open, listDirectory, createDirectory, listDirectoryPlaces, onOpen, onClose, busy, t,
+}: DirectoryBrowserProps) {
   // Miller state: the listed level, the selected row in it, and the selected
   // folder's own listing (the right column; null while nothing is selected).
   const [parent, setParent] = useState<DirectoryListing | null>(null)
@@ -282,6 +415,14 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   // Create-folder state: null = closed; a string = the nested dialog's draft.
   const [folderDraft, setFolderDraft] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
+  // Place tiles lead when the host can name them; columns open after a pick.
+  const [places, setPlaces] = useState<readonly PickerPlace[] | null>(() => readPlaceCatalog())
+  const [showingPlaces, setShowingPlaces] = useState(false)
+  const [placeQuery, setPlaceQuery] = useState('')
+  const [placeFocus, setPlaceFocus] = useState(0)
+  const placeSearchRef = useRef<HTMLInputElement | null>(null)
+  const listPlacesRef = useRef(listDirectoryPlaces)
+  listPlacesRef.current = listDirectoryPlaces
   const [createError, setCreateError] = useState<string | null>(null)
   const requestSeq = useRef(0)
   // The in-flight listing's controller: superseding intent aborts the wire
@@ -560,8 +701,8 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     select(entry)
   }, [child, select])
 
-  // Every open starts fresh at the Host home directory; closing invalidates
-  // any in-flight response so a late arrival cannot repopulate a closed dialog.
+  // Every open starts at the place tiles when the host can name them, else
+  // at the home directory. Closing invalidates in-flight responses.
   useEffect(() => {
     openGeneration.current += 1
     if (open) {
@@ -570,7 +711,34 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
       setChild(null)
       setCreatingFolder(false)
       setShowHidden(false)
-      navigate()
+      const loadPlaces = listPlacesRef.current
+      if (loadPlaces === undefined) {
+        setShowingPlaces(false)
+        setPlaces(null)
+        navigate()
+        return
+      }
+      setShowingPlaces(true)
+      const cached = readPlaceCatalog()
+      setPlaces(cached)
+      setPlaceQuery('')
+      setPlaceFocus(0)
+      const generation = openGeneration.current
+      loadPlaces().then((rows) => {
+        if (generation !== openGeneration.current) return
+        writePlaceCatalog(rows)
+        const known = new Set(rows.map((place) => place.path))
+        const recent = readRecentPlaces().filter((place) => !known.has(place.path))
+        setPlaces([...rows, ...recent])
+        // Park focus in the filter so typing searches without an extra click
+        // (Codex picker hint: / search · enter open · esc close).
+        queueMicrotask(() => { placeSearchRef.current?.focus() })
+      }, () => {
+        if (generation !== openGeneration.current) return
+        if (readPlaceCatalog() !== null) return
+        setShowingPlaces(false)
+        navigate()
+      })
       return
     }
     supersede()
@@ -583,6 +751,8 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     setPathDraft(null)
     setFolderDraft(null)
     setCreateError(null)
+    setPlaceQuery('')
+    setShowingPlaces(false)
     // A close mid-flight (failed Enter, then Cancel) may leave refocus
     // flags armed; retire them so a later render cannot consume them.
     refocusPick.current = false
@@ -748,6 +918,29 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   // committing actions must not act on the previous selection/listing while
   // a different path is displayed.
   const draftPending = pathDraft !== null
+  const placeNeedle = placeQuery.trim().toLowerCase()
+  const visiblePlaces = places === null
+    ? []
+    : places.filter((place) => placeMatches(place, placeNeedle, t))
+  const placeSections = groupPlaces(visiblePlaces)
+  const placeHome = places?.find((place) => place.kind === 'home')?.path
+  const focusedPlace = visiblePlaces[Math.min(placeFocus, Math.max(visiblePlaces.length - 1, 0))]
+  const enterPlace = (place: PickerPlace): void => {
+    rememberPlace(place.path, placeCaption(place, t))
+    setShowingPlaces(false)
+    navigate(place.path)
+  }
+  const returnToPlaces = (): void => {
+    supersede()
+    setLoading(false)
+    setParent(null)
+    setSelected(null)
+    setChild(null)
+    setPathDraft(null)
+    setError(null)
+    setShowingPlaces(true)
+    queueMicrotask(() => { placeSearchRef.current?.focus() })
+  }
 
   return (
     <Modal
@@ -756,10 +949,20 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
       // the nested create dialog is up only that topmost dialog may close
       // (its own guard keeps an in-flight creation open), and an in-flight
       // adoption pins the flow — dismissing it would leave the owner's
-      // createWorkspace to land after an apparent cancel.
-      onClose={() => { if (folderDraft === null && !busy) onClose() }}
+      // createWorkspace to land after an apparent cancel. From the columns,
+      // Escape first returns to the place tiles (Codex cancel-restore step).
+      onClose={() => {
+        if (folderDraft !== null || busy) return
+        if (!showingPlaces && places !== null && pathDraft === null) {
+          returnToPlaces()
+          return
+        }
+        onClose()
+      }}
       title={t('browser.title')}
-      className={clsx(css.dialog)}
+      // Places step is short; hug content instead of a fixed 500px cavern.
+      // Miller columns keep the full-height card so two panes have room.
+      className={clsx(css.dialog, showingPlaces && css.dialogPlaces)}
       headless
     >
       {/* Path-edit cancellation is observed at the card scope, not the
@@ -806,7 +1009,42 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         }}
       >
         <div className={css.header}>
-          <h2 className={css.title}>{t('browser.title')}</h2>
+          <h2 className={css.title}>{showingPlaces ? t('browser.placesTitle') : t('browser.title')}</h2>
+          {showingPlaces
+            ? (
+              <input
+                ref={placeSearchRef}
+                className={css.placeSearch}
+                value={placeQuery}
+                placeholder={t('browser.placesSearch')}
+                aria-label={t('browser.placesSearch')}
+                disabled={parentInert}
+                onChange={(event) => {
+                  setPlaceQuery(event.target.value)
+                  setPlaceFocus(0)
+                }}
+                {...compositionGuard}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+                    event.preventDefault()
+                    if (visiblePlaces.length === 0) return
+                    setPlaceFocus((index) => (index + 1) % visiblePlaces.length)
+                    return
+                  }
+                  if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+                    event.preventDefault()
+                    if (visiblePlaces.length === 0) return
+                    setPlaceFocus((index) => (index - 1 + visiblePlaces.length) % visiblePlaces.length)
+                    return
+                  }
+                  if (event.key === 'Enter' && !composingRef.current && focusedPlace !== undefined) {
+                    event.preventDefault()
+                    enterPlace(focusedPlace)
+                  }
+                }}
+              />
+            )
+            : (
           <div className={css.crumbBar}>
             {pathDraft === null
               ? (
@@ -912,9 +1150,58 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
                 />
               )}
           </div>
+            )}
         </div>
-        <div className={css.content}>
-          <div className={css.millerRow} ref={millerRowRef}>
+        <div className={clsx(css.content, showingPlaces && css.contentPlaces)}>
+          {showingPlaces && (
+            <div className={css.placesPane}>
+              {places === null
+                ? <div className={css.status} role="status">{t('browser.loading')}</div>
+                : placeSections.length === 0
+                  ? <div className={css.placesEmpty} role="status">{t('browser.placesEmpty')}</div>
+                  : placeSections.map((section) => (
+                    <section key={section.id} className={css.placeSection} aria-label={t(`browser.placesSection.${section.id}`)}>
+                      <h3 className={css.placeSectionTitle}>{t(`browser.placesSection.${section.id}`)}</h3>
+                      <div className={css.placeGrid}>
+                        {section.items.map((place) => {
+                          const index = visiblePlaces.indexOf(place)
+                          const caption = placeCaption(place, t)
+                          return (
+                            <button
+                              key={place.id}
+                              type="button"
+                              className={clsx(css.placeCard, index === placeFocus && css.placeCardFocused)}
+                              aria-label={caption}
+                              aria-current={index === placeFocus ? 'true' : undefined}
+                              disabled={parentInert}
+                              onMouseEnter={() => { setPlaceFocus(index) }}
+                              onClick={() => { enterPlace(place) }}
+                            >
+                              {placeIcon(place.kind)}
+                              <span className={css.placeCaption}>{caption}</span>
+                              <span className={css.placePath} aria-hidden="true">
+                                {placePathHint(place.path, placeHome)}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  ))}
+            </div>
+          )}
+          {!showingPlaces && places !== null && (
+            <button
+              type="button"
+              className={css.placeBack}
+              disabled={parentInert}
+              onClick={returnToPlaces}
+            >
+              <IconChevronLeftOutline14 size={14} />
+              {t('browser.places')}
+            </button>
+          )}
+          <div className={clsx(css.millerRow, showingPlaces && css.millerHidden)} ref={millerRowRef}>
             {parent !== null && (
               <LevelColumn
                 entries={parent.entries}
@@ -947,47 +1234,58 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
           * on screen, so an in-flight scan leaves it alone — hiding it while
           * the stale view still shows the cut level would shift the columns
           * on every navigation away from it. */}
-          {(parent?.truncated === true || child?.truncated === true)
+          {!showingPlaces && (parent?.truncated === true || child?.truncated === true)
           && <div className={css.status} role="status">{t('browser.truncated')}</div>}
-          {error !== null && <div className={css.error} role="alert">{error}</div>}
+          {!showingPlaces && error !== null && <div className={css.error} role="alert">{error}</div>}
         </div>
         <div className={css.footerBar}>
-          <Button
-            variant="outline"
-            icon={<IconPlusOutline16 size={14} />}
-            disabled={parent === null || loading || parentInert || draftPending}
-            onClick={() => {
-              setFolderDraft('')
-              setCreateError(null)
-            }}
-          >
-            {t('browser.newFolder')}
-          </Button>
-          <button
-            type="button"
-            className={clsx(css.showHiddenToggle, showHidden && css.showHiddenToggleActive)}
-            aria-pressed={showHidden}
-            disabled={parentInert}
-            // The toggle composes with the path editor (dot-led prefixes and
-            // this filter interleave): while editing, don't steal focus, so
-            // toggling never blur-cancels a draft mid-thought. Outside editing
-            // it keeps native focus behavior.
-            onMouseDown={draftPending ? (event) => { event.preventDefault() } : undefined}
-            onClick={() => { setShowHidden(prev => !prev) }}
-          >
-            {t('browser.showHidden')}
-            {/* Trailing check (Menu's selected vocabulary): the label never
-              * shifts when the pressed state toggles. */}
-            {showHidden && <IconCheckOutline16 size={14} />}
-          </button>
+          {!showingPlaces && (
+            <>
+              <Button
+                variant="outline"
+                icon={<IconPlusOutline16 size={14} />}
+                disabled={parent === null || loading || parentInert || draftPending}
+                onClick={() => {
+                  setFolderDraft('')
+                  setCreateError(null)
+                }}
+              >
+                {t('browser.newFolder')}
+              </Button>
+              <button
+                type="button"
+                className={clsx(css.showHiddenToggle, showHidden && css.showHiddenToggleActive)}
+                aria-pressed={showHidden}
+                disabled={parentInert}
+                // The toggle composes with the path editor (dot-led prefixes and
+                // this filter interleave): while editing, don't steal focus, so
+                // toggling never blur-cancels a draft mid-thought. Outside editing
+                // it keeps native focus behavior.
+                onMouseDown={draftPending ? (event) => { event.preventDefault() } : undefined}
+                onClick={() => { setShowHidden(prev => !prev) }}
+              >
+                {t('browser.showHidden')}
+                {/* Trailing check (Menu's selected vocabulary): the label never
+                  * shifts when the pressed state toggles. */}
+                {showHidden && <IconCheckOutline16 size={14} />}
+              </button>
+            </>
+          )}
+          {showingPlaces && (
+            <span className={css.placesHint} role="note">{t('browser.placesHint')}</span>
+          )}
           <span className={css.footerGap} />
           <Button variant="outline" className={clsx(css.footerAction)} disabled={parentInert} onClick={onClose}>{t('browser.cancel')}</Button>
           <Button
             variant="primary"
             className={clsx(css.footerAction)}
-            disabled={targetPath === null || loading || parentInert || draftPending}
+            disabled={showingPlaces || targetPath === null || loading || parentInert || draftPending}
             /* v8 ignore next -- narrowing guard: Open disables while no target exists. */
-            onClick={() => { if (targetPath !== null) onOpen(targetPath) }}
+            onClick={() => {
+              if (targetPath === null) return
+              rememberPlace(targetPath, targetName || targetPath)
+              onOpen(targetPath)
+            }}
           >
             {t('browser.open')}
           </Button>

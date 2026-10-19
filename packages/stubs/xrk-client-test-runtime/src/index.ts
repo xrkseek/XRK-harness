@@ -993,6 +993,13 @@ export class TestWorkspaces implements IWorkspaces {
     return Promise.resolve({ path: path ?? '', entries: [] } as never)
   }
 
+  listDirectoryPlaces(): Promise<never> {
+    this.record('listDirectoryPlaces', [])
+    const stub = this.stubs.get('listDirectoryPlaces')
+    if (stub !== undefined) return stub() as Promise<never>
+    return Promise.resolve({ places: [] } as never)
+  }
+
   /**
    * Record a directory creation.
    * @param path - parent directory.

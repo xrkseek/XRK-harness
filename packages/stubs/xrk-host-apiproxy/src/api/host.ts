@@ -15,6 +15,14 @@ export interface DirectoryEntry {
   hidden: boolean
 }
 
+/** One place tile the in-app picker offers before opening a column. */
+export interface DirectoryPlace {
+  id: string
+  kind: 'home' | 'desktop' | 'documents' | 'downloads' | 'drive'
+  label: string
+  path: string
+}
+
 /** host.listDirectory response value: one directory level plus its ancestry. */
 export interface DirectoryListing {
   /** Absolute path of the listed directory. */
@@ -74,6 +82,15 @@ export interface HostApi {
     request: RpcRequest<{ path?: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<DirectoryListing>>
+
+  /**
+   * Places for the in-app picker (home, profile folders that exist, drive
+   * roots). Only served under the `browse` capability. Remote/SSH hosts
+   * answer with the workspace root as Home.
+   */
+  listDirectoryPlaces(
+    request: RpcRequest<{}>,
+  ): Promise<RpcResponse<{ places: DirectoryPlace[] }>>
 
   /**
    * Create one child directory under an existing parent (the browser's

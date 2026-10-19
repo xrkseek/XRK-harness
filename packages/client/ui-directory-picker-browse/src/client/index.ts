@@ -46,6 +46,18 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': '加载中…',
         'browser.truncated': '文件夹过多，仅显示开头部分。',
         'browser.showHidden': '显示隐藏文件',
+        'browser.places': '位置',
+        'browser.placesTitle': '选择位置',
+        'browser.placesSearch': '搜索位置…',
+        'browser.placesEmpty': '没有匹配的位置',
+        'browser.placesHint': '↑↓ 选择 · Enter 打开 · Esc 关闭',
+        'browser.placesSection.common': '常用',
+        'browser.placesSection.drives': '磁盘',
+        'browser.placesSection.recent': '最近',
+        'browser.place.home': '主目录',
+        'browser.place.desktop': '桌面',
+        'browser.place.documents': '文档',
+        'browser.place.downloads': '下载',
       }],
       ['en', {
         'browser.title': 'Select Workspace Directory',
@@ -61,6 +73,18 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': 'Loading…',
         'browser.truncated': 'Too many folders to list; only the beginning is shown.',
         'browser.showHidden': 'Show hidden files',
+        'browser.places': 'Places',
+        'browser.placesTitle': 'Choose a place',
+        'browser.placesSearch': 'Search places…',
+        'browser.placesEmpty': 'No matching places',
+        'browser.placesHint': '↑↓ select · Enter open · Esc close',
+        'browser.placesSection.common': 'Common',
+        'browser.placesSection.drives': 'Drives',
+        'browser.placesSection.recent': 'Recent',
+        'browser.place.home': 'Home',
+        'browser.place.desktop': 'Desktop',
+        'browser.place.documents': 'Documents',
+        'browser.place.downloads': 'Downloads',
       }],
     ]
     try {
@@ -75,6 +99,7 @@ export function apply(ctx: ClientContext): void {
   const injected = (): BrowseFlowInjected => ({
     listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.workspaces.createDirectory(path, name),
+    listDirectoryPlaces: () => ctx.workspaces.listDirectoryPlaces(),
     t: ctx.locale.bind(LOCALE_NS),
   })
   // Both declaration lifetimes must be live before the pair installs; the

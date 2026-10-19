@@ -41,6 +41,22 @@ export const hostListDirectoryRequestSchema = z.object({
   path: z.string().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'host.listDirectory'>>>
 
+/** host.listDirectoryPlaces response row. */
+export const directoryPlaceSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['home', 'desktop', 'documents', 'downloads', 'drive']),
+  label: z.string(),
+  path: z.string(),
+})
+
+/** host.listDirectoryPlaces request payload (empty object literal). */
+export const hostListDirectoryPlacesRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'host.listDirectoryPlaces'>>>
+
+/** host.listDirectoryPlaces response value. */
+export const hostListDirectoryPlacesValueSchema = z.object({
+  places: z.array(directoryPlaceSchema),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.listDirectoryPlaces'>>>
+
 /** host.listDirectory response value. */
 export const hostListDirectoryValueSchema = z.object({
   path: z.string(),

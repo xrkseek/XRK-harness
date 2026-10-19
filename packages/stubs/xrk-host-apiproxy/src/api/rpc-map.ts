@@ -48,6 +48,7 @@ export interface RpcMethodMap {
   'host.describe': HostApi['describe']
   'host.pickDirectory': HostApi['pickDirectory']
   'host.listDirectory': HostApi['listDirectory']
+  'host.listDirectoryPlaces': HostApi['listDirectoryPlaces']
   'host.createDirectory': HostApi['createDirectory']
   'host.openPath': HostApi['openPath']
   'host.listOpenInApps': HostApi['listOpenInApps']

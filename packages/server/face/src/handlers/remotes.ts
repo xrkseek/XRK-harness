@@ -17,6 +17,7 @@ import {
 import { openNativePath } from "../host-open-path.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "../process-channels.js";
 import { publishRemoteEvent } from "../remote-event.js";
+import { entryNotFoundMessage, sessionNotFoundMessage } from "../face-error-text.js";
 import { sessionFeedbackRecord } from "../session-feedback.js";
 import { remoteArgs, type FaceHandler } from "./types.js";
 
@@ -110,7 +111,7 @@ function sessionFromAgentId(
   if (!runtime.store.has(agentId)) {
     return {
       ok: false,
-      error: { code: "session-not-found", message: agentId },
+      error: { code: "session-not-found", message: sessionNotFoundMessage(agentId) },
     };
   }
   return { ok: true };
@@ -188,7 +189,7 @@ export const pluginInventoryRemove: FaceHandler = async (runtime, _rpcId, payloa
   }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) {
-    return { ok: false, error: { code: "not-found", message: entryId } };
+    return { ok: false, error: { code: "not-found", message: entryNotFoundMessage(entryId) } };
   }
   if (!entry.managed) {
     return {
@@ -243,7 +244,7 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
   }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) {
-    return { ok: false, error: { code: "not-found", message: entryId } };
+    return { ok: false, error: { code: "not-found", message: entryNotFoundMessage(entryId) } };
   }
   if (!entry.managed) {
     return {
@@ -318,7 +319,7 @@ export const pluginInventoryReload: FaceHandler = async (runtime, _rpcId, payloa
   }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) {
-    return { ok: false, error: { code: "not-found", message: entryId } };
+    return { ok: false, error: { code: "not-found", message: entryNotFoundMessage(entryId) } };
   }
   if (!entry.managed) {
     return {
@@ -418,7 +419,7 @@ export const pluginInventoryOpen: FaceHandler = async (runtime, _rpcId, payload)
   }
   const entry = listFacePluginInventory(runtime).find((e) => e.entryId === entryId);
   if (!entry) {
-    return { ok: false, error: { code: "not-found", message: entryId } };
+    return { ok: false, error: { code: "not-found", message: entryNotFoundMessage(entryId) } };
   }
   if (!entry.managed) {
     return {

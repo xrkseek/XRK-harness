@@ -3,9 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { DirectoryListing } from '@xrkseek/client-runtime/client'
 import { DirectoryBrowseError } from '@xrkseek/client-runtime/client'
-import { DirectoryBrowser } from '../src/client/DirectoryBrowser.tsx'
+import { DirectoryBrowser, resetPlaceCatalogForTests } from '../src/client/DirectoryBrowser.tsx'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetPlaceCatalogForTests()
+  localStorage.removeItem('xrk.directory-places.catalog.v1')
+  localStorage.removeItem('xrk.directory-places.recent.v1')
+})
 
 const HOME = '/home/u'
 const DOCS = `${HOME}/Documents`
@@ -120,6 +125,75 @@ describe('DirectoryBrowser', () => {
     const b = mount({ open: false })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(b.listDirectory).not.toHaveBeenCalled()
+  })
+
+  it('paints the last place catalog immediately and refreshes behind it', async () => {
+    localStorage.setItem('xrk.directory-places.catalog.v1', JSON.stringify([
+      { id: 'home', kind: 'home', label: 'Home', path: HOME },
+    ]))
+    const rows = [{ id: 'home', kind: 'home' as const, label: 'Home', path: HOME }]
+    let release!: (value: typeof rows) => void
+    const listDirectoryPlaces = vi.fn(() => new Promise<typeof rows>((settle) => { release = settle }))
+    mount({ listDirectoryPlaces })
+    expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy()
+    expect(screen.queryByText('browser.loading')).toBeNull()
+    await act(async () => { release(rows) })
+    expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy()
+  })
+
+  it('opens on place tiles and lists the chosen place', async () => {
+    const listDirectoryPlaces = vi.fn(async () => [
+      { id: 'home', kind: 'home' as const, label: 'Home', path: HOME },
+      { id: 'drive-root', kind: 'drive' as const, label: '/', path: '/' },
+    ])
+    const b = mount({ listDirectoryPlaces })
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy() })
+    expect(b.listDirectory).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('browser.placesSearch')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'browser.placesTitle' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'browser.placesSection.common' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'browser.placesSection.drives' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'browser.newFolder' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '/' }))
+    await waitFor(() => { expect(b.listDirectory).toHaveBeenCalledWith('/', expect.any(AbortSignal)) })
+    expect(screen.getByRole('button', { name: 'browser.places' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'browser.newFolder' })).toBeTruthy()
+  })
+
+  it('filters place tiles, Enter opens the focused place, Esc returns then closes', async () => {
+    const listDirectoryPlaces = vi.fn(async () => [
+      { id: 'home', kind: 'home' as const, label: 'Home', path: HOME },
+      { id: 'drive-root', kind: 'drive' as const, label: '/', path: '/' },
+    ])
+    const b = mount({ listDirectoryPlaces })
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy() })
+    const search = screen.getByLabelText<HTMLInputElement>('browser.placesSearch')
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    expect(screen.getByText('browser.placesEmpty')).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'home' } })
+    expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '/' })).toBeNull()
+    fireEvent.keyDown(search, { key: 'Enter' })
+    await waitFor(() => { expect(b.listDirectory).toHaveBeenCalledWith(HOME, expect.any(AbortSignal)) })
+    // Esc from the columns restores the place tiles (Codex cancel-restore).
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => { expect(screen.getByLabelText('browser.placesSearch')).toBeTruthy() })
+    expect(b.onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(b.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('Places back button restores tiles without closing', async () => {
+    const listDirectoryPlaces = vi.fn(async () => [
+      { id: 'home', kind: 'home' as const, label: 'Home', path: HOME },
+    ])
+    const b = mount({ listDirectoryPlaces })
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }))
+    await waitFor(() => { expect(b.listDirectory).toHaveBeenCalled() })
+    fireEvent.click(screen.getByRole('button', { name: 'browser.places' }))
+    await waitFor(() => { expect(screen.getByLabelText('browser.placesSearch')).toBeTruthy() })
+    expect(b.onClose).not.toHaveBeenCalled()
   })
 
   it('opens at the Host home as one wide column, hides hidden entries, and roots the crumbs at Home', async () => {

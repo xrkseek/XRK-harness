@@ -16,7 +16,8 @@ import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
   hostCreateDirectoryValueSchema, hostDescribeValueSchema,
-  hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
+  hostListDirectoryValueSchema, hostListDirectoryPlacesValueSchema,
+  hostOpenPathValueSchema, hostPickDirectoryValueSchema,
   hostListOpenInAppsValueSchema, hostOpenInAppValueSchema,
 } from '../api/host.schema.ts'
 import {
@@ -132,6 +133,7 @@ export interface IApiClient {
     describe(payload: RequestPayload<'host.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.describe'>>>
     pickDirectory(payload: RequestPayload<'host.pickDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.pickDirectory'>>>
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
+    listDirectoryPlaces(payload: RequestPayload<'host.listDirectoryPlaces'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectoryPlaces'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
     listOpenInApps(payload: RequestPayload<'host.listOpenInApps'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listOpenInApps'>>>
@@ -230,6 +232,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.describe': hostDescribeValueSchema,
   'host.pickDirectory': hostPickDirectoryValueSchema,
   'host.listDirectory': hostListDirectoryValueSchema,
+  'host.listDirectoryPlaces': hostListDirectoryPlacesValueSchema,
   'host.createDirectory': hostCreateDirectoryValueSchema,
   'host.openPath': hostOpenPathValueSchema,
   'host.listOpenInApps': hostListOpenInAppsValueSchema,
@@ -573,6 +576,7 @@ export abstract class AbstractApiClient implements IApiClient {
       'host.pickDirectory', payload, signal, 'caller-signal-only',
     ),
     listDirectory: (payload, signal) => this.callUnary('host.listDirectory', payload, signal),
+    listDirectoryPlaces: (payload, signal) => this.callUnary('host.listDirectoryPlaces', payload, signal),
     createDirectory: (payload, signal) => this.callUnary('host.createDirectory', payload, signal),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
     listOpenInApps: (payload, signal) => this.callUnary('host.listOpenInApps', payload, signal),

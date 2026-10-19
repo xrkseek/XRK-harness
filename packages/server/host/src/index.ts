@@ -3047,7 +3047,9 @@ export function createHostManager(): HostManager {
             ns === "voice" ||
             ns === "image-gen" ||
             ns === "video-gen" ||
+            ns === "video-analyze" ||
             ns === "curated-memory" ||
+            ns === "workspace-inject" ||
             ns === "locale"
           ) {
             void invalidateAgents();

@@ -53,7 +53,7 @@ export type {
   SessionToolEntry, SessionToolsValue, SessionToolsDisclosure, SessionToolSurface,
   TurnOutlineEntry, WorkspaceChangesProjected,
 } from './sessions.ts'
-export type { DirectoryEntry, DirectoryListing, HostApi } from './host.ts'
+export type { DirectoryEntry, DirectoryListing, DirectoryPlace, HostApi } from './host.ts'
 export type {
   SubagentAddress, SubagentCatalog, SubagentInterruptReceipt, SubagentListEntry,
   SubagentPromptReceipt, SubagentsApi,

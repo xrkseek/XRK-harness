@@ -2,7 +2,15 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { fullyQualified, hostListDirectory, hostCreateDirectory } from "../src/host-directory.js";
+import {
+  fullyQualified,
+  hostListDirectory,
+  hostListDirectoryPlaces,
+  hostCreateDirectory,
+  parseDarwinFolderPaths,
+  parseXdgUserDirs,
+  profileFolderCandidates,
+} from "../src/host-directory.js";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createFaceRuntime } from "../src/runtime.js";
@@ -39,6 +47,62 @@ describe("host directory (DSH browse shapes)", () => {
     expect(listed.value.path).toBe(path.resolve(homedir()));
     expect(listed.value.crumbs.length).toBeGreaterThan(0);
     expect(listed.value.crumbs.at(-1)?.path).toBe(listed.value.path);
+  });
+
+  it("listDirectoryPlaces names home and at least one drive", async () => {
+    const listed = await hostListDirectoryPlaces();
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) return;
+    expect(listed.value.places.some((place) => place.kind === "home" && place.path === homedir())).toBe(true);
+    expect(listed.value.places.some((place) => place.kind === "drive")).toBe(true);
+    // Profile tiles prefer OS Known Folder / XDG when the folder exists.
+    for (const kind of ["desktop", "documents", "downloads"] as const) {
+      const place = listed.value.places.find((row) => row.kind === kind);
+      if (place) {
+        expect(place.path.length).toBeGreaterThan(0);
+        expect(path.isAbsolute(place.path)).toBe(true);
+      }
+    }
+  });
+
+  it("profileFolderCandidates prefers the OS-resolved path, then locale/OneDrive guesses", () => {
+    const home = process.platform === "win32" ? "C:\\Users\\u" : "/home/u";
+    const known = process.platform === "win32" ? "D:\\OneDrive\\Desktop" : "/mnt/shared/Desktop";
+    const rows = profileFolderCandidates(home, "desktop", known);
+    expect(rows[0]).toBe(known);
+    expect(rows).toContain(path.join(home, "Desktop"));
+    expect(rows).toContain(path.join(home, "桌面"));
+    expect(rows).toContain(path.join(home, "OneDrive", "Desktop"));
+  });
+
+  it("parseXdgUserDirs expands $HOME and ~ for Linux relocates", () => {
+    const parsed = parseXdgUserDirs(
+      [
+        'XDG_DESKTOP_DIR="$HOME/Bureau"',
+        'XDG_DOCUMENTS_DIR="~/Docs"',
+        'XDG_DOWNLOAD_DIR="$HOME/Téléchargements"',
+        "# comment",
+        'XDG_MUSIC_DIR="$HOME/Music"',
+      ].join("\n"),
+      "/home/u",
+    );
+    expect(parsed).toEqual({
+      desktop: "/home/u/Bureau",
+      documents: "/home/u/Docs",
+      downloads: "/home/u/Téléchargements",
+    });
+  });
+
+  it("parseDarwinFolderPaths strips trailing slashes from osascript lines", () => {
+    expect(
+      parseDarwinFolderPaths(
+        "/Users/u/Desktop/\n/Users/u/Documents/\n/Users/u/Downloads/\n",
+      ),
+    ).toEqual({
+      desktop: "/Users/u/Desktop",
+      documents: "/Users/u/Documents",
+      downloads: "/Users/u/Downloads",
+    });
   });
 
   it("hides Windows protected profile junctions from listings", async () => {
@@ -202,6 +266,24 @@ describe("host directory (DSH browse shapes)", () => {
     if (listed.result.ok) {
       const v = listed.result.value as { entries: { name: string }[] };
       expect(v.entries.some((e) => e.name === "src")).toBe(true);
+    }
+
+    // Remote / SSH Desktop: places collapse to the workspace root only
+    // (no local Known Folder / Volumes leakage across the tunnel).
+    const places = await dispatchFaceMethod(
+      runtime,
+      "host.listDirectoryPlaces",
+      "rpl1",
+      {},
+    );
+    expect(places.result.ok).toBe(true);
+    if (places.result.ok) {
+      const v = places.result.value as {
+        places: { id: string; kind: string; path: string }[];
+      };
+      expect(v.places).toEqual([
+        { id: "home", kind: "home", label: "Home", path: "/remote/work" },
+      ]);
     }
 
     const pick = await dispatchFaceMethod(
