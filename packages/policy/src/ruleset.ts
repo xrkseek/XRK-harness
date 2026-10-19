@@ -160,12 +160,19 @@ function ruleFromJson(raw: unknown, index: number): PolicyRule {
   if (typeof id !== "string" || !id.trim()) {
     throw new PolicyRulesetParseError(`rules[${index}]: missing string id`);
   }
-  const action = raw.action;
-  if (typeof action !== "string" || !ACTIONS.has(action as PolicyRuleAction)) {
+  // Bind as the union instead of `unknown`: a Set membership test does not narrow,
+  // and kindWide() only accepts "deny" | "ask" once "allow-only" has thrown.
+  const action: PolicyRuleAction | undefined = ACTIONS.has(
+    raw.action as PolicyRuleAction,
+  )
+    ? (raw.action as PolicyRuleAction)
+    : undefined;
+  if (action === undefined) {
     throw new PolicyRulesetParseError(
       `rule ${id}: action must be deny|ask|allow-only`,
     );
   }
+
   const reason =
     raw.reason === undefined
       ? undefined
