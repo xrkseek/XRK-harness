@@ -50,8 +50,8 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Thanks to everyone on the XRK-Harness team.',
     },
     {
-      zh: '感谢何润景、文具盒、刘雅婷、雨木木、炫彩马桶、乔晨欣、张利民。',
-      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 雨木木, 炫彩马桶, 乔晨欣, and 张利民.',
+      zh: '感谢何润景、文具盒、刘雅婷、炫彩马桶、乔晨欣、张利民、徐航、王乐。',
+      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, and 王乐.',
     },
   ],
 }
@@ -64,6 +64,48 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  * sees no dot.
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: '0.6.5',
+    date: '2026-10-19',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '策略规则新增可选的 match.when，可以按参数内容决定拦不拦（例如只拦 bash 里的递归删除，其余命令照放）。表达式在加载时编译，不能用 eval / vm，赋值、未知变量、原型链访问在编译期就被拒；不引入第二套策略引擎。',
+        en: 'Policy rules take an optional match.when, so a rule can decide by argument content (deny recursive delete inside bash and let the rest through). The expression compiles at load — no eval or vm, and assignment, unknown identifiers and prototype walks are rejected at compile time. No second policy engine.',
+      },
+      {
+        zh: '读文件改为在打开的那一刻才认符号链接（O_NOFOLLOW + 对已打开描述符复核），先查后开之间换链接绕过围栏的窗口关掉了；派生子进程不再继承名字含 KEY / PASSWORD / SECRET / TOKEN 的变量和 XRK_ / DSH_ 身份变量，显式传下去的仍传得到。',
+        en: 'Reads now trust a symlink only at open time (O_NOFOLLOW plus a re-check on the open descriptor), closing the check-then-open window that defeated the path jail; spawned children inherit no KEY / PASSWORD / SECRET / TOKEN variables and no XRK_ / DSH_ identity, while anything passed explicitly still gets through.',
+      },
+      {
+        zh: '在 CRLF 文件上贴一份 LF 排版的 old_content 不再直接报「找不到」：字面量匹配分成精确、逐行去尾空白、逐行 trim 三级，并回报命中哪一级；歧义匹配仍然报错，不静默改错处。',
+        en: 'Pasting LF-shaped old_content onto a CRLF file no longer fails as "not found": literal matching works in three tiers — exact, per-line trailing-whitespace strip, per-line trim — and reports which one hit. Ambiguous matches still error instead of silently editing the wrong spot.',
+      },
+      {
+        zh: '一个回合的多次模型调用共享同一条 trace-id、每步铸新的 span-id，四家 Provider 的出站请求都带上；上游报错的摘要里现在直接附 request-id，并认 cf-ray 与 AWS 的 requestid，跨网关的失败终于可对账。',
+        en: 'Calls inside one turn share a trace-id with a fresh span-id per step, and all four providers send it outbound. Failure summaries now append the request-id and read cf-ray plus the AWS requestid headers, so gateway-side failures are finally reconcilable.',
+      },
+      {
+        zh: 'Shell Hook 补到 14 类事件：新增 SessionEnd、Interrupt、PreModelRequest、PostModelRequest。会话首轮算 SessionStart(source: startup)，被打断或取消的回合触发 Interrupt，每次模型调用前后各触发一次；SessionEnd 强制同步执行。',
+        en: 'Shell Hooks reach 14 event names with SessionEnd, Interrupt, PreModelRequest and PostModelRequest. A session’s first turn fires SessionStart(source: startup), an aborted or interrupted turn fires Interrupt, and every model call brackets itself with the two request events; SessionEnd must run synchronously.',
+      },
+      {
+        zh: '技能目录超出注入预算时可选按相关性整条取舍（select），不再从条目中间切断；shadow 模式只记录本次会选谁、一个 prompt 字节都不改。工作区注入的目录扫描加上硬上限（根 32 / 目录 4000 / 条目 20000 / 单文件 1 MiB），一个巨型目录拖不死注入阶段。',
+        en: 'An over-budget skill catalog can now pack whole entries by relevance (select) instead of cutting one mid-way, and shadow mode only records the choice without changing a single prompt byte. Workspace inject walks gain hard caps — 32 roots, 4 000 dirs, 20 000 entries, 1 MiB per file — so one huge directory can no longer stall injection.',
+      },
+      {
+        zh: '模型选择面板从 composer 重开时沿用上一次的画面、后台软刷新，不再先闪一下加载条；点选立即回显。自动审查改为只按工具与参数的实际效果判，不采信 agent 对意图的自我描述——只读的生产查询仍算中风险，效果含糊就 fail closed。',
+        en: 'Reopening the model picker from the composer keeps the last good paint and soft-refreshes instead of flashing a loading bar, and the selection echoes at once. Auto-review now judges only on what the tool and arguments actually do, never the agent’s narration of intent — a read-only production query stays medium, and ambiguous effects fail closed.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.5 接管 @latest。完整清单见 docs/releases/v0.6.5.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.5 now owns @latest. Full list in docs/releases/v0.6.5.md.',
+      },
+    ],
+  },
   {
     version: '0.6.4',
     date: '2026-10-18',
