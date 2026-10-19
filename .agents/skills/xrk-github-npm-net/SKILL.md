@@ -33,9 +33,20 @@ gh api repos/<owner>/<repo>/releases/tags/<tag>
 单条命令的参数上：`curl.exe -x … <url>`、`npm … --proxy … --https-proxy …`、`git -c http.proxy=… push`。
 探活只用 `curl.exe`——Node `https.get` 不读代理**参数**，会给出「直连不通」的假阴性。
 
-### 2. registry.npmjs.org 与 release asset 下载一直直连可达
+### 2. npm registry：直连与代理**双向都可能断**，失败就换另一条
 
-npm registry 与 GitHub release asset 下载**从不走代理**（node/npm 不读系统代理）。大 tarball 上传/下载超时 → 先试直连，别一上来套代理。
+npm 不读系统代理，只认命令行参数（`--proxy` / `--https-proxy`）——所以「走代理」这件事只能落在
+单条命令上，绝不能设环境变量。
+
+**别把「直连优先」当定则**（v0.6.5 实测把这条旧结论推翻了）：同一轮里两条通道各自好坏互换——
+
+| 包 | 直连 | 走 `--https-proxy http://127.0.0.1:7897` |
+|---|---|---|
+| CLI（138 MB） | 3 次全 `FETCH_ERROR`（`attempt 1/2/3 failed`） | **94s 完成** |
+| SDK（36.5 MB） | **11.9s `PUT 202` 成功** | `ECONNRESET`（TLS 建立前 socket 断开） |
+
+结论只有一条：**某一条通道失败，立刻换另一条重试**，不要据此断定「这台机 npm 不通」，
+也不要因为上一轮某条通用就这一轮继续沿用。每次动手前按 §1 各探一次，用当轮的实测结果选路。
 
 ### 3. npm 大上传：面板看不到 = 正常
 
@@ -52,3 +63,5 @@ Get-NetAdapterStatistics
 - **直连 200 / 「已连通」不等于能用**：2026-10 `registry.npmjs.org` 直连出现过 `ERR_TLS_CERT_ALTNAME_INVALID` / `ECONNRESET`。大包（npm ~120MB、AGT ~332MB）别赌直连。
 - `gh api` 的 EOF 和 `error checking for existing release: ... EOF` 都是网络层报错，不是仓库/权限问题。
 - `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 直接把大包上传掐死，日志表现为 `verbose type request-timeout` / `FETCH_ERROR`）；`fetch_retries` 保持默认。
+- `gh release view --json draft` 是**无效字段名**，会报错但错误信息很友好地列出可用字段：要写
+  `isDraft` / `isPrerelease` / `targetCommitish`（不是 `commitish`）。

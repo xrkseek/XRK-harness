@@ -27,6 +27,12 @@ PowerShell 整段是解析期编译的：一行语法错 → 整段失败（exit
 
 `apply_edit` / `write_file` / `apply_patch` 按 UTF-8 写回。shell 管道 `(Get-Content -Raw) -replace ... | Set-Content` 会把 LF 压成一行、加 BOM、把 UTF-8 中文按 GBK 解码再编码（乱码）。
 
+**但 `apply_edit` 本身会「只删不写」**：v0.6.5 连撞两次——`ruleset.ts` 那次把刚写进去的整段弄丢、
+连带删掉原有的一行 `return finish(kindWide(...))`；`apps/site/releases.json` 那次删空 `version` +
+`filename` 两行，**而且已经 commit + push**。工具返回 `edited …` 不代表内容真落全。
+硬规矩：**每次编辑类工具返回后立刻 `git diff <file>` 回读**，确认新增行在、被删行只有预期的那些；
+发现丢内容马上 `git checkout -- <file>` 回基线重做。多行 / 跨行的结构改写优先用 `apply_patch`。
+
 ### 3. 验证文件完好用 node，不用 Get-Content
 
 `Get-Content` 默认按系统 ANSI 码页（GBK）解码 UTF-8 文件，中文会显示成乱码——**不代表文件真坏了**。验证用：
@@ -77,3 +83,8 @@ pnpm workspace 下裸 ESM `import '@scope/pkg'` 从 `scripts/` 或任意位置�
 - `Select-Object -First N` 截断输出会吃掉报错尾部——压测/测试先看 `EXIT=$LASTEXITCODE` 再信 stdout。
 - PowerShell `2>&1 | Select` 会把 stderr 包成 `NativeCommandError` 显示，不是命令真的挂了。
 - `git diff --no-index` 当文件不同时 exit 1（`[exit code: 1]` 是正常差异信号，不是失败）。
+- **重定向目标用相对 `..\..\..\..\` 会算错层，而且失败得很安静**：v0.6.5 从 `.release\harness-cli`
+  往上四层想落回工作区的 `.tmp`，实际落到 `Desktop\.tmp`（不存在），报
+  `Out-File: Could not find a part of the path` —— 于是 **publish 一步都没跑，job 却显示 completed**。
+  大上传 / 长任务的日志重定向一律写**绝对路径**，并在开跑前 `Test-Path` 目标目录。
+  后台 job 返回 completed 只证明进程退出过，不证明命令成功——看日志尾部与 `$LASTEXITCODE`。
