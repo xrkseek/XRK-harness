@@ -83,7 +83,6 @@ export function selectSkillsForBudget(
     if (selected.length === 0 && maxChars > 0 && cost + overhead > maxChars) {
       // Still keep one entry so the catalog is non-empty when budget is tiny.
       selected.push(s);
-      used += cost;
       break;
     }
     if (used + cost > maxChars && selected.length > 0) break;

@@ -258,7 +258,7 @@ function tokenize(source: string): Token[] {
 function peekRegex(source: string, at: number): boolean {
   // After ident/number/)/]/ regex is invalid — we never support division.
   // Treat `/` as regex start whenever the next non-space isn't whitespace-only end.
-  let j = at + 1;
+  const j = at + 1;
   if (j >= source.length) return false;
   // Empty regex `//` is not useful; still tokenize as regex with empty body.
   return true;
@@ -319,7 +319,7 @@ class Parser {
     if (this.peek().kind === "op" && (this.peek() as { value: string }).value === "!") {
       this.take();
       const inner = this.parseUnary(depth + 1);
-      return (env) => !Boolean(inner(env));
+      return (env) => !inner(env);
     }
     return this.parseCompare(depth);
   }
