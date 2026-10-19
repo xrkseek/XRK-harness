@@ -96,7 +96,11 @@ export function parseRetryAfterMs(
 
 export function requestIdFromHeaders(headers: Headers): string | undefined {
   const value =
-    headers.get("x-request-id") ?? headers.get("x-deepseek-request-id");
+    headers.get("x-request-id") ??
+    headers.get("x-deepseek-request-id") ??
+    headers.get("cf-ray") ??
+    headers.get("x-amzn-requestid") ??
+    headers.get("x-amz-request-id");
   if (value === null || value.trim().length === 0) return undefined;
   return value.trim();
 }
@@ -116,8 +120,10 @@ export function throwHttpLlmError(
     ? parseRetryAfterMs(headers.get("retry-after"))
     : undefined;
   const requestId = headers ? requestIdFromHeaders(headers) : undefined;
+  const idSuffix =
+    requestId !== undefined ? ` [request-id=${requestId}]` : "";
   throw new LlmError(
-    `${label} HTTP ${status}: ${bodyText.slice(0, 800)}`,
+    `${label} HTTP ${status}: ${bodyText.slice(0, 800)}${idSuffix}`,
     code,
     {
       status,

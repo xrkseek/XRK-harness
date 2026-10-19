@@ -27,6 +27,8 @@ import {
   isProviderFinishError,
   isUnsupportedContentError,
   isUnsupportedReasoningEffortError,
+  resolveTurnTraceContext,
+  runWithTraceContext,
   UnsupportedContentError,
   type LlmAdapter,
   type LlmChatRequest,
@@ -254,6 +256,24 @@ export interface RunTurnInput {
     readonly now: () => number;
   }) => void | Promise<void>;
   /**
+   * Immediately before each LLM chat/stream call (shell PreModelRequest).
+   * Failures are swallowed so a hook cannot abort the turn.
+   */
+  readonly beforeLlmRequest?: (ctx: {
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly stepId: string;
+  }) => void | Promise<void>;
+  /**
+   * Immediately after each LLM chat/stream call settles (shell PostModelRequest).
+   * Failures are swallowed.
+   */
+  readonly afterLlmRequest?: (ctx: {
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly stepId: string;
+  }) => void | Promise<void>;
+  /**
    * Face cross-session `@session` prepare: rewrite mention tokens and return
    * zero-or-more context rows to append immediately after the human message.
    * Omit → no prepare.
@@ -367,6 +387,48 @@ function toLlmRequest(
 const STREAM_YIELD_INTERVAL_MS = 16;
 
 async function invokeLlm(
+  input: RunTurnInput,
+  req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
+  onChunk: (chunk: {
+    kind: "text" | "reasoning" | "usage" | "tool-call";
+    index: number;
+    text: string;
+    usage?: TokenUsage;
+    toolCallId?: string;
+    toolName?: string;
+    argumentsDelta?: string;
+  }) => void,
+  stepMeta?: { readonly turnId: string; readonly stepId: string },
+): Promise<LlmChatResponse> {
+  const hookCtx =
+    stepMeta !== undefined
+      ? {
+          sessionId: input.sessionId,
+          turnId: stepMeta.turnId,
+          stepId: stepMeta.stepId,
+        }
+      : undefined;
+  if (hookCtx && input.beforeLlmRequest) {
+    try {
+      await input.beforeLlmRequest(hookCtx);
+    } catch {
+      /* fail-open */
+    }
+  }
+  try {
+    return await invokeLlmBody(input, req, onChunk);
+  } finally {
+    if (hookCtx && input.afterLlmRequest) {
+      try {
+        await input.afterLlmRequest(hookCtx);
+      } catch {
+        /* fail-open */
+      }
+    }
+  }
+}
+
+async function invokeLlmBody(
   input: RunTurnInput,
   req: { messages: ChatMessage[]; tools: AssembledRequest["tools"] },
   onChunk: (chunk: {
@@ -672,6 +734,11 @@ function assertReadyForLlm(events: readonly SessionEvent[]): void {
  * Session log remains append-only source of truth; volatile user is ephemeral.
  */
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
+  // One W3C trace-id for every outbound LLM call in this turn (inherit TRACEPARENT).
+  return runWithTraceContext(resolveTurnTraceContext(), () => runTurnBody(input));
+}
+
+async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
   const now = input.now ?? Date.now;
   const maxSteps = input.maxSteps ?? 8;
   const turnId = id("turn");
@@ -1157,7 +1224,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     };
     try {
       response = await invokeLlmWithRetry({
-        invoke: (onBuffered) => invokeLlm(input, req, onBuffered),
+        invoke: (onBuffered) =>
+          invokeLlm(input, req, onBuffered, { turnId, stepId }),
         flushChunk: onChunk,
         store: input.store,
         sessionId: input.sessionId,
@@ -1201,7 +1269,8 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
           // Same retry budget as the step that hit overflow — bare invokeLlm
           // used to drop TRANSPORT/SERVER after a successful compact.
           return invokeLlmWithRetry({
-            invoke: (onBuffered) => invokeLlm(input, req, onBuffered),
+            invoke: (onBuffered) =>
+              invokeLlm(input, req, onBuffered, { turnId, stepId }),
             flushChunk: onChunk,
             store: input.store,
             sessionId: input.sessionId,

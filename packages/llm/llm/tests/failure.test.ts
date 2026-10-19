@@ -40,6 +40,18 @@ describe("throwHttpLlmError", () => {
       expect(e.providerRetryAfterMs).toBe(2000);
     }
   });
+
+  it("surfaces request-id / cf-ray on the error and in the message", () => {
+    const headers = new Headers({ "cf-ray": "abc123-SJC" });
+    try {
+      throwHttpLlmError("openai-compatible", 500, "boom", headers);
+      expect.unreachable();
+    } catch (err) {
+      const e = err as LlmError;
+      expect(e.requestId).toBe("abc123-SJC");
+      expect(e.message).toContain("[request-id=abc123-SJC]");
+    }
+  });
 });
 
 describe("parseRetryAfterMs", () => {

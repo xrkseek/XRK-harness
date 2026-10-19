@@ -193,6 +193,14 @@ export interface CreateAgentOptions {
   readonly beforeUserMessage?: Parameters<
     typeof runTurn
   >[0]["beforeUserMessage"];
+  /** Forwarded to `runTurn.beforeLlmRequest` (shell PreModelRequest). */
+  readonly beforeLlmRequest?: Parameters<
+    typeof runTurn
+  >[0]["beforeLlmRequest"];
+  /** Forwarded to `runTurn.afterLlmRequest` (shell PostModelRequest). */
+  readonly afterLlmRequest?: Parameters<
+    typeof runTurn
+  >[0]["afterLlmRequest"];
   /**
    * After tool/result rows for a step, before `step/end`.
    * Forwarded to `runTurn.afterToolResults` (Harness post-tool fragments).
@@ -404,6 +412,12 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
               : {}),
             ...(options.beforeUserMessage
               ? { beforeUserMessage: options.beforeUserMessage }
+              : {}),
+            ...(options.beforeLlmRequest
+              ? { beforeLlmRequest: options.beforeLlmRequest }
+              : {}),
+            ...(options.afterLlmRequest
+              ? { afterLlmRequest: options.afterLlmRequest }
               : {}),
             ...(options.afterToolResults
               ? { afterToolResults: options.afterToolResults }

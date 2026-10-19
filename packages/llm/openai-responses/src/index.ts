@@ -11,6 +11,7 @@ import type {
 import {
   ContextOverflowError,
   classifyCaughtStreamError,
+  mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
   withExtraAbortSignal,
@@ -397,10 +398,10 @@ export function createOpenAiResponsesAdapter(
         parameters: t.parameters,
       }));
     }
-    const headers: Record<string, string> = {
+    const headers: Record<string, string> = mergeOutboundTraceHeaders({
       "content-type": "application/json",
       ...options.headers,
-    };
+    });
     const key = options.apiKey?.trim();
     if (key) headers.authorization = `Bearer ${key}`;
 

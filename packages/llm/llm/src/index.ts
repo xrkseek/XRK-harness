@@ -405,6 +405,17 @@ export {
   type StreamIdleWatchdogOptions,
 } from "./stream-idle-timeout.js";
 
+export {
+  createTraceContext,
+  formatTraceparent,
+  getActiveTraceContext,
+  mergeOutboundTraceHeaders,
+  parseTraceparent,
+  resolveTurnTraceContext,
+  runWithTraceContext,
+  type W3cTraceContext,
+} from "./trace-context.js";
+
 
 export interface LlmRegistry {
   register(adapter: LlmAdapter): void;

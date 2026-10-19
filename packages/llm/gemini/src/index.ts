@@ -11,6 +11,7 @@ import type {
 import {
   ContextOverflowError,
   classifyCaughtStreamError,
+  mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
   withExtraAbortSignal,
@@ -381,10 +382,10 @@ export function createGeminiAdapter(
       // key is already in URL when present.
     }
 
-    const headers: Record<string, string> = {
+    const headers: Record<string, string> = mergeOutboundTraceHeaders({
       "content-type": "application/json",
       ...options.headers,
-    };
+    });
     const timeoutSignal =
       options.timeoutMs !== undefined && options.timeoutMs > 0
         ? AbortSignal.timeout(options.timeoutMs)

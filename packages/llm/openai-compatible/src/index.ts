@@ -9,6 +9,7 @@ import {
   classifyCaughtStreamError,
   ContextOverflowError,
   LlmError,
+  mergeOutboundTraceHeaders,
   throwHttpLlmError,
   withExtraAbortSignal,
   withOpenAiFinishReason,
@@ -429,7 +430,7 @@ function buildAuthHeaders(
   } else {
     headers.authorization = `Bearer ${key}`;
   }
-  return { ...headers, ...options.headers };
+  return mergeOutboundTraceHeaders({ ...headers, ...options.headers });
 }
 
 function requestSignal(

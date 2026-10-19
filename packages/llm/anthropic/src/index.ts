@@ -13,6 +13,7 @@ import {
   collectLlmStream,
   classifyCaughtStreamError,
   ContextOverflowError,
+  mergeOutboundTraceHeaders,
   throwHttpLlmError,
   UnsupportedContentError,
   withAnthropicStopReason,
@@ -561,11 +562,11 @@ export function createAnthropicAdapter(
       });
       body.tools = tools;
     }
-    const headers: Record<string, string> = {
+    const headers: Record<string, string> = mergeOutboundTraceHeaders({
       "content-type": "application/json",
       "anthropic-version": options.anthropicVersion ?? ANTHROPIC_API_VERSION,
       ...options.headers,
-    };
+    });
     const key = options.apiKey?.trim();
     if (key) headers["x-api-key"] = key;
 
