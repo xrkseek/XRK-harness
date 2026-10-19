@@ -30,7 +30,7 @@ describe('WorkspaceManager', () => {
     gate.resolve(ok({ items: [workspace('old')] as never[] }))
     await hydration
     expect(manager.getSnapshot()).toMatchObject({ phase: 'ready', state: 'idle' })
-    expect(manager.getSnapshot().items.map(item => item.workspaceId)).toEqual(['new', 'old'])
+    expect(manager.getSnapshot().items.map(item => item.workspaceId)).toEqual(['old', 'new'])
 
     api.onWorkspaceList = () => Promise.resolve(ok({
       items: [workspace('old'), workspace('new')] as never[],
@@ -59,9 +59,14 @@ describe('WorkspaceManager', () => {
     expect(manager.getSnapshot()).toMatchObject({ phase: 'ready', state: 'error', error: { message: 'wire down' } })
   })
 
-  it('creates by path, prepends a new row, and folds failures', async () => {
+  it('creates by path, appends a new row, and folds failures', async () => {
     const api = new FakeApiClient()
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('pinned'), workspace('older')] as never[],
+      pinnedWorkspaceIds: [wid('pinned')],
+    }))
     const manager = new WorkspaceManager(api)
+    await manager.refresh()
     api.onWorkspaceCreate = payload => Promise.resolve(ok({
       workspace: workspace('created', [], '2026-02-01T00:00:00.000Z'),
       created: true,
@@ -69,7 +74,9 @@ describe('WorkspaceManager', () => {
     } as never))
     await expect(manager.create({ path: '/w/created' })).resolves.toMatchObject({ ok: true })
     expect(api.callsOf('workspace.create')).toEqual([{ path: '/w/created' }])
-    expect(manager.getSnapshot().items[0]?.workspaceId).toBe('created')
+    expect(manager.getSnapshot().items.map(item => item.workspaceId)).toEqual([
+      'pinned', 'older', 'created',
+    ])
 
     api.onWorkspaceCreate = () => Promise.reject(new Error('create transport'))
     await expect(manager.create({ path: '/w/existing' })).resolves.toMatchObject({

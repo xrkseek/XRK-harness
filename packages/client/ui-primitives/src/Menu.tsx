@@ -88,13 +88,19 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * scroll/resize; return null to skip placement for that frame.
  * @param props.footer - rows pinned below the scrolling items area, separated
  * by a hairline; they stay visible while the items above scroll.
+ * @param props.header - optional sticky content above the scrolling items
+ * (e.g. a filter field for long workspace lists).
+ * @param props.listMaxHeight - override the scrollable card's max-height
+ * (default viewport-fit). Use a shorter cap so tall lists don't cover the UI.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, listRef: listRefProp, footer, className }: {
+export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, listRef: listRefProp, footer, header, listMaxHeight, className }: {
   open: boolean
   anchor: ReactNode
   items: readonly MenuEntry[]
   footer?: readonly MenuEntry[]
+  header?: ReactNode
+  listMaxHeight?: string | number
   selectedId?: string | undefined
   selectedIds?: readonly string[] | undefined
   onSelect: (id: string) => void
@@ -338,17 +344,28 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   // this pre-render in the same commit, so the first painted frame is
   // already at the final position (with getAnchorRect returning null the
   // list simply stays hidden).
+  const listStyle: CSSProperties | undefined = (() => {
+    const base = portal ? (fixedPos ?? MEASURE_STYLE) : undefined
+    if (listMaxHeight === undefined) return base
+    const maxHeight = typeof listMaxHeight === 'number' ? `${listMaxHeight}px` : listMaxHeight
+    return base === undefined ? { maxHeight } : { ...base, maxHeight }
+  })()
   const list = open && (
     <div
       ref={listRef}
       className={clsx(css.list, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
-      style={portal ? fixedPos ?? MEASURE_STYLE : undefined}
+      style={listStyle}
       role="menu"
       // React portals bubble synthetic events through the REACT tree: without
       // this stop, an item click re-fires the anchor row's own onClick
       // (open/toggle) after onSelect.
       onClick={(e) => { e.stopPropagation() }}
     >
+      {header !== undefined && header !== null && (
+        <div className={css.header} role="presentation" onClick={(e) => { e.stopPropagation() }}>
+          {header}
+        </div>
+      )}
       <div className={css.viewport} role="presentation">
         {items.map(renderEntry)}
       </div>

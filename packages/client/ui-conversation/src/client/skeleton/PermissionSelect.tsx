@@ -105,21 +105,6 @@ export function PermissionSelect({
 
   if (value === undefined) return null
 
-  // Orchestration workspaces: calm static chip — never a greyed fake select.
-  if (accessLocked) {
-    const fullLabel = t(PRESET_LABEL_KEYS[FULL_ACCESS])
-    return (
-      <span
-        className={css.orchChip}
-        title={t('access.orch.lockedHint')}
-        aria-label={t('input.accessMode', { name: fullLabel })}
-      >
-        <span className={css.triggerIcon} aria-hidden>{permissionGlyphs[FULL_ACCESS]}</span>
-        <span className={css.triggerLabel}>{fullLabel}</span>
-      </span>
-    )
-  }
-
   const labelOf = (option: PermissionSelectValue['options'][number]): string => {
     const key = PRESET_LABEL_KEYS[option.value as keyof typeof PRESET_LABEL_KEYS]
     return key !== undefined ? t(key) : fallbackDisplayName(option.name)
@@ -136,6 +121,38 @@ export function PermissionSelect({
   const currentLabel = current === undefined
     ? fallbackDisplayName(currentValue)
     : labelOf(current)
+
+  // Orchestration workspaces: calm static chip — never a greyed fake select.
+  if (accessLocked) {
+    const fullLabel = t(PRESET_LABEL_KEYS[FULL_ACCESS])
+    return (
+      <span
+        className={css.orchChip}
+        title={t('access.orch.lockedHint')}
+        aria-label={t('input.accessMode', { name: fullLabel })}
+      >
+        <span className={css.triggerIcon} aria-hidden>{permissionGlyphs[FULL_ACCESS]}</span>
+        <span className={css.triggerLabel}>{fullLabel}</span>
+      </span>
+    )
+  }
+
+  // Subagent / other locked seats: show the live mode as a static chip
+  // (same chrome as 向阳) instead of a disabled dropdown.
+  if (locked) {
+    return (
+      <span
+        className={css.orchChip}
+        title={current === undefined ? undefined : descOf(current)}
+        aria-label={t('input.accessMode', { name: currentLabel })}
+      >
+        {permissionGlyph(currentValue) !== undefined && (
+          <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
+        )}
+        <span className={css.triggerLabel}>{currentLabel}</span>
+      </span>
+    )
+  }
 
   const items: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')

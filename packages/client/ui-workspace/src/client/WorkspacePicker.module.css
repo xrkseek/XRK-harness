@@ -18,3 +18,25 @@
 .menuStatus {
   color: var(--dsw-alias-label-secondary);
 }
+
+/* Match ModelSelect search chrome (capped popover + filter field). */
+.pickerSearch {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  min-height: 28px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+}
+
+.pickerSearch:focus-visible {
+  border-color: var(--dsw-alias-border-l3);
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}

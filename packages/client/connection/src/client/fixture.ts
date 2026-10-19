@@ -2781,6 +2781,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           truncated: false,
         })
       },
+      listDirectoryPlaces: request => ok(request, {
+        places: [
+          { id: 'home', kind: 'home' as const, label: 'Home', path: FIXTURE_HOME },
+          { id: 'drive-root', kind: 'drive' as const, label: '/', path: '/' },
+        ],
+      }),
       createDirectory: (request) => {
         const parent = request.payload.path
         const children = childrenOf(parent)
@@ -3521,6 +3527,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.describe': return this.api.host.describe(request)
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
+      case 'host.listDirectoryPlaces': return this.api.host.listDirectoryPlaces(request)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'host.listOpenInApps': return this.api.host.listOpenInApps(request)

@@ -48,6 +48,79 @@ type SpawnRole = 'default' | 'worker' | 'researcher' | 'reviewer' | 'lead'
 
 const ROLES: readonly SpawnRole[] = ['default', 'worker', 'researcher', 'reviewer', 'lead']
 const FILE_TOOLS = 'bash,read,grep,glob'
+const MEMBER_CARD_KIND = 'xrk-agent-member'
+
+/** Portable card: name / playbook / role — never appearance. */
+function memberExportCard(member: AgentTeamMemberRow): string {
+  return JSON.stringify({
+    kind: MEMBER_CARD_KIND,
+    name: member.name,
+    playbook: member.playbook,
+    role: member.role,
+    ...(member.brief ? { brief: member.brief } : {}),
+    ...(member.inject ? { inject: member.inject } : {}),
+    ...(member.tools ? { tools: member.tools } : {}),
+  }, null, 2)
+}
+
+function safeMemberFileStem(name: string): string {
+  const stem = name.trim().replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '_').replace(/\s+/g, '-').slice(0, 48)
+  return stem || 'member'
+}
+
+/** Download a portable card as `.json` (playbooks are too long for the clipboard). */
+function downloadMemberCard(member: AgentTeamMemberRow): void {
+  const blob = new Blob([memberExportCard(member)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `xrk-member-${safeMemberFileStem(member.name)}.json`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => { URL.revokeObjectURL(url) }, 1500)
+}
+
+function parseMemberImport(raw: string): {
+  name: string
+  playbook: string
+  role: SpawnRole
+  brief?: string
+  inject?: 'minimal' | 'subagent'
+  tools?: { mode: 'allow' | 'deny'; names: readonly string[] }
+} | null {
+  try {
+    const row = JSON.parse(raw) as Record<string, unknown>
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
+    const playbook = typeof row.playbook === 'string' ? row.playbook.trim() : ''
+    if (!name || !playbook) return null
+    const roleRaw = typeof row.role === 'string' ? row.role : 'worker'
+    const role = (ROLES.includes(roleRaw as SpawnRole) ? roleRaw : 'worker') as SpawnRole
+    const brief = typeof row.brief === 'string' ? row.brief.trim() : ''
+    const inject = row.inject === 'subagent' || row.inject === 'minimal' ? row.inject : undefined
+    const toolsRaw = row.tools
+    let tools: { mode: 'allow' | 'deny'; names: readonly string[] } | undefined
+    if (toolsRaw && typeof toolsRaw === 'object' && !Array.isArray(toolsRaw)) {
+      const mode = (toolsRaw as { mode?: unknown }).mode
+      const names = (toolsRaw as { names?: unknown }).names
+      if ((mode === 'allow' || mode === 'deny') && Array.isArray(names)) {
+        const list = names.map(n => String(n).trim().toLowerCase()).filter(Boolean)
+        if (list.length > 0) tools = { mode, names: list }
+      }
+    }
+    return {
+      name,
+      playbook,
+      role,
+      ...(brief ? { brief } : {}),
+      ...(inject ? { inject } : {}),
+      ...(tools ? { tools } : {}),
+    }
+  } catch {
+    return null
+  }
+}
 
 function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]): {
   shape: string
@@ -265,6 +338,8 @@ export function TeamRoster({
   const [toolsMode, setToolsMode] = useState<ToolMode>('inherit')
   const [toolsNames, setToolsNames] = useState('')
   const [task, setTask] = useState('')
+  const [exportHint, setExportHint] = useState<string | null>(null)
+  const importRef = useRef<HTMLInputElement>(null)
 
   const selected = selectedId && !isDraftMemberId(selectedId)
     ? members.find(row => row.id === selectedId)
@@ -505,12 +580,62 @@ export function TeamRoster({
 
             <div className={css.pane}>
               {selectedId === null ? (
-                <p className={css.editorEmpty}>{t('team.editorEmpty')}</p>
+                <div className={css.editorEmpty}>
+                  <p>{t('team.editorEmpty')}</p>
+                  <ol className={css.howTo}>
+                    <li>{t('team.howTo.pick')}</li>
+                    <li>{t('team.howTo.edit')}</li>
+                    <li>{t('team.howTo.dispatch')}</li>
+                    <li>{t('team.howTo.share')}</li>
+                  </ol>
+                  <div className={css.row}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => { importRef.current?.click() }}
+                    >
+                      {t('team.import')}
+                    </Button>
+                    <input
+                      ref={importRef}
+                      type="file"
+                      accept="application/json,.json"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file || sessionId === undefined) return
+                        void file.text().then((text) => {
+                          const card = parseMemberImport(text)
+                          if (!card) {
+                            setError(t('team.importBad'))
+                            return
+                          }
+                          void run(async () => {
+                            const saved = await upsertTeamMember(sessionId, {
+                              name: card.name,
+                              playbook: card.playbook,
+                              role: card.role,
+                              scope: 'workspace',
+                              ...(card.brief ? { brief: card.brief } : {}),
+                              ...(card.inject ? { inject: card.inject } : {}),
+                              ...(card.tools ? { tools: card.tools } : {}),
+                            })
+                            setSelectedId(saved.id)
+                            setExportHint(t('team.importOk'))
+                          })
+                        })
+                      }}
+                    />
+                  </div>
+                </div>
               ) : (
                 <div className={css.editor}>
                   {catalogSeed ? (
                     <p className={css.fieldHint}>{t('team.catalogHint')}</p>
                   ) : null}
+                  <p className={css.fieldHint}>{t('team.editorHint')}</p>
                   <fieldset className={css.editorLock} disabled={busy || catalogSeed}>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-member-name">{t('team.memberName')}</label>
@@ -802,6 +927,22 @@ export function TeamRoster({
                         {saveLabel}
                       </Button>
                     )}
+                    {selected !== undefined && !isDraftMemberId(selectedId) ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          try {
+                            downloadMemberCard(selected)
+                            setExportHint(t('team.exportOk'))
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : t('team.exportFail'))
+                          }
+                        }}
+                      >
+                        {t('team.export')}
+                      </Button>
+                    ) : null}
                     {canDelete && (
                       <Button
                         variant="outline"
@@ -852,6 +993,9 @@ export function TeamRoster({
               )}
             </div>
           </div>
+          {exportHint !== null && (
+            <div className={css.fieldHint} role="status">{exportHint}</div>
+          )}
           {error !== null && <div className={css.error} role="alert">{error}</div>}
         </div>
       )}

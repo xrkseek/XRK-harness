@@ -175,12 +175,11 @@ export function ModelSelect(
     load()
   }
 
-  // Mount-time load resolves the trigger label; reopen soft-refreshes via show().
+  // Mount-time load resolves the trigger label, including a locked child chip
+  // that must paint the pinned route. Reopen soft-refreshes via show().
   useEffect(() => {
-    if (available) {
-      lastActionRef.current = 'load'
-      load()
-    }
+    lastActionRef.current = 'load'
+    load()
   }, [available, load])
 
   useEffect(() => {
@@ -229,7 +228,33 @@ export function ModelSelect(
     ;(cell !== null && cell !== undefined && !cell.disabled ? cell : triggerRef.current)?.focus()
   }, [open, pane])
 
-  if (!available) return null
+  // Addressed subagent: show the inherited/pinned route as a calm static chip
+  // (向阳 permission pattern) — never hide the seat, never open a picker.
+  if (!available) {
+    const modelLabel = state.current !== null
+      ? (state.groups
+        .flatMap(g => g.models.map(m => ({ groupId: g.id, model: m })))
+        .find(row => row.groupId === state.current!.provider && row.model.id === state.current!.model)
+        ?.model.name
+        ?? state.current.model)
+      : t('trigger.fallback')
+    const effort = state.current?.reasoningEffort
+    const title = effort !== undefined && effort.length > 0
+      ? `${modelLabel} · ${effort}`
+      : modelLabel
+    return (
+      <span
+        className={css.lockedChip}
+        title={t('trigger.lockedHint')}
+        aria-label={t('trigger.lockedAria', { model: title })}
+      >
+        <span className={css.triggerLabel}>{modelLabel}</span>
+        {effort !== undefined && effort.length > 0 && (
+          <span className={css.triggerEffort}>{effort}</span>
+        )}
+      </span>
+    )
+  }
 
   const show = (): void => {
     triggerRef.current?.focus()

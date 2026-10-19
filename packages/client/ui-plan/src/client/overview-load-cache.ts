@@ -12,10 +12,38 @@ import type { PreviewTabLoad } from './preview-load.ts'
 
 const MAX_SESSIONS = 24
 const bySession = new Map<string, PreviewTabLoad>()
+/** Standing `todos` projection — last non-null array per Session (may be empty). */
+const todosBySession = new Map<string, readonly { content: string; status: string }[]>()
 
-/** Test-only: drop every remembered Status payload. */
+/** Test-only: drop every remembered Status / todos payload. */
 export function resetOverviewLoadCacheForTests(): void {
   bySession.clear()
+  todosBySession.clear()
+}
+
+/** Last todos paint for one Session (undefined = never seen). */
+export function readOverviewTodosCache(
+  sessionId: string,
+): readonly { content: string; status: string }[] | undefined {
+  const row = todosBySession.get(sessionId)
+  if (row === undefined) return undefined
+  todosBySession.delete(sessionId)
+  todosBySession.set(sessionId, row)
+  return row
+}
+
+/** Remember a live todos projection (including empty lists). */
+export function writeOverviewTodosCache(
+  sessionId: string,
+  todos: readonly { content: string; status: string }[],
+): void {
+  todosBySession.delete(sessionId)
+  todosBySession.set(sessionId, todos)
+  while (todosBySession.size > MAX_SESSIONS) {
+    const oldest = todosBySession.keys().next().value
+    if (oldest === undefined || oldest === sessionId) break
+    todosBySession.delete(oldest)
+  }
 }
 
 /** Last successful load for one Session (undefined = never fetched / evicted). */

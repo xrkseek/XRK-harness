@@ -124,10 +124,10 @@ describe('PluginsSettingsSection', () => {
     expect(screen.getByText('all').closest('[role="tabpanel"]')).toHaveProperty('hidden', true)
   })
 
-  it('leads with its own heading and intro', () => {
+  it('leads with its intro (dialog already titles the page)', () => {
     renderSection([{ id: 'configurable', order: 0, label: en.configurableTab }])
 
-    expect(screen.getByRole('heading', { name: en.title })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: en.title })).toBeNull()
     expect(screen.getByText(en.intro)).toBeTruthy()
   })
 
@@ -327,7 +327,6 @@ describe('AgentLoopCard', () => {
       softBudgetPeelAttempts: field('3'),
       toolResultMaxInlineBytes: field('64000'),
       maxConcurrentModelSessions: field('5'),
-      subagentModel: field(''),
     })
     const actions = cardActions()
     const props = {
@@ -361,7 +360,6 @@ describe('AgentLoopCard', () => {
       softBudgetPeelAttempts: field('3'),
       toolResultMaxInlineBytes: field('64000'),
       maxConcurrentModelSessions: field('5'),
-      subagentModel: field(''),
     })
     const actions = cardActions()
     const props = {

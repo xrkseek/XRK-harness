@@ -73,7 +73,7 @@
    notch, so a tall card scrolls its last rows under the home indicator
    unless the vertical pair comes off the budget too. */
 .portal.scrollable {
-  max-height: calc(100dvh - 24px - var(--ds-safe-v));
+  max-height: min(360px, calc(100dvh - 32px - var(--ds-safe-v)));
 }
 
 /* Open above the anchor (empty-state workspace chip: figma 122:9481). */
@@ -87,19 +87,25 @@
   right: 0;
 }
 
-/* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
- * (24 = 2 × the portal MARGIN in Menu.tsx) and taller content scrolls inside
- * .viewport, so a pinned .footer stays visible. Menus with submenu rows skip
- * this class — the overflow clip would crop the side card, so they rely on
- * staying short. */
+/* Same cap as the model menu: the card stays within 360px and the row list
+ * scrolls inside .viewport so the footer stays put. Menus with submenu rows
+ * skip this class — the overflow clip would crop the side card. */
 .scrollable {
-  max-height: calc(100vh - 24px);
+  max-height: min(360px, calc(100vh - 32px));
+  overflow: hidden;
 }
 
 @supports (height: 100dvh) {
   .scrollable {
-    max-height: calc(100dvh - 24px);
+    max-height: min(360px, calc(100dvh - 32px));
   }
+}
+
+/* Sticky filter / caption above the scrolling viewport. */
+.header {
+  flex: 0 0 auto;
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .viewport {
@@ -109,6 +115,10 @@
 }
 
 .scrollable .viewport {
+  flex: 1 1 auto;
+  /* Cap the row list itself. A flex card with only max-height still grows
+     with its content, so the workspace picker never got a scrollport. */
+  max-height: min(280px, calc(100dvh - 140px));
   overflow-y: auto;
   /* Tall menus scroll in .viewport so a pinned .footer stays visible. Contain
      stops the reached edge from scrolling the surface the menu was opened

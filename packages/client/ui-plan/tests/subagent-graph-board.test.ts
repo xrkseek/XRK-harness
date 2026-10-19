@@ -26,7 +26,7 @@ describe('SubagentGraphBoard', () => {
     expect(html).not.toContain('empty')
   })
 
-  it('keeps the depth-0 parent running while a graph child is running', () => {
+  it('keeps the depth-0 parent idle while a graph child is running', () => {
     const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
       sessionId: 'child',
       rootLabel: 'Session',
@@ -44,10 +44,11 @@ describe('SubagentGraphBoard', () => {
       runningLabel: 'running',
       idleLabel: 'done',
     }))
-    expect(html).toMatch(/data-depth="0"[^>]*data-activity="running"|data-activity="running"[^>]*data-depth="0"/)
+    expect(html).toMatch(/data-depth="0"[^>]*data-activity="inactive"|data-activity="inactive"[^>]*data-depth="0"/)
+    expect(html).toContain('data-activity="running"')
   })
 
-  it('keeps the depth-0 parent running while a live child is running', () => {
+  it('keeps the depth-0 parent idle while a live child is running', () => {
     const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
       sessionId: 'parent',
       rootLabel: 'Session',
@@ -63,7 +64,8 @@ describe('SubagentGraphBoard', () => {
       runningLabel: 'running',
       idleLabel: 'done',
     }))
-    expect(html).toMatch(/data-depth="0"[^>]*data-activity="running"|data-activity="running"[^>]*data-depth="0"/)
+    expect(html).toMatch(/data-depth="0"[^>]*data-activity="inactive"|data-activity="inactive"[^>]*data-depth="0"/)
+    expect(html).toContain('data-activity="running"')
   })
 
   it('paints a parent-aborted idle child as error, not done', () => {

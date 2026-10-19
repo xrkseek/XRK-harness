@@ -3,7 +3,7 @@
 /** Locale keys these surfaces render. */
 export type PluginsSettingsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'toolsTab' | 'skillsTab' | 'empty'
-  | 'catalogNoSession' | 'catalogLoading' | 'catalogError' | 'catalogRetry'
+  | 'catalogNoSession' | 'catalogLoading' | 'catalogRefreshing' | 'catalogError' | 'catalogRetry'
   | 'catalogSearch' | 'catalogRefresh' | 'catalogFilterAll' | 'catalogNoMatch'
   | 'catalogWorkspace' | 'catalogNoBody'
   | 'toolsCatalogLead' | 'toolsCatalogMeta' | 'toolsCatalogEmpty'
@@ -53,8 +53,6 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopSoftBudgetPeel' | 'agentLoopSoftBudgetPeelHint'
   | 'agentLoopToolResultMaxInline' | 'agentLoopToolResultMaxInlineHint'
   | 'agentLoopMaxConcurrentModelSessions' | 'agentLoopMaxConcurrentModelSessionsHint'
-  | 'agentLoopSubagentModel' | 'agentLoopSubagentModelHint'
-  | 'agentLoopSubagentModelInvalid'
   | 'workspaceInjectTitle' | 'workspaceInjectDescription'
   | 'workspaceInjectMaxChars' | 'workspaceInjectMaxCharsHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpConnectedHeading'
@@ -191,6 +189,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   skillsTab: 'Inject',
   catalogNoSession: 'Open a session to inspect its runtime tools and standing inject.',
   catalogLoading: 'Loading catalog…',
+  catalogRefreshing: 'Updating…',
   catalogError: 'Could not load this catalog.',
   catalogRetry: 'Retry',
   catalogSearch: 'Search by name or description',
@@ -317,9 +316,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolResultMaxInlineHint: 'Plain-text tool bodies over this spill to ~/.xrk/spill/ with a head/tail preview. 0 disables. Default 64000.',
   agentLoopMaxConcurrentModelSessions: 'Max sessions per model',
   agentLoopMaxConcurrentModelSessionsHint: 'Running sessions (parent + subagent) on one provider/model. Blank and idle history do not count. Default 5. Routes are independent. Per-model override: Settings → Models → maxConcurrentSessions.',
-  agentLoopSubagentModel: 'Subagent model',
-  agentLoopSubagentModelHint: 'Fleet-wide route for delegated subagents, as provider/model (e.g. deepseek/deepseek-flash). Leave empty (default) so every child uses the same model as the parent that spawned it. A subagent call can still override this per call.',
-  agentLoopSubagentModelInvalid: 'Use provider/model, e.g. deepseek/deepseek-flash',
   workspaceInjectTitle: 'Workspace inject',
   workspaceInjectDescription: 'How much of the workspace rules and skills catalog may enter the system prompt each turn.',
   workspaceInjectMaxChars: 'Inject character budget',
@@ -559,16 +555,16 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   videoAnalyzeLiveHint: 'Applies on the next agent rebuild (live; no Host restart).',
   videoAnalyzeBoundaryHint: 'Not for live browser pages — use browser_vision. Not for creating videos — use video_generate.',
   curatedMemoryTitle: 'Curated memory',
-  curatedMemoryDescription: 'Zoned MEMORY.md / USER.md (global · workspace · session · agent under ~/.xrk/memories; not Mnemon). Off skips the memory tool and frozen system prompt. Set XRK_CURATED_MEMORY=0 in CI to force off.',
-  curatedMemoryEnabled: 'Master switch',
-  curatedMemoryEnabledHint: 'On freezes MEMORY.md / USER.md into the system prompt and registers the memory tool. Off removes both on the next agent rebuild.',
+  curatedMemoryDescription: 'Injects the memory tool and a frozen MEMORY.md / USER.md snapshot (zones: global · workspace · session · agent). Standing AGENTS.md and SOUL.md stay on either way. Not Mnemon.',
+  curatedMemoryEnabled: 'Inject',
+  curatedMemoryEnabledHint: 'On: idle agents rebuild now and receive the tool plus the frozen snapshot. Off: both drop. A busy session finishes its current turn first.',
   curatedMemoryEnabledOn: 'On',
   curatedMemoryEnabledOff: 'Off',
   curatedMemoryPhase2: 'Phase2 LLM consolidate',
-  curatedMemoryPhase2Hint: 'After Phase1, ask the session model to fold notes into MEMORY.md. Needs a live LLM route. CI: XRK_CURATED_MEMORY_PHASE2=1.',
+  curatedMemoryPhase2Hint: 'Read at session end (after Phase1). Folds notes into the default zone. Needs a live LLM route. Does not itself change the frozen prompt.',
   curatedMemoryPhase2On: 'On',
   curatedMemoryPhase2Off: 'Off',
-  curatedMemoryLiveHint: 'Applies on the next agent rebuild (live; no Host restart). Provider backend: XRK_MEMORY_PROVIDER=file|http|sqlite.',
+  curatedMemoryLiveHint: 'Both fields apply without a Host restart. CI bypass only: XRK_CURATED_MEMORY=0 forces off; XRK_CURATED_MEMORY_PHASE2=1 forces Phase2. Backend stays XRK_MEMORY_PROVIDER=file|http|sqlite.',
   a2aInboundTitle: 'A2A inbound',
   a2aInboundDescription:
     'Opt-in Agent Card + POST /a2a message/send into a Face session (framed peer text). No SSE / tasks CRUD. CI: XRK_A2A_INBOUND=1 forces on; =0 forces off.',
@@ -666,6 +662,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   skillsTab: '注入',
   catalogNoSession: '打开一个会话后，可查看该会话的运行时工具与 Standing 注入。',
   catalogLoading: '正在加载目录…',
+  catalogRefreshing: '正在更新…',
   catalogError: '无法加载此目录。',
   catalogRetry: '重试',
   catalogSearch: '按名称或描述搜索',
@@ -792,9 +789,6 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopToolResultMaxInlineHint: '纯文本工具正文超过此值会落盘到 ~/.xrk/spill/，模型只见 head/tail。0 关闭。默认 64000。',
   agentLoopMaxConcurrentModelSessions: '每模型最大会话数',
   agentLoopMaxConcurrentModelSessionsHint: '同一「供应商/模型」下进行中的会话（主会话 + 子代理都算；blank / 闲置历史不计）。默认 5。不同路由互不影响。单模型可在 Settings → Models 配 maxConcurrentSessions。',
-  agentLoopSubagentModel: '子代理模型',
-  agentLoopSubagentModelHint: '委派子代理的统一线路，写作 provider/model（如 deepseek/deepseek-flash）。留空（默认）则每个子代理与委派它的父会话用同一个模型。单次 subagent 调用仍可覆盖。',
-  agentLoopSubagentModelInvalid: '请写作 provider/model，如 deepseek/deepseek-flash',
   workspaceInjectTitle: '工作区注入',
   workspaceInjectDescription: '每轮系统提示里可注入多少工作区 rules / skills 目录字符。',
   workspaceInjectMaxChars: '注入字符预算',
@@ -1034,16 +1028,16 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   videoAnalyzeLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。',
   videoAnalyzeBoundaryHint: '不要用于实时浏览器页（用 browser_vision）；不要用于生成视频（用 video_generate）。',
   curatedMemoryTitle: '策展记忆',
-  curatedMemoryDescription: '分区 MEMORY.md / USER.md（global · workspace · session · agent，目录在 ~/.xrk/memories；不是 Mnemon）。关则跳过 memory 工具与系统提示冻结段。CI 可设 XRK_CURATED_MEMORY=0 强制关。',
-  curatedMemoryEnabled: '总开关',
-  curatedMemoryEnabledHint: '开：冻结 MEMORY.md / USER.md 进系统提示并登记 memory 工具。关：下次 agent 重建后两者都卸下。',
+  curatedMemoryDescription: '注入 memory 工具，并冻进 MEMORY.md / USER.md（区：global · workspace · session · agent）。站立 AGENTS.md 与 SOUL.md 不受此开关影响。不是 Mnemon。',
+  curatedMemoryEnabled: '注入',
+  curatedMemoryEnabledHint: '开：空闲会话立即重建，带上工具和冻结快照。关：两者都卸下。正在跑的会话先把当前回合跑完。',
   curatedMemoryEnabledOn: '开',
   curatedMemoryEnabledOff: '关',
   curatedMemoryPhase2: 'Phase2 LLM 巩固',
-  curatedMemoryPhase2Hint: 'Phase1 之后用当前会话模型把笔记折进 MEMORY.md。需要可用 LLM 路由。CI：XRK_CURATED_MEMORY_PHASE2=1。',
+  curatedMemoryPhase2Hint: '会话结束时读取（在 Phase1 之后），把笔记折进缺省区。需要可用 LLM 路由。本身不改冻结段。',
   curatedMemoryPhase2On: '开',
   curatedMemoryPhase2Off: '关',
-  curatedMemoryLiveHint: '下次 agent 重建后生效（热切换，无需重启 Host）。后端：XRK_MEMORY_PROVIDER=file|http|sqlite。',
+  curatedMemoryLiveHint: '两项都不必重启 Host。CI 旁路：XRK_CURATED_MEMORY=0 强制关；XRK_CURATED_MEMORY_PHASE2=1 强制 Phase2。后端仍是 XRK_MEMORY_PROVIDER=file|http|sqlite。',
   a2aInboundTitle: 'A2A 入站',
   a2aInboundDescription:
     '可选 Agent Card + POST /a2a message/send 注入 Face 会话（对端正文加帧）。无 SSE / tasks CRUD。CI：XRK_A2A_INBOUND=1 强制开、=0 强制关。',

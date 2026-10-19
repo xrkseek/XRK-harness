@@ -18,6 +18,9 @@ type PlanTranslate = TranslateNS<'plan'>
 
 const GROUPED = new Intl.NumberFormat('en-US')
 
+/** Last diff per session + turn + path. Refresh still replaces it. */
+const diffPaint = new Map<string, WorkspaceFileDiff | null>()
+
 export type OverviewChangesFile = {
   readonly path: string
   readonly display: string
@@ -203,11 +206,15 @@ export function OverviewChangesPanel({
     const ac = new AbortController()
     const turnSeq = activeTurn.seq
     const index = safeIndex
-    setDiff(undefined)
+    const paintKey = `${sessionId}\0${turnSeq}\0${activeFilePath}`
+    const cached = diffPaint.get(paintKey)
+    setDiff(cached === undefined ? undefined : cached)
     setError(undefined)
     void loadFileDiffRef.current(turnSeq, index, ac.signal).then(
       (value) => {
-        if (!ac.signal.aborted) setDiff(value)
+        if (ac.signal.aborted) return
+        diffPaint.set(paintKey, value)
+        setDiff(value)
       },
       (err: unknown) => {
         if (!ac.signal.aborted) {
@@ -217,7 +224,7 @@ export function OverviewChangesPanel({
       },
     )
     return () => { ac.abort() }
-  }, [activeTurn?.seq, safeIndex, activeFilePath])
+  }, [sessionId, activeTurn?.seq, safeIndex, activeFilePath])
 
   if (turns.length === 0 || activeTurn === undefined) {
     return <div className={css.empty}>{t('preview.changes.empty')}</div>

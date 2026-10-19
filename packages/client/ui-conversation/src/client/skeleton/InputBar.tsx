@@ -197,14 +197,15 @@ export const InputBar = memo(function InputBar({
 
   // A continuable child without its live parent cannot accept human input,
   // but its independent Stop below stays available while it runs.
+  const oneShot = subagent?.address.mode === 'one-shot'
   const continuable = subagent?.address.mode === 'continuable'
   const parentOffline = continuable && !subagent.parentAvailable
   // Running input stays free; locked = session removed, the
   // inert no-workspace state, the machine faces absent (no session),
-  // reconnecting wire, or a parent-offline continuable child. An owner block
-  // also disables input; adjudicating and submitting render read-only so the
-  // draft stays visible.
-  const disabled = removed || inert || !live || blocked !== undefined || parentOffline || reconnecting
+  // reconnecting wire, a one-shot child (view-only transcript), or a
+  // parent-offline continuable child. An owner block also disables input;
+  // adjudicating and submitting render read-only so the draft stays visible.
+  const disabled = removed || inert || !live || blocked !== undefined || parentOffline || reconnecting || oneShot === true
   const locked = disabled
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
@@ -550,20 +551,22 @@ export const InputBar = memo(function InputBar({
 
   const placeholderText = placeholder ?? (reconnecting
     ? t('placeholder.reconnecting')
-    : parentOffline
-      ? t('placeholder.parentOffline')
-      : disabled
-        ? t('placeholder.unavailable')
-        // The steer hint deliberately outranks the plan placeholder:
-        // while it shows, the whole-queue gesture is genuinely available
-        // (the gate never consults plan mode), so the actionable hint wins.
-        : canSteerQueue
-          ? t('placeholder.steerQueue')
-          : busyEnterHint === 'queue'
-            ? t('placeholder.busyQueue')
-            : busyEnterHint === 'steer'
-              ? t('placeholder.busySteer')
-              : planActive ? t('placeholder.plan') : t('placeholder.default'))
+    : oneShot
+      ? t('placeholder.oneShot')
+      : parentOffline
+        ? t('placeholder.parentOffline')
+        : disabled
+          ? t('placeholder.unavailable')
+          // The steer hint deliberately outranks the plan placeholder:
+          // while it shows, the whole-queue gesture is genuinely available
+          // (the gate never consults plan mode), so the actionable hint wins.
+          : canSteerQueue
+            ? t('placeholder.steerQueue')
+            : busyEnterHint === 'queue'
+              ? t('placeholder.busyQueue')
+              : busyEnterHint === 'steer'
+                ? t('placeholder.busySteer')
+                : planActive ? t('placeholder.plan') : t('placeholder.default'))
 
   return (
     <div className={clsx(css.root, variant === 'hero' && css.hero)}>

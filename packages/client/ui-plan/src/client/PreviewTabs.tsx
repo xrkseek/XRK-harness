@@ -46,7 +46,9 @@ import {
 } from './overview-paint.ts'
 import {
   readOverviewLoadCache,
+  readOverviewTodosCache,
   writeOverviewLoadCache,
+  writeOverviewTodosCache,
 } from './overview-load-cache.ts'
 import { overviewStatusPollMs } from './overview-status-poll.ts'
 import { EMPTY_PRESENCE_SESSION_CUES } from './presence-session-cues.ts'
@@ -1773,7 +1775,12 @@ export function PreviewTabs({
   const plan = useProjection('plan') ?? loaded.plan
   // Face `todos` standing plan — keyed through host projections; cast keeps
   // this package free of a hard dependency on the todo stub types package.
-  const todos = (useProjection as (key: string) => unknown)('todos') as TodoRow[] | null
+  // Null means the projection has not landed yet: paint last-good for this
+  // Session so opening 任务 does not flash the empty copy.
+  const liveTodos = (useProjection as (key: string) => unknown)('todos') as TodoRow[] | null
+  const todos = (Array.isArray(liveTodos)
+    ? liveTodos
+    : readOverviewTodosCache(sessionId) ?? null) as TodoRow[] | null
   const workspaceChanges = (useProjection as (key: string) => unknown)(
     'workspaceChanges',
   ) as OverviewChangesTurn[] | null | undefined
@@ -1939,6 +1946,10 @@ export function PreviewTabs({
     },
     () => null,
   )
+
+  useEffect(() => {
+    if (Array.isArray(liveTodos)) writeOverviewTodosCache(sessionId, liveTodos)
+  }, [sessionId, liveTodos])
 
   useEffect(() => {
     if (reviewFocus !== null) selectTab('changes')

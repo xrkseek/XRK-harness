@@ -159,6 +159,29 @@ type ViewState =
   | { readonly status: 'error' }
   | { readonly status: 'ready'; readonly snapshot: PluginInventorySnapshot }
 
+const INVENTORY_CACHE_KEY = 'xrk.plugin-inventory.v1'
+let inventoryMemory: PluginInventorySnapshot | undefined
+
+function readInventoryCache(): PluginInventorySnapshot | undefined {
+  if (inventoryMemory !== undefined) return inventoryMemory
+  try {
+    const raw = sessionStorage.getItem(INVENTORY_CACHE_KEY)
+    if (raw === null) return undefined
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed === null || typeof parsed !== 'object' || !('entries' in parsed)) return undefined
+    if (!Array.isArray((parsed as PluginInventorySnapshot).entries)) return undefined
+    inventoryMemory = parsed as PluginInventorySnapshot
+    return inventoryMemory
+  } catch {
+    return undefined
+  }
+}
+
+function writeInventoryCache(snapshot: PluginInventorySnapshot): void {
+  inventoryMemory = snapshot
+  try { sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(snapshot)) } catch { /* quota / private */ }
+}
+
 const PHASE_KEYS = {
   pending: 'pending',
   loading: 'loadingPhase',
@@ -271,7 +294,11 @@ export function PluginInventorySettingsTab({
   const [presetOpen, setPresetOpen] = useState(true)
   const [globalOpen, setGlobalOpen] = useState(true)
   const [expanded, setExpanded] = useState<PluginInventoryEntry['entryId'] | null>(null)
-  const [state, setState] = useState<ViewState>({ status: 'loading' })
+  const [state, setState] = useState<ViewState>(() => {
+    const cached = readInventoryCache()
+    return cached === undefined ? { status: 'loading' } : { status: 'ready', snapshot: cached }
+  })
+  const [refreshing, setRefreshing] = useState(false)
   const [busyId, setBusyId] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [removeTarget, setRemoveTarget] = useState<PluginInventoryEntry | null>(null)
   const [menuEntryId, setMenuEntryId] = useState<PluginInventoryEntry['entryId'] | null>(null)
@@ -318,9 +345,22 @@ export function PluginInventorySettingsTab({
 
   useEffect(() => {
     let current = true
+    const had = readInventoryCache()
+    if (had === undefined) setState({ status: 'loading' })
+    else setRefreshing(true)
     void Promise.resolve().then(() => list()).then(
-      (snapshot) => { if (current) setState({ status: 'ready', snapshot }) },
-      () => { if (current) setState({ status: 'error' }) },
+      (snapshot) => {
+        if (!current) return
+        writeInventoryCache(snapshot)
+        setState({ status: 'ready', snapshot })
+        setRefreshing(false)
+      },
+      () => {
+        if (!current) return
+        setRefreshing(false)
+        if (readInventoryCache() !== undefined) return
+        setState({ status: 'error' })
+      },
     )
     return () => { current = false }
   }, [list, request])
@@ -362,7 +402,6 @@ export function PluginInventorySettingsTab({
   }, [state])
 
   const retry = (): void => {
-    setState({ status: 'loading' })
     setActionError(null)
     setRequest(value => value + 1)
   }
@@ -386,7 +425,6 @@ export function PluginInventorySettingsTab({
       setInstallSpec('')
       if (okSpec.length > 0) showToast(t('toastInstalled', { name: okSpec }))
     }
-    setState({ status: 'loading' })
     setRequest(value => value + 1)
   }, [installBusy, installSuccess, mutateKind, okSpec, t])
 
@@ -411,7 +449,6 @@ export function PluginInventorySettingsTab({
       if (options.notice !== undefined) showToast(options.notice)
       if (options.clientRefresh === true) markPluginClientRefreshHint()
       if (options.refresh !== false) {
-        setState({ status: 'loading' })
         setRequest(value => value + 1)
       }
     } catch (error) {
@@ -486,7 +523,7 @@ export function PluginInventorySettingsTab({
   ]
 
   return (
-    <div ref={rootRef} className={css.section} aria-busy={state.status === 'loading'}>
+    <div ref={rootRef} className={css.section} aria-busy={state.status === 'loading' || refreshing}>
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
       {state.status === 'error' ? (
         <div className={css.failure}>

@@ -465,15 +465,17 @@ export class WorkspaceManager {
     // late unary response cannot roll back a newer frame.
     const installed = index === -1 ? undefined : this.items[index]?.getSnapshot().view
     if (installed !== undefined && Date.parse(view.updatedAt) < Date.parse(installed.updatedAt)) return
+    // Append unknown ids: Face create pushes to the end of registry order
+    // (display = pins then rest). Prepending would leapfrog pinned workspaces.
     if (!this.committedOrder.includes(view.workspaceId)) {
-      this.committedOrder = [view.workspaceId, ...this.committedOrder]
+      this.committedOrder = [...this.committedOrder, view.workspaceId]
     }
     if (identity !== undefined) {
       this.items = index === -1
-        ? [identity, ...this.items]
+        ? [...this.items, identity]
         : this.items.map((item, position) => position === index ? identity : item)
     } else if (index === -1) {
-      this.items = [new Workspace(this.api, view), ...this.items]
+      this.items = [...this.items, new Workspace(this.api, view)]
     } else {
       this.items[index]?.adopt(view)
       this.items = [...this.items]
@@ -536,11 +538,11 @@ export class WorkspaceManager {
   }
 }
 
-/** Known ids retain their position; a newly created Workspace enters first. */
+/** Known ids retain their position; a newly created Workspace appends (Face create order). */
 function upsertWorkspace(items: readonly WorkspaceView[], workspace: WorkspaceView): WorkspaceView[] {
   const index = items.findIndex(item => item.workspaceId === workspace.workspaceId)
   return index === -1
-    ? [workspace, ...items]
+    ? [...items, workspace]
     : items.map((item, position) => position === index ? workspace : item)
 }
 

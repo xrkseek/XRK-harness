@@ -1,6 +1,7 @@
 /** Session header Inject tab: skill.list + inject docs, searchable groups, body peek. */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import clsx from 'clsx'
 import type {
   InjectDocumentEntry,
   SkillEntry,
@@ -10,6 +11,14 @@ import type {
 import type { SessionId } from '@xrkseek/xrk-api-remotes/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { PluginsSettingsLocaleKey } from './locales.ts'
+import {
+  paintSkillsCatalog,
+  rememberCatalog,
+  rememberSkillsCatalog,
+  skillBodyCache,
+  skillsChromeBySession,
+  writeChrome,
+} from './catalog-session-cache.ts'
 import css from './CatalogListTab.module.css'
 
 /** Selection-key prefixes for catalog rows (must match `slice` lengths below). */
@@ -247,43 +256,60 @@ function groupSkills(
     })
 }
 
-/** Render the skill directory for the current session cwd. */
-export function SkillsCatalogTab({
+const DEFAULT_SKILL_GROUPS = ['session-docs', 'documents'] as const
+
+/** One session's inject catalog. Remounted per sessionId so chrome cannot bleed. */
+function SkillsCatalogSession({
   t,
-  currentSessionId,
+  sessionId,
   listSkills,
   readSkill,
-}: SkillsCatalogTabProps): ReactNode {
+}: SkillsCatalogTabProps & { sessionId: string }): ReactNode {
   const searchId = useId()
+  const stored = skillsChromeBySession.get(sessionId)
+  const painted = paintSkillsCatalog(sessionId)
+  const cached = painted?.value as SkillListValue | undefined
   const [tick, setTick] = useState(0)
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<SkillFilter>('all')
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['session-docs', 'documents']))
-  const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [query, setQuery] = useState(stored?.query ?? '')
+  const [filter, setFilter] = useState<SkillFilter>((stored?.filter as SkillFilter | undefined) ?? 'all')
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(stored?.expanded ?? DEFAULT_SKILL_GROUPS),
+  )
+  const [activeKey, setActiveKey] = useState<string | null>(stored?.open ?? null)
+  const [refreshing, setRefreshing] = useState(painted !== undefined && !painted.owned)
   const [body, setBody] = useState<BodyState | null>(null)
-  const [state, setState] = useState<ViewState>({ status: 'idle' })
-  const sessionId = currentSessionId()
+  const [state, setState] = useState<ViewState>(
+    cached ? { status: 'ready', value: cached } : { status: 'loading' },
+  )
 
   useEffect(() => {
-    if (!sessionId) {
-      setState({ status: 'idle' })
-      return
-    }
+    writeChrome(skillsChromeBySession, sessionId, {
+      query,
+      filter,
+      expanded: [...expanded],
+      open: activeKey,
+    })
+  }, [sessionId, query, filter, expanded, activeKey])
+
+  useEffect(() => {
     let current = true
     const abort = new AbortController()
-    setState({ status: 'loading' })
+    const had = paintSkillsCatalog(sessionId)
+    if (had === undefined) setState({ status: 'loading' })
+    else setRefreshing(true)
     void listSkills(sessionId as SessionId, abort.signal).then(
       (value) => {
         if (!current) return
+        rememberSkillsCatalog(sessionId, value)
         setState({ status: 'ready', value })
-        setExpanded(new Set(['session-docs', 'documents']))
-        setActiveKey(null)
-        setBody(null)
+        setRefreshing(false)
       },
       (error: unknown) => {
         if (!current) return
         const cancelled = error instanceof DOMException && error.name === 'AbortError'
         if (cancelled) return
+        setRefreshing(false)
+        if (paintSkillsCatalog(sessionId) !== undefined) return
         const message = error instanceof Error ? error.message : undefined
         setState({ status: 'error', message })
       },
@@ -295,25 +321,31 @@ export function SkillsCatalogTab({
   }, [sessionId, tick, listSkills])
 
   useEffect(() => {
-    if (!sessionId || !activeKey) {
+    if (!activeKey) {
       setBody(null)
       return
     }
+    const bodyKey = `${sessionId}\0${activeKey}`
+    const cachedBody = skillBodyCache.get(bodyKey)
     let current = true
     const abort = new AbortController()
-    setBody({ status: 'loading' })
+    setBody(cachedBody !== undefined
+      ? { status: 'ready', content: cachedBody }
+      : { status: 'loading' })
     const selector = activeKey.startsWith(DOC_ITEM_PREFIX)
       ? { document: activeKey.slice(DOC_ITEM_PREFIX.length) }
       : { name: activeKey.slice(SKILL_ITEM_PREFIX.length) }
     void readSkill(sessionId as SessionId, selector, abort.signal).then(
       (value) => {
         if (!current) return
+        rememberCatalog(skillBodyCache, bodyKey, value.content)
         setBody({ status: 'ready', content: value.content })
       },
       (error: unknown) => {
         if (!current) return
         const cancelled = error instanceof DOMException && error.name === 'AbortError'
         if (cancelled) return
+        if (skillBodyCache.has(bodyKey)) return
         const message = error instanceof Error ? error.message : String(error)
         setBody({ status: 'error', message })
       },
@@ -371,14 +403,6 @@ export function SkillsCatalogTab({
     setActiveKey((prev) => (prev === key ? null : key))
   }
 
-  if (!sessionId) {
-    return (
-      <div className={css.root}>
-        <p className={css.lead}>{t('skillsCatalogLead')}</p>
-        <p className={css.status}>{t('catalogNoSession')}</p>
-      </div>
-    )
-  }
   if (state.status === 'loading' || state.status === 'idle') {
     return (
       <div className={css.root}>
@@ -411,7 +435,7 @@ export function SkillsCatalogTab({
   ]
 
   return (
-    <div className={css.root}>
+    <div className={clsx(css.root, refreshing && css.rootRefreshing)} aria-busy={refreshing}>
       <p className={css.lead}>{t('skillsCatalogLead')}</p>
       <p className={css.workspace} title={state.value.workspace.cwd}>
         {t('catalogWorkspace', { label: state.value.workspace.label })}
@@ -605,6 +629,30 @@ export function SkillsCatalogTab({
         })
       )}
     </div>
+  )
+}
+
+/** Inject catalog for the conversation-view session. Each session remounts. */
+export function SkillsCatalogTab({
+  currentSessionId,
+  ...rest
+}: SkillsCatalogTabProps): ReactNode {
+  const sessionId = currentSessionId()
+  if (!sessionId) {
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{rest.t('skillsCatalogLead')}</p>
+        <p className={css.status}>{rest.t('catalogNoSession')}</p>
+      </div>
+    )
+  }
+  return (
+    <SkillsCatalogSession
+      key={sessionId}
+      {...rest}
+      currentSessionId={currentSessionId}
+      sessionId={sessionId}
+    />
   )
 }
 

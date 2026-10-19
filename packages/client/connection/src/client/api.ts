@@ -8,7 +8,7 @@
 export type {
   ApiProxy, SessionsApi, SessionSearchItem, SessionSummary, PromptContentPart, HostApi, EventsApi, MuxFrame, HostFrame,
   ApprovalResponsePayload, QuestionResponsePayload, HistoryEntry, ToolEventView,
-  DirectoryEntry, DirectoryListing,
+  DirectoryEntry, DirectoryListing, DirectoryPlace,
   ResponseValue, WorkspaceApi, WorkspaceId, WorkspaceView,
   SessionToolEntry, SessionToolsValue, SessionToolsDisclosure, SessionToolSurface,
   SkillsApi, SkillEntry, SkillListValue, SkillListWorkspace,

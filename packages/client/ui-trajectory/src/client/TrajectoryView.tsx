@@ -29,6 +29,12 @@ import { EMPTY_TRAJECTORY_SNAPSHOT } from './trajectory-snapshot-builder.ts'
 import css from './views.module.css'
 
 const EMPTY_TURN_IDS: ReadonlySet<number> = new Set()
+
+/** Last non-empty ledger per session. A loading open keeps it until the new tail lands. */
+const trajectoryPaint = new Map<string, {
+  turns: readonly TrajectoryTurnModel[]
+  lastIndex: number
+}>()
 const EMPTY_RECORD_IDS: ReadonlySet<string> = new Set()
 const SEARCH_INDEX_THROTTLE_MS = 3_000
 
@@ -143,6 +149,7 @@ export function TrajectoryView({
   const inspection = useSession(snapshot =>
     snapshot.views.get('trajectory') ?? EMPTY_TRAJECTORY_SNAPSHOT)
   const historyLoading = useSession(snapshot => snapshot.openState === 'loading')
+  const liveSessionId = useSession(snapshot => snapshot.sessionId)
   const olderHistoryLoading = useSession(snapshot => snapshot.loadingOlder)
   const hasOlderHistory = useSession(snapshot => snapshot.hasMore)
   const nodes = inspection.eventNodes
@@ -269,6 +276,12 @@ export function TrajectoryView({
     nodes, eventLocations, partialTurn, partialStep,
     runningCalls, requests, callSchemas,
   ])
+  if (nodes.length > 0) {
+    trajectoryPaint.set(liveSessionId, finalized)
+  }
+  const painted = nodes.length === 0 && historyLoading
+    ? trajectoryPaint.get(liveSessionId) ?? finalized
+    : finalized
   const timelinePartialSignature = partialStructureSignature(partial)
   const timelinePartial = useMemo<ConversationSnapshot['partial']>(() => partial === null
     ? null
@@ -279,19 +292,19 @@ export function TrajectoryView({
     },
   [partialStep, partialTurn, timelinePartialSignature])
   const timelineTurns = useMemo(
-    () => appendTrajectoryPartialLayout(finalized.turns, timelinePartial, finalized.lastIndex),
-    [finalized, timelinePartial],
+    () => appendTrajectoryPartialLayout(painted.turns, timelinePartial, painted.lastIndex),
+    [painted, timelinePartial],
   )
   const timelineMode: TrajectoryTimelineMode = actualDuration
     ? actualTime ? 'actual' : 'duration'
     : actualTime ? 'time' : 'sequence'
   const partialSearchTurns = useMemo(
-    () => appendTrajectoryPartialLayout([], partial, finalized.lastIndex),
-    [finalized.lastIndex, partial],
+    () => appendTrajectoryPartialLayout([], partial, painted.lastIndex),
+    [painted.lastIndex, partial],
   )
   const searchLayouts = useMemo(
-    () => [finalized.turns, partialSearchTurns] as const,
-    [finalized, partialSearchTurns],
+    () => [painted.turns, partialSearchTurns] as const,
+    [painted, partialSearchTurns],
   )
   const latestSearchLayouts = useRef(searchLayouts)
   latestSearchLayouts.current = searchLayouts

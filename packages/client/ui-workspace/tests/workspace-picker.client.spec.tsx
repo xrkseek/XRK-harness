@@ -8,10 +8,13 @@ import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from '../src/client/contract/slots.ts'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
-import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
+import { resetWorkspacePickerPaintForTests, WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { zh } from '../src/client/locales.ts'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetWorkspacePickerPaintForTests()
+})
 
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
 // lookup chain (namespace, then common vocabulary, then the key).
@@ -116,10 +119,19 @@ function chooseAdd(): void {
 describe('WorkspacePicker', () => {
   it('lists same-title Workspaces separately and forwards the selected id', () => {
     const b = mount([workspace('alpha', 'Shared'), workspace('beta', 'Shared')])
-    const entries = screen.getAllByRole('menuitem', { name: 'Shared' })
+    const entries = screen.getAllByRole('menuitem', { name: /^Shared/ })
     expect(entries).toHaveLength(2)
     fireEvent.click(entries[1]!)
     expect(b.onPick).toHaveBeenCalledWith(wid('beta'))
+  })
+
+  it('always offers search and filters by title or path (model-menu shape)', () => {
+    mount([workspace('alpha', 'Alpha'), workspace('beta', 'Beta')])
+    const search = screen.getByRole('searchbox', { name: '筛选工作区' })
+    expect(search).toBeTruthy()
+    fireEvent.change(search, { target: { value: '/projects/beta' } })
+    expect(screen.getByRole('menuitem', { name: /^Beta/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /^Alpha/ })).toBeNull()
   })
 
   it('opens the composed directory flow, adopts its picked path, and selects the returned Workspace', async () => {
@@ -179,11 +191,11 @@ describe('WorkspacePicker', () => {
     chooseAdd()
     // The flow is open but nothing is picked yet: a chooser pending on the
     // host display must already block concurrent workspace actions.
-    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Alpha' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: /^Alpha/ }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: '添加工作区…' }).disabled).toBe(true)
     act(() => { b.probe.owner!.onPicked('/tmp/project') })
     expect(b.probe.owner!.busy).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Alpha' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: /^Alpha/ }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: '添加工作区…' }).disabled).toBe(true)
     await act(async () => { resolve(created); await pending })
     expect(b.probe.owner!.busy).toBe(false)
@@ -267,7 +279,7 @@ describe('WorkspacePicker', () => {
 
   it('hides the add entry while the directory-flow hole is empty', () => {
     mount([workspace('alpha', 'Alpha')], vi.fn(), occupancySource(false))
-    expect(screen.getByRole('menuitem', { name: 'Alpha' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Alpha/ })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: '添加工作区…' })).toBeNull()
   })
 
@@ -290,7 +302,7 @@ describe('WorkspacePicker', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '重新选择' }).disabled).toBe(true)
     // Cancel stays the way out, and the menu actions are usable again.
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Alpha' }).disabled).toBe(false)
+    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: /^Alpha/ }).disabled).toBe(false)
   })
 
   it('withdraws an open flow when its occupant unloads, re-enabling the menu actions', () => {
@@ -301,7 +313,7 @@ describe('WorkspacePicker', () => {
     // cancel, so the owner withdraws and the actions come back.
     act(() => { b.occupancy.flip(false) })
     expect(b.probe.owner!.open).toBe(false)
-    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Alpha' }).disabled).toBe(false)
+    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: /^Alpha/ }).disabled).toBe(false)
     expect(screen.queryByRole('menuitem', { name: '添加工作区…' })).toBeNull()
   })
 })

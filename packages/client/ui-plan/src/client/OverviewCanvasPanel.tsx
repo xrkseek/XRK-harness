@@ -15,6 +15,15 @@ export type CanvasTone = 'neutral' | 'good' | 'warn' | 'bad' | 'accent'
 
 const CANVAS_TONES = new Set<CanvasTone>(['neutral', 'good', 'warn', 'bad', 'accent'])
 
+type CanvasPaint = {
+  items: readonly OverviewCanvasSummary[]
+  generation: number
+  selectedId: string | undefined
+}
+
+/** Last catalog per session so switching Overview does not blank the rail. */
+const canvasPaintBySession = new Map<string, CanvasPaint>()
+
 function parseTone(raw: unknown): CanvasTone | undefined {
   if (typeof raw !== 'string') return undefined
   return CANVAS_TONES.has(raw as CanvasTone) ? (raw as CanvasTone) : undefined
@@ -388,12 +397,19 @@ export function OverviewCanvasPanel({
     ): void => {
       setItems((prev) => (itemsKey(prev) === itemsKey(value.items) ? prev : value.items))
       setGeneration((prev) => (prev === value.generation ? prev : value.generation))
-      setSelectedId((current) => {
-        if (current && value.items.some((row) => row.id === current)) return current
-        return value.items[0]?.id
-      })
       setError(undefined)
       if (!soft) setBoot(false)
+      setSelectedId((current) => {
+        const id = current && value.items.some((row) => row.id === current)
+          ? current
+          : value.items[0]?.id
+        canvasPaintBySession.set(sessionId, {
+          items: value.items,
+          generation: value.generation,
+          selectedId: id,
+        })
+        return id
+      })
     }
 
     const load = (soft: boolean): void => {
@@ -416,12 +432,22 @@ export function OverviewCanvasPanel({
       )
     }
 
-    setBoot(true)
-    setDoc(undefined)
-    setItems([])
-    setSelectedId(undefined)
-    setError(undefined)
-    load(false)
+    const cached = canvasPaintBySession.get(sessionId)
+    if (cached !== undefined && cached.items.length > 0) {
+      setItems(cached.items)
+      setGeneration(cached.generation)
+      setSelectedId(cached.selectedId)
+      setBoot(false)
+      setError(undefined)
+      load(true)
+    } else {
+      setBoot(true)
+      setDoc(undefined)
+      setItems([])
+      setSelectedId(undefined)
+      setError(undefined)
+      load(false)
+    }
     const timer = window.setInterval(() => { load(true) }, SOFT_POLL_MS)
     return () => {
       alive = false

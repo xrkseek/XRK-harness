@@ -63,7 +63,8 @@ export class ModelDirectory {
    * @returns the fresh directory value.
    */
   async load(): Promise<SessionModels> {
-    this.assertAvailable()
+    // Read is allowed on a locked child seat: the chip needs the pinned route.
+    // Switching stays refused in select().
     const generation = ++this.generation
     this.store.update((s) => {
       // Soft-refresh: keep the last good paint while the Host round-trips.
@@ -157,7 +158,6 @@ export class ModelDirectory {
       s.status = 'idle'
       s.error = null
     })
-    if (!this.available()) return
     void this.load().catch(() => { /* the next menu open remains the explicit retry surface */ })
   }
 

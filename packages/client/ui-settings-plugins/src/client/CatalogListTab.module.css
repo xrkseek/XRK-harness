@@ -353,6 +353,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Soft refresh keeps the last frame at full strength; the status line is the cue. */
+.rootRefreshing {
+  /* layout unchanged */
+}
+
 .errorDetail {
   margin: 0;
   font-size: 12px;

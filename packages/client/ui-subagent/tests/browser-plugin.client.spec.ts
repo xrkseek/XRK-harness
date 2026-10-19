@@ -125,11 +125,11 @@ describe('apply', () => {
     })
     expect(select(owner(undefined))).toBeNull()
     expect(select(owner(null))).toBeNull()
+    // One-shot keeps the default composer (locked send + visible chrome).
     expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true })))
-      .toEqual({ reason: 'one-shot' })
-    // One-shot stays read-only even while running: it has no stop action.
+      .toBeNull()
     expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true }, true)))
-      .toEqual({ reason: 'one-shot' })
+      .toBeNull()
     expect(select(owner({ address, parentAvailable: true }))).toBeNull()
     expect(select(owner({ address, parentAvailable: false })))
       .toEqual({ reason: 'parent-unavailable' })

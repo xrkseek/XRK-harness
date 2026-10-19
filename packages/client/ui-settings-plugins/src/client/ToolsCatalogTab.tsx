@@ -1,6 +1,7 @@
 /** Session header Runtime tab: live tool catalog with search, surface chips, groups. */
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import clsx from 'clsx'
 import type {
   SessionId,
   SessionToolEntry,
@@ -9,6 +10,13 @@ import type {
 } from '@xrkseek/client-connection/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { PluginsSettingsLocaleKey } from './locales.ts'
+import {
+  paintToolsCatalog,
+  readChrome,
+  rememberToolsCatalog,
+  toolsChromeBySession,
+  writeChrome,
+} from './catalog-session-cache.ts'
 import css from './CatalogListTab.module.css'
 
 function surfaceLabel(
@@ -141,40 +149,54 @@ function groupTools(
     })
 }
 
-/** Render the session tools directory. */
-export function ToolsCatalogTab({
+/** One session's runtime catalog. Remounted per sessionId so chrome cannot bleed. */
+function ToolsCatalogSession({
   t,
-  currentSessionId,
+  sessionId,
   listTools,
-}: ToolsCatalogTabProps): ReactNode {
+}: ToolsCatalogTabProps & { sessionId: string }): ReactNode {
   const searchId = useId()
+  const chrome0 = readChrome(toolsChromeBySession, sessionId)
+  const painted = paintToolsCatalog(sessionId)
+  const cached = painted?.value as SessionToolsValue | undefined
   const [tick, setTick] = useState(0)
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<ToolFilter>('all')
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
-  const [openTool, setOpenTool] = useState<string | null>(null)
-  const [state, setState] = useState<ViewState>({ status: 'idle' })
-  const sessionId = currentSessionId()
+  const [query, setQuery] = useState(chrome0.query)
+  const [filter, setFilter] = useState<ToolFilter>(chrome0.filter as ToolFilter)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(chrome0.expanded))
+  const [openTool, setOpenTool] = useState<string | null>(chrome0.open)
+  const [refreshing, setRefreshing] = useState(painted !== undefined && !painted.owned)
+  const [state, setState] = useState<ViewState>(
+    cached ? { status: 'ready', value: cached } : { status: 'loading' },
+  )
 
   useEffect(() => {
-    if (!sessionId) {
-      setState({ status: 'idle' })
-      return
-    }
+    writeChrome(toolsChromeBySession, sessionId, {
+      query,
+      filter,
+      expanded: [...expanded],
+      open: openTool,
+    })
+  }, [sessionId, query, filter, expanded, openTool])
+
+  useEffect(() => {
     let current = true
     const abort = new AbortController()
-    setState({ status: 'loading' })
+    const had = paintToolsCatalog(sessionId)
+    if (had === undefined) setState({ status: 'loading' })
+    else setRefreshing(true)
     void listTools(sessionId as SessionId, abort.signal).then(
       (value) => {
         if (!current) return
+        rememberToolsCatalog(sessionId, value)
         setState({ status: 'ready', value })
-        setExpanded(new Set())
-        setOpenTool(null)
+        setRefreshing(false)
       },
       (error: unknown) => {
         if (!current) return
         const cancelled = error instanceof DOMException && error.name === 'AbortError'
         if (cancelled) return
+        setRefreshing(false)
+        if (paintToolsCatalog(sessionId) !== undefined) return
         setState({
           status: 'error',
           ...(error instanceof Error && error.message
@@ -219,14 +241,6 @@ export function ToolsCatalogTab({
     })
   }
 
-  if (!sessionId) {
-    return (
-      <div className={css.root}>
-        <p className={css.lead}>{t('toolsCatalogLead')}</p>
-        <p className={css.status}>{t('catalogNoSession')}</p>
-      </div>
-    )
-  }
   if (state.status === 'loading' || state.status === 'idle') {
     return (
       <div className={css.root}>
@@ -276,7 +290,7 @@ export function ToolsCatalogTab({
   ]
 
   return (
-    <div className={css.root}>
+    <div className={clsx(css.root, refreshing && css.rootRefreshing)} aria-busy={refreshing}>
       <p className={css.lead}>{t('toolsCatalogLead')}</p>
       <p className={css.workspace} title={state.value.cwd}>
         {t('catalogWorkspace', { label: state.value.workspaceLabel })}
@@ -392,5 +406,29 @@ export function ToolsCatalogTab({
         })
       )}
     </div>
+  )
+}
+
+/** Runtime catalog for the conversation-view session. Each session remounts. */
+export function ToolsCatalogTab({
+  currentSessionId,
+  ...rest
+}: ToolsCatalogTabProps): ReactNode {
+  const sessionId = currentSessionId()
+  if (!sessionId) {
+    return (
+      <div className={css.root}>
+        <p className={css.lead}>{rest.t('toolsCatalogLead')}</p>
+        <p className={css.status}>{rest.t('catalogNoSession')}</p>
+      </div>
+    )
+  }
+  return (
+    <ToolsCatalogSession
+      key={sessionId}
+      {...rest}
+      currentSessionId={currentSessionId}
+      sessionId={sessionId}
+    />
   )
 }

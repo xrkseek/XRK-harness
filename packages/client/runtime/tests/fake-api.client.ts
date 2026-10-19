@@ -135,6 +135,13 @@ export class FakeApiClient implements IApiClient {
   onCreateDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string }>> =
     () => Promise.resolve(ok({ path: '/home/fake/new' }))
 
+  onListDirectoryPlaces: (payload: unknown) => Promise<RpcResponse<{
+    places: { id: string; kind: 'home' | 'desktop' | 'documents' | 'downloads' | 'drive'; label: string; path: string }[]
+  }>> =
+    () => Promise.resolve(ok({
+      places: [{ id: 'home', kind: 'home' as const, label: 'Home', path: '/home/fake' }],
+    }))
+
   private readonly muxConns: StreamConn<MuxFrame>[] = []
   private readonly hostConns: StreamConn<HostFrame>[] = []
   lastSearchSignal: AbortSignal | undefined
@@ -195,6 +202,7 @@ export class FakeApiClient implements IApiClient {
     describe: (payload: unknown) => this.record('host.describe', payload, this.onDescribe(payload)),
     pickDirectory: (payload: unknown) => this.record('host.pickDirectory', payload, this.onPickDirectory(payload)),
     listDirectory: (payload: unknown) => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
+    listDirectoryPlaces: (payload: unknown) => this.record('host.listDirectoryPlaces', payload, this.onListDirectoryPlaces(payload)),
     createDirectory: (payload: unknown) => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }

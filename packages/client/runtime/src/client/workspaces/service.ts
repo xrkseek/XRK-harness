@@ -2,7 +2,7 @@
 
 import type { Context } from '@xrkseek/cordis'
 import type {
-  DirectoryListing, IApiClient, RpcError,
+  DirectoryListing, DirectoryPlace, IApiClient, RpcError,
   SessionId, WorkspaceId, WorkspaceView,
 } from '@xrkseek/xrk-api-remotes/client'
 import type { SnapshotStore } from '../contract/store.ts'
@@ -267,6 +267,15 @@ export class WorkspaceRuntime implements IWorkspaces {
     const response = await this.api.host.listDirectory(path === undefined ? {} : { path }, signal)
     if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
     return response.result.value
+  }
+
+  /**
+   * Places for the in-app picker (home, profile folders that exist, drives).
+   */
+  async listDirectoryPlaces(): Promise<readonly DirectoryPlace[]> {
+    const response = await this.api.host.listDirectoryPlaces({})
+    if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
+    return response.result.value.places
   }
 
   /**

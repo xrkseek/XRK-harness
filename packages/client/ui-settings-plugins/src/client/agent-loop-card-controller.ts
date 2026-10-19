@@ -52,27 +52,6 @@ function compactionStrategyField(): CardFieldSpec {
 }
 
 /** `provider/model` (optionally ` (effort)`) — the shape `/status` prints. */
-const SUBAGENT_MODEL_ROUTE = /^([^/\s]+)\/(\S+?)(?:\s*\(([^)]+)\))?$/
-
-/**
- * Fleet-wide subagent route. Empty means "inherit the parent" (the default), so
- * clearing the field is the same gesture as resetting it; a draft that is not
- * `provider/model` blocks the save instead of being silently dropped.
- */
-function subagentModelField(): CardFieldSpec {
-  return {
-    field: 'subagentModel',
-    format: (value) => (typeof value === 'string' ? value : ''),
-    parse: (text) => {
-      const trimmed = text.trim()
-      if (trimmed === '') return { kind: 'clear' }
-      return SUBAGENT_MODEL_ROUTE.test(trimmed)
-        ? { kind: 'set', value: trimmed }
-        : undefined
-    },
-  }
-}
-
 /** The agent-loop fields this card edits. */
 export interface AgentLoopSettings {
   /** Upper bound on parallel-safe tool calls in flight per step. */
@@ -110,12 +89,6 @@ export interface AgentLoopSettings {
    * Per-model catalog `maxConcurrentSessions` overrides this.
    */
   maxConcurrentModelSessions?: number
-  /**
-   * Fleet-wide subagent route as `provider/model` (optionally with an
-   * effort in parentheses). Empty / omit → each child inherits its parent's
-   * route at spawn.
-   */
-  subagentModel?: string
 }
 
 /** What the agent-loop card renders. */
@@ -146,8 +119,6 @@ export interface AgentLoopCardState extends CardShell {
   toolResultMaxInlineBytes: CardFieldState
   /** Default max live sessions per provider/model. */
   maxConcurrentModelSessions: CardFieldState
-  /** Fleet-wide subagent route (`provider/model`); empty inherits the parent. */
-  subagentModel: CardFieldState
 }
 
 /** The registration-side face the agent-loop card's slot entry injects. */
@@ -179,7 +150,6 @@ export class AgentLoopCardController {
       numberField('softBudgetPeelAttempts'),
       numberField('toolResultMaxInlineBytes'),
       numberField('maxConcurrentModelSessions'),
-      subagentModelField(),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -200,7 +170,6 @@ export class AgentLoopCardController {
       softBudgetPeelAttempts: this.form.field('softBudgetPeelAttempts'),
       toolResultMaxInlineBytes: this.form.field('toolResultMaxInlineBytes'),
       maxConcurrentModelSessions: this.form.field('maxConcurrentModelSessions'),
-      subagentModel: this.form.field('subagentModel'),
     }
   }
 

@@ -338,7 +338,7 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.getByRole('menu')).toBeTruthy()
   })
 
-  it('renders no Agent-bound control for an addressed subagent session', () => {
+  it('shows a locked model chip for an addressed subagent session', () => {
     const load = vi.fn()
     render(<ModelSelect
       locked={false}
@@ -350,6 +350,7 @@ describe('ModelSelect reasoning effort', () => {
     />)
 
     expect(screen.queryByRole('button')).toBeNull()
-    expect(load).not.toHaveBeenCalled()
+    expect(screen.getByText('DeepSeek Chat')).toBeTruthy()
+    expect(load).toHaveBeenCalled()
   })
 })

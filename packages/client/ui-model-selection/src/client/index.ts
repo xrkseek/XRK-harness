@@ -164,7 +164,8 @@ export function apply(ctx: ClientContext): void {
           available,
           directory: directory.store,
           load: () => {
-            if (available) directory.load().catch(() => { /* surfaced on the store */ })
+            // Locked child seats still load so the chip can show the route.
+            directory.load().catch(() => { /* surfaced on the store */ })
           },
           select: (selection: ModelSelection) => available
             ? directory.select(selection).then(() => true, () => false)

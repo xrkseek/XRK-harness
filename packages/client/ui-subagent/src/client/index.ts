@@ -31,11 +31,16 @@ export type {
 /** Required services for conversation slots and session navigation. */
 export const inject = ['sessions', 'slots', 'locale']
 
-/** Claim the composer for one-shot history or an unavailable continuation owner. */
+/**
+ * Claim the composer only when a continuable child's parent is offline and
+ * idle. One-shot children keep the normal bar (presence dock, locked model /
+ * permission chips) with input disabled in InputBar — replacing the whole
+ * stack hid those seats.
+ */
 function selectReadOnlySubagent(owner: ComposerChainProps): SubagentReadOnlyMatch | null {
   const subagent = owner.session?.subagent
   if (subagent === undefined || subagent === null) return null
-  if (subagent.address.mode === 'one-shot') return { reason: 'one-shot' }
+  if (subagent.address.mode === 'one-shot') return null
   if (subagent.parentAvailable) return null
   // A RUNNING parent-offline continuable child keeps the default composer:
   // its input is disabled there, but the same primary Stop stays available so

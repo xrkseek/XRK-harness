@@ -314,14 +314,22 @@ describe('ui-model-selection dual entry', () => {
     expect(face.available).toBe(false)
     face.load()
     await expect(face.select({ provider: 'deepseek', model: 'deepseek-v4-pro' })).resolves.toBe(false)
-    await expect(b.ctx.modelDirectories.directoryFor(sid('child')).load())
-      .rejects.toThrow(/unavailable for addressed subagent/)
+    await b.ctx.modelDirectories.directoryFor(sid('child')).load()
+    expect(face.directory.getSnapshot().current).toEqual({
+      provider: 'deepseek-official',
+      model: 'deepseek-flash',
+    })
     await expect(b.ctx.modelDirectories.directoryFor(sid('child')).select({
       provider: 'deepseek',
       model: 'deepseek-v4-pro',
     })).rejects.toThrow(/unavailable for addressed subagent/)
+    const modelsBeforeReset = b.calls.models
+    expect(modelsBeforeReset).toBeGreaterThan(0)
+    expect(b.calls.select).toBe(0)
     b.ctx.emit('connection/reset')
     await Promise.resolve()
-    expect(b.calls).toEqual({ models: 0, select: 0 })
+    await Promise.resolve()
+    expect(b.calls.models).toBeGreaterThan(modelsBeforeReset)
+    expect(b.calls.select).toBe(0)
   })
 })

@@ -9,7 +9,7 @@
  * occupant's own create-folder affordance already covers creating one.
  */
 import type { ReactNode, RefObject } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button, IconFolderClose16, IconPlusOutline16, Menu, Modal, type MenuEntry,
 } from '@xrkseek/client-ui-primitives'
@@ -21,6 +21,14 @@ import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/s
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
+
+/** Last non-empty workspace list, so a pending baseline does not blank the menu. */
+let lastWorkspaceItems: readonly WorkspaceView[] = []
+
+/** Test-only: drop the last-good workspace list paint. */
+export function resetWorkspacePickerPaintForTests(): void {
+  lastWorkspaceItems = []
+}
 
 /** Core flow props: the owner supplies popover control and pick semantics. */
 export interface WorkspacePickFlowProps {
@@ -79,6 +87,10 @@ export function WorkspacePickFlow({
   const [modalError, setModalError] = useState<string | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
+  const [query, setQuery] = useState('')
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
   // One picking interaction at a time: while the flow is open (native chooser
   // pending, browse dialog up) or its pick is being adopted, every other
   // menu action stays disabled — a late outcome must not race a concurrent
@@ -103,14 +115,37 @@ export function WorkspacePickFlow({
     : []
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
-  const pinAdd = !addOnly && workspaces.length > 0
+  if (workspaces.length > 0) lastWorkspaceItems = workspaces
+  const listed = workspaces.length > 0 || workspaceSnapshot.phase !== 'pending'
+    ? workspaces
+    : lastWorkspaceItems
+  const pinAdd = !addOnly && listed.length > 0
+  const needle = query.trim().toLowerCase()
+  const visibleWorkspaces = useMemo(() => {
+    if (!pinAdd || needle.length === 0) return listed
+    return listed.filter((workspace) => {
+      const title = workspace.workspaceId === 'ws_default'
+        ? t('workspace.xiangyang')
+        : workspace.title
+      return title.toLowerCase().includes(needle)
+        || workspace.path.toLowerCase().includes(needle)
+        || workspace.workspaceId.toLowerCase().includes(needle)
+    })
+  }, [pinAdd, needle, listed, t])
   const items: MenuEntry[] = pinAdd
-    ? workspaces.map(workspace => ({
-      id: workspace.workspaceId,
-      label: workspace.workspaceId === 'ws_default' ? t('workspace.xiangyang') : workspace.title,
-      icon: <IconFolderClose16 size={16} />,
-      disabled: flowBusy,
-    }))
+    ? (visibleWorkspaces.length > 0
+      ? visibleWorkspaces.map(workspace => ({
+        id: workspace.workspaceId,
+        label: workspace.workspaceId === 'ws_default' ? t('workspace.xiangyang') : workspace.title,
+        description: workspace.path,
+        icon: <IconFolderClose16 size={16} />,
+        disabled: flowBusy,
+      }))
+      : [{
+        id: '::no-match',
+        type: 'label' as const,
+        text: t('picker.noMatches'),
+      }])
     : addEntries
   // Nothing listed and nothing to add with (a composition that mounts this
   // package without any directory-picker): an empty popover would claim a
@@ -186,7 +221,22 @@ export function WorkspacePickFlow({
         open={open && !addIsTheOnlyEntry && !menuIsEmpty}
         anchor={null}
         items={items}
-        {...pinAdd ? { footer: addEntries } : {}}
+        {...pinAdd ? {
+          footer: addEntries,
+          listMaxHeight: 360,
+          header: (
+            <input
+              className={css.pickerSearch}
+              type="search"
+              value={query}
+              placeholder={t('picker.search')}
+              aria-label={t('picker.searchAria')}
+              autoFocus
+              onChange={(event) => { setQuery(event.target.value) }}
+              onKeyDown={(event) => { event.stopPropagation() }}
+            />
+          ),
+        } : {}}
         selectedId={selectedId}
         onSelect={handleSelect}
         onClose={onClose}
@@ -194,7 +244,9 @@ export function WorkspacePickFlow({
         portal
         getAnchorRect={getAnchorRect}
       />
-      {open && !addIsTheOnlyEntry && !menuIsEmpty && workspaceSnapshot.phase === 'pending' && <div className={css.menuStatus} role="status">{t('picker.loading')}</div>}
+      {open && !addIsTheOnlyEntry && !menuIsEmpty && listed.length === 0 && workspaceSnapshot.phase === 'pending' && (
+        <div className={css.menuStatus} role="status">{t('picker.loading')}</div>
+      )}
       {renderDirectoryFlow(flowOwner)}
       <Modal
         open={errorOpen}

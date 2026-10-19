@@ -95,7 +95,10 @@ export class ModelDirectoryResolver extends Service {
     const conversation = this.ctx.get('conversation')
     if (conversation !== undefined) {
       const publish = (): void => {
-        conversation.blocks.set(sessionId, directory.store.getSnapshot().routable === false
+        // A locked child cannot switch routes, so an unroutable catalog must
+        // not freeze the composer behind "select a model".
+        const addressed = sessions.subagentAddress(sessionId) !== undefined
+        conversation.blocks.set(sessionId, !addressed && directory.store.getSnapshot().routable === false
           ? { reason: this.blockReason() }
           : undefined)
       }
