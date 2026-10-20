@@ -41,86 +41,19 @@ import {
   type DressingSticker,
 } from './dressing-library.ts'
 import css from './TeamRoster.module.css'
+import {
+  bytesToBase64,
+  downloadExportedMember,
+  downloadMemberCardJson,
+  parseMemberImportBytes,
+  type SpawnRole,
+} from './member-pack.ts'
 
 type Translate = WorkspaceBrowserProps['t']
 type ToolMode = 'inherit' | 'allow' | 'deny'
-type SpawnRole = 'default' | 'worker' | 'researcher' | 'reviewer' | 'lead'
 
 const ROLES: readonly SpawnRole[] = ['default', 'worker', 'researcher', 'reviewer', 'lead']
 const FILE_TOOLS = 'bash,read,grep,glob'
-const MEMBER_CARD_KIND = 'xrk-agent-member'
-
-/** Portable card: name / playbook / role — never appearance. */
-function memberExportCard(member: AgentTeamMemberRow): string {
-  return JSON.stringify({
-    kind: MEMBER_CARD_KIND,
-    name: member.name,
-    playbook: member.playbook,
-    role: member.role,
-    ...(member.brief ? { brief: member.brief } : {}),
-    ...(member.inject ? { inject: member.inject } : {}),
-    ...(member.tools ? { tools: member.tools } : {}),
-  }, null, 2)
-}
-
-function safeMemberFileStem(name: string): string {
-  const stem = name.trim().replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '_').replace(/\s+/g, '-').slice(0, 48)
-  return stem || 'member'
-}
-
-/** Download a portable card as `.json` (playbooks are too long for the clipboard). */
-function downloadMemberCard(member: AgentTeamMemberRow): void {
-  const blob = new Blob([memberExportCard(member)], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `xrk-member-${safeMemberFileStem(member.name)}.json`
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => { URL.revokeObjectURL(url) }, 1500)
-}
-
-function parseMemberImport(raw: string): {
-  name: string
-  playbook: string
-  role: SpawnRole
-  brief?: string
-  inject?: 'minimal' | 'subagent'
-  tools?: { mode: 'allow' | 'deny'; names: readonly string[] }
-} | null {
-  try {
-    const row = JSON.parse(raw) as Record<string, unknown>
-    const name = typeof row.name === 'string' ? row.name.trim() : ''
-    const playbook = typeof row.playbook === 'string' ? row.playbook.trim() : ''
-    if (!name || !playbook) return null
-    const roleRaw = typeof row.role === 'string' ? row.role : 'worker'
-    const role = (ROLES.includes(roleRaw as SpawnRole) ? roleRaw : 'worker') as SpawnRole
-    const brief = typeof row.brief === 'string' ? row.brief.trim() : ''
-    const inject = row.inject === 'subagent' || row.inject === 'minimal' ? row.inject : undefined
-    const toolsRaw = row.tools
-    let tools: { mode: 'allow' | 'deny'; names: readonly string[] } | undefined
-    if (toolsRaw && typeof toolsRaw === 'object' && !Array.isArray(toolsRaw)) {
-      const mode = (toolsRaw as { mode?: unknown }).mode
-      const names = (toolsRaw as { names?: unknown }).names
-      if ((mode === 'allow' || mode === 'deny') && Array.isArray(names)) {
-        const list = names.map(n => String(n).trim().toLowerCase()).filter(Boolean)
-        if (list.length > 0) tools = { mode, names: list }
-      }
-    }
-    return {
-      name,
-      playbook,
-      role,
-      ...(brief ? { brief } : {}),
-      ...(inject ? { inject } : {}),
-      ...(tools ? { tools } : {}),
-    }
-  } catch {
-    return null
-  }
-}
 
 function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]): {
   shape: string
@@ -210,6 +143,8 @@ function MemberBall({
   selected,
   disabled,
   seedLabel,
+  advancedLabel,
+  notReadyLabel,
   presenceOn,
   onSelect,
 }: {
@@ -218,6 +153,8 @@ function MemberBall({
   selected: boolean
   disabled: boolean
   seedLabel: string
+  advancedLabel: string
+  notReadyLabel: string
   presenceOn: boolean
   onSelect: () => void
 }) {
@@ -233,11 +170,19 @@ function MemberBall({
       aria-label={title}
       title={title}
     >
-      <MemberGlyph presenceOn={presenceOn} name={member.name} look={look} />
+      <span className={css.ballGlyphWrap}>
+        <MemberGlyph presenceOn={presenceOn} name={member.name} look={look} />
+        {member.kind === 'advanced'
+          ? <span className={css.advancedMark} title={advancedLabel}>{advancedLabel}</span>
+          : null}
+      </span>
       <span className={css.ballCaption}>
         <span className={css.ballName}>{member.name}</span>
         {member.catalog === true || member.seed === true
           ? <span className={css.seed}>{seedLabel}</span>
+          : null}
+        {member.ready === false
+          ? <span className={css.seed}>{notReadyLabel}</span>
           : null}
       </span>
     </button>
@@ -294,6 +239,8 @@ export function TeamRoster({
   upsertTeamMember,
   removeTeamMember,
   dispatchTeam,
+  exportTeamMember,
+  importTeamPack,
 }: {
   open: boolean
   onClose: () => void
@@ -308,6 +255,8 @@ export function TeamRoster({
   upsertTeamMember: NonNullable<WorkspaceBrowserProps['upsertTeamMember']>
   removeTeamMember?: WorkspaceBrowserProps['removeTeamMember']
   dispatchTeam: NonNullable<WorkspaceBrowserProps['dispatchTeam']>
+  exportTeamMember?: WorkspaceBrowserProps['exportTeamMember']
+  importTeamPack?: WorkspaceBrowserProps['importTeamPack']
 }) {
   const stickers = useDressingStickers()
   const presenceOn = usePresenceModuleEnabled()
@@ -412,10 +361,36 @@ export function TeamRoster({
 
   const importMemberFromFile = (file: File) => {
     if (sessionId === undefined) return
-    void file.text().then((text) => {
-      const card = parseMemberImport(text)
-      if (!card) {
-        setError(t('team.importBad'))
+    void file.arrayBuffer().then((buf) => {
+      const bytes = new Uint8Array(buf)
+      const parsed = parseMemberImportBytes(bytes, file.name)
+      if (!parsed.ok) {
+        setError(
+          parsed.reason === 'deflate'
+            ? t('team.importDeflate')
+            : parsed.reason === 'kind'
+              ? t('team.importKind')
+              : t('team.importBad'),
+        )
+        return
+      }
+      const card = parsed.card
+      if (parsed.source === 'pack') {
+        const importPack = importTeamPack
+        if (importPack === undefined) {
+          setError(t('team.importPackNeedHost'))
+          return
+        }
+        // Destination = left-rail New (global/workspace) or editor Where control.
+        const packScope = scope
+        void run(async () => {
+          const saved = await importPack(sessionId, {
+            scope: packScope,
+            zipBase64: bytesToBase64(bytes),
+          })
+          setSelectedId(saved.id)
+          setExportHint(t('team.importPackOk'))
+        })
         return
       }
       void run(async () => {
@@ -424,6 +399,8 @@ export function TeamRoster({
           playbook: card.playbook,
           role: card.role,
           scope,
+          kind: 'thin',
+          ready: true,
           ...(card.brief ? { brief: card.brief } : {}),
           ...(card.inject ? { inject: card.inject } : {}),
           ...(card.tools ? { tools: card.tools } : {}),
@@ -510,6 +487,8 @@ export function TeamRoster({
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
+                      advancedLabel={t('team.advanced')}
+                      notReadyLabel={t('team.notReady')}
                       presenceOn={presenceOn}
                       onSelect={() => {
                         setSelectedId(member.id)
@@ -579,6 +558,8 @@ export function TeamRoster({
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
+                      advancedLabel={t('team.advanced')}
+                      notReadyLabel={t('team.notReady')}
                       presenceOn={presenceOn}
                       onSelect={() => {
                         setSelectedId(member.id)
@@ -606,7 +587,7 @@ export function TeamRoster({
               <input
                 ref={importRef}
                 type="file"
-                accept="application/json,.json"
+                accept="application/json,.json,application/zip,.zip"
                 hidden
                 onChange={(e) => {
                   const file = e.target.files?.[0]
@@ -623,23 +604,15 @@ export function TeamRoster({
                     <li>{t('team.howTo.dispatch')}</li>
                     <li>{t('team.howTo.share')}</li>
                   </ol>
-                  <div className={css.row}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => { importRef.current?.click() }}
-                    >
-                      {t('team.import')}
-                    </Button>
-                  </div>
                 </div>
               ) : (
                 <div className={css.editor}>
                   {catalogSeed ? (
                     <p className={css.fieldHint}>{t('team.catalogHint')}</p>
                   ) : null}
-                  <p className={css.fieldHint}>{t('team.editorHint')}</p>
+                  {isDraftMemberId(selectedId) ? null : (
+                    <p className={css.fieldHint}>{t('team.editorHint')}</p>
+                  )}
                   <fieldset className={css.editorLock} disabled={busy || catalogSeed}>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-member-name">{t('team.memberName')}</label>
@@ -681,7 +654,17 @@ export function TeamRoster({
                     </div>
                     <div className={css.field}>
                       <span className={css.label} id="team-scope-label">{t('team.scope')}</span>
-                      <p className={css.fieldHint}>{t('team.scopeHint')}</p>
+                      {selected !== undefined
+                        && ((selected.scope === 'global' && scope === 'workspace')
+                          || (selected.scope === 'workspace' && scope === 'global'))
+                        ? (
+                            <p className={css.fieldHint}>
+                              {scope === 'workspace'
+                                ? t('team.scopeHint')
+                                : t('team.scopeHintPromote')}
+                            </p>
+                          )
+                        : null}
                       <div className={css.seg} role="group" aria-labelledby="team-scope-label">
                         <button
                           type="button"
@@ -940,20 +923,98 @@ export function TeamRoster({
                         {t('team.import')}
                       </Button>
                     ) : null}
+                    {selected !== undefined && !isDraftMemberId(selectedId) && selected.ready === false ? (
+                      <>
+                        {selected.envPrep ? (
+                          <div className={css.fieldHint} role="note">
+                            <div>{t('team.envPrepLabel')}</div>
+                            <pre className={css.envPrep}>{selected.envPrep}</pre>
+                          </div>
+                        ) : (
+                          <p className={css.fieldHint}>
+                            {selected.envHint ?? t('team.readyHint')}
+                          </p>
+                        )}
+                        <Button
+                          variant="primary"
+                          disabled={busy}
+                          onClick={() => {
+                            void run(async () => {
+                              const saved = await upsertTeamMember(sessionId!, {
+                                name: selected.name,
+                                playbook: selected.playbook,
+                                role: selected.role,
+                                id: selected.id,
+                                scope: selected.scope === 'global' ? 'global' : 'workspace',
+                                kind: 'advanced',
+                                ready: true,
+                                ...(selected.brief ? { brief: selected.brief } : {}),
+                                ...(selected.inject === 'subagent' || selected.inject === 'minimal'
+                                  ? { inject: selected.inject }
+                                  : {}),
+                                ...(selected.tools
+                                  ? {
+                                      tools: {
+                                        mode: selected.tools.mode === 'deny' ? 'deny' : 'allow',
+                                        names: selected.tools.names,
+                                      },
+                                    }
+                                  : {}),
+                              })
+                              setSelectedId(saved.id)
+                              setExportHint(t('team.readyOk'))
+                            })
+                          }}
+                        >
+                          {t('team.markReady')}
+                        </Button>
+                      </>
+                    ) : null}
                     {selected !== undefined && !isDraftMemberId(selectedId) ? (
                       <Button
                         variant="outline"
                         disabled={busy}
                         onClick={() => {
+                          const doExport = exportTeamMember
+                          if (doExport !== undefined && sessionId !== undefined) {
+                            void run(async () => {
+                              const payload = await doExport(sessionId, selected.id)
+                              downloadExportedMember(payload)
+                              setExportHint(
+                                payload.packIncomplete
+                                  ? t('team.exportZipIncomplete')
+                                  : payload.format === 'zip'
+                                    ? t('team.exportZipOk')
+                                    : t('team.exportJsonOk'),
+                              )
+                            })
+                            return
+                          }
                           try {
-                            downloadMemberCard(selected)
-                            setExportHint(t('team.exportOk'))
+                            downloadMemberCardJson({
+                              name: selected.name,
+                              playbook: selected.playbook,
+                              role: selected.role as SpawnRole,
+                              ...(selected.brief ? { brief: selected.brief } : {}),
+                              ...(selected.inject === 'subagent' || selected.inject === 'minimal'
+                                ? { inject: selected.inject }
+                                : {}),
+                              ...(selected.tools
+                                ? {
+                                    tools: {
+                                      mode: selected.tools.mode === 'deny' ? 'deny' : 'allow',
+                                      names: selected.tools.names,
+                                    },
+                                  }
+                                : {}),
+                            })
+                            setExportHint(t('team.exportJsonOk'))
                           } catch (err) {
                             setError(err instanceof Error ? err.message : t('team.exportFail'))
                           }
                         }}
                       >
-                        {t('team.export')}
+                        {selected.kind === 'advanced' ? t('team.exportZip') : t('team.exportJson')}
                       </Button>
                     ) : null}
                     {canDelete && (

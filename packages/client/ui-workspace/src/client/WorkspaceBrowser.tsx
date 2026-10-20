@@ -830,6 +830,8 @@ export function WorkspaceBrowser({
   upsertTeamMember,
   removeTeamMember,
   dispatchTeam,
+  exportTeamMember,
+  importTeamPack,
 }: WorkspaceBrowserProps) {
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
@@ -1396,6 +1398,8 @@ export function WorkspaceBrowser({
           upsertTeamMember={upsertTeamMember}
           removeTeamMember={removeTeamMember}
           dispatchTeam={dispatchTeam}
+          exportTeamMember={exportTeamMember}
+          importTeamPack={importTeamPack}
         />
       )}
       {forking && (

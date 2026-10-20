@@ -96,6 +96,28 @@
   min-width: 0;
 }
 
+.ballGlyphWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.advancedMark {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 1px solid var(--dsw-alias-border-secondary);
+  pointer-events: none;
+}
+
 .seed {
   font-size: 10px;
   line-height: 12px;
@@ -458,6 +480,22 @@
   line-height: 16px;
   font-weight: 500;
   color: var(--dsw-alias-label-secondary);
+}
+
+.envPrep {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-secondary);
 }
 
 .fieldHint {

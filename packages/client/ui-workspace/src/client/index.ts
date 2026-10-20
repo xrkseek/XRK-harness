@@ -176,6 +176,25 @@ export function apply(ctx: ClientContext): void {
       await ctx.sessions.refresh()
       ctx.sessions.open(result.value.childSessionId as typeof sessionId)
     },
+    exportTeamMember: async (sessionId, id) => {
+      const result = await ctx.remote.team.export({ sessionId, id })
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value
+    },
+    importTeamPack: async (sessionId, input) => {
+      const result = await ctx.remote.team.importPack({
+        sessionId,
+        scope: input.scope,
+        zipBase64: input.zipBase64,
+      })
+      if (!result.ok) throw new Error(result.error.message)
+      const member = result.value.member
+      const id = member && typeof member === 'object'
+        ? String((member as { id?: unknown }).id ?? '')
+        : ''
+      if (!id) throw new Error('team.importPack missing member id')
+      return { id }
+    },
     hooks: {
       directoryFlow: browserFlowSource,
       hostDescription: connection.hostDescription,

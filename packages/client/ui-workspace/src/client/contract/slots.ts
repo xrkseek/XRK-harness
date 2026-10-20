@@ -201,10 +201,26 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly brief?: string
     readonly inject?: 'subagent' | 'minimal'
     readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
+    readonly kind?: 'thin' | 'advanced'
+    readonly ready?: boolean
   }) => Promise<{ readonly id: string }>
   removeTeamMember?: (sessionId: SessionId, memberId: string, scope?: 'global' | 'workspace') => Promise<void>
   captureTeamMember?: (sessionId: SessionId) => Promise<void>
   dispatchTeam?: (sessionId: SessionId, memberId: string, task: string) => Promise<void>
+  /** Thin → JSON; advanced → zip (Face materializes pack skills). */
+  exportTeamMember?: (sessionId: SessionId, memberId: string) => Promise<{
+    readonly format: 'json' | 'zip'
+    readonly fileName: string
+    readonly text?: string
+    readonly base64?: string
+    readonly packIncomplete?: boolean
+    readonly hint?: string
+  }>
+  /** Store-method or Face-readable zip → advanced member (ready=false). */
+  importTeamPack?: (sessionId: SessionId, input: {
+    readonly scope: 'global' | 'workspace'
+    readonly zipBase64: string
+  }) => Promise<{ readonly id: string }>
 }
 
 export type WorkspaceThreadRow = {
@@ -239,6 +255,14 @@ export type AgentTeamMemberRow = {
   readonly brief?: string
   readonly inject?: string
   readonly tools?: { readonly mode: string; readonly names: readonly string[] }
+  /** thin (default) or advanced pack-backed. */
+  readonly kind?: 'thin' | 'advanced'
+  /** Advanced packs start false until parent marks ready. */
+  readonly ready?: boolean
+  /** Present when advanced + not ready (from Face team.list). */
+  readonly envPrep?: string
+  readonly envHint?: string
+  readonly packDir?: string
 }
 
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
