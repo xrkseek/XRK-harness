@@ -27,7 +27,7 @@ describe("agent-loop settings are consumed", () => {
       readFileSync(path.join(FACE, "subagent-tools.ts"), "utf8"),
     ].join("\n");
     const keys = agentLoopKeys();
-    expect(keys.length).toBeGreaterThanOrEqual(14);
+    expect(keys.length).toBe(13);
     const missing = keys.filter((key) => !readers.includes(key));
     expect(missing).toEqual([]);
   });

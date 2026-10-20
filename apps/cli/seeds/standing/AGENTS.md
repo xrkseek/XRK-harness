@@ -59,7 +59,7 @@ Bodies live in skills — load via `skill`.
 | Author a skill | `xrk-create-skill` |
 | Craft ladder (deep) | `xrk-craft` |
 
-Multi-step → `todo_write` when bound. Shared symbols → `lsp` before `grep` when on surface. Deferred/MCP → `tool_search` then call. No bulk payloads in tool params — write disk, pass paths. Parallel work allowed → load `xrk-delegate`.
+Multi-step → `todo_write` when bound (open-list discipline is re-injected with the standing plan). Shared symbols → `lsp` before `grep` when on surface. Deferred/MCP → `tool_search` then call. No bulk payloads in tool params — write disk, pass paths. Parallel work allowed → load `xrk-delegate`.
 
 ## Engineering (thin)
 

@@ -319,6 +319,9 @@ describe("external agent runtime", () => {
     const out = await tools.get("subagent")!.execute({
       prompt: "go",
       runtime: "acp",
+      // Default is continuable (creates a Face child). This case is the
+      // one-shot external path, which must not register a Face child.
+      run_in_background: false,
     });
     expect(out.isError).toBeFalsy();
     expect(out.content).toMatch(/\[external:acp\]/);

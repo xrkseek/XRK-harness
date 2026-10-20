@@ -430,7 +430,7 @@ describe("runTurn", () => {
       "assistant",
     ]);
     expect(msgs[0]!.content).toContain("[in_progress] ship");
-    expect(msgs[0]!.content).toContain("latest user turn wins");
+    expect(msgs[0]!.content).toContain("latest user wins");
   });
 
   it("stands the plan down once every item is settled", () => {

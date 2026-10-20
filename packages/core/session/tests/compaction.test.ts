@@ -410,6 +410,7 @@ describe("deriveMessages compaction window", () => {
     expect(windowed[0]?.role).toBe("user");
     expect(windowed[0]?.content).toContain("[in_progress] ship notes");
     expect(windowed[0]?.content).toContain("[pending] bump version");
+    expect(String(windowed[0]?.content)).toMatch(/stale in_progress|same turn/i);
     expect(windowed[0]?.content).not.toContain("old-ask");
     expect(windowed[1]?.content).toContain("context compacted");
     expect(windowed.some((m) => m.content === "old-ask")).toBe(false);
