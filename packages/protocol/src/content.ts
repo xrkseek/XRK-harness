@@ -275,10 +275,14 @@ export function fileUploadHandleBlock(ref: FileAttachmentRef): TextBlock {
     ref.sourcePath !== undefined && ref.sourcePath.length > 0
       ? `；源路径 ${ref.sourcePath}`
       : "";
+  const lower = ref.name.trim().toLowerCase();
+  const packHint = lower.endsWith(".zip")
+    ? `。若是高级干员包，用 team_import pack=attachment:${ref.attachmentId}（导入后未就绪 → 按 envPrep 准备 → team_ready）`
+    : `。需内容时用 read_file path=attachment:${ref.attachmentId} 读取`;
   return {
     type: "text",
     modelOnly: true,
-    text: `[文件附件 ${ref.name}（${ref.attachmentId}${pathNote}）。需内容时用 read_file path=attachment:${ref.attachmentId} 读取]`,
+    text: `[文件附件 ${ref.name}（${ref.attachmentId}${pathNote}）${packHint}]`,
   };
 }
 

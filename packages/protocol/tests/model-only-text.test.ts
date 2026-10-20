@@ -49,6 +49,17 @@ describe("modelOnly handle text", () => {
     expect(readerText([block])).toBe("");
   });
 
+  it("hints team_import for advanced pack zip uploads", () => {
+    const block = fileUploadHandleBlock({
+      attachmentId: "sha256:beef",
+      name: "scout.zip",
+      bytes: 12,
+    });
+    expect(block.text).toContain("team_import pack=attachment:sha256:beef");
+    expect(block.text).toContain("team_ready");
+    expect(looksLikeAttachmentHandleCaption(block.text)).toBe(true);
+  });
+
   it("includes sourcePath in model-only handle captions", () => {
     const block = fileUploadHandleBlock({
       attachmentId: "sha256:beef",
