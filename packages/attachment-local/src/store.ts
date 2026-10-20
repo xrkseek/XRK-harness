@@ -56,6 +56,14 @@ function objectPath(root: string, sha256: string): string {
   return join(root, 'objects', sha256.slice(0, 2), sha256)
 }
 
+/** Absolute content-addressed path of one stored image (`objects/<aa>/<sha>`). */
+export function storedImagePath(
+  root: string,
+  ref: { attachmentId: string },
+): string {
+  return objectPath(root, ensureReference(ref as ImageAttachmentRef))
+}
+
 function ensureReference(ref: ImageAttachmentRef): string {
   const match = ID_PATTERN.exec(String(ref.attachmentId))
   if (match?.[1] === undefined) throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')

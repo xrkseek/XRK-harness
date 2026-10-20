@@ -20,10 +20,33 @@ describe("cordis-credentials-bridge", () => {
     await a.set("CODEARTS_ACCOUNT_1", JSON.stringify({ access_token: "t1" }));
     const hit = await a.resolve("CODEARTS_ACCOUNT_1");
     expect(hit?.value).toContain("t1");
+    expect(hit?.source).toBe("local");
 
     const b = createCordisCredentialsBridge(home, "dsh-our-free-model");
     const again = await b.resolve("CODEARTS_ACCOUNT_1");
     expect(again?.value).toContain("t1");
+  });
+
+  it("describe reports configured; unset clears (channel-pack logout)", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "cred-describe-"));
+    temps.push(home);
+    const store = createCordisCredentialsBridge(home, "dsh-our-free-model");
+    expect(await store.describe("TRAE_ACCOUNT")).toEqual({
+      configured: false,
+      writable: true,
+    });
+    await store.set("TRAE_ACCOUNT", JSON.stringify({ access: "a1" }));
+    expect(await store.describe("TRAE_ACCOUNT")).toEqual({
+      configured: true,
+      source: "local",
+      writable: true,
+    });
+    await store.unset("TRAE_ACCOUNT");
+    expect(await store.describe("TRAE_ACCOUNT")).toEqual({
+      configured: false,
+      writable: true,
+    });
+    expect(await store.resolve("TRAE_ACCOUNT")).toBeUndefined();
   });
 
   it("rejects path-like refs", async () => {

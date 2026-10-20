@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   hasOurFreeModelEntry,
   isOurFreeModelPackage,
+  ofmProfileName,
   tryApplyOurFreeModelHost,
 } from "../src/dsh-compat/our-free-model-host.js";
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
@@ -29,6 +30,11 @@ afterEach(() => {
 });
 
 describe("our-free-model-host", () => {
+  it("maps desktop surface onto OFM web-desktop profile", () => {
+    expect(ofmProfileName({ XRK_SURFACE: "desktop" })).toBe("web-desktop");
+    expect(ofmProfileName({})).toBe("web");
+  });
+
   it("detects package name and staged entry", () => {
     expect(isOurFreeModelPackage("dsh-our-free-model")).toBe(true);
     expect(isOurFreeModelPackage("other")).toBe(false);
@@ -341,6 +347,48 @@ describe("our-free-model-host", () => {
     expect(
       await tryApplyOurFreeModelHost(pkgRoot, "dsh-something-else", {}),
     ).toBeUndefined();
+  });
+
+  it("provides profileContext, credentials, and attachments for channel-pack", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "ofm-profile-"));
+    const xrkHome = mkdtempSync(path.join(tmpdir(), "ofm-home-profile-"));
+    temps.push(pkgRoot, xrkHome);
+    writeFileSync(
+      path.join(pkgRoot, "index.js"),
+      `export async function apply(ctx) {
+  const profile = ctx.get("profileContext");
+  if (!profile || (profile.name !== "web" && profile.name !== "web-desktop") || typeof profile.home !== "string") {
+    throw new Error("profileContext missing");
+  }
+  const att = ctx.get("attachments");
+  if (typeof att?.imageHostPath !== "function" || typeof att?.readImage !== "function" || typeof att?.saveImage !== "function") {
+    throw new Error("attachments missing");
+  }
+  const settings = ctx.get("settings");
+  if (typeof settings?.configure !== "function" || typeof settings?.register === "function") {
+    throw new Error("settings seat should configure without legacy register");
+  }
+  const creds = ctx.get("credentials");
+  await creds.set("CH_TEST", "v1");
+  const desc = await creds.describe("CH_TEST");
+  if (!desc?.configured || desc.source !== "local") {
+    throw new Error("credentials.describe failed");
+  }
+  await creds.unset("CH_TEST");
+  const after = await creds.describe("CH_TEST");
+  if (after?.configured) throw new Error("credentials.unset failed");
+  ctx.llm.registerAdapter(["our-free-model"], {
+    async listModels() { return []; },
+  });
+}
+`,
+    );
+    const contribution = await tryApplyOurFreeModelHost(
+      pkgRoot,
+      "dsh-our-free-model",
+      { xrkHome },
+    );
+    expect(contribution?.meta.id).toBe("dsh-our-free-model-host");
   });
 
   it("seeds forward settings with distribution managed", async () => {

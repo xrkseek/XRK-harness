@@ -29,6 +29,7 @@ import {
   readImageByAttachmentId,
   readImageFile,
   storedFilePath,
+  storedImagePath,
   validateImageFile,
 } from "./store.js";
 import { readRequestImageFile, requestImageVariantId } from "./request-image.js";
@@ -41,6 +42,7 @@ export {
   prepareImageFile,
   readImageFile,
   storedFilePath,
+  storedImagePath,
   validateImageFile,
 } from "./store.js";
 export type { PreparedImageFile } from "./store.js";

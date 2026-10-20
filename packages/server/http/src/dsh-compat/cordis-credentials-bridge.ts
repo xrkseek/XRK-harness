@@ -1,6 +1,10 @@
 /**
  * Minimal Cordis `credentials` store for community host halves (channel-pack).
  * Persists under `~/.xrk/community-credentials/<package>/` as JSON text values.
+ *
+ * Shape mirrors DSH Cordis `ctx.credentials` used by OFM channel-pack
+ * (`describe` / `unset` / `resolve` / `set`) — see OFM standalone
+ * `packages/standalone/channels/credentials.mjs` and auth `status()`/`logout()`.
  */
 import {
   existsSync,
@@ -12,11 +16,23 @@ import path from "node:path";
 
 export interface CordisCredentialResolved {
   readonly value: string;
+  /** Winning layer when present (`local` for this on-disk store). */
+  readonly source?: string;
+}
+
+/** Value-free view — channel-pack login status / pool UI. */
+export interface CordisCredentialDescribed {
+  readonly configured: boolean;
+  readonly source?: string;
+  readonly writable: boolean;
 }
 
 export interface CordisCredentialsBridge {
   resolve(ref: unknown): Promise<CordisCredentialResolved | undefined>;
+  describe(ref: unknown): Promise<CordisCredentialDescribed>;
   set(ref: unknown, value: string): Promise<void>;
+  /** Cordis / channel-pack logout path (alias of delete). */
+  unset(ref: unknown): Promise<void>;
   delete?(ref: unknown): Promise<void>;
 }
 
@@ -74,11 +90,29 @@ export function createCordisCredentialsBridge(
     return cache;
   };
 
+  const remove = async (ref: unknown): Promise<void> => {
+    const key = refKey(ref);
+    const map = { ...read() };
+    delete map[key];
+    cache = map;
+    saveMap(file, map);
+  };
+
   return {
     async resolve(ref) {
       const key = refKey(ref);
       const value = read()[key];
-      return value === undefined ? undefined : { value };
+      return value === undefined
+        ? undefined
+        : { value, source: "local" };
+    },
+    async describe(ref) {
+      const key = refKey(ref);
+      const value = read()[key];
+      if (value === undefined) {
+        return { configured: false, writable: true };
+      }
+      return { configured: true, source: "local", writable: true };
     },
     async set(ref, value) {
       const key = refKey(ref);
@@ -86,12 +120,11 @@ export function createCordisCredentialsBridge(
       cache = map;
       saveMap(file, map);
     },
+    async unset(ref) {
+      await remove(ref);
+    },
     async delete(ref) {
-      const key = refKey(ref);
-      const map = { ...read() };
-      delete map[key];
-      cache = map;
-      saveMap(file, map);
+      await remove(ref);
     },
   };
 }

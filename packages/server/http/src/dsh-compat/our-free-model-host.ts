@@ -14,6 +14,7 @@ import {
   createCordisConnectionBridge,
   pushCordisWebServerRoute,
 } from "./cordis-connection-bridge.js";
+import { createCordisAttachmentsBridge } from "./cordis-attachments-bridge.js";
 import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
 import {
   asCommunityLlmModelRows,
@@ -23,6 +24,7 @@ import {
   dropStaleCommunityLlmFingerprints,
   enrichCommunityModelsWithResolve,
   isUsableCommunityLoopbackBaseUrl,
+  listModelsForCommunitySync,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
@@ -51,6 +53,16 @@ const DISPLAY_NAMES: Record<string, string> = {
 
 export function isOurFreeModelPackage(packageName: string): boolean {
   return packageName.trim() === OFM_PACKAGE;
+}
+
+/**
+ * OFM sealed-lane gate (`detectSealedHost`): `web` and `web-desktop` are the
+ * same flavor. Desktop Host sets `XRK_SURFACE=desktop` on the child.
+ */
+export function ofmProfileName(
+  env: NodeJS.ProcessEnv = process.env,
+): "web" | "web-desktop" {
+  return env.XRK_SURFACE === "desktop" ? "web-desktop" : "web";
 }
 
 export function hasOurFreeModelEntry(pkgRoot: string): boolean {
@@ -240,7 +252,15 @@ export async function tryApplyOurFreeModelHost(
         };
         for (const providerId of ids) {
           try {
-            const listed = (await adapter.listModels?.(providerId)) ?? [];
+            const listed = await listModelsForCommunitySync(
+              adapter,
+              providerId,
+              {
+                ...(forward.baseUrl !== undefined
+                  ? { lastBaseUrl: forward.baseUrl }
+                  : {}),
+              },
+            );
             const models = await enrichCommunityModelsWithResolve(
               adapter,
               providerId,
@@ -365,6 +385,11 @@ export async function tryApplyOurFreeModelHost(
     async update() {
       return undefined;
     },
+    // Channel-pack calls configure({ auto: false }) when present. No `register`:
+    // OFM then persists channel state to `{DSH_HOME}/channel-pack/state.json`.
+    configure() {
+      return () => undefined;
+    },
   });
 
   // Channel-pack injects credentials + commands; persist OAuth JSON under xrkHome.
@@ -372,6 +397,14 @@ export async function tryApplyOurFreeModelHost(
     "credentials",
     createCordisCredentialsBridge(dshHome, packageName),
   );
+  // OFM sealed EAC gate + chan-relay home: `ctx.get('profileContext').name|home`.
+  // `web` matches OFM vault detectSealedHost (web / web-desktop); home = compat data root.
+  root.provide("profileContext", {
+    name: ofmProfileName(),
+    home: dshHome,
+  });
+  // Free-lane imageResolver stats imageHostPath; channel-pack inlines readImage.
+  root.provide("attachments", createCordisAttachmentsBridge(dshHome));
   root.provide("commands", {
     register() {
       return () => undefined;

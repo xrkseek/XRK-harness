@@ -46,6 +46,8 @@ const FORBIDDEN_MAIN_PACKAGES = [
 
 /** Infrastructure whitelist dsh-compat may import externally (extraction peers). */
 const DSH_COMPAT_ALLOWED_EXTERNAL = [
+  // Attachment bridge reads the product content-addressed image store.
+  "@xrkseek/attachment-local",
   "@xrkseek/core-session",
   "@xrkseek/core-tools",
   // Host halves construct the Cordis Context the community plugins run in.

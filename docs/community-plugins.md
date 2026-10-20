@@ -138,7 +138,7 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` 同形离线状态 · `ui-mode` 持久化 · `/ask/state`；进程 start/stop 仍 deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` 团队目录持久化 |
 | `dsh-workbuddy-connect` | full | web/Desktop：stage `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face；共享 `connection`（admit/fetch）· `credentials` 落盘；装后需重启 Host |
-| `dsh-our-free-model` | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials` 落盘 · forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
+| `dsh-our-free-model` | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials`（`describe`/`unset`）· `profileContext`（EAC）· `attachments`（vision）· forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` 持久化；`raw-search` 无钥 `ddg` 走 DuckDuckGo HTML；带 key 引擎仍 deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings；PTY 需 WS |
@@ -421,7 +421,7 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` same offline shape · `ui-mode` persist · `/ask/state`; process start/stop still deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` team catalog persisted |
 | `dsh-workbuddy-connect` | full | web/Desktop: staged `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face; shared `connection` (admit/fetch) · persisted `credentials`; restart Host after install |
-| `dsh-our-free-model` | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` on disk · forward on by default · Face sync; `distribution: managed`; restart Host after install |
+| `dsh-our-free-model` | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` (`describe`/`unset`) · `profileContext` (EAC) · `attachments` (vision) · forward on by default · Face sync; `distribution: managed`; restart Host after install |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` persist; keyless `ddg` `raw-search` via DuckDuckGo HTML; keyed engines still deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings; PTY needs WS |
