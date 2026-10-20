@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.7',
+    date: '2026-10-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '附件本地存储与 DSH 附件桥接线：OFM free-lane 图像 resolver 与 channel-pack 的 readImage / saveImage 统一走 Cordis attachments 座位，字节落产品本地内容寻址库（{XRK_HOME}/attachments/v1），不再各插件各存一份。',
+        en: 'Local attachment storage and the DSH attachments bridge are wired: the OFM free-lane image resolver and channel-pack readImage / saveImage all go through the Cordis attachments seat, landing bytes in the product’s local content-addressed store ({XRK_HOME}/attachments/v1) instead of one copy per plugin.',
+      },
+      {
+        zh: 'token usage 协议统一四种供应商形状（OpenAI chat / Responses / Anthropic / Gemini），gemini 与 openai-responses 开始上报 usage；上下文压力优先用 totalTokens、否则 input + cacheRead，不再把 cacheWrite 计入窗口——Context 环不再被高估。',
+        en: 'The token-usage protocol unifies four vendor shapes (OpenAI chat / Responses / Anthropic / Gemini), and gemini plus openai-responses now report usage; context pressure prefers totalTokens, else input + cacheRead, and no longer counts cacheWrite — the Context ring stops being overstated.',
+      },
+      {
+        zh: '命令面板按 frecency 排序：空查询按使用频次上浮、命中查询同分由频次打破；排序是设备本地的，不进 Host 设置。',
+        en: 'The command palette ranks by frecency: with an empty query frequent commands float up, and ties on matches break by usage; the order is device-local and never enters Host settings.',
+      },
+      {
+        zh: 'Alt+← / Alt+→ 循环切换子代理：在团队根会话与健康直系子会话之间排环跳转（可改键）；没有兄弟会话时不吞键。模型面板的提供方长按 420ms 拖动排序，列表顺序同时作用到 composer 的模型分组。',
+        en: 'Alt+← / Alt+→ cycles subagents: hops around the ring of team root plus healthy direct children (rebindable), and never swallows the chord when there are no siblings. In Settings → Models, long-press a provider for 420ms to drag-reorder, and the same order drives the composer’s model groups.',
+      },
+      {
+        zh: 'todo_write 完成纪律改为动态注入：只有清单还有未结项时才追加「同轮标完成」提示，全部结清即撤；快捷键面板宽屏分 1/2/3 栏，干员导入按钮在草稿态也可见。',
+        en: 'todo_write completion discipline is now injected dynamically: the “mark completed in the same turn” tip appears only while open items remain and disappears once settled; the shortcuts panel splits into 1/2/3 columns on wide screens, and the roster import button shows in the draft state too.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.7 接管 @latest。完整清单见 docs/releases/v0.6.7.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.7 now owns @latest. Full list in docs/releases/v0.6.7.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.6',
     date: '2026-10-20',
     title: {
