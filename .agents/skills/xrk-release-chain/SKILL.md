@@ -48,6 +48,15 @@ gh api repos/xrkseek/XRK-harness/git/ref/tags/v<ver> --jq '.object.sha'
 - 收尾动作交给用户一条命令或一次性后台任务，**不轮询 `npm view`**。
 - 125 MB 的 CLI 包 publish 返回 ok 后，registry 文档里 `time[ver]` 可能还查不到、
   `dist-tags.latest` 还指着上一版 —— 这是大包传播延迟，**不是失败**，别去重发。
+- **唯一真判据是 shasum 对照**：packument 里 `versions.<ver>.dist.shasum` 必须等于 release
+  日志那行 `npm notice shasum:`。字节相同 = 就是这条 publish 落库了，只是 CDN 慢；不同或没有
+  才是真没发。**别按体积推测落库顺序**——v0.6.8 实测 139MB 的 CLI 08:09 可见，37MB 的 SDK
+  反而 08:19 才可见。
+- **已发过的版本绝不因「看着没落库」就重跑 `npm publish`**：v0.6.8 差点踩响——我随后跑了
+  `CI=true pnpm install --frozen-lockfile` 装回根 devDeps，stage 目录被掏胖，重打的 tarball
+  变成 21756 files / shasum `f26b2b3d`（release 原始 19611 files / `b8694b50`）。真让它 PUT
+  成功，npm 包与 GitHub Release asset 就**永久字节错位**（本 skill 列的「发布产物不一致」）。
+  补发只发**已在盘上且 shasum 对得上**的那个 tgz；对不上就先等传播，别发。
 
 ### 2. 先装根依赖再跑 stage（副作用 1）
 
