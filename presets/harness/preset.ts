@@ -1050,8 +1050,13 @@ export function createHarnessComposition(
     tools.register(createCreateWorktreeTool(options.createWorktreeTools));
   }
   for (const tool of createSkillTools({
-    workspaceRoot: injectOpts.root,
-    productDir,
+    ...(injectOpts.audience === "minimal" && injectOpts.extraSkillDirs?.length
+      ? { skillDirs: [] as string[] } // skip workspace catalog roots; pack via extra
+      : { workspaceRoot: injectOpts.root, productDir }),
+    ...(injectOpts.extraSkillDirs?.length
+      ? { extraSkillDirs: injectOpts.extraSkillDirs }
+      : {}),
+    includeUserHome: false,
   })) {
     tools.register(tool);
   }
@@ -1749,6 +1754,9 @@ export function createHarnessComposition(
     productDir,
     ...(injectOpts.audience !== undefined
       ? { audience: injectOpts.audience }
+      : {}),
+    ...(injectOpts.extraSkillDirs?.length
+      ? { extraSkillDirs: injectOpts.extraSkillDirs }
       : {}),
   });
 

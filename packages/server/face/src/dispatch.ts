@@ -145,6 +145,7 @@ import { canvasGet, canvasList } from "./handlers/canvas.js";
 import {
   threadsList, threadsUpsert, threadsSwitch, threadsRemove,
   teamList, teamUpsert, teamRemove, teamCapture, teamDispatch,
+  teamExport, teamImportPack,
 } from "./handlers/team.js";
 
 const HANDLERS: Record<string, FaceHandler> = {
@@ -299,6 +300,10 @@ const HANDLERS: Record<string, FaceHandler> = {
   "team.capture": teamCapture,
   "team/dispatch": teamDispatch,
   "team.dispatch": teamDispatch,
+  "team/export": teamExport,
+  "team.export": teamExport,
+  "team/importPack": teamImportPack,
+  "team.importPack": teamImportPack,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

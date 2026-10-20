@@ -28,7 +28,7 @@ import {
 } from "./presence-dressing.js";
 
 export const MEMBER_NAME_MAX = 40;
-export const MEMBER_PLAYBOOK_MAX = 8_000;
+export const MEMBER_PLAYBOOK_MAX = 20_000;
 export const MEMBER_FACE_MAX = 80_000;
 export const MEMBER_BRIEF_MAX = 160;
 export const GLOBAL_ROSTER_ID = "global";
@@ -89,6 +89,8 @@ export type MemberColor = (typeof MEMBER_COLORS)[number];
 export type MemberKit = (typeof MEMBER_KITS)[number];
 export type RosterScope = "global" | "workspace";
 export type MemberInject = "subagent" | "minimal";
+/** Thin = index JSON only. Advanced = pack dir under `packs/{scope}/{id}/`. */
+export type MemberKind = "thin" | "advanced";
 
 export interface MemberAppearance {
   readonly shape: MemberShape;
@@ -120,6 +122,13 @@ export interface AgentRosterMember {
   readonly brief: string;
   readonly inject: MemberInject;
   readonly tools?: MemberToolPolicy;
+  /** Thin (default) or advanced pack-backed member. */
+  readonly kind: MemberKind;
+  /**
+   * Advanced packs start `false` after zip import until the parent marks ready.
+   * Thin members are always ready.
+   */
+  readonly ready: boolean;
   /** True for catalog examples that ship with the file. */
   readonly seed?: true;
   readonly updatedAt: number;
@@ -207,6 +216,32 @@ export function parseRosterScope(raw: unknown): RosterScope | undefined {
 
 export function rosterRoot(productHome?: string): string {
   return path.join(path.resolve(productHome ?? resolveXrkHome()), "agent-rosters");
+}
+
+/**
+ * On-disk home for an advanced member pack (skills stay here — not workspace).
+ * `rosterWorkspaceId` is `global` or the canvas workspace id.
+ */
+export function memberPackDir(
+  rosterWorkspaceId: string,
+  memberId: string,
+  productHome?: string,
+): string {
+  const scopeKey =
+    rosterWorkspaceId === GLOBAL_ROSTER_ID
+      ? GLOBAL_ROSTER_ID
+      : sanitizeWorkspaceId(rosterWorkspaceId);
+  const id = normalizeMemberId(memberId) ?? memberId.trim();
+  return path.join(rosterRoot(productHome), "packs", scopeKey, id);
+}
+
+/** Skills root inside an advanced pack (`…/skills`). */
+export function memberPackSkillsDir(
+  rosterWorkspaceId: string,
+  memberId: string,
+  productHome?: string,
+): string {
+  return path.join(memberPackDir(rosterWorkspaceId, memberId, productHome), "skills");
 }
 
 function sanitizeWorkspaceId(workspaceId: string): string {
@@ -454,6 +489,8 @@ export function rosterPublicFields(row: ListedRosterMember) {
     scope: row.scope,
     brief: row.brief,
     inject: row.inject,
+    kind: row.kind,
+    ready: row.ready,
     seed: row.seed === true,
     catalog: row.catalog === true,
     appearance: row.appearance,
@@ -474,7 +511,14 @@ export function formatRosterCatalog(
           : pub.tools?.mode === "deny"
             ? ` deny=${pub.tools.names.join(",")}`
             : "";
-      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${pub.catalog ? " · catalog" : ""}`;
+      const ready =
+        pub.ready
+          ? ""
+          : pub.kind === "advanced"
+            ? " · not-ready → team_list(envPrep) → team_ready"
+            : " · not-ready";
+      const kind = pub.kind === "advanced" ? " · advanced" : "";
+      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog" : ""}`;
     })
     .join("\n")
     .slice(0, 2_400);
@@ -511,6 +555,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "只读调研，引用路径与原文。",
       playbook:
         "You are the workspace researcher. Gather facts with read/search tools. " +
@@ -524,6 +570,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "按任务改代码，不扩范围。",
       playbook:
         "You are the workspace implementer. Execute the assigned task precisely. " +
@@ -537,6 +585,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "只读审稿，先报缺陷。",
       playbook:
         "You are the workspace reviewer. Read-only review unless asked to patch. " +
@@ -550,6 +600,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "拆任务、协调干员。",
       playbook:
         "You are the workspace lead. Break work into clear sub-tasks, coordinate teammates, " +
@@ -564,6 +616,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "查网上公开事实，给出链接与日期。",
       playbook:
         "You are the web scout. Prefer web_search and web_fetch for public facts; " +
@@ -579,6 +633,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "写诚实说明书与发行说明，不编未做能力。",
       playbook:
         "You are the docs writer. Revise textbook docs in this repo. Follow docs/audiences.md. " +
@@ -592,6 +648,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "复现故障、定位、修，并给出证据。",
       playbook:
         "You are the debugger. Reproduce, isolate, then fix. Show failing evidence before the change. Stay in the given scope.",
@@ -604,6 +662,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       seed: true,
       updatedAt: now,
       inject: "minimal",
+      kind: "thin",
+      ready: true,
       brief: "跑相关测试，报告失败与最小复现。",
       playbook:
         "You are the tester. Run the relevant tests. Report failures with the command and output. Do not skip failing tests.",
@@ -632,6 +692,9 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
   const tools = parseMemberToolPolicy(o.tools);
   const inject = parseMemberInject(o.inject, "minimal");
   const brief = briefOf(name, playbook, typeof o.brief === "string" ? o.brief : undefined);
+  const kind: MemberKind = o.kind === "advanced" ? "advanced" : "thin";
+  // Thin always ready; advanced requires explicit ready:true (import starts false).
+  const ready = kind === "thin" ? true : o.ready === true;
   return {
     id: o.id,
     name,
@@ -640,6 +703,8 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
     appearance,
     brief,
     inject,
+    kind,
+    ready,
     updatedAt,
     ...(tools ? { tools } : {}),
     ...(o.seed === true ? { seed: true as const } : {}),
@@ -652,6 +717,11 @@ export class FaceAgentRosterStore {
 
   constructor(productHome?: string) {
     this.productHome = productHome;
+  }
+
+  /** Product home used for roster + pack paths (tests may override). */
+  get home(): string | undefined {
+    return this.productHome;
   }
 
   private emptyOrSeed(workspaceId: string): PersistShape {
@@ -736,6 +806,29 @@ export class FaceAgentRosterStore {
     return global ? listedMember(global, "global") : undefined;
   }
 
+  /**
+   * Locate a member id across global + every workspace roster file.
+   * Used when the current canvas cannot see the id (workspace-scoped elsewhere).
+   */
+  findHome(
+    memberId: string,
+  ):
+    | { readonly scope: "global"; readonly rosterWorkspaceId: typeof GLOBAL_ROSTER_ID }
+    | { readonly scope: "workspace"; readonly rosterWorkspaceId: string }
+    | undefined {
+    const id = normalizeMemberId(memberId) ?? memberId.trim();
+    if (!id) return undefined;
+    if (this.list(GLOBAL_ROSTER_ID).some((row) => row.id === id)) {
+      return { scope: "global", rosterWorkspaceId: GLOBAL_ROSTER_ID };
+    }
+    for (const wid of this.listWorkspaceRosterIds()) {
+      if (this.list(wid).some((row) => row.id === id)) {
+        return { scope: "workspace", rosterWorkspaceId: wid };
+      }
+    }
+    return undefined;
+  }
+
   upsert(
     workspaceId: string,
     input: {
@@ -747,6 +840,8 @@ export class FaceAgentRosterStore {
       readonly brief?: string;
       readonly inject?: MemberInject;
       readonly tools?: MemberToolPolicy | null;
+      readonly kind?: MemberKind;
+      readonly ready?: boolean;
     },
   ): AgentRosterMember | undefined {
     const name = clip(input.name, MEMBER_NAME_MAX);
@@ -777,6 +872,14 @@ export class FaceAgentRosterStore {
         input.tools === undefined
           ? prev?.tools
           : tools;
+      const kind: MemberKind =
+        input.kind ?? prev?.kind ?? "thin";
+      const ready =
+        kind === "thin"
+          ? true
+          : input.ready !== undefined
+            ? input.ready
+            : (prev?.ready ?? false);
       const next: AgentRosterMember = {
         id,
         name,
@@ -785,6 +888,8 @@ export class FaceAgentRosterStore {
         appearance,
         brief: briefOf(name, playbook, input.brief ?? prev?.brief),
         inject: input.inject !== undefined ? inject : (prev?.inject ?? "minimal"),
+        kind,
+        ready,
         updatedAt: now,
         ...(nextTools ? { tools: nextTools } : {}),
       };
@@ -795,6 +900,8 @@ export class FaceAgentRosterStore {
       this.save(workspaceId, { version: 1, members });
       return next;
     }
+    const kind: MemberKind = input.kind ?? "thin";
+    const ready = kind === "thin" ? true : input.ready === true;
     const minted: AgentRosterMember = {
       id: mintId(),
       name,
@@ -803,11 +910,40 @@ export class FaceAgentRosterStore {
       appearance: parseMemberAppearance(input.appearance ?? fallback, fallback),
       brief: briefOf(name, playbook, input.brief),
       inject,
+      kind,
+      ready,
       updatedAt: now,
       ...(tools ? { tools } : {}),
     };
     this.save(workspaceId, { version: 1, members: [...doc.members, minted] });
     return minted;
+  }
+
+  /** Mark an advanced member ready (or not). Thin members stay ready. */
+  setReady(
+    workspaceId: string,
+    memberId: string,
+    ready: boolean,
+  ): AgentRosterMember | undefined {
+    const listed = this.get(workspaceId, memberId);
+    if (!listed || listed.catalog) return undefined;
+    const target =
+      listed.scope === "global" ? GLOBAL_ROSTER_ID : workspaceId;
+    if (listed.kind !== "advanced") {
+      return listed;
+    }
+    return this.upsert(target, {
+      id: listed.id,
+      name: listed.name,
+      playbook: listed.playbook,
+      role: listed.role,
+      brief: listed.brief,
+      inject: listed.inject,
+      kind: "advanced",
+      ready,
+      ...(listed.tools ? { tools: listed.tools } : {}),
+      appearance: listed.appearance,
+    });
   }
 
   /** Workspace roster file ids on disk (`global.json` is the other home). */

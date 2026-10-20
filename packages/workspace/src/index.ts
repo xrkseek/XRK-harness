@@ -82,6 +82,12 @@ export interface WorkspaceInjectorOptions {
    * `minimal` is the 干员 default: same persona skip, no skill catalog.
    */
   readonly audience?: "user" | "subagent" | "minimal";
+  /**
+   * Extra skills roots always merged into the standing catalog (even when
+   * `audience` is `minimal`). Used for advanced 干员 pack skills on children —
+   * never passed on the parent session.
+   */
+  readonly extraSkillDirs?: readonly string[];
   /** Test override for user-home root. */
   readonly homeDir?: string;
 }
@@ -114,6 +120,9 @@ export function createWorkspaceInjector(
     ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
     // Catalog defaults off; fingerprint must match what inject() lists.
     includeUserHomeSkills: options.includeUserHomeSkills === true,
+    ...(options.extraSkillDirs?.length
+      ? { extraSkillDirs: options.extraSkillDirs }
+      : {}),
   });
 
   return {
@@ -157,11 +166,12 @@ export function createWorkspaceInjector(
       const instructionBlocks = sectionsToInstructionBlocks(sections);
       const changes = sectionsToInstructionChanges(sections);
 
-      // Standing catalog = workspace skills only unless opted in (Codex).
-      const skipSkills = options.audience === "minimal";
+      // Standing catalog = workspace skills unless minimal; extraSkillDirs
+      // (干员 pack) always merge so a child can see pack skills without the parent catalog.
+      const skipWorkspaceSkills = options.audience === "minimal";
       const includeHomeSkills =
-        !skipSkills && options.includeUserHomeSkills === true;
-      const skillDirs = skipSkills
+        !skipWorkspaceSkills && options.includeUserHomeSkills === true;
+      const baseDirs = skipWorkspaceSkills
         ? []
         : await resolveSkillDirs({
         workspaceRoot: root,
@@ -169,7 +179,12 @@ export function createWorkspaceInjector(
         includeUserHome: includeHomeSkills,
         ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
       });
-      const skills = skipSkills ? [] : await listSkills({ skillDirs });
+      const extraDirs = options.extraSkillDirs?.length
+        ? await resolveSkillDirs({ skillDirs: options.extraSkillDirs })
+        : [];
+      const skillDirs = [...baseDirs, ...extraDirs];
+      const skills =
+        skillDirs.length === 0 ? [] : await listSkills({ skillDirs });
       const skillCatalog = buildSkillCatalogPayload(skills, budget);
       const skillBlock = formatSkillCatalog(skills);
 
@@ -373,6 +388,8 @@ export interface ResolveWorkspaceInjectOptions {
    * `minimal` also skips the skill catalog (干员 default).
    */
   readonly audience?: "user" | "subagent" | "minimal";
+  /** Child-only pack skill roots (see WorkspaceInjectorOptions.extraSkillDirs). */
+  readonly extraSkillDirs?: readonly string[];
 }
 
 export interface ResolvedWorkspaceInject {
@@ -397,6 +414,10 @@ export async function resolveWorkspaceInject(
       root: options.root,
       ...(options.productDir !== undefined
         ? { productDir: options.productDir }
+        : {}),
+      ...(options.audience !== undefined ? { audience: options.audience } : {}),
+      ...(options.extraSkillDirs?.length
+        ? { extraSkillDirs: options.extraSkillDirs }
         : {}),
     });
 

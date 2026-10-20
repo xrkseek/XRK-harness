@@ -345,4 +345,20 @@ describe("FaceAgentRosterStore", () => {
       "global",
     );
   });
+
+  it("findHome locates workspace-scoped members outside the current canvas", () => {
+    const store = new FaceAgentRosterStore(home());
+    const member = store.upsertAtScope("ws_alpha", "workspace", {
+      name: "本地干员",
+      playbook: "Only on alpha.",
+      role: "worker",
+    });
+    expect(member?.id).toBeTruthy();
+    expect(store.get("ws_beta", member!.id)).toBeUndefined();
+    expect(store.findHome(member!.id)).toEqual({
+      scope: "workspace",
+      rosterWorkspaceId: "ws_alpha",
+    });
+    expect(store.findHome("mem_missing_nowhere")).toBeUndefined();
+  });
 });

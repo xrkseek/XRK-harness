@@ -109,8 +109,17 @@ describe("rootUserAuthorizationBlock", () => {
     for (const role of [undefined, "default", "lead", "worker"] as const) {
       expect(roleDeniedTools(role)).toContain("team_save");
       expect(roleDeniedTools(role)).toContain("team_import");
+      expect(roleDeniedTools(role)).toContain("team_ready");
     }
-    expect(roleDeniedTools("default")).toEqual(["team_save", "team_import"]);
-    expect(roleDeniedTools("lead")).toEqual(["team_save", "team_import"]);
+    expect(roleDeniedTools("default")).toEqual([
+      "team_save",
+      "team_import",
+      "team_ready",
+    ]);
+    expect(roleDeniedTools("lead")).toEqual([
+      "team_save",
+      "team_import",
+      "team_ready",
+    ]);
   });
 });

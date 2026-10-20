@@ -124,6 +124,7 @@ import {
   createSessionCapabilityFragmentProvider,
   createSessionPostureFragmentProvider,
   canvasWorkspaceIdForSession,
+  memberPackSkillsDir,
   resolveSessionModelSelection,
   credentialsSet,
   settingsMutateFace,
@@ -1415,26 +1416,52 @@ export function createHostManager(): HostManager {
           sessionId,
           async () => {
             const pluginSettings = pluginSettingsBox.read?.() ?? {};
+            // Child inject: skip parent persona; advanced pack skills → child
+            // catalog only (never parent). Curated memory is not in the pack.
+            let childWorkspaceInject:
+              | {
+                  readonly audience: "subagent" | "minimal";
+                  readonly extraSkillDirs?: readonly string[];
+                }
+              | undefined;
+            if (parentSessionId) {
+              const link = faceBox.runtime?.subagents.getByChild(sessionId);
+              const audience =
+                link?.inject === "subagent"
+                  ? ("subagent" as const)
+                  : ("minimal" as const);
+              const extraSkillDirs: string[] = [];
+              const memberId = link?.memberId?.trim();
+              const rt = faceBox.runtime;
+              if (memberId && rt && link) {
+                const rosterWs = canvasWorkspaceIdForSession(
+                  rt,
+                  link.parentSessionId,
+                );
+                const member = rt.agentRoster.get(rosterWs, memberId);
+                if (member?.kind === "advanced") {
+                  const skillsRoot = memberPackSkillsDir(
+                    member.scope === "global" ? "global" : rosterWs,
+                    member.id,
+                    rt.agentRoster.home,
+                  );
+                  if (existsSync(skillsRoot)) {
+                    extraSkillDirs.push(skillsRoot);
+                  }
+                }
+              }
+              childWorkspaceInject = {
+                audience,
+                ...(extraSkillDirs.length > 0 ? { extraSkillDirs } : {}),
+              };
+            }
             const agent = await factory({
               sessionId,
               store,
               workspaceRoot: sessionRoot,
               ...(wsRow?.title ? { workspaceDisplayTitle: wsRow.title } : {}),
-              // A delegated child must not inherit the *parent-facing* standing
-              // persona (SOUL.md / ~/.xrk AGENTS.md "you are the user's agent,
-              // do small asks yourself"). Its identity arrives in the spawn
-              // preamble; workspace project docs still apply. Codex splits the
-              // same way in `session/multi_agents.rs`.
-              ...(parentSessionId
-                ? {
-                    workspaceInject: {
-                      audience:
-                        faceBox.runtime?.subagents.getByChild(sessionId)
-                          ?.inject === "subagent"
-                          ? ("subagent" as const)
-                          : ("minimal" as const),
-                    },
-                  }
+              ...(childWorkspaceInject
+                ? { workspaceInject: childWorkspaceInject }
                 : {}),
               plugins: loader.list(),
               attachments,
@@ -1600,19 +1627,11 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.webSearch
                 ? { webSearch: pluginSettings.webSearch }
                 : {}),
-              ...(pluginSettings.workspaceInject || parentSessionId
+              ...(pluginSettings.workspaceInject || childWorkspaceInject
                 ? {
                     workspaceInject: {
                       ...(pluginSettings.workspaceInject ?? {}),
-                      ...(parentSessionId
-                        ? {
-                            audience:
-                              faceBox.runtime?.subagents.getByChild(sessionId)
-                                ?.inject === "subagent"
-                                ? ("subagent" as const)
-                                : ("minimal" as const),
-                          }
-                        : {}),
+                      ...(childWorkspaceInject ?? {}),
                     },
                   }
                 : {}),

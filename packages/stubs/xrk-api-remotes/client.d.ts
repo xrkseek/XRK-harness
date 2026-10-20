@@ -343,6 +343,11 @@ declare module '@xrkseek/xrk-typert-protocol' {
           readonly brief?: string
           readonly inject?: string
           readonly tools?: { readonly mode: string; readonly names: readonly string[] }
+          readonly kind?: 'thin' | 'advanced'
+          readonly ready?: boolean
+          readonly envPrep?: string
+          readonly envHint?: string
+          readonly packDir?: string
         }[]
       }>>
       upsert: (
@@ -378,6 +383,8 @@ declare module '@xrkseek/xrk-typert-protocol' {
           readonly brief?: string
           readonly inject?: string
           readonly tools?: { readonly mode: string; readonly names: readonly string[] } | null
+          readonly kind?: 'thin' | 'advanced'
+          readonly ready?: boolean
         },
         signal?: AbortSignal,
       ) => Promise<RemoteResult<{ readonly workspaceId: string; readonly member: unknown }>>
@@ -400,6 +407,35 @@ declare module '@xrkseek/xrk-typert-protocol' {
         readonly workspaceId: string
         readonly memberId: string
         readonly childSessionId: string
+      }>>
+      export: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly id: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly format: 'json' | 'zip'
+        readonly fileName: string
+        readonly text?: string
+        readonly base64?: string
+        readonly packIncomplete?: boolean
+        readonly hint?: string
+      }>>
+      importPack: (
+        args: {
+          readonly sessionId?: SessionId
+          readonly scope?: string
+          readonly zipBase64: string
+        },
+        signal?: AbortSignal,
+      ) => Promise<RemoteResult<{
+        readonly workspaceId: string
+        readonly member: unknown
+        readonly packDir?: string
+        readonly skillNames?: readonly string[]
+        readonly envPrep?: string
+        readonly ready?: boolean
       }>>
     }
   }

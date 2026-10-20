@@ -444,7 +444,7 @@ function createSubagentTool(
     "Set run_in_background false only when the user asked for a one-shot wait (10 min salvage on expiry). " +
     "Pin provider/model on this call when the child should not inherit the parent route. " +
     "Child identity is the Face spawn preamble — do not send it to AGENTS.md. " +
-    "Prefer member_id (team_save / team_import on this parent; propose_skill is a SKILL.md). " +
+    "Prefer member_id from team_list (thin: team_save; pack: team_import → team_ready; propose_skill is SKILL.md only). " +
     "role is the fallback when no member fits. Answers over ~12KB spill to ~/.xrk/spill/tool-outputs/.";
   return {
     name: "subagent",
@@ -692,8 +692,24 @@ function createSubagentTool(
           );
         rosterMember = options.runtime.agentRoster.get(workspaceId, memberId);
         if (!rosterMember) {
+          const home = options.runtime.agentRoster.findHome(memberId);
+          if (home && home.scope === "workspace" && home.rosterWorkspaceId !== workspaceId) {
+            return {
+              content:
+                `subagent: member_id "${memberId}" is workspace-scoped on canvas ${home.rosterWorkspaceId} ` +
+                `(not visible here). Open that workspace, or re-import with team_import scope=global.`,
+              isError: true,
+            };
+          }
           return {
             content: `subagent: unknown member_id "${memberId}" (team_list first)`,
+            isError: true,
+          };
+        }
+        if (!rosterMember.ready) {
+          return {
+            content:
+              `subagent: member_id "${memberId}" is not ready — parent must team_ready after pack env prep`,
             isError: true,
           };
         }

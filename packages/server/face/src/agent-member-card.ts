@@ -3,7 +3,11 @@
  * Kind `xrk-agent-member` is what the roster UI exports and `team_import` reads.
  */
 import { isAgentTeamSpawnRole, type AgentTeamSpawnRole } from "./agent-team-roles.js";
-import { parseMemberToolPolicy, type MemberToolPolicy } from "./agent-roster-store.js";
+import {
+  MEMBER_PLAYBOOK_MAX,
+  parseMemberToolPolicy,
+  type MemberToolPolicy,
+} from "./agent-roster-store.js";
 
 export const AGENT_MEMBER_CARD_KIND = "xrk-agent-member";
 
@@ -52,10 +56,23 @@ export function parseAgentMemberCard(
   }
   const row = asRecord(value);
   if (!row) return { ok: false, error: "card must be an object" };
+  const kind = typeof row.kind === "string" ? row.kind.trim() : "";
+  if (kind !== AGENT_MEMBER_CARD_KIND) {
+    return {
+      ok: false,
+      error: `card kind must be ${AGENT_MEMBER_CARD_KIND}`,
+    };
+  }
   const name = typeof row.name === "string" ? row.name.trim() : "";
   const playbook = typeof row.playbook === "string" ? row.playbook.trim() : "";
   if (!name || !playbook) {
     return { ok: false, error: "card needs name and playbook" };
+  }
+  if (playbook.length > MEMBER_PLAYBOOK_MAX) {
+    return {
+      ok: false,
+      error: `playbook exceeds ${MEMBER_PLAYBOOK_MAX} characters`,
+    };
   }
   const roleRaw = typeof row.role === "string" ? row.role : "worker";
   const brief = typeof row.brief === "string" ? row.brief.trim() : "";

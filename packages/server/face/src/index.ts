@@ -166,6 +166,8 @@ export {
 export {
   FaceAgentRosterStore,
   rosterRoot,
+  memberPackDir,
+  memberPackSkillsDir,
   seedGlobalRosterMembers,
   mergeGlobalSeedMembers,
   GLOBAL_ROSTER_ID,
@@ -229,6 +231,8 @@ export {
   subagentDescription,
   teamGraphDescription,
   teamListDescription,
+  packShareFlowHint,
+  rosterScopeVisibility,
   threadMessageDescription,
   waitAgentDescription,
   workspaceListDescription,

@@ -260,7 +260,7 @@ export function listSpawnRoleIds(): readonly AgentTeamSpawnRole[] {
 }
 
 /** Roster writes stay on the parent. Every child role loses these. */
-const ROSTER_EDIT_DENY = ["team_save", "team_import"] as const;
+const ROSTER_EDIT_DENY = ["team_save", "team_import", "team_ready"] as const;
 
 /** Tools denied for one role. Default / lead have no extra floor besides roster edits. */
 export function roleDeniedTools(

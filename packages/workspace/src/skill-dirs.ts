@@ -13,6 +13,8 @@ export interface SkillDirSourceOptions {
   readonly workspaceRoot?: string;
   readonly productDir?: string;
   readonly skillDirs?: readonly string[];
+  /** Always appended after the primary roots (干员 pack skills on children). */
+  readonly extraSkillDirs?: readonly string[];
   readonly includeUserHome?: boolean;
   readonly homeDir?: string;
 }
@@ -35,15 +37,6 @@ async function dirExists(p: string): Promise<boolean> {
 export async function resolveSkillDirs(
   options: SkillDirSourceOptions,
 ): Promise<readonly string[]> {
-  if (options.skillDirs && options.skillDirs.length > 0) {
-    const out: string[] = [];
-    for (const dir of options.skillDirs) {
-      const abs = path.resolve(dir);
-      if (await dirExists(abs)) out.push(abs);
-    }
-    return out;
-  }
-
   const out: string[] = [];
   const seen = new Set<string>();
   const push = async (abs: string) => {
@@ -54,23 +47,35 @@ export async function resolveSkillDirs(
     out.push(key);
   };
 
-  if (options.workspaceRoot) {
-    const root = path.resolve(options.workspaceRoot);
-    const includeUser = options.includeUserHome !== false;
-    if (includeUser) {
-      const home = path.resolve(options.homeDir ?? homedir());
-      for (const rel of USER_HOME_SKILL_REL_DIRS) {
-        const underProduct = resolveUnderUserProductHome(rel, options.homeDir);
-        await push(underProduct ?? path.join(home, rel));
+  if (options.skillDirs && options.skillDirs.length > 0) {
+    for (const dir of options.skillDirs) {
+      await push(path.resolve(dir));
+    }
+  } else {
+    if (options.workspaceRoot) {
+      const root = path.resolve(options.workspaceRoot);
+      const includeUser = options.includeUserHome !== false;
+      if (includeUser) {
+        const home = path.resolve(options.homeDir ?? homedir());
+        for (const rel of USER_HOME_SKILL_REL_DIRS) {
+          const underProduct = resolveUnderUserProductHome(rel, options.homeDir);
+          await push(underProduct ?? path.join(home, rel));
+        }
+      }
+      for (const rel of WORKSPACE_SKILL_REL_DIRS) {
+        await push(path.join(root, rel));
       }
     }
-    for (const rel of WORKSPACE_SKILL_REL_DIRS) {
-      await push(path.join(root, rel));
+
+    if (options.productDir) {
+      await push(path.join(path.resolve(options.productDir), "skills"));
     }
   }
 
-  if (options.productDir) {
-    await push(path.join(path.resolve(options.productDir), "skills"));
+  if (options.extraSkillDirs?.length) {
+    for (const dir of options.extraSkillDirs) {
+      await push(path.resolve(dir));
+    }
   }
 
   return out;

@@ -40,6 +40,8 @@ export interface SkillSourceOptions {
   readonly productDir?: string;
   /** Explicit skill roots (each is a skills directory). */
   readonly skillDirs?: readonly string[];
+  /** Appended after primary roots (advanced 干员 pack skills on children). */
+  readonly extraSkillDirs?: readonly string[];
   /**
    * Also scan `~/.codex|claude|agents|cursor|xrk/skills` when using workspaceRoot.
    * Default true. Tests that assert exact lists should pass false.

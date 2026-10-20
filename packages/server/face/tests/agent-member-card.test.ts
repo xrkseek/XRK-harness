@@ -24,8 +24,22 @@ describe("agent member card", () => {
     expect(formatAgentMemberCard(parsed.card)).toContain("xrk-agent-member");
   });
 
-  it("rejects empty name/playbook", () => {
-    expect(parseAgentMemberCard({ name: "", playbook: "x" }).ok).toBe(false);
+  it("rejects empty name/playbook and wrong kind", () => {
+    expect(
+      parseAgentMemberCard({
+        kind: "xrk-agent-member",
+        name: "",
+        playbook: "x",
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseAgentMemberCard({
+        kind: "xrk-agent-pack",
+        name: "X",
+        playbook: "y",
+      }).ok,
+    ).toBe(false);
+    expect(parseAgentMemberCard({ name: "X", playbook: "y" }).ok).toBe(false);
     expect(parseAgentMemberCard("not-json").ok).toBe(false);
   });
 });

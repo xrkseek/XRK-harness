@@ -1,6 +1,7 @@
 /**
- * Uncompressed ZIP (store method). No extra dependency.
+ * ZIP store (write) + store/deflate read. No extra dependency.
  */
+import { inflateRawSync } from "node:zlib";
 
 function crc32(data: Uint8Array): number {
   let c = ~0 >>> 0;
@@ -107,6 +108,58 @@ export function buildStoredZip(
   ]);
 
   return Buffer.concat([...locals, centralDir, eocd]);
+}
+
+/**
+ * Read PKZIP entries (store or deflate). Skips directories and unknown methods.
+ * Entry names are normalized with `zipEntryName` (no `..` escape).
+ */
+export function readZipEntries(buf: Buffer): Map<string, Buffer> | undefined {
+  let eocd = -1;
+  const min = Math.max(0, buf.length - 22 - 0xffff);
+  for (let i = buf.length - 22; i >= min; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return undefined;
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out = new Map<string, Buffer>();
+  for (let n = 0; n < count; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) {
+      return undefined;
+    }
+    const method = buf.readUInt16LE(p + 10);
+    const compSize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const extraLen = buf.readUInt16LE(p + 30);
+    const commentLen = buf.readUInt16LE(p + 32);
+    const localOff = buf.readUInt32LE(p + 42);
+    const rawName = buf.subarray(p + 46, p + 46 + nameLen).toString("utf8");
+    p += 46 + nameLen + extraLen + commentLen;
+    if (rawName.endsWith("/")) continue;
+    if (localOff + 30 > buf.length || buf.readUInt32LE(localOff) !== 0x04034b50) {
+      return undefined;
+    }
+    const localNameLen = buf.readUInt16LE(localOff + 26);
+    const localExtra = buf.readUInt16LE(localOff + 28);
+    const dataOff = localOff + 30 + localNameLen + localExtra;
+    if (dataOff + compSize > buf.length) return undefined;
+    const comp = buf.subarray(dataOff, dataOff + compSize);
+    let body: Buffer;
+    if (method === 0) body = Buffer.from(comp);
+    else if (method === 8) {
+      try {
+        body = inflateRawSync(comp);
+      } catch {
+        return undefined;
+      }
+    } else continue;
+    out.set(zipEntryName(rawName), body);
+  }
+  return out;
 }
 
 function u16(n: number): Buffer {

@@ -37,13 +37,36 @@ export function threadMessageDescription(input: {
   );
 }
 
+/** One-line pack share flow for tool descriptions (avoid duplicating prose). */
+export function packShareFlowHint(): string {
+  return (
+    "Share: team_import card=JSON (thin, ready) or pack=path|attachment:sha256:… " +
+    "(advanced zip/dir; ready=false). " +
+    "scope=global|workspace — global visible in every workspace; workspace = this canvas only " +
+    "(defaults: card→workspace, pack→global). " +
+    "Not-ready → team_list envPrep → prep → team_ready → subagent member_id. " +
+    "Missing id here? It may be workspace-scoped elsewhere — re-import scope=global or open that workspace. " +
+    "Never team_save an advanced id; never auto-run pack scripts; pack skills are child-only."
+  );
+}
+
+/** Short visibility note for import tool results. */
+export function rosterScopeVisibility(
+  scope: "global" | "workspace",
+  rosterWorkspaceId: string,
+): string {
+  return scope === "global"
+    ? "global — visible in every workspace team_list"
+    : `workspace — only canvas ${rosterWorkspaceId}; other workspaces will not see this id`;
+}
+
 export function teamListDescription(input: {
   readonly listOnly: boolean;
   readonly catalog: string;
 }): string {
   const head = input.listOnly
-    ? "Read-only roster (no team_save). Siblings: squad board + thread_message."
-    : "Member = name + duty + playbook (not SKILL.md). Spawn: subagent member_id. Mint: team_save / team_import (import drops appearance).";
+    ? "Read-only roster (no team_save/import/ready). Siblings: squad board + thread_message."
+    : `Member = name + duty + playbook (not SKILL.md). Mint thin: team_save. Spawn: subagent member_id. ${packShareFlowHint()}`;
   return `${head}\n${input.catalog}`;
 }
 

@@ -23,6 +23,7 @@ const FACE_SESSION_TOOLS = [
   "team_list",
   "team_save",
   "team_import",
+  "team_ready",
   "thread_delete",
   "thread_list",
   "thread_message",

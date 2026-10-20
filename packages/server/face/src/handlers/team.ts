@@ -2,6 +2,7 @@
  * Face remotes `threads/*` and `team/*`: workspace 主线, plus Agent Team as the
  * child's tools / inject / playbook roster.
  */
+import { existsSync } from "node:fs";
 import { readSessionEvents } from "@xrkseek/core-session";
 import {
   effectiveApprovalPolicy,
@@ -16,16 +17,30 @@ import {
   rootUserAuthorizationBlock,
 } from "../agent-team-roles.js";
 import {
+  formatAgentMemberCard,
+} from "../agent-member-card.js";
+import {
+  buildAgentMemberPackZip,
+  loadAgentMemberPackBytes,
+  materializeAgentMemberPack,
+  notReadyPackHints,
+  zipMemberPackDir,
+} from "../agent-member-pack.js";
+import {
+  GLOBAL_ROSTER_ID,
   memberIdProblem,
+  memberPackDir,
   catalogMemberWriteProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
   parseRosterScope,
+  type ListedRosterMember,
 } from "../agent-roster-store.js";
 import { captureSessionPlaybook } from "../capture-member-playbook.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import { permissionSelectFromEvents } from "../permissions.js";
 import { effectiveSessionAgentPreset } from "../session-agent-preset.js";
+import { rosterScopeVisibility } from "../session-tool-copy.js";
 import {
   publishSessionThread,
   publishSessionThreads,
@@ -128,6 +143,23 @@ export const threadsRemove: FaceHandler = async (runtime, _rpcId, payload) => {
   return { ok: true, value: { workspaceId, deleted: true, id } };
 };
 
+function listMemberForClient(
+  runtime: Parameters<FaceHandler>[0],
+  canvasId: string,
+  row: ListedRosterMember,
+) {
+  if (row.kind !== "advanced" || row.ready) return row;
+  const rosterWs = row.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  return {
+    ...row,
+    ...notReadyPackHints({
+      rosterWorkspaceId: rosterWs,
+      memberId: row.id,
+      productHome: runtime.agentRoster.home,
+    }),
+  };
+}
+
 export const teamList: FaceHandler = async (runtime, _rpcId, payload) => {
   const sessionId = sessionIdOf(payload);
   const missing = requireSession(runtime, sessionId);
@@ -137,7 +169,9 @@ export const teamList: FaceHandler = async (runtime, _rpcId, payload) => {
     ok: true,
     value: {
       workspaceId,
-      members: runtime.agentRoster.listVisible(workspaceId),
+      members: runtime.agentRoster
+        .listVisible(workspaceId)
+        .map((row) => listMemberForClient(runtime, workspaceId, row)),
     },
   };
 };
@@ -202,6 +236,10 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
         }
       : {}),
     ...(typeof args.id === "string" ? { id: args.id } : {}),
+    ...(args.kind === "advanced" || args.kind === "thin"
+      ? { kind: args.kind }
+      : {}),
+    ...(typeof args.ready === "boolean" ? { ready: args.ready } : {}),
   });
   if (!member) {
     return {
@@ -283,7 +321,28 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
   const member = runtime.agentRoster.get(workspaceId, memberId);
   if (!member) {
+    const home = runtime.agentRoster.findHome(memberId);
+    if (home && home.scope === "workspace" && home.rosterWorkspaceId !== workspaceId) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message:
+            `member ${memberId} is workspace-scoped on canvas ${home.rosterWorkspaceId} ` +
+            `(not visible here). Open that workspace, or re-import with scope=global.`,
+        },
+      };
+    }
     return { ok: false, error: { code: "invalid-payload", message: "unknown member id" } };
+  }
+  if (!member.ready) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: `member ${member.id} is not ready (team_ready after env prep)`,
+      },
+    };
   }
   const created = await sessionCreate(runtime, `${rpcId}-c`, {
     parentSessionId: sessionId,
@@ -328,5 +387,148 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
   return {
     ok: true,
     value: { workspaceId, memberId: member.id, childSessionId: childId },
+  };
+};
+
+function safeStem(name: string): string {
+  const stem = name
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "_")
+    .replace(/\s+/g, "-")
+    .slice(0, 48);
+  return stem || "member";
+}
+
+/** Thin → JSON card; advanced → zip of pack dir (or synthesized pack). */
+export const teamExport: FaceHandler = async (runtime, _rpcId, payload) => {
+  const sessionId = sessionIdOf(payload);
+  const missing = requireSession(runtime, sessionId);
+  if (missing) return missing;
+  const args = remoteArgs(payload);
+  const id = String(args.id ?? args.memberId ?? "").trim();
+  if (!id) {
+    return { ok: false, error: { code: "invalid-payload", message: "id required" } };
+  }
+  const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
+  const member = runtime.agentRoster.get(canvasId, id);
+  if (!member) {
+    return { ok: false, error: { code: "invalid-payload", message: "unknown member id" } };
+  }
+  const stem = safeStem(member.name);
+  if (member.kind !== "advanced") {
+    const card = formatAgentMemberCard({
+      name: member.name,
+      playbook: member.playbook,
+      role: isAgentTeamSpawnRole(member.role) ? member.role : "worker",
+      ...(member.brief ? { brief: member.brief } : {}),
+      ...(member.inject === "subagent" || member.inject === "minimal"
+        ? { inject: member.inject }
+        : {}),
+      ...(member.tools ? { tools: member.tools } : {}),
+    });
+    return {
+      ok: true,
+      value: {
+        format: "json" as const,
+        fileName: `xrk-member-${stem}.json`,
+        text: card,
+      },
+    };
+  }
+  const rosterWs = member.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  const packDir = memberPackDir(rosterWs, member.id, runtime.agentRoster.home);
+  const fromDisk = existsSync(packDir) ? zipMemberPackDir(packDir) : undefined;
+  const zipped =
+    fromDisk ??
+    buildAgentMemberPackZip({
+      name: member.name,
+      playbook: member.playbook,
+      role: isAgentTeamSpawnRole(member.role) ? member.role : "worker",
+      ...(member.brief ? { brief: member.brief } : {}),
+      ...(member.inject === "subagent" || member.inject === "minimal"
+        ? { inject: member.inject }
+        : {}),
+      ...(member.tools ? { tools: member.tools } : {}),
+    });
+  return {
+    ok: true,
+    value: {
+      format: "zip" as const,
+      fileName: `xrk-member-${stem}.zip`,
+      base64: zipped.toString("base64"),
+      ...(fromDisk
+        ? {}
+        : {
+            packIncomplete: true as const,
+            hint: "pack dir missing on disk — zip is playbook-only (no skills/env)",
+          }),
+    },
+  };
+};
+
+/** UI zip upload → advanced member (ready=false) + materialize under packs/. */
+export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
+  const sessionId = sessionIdOf(payload);
+  const missing = requireSession(runtime, sessionId);
+  if (missing) return missing;
+  const args = remoteArgs(payload);
+  // Default global; UI/tools may pass workspace for canvas-only packs.
+  const scope = parseRosterScope(args.scope ?? "global");
+  if (scope === undefined) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: 'scope must be "workspace" or "global"' },
+    };
+  }
+  const b64 = String(args.zipBase64 ?? args.base64 ?? "").trim();
+  if (!b64) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "zipBase64 required" },
+    };
+  }
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    return { ok: false, error: { code: "invalid-payload", message: "zipBase64 invalid" } };
+  }
+  if (buf.length < 4) {
+    return { ok: false, error: { code: "invalid-payload", message: "zip too small" } };
+  }
+  const loaded = loadAgentMemberPackBytes(buf);
+  if (!loaded.ok) {
+    return { ok: false, error: { code: "invalid-payload", message: loaded.error } };
+  }
+  const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
+  const rosterWs = scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  const member = runtime.agentRoster.upsertAtScope(canvasId, scope, {
+    ...loaded.pack.card,
+    kind: "advanced",
+    ready: false,
+  });
+  if (!member) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "name and playbook required" },
+    };
+  }
+  const placed = materializeAgentMemberPack(loaded.pack, {
+    rosterWorkspaceId: rosterWs,
+    memberId: member.id,
+    productHome: runtime.agentRoster.home,
+  });
+  return {
+    ok: true,
+    value: {
+      workspaceId: rosterWs,
+      scope,
+      visibility: rosterScopeVisibility(scope, rosterWs),
+      member,
+      packDir: placed.packDir,
+      skillNames: placed.skillNames,
+      ...(placed.envPrep ? { envPrep: placed.envPrep } : {}),
+      ready: false,
+    },
   };
 };

@@ -18,6 +18,7 @@ export interface InjectFingerprintOptions {
   readonly includeUserHome?: boolean;
   readonly homeDir?: string;
   readonly includeUserHomeSkills?: boolean;
+  readonly extraSkillDirs?: readonly string[];
 }
 
 async function markerFingerprint(base: string, rel: string): Promise<string> {
@@ -69,7 +70,10 @@ export async function computeInjectFingerprint(
       options.includeUserHomeSkills === true,
     ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
   });
-  parts.push(await skillDirsFingerprint(skillDirs));
+  const extra = options.extraSkillDirs?.length
+    ? await resolveSkillDirs({ skillDirs: options.extraSkillDirs })
+    : [];
+  parts.push(await skillDirsFingerprint([...skillDirs, ...extra]));
 
   return parts.join("|");
 }
