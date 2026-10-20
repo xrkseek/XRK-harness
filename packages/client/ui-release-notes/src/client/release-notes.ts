@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.8',
+    date: '2026-10-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '干员可以打包分享了：新增高级干员包 xrk-agent-pack（zip 或目录：playbook.md + 只给子会话的 skills/ + env/SETUP.md 准备说明），别人发的包直接拖进聊天即可安装。',
+        en: '干员 (Agent Team members) are now packageable and shareable: the new advanced pack kind xrk-agent-pack (zip or directory: playbook.md + child-only skills/ + env/SETUP.md prep notes) can be dragged straight into chat to install.',
+      },
+      {
+        zh: 'team_import 新增 pack= 通道，接受本机路径或 attachment:sha256:…；与薄卡 card= 互斥。scope 缺省不同：card= 落 workspace，pack= 落 global。',
+        en: 'team_import gains a pack= channel accepting a local path or attachment:sha256:…, mutually exclusive with the thin card= form. Scope defaults differ: card= lands in workspace, pack= in global.',
+      },
+      {
+        zh: '导入的高级包默认未就绪：先看 team_list 给的 envPrep，准备完再 team_ready 才放开派发。包内脚本永不自动执行，包内 skills 只进子会话目录、不污染父会话。',
+        en: 'Imported advanced packs start not-ready: follow the envPrep from team_list, then team_ready unlocks dispatch. Pack scripts never auto-run, and pack skills land only in the child catalog — the parent stays clean.',
+      },
+      {
+        zh: '名册区分 thin / advanced 两类并明确 scope 可见性：global 全工作区可见、workspace 仅当前画布。找不到某个 id 时会提示「用 scope=global 重导或去那个工作区」，不再只回一句不存在。',
+        en: 'The roster distinguishes thin from advanced and spells out scope visibility: global shows in every workspace, workspace only in the current canvas. A missing id now suggests re-importing with scope=global or opening that workspace, instead of a bare not-found.',
+      },
+      {
+        zh: '导出与导入更可诊断：thin 出 .json、advanced 出 .zip（文件名已清洗）；导入失败分成「zip 解压失败 / 不是本产品包 / JSON 结构不对」三种文案。对高级 id 调 team_save 会被拒绝。',
+        en: 'Export and import are easier to diagnose: thin exports .json, advanced .zip (sanitized names), and import failures split into unzip-failed / not-an-XRK-pack / bad-JSON-shape. team_save on an advanced id is now refused.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.8 接管 @latest。完整清单见 docs/releases/v0.6.8.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.8 now owns @latest. Full list in docs/releases/v0.6.8.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.7',
     date: '2026-10-20',
     title: {
