@@ -64,6 +64,55 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  user-select: none;
+  position: relative;
+  list-style: none;
+}
+
+.rowLongPress {
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: grabbing;
+}
+
+.rowCard.dropBefore,
+.rowCard.dropAfter {
+  position: relative;
+}
+
+.rowCard.dropBefore::before,
+.rowCard.dropAfter::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  right: 8px;
+  height: 12px;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      55deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 0 / 5px 7px no-repeat,
+    linear-gradient(
+      125deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 5px 0 / 5px 7px no-repeat,
+    linear-gradient(
+      var(--dsw-alias-state-business-primary),
+      var(--dsw-alias-state-business-primary)
+    ) 10px 3px / calc(100% - 10px) 2px no-repeat;
+}
+
+.rowCard.dropBefore::before {
+  top: -10px;
+}
+
+.rowCard.dropAfter::after {
+  bottom: -10px;
 }
 
 .rowHead {

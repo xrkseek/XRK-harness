@@ -109,6 +109,7 @@ function mountFrame() {
       byId,
       current,
       phase: 'ready',
+      subagentsByParent: {},
     } as SessionListState
     return sel(sessionState)
   }) as never
@@ -121,6 +122,8 @@ function mountFrame() {
     'sidebar.close': 'Close sidebar',
     'sidebar.dialog': 'Sidebar',
   }[key] ?? key)) as AppFrameProps['t']
+  const openSession = vi.fn()
+  const openSubagent = vi.fn()
   const element = () => (
     <AppFrame
       useStore={hookOf(instance)}
@@ -133,6 +136,8 @@ function mountFrame() {
       t={t}
       publishLayoutInsets={applyLayoutInsetsDom}
       clearLayoutInsets={clearLayoutInsetsDom}
+      openSession={openSession}
+      openSubagent={openSubagent}
     />
   )
   const utils = render(element())

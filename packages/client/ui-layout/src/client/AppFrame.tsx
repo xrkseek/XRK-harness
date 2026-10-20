@@ -46,6 +46,10 @@ import {
   type ShellShortcutId,
   type ShellShortcutOverrides,
 } from './shell-shortcuts.ts'
+import {
+  nextSubagentCycleTarget,
+  type SubagentCycleTarget,
+} from './subagent-cycle.ts'
 import type { createLayoutStore } from './stores.ts'
 import { DesktopChrome, hasDesktopChrome } from './DesktopChrome.tsx'
 import css from './AppFrame.module.css'
@@ -66,6 +70,14 @@ export interface AppFrameInjected {
   }): void
   /** Clear published insets on unmount. */
   clearLayoutInsets(): void
+  /** Select a listed / retained session (team-root hops). */
+  openSession(id: string): void
+  /** Open a healthy catalog child via its parent address. */
+  openSubagent(address: {
+    readonly parentSessionId: string
+    readonly childSessionId: string
+    readonly mode: 'one-shot' | 'continuable'
+  }): void
 }
 
 /** Full composed props: runtime share + child-slot render share + store share + locale. */
@@ -153,9 +165,16 @@ export function AppFrame({
   t,
   publishLayoutInsets,
   clearLayoutInsets,
+  openSession,
+  openSubagent,
 }: AppFrameProps) {
   const panels = useStore(s => s)
   const currentSession = useSessions(s => s.current)
+  const cycleState = useSessions((s) => ({
+    byId: s.byId,
+    subagentsByParent: s.subagentsByParent,
+    current: s.current,
+  }))
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -180,6 +199,12 @@ export function AppFrame({
   shortcutOverridesRef.current = shortcutOverrides
   const capturingIdRef = useRef(capturingId)
   capturingIdRef.current = capturingId
+  const cycleStateRef = useRef(cycleState)
+  cycleStateRef.current = cycleState
+  const openSessionRef = useRef(openSession)
+  openSessionRef.current = openSession
+  const openSubagentRef = useRef(openSubagent)
+  openSubagentRef.current = openSubagent
   // Details open/closed for toggleDetails dispatch (updated after column solve).
   const detailsCollapsedRef = useRef(true)
 
@@ -199,23 +224,43 @@ export function AppFrame({
     saveShortcutOverrides(next)
   }, [])
 
-  const runShellAction = useCallback((id: ShellShortcutId) => {
+  const applyCycleTarget = useCallback((target: SubagentCycleTarget) => {
+    if (target.kind === 'session') {
+      openSessionRef.current(target.id)
+      return
+    }
+    openSubagentRef.current(target.address)
+  }, [])
+
+  /** @returns false when the chord matched but must not be swallowed (no siblings). */
+  const runShellAction = useCallback((id: ShellShortcutId): boolean => {
     if (id === 'keybinds.openPanel') {
       setShortcutsOpen(true)
       setShortcutsFilter('')
       setCapturingId(null)
       setConflictHint(null)
-      return
+      return true
     }
     if (id === 'layout.toggleSidebar') {
       actions.toggleSidebar()
-      return
+      return true
     }
     if (id === 'layout.toggleDetails') {
       if (detailsCollapsedRef.current) actions.openDetails()
       else actions.closeDetails()
+      return true
     }
-  }, [actions])
+    if (id === 'layout.prevSubagent' || id === 'layout.nextSubagent') {
+      const target = nextSubagentCycleTarget(
+        cycleStateRef.current,
+        id === 'layout.nextSubagent' ? 1 : -1,
+      )
+      if (target === undefined) return false
+      applyCycleTarget(target)
+      return true
+    }
+    return true
+  }, [actions, applyCycleTarget])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -255,8 +300,9 @@ export function AppFrame({
       if (id === null) return
       // Composer Enter/newline stay with the editor; shell only lists them.
       if (id === 'composer.submit' || id === 'composer.newline') return
+      // No subagent siblings → leave the key for the focused control.
+      if (!runShellAction(id)) return
       e.preventDefault()
-      runShellAction(id)
     }
     // Capture phase so rebind Escape beats Modal's bubble Escape → close.
     window.addEventListener('keydown', onKey, true)

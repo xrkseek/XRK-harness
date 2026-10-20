@@ -410,6 +410,30 @@ export function TeamRoster({
     }
   }
 
+  const importMemberFromFile = (file: File) => {
+    if (sessionId === undefined) return
+    void file.text().then((text) => {
+      const card = parseMemberImport(text)
+      if (!card) {
+        setError(t('team.importBad'))
+        return
+      }
+      void run(async () => {
+        const saved = await upsertTeamMember(sessionId, {
+          name: card.name,
+          playbook: card.playbook,
+          role: card.role,
+          scope,
+          ...(card.brief ? { brief: card.brief } : {}),
+          ...(card.inject ? { inject: card.inject } : {}),
+          ...(card.tools ? { tools: card.tools } : {}),
+        })
+        setSelectedId(saved.id)
+        setExportHint(t('team.importOk'))
+      })
+    })
+  }
+
   const persistMember = () => {
     if (sessionId === undefined || busy || name.trim() === '' || playbook.trim() === '' || selectedId === null) return
     if (catalogSeed) return
@@ -579,6 +603,17 @@ export function TeamRoster({
             </aside>
 
             <div className={css.pane}>
+              <input
+                ref={importRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) importMemberFromFile(file)
+                }}
+              />
               {selectedId === null ? (
                 <div className={css.editorEmpty}>
                   <p>{t('team.editorEmpty')}</p>
@@ -597,37 +632,6 @@ export function TeamRoster({
                     >
                       {t('team.import')}
                     </Button>
-                    <input
-                      ref={importRef}
-                      type="file"
-                      accept="application/json,.json"
-                      hidden
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        e.target.value = ''
-                        if (!file || sessionId === undefined) return
-                        void file.text().then((text) => {
-                          const card = parseMemberImport(text)
-                          if (!card) {
-                            setError(t('team.importBad'))
-                            return
-                          }
-                          void run(async () => {
-                            const saved = await upsertTeamMember(sessionId, {
-                              name: card.name,
-                              playbook: card.playbook,
-                              role: card.role,
-                              scope: 'workspace',
-                              ...(card.brief ? { brief: card.brief } : {}),
-                              ...(card.inject ? { inject: card.inject } : {}),
-                              ...(card.tools ? { tools: card.tools } : {}),
-                            })
-                            setSelectedId(saved.id)
-                            setExportHint(t('team.importOk'))
-                          })
-                        })
-                      }}
-                    />
                   </div>
                 </div>
               ) : (
@@ -927,6 +931,15 @@ export function TeamRoster({
                         {saveLabel}
                       </Button>
                     )}
+                    {isDraftMemberId(selectedId) ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => { importRef.current?.click() }}
+                      >
+                        {t('team.import')}
+                      </Button>
+                    ) : null}
                     {selected !== undefined && !isDraftMemberId(selectedId) ? (
                       <Button
                         variant="outline"

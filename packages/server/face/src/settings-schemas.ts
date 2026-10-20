@@ -153,6 +153,12 @@ const PiAiProvider = Schema.object({
 
 const PiAiConfig = Schema.object({
   providers: Schema.dict(PiAiProvider),
+  /**
+   * Settings → Models list order (`llm.providers` ids, including brands like
+   * `deepseek-official` that are not under `providers.*`). Unknown ids ignored;
+   * missing ids append in discovery order.
+   */
+  providerOrder: Schema.array(Schema.string()),
 });
 
 const AgentDefaultModelConfig = Schema.object({

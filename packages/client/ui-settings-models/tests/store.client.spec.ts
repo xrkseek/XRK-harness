@@ -1,7 +1,12 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '@xrkseek/xrk-api-remotes/client'
-import { messageOf, ModelsSettingsStore } from '../src/client/store.ts'
+import {
+  insertProviderBefore,
+  messageOf,
+  ModelsSettingsStore,
+} from '../src/client/store.ts'
+import { providerReorderAnchor } from '../src/client/ProviderReorderRow.tsx'
 
 let nextRpc = 0
 function ok<T>(value: T): RpcResponse<T> {
@@ -300,6 +305,47 @@ describe('edge joins', () => {
     await first
     // The stale empty directory never overwrote the newer join.
     expect(store.store.getSnapshot().rows).toHaveLength(4)
+  })
+})
+
+describe('insertProviderBefore / providerReorderAnchor', () => {
+  it('moves an id before an anchor and skips no-ops', () => {
+    expect(insertProviderBefore(['a', 'b', 'c'], 'c', 'a')).toEqual(['c', 'a', 'b'])
+    expect(insertProviderBefore(['a', 'b', 'c'], 'a', 'b')).toEqual(['a', 'b', 'c'])
+    expect(insertProviderBefore(['a', 'b', 'c'], 'a')).toEqual(['b', 'c', 'a'])
+  })
+
+  it('maps drop half to insert-before anchors', () => {
+    expect(providerReorderAnchor(['a', 'b', 'c'], 'c', 'a', 'before')).toBe('a')
+    expect(providerReorderAnchor(['a', 'b', 'c'], 'a', 'b', 'after')).toBe('c')
+    expect(providerReorderAnchor(['a', 'b', 'c'], 'a', 'c', 'after')).toBeUndefined()
+    expect(providerReorderAnchor(['a', 'b', 'c'], 'b', 'a', 'after')).toBeNull()
+  })
+})
+
+describe('ModelsSettingsStore.reorderProviders', () => {
+  it('writes llm-pi-ai.providerOrder and keeps optimistic order until reload', async () => {
+    const mutates: unknown[] = []
+    const { face } = api({
+      mutate: (payload) => {
+        mutates.push(payload)
+        return Promise.resolve(ok({}))
+      },
+    })
+    const store = new ModelsSettingsStore(face)
+    await store.load()
+    const before = store.store.getSnapshot().rows
+      .filter(row => row.configured)
+      .map(row => row.entry.provider)
+    expect(before[0]).toBe('deepseek-official')
+
+    const failure = await store.reorderProviders('openai', 'deepseek-official')
+    expect(failure).toBeUndefined()
+    expect(mutates).toContainEqual({
+      ns: 'llm-pi-ai',
+      expectedRevision: 0,
+      ops: [{ op: 'set', path: ['providerOrder'], value: ['openai', 'deepseek-official'] }],
+    })
   })
 })
 

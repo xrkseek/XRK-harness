@@ -13,7 +13,9 @@ import { pinSessionAgentPreset } from "../session-agent-preset.js";
 import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
   listDeclaredPiAiProviders,
+  orderProvidersByPreference,
   readProviderApiKey,
+  readProviderOrder,
   readProviderRoute,
   resolveProviderBinding,
 } from "../llm-provider-context.js";
@@ -210,7 +212,15 @@ export const llmProviders: FaceHandler = async (runtime) => {
       ...(error !== undefined ? { error } : {}),
     });
   }
-  return { ok: true, value: { providers } };
+  return {
+    ok: true,
+    value: {
+      providers: orderProvidersByPreference(
+        providers,
+        readProviderOrder(runtime),
+      ),
+    },
+  };
 };
 
 export const llmModels: FaceHandler = async (runtime) => {

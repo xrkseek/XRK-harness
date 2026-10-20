@@ -24,6 +24,12 @@ import { CommandDirectory } from './directory.ts'
 import { PopupSelectController } from './popup.ts'
 import type { TokenSegment } from './popup.ts'
 import { localizeHostCommandDescription } from './host-description.ts'
+import {
+  frecencyScore,
+  loadCommandFrecency,
+  recordCommandUse,
+  type CommandFrecencyDoc,
+} from './command-frecency.ts'
 import type { TranslateNS } from '@xrkseek/client-locale/client'
 
 declare module '@xrkseek/cordis' {
@@ -61,6 +67,7 @@ interface RankedCandidate {
   readonly index: number
   readonly prefix: boolean
   readonly score: number
+  readonly frecency: number
 }
 
 /** Extra weight for command-name starts and separator boundaries. */
@@ -103,18 +110,42 @@ function fuzzyScore(name: string, query: string): number | undefined {
   return best === noMatch ? undefined : best
 }
 
-/** Case-insensitive fuzzy filtering with stable ordering for equal matches. */
-function fuzzyCandidates(candidates: readonly InputTriggerCandidate[], rawQuery: string): readonly InputTriggerCandidate[] {
+/** Case-insensitive fuzzy filtering; frecency breaks ties / ranks empty query. */
+function fuzzyCandidates(
+  candidates: readonly InputTriggerCandidate[],
+  rawQuery: string,
+  frecency: CommandFrecencyDoc,
+): readonly InputTriggerCandidate[] {
   const query = rawQuery.toLowerCase()
-  if (query === '') return candidates
+  if (query === '') {
+    const ranked = candidates.map((candidate, index) => ({
+      candidate,
+      index,
+      frecency: frecencyScore(candidate.name, frecency),
+    }))
+    ranked.sort((left, right) =>
+      right.frecency - left.frecency || left.index - right.index)
+    return ranked.map(match => match.candidate)
+  }
   const ranked: RankedCandidate[] = []
   candidates.forEach((candidate, index) => {
     const name = candidate.name.toLowerCase()
     const score = fuzzyScore(name, query)
-    if (score !== undefined) ranked.push({ candidate, index, prefix: name.startsWith(query), score })
+    if (score !== undefined) {
+      ranked.push({
+        candidate,
+        index,
+        prefix: name.startsWith(query),
+        score,
+        frecency: frecencyScore(candidate.name, frecency),
+      })
+    }
   })
   ranked.sort((left, right) =>
-    Number(right.prefix) - Number(left.prefix) || right.score - left.score || left.index - right.index)
+    Number(right.prefix) - Number(left.prefix)
+    || right.score - left.score
+    || right.frecency - left.frecency
+    || left.index - right.index)
   return ranked.map(match => match.candidate)
 }
 
@@ -274,6 +305,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     return fuzzyCandidates(
       rows.filter(c => req.position === 'leading' || c.hint === undefined),
       req.query,
+      loadCommandFrecency(),
     )
   }
 
@@ -287,6 +319,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const name = pick.candidate.name
     const contribution = this.live.contributions.get(name)
     if (contribution !== undefined && contribution.available(pick.session)) {
+      recordCommandUse(name)
       this.invokeUi(name, contribution.ui, pick.session, { via: 'menu', span: pick.span })
       return 'handled'
     }
@@ -297,6 +330,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     // manufactures one, and never touches the argument claim below.
     const decoration = this.live.decorations.get(name)
     if (decoration !== undefined && decoration.available(pick.session)) {
+      recordCommandUse(name)
       this.invokeUi(name, decoration.ui, pick.session, { via: 'menu', span: pick.span })
       return 'handled'
     }
@@ -451,6 +485,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * the composer notice as immediate feedback.
    */
   private runDetached(desc: CommandDescriptor, session: ClientSessionContext, line: string): void {
+    recordCommandUse(desc.name)
     void this.execute(session, line).then(
       (outcome) => {
         // matched:false maps to an error outcome with no logged lifecycle.

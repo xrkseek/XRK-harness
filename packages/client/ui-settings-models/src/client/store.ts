@@ -23,6 +23,26 @@ const PROBE_ROUTE = '\u0000probe'
 /** Settings namespace for the fleet default New Session falls back to. */
 export const AGENT_DEFAULT_MODEL_NS = 'agent-default-model'
 
+/** Settings namespace that owns Models list order (`providerOrder`). */
+export const LLM_PI_AI_NS = 'llm-pi-ai'
+
+/**
+ * Move one provider id before an optional anchor (DOM-insertBefore semantics).
+ * No-op when ids are unknown or the move would not change order.
+ */
+export function insertProviderBefore(
+  ids: readonly string[],
+  id: string,
+  beforeId?: string,
+): string[] {
+  if (!ids.includes(id) || (beforeId !== undefined && !ids.includes(beforeId)) || beforeId === id) {
+    return [...ids]
+  }
+  const without = ids.filter(candidate => candidate !== id)
+  const at = beforeId === undefined ? without.length : without.indexOf(beforeId)
+  return [...without.slice(0, at), id, ...without.slice(at)]
+}
+
 /** One selectable default-model row (`provider/model`). */
 export interface DefaultModelOption {
   readonly value: string
@@ -326,6 +346,53 @@ export class ModelsSettingsStore {
       })
       if (!response.result.ok) return response.result.error.message
     } catch (error) {
+      return messageOf(error)
+    }
+    await this.load()
+    return undefined
+  }
+
+  /**
+   * Persist Settings → Models row order (`llm-pi-ai.providerOrder`) after a
+   * long-press reorder. Optimistic local splice; reloads on failure.
+   * @param providerId - moved provider route id.
+   * @param beforeProviderId - insert-before anchor; omit to append.
+   * @returns failure text, or undefined on success.
+   */
+  async reorderProviders(
+    providerId: string,
+    beforeProviderId?: string,
+  ): Promise<string | undefined> {
+    const snap = this.store.getSnapshot()
+    const configuredIds = snap.rows
+      .filter(row => row.configured)
+      .map(row => row.entry.provider)
+    const nextIds = insertProviderBefore(configuredIds, providerId, beforeProviderId)
+    if (nextIds.join('\0') === configuredIds.join('\0')) return undefined
+
+    const byId = new Map(snap.rows.map(row => [row.entry.provider, row]))
+    const nextConfigured = nextIds.flatMap(id => {
+      const row = byId.get(id)
+      return row === undefined ? [] : [row]
+    })
+    const rest = snap.rows.filter(row => !row.configured)
+    this.store.update((s) => {
+      s.rows = [...nextConfigured, ...rest]
+    })
+
+    const piAi = snap.namespaces.get(LLM_PI_AI_NS)
+    try {
+      const response = await this.api.settings.mutate({
+        ns: LLM_PI_AI_NS,
+        ...(piAi !== undefined ? { expectedRevision: piAi.revision } : {}),
+        ops: [{ op: 'set', path: ['providerOrder'], value: nextIds }],
+      })
+      if (!response.result.ok) {
+        await this.load()
+        return response.result.error.message
+      }
+    } catch (error) {
+      await this.load()
       return messageOf(error)
     }
     await this.load()

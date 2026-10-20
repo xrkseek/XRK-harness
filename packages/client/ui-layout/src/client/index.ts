@@ -7,7 +7,7 @@
  * with the runtime sessions service. A second effect seats the theme
  * presenter, which projects ctx.theme snapshots onto document.body.
  */
-import type { ClientContext } from '@xrkseek/client-runtime/client'
+import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-theme/client'
 import type { PanelActions } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
@@ -160,6 +160,18 @@ export function apply(ctx: ClientContext): void {
         return {
           publishLayoutInsets: (insets: LayoutInsets) => { layout.publishInsets(insets) },
           clearLayoutInsets: () => { layout.clearInsets() },
+          openSession: (id: string) => { ctx.sessions.open(id as SessionId) },
+          openSubagent: (address: {
+            readonly parentSessionId: string
+            readonly childSessionId: string
+            readonly mode: 'one-shot' | 'continuable'
+          }) => {
+            ctx.sessions.openSubagent({
+              parentSessionId: address.parentSessionId as SessionId,
+              childSessionId: address.childSessionId as SessionId,
+              mode: address.mode,
+            })
+          },
         }
       },
     }, AppFrame)

@@ -118,6 +118,7 @@ export const en = {
   defaultModelHint: 'Used when New Session has nothing to inherit; otherwise New Session copies the current session’s model.',
   resetDefaultModel: 'Restore composition default',
   defaultModelSaveFailed: 'Could not save the default model',
+  reorderHint: 'Press and hold a provider, then drag to reorder the list.',
 }
 
 /** The settings.models namespace key union. */
@@ -239,4 +240,5 @@ export const zh: { [Key in keyof typeof en]: string } = {
   defaultModelHint: '新建会话无可继承会话时使用；否则复制当前会话的模型。',
   resetDefaultModel: '恢复组合默认',
   defaultModelSaveFailed: '无法保存默认模型',
+  reorderHint: '长按提供方后拖动，可调整列表顺序。',
 }

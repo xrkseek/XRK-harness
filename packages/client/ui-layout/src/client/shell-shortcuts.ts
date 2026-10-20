@@ -14,6 +14,8 @@ export type ShellShortcutId =
   | 'composer.newline'
   | 'layout.toggleSidebar'
   | 'layout.toggleDetails'
+  | 'layout.prevSubagent'
+  | 'layout.nextSubagent'
 
 /** One shipped shortcut definition. */
 export interface ShellShortcutDef {
@@ -31,6 +33,8 @@ export interface ShellShortcutDef {
     | 'shortcuts.newLine'
     | 'shortcuts.toggleSidebar'
     | 'shortcuts.toggleDetails'
+    | 'shortcuts.prevSubagent'
+    | 'shortcuts.nextSubagent'
 }
 
 /** Shipped catalog (order = panel order). */
@@ -69,6 +73,20 @@ export const SHELL_SHORTCUT_DEFS: readonly ShellShortcutDef[] = [
     fixed: false,
     categoryKey: 'shortcuts.cat.panels',
     labelKey: 'shortcuts.toggleDetails',
+  },
+  {
+    id: 'layout.prevSubagent',
+    defaultCombo: 'alt+left',
+    fixed: false,
+    categoryKey: 'shortcuts.cat.panels',
+    labelKey: 'shortcuts.prevSubagent',
+  },
+  {
+    id: 'layout.nextSubagent',
+    defaultCombo: 'alt+right',
+    fixed: false,
+    categoryKey: 'shortcuts.cat.panels',
+    labelKey: 'shortcuts.nextSubagent',
   },
 ]
 
@@ -150,6 +168,22 @@ export function formatCombo(combo: string, apple = isApplePlatform()): string {
       labels.push('Space')
       continue
     }
+    if (part === 'left') {
+      labels.push('←')
+      continue
+    }
+    if (part === 'right') {
+      labels.push('→')
+      continue
+    }
+    if (part === 'up') {
+      labels.push('↑')
+      continue
+    }
+    if (part === 'down') {
+      labels.push('↓')
+      continue
+    }
     if (part.length === 1) {
       labels.push(part.toUpperCase())
       continue
@@ -170,6 +204,10 @@ export function comboFromEvent(event: KeyboardEvent, apple = isApplePlatform()):
   else if (event.key === 'Escape') base = 'escape'
   else if (event.key === ' ') base = 'space'
   else if (event.key === 'Tab') base = 'tab'
+  else if (event.key === 'ArrowLeft') base = 'left'
+  else if (event.key === 'ArrowRight') base = 'right'
+  else if (event.key === 'ArrowUp') base = 'up'
+  else if (event.key === 'ArrowDown') base = 'down'
   else if (event.key.length === 1) base = event.key.toLowerCase()
   else if (event.code.startsWith('Key')) base = event.code.slice(3).toLowerCase()
   else if (event.code.startsWith('Digit')) base = event.code.slice(5)

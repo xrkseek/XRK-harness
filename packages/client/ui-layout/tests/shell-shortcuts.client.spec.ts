@@ -94,6 +94,17 @@ describe('shell-shortcuts', () => {
     expect(comboFromEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true }), false)).toBe('shift+enter')
   })
 
+  it('parses alt+arrow chords for subagent cycle', () => {
+    const left = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true })
+    const right = new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true })
+    expect(comboFromEvent(left, false)).toBe('alt+left')
+    expect(comboFromEvent(right, false)).toBe('alt+right')
+    expect(matchShortcutEvent(left, {}, false)).toBe('layout.prevSubagent')
+    expect(matchShortcutEvent(right, {}, false)).toBe('layout.nextSubagent')
+    expect(formatCombo('alt+left', false)).toBe('Alt+←')
+    expect(formatCombo('alt+right', true)).toBe('⌥+→')
+  })
+
   it('tolerates corrupt storage', () => {
     const storage = memoryStorage({ [SHELL_SHORTCUTS_STORAGE_KEY]: '{not-json' })
     expect(loadShortcutOverrides(storage)).toEqual({})

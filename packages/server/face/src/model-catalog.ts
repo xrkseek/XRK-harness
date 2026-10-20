@@ -8,10 +8,13 @@ import { DEFAULT_DEEPSEEK_MODELS } from "./settings-schemas.js";
 import { mergeLayers, persistSettingsDocument } from "./settings-document.js";
 import { lastRequestHeaderSelection } from "./adapt/model-route.js";
 import {
+  catalogGroupIdFromProviderOrderEntry,
   listDeclaredPiAiProviders,
+  orderProvidersByPreference,
   piAiProviderProfile,
   providerHasUsableCredential,
   providerRouteServed,
+  readProviderOrder,
   resolveProviderBinding,
 } from "./llm-provider-context.js";
 
@@ -340,7 +343,15 @@ export function buildFaceModelCatalog(
       models,
     });
   }
-  return { groups, failures: [] };
+  // Same Settings → Models long-press order (`llm-pi-ai.providerOrder`).
+  const preferred = readProviderOrder(runtime)?.map(
+    catalogGroupIdFromProviderOrderEntry,
+  );
+  const ordered = orderProvidersByPreference(
+    groups.map((group) => ({ provider: group.id, group })),
+    preferred,
+  ).map((row) => row.group);
+  return { groups: ordered, failures: [] };
 }
 
 /** Look up catalog contextWindow for a selection (Face contextPressure denominator). */

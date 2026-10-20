@@ -1417,6 +1417,54 @@ describe("Face credentials U2", () => {
     expect((row as { error?: string }).error).toBeUndefined();
   });
 
+  it("llm.providers and llm.models honor llm-pi-ai.providerOrder", async () => {
+    const rt = runtime({ bootstrapApiKey: "" });
+    const mutate = await dispatchFaceMethod(rt, "settings.mutate", "po0", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "zeta"],
+          value: {
+            api: "openai-chat",
+            baseURL: "https://zeta.example/v1",
+            displayName: "Zeta",
+            models: [{ id: "z1" }],
+          },
+        },
+        {
+          op: "set",
+          path: ["providerOrder"],
+          value: ["zeta", "deepseek-official", "ollama"],
+        },
+      ],
+    });
+    expect(mutate.result.ok).toBe(true);
+    if (!mutate.result.ok) {
+      expect.fail(mutate.result.error.message);
+    }
+    const listed = await dispatchFaceMethod(rt, "llm.providers", "po1", {});
+    expect(listed.result.ok).toBe(true);
+    if (!listed.result.ok) return;
+    const ids = (
+      listed.result.value as { providers: { provider: string }[] }
+    ).providers.map((p) => p.provider);
+    expect(ids.indexOf("zeta")).toBeLessThan(ids.indexOf("deepseek-official"));
+    expect(ids.indexOf("deepseek-official")).toBeLessThan(ids.indexOf("ollama"));
+
+    const catalog = await dispatchFaceMethod(rt, "llm.models", "po2", {});
+    expect(catalog.result.ok).toBe(true);
+    if (!catalog.result.ok) return;
+    const groupIds = (
+      catalog.result.value as { groups: { id: string }[] }
+    ).groups.map((g) => g.id);
+    // Catalog uses brand id `deepseek` (Settings row is `deepseek-official`).
+    expect(groupIds.indexOf("zeta")).toBeLessThan(groupIds.indexOf("deepseek"));
+    if (groupIds.includes("ollama")) {
+      expect(groupIds.indexOf("deepseek")).toBeLessThan(groupIds.indexOf("ollama"));
+    }
+  });
+
   it("llm.providers keeps a broken declared route with a diagnostic error", async () => {
     const rt = runtime({ bootstrapApiKey: "" });
     const mutate = await dispatchFaceMethod(rt, "settings.mutate", "c-broken", {

@@ -243,6 +243,59 @@ export function listSettingsProviderCredentialRefs(
 }
 
 /**
+ * User preference for Settings → Models row order (`llm-pi-ai.providerOrder`).
+ * Empty / absent → discovery order from {@link listDeclaredPiAiProviders} + brands.
+ * Same list also orders composer `llm.models` groups (after
+ * {@link catalogGroupIdFromProviderOrderEntry}).
+ */
+export function readProviderOrder(
+  runtime: FaceRuntime,
+): readonly string[] | undefined {
+  const raw = mergedNamespace(runtime, "llm-pi-ai").providerOrder;
+  if (!Array.isArray(raw)) return undefined;
+  const out: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const id = entry.trim();
+    if (id) out.push(id);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Map a Settings `llm.providers` id onto an `llm.models` group id.
+ * DeepSeek's directory row is `deepseek-official`; the catalog group stays `deepseek`.
+ */
+export function catalogGroupIdFromProviderOrderEntry(id: string): string {
+  return id === "deepseek-official" ? "deepseek" : id;
+}
+
+/**
+ * Stable-sort providers by a preferred id list; unknown preference ids are
+ * skipped, and items missing from the preference keep relative discovery order
+ * at the end.
+ */
+export function orderProvidersByPreference<T extends { readonly provider: string }>(
+  providers: readonly T[],
+  order: readonly string[] | undefined,
+): T[] {
+  if (order === undefined || order.length === 0) return [...providers];
+  const byId = new Map(providers.map((row) => [row.provider, row]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    const hit = byId.get(id);
+    if (hit === undefined || seen.has(id)) continue;
+    out.push(hit);
+    seen.add(id);
+  }
+  for (const row of providers) {
+    if (!seen.has(row.provider)) out.push(row);
+  }
+  return out;
+}
+
+/**
  * Settings-only routes (Custom provider card). Excludes Registry brands.
  */
 export function listDeclaredPiAiProviders(

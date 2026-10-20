@@ -19,6 +19,11 @@ import { Button, IconPlusOutline16, Modal } from '@xrkseek/client-ui-primitives'
 import type { SnapshotSelectorHook } from '@xrkseek/client-web-react'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
 import {
+  ProviderReorderRow,
+  providerReorderAnchor,
+  type ProviderDropHalf,
+} from './ProviderReorderRow.tsx'
+import {
   defaultModelRoute,
   deriveKeyRef,
   messageOf,
@@ -194,6 +199,10 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
   const [defaultModelBusy, setDefaultModelBusy] = useState(false)
   const [defaultModelError, setDefaultModelError] = useState<string | undefined>(undefined)
+  const [providerDrag, setProviderDrag] = useState<{
+    providerId: string
+    over: { id: string; half: ProviderDropHalf } | null
+  } | null>(null)
 
   const announceSaved = (target: ProviderIdentity): void => {
     // Announced only once the refreshed directory is in the snapshot the
@@ -272,6 +281,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   // step: whether the user already has a provider to talk to.
   const anyUsable = state.rows.some(providerUsable)
   const configured = state.rows.filter(row => row.configured)
+  const configuredIds = configured.map(row => row.entry.provider)
   const addable = state.rows.filter(row => !row.configured && row.entry.settingsNs !== '')
   const addTarget = adding ? editing : undefined
   const addNamespace = addTarget === undefined ? undefined : state.namespaces.get(addTarget.settingsNs)
@@ -280,10 +290,27 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   // there is nothing to declare and the entry point stays disabled.
   const protocols = protocolChoices(state.namespaces.get('llm-pi-ai'))
 
+  const commitProviderDrag = (): void => {
+    const active = providerDrag
+    setProviderDrag(null)
+    if (active === null || active.over === null || !state.writable) return
+    const beforeId = providerReorderAnchor(
+      configuredIds,
+      active.providerId,
+      active.over.id,
+      active.over.half,
+    )
+    if (beforeId === null) return
+    void controller.reorderProviders(active.providerId, beforeId)
+  }
+
   return (
     <div className={styles['section']}>
       <h2 className={styles['title']}>{t('title')}</h2>
       <p className={styles['intro']}>{t('intro')}</p>
+      {state.writable && configured.length > 1
+        ? <p className={styles['intro']}>{t('reorderHint')}</p>
+        : null}
       {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
       {savedIdentity === undefined
         ? null
@@ -389,8 +416,36 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
           const credentialMissing = !credentialConfigured
             && row.apiKeyEnv !== undefined
             && row.credential?.configured === false
+          const canReorder = state.writable && !open && configured.length > 1
+          const dropHalf = providerDrag !== null
+            && providerDrag.providerId !== row.entry.provider
+            && providerDrag.over?.id === row.entry.provider
+            ? providerDrag.over.half
+            : null
           return (
-            <li key={row.entry.provider} className={styles['rowCard']}>
+            <ProviderReorderRow
+              key={row.entry.provider}
+              providerId={row.entry.provider}
+              dragging={providerDrag?.providerId === row.entry.provider}
+              dropHalf={dropHalf}
+              {...(canReorder
+                ? {
+                  drag: {
+                    start: () => {
+                      setProviderDrag({ providerId: row.entry.provider, over: null })
+                    },
+                    hover: (overId, half) => {
+                      setProviderDrag(prev => (
+                        prev === null
+                          ? prev
+                          : { ...prev, over: { id: overId, half } }
+                      ))
+                    },
+                    end: commitProviderDrag,
+                  },
+                }
+                : {})}
+            >
               <div className={styles['rowHead']}>
                 <span className={styles['rowIdentity']}>
                   <span className={styles['rowName']}>{row.entry.displayName}</span>
@@ -468,7 +523,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                   onClose: (changed) => { closeEditor(changed, target) },
                 })
                 : null}
-            </li>
+            </ProviderReorderRow>
           )
         })}
       </ul>
