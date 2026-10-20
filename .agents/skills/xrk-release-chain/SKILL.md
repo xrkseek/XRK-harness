@@ -21,11 +21,7 @@ description: >-
 
 ## Procedure
 
-### 0. 流水线顺序：先 push，最后才 release
 
-顺序是硬的：**检查更新 → 分批 commit → `pnpm check` → push → 根依赖 → release →
-打包桌面包 → 校验**。桌面包排在 release 之后（版本号先定下来），且它从工作树构建，
-所以 commit 必须更早落地。
 
 **push 必须先于 `pnpm release`**。`gh release create` 在 tag 不存在时，是拿**远端默认分支的 HEAD**
 建 tag，不是你本地的工作区。本地没 push 的 commit 一个都进不去 —— 而 npm tarball 是从本地
