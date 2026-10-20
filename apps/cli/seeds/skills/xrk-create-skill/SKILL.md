@@ -3,7 +3,8 @@ name: xrk-create-skill
 description: >-
   Author an XRK product skill (SKILL.md + frontmatter) that teaches the agent a
   repeatable workflow. Use when the user says 「写 skill」「create skill」
-  「教 agent」「自我升级」「加一条习惯」.
+  「教 agent」「自我升级」「加一条习惯」. Not for 干员/Agent Team packs
+  (→ xrk-delegate) or Xiangyang orch routing (→ xrk-demand-translate).
 ---
 
 # Create skill
@@ -11,8 +12,10 @@ description: >-
 结构同 Cursor Agent Skill：`skill-name/SKILL.md` + YAML frontmatter。  
 目标：**改模型决策**，不是写说明书。差 skill = 模糊触发 + 堆事实 + 无检查清单。
 
+**边界：** skill = 决策习惯 / checklist。干员（thin JSON 或高级 zip pack + `workspace/`）→ **`xrk-delegate`**。向阳「帮我弄一下」总控 → **`xrk-demand-translate`**。
+
 ```
-- [ ] 1. 定范围：跨项目习惯 vs 仅本仓库
+- [ ] 1. 定范围：跨项目习惯 vs 仅本仓库（勿写进向阳 orch 种子名）
 - [ ] 2. 写 description：WHAT + WHEN + 用户原话触发语（中英均可）
 - [ ] 3. 正文：checklist → 何时用/不用 → 工具与约束 → 反模式
 - [ ] 4. 落盘后提示用户新 turn，或 `skill.list` 确认可见
@@ -25,6 +28,7 @@ description: >-
 | 仅本仓库 / 用户自建（推荐） | `{workspace}/.agents/skills/<name>/` 或 `.xrk/skills/`（用户明确同意再建） |
 | 产品默认种子（勿手改） | `~/.xrk/skills/<bundled-name>/` — Host 按指纹镜像覆盖 |
 | 跨项目习惯（非种子名） | 也可 `~/.xrk/skills/<custom-name>/`（不会被 bundled 列表覆盖） |
+| 向阳编排（产品维护） | `xiangyang-workspace/.xrk/skills/` — 勿把项目 skill 塞这里抢路由 |
 
 Host 启动把产品种子镜像到 `~/.xrk/skills/`：指纹与 bundled 不一致（或缺文件）→ 覆盖写入。  
 **自定义 skill / AGENTS / SOUL 写工作区** `.agents/skills/` · `.agents/AGENTS.md` · `.agents/SOUL.md`（或 `.xrk/`）。  

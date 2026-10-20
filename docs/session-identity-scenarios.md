@@ -34,7 +34,7 @@
 
 ```
 badge: qichuang
-tool_surface: qichuang (full-access · team+list/create/session_prompt+thread · no nested subagents)
+tool_surface: qichuang (full-access · settings+team_*+list/create/session_prompt+thread · no nested subagents)
 surface_brief: kind=orchestrator · surface=qichuang · path=open (fs incl. grep/glob) — verbs in <session_posture>.
 ```
 
@@ -42,7 +42,8 @@ surface_brief: kind=orchestrator · surface=qichuang · path=open (fs incl. grep
 
 ```
 kind=orchestrator (Qichuang) · path=open · shell_confine=off
-Vague → skill xrk-demand-translate. Care: …
+Vague → skill xrk-demand-translate. Care: xrk-home-config · …
+Config parity: settings_* (=Settings UI) · team_* (=Team UI; skill xrk-delegate) · habits → xrk-create-skill.
 Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.
 No nested subagent. Implement on coding peers only.
 ```
