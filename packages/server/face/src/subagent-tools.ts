@@ -94,6 +94,13 @@ import {
   isAgentTeamRole,
   type AgentTeamEdgeKind,
 } from "./agent-team-graph.js";
+import {
+  formatMemberPackInventoryLines,
+  listMemberPackInventory,
+  resolveMemberPackHome,
+  resolveMemberPackMaterialsDir,
+} from "./agent-member-pack.js";
+import { GLOBAL_ROSTER_ID } from "./agent-roster-store.js";
 import { bindRalphTool } from "./ralph-tool.js";
 import {
   raceDrainRunSlice,
@@ -444,7 +451,9 @@ function createSubagentTool(
     "Set run_in_background false only when the user asked for a one-shot wait (10 min salvage on expiry). " +
     "Pin provider/model on this call when the child should not inherit the parent route. " +
     "Child identity is the Face spawn preamble — do not send it to AGENTS.md. " +
-    "Prefer member_id from team_list (thin: team_save; pack: team_import → team_ready; propose_skill is SKILL.md only). " +
+    "Prefer member_id from team_list (applies that member's tools+inject+playbook ≠ parent). " +
+    "Mint after real work: team_save name+playbook (kind=advanced +skills/files when packing) → team_ready if advanced → team_export. " +
+    "Child: team_self. propose_skill is SKILL.md only. " +
     "role is the fallback when no member fits. Answers over ~12KB spill to ~/.xrk/spill/tool-outputs/.";
   return {
     name: "subagent",
@@ -482,7 +491,7 @@ function createSubagentTool(
         member_id: {
           type: "string",
           description:
-            "Agent Team member id (干员 / 成员 / 子代理团队的一员). Face applies that member's tools, inject, and playbook — the same three surfaces the parent already edits. Prefer this over restating those in prompt. Missing member: team_save, not propose_skill.",
+            "Agent Team member id. Face applies that member's tools + inject + playbook (≠ parent). Child may team_self to revise own surfaces. Missing: team_save (not propose_skill).",
         },
         workspace_id: {
           type: "string",
@@ -1164,6 +1173,10 @@ function createSubagentTool(
         await discardIfUnstarted();
         return { content: modelPin.message, isError: true };
       }
+      const spawnCwd = isolated?.path ?? parentCwd;
+      let packHome: string | undefined;
+      let packMaterials: string | undefined;
+      let packInventoryLines: readonly string[] | undefined;
       if (isolated) {
         options.runtime.sessionCwds.set(childId, isolated.path);
         // Confirm the checkout still exists (DSH working-directory ensure);
@@ -1176,6 +1189,26 @@ function createSubagentTool(
         await Promise.resolve(options.runtime.invalidateAgent?.(childId)).catch(
           () => undefined,
         );
+      } else if (rosterMember?.kind === "advanced") {
+        // 公文包 (briefcase) only — session cwd stays parent workspace.
+        const rosterWs =
+          rosterMember.scope === "global"
+            ? GLOBAL_ROSTER_ID
+            : canvasWorkspaceIdForSession(
+                options.runtime,
+                options.parentSessionId,
+              );
+        const packOpts = {
+          rosterWorkspaceId: rosterWs,
+          memberId: rosterMember.id,
+          ...(options.runtime.agentRoster.home
+            ? { productHome: options.runtime.agentRoster.home }
+            : {}),
+        };
+        packHome = resolveMemberPackHome(packOpts);
+        packMaterials = resolveMemberPackMaterialsDir(packOpts);
+        const inv = listMemberPackInventory(packOpts);
+        if (inv) packInventoryLines = formatMemberPackInventoryLines(inv);
       }
       const childPrompt = applySubagentSpawnPreamble({
         prompt: taskBody,
@@ -1185,8 +1218,11 @@ function createSubagentTool(
         label,
         ...(spawnRole ? { role: spawnRole } : {}),
         inheritContext: inherit,
-        cwd: isolated?.path ?? parentCwd,
+        cwd: spawnCwd,
         isolatedWorktree: isolated !== null,
+        ...(packHome ? { packHome } : {}),
+        ...(packMaterials ? { packMaterials } : {}),
+        ...(packInventoryLines ? { packInventoryLines } : {}),
         ...(rosterMember
           ? { memberId: rosterMember.id, inject: rosterMember.inject }
           : {}),

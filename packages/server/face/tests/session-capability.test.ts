@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,6 +14,7 @@ import {
   applySubagentSpawnPreamble,
   roleCapsHint,
 } from "../src/agent-team-roles.js";
+import { GLOBAL_ROSTER_ID } from "../src/agent-roster-store.js";
 import type { FaceDrain } from "../src/context.js";
 
 function drain(): FaceDrain {
@@ -83,6 +85,7 @@ describe("session_capability", () => {
     const xyId = (xy.result.value as { sessionId: string }).sessionId;
     const xyText = formatSessionCapability(runtime, xyId);
     expect(xyText).toMatch(/tool_surface: qichuang \(full-access/);
+    expect(xyText).toMatch(/settings\+team_\*/);
     expect(xyText).toMatch(/path=open/);
     expect(xyText).toMatch(/shell_confine=off/);
   });
@@ -110,6 +113,37 @@ describe("session_capability", () => {
     );
     expect(out).toContain("FINAL assistant message");
     expect(out).not.toContain("turn-start squad board");
+  });
+
+  it("preamble injects 公文包 (briefcase) while cwd stays parent workspace", () => {
+    const packHome = "/home/u/.xrk/agent-rosters/packs/global/mem_hw";
+    const out = applySubagentSpawnPreamble({
+      prompt: "grade homework/hw1.md",
+      parentSessionId: "p1",
+      childSessionId: "c1",
+      mode: "continuable",
+      label: "作业生成员",
+      role: "worker",
+      inheritContext: false,
+      cwd: "/proj/coding",
+      isolatedWorktree: false,
+      packHome,
+      packMaterials: `${packHome}/workspace`,
+      packInventoryLines: [
+        "公文包 (briefcase): not workspace cwd — read/edit here or copy into workspace",
+        `pack_home: ${packHome}`,
+        `materials: ${packHome}/workspace · top=hw1.md`,
+        `skill: lit @ ${packHome}/skills/lit · references=${packHome}/skills/lit/references`,
+      ],
+      memberId: "mem_hw",
+      inject: "minimal",
+    });
+    expect(out).toMatch(/workspace: \/proj\/coding · same as the parent session/);
+    expect(out).toMatch(/公文包 \(briefcase\)/);
+    expect(out).toMatch(/pack_home: .*mem_hw/);
+    expect(out).toMatch(/skill: lit @/);
+    expect(out).toMatch(/references=/);
+    expect(out).toMatch(/member_id: mem_hw/);
   });
 
   it("formats kind=delegated for a tool-delegated child", async () => {
@@ -140,6 +174,25 @@ describe("session_capability", () => {
     expect(childCreated.result.ok).toBe(true);
     if (!childCreated.result.ok) return;
     const childId = (childCreated.result.value as { sessionId: string }).sessionId;
+    const scout = runtime.agentRoster.upsert(GLOBAL_ROSTER_ID, {
+      id: "mem_scout",
+      name: "scout",
+      playbook: "Scout the repo.",
+      role: "researcher",
+      kind: "advanced",
+      ready: true,
+    });
+    expect(scout?.id).toBe("mem_scout");
+    const packHome = path.join(
+      root,
+      "agent-rosters",
+      "packs",
+      "global",
+      "mem_scout",
+    );
+    const materials = path.join(packHome, "workspace");
+    mkdirSync(materials, { recursive: true });
+    mkdirSync(path.join(packHome, "skills"), { recursive: true });
     runtime.subagents.attach({
       parentSessionId: parentId,
       childSessionId: childId,
@@ -148,6 +201,8 @@ describe("session_capability", () => {
       role: "researcher",
       memberId: "mem_scout",
     });
+    // cwd stays the coding workspace — briefcase is injected separately.
+    runtime.sessionCwds.set(childId, codingRoot);
 
     const text = formatSessionCapability(runtime, childId);
     expect(text).toContain("kind: delegated_child");
@@ -155,6 +210,11 @@ describe("session_capability", () => {
     expect(text).toContain(`human_face: ${parentId}`);
     expect(text).toContain("member_id: mem_scout");
     expect(text).toContain("role: researcher");
+    expect(text).toContain(`cwd: ${codingRoot}`);
+    expect(text).toContain("公文包 (briefcase)");
+    expect(text).toContain(`pack_home: ${packHome}`);
+    expect(text).toContain(`materials: ${materials}`);
+    expect(text).toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
     expect(text).toContain("ask→human_face");
     expect(text).toContain("omitted:");
     expect(text).toContain("ask_user");

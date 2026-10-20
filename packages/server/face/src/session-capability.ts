@@ -25,6 +25,10 @@ import { countExposures } from "@xrkseek/core-tools";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { roleCapsHint, roleDeniedTools } from "./agent-team-roles.js";
 import { DELEGATED_INHERIT_DENY } from "./agent-roster-store.js";
+import {
+  formatMemberPackInventoryLines,
+  listMemberPackInventory,
+} from "./agent-member-pack.js";
 
 /** Affirmative permission copy for the model (path gate only). */
 function permissionBrief(permission: string): string {
@@ -53,7 +57,7 @@ function surfaceBrief(badge: string): string {
     case "shallow":
       return "kind=coding_parent · full tools + subagents + peers — spawn when parallel helps (per-model live session cap).";
     case "harness":
-      return "kind=coding_parent · full tools + subagents + peers — prefer team_list member_id (per-model live session cap).";
+      return "kind=coding_parent · full tools + subagents + peers — prefer team_list member_id; mint 干员→skill xrk-delegate (per-model live session cap).";
     case "im":
       return "kind=orchestrator · surface=im — verbs in <session_posture>.";
     case "qichuang":
@@ -69,7 +73,7 @@ function toolSurfaceSummary(badge: string): string {
     return "im (full-access · channel+list/create/session_prompt+subagent→coding+thread_message)";
   }
   if (badge === "qichuang") {
-    return "qichuang (full-access · team+list/create/session_prompt+thread · no nested subagents)";
+    return "qichuang (full-access · settings+team_*+list/create/session_prompt+thread · no nested subagents)";
   }
   const profile = resolveAgentPresetProfile(badge);
   const bits: string[] = ["fs"];
@@ -84,6 +88,30 @@ function toolSurfaceSummary(badge: string): string {
   return `${badge} (${bits.join("+")} · ${sub})`;
 }
 
+/**
+ * Live 公文包 (briefcase) inventory for an advanced member child (pack ≠ cwd).
+ */
+function advancedBriefcaseCapabilityLines(
+  runtime: FaceRuntime,
+  memberId: string,
+): string[] {
+  const home = runtime.agentRoster.findHome(memberId);
+  if (!home) return [];
+  const member = runtime.agentRoster.get(home.rosterWorkspaceId, memberId);
+  if (member?.kind !== "advanced") return [];
+  const productHome = runtime.agentRoster.home;
+  const inv = listMemberPackInventory({
+    rosterWorkspaceId: home.rosterWorkspaceId,
+    memberId,
+    ...(productHome ? { productHome } : {}),
+  });
+  if (!inv) return [];
+  return [
+    ...formatMemberPackInventoryLines(inv),
+    "skills also in skill catalog (load by name; references/ under each skill path)",
+  ];
+}
+
 /** Short capability for tool-delegated children (not UI forks). */
 function formatDelegatedCapability(
   runtime: FaceRuntime,
@@ -94,6 +122,9 @@ function formatDelegatedCapability(
   const role = link.role && link.role !== "default" ? link.role : "default";
   const cwd = resolveSessionCwd(runtime, sessionId);
   const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
+  const briefcase = link.memberId
+    ? advancedBriefcaseCapabilityLines(runtime, link.memberId)
+    : [];
   const lines = [
     "kind: delegated_child",
     `parent: ${link.parentSessionId}`,
@@ -102,6 +133,7 @@ function formatDelegatedCapability(
     `role: ${role}`,
     `caps: ${roleCapsHint(link.role)}`,
     `cwd: ${cwd}`,
+    ...briefcase,
     ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
     ...(link.label.trim() ? [`label: ${link.label.trim()}`] : []),
     "brief: FINAL→parent (only visible result; include hard failures). ask→human_face. siblings→thread_message. catalog=truth. no self-spawn unless tasked.",

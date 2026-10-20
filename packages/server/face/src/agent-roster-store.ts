@@ -164,6 +164,15 @@ export function catalogMemberWriteProblem(raw: unknown): string | undefined {
   return `catalog member ${id} is built-in; omit id to mint a new role from that template`;
 }
 
+/** Built-in catalog ids cannot be exported; mint a custom copy to share. */
+export function catalogMemberExportProblem(raw: unknown): string | undefined {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return undefined;
+  const id = normalizeMemberId(trimmed);
+  if (!id || !isCatalogSeedMemberId(id)) return undefined;
+  return `catalog member ${id} cannot be exported; mint a custom copy first`;
+}
+
 function listedMember(
   row: AgentRosterMember,
   scope: RosterScope,
@@ -242,6 +251,18 @@ export function memberPackSkillsDir(
   productHome?: string,
 ): string {
   return path.join(memberPackDir(rosterWorkspaceId, memberId, productHome), "skills");
+}
+
+/**
+ * Optional project tree inside an advanced pack (`…/workspace`).
+ * When present, child default cwd prefers this over the pack root.
+ */
+export function memberPackWorkspaceDir(
+  rosterWorkspaceId: string,
+  memberId: string,
+  productHome?: string,
+): string {
+  return path.join(memberPackDir(rosterWorkspaceId, memberId, productHome), "workspace");
 }
 
 function sanitizeWorkspaceId(workspaceId: string): string {
@@ -428,6 +449,9 @@ export const DELEGATED_INHERIT_DENY = [
   "ask_user",
   "team_save",
   "team_import",
+  "team_ready",
+  "team_export",
+  "team_remove",
   "propose_skill",
   "exit_plan_mode",
   "settings_*",
@@ -518,7 +542,7 @@ export function formatRosterCatalog(
             ? " · not-ready → team_list(envPrep) → team_ready"
             : " · not-ready";
       const kind = pub.kind === "advanced" ? " · advanced" : "";
-      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog" : ""}`;
+      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog · no-export" : ""}`;
     })
     .join("\n")
     .slice(0, 2_400);

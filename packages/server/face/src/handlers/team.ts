@@ -24,12 +24,17 @@ import {
   loadAgentMemberPackBytes,
   materializeAgentMemberPack,
   notReadyPackHints,
+  formatMemberPackInventoryLines,
+  listMemberPackInventory,
+  resolveMemberPackHome,
+  resolveMemberPackMaterialsDir,
   zipMemberPackDir,
 } from "../agent-member-pack.js";
 import {
   GLOBAL_ROSTER_ID,
   memberIdProblem,
   memberPackDir,
+  catalogMemberExportProblem,
   catalogMemberWriteProblem,
   parseMemberAppearance,
   parseMemberToolPolicy,
@@ -344,6 +349,28 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
       },
     };
   }
+  const rosterWs = member.scope === "global" ? GLOBAL_ROSTER_ID : workspaceId;
+  const packOpts =
+    member.kind === "advanced"
+      ? {
+          rosterWorkspaceId: rosterWs,
+          memberId: member.id,
+          ...(runtime.agentRoster.home
+            ? { productHome: runtime.agentRoster.home }
+            : {}),
+        }
+      : undefined;
+  const packHome = packOpts ? resolveMemberPackHome(packOpts) : undefined;
+  const packMaterials = packOpts
+    ? resolveMemberPackMaterialsDir(packOpts)
+    : undefined;
+  const packInventory = packOpts
+    ? listMemberPackInventory(packOpts)
+    : undefined;
+  const packInventoryLines = packInventory
+    ? formatMemberPackInventoryLines(packInventory)
+    : undefined;
+  const childCwd = resolveSessionCwd(runtime, sessionId);
   const created = await sessionCreate(runtime, `${rpcId}-c`, {
     parentSessionId: sessionId,
     label: member.name,
@@ -370,8 +397,11 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
     label: member.name,
     role: member.role,
     inheritContext: false,
-    cwd: resolveSessionCwd(runtime, sessionId),
+    cwd: childCwd,
     isolatedWorktree: false,
+    ...(packHome ? { packHome } : {}),
+    ...(packMaterials ? { packMaterials } : {}),
+    ...(packInventoryLines ? { packInventoryLines } : {}),
     memberId: member.id,
     inject: member.inject,
     permissionInherit: `${permission} (path=${pathAccessModeFromSandbox(sandbox)}) · approval=${approval}`,
@@ -414,6 +444,16 @@ export const teamExport: FaceHandler = async (runtime, _rpcId, payload) => {
   const member = runtime.agentRoster.get(canvasId, id);
   if (!member) {
     return { ok: false, error: { code: "invalid-payload", message: "unknown member id" } };
+  }
+  const catalogProblem = catalogMemberExportProblem(member.id);
+  if (catalogProblem || member.catalog) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: catalogProblem ?? `catalog member ${member.id} cannot be exported`,
+      },
+    };
   }
   const stem = safeStem(member.name);
   if (member.kind !== "advanced") {

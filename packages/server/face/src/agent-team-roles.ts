@@ -3,6 +3,7 @@
  * Graph `delegator|worker|observer` stays a UI label; these prefix the child prompt.
  */
 
+import path from "node:path";
 import {
   flattenText,
   isHumanUserMessageSource,
@@ -172,6 +173,15 @@ export interface SubagentSpawnPreambleInput {
   readonly inheritContext: boolean;
   readonly cwd: string;
   readonly isolatedWorktree: boolean;
+  /**
+   * Absolute path to an advanced member's 公文包 (briefcase) / pack home.
+   * Session cwd stays the parent workspace; child may read/write/copy from here.
+   */
+  readonly packHome?: string;
+  /** Pack `workspace/` materials when present (still under 公文包/briefcase). */
+  readonly packMaterials?: string;
+  /** Optional live inventory lines (skills + references paths). */
+  readonly packInventoryLines?: readonly string[];
   /** Bounded root-evidence block (see {@link rootUserAuthorizationBlock}). */
   readonly userAuthorization?: string;
   /** Named 干员 this child was spawned as. */
@@ -222,6 +232,8 @@ export function applySubagentSpawnPreamble(
   const workspaceLine = input.isolatedWorktree
     ? "isolated git worktree (not the parent's checkout). Follow the worktree note in the task."
     : "same as the parent session. File tools and git run here.";
+  const packHome = input.packHome?.trim();
+  const packMaterials = input.packMaterials?.trim();
   // Identity + delivery only. Live axes (ask, omitted tools, siblings) live in
   // turn-start <session_capability> — do not re-lecture them here.
   const header = [
@@ -246,6 +258,17 @@ export function applySubagentSpawnPreamble(
       : []),
     `- inherit_context: ${inheritLine}`,
     `- workspace: ${input.cwd} · ${workspaceLine}`,
+    ...(input.packInventoryLines && input.packInventoryLines.length > 0
+      ? input.packInventoryLines.map((line) => `- ${line}`)
+      : packHome
+        ? [
+            `- 公文包 (briefcase): ${packHome} · not workspace cwd — read/edit or copy into workspace`,
+            ...(packMaterials
+              ? [`- materials: ${packMaterials} · 公文包/briefcase workspace/`]
+              : []),
+            `- skills_dir: ${path.join(packHome, "skills")} · also in skill catalog`,
+          ]
+        : []),
     "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Repo AGENTS.md is not your persona.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);
@@ -259,8 +282,17 @@ export function listSpawnRoleIds(): readonly AgentTeamSpawnRole[] {
   return AGENT_TEAM_SPAWN_ROLES;
 }
 
-/** Roster writes stay on the parent. Every child role loses these. */
-const ROSTER_EDIT_DENY = ["team_save", "team_import", "team_ready"] as const;
+/**
+ * Full roster mint/install/uninstall stay on the parent.
+ * Children with member_id get `team_self` (own playbook) instead — not these.
+ */
+const ROSTER_EDIT_DENY = [
+  "team_save",
+  "team_import",
+  "team_ready",
+  "team_export",
+  "team_remove",
+] as const;
 
 /** Tools denied for one role. Default / lead have no extra floor besides roster edits. */
 export function roleDeniedTools(

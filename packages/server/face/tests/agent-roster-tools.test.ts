@@ -30,6 +30,8 @@ describe("bindAgentRosterTools", () => {
     expect(full.get("team_save")).toBeTruthy();
     expect(full.get("team_import")).toBeTruthy();
     expect(full.get("team_ready")).toBeTruthy();
+    expect(full.get("team_export")).toBeTruthy();
+    expect(full.get("team_remove")).toBeTruthy();
   });
 
   it("team_import mints a member without appearance", async () => {
@@ -115,7 +117,7 @@ describe("bindAgentRosterTools", () => {
     expect(readyBody.member.ready).toBe(true);
   });
 
-  it("team_save refuses to overwrite an advanced pack member", async () => {
+  it("team_save revises advanced playbook in place (keeps kind); team_self for child; team_remove uninstalls", async () => {
     const { buildAgentMemberPackZip } = await import("../src/agent-member-pack.js");
     const store = createMemorySessionStore();
     const runtime = createBareFaceRuntime({
@@ -142,11 +144,74 @@ describe("bindAgentRosterTools", () => {
     bindAgentRosterTools(tools, { runtime, sessionId });
     const save = await tools.get("team_save")!.execute({
       id,
-      name: "Hijack",
-      playbook: "should fail",
+      name: "Guard v2",
+      playbook: "Improved playbook.",
+      scope: "global",
     });
-    expect(save.isError).toBe(true);
-    expect(String(save.content)).toMatch(/refuse|advanced/i);
+    expect(save.isError).toBeFalsy();
+    const saved = JSON.parse(String(save.content)) as {
+      kind: string;
+      member: { name: string; playbook: string; kind?: string };
+    };
+    expect(saved.kind).toBe("advanced");
+    expect(saved.member.name).toBe("Guard v2");
+    expect(saved.member.playbook).toContain("Improved");
+    expect(saved.member.kind).toBe("advanced");
+
+    const childTools = createToolRegistry();
+    bindAgentRosterTools(childTools, {
+      runtime,
+      sessionId,
+      listOnly: true,
+      selfMemberId: id,
+    });
+    expect(childTools.get("team_save")).toBeUndefined();
+    expect(childTools.get("team_self")).toBeTruthy();
+    const self = await childTools.get("team_self")!.execute({
+      playbook: "Child-revised playbook.",
+      brief: "Self note",
+      inject: "subagent",
+      tools: { mode: "deny", names: ["bash"] },
+    });
+    expect(self.isError).toBeFalsy();
+    const selfBody = JSON.parse(String(self.content)) as {
+      member: {
+        playbook: string;
+        brief: string;
+        inject?: string;
+        tools?: { mode: string; names: string[] };
+      };
+    };
+    expect(selfBody.member.playbook).toContain("Child-revised");
+    expect(selfBody.member.brief).toBe("Self note");
+    expect(selfBody.member.inject).toBe("subagent");
+    expect(selfBody.member.tools).toEqual({ mode: "deny", names: ["bash"] });
+
+    const cwd = (await import("node:os")).tmpdir();
+    const { mkdtempSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const exportCwd = mkdtempSync(join(cwd, "xrk-team-export-"));
+    runtime.sessionCwds.set(sessionId, exportCwd);
+    const exported = await tools.get("team_export")!.execute({ id });
+    expect(exported.isError).toBeFalsy();
+    const expBody = JSON.parse(String(exported.content)) as {
+      format: string;
+      path: string;
+      fileName: string;
+    };
+    expect(expBody.format).toBe("zip");
+    expect(expBody.fileName.endsWith(".zip")).toBe(true);
+    expect(expBody.path).toContain(expBody.fileName);
+
+    const removed = await tools.get("team_remove")!.execute({
+      id,
+      scope: "global",
+    });
+    expect(removed.isError).toBeFalsy();
+    const listed = JSON.parse(
+      String((await tools.get("team_list")!.execute({})).content),
+    ) as { members: Array<{ id: string }> };
+    expect(listed.members.find((m) => m.id === id)).toBeUndefined();
   });
 
   it("team_list resurfaces envPrep for UI-imported not-ready packs", async () => {
@@ -326,5 +391,165 @@ describe("bindAgentRosterTools", () => {
     const ready = await toolsB.get("team_ready")!.execute({ id: body.member.id });
     expect(ready.isError).toBe(true);
     expect(String(ready.content)).toMatch(/workspace-scoped/);
+  });
+
+  it("team_save kind=advanced mints pack with skills/files; team_import only installs; export works", async () => {
+    const { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } =
+      await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const {
+      resolveMemberPackHome,
+      resolveMemberPackMaterialsDir,
+    } = await import("../src/agent-member-pack.js");
+    const { GLOBAL_ROSTER_ID } = await import("../src/agent-roster-store.js");
+
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const cwd = mkdtempSync(path.join(tmpdir(), "xrk-mint-adv-"));
+    runtime.sessionCwds.set(sessionId, cwd);
+    const skillDir = path.join(cwd, ".agents", "skills", "lit-search");
+    mkdirSync(path.join(skillDir, "references"), { recursive: true });
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: lit-search\ndescription: lit\n---\n# Lit\nSee references/sources.md\n",
+    );
+    writeFileSync(
+      path.join(skillDir, "references", "sources.md"),
+      "# Sources\n- DOI list\n",
+    );
+    const projectDir = path.join(cwd, "lit-kit");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(path.join(projectDir, "queries.txt"), "transformer survey\n");
+
+    const tools = createToolRegistry();
+    bindAgentRosterTools(tools, { runtime, sessionId });
+
+    const legacy = await tools.get("team_import")!.execute({
+      from_session: true,
+      name: "x",
+      playbook: "y",
+    });
+    expect(legacy.isError).toBe(true);
+    expect(String(legacy.content)).toMatch(/team_save/);
+
+    const minted = await tools.get("team_save")!.execute({
+      kind: "advanced",
+      name: "文献助研",
+      playbook: "Search papers; use lit-search skill; cite DOI.",
+      brief: "Literature scout",
+      role: "researcher",
+      env_prep: "Install: pip install scholarly\nAPI: set SEMANTIC_SCHOLAR_KEY",
+      skills: [".agents/skills/lit-search"],
+      files: ["./lit-kit"],
+    });
+    expect(minted.isError).toBeFalsy();
+    const body = JSON.parse(String(minted.content)) as {
+      source: string;
+      scope: string;
+      kind: string;
+      member: { id: string; kind?: string; ready?: boolean; name: string };
+      skillNames: string[];
+      packDir: string;
+      envPrep?: string;
+      ready: boolean;
+      shareHint?: string;
+      pathHint?: string;
+    };
+    expect(body.source).toBe("team_save");
+    expect(body.kind).toBe("advanced");
+    expect(body.scope).toBe("global");
+    expect(body.member.name).toBe("文献助研");
+    expect(body.member.kind).toBe("advanced");
+    expect(body.member.ready).toBe(false);
+    expect(body.ready).toBe(false);
+    expect(body.skillNames).toContain("lit-search");
+    expect(body.envPrep).toMatch(/scholarly/);
+    expect(readFileSync(path.join(body.packDir, "playbook.md"), "utf8")).toMatch(
+      /Paths \(portable\)/,
+    );
+    expect(body.pathHint).toMatch(/relative/i);
+    expect(
+      existsSync(
+        path.join(body.packDir, "skills", "lit-search", "references", "sources.md"),
+      ),
+    ).toBe(true);
+    expect(
+      readFileSync(
+        path.join(body.packDir, "workspace", "lit-kit", "queries.txt"),
+        "utf8",
+      ),
+    ).toMatch(/transformer/);
+    expect(
+      resolveMemberPackHome({
+        rosterWorkspaceId: GLOBAL_ROSTER_ID,
+        memberId: body.member.id,
+        productHome: runtime.agentRoster.home,
+      }),
+    ).toBe(body.packDir);
+    expect(
+      resolveMemberPackMaterialsDir({
+        rosterWorkspaceId: GLOBAL_ROSTER_ID,
+        memberId: body.member.id,
+        productHome: runtime.agentRoster.home,
+      }),
+    ).toBe(path.join(body.packDir, "workspace"));
+    expect(body.pathHint).toMatch(/公文包 \(briefcase\)|briefcase/i);
+
+    const listed = JSON.parse(
+      String((await tools.get("team_list")!.execute({})).content),
+    ) as { members: Array<{ id: string; ready?: boolean; envPrep?: string }> };
+    const row = listed.members.find((m) => m.id === body.member.id);
+    expect(row?.ready).toBe(false);
+    expect(row?.envPrep).toMatch(/SEMANTIC_SCHOLAR/);
+
+    const ready = await tools.get("team_ready")!.execute({ id: body.member.id });
+    expect(ready.isError).toBeFalsy();
+    expect(
+      (JSON.parse(String(ready.content)) as { member: { ready?: boolean } }).member.ready,
+    ).toBe(true);
+
+    const exported = await dispatchFaceMethod(runtime, "team.export", "e", {
+      sessionId,
+      id: body.member.id,
+    });
+    expect(exported.result.ok).toBe(true);
+    const exp = exported.result.value as { format: string; fileName: string };
+    expect(exp.format).toBe("zip");
+    expect(exp.fileName.endsWith(".zip")).toBe(true);
+
+    const catalogExport = await dispatchFaceMethod(runtime, "team.export", "e-seed", {
+      sessionId,
+      id: "mem_seed_researcher",
+    });
+    expect(catalogExport.result.ok).toBe(false);
+    expect(
+      String(
+        (catalogExport.result as { error?: { message?: string } }).error?.message ?? "",
+      ),
+    ).toMatch(/cannot be exported|catalog/i);
+
+    const thin = await tools.get("team_save")!.execute({
+      name: "Thin Note",
+      playbook: "Short thin member.",
+      scope: "workspace",
+    });
+    expect(thin.isError).toBeFalsy();
+    const thinId = (JSON.parse(String(thin.content)) as { member: { id: string } }).member
+      .id;
+    const thinExport = await dispatchFaceMethod(runtime, "team.export", "e2", {
+      sessionId,
+      id: thinId,
+    });
+    expect(thinExport.result.ok).toBe(true);
+    const thinExp = thinExport.result.value as { format: string; fileName: string };
+    expect(thinExp.format).toBe("json");
+    expect(thinExp.fileName.endsWith(".json")).toBe(true);
   });
 });

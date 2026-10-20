@@ -135,4 +135,59 @@ describe("agent-member-pack", () => {
     const parsed = parseAgentMemberPackFiles(entries);
     expect(parsed.ok).toBe(false);
   });
+
+  it("rejects illegal root and skills without SKILL.md", () => {
+    const badRoot = withMarker(
+      new Map<string, Buffer>([
+        [
+          "manifest.json",
+          Buffer.from(JSON.stringify({ kind: "xrk-agent-pack", name: "X", role: "worker" })),
+        ],
+        ["playbook.md", Buffer.from("ok\n")],
+        ["notes.txt", Buffer.from("nope\n")],
+      ]),
+    );
+    const rootParsed = parseAgentMemberPackFiles(badRoot);
+    expect(rootParsed.ok).toBe(false);
+    if (!rootParsed.ok) expect(rootParsed.error).toMatch(/illegal pack root/);
+
+    const badSkill = withMarker(
+      new Map<string, Buffer>([
+        [
+          "manifest.json",
+          Buffer.from(JSON.stringify({ kind: "xrk-agent-pack", name: "X", role: "worker" })),
+        ],
+        ["playbook.md", Buffer.from("ok\n")],
+        ["skills/orphan/references/a.md", Buffer.from("# a\n")],
+      ]),
+    );
+    const skillParsed = parseAgentMemberPackFiles(badSkill);
+    expect(skillParsed.ok).toBe(false);
+    if (!skillParsed.ok) expect(skillParsed.error).toMatch(/SKILL\.md/);
+  });
+
+  it("accepts workspace/ and skills references/", () => {
+    const files = withMarker(
+      new Map<string, Buffer>([
+        [
+          "manifest.json",
+          Buffer.from(
+            JSON.stringify({ kind: "xrk-agent-pack", name: "Hw", role: "worker" }),
+          ),
+        ],
+        ["playbook.md", Buffer.from("Read homework/brief.md\n")],
+        [
+          "skills/rubric/SKILL.md",
+          Buffer.from("---\nname: rubric\ndescription: grade\n---\n# R\n"),
+        ],
+        ["skills/rubric/references/scale.md", Buffer.from("# scale\n")],
+        ["workspace/homework/brief.md", Buffer.from("Do the worksheet.\n")],
+      ]),
+    );
+    const parsed = parseAgentMemberPackFiles(files);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.skillDirs).toEqual(["rubric"]);
+    expect(parsed.pack.files.has("workspace/homework/brief.md")).toBe(true);
+  });
 });

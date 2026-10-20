@@ -1,14 +1,11 @@
 /**
- * Portable advanced 干员 pack: playbook + optional skills + env prep.
- * Thin cards stay on `xrk-agent-member` JSON in the roster index.
+ * Portable advanced 干员 pack (公文包): playbook + optional skills + env prep +
+ * workspace materials. Thin cards stay on `xrk-agent-member` JSON in the roster.
  *
- * Layout (zip or directory under agent-rosters/packs/{scope}/{id}/):
- *   .xrk-agent-pack — required marker (illegal zip without it)
- *   manifest.json   — kind xrk-agent-pack, name, role, optional brief/inject/tools
- *   playbook.md     — required (≤ MEMBER_PLAYBOOK_MAX); stands in for AGENTS.md / rules
- *   skills/<id>/    — optional; child-only catalog (not parent workspace)
- *   env/SETUP.md    — optional parent prep text (never auto-run)
+ * Layout: see {@link AGENT_MEMBER_PACK_LAYOUT}. Import rejects unknown root
+ * names, path traversal, and skills/<id>/ without SKILL.md.
  *
+ * Session cwd stays the parent workspace; pack_home is injected as 公文包.
  * Never pack curated memory (`scope=agent`) or appearance — those stay local.
  */
 import {
@@ -29,6 +26,7 @@ import {
 import {
   MEMBER_PLAYBOOK_MAX,
   memberPackDir,
+  memberPackWorkspaceDir,
 } from "./agent-roster-store.js";
 import { buildStoredZip, readZipEntries, zipEntryName } from "./zip-store.js";
 
@@ -36,6 +34,29 @@ export const AGENT_MEMBER_PACK_KIND = "xrk-agent-pack";
 export const AGENT_MEMBER_PACK_VERSION = 1;
 /** Required root marker — zip/dir without it is rejected. */
 export const AGENT_MEMBER_PACK_MARKER = ".xrk-agent-pack";
+
+/** Model-facing bilingual name for the advanced pack home (not session cwd). */
+export const MEMBER_PACK_BRIEFCASE = "公文包 (briefcase)";
+
+/** One-line layout contract (tools, errors, skills). */
+export const AGENT_MEMBER_PACK_LAYOUT =
+  `Required: .xrk-agent-pack · manifest.json (kind xrk-agent-pack) · playbook.md. ` +
+  `Optional: skills/<id>/ (+SKILL.md, references/…) · workspace/ (${MEMBER_PACK_BRIEFCASE} materials) · env/SETUP.md. ` +
+  `Session cwd = parent workspace; ${MEMBER_PACK_BRIEFCASE} paths are absolute at runtime — share zip with relative paths only.`;
+
+/** Allowed single-segment root file names (besides dirs below). */
+const PACK_ROOT_FILES = new Set([
+  AGENT_MEMBER_PACK_MARKER,
+  "manifest.json",
+  "member.json",
+  "card.json",
+  "playbook.md",
+  "PLAYBOOK.md",
+  "SETUP.md",
+]);
+
+/** Allowed top-level directories. Anything else at root → illegal pack. */
+const PACK_ROOT_DIRS = new Set(["skills", "workspace", "env"]);
 
 export interface AgentMemberPack {
   readonly card: AgentMemberCard;
@@ -90,6 +111,59 @@ function hasPackMarker(files: ReadonlyMap<string, Buffer>): boolean {
   }
 }
 
+/** Reject path traversal, absolute entries, and non-standard root names. */
+export function validatePackLayout(
+  files: ReadonlyMap<string, Buffer>,
+): string | undefined {
+  const skillIds = new Set<string>();
+  const skillHasMd = new Set<string>();
+  for (const key of files.keys()) {
+    const name = zipEntryName(key);
+    if (!name) continue;
+    if (
+      name.includes("..") ||
+      name.startsWith("/") ||
+      name.startsWith("\\") ||
+      /^[a-zA-Z]:/.test(name)
+    ) {
+      return `illegal pack path: ${name}`;
+    }
+    const parts = name.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+    const top = parts[0]!;
+    if (parts.length === 1) {
+      if (!PACK_ROOT_FILES.has(top)) {
+        return `illegal pack root file "${top}" — ${AGENT_MEMBER_PACK_LAYOUT}`;
+      }
+      continue;
+    }
+    if (!PACK_ROOT_DIRS.has(top)) {
+      return `illegal pack root "${top}/" — allowed: skills/ workspace/ env/`;
+    }
+    if (top === "skills") {
+      const id = parts[1];
+      if (!id || id === "." || id === "..") {
+        return `illegal skills path: ${name}`;
+      }
+      skillIds.add(id);
+      if (parts.length === 3 && parts[2]!.toLowerCase() === "skill.md") {
+        skillHasMd.add(id);
+      }
+    } else if (top === "env") {
+      const leaf = parts.slice(1).join("/");
+      if (leaf.toLowerCase() !== "setup.md") {
+        return `illegal env file "${name}" — only env/SETUP.md`;
+      }
+    }
+  }
+  for (const id of skillIds) {
+    if (!skillHasMd.has(id)) {
+      return `skills/${id}/ missing SKILL.md`;
+    }
+  }
+  return undefined;
+}
+
 /** Parse a pack from an in-memory path→bytes map (zip or walked directory). */
 export function parseAgentMemberPackFiles(
   files: ReadonlyMap<string, Buffer>,
@@ -105,6 +179,11 @@ export function parseAgentMemberPackFiles(
       ok: false,
       error: `illegal pack: missing ${AGENT_MEMBER_PACK_MARKER} marker`,
     };
+  }
+
+  const layoutProblem = validatePackLayout(normalized);
+  if (layoutProblem) {
+    return { ok: false, error: layoutProblem };
   }
 
   const playbookRaw =
@@ -359,9 +438,343 @@ export function materializeAgentMemberPack(
   };
 }
 
+/** Keep on-disk pack `playbook.md` aligned after a roster playbook revise. */
+export function syncMemberPackPlaybook(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly playbook: string;
+  readonly productHome?: string | undefined;
+}): boolean {
+  const packDir = memberPackDir(
+    input.rosterWorkspaceId,
+    input.memberId,
+    input.productHome,
+  );
+  if (!existsSync(packDir) || !statSync(packDir).isDirectory()) return false;
+  const text = input.playbook.endsWith("\n") ? input.playbook : `${input.playbook}\n`;
+  try {
+    writeFileSync(path.join(packDir, "playbook.md"), text, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bundle local skill directories into pack `skills/<id>/…` files.
+ * Each path must be a directory containing SKILL.md (or a SKILL.md file's parent).
+ * Walks the full tree — includes `references/`, scripts, and other assets.
+ */
+export function collectPackSkillFiles(
+  skillPaths: readonly string[],
+):
+  | { readonly ok: true; readonly files: ReadonlyMap<string, Buffer> }
+  | { readonly ok: false; readonly error: string } {
+  const files = new Map<string, Buffer>();
+  for (const raw of skillPaths) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    let abs = path.resolve(trimmed);
+    if (!existsSync(abs)) {
+      return { ok: false, error: `skill path not found: ${trimmed}` };
+    }
+    let st;
+    try {
+      st = statSync(abs);
+    } catch {
+      return { ok: false, error: `cannot stat skill path: ${trimmed}` };
+    }
+    if (st.isFile()) {
+      if (path.basename(abs).toLowerCase() !== "skill.md") {
+        return { ok: false, error: `skill path must be a dir or SKILL.md: ${trimmed}` };
+      }
+      abs = path.dirname(abs);
+    } else if (!st.isDirectory()) {
+      return { ok: false, error: `skill path must be a directory: ${trimmed}` };
+    }
+    const skillMd = path.join(abs, "SKILL.md");
+    if (!existsSync(skillMd)) {
+      return { ok: false, error: `skill dir missing SKILL.md: ${trimmed}` };
+    }
+    const id = path.basename(abs).trim();
+    if (!id || id === "." || id === "..") {
+      return { ok: false, error: `invalid skill id from path: ${trimmed}` };
+    }
+    for (const [rel, data] of walkDirFiles(abs)) {
+      files.set(zipEntryName(`skills/${id}/${rel}`), data);
+    }
+  }
+  return { ok: true, files };
+}
+
+/**
+ * Bundle dirs/files into pack `workspace/…` (公文包/briefcase materials, not session cwd).
+ * A directory keeps its basename; a file lands as `workspace/<basename>`.
+ */
+export function collectPackWorkspaceFiles(
+  filePaths: readonly string[],
+):
+  | { readonly ok: true; readonly files: ReadonlyMap<string, Buffer> }
+  | { readonly ok: false; readonly error: string } {
+  const files = new Map<string, Buffer>();
+  for (const raw of filePaths) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const abs = path.resolve(trimmed);
+    if (!existsSync(abs)) {
+      return { ok: false, error: `workspace path not found: ${trimmed}` };
+    }
+    let st;
+    try {
+      st = statSync(abs);
+    } catch {
+      return { ok: false, error: `cannot stat workspace path: ${trimmed}` };
+    }
+    if (st.isFile()) {
+      const base = path.basename(abs);
+      if (!base || base === "." || base === "..") {
+        return { ok: false, error: `invalid workspace file: ${trimmed}` };
+      }
+      files.set(zipEntryName(`workspace/${base}`), readFileSync(abs));
+      continue;
+    }
+    if (!st.isDirectory()) {
+      return { ok: false, error: `workspace path must be a file or directory: ${trimmed}` };
+    }
+    const id = path.basename(abs).trim();
+    if (!id || id === "." || id === "..") {
+      return { ok: false, error: `invalid workspace dir from path: ${trimmed}` };
+    }
+    for (const [rel, data] of walkDirFiles(abs)) {
+      files.set(zipEntryName(`workspace/${id}/${rel}`), data);
+    }
+  }
+  return { ok: true, files };
+}
+
+/**
+ * Advanced member 公文包 (briefcase) root — not the session workspace cwd.
+ * Spawn keeps parent cwd; this path is injected into child/parent context.
+ */
+export function resolveMemberPackHome(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly productHome?: string | undefined;
+}): string | undefined {
+  const packDir = memberPackDir(
+    input.rosterWorkspaceId,
+    input.memberId,
+    input.productHome,
+  );
+  if (!existsSync(packDir)) return undefined;
+  try {
+    if (!statSync(packDir).isDirectory()) return undefined;
+  } catch {
+    return undefined;
+  }
+  return packDir;
+}
+
+/**
+ * Optional bundled materials under the pack (`workspace/`). Still under
+ * 公文包 (briefcase), not the coding session cwd.
+ */
+export function resolveMemberPackMaterialsDir(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly productHome?: string | undefined;
+}): string | undefined {
+  if (!resolveMemberPackHome(input)) return undefined;
+  const materials = memberPackWorkspaceDir(
+    input.rosterWorkspaceId,
+    input.memberId,
+    input.productHome,
+  );
+  try {
+    if (existsSync(materials) && statSync(materials).isDirectory()) {
+      return materials;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+export type MemberPackSkillInfo = {
+  readonly id: string;
+  readonly path: string;
+  readonly hasReferences: boolean;
+  readonly referencesPath?: string;
+};
+
+/** Live 公文包 (briefcase) inventory for team_list / capability / revise responses. */
+export type MemberPackInventory = {
+  readonly packHome: string;
+  readonly playbookPath: string;
+  readonly envPrepPath?: string;
+  readonly materialsPath?: string;
+  readonly materialsTop: readonly string[];
+  readonly skills: readonly MemberPackSkillInfo[];
+};
+
+/** Scan an on-disk advanced pack for playbook / env / materials / skills(+references). */
+export function listMemberPackInventory(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly productHome?: string | undefined;
+}): MemberPackInventory | undefined {
+  const packHome = resolveMemberPackHome(input);
+  if (!packHome) return undefined;
+  const playbookPath = path.join(packHome, "playbook.md");
+  const envPrepPath = path.join(packHome, "env", "SETUP.md");
+  const materialsPath = resolveMemberPackMaterialsDir(input);
+  const materialsTop: string[] = [];
+  if (materialsPath) {
+    try {
+      for (const name of readdirSync(materialsPath)) {
+        if (name === "." || name === "..") continue;
+        materialsTop.push(name);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const skills: MemberPackSkillInfo[] = [];
+  const skillsRoot = path.join(packHome, "skills");
+  try {
+    if (existsSync(skillsRoot) && statSync(skillsRoot).isDirectory()) {
+      for (const id of readdirSync(skillsRoot)) {
+        if (id === "." || id === "..") continue;
+        const skillPath = path.join(skillsRoot, id);
+        let st;
+        try {
+          st = statSync(skillPath);
+        } catch {
+          continue;
+        }
+        if (!st.isDirectory()) continue;
+        if (!existsSync(path.join(skillPath, "SKILL.md"))) continue;
+        const referencesPath = path.join(skillPath, "references");
+        let hasReferences = false;
+        try {
+          hasReferences =
+            existsSync(referencesPath) && statSync(referencesPath).isDirectory();
+        } catch {
+          hasReferences = false;
+        }
+        skills.push({
+          id,
+          path: skillPath,
+          hasReferences,
+          ...(hasReferences ? { referencesPath } : {}),
+        });
+      }
+    }
+  } catch {
+    // ignore
+  }
+  skills.sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    packHome,
+    playbookPath,
+    ...(existsSync(envPrepPath) ? { envPrepPath } : {}),
+    ...(materialsPath ? { materialsPath } : {}),
+    materialsTop,
+    skills,
+  };
+}
+
+/** Compact capability / preamble lines for a 公文包 (briefcase) inventory. */
+export function formatMemberPackInventoryLines(
+  inv: MemberPackInventory,
+): string[] {
+  const lines = [
+    `${MEMBER_PACK_BRIEFCASE}: not workspace cwd — read/edit here or copy into workspace`,
+    `pack_home: ${inv.packHome}`,
+    `playbook: ${inv.playbookPath}`,
+  ];
+  if (inv.envPrepPath) lines.push(`env_prep: ${inv.envPrepPath}`);
+  if (inv.materialsPath) {
+    const tops =
+      inv.materialsTop.length > 0
+        ? ` · top=${inv.materialsTop.slice(0, 12).join(",")}`
+        : "";
+    lines.push(`materials: ${inv.materialsPath}${tops}`);
+  }
+  if (inv.skills.length === 0) {
+    lines.push("skills: (none yet)");
+  } else {
+    for (const s of inv.skills) {
+      const refs = s.hasReferences
+        ? ` · references=${s.referencesPath ?? path.join(s.path, "references")}`
+        : "";
+      lines.push(`skill: ${s.id} @ ${s.path}${refs}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Merge skills / materials / env into an existing 公文包 (briefcase)
+ * without wiping other roots. Creates missing dirs; overwrites colliding paths.
+ */
+export function mergeIntoMemberPack(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly productHome?: string | undefined;
+  readonly skillsFiles?: ReadonlyMap<string, Buffer>;
+  readonly workspaceFiles?: ReadonlyMap<string, Buffer>;
+  readonly envPrep?: string;
+}):
+  | { readonly ok: true; readonly inventory: MemberPackInventory }
+  | { readonly ok: false; readonly error: string } {
+  const packHome = resolveMemberPackHome(input);
+  if (!packHome) {
+    return {
+      ok: false,
+      error: `${MEMBER_PACK_BRIEFCASE} missing on disk — re-import pack= or team_save kind=advanced`,
+    };
+  }
+  const writeRel = (rel: string, data: Buffer): void => {
+    const name = zipEntryName(rel);
+    if (!name || name.includes("..")) return;
+    const dest = path.join(packHome, name);
+    mkdirSync(path.dirname(dest), { recursive: true });
+    writeFileSync(dest, data);
+  };
+  if (input.envPrep?.trim()) {
+    const text = input.envPrep.endsWith("\n")
+      ? input.envPrep
+      : `${input.envPrep}\n`;
+    writeRel("env/SETUP.md", Buffer.from(text, "utf8"));
+  }
+  if (input.skillsFiles) {
+    for (const [rel, data] of input.skillsFiles) {
+      writeRel(rel.startsWith("skills/") ? rel : `skills/${rel}`, data);
+    }
+  }
+  if (input.workspaceFiles) {
+    for (const [rel, data] of input.workspaceFiles) {
+      writeRel(
+        rel.startsWith("workspace/") ? rel : `workspace/${rel}`,
+        data,
+      );
+    }
+  }
+  const inventory = listMemberPackInventory(input);
+  if (!inventory) {
+    return {
+      ok: false,
+      error: `${MEMBER_PACK_BRIEFCASE} inventory failed after merge`,
+    };
+  }
+  return { ok: true, inventory };
+}
+
 /** Build a store-method zip for export (includes marker; no appearance). */
 export function buildAgentMemberPackZip(card: AgentMemberCard, options?: {
   readonly skillsFiles?: ReadonlyMap<string, Buffer>;
+  readonly workspaceFiles?: ReadonlyMap<string, Buffer>;
   readonly envPrep?: string;
 }): Buffer {
   const enc = new TextEncoder();
@@ -393,6 +806,14 @@ export function buildAgentMemberPackZip(card: AgentMemberCard, options?: {
   if (options?.skillsFiles) {
     for (const [rel, data] of options.skillsFiles) {
       const name = zipEntryName(rel.startsWith("skills/") ? rel : `skills/${rel}`);
+      entries.push({ name, data });
+    }
+  }
+  if (options?.workspaceFiles) {
+    for (const [rel, data] of options.workspaceFiles) {
+      const name = zipEntryName(
+        rel.startsWith("workspace/") ? rel : `workspace/${rel}`,
+      );
       entries.push({ name, data });
     }
   }

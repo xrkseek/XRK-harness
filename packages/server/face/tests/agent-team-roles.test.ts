@@ -110,16 +110,22 @@ describe("rootUserAuthorizationBlock", () => {
       expect(roleDeniedTools(role)).toContain("team_save");
       expect(roleDeniedTools(role)).toContain("team_import");
       expect(roleDeniedTools(role)).toContain("team_ready");
+      expect(roleDeniedTools(role)).toContain("team_export");
+      expect(roleDeniedTools(role)).toContain("team_remove");
     }
     expect(roleDeniedTools("default")).toEqual([
       "team_save",
       "team_import",
       "team_ready",
+      "team_export",
+      "team_remove",
     ]);
     expect(roleDeniedTools("lead")).toEqual([
       "team_save",
       "team_import",
       "team_ready",
+      "team_export",
+      "team_remove",
     ]);
   });
 });

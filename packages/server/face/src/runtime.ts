@@ -93,7 +93,10 @@ import { bindGoalTools } from "./goal-tools.js";
 import { bindCanvasTools } from "./canvas-tools.js";
 import { bindSessionThreadTools } from "./session-thread-tools.js";
 import { bindAgentRosterTools } from "./agent-roster-tools.js";
-import { applyDelegatedInheritMask } from "./agent-roster-store.js";
+import {
+  applyDelegatedInheritMask,
+  applyRosterToolPolicy,
+} from "./agent-roster-store.js";
 import { bindAskParentTool } from "./subagent-tools.js";
 import { FacePresenceStore } from "./presence-store.js";
 import { bindPresenceTools } from "./presence-tools.js";
@@ -886,7 +889,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             });
           }
           if (delegatedChild) {
-            // Children list profiles only. Roster edits stay on the parent.
+            // Children: list roster; if spawned as a 干员, may revise own playbook (team_self).
             bindAskParentTool(agent.tools, {
               parentSessionId: childLink.parentSessionId,
               childLabel: childLink.label,
@@ -901,6 +904,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               runtime,
               sessionId,
               listOnly: true,
+              ...(typeof childLink.memberId === "string" && childLink.memberId.trim()
+                ? { selfMemberId: childLink.memberId.trim() }
+                : {}),
             });
           } else {
             bindAgentRosterTools(agent.tools, {
@@ -921,6 +927,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         const childLink = runtime.subagents.getByChild(sessionId);
         if (childLink && childLink.mode !== "fork" && agent.tools) {
           applyDelegatedInheritMask(agent.tools);
+          // Role + member tools policy (child surface may be tighter than parent).
+          applyRosterToolPolicy(agent.tools, childLink.role, childLink.tools);
         }
       }
     }

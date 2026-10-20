@@ -61,7 +61,11 @@ describe("session_posture", () => {
       expect(xyText).toMatch(/shell_confine=off/);
       expect(xyText).toMatch(/workspace_session_prompt/);
       expect(xyText).toMatch(/xrk-demand-translate/);
+      expect(xyText).toMatch(/xrk-home-config/);
       expect(xyText).toMatch(/xrk-plugin-dev-care/);
+      expect(xyText).toMatch(/team_\*/);
+      expect(xyText).toMatch(/xrk-delegate/);
+      expect(xyText).toMatch(/xrk-create-skill/);
       expect(xyText).toMatch(/thread_upsert/);
 
       await ensureImWorkspace(runtime);
@@ -76,6 +80,7 @@ describe("session_posture", () => {
       expect(imText).toMatch(/path=open/);
       expect(imText).toMatch(/subagent\(workspace_id\)|workspace_session_prompt/);
       expect(imText).toMatch(/thread_message/);
+      expect(imText).toMatch(/team_\*/);
 
       const frags = createSessionPostureFragmentProvider(runtime).produce({
         sessionId: imId,

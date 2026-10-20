@@ -37,16 +37,14 @@ export function threadMessageDescription(input: {
   );
 }
 
-/** One-line pack share flow for tool descriptions (avoid duplicating prose). */
+/**
+ * One-line 干员 pointer for list/spawn tools.
+ * Full mint template lives in skill `xrk-delegate` + `team_save` description.
+ */
 export function packShareFlowHint(): string {
   return (
-    "Share: team_import card=JSON (thin, ready) or pack=path|attachment:sha256:… " +
-    "(advanced zip/dir; ready=false). " +
-    "scope=global|workspace — global visible in every workspace; workspace = this canvas only " +
-    "(defaults: card→workspace, pack→global). " +
-    "Not-ready → team_list envPrep → prep → team_ready → subagent member_id. " +
-    "Missing id here? It may be workspace-scoped elsewhere — re-import scope=global or open that workspace. " +
-    "Never team_save an advanced id; never auto-run pack scripts; pack skills are child-only."
+    "Mint/revise: team_save (playbook craft → skill xrk-delegate). " +
+    "Export: team_export · install file: team_import · catalog mem_seed_*: no export."
   );
 }
 
@@ -62,11 +60,15 @@ export function rosterScopeVisibility(
 
 export function teamListDescription(input: {
   readonly listOnly: boolean;
+  /** Child spawned with member_id may revise own playbook via team_self. */
+  readonly selfRevise?: boolean;
   readonly catalog: string;
 }): string {
   const head = input.listOnly
-    ? "Read-only roster (no team_save/import/ready). Siblings: squad board + thread_message."
-    : `Member = name + duty + playbook (not SKILL.md). Mint thin: team_save. Spawn: subagent member_id. ${packShareFlowHint()}`;
+    ? input.selfRevise
+      ? "team_list + team_self: revise YOUR playbook/inject/tools (durable; next spawn). No mint/export/remove of others."
+      : "Read-only roster. Siblings: squad board + thread_message."
+    : `Spawn: subagent member_id (applies that member's tools+inject+playbook). ${packShareFlowHint()}`;
   return `${head}\n${input.catalog}`;
 }
 

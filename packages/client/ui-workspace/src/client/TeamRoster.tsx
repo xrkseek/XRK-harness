@@ -300,6 +300,9 @@ export function TeamRoster({
   const canDelete = selected !== undefined
     && removeTeamMember !== undefined
     && !catalogSeed
+  const canExport = selected !== undefined
+    && !isDraftMemberId(selectedId)
+    && !catalogSeed
 
   const reload = async () => {
     if (sessionId === undefined) return
@@ -970,7 +973,7 @@ export function TeamRoster({
                         </Button>
                       </>
                     ) : null}
-                    {selected !== undefined && !isDraftMemberId(selectedId) ? (
+                    {canExport ? (
                       <Button
                         variant="outline"
                         disabled={busy}
