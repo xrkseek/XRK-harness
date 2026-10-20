@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.9',
+    date: '2026-10-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '干员能自己长了：用 team_save kind=advanced 把技能、材料和环境准备说明打进一个「公文包 (briefcase)」高级干员；导出的 zip 别人拖进聊天就能装。',
+        en: '干员 (Agent Team members) can now grow themselves: team_save kind=advanced packs skills, materials and prep notes into a 公文包 (briefcase) advanced member; the exported zip installs by dragging it into a friend chat.',
+      },
+      {
+        zh: '干员能自己改自己：新增 team_self，子会话里的干员可修订自己的 playbook / brief / inject / tools（父会话仍用 team_save id= 改面）；team_export 导出薄=JSON、高级=zip，预置干员不可导出。',
+        en: 'A member can revise itself: new team_self lets a child edit its own playbook / brief / inject / tools (the parent still uses team_save id=). team_export writes thin = JSON and advanced = zip; catalog seeds cannot be exported.',
+      },
+      {
+        zh: '高级包带 workspace/ 材料树：会话 cwd 仍继承父工作区，pack 是公文包（briefcase），能力板注入 pack_home / materials / skills_dir，干员可读写或复制进工作区；分享 zip 用相对路径。',
+        en: 'Advanced packs carry a workspace/ materials tree: session cwd stays the parent workspace; the pack is a briefcase with pack_home / materials / skills_dir injected so the child can read, edit, or copy into the workspace; zip share uses relative paths.',
+      },
+      {
+        zh: '包安装更保险：布局白名单校验（散文件与空技能目录直接拒），team_remove 按 scope 卸载，找不到成员时会区分「不存在」和「在别的画布」并给出下一步。',
+        en: 'Pack installs are safer: whitelist-validated layout (stray files and empty skill dirs are refused), team_remove uninstalls per scope, and a missing member now distinguishes not-found from lives-in-another-canvas with a next step.',
+      },
+      {
+        zh: '七个 team 工具统一走调用卡片呈现，Team 面板与工具调用同步可见。',
+        en: 'All seven team tools now render as call cards, so the Team panel mirrors every tool call.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.9 接管 @latest。完整清单见 docs/releases/v0.6.9.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.9 now owns @latest. Full list in docs/releases/v0.6.9.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.8',
     date: '2026-10-20',
     title: {
