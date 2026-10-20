@@ -32,6 +32,22 @@ PowerShell 整段是解析期编译的：一行语法错 → 整段失败（exit
 `filename` 两行，**而且已经 commit + push**。工具返回 `edited …` 不代表内容真落全。
 硬规矩：**每次编辑类工具返回后立刻 `git diff <file>` 回读**，确认新增行在、被删行只有预期的那些；
 发现丢内容马上 `git checkout -- <file>` 回基线重做。多行 / 跨行的结构改写优先用 `apply_patch`。
+**可执行绕法（v0.6.8 又连撞两回后补）**：编辑工具返回 `edited …` 之后，**只看 `git diff --numstat <file>`**，
+新增段必须形如 `N\t0`（只加不减）。出现 `1\t2` 这类「删除多于新增」就是只删不写，立刻
+`git checkout -- <file>`。要给既有文件插整段时，别赌编辑工具，走 .NET 锚点法（保编码、保行尾、可验证）：
+
+```powershell
+$raw  = [System.IO.File]::ReadAllText("$PWD\$t")
+$nl   = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }   # 跟随原文件行尾
+$snip = ([System.IO.File]::ReadAllText("$PWD\.tmp\snippet.md") -replace "`r`n","`n") -replace "`n",$nl
+if (([regex]::Matches($raw, [regex]::Escape($anchor))).Count -ne 1) { throw 'anchor not unique' }
+[System.IO.File]::WriteAllText("$PWD\$t", $raw.Replace($anchor, $anchor + $nl + $snip.TrimEnd("`r","`n")),
+                               (New-Object System.Text.UTF8Encoding($false)))   # 无 BOM
+```
+
+临时片段写 `.tmp/`（发版不提交），用完删。字符串替换类改动同理：**替换完必须 `git diff` 或
+`Select-String` 证明新值在**，`-replace` 静默不匹配是常态（`docs/publishing.md` 英文半表就是这么漏改的，
+见 `xrk-release-chain` 第 5 节）。
 
 ### 3. 验证文件完好用 node，不用 Get-Content
 
