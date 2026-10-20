@@ -24,6 +24,7 @@ alwaysApply: false
 - 勿合并 pressure + breakdown 成 mega-unit。
 - 勿把 `stubs/xrk-token-meter` 嵌进内核。
 - `usageFromSessionEvent` 只做 `providerUsageSample` 的薄封装。
+- `inputPressureTokens` 优先 `totalTokens`（Codex）；否则 `promptPressureTokens`=`input+cacheRead`；**禁止**加 `cacheWrite`。
 - `request-header-log` 用 `LlmAdapter.peekRoute?` / `ensureRoute?`，禁止 duck cast。
 - 缺 `shadowedTokenCount` → fold delta **0**。
 

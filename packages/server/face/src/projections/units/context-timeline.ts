@@ -10,8 +10,8 @@
 import type { MessageContent, SessionEvent } from "@xrkseek/protocol";
 import {
   flattenText,
-  inputPressureTokens,
   isHumanUserMessageSource,
+  promptPressureTokens,
   usageFromSessionEvent,
 } from "@xrkseek/protocol";
 import {
@@ -273,7 +273,7 @@ function stampUsageOnLatestRequest(
 ): readonly ContextTimelineRequest[] | undefined {
   if (requests.length === 0) return undefined;
   const last = requests[requests.length - 1]!;
-  const prompt = inputPressureTokens(usage);
+  const prompt = promptPressureTokens(usage);
   const output = usage.outputTokens;
   if (last.prompt === prompt && last.output === output) return undefined;
   return [

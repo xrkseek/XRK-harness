@@ -48,18 +48,37 @@ export function parseTokenUsage(value: unknown): TokenUsage {
   };
 }
 
-/** Soft-parse OpenAI-style usage blobs; returns undefined when unusable.
+function asUsageDetails(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+/** Soft-parse provider usage blobs; returns undefined when unusable.
  *
- * Wire `prompt_tokens` often **includes** cache hits (DeepSeek:
- * `prompt_tokens = prompt_cache_hit_tokens + prompt_cache_miss_tokens`).
- * Harness {@link TokenUsage} keeps **disjoint** buckets, so cache reads are
- * subtracted from `inputTokens` (DSH `mapUsage`).
+ * Accepts OpenAI chat (`prompt_tokens`), Responses (`input_tokens` +
+ * `input_tokens_details`), Anthropic (`cache_*_input_tokens`), and Gemini
+ * (`promptTokenCount` / `candidatesTokenCount` / `totalTokenCount`).
+ *
+ * Wire prompt totals often **include** cache hits. Harness {@link TokenUsage}
+ * keeps **disjoint** buckets, so cache reads are subtracted from `inputTokens`.
  */
 export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
   if (!value || typeof value !== "object") return undefined;
   const o = value as Record<string, unknown>;
-  const input = o.prompt_tokens ?? o.input_tokens ?? o.inputTokens;
-  const output = o.completion_tokens ?? o.output_tokens ?? o.outputTokens;
+  const input =
+    o.prompt_tokens ??
+    o.input_tokens ??
+    o.inputTokens ??
+    o.promptTokenCount;
+  const output =
+    o.completion_tokens ??
+    o.output_tokens ??
+    o.outputTokens ??
+    o.candidatesTokenCount;
   if (
     typeof input !== "number" ||
     !Number.isFinite(input) ||
@@ -71,28 +90,24 @@ export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
     return undefined;
   }
 
-  const details =
-    o.prompt_tokens_details &&
-    typeof o.prompt_tokens_details === "object" &&
-    !Array.isArray(o.prompt_tokens_details)
-      ? (o.prompt_tokens_details as Record<string, unknown>)
-      : undefined;
-  const completionDetails =
-    o.completion_tokens_details &&
-    typeof o.completion_tokens_details === "object" &&
-    !Array.isArray(o.completion_tokens_details)
-      ? (o.completion_tokens_details as Record<string, unknown>)
-      : undefined;
+  const details = asUsageDetails(o.prompt_tokens_details);
+  const inputDetails = asUsageDetails(o.input_tokens_details);
+  const completionDetails = asUsageDetails(
+    o.completion_tokens_details ?? o.output_tokens_details,
+  );
 
   const cacheReadRaw =
     details?.cached_tokens ??
+    inputDetails?.cached_tokens ??
     o.prompt_cache_hit_tokens ??
     o.cache_read_input_tokens ??
+    o.cachedContentTokenCount ??
     o.cacheReadTokens;
   const cacheWriteRaw =
     o.cache_creation_input_tokens ??
     o.cacheWriteTokens ??
-    details?.cache_write_tokens;
+    details?.cache_write_tokens ??
+    inputDetails?.cache_write_tokens;
   const reasoningRaw =
     completionDetails?.reasoning_tokens ??
     o.reasoning_tokens ??
@@ -122,19 +137,22 @@ export function tryParseOpenAiUsage(value: unknown): TokenUsage | undefined {
   const uncached =
     cacheRead !== undefined ? Math.max(0, promptTotal - cacheRead) : promptTotal;
   const combined = promptTotal + outputTokens;
-  const wireTotal = o.total_tokens ?? o.totalTokens;
-  const hasExactTotal =
-    Number.isSafeInteger(combined)
-    && combined >= 0
-    && (wireTotal === undefined
-      || (typeof wireTotal === "number"
-        && Number.isSafeInteger(wireTotal)
-        && wireTotal === combined));
+  const wireTotal = o.total_tokens ?? o.totalTokens ?? o.totalTokenCount;
+  // Prefer the provider total when present (Codex `tokens_in_context_window`);
+  // else reconstitute prompt+output.
+  const totalTokens =
+    typeof wireTotal === "number" &&
+    Number.isSafeInteger(wireTotal) &&
+    wireTotal >= 0
+      ? wireTotal
+      : Number.isSafeInteger(combined) && combined >= 0
+        ? combined
+        : undefined;
 
   return {
     inputTokens: uncached,
     outputTokens,
-    ...(hasExactTotal ? { totalTokens: combined } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {}),
     ...(cacheWrite !== undefined ? { cacheWriteTokens: cacheWrite } : {}),
     ...(reasoning !== undefined ? { reasoningTokens: reasoning } : {}),
@@ -180,11 +198,22 @@ export function usageFromSessionEvent(
   return providerUsageSample(event)?.usage;
 }
 
-/** Input-side occupancy for context pressure (excludes output / reasoning). */
+/**
+ * Prompt-side occupancy (disjoint Harness buckets). Never includes output or
+ * `cacheWriteTokens` (Anthropic cache_creation is already inside wire input).
+ */
+export function promptPressureTokens(usage: TokenUsage): number {
+  return usage.inputTokens + (usage.cacheReadTokens ?? 0);
+}
+
+/**
+ * Context-window occupancy from one provider sample (Codex
+ * `tokens_in_context_window`): prefer exact {@link TokenUsage.totalTokens};
+ * else {@link promptPressureTokens}.
+ */
 export function inputPressureTokens(usage: TokenUsage): number {
-  return (
-    usage.inputTokens +
-    (usage.cacheReadTokens ?? 0) +
-    (usage.cacheWriteTokens ?? 0)
-  );
+  if (usage.totalTokens !== undefined) {
+    return usage.totalTokens;
+  }
+  return promptPressureTokens(usage);
 }

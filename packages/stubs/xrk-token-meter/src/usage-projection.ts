@@ -67,9 +67,9 @@ const pressureSchema = z.object({
   contextWindow: z.number().int().positive().optional(),
 }).strict() as unknown as z.ZodType<ContextPressureProjection>
 
-/** Prompt-side pressure of one request: input plus cache traffic, no output. */
+/** Prompt-side pressure: uncached + cacheRead (not cacheWrite; not output). */
 const pressureFrom = (usage: TokenUsage): number =>
-  usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+  usage.inputTokens + (usage.cacheReadTokens ?? 0)
 
 /** The usage a chunk or finalized message reports for its step, if any. */
 const usageOf = (event: SessionEvent): TokenUsage | undefined =>

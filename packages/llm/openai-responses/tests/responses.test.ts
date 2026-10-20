@@ -37,6 +37,42 @@ describe("openai-responses adapter", () => {
     expect(out.content).toBe("ok");
   });
 
+  it("maps Responses usage (incl. cached_tokens) into TokenUsage", async () => {
+    const llm = createOpenAiResponsesAdapter({
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk",
+      model: "gpt-test",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            output: [
+              {
+                type: "message",
+                content: [{ type: "output_text", text: "ok" }],
+              },
+            ],
+            usage: {
+              input_tokens: 110,
+              output_tokens: 20,
+              total_tokens: 130,
+              input_tokens_details: { cached_tokens: 40 },
+            },
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.usage).toEqual({
+      inputTokens: 70,
+      outputTokens: 20,
+      cacheReadTokens: 40,
+      totalTokens: 130,
+    });
+  });
+
   it("turns a silent body into a retryable TIMEOUT, not a hang", async () => {
     const llm = createOpenAiResponsesAdapter({
       baseUrl: "https://api.openai.com/v1",

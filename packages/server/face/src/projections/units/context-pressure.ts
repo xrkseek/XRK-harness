@@ -9,7 +9,8 @@ import { asOptNonNegInt, asOptPositiveInt } from "../parse-int.js";
 
 /**
  * Approximate context occupancy (DSH contextPressure; ContextMeter).
- * Provider pressure from usage; capacity from `request/header.config.contextWindow`;
+ * Provider pressure from {@link inputPressureTokens} (prefer `totalTokens`, else
+ * `input + cacheRead`; never cacheWrite); capacity from `request/header.config.contextWindow`;
  * projectedTokens = pressure + (surface − sampledSurface) after stamp-before-append
  * (same formula as core-session {@link projectedInputPressureTokens}, which soft
  * budget also reads so the meter and auto-compact share one occupancy signal).

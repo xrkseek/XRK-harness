@@ -35,8 +35,10 @@ user-invocable: false
 - 把预算强行换成 surface 计价  
 - Face estimate/fold shim  
 - 搬 Cordis `xrk-token-meter` 进内核  
+- `inputPressureTokens` / fixture pressure 加 `cacheWrite`（会把 Context 环吹爆）  
 - 在 `docs/` 写「不要合并 / 本刀 / shim」  
 - 假扮多事件 `summary|prune` + surfaceOp（本仓单事件 shadow 字段）
+- 窗口分子绕过 `totalTokens`（Codex `tokens_in_context_window`）；timeline prompt 用 `promptPressureTokens`
 
 ## 教科书 vs 笔记
 

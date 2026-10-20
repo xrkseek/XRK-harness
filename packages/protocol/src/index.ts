@@ -169,6 +169,7 @@ export {
 export {
   inputPressureTokens,
   parseTokenUsage,
+  promptPressureTokens,
   providerUsageSample,
   tryParseOpenAiUsage,
   usageFromSessionEvent,

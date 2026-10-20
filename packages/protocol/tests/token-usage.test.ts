@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   inputPressureTokens,
+  promptPressureTokens,
   providerUsageSample,
   tryParseOpenAiUsage,
   usageFromSessionEvent,
@@ -34,6 +35,36 @@ describe("token-usage event helpers", () => {
     });
     expect(usageFromSessionEvent(message)).toEqual(message.usage);
     expect(inputPressureTokens(chunk.usage!)).toBe(13);
+  });
+
+  it("window pressure prefers totalTokens; prompt path never adds cacheWrite", () => {
+    // Anthropic-shaped: wire input 100 = uncached 60 + cacheRead 40; cacheWrite 20
+    // is a billing subset of that prompt, not an additive window layer.
+    expect(
+      promptPressureTokens({
+        inputTokens: 60,
+        outputTokens: 5,
+        cacheReadTokens: 40,
+        cacheWriteTokens: 20,
+      }),
+    ).toBe(100);
+    // Codex tokens_in_context_window = total_tokens when present.
+    expect(
+      inputPressureTokens({
+        inputTokens: 60,
+        outputTokens: 5,
+        cacheReadTokens: 40,
+        cacheWriteTokens: 20,
+        totalTokens: 105,
+      }),
+    ).toBe(105);
+    expect(
+      inputPressureTokens({
+        inputTokens: 60,
+        outputTokens: 5,
+        cacheReadTokens: 40,
+      }),
+    ).toBe(100);
   });
 
   it("ignores non-usage events and usage-less messages", () => {
@@ -88,5 +119,37 @@ describe("token-usage event helpers", () => {
     expect(
       tryParseOpenAiUsage({ prompt_tokens: 10, completion_tokens: 2 }),
     ).toEqual({ inputTokens: 10, outputTokens: 2, totalTokens: 12 });
+  });
+
+  it("tryParseOpenAiUsage maps Responses + Gemini usage shapes", () => {
+    expect(
+      tryParseOpenAiUsage({
+        input_tokens: 110,
+        output_tokens: 20,
+        total_tokens: 130,
+        input_tokens_details: { cached_tokens: 40, cache_write_tokens: 5 },
+        output_tokens_details: { reasoning_tokens: 8 },
+      }),
+    ).toEqual({
+      inputTokens: 70,
+      outputTokens: 20,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 5,
+      reasoningTokens: 8,
+      totalTokens: 130,
+    });
+    expect(
+      tryParseOpenAiUsage({
+        promptTokenCount: 90,
+        candidatesTokenCount: 12,
+        totalTokenCount: 102,
+        cachedContentTokenCount: 30,
+      }),
+    ).toEqual({
+      inputTokens: 60,
+      outputTokens: 12,
+      cacheReadTokens: 30,
+      totalTokens: 102,
+    });
   });
 });

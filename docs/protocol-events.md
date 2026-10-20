@@ -72,7 +72,8 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `parseTokenUsage` · `tryParseOpenAiUsage` | Strict / soft provider sample decode |
 | `providerUsageSample(event)` | From mid-stream `assistant/chunk` kind=`usage` or final `assistant/message.usage` → `{ usage, turnId, stepId }` |
 | `usageFromSessionEvent(event)` | Same sample, usage only |
-| `inputPressureTokens(usage)` | `input + cacheRead + cacheWrite`（for context pressure） |
+| `promptPressureTokens(usage)` | `input + cacheRead`（prompt 侧；不含 `cacheWrite` / output） |
+| `inputPressureTokens(usage)` | 优先 `totalTokens`（Codex 窗口占用）；否则同 `promptPressureTokens` |
 
 Surface / compaction window pricing lives in `@xrkseek/core-session` — see [session-compaction.md](./session-compaction.md).
 
@@ -163,7 +164,8 @@ Other `turn/end.reason` values: `completed` · `error` · `max-tokens` · `block
 | `parseTokenUsage` · `tryParseOpenAiUsage` | Strict / soft provider sample decode |
 | `providerUsageSample(event)` | From mid-stream `assistant/chunk` kind=`usage` or final `assistant/message.usage` → `{ usage, turnId, stepId }` |
 | `usageFromSessionEvent(event)` | Same sample, usage only |
-| `inputPressureTokens(usage)` | `input + cacheRead + cacheWrite` (for context pressure) |
+| `promptPressureTokens(usage)` | `input + cacheRead` (prompt side; excludes `cacheWrite` / output) |
+| `inputPressureTokens(usage)` | Prefer `totalTokens` (Codex window occupancy); else same as `promptPressureTokens` |
 
 Surface / compaction window pricing lives in `@xrkseek/core-session` — see [session-compaction.md](./session-compaction.md).
 

@@ -23,6 +23,7 @@ import {
   contentHasImage,
   flattenText,
   requestImageHandleText,
+  tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 
 export const GEMINI_DEFAULT_BASE_URL =
@@ -236,9 +237,13 @@ function parseGenerateContent(json: unknown): LlmChatResponse {
       });
     }
   }
+  const usage = tryParseOpenAiUsage(
+    (json as { usageMetadata?: unknown })?.usageMetadata,
+  );
   return {
     content,
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 
@@ -250,6 +255,7 @@ async function* streamGeminiJsonLines(
   const decoder = new TextDecoder();
   let buf = "";
   let content = "";
+  let usage: LlmChatResponse["usage"];
   const toolCalls: ToolCall[] = [];
 
   const flushObj = function* (obj: unknown): Generator<LlmStreamEvent> {
@@ -270,6 +276,10 @@ async function* streamGeminiJsonLines(
           toolCalls.push(call);
         }
       }
+    }
+    if (parsed.usage) {
+      usage = parsed.usage;
+      yield { type: "usage", usage: parsed.usage };
     }
   };
 
@@ -303,6 +313,7 @@ async function* streamGeminiJsonLines(
     type: "done",
     content,
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 

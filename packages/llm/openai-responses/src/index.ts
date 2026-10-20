@@ -23,6 +23,7 @@ import {
   contentHasImage,
   flattenText,
   requestImageHandleText,
+  tryParseOpenAiUsage,
 } from "@xrkseek/protocol";
 
 export const OPENAI_RESPONSES_DEFAULT_PATH = "/responses";
@@ -250,9 +251,11 @@ function parseResponse(json: unknown): LlmChatResponse {
       content = choice.message.content;
     }
   }
+  const usage = tryParseOpenAiUsage((json as { usage?: unknown })?.usage);
   return {
     content,
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 
@@ -264,6 +267,7 @@ async function* streamResponsesSse(
   const decoder = new TextDecoder();
   let buf = "";
   let content = "";
+  let usage: LlmChatResponse["usage"];
   const toolAcc = new Map<string, { name?: string; arguments: string }>();
 
   const flush = function* (line: string): Generator<LlmStreamEvent> {
@@ -286,7 +290,19 @@ async function* streamResponsesSse(
         name?: string;
         arguments?: string;
       };
+      response?: { usage?: unknown };
+      usage?: unknown;
     };
+    if (
+      ev.type === "response.completed" ||
+      ev.type === "response.done"
+    ) {
+      const parsed = tryParseOpenAiUsage(ev.response?.usage ?? ev.usage);
+      if (parsed) {
+        usage = parsed;
+        yield { type: "usage", usage: parsed };
+      }
+    }
     if (
       ev.type === "response.output_text.delta" ||
       ev.type === "response.text.delta"
@@ -352,6 +368,7 @@ async function* streamResponsesSse(
     type: "done",
     content,
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(usage ? { usage } : {}),
   };
 }
 

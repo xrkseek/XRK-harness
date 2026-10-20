@@ -34,6 +34,36 @@ describe("gemini adapter", () => {
     expect(out.content).toBe("yo");
   });
 
+  it("maps usageMetadata into TokenUsage", async () => {
+    const llm = createGeminiAdapter({
+      apiKey: "gk",
+      model: "gemini-test",
+      enableStream: false,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: "yo" }] } }],
+            usageMetadata: {
+              promptTokenCount: 90,
+              candidatesTokenCount: 12,
+              totalTokenCount: 102,
+              cachedContentTokenCount: 30,
+            },
+          }),
+          { status: 200 },
+        )) as unknown as typeof fetch,
+    });
+    const out = await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(out.usage).toEqual({
+      inputTokens: 60,
+      outputTokens: 12,
+      cacheReadTokens: 30,
+      totalTokens: 102,
+    });
+  });
+
   it("turns a silent body into a retryable TIMEOUT, not a hang", async () => {
     const llm = createGeminiAdapter({
       apiKey: "gk",

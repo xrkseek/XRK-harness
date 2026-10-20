@@ -1131,9 +1131,10 @@ function contextPressureOf(
   for (const event of log) {
     const sample = usageSampleOf(event)
     if (sample === undefined) continue
+    // Match protocol inputPressureTokens: uncached + cacheRead only.
+    // cacheWrite is a billing subset of wire input, not an extra window layer.
     pressureTokens = sample.usage.inputTokens
       + (sample.usage.cacheReadTokens ?? 0)
-      + (sample.usage.cacheWriteTokens ?? 0)
   }
   const contextWindow = lastRequestContext(log)?.contextWindow
   return {

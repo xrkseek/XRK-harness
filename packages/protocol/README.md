@@ -24,7 +24,8 @@ See `docs/protocol-events.md`.
 | `parseTokenUsage` / `tryParseOpenAiUsage` | Strict / soft decode of provider samples |
 | `providerUsageSample` | Mid-stream usage chunk or final message usage (+ turn/step) |
 | `usageFromSessionEvent` | Same sample without ids |
-| `inputPressureTokens` | Input + cache buckets for context pressure |
+| `promptPressureTokens` | Uncached input + cache read (prompt side; not cache write) |
+| `inputPressureTokens` | Prefer `totalTokens` (Codex window); else `promptPressureTokens` |
 
 See [docs/protocol-events.md](../../docs/protocol-events.md). Compaction / surface pricing: [docs/session-compaction.md](../../docs/session-compaction.md).
 
