@@ -393,6 +393,7 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
 function safeStem(name: string): string {
   const stem = name
     .trim()
+    /* eslint-disable-next-line no-control-regex -- strip C0 controls from filenames */
     .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "_")
     .replace(/\s+/g, "-")
     .slice(0, 48);

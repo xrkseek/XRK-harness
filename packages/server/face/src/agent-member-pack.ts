@@ -284,7 +284,7 @@ export function readMemberPackEnvPrep(packDir: string): string | undefined {
 export function notReadyPackHints(input: {
   readonly rosterWorkspaceId: string;
   readonly memberId: string;
-  readonly productHome?: string;
+  readonly productHome?: string | undefined;
 }): {
   readonly packDir: string;
   readonly envPrep?: string;
@@ -310,7 +310,7 @@ export function notReadyPackHints(input: {
 export interface MaterializeAgentMemberPackOptions {
   readonly rosterWorkspaceId: string;
   readonly memberId: string;
-  readonly productHome?: string;
+  readonly productHome?: string | undefined;
 }
 
 export interface MaterializeAgentMemberPackResult {
