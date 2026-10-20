@@ -91,6 +91,10 @@ export {
   type CordisCredentialsBridge,
 } from "./cordis-credentials-bridge.js";
 export {
+  createCordisAttachmentsBridge,
+  type CordisAttachmentsBridge,
+} from "./cordis-attachments-bridge.js";
+export {
   asCommunityLlmModelRows,
   baseUrlFromCommunityModels,
   communityLlmSyncFingerprint,
