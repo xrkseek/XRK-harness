@@ -27,6 +27,10 @@ describe("agentPreset catalog", () => {
     expect(resolveAgentPresetProfile("im").subagents.mode).toBe("on");
     expect(resolveAgentPresetProfile("im").subagentRouting).toBe(true);
     expect(resolveAgentPresetProfile("im").delegation).toBe("proactive");
+    const qichuang = resolveAgentPresetProfile("qichuang");
+    expect(qichuang.composition).toBe("harness");
+    expect(qichuang.tools).toEqual({ web: true, lsp: true, pty: true });
+    expect(qichuang.subagents.mode).toBe("off");
   });
 
   it("legacy server / plan map to harness tools", () => {

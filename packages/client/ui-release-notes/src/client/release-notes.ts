@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.10',
+    date: '2026-10-20',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '向阳奇创补齐查网 / 语言服务 / 终端：web · lsp · PTY 与 harness 同档开，仍无嵌套子代理；跨区继续用 workspace_* / thread_*。',
+        en: 'Xiangyang Qichuang now matches harness tool switches: web · lsp · PTY on, still no nested subagents; cross-workspace work stays on workspace_* / thread_*.',
+      },
+      {
+        zh: '修好壳里拖 zip 装高级干员：team.export / team.importPack remotes 补挂，名册导入不再报 importPack is not a function；大型公文包可完整落盘。',
+        en: 'Fixed drag-install for advanced 干员 zips: team.export / team.importPack remotes are wired so roster import no longer throws; large briefcase packs materialize fully.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.10 接管 @latest。完整清单见 docs/releases/v0.6.10.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.10 now owns @latest. Full list in docs/releases/v0.6.10.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.9',
     date: '2026-10-20',
     title: {

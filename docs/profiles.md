@@ -41,7 +41,7 @@ Wire 遗留值 **`server`** → 入库与徽章一律归一成 **`harness`**。�
 |----|-------|--------|------|
 | **minimal** | Minimal | fs + skill + std（无 workspace/thread peer） | 最小，无 shell / 联网（烟测 / `run` 默认） |
 | **im** | IM | minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_*` / `thread_*` / `subagent`（无 bash / web / presence） | IM 通道（`ws_im`）；可删工作区；复杂任务可 `workspace_id` 委派到编码区；AGT 可换 `setImToolPorts` |
-| **qichuang** | 奇创 | minimal + team / session_query / `workspace_*` / `thread_*`（无 subagent / bash / web） | 向阳空间锁定徽章；建区 / 开会话 / 派任务（peer，非嵌套子代理） |
+| **qichuang** | 奇创 | harness 面（bash + web + lsp + PTY）+ team / session_query / `workspace_*` / `thread_*`（**无** nested subagent） | 向阳空间锁定徽章；统领全局：查网、终端、语言服务、建区 / 开会话 / 派任务（peer，非嵌套子代理） |
 | **shell** | Shell | + bash + PTY（无 workspace/thread peer） | 本机 shell 专注 |
 | **frugal** | Frugal | 完整工具 + workspace/thread，无子代理（`delegation: explicit`，无子代理工具时不生效） | 控制支出（省钱） |
 | **shallow** | Shallow | 完整工具 + 子代理 + workspace/thread（与 harness 同用每模型会话上限；`delegation: proactive`） | 浅委派偏好 |
@@ -131,7 +131,7 @@ node apps/cli/dist/bin.js web --preset frugal
 | 名 | 契约 |
 |----|------|
 | **向阳空间** | id `ws_default`；标题固定「向阳空间」；路径 `~/.xrk/xiangyang-workspace`；初次启动默认存在；**不可删除 / 改名** |
-| **奇创**（`qichuang`） | 向阳空间会话锁定徽章：团队名册 + `workspace_*` + `thread_*`（可给别处开会话定主线）；**无**嵌套子代理；空间内不可切换工具面 |
+| **奇创**（`qichuang`） | 向阳空间会话锁定徽章：团队名册 + `workspace_*` + `thread_*` + web / lsp / PTY（可给别处开会话定主线）；**无**嵌套子代理；空间内不可切换工具面 |
 | **专用 skills** | 仅落在向阳空间 `.xrk/skills`：`xrk-demand-translate`（模糊需求转化）· `xrk-plugin-dev-care`（无源码写插件）· `xrk-home-config` · `xrk-xrk-cleanup` · `xrk-memory-polish` · `xrk-mainline-sideline` · `xrk-skill-merge`；seed 正文变更会刷新 |
 | **IM**（`ws_im`） | 仅网关连接或首次挂 IM 会话时生成；**可删**（下次连接再建）；空且无网关时侧栏隐藏；可 `subagent(workspace_id)` 派进编码区 |
 | **编排边界** | `workspace_list` / `workspace_create` / `workspace_session_prompt`：**奇创 · IM · 编码**均有；主线只做发现，`thread_message` 不要求挂钉；仅 **IM** 可 `subagent(workspace_id)` 跨区；编码徽章的嵌套子代理仍限本工作区 |
@@ -185,7 +185,7 @@ Legacy wire value **`server`** normalizes to **`harness`** for storage and badge
 |---------------|---------|----------------|----------|
 | **minimal** | Minimal | fs · skill · std; no bash / web / lsp / PTY / subagents / workspace·thread peer tools | Smoke tests; no shell |
 | **im** | IM | Minimal + Host `im_send` / `im_binding` + team / session_query / `workspace_*` / `thread_*` / `subagent` (no bash / web / presence) | IM channel (`ws_im`); deletable workspace; complex asks may `workspace_id` into coding workspaces; AGT may swap via `setImToolPorts` |
-| **qichuang** | 奇创 | Minimal + team / session_query / `workspace_*` / `thread_*` (no subagent / bash / web) | Locked badge for 向阳空间; create workspace / open peer sessions / dispatch (not nested subagents) |
+| **qichuang** | 奇创 | Harness plane (bash + web + lsp + PTY) + team / session_query / `workspace_*` / `thread_*` (**no** nested subagent) | Locked badge for 向阳空间; orchestrates globally — web, terminal, language server, create workspace / open peers / dispatch (not nested subagents) |
 | **shell** | Shell | Harness plane: fs + bash + PTY; web / lsp / subagents / workspace·thread peer tools off | Local shell focus |
 | **frugal** | Frugal | Full coding tools + workspace/thread; **subagents off** (`delegation: explicit`) | Control spend |
 | **shallow** | Shallow | Full tools + subagents + workspace/thread (same per-model session cap as harness; `delegation: proactive`) | Light helper tasks |
@@ -275,7 +275,7 @@ node apps/cli/dist/bin.js web --preset frugal
 | Name | Contract |
 |------|----------|
 | **Xiangyang space** | id `ws_default`; fixed title 「向阳空间»; path `~/.xrk/xiangyang-workspace`; present on first launch; **undeletable / unrenamable** |
-| **Qichuang** (`qichuang`) | Locked badge for Xiangyang sessions: team roster + `workspace_*` + `thread_*` (may pin peers opened elsewhere); **no** nested subagents; tool surface not user-switchable |
+| **Qichuang** (`qichuang`) | Locked badge for Xiangyang sessions: team roster + `workspace_*` + `thread_*` + web / lsp / PTY (may pin peers opened elsewhere); **no** nested subagents; tool surface not user-switchable |
 | **Dedicated skills** | Only under Xiangyang `.xrk/skills`: `xrk-demand-translate` (fuzzy-demand hub) · `xrk-plugin-dev-care` (plugins without monorepo) · `xrk-home-config` · `xrk-xrk-cleanup` · `xrk-memory-polish` · `xrk-mainline-sideline` · `xrk-skill-merge`; seed refreshes when bodies change |
 | **IM** (`ws_im`) | Created only when a gateway connects or an IM session attaches; **deletable** (recreated on next connect); hidden when empty with no gateway; may `subagent(workspace_id)` into coding |
 | **Orchestration boundary** | `workspace_list` / `workspace_create` / `workspace_session_prompt`: **Qichuang · IM · coding**; 主线 is discovery only — `thread_message` needs no pin; only **IM** may `subagent(workspace_id)` across workspaces; coding nested subagents stay in-workspace |

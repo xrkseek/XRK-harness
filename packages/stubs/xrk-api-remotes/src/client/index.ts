@@ -122,6 +122,8 @@ const FACE_REMOTES: FaceRemoteSpec = {
     remove: 'args',
     capture: 'args',
     dispatch: 'args',
+    export: 'args',
+    importPack: 'args',
   },
 }
 

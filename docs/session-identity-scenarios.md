@@ -34,7 +34,7 @@
 
 ```
 badge: qichuang
-tool_surface: qichuang (full-access · settings+team_*+list/create/session_prompt+thread · no nested subagents)
+tool_surface: qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · no nested subagents)
 surface_brief: kind=orchestrator · surface=qichuang · path=open (fs incl. grep/glob) — verbs in <session_posture>.
 ```
 

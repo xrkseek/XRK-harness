@@ -73,7 +73,7 @@ function toolSurfaceSummary(badge: string): string {
     return "im (full-access · channel+list/create/session_prompt+subagent→coding+thread_message)";
   }
   if (badge === "qichuang") {
-    return "qichuang (full-access · settings+team_*+list/create/session_prompt+thread · no nested subagents)";
+    return "qichuang (full-access · settings+team_*+web+lsp+pty+list/create/session_prompt+thread · no nested subagents)";
   }
   const profile = resolveAgentPresetProfile(badge);
   const bits: string[] = ["fs"];

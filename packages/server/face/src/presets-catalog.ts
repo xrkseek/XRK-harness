@@ -84,6 +84,8 @@ export const DEFAULT_MAX_ACTIVE_CHILDREN = 0;
 const FULL_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
 const SHELL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: true };
 const MINIMAL_TOOLS: AgentToolFlags = { web: false, lsp: false, pty: false };
+/** Xiangyang orchestrator — full harness tool switches (no nested subagents). */
+const QICHUANG_TOOLS: AgentToolFlags = { web: true, lsp: true, pty: true };
 
 const SUBAGENTS_OFF: AgentSubagentPolicy = { mode: "off" };
 
@@ -188,12 +190,13 @@ export const FACE_AGENT_PRESETS: readonly AgentPresetInfo[] = [
     id: "qichuang",
     displayName: "Qichuang",
     description:
-      "Xiangyang locked surface: team + workspace_* / thread_* peer collab — no nested subagents, no bash/web/lsp/PTY",
+      "Xiangyang locked surface: team + workspace_* / thread_* + web + lsp + PTY — no nested subagents",
     workspaceLocked: true,
     profile: {
       id: "qichuang",
-      composition: "minimal",
-      tools: MINIMAL_TOOLS,
+      // Host builds harness composition; full tool flags + no nested subagents.
+      composition: "harness",
+      tools: QICHUANG_TOOLS,
       subagents: SUBAGENTS_OFF,
       subagentRouting: false,
       delegation: "explicit",
