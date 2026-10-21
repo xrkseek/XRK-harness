@@ -44,13 +44,23 @@ function npmSpawn(args, opts = {}) {
     "bin",
     "npm-cli.js",
   );
-  const cmd = existsSync(npmCli) ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
-  const npmArgs = existsSync(npmCli) ? [npmCli, ...args] : args;
-  return spawnSync(cmd, npmArgs, {
+  // Cursor/helper Node has no bundled npm — fall back to PATH `npm.cmd`,
+  // which on Windows needs a shell (shell:false → status null / silent fail).
+  if (existsSync(npmCli)) {
+    return spawnSync(process.execPath, [npmCli, ...args], {
+      cwd: opts.cwd ?? ROOT,
+      encoding: opts.encoding ?? "utf8",
+      stdio: opts.stdio ?? "pipe",
+      shell: false,
+      env: { ...process.env, ...opts.env },
+    });
+  }
+  const cmd = process.platform === "win32" ? "npm.cmd" : "npm";
+  return spawnSync(cmd, args, {
     cwd: opts.cwd ?? ROOT,
     encoding: opts.encoding ?? "utf8",
     stdio: opts.stdio ?? "pipe",
-    shell: false,
+    shell: process.platform === "win32",
     env: { ...process.env, ...opts.env },
   });
 }
