@@ -684,32 +684,35 @@ export function listMemberPackInventory(input: {
   };
 }
 
-/** Compact capability / preamble lines for a 公文包 (briefcase) inventory. */
+/**
+ * Lean capability / preamble lines for a 公文包 (briefcase).
+ * Do not dump every skill absolute path — those trees are in the skill catalog;
+ * the child loads them with the skill tool. Full inventory stays on team_* JSON.
+ */
 export function formatMemberPackInventoryLines(
   inv: MemberPackInventory,
 ): string[] {
+  const skillsDir = path.join(inv.packHome, "skills");
   const lines = [
     `${MEMBER_PACK_BRIEFCASE}: not workspace cwd — read/edit here or copy into workspace`,
     `pack_home: ${inv.packHome}`,
-    `playbook: ${inv.playbookPath}`,
+    `skills_dir: ${skillsDir}`,
   ];
-  if (inv.envPrepPath) lines.push(`env_prep: ${inv.envPrepPath}`);
+  if (inv.skills.length === 0) {
+    lines.push(
+      "skills: (none yet) — when present, load/search with the skill tool by name (paths not dumped here)",
+    );
+  } else {
+    lines.push(
+      `skills: ${inv.skills.length} in skill catalog — load/search with the skill tool by name (not listed here); references/ under each skills/<id>/`,
+    );
+  }
   if (inv.materialsPath) {
     const tops =
       inv.materialsTop.length > 0
         ? ` · top=${inv.materialsTop.slice(0, 12).join(",")}`
         : "";
     lines.push(`materials: ${inv.materialsPath}${tops}`);
-  }
-  if (inv.skills.length === 0) {
-    lines.push("skills: (none yet)");
-  } else {
-    for (const s of inv.skills) {
-      const refs = s.hasReferences
-        ? ` · references=${s.referencesPath ?? path.join(s.path, "references")}`
-        : "";
-      lines.push(`skill: ${s.id} @ ${s.path}${refs}`);
-    }
   }
   return lines;
 }

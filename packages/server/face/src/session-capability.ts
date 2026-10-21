@@ -106,10 +106,7 @@ function advancedBriefcaseCapabilityLines(
     ...(productHome ? { productHome } : {}),
   });
   if (!inv) return [];
-  return [
-    ...formatMemberPackInventoryLines(inv),
-    "skills also in skill catalog (load by name; references/ under each skill path)",
-  ];
+  return formatMemberPackInventoryLines(inv);
 }
 
 /** Short capability for tool-delegated children (not UI forks). */

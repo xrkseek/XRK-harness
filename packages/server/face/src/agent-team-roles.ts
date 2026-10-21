@@ -263,10 +263,10 @@ export function applySubagentSpawnPreamble(
       : packHome
         ? [
             `- 公文包 (briefcase): ${packHome} · not workspace cwd — read/edit or copy into workspace`,
+            `- skills_dir: ${path.join(packHome, "skills")} · load via skill tool/catalog (no per-skill path dump)`,
             ...(packMaterials
               ? [`- materials: ${packMaterials} · 公文包/briefcase workspace/`]
               : []),
-            `- skills_dir: ${path.join(packHome, "skills")} · also in skill catalog`,
           ]
         : []),
     "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Repo AGENTS.md is not your persona.",

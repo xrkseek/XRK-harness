@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -132,8 +132,9 @@ describe("session_capability", () => {
       packInventoryLines: [
         "公文包 (briefcase): not workspace cwd — read/edit here or copy into workspace",
         `pack_home: ${packHome}`,
+        `skills_dir: ${packHome}/skills`,
+        "skills: 1 in skill catalog — load/search with the skill tool by name (not listed here); references/ under each skills/<id>/",
         `materials: ${packHome}/workspace · top=hw1.md`,
-        `skill: lit @ ${packHome}/skills/lit · references=${packHome}/skills/lit/references`,
       ],
       memberId: "mem_hw",
       inject: "minimal",
@@ -141,8 +142,9 @@ describe("session_capability", () => {
     expect(out).toMatch(/workspace: \/proj\/coding · same as the parent session/);
     expect(out).toMatch(/公文包 \(briefcase\)/);
     expect(out).toMatch(/pack_home: .*mem_hw/);
-    expect(out).toMatch(/skill: lit @/);
-    expect(out).toMatch(/references=/);
+    expect(out).toMatch(/skills_dir:/);
+    expect(out).toMatch(/skill tool/);
+    expect(out).not.toMatch(/skill: lit @/);
     expect(out).toMatch(/member_id: mem_hw/);
   });
 
@@ -192,7 +194,12 @@ describe("session_capability", () => {
     );
     const materials = path.join(packHome, "workspace");
     mkdirSync(materials, { recursive: true });
-    mkdirSync(path.join(packHome, "skills"), { recursive: true });
+    const skillDir = path.join(packHome, "skills", "scout-notes");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      "---\nname: scout-notes\ndescription: notes\n---\n\n# Notes\n",
+    );
     runtime.subagents.attach({
       parentSessionId: parentId,
       childSessionId: childId,
@@ -213,8 +220,12 @@ describe("session_capability", () => {
     expect(text).toContain(`cwd: ${codingRoot}`);
     expect(text).toContain("公文包 (briefcase)");
     expect(text).toContain(`pack_home: ${packHome}`);
+    expect(text).toContain(`skills_dir: ${path.join(packHome, "skills")}`);
+    expect(text).toContain("skill tool");
+    expect(text).toMatch(/skills: 1 in skill catalog/);
+    expect(text).not.toContain(`skill: scout-notes @`);
     expect(text).toContain(`materials: ${materials}`);
-    expect(text).toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
+    expect(text).not.toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
     expect(text).toContain("ask→human_face");
     expect(text).toContain("omitted:");
     expect(text).toContain("ask_user");

@@ -5,6 +5,8 @@ import path from "node:path";
 import {
   AGENT_MEMBER_PACK_MARKER,
   buildAgentMemberPackZip,
+  formatMemberPackInventoryLines,
+  listMemberPackInventory,
   loadAgentMemberPack,
   materializeAgentMemberPack,
   parseAgentMemberPackFiles,
@@ -189,5 +191,30 @@ describe("agent-member-pack", () => {
     if (!parsed.ok) return;
     expect(parsed.pack.skillDirs).toEqual(["rubric"]);
     expect(parsed.pack.files.has("workspace/homework/brief.md")).toBe(true);
+  });
+
+  it("capability lines stay lean (no per-skill absolute paths)", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-pack-lean-"));
+    const packHome = path.join(home, "agent-rosters", "packs", "global", "mem_x");
+    for (const id of ["a", "b", "c"]) {
+      const d = path.join(packHome, "skills", id);
+      mkdirSync(d, { recursive: true });
+      writeFileSync(path.join(d, "SKILL.md"), `# ${id}\n`);
+    }
+    mkdirSync(path.join(packHome, "workspace"), { recursive: true });
+    writeFileSync(path.join(packHome, "playbook.md"), "Do work.\n");
+    const inv = listMemberPackInventory({
+      rosterWorkspaceId: "global",
+      memberId: "mem_x",
+      productHome: home,
+    });
+    expect(inv?.skills).toHaveLength(3);
+    const lines = formatMemberPackInventoryLines(inv!);
+    const blob = lines.join("\n");
+    expect(blob).toContain("skills_dir:");
+    expect(blob).toMatch(/skills: 3 in skill catalog/);
+    expect(blob).toContain("skill tool");
+    expect(blob).not.toMatch(/skill: a @/);
+    expect(blob).not.toContain(path.join(packHome, "skills", "a"));
   });
 });

@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.11',
+    date: '2026-10-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '高级干员派生不再灌每条 skill 绝对路径：能力板 / preamble 只留 pack_home 与 skills_dir；正文用 skill 工具按名加载。',
+        en: 'Spawning an advanced 干员 no longer dumps every skill absolute path: capability / preamble keep pack_home and skills_dir; load bodies with the skill tool by name.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.11 接管 @latest。完整清单见 docs/releases/v0.6.11.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.11 now owns @latest. Full list in docs/releases/v0.6.11.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.10',
     date: '2026-10-20',
     title: {

@@ -86,7 +86,7 @@ Each child = a full model session. Prefer doing it yourself. Spawn only when the
 | `files` | → `workspace/`（公文包材料，**不是**会话工作区） |
 | `env_prep` | → `env/SETUP.md`（GitHub 链接、安装说明等；从不自动执行） |
 
-派生后：cwd = 父工作区；turn-start / preamble 注入 `公文包 (briefcase)` · `pack_home` · `playbook` · `env_prep` · `materials` · 每条 `skill: id @ path · references=…`。分享 zip 用相对路径（Host 会补 `## Paths (portable)`）。
+派生后：cwd = 父工作区；turn-start / preamble **只**注入短句：`公文包 (briefcase)` · `pack_home` · `skills_dir` ·（可选）`materials` —— **不**枚举每条 skill 绝对路径。包内 skills 经 `extraSkillDirs` 进子会话 **skill catalog**（name+description），正文用 `skill` 工具按名加载。分享 zip 用相对路径（Host 会补短 `## Paths (portable)`）。
 
 **Example — 收到 zip**
 
