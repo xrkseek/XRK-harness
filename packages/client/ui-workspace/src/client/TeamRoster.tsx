@@ -182,13 +182,7 @@ function MemberBall({
           ? <span className={css.seed}>{seedLabel}</span>
           : null}
         {member.ready === false
-请接着刚才中断的地方继续完成任务，不要从零重做。
-
-编码约束：
-- 沿用项目现有风格与约定，改动范围尽量小
-- 优先复用已有代码，避免重复实现
-- 不做无关重构，不过度抽象
-- 改完确认相关逻辑可正常运行          ? <span className={css.notReady}>{notReadyLabel}</span>
+          ? <span className={css.notReady}>{notReadyLabel}</span>
           : null}
       </span>
     </button>
