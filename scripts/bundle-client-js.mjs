@@ -11,10 +11,32 @@
  *   pnpm client:bundle connection runtime
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
+
+/**
+ * Recursive copy without `fs.cpSync` — on Windows, `cpSync` of
+ * `packages/client/ui-theme/src/styles` aborts the process (0xC0000409)
+ * after a successful tsdown emit; `copyFileSync` is fine.
+ */
+function copyDirSync(src, dest) {
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(src)) {
+    const from = path.join(src, name);
+    const to = path.join(dest, name);
+    if (statSync(from).isDirectory()) copyDirSync(from, to);
+    else copyFileSync(from, to);
+  }
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_SRC = path.join(ROOT, "packages", "client");
@@ -107,17 +129,29 @@ function main() {
       continue;
     }
     process.stdout.write(`bundle ${pkg.name}\n`);
+    // pipe stdio: on Windows, `inherit` + a child STATUS_STACK_BUFFER_OVERRUN
+    // (seen after ui-theme emit) tears down this parent before we can recover.
     const result = spawnSync(
       process.execPath,
       [cli, "--env.XRK_BUILD_FACE", "client"],
-      { cwd: dir, env, stdio: "inherit" },
+      { cwd: dir, env, encoding: "utf8" },
     );
-    if (result.status !== 0) {
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    const out = path.join(dir, "lib", "client.js");
+    // 0xC0000409: rare abort-after-emit; accept when client.js landed.
+    const abortAfterWrite =
+      result.status === 3221226505 || result.status === -1073740791;
+    if (result.status !== 0 && !(abortAfterWrite && existsSync(out))) {
       throw new Error(
         `tsdown failed for ${pkg.name} (exit ${result.status ?? "spawn"})`,
       );
     }
-    const out = path.join(dir, "lib", "client.js");
+    if (abortAfterWrite) {
+      process.stderr.write(
+        `warn ${pkg.name}: tsdown exited ${result.status} after emit; accepting artifact\n`,
+      );
+    }
     if (!existsSync(out)) {
       throw new Error(`tsdown did not emit ${path.relative(ROOT, out)}`);
     }
@@ -125,7 +159,7 @@ function main() {
     const srcStyles = path.join(dir, "src", "styles");
     const libStyles = path.join(dir, "lib", "styles");
     if (existsSync(srcStyles)) {
-      cpSync(srcStyles, libStyles, { recursive: true });
+      copyDirSync(srcStyles, libStyles);
     }
     process.stdout.write(`ok ${path.relative(ROOT, out)}\n`);
   }
