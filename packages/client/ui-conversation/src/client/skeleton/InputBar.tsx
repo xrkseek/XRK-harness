@@ -299,14 +299,11 @@ export const InputBar = memo(function InputBar({
   // back. Oversized generic files (> maxFileBytes) become `@path` chips via
   // Desktop `pathForFile` instead of base64 upload; without a host path the
   // batch is refused. The host still enforces byte limits at submit for
-  // callers that bypass this composer. Subagent sessions reject attachments
-  // at intake (not only at RPC).
+  // callers that bypass this composer. Subagent sessions share the same
+  // attachment intake as the parent — Face prompt already accepts image/file
+  // parts on child sessions.
   const intakeImages = useCallback((files: readonly File[]): void => {
     if (addImages === undefined || files.length === 0) return
-    if (subagent !== null) {
-      showToast(t('image.subagentUnsupported'))
-      return
-    }
     const rejected = ((): string | null => {
       const imageTypes = imageLimits?.mediaTypes as readonly string[] | undefined
       const imageFiles = imageTypes === undefined
@@ -392,17 +389,13 @@ export const InputBar = memo(function InputBar({
       return null
     })()
     if (rejected !== null) showToast(rejected)
-  }, [addImages, attachments, fileLimits, imageLimits, keyboard, showToast, subagent, t])
+  }, [addImages, attachments, fileLimits, imageLimits, keyboard, showToast, t])
 
-  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined && subagent === null
+  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
 
   const intakeDirectories = useCallback((directories: readonly File[]): void => {
     if (directories.length === 0) return
     if (locked || machineBusy) return
-    if (subagent !== null) {
-      showToast(t('file.subagentUnsupported'))
-      return
-    }
     if (keyboard === undefined) {
       showToast(t('file.folderNeedsDesktop'))
       return
@@ -419,7 +412,7 @@ export const InputBar = memo(function InputBar({
     if (unresolved.length > 0) {
       showToast(t('file.folderNeedsDesktop'))
     }
-  }, [keyboard, locked, machineBusy, showToast, subagent, t])
+  }, [keyboard, locked, machineBusy, showToast, t])
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onPickFiles = (e: ChangeEvent<HTMLInputElement>): void => {
@@ -677,7 +670,6 @@ export const InputBar = memo(function InputBar({
               ref={fileInputRef}
               type="file"
               multiple
-              disabled={subagent !== null}
               hidden
               onChange={onPickFiles}
             />

@@ -353,4 +353,42 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.getByText('DeepSeek Chat')).toBeTruthy()
     expect(load).toHaveBeenCalled()
   })
+
+  it('locked chip paints adapter effort names, not raw ids', () => {
+    const load = vi.fn()
+    render(<ModelSelect
+      locked={false}
+      available={false}
+      directory={createSnapshotStore(state({
+        current: {
+          provider: 'deepseek-official',
+          model: 'deepseek-flash',
+          reasoningEffort: 'xhigh',
+        },
+        groups: [{
+          id: 'deepseek-official',
+          name: 'DeepSeek',
+          models: [{
+            id: 'deepseek-flash',
+            name: 'Qwen3.8-Flash',
+            reasoning: {
+              efforts: [
+                { id: 'high', name: '高' },
+                { id: 'xhigh', name: '极高' },
+              ],
+              defaultEffort: 'high',
+            },
+          }],
+        }],
+      }))}
+      load={load}
+      select={vi.fn().mockResolvedValue(false)}
+      t={t}
+    />)
+
+    expect(screen.getByText('Qwen3.8-Flash')).toBeTruthy()
+    expect(screen.getByText('极高')).toBeTruthy()
+    expect(screen.queryByText('xhigh')).toBeNull()
+    expect(screen.getByLabelText('子代理模型（已锁定）：Qwen3.8-Flash · 极高')).toBeTruthy()
+  })
 })

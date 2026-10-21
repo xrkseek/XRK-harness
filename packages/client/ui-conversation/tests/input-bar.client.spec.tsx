@@ -967,10 +967,11 @@ describe('running and lock semantics', () => {
     expect(sink).not.toHaveBeenCalled()
   })
 
-  it('refuses image intake on subagent sessions at the composer', () => {
+  it('accepts image intake on subagent sessions at the composer', () => {
     const addImages = vi.fn(() => null)
     const { view } = bench({
       addImages,
+      imageLimits: PNG_LIMITS,
       subagent: {
         address: {
           parentSessionId: 'parent' as SessionId,
@@ -985,8 +986,8 @@ describe('running and lock semantics', () => {
     data.items.add(file)
     const textarea = view.container.querySelector('[data-composer-input]')!
     fireEvent.paste(textarea, { clipboardData: data })
-    expect(addImages).not.toHaveBeenCalled()
-    expect(view.getByText('子智能体会话暂不支持图片')).toBeTruthy()
+    expect(addImages).toHaveBeenCalledWith([file])
+    expect(view.queryByText('子智能体会话暂不支持图片')).toBeNull()
   })
 
   it('running plain Enter follows the busy-state Steer preference', () => {

@@ -230,18 +230,27 @@ export function ModelSelect(
 
   // Addressed subagent: show the inherited/pinned route as a calm static chip
   // (向阳 permission pattern) — never hide the seat, never open a picker.
+  // Resolve effort via adapter-owned `name` (same as the interactive trigger),
+  // never paint the raw id (`xhigh`) when the catalog already localized it.
   if (!available) {
-    const modelLabel = state.current !== null
-      ? (state.groups
+    const current = state.current
+    const pinned = current === null
+      ? undefined
+      : state.groups
         .flatMap(g => g.models.map(m => ({ groupId: g.id, model: m })))
-        .find(row => row.groupId === state.current!.provider && row.model.id === state.current!.model)
-        ?.model.name
-        ?? state.current.model)
-      : t('trigger.fallback')
-    const effort = state.current?.reasoningEffort
-    const title = effort !== undefined && effort.length > 0
-      ? `${modelLabel} · ${effort}`
-      : modelLabel
+        .find(row => row.groupId === current.provider && row.model.id === current.model)
+    const modelLabel = pinned?.model.name
+      ?? current?.model
+      ?? t('trigger.fallback')
+    const effortId = current?.reasoningEffort
+      ?? pinned?.model.reasoning?.defaultEffort
+    const effortLabel = effortId === undefined || effortId.length === 0
+      ? undefined
+      : pinned?.model.reasoning?.efforts.find(level => level.id === effortId)?.name
+        ?? effortId
+    const title = effortLabel === undefined
+      ? modelLabel
+      : `${modelLabel} · ${effortLabel}`
     return (
       <span
         className={css.lockedChip}
@@ -249,8 +258,8 @@ export function ModelSelect(
         aria-label={t('trigger.lockedAria', { model: title })}
       >
         <span className={css.triggerLabel}>{modelLabel}</span>
-        {effort !== undefined && effort.length > 0 && (
-          <span className={css.triggerEffort}>{effort}</span>
+        {effortLabel !== undefined && (
+          <span className={css.triggerEffort}>{effortLabel}</span>
         )}
       </span>
     )

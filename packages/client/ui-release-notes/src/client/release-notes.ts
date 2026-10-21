@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.12',
+    date: '2026-10-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '子智能体会话可贴图 / 拖文件：去掉壳上 intake 门禁，与主会话同轨进 prompt。',
+        en: 'Subagent sessions accept images and files: shell intake gate removed; same prompt path as the parent.',
+      },
+      {
+        zh: '子会话锁定模型芯片显示思考强度目录名（如「极高」），不再露出 xhigh 等原始 id。',
+        en: 'Locked child model chips show catalog effort names (e.g. 「极高」) instead of raw ids like xhigh.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.12 接管 @latest。完整清单见 docs/releases/v0.6.12.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.12 now owns @latest. Full list in docs/releases/v0.6.12.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.11',
     date: '2026-10-21',
     title: {
