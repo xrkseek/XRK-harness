@@ -11,32 +11,11 @@
  *   pnpm client:bundle connection runtime
  */
 import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-} from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyDirSync } from "./copy-dir-sync.mjs";
 import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
-
-/**
- * Recursive copy without `fs.cpSync` — on Windows, `cpSync` of
- * `packages/client/ui-theme/src/styles` aborts the process (0xC0000409)
- * after a successful tsdown emit; `copyFileSync` is fine.
- */
-function copyDirSync(src, dest) {
-  mkdirSync(dest, { recursive: true });
-  for (const name of readdirSync(src)) {
-    const from = path.join(src, name);
-    const to = path.join(dest, name);
-    if (statSync(from).isDirectory()) copyDirSync(from, to);
-    else copyFileSync(from, to);
-  }
-}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_SRC = path.join(ROOT, "packages", "client");

@@ -8,7 +8,6 @@
  */
 import { spawnSync } from "node:child_process";
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -19,6 +18,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyDirSync } from "./copy-dir-sync.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLI_PKG = path.join(ROOT, "apps", "cli", "package.json");
@@ -56,12 +56,12 @@ function hoistPnpmStore(nm) {
         for (const pkg of readdirSync(src)) {
           const dest = path.join(scopeDest, pkg);
           rmSync(dest, { recursive: true, force: true });
-          cpSync(path.join(src, pkg), dest, { recursive: true, dereference: true });
+          copyDirSync(path.join(src, pkg), dest);
         }
       } else {
         const dest = path.join(nm, name);
         rmSync(dest, { recursive: true, force: true });
-        cpSync(src, dest, { recursive: true, dereference: true });
+        copyDirSync(src, dest);
       }
     }
   }

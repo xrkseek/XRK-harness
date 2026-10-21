@@ -15,7 +15,6 @@
  */
 import {
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -25,6 +24,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyDirSync } from "./copy-dir-sync.mjs";
 import { PRODUCT_BOOT_OMIT } from "./product-boot-omit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -150,7 +150,7 @@ function copyPlugins(packages, uiSrc) {
     copyFileSync(path.join(libDir, "client.js"), path.join(destDir, "client.js"));
     const styles = path.join(libDir, "styles");
     if (existsSync(styles)) {
-      cpSync(styles, path.join(destDir, "styles"), { recursive: true });
+      copyDirSync(styles, path.join(destDir, "styles"));
     }
     copied += 1;
     process.stdout.write(`plugin ${id}\n`);
@@ -162,7 +162,7 @@ function copyPresenceAssets() {
   const src = path.join(ROOT, "apps", "web", "public", "presence");
   const dest = path.join(DIST, "presence");
   if (!existsSync(src)) return;
-  cpSync(src, dest, { recursive: true });
+  copyDirSync(src, dest);
   process.stdout.write("presence assets\n");
 }
 
