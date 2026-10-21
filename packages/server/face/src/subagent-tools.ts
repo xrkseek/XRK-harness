@@ -101,6 +101,7 @@ import {
   resolveMemberPackMaterialsDir,
 } from "./agent-member-pack.js";
 import { GLOBAL_ROSTER_ID } from "./agent-roster-store.js";
+import { liveMemberPlaybook } from "./agent-roster-tools.js";
 import { bindRalphTool } from "./ralph-tool.js";
 import {
   raceDrainRunSlice,
@@ -722,7 +723,7 @@ function createSubagentTool(
             isError: true,
           };
         }
-        prompt = `${rosterMember.playbook.trim()}\n\nTASK:\n${promptBare}`;
+        prompt = `${liveMemberPlaybook(options.runtime, workspaceId, rosterMember).trim()}\n\nTASK:\n${promptBare}`;
         if (spawnRole === undefined && rosterMember.role !== "default") {
           spawnRole = rosterMember.role;
         }

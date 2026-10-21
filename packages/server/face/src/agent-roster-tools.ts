@@ -38,6 +38,7 @@ import {
   materializeAgentMemberPack,
   mergeIntoMemberPack,
   notReadyPackHints,
+  readMemberPackPlaybook,
   syncMemberPackPlaybook,
   type ParseAgentMemberPackResult,
 } from "./agent-member-pack.js";
@@ -148,23 +149,66 @@ async function loadPackFromArg(
   return loadAgentMemberPack(resolvePackPath(runtime, sessionId, packRaw));
 }
 
+/**
+ * Advanced pack: prefer on-disk playbook.md over lagging roster JSON, and heal
+ * the roster when they diverge so the next spawn / UI list sees the same text.
+ */
+function adoptLiveAdvancedPlaybook(
+  runtime: FaceRuntime,
+  canvasId: string,
+  row: ListedRosterMember,
+): ListedRosterMember {
+  if (row.kind !== "advanced") return row;
+  const rosterWs = row.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  const disk = readMemberPackPlaybook({
+    rosterWorkspaceId: rosterWs,
+    memberId: row.id,
+    productHome: runtime.agentRoster.home,
+  });
+  if (!disk || disk === row.playbook.trim()) return row;
+  const scope = row.scope === "global" ? "global" : "workspace";
+  const healed = runtime.agentRoster.upsertAtScope(canvasId, scope, {
+    id: row.id,
+    name: row.name,
+    playbook: disk,
+    role: isAgentTeamSpawnRole(row.role) ? row.role : "worker",
+    kind: row.kind,
+    ready: row.ready,
+    brief: row.brief,
+    inject: row.inject,
+    ...(row.tools ? { tools: row.tools } : {}),
+    appearance: row.appearance,
+  });
+  return healed ?? row;
+}
+
+/** Effective playbook for spawn / tool responses (disk wins for advanced packs). */
+export function liveMemberPlaybook(
+  runtime: FaceRuntime,
+  canvasId: string,
+  row: ListedRosterMember,
+): string {
+  return adoptLiveAdvancedPlaybook(runtime, canvasId, row).playbook;
+}
+
 function enrichListedMember(
   runtime: FaceRuntime,
   canvasId: string,
   row: ListedRosterMember,
 ): Record<string, unknown> {
-  const rosterWs = row.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  const live = adoptLiveAdvancedPlaybook(runtime, canvasId, row);
+  const rosterWs = live.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
   const pub = {
-    ...rosterPublicFields(row),
+    ...rosterPublicFields(live),
     visibility: rosterScopeVisibility(
-      row.scope === "global" ? "global" : "workspace",
+      live.scope === "global" ? "global" : "workspace",
       rosterWs,
     ),
   };
-  if (row.kind !== "advanced") return pub;
+  if (live.kind !== "advanced") return pub;
   const packOpts = {
     rosterWorkspaceId: rosterWs,
-    memberId: row.id,
+    memberId: live.id,
     productHome: runtime.agentRoster.home,
   };
   const inventory = listMemberPackInventory(packOpts);
@@ -188,7 +232,7 @@ function enrichListedMember(
         }
       : {}),
   };
-  if (row.ready) return base;
+  if (live.ready) return base;
   return {
     ...base,
     ...notReadyPackHints(packOpts),
@@ -352,12 +396,22 @@ function patchExistingMember(
   },
 ): ListedRosterMember | undefined {
   const name = (patch.name ?? existing.name).trim();
+  const scope = existing.scope === "global" ? "global" : "workspace";
   let playbook = (patch.playbook ?? existing.playbook).trim();
-  if (existing.kind === "advanced" && patch.playbook !== undefined) {
-    playbook = withAdvancedPackPathGuidance(playbook);
+  if (existing.kind === "advanced") {
+    if (patch.playbook !== undefined) {
+      playbook = withAdvancedPackPathGuidance(playbook);
+    } else {
+      // Keep roster aligned with disk when the caller omits playbook.
+      const disk = readMemberPackPlaybook({
+        rosterWorkspaceId: scope === "global" ? GLOBAL_ROSTER_ID : canvasId,
+        memberId: existing.id,
+        productHome: runtime.agentRoster.home,
+      });
+      if (disk) playbook = disk;
+    }
   }
   if (!name || !playbook) return undefined;
-  const scope = existing.scope === "global" ? "global" : "workspace";
   const inject = patch.inject ?? existing.inject;
   const tools =
     patch.tools === undefined
@@ -378,7 +432,10 @@ function patchExistingMember(
     appearance: existing.appearance,
   });
   if (!member) return undefined;
-  if (existing.kind === "advanced") {
+  // Only push roster → disk when playbook was explicitly revised. Omitting
+  // playbook (brief/inject/tools/skills-only) used to overwrite a fresher
+  // playbook.md with the lagging roster copy (41 skills vs 42 on disk).
+  if (existing.kind === "advanced" && patch.playbook !== undefined) {
     const rosterWs = scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
     syncMemberPackPlaybook({
       rosterWorkspaceId: rosterWs,

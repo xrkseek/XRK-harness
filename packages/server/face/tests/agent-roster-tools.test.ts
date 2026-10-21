@@ -214,6 +214,75 @@ describe("bindAgentRosterTools", () => {
     expect(listed.members.find((m) => m.id === id)).toBeUndefined();
   });
 
+  it("team_save omit playbook does not overwrite a fresher on-disk playbook.md", async () => {
+    const {
+      buildAgentMemberPackZip,
+      readMemberPackPlaybook,
+      resolveMemberPackHome,
+    } = await import("../src/agent-member-pack.js");
+    const { writeFileSync, readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const { GLOBAL_ROSTER_ID } = await import("../src/agent-roster-store.js");
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const zip = buildAgentMemberPackZip({
+      name: "Lit Scout",
+      playbook: "skills (41个) — old roster copy",
+      role: "researcher",
+    });
+    const imported = await dispatchFaceMethod(runtime, "team.importPack", "i", {
+      sessionId,
+      zipBase64: zip.toString("base64"),
+    });
+    expect(imported.result.ok).toBe(true);
+    const id = String(
+      (imported.result.value as { member: { id: string } }).member.id,
+    );
+    const packOpts = {
+      rosterWorkspaceId: GLOBAL_ROSTER_ID,
+      memberId: id,
+      productHome: runtime.agentRoster.home,
+    };
+    const diskPath = path.join(resolveMemberPackHome(packOpts)!, "playbook.md");
+    const fresher =
+      "skills (42个) — §7.1 §10\nLive disk edit after import.\n";
+    writeFileSync(diskPath, fresher, "utf8");
+
+    const tools = createToolRegistry();
+    bindAgentRosterTools(tools, { runtime, sessionId });
+    const save = await tools.get("team_save")!.execute({
+      id,
+      brief: "Duty line only — no playbook field",
+      scope: "global",
+    });
+    expect(save.isError).toBeFalsy();
+    expect(readFileSync(diskPath, "utf8")).toContain("skills (42个)");
+    expect(readFileSync(diskPath, "utf8")).not.toContain("41个");
+    const body = JSON.parse(String(save.content)) as {
+      member: { playbook: string; brief?: string };
+    };
+    expect(body.member.playbook).toContain("42个");
+    expect(body.member.brief).toBe("Duty line only — no playbook field");
+    expect(readMemberPackPlaybook(packOpts)).toContain("§7.1");
+
+    // team_list omits full playbook in public fields; heal lands on the store.
+    await tools.get("team_list")!.execute({});
+    const healed = runtime.agentRoster.get(
+      (await import("../src/canvas-tools.js")).canvasWorkspaceIdForSession(
+        runtime,
+        sessionId,
+      ),
+      id,
+    );
+    expect(healed?.playbook).toContain("42个");
+  });
+
   it("team_list resurfaces envPrep for UI-imported not-ready packs", async () => {
     const { buildAgentMemberPackZip } = await import("../src/agent-member-pack.js");
     const store = createMemorySessionStore();

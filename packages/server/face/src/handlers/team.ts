@@ -41,6 +41,7 @@ import {
   parseRosterScope,
   type ListedRosterMember,
 } from "../agent-roster-store.js";
+import { liveMemberPlaybook } from "../agent-roster-tools.js";
 import { captureSessionPlaybook } from "../capture-member-playbook.js";
 import { resolveSessionCwd } from "../session-cwd.js";
 import { permissionSelectFromEvents } from "../permissions.js";
@@ -153,13 +154,19 @@ function listMemberForClient(
   canvasId: string,
   row: ListedRosterMember,
 ) {
-  if (row.kind !== "advanced" || row.ready) return row;
-  const rosterWs = row.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
+  // Advanced: surface disk playbook.md (and heal roster) so TeamRoster stays hot.
+  const playbook = liveMemberPlaybook(runtime, canvasId, row);
+  const live =
+    playbook === row.playbook
+      ? row
+      : { ...row, playbook };
+  if (live.kind !== "advanced" || live.ready) return live;
+  const rosterWs = live.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
   return {
-    ...row,
+    ...live,
     ...notReadyPackHints({
       rosterWorkspaceId: rosterWs,
-      memberId: row.id,
+      memberId: live.id,
       productHome: runtime.agentRoster.home,
     }),
   };
@@ -390,7 +397,7 @@ export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
   const permission = permissionSelectFromEvents(parentEvents).currentValue;
   const approval = effectiveApprovalPolicy(parentEvents);
   const prompt = applySubagentSpawnPreamble({
-    prompt: `${member.playbook.trim()}\n\nTASK:\n${task}`,
+    prompt: `${liveMemberPlaybook(runtime, workspaceId, member).trim()}\n\nTASK:\n${task}`,
     parentSessionId: sessionId,
     childSessionId: childId,
     mode: "continuable",
@@ -456,10 +463,11 @@ export const teamExport: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   const stem = safeStem(member.name);
+  const playbook = liveMemberPlaybook(runtime, canvasId, member);
   if (member.kind !== "advanced") {
     const card = formatAgentMemberCard({
       name: member.name,
-      playbook: member.playbook,
+      playbook,
       role: isAgentTeamSpawnRole(member.role) ? member.role : "worker",
       ...(member.brief ? { brief: member.brief } : {}),
       ...(member.inject === "subagent" || member.inject === "minimal"
@@ -483,7 +491,7 @@ export const teamExport: FaceHandler = async (runtime, _rpcId, payload) => {
     fromDisk ??
     buildAgentMemberPackZip({
       name: member.name,
-      playbook: member.playbook,
+      playbook,
       role: isAgentTeamSpawnRole(member.role) ? member.role : "worker",
       ...(member.brief ? { brief: member.brief } : {}),
       ...(member.inject === "subagent" || member.inject === "minimal"

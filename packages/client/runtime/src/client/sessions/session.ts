@@ -30,6 +30,7 @@ import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror, echoRpcIdsFromUserMessage } from './queue-mirror.ts'
+import { isTokenDelta } from './assistant-timing.ts'
 
 /**
  * Messages requested per history page (open / loadOlder).
@@ -141,6 +142,17 @@ export class Session implements SessionFace {
   private lastAgentError: string | null = null
   /** Live events buffered during open/resync and stitched by sequence once history lands. */
   private liveBuffer: { event: SessionEvent; view: ToolEventView | undefined }[] = []
+  /**
+   * Token deltas held until the next stream paint flush so mux storms do not
+   * run conversation.append/matchInput on every SSE frame (paint was already
+   * coalesced; apply work was not). Structural events drain this first.
+   */
+  private deferredStreamAppends: { event: SessionEvent; view: ToolEventView | undefined }[] = []
+  /**
+   * Soft submission notify: rebuild snapshot without conversation.flush so
+   * Ctrl+Enter/Enter does not force a deferred Markdown/tool paint on keydown.
+   */
+  private skipConversationFlush = false
   /** Gap repair in flight; live events detour to the buffer until the tail page lands. */
   private stitching = false
   /** subscribed.lastSeq baseline (gap detection; null when no subscribed frame arrived — degrade to the liveBuffer dedup path). */
@@ -193,8 +205,20 @@ export class Session implements SessionFace {
       )
       : new ConversationNodeAssembler(options.conversation.events, options.conversation.views)
     this.notifier = new Notifier(() => {
-      this.conversation.flush()
+      let leftoverStream = false
+      if (!this.skipConversationFlush) {
+        leftoverStream = this.drainDeferredStreamAppends()
+        this.conversation.flush()
+      } else if (this.conversation.needsWindowReplace()) {
+        // Soft keydown still materializes an unflushed window replace (open with
+        // no subscribers stays lazy until the first snapshot read).
+        this.conversation.flush()
+      }
+      this.skipConversationFlush = false
       this.snapshotCache = this.buildSnapshot()
+      // Time-sliced drain: continue ASAP (skip adaptive gap) so the assembler
+      // catches the durable log without waiting another full paint budget.
+      if (leftoverStream) queueMicrotask(() => { this.notifier.continueFrameDirty() })
     })
     this.snapshotCache = this.buildSnapshot()
   }
@@ -248,7 +272,19 @@ export class Session implements SessionFace {
     }]
     this.submissionSettlements.set(requestId, { onRetire: input.onRetire, retiring: false })
     this.promptAttempted = true
-    this.notifier.markDirty()
+    // Soft sync notify: paint the pending echo on this keydown without forcing
+    // deferred stream Markdown/tool materialization (that was making Ctrl+Enter
+    // wait on the current Think/assistant paint). Re-arm stream paint if dirties
+    // or coalesced chunks are still outstanding — and keep skip armed so the
+    // caller's immediate getSnapshot/ensureFresh (React uSES) does not hard-flush
+    // stream dirties before the re-armed frame runs.
+    const rearmStream = this.deferredStreamAppends.length > 0 || this.conversation.needsFlush()
+    this.skipConversationFlush = true
+    this.notifier.notifyNow()
+    if (rearmStream) {
+      this.skipConversationFlush = true
+      this.notifier.markFrameDirty()
+    }
     return { requestId, abandon: () => { this.retireFailedSubmission(requestId) } }
   }
 
@@ -601,6 +637,7 @@ export class Session implements SessionFace {
     this.pendingRev++
     this.subscribedLastSeq = null
     this.liveBuffer = []
+    this.deferredStreamAppends = []
     this.notifier.markDirty()
     await this.open()
   }
@@ -860,6 +897,8 @@ export class Session implements SessionFace {
     this.views = entries.map(e => e.view)
     this.baseSeq = this.events[0]?.seq ?? 0
     this.hasMore = hasMore && this.baseSeq > 1
+    // Window replace invalidates any coalesced live tail — stitch via appendLive.
+    this.deferredStreamAppends = []
     if (this.events.some(event => event.type === 'turn/start')) this.firstPromptPendingTurn = false
     if (this.blankBit && this.events.some(event =>
       event.type === 'turn/start' || event.type === 'command/run')) {
@@ -871,6 +910,33 @@ export class Session implements SessionFace {
     this.liveBuffer = []
     for (const item of buffered) this.appendLive(item.event, item.view)
     this.notifier.markDirty()
+  }
+
+  /**
+   * Apply coalesced token deltas into the conversation assembler (events[] already
+   * holds them for seq continuity). Merges same-run deltas; stream paints may
+   * stop after a short time slice so one frame cannot monopolize the main thread.
+   * Structural events pass `forceAll` so ordering stays contiguous.
+   * @returns true when deferred work remains (caller should re-arm stream paint).
+   */
+  private drainDeferredStreamAppends(options?: { forceAll?: boolean }): boolean {
+    if (this.deferredStreamAppends.length === 0) return false
+    const batch = this.deferredStreamAppends
+    this.deferredStreamAppends = []
+    const merged = mergeDeferredStreamBatch(batch)
+    const forceAll = options?.forceAll === true
+    const started = Date.now()
+    let index = 0
+    for (; index < merged.length; index++) {
+      if (!forceAll && index > 0 && Date.now() - started >= STREAM_DRAIN_SLICE_MS) break
+      const item = merged[index]!
+      this.queueMirror.acceptDurable(item.event)
+      this.conversation.append({ event: item.event, view: item.view })
+      this.observeSubmissionEvent(item.event)
+    }
+    if (index >= merged.length) return false
+    this.deferredStreamAppends = merged.slice(index)
+    return true
   }
 
   /** Seq-guarded append shared by stitching and the open-state live path. */
@@ -915,6 +981,18 @@ export class Session implements SessionFace {
       void this.repairGap()
       return
     }
+    // Coalesce token deltas: keep seq contiguous in events[], defer assembler
+    // matchInput until the next stream paint (or the next structural event).
+    if (isStreamCoalescableChunk(event)) {
+      if (tailSeq !== null && event.seq <= tailSeq) return
+      this.events.push(event)
+      this.views.push(view)
+      this.deferredStreamAppends.push({ event, view })
+      this.notifier.markFrameDirty()
+      return
+    }
+    // Structural events must see every prior coalesced chunk before append.
+    this.drainDeferredStreamAppends({ forceAll: true })
     this.scheduleConversation(this.appendLive(event, view))
   }
 
@@ -1145,6 +1223,95 @@ function hasVisibleConversationContent(chat: ChatSnapshot): boolean {
 function scheduleFrame(fn: () => void): void {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { fn() })
   else setTimeout(fn, 0)
+}
+
+/**
+ * Live token deltas that Definitions publish at animation-frame cadence.
+ * Usage/finish/block-start stay on the immediate append path.
+ */
+function isStreamCoalescableChunk(event: SessionEvent): boolean {
+  return event.type === 'assistant/chunk' && isTokenDelta(event.data.chunk)
+}
+
+/** Max wall time spent applying deferred stream chunks inside one paint. */
+const STREAM_DRAIN_SLICE_MS = 8
+
+type DeferredStreamItem = { event: SessionEvent; view: ToolEventView | undefined }
+
+/**
+ * Fold consecutive same-run token deltas so one paint does O(runs) matchInput
+ * work instead of O(chunks). events[] already retained every seq for the log.
+ */
+function mergeDeferredStreamBatch(
+  batch: readonly DeferredStreamItem[],
+): DeferredStreamItem[] {
+  if (batch.length <= 1) return [...batch]
+  const out: DeferredStreamItem[] = []
+  let open: DeferredStreamItem | null = null
+  let openKey: string | null = null
+  for (const item of batch) {
+    const key = streamChunkRunKey(item.event)
+    if (key === null || open === null || key !== openKey) {
+      if (open !== null) out.push(open)
+      open = item
+      openKey = key
+      continue
+    }
+    open = { event: mergeStreamChunkEvents(open.event, item.event), view: item.view ?? open.view }
+  }
+  if (open !== null) out.push(open)
+  return out
+}
+
+/** Same-run key for text / reasoning / tool-call deltas; null = do not merge. */
+function streamChunkRunKey(event: SessionEvent): string | null {
+  if (event.type !== 'assistant/chunk') return null
+  const { turn, step, chunk } = event.data
+  if (chunk.type === 'text-delta') return `text:${turn}:${step}:${chunk.index}`
+  if (chunk.type === 'reasoning-delta') return `reasoning:${turn}:${step}:${chunk.index}`
+  if (chunk.type === 'tool-call-delta') {
+    return `tool:${turn}:${step}:${chunk.index}:${String(chunk.id)}`
+  }
+  return null
+}
+
+/** Merge two same-run deltas; keep the later seq so the assembler window advances. */
+function mergeStreamChunkEvents(head: SessionEvent, next: SessionEvent): SessionEvent {
+  if (head.type !== 'assistant/chunk' || next.type !== 'assistant/chunk') return next
+  const headChunk = head.data.chunk
+  const nextChunk = next.data.chunk
+  if (headChunk.type === 'text-delta' && nextChunk.type === 'text-delta') {
+    return {
+      ...next,
+      data: {
+        ...next.data,
+        chunk: { ...nextChunk, text: `${headChunk.text}${nextChunk.text}` },
+      },
+    }
+  }
+  if (headChunk.type === 'reasoning-delta' && nextChunk.type === 'reasoning-delta') {
+    return {
+      ...next,
+      data: {
+        ...next.data,
+        chunk: { ...nextChunk, text: `${headChunk.text}${nextChunk.text}` },
+      },
+    }
+  }
+  if (headChunk.type === 'tool-call-delta' && nextChunk.type === 'tool-call-delta') {
+    return {
+      ...next,
+      data: {
+        ...next.data,
+        chunk: {
+          ...nextChunk,
+          name: nextChunk.name ?? headChunk.name,
+          argumentsDelta: `${headChunk.argumentsDelta}${nextChunk.argumentsDelta}`,
+        },
+      },
+    }
+  }
+  return next
 }
 
 /** Attachment references in one structurally-read content block list, in block order. */

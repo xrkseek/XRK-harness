@@ -182,7 +182,13 @@ function MemberBall({
           ? <span className={css.seed}>{seedLabel}</span>
           : null}
         {member.ready === false
-          ? <span className={css.seed}>{notReadyLabel}</span>
+请接着刚才中断的地方继续完成任务，不要从零重做。
+
+编码约束：
+- 沿用项目现有风格与约定，改动范围尽量小
+- 优先复用已有代码，避免重复实现
+- 不做无关重构，不过度抽象
+- 改完确认相关逻辑可正常运行          ? <span className={css.notReady}>{notReadyLabel}</span>
           : null}
       </span>
     </button>
@@ -896,48 +902,22 @@ export function TeamRoster({
                     />
                   </div>
                   </fieldset>
-                  <div className={css.row}>
-                    {catalogSeed ? (
-                      <Button
-                        variant="primary"
-                        disabled={busy}
-                        onClick={() => {
-                          setSelectedId('new-workspace')
-                          setScope('workspace')
-                        }}
-                      >
-                        {t('team.cloneFrom')}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="primary"
-                        disabled={busy || name.trim() === '' || playbook.trim() === ''}
-                        onClick={() => { persistMember() }}
-                      >
-                        {saveLabel}
-                      </Button>
-                    )}
-                    {isDraftMemberId(selectedId) ? (
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => { importRef.current?.click() }}
-                      >
-                        {t('team.import')}
-                      </Button>
-                    ) : null}
-                    {selected !== undefined && !isDraftMemberId(selectedId) && selected.ready === false ? (
-                      <>
-                        {selected.envPrep ? (
-                          <div className={css.fieldHint} role="note">
-                            <div>{t('team.envPrepLabel')}</div>
-                            <pre className={css.envPrep}>{selected.envPrep}</pre>
-                          </div>
-                        ) : (
-                          <p className={css.fieldHint}>
-                            {selected.envHint ?? t('team.readyHint')}
-                          </p>
-                        )}
+                  {selected !== undefined && !isDraftMemberId(selectedId) && selected.ready === false ? (
+                    <div className={css.readyGate} role="note">
+                      <div className={css.readyGateHead}>
+                        <span className={css.notReadyBadge}>{t('team.notReady')}</span>
+                      </div>
+                      {selected.envPrep ? (
+                        <>
+                          <div className={css.readyGateLabel}>{t('team.envPrepLabel')}</div>
+                          <pre className={css.envPrep}>{selected.envPrep}</pre>
+                        </>
+                      ) : (
+                        <p className={css.fieldHint}>
+                          {selected.envHint ?? t('team.readyHint')}
+                        </p>
+                      )}
+                      <div className={css.readyGateActions}>
                         <Button
                           variant="primary"
                           disabled={busy}
@@ -971,7 +951,38 @@ export function TeamRoster({
                         >
                           {t('team.markReady')}
                         </Button>
-                      </>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className={css.row}>
+                    {catalogSeed ? (
+                      <Button
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => {
+                          setSelectedId('new-workspace')
+                          setScope('workspace')
+                        }}
+                      >
+                        {t('team.cloneFrom')}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        disabled={busy || name.trim() === '' || playbook.trim() === ''}
+                        onClick={() => { persistMember() }}
+                      >
+                        {saveLabel}
+                      </Button>
+                    )}
+                    {isDraftMemberId(selectedId) ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => { importRef.current?.click() }}
+                      >
+                        {t('team.import')}
+                      </Button>
                     ) : null}
                     {canExport ? (
                       <Button

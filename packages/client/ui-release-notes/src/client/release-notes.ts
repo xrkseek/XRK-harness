@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.13',
+    date: '2026-10-21',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '流式回复时 Ctrl+Enter / 打字更跟手：绘制让路给输入，同 run 文本合并，插队回显先画出来。',
+        en: 'Streaming stays responsive under Ctrl+Enter / typing: paints yield to input, same-run text merges, and steer echo paints first.',
+      },
+      {
+        zh: '高级干员只改 brief / skills 时，team_save 不再用名册旧文盖掉磁盘 playbook.md；派发与列表吃到最新说明。',
+        en: 'Advanced 干员 team_save without playbook no longer overwrites a fresher on-disk playbook.md; spawn and list use the live text.',
+      },
+      {
+        zh: '干员名册「未就绪」环境说明独立成警告面板，按钮不再挤成圆钮。',
+        en: 'Team roster Not ready env prep sits in its own warn panel; action buttons no longer crush into circles.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.13 接管 @latest。完整清单见 docs/releases/v0.6.13.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.13 now owns @latest. Full list in docs/releases/v0.6.13.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.12',
     date: '2026-10-21',
     title: {

@@ -125,6 +125,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.notReady {
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  color: var(--dsw-alias-state-warn-label);
+}
+
 .heading {
   margin: 0 0 4px;
   font-size: 13px;
@@ -182,8 +190,64 @@
 
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.row > * {
+  flex: 0 0 auto;
+}
+
+/* Advanced pack still preparing: full-width note so env text never shares
+ * the capsule button row (that squeeze made Save / Mark ready look circular). */
+.readyGate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 35%, var(--dsw-alias-border-secondary));
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, var(--dsw-alias-interactive-bg-hover));
+}
+
+.readyGateHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notReadyBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-state-warn-label);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
+}
+
+.readyGateLabel {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.readyGateActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.readyGateActions > * {
+  flex: 0 0 auto;
 }
 
 .input,
@@ -483,9 +547,9 @@
 }
 
 .envPrep {
-  margin: 6px 0 0;
+  margin: 0;
   padding: 8px 10px;
-  max-height: 140px;
+  max-height: 160px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -493,7 +557,7 @@
   font-size: 12px;
   line-height: 16px;
   color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-interactive-bg-hover);
+  background: var(--dsw-alias-button-elevated-fill);
   border-radius: 8px;
   border: 1px solid var(--dsw-alias-border-secondary);
 }

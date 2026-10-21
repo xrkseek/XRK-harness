@@ -438,7 +438,33 @@ export function materializeAgentMemberPack(
   };
 }
 
-/** Keep on-disk pack `playbook.md` aligned after a roster playbook revise. */
+/**
+ * Read on-disk pack `playbook.md` when present and non-empty. Advanced packs
+ * treat this file as the live source of truth after import / manual edit;
+ * roster JSON can lag until the next explicit team_save playbook=.
+ */
+export function readMemberPackPlaybook(input: {
+  readonly rosterWorkspaceId: string;
+  readonly memberId: string;
+  readonly productHome?: string | undefined;
+}): string | undefined {
+  const packHome = resolveMemberPackHome(input);
+  if (!packHome) return undefined;
+  const file = path.join(packHome, "playbook.md");
+  try {
+    if (!existsSync(file)) return undefined;
+    const raw = readFileSync(file, "utf8");
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    return trimmed.length > MEMBER_PLAYBOOK_MAX
+      ? trimmed.slice(0, MEMBER_PLAYBOOK_MAX)
+      : trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keep on-disk pack `playbook.md` aligned after an explicit roster playbook revise. */
 export function syncMemberPackPlaybook(input: {
   readonly rosterWorkspaceId: string;
   readonly memberId: string;

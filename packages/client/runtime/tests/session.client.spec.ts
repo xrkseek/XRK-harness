@@ -317,18 +317,78 @@ describe('live event path', () => {
     expect(frames).toHaveLength(1)
 
     frames.shift()!(0)
-    expect(published).toEqual([[0, 1, 2, 3, 4, 5, 6, 7, 8]])
+    // Same-run text-deltas merge into one node at the last seq of the run.
+    expect(published).toEqual([[0, 1, 2, 3, 4, 5, 6, 8]])
 
     feed(ev.chunkText(9, 1, '完成'))
     feed(ev.assistant(10, 1, '累计完成'))
     await Promise.resolve()
     expect(published).toEqual([
-      [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      [0, 1, 2, 3, 4, 5, 6, 8],
+      [0, 1, 2, 3, 4, 5, 6, 8, 9, 10],
     ])
 
-    frames.shift()!(0)
+    // Immediate assistant supersedes any budget-delayed stream frame; a leftover
+    // rAF (if still armed) is a no-op after the generation bump.
+    if (frames.length > 0) frames.shift()!(0)
     expect(published).toHaveLength(2)
+  })
+
+  it('merges same-run deferred text deltas into one assembler append per paint', async () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const { session } = await opened()
+    session.subscribe(() => undefined)
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1, 2, 3, 4, 5])
+    const feed = (event: SessionEvent) => {
+      session.handleMuxEnvelope('r' as never, { type: 'session/event', sessionId: SID, event })
+    }
+    feed(ev.chunkStart(6, 1))
+    feed(ev.chunkText(7, 1, '合'))
+    feed(ev.chunkText(8, 1, '并'))
+    feed(ev.chunkText(9, 1, '块'))
+    expect(frames).toHaveLength(1)
+    frames.shift()!(0)
+    // Three text-deltas collapse to one node at the last seq of the run.
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1, 2, 3, 4, 5, 6, 9])
+  })
+
+  it('soft-notifies a steer echo without flushing coalesced stream dirties on keydown', async () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const { session } = await opened()
+    // Subscribers required: zero-listener flush stays lazy (production UI always
+    // has uSES listeners; frame paint would otherwise never drain coalesced chunks).
+    session.subscribe(() => undefined)
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1, 2, 3, 4, 5])
+    const feed = (event: SessionEvent) => {
+      session.handleMuxEnvelope('r' as never, { type: 'session/event', sessionId: SID, event })
+    }
+    feed(ev.chunkStart(6, 1))
+    feed(ev.chunkText(7, 1, '流'))
+    feed(ev.chunkText(8, 1, '式'))
+    expect(frames).toHaveLength(1)
+
+    const handle = session.beginSubmission({ mode: 'steer', text: '插队', attachments: [] })
+    // Echo is visible immediately; stream dirties stay unflushed (history only).
+    expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
+      requestId: handle.requestId,
+      text: '插队',
+      placement: 'steering',
+    }])
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1, 2, 3, 4, 5])
+
+    // Soft notify re-arms stream paint; fire the outstanding frame(s).
+    expect(frames.length).toBeGreaterThanOrEqual(1)
+    while (frames.length > 0) frames.shift()!(0)
+    // Merged same-run deltas: seq 7 folds into 8.
+    expect(chatSeqs(session.getSnapshot())).toEqual([0, 1, 2, 3, 4, 5, 6, 8])
   })
 
   it('publishes a timeline-only boundary even when no Definition claims the event', async () => {
@@ -567,15 +627,15 @@ describe('prompt and cancel errors', () => {
     expect(session.getSnapshot().composerPhase).toBe('engaging')
     const result = await inFlight
     expect(result.ok).toBe(true)
-    // Monotone: settlement alone does not step the phase anywhere.
-    expect(session.getSnapshot().composerPhase).toBe('engaging')
+    // Accepted prompt arms optimistic running (Stop chrome before turn/start),
+    // so settlement itself steps engaging → active.
+    expect(session.getSnapshot().composerPhase).toBe('active')
     expect(api.callsOf('session.prompt')).toMatchObject([{
       sessionId: SID,
       mode: 'queue',
       content: [{ type: 'text', text: '要发的' }],
       clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
     }])
-    // First content lands (running turn): engaging → active.
     session.handleRunning(true)
     expect(session.getSnapshot().composerPhase).toBe('active')
   })

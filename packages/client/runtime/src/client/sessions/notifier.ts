@@ -29,13 +29,20 @@
 const FRAME_STALL_MS = 250
 
 /**
- * Minimum gap between stream (animation-frame) paints. Token deltas often arrive
+ * Baseline gap between stream (animation-frame) paints. Token deltas often arrive
  * faster than the main thread can parse Markdown / layout a long transcript; at
  * 60Hz the UI falls behind the durable log ("Think still typing" while Host already
- * spawned subagents). ~20fps keeps cumulative text catching up without starving
- * input. Structural markDirty / notifyNow still flush immediately.
+ * spawned subagents). ~20fps is the idle budget; a slow flush widens it so input
+ * (Ctrl+Enter echo) can land between paints. Structural markDirty / notifyNow
+ * still flush immediately.
  */
 const STREAM_PAINT_MIN_MS = 48
+
+/** Cap when the previous stream flush was expensive (Markdown / tool DOM). */
+const STREAM_PAINT_MAX_MS = 160
+
+/** Flush wall time that widens the next stream budget. */
+const STREAM_FLUSH_SLOW_MS = 40
 
 /** Frame publications whose rAF callback has not landed yet (wake-edge recovery targets). */
 const strandedFramePublications = new Set<() => void>()
@@ -48,6 +55,51 @@ interface FrameWakeHost {
     addEventListener?(type: 'visibilitychange', listener: () => void): void
   }
   addEventListener?(type: 'pageshow', listener: () => void): void
+  readonly navigator?: {
+    readonly scheduling?: {
+      isInputPending?(options?: { includeContinuous?: boolean }): boolean
+    }
+  }
+  readonly scheduler?: {
+    postTask?(
+      callback: () => void,
+      options?: { priority?: 'user-blocking' | 'user-visible' | 'background' },
+    ): unknown
+  }
+}
+
+/**
+ * Schedule a stream paint cooperatively when the browser exposes Scheduler API.
+ * Priority is `user-visible` (not `background`): streaming Think/text is on-screen
+ * work that must still yield to `user-blocking` input (Ctrl+Enter), but must not
+ * sit behind analytics-class tasks or the transcript looks frozen. rAF is the
+ * portable fallback (tests / older Chromium).
+ */
+function scheduleStreamCallback(armed: () => void): void {
+  const postTask = (globalThis as unknown as FrameWakeHost).scheduler?.postTask
+  if (typeof postTask === 'function') {
+    try {
+      postTask.call((globalThis as unknown as FrameWakeHost).scheduler, armed, {
+        priority: 'user-visible',
+      })
+      return
+    } catch {
+      // Fall through to rAF when postTask rejects the priority or is stubbed.
+    }
+  }
+  globalThis.requestAnimationFrame(armed)
+}
+
+/**
+ * True when the browser reports a pending discrete input event. Used to defer
+ * a stream paint so Ctrl+Enter / typing is not stranded behind Markdown work.
+ */
+function isInputPending(): boolean {
+  try {
+    return (globalThis as unknown as FrameWakeHost).navigator?.scheduling?.isInputPending?.() === true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -82,7 +134,9 @@ export class Notifier {
   private frameArmedAt = 0
   /** Last completed frame flush (stream paint budget). */
   private lastFrameFlushAt = 0
-  /** Deferred arm when a frame flush happened too recently. */
+  /** Adaptive gap before the next stream paint (widens after a slow flush). */
+  private streamPaintBudgetMs = STREAM_PAINT_MIN_MS
+  /** Deferred arm when a frame flush happened too recently or input is pending. */
   private delayedFrameTimer: ReturnType<typeof setTimeout> | null = null
 
   /** @param rebuild - snapshot rebuild function injected by the owner (writes the owner's snapshotCache). */
@@ -111,8 +165,9 @@ export class Notifier {
 
   /**
    * Stream-change entry: mark dirty and publish the cumulative state at most
-   * once per paint budget (~20fps). Coalesces token storms so the renderer can
-   * catch the durable log instead of painting every delta behind.
+   * once per paint budget (~20fps idle, slower after a heavy flush). Coalesces
+   * token storms so the renderer can catch the durable log instead of painting
+   * every delta behind. Yields once when the browser reports pending input.
    */
   markFrameDirty(): void {
     this.dirty = true
@@ -130,14 +185,28 @@ export class Notifier {
       return
     }
 
-    const wait = STREAM_PAINT_MIN_MS - (Date.now() - this.lastFrameFlushAt)
-    if (wait > 0) {
-      this.delayedFrameTimer = setTimeout(() => {
-        this.delayedFrameTimer = null
-        if (!this.notifyPending) return
-        if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
-        this.schedule('frame')
-      }, wait)
+    // Stalled clock: re-arm immediately. Budget / input yield only apply when no
+    // frame is outstanding — otherwise armStreamFrame would no-op on scheduled=frame.
+    if (this.scheduled === 'frame') {
+      this.schedule('frame')
+      return
+    }
+    this.armStreamFrame()
+  }
+
+  /**
+   * Continue a time-sliced stream drain without re-applying the adaptive paint
+   * gap. The previous slice already yielded; waiting another 48–160ms here left
+   * the assembler lagging the durable log after a multi-run merge.
+   */
+  continueFrameDirty(): void {
+    this.dirty = true
+    this.notifyPending = true
+    if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
+    if (this.delayedFrameTimer !== null) return
+    const useFrame = typeof globalThis.requestAnimationFrame === 'function'
+    if (!useFrame) {
+      this.schedule('microtask')
       return
     }
     this.schedule('frame')
@@ -170,6 +239,60 @@ export class Notifier {
     this.delayedFrameTimer = null
   }
 
+  /**
+   * Arm a stream frame after the adaptive budget, yielding once when input is
+   * pending so Ctrl+Enter / typing can run before the next Markdown paint.
+   */
+  private armStreamFrame(): void {
+    if (this.delayedFrameTimer !== null) return
+    if (this.scheduled === 'microtask') return
+
+    if (isInputPending()) {
+      this.delayedFrameTimer = setTimeout(() => {
+        this.delayedFrameTimer = null
+        if (!this.notifyPending) return
+        if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
+        // One yield is enough — do not spin on a sticky isInputPending.
+        this.armStreamFrameAfterBudget()
+      }, 0)
+      return
+    }
+    this.armStreamFrameAfterBudget()
+  }
+
+  private armStreamFrameAfterBudget(): void {
+    if (this.delayedFrameTimer !== null) return
+    if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
+
+    const wait = this.streamPaintBudgetMs - (Date.now() - this.lastFrameFlushAt)
+    if (wait > 0) {
+      this.delayedFrameTimer = setTimeout(() => {
+        this.delayedFrameTimer = null
+        if (!this.notifyPending) return
+        if (this.scheduled === 'microtask' || this.scheduled === 'frame') return
+        this.schedule('frame')
+      }, wait)
+      return
+    }
+    this.schedule('frame')
+  }
+
+  private adaptStreamBudget(flushDurationMs: number): void {
+    const target = flushDurationMs >= STREAM_FLUSH_SLOW_MS
+      ? Math.min(STREAM_PAINT_MAX_MS, Math.max(STREAM_PAINT_MIN_MS, flushDurationMs * 2))
+      : STREAM_PAINT_MIN_MS
+    // Ramp up immediately under load; ease back down so a single cheap frame
+    // does not snap to 20fps while the transcript is still heavy.
+    if (target >= this.streamPaintBudgetMs) {
+      this.streamPaintBudgetMs = target
+      return
+    }
+    this.streamPaintBudgetMs = Math.max(
+      STREAM_PAINT_MIN_MS,
+      Math.round(this.streamPaintBudgetMs * 0.75 + target * 0.25),
+    )
+  }
+
   private schedule(kind: 'microtask' | 'frame'): void {
     const generation = ++this.scheduleGeneration
     this.scheduled = kind
@@ -183,8 +306,13 @@ export class Notifier {
       if (generation !== this.scheduleGeneration) return
       const wasFrame = this.scheduled === 'frame'
       this.scheduled = 'none'
+      const started = Date.now()
       this.flush()
-      if (wasFrame) this.lastFrameFlushAt = Date.now()
+      if (wasFrame) {
+        const duration = Date.now() - started
+        this.lastFrameFlushAt = Date.now()
+        this.adaptStreamBudget(duration)
+      }
     }
     if (kind === 'frame') {
       bindFrameWake()
@@ -199,7 +327,8 @@ export class Notifier {
       }
       this.strandedFrame = armed
       strandedFramePublications.add(armed)
-      globalThis.requestAnimationFrame(armed)
+      // user-visible postTask yields to input; rAF is the portable fallback.
+      scheduleStreamCallback(armed)
       return
     }
     queueMicrotask(publish)
@@ -217,10 +346,11 @@ export class Notifier {
     if (!this.notifyPending) return
     if (this.listeners.size === 0) return // lazy: dirty (if still set) rebuilds on next getSnapshot
     this.notifyPending = false
-    if (this.dirty) {
-      this.dirty = false
-      this.rebuild()
-    }
+    // Always rebuild when notifying. ensureFresh may clear `dirty` while leaving
+    // notifyPending for a coalesced stream frame (soft submission echo); a
+    // dirty-gated rebuild would then notify-only and never drain deferred chunks.
+    this.dirty = false
+    this.rebuild()
     // Listener isolation: a subscriber throwing must not rob the rest of the
     // round. Unisolated, one bad listener truncated the iteration and left
     // every later view stale for that flush — which the next markDirty would

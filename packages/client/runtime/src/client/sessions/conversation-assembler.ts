@@ -257,6 +257,23 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   }
 
   /**
+   * Whether {@link flush} would materialize stream/structural dirties.
+   * Used so a soft submission notify can skip flush yet re-arm stream paint.
+   */
+  needsFlush(): boolean {
+    return this.replacePending || this.dirty.size > 0 || this.timelineDirty
+  }
+
+  /**
+   * True when the next flush must replace the whole window (open/resync).
+   * Soft submission notify still runs this flush so a zero-subscriber open
+   * does not leave chat empty on the first keydown read.
+   */
+  needsWindowReplace(): boolean {
+    return this.replacePending
+  }
+
+  /**
    * Materialize dirty Contexts and advance every registered view builder.
    * @returns whether any view snapshot was rebuilt or incrementally applied.
    */

@@ -109,6 +109,139 @@ describe('Notifier', () => {
     vi.useRealTimers()
   })
 
+  it('widens the stream budget after a slow frame flush', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const now = vi.spyOn(Date, 'now')
+    let clock = 1_000
+    now.mockImplementation(() => clock)
+    const notifier = new Notifier(() => {
+      clock += 80 // simulate heavy Markdown / tool paint inside flush
+    })
+    notifier.subscribe(() => undefined)
+
+    notifier.markFrameDirty()
+    frames.shift()!(0)
+    expect(clock).toBe(1_080)
+
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(0)
+    clock += 48
+    vi.advanceTimersByTime(48)
+    expect(frames).toHaveLength(0) // still inside the widened budget
+    clock += 112
+    vi.advanceTimersByTime(112)
+    expect(frames).toHaveLength(1)
+    now.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('yields one stream paint when the browser reports pending input', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    vi.stubGlobal('navigator', {
+      scheduling: { isInputPending: () => true },
+    })
+    let notifications = 0
+    const notifier = new Notifier(() => undefined)
+    notifier.subscribe(() => { notifications++ })
+
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(0)
+    vi.advanceTimersByTime(0)
+    expect(frames).toHaveLength(1)
+    frames.shift()!(0)
+    expect(notifications).toBe(1)
+    vi.useRealTimers()
+  })
+
+  it('prefers scheduler.postTask(user-visible) for stream paints when available', () => {
+    const tasks: Array<() => void> = []
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('scheduler', {
+      postTask: (callback: () => void, options?: { priority?: string }) => {
+        expect(options?.priority).toBe('user-visible')
+        tasks.push(callback)
+      },
+    })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    let notifications = 0
+    const notifier = new Notifier(() => undefined)
+    notifier.subscribe(() => { notifications++ })
+
+    notifier.markFrameDirty()
+    expect(tasks).toHaveLength(1)
+    expect(frames).toHaveLength(0)
+    tasks.shift()!()
+    expect(notifications).toBe(1)
+  })
+
+  it('continueFrameDirty skips the adaptive paint budget', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const now = vi.spyOn(Date, 'now')
+    let clock = 1_000
+    now.mockImplementation(() => clock)
+    const notifier = new Notifier(() => { clock += 80 })
+    notifier.subscribe(() => undefined)
+
+    notifier.markFrameDirty()
+    frames.shift()!(0) // budget widens after a slow flush
+    notifier.continueFrameDirty()
+    expect(frames).toHaveLength(1) // no 160ms wait
+    frames.shift()!(0)
+    now.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('eases the stream budget back down after a cheap flush', () => {
+    vi.useFakeTimers()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const now = vi.spyOn(Date, 'now')
+    let clock = 1_000
+    now.mockImplementation(() => clock)
+    let flushCost = 80
+    const notifier = new Notifier(() => { clock += flushCost })
+    notifier.subscribe(() => undefined)
+
+    notifier.markFrameDirty()
+    frames.shift()!(0) // budget → 160
+    flushCost = 1
+    notifier.markFrameDirty()
+    clock += 160
+    vi.advanceTimersByTime(160)
+    frames.shift()!(0) // ease toward 48 → ~132
+    notifier.markFrameDirty()
+    expect(frames).toHaveLength(0)
+    clock += 100
+    vi.advanceTimersByTime(100)
+    expect(frames).toHaveLength(0) // still above the idle 48ms floor
+    clock += 40
+    vi.advanceTimersByTime(40)
+    expect(frames).toHaveLength(1)
+    now.mockRestore()
+    vi.useRealTimers()
+  })
+
   it('keeps stream paints bounded under a token storm', () => {
     vi.useFakeTimers()
     const frames: FrameRequestCallback[] = []
