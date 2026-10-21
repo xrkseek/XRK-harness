@@ -179,7 +179,8 @@ function adoptLiveAdvancedPlaybook(
     ...(row.tools ? { tools: row.tools } : {}),
     appearance: row.appearance,
   });
-  return healed ?? row;
+  if (!healed) return row;
+  return runtime.agentRoster.get(canvasId, healed.id) ?? row;
 }
 
 /** Effective playbook for spawn / tool responses (disk wins for advanced packs). */
