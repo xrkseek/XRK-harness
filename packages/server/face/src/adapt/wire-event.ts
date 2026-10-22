@@ -55,6 +55,8 @@ export const EVENT_ISOMORPHISM = {
   "deliverables/presented": "deliverables/presented",
   "working-directory/change": "working-directory/change",
   "plugin/record": "plugin/record",
+  "job/registered": "job/registered",
+  "job/settled": "job/settled",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -508,8 +510,10 @@ export function toFaceWireSessionEvent(
       };
     case "working-directory/change":
     case "plugin/record":
-      // Log-only: neither is model-visible. Projected verbatim for clients
-      // that track session cwd / plugin-owned records.
+    case "job/registered":
+    case "job/settled":
+      // Log-only: not model-visible. Projected verbatim for clients that
+      // track session cwd / plugin records / background-job journal.
       return {
         type: event.type,
         seq,

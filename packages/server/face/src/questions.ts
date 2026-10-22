@@ -372,7 +372,7 @@ export class FaceQuestionBroker {
       return;
     }
     pending.timer = setTimeout(() => {
-      pending.timer = undefined;
+      delete pending.timer;
       this.fireTimeout(pending);
     }, delay);
   }
@@ -380,7 +380,7 @@ export class FaceQuestionBroker {
   private clearTimer(pending: Waiter): void {
     if (pending.timer !== undefined) {
       clearTimeout(pending.timer);
-      pending.timer = undefined;
+      delete pending.timer;
     }
   }
 
@@ -391,7 +391,7 @@ export class FaceQuestionBroker {
     this.clearTimer(pending);
     if (pending.signal && pending.onAbort) {
       pending.signal.removeEventListener("abort", pending.onAbort);
-      pending.onAbort = undefined;
+      delete pending.onAbort;
     }
     // Keep in waiters so late respond / mux replay still see the question.
     pending.reject(
