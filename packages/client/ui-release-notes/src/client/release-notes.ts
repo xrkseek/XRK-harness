@@ -84,6 +84,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         zh: '子代理超长末条答案落盘可再读；侧栏 Plugins 与发行说明并排紧凑格。',
         en: 'Long subagent final answers spill to disk for re-read; Plugins and release notes share a compact sidebar strip.',
       },
+      {
+        zh: '概况委派图：连线对齐、去掉幽灵节点与调试腔文案；并发槽含义可悬停查看。',
+        en: 'Overview graph: aligned edges, no ghost nodes or debug chips; hover explains concurrent slots.',
+      },
     ],
   },
   {

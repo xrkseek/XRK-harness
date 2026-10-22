@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 /** Stable no-op subscribe for optional faces — never allocate `() => {}` per render. */
 const NOOP_SUBSCRIBE = (_onStoreChange: () => void): (() => void) => () => {}
 import type { KeyboardEvent, ReactNode } from 'react'
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@xrkseek/client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
+import type { PlanKey } from './locales.ts'
 import {
   IconBrowseOutline16,
   IconChecklistOutline14,
@@ -19,6 +20,7 @@ import {
   EMPTY_WORKSPACE_CHANGES_TURNS,
   abbreviateHomePath,
   stableWorkspaceChangesTurns,
+  subagentActivityDot,
 } from '@xrkseek/client-ui-primitives'
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
@@ -236,6 +238,31 @@ function teamTaskStatusRank(status: string): number {
     case 'failed': return 4
     default: return 5
   }
+}
+
+type PlanTranslate = TranslateNS<'plan'>
+
+/** Localized subagent terminal verdict — never dump raw enums into zh UI. */
+function subagentOutcomeLabel(
+  t: PlanTranslate,
+  kind: string | undefined,
+): string | undefined {
+  if (!kind || kind === 'completed' || kind === 'none') return undefined
+  const key = `preview.status.subagentOutcome.${kind}` as PlanKey
+  const label = t(key)
+  return label === key ? kind : label
+}
+
+function subagentModeLabel(t: PlanTranslate, mode: string): string {
+  const key = `preview.status.subagentMode.${mode}` as PlanKey
+  const label = t(key)
+  return label === key ? mode : label
+}
+
+function subagentRoleLabel(t: PlanTranslate, role: string): string {
+  const key = `preview.status.subagentRole.${role}` as PlanKey
+  const label = t(key)
+  return label === key ? role : label
 }
 
 /**
@@ -911,18 +938,22 @@ function StatusPanel({
         defaultOpen
         meta={(
           <>
-            {liveSubs.length}/{status.subagents.live.length} live ·{' '}
-            {t('preview.status.subagentQuota')}{' '}
-            {status.subagents.quota.provider ?? '?'}/
-            {status.subagents.quota.model ?? '?'}{' '}
-            {status.subagents.quota.active}/{status.subagents.quota.maxActive}
+            {t('preview.status.subagentLiveMeta', {
+              live: liveSubs.length,
+              total: status.subagents.live.length,
+            })}
             {' · '}
-            {status.subagents.graph.nodes.length}n/{status.subagents.graph.edges.length}e
+            <span title={t('preview.status.subagentQuotaHint')}>
+              {t('preview.status.subagentQuotaMeta', {
+                active: status.subagents.quota.active,
+                max: status.subagents.quota.maxActive,
+              })}
+            </span>
           </>
         )}
       >
         <>
-              <h4 className={css.sectionTitle}>{t('preview.status.subagentGraph')}</h4>
+              <h4 className={css.subsectionLabel}>{t('preview.status.subagentGraph')}</h4>
               <SubagentGraphBoard
                 sessionId={status.sessionId}
                 rootLabel={t('preview.status.session')}
@@ -932,6 +963,12 @@ function StatusPanel({
                 emptyLabel={t('preview.status.subagentsEmpty')}
                 runningLabel={t('preview.status.subagentRunning')}
                 idleLabel={t('preview.status.subagentIdle')}
+                outcomeLabel={(kind) => {
+                  if (kind === 'completed') return t('preview.status.subagentIdle')
+                  if (kind === 'none') return t('preview.status.subagentOutcome.none')
+                  return subagentOutcomeLabel(t, kind) ?? kind
+                }}
+                roleLabel={(role) => subagentRoleLabel(t, role)}
                 {...(openTeamChild
                   ? {
                     onOpenNode: (nodeId: string) => {
@@ -953,36 +990,48 @@ function StatusPanel({
               {status.subagents.live.length > 0
                 ? (
                   <>
-                    <h4 className={css.sectionTitle}>{t('preview.status.subagentLive')}</h4>
+                    <h4 className={css.subsectionLabel}>{t('preview.status.subagentLive')}</h4>
                     <ul className={css.itemList}>
-                      {status.subagents.live.map((s) => (
+                      {status.subagents.live.map((s) => {
+                        const outcomeText = subagentOutcomeLabel(t, s.outcome?.kind)
+                        const activityText = s.activity === 'running'
+                          ? t('preview.status.subagentRunning')
+                          : (outcomeText ?? t('preview.status.subagentIdle'))
+                        const detail = s.liveTool
+                          ?? s.liveText
+                          ?? subagentModeLabel(t, s.mode)
+                        const queueText = (s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
+                          ? t('preview.status.subagentQueueMeta', {
+                            queued: s.queued ?? 0,
+                            steering: s.steering ?? 0,
+                          })
+                          : ''
+                        const externalText = s.externalKind
+                          ? [
+                            t('preview.status.subagentExternal'),
+                            s.externalKind,
+                            s.externalResume === 'cold'
+                              ? t('preview.status.subagentExternalCold')
+                              : s.externalResume
+                                ? t('preview.status.subagentExternalLive')
+                                : '',
+                          ].filter(Boolean).join(' · ')
+                          : ''
+                        return (
                         <li key={s.id} className={css.itemRow} data-live={s.activity === 'running' || undefined}>
                           <StateDot
-                            state={s.activity === 'running' ? 'ongoing' : 'done'}
+                            state={subagentActivityDot(s.activity, s.outcome?.kind)}
                             size={8}
                           />
                           <span className={css.itemTitle}>{s.label ?? s.id}</span>
                           <span className={css.itemMeta}>
-                            {s.activity === 'running'
-                              ? t('preview.status.subagentRunning')
-                              : t('preview.status.subagentIdle')}
-                            {s.model ? ` · ${s.model}` : ''}
-                            {s.liveTool ? ` · tool:${s.liveTool}` : s.liveText ? ` · ${s.liveText}` : ` · ${s.mode}`}
-                            {(s.queued ?? 0) > 0 || (s.steering ?? 0) > 0
-                              ? ` · ${t('preview.status.subagentQueue')} q=${s.queued ?? 0}/steer=${s.steering ?? 0}`
-                              : ''}
-                            {s.externalKind
-                              ? ` · ${t('preview.status.subagentExternal')}:${s.externalKind}${
-                                s.externalResume
-                                  ? `/${s.externalResume === 'cold'
-                                    ? t('preview.status.subagentExternalCold')
-                                    : t('preview.status.subagentExternalLive')}`
-                                  : ''
-                              }`
-                              : ''}
+                            {[activityText, detail, queueText, externalText]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </span>
                         </li>
-                      ))}
+                        )
+                      })}
                     </ul>
                   </>
                 )
@@ -1000,13 +1049,10 @@ function StatusPanel({
         title={t('preview.status.teamTasks')}
         signal={collapseSignal}
         defaultOpen
-        meta={(
-          <>
-            {status.teamTasks.filter((row) => row.status === 'in_progress' || row.status === 'paused').length}
-            /
-            {status.teamTasks.length} open
-          </>
-        )}
+        meta={t('preview.status.teamTasksOpenMeta', {
+          open: status.teamTasks.filter((row) => row.status === 'in_progress' || row.status === 'paused').length,
+          total: status.teamTasks.length,
+        })}
       >
             <ul className={css.teamTaskList}>
               {[...status.teamTasks]
@@ -1051,20 +1097,20 @@ function StatusPanel({
                       </span>
                     </div>
                     <span className={css.itemMeta}>
-                      {task.role ? `${task.role}` : 'worker'}
-                      {task.humanOwned ? ` · ${t('preview.status.teamTasksHuman')}` : ''}
-                      {task.externalResume
-                        ? ` · ${t('preview.status.subagentExternal')}:${
-                          task.externalResume === 'cold'
-                            ? t('preview.status.subagentExternalCold')
-                            : t('preview.status.subagentExternalLive')
-                        }`
-                        : ''}
-                      {task.schemaValid === false
-                        ? ` · ${t('preview.status.teamTasksSchemaBad')}`
-                        : task.schemaValid === true
-                          ? ` · ${t('preview.status.teamTasksSchemaOk')}`
-                          : ''}
+                      {[
+                        subagentRoleLabel(t, task.role || 'worker'),
+                        task.humanOwned ? t('preview.status.teamTasksHuman') : '',
+                        task.externalResume === 'cold'
+                          ? `${t('preview.status.subagentExternal')} · ${t('preview.status.subagentExternalCold')}`
+                          : task.externalResume
+                            ? `${t('preview.status.subagentExternal')} · ${t('preview.status.subagentExternalLive')}`
+                            : '',
+                        task.schemaValid === false
+                          ? t('preview.status.teamTasksSchemaBad')
+                          : task.schemaValid === true
+                            ? t('preview.status.teamTasksSchemaOk')
+                            : '',
+                      ].filter(Boolean).join(' · ')}
                     </span>
                     {task.childSessionId
                       ? (

@@ -113,4 +113,27 @@ describe('SubagentGraphBoard', () => {
     expect(html).toContain('data-activity="running"')
     expect(html).toContain('scout')
   })
+
+  it('does not paint sibling peer edges on the Overview board', () => {
+    const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
+      sessionId: 'parent',
+      rootLabel: 'Session',
+      nodes: [
+        { id: 'parent', label: 'Session', depth: 0 },
+        { id: 'a', label: 'scout', depth: 1 },
+        { id: 'b', label: 'writer', depth: 1 },
+      ],
+      edges: [
+        { from: 'parent', to: 'a', kind: 'delegates' },
+        { from: 'parent', to: 'b', kind: 'delegates' },
+        { from: 'a', to: 'b', kind: 'peer', label: 'sibling' },
+      ],
+      live: [],
+      emptyLabel: 'empty',
+      runningLabel: 'running',
+      idleLabel: 'done',
+    }))
+    expect(html).toContain('data-kind="delegates"')
+    expect(html).not.toContain('data-kind="peer"')
+  })
 })

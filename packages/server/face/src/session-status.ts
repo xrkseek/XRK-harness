@@ -1058,6 +1058,9 @@ export function buildSessionStatusSnapshotUncached(
     for (const node of bucket) childIdSet.add(node.id);
   }
   for (const node of team.nodes) {
+    // Skip closed sessions still listed on a stale peer edge — walking them
+    // would invent live/outcome rows for nodes the board must not show.
+    if (!runtime.store.has(node.id)) continue;
     if (!childIdSet.has(node.id)) walk(node.id);
   }
   for (const id of ordered) {
@@ -1127,30 +1130,40 @@ export function buildSessionStatusSnapshotUncached(
     outcomeById.set(node.id, describeChildOutcome(childLog(node.id)));
   }
 
+  // Drop board nodes whose session store is gone (closed child still hanging
+  // on a stale peer edge). Keep the viewing session even if hydration races.
+  const boardIds = new Set<string>();
+  for (const n of team.nodes) {
+    if (n.id === sessionId || runtime.store.has(n.id)) boardIds.add(n.id);
+  }
   const graph: SessionStatusGraph = {
-    nodes: team.nodes.map((n) => {
-      // Own drain only. Missing activity used to fall through to "done" on the
-      // client — always emit inactive|running from this session's drain latch.
-      const running =
-        n.id === sessionId
-          ? turnActive
-          : activeOwn.has(n.id) || isChildSessionActive(runtime, n.id);
-      const outcome = outcomeById.get(n.id);
-      return {
-        id: n.id,
-        label: n.label,
-        ...(n.role ? { role: n.role } : {}),
-        ...(n.depth !== undefined ? { depth: n.depth } : {}),
-        activity: running ? ("running" as const) : ("inactive" as const),
-        ...(outcome ? { outcome } : {}),
-      };
-    }),
-    edges: team.edges.map((e) => ({
-      from: e.from,
-      to: e.to,
-      kind: e.kind,
-      ...(e.label ? { label: e.label } : {}),
-    })),
+    nodes: team.nodes
+      .filter((n) => boardIds.has(n.id))
+      .map((n) => {
+        // Own drain only. Missing activity used to fall through to "done" on the
+        // client — always emit inactive|running from this session's drain latch.
+        const running =
+          n.id === sessionId
+            ? turnActive
+            : activeOwn.has(n.id) || isChildSessionActive(runtime, n.id);
+        const outcome = outcomeById.get(n.id);
+        return {
+          id: n.id,
+          label: n.label,
+          ...(n.role ? { role: n.role } : {}),
+          ...(n.depth !== undefined ? { depth: n.depth } : {}),
+          activity: running ? ("running" as const) : ("inactive" as const),
+          ...(outcome ? { outcome } : {}),
+        };
+      }),
+    edges: team.edges
+      .filter((e) => boardIds.has(e.from) && boardIds.has(e.to))
+      .map((e) => ({
+        from: e.from,
+        to: e.to,
+        kind: e.kind,
+        ...(e.label ? { label: e.label } : {}),
+      })),
   };
   const teamTasks = runtime.agentTeamTasks
     .list(sessionId)

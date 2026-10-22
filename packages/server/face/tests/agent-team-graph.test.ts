@@ -172,6 +172,46 @@ describe("agent team graph", () => {
     );
   });
 
+  it("rebuildDelegations drops closed children so they cannot haunt as observers", () => {
+    const graph = new AgentTeamGraph();
+    const registry = new FaceSubagentRegistry(undefined, {
+      onAttach: (link) => graph.recordDelegation(link),
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "keep",
+      mode: "continuable",
+      label: "文献检索员",
+    });
+    registry.attach({
+      parentSessionId: "root",
+      childSessionId: "gone",
+      mode: "one-shot",
+      label: "文献检索员",
+    });
+    expect(graph.view("root").nodes.map((n) => n.id).sort()).toEqual([
+      "gone",
+      "keep",
+      "root",
+    ]);
+
+    registry.detach("gone");
+    graph.rebuildDelegations(registry.entries());
+
+    const view = graph.view("root");
+    expect(view.nodes.map((n) => n.id).sort()).toEqual(["keep", "root"]);
+    expect(view.nodes.some((n) => n.id === "gone")).toBe(false);
+    expect(view.nodes.every((n) => n.role !== "observer")).toBe(true);
+    // Explicit peer-only watchers survive a rebuild.
+    graph.linkPeers("root", "watcher", "observe");
+    graph.rebuildDelegations(registry.entries());
+    expect(graph.view("root").nodes.map((n) => n.id).sort()).toEqual([
+      "keep",
+      "root",
+      "watcher",
+    ]);
+  });
+
   it("unlinks peers, removes observer nodes, and reports neighbors/depth", () => {
     const graph = new AgentTeamGraph();
     const registry = new FaceSubagentRegistry(undefined, {

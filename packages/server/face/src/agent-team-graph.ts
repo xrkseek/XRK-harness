@@ -98,12 +98,23 @@ export class AgentTeamGraph {
     this.save();
   }
 
-  /** Replace delegation edges from the live registry; peer links stay. */
+  /**
+   * Replace delegation edges from the live registry; peer links among still-
+   * live endpoints stay (custom labels kept). Former delegated children that
+   * left the registry are pruned (peer edges + node) so the Overview board
+   * cannot keep a ghost "observer" wearing the old role label. Explicit
+   * peer-only watchers (never a delegates target) are left alone.
+   */
   rebuildDelegations(links: readonly FaceSubagentLink[]): void {
+    const formerChildren = new Set<string>();
+    for (const edge of this.edges.values()) {
+      if (edge.kind === "delegates") formerChildren.add(edge.to);
+    }
     for (const [key, edge] of this.edges) {
       if (edge.kind === "delegates") this.edges.delete(key);
     }
     const parents = new Set<string>();
+    const liveChildIds = new Set<string>();
     for (const link of links) {
       if (link.mode === "fork") continue;
       this.upsertNode(link.parentSessionId, link.parentSessionId);
@@ -115,6 +126,18 @@ export class AgentTeamGraph {
         ...(link.label ? { label: link.label } : {}),
       });
       parents.add(link.parentSessionId);
+      liveChildIds.add(link.childSessionId);
+    }
+    // Closed children: strip peer edges and the node (role override too).
+    for (const id of formerChildren) {
+      if (liveChildIds.has(id)) continue;
+      for (const [key, edge] of this.edges) {
+        if (edge.kind !== "peer") continue;
+        if (edge.from !== id && edge.to !== id) continue;
+        this.edges.delete(key);
+      }
+      this.nodes.delete(id);
+      this.roles.delete(id);
     }
     for (const parentId of parents) this.meshSiblingPeers(parentId);
     this.save();

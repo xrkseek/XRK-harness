@@ -65,6 +65,10 @@ export interface SubagentGraphBoardProps {
   readonly emptyLabel: string
   readonly runningLabel: string
   readonly idleLabel: string
+  /** Localized captions for abnormal terminal kinds (no English dumps). */
+  readonly outcomeLabel?: (kind: LiveOutcome['kind']) => string
+  /** Localized role chip when a node carries `role`. */
+  readonly roleLabel?: (role: string) => string
   /** Open a child session when a non-root node is activated. */
   readonly onOpenNode?: (nodeId: string) => void
 }
@@ -76,8 +80,6 @@ const NODE_H = 40
 const PAD_X = 16
 const PAD_Y = 20
 
-type LiveOutcomeKind = LiveOutcome['kind']
-
 /** Verdict for one node: its own terminal axis first, then any `live` row. */
 function outcomeOf(
   node: SubagentGraphNode,
@@ -86,14 +88,16 @@ function outcomeOf(
   return node.outcome ?? liveRow?.outcome
 }
 
-/** Meta caption for an abnormal terminal verdict. */
-function abnormalLabel(kind: LiveOutcomeKind): string {
+/** Fallback English only when the host forgot to pass `outcomeLabel`. */
+function defaultOutcomeLabel(kind: LiveOutcome['kind']): string {
   switch (kind) {
     case 'aborted': return 'aborted'
     case 'error': return 'error'
     case 'interrupted': return 'interrupted'
     case 'max-tokens': return 'max tokens'
     case 'blocked': return 'blocked'
+    case 'completed': return 'done'
+    case 'none': return 'idle'
     default: return kind
   }
 }
@@ -172,12 +176,20 @@ function mergeGraph(
     }
   }
 
-  const edgeList = [...edges]
+  // Overview paints the delegation tree. Sibling `peer` mesh edges stay in
+  // the status payload for tools / announce, but drawing them here stacks
+  // same-column arcs that read as broken wires over the cards.
+  const edgeList = edges.filter((e) => e.kind === 'delegates')
   for (const row of live) {
     if (edgeList.some((e) => e.to === row.id)) continue
     edgeList.push({ from: sessionId, to: row.id, kind: 'delegates' })
   }
-  return { nodes: [...byId.values()], edges: edgeList }
+  // Drop edges whose endpoints never made it onto the board (ghost filter).
+  const known = new Set(byId.keys())
+  return {
+    nodes: [...byId.values()],
+    edges: edgeList.filter((e) => known.has(e.from) && known.has(e.to)),
+  }
 }
 
 function layout(
@@ -230,6 +242,8 @@ function layout(
   const positions = new Map<string, { x: number; y: number; depth: number }>()
   let maxRows = 1
   for (const [depth, ids] of columns) {
+    // Stable row order so remounts do not reshuffle siblings.
+    ids.sort((a, b) => a.localeCompare(b))
     maxRows = Math.max(maxRows, ids.length)
     ids.forEach((id, index) => {
       positions.set(id, {
@@ -247,10 +261,24 @@ function layout(
   }
 }
 
+/**
+ * Bezier between node boxes. Same-column peers (sibling mesh) must curve
+ * vertically — the left→right path would arc into empty space beside the
+ * column and look like a broken wire.
+ */
 function edgePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
+  kind: string,
 ): string {
+  if (kind === 'peer' || Math.abs(from.x - to.x) < 1) {
+    const x1 = from.x + NODE_W / 2
+    const y1 = from.y < to.y ? from.y + NODE_H : from.y
+    const x2 = to.x + NODE_W / 2
+    const y2 = from.y < to.y ? to.y : to.y + NODE_H
+    const bulge = 18
+    return `M ${x1} ${y1} C ${x1 + bulge} ${y1}, ${x2 + bulge} ${y2}, ${x2} ${y2}`
+  }
   const x1 = from.x + NODE_W
   const y1 = from.y + NODE_H / 2
   const x2 = to.x
@@ -271,6 +299,8 @@ export function SubagentGraphBoard({
   emptyLabel,
   runningLabel,
   idleLabel,
+  outcomeLabel = defaultOutcomeLabel,
+  roleLabel = (role) => role,
   onOpenNode,
 }: SubagentGraphBoardProps) {
   const merged = useMemo(
@@ -319,7 +349,7 @@ export function SubagentGraphBoard({
           return (
             <path
               key={`${edge.kind}:${edge.from}:${edge.to}`}
-              d={edgePath(from, to)}
+              d={edgePath(from, to, edge.kind)}
               className={running ? `${css.edge} ${css.edgeLive}` : css.edge}
               data-kind={edge.kind}
               markerEnd="url(#subagent-arrow)"
@@ -327,23 +357,27 @@ export function SubagentGraphBoard({
           )
         })}
       </svg>
-      <div className={css.overlay} style={{ width: laid.width, height: laid.height }}>
+      <div
+        className={css.overlay}
+        style={{ width: laid.width, height: laid.height }}
+      >
         {merged.nodes.map((node) => {
           const pos = laid.positions.get(node.id)
           if (!pos) return null
           const liveRow = liveById.get(node.id)
           const running = node.activity === 'running'
           const outcome = outcomeOf(node, liveRow)
+          const roleText = node.role ? roleLabel(node.role) : undefined
           const meta = running
             ? (liveRow?.liveTool
-              ? `tool:${liveRow.liveTool}`
+              ? liveRow.liveTool
               : liveRow?.liveText
                 ? liveRow.liveText
                 : runningLabel)
             // An abnormal terminal verdict must not print "done" under an
             // error dot — the second line would contradict the first.
             : (outcome !== undefined && outcome.kind !== 'completed' && outcome.kind !== 'none'
-              ? abnormalLabel(outcome.kind)
+              ? outcomeLabel(outcome.kind)
               : idleLabel)
           const clickable = onOpenNode !== undefined && node.id !== sessionId
           return (
@@ -361,7 +395,7 @@ export function SubagentGraphBoard({
               // The node box is a fixed 40px with two lines already, so the
               // route rides the tooltip and the data attribute rather than
               // overflowing the card. Drop `data-model` to hide it.
-              title={[node.label, node.role, node.model, meta]
+              title={[node.label, roleText, node.model, meta]
                 .filter(value => value !== undefined && value !== '')
                 .join(' · ')}
               {...(clickable
@@ -385,7 +419,7 @@ export function SubagentGraphBoard({
               <div className={css.nodeText}>
                 <span className={css.nodeTitle}>{node.label}</span>
                 <span className={css.nodeMeta}>
-                  {node.role ? `${node.role} · ` : ''}
+                  {roleText ? `${roleText} · ` : ''}
                   {meta}
                 </span>
               </div>

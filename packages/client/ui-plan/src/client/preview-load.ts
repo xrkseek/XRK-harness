@@ -95,6 +95,9 @@ export interface SessionStatusView {
       readonly maxActive: number
       readonly delegated: number
       readonly slotsFree: number
+      /** Optional route label for tooltips (not painted in section meta). */
+      readonly provider?: string
+      readonly model?: string
     }
   }
   readonly teamTasks: readonly {
@@ -520,6 +523,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
   const quotaObj = quotaRaw && typeof quotaRaw === 'object'
     ? (quotaRaw as Record<string, unknown>)
     : null
+  const quotaProvider = str(quotaObj?.provider)
+  const quotaModel = str(quotaObj?.model)
   const quota = {
     depth: num(quotaObj?.depth) ?? 0,
     maxDepth: num(quotaObj?.maxDepth) ?? 0,
@@ -527,6 +532,8 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     maxActive: num(quotaObj?.maxActive) ?? 0,
     delegated: num(quotaObj?.delegated) ?? live.length,
     slotsFree: num(quotaObj?.slotsFree) ?? 0,
+    ...(quotaProvider ? { provider: quotaProvider } : {}),
+    ...(quotaModel ? { model: quotaModel } : {}),
   }
 
   const costRaw = v.cost
