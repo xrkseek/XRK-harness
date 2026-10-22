@@ -388,6 +388,7 @@ export {
   raceDrainRunSlice,
   SESSION_DRAIN_POLL_MS,
   SESSION_DRAIN_WAIT_MS,
+  waitForSignalOrSlice,
   waitSessionDrainIdle,
   type WaitSessionDrainIdleOptions,
 } from "./wait-drain-idle.js";

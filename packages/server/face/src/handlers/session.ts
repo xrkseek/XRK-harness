@@ -57,6 +57,11 @@ import { asRecord, type FaceHandler } from "./types.js";
 import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
 import {
+  createListWorkSlice,
+  maybeYieldListWork,
+  throwIfListCancelled,
+} from "../list-work-slice.js";
+import {
   defaultPermissionPreset,
   ensureOrchestrationFullAccess,
   pinInheritedPermission,
@@ -393,7 +398,15 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
 };
 
 export const sessionList: FaceHandler = async (runtime) => {
-  const items = runtime.store.list().map((sessionId) => {
+  const slice = createListWorkSlice(
+    runtime.listWorkSliceMs === undefined
+      ? undefined
+      : { sliceMs: runtime.listWorkSliceMs },
+  );
+  const sessionIds = runtime.store.list();
+  const items: Array<Record<string, unknown>> = [];
+  for (const sessionId of sessionIds) {
+    throwIfListCancelled(slice.signal);
     const hints = runtime.store.listHints?.(sessionId);
     const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
     const snap =
@@ -438,7 +451,7 @@ export const sessionList: FaceHandler = async (runtime) => {
           : wsId === IM_WORKSPACE_ID
             ? { origin: "im" as const }
             : undefined;
-    return {
+    items.push({
       sessionId,
       updatedAt,
       running: runtime.drain.isActive(sessionId),
@@ -452,8 +465,10 @@ export const sessionList: FaceHandler = async (runtime) => {
       ...(thread ? { mainline: thread.title, mainlineId: thread.id } : {}),
       ...(sideline ? { sideline } : {}),
       ...(snap ? { projections: snapshotWireBlock(snap) } : {}),
-    };
-  });
+    });
+    await maybeYieldListWork(slice);
+  }
+  throwIfListCancelled(slice.signal);
   return { ok: true, value: { items } };
 };
 

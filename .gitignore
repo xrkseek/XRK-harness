@@ -60,6 +60,7 @@ apps/cli/product-web/
 .playwright-mcp/
 .tmp-*.mjs
 .tmp-*/
+.tmp/
 
 # Ad-hoc scratch trees at the repo root (artwork / promo / side experiments;
 # they carry their own README and must never leak into a release)

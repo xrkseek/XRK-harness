@@ -4,6 +4,11 @@
  * Extreme sessions: each tool step used to `readSessionEvents` + full-log fold
  * even when the auto path would no-op. Cache the last folded snapshot per
  * session so the hot path is O(1); cold miss still uses tail-fold.
+ *
+ * When standing tool **names** change vs the prior header, also append a
+ * model-visible `user/message` with `source.kind: "tool-registry"` (DSH
+ * dynamic-tool-updates). Schema-only tweaks still rewrite the header but do
+ * not emit the inject.
  */
 import {
   foldRequestHeader,
@@ -14,10 +19,11 @@ import {
   readSessionEvents,
 } from "@xrkseek/core-session";
 import type { LlmAdapter } from "@xrkseek/llm";
-import type {
-  RequestHeaderReason,
-  RequestHeaderToolSchema,
-  SessionEvent,
+import {
+  newUserMessageId,
+  type RequestHeaderReason,
+  type RequestHeaderToolSchema,
+  type SessionEvent,
 } from "@xrkseek/protocol";
 
 /** Last appended/folded header per session (Host process lifetime). */
@@ -53,6 +59,55 @@ function logHasTurnEnd(events: readonly SessionEvent[]): boolean {
     if (events[i]?.type === "turn/end") return true;
   }
   return false;
+}
+
+function toolNameSet(
+  tools: readonly RequestHeaderToolSchema[] | undefined,
+): Set<string> {
+  const names = new Set<string>();
+  for (const t of tools ?? []) {
+    if (t.name) names.add(t.name);
+  }
+  return names;
+}
+
+/** Sorted name deltas for standing tools (schema-only changes → empty). */
+export function diffToolRegistryNames(
+  prev: readonly RequestHeaderToolSchema[] | undefined,
+  next: readonly RequestHeaderToolSchema[] | undefined,
+): { readonly added: string[]; readonly removed: string[] } {
+  const before = toolNameSet(prev);
+  const after = toolNameSet(next);
+  const added: string[] = [];
+  const removed: string[] = [];
+  for (const name of after) {
+    if (!before.has(name)) added.push(name);
+  }
+  for (const name of before) {
+    if (!after.has(name)) removed.push(name);
+  }
+  added.sort();
+  removed.sort();
+  return { added, removed };
+}
+
+function formatToolRegistryUpdate(input: {
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+  readonly headerSeq: number;
+}): string {
+  const lines = ["# Tool registry update", ""];
+  if (input.added.length > 0) {
+    lines.push(`Added: ${input.added.join(", ")}`);
+  }
+  if (input.removed.length > 0) {
+    lines.push(`Removed: ${input.removed.join(", ")}`);
+  }
+  lines.push("");
+  lines.push(
+    `Full schemas for the current standing set are on request/header seq ${input.headerSeq}.`,
+  );
+  return lines.join("\n");
 }
 
 export function maybeAppendRequestHeader(input: {
@@ -113,4 +168,25 @@ export function maybeAppendRequestHeader(input: {
     header: snap,
   });
   lastHeaderBySession.set(input.sessionId, snap);
+
+  // Name-set delta only (not schema-only). Skip the first header of a session
+  // view — there is no prior standing set for the model to reconcile against.
+  if (!prev) return;
+  const { added, removed } = diffToolRegistryNames(prev.tools, snap.tools);
+  if (added.length === 0 && removed.length === 0) return;
+  const headerSeq = input.store.get(input.sessionId).events.length - 1;
+  input.store.append(input.sessionId, {
+    type: "user/message",
+    ts: input.now(),
+    turnId: input.turnId,
+    messageId: newUserMessageId(),
+    content: formatToolRegistryUpdate({ added, removed, headerSeq }),
+    source: {
+      kind: "tool-registry",
+      form: "update",
+      added,
+      removed,
+      headerSeq,
+    },
+  });
 }

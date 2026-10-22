@@ -24,17 +24,39 @@ import type {
 export class FaceQuestionError extends Error {
   constructor(
     message: string,
-    readonly code: "ASK_CANCELLED" | "ASK_ABORTED" | "EMPTY_QUESTIONS",
+    readonly code:
+      | "ASK_CANCELLED"
+      | "ASK_ABORTED"
+      | "EMPTY_QUESTIONS"
+      | "ASK_TIMED_OUT",
   ) {
     super(message);
     this.name = "FaceQuestionError";
   }
 }
 
+/** Default Host timeout when `mode: "timed"` (DSH timed-user-question). */
+export const DEFAULT_TIMED_ASK_TIMEOUT_MS = 120_000;
+
+export type FaceAskMode = "legacy" | "timed";
+
+export interface FaceAskOptions {
+  readonly mode?: FaceAskMode;
+  /**
+   * When `mode` is `"timed"`: deadline length in ms (default
+   * {@link DEFAULT_TIMED_ASK_TIMEOUT_MS}). `-1` forces legacy blocking.
+   */
+  readonly timeoutMs?: number;
+}
+
 export interface PendingQuestionItem {
   readonly rpcId: string;
   readonly sessionId: string;
   readonly questions: readonly FaceQuestionItem[];
+  /** Present when the ask used timed mode (even after timeout → late pending). */
+  readonly mode?: FaceAskMode;
+  /** Absolute deadline ms (`Date.now` basis) while the timer may still fire. */
+  readonly deadlineAt?: number;
 }
 
 type Waiter = PendingQuestionItem & {
@@ -42,6 +64,11 @@ type Waiter = PendingQuestionItem & {
   reject: (error: FaceQuestionError) => void;
   signal?: AbortSignal;
   onAbort?: () => void;
+  /** Answering-UI holders; Host timer runs only when this is 0. */
+  holders: number;
+  timer?: ReturnType<typeof setTimeout>;
+  /** Tool already settled with timeout; late respond steers instead. */
+  late?: boolean;
 };
 
 export interface FaceQuestionHooks {
@@ -50,6 +77,16 @@ export interface FaceQuestionHooks {
     sessionId: string,
     questionRpcId: string,
     outcome: "answered" | "cancelled",
+  ): void;
+  /**
+   * Late answer after a timed ask already returned pending to the tool.
+   * Host should steer a durable user message (second settlement).
+   */
+  onLateAnswer?(
+    sessionId: string,
+    questionRpcId: string,
+    questions: readonly FaceQuestionItem[],
+    answer: FaceQuestionAnswer,
   ): void;
 }
 
@@ -113,6 +150,42 @@ export function formatQuestionAnswer(answer: FaceQuestionAnswer): string {
     .join("\n");
 }
 
+/** Model-visible steer body for a late timed-ask answer (second settlement). */
+export function formatLateQuestionSteer(
+  questions: readonly FaceQuestionItem[],
+  answer: FaceQuestionAnswer,
+): string {
+  const lines = ["[Late answer to ask_user]", ""];
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i]!;
+    const a = answer.answers.find((row) => row.id === q.id) ?? answer.answers[i];
+    lines.push(`Q: ${q.question}`);
+    lines.push(`A: ${a ? formatQuestionAnswer({ answers: [a] }) : "(skipped)"}`);
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+function resolveTimedDeadlineMs(options?: FaceAskOptions): number | undefined {
+  const mode = options?.mode ?? "legacy";
+  if (mode !== "timed") return undefined;
+  const raw = options?.timeoutMs;
+  if (raw === -1) return undefined;
+  if (raw === undefined) return DEFAULT_TIMED_ASK_TIMEOUT_MS;
+  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_TIMED_ASK_TIMEOUT_MS;
+  return raw;
+}
+
+function pendingView(w: Waiter): PendingQuestionItem {
+  return {
+    rpcId: w.rpcId,
+    sessionId: w.sessionId,
+    questions: w.questions,
+    ...(w.mode ? { mode: w.mode } : {}),
+    ...(w.deadlineAt !== undefined ? { deadlineAt: w.deadlineAt } : {}),
+  };
+}
+
 export class FaceQuestionBroker {
   private readonly waiters = new Map<string, Waiter>();
 
@@ -122,11 +195,7 @@ export class FaceQuestionBroker {
     const out: PendingQuestionItem[] = [];
     for (const w of this.waiters.values()) {
       if (sessionId === undefined || w.sessionId === sessionId) {
-        out.push({
-          rpcId: w.rpcId,
-          sessionId: w.sessionId,
-          questions: w.questions,
-        });
+        out.push(pendingView(w));
       }
     }
     return out;
@@ -136,16 +205,51 @@ export class FaceQuestionBroker {
     return this.waiters.has(rpcId);
   }
 
+  /**
+   * Remaining ms until the Host timer fires for a timed ask (0 when expired).
+   * Undefined when the ask is legacy / not timed.
+   */
+  remainingMs(rpcId: string, now = Date.now()): number | undefined {
+    const w = this.waiters.get(rpcId);
+    if (!w || w.deadlineAt === undefined) return undefined;
+    return Math.max(0, w.deadlineAt - now);
+  }
+
+  /**
+   * Answering UI takeover: pauses the Host timer while any holder is active.
+   * Delivery onto the mux transport does **not** count — only explicit claim.
+   */
+  claimUi(rpcId: string): boolean {
+    const w = this.waiters.get(rpcId);
+    if (!w || w.late) return false;
+    w.holders += 1;
+    if (w.holders === 1) this.clearTimer(w);
+    return true;
+  }
+
+  /** Last answering UI leaves; restore the original absolute deadline. */
+  releaseUi(rpcId: string): boolean {
+    const w = this.waiters.get(rpcId);
+    if (!w || w.late) return false;
+    if (w.holders <= 0) return false;
+    w.holders -= 1;
+    if (w.holders === 0) this.armTimer(w);
+    return true;
+  }
+
   ask(
     sessionId: string,
     questions: readonly FaceQuestionItem[],
     signal?: AbortSignal,
+    options?: FaceAskOptions,
   ): Promise<FaceQuestionAnswer> {
     if (questions.length === 0) {
       return Promise.reject(
         new FaceQuestionError("questions must be non-empty", "EMPTY_QUESTIONS"),
       );
     }
+    const timeoutMs = resolveTimedDeadlineMs(options);
+    const timed = timeoutMs !== undefined;
     return new Promise<FaceQuestionAnswer>((resolve, reject) => {
       const rpcId = mintRpcId();
       const pending: Waiter = {
@@ -154,10 +258,13 @@ export class FaceQuestionBroker {
         questions,
         resolve,
         reject,
+        holders: 0,
+        ...(timed ? { mode: "timed" as const, deadlineAt: Date.now() + timeoutMs } : {}),
         ...(signal ? { signal } : {}),
       };
       const onAbort = () => {
-        this.claim(pending, "cancelled");
+        if (!this.waiters.has(rpcId)) return;
+        this.finish(pending, "cancelled");
         reject(
           new FaceQuestionError(
             "ask_user_question was aborted before the user answered",
@@ -174,7 +281,8 @@ export class FaceQuestionBroker {
         }
         signal.addEventListener("abort", onAbort, { once: true });
       }
-      this.hooks.onRequested({ rpcId, sessionId, questions });
+      this.hooks.onRequested(pendingView(pending));
+      if (timed) this.armTimer(pending);
     });
   }
 
@@ -182,6 +290,7 @@ export class FaceQuestionBroker {
     sessionId: string,
     question: string,
     signal?: AbortSignal,
+    options?: FaceAskOptions,
   ): Promise<string> {
     const q = question.trim();
     if (!q) {
@@ -189,7 +298,7 @@ export class FaceQuestionBroker {
         new FaceQuestionError("questions must be non-empty", "EMPTY_QUESTIONS"),
       );
     }
-    return this.ask(sessionId, [{ id: "q0", question: q }], signal).then(
+    return this.ask(sessionId, [{ id: "q0", question: q }], signal, options).then(
       formatQuestionAnswer,
     );
   }
@@ -197,6 +306,8 @@ export class FaceQuestionBroker {
   /**
    * DSH `/api/respond` after approvals miss. `result` is the client-response
    * `result` object (`ok` + `value` or `error`).
+   * Late answers (after timed pending) still accept and steer via
+   * {@link FaceQuestionHooks.onLateAnswer}.
    */
   respondByRpcId(rpcId: string, result: unknown): FaceRpcReceipt {
     const pending = this.waiters.get(rpcId);
@@ -214,13 +325,16 @@ export class FaceQuestionBroker {
       if (code !== "cancelled") {
         return { accepted: false, reason: "bad-response" };
       }
-      this.claim(pending, "cancelled");
-      pending.reject(
-        new FaceQuestionError(
-          "the user cancelled ask_user_question",
-          "ASK_CANCELLED",
-        ),
-      );
+      const wasLate = pending.late === true;
+      this.finish(pending, "cancelled");
+      if (!wasLate) {
+        pending.reject(
+          new FaceQuestionError(
+            "the user cancelled ask_user_question",
+            "ASK_CANCELLED",
+          ),
+        );
+      }
       return { accepted: true };
     }
     const value = r.value;
@@ -235,12 +349,61 @@ export class FaceQuestionBroker {
     if (!answer || !matchesQuestions(v.sessionId, answer, pending)) {
       return { accepted: false, reason: "bad-response" };
     }
-    this.claim(pending, "answered");
-    pending.resolve(answer);
+    const wasLate = pending.late === true;
+    const questions = pending.questions;
+    const sessionId = pending.sessionId;
+    this.finish(pending, "answered");
+    if (wasLate) {
+      this.hooks.onLateAnswer?.(sessionId, rpcId, questions, answer);
+    } else {
+      pending.resolve(answer);
+    }
     return { accepted: true };
   }
 
-  private claim(pending: Waiter, outcome: "answered" | "cancelled"): void {
+  private armTimer(pending: Waiter): void {
+    if (pending.late || pending.deadlineAt === undefined || pending.holders > 0) {
+      return;
+    }
+    this.clearTimer(pending);
+    const delay = pending.deadlineAt - Date.now();
+    if (delay <= 0) {
+      this.fireTimeout(pending);
+      return;
+    }
+    pending.timer = setTimeout(() => {
+      pending.timer = undefined;
+      this.fireTimeout(pending);
+    }, delay);
+  }
+
+  private clearTimer(pending: Waiter): void {
+    if (pending.timer !== undefined) {
+      clearTimeout(pending.timer);
+      pending.timer = undefined;
+    }
+  }
+
+  private fireTimeout(pending: Waiter): void {
+    if (!this.waiters.has(pending.rpcId) || pending.late) return;
+    if (pending.holders > 0) return;
+    pending.late = true;
+    this.clearTimer(pending);
+    if (pending.signal && pending.onAbort) {
+      pending.signal.removeEventListener("abort", pending.onAbort);
+      pending.onAbort = undefined;
+    }
+    // Keep in waiters so late respond / mux replay still see the question.
+    pending.reject(
+      new FaceQuestionError(
+        "ask_user_question timed out waiting for an answer (pending)",
+        "ASK_TIMED_OUT",
+      ),
+    );
+  }
+
+  private finish(pending: Waiter, outcome: "answered" | "cancelled"): void {
+    this.clearTimer(pending);
     this.waiters.delete(pending.rpcId);
     if (pending.signal && pending.onAbort) {
       pending.signal.removeEventListener("abort", pending.onAbort);
@@ -251,11 +414,19 @@ export class FaceQuestionBroker {
 
 export function questionRequestedFrame(
   item: PendingQuestionItem,
+  now = Date.now(),
 ): Extract<MuxFrame, { type: "question/requested" }> {
+  const remainingMs =
+    item.deadlineAt !== undefined
+      ? Math.max(0, item.deadlineAt - now)
+      : undefined;
   return {
     type: "question/requested",
     sessionId: item.sessionId,
     questions: item.questions,
+    ...(item.mode ? { mode: item.mode } : {}),
+    ...(item.deadlineAt !== undefined ? { deadlineAt: item.deadlineAt } : {}),
+    ...(remainingMs !== undefined ? { remainingMs } : {}),
   };
 }
 
@@ -344,12 +515,33 @@ export function coerceAskUserQuestions(
   return undefined;
 }
 
+/** Read `mode` / `timeout_ms` from ask_user args (default legacy blocking). */
+export function coerceAskOptions(args: unknown): FaceAskOptions | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const a = args as Record<string, unknown>;
+  const modeRaw = a.mode;
+  const mode =
+    modeRaw === "timed" || modeRaw === "legacy" ? modeRaw : undefined;
+  const timeoutRaw =
+    typeof a.timeout_ms === "number"
+      ? a.timeout_ms
+      : typeof a.timeoutMs === "number"
+        ? a.timeoutMs
+        : undefined;
+  if (mode === undefined && timeoutRaw === undefined) return undefined;
+  return {
+    ...(mode !== undefined ? { mode } : {}),
+    ...(timeoutRaw !== undefined ? { timeoutMs: timeoutRaw } : {}),
+  };
+}
+
 /** Point `ask_user` execute at Face questions (DSH web provider). */
 export function bindAskUserTool(
   tools: ToolRegistry,
   ask: (
     questions: readonly FaceQuestionItem[],
     signal?: AbortSignal,
+    options?: FaceAskOptions,
   ) => Promise<string>,
 ): void {
   const prev = tools.get("ask_user");
@@ -370,9 +562,20 @@ export function bindAskUserTool(
         return { content: "ask_user: empty or invalid questions", isError: true };
       }
       try {
-        return { content: await ask(questions, signal) };
+        return {
+          content: await ask(questions, signal, coerceAskOptions(args)),
+        };
       } catch (err) {
         if (err instanceof FaceQuestionError) {
+          // Timed timeout: first settlement — tool returns pending, question
+          // stays answerable for a late steer (second settlement).
+          if (err.code === "ASK_TIMED_OUT") {
+            return {
+              content:
+                "ask_user: timed out waiting for an answer (pending). " +
+                "The user may still reply later as a message; continue without blocking on this question.",
+            };
+          }
           return { content: err.message, isError: true };
         }
         throw err;

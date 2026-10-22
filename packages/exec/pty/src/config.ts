@@ -13,13 +13,19 @@ export interface PtyBackendConfig {
   readonly exactProbeAfterMs: number;
   readonly idleSilenceMs: number;
   readonly handoffGraceMs: number;
+  /**
+   * Extra silence budget only while the prompt marker was seen but the
+   * printable tail has not arrived yet (late second pty chunk). Default `0`
+   * preserves pre-grace settle boundaries exactly; zero is a valid value.
+   */
+  readonly promptTailGraceMs: number;
   readonly timeoutMs: number;
   readonly disposeGraceMs: number;
 }
 
 /**
  * Assert every numeric config field is a positive safe integer and bounds compose
- * (CV DSH terminal-bash `validateConfig`).
+ * (CV DSH terminal-bash `validateConfig`). `promptTailGraceMs` uniquely allows 0.
  */
 export function validatePtyBackendConfig(
   config: PtyBackendConfig,
@@ -31,7 +37,14 @@ export function validatePtyBackendConfig(
     throw new Error("pty: shellPath must be non-empty");
   }
   for (const [name, value] of Object.entries(config)) {
-    if (typeof value === "number" && (!Number.isSafeInteger(value) || value <= 0)) {
+    if (typeof value !== "number") continue;
+    if (name === "promptTailGraceMs") {
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`pty: ${name} must be a non-negative safe integer`);
+      }
+      continue;
+    }
+    if (!Number.isSafeInteger(value) || value <= 0) {
       throw new Error(`pty: ${name} must be a positive safe integer`);
     }
   }
@@ -62,6 +75,7 @@ export function defaultPtyBackendConfig(
     exactProbeAfterMs: 150,
     idleSilenceMs: 3_000,
     handoffGraceMs: 500,
+    promptTailGraceMs: 0,
     timeoutMs: 30_000,
     disposeGraceMs: 3_000,
     ...overrides,

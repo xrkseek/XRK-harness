@@ -107,6 +107,7 @@ import {
   raceDrainRunSlice,
   SESSION_DRAIN_POLL_MS,
   SESSION_DRAIN_WAIT_MS,
+  waitForSignalOrSlice,
   waitSessionDrainIdle,
 } from "./wait-drain-idle.js";
 
@@ -2027,7 +2028,10 @@ function createWaitAgentTool(
             /* keep polling until deadline */
           }
         } else {
-          await new Promise((r) => setTimeout(r, Math.max(POLL_MS, slice)));
+          await waitForSignalOrSlice({
+            sliceMs: Math.max(POLL_MS, slice),
+            ...(signal ? { signal } : {}),
+          });
         }
       }
       const timedOut = stillRunning();

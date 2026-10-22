@@ -10,6 +10,7 @@ import {
   estimateTokens,
   parseCompactionStrategy,
   prepareCompactionPayload,
+  priceRouteImageTokens,
   resolveCompactionStrategy,
   resolveSoftBudgetCeiling,
   resolveSoftBudgetTokens,
@@ -20,6 +21,53 @@ describe("compaction helpers", () => {
   it("estimates tokens roughly", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("abcdefgh")).toBe(2);
+  });
+
+  it("prices the same image by route; no-route is annotated heuristic", () => {
+    const img = {
+      width: 1024,
+      height: 768,
+      attachmentId: "sha256:abcdef0123456789",
+      mediaType: "image/png" as const,
+      bytes: 12_000,
+    };
+    const vision = priceRouteImageTokens([img], {
+      inputModalities: ["text", "image"],
+      expectedCount: 1,
+    });
+    const textOnly = priceRouteImageTokens([img], {
+      inputModalities: ["text"],
+      expectedCount: 1,
+    });
+    const noRoute = priceRouteImageTokens([img], { expectedCount: 1 });
+    expect(vision.pricing).toBe("vision");
+    expect(textOnly.pricing).toBe("text-placeholder");
+    expect(noRoute.pricing).toBe("heuristic");
+    expect(vision.tokens).toBeGreaterThan(textOnly.tokens);
+    expect(vision.tokens).not.toBe(noRoute.tokens);
+    expect(() =>
+      priceRouteImageTokens([img], { expectedCount: 2 }),
+    ).toThrow(/occurrence count/);
+
+    const softVision = estimateRequestTokens({
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "image", attachment: img }],
+        },
+      ],
+      inputModalities: ["text", "image"],
+    });
+    const softText = estimateRequestTokens({
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "image", attachment: img }],
+        },
+      ],
+      inputModalities: ["text"],
+    });
+    expect(softVision).toBeGreaterThan(softText);
   });
 
   it("resolves soft-budget tokens from catalog soft max with derived keep/buffer", () => {
@@ -70,28 +118,31 @@ describe("compaction helpers", () => {
     expect(withReasoning - without).toBe(estimateTokens("r".repeat(40)));
   });
 
-  it("counts image blocks with DeepSeek V41 vision tokens", () => {
+  it("counts image blocks with DeepSeek V41 vision tokens on vision routes", () => {
     const textOnly = estimateMessagesTokens([
       { role: "user", content: [{ type: "text", text: "hi" }] },
     ]);
-    const withImage = estimateMessagesTokens([
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "hi" },
-          {
-            type: "image",
-            attachment: {
-              attachmentId: "sha256:abcdef0123456789",
-              mediaType: "image/png",
-              bytes: 1200,
-              width: 10,
-              height: 10,
+    const withImage = estimateMessagesTokens(
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "hi" },
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:abcdef0123456789",
+                mediaType: "image/png",
+                bytes: 1200,
+                width: 10,
+                height: 10,
+              },
             },
-          },
-        ],
-      },
-    ]);
+          ],
+        },
+      ],
+      { inputModalities: ["text", "image"] },
+    );
     // Tiny images scale up to the 544×544 floor → 184 vision tokens.
     expect(withImage - textOnly).toBe(184);
   });

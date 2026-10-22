@@ -23,6 +23,22 @@ describe("defaultPtyBackendConfig", () => {
       defaultPtyBackendConfig({ handoffGraceMs: 10, pollIntervalMs: 50 }),
     ).toThrow(/handoffGraceMs/);
   });
+
+  it("accepts promptTailGraceMs 0 and rejects negatives / fractions", () => {
+    expect(defaultPtyBackendConfig().promptTailGraceMs).toBe(0);
+    expect(defaultPtyBackendConfig({ promptTailGraceMs: 0 }).promptTailGraceMs).toBe(
+      0,
+    );
+    expect(defaultPtyBackendConfig({ promptTailGraceMs: 25 }).promptTailGraceMs).toBe(
+      25,
+    );
+    expect(() => defaultPtyBackendConfig({ promptTailGraceMs: -1 })).toThrow(
+      /promptTailGraceMs/,
+    );
+    expect(() => defaultPtyBackendConfig({ promptTailGraceMs: 1.5 })).toThrow(
+      /promptTailGraceMs/,
+    );
+  });
 });
 
 describe("resolvePtyCwd", () => {

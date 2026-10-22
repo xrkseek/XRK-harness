@@ -313,7 +313,10 @@ function declareRoot(slots: SlotRegistry): () => void {
   } as never, () => null)
   const offSidebar = slots.register({
     name: 'sidebar',
-    children: { 'sidebar.utility': { kind: 'list', scope: 'root' } },
+    children: {
+      'sidebar.utility.compact': { kind: 'list', scope: 'root' },
+      'sidebar.utility': { kind: 'list', scope: 'root' },
+    },
   } as never, () => null)
   return () => {
     offSidebar()

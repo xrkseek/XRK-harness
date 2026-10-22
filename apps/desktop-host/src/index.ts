@@ -162,6 +162,7 @@ async function main(): Promise<void> {
 
   let controller: DesktopHostController | undefined;
   let stopping: Promise<void> | undefined;
+  let fatalReported = false;
 
   const stop = (): Promise<void> => {
     stopping ??= (async () => {
@@ -185,6 +186,26 @@ async function main(): Promise<void> {
     })();
     return stopping;
   };
+
+  /** Process-level fatal → full stack over IPC (not Node's truncated default). */
+  const reportFatal = (kind: string, error: unknown): void => {
+    if (fatalReported) return;
+    fatalReported = true;
+    const err = error instanceof Error ? error : new Error(String(error));
+    const stack = err.stack?.trim() || err.message;
+    const message = `${kind}: ${stack}`;
+    process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${message}\n`);
+    sendIpc({ type: "fatal", message });
+    process.exitCode = 1;
+    void stop();
+  };
+
+  process.on("uncaughtException", (error) => {
+    reportFatal("uncaughtException", error);
+  });
+  process.on("unhandledRejection", (reason) => {
+    reportFatal("unhandledRejection", reason);
+  });
 
   try {
     controller = await startDesktopHost({ projectDir });

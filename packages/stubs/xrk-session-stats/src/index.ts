@@ -13,6 +13,13 @@ import type { Context } from '@xrkseek/cordis'
 import { sessionStatsProjectionDefinition } from './projection.ts'
 
 export type * from './types.ts'
+export {
+  CriticalPath,
+  MAX_PATH_DEPTH,
+  sumDurations,
+  type PathDurations,
+  type WorkKind,
+} from './critical-path.ts'
 
 /** Cordis plugin name. */
 export const name = 'session-stats'

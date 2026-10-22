@@ -152,6 +152,19 @@ export type UserMessageSource =
       readonly kind: "auto-continue";
       /** Which consecutive auto-continue this is (1-based). */
       readonly round: number;
+    }
+  | {
+      /**
+       * Standing tool **name** set changed vs the prior `request/header`
+       * (DSH dynamic-tool-updates). Schema-only tweaks do not emit this.
+       * Model-visible via `deriveMessages`; Face shows it as context inject.
+       */
+      readonly kind: "tool-registry";
+      readonly form: "update";
+      readonly added: readonly string[];
+      readonly removed: readonly string[];
+      /** 0-based log index of the new `request/header` this update refers to. */
+      readonly headerSeq?: number;
     };
 
 /** Budget clip recorded on durable workspace injects (was inject-result-only). */
@@ -644,6 +657,44 @@ export interface PluginRecordEvent extends SessionEventBase {
   readonly data: unknown;
 }
 
+/**
+ * Background job admitted to the live registry (DSH `job/registered`).
+ * Log-only — reconstructs execution intervals after registry restart.
+ * `jobId` is a UUID (stable across restarts); `liveId` is the process-local
+ * control id (`bash-N` / `pty-send-N`) used by job_kill / job_output.
+ */
+export interface JobRegisteredEvent extends SessionEventBase {
+  readonly type: "job/registered";
+  readonly jobId: string;
+  readonly liveId: string;
+  readonly kind: string;
+  readonly label: string;
+  /** Registry epoch-ms when the live row was created. */
+  readonly startedAt: number;
+  /** Optional creating tool call when the producer supplied one. */
+  readonly toolCallId?: string;
+}
+
+/**
+ * Background job reached a terminal status (DSH `job/settled`).
+ * Missing settled rows stay incomplete — never inferred on read/restart.
+ */
+export interface JobSettledEvent extends SessionEventBase {
+  readonly type: "job/settled";
+  readonly jobId: string;
+  readonly liveId: string;
+  readonly status: "exited" | "killed" | "failed";
+  /** Registry epoch-ms when the terminal snapshot committed. */
+  readonly finishedAt: number;
+  /**
+   * True when the producer `done` promise fulfilled; false when it rejected
+   * or teardown forced a terminal row without a clean report.
+   */
+  readonly producerReported: boolean;
+  readonly exitCode?: number | null;
+  readonly detail?: string;
+}
+
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
@@ -678,7 +729,9 @@ export type SessionEvent =
   | WorkspaceChangesEvent
   | DeliverablesPresentedEvent
   | WorkingDirectoryChangeEvent
-  | PluginRecordEvent;
+  | PluginRecordEvent
+  | JobRegisteredEvent
+  | JobSettledEvent;
 
 
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
@@ -716,6 +769,8 @@ const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "deliverables/presented",
   "working-directory/change",
   "plugin/record",
+  "job/registered",
+  "job/settled",
 ]);
 
 /**

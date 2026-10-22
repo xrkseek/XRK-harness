@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.14',
+    date: '2026-10-22',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '会话跑完可桌面提醒（窗口未聚焦时）；Host 升级后提示刷新壳，避免旧壳挂新 Host。',
+        en: 'Desktop notify when a session finishes (unfocused); reload prompt when Host version drifts from the shell.',
+      },
+      {
+        zh: '限时 ask_user：超时后工具先结案，晚到的回答改走 steer；有活回合/作业/子代理时拒绝静默归档。',
+        en: 'Timed ask_user: timeout settles the tool, late answers steer; archive refuses while a turn / job / subagent is live.',
+      },
+      {
+        zh: '子代理超长末条答案落盘可再读；侧栏 Plugins 与发行说明并排紧凑格。',
+        en: 'Long subagent final answers spill to disk for re-read; Plugins and release notes share a compact sidebar strip.',
+      },
+    ],
+  },
+  {
     version: '0.6.13',
     date: '2026-10-21',
     title: {

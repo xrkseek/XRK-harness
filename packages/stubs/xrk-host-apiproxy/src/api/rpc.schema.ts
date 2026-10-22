@@ -36,6 +36,18 @@ export const rpcErrorSchema: z.ZodType<RpcError> = z.discriminatedUnion('code', 
   z.object({ code: z.literal('cancelled'), message: z.string(), details: z.object({}) }),
   z.object({ code: z.literal('session-not-found'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
   z.object({ code: z.literal('session-not-archived'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
+  z.object({
+    code: z.literal('session-active'),
+    message: z.string(),
+    details: z.object({
+      sessionId: z.string(),
+      activity: z.array(z.object({
+        kind: z.string(),
+        id: z.string(),
+        title: z.string(),
+      })),
+    }),
+  }),
   z.object({ code: z.literal('model-unavailable'), message: z.string(), details: z.object({ provider: z.string(), model: z.string() }) }),
   z.object({
     code: z.literal('model-session-cap'),

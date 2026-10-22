@@ -1,4 +1,9 @@
 import type { HostDescription, IApiClient, HostFrame, MuxFrame, RpcRequest } from './api.ts'
+import {
+  createReleaseMismatchTracker,
+  readShellReleaseVersion,
+  type ReleaseMismatch,
+} from '../release-mismatch.ts'
 
 /** Reconnect/backoff tunables (deployment-varying — no hardcoded tunables; these become the
  *  future `ctx.connection` plugin's Config). All fields optional; defaults below. */
@@ -84,6 +89,11 @@ export interface ConnectionSinks {
   onHostEnvelope?: (envelope: RpcRequest<HostFrame>) => void
   /** After each connection generation is established (both streams open + describe succeeded), first connect included. */
   onConnected?: (description: HostDescription) => void
+  /**
+   * Host package version drifted from the shell stamp or from a prior
+   * generation — page should prompt reload (static JS can be stale).
+   */
+  onReleaseMismatch?: (mismatch: ReleaseMismatch) => void
   /** Coarse state transitions (deduplicated: fires only on change). The initial pre-connect
    *  span reports nothing — the UI treats "no state yet" as connecting, not as an outage. */
   onStateChange?: (state: ConnectionState) => void
@@ -114,6 +124,9 @@ export class ConnectionController {
   private lastState: ConnectionState | null = null
   private lastPhase: ConnectionPhase | undefined | null = null
   private readonly config: ConnectionConfigResolved
+  private readonly releaseMismatch = createReleaseMismatchTracker({
+    shellVersion: readShellReleaseVersion(),
+  })
 
   constructor(
     private readonly api: IApiClient,
@@ -295,6 +308,12 @@ export class ConnectionController {
         // A state sink may synchronously stop this controller. Do not publish
         // a description for a generation that no longer exists afterward.
         if (this.isGenerationActive(ac)) {
+          const mismatch = this.releaseMismatch.noteHostVersion(
+            descriptionResult.value.version,
+          )
+          if (mismatch) {
+            this.callSink(() => { this.sinks.onReleaseMismatch?.(mismatch) })
+          }
           this.callSink(() => { this.sinks.onConnected?.(descriptionResult.value) })
         }
       } catch {

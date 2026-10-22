@@ -36,7 +36,10 @@ export interface ResolveSandboxOptions {
   readonly workspaceRoot: string;
   /**
    * Backend kind. Default `workspace` (deny-list + cwd jail).
-   * `docker` / `bwrap` are first-class container / OS isolation Providers.
+   * On win32, `workspace` is **not** a kernel security boundary — parent
+   * `FILE_DELETE_CHILD` can still delete outside the jail (G3 / DSH #4581).
+   * True ACL + mandatory integrity needs `windows` + helper (or a future
+   * in-tree win32-acl layer). `docker` / `bwrap` are first-class Providers.
    * `windows` bridges to a Codex-style helper binary and fails closed
    * without it.
    */

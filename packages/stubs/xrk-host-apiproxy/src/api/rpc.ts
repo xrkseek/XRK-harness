@@ -35,6 +35,14 @@ export interface RpcErrorDetailsMap {
   'session-not-found': { sessionId: SessionId }
   /** `session.delete` refused because the session is not in the archive set. */
   'session-not-archived': { sessionId: SessionId }
+  /**
+   * `workspace.archiveSession` refused while turn / jobs / subagents still run.
+   * Pass `force: true` to stop and archive.
+   */
+  'session-active': {
+    sessionId: SessionId
+    activity: readonly { kind: string; id: string; title: string }[]
+  }
   'model-unavailable': { provider: string; model: string }
   /**
    * Opening / switching onto a provider+model route would exceed the live

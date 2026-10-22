@@ -52,7 +52,7 @@ createWorkspaceToolOutputPersist() // host disk: `~/.xrk/spill/tool-outputs/`
 
 ### 子代理答案（同一目录，更低上限）
 
-前台 / 后台子代理回给父会话的最终答案经 `boundChildAnswer`：UTF-8 **超过 12_000 字节**才 spill（`SUBAGENT_ANSWER_INLINE_BYTES`），仍写入 **`spill/tool-outputs/`**（与 64KiB 工具结果同店），内联只留 head/tail + 读盘提示。刻意低于 64KiB，避免「子答案 spill 后再被工具结果 bound 二次落盘」。
+前台 / 后台子代理回给父会话的最终答案经 `boundChildAnswer`：UTF-8 **超过 12_000 字节**才 spill（`SUBAGENT_ANSWER_INLINE_BYTES`），仍写入 **`spill/tool-outputs/`**（与 64KiB 工具结果同店），内联只留 head/tail + 读盘提示。刻意低于 64KiB，避免「子答案 spill 后再被工具结果 bound 二次落盘」。读盘提示是**祈使句**且 `tool description` 与返回正文**两处都写** —— 只留 notice 会被模型当噪声跳过，转而命令子代理压缩重述。**为什么这样设计**见 [ADR-0011](./adr/0011-tool-output-spill.md)。
 
 ### 不是 spill 的情况（别去翻 tool-outputs）
 
@@ -130,7 +130,7 @@ Filenames look like `<parentSessionId>_subagent-<childSessionId>.txt` (child ans
 
 ### Subagent answers (same directory, lower ceiling)
 
-Foreground / background child answers returned to the parent go through `boundChildAnswer`: spill only when UTF-8 length exceeds **12_000 bytes** (`SUBAGENT_ANSWER_INLINE_BYTES`), still under **`spill/tool-outputs/`** (same store as the 64KiB tool bound), with head/tail + a read-disk lead-in inline. The lower ceiling avoids a second spill pass through the 64KiB tool-result bound.
+Foreground / background child answers returned to the parent go through `boundChildAnswer`: spill only when UTF-8 length exceeds **12_000 bytes** (`SUBAGENT_ANSWER_INLINE_BYTES`), still under **`spill/tool-outputs/`** (same store as the 64KiB tool bound), with head/tail + a read-disk lead-in inline. The lower ceiling avoids a second spill pass through the 64KiB tool-result bound. The lead-in is **imperative** and written into both the `tool description` and the return body — a notice alone gets scanned past, and the model orders the child to compress and restate. **Rationale:** [ADR-0011](./adr/0011-tool-output-spill.md).
 
 ### Not spill (do not dig in tool-outputs for these)
 

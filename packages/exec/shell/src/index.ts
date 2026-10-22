@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ToolDefinition } from "@xrkseek/core-tools";
 import {
@@ -36,6 +37,11 @@ export type ShellJobStatus =
 
 export interface ShellJobInfo {
   readonly id: string;
+  /**
+   * Durable UUID for session-journal facts (`job/registered` / `job/settled`).
+   * Survives registry restart; `id` (`bash-N`) is process-local control only.
+   */
+  readonly recordId: string;
   /** Producer kind — `bash` for subprocess jobs; `pty-send` for terminal background sends. */
   readonly kind: string;
   readonly command: string;
@@ -76,6 +82,11 @@ export interface ShellJobInfo {
    * UI offers "move to background" only for awaited jobs; dropped on settle.
    */
   readonly foreground?: boolean;
+  /**
+   * Set on the terminal snapshot: producer `done` fulfilled (`true`) vs
+   * reject / forced teardown (`false`). Omitted while running/stopping.
+   */
+  readonly producerReported?: boolean;
 }
 
 export interface ShellStartJobResult {
@@ -478,6 +489,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
     const { settled, markSettled } = makeSettled();
     const info: ShellJobInfo = {
       id,
+      recordId: randomUUID(),
       kind: "bash",
       command,
       status: "running",
@@ -510,6 +522,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
             ? { stderrSpillPath: r.stderrSpillPath }
             : {}),
           finishedAt: Date.now(),
+          producerReported: true,
         });
       })
       .catch((err: unknown) => {
@@ -521,6 +534,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
           status: "failed",
           stderr: message,
           finishedAt: Date.now(),
+          producerReported: false,
         });
       });
 
@@ -585,6 +599,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
       const { settled, markSettled } = makeSettled();
       const info: ShellJobInfo = {
         id,
+        recordId: randomUUID(),
         kind,
         command: label,
         status: "running",
@@ -613,6 +628,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
             status,
             ...(outcome.detail !== undefined ? { detail: outcome.detail } : {}),
             finishedAt: Date.now(),
+            producerReported: true,
           });
         })
         .catch((err: unknown) => {
@@ -624,6 +640,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
             status: "failed",
             detail: message,
             finishedAt: Date.now(),
+            producerReported: false,
           });
         });
 
@@ -808,6 +825,7 @@ export function createLocalShell(options: ShellLocalOptions): ShellService {
             detail,
             finishedAt: Date.now(),
             reported: true,
+            producerReported: false,
           });
         }
       }

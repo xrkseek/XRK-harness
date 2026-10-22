@@ -110,6 +110,12 @@ export type MuxFrame =
       readonly type: "question/requested";
       readonly sessionId: string;
       readonly questions: readonly FaceQuestionItem[];
+      /** Omit / `"legacy"` = blocking ask (default). `"timed"` = Host deadline. */
+      readonly mode?: "legacy" | "timed";
+      /** Absolute deadline ms when `mode` is `"timed"`. */
+      readonly deadlineAt?: number;
+      /** Host-computed remaining ms (`max(0, deadlineAt - now)`). */
+      readonly remainingMs?: number;
     }
   | {
       readonly type: "question/resolved";

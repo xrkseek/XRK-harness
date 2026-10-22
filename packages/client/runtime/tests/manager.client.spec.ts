@@ -35,6 +35,34 @@ describe('instances', () => {
     expect(session.getSnapshot().running).toBe(true) // list preceded instantiation
   })
 
+  it('keeps blank=false across Session object rebuild after local engage (G25)', async () => {
+    // Host list lag can still report blank:true after the first send. The
+    // summary row is monotonic; a dropped+rebuilt Session must adopt that,
+    // not re-enter the Hero blank pool.
+    const api = new FakeApiClient()
+    api.onList = () =>
+      Promise.resolve(ok({ items: [summary(S1, { blank: true })] as never[] }))
+    const manager = new SessionManager(api, fakeRemote())
+    await manager.refreshList()
+    const first = manager.get(S1)
+    expect(first.getSnapshot().blank).toBe(true)
+    const prompted = await first.prompt([{ type: 'text', text: 'hi' }], 'queue')
+    expect(prompted.ok).toBe(true)
+    expect(first.getSnapshot().blank).toBe(false)
+    expect(manager.getListSnapshot().items[0]?.blank).toBe(false)
+
+    manager.drop(S1)
+    // Stale host list still claims blank — summary must not re-raise.
+    api.onList = () =>
+      Promise.resolve(ok({ items: [summary(S1, { blank: true })] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]?.blank).toBe(false)
+
+    const rebuilt = manager.get(S1)
+    expect(rebuilt).not.toBe(first)
+    expect(rebuilt.getSnapshot().blank).toBe(false)
+  })
+
   it('replays buffered approval frames on instantiation and drops ordinary frames for uninstantiated sessions', () => {
     const api = new FakeApiClient()
     const manager = new SessionManager(api, fakeRemote())

@@ -24,10 +24,15 @@ declare module '@xrkseek/client-ui-slots' {
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * Compact utility rows between New Session and the workspace browser
-     * (Plugins, schedules, …). Declared by this package's `sidebar` entry;
+     * Declared by this package's `sidebar` entry;
      * each action receives only the column state.
      */
     'sidebar.utility': { kind: 'list'; scope: 'root'; owner: SidebarUtilityOwnerProps }
+    /**
+     * Two-up strip above {@link sidebar.utility} (Plugins + release notes).
+     * Wide: side-by-side; rail: stacked icons.
+     */
+    'sidebar.utility.compact': { kind: 'list'; scope: 'root'; owner: SidebarUtilityOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -97,5 +102,11 @@ export type SidebarRootInjected = {
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
-  & PropsRenderSlots<'sidebar.utility' | 'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
+  & PropsRenderSlots<
+    | 'sidebar.utility'
+    | 'sidebar.utility.compact'
+    | 'sidebar.workspaces'
+    | 'sidebar.settings'
+    | 'sidebar.footer.action'
+  >
   & SidebarRootInjected & PropsLocale<'sidebar'>

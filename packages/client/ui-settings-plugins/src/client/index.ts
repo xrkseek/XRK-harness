@@ -315,12 +315,11 @@ export function apply(ctx: ClientContext): void {
     },
   })
 
-  // DSH seat: Plugins under New Session / above Workspace (release-notes /
-  // 公告 shares the same utility list at order 10). The gear Settings nav
-  // does NOT list Plugins — SettingsRoot treats id `plugins` as home-only
-  // (full-bleed panel).
-  ctx.slots.inject('sidebar.utility', () => ctx.slots.register({
-    name: 'sidebar.utility',
+  // Compact strip with release-notes (two-up under New Session). The gear
+  // Settings nav does NOT list Plugins — SettingsRoot treats id `plugins` as
+  // home-only (full-bleed panel).
+  ctx.slots.inject('sidebar.utility.compact', () => ctx.slots.register({
+    name: 'sidebar.utility.compact',
     id: 'plugins',
     order: 0,
     label: () => t('nav'),
@@ -332,7 +331,7 @@ export function apply(ctx: ClientContext): void {
 
   // Still a settings.section so tabs / cards stay on the settings slot tree
   // (feature plugins inject `settings.plugin.item` here). The shell hides it
-  // from the gear nav; only sidebar.utility opens it.
+  // from the gear nav; only the compact Plugins row opens it.
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'plugins',

@@ -196,6 +196,17 @@ export function createStdTools(
               required: ["id", "question"],
             },
           },
+          mode: {
+            type: "string",
+            description:
+              'Ask settlement mode. Omit or "legacy" = block until answered. ' +
+              '"timed" = Host deadline; timeout returns pending and a late answer may arrive as a user message.',
+          },
+          timeout_ms: {
+            type: "number",
+            description:
+              'When mode is "timed": deadline length in ms (Host default 120000). Pass -1 to force legacy blocking.',
+          },
         },
       },
       presentCall: (args) => {

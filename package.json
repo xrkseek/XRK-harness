@@ -8,6 +8,7 @@
   },
   "scripts": {
     "check": "node ./scripts/check.mjs",
+    "perf:gate": "node --expose-gc ./scripts/perf-gate.mjs",
     "verify:client-ui-i18n": "node --experimental-strip-types ./scripts/verify-client-ui-i18n.ts",
     "verify:client-ui-i18n:desktop": "node --experimental-strip-types ./scripts/verify-client-ui-i18n.ts --desktop-only",
     "build": "node ./scripts/build.mjs",

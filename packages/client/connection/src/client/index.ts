@@ -41,6 +41,7 @@ export {
 // Connection loop types are public through ConnectionHandle.start; the
 // controller remains package-internal.
 export type { ConnectionConfig, ConnectionPhase, ConnectionSinks, ConnectionState }
+export type { ReleaseMismatch, ReleaseMismatchKind } from '../release-mismatch.ts'
 export type { ClientConnectionRpc } from '../rpc.ts'
 
 /**

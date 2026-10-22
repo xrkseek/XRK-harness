@@ -170,8 +170,11 @@ export function SidebarRoot({
         </button>
       </Tooltip>
 
-      {/* Utility panellist (Plugins, release notes, …) then hairline before workspaces. */}
+      {/* Compact two-up (Plugins + release notes), then remaining utility rows. */}
       <nav className={css.utilityList} aria-label={t('utilities.label')}>
+        <div className={css.utilityCompact}>
+          {renderSlot('sidebar.utility.compact', { wide })}
+        </div>
         {renderSlot('sidebar.utility', { wide })}
       </nav>
 

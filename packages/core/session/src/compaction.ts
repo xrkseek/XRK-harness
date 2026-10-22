@@ -11,7 +11,7 @@ import type {
   SessionEvent,
 } from "@xrkseek/protocol";
 import { flattenText } from "@xrkseek/protocol";
-import { estimateImageTokens } from "@xrkseek/attachment";
+import { priceRouteImageTokens, type InputModality } from "./surface-estimate.js";
 import { estimateText } from "./surface-estimate.js";
 import {
   foldImageOffloadMarks,
@@ -70,27 +70,36 @@ function messagePlainText(m: ChatMessage): string {
 /**
  * Blocks that {@link flattenText} skips (images) or under-prices relative to the
  * outbound wire — soft budget must not miss them (漏压).
- * Image blocks use DeepSeek V41-aligned vision tokens from attachment dims
- * (provider usage remains authoritative after the turn).
+ * Image blocks use {@link priceRouteImageTokens} (pass `inputModalities` from
+ * the adapter; omit → annotated heuristic).
  */
-function estimateOpaqueContentBlocks(content: MessageContent): number {
+function estimateOpaqueContentBlocks(
+  content: MessageContent,
+  inputModalities?: readonly InputModality[],
+): number {
   if (typeof content === "string") return 0;
   let n = 0;
   for (const block of content) {
     if (block.type === "text") continue;
     if (block.type === "image") {
       if (block.offloaded === true) continue;
-      const { width, height } = block.attachment;
-      if (
-        Number.isSafeInteger(width) &&
-        Number.isSafeInteger(height) &&
-        width > 0 &&
-        height > 0
-      ) {
-        n += estimateImageTokens(width, height);
-      } else {
-        n += estimateTokens(JSON.stringify(block.attachment));
-      }
+      const a = block.attachment;
+      n += priceRouteImageTokens(
+        [
+          {
+            width: a.width,
+            height: a.height,
+            attachmentId: a.attachmentId,
+            mediaType: a.mediaType,
+            bytes: a.bytes,
+            ...(a.name !== undefined ? { name: a.name } : {}),
+          },
+        ],
+        {
+          ...(inputModalities !== undefined ? { inputModalities } : {}),
+          expectedCount: 1,
+        },
+      ).tokens;
       continue;
     }
     if (block.type === "file") continue;
@@ -101,6 +110,7 @@ function estimateOpaqueContentBlocks(content: MessageContent): number {
 
 export function estimateMessagesTokens(
   messages: readonly ChatMessage[],
+  options?: { readonly inputModalities?: readonly InputModality[] },
 ): number {
   let n = 0;
   for (const m of messages) {
@@ -110,7 +120,7 @@ export function estimateMessagesTokens(
       n += estimateTokens(m.reasoning);
     }
     if (m.role === "user" || m.role === "tool") {
-      n += estimateOpaqueContentBlocks(m.content);
+      n += estimateOpaqueContentBlocks(m.content, options?.inputModalities);
     }
     if (m.role === "assistant" && m.toolCalls) {
       for (const c of m.toolCalls) {
@@ -135,8 +145,14 @@ export function estimateRequestTokens(input: {
     readonly parameters: Record<string, unknown>;
   }[];
   readonly system?: string;
+  /** Active adapter modalities; text-only routes price images as placeholders. */
+  readonly inputModalities?: readonly InputModality[];
 }): number {
-  let n = estimateMessagesTokens(input.messages);
+  let n = estimateMessagesTokens(input.messages, {
+    ...(input.inputModalities !== undefined
+      ? { inputModalities: input.inputModalities }
+      : {}),
+  });
   // Non-assemble callers may pass system only on the side; avoid double-count
   // when the same text is already any system message (leading or in-history
   // trailing append).

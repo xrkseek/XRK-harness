@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { raceDrainRunSlice, waitSessionDrainIdle } from "../src/wait-drain-idle.js";
+import {
+  raceDrainRunSlice,
+  waitForSignalOrSlice,
+  waitSessionDrainIdle,
+} from "../src/wait-drain-idle.js";
 import type { FaceDrain } from "../src/context.js";
 
 describe("waitSessionDrainIdle", () => {
@@ -46,5 +50,31 @@ describe("raceDrainRunSlice", () => {
     });
     queueMicrotask(() => ac.abort());
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("waitForSignalOrSlice", () => {
+  it("returns when the slice elapses without a signal", async () => {
+    const started = Date.now();
+    await waitForSignalOrSlice({ sliceMs: 25 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(20);
+  });
+
+  it("throws AbortError when the signal aborts mid-slice", async () => {
+    const ac = new AbortController();
+    const pending = waitForSignalOrSlice({
+      sliceMs: 5_000,
+      signal: ac.signal,
+    });
+    queueMicrotask(() => ac.abort());
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("throws immediately when the signal is already aborted", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      waitForSignalOrSlice({ sliceMs: 5_000, signal: ac.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

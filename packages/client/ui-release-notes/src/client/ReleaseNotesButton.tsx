@@ -1,11 +1,11 @@
 /**
- * Sidebar utility release-notes button (with Plugins, under New Session): a
+ * Compact-strip release-notes button (with Plugins, under New Session): a
  * label + bell that carries a red dot while the newest bundled version is
  * unread. Opening the dialog lists every published version as an accordion;
  * expanding the newest entry marks notes read (clears the dot). Older rows stay
  * collapsible for reading without changing the marker.
  *
- * Geometry matches the Plugins utility row: wide labelled list chrome,
+ * Geometry matches the Plugins compact cell: wide labelled chrome,
  * collapsed 36px rail icon.
  */
 import { useEffect, useState, type ReactNode } from 'react'
@@ -36,9 +36,9 @@ export interface ReleaseNotesButtonInjected {
   resolveText: (text: LocalizedText) => string
 }
 
-/** Sidebar owner state plus this button's injected face. */
+/** Compact-strip owner state plus this button's injected face. */
 export type ReleaseNotesButtonProps =
-  PropsRuntime<'sidebar.utility'> & InjectFace<ReleaseNotesButtonInjected>
+  PropsRuntime<'sidebar.utility.compact'> & InjectFace<ReleaseNotesButtonInjected>
 
 /**
  * Render the sidebar utility release-notes row.

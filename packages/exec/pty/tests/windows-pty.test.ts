@@ -7,6 +7,7 @@ describe("windowsPtySpawnOptions", () => {
     if (process.platform === "win32") {
       expect(opts).toEqual({
         useConpty: true,
+        useConptyDll: true,
         conptyInheritCursor: false,
       });
     } else {

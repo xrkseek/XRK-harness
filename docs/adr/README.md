@@ -13,6 +13,8 @@
 | [0007](./0007-taskflow-external-runtime.md) | 任务流外部运行时 | Accepted |
 | [0008](./0008-desktop-shell-private-host.md) | Desktop 壳与私有 Host | Proposed |
 | [0009](./0009-session-format-v3-vs-sqlite-schema-v3.md) | Session Format V3 ≠ SQLite schema v3 | Accepted |
+| — | *0010 空缺（未曾存在，编号保留）* | — |
+| [0011](./0011-tool-output-spill.md) | 子代理答案封顶 —— 落盘不截杀 | Accepted |
 
 产品入口：[docs/README.md](../README.md) · [status.md](../status.md)。
 
@@ -33,5 +35,7 @@
 | [0007](./0007-taskflow-external-runtime.md) | Task flow external runtime | Accepted |
 | [0008](./0008-desktop-shell-private-host.md) | Desktop shell and private Host | Proposed |
 | [0009](./0009-session-format-v3-vs-sqlite-schema-v3.md) | Session Format V3 ≠ SQLite schema v3 | Accepted |
+| — | *0010 vacant (never existed; number reserved)* | — |
+| [0011](./0011-tool-output-spill.md) | Child-answer bound — spill, don't kill | Accepted |
 
 Product entry: [docs/README.md](../README.md) · [status.md](../status.md).

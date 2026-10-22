@@ -102,6 +102,8 @@ export {
   estimateMessageContent,
   estimateSystemTokens,
   estimateToolsTokens,
+  priceRouteImageTokens,
+  type InputModality,
 } from "./surface-estimate.js";
 
 export {
@@ -400,6 +402,8 @@ export {
 export {
   createPersistentSessionStore,
   ftsMatchQuery,
+  isLikelyRemoteSessionsPath,
+  resolveSqliteJournalMode,
   SESSION_ARCHIVE_DB_FILENAME,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
@@ -407,6 +411,7 @@ export {
   SESSIONS_WRITE_LOCK_FILENAME,
   type PersistentSessionStore,
   type PersistentSessionStoreOptions,
+  type SqliteJournalMode,
 } from "./sqlite-store.js";
 export {
   expandPackedStorageRecords,

@@ -28,6 +28,7 @@ import {
   migrateSqliteSchema,
   SQLITE_SCHEMA_CURRENT,
 } from "@xrkseek/session-format";
+import { resolveSqliteJournalMode } from "./sqlite-journal.js";
 
 export {
   acquireSessionsDirLock,
@@ -35,6 +36,11 @@ export {
   SESSIONS_WRITE_LOCK_FILENAME,
   type SessionsDirLock,
 } from "./store-lock.js";
+export {
+  isLikelyRemoteSessionsPath,
+  resolveSqliteJournalMode,
+  type SqliteJournalMode,
+} from "./sqlite-journal.js";
 
 function openDatabase(dbPath: string, readOnly = false): DatabaseSync {
   const { DatabaseSync: Db } = process.getBuiltinModule(
@@ -359,8 +365,8 @@ function rebuildFts(db: DatabaseSync): void {
   }
 }
 
-function initSchema(db: DatabaseSync): void {
-  db.exec("PRAGMA journal_mode = WAL");
+function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): void {
+  db.exec(`PRAGMA journal_mode = ${journalMode}`);
   db.exec("PRAGMA synchronous = FULL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
@@ -496,16 +502,22 @@ export function createPersistentSessionStore(
     : acquireSessionsDirLock(root);
   const dbPath = path.join(root, DB_NAME);
   const archivePath = path.join(root, ARCHIVE_DB_NAME);
+  const journalMode = resolveSqliteJournalMode(root);
+  if (journalMode === "DELETE") {
+    console.warn(
+      `[session-store] using SQLite DELETE journal for ${root} (network/sync volume or XRK_SQLITE_JOURNAL=DELETE); WAL is unsafe on remote filesystems`,
+    );
+  }
   let db: DatabaseSync;
   let archiveDb: DatabaseSync;
   try {
     db = openDatabase(dbPath, shared);
     if (!shared) {
-      initSchema(db);
+      initSchema(db, journalMode);
     }
     archiveDb = openDatabase(archivePath, shared);
     if (!shared) {
-      initSchema(archiveDb);
+      initSchema(archiveDb, journalMode);
     }
   } catch (err) {
     writeLock?.release();

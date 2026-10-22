@@ -225,6 +225,24 @@
   border: 0;
 }
 
+/* Plugins + release notes share one row when wide; rail stacks icons. */
+.utilityCompact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 0;
+}
+
+.utilityCompact:empty {
+  display: none;
+}
+
+.collapsed .utilityCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .utilityList::after {
   content: '';
   position: absolute;

@@ -236,6 +236,21 @@ export function apply(ctx: Context): void {
       workspaces.handleConnected()
       ctx.emit('connection/reset')
     },
+    onReleaseMismatch: (mismatch) => {
+      // Static shell can outlive a Host upgrade; reload picks up the new graph.
+      const detail =
+        mismatch.kind === 'shell-stale'
+          ? `Shell ${mismatch.shellVersion ?? '?'} vs Host ${mismatch.hostVersion}`
+          : `Host ${mismatch.previousHostVersion ?? '?'} → ${mismatch.hostVersion}`
+      const ok =
+        typeof globalThis.confirm === 'function'
+          && globalThis.confirm(
+            `A newer Host is running (${detail}). Reload this page to match?`,
+          )
+      if (ok && typeof globalThis.location?.reload === 'function') {
+        globalThis.location.reload()
+      }
+    },
     onStateChange: (state) => {
       // Generation death fires before any next-generation frame can arrive
       // (reconnect replays flow from stream open, ahead of onConnected):

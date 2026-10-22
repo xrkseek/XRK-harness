@@ -3405,7 +3405,11 @@ export function createHostManager(): HostManager {
                       : 14;
                   return injectMobileAccessShellIntoHtml(
                     injectBootThemeIntoHtml(
-                      injectBootIntoHtml(html, liveBoot.current),
+                      injectBootIntoHtml(
+                        html,
+                        liveBoot.current,
+                        faceRuntime.version,
+                      ),
                       faceRuntime.uiSettings.theme,
                       fontSize,
                     ),

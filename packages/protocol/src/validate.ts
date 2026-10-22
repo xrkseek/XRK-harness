@@ -299,6 +299,36 @@ function parseUserMessageSource(
     return { kind: "auto-continue", round };
   }
 
+  if (kind === "tool-registry") {
+    if (raw.form !== undefined && raw.form !== "update") {
+      throw new SessionEventParseError(
+        'tool-registry form must be "update"',
+        path,
+      );
+    }
+    const added = parseStringNameList(raw.added, `${path}.added`);
+    const removed = parseStringNameList(raw.removed, `${path}.removed`);
+    const headerSeq = raw.headerSeq;
+    if (
+      headerSeq !== undefined &&
+      (typeof headerSeq !== "number" ||
+        !Number.isSafeInteger(headerSeq) ||
+        headerSeq < 0)
+    ) {
+      throw new SessionEventParseError(
+        "headerSeq must be a non-negative safe integer",
+        path,
+      );
+    }
+    return {
+      kind: "tool-registry",
+      form: "update",
+      added,
+      removed,
+      ...(headerSeq !== undefined ? { headerSeq } : {}),
+    };
+  }
+
   // plugin + forward-compat opaque kinds: keep as plugin bag when kind is plugin,
   // otherwise wrap unknown kinds as plugin with the durable kind string preserved
   // via a `plugin` label when absent.
@@ -321,6 +351,24 @@ function parseUserMessageSource(
       Object.entries(raw).filter(([k]) => k !== "kind"),
     ),
   };
+}
+
+function parseStringNameList(raw: unknown, path: string): string[] {
+  if (!Array.isArray(raw)) {
+    throw new SessionEventParseError("must be a string array", path);
+  }
+  const out: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const name = raw[i];
+    if (typeof name !== "string" || !name.trim()) {
+      throw new SessionEventParseError(
+        "each entry must be a non-empty string",
+        `${path}[${i}]`,
+      );
+    }
+    out.push(name);
+  }
+  return out;
 }
 
 function reqString(
@@ -1440,6 +1488,83 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         );
       }
       return { type, ts, pluginId, key, data };
+    }
+    case "job/registered": {
+      const jobId = reqString(value, "jobId", type);
+      const liveId = reqString(value, "liveId", type);
+      const kind = reqString(value, "kind", type);
+      const label = reqString(value, "label", type);
+      const startedAt = value.startedAt;
+      if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) {
+        throw new SessionEventParseError(
+          "startedAt must be a finite number",
+          type,
+        );
+      }
+      const toolCallId =
+        value.toolCallId === undefined
+          ? undefined
+          : reqString(value, "toolCallId", type);
+      return {
+        type,
+        ts,
+        jobId,
+        liveId,
+        kind,
+        label,
+        startedAt,
+        ...(toolCallId !== undefined ? { toolCallId } : {}),
+      };
+    }
+    case "job/settled": {
+      const jobId = reqString(value, "jobId", type);
+      const liveId = reqString(value, "liveId", type);
+      const status = value.status;
+      if (status !== "exited" && status !== "killed" && status !== "failed") {
+        throw new SessionEventParseError(
+          'status must be "exited" | "killed" | "failed"',
+          type,
+        );
+      }
+      const finishedAt = value.finishedAt;
+      if (typeof finishedAt !== "number" || !Number.isFinite(finishedAt)) {
+        throw new SessionEventParseError(
+          "finishedAt must be a finite number",
+          type,
+        );
+      }
+      if (typeof value.producerReported !== "boolean") {
+        throw new SessionEventParseError(
+          "producerReported must be a boolean",
+          type,
+        );
+      }
+      const exitCode = value.exitCode;
+      if (
+        exitCode !== undefined &&
+        exitCode !== null &&
+        (typeof exitCode !== "number" || !Number.isFinite(exitCode))
+      ) {
+        throw new SessionEventParseError(
+          "exitCode must be a finite number or null",
+          type,
+        );
+      }
+      const detail =
+        value.detail === undefined
+          ? undefined
+          : reqString(value, "detail", type);
+      return {
+        type,
+        ts,
+        jobId,
+        liveId,
+        status,
+        finishedAt,
+        producerReported: value.producerReported,
+        ...(exitCode !== undefined ? { exitCode } : {}),
+        ...(detail !== undefined ? { detail } : {}),
+      };
     }
     default:
       throw new SessionEventParseError(`unknown event type "${type}"`);

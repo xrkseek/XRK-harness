@@ -16,6 +16,8 @@ import { canOpenNativePath } from "./host-open-path.js";
 import { fullyQualified } from "./host-directory.js";
 import { persistWorkspaceDoc } from "./workspace-store.js";
 import { sessionCancel } from "./handlers/session.js";
+import { killLiveSessionJobs } from "./handlers/job.js";
+import { collectArchiveActivity } from "./session-archive-activity.js";
 import { IM_WORKSPACE_ID } from "./im-workspace.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 import { resolveImGatewayWired } from "./process-channels.js";
@@ -436,12 +438,30 @@ export async function workspaceArchiveSessionFace(
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
+  const force = p.force === true;
+  // Refuse while work is still burning tokens/jobs — unless the client
+  // confirms with force. Idle archive stays one-shot (no confirmation tax).
+  const activity = collectArchiveActivity(runtime, sessionId);
+  if (activity.length > 0 && !force) {
+    return {
+      ok: false,
+      error: {
+        code: "session-active",
+        message:
+          "session still has running work; pass force:true to stop and archive",
+        details: { sessionId, activity: [...activity] },
+      },
+    };
+  }
   // Archive is the sidebar “put this away” path after edit-fork; stop the
   // original turn so a leftover drain does not keep writing behind the child.
   await sessionCancel(runtime, `archive-${sessionId}`, {
     sessionId,
     cascade: true,
   });
+  // sessionCancel already kills jobs; call again for force paths that race a
+  // late register (idempotent best-effort).
+  killLiveSessionJobs(runtime.shell, sessionId);
   try {
     await runtime.onSessionFinalize?.(sessionId);
   } catch {
@@ -474,6 +494,7 @@ export async function workspaceArchiveSessionFace(
     value: {
       archivedSessionIds: result.archivedSessionIds,
       pinnedSessionIds: result.pinnedSessionIds,
+      ...(force && activity.length > 0 ? { stoppedActivity: activity } : {}),
     },
   };
 }

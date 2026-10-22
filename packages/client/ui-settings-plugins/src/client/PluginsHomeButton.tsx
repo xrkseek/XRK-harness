@@ -1,5 +1,5 @@
 /**
- * Sidebar utility Plugins entry (DSH panellist seat: under New Session, above Workspace).
+ * Compact-strip Plugins entry (with release notes, under New Session).
  * Opens Settings → Plugins without burying the entry only inside the gear menu.
  */
 import type { ReactNode } from 'react'
@@ -13,7 +13,7 @@ export interface PluginsHomeButtonInjected {
 }
 
 export type PluginsHomeButtonProps =
-  PropsRuntime<'sidebar.utility'>
+  PropsRuntime<'sidebar.utility.compact'>
   & PropsLocale<'settings.plugins'>
   & InjectFace<PluginsHomeButtonInjected>
 

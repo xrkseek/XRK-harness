@@ -22,6 +22,42 @@ export type WaitSessionDrainIdleOptions = {
 };
 
 /**
+ * Sleep up to `sliceMs`, waking early when `signal` aborts (AbortError).
+ * Used by poll loops that must not hold a full idleSilence-class wait when
+ * the parent turn is cancelled or steered away from `wait_agent`.
+ */
+export async function waitForSignalOrSlice(input: {
+  readonly sliceMs: number;
+  readonly signal?: AbortSignal;
+}): Promise<void> {
+  const sliceMs = Math.max(1, Math.floor(input.sliceMs));
+  const formatAbort = defaultFormatAbortReason;
+  if (input.signal?.aborted) {
+    throw abortError(input.signal.reason, formatAbort);
+  }
+  if (input.signal === undefined) {
+    await new Promise<void>((resolve) => setTimeout(resolve, sliceMs));
+    return;
+  }
+  let sliceTimer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      sliceTimer = setTimeout(resolve, sliceMs);
+      onAbort = () => {
+        reject(abortError(input.signal!.reason, formatAbort));
+      };
+      input.signal!.addEventListener("abort", onAbort, { once: true });
+    });
+  } finally {
+    if (sliceTimer !== undefined) clearTimeout(sliceTimer);
+    if (onAbort) {
+      input.signal.removeEventListener("abort", onAbort);
+    }
+  }
+}
+
+/**
  * Short join used by multi-target / peer poll loops: race `drain.run` against
  * a slice budget (and optional abort). Settling or slice expiry returns;
  * AbortError always propagates. Never cancels the target session.
@@ -78,10 +114,10 @@ export async function waitSessionDrainIdle(
     ? abortable(run(sessionId), options?.signal, formatAbort)
     : (async () => {
         while (runtime.drain.isActive(sessionId)) {
-          if (options?.signal?.aborted) {
-            throw abortError(options.signal.reason, formatAbort);
-          }
-          await new Promise((r) => setTimeout(r, SESSION_DRAIN_POLL_MS));
+          await waitForSignalOrSlice({
+            sliceMs: SESSION_DRAIN_POLL_MS,
+            ...(options?.signal ? { signal: options.signal } : {}),
+          });
         }
       })();
   await raceDeadline(work, timeoutMs, sessionId, kind);

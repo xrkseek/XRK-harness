@@ -127,7 +127,10 @@ function declareRoot(slots: SlotRegistry): () => void {
   // Declared so Plugins home can inject into the DSH-style utility seat.
   const offSidebar = slots.register({
     name: 'sidebar',
-    children: { 'sidebar.utility': { kind: 'list', scope: 'root' } },
+    children: {
+      'sidebar.utility.compact': { kind: 'list', scope: 'root' },
+      'sidebar.utility': { kind: 'list', scope: 'root' },
+    },
   } as never, () => null)
   return () => {
     offSidebar()

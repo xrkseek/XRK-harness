@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { BoundedTextBuffer } from "@xrkseek/exec-pty";
+import { BoundedTextBuffer, windowsPtySpawnOptions } from "@xrkseek/exec-pty";
 
 /** UTF-8 byte ceiling for agent terminal transcripts (same idea as PTY scrollback). */
 const TRANSCRIPT_MAX_BYTES = 1 << 20;
@@ -219,9 +219,7 @@ export class AgentPtyRegistry {
         rows: dims.rows,
         cwd,
         env,
-        ...(process.platform === "win32"
-          ? { useConpty: true, conptyInheritCursor: false }
-          : {}),
+        ...windowsPtySpawnOptions(),
       });
     } catch (first) {
       const home = homedir();
@@ -232,9 +230,7 @@ export class AgentPtyRegistry {
         rows: dims.rows,
         cwd: home,
         env,
-        ...(process.platform === "win32"
-          ? { useConpty: true, conptyInheritCursor: false }
-          : {}),
+        ...windowsPtySpawnOptions(),
       });
     }
 

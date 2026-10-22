@@ -71,7 +71,14 @@ export type MuxFrame =
   | { type: 'session/subscribed'; sessionId: SessionId; lastSeq: number }
   | { type: 'approval/requested'; sessionId: SessionId; approvalId: ApprovalRequestId; toolName: string; callId?: CallId; reason?: string; displayReason?: { readonly en: string; readonly [locale: string]: string }; category?: 'tool' | 'network' | 'escalation' | 'path-overreach'; networkHost?: string; networkProtocol?: string }
   | { type: 'approval/resolved'; sessionId: SessionId; approvalId: ApprovalRequestId; outcome: ApprovalOutcome }
-  | { type: 'question/requested'; sessionId: SessionId; questions: AskUserQuestionItem[] }
+  | {
+      type: 'question/requested'
+      sessionId: SessionId
+      questions: AskUserQuestionItem[]
+      mode?: 'legacy' | 'timed'
+      deadlineAt?: number
+      remainingMs?: number
+    }
   | { type: 'question/resolved'; sessionId: SessionId; questionRpcId: RpcId; outcome: 'answered' | 'cancelled' }
   /**
    * Complete transient inbox state after every enqueue, mutation, claim, or

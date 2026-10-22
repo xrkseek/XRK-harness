@@ -129,6 +129,11 @@ export interface FaceRuntime {
    * Written on list-key changes and before SQLite LRU eviction.
    */
   readonly listProjectionCache: FaceListProjectionCache;
+  /**
+   * Host fairness budget for `session.list` assembly (ms of work before yield).
+   * Default 16 when omitted.
+   */
+  readonly listWorkSliceMs?: number;
   readonly titles: FaceTitleController;
   /** rpcId (unary) → admitId */
   readonly rpcAdmitMap: Map<string, string>;

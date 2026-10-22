@@ -11,7 +11,10 @@ import {
   lastAssistantBodyText,
 } from "./adapt/subagent-notice.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
-import { raceDrainRunSlice } from "./wait-drain-idle.js";
+import {
+  raceDrainRunSlice,
+  waitForSignalOrSlice,
+} from "./wait-drain-idle.js";
 
 export const PEER_WAIT_DEFAULT_MS = 10 * 60 * 1000;
 export const PEER_WAIT_MIN_MS = 1_000;
@@ -67,9 +70,10 @@ export async function waitForPeerAssistantReply(
         /* keep polling */
       }
     } else {
-      await new Promise((r) =>
-        setTimeout(r, Math.min(PEER_POLL_MS, remaining)),
-      );
+      await waitForSignalOrSlice({
+        sliceMs: Math.min(PEER_POLL_MS, remaining),
+        ...(signal ? { signal } : {}),
+      });
     }
   }
   const events = readSessionEvents(runtime.store, targetId);

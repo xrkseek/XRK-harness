@@ -406,7 +406,16 @@ export class LocalPtySession implements TerminalBackendSession {
       // on waiting for shell ownership instead of letting a child marker suppress
       // readiness until the absolute timeout.
       const handoffGrace = this.promptSeen ? this.config.handoffGraceMs : 0
-      if (startupHasOutput && idleFor >= this.config.idleSilenceMs + handoffGrace) {
+      // Late printable prompt tail (marker in one chunk, tail in the next): only
+      // then extend silence. Malformed tails never arrive — G1 / useConptyDll.
+      const promptTailGrace =
+        this.promptSeen && !this.promptTextSeen
+          ? this.config.promptTailGraceMs
+          : 0
+      if (
+        startupHasOutput
+        && idleFor >= this.config.idleSilenceMs + handoffGrace + promptTailGrace
+      ) {
         this.settleActive('inferred_idle')
       }
     } catch (error: unknown) {

@@ -380,4 +380,93 @@ describe("Face question/requested (DSH user-questions)", () => {
     expect(q?.rpcId).toBe(pending.rpcId);
     await face.close();
   });
+
+  it("timed ask: timeout returns pending; late respond steers", async () => {
+    const store = createMemorySessionStore();
+    const steered: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () =>
+        ({
+          admit(content: string) {
+            steered.push(String(content));
+            return { admitId: "admit_late" };
+          },
+        }) as never,
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const asked = runtime.questions.ask(
+      sessionId,
+      [{ id: "q0", question: "ready?" }],
+      undefined,
+      { mode: "timed", timeoutMs: 30 },
+    );
+    await expect(asked).rejects.toMatchObject({ code: "ASK_TIMED_OUT" });
+    const pending = runtime.questions.listPending(sessionId)[0]!;
+    expect(pending.mode).toBe("timed");
+    expect(pending.questions[0]?.question).toBe("ready?");
+
+    expect(
+      settleFaceRespond(runtime, {
+        type: "client-response",
+        rpcId: pending.rpcId,
+        result: {
+          ok: true,
+          value: {
+            sessionId,
+            answer: { answers: [{ id: "q0", selected: [], custom: "yes" }] },
+          },
+        },
+      }),
+    ).toEqual({ accepted: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(steered.some((t) => t.includes("Late answer") && t.includes("yes"))).toBe(
+      true,
+    );
+    expect(runtime.questions.listPending(sessionId)).toHaveLength(0);
+  });
+
+  it("timed ask: UI claim pauses Host timer until release", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    let settled = false;
+    const asked = runtime.questions
+      .ask(
+        sessionId,
+        [{ id: "q0", question: "hold?" }],
+        undefined,
+        { mode: "timed", timeoutMs: 40 },
+      )
+      .then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+    const pending = runtime.questions.listPending(sessionId)[0]!;
+    expect(runtime.questions.claimUi(pending.rpcId)).toBe(true);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(settled).toBe(false);
+    expect(runtime.questions.releaseUi(pending.rpcId)).toBe(true);
+    await asked;
+    expect(settled).toBe(true);
+  });
 });

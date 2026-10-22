@@ -204,6 +204,31 @@ describe("parseSessionEvent", () => {
     });
   });
 
+  it("parses user/message tool-registry source", () => {
+    const ev = parseSessionEvent({
+      type: "user/message",
+      ts: 3,
+      turnId: "t1",
+      content: "# Tool registry update\n\nAdded: read_file",
+      source: {
+        kind: "tool-registry",
+        form: "update",
+        added: ["read_file"],
+        removed: ["old_tool"],
+        headerSeq: 12,
+      },
+    });
+    expect(ev).toMatchObject({
+      source: {
+        kind: "tool-registry",
+        form: "update",
+        added: ["read_file"],
+        removed: ["old_tool"],
+        headerSeq: 12,
+      },
+    });
+  });
+
   it("parses user/message agent-instructions source", () => {
     const ev = parseSessionEvent({
       type: "user/message",

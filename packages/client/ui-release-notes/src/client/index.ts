@@ -1,9 +1,9 @@
 /**
- * Release notes plugin, browser half: a `sidebar.utility` row beside Plugins
- * (under New Session / above Workspace). Owns one piece of durable state — the
- * "newest version this user has opened" marker in Host settings — and no
- * content: the notes are bundle copy (release-notes.ts), so the list can never
- * disagree with the installed build.
+ * Release notes plugin, browser half: compact-strip seat beside Plugins
+ * (under New Session). Owns one piece of durable state — the "newest version
+ * this user has opened" marker in Host settings — and no content: the notes
+ * are bundle copy (release-notes.ts), so the list can never disagree with the
+ * installed build.
  *
  * Read-on-expand, not read-on-load or read-on-dialog: loading the shell or
  * merely opening the list must not consume notes. The dot clears when the user
@@ -77,9 +77,9 @@ export function apply(ctx: ClientContext): void {
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-release-notes: pushed invalidations')
 
-  // Beside Plugins in the utility panellist (Plugins order 0; notes after).
-  ctx.slots.inject('sidebar.utility', () => ctx.slots.register({
-    name: 'sidebar.utility',
+  // Beside Plugins in the compact strip (Plugins order 0; notes after).
+  ctx.slots.inject('sidebar.utility.compact', () => ctx.slots.register({
+    name: 'sidebar.utility.compact',
     id: 'release-notes',
     order: 10,
     locale: NS,

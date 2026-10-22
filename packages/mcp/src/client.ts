@@ -154,6 +154,11 @@ export function createMcpClient(options: McpClientOptions): McpClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let failedAttempts = 0;
   let connectedAt: number | undefined;
+  /**
+   * Shared across sessions that register against this client (A4).
+   * Invalidated on tools/list_changed and whenever the live generation drops.
+   */
+  let toolsListCache: readonly McpToolInfo[] | undefined;
 
   const log = (level: "info" | "warn" | "error", message: string): void => {
     options.onLog?.(level, `${label}: ${message}`);
@@ -173,6 +178,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
   }
 
   async function fanOutListChanged(): Promise<void> {
+    toolsListCache = undefined;
     for (const handler of [...listChangedHandlers]) {
       try {
         await handler();
@@ -304,6 +310,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
 
   function generationDown(generation: Client): void {
     if (!isCurrent(generation)) return;
+    toolsListCache = undefined;
     attempt = undefined;
     client = undefined;
     transport = undefined;
@@ -448,14 +455,16 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     },
 
     async listTools() {
+      if (toolsListCache !== undefined) return toolsListCache;
       const live = requireLive();
       // Servers that omit the tools capability (prompts/resources-only) must
       // not receive tools/list — return an empty generation (DSH mcp-client).
       if (live.getServerCapabilities()?.tools === undefined) {
-        return [];
+        toolsListCache = [];
+        return toolsListCache;
       }
       try {
-        return await drainToolsListPages(options.serverName, async (cursor) => {
+        const tools = await drainToolsListPages(options.serverName, async (cursor) => {
           const result = await live.listTools(
             cursor === undefined ? undefined : { cursor },
           );
@@ -481,10 +490,15 @@ export function createMcpClient(options: McpClientOptions): McpClient {
               : {}),
           };
         });
+        toolsListCache = tools;
+        return tools;
       } catch (err) {
         // Some servers reject tools/list with MethodNotFound despite a weak
         // capability advertisement — treat as no tools, not a hard failure.
-        if (isToolsListUnsupported(err)) return [];
+        if (isToolsListUnsupported(err)) {
+          toolsListCache = [];
+          return toolsListCache;
+        }
         throw err;
       }
     },
@@ -678,6 +692,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     async dispose() {
       disposed = true;
       connected = false;
+      toolsListCache = undefined;
       if (reconnectTimer !== undefined) {
         clearTimeout(reconnectTimer);
         reconnectTimer = undefined;

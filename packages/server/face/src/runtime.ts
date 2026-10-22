@@ -46,6 +46,7 @@ import {
   type FaceJobsSource,
   type JobView,
 } from "./adapt/job-view.js";
+import { wireJobSessionJournal } from "./job-session-journal.js";
 import {
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
@@ -83,6 +84,7 @@ import {
   FaceQuestionBroker,
   bindAskUserTool,
   bindExitPlanModeTool,
+  formatLateQuestionSteer,
   formatQuestionAnswer,
   questionRequestedFrame,
   questionResolvedFrame,
@@ -760,6 +762,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     onResolved(sessionId, questionRpcId, outcome) {
       bus.publishMux(questionResolvedFrame(sessionId, questionRpcId, outcome));
     },
+    onLateAnswer(sessionId, _questionRpcId, qs, answer) {
+      // Second settlement: tool already returned pending; steer the late reply.
+      const text = formatLateQuestionSteer(qs, answer);
+      void options
+        .resolveAgent(sessionId)
+        .then((agent) => {
+          agent.admit(text, { delivery: "steer" });
+          options.drain.wake(sessionId);
+        })
+        .catch(() => undefined);
+    },
   });
 
   /**
@@ -834,8 +847,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             runtime,
             sessionId,
           });
-          bindAskUserTool(agent.tools, (qs, signal) =>
-            questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+          bindAskUserTool(agent.tools, (qs, signal, opts) =>
+            questions
+              .ask(sessionId, qs, signal, opts)
+              .then(formatQuestionAnswer),
           );
           bindSettingsTools(agent.tools, runtime);
           bindPresenceTools(agent.tools, {
@@ -843,8 +858,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             sessionId,
           });
         } else {
-          bindAskUserTool(agent.tools, (qs, signal) =>
-            questions.ask(sessionId, qs, signal).then(formatQuestionAnswer),
+          bindAskUserTool(agent.tools, (qs, signal, opts) =>
+            questions
+              .ask(sessionId, qs, signal, opts)
+              .then(formatQuestionAnswer),
           );
           bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
             questions.ask(sessionId, qs, signal),
@@ -966,6 +983,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         publishJobs(sessionId);
       }
     });
+  }
+
+  // Owned shell jobs → durable job/registered + job/settled (G5).
+  if (options.shell) {
+    wireJobSessionJournal(options.shell, store);
   }
 
   const titleBox: { controller: FaceTitleController | undefined } = {

@@ -10,6 +10,8 @@ export const FACE_RPC_ERROR_CODES = [
   "cancelled",
   "session-not-found",
   "session-not-archived",
+  /** Archive refused while turn/jobs/subagents still running (pass force). */
+  "session-active",
   "model-unavailable",
   /** Per-route live session ceiling (`agent-loop.maxConcurrentModelSessions`). */
   "model-session-cap",

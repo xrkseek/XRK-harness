@@ -1036,6 +1036,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
               messages,
               tools: req.tools,
               ...(req.system !== undefined ? { system: req.system } : {}),
+              ...(input.llm.inputModalities !== undefined
+                ? { inputModalities: input.llm.inputModalities }
+                : {}),
             });
             if (!trustProjected) return estimate;
             // Provider pressure (Context meter numerator) can run far above the
@@ -1684,6 +1687,7 @@ export {
 export {
   maybeAppendRequestHeader,
   forgetRequestHeaderCache,
+  diffToolRegistryNames,
 } from "./request-header-log.js";
 export {
   boundToolResultContent,

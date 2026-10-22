@@ -108,6 +108,8 @@ export {
   type DeliverablesPresentedEvent,
   type WorkingDirectoryChangeEvent,
   type PluginRecordEvent,
+  type JobRegisteredEvent,
+  type JobSettledEvent,
   TOOL_EMITTABLE_EVENT_TYPES,
 } from "./session-events.js";
 export { parseTurnEndCancelCause } from "./session-events.js";

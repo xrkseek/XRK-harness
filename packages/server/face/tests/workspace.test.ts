@@ -802,4 +802,73 @@ describe("Face workspace U2", () => {
     expect(runtime.workspaces.isArchived(sessionId)).toBe(true);
     expect(store.has(sessionId)).toBe(true);
   });
+
+  it("workspace.archiveSession refuses while a turn is active without force", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-face-arch-refuse-"));
+    const store = createMemorySessionStore();
+    let aborted = 0;
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return true;
+        },
+      },
+      resolveAgent: async () =>
+        ({
+          admit: () => {
+            throw new Error("unused");
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => true,
+          abort() {
+            aborted += 1;
+          },
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const sess = await dispatchFaceMethod(runtime, "session.create", "ar1", {});
+    expect(sess.result.ok).toBe(true);
+    if (!sess.result.ok) return;
+    const sessionId = (sess.result.value as { sessionId: string }).sessionId;
+
+    const refused = await dispatchFaceMethod(
+      runtime,
+      "workspace.archiveSession",
+      "ar2",
+      { sessionId },
+    );
+    expect(refused.result.ok).toBe(false);
+    if (refused.result.ok) return;
+    expect(refused.result.error.code).toBe("session-active");
+    expect(refused.result.error.details).toMatchObject({
+      sessionId,
+      activity: [{ kind: "turn", id: sessionId }],
+    });
+    expect(runtime.workspaces.isArchived(sessionId)).toBe(false);
+    expect(aborted).toBe(0);
+
+    const forced = await dispatchFaceMethod(
+      runtime,
+      "workspace.archiveSession",
+      "ar3",
+      { sessionId, force: true },
+    );
+    expect(forced.result.ok).toBe(true);
+    expect(aborted).toBeGreaterThan(0);
+    expect(runtime.workspaces.isArchived(sessionId)).toBe(true);
+    if (forced.result.ok) {
+      const v = forced.result.value as {
+        stoppedActivity?: { kind: string }[];
+      };
+      expect(v.stoppedActivity?.some((a) => a.kind === "turn")).toBe(true);
+    }
+  });
 });

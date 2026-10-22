@@ -155,17 +155,26 @@ export function mergeWebBootManifests(
   };
 }
 
-export function bootInjectScript(manifest: WebBootManifest): string {
+export function bootInjectScript(
+  manifest: WebBootManifest,
+  shellVersion?: string,
+): string {
   const json = JSON.stringify(manifest);
-  return `<script>window.__XRK_BOOT__=${json};</script>`;
+  const version = shellVersion?.trim();
+  const stamp =
+    version && version.length > 0
+      ? `window.__XRK_SHELL_VERSION__=${JSON.stringify(version)};`
+      : "";
+  return `<script>window.__XRK_BOOT__=${json};${stamp}</script>`;
 }
 
 /** Insert boot script before `</head>` (or prepend). */
 export function injectBootIntoHtml(
   html: string,
   manifest: WebBootManifest,
+  shellVersion?: string,
 ): string {
-  const script = bootInjectScript(manifest);
+  const script = bootInjectScript(manifest, shellVersion);
   const stripped = html.replace(
     /<script>\s*window\.__XRK_BOOT__[\s\S]*?<\/script>/i,
     "",

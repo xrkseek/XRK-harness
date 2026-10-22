@@ -19,6 +19,7 @@ import type { PendingInteractionStatus } from './pending.ts'
 // useProjection('title') consumer reads). Zero value imports by construction.
 import type {} from '@xrkseek/xrk-session-title/client'
 import { Notifier } from './notifier.ts'
+import { notifySessionCompleted } from './os-notify.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
@@ -465,9 +466,12 @@ export class SessionManager {
       try {
         const { result } = await this.api.sessions.list({})
         if (result.ok) {
-          const baseline = this.listPhase === 'pending'
+          const pulled = this.listPhase === 'pending'
             ? result.value.items
             : mergeOrderedBaseline(established, result.value.items, summary => summary.sessionId)
+          // Blank only lowers across list pulls (G25): a local engage /
+          // running edge must survive host list lag that still reports blank.
+          const baseline = reconcileBlankMonotonic(established, pulled)
           // Seed first observations from the pull-time baseline BEFORE replaying
           // in-flight mutations, then reconcile the reminders after EVERY
           // replayed mutation: an edge that happens entirely between mutations
@@ -1161,7 +1165,21 @@ export class SessionManager {
         continue
       }
       if (prev && !s.running) {
-        if (s.sessionId !== this.selected) this.completedNotifications.add(s.sessionId)
+        if (s.sessionId !== this.selected) {
+          const first = !this.completedNotifications.has(s.sessionId)
+          this.completedNotifications.add(s.sessionId)
+          // OS exit for the reminder set — only on the true→false edge arm.
+          if (first) {
+            const projected = this.projectionStores.get(s.sessionId)?.get('title')
+            const title = typeof projected === 'string' && projected.trim() !== ''
+              ? projected.trim()
+              : (s.mainline?.trim() || 'Session finished')
+            notifySessionCompleted({
+              title,
+              body: 'A background session finished.',
+            })
+          }
+        }
       } else if (s.running) {
         this.completedNotifications.delete(s.sessionId)
       }
@@ -1234,6 +1252,23 @@ export class SessionManager {
       currentAddress: current === undefined ? undefined : this.addresses.get(current),
     }
   }
+}
+
+/**
+ * Keep client-side blank→false across a full list replace.
+ * Upsert mutations already AND blanks; pull baselines must too.
+ */
+function reconcileBlankMonotonic(
+  previous: readonly SessionSummary[],
+  next: readonly SessionSummary[],
+): SessionSummary[] {
+  if (previous.length === 0) return [...next]
+  const prevBlank = new Map(previous.map((s) => [s.sessionId, s.blank]))
+  return next.map((s) => {
+    if (!s.blank) return s
+    if (prevBlank.get(s.sessionId) === false) return { ...s, blank: false }
+    return s
+  })
 }
 
 /** Apply one list mutation without deriving display order. */

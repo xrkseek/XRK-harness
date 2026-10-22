@@ -15,6 +15,7 @@ import {
   isAttachmentAddress,
 } from '@xrkseek/client-runtime/client'
 import { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
+import { readPartialStringFields } from './partial-args.ts'
 
 export type { ToolCallBlock } from '@xrkseek/client-runtime/client'
 export { abbreviateHomePath } from '@xrkseek/client-ui-primitives'
@@ -222,6 +223,9 @@ export function relativizeToCwd(text: string, cwd: string | undefined): string {
 function deriveSummary(variant: ToolRowVariant, argsRaw: string): string {
   const parsed = parseArgs(argsRaw)
   if (typeof parsed !== 'object' || parsed === null) {
+    // Preparing / mid-stream: closed scalar fields beat dumping the raw prefix.
+    const partial = readPartialStringFields(argsRaw, SUMMARY_KEYS[variant])
+    if (partial !== undefined) return firstLine(redactDataUrls(partial))
     return firstLine(redactDataUrls(argsRaw))
   }
   const args = parsed as Record<string, unknown>
@@ -247,6 +251,9 @@ const FILE_PATH_VARIANTS: ReadonlySet<ToolRowVariant> = new Set(['read', 'write'
 function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
   if (!FILE_PATH_VARIANTS.has(variant)) return undefined
   const parsed = parseArgs(argsRaw)
+  if (parsed === undefined) {
+    return readPartialStringFields(argsRaw, FILE_PATH_KEYS)
+  }
   if (typeof parsed !== 'object' || parsed === null) return undefined
   const picked = pickString(parsed as Record<string, unknown>, FILE_PATH_KEYS)
   if (picked === undefined) return undefined

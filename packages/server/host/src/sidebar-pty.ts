@@ -18,11 +18,17 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket, type RawData } from "ws";
+import { windowsPtySpawnOptions } from "@xrkseek/exec-pty";
 import type { AgentOpenRegistry } from "./sidebar-agent-opens.js";
 import type { AgentPtyRegistry } from "./sidebar-agent-pty.js";
 
 const PTY_DEPS_MISSING = "pty-deps-missing";
-/** Reconnect grace after bare socket drop / park (ms). */
+/**
+ * Reconnect grace after bare socket drop / park (ms).
+ * DSH unattended reclaim uses a 2h idle window; we reclaim sooner once no
+ * window holds the slot (React remounts need only tens of seconds). Named so
+ * G11 audits find the policy — do not stretch this to hours.
+ */
 const RECONNECT_GRACE_MS = 30_000;
 /** WebSocket.OPEN — also used by Desktop HTTP sinks. */
 const PTY_CLIENT_OPEN = 1;
@@ -126,9 +132,7 @@ async function spawnInteractivePty(
     rows,
     cwd,
     env,
-    ...(process.platform === "win32"
-      ? { useConpty: true, conptyInheritCursor: false }
-      : {}),
+    ...windowsPtySpawnOptions(),
   });
 }
 
