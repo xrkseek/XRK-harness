@@ -46,7 +46,12 @@ export { SessionProvideChannel } from './sessions/provide.ts'
 export type { SessionProvideChannelHost } from './sessions/provide.ts'
 export { createScope } from './agents/scope.ts'
 export type { AgentScopeHandle } from './agents/scope.ts'
-export { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from './workspaces/service.ts'
+export {
+  DirectoryBrowseError,
+  WorkspaceArchiveActiveError,
+  WorkspaceCreateError,
+  WorkspaceRuntime,
+} from './workspaces/service.ts'
 export { formatAttachmentSummary, isAttachmentAddress, normalizeAttachmentId, resolveWorkspacePath } from './workspaces/path.ts'
 export { routeWorkspaceOpenFile } from './workspaces/open-file-route.ts'
 // Contract only: the scope implementation and its Host transport belong to

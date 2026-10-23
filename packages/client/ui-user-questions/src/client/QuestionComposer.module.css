@@ -56,6 +56,14 @@
 
 /* Header button group: minimize sits next to the close action, both on the
    same 24px icon-button grid. */
+.timedHint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .headerActions {
   display: flex;
   align-items: center;

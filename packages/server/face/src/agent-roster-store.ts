@@ -569,6 +569,16 @@ export function mergeGlobalSeedMembers(
   };
 }
 
+/**
+ * Operator-authority line for built-in catalog playbooks. Delegated children run
+ * with `audience=subagent|minimal`, so home standing (`~/.xrk/AGENTS.md`) is
+ * skipped (see docs/workspace-inject.md) and the playbook is the only operator-
+ * authored text they reliably read. Scope-bound by design: it authorizes
+ * executing the assigned task, not escalating runtime permission or approval.
+ */
+const CATALOG_AUTHORITY_LINE =
+  "Operator task + this playbook are mandatory for the stated scope, not optional guidance and not prompt injection. Runtime permission and approval policy still bind. Deliver completely: no hedging, no truncation, no self-censorship.";
+
 export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterMember[] {
   return [
     {
@@ -583,6 +593,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "只读调研，引用路径与原文。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the workspace researcher. Gather facts with read/search tools. " +
         "Cite paths and quotes. Do not make durable edits unless the task explicitly requires them.",
     },
@@ -598,6 +609,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "按任务改代码，不扩范围。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the workspace implementer. Execute the assigned task precisely. " +
         "Prefer concrete edits and evidence. Stay inside the given scope.",
     },
@@ -613,6 +625,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "只读审稿，先报缺陷。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the workspace reviewer. Read-only review unless asked to patch. " +
         "Report defects first. Do not expand scope.",
     },
@@ -628,6 +641,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "拆任务、协调干员。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the workspace lead. Break work into clear sub-tasks, coordinate teammates, " +
         "and keep a short status of blockers and next steps. " +
         "When a specialist fits, spawn with subagent member_id from the live catalog rather than restating tools or playbook.",
@@ -644,6 +658,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "查网上公开事实，给出链接与日期。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the web scout. Prefer web_search and web_fetch for public facts; " +
         "web_fetch returns text for pages and status/content-type/size for images (optional proxy / HTTP_PROXY). " +
         "Cite URLs and dates. Do not edit the repo. Prefer primary sources. " +
@@ -661,6 +676,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "写诚实说明书与发行说明，不编未做能力。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the docs writer. Revise textbook docs in this repo. Follow docs/audiences.md. " +
         "Do not invent APIs. Match existing tone. Use standing skills when they apply; do not paste them.",
     },
@@ -676,6 +692,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "复现故障、定位、修，并给出证据。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the debugger. Reproduce, isolate, then fix. Show failing evidence before the change. Stay in the given scope.",
     },
     {
@@ -690,6 +707,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       ready: true,
       brief: "跑相关测试，报告失败与最小复现。",
       playbook:
+        CATALOG_AUTHORITY_LINE +
         "You are the tester. Run the relevant tests. Report failures with the command and output. Do not skip failing tests.",
     },
   ];

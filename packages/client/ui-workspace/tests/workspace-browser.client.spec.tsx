@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import type { HostDescription } from '@xrkseek/client-connection/client'
-import type {
-  SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceListState, WorkspaceView,
+import {
+  WorkspaceArchiveActiveError,
+  type SessionId, type SessionListState, type SessionSummary,
+  type WorkspaceId, type WorkspaceListState, type WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
@@ -59,8 +61,22 @@ function dragData(): Pick<DataTransfer, 'effectAllowed' | 'dropEffect' | 'setDat
   return { effectAllowed: 'uninitialized', dropEffect: 'none', setData: vi.fn() }
 }
 
+/** Persist writes debounce 120ms — wait past that before remounting a store. */
+async function flushViewPersist(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => { setTimeout(resolve, 150) })
+  })
+}
+
 function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
+  // Fresh instance per mount — beforeEach cannot set orderBy on this handle.
   const store = createWorkspaceViewStore().create()
+  const snap = store.getSnapshot()
+  const blank = snap.groupBy === 'workspace'
+    && snap.orderBy === 'updated'
+    && Object.keys(snap.sessionOrderByAccount).length === 0
+  // Seed Manual for menu-checkmark tests; skip when rehydrating a remount.
+  if (blank) store.actions.setOrderBy('manual')
   const props: WorkspaceBrowserProps = {
     wide: true,
     expandSidebar: vi.fn(),
@@ -206,6 +222,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
     fireEvent.dragStart(one, { dataTransfer: dragData() })
     fireDrag(three, 'drop', 180)
+    await flushViewPersist()
     b.view.unmount()
 
     const restored = mount({ useSessions: hook(sessions), useWorkspaces: hook(workspaces) })
@@ -311,6 +328,7 @@ describe('WorkspaceBrowser', () => {
       expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
     })
 
+    await flushViewPersist()
     b.view.unmount()
     const restored = mount({
       useSessions: hook(promoted),
@@ -361,6 +379,37 @@ describe('WorkspaceBrowser', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+
+  it('confirms force archive when Host refuses with session-active', async () => {
+    const archiveSession = vi.fn(async (_id: SessionId, options?: { force?: boolean }) => {
+      if (options?.force === true) return
+      throw new WorkspaceArchiveActiveError({
+        code: 'session-active',
+        message: 'session still has running work',
+        details: {
+          sessionId: sid('busy-s'),
+          activity: [{ kind: 'turn', id: 'busy-s', title: 'session turn running' }],
+        },
+      })
+    })
+    mount({
+      useSessions: hook(sessionState([summary('busy-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['busy-s'])])),
+      archiveSession,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '会话“busy-s”的操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '归档会话' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(archiveSession).toHaveBeenCalledWith(sid('busy-s'))
+    expect(screen.getByText('会话仍在运行')).toBeTruthy()
+    expect(screen.getByText(/session turn running/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '停止并归档' }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(archiveSession).toHaveBeenLastCalledWith(sid('busy-s'), { force: true })
   })
 
   it('renders a fork child as a top-level row without a session twist', () => {
@@ -878,6 +927,7 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['two', 'three', 'one'])
     expect(insertSessionBefore).not.toHaveBeenCalled()
 
+    await flushViewPersist()
     b.view.unmount()
     const restored = mount({
       useSessions: hook(sessions),
@@ -1162,7 +1212,10 @@ describe('WorkspaceBrowser', () => {
     })
     expect(screen.getByRole('button', { name: '选择工作区' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '选择工作区' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Alpha' }))
+    await waitFor(() => {
+      expect(screen.getByRole('menuitem', { name: /Alpha/ })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Alpha/ }))
     expect(startSession).toHaveBeenCalledWith(wid('alpha'))
     expect(listTeam).toHaveBeenCalledWith(sid('alpha-s'))
   })
@@ -1187,10 +1240,10 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '新建全局干员' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: '新建全局' })).toBeTruthy()
     })
-    expect(screen.getByRole('button', { name: '新建工作区干员' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '新建全局干员' }))
+    expect(screen.getByRole('button', { name: '新建工作区' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '新建全局' }))
     expect(screen.getByRole('button', { name: '全局', pressed: true })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: '名称' })).toBeTruthy()
   })
@@ -1219,9 +1272,9 @@ describe('WorkspaceBrowser', () => {
       expect(screen.getByRole('button', { name: '施工员' })).toBeTruthy()
     })
     fireEvent.click(screen.getByRole('button', { name: '施工员' }))
-    expect(screen.getByText('预置干员不能改。要定制请以它为基底新建。')).toBeTruthy()
+    expect(screen.getByText('预置只读、不可导出。要定制请以其为基底新建。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '以该预置为基底新建' }))
+    fireEvent.click(screen.getByRole('button', { name: '以此为基底新建' }))
     expect(screen.getByRole('button', { name: '工作区', pressed: true })).toBeTruthy()
     expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
     const name = screen.getByRole('textbox', { name: '名称' }) as HTMLInputElement

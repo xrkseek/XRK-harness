@@ -17,6 +17,8 @@ export const zh = {
   'plan.approve': '确认执行',
   'plan.decline': '拒绝',
   'plan.discuss': '去聊天里说',
+  'timed.remaining': '剩余 {s} 秒',
+  'timed.expired': '已超时，答案仍可提交',
 } satisfies Record<string, string>
 
 /** The question namespace key union. */
@@ -39,4 +41,6 @@ export const en = {
   'plan.approve': 'Approve',
   'plan.decline': 'Refuse',
   'plan.discuss': 'Chat about it',
+  'timed.remaining': '{s}s left',
+  'timed.expired': 'Timed out — you can still answer',
 } satisfies Record<QuestionKey, string>

@@ -140,7 +140,7 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    * surfaces, log and accounting slot retained. Archiving the current
    * session clears the selection into the New Session view state.
    */
-  archiveSession: (sessionId: SessionId) => Promise<void>
+  archiveSession: (sessionId: SessionId, options?: { force?: boolean }) => Promise<void>
   /**
    * Pin a Session to the front of the registry-global pin order (newest
    * first). Unarchives when needed.

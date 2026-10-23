@@ -20,7 +20,12 @@ const SID = 's1' as SessionId
 
 /** Seat stub over a dictionary pair mirroring the real lookup chain: package dictionary, then common vocabulary, then the key. */
 const seatOver = (dict: Record<string, string>, common: Record<string, string>): QuestionComposerProps['t'] =>
-  (key => dict[key] ?? common[key] ?? key)
+  ((key, params) => {
+    const template = dict[key] ?? common[key] ?? key
+    if (params === undefined) return template
+    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+      Object.prototype.hasOwnProperty.call(params, name) ? String(params[name as keyof typeof params]) : match)
+  }) as QuestionComposerProps['t']
 
 /** Framework standard-kit stubs: the composer consumes only the locale seat;
  *  the composed props type mandates delivery of the rest (framework hooks are
@@ -72,6 +77,23 @@ function answeredEnvelope(rpcId: string, answers: object[]) {
 }
 
 describe('QuestionComposer', () => {
+  it('shows a live countdown for timed asks', () => {
+    const carrier = new PendingWait(
+      'question',
+      RpcId('q-timed'),
+      SID,
+      {
+        questions: [{ id: 'one', question: '还在吗？' }],
+        mode: 'timed',
+        deadlineAt: Date.now() + 12_000,
+        remainingMs: 12_000,
+      },
+      vi.fn(() => Promise.resolve<RpcReceipt>({ accepted: true })),
+    )
+    render(<QuestionComposer matched={carrier} interactions={[carrier]} {...kit} />)
+    expect(screen.getByTestId('timed-ask-countdown').textContent).toMatch(/剩余 \d+ 秒/)
+  })
+
   it('collects single, custom, and multi-select answers before one batch submit', () => {
     const { carrier, respond } = wait()
     render(<QuestionComposer matched={carrier} interactions={[carrier]} {...kit} />)

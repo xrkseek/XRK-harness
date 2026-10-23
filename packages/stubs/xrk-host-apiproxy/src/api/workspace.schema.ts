@@ -95,12 +95,20 @@ export const workspaceInsertSessionBeforeValueSchema = z.object({
 /** workspace.archiveSession request payload. */
 export const workspaceArchiveSessionRequestSchema = z.object({
   sessionId: sessionIdSchema,
+  /** Stop running turn/jobs/subagents and archive anyway (after UI confirm). */
+  force: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'workspace.archiveSession'>>>
 
 /** workspace.archiveSession response value: archive + pin sets (pin may drop). */
 export const workspaceArchiveSessionValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
   pinnedSessionIds: z.array(sessionIdSchema),
+  /** Present when force stopped live work; same shape as session-active.activity. */
+  stoppedActivity: z.array(z.object({
+    kind: z.string(),
+    id: z.string(),
+    title: z.string(),
+  })).optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.archiveSession'>>>
 
 /** workspace.unarchiveSession request payload. */

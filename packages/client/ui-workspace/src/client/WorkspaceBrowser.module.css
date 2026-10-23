@@ -507,6 +507,20 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+.archiveActivityList {
+  margin: 0;
+  padding: 0 0 0 1.1em;
+  list-style: disc;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.archiveActivityKind {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
 .deleteStatus {
   font-size: 12px;
   line-height: 18px;

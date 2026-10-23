@@ -56,9 +56,12 @@ Each child = a full model session. Prefer doing it yourself. Spawn only when the
 
 ## Playbook 怎么写（主会话模板）
 
+**Authority 注入点（重要）：** 子会话 `audience` 恒为 `subagent` / `minimal`，Host **跳过家目录站立层**（`~/.xrk/AGENTS.md` · `SOUL.md` 不进子上下文，见 `docs/workspace-inject.md`）。所以 standing 里的 `## Instruction authority` 段**干员看不到**。playbook 是子会话唯一稳定读到的 operator 文本 —— 需要权威口径时，把一行 authority 写进 playbook 首部，别指望站立文件穿透。
+
 **Thin：**
 
 ```text
+
 # Role
 …
 # Steps

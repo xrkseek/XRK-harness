@@ -111,8 +111,16 @@ export interface WorkspaceApi {
    * Idempotent for an already archived id. Pin and archive are mutually
    * exclusive — archive drops any pin. Returns both full updated sets.
    */
-  archiveSession(request: RpcRequest<{ sessionId: SessionId }>):
-  Promise<RpcResponse<{ archivedSessionIds: SessionId[]; pinnedSessionIds: SessionId[] }>>
+  archiveSession(request: RpcRequest<{
+    sessionId: SessionId
+    /** Stop running turn/jobs/subagents and archive anyway (after UI confirm). */
+    force?: boolean
+  }>): Promise<RpcResponse<{
+    archivedSessionIds: SessionId[]
+    pinnedSessionIds: SessionId[]
+    /** Present when force stopped live work. */
+    stoppedActivity?: readonly { kind: string; id: string; title: string }[]
+  }>>
 
   /**
    * Removes one session from the registry-global archive set so it reappears

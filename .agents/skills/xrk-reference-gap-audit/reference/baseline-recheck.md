@@ -1,7 +1,8 @@
 # 基线清单落地复核表（主控侧独立核查，2026-10-22）
 
 > 方法：对基线 `方案.md` §3 全部条目 + 内核真缺口，逐条在本仓 `git grep` 查证。
-> **结论：基线是过期的。P0 6 条已落地 5 条、P1 多数已落地。真正还缺的只有通知能力、chord/leader、Ctrl+R、tmTheme 主题、快捷键多列、看板、elicitition、agents overview、resume 配置、流式补丁等长尾。**
+> **结论：基线是过期的。P0 6 条已落地（含通知 U1/`os-notify.ts`）、P1 多数已落地。真正还缺的是 chord/leader、Ctrl+R、tmTheme、看板、elicitation、agents overview、resume 配置、流式补丁等长尾。**
+> **注意**：下方「仍缺 P0#1 系统通知」行已过期（2026-10-22 后 U1 落地）；勿再当 todo。`.tmp/compare/方案.md` 已删，以 `2026-10-22-status.md` 为准。
 
 ## 已落地（基线误报为"待做"，实际已有等价实现）
 
@@ -25,7 +26,7 @@
 
 | 基线编号 | 事项 | 零命中搜索词（本仓 `packages` + `apps`） |
 | --- | --- | --- |
-| P0#1 | **系统通知能力**（回合结束 / 需审批 / 需注意力） | `new Notification(` / `requestPermission` / `showNotification` / `Notification.permission` |
+| ~~P0#1~~ | ~~系统通知~~ → **已落地** `packages/client/.../os-notify.ts` + `new Notification(`（见 status U1） | — |
 
 | P2#18 | 输入历史 Ctrl+R 反向增量搜索 | `reverseSearch` / `searchHistory` / `historySearch` |
 | P2#19 | 自定义高亮主题发现 | `tmTheme` |

@@ -15,8 +15,10 @@ import {
   Button, IconAgentPresetOutline16, IconCloseFill14, IconPersonalizationOutline16,
   IconProjectAddOutline16, IconSearchOutline16, Menu, Modal, Tooltip,
 } from '@xrkseek/client-ui-primitives'
-import type {
-  SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
+import {
+  WorkspaceArchiveActiveError,
+  type SessionId, type SessionListState, type SessionSearchResultItem,
+  type WorkspaceId, type WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import {
@@ -1008,12 +1010,42 @@ export function WorkspaceBrowser({
     setSessionRenameError(null)
   }
 
-  // Archive is dialog-free: not destructive (the log and the accounting slot
-  // remain), so the menu action commits directly; the row disappears when the
-  // archive-set echo lands. Failures are non-fatal console diagnostics, the
-  // same posture as reorder rejections.
+  // Idle archive stays one-shot. Host refuses with session-active while a
+  // turn / job / subagent is live — confirm then retry with force:true.
+  type ArchiveActivity = { kind: string; id: string; title: string }
+  const [archiveTarget, setArchiveTarget] = useState<{
+    sessionId: SessionId
+    activity: readonly ArchiveActivity[]
+  } | null>(null)
+  const [archiving, setArchiving] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const closeArchive = () => {
+    if (archiving) return
+    setArchiveTarget(null)
+    setArchiveError(null)
+  }
+  const confirmArchiveForce = () => {
+    if (archiving || archiveTarget === null) return
+    setArchiving(true)
+    setArchiveError(null)
+    archiveSession(archiveTarget.sessionId, { force: true }).then(() => {
+      setArchiving(false)
+      setArchiveTarget(null)
+    }).catch((reason: unknown) => {
+      setArchiving(false)
+      setArchiveError(reason instanceof Error ? reason.message : String(reason))
+    })
+  }
   const onSessionArchive = (sessionId: SessionNode['id']) => {
     archiveSession(sessionId).catch((reason: unknown) => {
+      if (reason instanceof WorkspaceArchiveActiveError) {
+        setArchiveTarget({
+          sessionId,
+          activity: reason.rpcError.details.activity,
+        })
+        setArchiveError(null)
+        return
+      }
       console.warn('session archive rejected:', reason)
     })
   }
@@ -1382,6 +1414,49 @@ export function WorkspaceBrowser({
       >
         {deleting && <div className={css.deleteStatus} role="status">{t('delete.pending')}</div>}
         {deleteError !== null && <div className={css.renameError} role="alert">{deleteError}</div>}
+      </Modal>
+      <Modal
+        open={archiveTarget !== null}
+        onClose={closeArchive}
+        closeLabel={t('close')}
+        title={t('archive.active.title')}
+        {...archiveTarget === null
+          ? {}
+          : { description: t('archive.active.desc') }}
+        footer={(
+          <>
+            <Button variant="outline" disabled={archiving} onClick={closeArchive}>{t('cancel')}</Button>
+            <Button
+              variant="outline"
+              className={css.deleteAction}
+              disabled={archiving}
+              onClick={confirmArchiveForce}
+            >
+              {t('archive.active.confirm')}
+            </Button>
+          </>
+        )}
+      >
+        {archiveTarget !== null && (
+          <ul className={css.archiveActivityList}>
+            {archiveTarget.activity.map((item) => {
+              const kindKey = item.kind === 'turn' || item.kind === 'job' || item.kind === 'subagent'
+                ? (`archive.active.kind.${item.kind}` as const)
+                : null
+              return (
+                <li key={`${item.kind}:${item.id}`}>
+                  <span className={css.archiveActivityKind}>
+                    {kindKey !== null ? t(kindKey) : item.kind}
+                  </span>
+                  {' · '}
+                  {item.title}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {archiving && <div className={css.deleteStatus} role="status">{t('archive.active.pending')}</div>}
+        {archiveError !== null && <div className={css.renameError} role="alert">{archiveError}</div>}
       </Modal>
       {teamAvailable && (
         <TeamRoster

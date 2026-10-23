@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId, WorkspaceView } from '@xrkseek/xrk-api-remotes/client'
 import { SessionRuntime } from '../src/client/sessions/service.ts'
 import { WorkspaceManager } from '../src/client/workspaces/manager.ts'
-import { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from '../src/client/workspaces/service.ts'
+import {
+  DirectoryBrowseError,
+  WorkspaceArchiveActiveError,
+  WorkspaceCreateError,
+  WorkspaceRuntime,
+} from '../src/client/workspaces/service.ts'
 import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.ts'
 
 const sid = (id: string): SessionId => id as SessionId
@@ -612,12 +617,38 @@ describe('WorkspaceRuntime', () => {
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle', 's-open'])
     expect(sessions.list.getSnapshot().current).toBeUndefined()
 
+    // Live work refuses with session-active; force retries and archives.
+    api.onWorkspaceArchiveSession = (payload) => {
+      const body = payload as { sessionId: string; force?: boolean }
+      if (body.force !== true) {
+        return Promise.resolve(err({
+          code: 'session-active',
+          message: 'session still has running work',
+          details: {
+            sessionId: sid('s-busy'),
+            activity: [{ kind: 'turn', id: 's-busy', title: 'session turn running' }],
+          },
+        }))
+      }
+      return Promise.resolve(ok({
+        archivedSessionIds: [sid('s-idle'), sid('s-open'), sid('s-busy')],
+        pinnedSessionIds: [] as SessionId[],
+        stoppedActivity: [{ kind: 'turn', id: 's-busy', title: 'session turn running' }],
+      }))
+    }
+    await expect(workspaces.archiveSession(sid('s-busy'))).rejects.toBeInstanceOf(WorkspaceArchiveActiveError)
+    await expect(workspaces.archiveSession(sid('s-busy'), { force: true })).resolves.toBeUndefined()
+    expect(api.callsOf('workspace.archiveSession').at(-1)).toEqual({
+      sessionId: 's-busy', force: true,
+    })
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle', 's-open', 's-busy'])
+
     // A Host failure leaves the set and the selection untouched.
     api.onWorkspaceArchiveSession = () => Promise.resolve(err({
       code: 'session-not-found', message: 'no session ghost', details: { sessionId: sid('ghost') },
     }))
     await expect(workspaces.archiveSession(sid('ghost'))).rejects.toThrow(/session-not-found/)
-    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle', 's-open'])
+    expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual(['s-idle', 's-open', 's-busy'])
 
     // The changed frame and the list baseline both re-install the full set.
     workspaces.handleHostEnvelope({

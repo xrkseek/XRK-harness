@@ -248,11 +248,18 @@ export class WorkspaceManager {
    * @param sessionId - session to archive.
    * @returns the wire result.
    */
-  async archiveSession(sessionId: SessionId): Promise<RpcResult<{
+  async archiveSession(
+    sessionId: SessionId,
+    options?: { force?: boolean },
+  ): Promise<RpcResult<{
     archivedSessionIds: SessionId[]
     pinnedSessionIds: SessionId[]
+    stoppedActivity?: readonly { kind: string; id: string; title: string }[]
   }>> {
-    const { result } = await this.api.workspace.archiveSession({ sessionId })
+    const { result } = await this.api.workspace.archiveSession({
+      sessionId,
+      ...(options?.force === true ? { force: true } : {}),
+    })
     if (result.ok) {
       this.installArchived(result.value.archivedSessionIds)
       this.installPinned(result.value.pinnedSessionIds)

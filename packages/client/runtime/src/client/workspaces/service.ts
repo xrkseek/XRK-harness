@@ -49,6 +49,17 @@ export class WorkspaceCreateError extends Error {
   }
 }
 
+/**
+ * Archive refused while turn / jobs / subagents still run (`session-active`).
+ * UI should confirm, then retry with `force: true`.
+ */
+export class WorkspaceArchiveActiveError extends Error {
+  constructor(readonly rpcError: Extract<RpcError, { code: 'session-active' }>) {
+    super(`session archive refused: ${rpcError.code}: ${rpcError.message}`)
+    this.name = 'WorkspaceArchiveActiveError'
+  }
+}
+
 /** Structured browse failure so the directory browser can branch on Host business codes. */
 export class DirectoryBrowseError extends Error {
   constructor(readonly rpcError: RpcError) {
@@ -344,9 +355,14 @@ export class WorkspaceRuntime implements IWorkspaces {
    * echo and a remote tab's frame alike).
    * @param sessionId - session to archive.
    */
-  async archiveSession(sessionId: SessionId): Promise<void> {
-    const result = await this.manager.archiveSession(sessionId)
-    if (!result.ok) throw new Error(`session archive failed: ${result.error.code}: ${result.error.message}`)
+  async archiveSession(sessionId: SessionId, options?: { force?: boolean }): Promise<void> {
+    const result = await this.manager.archiveSession(sessionId, options)
+    if (!result.ok) {
+      if (result.error.code === 'session-active') {
+        throw new WorkspaceArchiveActiveError(result.error)
+      }
+      throw new Error(`session archive failed: ${result.error.code}: ${result.error.message}`)
+    }
   }
 
   /**

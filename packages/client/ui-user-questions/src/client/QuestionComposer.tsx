@@ -1,4 +1,7 @@
-import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import {
+  useEffect, useMemo, useRef, useState,
+  type ChangeEvent, type KeyboardEvent,
+} from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutline14, IconChevronDownOutline14, IconChevronLeftOutline14,
@@ -63,12 +66,58 @@ export function QuestionComposer(props: QuestionComposerProps) {
   // select/render dispatch — per-dispatch minting would churn memo identity).
   const question = useMemo(() => new PendingQuestion(props.matched), [props.matched])
   const review = useMemo(() => planReviewOf(question.questions), [question])
+  const deadlineAt = props.matched.payload.mode === 'timed'
+    ? props.matched.payload.deadlineAt
+    : undefined
   return review === undefined
-    ? <QuestionFlow key={question.key} pending={question} t={props.t} />
+    ? (
+      <QuestionFlow
+        key={question.key}
+        pending={question}
+        deadlineAt={deadlineAt}
+        t={props.t}
+      />
+    )
     : <PlanReviewPanel key={question.key} pending={question} review={review} t={props.t} />
 }
 
-function QuestionFlow({ pending, t }: { pending: PendingQuestion } & Pick<QuestionComposerProps, 't'>) {
+/** Live countdown for Host `mode: timed` asks (deadline is absolute ms). */
+function TimedAskCountdown({
+  deadlineAt,
+  t,
+}: {
+  deadlineAt: number
+} & Pick<QuestionComposerProps, 't'>) {
+  const [remainingMs, setRemainingMs] = useState(() => Math.max(0, deadlineAt - Date.now()))
+  useEffect(() => {
+    const tick = () => { setRemainingMs(Math.max(0, deadlineAt - Date.now())) }
+    tick()
+    const id = window.setInterval(tick, 250)
+    return () => { window.clearInterval(id) }
+  }, [deadlineAt])
+  const seconds = Math.ceil(remainingMs / 1000)
+  return (
+    <div
+      className={css.timedHint}
+      data-testid="timed-ask-countdown"
+      role="status"
+      aria-live="polite"
+    >
+      {remainingMs > 0
+        ? t('timed.remaining', { s: String(seconds) })
+        : t('timed.expired')}
+    </div>
+  )
+}
+
+function QuestionFlow({
+  pending,
+  deadlineAt,
+  t,
+}: {
+  pending: PendingQuestion
+  deadlineAt?: number
+} & Pick<QuestionComposerProps, 't'>) {
   const questions = pending.questions
   const [index, setIndex] = useState(0)
   const [drafts, setDrafts] = useState<DraftAnswer[]>(() => questions.map(() => ({
@@ -209,6 +258,9 @@ function QuestionFlow({ pending, t }: { pending: PendingQuestion } & Pick<Questi
             <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
               {question.question}
             </h2>
+            {deadlineAt !== undefined && (
+              <TimedAskCountdown deadlineAt={deadlineAt} t={t} />
+            )}
           </div>
           <div className={css.headerActions}>
             <button

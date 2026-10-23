@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.15',
+    date: '2026-10-23',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '有活任务时归档会先确认再强制停并归档；限时提问显示剩余秒数。',
+        en: 'Archive while busy confirms then force-stops; timed ask shows a live countdown.',
+      },
+      {
+        zh: '内置干员 playbook 带 operator 权威首行（子会话不读家站立）；站立种子补 Instruction authority。',
+        en: 'Catalog playbooks open with an operator-authority line (children skip home standing); standing seed adds Instruction authority.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.15 接管 @latest。完整清单见 docs/releases/v0.6.15.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.15 now owns @latest. Full list in docs/releases/v0.6.15.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.14',
     date: '2026-10-22',
     title: {

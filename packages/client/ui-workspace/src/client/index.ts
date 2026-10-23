@@ -119,7 +119,9 @@ export function apply(ctx: ClientContext): void {
     insertWorkspaceBefore: async (workspaceId, beforeWorkspaceId) => {
       await ctx.workspaces.insertBefore(workspaceId, beforeWorkspaceId)
     },
-    archiveSession: async (sessionId) => { await ctx.workspaces.archiveSession(sessionId) },
+    archiveSession: async (sessionId, options) => {
+      await ctx.workspaces.archiveSession(sessionId, options)
+    },
     pinSession: async (sessionId) => { await ctx.workspaces.pinSession(sessionId) },
     unpinSession: async (sessionId) => { await ctx.workspaces.unpinSession(sessionId) },
     pinWorkspace: async (workspaceId) => { await ctx.workspaces.pinWorkspace(workspaceId) },
