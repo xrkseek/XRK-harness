@@ -30,7 +30,8 @@ export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
     authMode: "bearer",
     apiKeyEnv: "OPENCODE_API_KEY",
     defaultModel: "big-pickle",
-    notes: "API key from https://opencode.ai/zen",
+    notes:
+      "API key from https://opencode.ai/zen; outbound sends x-opencode-session",
   },
   {
     id: "opencode-go",
@@ -41,7 +42,8 @@ export const OPENAI_CHAT_BRANDS: readonly BrandEntry[] = [
     authMode: "bearer",
     apiKeyEnv: "OPENCODE_GO_API_KEY",
     defaultModel: "deepseek-flash",
-    notes: "OPENCODE_API_KEY accepted as env fallback",
+    notes:
+      "OPENCODE_API_KEY accepted as env fallback; outbound sends x-opencode-session",
   },
   {
     id: "openrouter",

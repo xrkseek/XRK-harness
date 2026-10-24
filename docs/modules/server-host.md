@@ -38,7 +38,7 @@
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| shell \| frugal \| plan \| shallow \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP 鉴权（空=开发免鉴权） |
-| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；独占写锁，第二实例拒绝抢写；省略 = 内存 store（CLI `serve` 另有默认 `~/.xrk/sessions`） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db`）；独占写锁，存活第二实例拒绝抢写，持锁进程已死则清过期锁再开；省略 = 内存 store（CLI `serve` 另有默认 `~/.xrk/sessions`） |
 | `XRK_PLUGINS_DIR` | 进程插件根；`web/` 子目录为客户端叠加（boot + `/plugins/…`） |
 | `XRK_WEB_DIST` | 静态壳覆盖；缺省见 CLI（`product-web/` 或 apps/web/dist） |
 | `XRK_POLICY_FILE` | policy JSON |
@@ -135,7 +135,7 @@ Shutdown: set `mcpClosed` → `agentCache.dispose` → `shellJobs.dispose` (if a
 | `XRK_WORKSPACE` | workspaceRoot |
 | `XRK_PRESET` | minimal \| shell \| frugal \| plan \| shallow \| harness \| server |
 | `XRK_API_KEY` | Face/HTTP auth (empty = dev no-auth) |
-| `XRK_SESSIONS_DIR` | Session persistence dir (`sessions.db`); exclusive write lock — a second instance refuses to steal; omit = in-memory store (CLI `serve` defaults to `~/.xrk/sessions`) |
+| `XRK_SESSIONS_DIR` | Session persistence dir (`sessions.db`); exclusive write lock — live second instance refuses; dead holder's stale lock is reclaimed once; omit = in-memory store (CLI `serve` defaults to `~/.xrk/sessions`) |
 | `XRK_PLUGINS_DIR` | Process plugin root; `web/` is client overlay (boot + `/plugins/…`) |
 | `XRK_WEB_DIST` | Static shell override; CLI default is `product-web/` or apps/web/dist |
 | `XRK_POLICY_FILE` | Policy JSON |

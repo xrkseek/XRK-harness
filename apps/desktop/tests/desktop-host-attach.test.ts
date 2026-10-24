@@ -130,6 +130,39 @@ describe("scheduleDesktopHostFetchAttach", () => {
     expect(startCount).toBe(2);
   });
 
+  it("parks on OOM death instead of auto-restarting", async () => {
+    let exitResolve!: () => void;
+    const exitPromise = new Promise<void>((resolve) => {
+      exitResolve = resolve;
+    });
+    const onFailed = vi.fn();
+    const attach = vi.fn();
+    let startCount = 0;
+    scheduleDesktopHostFetchAttach({
+      start: async ({ onSpawned }) => {
+        startCount += 1;
+        onSpawned();
+        return fakeHost({
+          lastDeath: {
+            code: 134,
+            signal: null,
+            stderrTail: "JavaScript heap out of memory",
+          },
+          waitForExit: () => exitPromise,
+        });
+      },
+      attach,
+      onFailed,
+      restartMaxAttempts: 5,
+      restartDelayMs: 5,
+    });
+    await vi.waitFor(() => expect(attach).toHaveBeenCalledOnce());
+    exitResolve();
+    await vi.waitFor(() => expect(onFailed).toHaveBeenCalledOnce());
+    expect(onFailed.mock.calls[0]![0].message).toMatch(/^\[OOM\]/);
+    expect(startCount).toBe(1);
+  });
+
   it("rebring clears sticky failure and starts again after budget exhaust", async () => {
     const onFailed = vi.fn();
     let starts = 0;

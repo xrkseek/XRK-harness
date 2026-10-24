@@ -1,18 +1,15 @@
 /**
  * Changed-files card: file list + inline review pane; header opens the
  * Status-column Changes tab when `openOverviewReview` is wired (D-01).
- * Rows also hover-preview via HoverCard + fileDiff.
+ * Rows open review on click — no hover peek (that card was noise).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
-  DiffBlock,
-  HoverCard,
   IconChevronDownOutline14,
   IconChevronUpOutline14,
   IconCodeOutline16,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
-import type { WorkspaceFileDiff } from '@xrkseek/xrk-api-remotes/client'
 import type { ChangesTurnData } from './turn-deliverables.ts'
 import type { NS } from './locales.ts'
 import {
@@ -27,7 +24,6 @@ export type { LoadFileDiff } from './load-file-diff.ts'
 
 const COLLAPSED_ROWS = 3
 const GROUPED = new Intl.NumberFormat('en-US')
-const HOVER_PREVIEW_DELAY_MS = 500
 
 function Counts({
   added, deleted, t,
@@ -41,77 +37,10 @@ function Counts({
   </>
 }
 
-/** Mounted only while its HoverCard is open — avoids loading every row on pass. */
-function ChangedFilePreview({
-  seq,
-  index,
-  display,
-  loadFileDiff,
-  t,
-}: {
-  seq: number
-  index: number
-  display: string
-  loadFileDiff: LoadFileDiff
-} & PropsLocale<typeof NS>) {
-  const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
-  const [error, setError] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    const ac = new AbortController()
-    setDiff(undefined)
-    setError(undefined)
-    void loadFileDiff(seq, index, ac.signal).then(
-      (value) => {
-        if (!ac.signal.aborted) setDiff(value)
-      },
-      (err: unknown) => {
-        if (!ac.signal.aborted) {
-          setError(err instanceof Error ? err.message : String(err))
-          setDiff(null)
-        }
-      },
-    )
-    return () => { ac.abort() }
-  }, [seq, index, loadFileDiff])
-
-  const hunk = diff !== undefined && diff !== null ? diffHunkFromWorkspaceFileDiff(diff) : null
-  const textNote = diff?.kind === 'text'
-    ? (!diff.before
-      ? 'diff.created' as const
-      : !diff.after
-        ? 'diff.deleted' as const
-        : diff.hunks.length === 0
-          ? 'diff.unchanged' as const
-          : undefined)
-    : undefined
-  // Note-only for empty/unchanged; skip path-only DiffBlock stub (D-05).
-  const showDiff = hunk !== null && diff?.kind === 'text' && diff.hunks.length > 0
-
-  return (
-    <div className={css.preview} data-changes-hover-preview>
-      <div className={css.previewPath} data-changes-preview-path>{display}</div>
-      {diff === undefined && <span className={css.previewStatus}>{t('changes.loading')}</span>}
-      {error !== undefined && <span className={css.previewStatus} data-error="true">{error}</span>}
-      {diff === null && error === undefined && (
-        <span className={css.previewStatus}>{t('changes.missing')}</span>
-      )}
-      {diff?.kind === 'binary' && <span className={css.previewStatus}>{t('changes.binary')}</span>}
-      {diff?.kind === 'oversized' && <span className={css.previewStatus}>{t('changes.oversized')}</span>}
-      {textNote !== undefined
-        ? <p className={css.diffNote} role="note">{t(textNote)}</p>
-        : null}
-      {showDiff && hunk !== null
-        ? <DiffBlock diffs={[hunk]} className={css.previewDiff} layout="unified" maxLines={12} />
-        : null}
-    </div>
-  )
-}
-
 /**
  * Render one turn's changed files. Header + rows open the Status Changes tab
  * when `openOverviewReview` is wired (D-01); otherwise rows open an inline
- * review pane. Hover (500ms) peeks a compact unified diff without opening.
+ * review pane.
  */
 export function ChangedFiles({
   changes, loadFileDiff, openFile, openOverviewReview, t,
@@ -159,8 +88,8 @@ export function ChangedFiles({
       </span>
     </button>
     <ul className={css.list}>
-      {rows.map((file, index) => {
-        const rowButton = (
+      {rows.map((file, index) => (
+        <li key={`${file.display}:${index}`}>
           <button type="button"
             className={css.row}
             data-selected={reviewing && safeIndex === index ? 'true' : undefined}
@@ -175,31 +104,8 @@ export function ChangedFiles({
                   : <Counts t={t} added={file.added} deleted={file.deleted} />}
             </span>
           </button>
-        )
-        const hoverable = file.binary !== true && file.oversized !== true
-        return (
-          <li key={`${file.display}:${index}`}>
-            {hoverable
-              ? (
-                <HoverCard
-                  openDelayMs={HOVER_PREVIEW_DELAY_MS}
-                  disabled={reviewing}
-                  anchor={rowButton}
-                  content={(
-                    <ChangedFilePreview
-                      seq={changes.seq}
-                      index={index}
-                      display={file.path}
-                      loadFileDiff={loadFileDiff}
-                      t={t}
-                    />
-                  )}
-                />
-              )
-              : rowButton}
-          </li>
-        )
-      })}
+        </li>
+      ))}
     </ul>
     {foldable && <button type="button" className={css.toggle}
       aria-expanded={expanded}

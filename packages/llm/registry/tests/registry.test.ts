@@ -29,6 +29,77 @@ describe("createProviderRegistry", () => {
     expect(go.model).toBe("glm-5");
   });
 
+  it("sends x-opencode-session on OpenCode Go and Zen chat", async () => {
+    const reg = createProviderRegistry();
+    for (const row of [
+      {
+        provider: "opencode-go" as const,
+        model: "deepseek-v4.1-flash",
+        sessionId: "sess-go-1",
+      },
+      {
+        provider: "opencode" as const,
+        model: "beam-free",
+        sessionId: "sess-zen-1",
+      },
+    ]) {
+      const binding = reg.resolve({
+        provider: row.provider,
+        model: row.model,
+      });
+      const fetchMock = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "hi" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+      const adapter = reg.createAdapter(
+        binding,
+        { apiKey: "oc_sk_test" },
+        {
+          fetch: fetchMock as unknown as typeof fetch,
+          sessionId: row.sessionId,
+        },
+      );
+      await adapter.chat({
+        messages: [{ role: "user", content: "ping" }],
+      });
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers["x-opencode-session"]).toBe(row.sessionId);
+      expect(headers.authorization).toBe("Bearer oc_sk_test");
+    }
+  });
+
+  it("does not send x-opencode-session on unrelated brands", async () => {
+    const reg = createProviderRegistry();
+    const binding = reg.resolve({ provider: "openai", model: "gpt-4o-mini" });
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "hi" } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const adapter = reg.createAdapter(
+      binding,
+      { apiKey: "sk-test" },
+      {
+        fetch: fetchMock as unknown as typeof fetch,
+        sessionId: "sess-other",
+      },
+    );
+    await adapter.chat({
+      messages: [{ role: "user", content: "ping" }],
+    });
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-opencode-session"]).toBeUndefined();
+  });
+
   it("uses defaultProvider and brand defaultModel", () => {
     const reg = createProviderRegistry({ defaultProvider: "deepseek" });
     const b = reg.resolve({});

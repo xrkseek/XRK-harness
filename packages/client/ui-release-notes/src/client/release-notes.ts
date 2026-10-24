@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.16',
+    date: '2026-10-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'OpenCode Zen/Go 出站带会话头；地区/免费档等失败显示真因，不再伪装成密钥无效。',
+        en: 'OpenCode Zen/Go send a session header; region/free-tier failures show the real cause, not a fake invalid key.',
+      },
+      {
+        zh: '会话写锁可回收已死进程；Desktop Host OOM 不自动重启，中途死亡不再叠系统错误框。',
+        en: 'Session write lock reclaims dead holders; Desktop Host skips OOM auto-restart and mid-session OS error boxes.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.16 接管 @latest。完整清单见 docs/releases/v0.6.16.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.16 now owns @latest. Full list in docs/releases/v0.6.16.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.15',
     date: '2026-10-23',
     title: {

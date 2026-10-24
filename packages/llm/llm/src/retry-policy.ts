@@ -43,8 +43,12 @@ export interface ResolvedRetryPolicy {
 export const DEFAULT_NON_RETRYABLE_CODES = [
   // User cancel / parent dispose: retrying ignores the stop.
   "ABORTED",
-  // 401/403 — bad key or missing permission. Same request, same rejection.
+  // 401 / auth-shaped 403 — bad key. Same request, same rejection.
   "AUTH",
+  // Geo / free-tier / other provider policy 403 — not fixed by retry.
+  "REGION",
+  "PROVIDER_DENIED",
+  "FORBIDDEN",
   // Out of credit / quota exhausted. Retrying only spends more money.
   "QUOTA",
   // 400/413 — malformed request or oversized body; the request must change.

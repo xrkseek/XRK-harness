@@ -207,8 +207,7 @@ describe('ChangedFiles review navigation', () => {
     expect(screen.getByText('Preview a.ts')).toBeTruthy()
   })
 
-  it('loads a hover diff preview after 500ms without opening the review pane', async () => {
-    vi.useFakeTimers()
+  it('does not load a hover diff peek — click opens review instead', async () => {
     const loadFileDiff = vi.fn(async () => textDiff('a.ts', '+hello'))
     const { container } = render(
       <ChangedFiles
@@ -219,15 +218,12 @@ describe('ChangedFiles review navigation', () => {
       />,
     )
     const row = screen.getByLabelText('View diff for a.ts')
-    const wrapper = row.parentElement as HTMLElement
-    fireEvent.pointerEnter(wrapper)
+    fireEvent.pointerEnter(row)
+    expect(document.querySelector('[data-changes-hover-preview]')).toBeNull()
     expect(loadFileDiff).not.toHaveBeenCalled()
-    await act(async () => { vi.advanceTimersByTime(500) })
-    expect(document.querySelector('[data-changes-hover-preview]')).toBeTruthy()
-    // Flush the preview's loadFileDiff microtask under fake timers.
-    await act(async () => { await Promise.resolve() })
-    expect(loadFileDiff).toHaveBeenCalledWith(4, 0, expect.any(AbortSignal))
-    expect(screen.getByText('Created in this turn')).toBeTruthy()
     expect(container.querySelector('[data-changes-review]')).toBeNull()
+    await act(async () => { fireEvent.click(row) })
+    expect(await screen.findByText('Created in this turn')).toBeTruthy()
+    expect(loadFileDiff).toHaveBeenCalled()
   })
 })

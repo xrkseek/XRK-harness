@@ -43,6 +43,7 @@ export class FaceLlmResolveError extends Error {
 export function resolveLlmForSelection(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
+  options?: { readonly sessionId?: string },
 ): ResolvedFaceLlm {
   if (!providerHasUsableCredential(runtime, selection.provider)) {
     const brand = runtime.registry.listBrands().find(
@@ -67,6 +68,7 @@ export function resolveLlmForSelection(
     {
       id: `${binding.provider}:${binding.model}`,
       model: selection.model,
+      ...(options?.sessionId ? { sessionId: options.sessionId } : {}),
       ...(catalogModalities ? { inputModalities: catalogModalities } : {}),
       ...(runtime.attachments?.readImageRequest
         ? {
@@ -91,7 +93,7 @@ export function createSessionRoutingLlm(
     runtime.sessionModels.get(sessionId) ??
     resolveSessionModelSelection(runtime, sessionId);
   try {
-    resolveLlmForSelection(runtime, pickSelection());
+    resolveLlmForSelection(runtime, pickSelection(), { sessionId });
   } catch {
     return undefined;
   }
@@ -112,7 +114,7 @@ export function createSessionRoutingLlm(
       };
     },
     resolveAdapter: (selection) =>
-      resolveLlmForSelection(runtime, selection).adapter,
+      resolveLlmForSelection(runtime, selection, { sessionId }).adapter,
   });
 }
 

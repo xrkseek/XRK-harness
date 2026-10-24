@@ -8,6 +8,7 @@ import {
   DESKTOP_HOST_STDERR_TAIL_MAX,
   DesktopHostProcess,
   formatDesktopHostDeathMessage,
+  isDesktopHostOomFingerprint,
 } from "../src/host-process.js";
 
 const roots: string[] = [];
@@ -287,5 +288,10 @@ describe("stderr tail helpers", () => {
         stderrTail: "JavaScript heap out of memory",
       }),
     ).toMatch(/^\[OOM]/);
+    expect(isDesktopHostOomFingerprint("JavaScript heap out of memory")).toBe(
+      true,
+    );
+    expect(isDesktopHostOomFingerprint("[OOM] exit 1")).toBe(true);
+    expect(isDesktopHostOomFingerprint("exit 1: plain crash")).toBe(false);
   });
 });

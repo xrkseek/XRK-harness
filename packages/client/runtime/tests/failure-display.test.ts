@@ -17,4 +17,32 @@ describe("displayFailureMessage", () => {
       displayFailureMessage({ code: "RATE_LIMIT", message: "slow down" }),
     ).toBe("slow down");
   });
+
+  it("strips adapter prefixes and keeps region / free-tier detail", () => {
+    expect(
+      displayFailureMessage({
+        code: "REGION",
+        message:
+          "openai-compatible HTTP 403: This model is not available in your country",
+      }),
+    ).toBe("This model is not available in your country");
+    expect(
+      displayFailureMessage({
+        code: "PROVIDER_DENIED",
+        message:
+          "openai-compatible HTTP 403: OpenCode's free tier can only be used from within OpenCode.",
+      }),
+    ).toBe(
+      "OpenCode's free tier can only be used from within OpenCode.",
+    );
+  });
+
+  it("falls back to stable copy when the message is empty", () => {
+    expect(displayFailureMessage({ code: "REGION", message: "" })).toBe(
+      "This model is not available in your region",
+    );
+    expect(displayFailureMessage({ code: "FORBIDDEN" })).toBe(
+      "Provider refused this request",
+    );
+  });
 });

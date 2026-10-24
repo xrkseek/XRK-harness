@@ -10,6 +10,7 @@ import {
   ContextOverflowError,
   LlmError,
   mergeOutboundTraceHeaders,
+  providerPolicyErrorCode,
   throwHttpLlmError,
   withExtraAbortSignal,
   withOpenAiFinishReason,
@@ -523,8 +524,13 @@ function throwOpenAiWireError(error: unknown, via: "chat" | "stream"): never {
         : String(error);
   const errType =
     typeof errObj?.type === "string" ? errObj.type.toLowerCase() : "";
+  const typeAndMsg = `${errType} ${msg}`;
+  const policy = providerPolicyErrorCode(typeAndMsg);
   const code =
-    errType === "invalid_request_error" || errType === "invalid_request"
+    policy ??
+    (errType === "invalid_request_error" ||
+    errType === "invalid_request" ||
+    errType === "missingsessionid"
       ? "INVALID_REQUEST"
       : errType === "authentication_error" || errType === "auth_error"
         ? "AUTH"
@@ -532,7 +538,7 @@ function throwOpenAiWireError(error: unknown, via: "chat" | "stream"): never {
           ? "QUOTA"
           : errType === "rate_limit_error" || errType === "rate_limit"
             ? "RATE_LIMIT"
-            : "SERVER";
+            : "SERVER");
   throw new LlmError(
     `openai-compatible ${via} error: ${msg.slice(0, 800)}`,
     code,

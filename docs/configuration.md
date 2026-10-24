@@ -90,7 +90,7 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 | `XRK_WORKSPACE` | workspace 根 |
 | `XRK_SURFACE` | 运行壳形态：`desktop`（Electron 桌面端）\| `web`（浏览器，`xrkh web` / `serve`）\| `tui` \| `acp` \| `cli`；决定模型看到的 `## Runtime surface` 段。CLI / Desktop Host 自动声明，一般不用手设 |
 | `XRK_WEB_DIST` | 产品壳静态根。默认：CLI 包内 `product-web/`，或 monorepo `apps/web/dist`。设了则需已存在 |
-| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL · 独占 `sessions.write.lock`）；第二 Host 拒绝抢写 | Host 省略 = 内存（CLI serve 另有默认） |
+| `XRK_SESSIONS_DIR` | 会话持久化目录（`sessions.db` · WAL · 独占 `sessions.write.lock`）；另一存活 Host 拒绝抢写，持锁进程已死则清过期锁再开 | Host 省略 = 内存（CLI serve 另有默认） |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`：包装 SessionStore，挂 core-session / core-agent-loop 包自有 invariant 伴侣；关系违规抛 `InvariantError` 并阻止 append | 默认关（可选诊断） |
 | `XRK_A2A_AGENTS` | A2A 对等体 JSON：`{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`；亦可 `{XRK_HOME}/a2a_agents.json` | 出站 `extensions/a2a` |
 | `XRK_A2A_INBOUND` | `1` / `true`：启用入站 Agent Card + `POST /a2a` `message/send`（Face 会话注入）。非空为 CI 旁路（`0` 强制关）。产品路径：Settings → Plugins → **A2A 入站**（`a2a-inbound`） | 默认关 |
@@ -399,7 +399,7 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 | `XRK_WORKSPACE` | Workspace root |
 | `XRK_SURFACE` | Hosting shell surface: `desktop` (Electron) \| `web` (browser, `xrkh web` / `serve`) \| `tui` \| `acp` \| `cli`; drives the model's `## Runtime surface` inject. Declared by the CLI / Desktop Host — not user config |
 | `XRK_WEB_DIST` | Product-shell static root. Default: `product-web/` inside the CLI package, or monorepo `apps/web/dist`. If set, the path must already exist |
-| `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL · exclusive `sessions.write.lock`); a second Host refuses to steal the write lease | Host omit = in-memory (CLI serve has its own default) |
+| `XRK_SESSIONS_DIR` | Session persistence directory (`sessions.db` · WAL · exclusive `sessions.write.lock`); another live Host refuses; a dead holder's stale lock is cleared then re-acquired | Host omit = in-memory (CLI serve has its own default) |
 | `XRK_INVARIANTS_FAIL_FAST` | `1` / `true`: wrap SessionStore with core-session / core-agent-loop package-owned invariant companions; relational violations throw `InvariantError` and block append | Off by default (opt-in diagnostics) |
 | `XRK_A2A_AGENTS` | A2A peers JSON: `{ "name": { "url", "auth?", "timeout?", "capabilities?" } }`; or `{XRK_HOME}/a2a_agents.json` | Outbound `extensions/a2a` |
 | `XRK_A2A_INBOUND` | `1` / `true`: enable inbound Agent Card + `POST /a2a` `message/send` (Face session inject). Non-empty is CI bypass (`0` force off). Product path: Settings → Plugins → **A2A inbound** (`a2a-inbound`) | Off by default |

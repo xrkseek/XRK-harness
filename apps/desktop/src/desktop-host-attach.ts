@@ -13,6 +13,7 @@
 
 import {
   formatDesktopHostDeathMessage,
+  isDesktopHostOomFingerprint,
   type DesktopHostProcess,
 } from "./host-process.js";
 
@@ -67,16 +68,11 @@ export function scheduleDesktopHostFetchAttach(
   let crashAttempts = 0;
   /** Counts start() invocations so cold vs restart timeouts can differ. */
   let startGeneration = 0;
-  let stableTimer: ReturnType<typeof setTimeout> | undefined;
   let restartTimer: ReturnType<typeof setTimeout> | undefined;
   let currentHost: DesktopHostProcess | undefined;
   let generation = 0;
 
   const clearTimers = (): void => {
-    if (stableTimer !== undefined) {
-      clearTimeout(stableTimer);
-      stableTimer = undefined;
-    }
     if (restartTimer !== undefined) {
       clearTimeout(restartTimer);
       restartTimer = undefined;
@@ -115,16 +111,8 @@ export function scheduleDesktopHostFetchAttach(
 
   const watchExit = (host: DesktopHostProcess, gen: number): void => {
     if (maxAttempts <= 0) return;
-    if (stableTimer !== undefined) clearTimeout(stableTimer);
-    stableTimer = setTimeout(() => {
-      crashAttempts = 0;
-    }, 30_000);
     void host.waitForExit().then(() => {
       if (gen !== generation) return;
-      if (stableTimer !== undefined) {
-        clearTimeout(stableTimer);
-        stableTimer = undefined;
-      }
       if (host.stopWasRequested) return;
       if (options.shouldAbortRestart?.()) return;
       options.detach?.();
@@ -135,6 +123,15 @@ export function scheduleDesktopHostFetchAttach(
         death !== undefined
           ? formatDesktopHostDeathMessage(death)
           : "Desktop Host exited";
+      // OOM: never auto-restart — restart loops thrash Face reconnect/resync and
+      // can wedge the frameless shell. Slow leaks without a heavy turn also hit
+      // this path; user rebring (footer / splash) clears the budget.
+      if (isDesktopHostOomFingerprint(detail)) {
+        failOut(new Error(detail));
+        return;
+      }
+      // Do not reset crashAttempts after a quiet window: a Host that dies every
+      // few minutes would otherwise restart forever under light load.
       queueRestart(new Error(detail));
     });
   };

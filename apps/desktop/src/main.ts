@@ -144,6 +144,11 @@ function createMainBrowserWindow(): BrowserWindow {
     return { action: "deny" };
   });
   attachDesktopNavigationGuard(window.webContents, DESKTOP_PROTOCOL_SCHEME);
+  // Abort Host auto-restart as soon as the user closes the window — will-quit
+  // is later and races a dying Host's watchExit → queueRestart.
+  window.on("close", () => {
+    desktopQuitting = true;
+  });
   return window;
 }
 
@@ -279,10 +284,19 @@ function beginDesktopHostBringUp(webRoot: string): void {
         liveHostWindows(),
         error.message,
       );
-      dialog.showErrorBox(
-        desktopWindowTitle(),
-        `Desktop Host failed to start:\n${error.message}`,
+      // Mid-session death already has footer / splash retry chrome. A blocking
+      // OS dialog on top of a reconnecting renderer is how the shell feels
+      // "frozen" (custom close needs IPC). Cold start (no window yet) still
+      // needs the box.
+      const liveWindows = BrowserWindow.getAllWindows().filter(
+        (win) => !win.isDestroyed(),
       );
+      if (liveWindows.length === 0) {
+        dialog.showErrorBox(
+          desktopWindowTitle(),
+          `Desktop Host failed to start:\n${error.message}`,
+        );
+      }
     },
   });
 }

@@ -151,12 +151,19 @@ export function appendUtf8StderrTail(previous: string, chunk: string): string {
   return next.slice(next.length - DESKTOP_HOST_STDERR_TAIL_MAX);
 }
 
+/** True when stderr (or a formatted death line) looks like a V8 heap OOM. */
+export function isDesktopHostOomFingerprint(text: string): boolean {
+  return (
+    /JavaScript heap out of memory/u.test(text) ||
+    /heap limit/iu.test(text) ||
+    /^\[OOM\]/u.test(text.trim())
+  );
+}
+
 /** Prefix OOM fingerprints for shell / Face failure copy. */
 export function formatDesktopHostDeathMessage(death: DesktopHostDeath): string {
   const tail = death.stderrTail.trim();
-  const oom =
-    /JavaScript heap out of memory/u.test(tail) ||
-    /heap limit/iu.test(tail);
+  const oom = isDesktopHostOomFingerprint(tail);
   const codePart =
     death.code !== null && death.code !== 0
       ? `exit ${String(death.code)}`

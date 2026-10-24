@@ -31,6 +31,28 @@ export const DEFAULT_REGISTRY_BRANDS: readonly BrandEntry[] = [
   ...R1_PROTOCOL_BRANDS,
 ];
 
+/**
+ * OpenCode Zen / Go ask for a stable conversation id in `x-opencode-session`
+ * (Go documents it; Zen free-tier and routing benefit from the same header).
+ */
+function isOpenCodeBinding(binding: ProviderBinding): boolean {
+  if (binding.provider === "opencode" || binding.provider === "opencode-go") {
+    return true;
+  }
+  return /opencode\.ai\/(?:zen(?:\/go)?|inference)\b/i.test(binding.baseUrl);
+}
+
+function openCodeSessionHeaders(
+  binding: ProviderBinding,
+  sessionId?: string,
+): Record<string, string> | undefined {
+  if (!isOpenCodeBinding(binding)) return undefined;
+  const sid =
+    (typeof sessionId === "string" && sessionId.trim()) ||
+    `xrk-${binding.provider}`;
+  return { "x-opencode-session": sid };
+}
+
 export interface ProviderRegistry {
   registerBrand(entry: BrandEntry): void;
   resolve(input: ResolveInput): ProviderBinding;
@@ -43,6 +65,10 @@ export interface ProviderRegistry {
       model?: string;
       inputModalities?: readonly ("text" | "image")[];
       readImageRequest?: import("@xrkseek/llm-deepseek").DeepSeekReadImageRequest;
+      /** Harness session id → OpenCode `x-opencode-session` (Zen / Go). */
+      sessionId?: string;
+      /** Extra outbound headers (merged after OpenCode session header). */
+      headers?: Record<string, string>;
     },
   ): LlmAdapter;
   listBrands(): readonly BrandEntry[];
@@ -196,6 +222,14 @@ export function createProviderRegistry(
               : {}),
           });
         }
+        const openCodeHeaders = openCodeSessionHeaders(
+          binding,
+          extras?.sessionId,
+        );
+        const headers = {
+          ...(openCodeHeaders ?? {}),
+          ...(extras?.headers ?? {}),
+        };
         return createOpenAiCompatibleAdapter({
           id,
           baseUrl: binding.baseUrl,
@@ -205,6 +239,7 @@ export function createProviderRegistry(
           inputModalities: vision,
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
+          ...(Object.keys(headers).length > 0 ? { headers } : {}),
         });
       }
 

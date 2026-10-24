@@ -3,12 +3,12 @@
  * (`sessions.db`). DSH uses per-session `session.lock`; XRK stores every
  * session in one SQLite file, so the lease guards the directory.
  *
- * Portable lockfile with **no PID steal**. A second writer that sees an
- * existing lock always gets {@link SessionsDirInUseError} — even when the
- * named PID looks dead. PID reuse on Windows would otherwise tear concurrent
- * SQLite writers. Crash reclaim is operator-visible (delete the lock file /
- * quit the other Host); a future kernel mutex can auto-reclaim without
- * reintroducing steal-by-PID.
+ * Portable lockfile: a second live writer always gets
+ * {@link SessionsDirInUseError}. A **dead** holder's PID (crash / hard kill
+ * without `release`) is cleared **once** then the acquire retries — matching
+ * Desktop "close the window and reopen" UX. Empty / unreadable locks are not
+ * stolen (create-window race). `EPERM` on the liveness probe counts as alive
+ * so we never steal a process we cannot signal.
  */
 import {
   mkdirSync,
@@ -69,31 +69,39 @@ function readHolderPid(lockPath: string): number | undefined {
   }
 }
 
-/**
- * Acquire exclusive write ownership of `dir`.
- * @throws {SessionsDirInUseError} when another process (or this process)
- *   already holds the lease — never steals a lockfile by PID liveness.
- */
-export function acquireSessionsDirLock(dir: string): SessionsDirLock {
-  const root = path.resolve(dir);
-  mkdirSync(root, { recursive: true });
-
-  const existing = localExclusive.get(root);
-  if (existing) {
-    throw new SessionsDirInUseError(root, process.pid);
-  }
-
-  const lockPath = path.join(root, SESSIONS_WRITE_LOCK_FILENAME);
-
+/** True when the OS still has a process for `pid` (or we lack rights to ask). */
+export function isSessionsLockHolderAlive(pid: number): boolean {
+  if (pid === process.pid) return true;
   try {
-    writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
+    process.kill(pid, 0);
+    return true;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code === "EEXIST") {
-      throw new SessionsDirInUseError(root, readHolderPid(lockPath));
-    }
-    throw err;
+    // Exists but we cannot signal it — treat as live; never steal.
+    if (code === "EPERM") return true;
+    return false;
   }
+}
+
+/**
+ * If the lock names a dead PID, unlink once when the content is unchanged.
+ * @returns whether the file was removed
+ */
+function tryReclaimDeadHolder(lockPath: string): boolean {
+  const holder = readHolderPid(lockPath);
+  if (holder === undefined) return false;
+  if (isSessionsLockHolderAlive(holder)) return false;
+  try {
+    if (readHolderPid(lockPath) !== holder) return false;
+    unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createExclusiveLock(root: string, lockPath: string): SessionsDirLock {
+  writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
 
   if (readHolderPid(lockPath) !== process.pid) {
     // Replaced under us — do not steal; surface contention.
@@ -117,4 +125,44 @@ export function acquireSessionsDirLock(dir: string): SessionsDirLock {
   };
   localExclusive.set(root, lock);
   return lock;
+}
+
+/**
+ * Acquire exclusive write ownership of `dir`.
+ * @throws {SessionsDirInUseError} when another **live** process (or this
+ *   process) already holds the lease. A dead holder's stale lockfile is
+ *   reclaimed once, then create retries.
+ */
+export function acquireSessionsDirLock(dir: string): SessionsDirLock {
+  const root = path.resolve(dir);
+  mkdirSync(root, { recursive: true });
+
+  const existing = localExclusive.get(root);
+  if (existing) {
+    throw new SessionsDirInUseError(root, process.pid);
+  }
+
+  const lockPath = path.join(root, SESSIONS_WRITE_LOCK_FILENAME);
+
+  try {
+    return createExclusiveLock(root, lockPath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST") throw err;
+  }
+
+  // Live holder or empty/unreadable → refuse. Dead PID → reclaim once + retry.
+  if (!tryReclaimDeadHolder(lockPath)) {
+    throw new SessionsDirInUseError(root, readHolderPid(lockPath));
+  }
+
+  try {
+    return createExclusiveLock(root, lockPath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EEXIST" || err instanceof SessionsDirInUseError) {
+      throw new SessionsDirInUseError(root, readHolderPid(lockPath));
+    }
+    throw err;
+  }
 }

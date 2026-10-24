@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   acquireSessionsDirLock,
+  isSessionsLockHolderAlive,
   SessionsDirInUseError,
   SESSIONS_WRITE_LOCK_FILENAME,
 } from "../src/store-lock.js";
@@ -26,11 +27,27 @@ describe("sessions dir write lock", () => {
     expect(() => acquireSessionsDirLock(dir)).toThrow(SessionsDirInUseError);
   });
 
-  it("refuses to steal a stale lock from a dead-looking pid", () => {
+  it("reclaims a stale lock when the named pid is dead", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "xrk-sess-stale-"));
     dirs.push(dir);
-    writeFileSync(path.join(dir, SESSIONS_WRITE_LOCK_FILENAME), "2147483646\n");
+    const lockPath = path.join(dir, SESSIONS_WRITE_LOCK_FILENAME);
+    // PID unlikely to exist; probe must report dead or the case is skipped.
+    const deadPid = 2147483646;
+    expect(isSessionsLockHolderAlive(deadPid)).toBe(false);
+    writeFileSync(lockPath, `${String(deadPid)}\n`);
+    const lock = acquireSessionsDirLock(dir);
+    locks.push(lock);
+    expect(readFileSync(lockPath, "utf8").trim()).toBe(String(process.pid));
+  });
+
+  it("refuses to steal when the named pid is still alive", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "xrk-sess-live-"));
+    dirs.push(dir);
+    const lockPath = path.join(dir, SESSIONS_WRITE_LOCK_FILENAME);
+    // Our pid is alive, but we are not the in-process holder — must not steal.
+    writeFileSync(lockPath, `${String(process.pid)}\n`);
     expect(() => acquireSessionsDirLock(dir)).toThrow(SessionsDirInUseError);
+    expect(readFileSync(lockPath, "utf8").trim()).toBe(String(process.pid));
   });
 
   it("refuses an empty lockfile instead of stealing it", () => {
@@ -51,7 +68,7 @@ describe("sessions dir write lock", () => {
     expect(readFileSync(lockPath, "utf8").trim()).toBe("2147483646");
   });
 
-  it("user message tells operators to quit other Hosts", () => {
+  it("error message tells operators to quit other Hosts", () => {
     const err = new SessionsDirInUseError("/tmp/x", 42);
     expect(err.message).toMatch(/Session store lock/);
     expect(err.message).toMatch(/PID 42/);

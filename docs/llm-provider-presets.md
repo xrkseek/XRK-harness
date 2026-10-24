@@ -45,7 +45,7 @@
 
 URL 以厂商文档为准；测例锁字符串。Settings 添加目录来自 Registry（经 `llm.providers`）；`llm-pi-ai` settings base 仅含零配置 `ollama`。
 
-`opencode`（Zen）密钥：`OPENCODE_API_KEY`（https://opencode.ai/zen）。`opencode-go` 密钥：`OPENCODE_GO_API_KEY`（环境变量可回退 `OPENCODE_API_KEY`）。
+`opencode`（Zen）密钥：`OPENCODE_API_KEY`（https://opencode.ai/zen）。`opencode-go` 密钥：`OPENCODE_GO_API_KEY`（环境变量可回退 `OPENCODE_API_KEY`）。Zen / Go 出站都会带 `x-opencode-session`（会话 id）；部分免费模型有地区或「仅 OpenCode 客户端」限制，403 会标成 `REGION` / `PROVIDER_DENIED`，UI 展示真因而非 invalid key。
 
 非 openai-chat 网关（如 Bedrock / Vertex）用 Custom 自填 endpoint。
 
@@ -112,7 +112,7 @@ Subordinate to [llm-provider-registry.md](./llm-provider-registry.md). Entry dat
 
 URLs follow vendor docs; tests lock the strings. The Settings add directory comes from the Registry via `llm.providers`; the `llm-pi-ai` settings base ships only zero-config `ollama`.
 
-`opencode` (Zen) key: `OPENCODE_API_KEY` (https://opencode.ai/zen). `opencode-go` key: `OPENCODE_GO_API_KEY` (env may fall back to `OPENCODE_API_KEY`).
+`opencode` (Zen) key: `OPENCODE_API_KEY` (https://opencode.ai/zen). `opencode-go` key: `OPENCODE_GO_API_KEY` (env may fall back to `OPENCODE_API_KEY`). Zen and Go outbound both send `x-opencode-session` (session id); some free models are geo- or client-restricted — those 403s map to `REGION` / `PROVIDER_DENIED`, and the UI shows the real cause instead of a fake invalid-key AUTH.
 
 Gateways outside openai-chat (e.g. Bedrock / Vertex) use Custom with a self-supplied endpoint.
 

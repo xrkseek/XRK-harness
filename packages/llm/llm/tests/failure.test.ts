@@ -24,6 +24,36 @@ describe("httpErrorCode", () => {
     expect(httpErrorCode(400, "insufficient_quota")).toBe("QUOTA");
     expect(httpErrorCode(400, "bad json")).toBe("INVALID_REQUEST");
   });
+
+  it("does not collapse OpenCode region / free-tier 403 into AUTH", () => {
+    expect(
+      httpErrorCode(
+        403,
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "RegionError",
+            message: "This model is not available in your country",
+          },
+        }),
+      ),
+    ).toBe("REGION");
+    expect(
+      httpErrorCode(
+        403,
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "FreeTierError",
+            message:
+              "OpenCode's free tier can only be used from within OpenCode.",
+          },
+        }),
+      ),
+    ).toBe("PROVIDER_DENIED");
+    expect(httpErrorCode(403, "Invalid credential")).toBe("AUTH");
+    expect(httpErrorCode(403, "access denied by policy")).toBe("FORBIDDEN");
+  });
 });
 
 describe("throwHttpLlmError", () => {
@@ -50,6 +80,30 @@ describe("throwHttpLlmError", () => {
       const e = err as LlmError;
       expect(e.requestId).toBe("abc123-SJC");
       expect(e.message).toContain("[request-id=abc123-SJC]");
+    }
+  });
+
+  it("prefers nested provider message and REGION code for geo 403", () => {
+    try {
+      throwHttpLlmError(
+        "openai-compatible",
+        403,
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "RegionError",
+            message: "This model is not available in your country",
+          },
+        }),
+      );
+      expect.unreachable();
+    } catch (err) {
+      const e = err as LlmError;
+      expect(e.code).toBe("REGION");
+      expect(e.message).toContain(
+        "This model is not available in your country",
+      );
+      expect(e.message).not.toContain('"type":"RegionError"');
     }
   });
 });

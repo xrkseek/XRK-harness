@@ -60,20 +60,79 @@ export function isLlmError(err: unknown): boolean {
 const QUOTA_RE =
   /\b(?:insufficient[_\s-]?quota|billing|balance|credit|payment|exceeded[_\s-]?your[_\s-]?(?:current[_\s-]?)?quota)\b/i;
 
+const REGION_RE =
+  /RegionError|not available in your country|unavailable in (?:your|this) (?:country|region)/i;
+
+const PROVIDER_DENIED_RE =
+  /FreeTierError|free tier can only be used|only be used from within OpenCode|trains on request data/i;
+
+const AUTH_BODY_RE =
+  /invalid(?:\s+\w+)?\s+(?:api[_\s-]?key|credential)|authentication|unauthorized|AuthError|invalid credential/i;
+
 export function isQuotaExceededError(detail: string): boolean {
   return QUOTA_RE.test(detail);
 }
 
 /**
+ * Policy / auth codes from OpenCode (and similar) type+message text.
+ * Used by HTTP status mapping and openai-compatible wire-error frames.
+ */
+export function providerPolicyErrorCode(
+  detail: string,
+): "REGION" | "PROVIDER_DENIED" | "AUTH" | undefined {
+  if (REGION_RE.test(detail)) return "REGION";
+  if (PROVIDER_DENIED_RE.test(detail)) return "PROVIDER_DENIED";
+  if (AUTH_BODY_RE.test(detail)) return "AUTH";
+  return undefined;
+}
+
+/**
+ * Prefer nested provider `error.message` over a raw JSON dump for UI / logs.
+ * Understands OpenAI `{ error: { message } }` and OpenCode
+ * `{ type, error: { type, message } }`.
+ */
+export function extractHttpErrorDetail(bodyText: string): string {
+  const trimmed = bodyText.trim();
+  if (!trimmed) return "";
+  try {
+    const json = JSON.parse(trimmed) as unknown;
+    if (json && typeof json === "object" && !Array.isArray(json)) {
+      const root = json as Record<string, unknown>;
+      const err = root.error;
+      if (typeof err === "string" && err.trim()) return err.trim();
+      if (err && typeof err === "object" && !Array.isArray(err)) {
+        const msg = (err as { message?: unknown }).message;
+        if (typeof msg === "string" && msg.trim()) return msg.trim();
+      }
+      if (typeof root.message === "string" && root.message.trim()) {
+        return root.message.trim();
+      }
+    }
+  } catch {
+    /* not JSON */
+  }
+  return trimmed.slice(0, 800);
+}
+
+/**
  * Map HTTP status (+ optional body text) to a stable LlmError code.
- * CV DSH `llm-deepseek/adapter.httpErrorCode`.
+ * CV DSH `llm-deepseek/adapter.httpErrorCode`, refined: 403 is not always AUTH
+ * (OpenCode RegionError / FreeTier must not become "API key is invalid").
  */
 export function httpErrorCode(status: number, bodyText = ""): string {
-  if (status === 401 || status === 403) return "AUTH";
+  if (status === 401) return "AUTH";
+  if (status === 403) {
+    return providerPolicyErrorCode(bodyText) ?? "FORBIDDEN";
+  }
   if (status === 413) return "INVALID_REQUEST";
   if (isQuotaExceededError(bodyText)) return QUOTA_EXCEEDED_CODE;
   if (status === 429) return "RATE_LIMIT";
-  if (status === 400) return "INVALID_REQUEST";
+  if (status === 400) {
+    // OpenCode MissingSessionID and similar are request-shape, not auth.
+    const policy = providerPolicyErrorCode(bodyText);
+    if (policy === "AUTH") return "AUTH";
+    return "INVALID_REQUEST";
+  }
   if (status >= 500) return "SERVER";
   return `HTTP_${status}`;
 }
@@ -116,14 +175,16 @@ export function throwHttpLlmError(
   headers?: Headers,
 ): never {
   const code = httpErrorCode(status, bodyText);
+  const detail = extractHttpErrorDetail(bodyText);
   const providerRetryAfterMs = headers
     ? parseRetryAfterMs(headers.get("retry-after"))
     : undefined;
   const requestId = headers ? requestIdFromHeaders(headers) : undefined;
   const idSuffix =
     requestId !== undefined ? ` [request-id=${requestId}]` : "";
+  const detailPart = detail ? `: ${detail.slice(0, 800)}` : "";
   throw new LlmError(
-    `${label} HTTP ${status}: ${bodyText.slice(0, 800)}${idSuffix}`,
+    `${label} HTTP ${status}${detailPart}${idSuffix}`,
     code,
     {
       status,
