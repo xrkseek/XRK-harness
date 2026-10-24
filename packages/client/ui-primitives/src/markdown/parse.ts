@@ -17,6 +17,9 @@ import { math } from 'micromark-extension-math'
 import { cjkFriendlyStrong } from './cjkFriendlyStrong.ts'
 import { mathCompatibility } from './mathCompatibility.ts'
 
+/** GFM options: keep `~~strike~~`, drop single-`~` so ranges like `10~20` stay literal (U-26). */
+const GFM = { singleTilde: false } as const
+
 /**
  * Parse GFM markdown (the streaming arm's grammar: no math, so incomplete
  * TeX never flashes KaTeX errors mid-stream).
@@ -25,7 +28,7 @@ import { mathCompatibility } from './mathCompatibility.ts'
  */
 export function parseGfm(text: string): Root {
   return fromMarkdown(text, {
-    extensions: [gfm(), cjkFriendlyStrong()],
+    extensions: [gfm(GFM), cjkFriendlyStrong()],
     mdastExtensions: [gfmFromMarkdown()],
   })
 }
@@ -38,7 +41,7 @@ export function parseGfm(text: string): Root {
  */
 export function parseGfmWithMath(text: string): Root {
   return fromMarkdown(text, {
-    extensions: [gfm(), cjkFriendlyStrong(), mathCompatibility(), math()],
+    extensions: [gfm(GFM), cjkFriendlyStrong(), mathCompatibility(), math()],
     mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
   })
 }

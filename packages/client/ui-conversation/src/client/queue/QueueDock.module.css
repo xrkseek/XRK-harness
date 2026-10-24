@@ -259,8 +259,14 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.editor:focus {
+.editor:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.editor:focus-visible {
+  outline: none;
   border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
 }
 
 .actions {

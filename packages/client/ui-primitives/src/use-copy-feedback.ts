@@ -2,9 +2,9 @@
 // (TerminalBlock, SearchBlock): write the given text, and on success flip a
 // transient `copied` flag that the caller renders as a "复制成功" label for one
 // second. A refused write leaves the flag untouched, so the control never claims
-// a copy the host declined.
+// a copy the host declined. Timers and late promises are dropped on unmount (U-19).
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { writeClipboard } from './clipboard.ts'
 
 /** How long the `copied` flag stays true after a successful write, in ms. */
@@ -25,12 +25,28 @@ export interface CopyFeedback {
  */
 export function useCopyFeedback(text: string): CopyFeedback {
   const [copied, setCopied] = useState(false)
+  const pending = useRef(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const epoch = useRef(0)
+  useEffect(() => () => {
+    epoch.current += 1
+    pending.current = false
+    if (timer.current !== null) clearTimeout(timer.current)
+  }, [])
   const onCopy = useCallback(() => {
-    if (copied) return
+    if (copied || pending.current) return
+    const generation = epoch.current
+    pending.current = true
     void writeClipboard(text).then((ok) => {
+      if (generation !== epoch.current) return
+      pending.current = false
       if (!ok) return
       setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, COPIED_FEEDBACK_MS)
+      timer.current = window.setTimeout(() => {
+        timer.current = null
+        if (generation !== epoch.current) return
+        setCopied(false)
+      }, COPIED_FEEDBACK_MS)
     })
   }, [copied, text])
   return { copied, onCopy }

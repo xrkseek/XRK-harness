@@ -160,11 +160,13 @@
   display: none;
 }
 
-.collapsed .toggle:hover .panelIcon {
+.collapsed .toggle:hover .panelIcon,
+.collapsed .toggle:focus-visible .panelIcon {
   display: inline;
 }
 
-.collapsed .toggle:hover .railMark {
+.collapsed .toggle:hover .railMark,
+.collapsed .toggle:focus-visible .railMark {
   display: none;
 }
 
@@ -197,7 +199,8 @@
   overflow: hidden;
 }
 
-.newSession:hover {
+.newSession:hover,
+.newSession:focus-visible {
   background: var(--dsw-alias-button-floating-hover);
 }
 
@@ -286,7 +289,8 @@
   }
 }
 
-.collapsed .newSession:hover {
+.collapsed .newSession:hover,
+.collapsed .newSession:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 

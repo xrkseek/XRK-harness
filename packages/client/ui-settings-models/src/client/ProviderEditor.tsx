@@ -30,7 +30,7 @@ import {
 import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
-import { apiKeyFailure } from './apiKey.ts'
+import { apiKeyFailure, isApiKeyProbeAuthFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
@@ -236,6 +236,22 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    */
   const applyOnce = async (): Promise<string | undefined> => {
     const ns = namespace.ns
+    // Probe a newly typed key before any write: credentials.set only stores the
+    // string, so a bad key would otherwise report "Saved" (audit B-3). Empty
+    // field keeps the stored key and skips the probe. Only auth-shaped probe
+    // failures block the write — offline / non-listable protocols still save.
+    if (keyValue.length > 0) {
+      const probed = await api.llm.discoverModels({
+        settingsNs: ns,
+        provider: props.provider,
+        ...probeBaseURL === undefined ? {} : { baseURL: probeBaseURL },
+        ...probeApi === undefined ? {} : { api: probeApi },
+        apiKey: keyValue,
+      })
+      if (!probed.result.ok && isApiKeyProbeAuthFailure(probed.result.error.message)) {
+        return probed.result.error.message
+      }
+    }
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
     const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
@@ -422,6 +438,21 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 }}
               />
             </div>
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('proxy')}</span>
+              <input
+                className={styles['input']}
+                type="text"
+                value={stringAt(draft, 'proxy') ?? ''}
+                placeholder={t('proxyPlaceholder')}
+                aria-label={t('proxy')}
+                disabled={disabled}
+                onChange={(event) => {
+                  setField('proxy', event.target.value === '' ? undefined : event.target.value)
+                }}
+              />
+              <p className={styles['advancedHint']}>{t('proxyHint')}</p>
+            </div>
             {/* The protocol sits beside the endpoint it describes, as it does
                 on the create card. */}
             {ownsIdentity
@@ -482,7 +513,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       {layout === 'unknown'
         ? <p className={styles['advancedHint']}>{`${t('advancedHint')} (${namespace.ns})`}</p>
         : curatedFields(layout)}
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
+      {failure !== undefined ? <p className={styles['error']} role="alert">{failure}</p> : null}
       {props.credentialOnly === true || modelFailure === undefined
         ? null
         : (

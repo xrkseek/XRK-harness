@@ -27,6 +27,7 @@ type CatalogField =
   | 'softBudgetBufferTokens'
   | 'maxConcurrentSessions'
   | 'inputModalities'
+  | 'proxy'
 
 /** Token counts edited as K/M-suffixed text behind a row's disclosure. */
 type CapacityField =
@@ -419,6 +420,21 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                       {capacityField(model, index, 'softBudgetMaxTokens', undefined)}
                       {capacityField(model, index, 'softBudgetKeepTokens', undefined)}
                       {capacityField(model, index, 'softBudgetBufferTokens', undefined)}
+                      <label className={styles['modelField']}>
+                        <span className={styles['modelFieldLabel']}>{props.t('modelProxy')}</span>
+                        <input
+                          className={styles['input']}
+                          type="text"
+                          value={typeof model['proxy'] === 'string' ? model['proxy'] : ''}
+                          placeholder={props.t('modelProxyPlaceholder')}
+                          aria-label={`${props.t('modelProxy')} ${String(index + 1)}`}
+                          disabled={props.disabled}
+                          onChange={(event) => {
+                            const text = event.target.value.trim()
+                            update(index, 'proxy', text.length === 0 ? undefined : event.target.value)
+                          }}
+                        />
+                      </label>
                       <label className={styles['modelField']}>
                         <span className={styles['modelFieldLabel']}>{props.t('maxConcurrentSessions')}</span>
                         <input

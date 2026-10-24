@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.17',
+    date: '2026-10-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '提供方 / 模型可分层配置 HTTP 代理（模型优先；空则继承环境；direct 强制直连）。',
+        en: 'Provider / model HTTP proxy layers (model wins; empty inherits env; direct forces no proxy).',
+      },
+      {
+        zh: '设置面板打开时背景 inert、深链可开分区；触控命中与滚动滚入视口手感加强。',
+        en: 'Settings traps focus with inert root and hash deep links; larger hit targets and scroll-into-view polish.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.17 接管 @latest。完整清单见 docs/releases/v0.6.17.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.17 now owns @latest. Full list in docs/releases/v0.6.17.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.16',
     date: '2026-10-24',
     title: {

@@ -13,6 +13,7 @@ import { createPersistentSessionStore, toJSONL } from "@xrkseek/core-session";
 import type { LlmAdapter, LlmChatRequest, LlmStreamEvent } from "@xrkseek/llm";
 import { describe, expect, it } from "vitest";
 import {
+import { composerInput } from "./support.ts";
   HAS_SHELL,
   faceRpc,
   openEnglishPage,
@@ -150,7 +151,7 @@ describe.skipIf(!HAS_SHELL)("product shell subagent queue / steer / stop", () =>
         expect(parentId).toBeTypeOf("string");
 
         // --- Parent chrome: queue · Steer · Stop ---
-        const composer = page.locator("textarea:enabled").first();
+        const composer = composerInput(page);
         await composer.fill("hang until stop");
         await page.getByRole("button", { name: /发送消息|Send message/ }).click();
 

@@ -104,7 +104,14 @@ export function Modal({
     ;(autoFocused ?? firstField ?? stops[0] ?? dialog)?.focus()
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onCloseRef.current(); return }
+      if (e.key === 'Escape') {
+        // stopImmediatePropagation: sibling document keydown listeners
+        // (SettingsPanel, …) must not also close on this same Escape (B-4).
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        onCloseRef.current()
+        return
+      }
       if (e.key !== 'Tab' || !dialog) return
       // Focus trap. Without it, Tab walks straight out of the dialog into the
       // page behind, which `aria-modal="true"` promises cannot happen.

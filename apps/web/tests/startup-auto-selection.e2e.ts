@@ -29,7 +29,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, composerInput } from './support.ts'
 
 /** Wire path of the history round-trip the conversation root waits out (POST /api/session.history). */
 const HISTORY_ROUTE = '**/api/session.history'
@@ -153,10 +153,10 @@ describe('web e2e: startup auto-selection', () => {
     await page.waitForSelector(ROOT_PHASE, { timeout: 15_000 })
     expect(await page.locator(ROOT_PHASE).first().getAttribute('data-phase')).toBe('hero')
     expect(await page.getByText('Local agents, your harness').isVisible()).toBe(true)
-    expect(await page.locator('textarea').first().isVisible()).toBe(true)
+    expect(await composerInput(page).isVisible()).toBe(true)
 
     releaseHistory()
-    await page.locator('textarea:enabled[placeholder="Describe what you want to build"]')
+    await composerInput(page)
       .waitFor({ timeout: 15_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)
 

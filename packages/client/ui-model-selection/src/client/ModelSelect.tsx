@@ -210,10 +210,13 @@ export function ModelSelect(
     paneFocus.current = null
     if (!open || intent === null) return
     if (intent === 'drill') {
-      // Large catalogs mount a search field: keep the keyboard there so ↑↓
-      // can drive the virtual highlight (PopupSelectView). Small catalogs
-      // land on the checked row instead.
-      if (pane === 'model' && searchRef.current !== null) {
+      // Large catalogs mount a search field: fine pointer keeps the keyboard
+      // there so ↑↓ can drive the list. Coarse skips search autofocus so the
+      // soft keyboard does not cover the options (U-5/U-6); land on the
+      // checked row instead — arrows still work once focus is in the menu.
+      const coarse = typeof matchMedia === 'function'
+        && matchMedia('(pointer: coarse)').matches
+      if (pane === 'model' && searchRef.current !== null && !coarse) {
         searchRef.current.focus()
         return
       }

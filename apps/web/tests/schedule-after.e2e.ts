@@ -25,7 +25,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, conversationContextKey, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, conversationContextKey, saveFailureShot, composerInput } from './support.ts'
 
 const MODE = webSnapshotMode()
 const OVERLAY = fileURLToPath(new URL('../../../examples/web-schedule/cordis.yml', import.meta.url))
@@ -357,7 +357,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
     const atSession = page.getByRole('treeitem', { name: /Explicit local-time reminder/ })
     await atSession.waitFor({ timeout: 15_000 })
     await atSession.click()
-    const composer = page.locator('textarea:enabled').last()
+    const composer = composerInput(page)
     await composer.fill(AT_USER_PROMPT)
     const settled = scaffold.whenTurnSettled(60_000)
     await page.getByRole('button', { name: 'Send message', exact: true }).click()

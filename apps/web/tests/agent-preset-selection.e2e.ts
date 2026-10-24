@@ -24,7 +24,7 @@ import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, composerInput } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/agent-preset-selection', import.meta.url))
 const HERO_EXPECTED = join(SNAPSHOT_DIR, 'hero.expected.md')
@@ -235,7 +235,7 @@ describe('web e2e: agent-preset selection', () => {
     // Continues the previous case: the chip has already applied `minimal` to
     // the blank session, and this one reads the menu that switch left behind.
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-preset-slash-catalog'))
-    const composer = page.locator('textarea:enabled').last()
+    const composer = composerInput(page)
 
     // `minimal` mounts neither the compaction group nor plan mode nor local
     // skill discovery, so the catalog the composer warmed under the

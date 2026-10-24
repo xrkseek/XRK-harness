@@ -6,14 +6,18 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  width: 36px;
-  height: 20px;
+  width: 40px;
+  height: 24px;
+  min-width: 40px;
+  min-height: 24px;
   padding: 2px;
   border: 0;
   border-radius: 999px;
   appearance: none;
   background: var(--dsw-alias-border-l3);
   cursor: pointer;
+  /* Settings `.options` / long plugin lists: keep the control clear of the chrome. */
+  scroll-margin-block: 24px;
 }
 
 .switch[aria-checked='true'] {
@@ -32,8 +36,8 @@
 
 .thumb {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--dsw-alias-switch-thumb, var(--dsw-static-neutral-bluish-00));
   transition: transform 120ms ease;

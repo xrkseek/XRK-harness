@@ -85,8 +85,14 @@
   outline: none;
 }
 
-.objectiveInput:focus {
+.objectiveInput:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.objectiveInput:focus-visible {
+  outline: none;
   border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
 }
 
 .objectiveInput::placeholder {

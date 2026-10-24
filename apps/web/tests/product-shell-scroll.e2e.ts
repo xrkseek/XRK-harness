@@ -13,6 +13,7 @@ import {
   sendComposerPrompt,
   spawnRegisteredWorkspace,
 } from "./product-shell-host.ts";
+import { composerInput } from "./support.ts";
 
 const MARKER = "scroll-bottom-marker";
 
@@ -52,7 +53,7 @@ describe.skipIf(!HAS_SHELL)("product shell scroll", () => {
         await page.getByText(MARKER).waitFor({ timeout: 20_000 });
         await expectBottom(page);
 
-        const composer = page.getByPlaceholder(LIVE_PLACEHOLDER);
+        const composer = composerInput(page, LIVE_PLACEHOLDER);
         const longDraft = Array.from(
           { length: 18 },
           (_, index) =>

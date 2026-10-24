@@ -5,7 +5,7 @@
 // first viewport intersection ({@link useViewportHighlighting}); streaming
 // fences highlight incrementally through {@link StreamingHighlightSession}.
 
-import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from '../clipboard.ts'
@@ -137,14 +137,30 @@ export function CodeBlock({
     [streaming, highlighting, streamedBody, trimmed, lang, loaded],
   )
   const [copied, setCopied] = useState(false)
+  const copyPending = useRef(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyEpoch = useRef(0)
+  useEffect(() => () => {
+    copyEpoch.current += 1
+    copyPending.current = false
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+  }, [])
 
   const onCopy = useCallback(() => {
-    if (copied) return
+    if (copied || copyPending.current) return
+    const generation = copyEpoch.current
+    copyPending.current = true
     const text = rootRef.current?.querySelector('pre')?.textContent ?? trimmed
     void writeClipboard(text).then((ok) => {
+      if (generation !== copyEpoch.current) return
+      copyPending.current = false
       if (!ok) return
       setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, 1000)
+      copyTimer.current = window.setTimeout(() => {
+        copyTimer.current = null
+        if (generation !== copyEpoch.current) return
+        setCopied(false)
+      }, 1000)
     })
   }, [copied, trimmed])
 

@@ -632,9 +632,14 @@ select.input {
   cursor: pointer;
 }
 
-.input:focus {
+.input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.input:focus-visible {
   outline: none;
   border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent);
 }
 
 .input::placeholder {
@@ -745,4 +750,12 @@ select.input {
   font-family: var(--ds-font-family-code);
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+/* iOS Safari zooms the page when focusing inputs under 16px (U-7). */
+@media (max-width: 767px) {
+  .input,
+  .defaultModelSelect {
+    font-size: 16px;
+  }
 }

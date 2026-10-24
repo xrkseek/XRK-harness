@@ -90,6 +90,7 @@
    surface (white in light, the elevated layer in dark) over the module fill;
    hover raises the full layer-1 chip. */
 .arrow {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -101,6 +102,13 @@
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 75%, transparent);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+}
+
+/* Invisible hit pad ≥24×24 without growing the pill layout (audit B-7). */
+.arrow::before {
+  content: '';
+  position: absolute;
+  inset: -6px -3.5px;
 }
 
 .arrow:hover:not(:disabled) {

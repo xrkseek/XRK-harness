@@ -11,6 +11,7 @@ import {
   prepareLiveComposer,
   spawnRegisteredWorkspace,
 } from "./product-shell-host.ts";
+import { composerInput } from "./support.ts";
 
 describe.skipIf(!HAS_SHELL)("product shell reconnect", () => {
   it(
@@ -51,7 +52,7 @@ describe.skipIf(!HAS_SHELL)("product shell reconnect", () => {
           exact: true,
         });
         await connecting.waitFor({ timeout: 10_000 });
-        expect(await page.getByPlaceholder(LIVE_PLACEHOLDER).isDisabled()).toBe(
+        expect(await composerInput(page, LIVE_PLACEHOLDER).isDisabled()).toBe(
           true,
         );
 
@@ -62,7 +63,7 @@ describe.skipIf(!HAS_SHELL)("product shell reconnect", () => {
           .waitFor({ timeout: 15_000 });
         await expect
           .poll(
-            async () => page.getByPlaceholder(LIVE_PLACEHOLDER).isEnabled(),
+            async () => composerInput(page, LIVE_PLACEHOLDER).isEnabled(),
             { timeout: 15_000 },
           )
           .toBe(true);

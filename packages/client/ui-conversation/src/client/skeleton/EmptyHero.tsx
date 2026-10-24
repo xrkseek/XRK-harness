@@ -125,7 +125,7 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
               fallback: <BrandMark size={34} className={css.fish} />,
             })}
           </span>
-          <span className={css.headlineText}>{t('hero.headline')}</span>
+          <h1 className={css.headlineText}>{t('hero.headline')}</h1>
         </div>
         <div className={css.body}>
           {/* The resident composer (ConversationRoot's root-owned scrollport;

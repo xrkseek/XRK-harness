@@ -94,6 +94,7 @@ function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
     <div
       className={css.centerCol}
       data-pane="conversation"
+      role="main"
       {...htmlInert(props.inert === true)}
     >
       {props.children}
@@ -101,9 +102,23 @@ function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
   )
 }
 
-/** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
-function DetailsColumn(props: { children?: ReactNode }) {
-  return <div className={css.detailsCol}>{props.children}</div>
+/**
+ * Details column grid item; width 0 keeps the subtree mounted (never unmount on
+ * close). A closed column is visually clipped, but its controls remain in the
+ * tab order and hit-testable outside the viewport — a focus trap for keyboard
+ * users — so the collapsed subtree is `inert` (same contract the phone drawer
+ * uses on the conversation column).
+ */
+function DetailsColumn(props: { children?: ReactNode; inert?: boolean }) {
+  return (
+    <div
+      className={css.detailsCol}
+      role="complementary"
+      {...htmlInert(props.inert === true)}
+    >
+      {props.children}
+    </div>
+  )
 }
 
 /**
@@ -631,7 +646,7 @@ export function AppFrame({
       <>
         {/* Phone drawer: inert the conversation so taps do not leak under the sheet. */}
         <CenterColumn inert={drawerOpen}>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        <DetailsColumn inert={detailsCollapsed}>{renderSlot('details', {})}</DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}

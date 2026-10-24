@@ -10,7 +10,7 @@
  * - Within {@link EDIT_MAX_CHARS}: a native textarea, fully editable.
  * - Beyond it: read-only, head/tail-capped, copyable.
  */
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Button,
@@ -76,15 +76,31 @@ export function PastedText({
   const [expanded, setExpanded] = useState(false)
   const [draft, setDraft] = useState(text)
   const [copied, setCopied] = useState(false)
+  const copyPending = useRef(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyEpoch = useRef(0)
+  useEffect(() => () => {
+    copyEpoch.current += 1
+    copyPending.current = false
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+  }, [])
 
   // A refused clipboard write leaves the flag untouched, so the button never
-  // claims a copy the host declined.
+  // claims a copy the host declined. Unmount drops late promises/timers (U-19).
   const onCopy = useCallback(() => {
-    if (copied) return
+    if (copied || copyPending.current) return
+    const generation = copyEpoch.current
+    copyPending.current = true
     void writeClipboard(text).then((ok) => {
+      if (generation !== copyEpoch.current) return
+      copyPending.current = false
       if (!ok) return
       setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, COPIED_FEEDBACK_MS)
+      copyTimer.current = window.setTimeout(() => {
+        copyTimer.current = null
+        if (generation !== copyEpoch.current) return
+        setCopied(false)
+      }, COPIED_FEEDBACK_MS)
     })
   }, [copied, text])
 

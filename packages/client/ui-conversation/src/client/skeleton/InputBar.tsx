@@ -41,8 +41,8 @@ import {
 import { isComposerAgentActive } from '../chat/flow-waiting.ts'
 import { composerDeliveryBusy, collectUserShapedSeqs, latestTurnNumber } from '../chat/pending-input-chrome.ts'
 import {
-  focusDraftEditor, installDraftFilePicker, installDraftKeymap, installDraftWheel,
-  keepDraftFocus, revealDraftSelection,
+  dismissSoftKeyboard, focusDraftEditor, installDraftFilePicker, installDraftKeymap,
+  installDraftWheel, keepDraftFocus, revealDraftSelection,
 } from '../input/editor/view-binding.ts'
 import { resolveSubmitMode } from '../input/resolve-submit-mode.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
@@ -255,8 +255,14 @@ export const InputBar = memo(function InputBar({
   // scroll walk (preventScroll inside), so the reveal in our own scrollport
   // is ours to perform — switching to a longer draft otherwise leaves the
   // caret (restored at the draft's end) off screen.
+  // Coarse pointer skips autofocus: opening a session must not pop the soft
+  // keyboard when the user only wants to read history (U-4).
   useEffect(() => {
     if (locked || editor === null) return
+    if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) {
+      revealSelection()
+      return
+    }
     focusDraftEditor(editor, revealSelection)
   }, [locked, sessionId, editor])
 
@@ -504,7 +510,9 @@ export const InputBar = memo(function InputBar({
     }
     if (keyboard === undefined) return // absent machine: the button is disabled
     /* v8 ignore next -- defensive: the primary button is disabled for empty, disabled, and pending-upload states. */
-    if (!empty && !disabled && !machineBusy && !filesNotReady) keyboard.submit(primarySubmitMode)
+    if (empty || disabled || machineBusy || filesNotReady) return
+    keyboard.submit(primarySubmitMode)
+    dismissSoftKeyboard(keyboard.editor)
   }
 
   // The Access seat: the projection-fed permission chip (renders nothing

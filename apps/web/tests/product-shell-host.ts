@@ -249,9 +249,12 @@ export async function prepareLiveComposer(
   pageErrors: readonly string[] = [],
 ): Promise<void> {
   await dismissOptionalProductDialogs(page);
-  const live = page.locator(
-    'textarea:enabled[placeholder="Describe what you want to build"]',
-  );
+  // The composer surface is a contenteditable `role=textbox` (Lexical), not a
+  // `<textarea>`: its accessible name is the hero placeholder, which survives
+  // the locked→live swap (the locked trigger carries the same label).
+  const live = page.getByRole('textbox', {
+    name: 'Describe what you want to build',
+  });
   if (await live.isVisible().catch(() => false)) return;
   try {
     const { connectFreshWorkspace } = await import('./support.ts');
@@ -273,7 +276,10 @@ export async function sendComposerPrompt(
   page: Page,
   text: string,
 ): Promise<void> {
-  await page.getByPlaceholder(LIVE_PLACEHOLDER).fill(text);
+  // The composer surface is a contenteditable `role=textbox` (Lexical), whose
+  // accessible name is the hero placeholder — `getByPlaceholder` only matches a
+  // native `placeholder` attribute, so it can never see this element.
+  await page.getByRole('textbox', { name: LIVE_PLACEHOLDER }).fill(text);
   await page.getByRole("button", { name: /发送消息|Send message/ }).click();
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 /** Stable no-op subscribe for optional faces — never allocate `() => {}` per render. */
 const NOOP_SUBSCRIBE = (_onStoreChange: () => void): (() => void) => () => {}
@@ -1757,6 +1757,7 @@ export function PreviewTabs({
   useSessions,
   renderSlot = (() => null) as PreviewTabsProps['renderSlot'],
 }: PreviewTabsProps) {
+  const panelId = useId()
   const parentId = useSessions((s) => s.byId[sessionId]?.parentId)
   const sessionOrigin = useSessions((s) => s.byId[sessionId]?.origin)
   const mountPaint = takeOverviewMountPaint(sessionId, parentId)
@@ -2208,6 +2209,7 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'status'}
+              aria-controls={panelId}
               tabIndex={tab === 'status' ? 0 : -1}
               onClick={() => { selectTab('status') }}
             >
@@ -2219,6 +2221,7 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'changes'}
+              aria-controls={panelId}
               tabIndex={tab === 'changes' ? 0 : -1}
               onClick={() => { selectTab('changes') }}
             >
@@ -2230,6 +2233,7 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'context'}
+              aria-controls={panelId}
               tabIndex={tab === 'context' ? 0 : -1}
               onClick={() => { selectTab('context') }}
             >
@@ -2241,6 +2245,7 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'todos'}
+              aria-controls={panelId}
               tabIndex={tab === 'todos' ? 0 : -1}
               onClick={() => { selectTab('todos') }}
             >
@@ -2252,6 +2257,7 @@ export function PreviewTabs({
               role="tab"
               className={css.tab}
               aria-selected={tab === 'canvas'}
+              aria-controls={panelId}
               tabIndex={tab === 'canvas' ? 0 : -1}
               onClick={() => { selectTab('canvas') }}
             >
@@ -2408,6 +2414,7 @@ export function PreviewTabs({
       </div>
       ) : null}
       <div
+        id={panelId}
         ref={bodyRef}
         className={css.body}
         role="tabpanel"

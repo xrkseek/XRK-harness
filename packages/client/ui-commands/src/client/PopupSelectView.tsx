@@ -69,9 +69,20 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
     return () => { document.removeEventListener('pointerdown', onPointerDown, true) }
   }, [state.open, state.confirming, popup])
 
-  // Focus the search input after it mounts (separate effect so the ref is populated).
+  // Focus ownership after open (separate effect so refs are populated).
+  // Fine pointer: search grabs focus (desktop filter-as-you-type).
+  // Coarse pointer: focus the card instead — autofocusing search pops the
+  // soft keyboard and covers the option list (U-5); arrows/Escape still work
+  // on the focused card (U-6). Tap the search field to filter when needed.
   useEffect(() => {
-    if (state.open && state.confirming === null) searchRef.current?.focus()
+    if (!state.open || state.confirming !== null) return
+    const coarse = typeof matchMedia === 'function'
+      && matchMedia('(pointer: coarse)').matches
+    if (coarse) {
+      cardRef.current?.focus()
+      return
+    }
+    searchRef.current?.focus()
   }, [state.open, state.confirming])
 
   if (!state.open) return null
@@ -110,6 +121,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
           ref={cardRef}
           className={css.card}
           style={{ maxHeight }}
+          tabIndex={-1}
           aria-label={t('overlay.aria', { command: String(state.command) })}
           onKeyDown={onKeyDown}
         >

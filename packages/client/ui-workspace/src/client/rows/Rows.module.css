@@ -16,7 +16,9 @@
 }
 
 .projectRow:hover,
-.sessionRow:hover {
+.sessionRow:hover,
+.projectRow:focus-within,
+.sessionRow:focus-within {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -182,10 +184,12 @@
 }
 
 
-/* Project leading slot: folder by default, expand arrow on row hover. */
+/* Project leading slot: folder by default, expand arrow on row hover/focus. */
 .projectRow .chevron { display: none; }
-.projectRow:hover .chevron { display: inline-flex; }
-.projectRow:hover .folder { display: none; }
+.projectRow:hover .chevron,
+.projectRow:focus-within .chevron { display: inline-flex; }
+.projectRow:hover .folder,
+.projectRow:focus-within .folder { display: none; }
 
 /* Expand arrow (filled triangle): points right closed, rotates to point down open. */
 .arrow {
@@ -308,6 +312,8 @@
 
 .projectRow:hover .rowActions,
 .sessionRow:hover .rowActions,
+.projectRow:focus-within .rowActions,
+.sessionRow:focus-within .rowActions,
 .projectRow.menuOpen .rowActions,
 .sessionRow.menuOpen .rowActions,
 .projectRow.projectLongPress .rowActions {
@@ -315,6 +321,7 @@
 }
 
 .sessionRow:hover .time,
+.sessionRow:focus-within .time,
 .sessionRow.menuOpen .time {
   display: none;
 }

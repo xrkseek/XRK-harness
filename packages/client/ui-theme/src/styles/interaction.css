@@ -45,11 +45,19 @@
 }
 
 /* ---- Focus ring floor ---------------------------------------------------
- * :where() keeps specificity at zero, so this is a floor and not an override:
- * any component sheet that styles :focus-visible still wins. Sheets that write
- * a bare `outline: none` do NOT get rescued here — that is a local decision to
- * fix in the sheet, not something the app shell should paper over. */
-:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+ * One class of specificity (no :where): bare `outline: none` on a control
+ * class no longer erases the keyboard ring (audit B-6). A sheet that styles
+ * `:focus-visible` itself (outline + box-shadow) still wins at (0,2,1).
+ * `[contenteditable]` covers the Lexical composer (not a native input). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+[contenteditable="true"]:focus-visible,
+[contenteditable=""]:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 2px;
 }

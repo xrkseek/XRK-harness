@@ -10,6 +10,9 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
+  window.location.hash = ''
+  const appRoot = document.getElementById('root')
+  if (appRoot !== null) appRoot.inert = false
 })
 
 type Row = { id: string; order: number; label: string }
@@ -184,6 +187,44 @@ describe('SettingsRoot trigger', () => {
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: false })
   })
 
+  it('names the rail trigger Settings when the seat paints only an icon', () => {
+    mount({ wide: false })
+    const trigger = screen.getByRole('button', { name: 'Settings' })
+    expect(trigger.getAttribute('aria-label')).toBe('Settings')
+  })
+
+  it('inerts #root while the settings dialog is open', () => {
+    let appRoot = document.getElementById('root')
+    if (appRoot === null) {
+      appRoot = document.createElement('div')
+      appRoot.id = 'root'
+      document.body.appendChild(appRoot)
+    }
+    appRoot.inert = false
+    mount()
+    openPanel()
+    expect(appRoot.inert).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(appRoot.inert).toBe(false)
+  })
+
+  it('opens Models from a #/models deep link', () => {
+    window.location.hash = '#/models'
+    mount()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Models', current: true })).toBeTruthy()
+    window.location.hash = ''
+  })
+
+  it('clears a settings deep-link hash when the panel closes', () => {
+    window.location.hash = '#/models'
+    mount()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+
   it('shows retry progress and a two-second recovery confirmation', () => {
     vi.useFakeTimers()
     const mounted = mount()
@@ -334,6 +375,23 @@ describe('SettingsPanel close paths', () => {
     mount()
     openPanel()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+  })
+
+  it('scrolls a focused control inside .options into view (B-10 / H4)', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    mount()
+    openPanel()
+    const options = screen.getByRole('dialog').querySelector('[class*="options"]')
+    expect(options).not.toBeNull()
+    const probe = document.createElement('button')
+    probe.type = 'button'
+    probe.textContent = 'probe'
+    options!.append(probe)
+    scrollIntoView.mockClear()
+    probe.focus()
+    expect(document.activeElement).toBe(probe)
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
   })
 
   it('returns focus to the Settings trigger when the dialog closes', () => {

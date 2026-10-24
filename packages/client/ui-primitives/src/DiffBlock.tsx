@@ -7,8 +7,8 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { writeClipboard } from './clipboard.ts'
 import { fileExtension } from './FileTypeIcon.tsx'
+import { useCopyFeedback } from './use-copy-feedback.ts'
 import {
   grammarLoadCount,
   highlightLines,
@@ -341,21 +341,13 @@ export function DiffBlock({
   const [layout, setLayout] = useState<DiffLayout>(layoutProp)
   const [wrap, setWrap] = useState(wrapProp)
   const [expanded, setExpanded] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const clipboardText = useMemo(() => copyText(rows), [rows])
+  const { copied, onCopy } = useCopyFeedback(clipboardText)
   const leftRef = useRef<HTMLDivElement | null>(null)
   const rightRef = useRef<HTMLDivElement | null>(null)
   const syncing = useRef(false)
 
   useEffect(() => { setWrap(wrapProp) }, [wrapProp])
-
-  const onCopy = useCallback(() => {
-    if (copied) return
-    void writeClipboard(copyText(rows)).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, 1000)
-    })
-  }, [copied, rows])
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
   const onToggleLayout = useCallback(() => {

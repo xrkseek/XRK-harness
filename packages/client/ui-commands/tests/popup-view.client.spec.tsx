@@ -90,6 +90,28 @@ describe('PopupSelectView', () => {
     expect(rowLabels()).toEqual(['Dark', 'Light', 'Sepia'])
   })
 
+  it('on coarse pointer focuses the card, not the search (soft keyboard stays down)', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('pointer: coarse'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })))
+    const popup = new PopupSelectController<string>({ consume: () => true, focusComposer: () => {} })
+    render(<PopupSelectView popup={popup} t={t} />)
+    await act(async () => {
+      popup.open('theme', spec(), 'ctx-A', SEGMENT)
+      await Promise.resolve()
+    })
+    const card = screen.getByLabelText('/theme 选项')
+    expect(document.activeElement).toBe(card)
+    expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: '筛选选项' }))
+  })
+
   it('typing filters rows locally and rebases the highlight', async () => {
     const options = vi.fn(() => Promise.resolve(OPTIONS))
     const { search } = await mountOpen({ options })

@@ -608,6 +608,21 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'softBudgetBufferTokens', event.target.value) }}
                   />
                 </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('modelProxy')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    value={typeof model['proxy'] === 'string' ? model['proxy'] : ''}
+                    placeholder={t('modelProxyPlaceholder')}
+                    aria-label={`${t('modelProxy')} ${index + 1}`}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const text = event.target.value.trim()
+                      patch(index, { proxy: text.length === 0 ? undefined : event.target.value })
+                    }}
+                  />
+                </label>
                 <div className={styles['modelField']}>
                   <span className={styles['modelFieldLabel']}>{t('inputModalities')}</span>
                   <div className={styles['modalityRow']}>

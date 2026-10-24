@@ -56,3 +56,12 @@ export function apiKeyFailure(draft: string): ApiKeyFailureKey | undefined {
   if (!LEGAL_API_KEY.test(value)) return 'keyIllegalCharacters'
   return undefined
 }
+
+/**
+ * Whether a `llm.discoverModels` failure means the typed key was refused
+ * (401/403 / explicit key wording). Network blips and "protocol has no
+ * listing" must not block credentials.set — those are not key validity.
+ */
+export function isApiKeyProbeAuthFailure(message: string): boolean {
+  return /\b(401|403)\b|api key|unauthorized|forbidden|invalid|auth/i.test(message)
+}

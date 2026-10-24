@@ -1,12 +1,14 @@
 // Web e2e scenario: a composer draft longer than the 14-line cap scrolls its
 // GLYPHS AND ITS CARET AS ONE.
 //
-// The composer paints its text in two stacked layers (see
-// packages/client/ui-conversation/src/client/skeleton/InputBar.module.css): the
-// `<textarea>` carries the value, the selection and the caret but renders its
-// own glyphs `color: transparent`, and every visible character is painted by the
-// `[data-input-backdrop]` div underneath it, which also carries the claim-token
-// highlight, the chips and the ghost hint.
+// STALE vs Lexical: the product composer is now a contenteditable `role=textbox`
+// (see InputBar.tsx). This lane still probes the old dual-layer `<textarea>` +
+// `[data-input-backdrop]` geometry. Rewrite against Lexical before re-enabling
+// as a green gate; until then treat failures here as fixture drift, not UX
+// regressions. Prefer `composerInput(page)` from support.ts in new scenarios.
+//
+// Historical dual-layer note (pre-Lexical): the `<textarea>` carried value /
+// caret with transparent glyphs; `[data-input-backdrop]` painted visible text.
 //
 // Two layers can only stay together by moving together. They do: both sit
 // inside `[data-input-scroll]`, the composer's single scrolling box, and are as

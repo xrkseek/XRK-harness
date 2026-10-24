@@ -361,7 +361,9 @@ const PNG_LIMITS = {
 }
 
 describe('image draft rail', () => {
-  it('collects clipboard files while preserving text from a mixed paste', async () => {
+  it('collects clipboard files from a mixed paste without inserting companion text/plain', () => {
+    // File paste owns the gesture (Explorer / screenshot tools also put a path
+    // in text/plain — inserting that too dumps a raw path into the draft).
     const addImages = vi.fn(() => null)
     const { textarea, shell } = bench({ addImages, imageLimits: PNG_LIMITS })
     const image = new File([Uint8Array.of(1, 2, 3)], 'pixel.png', { type: 'image/png' })
@@ -371,11 +373,11 @@ describe('image draft rail', () => {
           { kind: 'string', type: 'text/plain', getAsFile: () => null },
           { kind: 'file', type: 'image/png', getAsFile: () => image },
         ],
-        getData: () => '同时粘贴的文字',
+        getData: () => 'C:\\Users\\shot.png',
       },
     })
     expect(addImages).toHaveBeenCalledWith([image])
-    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('同时粘贴的文字') })
+    expect(shell.snapshot.draft).toBe('')
   })
 
   it('pre-checks projected limits at intake: whole-batch refusal with product copy, none added', () => {
@@ -1111,7 +1113,7 @@ describe('running and lock semantics', () => {
     expect(button.getAttribute('aria-label')).toBe('发送消息')
   })
 
-  it('keeps both running one-shot Enter gestures on Queue transport', () => {
+  it('one-shot child locks the composer (view-only; Enter does not queue)', () => {
     const subagent = {
       address: {
         parentSessionId: 'parent' as SessionId,
@@ -1121,12 +1123,13 @@ describe('running and lock semantics', () => {
       parentAvailable: true,
     }
     const plain = bench({ running: true, busyEnter: 'steer', draft: 'plain', subagent })
+    expect(plain.textarea.getAttribute('aria-disabled')).toBe('true')
     fireEvent.keyDown(plain.textarea, { key: 'Enter' })
-    expect(plain.sink).toHaveBeenCalledWith('plain', [], 'queue', expect.any(AbortSignal))
+    expect(plain.sink).not.toHaveBeenCalled()
 
     const accelerated = bench({ running: true, draft: 'accelerated', subagent })
     fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
-    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'queue', expect.any(AbortSignal))
+    expect(accelerated.sink).not.toHaveBeenCalled()
   })
 
   it('disabled (session removed) locks the textarea and chrome', () => {
@@ -1322,6 +1325,25 @@ describe('running and lock semantics', () => {
     expect(focused.length).toBeGreaterThan(0)
     expect(textarea.isConnected).toBe(true)
     expect(Number.isFinite(scroll.scrollTop)).toBe(true)
+  })
+
+  it('coarse pointer skips autofocus on session unlock (soft keyboard stays down)', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('pointer: coarse'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })))
+    const { view, props, shell } = bench()
+    const lexicalFocus = vi.spyOn(shell.editor, 'focus')
+    lexicalFocus.mockClear()
+    act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
+    await act(async () => { await new Promise((resolve) => { requestAnimationFrame(() => { resolve(null) }) }) })
+    expect(lexicalFocus).not.toHaveBeenCalled()
   })
 
   it('a persisted draft adopted after mount gets its caret revealed too', async () => {
@@ -1806,7 +1828,10 @@ describe('command launcher chrome and control seats', () => {
       .every(icon => icon.closest('[aria-hidden="true"]') !== null)).toBe(true)
     fireEvent.click(trigger)
     const items = view.getAllByRole('menuitem')
-    expect(items.map(o => o.textContent)).toEqual(['只读', '工作区写入', '完全访问'])
+    // Rows carry a second-line description; assert the title line only.
+    expect(items.map(o => o.querySelector('[class*="itemLabel"]')?.textContent)).toEqual([
+      '只读', '工作区写入', '完全访问',
+    ])
     fireEvent.click(items[1]!)
     // Optimistic pick + disable until admission resolves (command stub resolves true).
     const busy = view.getByLabelText(/^访问模式/) as HTMLButtonElement
@@ -1828,7 +1853,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
+    fireEvent.click(view.getByRole('menuitem', { name: /^完全访问/ }))
 
     expect(command).not.toHaveBeenCalled()
     expect(view.getByRole('dialog', { name: '确认启用完全访问？' })).toBeTruthy()
@@ -1858,7 +1883,7 @@ describe('command launcher chrome and control seats', () => {
     const { view } = bench({ permissions, command })
     const openConfirmation = () => {
       fireEvent.click(view.getByLabelText(/^访问模式/))
-      fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
+      fireEvent.click(view.getByRole('menuitem', { name: /^完全访问/ }))
     }
 
     openConfirmation()
@@ -1883,7 +1908,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, session } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
+    fireEvent.click(view.getByRole('menuitem', { name: /^完全访问/ }))
     fireEvent.click(view.getByRole('checkbox'))
     act(() => { session.set(snapshotOf({ removed: true })) })
     expect(view.queryByRole('dialog')).toBeNull()
@@ -1901,7 +1926,7 @@ describe('command launcher chrome and control seats', () => {
     }
     const { view, props } = bench({ permissions, command })
     fireEvent.click(view.getByLabelText(/^访问模式/))
-    fireEvent.click(view.getByRole('menuitem', { name: '完全访问' }))
+    fireEvent.click(view.getByRole('menuitem', { name: /^完全访问/ }))
     fireEvent.click(view.getByRole('checkbox'))
     view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />)
     expect(view.queryByRole('dialog')).toBeNull()
@@ -1927,13 +1952,17 @@ describe('command launcher chrome and control seats', () => {
     expect(attachmentOwner(live.slotCalls).canAcceptDrop).toBe(true)
   })
 
-  it('disabled locks the Access chip and command launcher (running does not)', () => {
+  it('disabled paints Access as a static chip; running keeps the menu trigger', () => {
     const permissions = { options: [{ value: 'workspace-write', name: 'workspace-write' }], currentValue: 'workspace-write' }
     const { view } = bench({ disabled: true, permissions })
     expect((view.getByLabelText('命令') as HTMLButtonElement).disabled).toBe(true)
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).disabled).toBe(true)
+    const lockedChip = view.getByLabelText(/^访问模式/)
+    expect(lockedChip.tagName).toBe('SPAN')
+    expect(view.queryByRole('button', { name: /^访问模式/ })).toBeNull()
     cleanup()
     const live = bench({ running: true, permissions })
-    expect((live.view.getByLabelText(/^访问模式/) as HTMLButtonElement).disabled).toBe(false)
+    const liveTrigger = live.view.getByLabelText(/^访问模式/)
+    expect(liveTrigger.tagName).toBe('BUTTON')
+    expect((liveTrigger as HTMLButtonElement).disabled).toBe(false)
   })
 })

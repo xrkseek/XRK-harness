@@ -224,6 +224,16 @@
   caret-color: var(--dsw-alias-state-business-primary);
 }
 
+.input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
 .input p {
   margin: 0;
 }
@@ -371,6 +381,11 @@
 
 .select:hover:not(:disabled) {
   background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
 .select:disabled {

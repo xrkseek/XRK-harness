@@ -58,6 +58,26 @@ export function focusDraftEditor(editor: LexicalEditor, revealSelection: () => v
 }
 
 /**
+ * Coarse pointer: blur the composer to dismiss the soft keyboard (U-2) while
+ * pinning the conversation scrollport so iOS does not jump to the top (U-3).
+ * Fine pointer is a no-op.
+ * @param editor - the Session-owned editor.
+ */
+export function dismissSoftKeyboard(editor: LexicalEditor): void {
+  if (typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) return
+  const root = editor.getRootElement()
+  if (root === null) return
+  const scrollport = root.closest('[data-conversation-scroll]')
+  const top = scrollport instanceof HTMLElement ? scrollport.scrollTop : null
+  root.blur()
+  if (!(scrollport instanceof HTMLElement) || top === null) return
+  scrollport.scrollTop = top
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => { scrollport.scrollTop = top })
+  }
+}
+
+/**
  * Forward wheel movement at the draft's edge to its conversation scrollport.
  * @param scrollRef - the InputBar-owned scrollport reference.
  * @returns the listener cleanup, or undefined when the element is absent.
@@ -135,6 +155,7 @@ export function installDraftKeymap(
         accelerated ? 'accelerated' : 'enter',
         g.steeringAvailable,
       ))
+      dismissSoftKeyboard(editor)
     },
     intakeFiles: (files) => { gate.current.intakeFiles(files) },
     pasteText: (text) => {

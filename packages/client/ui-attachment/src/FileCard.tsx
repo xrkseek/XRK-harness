@@ -52,7 +52,7 @@ export function FileCard({ file, upload, labels, onRemove, onRetry }: {
       </div>
       <div className={css.body}>
         <div className={css.name} title={name}>{name}</div>
-        <div className={css.status}>{status}</div>
+        <div className={css.status} title={failed ? status : undefined}>{status}</div>
       </div>
       {failed && (
         <button type="button" className={css.retry} onClick={onRetry}>

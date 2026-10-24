@@ -19,6 +19,10 @@ import {
 import type { FaceRuntime } from "./context.js";
 import { mergeLayers } from "./settings-layers.js";
 import { normalizeApiKey, apiKeyRefForProvider } from "./llm-api-key.js";
+import {
+  resolveOutboundProxyPreference,
+  type OutboundProxyPreference,
+} from "./llm-outbound-proxy.js";
 
 export interface ProviderRouteContext {
   readonly baseUrl?: string;
@@ -345,6 +349,51 @@ export function readProviderRoute(
     ...(baseUrl ? { baseUrl } : {}),
     ...(protocol ? { protocol } : {}),
   };
+}
+
+/**
+ * Outbound proxy for one provider+model: model `proxy` beats provider `proxy`;
+ * either may inherit (then Host env proxy / direct).
+ */
+export function readOutboundProxyPreference(
+  runtime: FaceRuntime,
+  provider: string,
+  model: string,
+): OutboundProxyPreference {
+  const key = catalogGroupIdFromProviderOrderEntry(
+    provider.trim().toLowerCase(),
+  );
+  const modelId = model.trim();
+  let providerProxy: unknown;
+  let modelProxy: unknown;
+  if (key === "deepseek") {
+    const profile = mergedNamespace(runtime, "llm-deepseek");
+    providerProxy = profile.proxy;
+    if (modelId && Array.isArray(profile.models)) {
+      for (const row of profile.models) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+        const id = (row as { id?: unknown }).id;
+        if (typeof id === "string" && id.trim() === modelId) {
+          modelProxy = (row as { proxy?: unknown }).proxy;
+          break;
+        }
+      }
+    }
+  } else {
+    const profile = piAiProviderProfile(runtime, provider);
+    providerProxy = profile?.proxy;
+    if (profile && modelId && Array.isArray(profile.models)) {
+      for (const row of profile.models) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+        const id = (row as { id?: unknown }).id;
+        if (typeof id === "string" && id.trim() === modelId) {
+          modelProxy = (row as { proxy?: unknown }).proxy;
+          break;
+        }
+      }
+    }
+  }
+  return resolveOutboundProxyPreference(modelProxy, providerProxy);
 }
 
 /** Credential precedence: typed probe → vault → env. */

@@ -243,6 +243,7 @@
 .paste:focus-visible {
   outline: none;
   border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 18%, transparent);
 }
 
 .paste:disabled {

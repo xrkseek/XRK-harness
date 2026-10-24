@@ -61,6 +61,9 @@
 .headlineText {
   grid-row: 1;
   grid-column: 2;
+  margin: 0;
+  font: inherit;
+  color: inherit;
 }
 
 .previewBadge {

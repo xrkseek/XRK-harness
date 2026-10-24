@@ -13,7 +13,7 @@ import { pathOps } from '../src/client/ProviderEditor.tsx'
 import {
   DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
-import { apiKeyFailure } from '../src/client/apiKey.ts'
+import { apiKeyFailure, isApiKeyProbeAuthFailure } from '../src/client/apiKey.ts'
 import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import type { ProviderRow } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
@@ -140,12 +140,15 @@ function scriptedFace(overrides: {
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
   unset?: ReturnType<typeof vi.fn>
+  discoverModels?: ReturnType<typeof vi.fn>
 } = {}) {
   const update = overrides.update ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const replace = overrides.replace ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const mutate = overrides.mutate ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const set = overrides.set ?? vi.fn(() => Promise.resolve(ok({})))
   const unset = overrides.unset ?? vi.fn(() => Promise.resolve(ok({})))
+  const discoverModels = overrides.discoverModels
+    ?? vi.fn(() => Promise.resolve(ok({ models: [] })))
   const face = {
     llm: {
       providers: vi.fn(() => Promise.resolve(ok({
@@ -159,6 +162,7 @@ function scriptedFace(overrides: {
         ],
       }))),
       models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
+      discoverModels,
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
@@ -1085,6 +1089,30 @@ describe('ModelsSection', () => {
     await waitFor(() => { expect(set).toHaveBeenCalledTimes(1) })
   })
 
+  it('refuses Apply when a typed API key fails discoverModels and never stores it', async () => {
+    const discoverModels = vi.fn(() => Promise.resolve(fail('API key is invalid', 'auth')))
+    const { set } = await mountSection({ discoverModels })
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(editorKey, { target: { value: 'sk-bad-key-audit-000000' } })
+    fireEvent.click(screen.getByText(en.apply))
+    expect((await screen.findByRole('alert')).textContent).toContain('API key is invalid')
+    expect(set).not.toHaveBeenCalled()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('still stores a typed key when discoverModels fails for a non-auth reason', async () => {
+    const discoverModels = vi.fn(() => Promise.resolve(
+      fail('could not reach https://proxy.example/v1/models', 'model-discovery-failed'),
+    ))
+    const { set } = await mountSection({ discoverModels })
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(editorKey, { target: { value: 'sk-offline-ok' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(set).toHaveBeenCalledWith({ ref: 'OPENAI_API_KEY', value: 'sk-offline-ok' }) })
+  })
+
   it('requires confirmation before removing a user-added provider', async () => {
     const { replace, mutate, unset } = await mountSection()
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.removeProvider) }))
@@ -1330,6 +1358,25 @@ describe('ModelsSection', () => {
       { settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'] },
     )
     expect(failure).toBe('connection lost')
+  })
+})
+
+describe('isApiKeyProbeAuthFailure', () => {
+  it.each([
+    ['API key is invalid'],
+    ['https://api.example/models answered 401; check the API key'],
+    ['answered 403; check the API key'],
+    ['Unauthorized'],
+  ])('flags %s as auth', (message) => {
+    expect(isApiKeyProbeAuthFailure(message)).toBe(true)
+  })
+
+  it.each([
+    ['could not reach https://api.example/models'],
+    ['protocol "custom" has no model listing this build can read'],
+    ['no model discovery is registered for "llm-plain"'],
+  ])('lets %s through as non-auth', (message) => {
+    expect(isApiKeyProbeAuthFailure(message)).toBe(false)
   })
 })
 

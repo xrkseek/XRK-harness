@@ -92,11 +92,18 @@ const DeepSeekCatalogModelSchema = Schema.object({
   // Empty = unset (UI treats as text); do not use .min(1) — legacy rows
   // with `[]` must not block unrelated settings.mutate (community LLM sync).
   inputModalities: Schema.array(Schema.union(["text", "image"])),
+  /**
+   * Optional HTTP(S) proxy for this model only (beats provider `proxy`).
+   * Empty / `direct` / `none` → no proxy; omit → inherit provider then env.
+   */
+  proxy: Schema.string(),
 });
 
 const DeepSeekConfig = Schema.object({
   apiKeyEnv: Schema.string().role("credential-ref"),
   baseURL: Schema.string(),
+  /** Optional HTTP(S) proxy for every model on this provider (model `proxy` wins). */
+  proxy: Schema.string(),
   reasoningEffort: Schema.union(["off", "low", "high", "max"]),
   defaultContextWindow: Schema.number().step(1).min(1),
   maxTokens: Schema.number().step(1).min(1),
@@ -110,6 +117,8 @@ const DeepSeekConfig = Schema.object({
 const PiAiProvider = Schema.object({
   apiKeyEnv: Schema.string().role("credential-ref"),
   baseURL: Schema.string(),
+  /** Optional HTTP(S) proxy for this provider (per-model `proxy` overrides). */
+  proxy: Schema.string(),
   api: Schema.union([...PI_AI_PROTOCOLS]),
   displayName: Schema.string(),
   reasoning: Schema.union([
@@ -134,6 +143,8 @@ const PiAiProvider = Schema.object({
       maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
       // Same modality toggle the Models → Capacities row edits (DeepSeek catalog too).
       inputModalities: Schema.array(Schema.union(["text", "image"])),
+      /** Optional HTTP(S) proxy; beats provider `proxy` when set. */
+      proxy: Schema.string(),
       // Community / discover menus (OFM `reasoning.efforts`, DSH dict form).
       reasoning: Schema.object({
         efforts: Schema.array(

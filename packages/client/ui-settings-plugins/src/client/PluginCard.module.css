@@ -70,6 +70,8 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
+  /* Master Switch tab target: scroll clear of Settings header (B-10 / H4). */
+  scroll-margin-block: 24px;
 }
 
 .headerMain {

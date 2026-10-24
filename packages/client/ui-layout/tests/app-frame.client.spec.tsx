@@ -197,6 +197,28 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 0])
   })
 
+  it('inerts the collapsed details subtree so its clipped controls leave the tab order', () => {
+    // Closed Overview keeps the subtree mounted at zero width. Mounted means
+    // focusable: keyboard users walked into Status/Changes/Session log buttons
+    // painted outside the viewport. The collapsed column is `inert`, the same
+    // contract the phone drawer uses on the conversation column.
+    const { frame, instance, getByTestId, rerenderFrame } = mountFrame()
+    const detailsCol = getByTestId('details-content').parentElement as HTMLElement
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 0])
+    expect(detailsCol.hasAttribute('inert')).toBe(true)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(true)
+
+    act(() => { instance.actions.openDetails() })
+    rerenderFrame()
+    expect(tracks(frame)).toEqual([SIDEBAR_DEFAULT, 360])
+    expect(detailsCol.hasAttribute('inert')).toBe(false)
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+
+    act(() => { instance.actions.closeDetails() })
+    rerenderFrame()
+    expect(detailsCol.hasAttribute('inert')).toBe(true)
+  })
+
   it('renders the session pair with empty owner shares (sessionId is framework-standard)', () => {
     const { slotCalls, getByTestId } = mountFrame()
     expect(getByTestId('center-content')).toBeTruthy()

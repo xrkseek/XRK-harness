@@ -19,9 +19,11 @@ import {
 import {
   providerHasUsableCredential,
   providerApiKeyEnv,
+  readOutboundProxyPreference,
   readProviderApiKey,
   resolveProviderBinding,
 } from "./llm-provider-context.js";
+import { fetchForOutboundProxy } from "./llm-outbound-proxy.js";
 
 export interface ResolvedFaceLlm {
   readonly binding: ProviderBinding;
@@ -62,6 +64,13 @@ export function resolveLlmForSelection(
     model: selection.model,
   });
   const catalogModalities = lookupModelInputModalities(runtime, selection);
+  const proxyFetch = fetchForOutboundProxy(
+    readOutboundProxyPreference(
+      runtime,
+      selection.provider,
+      selection.model,
+    ),
+  );
   const adapter = runtime.registry.createAdapter(
     binding,
     apiKey ? { apiKey } : {},
@@ -70,6 +79,7 @@ export function resolveLlmForSelection(
       model: selection.model,
       ...(options?.sessionId ? { sessionId: options.sessionId } : {}),
       ...(catalogModalities ? { inputModalities: catalogModalities } : {}),
+      ...(proxyFetch ? { fetch: proxyFetch } : {}),
       ...(runtime.attachments?.readImageRequest
         ? {
             readImageRequest: (

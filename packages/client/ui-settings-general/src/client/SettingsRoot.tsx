@@ -15,7 +15,7 @@
  * while the gear menu only lists ordinary preference pages.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { FocusEvent, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
@@ -62,11 +62,37 @@ type PanelProps = {
 }
 
 /**
+ * Map a location hash to a Settings open request. `#/settings` opens the
+ * default rail page; `#/models` / `#/settings/models` (and bare aliases)
+ * select that section. Unrelated hashes return null.
+ */
+function settingsHashTarget(hash: string): { section?: string } | null {
+  let path = hash.trim()
+  if (path.startsWith('#')) path = path.slice(1)
+  // Tolerate `#//settings` and `/settings` probe forms from deep-link audits.
+  const parts = path.split('/').filter(part => part.length > 0)
+  if (parts.length === 0) return null
+  if (parts[0] === 'settings') {
+    return parts[1] === undefined ? {} : { section: parts[1] }
+  }
+  if (
+    parts[0] === 'models'
+    || parts[0] === 'plugins'
+    || parts[0] === 'general'
+    || parts[0] === 'agent-presets'
+  ) {
+    return { section: parts[0] }
+  }
+  return null
+}
+
+/**
  * The modal layer: full-viewport mask + centered panel. Close paths: the
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's). Focus enters on the close
  * control and returns to the opener on unmount (same restore contract as
- * ImageLightbox).
+ * ImageLightbox). While open, `#root` is inert so Tab cannot walk the page
+ * behind the dialog (same contract as OnboardingModal / OnboardingSurface).
  */
 function SettingsPanel({
   navRows, allRows, renderSlot, activeId, onSelect, onClose, openerRef,
@@ -84,15 +110,23 @@ function SettingsPanel({
   const titleId = useId()
   const closeButton = useRef<HTMLButtonElement | null>(null)
   const navListRef = useRef<HTMLDivElement | null>(null)
+  const optionsRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    const appRoot = document.getElementById('root')
+    const previousInert = appRoot === null ? false : appRoot.inert
+    if (appRoot !== null) appRoot.inert = true
     closeButton.current?.focus()
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      // Nested confirm Modals (delete provider, …) own Escape first.
+      if (document.querySelectorAll('[role="dialog"]').length > 1) return
+      onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      if (appRoot !== null) appRoot.inert = previousInert
       openerRef.current?.focus()
     }
   }, [onClose, openerRef])
@@ -113,6 +147,18 @@ function SettingsPanel({
     })
   }, [active, homeMode])
 
+  // Tab / programmatic focus into a long `.options` list (plugins, General):
+  // scroll the focused control into the viewport (B-10 / H4). Capture so
+  // nested switches and inputs fire before their own handlers.
+  const onOptionsFocusCapture = (event: FocusEvent<HTMLDivElement>): void => {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    const root = optionsRef.current
+    if (root === null || target === root || !root.contains(target)) return
+    if (typeof target.scrollIntoView !== 'function') return
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+
   // Portal to body: the settings trigger lives in the sidebar foot, and phone
   // AppFrame draws the drawer with `transform`, which would otherwise become
   // the containing block for `position: fixed` and crush the panel to the
@@ -127,8 +173,8 @@ function SettingsPanel({
         aria-labelledby={titleId}
       >
         {!homeMode ? (
-          <nav className={css.nav}>
-            <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
+          <nav className={css.nav} aria-labelledby={titleId}>
+            <h2 className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</h2>
             <div ref={navListRef} className={css.navList}>
               {navRows.map(row => (
                 <button
@@ -148,14 +194,18 @@ function SettingsPanel({
         <div className={css.content}>
           <div className={css.header}>
             {homeMode
-              ? <div className={css.homeTitle} id={titleId}>{homeRow.label}</div>
+              ? <h2 className={css.homeTitle} id={titleId}>{homeRow.label}</h2>
               : <div className={css.actions}>{renderSlot('settings.action', {})}</div>}
             <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
               <IconCloseOutline16 size={14} />
               <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
             </button>
           </div>
-          <div className={css.options}>
+          <div
+            ref={optionsRef}
+            className={css.options}
+            onFocusCapture={onOptionsFocusCapture}
+          >
             {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
           </div>
         </div>
@@ -182,6 +232,12 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   const close = useCallback(() => {
     setOpen(false)
     setActiveId(undefined)
+    // Drop a settings deep-link hash so remount / refresh does not reopen.
+    if (settingsHashTarget(window.location.hash) !== null) {
+      const url = new URL(window.location.href)
+      url.hash = ''
+      window.history.replaceState(null, '', `${url.pathname}${url.search}`)
+    }
   }, [])
 
   const openSection = useCallback((id: string) => {
@@ -190,6 +246,23 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
   }, [])
 
   useEffect(() => bindOpenSection(openSection), [bindOpenSection, openSection])
+
+  // Deep links: `#/settings`, `#/models`, `#/settings/models`, …
+  useEffect(() => {
+    const applyHash = (): void => {
+      const target = settingsHashTarget(window.location.hash)
+      if (target === null) return
+      if (target.section === undefined) {
+        setActiveId(undefined)
+        setOpen(true)
+        return
+      }
+      openSection(target.section)
+    }
+    applyHash()
+    window.addEventListener('hashchange', applyHash)
+    return () => { window.removeEventListener('hashchange', applyHash) }
+  }, [openSection])
 
   // The ledger tick keeps the nav rows fresh: registrants re-register with
   // freshly localized text on locale change, and the trigger/header/close
@@ -266,6 +339,9 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           className={clsx(css.trigger, !wide && css.rail)}
           aria-haspopup="dialog"
           aria-expanded={open}
+          // Rail mode paints only the icon; name the control so narrow viewports
+          // still expose a "Settings" accessible name (audit B-11).
+          aria-label={wide ? undefined : t('trigger')}
           onClick={() => {
             // Gear opens ordinary Settings — never a leftover home surface.
             setActiveId(undefined)

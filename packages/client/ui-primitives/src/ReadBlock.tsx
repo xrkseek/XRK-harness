@@ -11,7 +11,6 @@
 
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { writeClipboard } from './clipboard.ts'
 import {
   grammarLoadCount,
   highlightLines,
@@ -19,6 +18,7 @@ import {
   type HighlightSpan,
 } from './markdown/highlight.ts'
 import { useViewportHighlighting } from './markdown/useViewportHighlighting.ts'
+import { useCopyFeedback } from './use-copy-feedback.ts'
 import css from './ReadBlock.module.css'
 
 /**
@@ -95,18 +95,8 @@ export function ReadBlock({
     [highlighting, raw, lang, loaded],
   )
   const [expanded, setExpanded] = useState(false)
-  const [copied, setCopied] = useState(false)
-
-  const onCopy = useCallback(() => {
-    if (copied) return
-    // The window's raw text, never the rendered tree: the gutter numbers and the
-    // banner are chrome the file does not contain.
-    void writeClipboard(raw).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      window.setTimeout(() => { setCopied(false) }, 1000)
-    })
-  }, [copied, raw])
+  // Raw window text only — gutter/banner chrome must not enter the clipboard.
+  const { copied, onCopy } = useCopyFeedback(raw)
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
 

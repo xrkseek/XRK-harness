@@ -107,6 +107,7 @@
 }
 
 .registryCustomField input:focus-visible {
+  outline: none;
   border-color: var(--dsw-alias-state-business-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
 }
@@ -135,6 +136,7 @@
 }
 
 .installField input:focus-visible {
+  outline: none;
   border-color: var(--dsw-alias-state-business-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
 }
@@ -373,6 +375,7 @@
 }
 
 .search input:focus-visible {
+  outline: none;
   border-color: var(--dsw-alias-state-business-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
 }
@@ -772,6 +775,8 @@
   flex: none;
   align-items: center;
   padding: 0 4px 0 0;
+  /* Keep enable switches scrollable into the Settings `.options` viewport (B-10). */
+  scroll-margin-block: 24px;
 }
 
 .moreSlot {

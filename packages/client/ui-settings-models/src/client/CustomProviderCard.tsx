@@ -24,7 +24,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
-import { apiKeyFailure } from './apiKey.ts'
+import { apiKeyFailure, isApiKeyProbeAuthFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { validateDeepSeekModels } from './DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
@@ -90,6 +90,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const [route, setRoute] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [baseURL, setBaseURL] = useState('')
+  const [proxy, setProxy] = useState('')
   const [protocol, setProtocol] = useState(protocols[0] ?? '')
   const [keyDraft, setKeyDraft] = useState('')
   const [models, setModels] = useState<readonly ModelDraft[]>([])
@@ -143,6 +144,20 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const createOnce = async (): Promise<string | undefined> => {
     const keyRef = deriveKeyRef(route)
     const storesKey = keyValue.length > 0
+    // Same probe-before-write contract as ProviderEditor (audit B-3): only
+    // auth-shaped discovery failures block the create.
+    if (storesKey) {
+      const probed = await api.llm.discoverModels({
+        settingsNs: NS,
+        provider: route,
+        baseURL: normalizedBaseURL,
+        api: protocol,
+        apiKey: keyValue,
+      })
+      if (!probed.result.ok && isApiKeyProbeAuthFailure(probed.result.error.message)) {
+        return probed.result.error.message
+      }
+    }
     if (!committed) {
       const profile = {
         ...displayName.length === 0 ? {} : { displayName },
@@ -153,6 +168,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         ...storesKey ? { apiKeyEnv: keyRef } : {},
         api: protocol,
         baseURL: normalizedBaseURL,
+        ...(proxy.trim().length > 0 ? { proxy: proxy.trim() } : {}),
         models: models.map(model => ({ ...model })),
       }
       const response = await api.settings.mutate({
@@ -249,6 +265,19 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p>
         : null}
       <div className={styles['field']}>
+        <span className={styles['fieldLabel']}>{t('proxy')}</span>
+        <input
+          className={styles['input']}
+          type="text"
+          value={proxy}
+          placeholder={t('proxyPlaceholder')}
+          aria-label={t('proxy')}
+          disabled={profileDisabled}
+          onChange={(event) => { setProxy(event.target.value) }}
+        />
+        <p className={styles['advancedHint']}>{t('proxyHint')}</p>
+      </div>
+      <div className={styles['field']}>
         <span className={styles['fieldLabel']}>{t('customApi')}</span>
         <select
           className={`${styles['input']} ${styles['selectInput']}`}
@@ -295,7 +324,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         t={t}
         disabled={profileDisabled}
       />
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
+      {failure !== undefined ? <p className={styles['error']} role="alert">{failure}</p> : null}
       {/* Only the gates with something to say render; the route-id gate has its
           own field-level hint, so its blocked state would print an empty line. */}
       {hint === undefined ? null : <p className={styles['advancedHint']}>{hint}</p>}

@@ -24,7 +24,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, composerInput } from './support.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('./snapshots/live-interactions/session.jsonl', import.meta.url))
 
@@ -154,7 +154,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     // One prompted parent turn makes the parent non-blank so the session
     // header (and its subagent catalog action) renders.
     const parentSettled = scaffold.whenTurnSettled()
-    const parentInput = page.locator('textarea:enabled').first()
+    const parentInput = composerInput(page)
     await parentInput.fill('Ask a research subagent to explain event sourcing.')
     await parentInput.press('Enter')
     expect(await parentSettled).toBe(parent.id)

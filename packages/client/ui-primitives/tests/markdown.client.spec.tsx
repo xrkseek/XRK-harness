@@ -68,6 +68,13 @@ describe('MarkdownText', () => {
     expect(screen.getByRole('link', { name: 'https://deepseek.com' })).toBeTruthy()
   })
 
+  it('keeps single-tilde ranges literal while still striking with ~~double~~', () => {
+    const { container } = render(<MarkdownText text={'Range 10~20 and ~~gone~~.'} />)
+    expect(container.querySelector('del')?.textContent).toBe('gone')
+    expect(container.textContent).toContain('10~20')
+    expect(container.querySelector('del')?.textContent).not.toContain('10')
+  })
+
   it('closes punctuation-terminated strong emphasis before adjacent CJK text', () => {
     const cases = [
       ['**注意：**内容', '注意：'],

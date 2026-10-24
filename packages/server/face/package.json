@@ -38,6 +38,7 @@
     "@xrkseek/face-session-query": "workspace:*",
     "@xrkseek/xrk-session-reference": "workspace:*",
     "js-yaml": "^4.1.0",
+    "undici": "^7.29.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
