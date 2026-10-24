@@ -53,18 +53,27 @@ function drain(active = new Set<string>()): FaceDrain {
 describe("Face subagent", () => {
   it("create-with-parent + list/history/prompt/interrupt", async () => {
     const store = createMemorySessionStore();
-    const admits: Array<{ delivery: string; content: unknown }> = [];
+    // Split parent/child stubs: human follow-ups also mirror a steer notice
+    // onto the parent inbox (0.6.18+).
+    const childAdmits: Array<{ delivery: string; content: unknown }> = [];
+    const parentAdmits: Array<{ delivery: string; content: unknown }> = [];
+    const agents = new Map<string, AgentHandle>();
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
       drain: drain(),
-      resolveAgent: async () => stubAgent(admits),
+      resolveAgent: async (sessionId) => {
+        const agent = agents.get(sessionId);
+        if (!agent) throw new Error(`no stub agent for ${sessionId}`);
+        return agent;
+      },
     });
 
     const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
     expect(parent.result.ok).toBe(true);
     if (!parent.result.ok) return;
     const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    agents.set(parentId, stubAgent(parentAdmits));
 
     const child = await dispatchFaceMethod(runtime, "session.create", "c", {
       parentSessionId: parentId,
@@ -73,6 +82,7 @@ describe("Face subagent", () => {
     expect(child.result.ok).toBe(true);
     if (!child.result.ok) return;
     const childId = (child.result.value as { sessionId: string }).sessionId;
+    agents.set(childId, stubAgent(childAdmits));
 
     const listed = await dispatchFaceMethod(runtime, "subagent.list", "l", {
       parentSessionId: parentId,
@@ -132,8 +142,15 @@ describe("Face subagent", () => {
       content: [{ type: "text", text: "插话" }],
     });
     expect(steered.result.ok).toBe(true);
-    expect(admits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
-    expect(admits[1]?.content).toBe("插话");
+    // Parent mirror is fire-and-forget via resolveAgent().then — flush microtasks.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(childAdmits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
+    expect(childAdmits[1]?.content).toBe("插话");
+    expect(parentAdmits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
+    expect(String(parentAdmits[0]?.content)).toContain("User message to background subagent");
+    expect(String(parentAdmits[0]?.content)).toContain("go");
+    expect(String(parentAdmits[1]?.content)).toContain("插话");
 
     const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {
       parentSessionId: parentId,
