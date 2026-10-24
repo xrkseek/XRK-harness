@@ -79,9 +79,12 @@ export function fetchForOutboundProxy(
     preference.kind === "direct"
       ? directDispatcher()
       : proxyAgentFor(preference.url);
-  return ((input, init) =>
-    undiciFetch(input, {
-      ...init,
-      dispatcher,
-    })) as typeof fetch;
+  // DOM `fetch` Request vs undici / undici-types Request are not the same
+  // nominal type; bridge once at the boundary instead of asserting each call.
+  type ProxiedFetch = (
+    input: Parameters<typeof fetch>[0],
+    init?: object,
+  ) => ReturnType<typeof fetch>;
+  const dispatch = undiciFetch as unknown as ProxiedFetch;
+  return (input, init) => dispatch(input, { ...init, dispatcher });
 }
