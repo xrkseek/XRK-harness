@@ -162,6 +162,12 @@ export type HostFrame =
   | {
       readonly type: "host/session-removed";
       readonly sessionId: string;
+      /**
+       * True when the durable log was wiped (unstarted spawn discard / hard
+       * delete). Clients must drop the row from catalogs and summary lineage
+       * instead of treating the frame as a soft Activation detach.
+       */
+      readonly purged?: boolean;
     }
   | {
       readonly type: "host/session-status";

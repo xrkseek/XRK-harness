@@ -147,6 +147,15 @@ export const subagentHistory: FaceHandler = async (runtime, rpcId, payload) => {
   });
 };
 
+/**
+ * Face tool / orchestrator dispatches mint stable rpcId prefixes; human UI
+ * clients send UUIDs. Used to skip parent-mirror duplication when the parent
+ * already authored the follow-up via send_message / followup_task.
+ */
+function isInternalFaceRpc(rpcId: string): boolean {
+  return /^(tool-|orch-|te-|delete-)/.test(rpcId);
+}
+
 export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   const p = asRecord(payload);
   const parentSessionId = String(p.parentSessionId ?? "").trim();
@@ -175,8 +184,10 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   // Session collaboration defaults to steer (插队 at the next tool boundary).
   const delivery =
     deliveryRaw === "queue" || deliveryRaw === "steer" ? deliveryRaw : "steer"
+  const preview = contentPartsToText(p.content);
+  const mirrorHuman = !isInternalFaceRpc(rpcId);
   if (runtime.externalAgents.has(childSessionId)) {
-    const message = contentPartsToText(p.content);
+    const message = preview;
     if (!message) {
       return {
         ok: false,
@@ -201,6 +212,9 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
         steer: delivery === "steer",
       });
       runtime.agentTeamTasks.markResumed(childSessionId);
+      if (mirrorHuman) {
+        runtime.notifyOwnedSubagentUserPrompt(childSessionId, message);
+      }
       return { ok: true, value: { messageId: rpcId } };
     } catch (err) {
       return {
@@ -223,6 +237,9 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   });
   if (!prompted.ok) return prompted;
   runtime.agentTeamTasks.markResumed(childSessionId);
+  if (mirrorHuman && preview) {
+    runtime.notifyOwnedSubagentUserPrompt(childSessionId, preview);
+  }
   const messageId = runtime.rpcAdmitMap.get(rpcId) ?? rpcId;
   return { ok: true, value: { messageId } };
 };

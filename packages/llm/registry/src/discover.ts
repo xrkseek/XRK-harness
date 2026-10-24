@@ -8,6 +8,10 @@
  */
 
 import type { AuthMode } from "./types.js";
+import {
+  enrichFromModelsDev,
+  loadModelsDevCatalog,
+} from "./models-dev-catalog.js";
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
@@ -24,6 +28,20 @@ const LISTABLE_APIS = new Set([
   "openai-compatible",
   "openai-responses",
   "anthropic-messages",
+  "gemini-generate",
+]);
+
+/**
+ * Protocols whose adapter turns a chosen effort into a wire field
+ * (`reasoning_effort`). Anthropic Messages and Gemini take a thinking budget
+ * instead, and this build does not translate one into the other — so their
+ * probes get capacities but stay out of the thinking-menu business.
+ */
+const EFFORT_WIRE_APIS = new Set([
+  "",
+  "openai-chat",
+  "openai-completions",
+  "openai-compatible",
 ]);
 
 /** Selectable thinking intensity when the listing advertises one (OFM / DSH). */
@@ -41,6 +59,8 @@ export interface DiscoveredLlmModel {
   readonly name?: string;
   readonly contextWindow?: number;
   readonly maxTokens?: number;
+  /** Inputs the model accepts, when the listing or the catalog discloses them. */
+  readonly inputModalities?: readonly ("text" | "image")[];
   /** Thinking menu from OpenAI-compatible gateways that extend `/models`. */
   readonly reasoning?: DiscoveredLlmReasoning;
 }
@@ -53,6 +73,14 @@ export interface DiscoverModelsRequest {
   readonly authMode?: AuthMode;
   readonly signal?: AbortSignal;
   readonly fetch?: typeof fetch;
+  /**
+   * Transport for the second-opinion catalog (models.dev). Defaults to the
+   * process fetch and is separate from {@link fetch} so a probe's own transport
+   * — a proxy, a test double — never stands in for a public catalog read.
+   */
+  readonly catalogFetch?: typeof fetch;
+  /** Set `false` to answer from the listing alone (no catalog round trip). */
+  readonly enrichCatalog?: boolean;
 }
 
 export class ModelDiscoveryError extends Error {
@@ -66,6 +94,7 @@ export class ModelDiscoveryError extends Error {
 /**
  * Join the endpoint base with the protocol's listing path.
  * Anthropic lists at `{root}/v1/models` (strip one trailing `/v1` segment).
+ * Gemini lists at `{base}/models` where base already carries its version.
  */
 function listingUrl(baseUrl: string, api: string): string {
   const base = baseUrl.replace(/\/+$/, "");
@@ -97,11 +126,20 @@ interface ListingTopProvider {
   readonly max_completion_tokens?: unknown;
 }
 
+interface ListingArchitecture {
+  readonly input_modalities?: unknown;
+  readonly modality?: unknown;
+}
+
 interface ListingEntry {
   readonly id?: unknown;
   readonly name?: unknown;
   readonly display_name?: unknown;
   readonly displayName?: unknown;
+  /** Gemini's listing names models `models/<id>`. */
+  readonly inputTokenLimit?: unknown;
+  readonly outputTokenLimit?: unknown;
+  readonly supportedGenerationMethods?: unknown;
   readonly contextWindow?: unknown;
   readonly context_window?: unknown;
   readonly context_length?: unknown;
@@ -112,12 +150,40 @@ interface ListingEntry {
   readonly maxTokens?: unknown;
   readonly limit?: ListingLimit | null;
   readonly top_provider?: ListingTopProvider | null;
+  readonly input_modalities?: unknown;
+  readonly modalities?: unknown;
+  readonly architecture?: ListingArchitecture | null;
   readonly reasoning?: unknown;
   readonly reasoningEfforts?: unknown;
   readonly efforts?: unknown;
   readonly defaultEffort?: unknown;
   readonly defaultReasoningEffort?: unknown;
   readonly default?: unknown;
+}
+
+/**
+ * Inputs a listing says the model takes. OpenRouter-style gateways put them in
+ * `architecture.input_modalities` (or a `text+image->text` modality string).
+ */
+function modalitiesFromListing(entry: ListingEntry): ("text" | "image")[] | undefined {
+  const direct = entry.input_modalities;
+  const nested = entry.architecture?.input_modalities;
+  const list = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : undefined;
+  const kept: ("text" | "image")[] = [];
+  const push = (value: unknown): void => {
+    if (value !== "text" && value !== "image") return;
+    if (!kept.includes(value)) kept.push(value);
+  };
+  if (list !== undefined) {
+    for (const item of list) {
+      if (typeof item !== "string") continue;
+      // `file` / `pdf` are not separate intake modes here; text rides along.
+      push(item.trim().toLowerCase());
+    }
+  } else if (typeof entry.architecture?.modality === "string") {
+    for (const item of entry.architecture.modality.split(/[^a-z]+/i)) push(item.toLowerCase());
+  }
+  return kept.length > 0 ? kept : undefined;
 }
 
 /**
@@ -195,6 +261,10 @@ function readListing(body: unknown): DiscoveredLlmModel[] {
   let listed: { readonly key?: string; readonly raw: unknown }[];
   if (Array.isArray(data)) {
     listed = (data as readonly unknown[]).map((raw) => ({ raw }));
+  } else if (Array.isArray(listing?.models)) {
+    // Gemini answers `{models: [...]}`; every other readable protocol answers
+    // with `data`, and the enriched gateway shape uses an object here.
+    listed = (listing.models as readonly unknown[]).map((raw) => ({ raw }));
   } else {
     const modelsMap = listing?.models;
     if (
@@ -219,16 +289,30 @@ function readListing(body: unknown): DiscoveredLlmModel[] {
   for (const { key, raw } of listed) {
     if (!raw || typeof raw !== "object") continue;
     const entry = raw as ListingEntry;
-    const id = label(key, entry.id);
+    if (
+      Array.isArray(entry.supportedGenerationMethods)
+      && !(entry.supportedGenerationMethods as readonly unknown[]).includes("generateContent")
+    ) {
+      // Embedding-only rows (Gemini) are not chat models and cannot be routed.
+      continue;
+    }
+    const rawId = label(key, entry.id, entry.name);
+    const id = rawId?.startsWith("models/") ? rawId.slice("models/".length) : rawId;
     if (!id || seen.has(id)) continue;
     seen.add(id);
+    // Gemini repeats the id in `name`; every other listing uses `name` as the
+    // human label. A `models/` spelling is never a display name.
     const name =
-      label(entry.name, entry.display_name, entry.displayName) ?? id;
+      [entry.name, entry.display_name, entry.displayName]
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .find((value) => value.length > 0 && !value.startsWith("models/"))
+      ?? id;
     const contextWindow = capacity(
       entry.contextWindow,
       entry.context_window,
       entry.context_length,
       entry.max_input_tokens,
+      entry.inputTokenLimit,
       entry.limit?.context,
     );
     const maxTokens = capacity(
@@ -236,15 +320,18 @@ function readListing(body: unknown): DiscoveredLlmModel[] {
       entry.max_output_tokens,
       entry.maxTokens,
       entry.max_tokens,
+      entry.outputTokenLimit,
       entry.limit?.output,
       entry.top_provider?.max_completion_tokens,
     );
     const reasoning = reasoningFromListing(entry);
+    const inputModalities = modalitiesFromListing(entry);
     models.push({
       id,
       name,
       ...(contextWindow !== undefined ? { contextWindow } : {}),
       ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(inputModalities !== undefined ? { inputModalities } : {}),
       ...(reasoning !== undefined ? { reasoning } : {}),
     });
   }
@@ -261,6 +348,13 @@ function authHeaders(
     headers["anthropic-version"] = ANTHROPIC_VERSION;
     const key = apiKey?.trim();
     if (key) headers["x-api-key"] = key;
+    return headers;
+  }
+  if (api === "gemini-generate") {
+    // Google takes the key in a header; a query parameter would leak it into
+    // every proxy log between here and the endpoint.
+    const key = apiKey?.trim();
+    if (key) headers["x-goog-api-key"] = key;
     return headers;
   }
   const key = apiKey?.trim();
@@ -332,5 +426,35 @@ export async function discoverOpenAiChatModels(
       cause: err,
     });
   }
-  return readListing(json);
+  const listed = readListing(json);
+  // A standard listing carries ids and little else (OpenCode Zen/Go sends
+  // `{id, object, created, owned_by}`), so capacities and thinking menus stay
+  // blank forever unless the public catalog fills them. Only a probe that names
+  // its provider can be looked up, and only rows with real blanks pay for it.
+  if (
+    request.enrichCatalog === false
+    || request.provider === undefined
+    || !needsCatalog(listed)
+  ) {
+    return listed;
+  }
+  const catalog = await loadModelsDevCatalog(request.catalogFetch);
+  if (catalog === undefined) return listed;
+  return enrichFromModelsDev(listed, catalog, {
+    ...(request.provider === undefined ? {} : { provider: request.provider }),
+    baseUrl,
+    effortWire: EFFORT_WIRE_APIS.has(api),
+    globalFallback: true,
+  });
+}
+
+/** Whether any advertised row left a fact the catalog could supply. */
+function needsCatalog(models: readonly DiscoveredLlmModel[]): boolean {
+  return models.some(
+    (model) =>
+      model.contextWindow === undefined
+      || model.maxTokens === undefined
+      || model.reasoning === undefined
+      || model.inputModalities === undefined,
+  );
 }

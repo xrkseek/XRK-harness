@@ -398,6 +398,11 @@ export interface FaceRuntime {
     childSessionId: string,
     reason: "user" | "parent" | "takeover",
   ): void;
+  /**
+   * Mirror a human prompt into a continuable child onto the parent transcript
+   * so the orchestrator session can see what the user told the worker.
+   */
+  notifyOwnedSubagentUserPrompt(childSessionId: string, preview: string): void;
   /** Shared shell registry for session-scoped job kill / background RPC. */
   readonly shell?: ShellService;
 }

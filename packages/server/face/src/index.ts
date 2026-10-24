@@ -354,6 +354,7 @@ export {
   formatJobCompletionNotice,
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
+  formatSubagentUserPromptNotice,
   describeChildOutcome,
   lastAssistantBodyText,
   boundChildAnswer,

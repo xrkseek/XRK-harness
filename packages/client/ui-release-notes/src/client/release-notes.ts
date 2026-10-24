@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.18',
+    date: '2026-10-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '模型探测用 models.dev 补齐容量/思考档/输入模态，Gemini 可列；探测与聊天同走提供方代理；目录有思考档时才会发 reasoning_effort。',
+        en: 'Model probe fills capacities / thinking / intake from models.dev, Gemini can list; probe shares the provider proxy; reasoning_effort only when the row advertises levels.',
+      },
+      {
+        zh: '子代理用户跟进会进父会话；半成品 spawn 幽灵不再把「N 个子代理」算多。',
+        en: 'Human follow-ups on a child steer into the parent; half-made spawn ghosts no longer inflate the subagent count.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.18 接管 @latest。完整清单见 docs/releases/v0.6.18.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.18 now owns @latest. Full list in docs/releases/v0.6.18.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.17',
     date: '2026-10-24',
     title: {

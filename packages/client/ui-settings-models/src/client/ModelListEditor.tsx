@@ -159,6 +159,7 @@ const DISCLOSED_CAPACITIES = ['contextWindow', 'maxTokens', 'softBudgetMaxTokens
  * - Missing from the provider listing → drop.
  * - Still listed → keep id / display name and any capacity already set.
  * - Blank capacity the listing disclosed → fill it.
+ * - Blank intake modes the listing disclosed → fill them.
  * - Thinking menu the listing disclosed → replace.
  * - Blank id → draft still being typed, keep.
  * Never copies upstream `name` onto a hand-edited display name.
@@ -187,6 +188,11 @@ function syncListedModels(
         merged = { ...merged, [field]: disclosed }
       }
     }
+    // Intake modes behave like the capacities: a hand-set pair is a decision,
+    // a missing one is a blank the listing (or the catalog behind it) may fill.
+    if (merged['inputModalities'] === undefined && upstream.inputModalities !== undefined) {
+      merged = { ...merged, inputModalities: [...upstream.inputModalities] }
+    }
     next.push(merged)
   }
   return next
@@ -200,9 +206,30 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
     ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
     ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
     ...candidate.softBudgetMaxTokens === undefined ? {} : { softBudgetMaxTokens: candidate.softBudgetMaxTokens },
+    ...candidate.inputModalities === undefined
+      ? {}
+      : { inputModalities: [...candidate.inputModalities] },
     // OFM / community listings carry a thinking menu on the row.
     ...candidate.reasoning === undefined ? {} : { reasoning: candidate.reasoning },
   }
+}
+
+/**
+ * What a probe learned about one candidate, as a compact tail.
+ *
+ * Capacities are what the picker exists to save the user from typing, and a
+ * thinking menu is invisible until the row is adopted and the model selector is
+ * opened — so the picker states both. Absent facts stay absent rather than
+ * being spelled as zero.
+ */
+function candidateFacts(candidate: DiscoveredModelView): string | undefined {
+  const parts: string[] = []
+  if (candidate.contextWindow !== undefined) parts.push(`${formatCapacity(candidate.contextWindow)} ctx`)
+  if (candidate.maxTokens !== undefined) parts.push(`${formatCapacity(candidate.maxTokens)} out`)
+  if (candidate.reasoning !== undefined) {
+    parts.push(candidate.reasoning.efforts.map(effort => effort.id).join('/'))
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 /**
@@ -711,21 +738,26 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           )
           : null}
         <ul className={styles['candidateList']}>
-          {(candidates ?? []).map(candidate => (
-            <li key={candidate.id} className={styles['candidate']}>
-              <label className={styles['candidateLabel']}>
-                <input
-                  type="checkbox"
-                  checked={picked.has(candidate.id)}
-                  onChange={() => { toggle(candidate.id) }}
-                />
-                {/* The id alone: it is the string adoption writes, and the
-                    capacities the endpoint reported are adopted with it and
-                    editable in the row that appears. */}
-                <span className={styles['candidateId']}>{candidate.id}</span>
-              </label>
-            </li>
-          ))}
+          {(candidates ?? []).map((candidate) => {
+            const facts = candidateFacts(candidate)
+            return (
+              <li key={candidate.id} className={styles['candidate']}>
+                <label className={styles['candidateLabel']}>
+                  <input
+                    type="checkbox"
+                    checked={picked.has(candidate.id)}
+                    onChange={() => { toggle(candidate.id) }}
+                  />
+                  {/* The id is the string adoption writes; the facts behind it
+                      are what the user is deciding to accept. */}
+                  <span className={styles['candidateId']}>{candidate.id}</span>
+                  {facts === undefined
+                    ? null
+                    : <span className={styles['candidateFacts']}>{facts}</span>}
+                </label>
+              </li>
+            )
+          })}
         </ul>
       </Modal>
     </section>

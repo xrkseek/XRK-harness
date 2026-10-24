@@ -141,7 +141,7 @@ export type HostFrame =
     cwd?: string
     agentPreset?: string
   }
-  | { type: 'host/session-removed'; sessionId: SessionId }
+  | { type: 'host/session-removed'; sessionId: SessionId; purged?: boolean }
   | { type: 'host/session-status'; sessionId: SessionId; running: boolean }
   | {
     type: 'host/session-thread'

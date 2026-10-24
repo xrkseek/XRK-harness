@@ -44,6 +44,7 @@ export const discoveredModelViewSchema = z.object({
   contextWindow: z.number().int().positive().optional(),
   maxTokens: z.number().int().positive().optional(),
   softBudgetMaxTokens: z.number().int().positive().optional(),
+  inputModalities: z.array(z.enum(['text', 'image'])).optional(),
   reasoning: z
     .object({
       efforts: z.array(

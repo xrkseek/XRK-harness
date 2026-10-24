@@ -916,6 +916,59 @@ describe("deepseek thinking wire", () => {
     expect(body?.reasoning_effort).toBeUndefined();
   });
 
+  it("forwards a chosen level as reasoning_effort on an effort-wire route", async () => {
+    let body: Record<string, unknown> | undefined;
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      model: "glm-5.3-flash",
+      reasoningEffortWire: true,
+      enableStream: false,
+      fetch: (async (_u, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "max",
+    });
+    // The model published this spelling; no translation, and no DeepSeek
+    // `thinking` field on a gateway that never asked for one.
+    expect(body?.reasoning_effort).toBe("max");
+    expect(body?.thinking).toBeUndefined();
+  });
+
+  it("spells a disabled level as none and stays silent with no level", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://gateway.example/v1",
+      model: "m",
+      reasoningEffortWire: true,
+      enableStream: false,
+      fetch: (async (_u, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          }),
+          { status: 200 },
+        );
+      }) as unknown as typeof fetch,
+    });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "off",
+    });
+    await llm.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(bodies[0]?.reasoning_effort).toBe("none");
+    expect(bodies[1]?.reasoning_effort).toBeUndefined();
+  });
+
   it("rejects unknown effort", async () => {
     const llm = createOpenAiCompatibleAdapter({
       baseUrl: "https://api.deepseek.com",

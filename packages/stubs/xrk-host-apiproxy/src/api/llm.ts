@@ -108,6 +108,8 @@ export interface DiscoveredModelView {
    * 75% only when the window is smaller. Absent when missing or below 8k.
    */
   softBudgetMaxTokens?: number
+  /** Inputs the model accepts, when the listing or the public catalog says. */
+  inputModalities?: Array<'text' | 'image'>
   /** Thinking menu when the listing advertises one (OFM channel rows, …). */
   reasoning?: DiscoveredModelReasoningView
 }

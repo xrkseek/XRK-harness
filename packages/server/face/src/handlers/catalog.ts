@@ -14,11 +14,13 @@ import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
   listDeclaredPiAiProviders,
   orderProvidersByPreference,
+  readOutboundProxyPreference,
   readProviderApiKey,
   readProviderOrder,
   readProviderRoute,
   resolveProviderBinding,
 } from "../llm-provider-context.js";
+import { fetchForOutboundProxy } from "../llm-outbound-proxy.js";
 import { readSessionAttachment } from "../session-attachment.js";
 import { sessionNotFoundMessage } from "../face-error-text.js";
 import { asRecord, type FaceHandler } from "./types.js";
@@ -307,6 +309,16 @@ export const llmDiscoverModels: FaceHandler = async (runtime, _rpcId, payload) =
 
   const resolved = resolveDiscoveryBaseUrl(runtime, provider, baseURL);
   const key = resolveDiscoveryKey(runtime, provider, apiKey);
+  // The probe leaves this machine exactly like a chat request would, so it
+  // obeys the same per-provider proxy: a route that can only be reached through
+  // 127.0.0.1:7897 must not report "unreachable" because the settings page
+  // forgot the proxy it is storing two fields above.
+  const proxyFetch =
+    provider === undefined
+      ? undefined
+      : fetchForOutboundProxy(
+          readOutboundProxyPreference(runtime, provider, ""),
+        );
 
   try {
     const listed = await discoverOpenAiChatModels({
@@ -315,6 +327,7 @@ export const llmDiscoverModels: FaceHandler = async (runtime, _rpcId, payload) =
       ...(api ? { api } : {}),
       ...(key ? { apiKey: key } : {}),
       ...(resolved.authMode ? { authMode: resolved.authMode } : {}),
+      ...(proxyFetch ? { fetch: proxyFetch, catalogFetch: proxyFetch } : {}),
     });
     const models = listed.map((model) => {
       const softBudgetMaxTokens = defaultSoftBudgetMaxTokens(model.contextWindow);
@@ -383,4 +396,3 @@ export const sessionAttachment: FaceHandler = async (runtime, _rpcId, payload) =
   }
   return { ok: true, value: result.value };
 };
-

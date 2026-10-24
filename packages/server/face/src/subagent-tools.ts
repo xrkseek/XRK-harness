@@ -354,10 +354,19 @@ async function discardUnstartedChild(
   } catch {
     /* store without delete / already gone */
   }
+  runtime.listProjectionCache.forget(childSessionId);
+  runtime.wireIds.clear(childSessionId);
   forgetRequestHeaderCache(childSessionId);
   await Promise.resolve(runtime.invalidateAgent?.(childSessionId)).catch(
     () => undefined,
- );
+  );
+  // Soft Activation detach keeps subagent summaries; a half-made spawn wipe
+  // must purge catalog + lineage or the parent header overcounts ghosts.
+  runtime.bus.publishHost({
+    type: "host/session-removed",
+    sessionId: childSessionId,
+    purged: true,
+  });
 }
 
 /**

@@ -539,9 +539,28 @@ function CatalogDropdown({
     () => indexSubagentDescendants(summaries).get(rootSessionId) ?? NO_DESCENDANTS,
     [rootSessionId, summaries],
   )
+  // When the descriptor catalog is ready, direct rows that are missing from it
+  // are purged spawn shells still lingering in session-list summaries — do not
+  // let them inflate the chip. Nested grandchildren (parent catalog not yet
+  // pulled) still count via the summary index.
+  const orphanDirectCount = useMemo(() => {
+    // Ready+empty is the summary-backed bootstrap window — do not treat every
+    // summary child as an orphan or the chip disappears before list RPC lands.
+    if (catalog?.state !== 'ready' || catalog.entries.length === 0) return 0
+    const listed = new Set<SessionId>()
+    for (const entry of catalog.entries) {
+      if (entry.kind === 'child') listed.add(entry.id)
+    }
+    let orphans = 0
+    for (const row of Object.values(summaries)) {
+      if (row.origin !== 'subagent' || row.parentId !== rootSessionId) continue
+      if (!listed.has(row.id)) orphans += 1
+    }
+    return orphans
+  }, [catalog, rootSessionId, summaries])
   // The catalog can arrive before the session-list baseline; never undercount
   // the already-visible direct rows during that short bootstrap window.
-  const descendantCount = Math.max(healthy.length, descendants.count)
+  const descendantCount = Math.max(healthy.length, descendants.count - orphanDirectCount)
   const totalCountKey = descendantCount === 1 ? 'count.total.one' : 'count.total.other'
   const runningCountKey = descendants.runningCount === 1 ? 'count.running.one' : 'count.running.other'
   // Session summaries can announce membership before the descriptor-backed catalog catches up.

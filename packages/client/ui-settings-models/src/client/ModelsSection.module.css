@@ -752,6 +752,14 @@ select.input {
   overflow-wrap: anywhere;
 }
 
+/* Capacities and thinking levels a probe found, kept quieter than the id. */
+.candidateFacts {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
 /* iOS Safari zooms the page when focusing inputs under 16px (U-7). */
 @media (max-width: 767px) {
   .input,

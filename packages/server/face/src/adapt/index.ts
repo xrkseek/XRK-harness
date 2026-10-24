@@ -49,6 +49,7 @@ export {
   describeChildOutcome,
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
+  formatSubagentUserPromptNotice,
   lastAssistantBodyText,
   type ChildOutcome,
   type ChildOutcomeKind,

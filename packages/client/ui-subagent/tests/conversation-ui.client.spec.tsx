@@ -187,6 +187,23 @@ describe('SubagentHeaderLineage', () => {
     expect(translate).toHaveBeenCalledWith('count.total.one', { count: 1 })
   })
 
+  it('does not let purged direct shells inflate the ready catalog chip', () => {
+    const ghostA = 'ghost-a' as SessionId
+    const ghostB = 'ghost-b' as SessionId
+    render(<SubagentHeaderLineage {...props(catalog({
+      entries: [{
+        kind: 'child', id: CHILD, mode: 'continuable', label: 'worker',
+        activity: 'inactive', hasChildren: false,
+      }],
+    }), {}, {
+      [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' },
+      [ghostA]: { ...summary(ghostA, 1), parentId: PARENT, origin: 'subagent' },
+      [ghostB]: { ...summary(ghostB, 1), parentId: PARENT, origin: 'subagent' },
+    })} />)
+
+    expect(screen.getByRole('button', { name: '1 个子代理' })).toBeTruthy()
+  })
+
   it('removes the disclosure column from branchless catalog levels', () => {
     const input = props(catalog({
       entries: [{

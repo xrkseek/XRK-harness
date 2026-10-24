@@ -293,6 +293,24 @@ function assembleParentNotice(
 }
 
 /**
+ * Parent inbox notice when a human steers / queues into a continuable child
+ * (UI composer or `subagent.prompt`). Tool-originated follow-ups skip this —
+ * the parent already owns that text in its tool call.
+ */
+export function formatSubagentUserPromptNotice(
+  link: FaceSubagentLink,
+  preview: string,
+): string {
+  const label = link.label?.trim() || "subagent";
+  const body = preview.trim();
+  const clipped =
+    body.length > 800 ? `${body.slice(0, 800).trimEnd()}…` : body;
+  const head =
+    `User message to background subagent \`${link.childSessionId}\` (${label}):`;
+  return clipped ? `${head}\n\n${clipped}` : head;
+}
+
+/**
  * Parent inbox notice when a child is stopped on purpose.
  * Distinct from {@link formatSubagentCompletionNotice}: Stop / interrupt_agent
  * / takeover each say who cut the turn, so the parent does not read a kill as

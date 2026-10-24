@@ -12,6 +12,7 @@ import {
   lookupModelContextWindow,
   lookupModelInputModalities,
   lookupModelSoftBudget,
+  modelAdvertisesReasoning,
   resolveAgentDefaultModel,
   resolveSessionModelSelection,
   type FaceModelSelection,
@@ -79,6 +80,12 @@ export function resolveLlmForSelection(
       model: selection.model,
       ...(options?.sessionId ? { sessionId: options.sessionId } : {}),
       ...(catalogModalities ? { inputModalities: catalogModalities } : {}),
+      // A row that advertises levels expects the chosen one on the wire;
+      // everything else keeps the level in the UI only (no 400s from a
+      // parameter the endpoint never heard of).
+      ...(modelAdvertisesReasoning(runtime, selection)
+        ? { reasoningEffortWire: true as const }
+        : {}),
       ...(proxyFetch ? { fetch: proxyFetch } : {}),
       ...(runtime.attachments?.readImageRequest
         ? {

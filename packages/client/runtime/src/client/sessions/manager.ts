@@ -895,12 +895,27 @@ export class SessionManager {
       }
       case 'host/session-removed': {
         const summary = this.summaries.find(candidate => candidate.sessionId === frame.sessionId)
-        const durableSubagent = summary?.origin === 'subagent' || this.addresses.has(frame.sessionId)
+        // Half-made spawn discard publishes purged:true — drop lineage/catalog
+        // ghosts. Soft Activation detach keeps durable subagent rows.
+        const purged = frame.purged === true
+        const durableSubagent = !purged
+          && (summary?.origin === 'subagent' || this.addresses.has(frame.sessionId))
+        const parentForPurge = purged
+          ? (summary?.parentSessionId
+            ?? this.addresses.get(frame.sessionId)?.parentSessionId)
+          : undefined
         this.recordMutation(durableSubagent
           ? { kind: 'status', sessionId: frame.sessionId, running: false }
           : { kind: 'remove', sessionId: frame.sessionId })
         this.updateCatalogActivity(frame.sessionId, false)
-        if (durableSubagent) {
+        if (purged) {
+          this.dropCatalogChild(frame.sessionId)
+          this.addresses.delete(frame.sessionId)
+          this.sessions.get(frame.sessionId)?.handleRemoved()
+          if (parentForPurge !== undefined) {
+            this.scheduleCatalogRefresh(parentForPurge)
+          }
+        } else if (durableSubagent) {
           // An Activation detaching is not durable child deletion:
           // keep its lineage and conversation while returning it to idle.
           this.sessions.get(frame.sessionId)?.handleRunning(false)
@@ -1080,6 +1095,30 @@ export class SessionManager {
       error: null,
     })
     this.notifier.markDirty()
+  }
+
+  /**
+   * Drop a purged child from every loaded parent catalog (and its own nested
+   * catalog key). Complements {@link noteCatalogChild} for half-made spawn
+   * discard so the header chip does not keep ghosts until the next refresh.
+   */
+  private dropCatalogChild(childSessionId: SessionId): void {
+    let changed = false
+    for (const [parentSessionId, catalog] of this.catalogs) {
+      if (parentSessionId === childSessionId) {
+        this.catalogs.delete(childSessionId)
+        changed = true
+        continue
+      }
+      const rows = catalog.entries ?? []
+      if (!rows.some(entry => entry.kind === 'child' && entry.id === childSessionId)) continue
+      this.catalogs.set(parentSessionId, {
+        ...catalog,
+        entries: rows.filter(entry => !(entry.kind === 'child' && entry.id === childSessionId)),
+      })
+      changed = true
+    }
+    if (changed) this.notifier.markDirty()
   }
 
   /** Apply one Agent-driver transition to loaded and in-flight catalogs. */

@@ -50,6 +50,7 @@ import { wireJobSessionJournal } from "./job-session-journal.js";
 import {
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
+  formatSubagentUserPromptNotice,
   lastAssistantBodyText,
   lastTurnEndReason,
   type SubagentStopReason,
@@ -743,6 +744,31 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       .catch(() => undefined);
   };
 
+  /**
+   * Mirror a human follow-up on a continuable child into the parent's inbox.
+   * Visibility only for tool-originated prompts is skipped by the caller.
+   */
+  const notifyOwnedSubagentUserPrompt = (
+    childSessionId: string,
+    preview: string,
+  ): void => {
+    const link = subagents.getByChild(childSessionId);
+    if (!link || link.mode !== "continuable") return;
+    const parentId = link.parentSessionId;
+    void resolveAgent(parentId)
+      .then((parent) => {
+        const receipt = parent.admit(
+          formatSubagentUserPromptNotice(link, preview),
+          { delivery: "steer" },
+        );
+        noticeAdmitIds.add(receipt.admitId);
+        // Land the mirror in the parent transcript even when the parent is
+        // idle (same wake posture as stop notices).
+        options.drain.wake(parentId);
+      })
+      .catch(() => undefined);
+  };
+
   const getTool = (sessionId: string, name: string) => {
     const fromAgent = rememberedTools.get(sessionId)?.get(name);
     if (fromAgent) return fromAgent;
@@ -1372,6 +1398,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     suppressOwnedSubagentCompletion,
     notifyOwnedSubagentStopped,
+    notifyOwnedSubagentUserPrompt,
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),

@@ -564,6 +564,55 @@ describe('endpoint interrogation', () => {
     }])
   })
 
+  it('fills blank intake modes on refresh and shows what a probe found', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{
+        id: 'kept',
+        contextWindow: 1_000_000,
+        maxTokens: 384_000,
+        softBudgetMaxTokens: 300_000,
+        inputModalities: ['text', 'image'],
+        reasoning: {
+          efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }],
+          defaultEffort: 'high',
+        },
+      }],
+    })))
+    const { mutate } = await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://opencode.ai/zen/go/v1', models: [{ id: 'kept' }] } },
+    })
+    openEditor('openai')
+
+    // The picker states the facts behind an id, so adopting is an informed click
+    // rather than a guess at what the row will contain.
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText('1M ctx · 384K out · low/high')
+    cleanup()
+
+    const refreshed = await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://opencode.ai/zen/go/v1', models: [{ id: 'kept' }] } },
+    })
+    openEditor('openai')
+    fireEvent.click(screen.getByRole('button', { name: en.refreshModels }))
+    await screen.findByText(en.refreshModelsDone)
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(refreshed.mutate).toHaveBeenCalled() })
+    expect(firstMutate(refreshed.mutate).ops[0]?.value).toEqual([{
+      id: 'kept',
+      contextWindow: 1_000_000,
+      maxTokens: 384_000,
+      softBudgetMaxTokens: 300_000,
+      inputModalities: ['text', 'image'],
+      reasoning: {
+        efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }],
+        defaultEffort: 'high',
+      },
+    }])
+  })
+
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
     const discover = vi.fn(() => Promise.resolve(
       fail('https://proxy.example/v1/models answered 401; check the API key', 'model-discovery-failed'),

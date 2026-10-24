@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatSubagentCompletionNotice,
   formatSubagentStopNotice,
+  formatSubagentUserPromptNotice,
   lastAssistantBodyText,
 } from "../src/adapt/subagent-notice.js";
 
@@ -189,6 +190,37 @@ describe("formatSubagentCompletionNotice", () => {
     );
     expect(text).toContain(long);
     expect(text).not.toContain("\n…\n\nFollow up");
+  });
+});
+
+describe("formatSubagentUserPromptNotice", () => {
+  it("mirrors the human follow-up preview for the parent inbox", () => {
+    const text = formatSubagentUserPromptNotice(
+      {
+        parentSessionId: "parent",
+        childSessionId: "child-u",
+        mode: "continuable",
+        label: "researcher",
+      },
+      "  Please refine the outline.  ",
+    );
+    expect(text).toContain("User message to background subagent `child-u` (researcher):");
+    expect(text).toContain("Please refine the outline.");
+  });
+
+  it("clips very long follow-ups", () => {
+    const long = "x".repeat(900);
+    const text = formatSubagentUserPromptNotice(
+      {
+        parentSessionId: "parent",
+        childSessionId: "child-u",
+        mode: "continuable",
+        label: "worker",
+      },
+      long,
+    );
+    expect(text.length).toBeLessThan(long.length + 120);
+    expect(text.endsWith("…")).toBe(true);
   });
 });
 

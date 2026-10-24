@@ -455,6 +455,42 @@ describe('subagent catalogs', () => {
     })
   })
 
+  it('purged session-removed drops half-made subagent catalog and lineage ghosts', async () => {
+    const api = new FakeApiClient()
+    const manager = new SessionManager(api, fakeRemote())
+    manager.handleHostEnvelope({
+      rpcId: 'seed' as never,
+      payload: {
+        type: 'host/session-added',
+        sessionId: S1,
+        blank: false,
+      },
+    })
+    manager.handleHostEnvelope({
+      rpcId: 'child-added' as never,
+      payload: {
+        type: 'host/session-added',
+        sessionId: S2,
+        parentSessionId: S1,
+        origin: 'subagent',
+        blank: true,
+      },
+    })
+    expect(manager.getListSnapshot().subagentsByParent[S1]?.entries.some(
+      entry => entry.kind === 'child' && entry.id === S2,
+    )).toBe(true)
+    expect(manager.getListSnapshot().items.some(item => item.sessionId === S2)).toBe(true)
+
+    manager.handleHostEnvelope({
+      rpcId: 'child-purged' as never,
+      payload: { type: 'host/session-removed', sessionId: S2, purged: true },
+    })
+    expect(manager.getListSnapshot().items.find(item => item.sessionId === S2)).toBeUndefined()
+    expect(manager.getListSnapshot().subagentsByParent[S1]?.entries.some(
+      entry => entry.kind === 'child' && entry.id === S2,
+    )).toBe(false)
+  })
+
   it('refetches debounced membership only while the parent catalog is open', async () => {
     vi.useFakeTimers()
     try {

@@ -394,6 +394,21 @@ export function lookupModelInputModalities(
   return findCatalogModel(runtime, selection)?.inputModalities;
 }
 
+/**
+ * Whether the catalog row advertises thinking levels for this selection.
+ *
+ * Only such a route may put a chosen level on the wire: a gateway that never
+ * declared levels has no promise to honor, and sending `reasoning_effort` to an
+ * unknown endpoint is how a working model starts answering 400.
+ */
+export function modelAdvertisesReasoning(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): boolean {
+  const reasoning = findCatalogModel(runtime, selection)?.reasoning;
+  return reasoning !== undefined && reasoning.efforts.length > 0;
+}
+
 function findCatalogModel(
   runtime: FaceRuntime,
   selection: FaceModelSelection,

@@ -246,6 +246,17 @@ export interface LlmDiscoveredModel {
   contextWindow?: number
   /** Maximum output tokens, when disclosed. */
   maxTokens?: number
+  /** Inputs the model accepts, when the listing (or the catalog) says. */
+  inputModalities?: readonly ('text' | 'image')[]
+  /** Thinking menu when the endpoint advertises one. */
+  reasoning?: {
+    readonly efforts: readonly {
+      readonly id: string
+      readonly name: string
+      readonly description?: string
+    }[]
+    readonly defaultEffort?: string
+  }
 }
 
 /** One adapter-discovered model; catalog membership is advisory, not request validation. */

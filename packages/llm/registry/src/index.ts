@@ -33,6 +33,12 @@ export {
   type DiscoveredLlmReasoning,
 } from "./discover.js";
 export {
+  enrichFromModelsDev,
+  loadModelsDevCatalog,
+  resetModelsDevCatalogCache,
+  type ModelsDevCatalog,
+} from "./models-dev-catalog.js";
+export {
   createRoutingLlmAdapter,
   isRoutingLlmAdapter,
   type CreateRoutingLlmAdapterOptions,

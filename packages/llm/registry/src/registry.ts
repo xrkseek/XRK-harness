@@ -69,6 +69,11 @@ export interface ProviderRegistry {
       sessionId?: string;
       /** Extra outbound headers (merged after OpenCode session header). */
       headers?: Record<string, string>;
+      /**
+       * This route advertises thinking levels, so a chosen one may travel as
+       * `reasoning_effort` (OpenAI-compatible protocols only).
+       */
+      reasoningEffortWire?: true;
     },
   ): LlmAdapter;
   listBrands(): readonly BrandEntry[];
@@ -240,6 +245,9 @@ export function createProviderRegistry(
           ...(apiKey !== undefined ? { apiKey } : {}),
           ...(fetchImpl ? { fetch: fetchImpl } : {}),
           ...(Object.keys(headers).length > 0 ? { headers } : {}),
+          ...(extras?.reasoningEffortWire === true
+            ? { reasoningEffortWire: true as const }
+            : {}),
         });
       }
 

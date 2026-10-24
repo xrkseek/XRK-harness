@@ -97,6 +97,16 @@ export interface OpenAiCompatibleOptions {
    */
   readonly deepseekThinking?: true | DeepSeekThinkingDefaults;
   /**
+   * When true, a route that advertises thinking levels sends the chosen one as
+   * `reasoning_effort` — the plain OpenAI-compatible spelling of the same fact
+   * {@link deepseekThinking} emits for DeepSeek, without the `thinking` field.
+   *
+   * Off by default, and turned on per route only by callers that know the model
+   * advertises levels: an unknown gateway may reject the parameter outright, and
+   * a menu that changes nothing is worse than no menu.
+   */
+  readonly reasoningEffortWire?: true;
+  /**
    * When set, replaces default `image_url` data-URL wire for vision requests.
    * Used by `@xrkseek/llm-deepseek` for official Files API (`dsh-v0.1.1-rc.2`).
    */
@@ -506,8 +516,24 @@ async function buildBody(
     if (thinking.reasoning_effort !== undefined) {
       body.reasoning_effort = thinking.reasoning_effort;
     }
+  } else if (options.reasoningEffortWire === true) {
+    const effort = wireReasoningEffort(request.reasoningEffort);
+    if (effort !== undefined) body.reasoning_effort = effort;
   }
   return body;
+}
+
+/**
+ * Wire spelling of a chosen thinking level for OpenAI-compatible gateways.
+ *
+ * Levels travel as the model's own vocabulary (gateways publish `max`, `xhigh`
+ * and friends, and pass them through), except `off`, which OpenAI-compatible
+ * APIs spell `none`.
+ */
+export function wireReasoningEffort(effort: string | undefined): string | undefined {
+  const trimmed = effort?.trim().toLowerCase();
+  if (trimmed === undefined || trimmed.length === 0) return undefined;
+  return trimmed === "off" ? "none" : trimmed;
 }
 
 /** Map OpenAI `{ error: { message, type } }` (HTTP body or SSE frame) to LlmError. */
