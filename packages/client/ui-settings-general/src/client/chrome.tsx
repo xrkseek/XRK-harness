@@ -4,7 +4,7 @@
  * The shell renders the surrounding chrome (button, nav heading row) and
  * reads each entry's `label` option for aria text.
  */
-import { IconSettingsOutlineRegular, IconSettingsOutlineRegular } from '@xrkseek/client-ui-primitives'
+import { IconSettingsOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import css from './chrome.module.css'
 
