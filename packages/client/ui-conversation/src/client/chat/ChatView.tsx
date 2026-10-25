@@ -1297,6 +1297,7 @@ export function ChatView({
           deferFold={atBottom}
           foldCompletedTurns={policy.foldCompletedTurns && !toolsDefaultExpanded}
           detailTitles={policy.detailTitles}
+          liveProcessDetail={policy.liveProcessDetail}
           writeScroll={writeFoldScroll}
           onFoldSettled={handleFoldSettled}
         />,

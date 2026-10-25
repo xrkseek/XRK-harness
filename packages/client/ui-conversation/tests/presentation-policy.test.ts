@@ -26,6 +26,13 @@ describe('presentationPolicyFor', () => {
     expect(presentationPolicyFor('verbose').detailTitles).toBe(true)
   })
 
+  it('shows live process detail only in standard and detailed', () => {
+    expect(presentationPolicyFor('compact').liveProcessDetail).toBe(false)
+    expect(presentationPolicyFor('standard').liveProcessDetail).toBe(true)
+    expect(presentationPolicyFor('detailed').liveProcessDetail).toBe(true)
+    expect(presentationPolicyFor('verbose').liveProcessDetail).toBe(false)
+  })
+
   it('returns one stable object per mode', () => {
     for (const mode of TRANSCRIPT_VIEW_MODES) {
       expect(presentationPolicyFor(mode)).toBe(presentationPolicyFor(mode))

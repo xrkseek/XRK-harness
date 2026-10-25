@@ -19,22 +19,34 @@ const useSession = ((selector: (state: unknown) => unknown) => selector({
 
 const seat = { useSession } as never
 
-function group(closed: boolean): FlowEntry & { kind: 'group' } {
+function group(closed: boolean, overrides: Partial<Extract<FlowEntry, { kind: 'group' }>['summary']> = {}): FlowEntry & { kind: 'group' } {
   return {
     kind: 'group',
     key: 'process:a1',
     turn: 1,
     closed,
-    summary: { tools: 2, reasoning: 1 },
+    summary: {
+      tools: 2,
+      reasoning: 1,
+      toolNames: ['bash', 'Read'],
+      runningTool: undefined,
+      running: false,
+      ...overrides,
+    },
     members: [{ key: 'a1' }, { key: 'a2' }, { key: 'a3' }],
   }
 }
 
+/** Whole-row toggle target (`expandOnRowClick`); falls back to the leading button. */
 const toggle = (container: HTMLElement): HTMLElement | null =>
-  container.querySelector('[data-process-group] button')
+  container.querySelector('[data-disclosure-row]')
+  ?? container.querySelector('[data-process-group] button')
 
 const body = (container: HTMLElement): HTMLElement | null =>
   container.querySelector('[data-process-group-body]')
+
+const summary = (container: HTMLElement): HTMLElement | null =>
+  container.querySelector('[data-process-summary]')
 
 /** jsdom reports a zero rect for everything, so fold geometry is staged. */
 function rectOf(top: number, bottom: number): DOMRect {
@@ -51,6 +63,7 @@ function renderSeat(
     deferFold: boolean
     foldCompletedTurns: boolean
     detailTitles: boolean
+    liveProcessDetail: boolean
     writeScroll: (scrollport: HTMLElement, top: number) => void
     onFoldSettled: () => void
   }> = {},
@@ -59,6 +72,7 @@ function renderSeat(
     deferFold: false,
     foldCompletedTurns: true,
     detailTitles: true,
+    liveProcessDetail: true,
     ...overrides,
   }
   return render(<ProcessGroupSeat entry={entry} nodeSeat={seat} t={t} {...props} />)
@@ -78,6 +92,7 @@ function stageFold(
         deferFold={false}
         foldCompletedTurns
         detailTitles
+        liveProcessDetail
         writeScroll={writeScroll}
       />
     </div>,
@@ -106,14 +121,14 @@ describe('ProcessGroupSeat', () => {
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
   })
 
-  it('leaves the run open when a closing Turn ends under a reader at the floor', async () => {
+  it('folds a closing Turn even when the reader is at the floor', async () => {
     const view = renderSeat(group(true), { deferFold: true })
-    // The latch is decided once; folding the rows the reader is looking at is
-    // exactly the jump this guards against.
+    // Standard mode promises auto-fold on completion; floor-follow must not
+    // leave the run permanently open.
     await vi.waitFor(() => {
-      expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
-    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('never conditionally renders the body, so folded rows keep their anchors', async () => {
@@ -129,12 +144,12 @@ describe('ProcessGroupSeat', () => {
   it('pins the reader choice over the latch', async () => {
     const view = renderSeat(group(true), { deferFold: true })
     await vi.waitFor(() => {
-      expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+      expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
     })
     fireEvent.click(toggle(view.container) as HTMLElement)
-    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(toggle(view.container) as HTMLElement)
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle(view.container) as HTMLElement)
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('gives the height a fold above the reader would eat back to the offset', () => {
@@ -179,7 +194,7 @@ describe('ProcessGroupSeat', () => {
     expect(onFoldSettled).toHaveBeenCalledTimes(2)
   })
 
-  it('leaves a closing run open while the reader can see it', async () => {
+  it('folds a closing run even while the reader can see it', async () => {
     const view = render(
       <div data-conversation-scroll>
         <ProcessGroupSeat
@@ -189,6 +204,7 @@ describe('ProcessGroupSeat', () => {
           deferFold={false}
           foldCompletedTurns
           detailTitles
+          liveProcessDetail
         />
       </div>,
     )
@@ -205,13 +221,12 @@ describe('ProcessGroupSeat', () => {
           deferFold={false}
           foldCompletedTurns
           detailTitles
+          liveProcessDetail
         />
       </div>,
     )
-    // The reader is looking at this run: folding it now is exactly the jump
-    // `deferFold` guards when he is parked at the floor.
     await vi.waitFor(() => {
-      expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
   })
 
@@ -231,6 +246,54 @@ describe('ProcessGroupSeat', () => {
     })
     // The stub keeps the key and its params, so the count must survive the mode.
     expect(view.container.textContent).toContain('chat.process.steps')
-    expect(view.container.textContent).not.toContain('chat.process.tools')
+    expect(view.container.textContent).not.toContain('bash')
+  })
+
+  it('names tools on a settled detailed header', async () => {
+    const view = renderSeat(group(true))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(summary(view.container)?.textContent).toContain('bash')
+    expect(summary(view.container)?.textContent).toContain('Read')
+  })
+
+  it('shows the running tool with the live shimmer class while open', () => {
+    const view = renderSeat(group(false, { running: true, runningTool: 'bash', toolNames: ['bash'] }))
+    expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
+    expect(summary(view.container)?.textContent).toBe('bash')
+    expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+  })
+
+  it('shimmers an open run even before any tool is in flight', () => {
+    const view = renderSeat(group(false, {
+      tools: 0,
+      reasoning: 1,
+      toolNames: [],
+      running: false,
+      runningTool: undefined,
+    }))
+    expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
+    expect(summary(view.container)?.textContent).toBe('think.title')
+    expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+  })
+
+  it('toggles from a click on the whole disclosure row', () => {
+    const view = renderSeat(group(false))
+    const row = view.container.querySelector('[data-disclosure-row]') as HTMLElement
+    expect(row.hasAttribute('data-expandable')).toBe(true)
+    fireEvent.click(row)
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+  })
+
+  it('separates the process title from the summary', async () => {
+    const view = renderSeat(group(true))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    // DisclosureRow puts title then collapsedContent; the sep is aria-hidden.
+    const row = view.container.querySelector('[data-disclosure-row]')
+    expect(row?.querySelector('[aria-hidden]')).not.toBeNull()
+    expect(summary(view.container)).not.toBeNull()
   })
 })

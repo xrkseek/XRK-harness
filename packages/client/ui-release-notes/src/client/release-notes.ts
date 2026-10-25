@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.20',
+    date: '2026-10-25',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '标准 / 精简：Turn 完成后过程自动收起（跟到底部也会折）；摘要点名工具，进行中扫光并显示当前工具。',
+        en: 'Standard / Compact: process auto-folds when a Turn completes (even while following the floor); summaries name tools, and live runs shimmer with the current tool.',
+      },
+      {
+        zh: '过程头整行可点；「过程」与详情留分隔；折叠短内容时输入框仍贴视口底部。',
+        en: 'The process header toggles on the whole row; a separator sits between “Process” and the detail; folding short content keeps the composer docked.',
+      },
+      {
+        zh: '设置「过程详情」四档说明写清：精简 / 标准 / 详细 / 始终展开各自的分组、收起与进行中详情。',
+        en: 'Settings “Process detail” copy spells out Compact / Standard / Detailed / Always expanded — grouping, fold, and live detail per mode.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.20 接管 @latest。完整清单见 docs/releases/v0.6.20.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.20 now owns @latest. Full list in docs/releases/v0.6.20.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.19',
     date: '2026-10-24',
     title: {

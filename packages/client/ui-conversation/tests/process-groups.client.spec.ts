@@ -54,7 +54,13 @@ describe('flowEntries', () => {
     const group = entries[1]
     expect(group?.kind).toBe('group')
     if (group?.kind !== 'group') throw new Error('expected group')
-    expect(group.summary).toEqual({ tools: 3, reasoning: 0 })
+    expect(group.summary).toEqual({
+      tools: 3,
+      reasoning: 0,
+      toolNames: [],
+      runningTool: undefined,
+      running: false,
+    })
     expect(group.members.map(member => member.key)).toEqual(['t1', 't2', 't3'])
     expect(group.closed).toBe(true)
     expect(group.key).toBe('process:t1')
@@ -74,7 +80,13 @@ describe('flowEntries', () => {
     const group = entries[0]
     expect(group?.kind).toBe('group')
     if (group?.kind !== 'group') throw new Error('expected group')
-    expect(group.summary).toEqual({ tools: 1, reasoning: 1 })
+    expect(group.summary).toEqual({
+      tools: 1,
+      reasoning: 1,
+      toolNames: [],
+      runningTool: undefined,
+      running: false,
+    })
     expect(group.turn).toBe(2)
     expect(entries[1]).toEqual({ kind: 'node', key: 'a1' })
   })
@@ -105,6 +117,52 @@ describe('flowEntries', () => {
       entries.map(entry => (entry.kind === 'group' ? entry.key : entry.key))
     expect(keyOf(before)).toEqual(['process:t1'])
     expect(keyOf(after)).toEqual(['process:t1'])
+  })
+
+  it('collects unique tool names and the in-flight root', () => {
+    const running = stub('t1', 'tool-call', {})
+    ;(running as { data: unknown }).data = {
+      root: { callId: 'c1', name: 'bash', argsRaw: '{}', turn: 1, step: 0, time: 0, callView: null, subCalls: [] },
+    }
+    const settled = stub('t2', 'tool-call', {})
+    ;(settled as { data: unknown }).data = {
+      root: {
+        kind: 'tool-result',
+        seq: 1,
+        time: 0,
+        callId: 'c2',
+        call: { name: 'bash', argsRaw: '{}' },
+        callTime: null,
+        content: [],
+        isError: false,
+        callView: null,
+        resultView: null,
+        subCalls: [],
+      },
+    }
+    const other = stub('t3', 'tool-call', {})
+    ;(other as { data: unknown }).data = {
+      root: {
+        kind: 'tool-result',
+        seq: 2,
+        time: 0,
+        callId: 'c3',
+        call: { name: 'Read', argsRaw: '{}' },
+        callTime: null,
+        content: [],
+        isError: false,
+        callView: null,
+        resultView: null,
+        subCalls: [],
+      },
+    }
+    const entries = entriesOf([running, settled, other])
+    const group = entries[0]
+    expect(group?.kind).toBe('group')
+    if (group?.kind !== 'group') throw new Error('expected group')
+    expect(group.summary.toolNames).toEqual(['bash', 'Read'])
+    expect(group.summary.running).toBe(true)
+    expect(group.summary.runningTool).toBe('bash')
   })
 })
 

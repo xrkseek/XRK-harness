@@ -239,18 +239,59 @@
    read. `min-height: 0` is what lets the row actually collapse — a grid
    item defaults to `min-height: auto` and refuses to shrink below content. */
 /* Header chrome comes from the shared `DisclosureRow` (same 24px row and
-   chevron as ReasoningRow and the tool cards), so only the collapsed summary
-   needs a rule here: the run's counts sit where ReasoningRow puts its preview
-   line, and must truncate instead of pushing the chevron. */
-.processGroupSummary {
+   chevron as ReasoningRow and the tool cards). Separator + summary match
+   ReasoningRow / ToolRow so "过程" never sits flush against the detail. */
+.processGroupSep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-caption);
+}
+
+.processGroupSummary,
+.processGroupSummaryLive {
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  color: var(--dsw-alias-label-tertiary);
   font-size: 14px;
   line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.processGroupSummary {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Open-run detail: same brand-blue shimmer as the turn-status band, so a
+   folded header still reads as "in flight" when a tool is running. */
+.processGroupSummaryLive {
+  background: linear-gradient(
+    90deg,
+    var(--dsw-static-deepseek-500) 0%,
+    var(--dsw-static-deepseek-500) 40%,
+    var(--dsw-static-deepseek-200) 50%,
+    var(--dsw-static-deepseek-500) 60%,
+    var(--dsw-static-deepseek-500) 100%
+  );
+  background-position: 100% 0;
+  background-size: 250% 100%;
+  background-clip: text;
+  color: transparent;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: dsh-turn-status-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processGroupSummaryLive {
+    animation: none;
+    background: none;
+    color: var(--dsw-alias-label-secondary);
+    -webkit-text-fill-color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .processGroupBody {

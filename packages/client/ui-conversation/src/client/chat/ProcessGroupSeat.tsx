@@ -25,6 +25,9 @@ import css from './ChatView.module.css'
 
 type GroupEntry = Extract<FlowEntry, { kind: 'group' }>
 
+/** How many distinct tool names the collapsed header keeps before `+N`. */
+const TOOL_NAME_CAP = 3
+
 type GroupProps = {
   readonly entry: GroupEntry
   readonly nodeSeat: Omit<ComponentProps<typeof ChatNodeSeat>, 'nodeKey'>
@@ -41,6 +44,11 @@ type GroupProps = {
   readonly foldCompletedTurns: boolean
   /** Whether the header names what ran, or only counts steps. */
   readonly detailTitles: boolean
+  /**
+   * Whether an open run's header shows the live tool name (and shimmer).
+   * Settled runs ignore this and use {@link detailTitles} instead.
+   */
+  readonly liveProcessDetail: boolean
   /**
    * Writes `scrollTop` through the owner of the observed-top ledger.
    *
@@ -59,18 +67,45 @@ type GroupProps = {
   readonly onFoldSettled?: (() => void) | undefined
 }
 
-/** Summary line for a group header; quiet modes count steps instead of naming them. */
-function groupTitle(summary: ProcessGroupSummary, detail: boolean, t: ChatViewSlotProps['t']): string {
+/** Collapsed / live summary line for a group header. */
+function groupTitle(
+  summary: ProcessGroupSummary,
+  closed: boolean,
+  detail: boolean,
+  liveDetail: boolean,
+  t: ChatViewSlotProps['t'],
+): string {
+  // Open run + live detail (DSH `liveProcessDetail`): name the in-flight work.
+  if (!closed && liveDetail) {
+    if (summary.runningTool !== undefined) return summary.runningTool
+    if (summary.running) return t('row.running')
+    if (summary.reasoning > 0 && summary.tools === 0) return t('think.title')
+    const names = formatToolNames(summary.toolNames)
+    if (names !== undefined) return names
+    return t('row.running')
+  }
   if (!detail) return t('chat.process.steps', { count: summary.tools + summary.reasoning })
   const parts: string[] = []
-  if (summary.tools > 0) parts.push(t('chat.process.tools', { count: summary.tools }))
+  const names = formatToolNames(summary.toolNames)
+  if (names !== undefined) parts.push(names)
+  else if (summary.tools > 0) parts.push(t('chat.process.tools', { count: summary.tools }))
   if (summary.reasoning > 0) parts.push(t('chat.process.reasoning', { count: summary.reasoning }))
+  if (parts.length === 0) return t('chat.process.steps', { count: 0 })
   return parts.join(' · ')
+}
+
+/** First few unique tool names, with a `+N` tail when the list is longer. */
+function formatToolNames(names: readonly string[]): string | undefined {
+  if (names.length === 0) return undefined
+  if (names.length <= TOOL_NAME_CAP) return names.join(' · ')
+  const head = names.slice(0, TOOL_NAME_CAP).join(' · ')
+  return `${head} +${names.length - TOOL_NAME_CAP}`
 }
 
 /** Rows hidden behind one header inside a Turn's process run. */
 export const ProcessGroupSeat = memo(function ProcessGroupSeat({
-  entry, nodeSeat, t, deferFold, foldCompletedTurns, detailTitles, writeScroll, onFoldSettled,
+  entry, nodeSeat, t, deferFold, foldCompletedTurns, detailTitles, liveProcessDetail,
+  writeScroll, onFoldSettled,
 }: GroupProps) {
   const { rootRef, folded, toggle } = useFoldDriver({
     closed: entry.closed,
@@ -79,6 +114,10 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     writeScroll,
     onSettled: onFoldSettled,
   })
+  // DSH shimmers the whole process label while the Turn is still open — not
+  // only while a tool root is in flight — so a folded header still reads live.
+  const live = !entry.closed
+  const title = groupTitle(entry.summary, entry.closed, detailTitles, liveProcessDetail, t)
 
   return (
     <div
@@ -87,15 +126,26 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
       data-process-group={entry.key}
       data-process-turn={entry.turn}
       data-folded={folded || undefined}
+      data-process-running={live || undefined}
     >
       <DisclosureRow
         icon={<IconChecklistOutlineRegular />}
         title={t('chat.process.title')}
         open={!folded}
         expandable
+        expandOnRowClick
+        keepContentWhenOpen
         onToggle={toggle}
         collapsedContent={
-          <span className={css.processGroupSummary}>{groupTitle(entry.summary, detailTitles, t)}</span>
+          <>
+            <span className={css.processGroupSep} aria-hidden />
+            <span
+              className={live ? css.processGroupSummaryLive : css.processGroupSummary}
+              data-process-summary=""
+            >
+              {title}
+            </span>
+          </>
         }
       />
       <div className={css.processGroupBody} data-folded={folded || undefined} data-process-group-body="">
@@ -111,6 +161,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   previous.deferFold === next.deferFold
   && previous.foldCompletedTurns === next.foldCompletedTurns
   && previous.detailTitles === next.detailTitles
+  && previous.liveProcessDetail === next.liveProcessDetail
   && previous.t === next.t
   && previous.nodeSeat === next.nodeSeat
   && previous.writeScroll === next.writeScroll
@@ -124,4 +175,8 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   && previous.entry.members.every((member, index) => member.key === next.entry.members[index]?.key)
   && previous.entry.summary.tools === next.entry.summary.tools
   && previous.entry.summary.reasoning === next.entry.summary.reasoning
+  && previous.entry.summary.running === next.entry.summary.running
+  && previous.entry.summary.runningTool === next.entry.summary.runningTool
+  && previous.entry.summary.toolNames.length === next.entry.summary.toolNames.length
+  && previous.entry.summary.toolNames.every((name, index) => name === next.entry.summary.toolNames[index])
 ))

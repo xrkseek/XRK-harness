@@ -9,8 +9,9 @@
  * opened.
  */
 
-import type { ChatConversationViewNode } from '@xrkseek/client-runtime/client'
-import type { ChatNode } from '../contract/chat-nodes.ts'
+import type { ChatConversationViewNode, ToolCallBlock } from '@xrkseek/client-runtime/client'
+import type { ChatNode, ToolChatData } from '../contract/chat-nodes.ts'
+import { isSettledTool } from '../contract/chat-nodes.ts'
 
 /** What a process group header summarizes. */
 export interface ProcessGroupSummary {
@@ -18,6 +19,15 @@ export interface ProcessGroupSummary {
   readonly tools: number
   /** Reasoning-only Assistant steps in the group. */
   readonly reasoning: number
+  /**
+   * Tool names in first-seen order (duplicates collapsed).
+   * Empty when the projection has not named the roots yet.
+   */
+  readonly toolNames: readonly string[]
+  /** Name of the tool still running, when exactly one root is in flight. */
+  readonly runningTool: string | undefined
+  /** Whether any tool root in the group has not settled. */
+  readonly running: boolean
 }
 
 /** One row rendered inside a group body. */
@@ -85,9 +95,25 @@ export function flowEntries(
     }
     let tools = 0
     let reasoning = 0
+    const toolNames: string[] = []
+    const seen = new Set<string>()
+    let runningTool: string | undefined
+    let running = false
     for (const member of pending) {
-      if (member.node.kind === 'tool-call') tools += 1
-      else reasoning += 1
+      if (member.node.kind === 'tool-call') {
+        tools += 1
+        const name = toolNameOf(member.node)
+        if (name !== undefined && !seen.has(name)) {
+          seen.add(name)
+          toolNames.push(name)
+        }
+        if (toolRunning(member.node)) {
+          running = true
+          if (runningTool === undefined) runningTool = name
+        }
+      } else {
+        reasoning += 1
+      }
     }
     const first = pending[0]
     if (first === undefined) return
@@ -98,7 +124,7 @@ export function flowEntries(
       key: `process:${first.key}`,
       turn: pendingTurn,
       closed: closedTurn(first.node),
-      summary: { tools, reasoning },
+      summary: { tools, reasoning, toolNames, runningTool, running },
       members: pending.map(member => ({ key: member.key })),
     })
     pending = []
@@ -149,6 +175,29 @@ export function closedTurn(node: ChatNode): boolean {
 export function isProcessMember(node: ChatNode): boolean {
   if (node.kind === 'tool-call') return true
   return node.kind === 'assistant-step' && hasReasoning(node) && !hasReply(node)
+}
+
+/** Tool display name on a tool-call Chat node, when the root has one. */
+export function toolNameOf(node: ChatNode): string | undefined {
+  if (node.kind !== 'tool-call') return undefined
+  const root = (node.data as ToolChatData | undefined)?.root
+  if (root === undefined) return undefined
+  return nameOfRoot(root)
+}
+
+function toolRunning(node: ChatNode): boolean {
+  if (node.kind !== 'tool-call') return false
+  const root = (node.data as ToolChatData | undefined)?.root
+  if (root === undefined) return false
+  return !isSettledTool(root)
+}
+
+function nameOfRoot(root: ToolCallBlock): string | undefined {
+  if (isSettledTool(root)) {
+    const name = root.call?.name
+    return name !== undefined && name !== '' ? name : undefined
+  }
+  return root.name !== '' ? root.name : undefined
 }
 
 function hasReply(node: ChatNode): boolean {

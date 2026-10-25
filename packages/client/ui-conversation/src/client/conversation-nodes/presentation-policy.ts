@@ -28,10 +28,15 @@ export interface ChatPresentationPolicy {
   /** Where a group may appear at all. */
   readonly stepGrouping: StepGrouping
   /**
-   * Whether a run header names what ran (`3 个工具调用 · 思考 1 次`) or only
-   * counts steps (`4 步`). Quiet modes drop the taxonomy, not the count.
+   * Whether a settled run header names what ran (`bash · Read · 思考 1 次`)
+   * or only counts steps (`4 步`). Quiet modes drop the taxonomy, not the count.
    */
   readonly detailTitles: boolean
+  /**
+   * Whether a still-open run's header shows the live tool / reasoning detail
+   * (and the running shimmer). Mirrors DSH `liveProcessDetail`.
+   */
+  readonly liveProcessDetail: boolean
 }
 
 const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
@@ -40,24 +45,29 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
     detailTitles: false,
+    liveProcessDetail: false,
   },
   standard: {
     mode: 'standard',
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
     detailTitles: true,
+    liveProcessDetail: true,
   },
   detailed: {
     mode: 'detailed',
     foldCompletedTurns: true,
     stepGrouping: 'history',
     detailTitles: true,
+    liveProcessDetail: true,
   },
   verbose: {
     mode: 'verbose',
     foldCompletedTurns: false,
     stepGrouping: 'none',
     detailTitles: true,
+    // Rows stay flat; live detail lives on each tool / think row, not a group header.
+    liveProcessDetail: false,
   },
 }
 

@@ -33,9 +33,9 @@ const LABELS = {
 /**
  * Render the work-details selector.
  *
- * Four points on one axis, quietest first: a completed Turn's process run
- * either folds or does not, and the rows are either grouped or not. `verbose`
- * is the "always expanded" posture — see `presentationPolicyFor`.
+ * Four points on one axis (see `presentationPolicyFor`): compact / standard
+ * group and auto-fold; detailed groups history only; verbose never groups or
+ * folds. Standard and detailed also surface live tool detail on open runs.
  * @param props - composed Settings slot props.
  * @returns the preference row.
  */

@@ -14,6 +14,12 @@
  *   folds without the transition and restores the offset in the same commit
  *   (`data-instant`), because a CSS-animated height cannot be compensated per
  *   frame from React. A run the reader can see keeps the transition instead.
+ *
+ * Auto-fold policy (work-details modes with `foldCompletedTurns`):
+ * once the Turn closes, the run latches closed. A reader at the floor or with
+ * the run on screen still gets the fold — that is what "标准 / 精简" promise —
+ * but the height transition stays on so the answer does not jump. Only a run
+ * entirely above the viewport takes the instant + scroll-compensation path.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -43,7 +49,11 @@ export interface FoldDriverOptions {
    * "auto-expand tools" switch overrides it.
    */
   readonly foldAllowed: boolean
-  /** Whether the reader was pinned to the floor when the Turn closed. */
+  /**
+   * Reserved for callers that still sample floor-follow at close time.
+   * Auto-fold no longer keeps the run open for a floor reader; the flag is
+   * kept so ChatView's prop surface stays stable.
+   */
   readonly deferFold: boolean
   /** Writes `scrollTop` through the owner of the observed-top ledger. */
   readonly writeScroll?: ((scrollport: HTMLElement, top: number) => void) | undefined
@@ -63,17 +73,15 @@ export interface FoldDriver {
 /**
  * Own one run's fold state, its latch, and its scroll compensation.
  *
- * The latch is taken once, before the DOM changes: a reader sitting at the
- * floor (or with the run on screen) when the Turn ends keeps the run open —
- * folding it under their eyes moved the answer they were reading — and a later
- * scroll never re-decides, because a latch cannot move the same row twice.
+ * The latch is taken once when the Turn closes: policy-allowed runs fold.
+ * A later scroll never re-decides. The reader's pin (manual toggle) overrides
+ * the latch for the life of the seat.
  * @param options - Turn state, policy, and the owner's ledger hooks.
  * @returns the ref to bind, the current fold state, and the toggle.
  */
 export function useFoldDriver({
   closed,
   foldAllowed,
-  deferFold,
   writeScroll,
   onSettled,
 }: FoldDriverOptions): FoldDriver {
@@ -89,9 +97,8 @@ export function useFoldDriver({
   /**
    * Whether the run is inside the reader's viewport right now.
    *
-   * `deferFold` guards a reader parked at the floor; this guards the same jump
-   * for one reading mid-transcript with the run on screen. A run above or below
-   * the viewport folds silently.
+   * Used only to choose animated vs instant fold — never to keep a closed
+   * Turn open. Keeping it open on sight made "标准" look like it never folds.
    */
   const readableNow = useCallback((): boolean => {
     const root = rootRef.current
@@ -168,9 +175,15 @@ export function useFoldDriver({
   // the run at its open height.
   useEffect(() => {
     if (!closed || latched !== null) return
-    if (deferFold || !foldAllowed || readableNow()) setLatched('open')
+    if (!foldAllowed) {
+      setLatched('open')
+      return
+    }
+    // In view (including a floor-following reader): fold with the height
+    // transition. Above the viewport: instant fold + scroll compensation.
+    if (readableNow()) setLatched('closed')
     else foldAbove(() => setLatched('closed'))
-  }, [closed, deferFold, foldAllowed, latched, foldAbove, readableNow])
+  }, [closed, foldAllowed, latched, foldAbove, readableNow])
 
   const toggle = useCallback((): void => {
     if (folded) setPinned(false)
