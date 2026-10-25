@@ -5,6 +5,11 @@
  * error material from the settled result node. A call whose render intent is
  * a terminal card gets its expanded body from the views instead, through
  * `terminalCardModel` in terminal-card-model.ts.
+ *
+ * The arguments are parsed once per row and the expansion body is materialized
+ * lazily (`get body` on {@link ToolRowModel}): a collapsed row — the
+ * overwhelmingly common case — never pays for the pretty-print of a call it
+ * does not show.
  */
 // The block union's defining home is runtime (fold-product types); this
 // contract only forwards it (type-definition authority stays with the layer
@@ -64,6 +69,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   // Deliverable declaration: write-family chrome (edit glyph) while the title
   // below names the act; paths come from args.files / callView.locations.
   present: 'write',
+  // Skill draft → user confirm → write SKILL.md (workspace propose_skill).
+  propose_skill: 'write',
   run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
@@ -88,6 +95,7 @@ const TOOL_TITLES: Record<string, string> = {
   image_generate: 'Image generation',
   video_generate: 'Video generation',
   present: 'Present',
+  propose_skill: 'Write skill',
 }
 
 /**
@@ -116,7 +124,15 @@ export interface ToolRowModel {
    * relative values against the session cwd before opening.
    */
   filePath: string | undefined
-  /** Expanded-body input text (pretty args); null = no input section. */
+  /**
+   * Expanded-body input text (pretty args); null = no input section.
+   *
+   * An accessor on the returned model, not a stored field: the pretty-print
+   * (data-URL redaction plus `JSON.stringify` over the whole argument object)
+   * is the most expensive derivation in the row, and only an OPEN disclosure
+   * ever renders it. Reading it here is what the expand path does; the first
+   * read memoizes, so a re-render after opening costs nothing.
+   */
   body: string | null
   /** Flattened result text ({@link resultText}); null while running or when the result carries no text. */
   output: string | null
@@ -159,6 +175,24 @@ function parseArgs(argsRaw: string): unknown {
   } catch {
     // Non-JSON args (mid-stream truncation): summary/body fall back to the raw string.
     return undefined
+  }
+}
+
+/**
+ * Wrap a derivation in a one-shot memo. `null` is a real row value, so the
+ * cache cannot key off the value being absent.
+ * @param compute - the derivation to run at most once.
+ * @returns a reader returning the cached value after the first call.
+ */
+function onceValue<T>(compute: () => T): () => T {
+  let ready = false
+  let value: T | undefined
+  return () => {
+    if (!ready) {
+      value = compute()
+      ready = true
+    }
+    return value as T
   }
 }
 
@@ -220,8 +254,7 @@ export function relativizeToCwd(text: string, cwd: string | undefined): string {
   return text
 }
 
-function deriveSummary(variant: ToolRowVariant, argsRaw: string): string {
-  const parsed = parseArgs(argsRaw)
+function deriveSummary(variant: ToolRowVariant, argsRaw: string, parsed: unknown): string {
   if (typeof parsed !== 'object' || parsed === null) {
     // Preparing / mid-stream: closed scalar fields beat dumping the raw prefix.
     const partial = readPartialStringFields(argsRaw, SUMMARY_KEYS[variant])
@@ -248,9 +281,8 @@ const FILE_PATH_KEYS = ['path', 'file_path'] as const
 /** File-tool variants whose summary may be an openable workspace path. */
 const FILE_PATH_VARIANTS: ReadonlySet<ToolRowVariant> = new Set(['read', 'write', 'edit'])
 
-function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
+function deriveFilePath(variant: ToolRowVariant, argsRaw: string, parsed: unknown): string | undefined {
   if (!FILE_PATH_VARIANTS.has(variant)) return undefined
-  const parsed = parseArgs(argsRaw)
   if (parsed === undefined) {
     return readPartialStringFields(argsRaw, FILE_PATH_KEYS)
   }
@@ -268,8 +300,7 @@ function displayPathSummary(text: string, cwd?: string, home?: string): string {
 }
 
 /** Paths from `present` args.files (model-declared deliverables). */
-function presentArgsPaths(argsRaw: string): string[] {
-  const parsed = parseArgs(argsRaw)
+function presentArgsPaths(parsed: unknown): string[] {
   if (typeof parsed !== 'object' || parsed === null) return []
   const files = (parsed as { files?: unknown }).files
   if (!Array.isArray(files)) return []
@@ -305,9 +336,8 @@ function formatPresentSummary(paths: readonly string[]): string | undefined {
   return `${paths[0]} +${String(paths.length - 1)}`
 }
 
-function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
+function deriveBody(variant: ToolRowVariant, argsRaw: string, parsed: unknown): string | null {
   if (argsRaw === '') return null
-  const parsed = parseArgs(argsRaw)
   if (parsed === undefined) return redactDataUrls(argsRaw)
   // The code row's expanded body IS the program (monospace via the row's
   // variant styling), not the args JSON envelope around it.
@@ -330,6 +360,10 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const variant = classifyTool(toolName)
   const done = 'kind' in block
   const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? ''
+  // Parse once: the summary, the file path and the body all read the same
+  // argument object. The raw string still rides along for the partial readers
+  // below, which only run while the JSON is still open (`parsed === undefined`).
+  const args = parseArgs(argsRaw)
   const state: ToolRowState = !done ? 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError ? 'error' : 'ok'
@@ -341,7 +375,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
 
   // present: show deliverable paths while running (args.files, else callView).
   if (toolName === 'present') {
-    const paths = presentArgsPaths(argsRaw)
+    const paths = presentArgsPaths(args)
     const resolved = paths.length > 0 ? paths : callViewPaths(block)
     const displayPaths = resolved.map(path => displayPathSummary(path, cwd, home))
     const presentSummary = formatPresentSummary(displayPaths)
@@ -374,7 +408,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   })()
   const base = argsRaw === ''
     ? preparingTitle
-    : displayPathSummary(deriveSummary(variant, argsRaw), cwd, home)
+    : displayPathSummary(deriveSummary(variant, argsRaw, args), cwd, home)
   const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
     ? (base === '' ? toolName : `${toolName} · ${base}`)
     : base
@@ -383,12 +417,21 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   // would erase the collapsed error row's summary slot.
   const output = done ? (resultText(block) || null) : null
   const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
+  // The expansion body is the row's most expensive derivation (a redaction walk
+  // over the argument tree plus a full `JSON.stringify`), and a collapsed row
+  // never renders it and never asks whether it is non-null — so it stays behind
+  // an accessor: the pretty-print runs when a disclosure opens, not on every
+  // pass over the title/summary/output the row needs first. One-shot memoized,
+  // because every read after the first (open → re-render) is another render.
+  const readBody = onceValue(() => deriveBody(variant, argsRaw, args))
   return {
     variant,
     title,
     summary,
-    filePath: deriveFilePath(variant, argsRaw),
-    body: deriveBody(variant, argsRaw),
+    filePath: deriveFilePath(variant, argsRaw, args),
+    get body(): string | null {
+      return readBody()
+    },
     output,
     errorSummary,
     autoReviewDenial: deriveAutoReviewDenial(block),

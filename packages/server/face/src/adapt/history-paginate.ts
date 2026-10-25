@@ -20,10 +20,6 @@ export const DEFAULT_HISTORY_MAX_WIRE_CHARS = 1_500_000;
 
 const MESSAGE_TYPES = new Set<string>(["user/message", "assistant/message"]);
 
-function eventSeq(index: number): number {
-  return index + 1;
-}
-
 function sameTurnStep(
   left: SessionEvent,
   turnId: string,
@@ -119,11 +115,9 @@ export function paginateSessionHistory(
 } {
   let windowEnd = events.length;
   if (beforeSeq !== undefined) {
-    windowEnd = 0;
-    for (let i = 0; i < events.length; i++) {
-      if (eventSeq(i) < beforeSeq) windowEnd = i + 1;
-      else break;
-    }
+    // `eventSeq(i) === i + 1`, so the old linear probe only rediscovered the
+    // index. Clamp instead: callers may pass beforeSeq <= 0 or > length.
+    windowEnd = Math.min(Math.max(beforeSeq - 1, 0), events.length);
   }
   const window = events.slice(0, windowEnd);
   if (window.length === 0) {

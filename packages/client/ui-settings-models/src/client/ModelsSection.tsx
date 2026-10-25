@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
-import { Button, IconPlusOutline16, Modal } from '@xrkseek/client-ui-primitives'
+import { Button, IconPlusOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
 import type { SnapshotSelectorHook } from '@xrkseek/client-web-react'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
 import {
@@ -590,7 +590,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                 <Button
                   variant="outline"
                   className={styles['addButton']}
-                  icon={<IconPlusOutline16 size={14} />}
+                  icon={<IconPlusOutlineRegular size={14} />}
                   disabled={addable.length === 0 || !state.writable}
                   onClick={() => {
                     const first = addable[0]
@@ -607,7 +607,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                 <Button
                   variant="outline"
                   className={styles['addButton']}
-                  icon={<IconPlusOutline16 size={14} />}
+                  icon={<IconPlusOutlineRegular size={14} />}
                   disabled={protocols.length === 0 || !state.writable}
                   onClick={() => {
                     setSavedTarget(undefined)

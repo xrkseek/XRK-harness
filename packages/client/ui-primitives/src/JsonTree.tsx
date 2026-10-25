@@ -6,7 +6,7 @@ import type {
   ReactNode,
   UIEvent as ReactUIEvent,
 } from 'react'
-import { IconCheckOutline16, IconCopyOutline16 } from './icons/index.tsx'
+import { IconCheckOutlineRegular, IconCopyOutlineRegular } from './icons/index.tsx'
 import { Menu } from './Menu.tsx'
 import type { MenuEntry } from './Menu.tsx'
 import css from './JsonTree.module.css'
@@ -640,8 +640,8 @@ export function JsonTree({
                 }}
               >
                 {copyState === 'copied'
-                  ? <IconCheckOutline16 size={12} />
-                  : <IconCopyOutline16 size={12} />}
+                  ? <IconCheckOutlineRegular size={12} />
+                  : <IconCopyOutlineRegular size={12} />}
               </button>
             )}
             items={copyTargetIsObject ? objectCopyMenuItems(copyLabels) : valueCopyMenuItems(copyLabels)}

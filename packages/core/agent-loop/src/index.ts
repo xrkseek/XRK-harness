@@ -29,7 +29,6 @@ import {
   isUnsupportedReasoningEffortError,
   resolveTurnTraceContext,
   runWithTraceContext,
-  UnsupportedContentError,
   type LlmAdapter,
   type LlmChatRequest,
   type LlmChatResponse,
@@ -53,6 +52,7 @@ import {
   parseSessionEvent,
   parseTurnEndCancelCause,
   projectFilesToText,
+  projectImageContentForTextModel,
   projectImagesForTextModel,
   DEFAULT_PLAN_POLICY_SECTION,
   TOOL_EMITTABLE_EVENT_TYPES,
@@ -767,10 +767,13 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     }
   }
 
+  // Text-only route + image admit: keep the durable user event as-is when the
+  // caller already stored blocks; for the live turn body, project to
+  // placeholders so the model can continue (same contract as toLlmRequest).
   if (contentHasImage(userContent) && !llmAllowsImage(input.llm)) {
-    throw new UnsupportedContentError(
-      "image content is not supported on text-only LLM routes",
-    );
+    userContent = projectImageContentForTextModel(userContent);
+    if (typeof userContent === "string") userText = userContent;
+    else userText = flattenText(userContent);
   }
 
   // Fail-before-retry: close orphan open turns left by a prior false-idle /

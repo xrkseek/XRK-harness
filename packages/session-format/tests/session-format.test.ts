@@ -115,7 +115,7 @@ describe("detectSessionArtifact", () => {
 });
 
 describe("sqlite schema chain", () => {
-  it("runs adjacent 0→1→2→3 hooks", () => {
+  it("runs adjacent 0→1→2→3→4 hooks", () => {
     const calls: string[] = [];
     const next = migrateSqliteSchema(0, {
       ensureTables: () => {
@@ -127,15 +127,27 @@ describe("sqlite schema chain", () => {
       rebuildFts: () => {
         calls.push("rebuild");
       },
+      ensureSessionHints: () => {
+        calls.push("hints");
+      },
     });
     expect(next).toBe(SQLITE_SCHEMA_CURRENT);
-    expect(calls).toEqual(["tables", "tables", "fts", "tables", "fts", "rebuild"]);
-    expect(createSqliteSchemaChain().currentVersion).toBe(3);
+    expect(calls).toEqual([
+      "tables",
+      "tables",
+      "fts",
+      "tables",
+      "fts",
+      "rebuild",
+      "tables",
+      "hints",
+    ]);
+    expect(createSqliteSchemaChain().currentVersion).toBe(4);
   });
 
   it("no-ops when already current", () => {
     const calls: string[] = [];
-    migrateSqliteSchema(3, {
+    migrateSqliteSchema(4, {
       ensureTables: () => {
         calls.push("tables");
       },
@@ -144,6 +156,9 @@ describe("sqlite schema chain", () => {
       },
       rebuildFts: () => {
         calls.push("rebuild");
+      },
+      ensureSessionHints: () => {
+        calls.push("hints");
       },
     });
     expect(calls).toEqual([]);
@@ -156,7 +171,7 @@ describe("catalog", () => {
     expect(SESSION_FORMAT_SEAMS.interchange.currentVersion).toBe(
       SESSION_INTERCHANGE_VERSION,
     );
-    expect(SESSION_FORMAT_SEAMS.sqliteSchema.currentVersion).toBe(3);
+    expect(SESSION_FORMAT_SEAMS.sqliteSchema.currentVersion).toBe(4);
     expect(sessionFormatCatalogSummary()).toContain("session-format-v3:adopted=false");
   });
 });

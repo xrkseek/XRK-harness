@@ -5,15 +5,15 @@
  * except workspace Rename/Delete and session Rename/Fork/Pin/Archive; the session
  * and workspace hover cards are suppressed while a menu is open.
  */
-import { useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
-  IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPinOutline16,
-  IconPlusOutline16, IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
+  HoverCard, IconArchiveOutlineRegular, IconBranchOutlineRegular, IconEditOutlineRegular,
+  IconEllipsisOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconPinOutlineRegular,
+  IconPlusOutlineRegular, IconTrashOutlineRegular, IconTriangleRightFillRegular, Menu, StateDot,
   abbreviateHomePath,
 } from '@xrkseek/client-ui-primitives'
-import type { StateDotState } from '@xrkseek/client-ui-primitives'
+import type { MenuItem, StateDotState } from '@xrkseek/client-ui-primitives'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import { relativeTime } from '../tree.ts'
@@ -21,6 +21,18 @@ import css from './Rows.module.css'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
+
+/**
+ * Menu glyphs as module constants. A row renders these on every pass; minting a
+ * fresh element per row per render is pure reconciliation churn (and it would
+ * defeat the menu `useMemo` below).
+ */
+const MENU_RENAME_ICON = <IconEditOutlineRegular />
+const MENU_FORK_ICON = <IconBranchOutlineRegular />
+const MENU_PIN_ICON = <IconPinOutlineRegular />
+/** 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon). */
+const MENU_ARCHIVE_ICON = <IconArchiveOutlineRegular size={16} />
+const MENU_DELETE_ICON = <IconTrashOutlineRegular />
 
 /** Row display title: blank rows show the localized New Session label. */
 function displayTitle(node: SessionNode, t: RowTranslate): string {
@@ -103,20 +115,8 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
   return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
-/**
- * Project (workspace) header row: folder + title;
- * hover reveals the chevron and (for real Workspaces) create button; dwelling
- * on a real Workspace shows its hover card (the ungrouped bucket has neither).
- * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
- * @param props.group - derived group node.
- * @param props.onToggle - expand/collapse the group.
- * @param props.onCreate - start a frontend Session inside this Workspace (unused for ungrouped).
- * @param props.drag - optional workspace-row drag wiring.
- * @param props.home - host account home for POSIX hover-path abbreviation.
- * @param props.t - the browser root's locale seat.
- * @returns the row element.
- */
-export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }: {
+/** Props of one Workspace header row. */
+interface ProjectRowItemProps {
   group: GroupNode
   onToggle: () => void
   onCreate: () => void
@@ -131,7 +131,58 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
   home?: string | undefined
   t: RowTranslate
-}) {
+}
+
+/**
+ * Group facts the header row actually paints. `sessions` is deliberately
+ * excluded: the header never reads the rows, so a session-list change that
+ * leaves the header alone must not re-render it.
+ * @param a - previous group node.
+ * @param b - next group node.
+ * @returns whether both headers paint identically.
+ */
+function sameGroupHeader(a: GroupNode, b: GroupNode): boolean {
+  return a.key === b.key && a.workspaceId === b.workspaceId && a.label === b.label
+    && a.cwd === b.cwd && a.createdAt === b.createdAt && a.pinned === b.pinned
+    && a.sessionCount === b.sessionCount && a.expanded === b.expanded
+    && a.containsCurrent === b.containsCurrent
+}
+
+/**
+ * Row memo comparator. Callback identities are compared by construction: every
+ * closure the browser hands a header (`onToggle` / `onCreate` / `actions` /
+ * `drag`) is a thin wrapper over values this comparator already checks plus
+ * identity-stable owner callbacks, so an equal verdict never keeps a stale verb.
+ * @param prev - previous props.
+ * @param next - next props.
+ * @returns whether the row can keep its previous render.
+ */
+function projectRowPropsEqual(prev: ProjectRowItemProps, next: ProjectRowItemProps): boolean {
+  if (prev.t !== next.t || prev.home !== next.home) return false
+  if ((prev.actions === undefined) !== (next.actions === undefined)) return false
+  if ((prev.drag === undefined) !== (next.drag === undefined)) return false
+  return sameGroupHeader(prev.group, next.group)
+}
+
+/**
+ * Project (workspace) header row: folder + title;
+ * hover reveals the chevron and (for real Workspaces) create button; dwelling
+ * on a real Workspace shows its hover card (the ungrouped bucket has neither).
+ * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
+ * Memoized: a session-list change that leaves this header's facts alone must
+ * not re-render the row (see {@link projectRowPropsEqual}).
+ * @param props.group - derived group node.
+ * @param props.onToggle - expand/collapse the group.
+ * @param props.onCreate - start a frontend Session inside this Workspace (unused for ungrouped).
+ * @param props.actions - real-Workspace verbs; absent for the ungrouped bucket.
+ * @param props.drag - optional workspace-row drag wiring.
+ * @param props.home - host account home for POSIX hover-path abbreviation.
+ * @param props.t - the browser root's locale seat.
+ * @returns the row element.
+ */
+export const ProjectRowItem = memo(function ProjectRowItem(
+  { group, onToggle, onCreate, actions, drag, home, t }: ProjectRowItemProps,
+) {
   const row = group
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
   // Xiangyang wire title is English; zh UI remaps via locale.
@@ -156,19 +207,19 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   const isImWorkspace = row.workspaceId === 'ws_im'
   const isXiangyangWorkspace = row.workspaceId === 'ws_default'
   // 向阳空间: product home — no rename/delete. IM: deletable (recreated on connect).
-  const workspaceMenuItems = [
-    ...(!isXiangyangWorkspace
-      ? [{ id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> }]
-      : []),
+  // Rebuilt only when a dictionary or pin fact can change a row: the glyphs are
+  // module constants, so an unchanged menu costs no allocation.
+  const workspaceMenuItems = useMemo<MenuItem[]>(() => [
+    ...(!isXiangyangWorkspace ? [{ id: 'rename', label: t('rename'), icon: MENU_RENAME_ICON }] : []),
     {
       id: 'pin',
       label: t(row.pinned ? 'menu.unpinWorkspace' : 'menu.pinWorkspace'),
-      icon: <IconPinOutline16 />,
+      icon: MENU_PIN_ICON,
     },
     ...(!isXiangyangWorkspace
-      ? [{ id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true }]
+      ? [{ id: 'delete', label: t('delete.workspace'), icon: MENU_DELETE_ICON, danger: true }]
       : []),
-  ]
+  ], [isXiangyangWorkspace, row.pinned, t])
   const ownRow = (
     <div
       className={clsx(
@@ -257,10 +308,10 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       }}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
-        {row.expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
+        {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
       </span>
       <span className={clsx(css.slot, css.chevron)}>
-        <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
+        <IconTriangleRightFillRegular className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
@@ -272,7 +323,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
         )}
         {row.pinned && (
           <span className={css.pinBadge} aria-hidden="true">
-            <IconPinOutline16 />
+            <IconPinOutlineRegular />
           </span>
         )}
       </span>
@@ -288,7 +339,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
                 actions.pinToggle()
               }}
             >
-              <IconPinOutline16 />
+              <IconPinOutlineRegular />
             </button>
             <Menu
               open={menuOpen}
@@ -313,7 +364,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
                   aria-label={t('actions.workspace.aria', { name: label })}
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
                 >
-                  <IconEllipsisOutline16 />
+                  <IconEllipsisOutlineRegular />
                 </button>
               )}
             />
@@ -326,7 +377,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
             aria-label={t('actions.newSession.aria', { name: label })}
             onClick={(e) => { e.stopPropagation(); onCreate() }}
           >
-            <IconPlusOutline16 />
+            <IconPlusOutlineRegular />
           </button>
         )}
       </span>
@@ -349,7 +400,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       copiedLabel={t('hover.copied')}
     />
   )
-}
+}, projectRowPropsEqual)
 
 /* v8 ignore next 3 -- closed-union backstop; only reached if the status is forged */
 function assertNever(value: never): never {
@@ -493,22 +544,8 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
   )
 }
 
-/**
- * One top-level 34px session row: status dot (pending user interaction outranks
- * own or descendant activity), title, relative time, and the row actions menu.
- * @param props.node - derived session node.
- * @param props.currentId - selected session id (row highlight).
- * @param props.now - epoch ms for relative-time formatting.
- * @param props.onOpen - open a session by id.
- * @param props.onRename - open the session rename dialog (id + current title).
- * @param props.onFork - fork a session at its last completed turn.
- * @param props.onArchive - archive a session by id.
- * @param props.drag - optional draggable-row wiring.
- * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
- * @param props.t - the browser root's locale seat.
- * @returns the session row.
- */
-export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onPinToggle, drag, flat = false, t }: {
+/** Props of one session row. */
+interface SessionNodeItemProps {
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -526,7 +563,85 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   /** The row is rendered without a parent Workspace header. */
   flat?: boolean | undefined
   t: RowTranslate
-}) {
+}
+
+/**
+ * Compare two session-node snapshots field by field. The node is a flat
+ * projection (no nested objects), so this is exhaustive, not a heuristic.
+ * @param a - previous node.
+ * @param b - next node.
+ * @returns whether every painted field is unchanged.
+ */
+function sameSessionNode(a: SessionNode, b: SessionNode): boolean {
+  return a.id === b.id && a.title === b.title && a.blank === b.blank
+    && a.pendingInteraction === b.pendingInteraction && a.running === b.running
+    && a.runningSubagentCount === b.runningSubagentCount && a.completed === b.completed
+    && a.pinned === b.pinned && a.updatedAt === b.updatedAt
+    && a.sideline === b.sideline && a.mainline === b.mainline && a.agentPreset === b.agentPreset
+}
+
+/**
+ * Whether two clock reads format to the same relative-time label for one row.
+ * Buckets are the whole of `now`'s influence on the row (and on its hover card),
+ * so a fresh `Date.now()` that has not crossed a bucket changes nothing.
+ * @param updatedAt - session's last activity (epoch ms).
+ * @param aNow - previous clock read.
+ * @param bNow - next clock read.
+ * @returns whether the formatted label is identical.
+ */
+function sameTimeBucket(updatedAt: number, aNow: number, bNow: number): boolean {
+  if (aNow === bNow) return true
+  const a = relativeTime(updatedAt, aNow)
+  const b = relativeTime(updatedAt, bNow)
+  return a.unit === b.unit && a.n === b.n
+}
+
+/**
+ * Row memo comparator. `currentId` and `now` are projections (selection
+ * highlight / relative-time bucket), so an unrelated selection change or a new
+ * clock read does not re-render every row. Drag handler identities are compared
+ * by construction: the browser's row drag closures wrap this row's own id plus
+ * identity-stable owner callbacks and read the live gesture from a ref.
+ * @param prev - previous props.
+ * @param next - next props.
+ * @returns whether the row can keep its previous render.
+ */
+function sessionRowPropsEqual(prev: SessionNodeItemProps, next: SessionNodeItemProps): boolean {
+  if (prev.t !== next.t || prev.flat !== next.flat) return false
+  if (prev.onOpen !== next.onOpen || prev.onRename !== next.onRename || prev.onFork !== next.onFork
+    || prev.onArchive !== next.onArchive || prev.onPinToggle !== next.onPinToggle) return false
+  if (!sameSessionNode(prev.node, next.node)) return false
+  // The only use of currentId is `node.id === currentId` (class + aria).
+  if ((prev.node.id === prev.currentId) !== (next.node.id === next.currentId)) return false
+  if (!sameTimeBucket(next.node.updatedAt, prev.now, next.now)) return false
+  if ((prev.drag === undefined) !== (next.drag === undefined)) return false
+  if (prev.drag !== undefined && next.drag !== undefined) {
+    if (prev.drag.active !== next.drag.active || prev.drag.marker !== next.drag.marker) return false
+  }
+  return true
+}
+
+/**
+ * One top-level 34px session row: status dot (pending user interaction outranks
+ * own or descendant activity), title, relative time, and the row actions menu.
+ * Memoized: a list update that leaves this row's facts unrepainted keeps the
+ * previous render (see {@link sessionRowPropsEqual}).
+ * @param props.node - derived session node.
+ * @param props.currentId - selected session id (row highlight).
+ * @param props.now - epoch ms for relative-time formatting.
+ * @param props.onOpen - open a session by id.
+ * @param props.onRename - open the session rename dialog (id + current title).
+ * @param props.onFork - fork a session at its last completed turn.
+ * @param props.onArchive - archive a session by id.
+ * @param props.onPinToggle - pin or unpin this session.
+ * @param props.drag - optional draggable-row wiring.
+ * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
+ * @param props.t - the browser root's locale seat.
+ * @returns the session row.
+ */
+export const SessionNodeItem = memo(function SessionNodeItem(
+  { node, currentId, now, onOpen, onRename, onFork, onArchive, onPinToggle, drag, flat = false, t }: SessionNodeItemProps,
+) {
   const row = node
   const title = displayTitle(node, t)
   const selected = node.id === currentId
@@ -537,17 +652,18 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog. Pin leads the section; archive drops any pin.
-  const sessionMenuItems = [
-    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
-    { id: 'fork', label: t('menu.fork'), icon: <IconBranchOutline16 /> },
+  // Rebuilt only when a dictionary or pin fact can change a row: the glyphs are
+  // module constants, so an unchanged menu costs no allocation.
+  const sessionMenuItems = useMemo<MenuItem[]>(() => [
+    { id: 'rename', label: t('rename'), icon: MENU_RENAME_ICON },
+    { id: 'fork', label: t('menu.fork'), icon: MENU_FORK_ICON },
     {
       id: 'pin',
       label: t(row.pinned ? 'menu.unpinSession' : 'menu.pinSession'),
-      icon: <IconPinOutline16 />,
+      icon: MENU_PIN_ICON,
     },
-    // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
-    { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
-  ]
+    { id: 'archive', label: t('menu.archiveSession'), icon: MENU_ARCHIVE_ICON },
+  ], [row.pinned, t])
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
@@ -640,7 +756,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
                 aria-label={t('actions.session.aria', { name: title })}
                 onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
               >
-                <IconEllipsisOutline16 />
+                <IconEllipsisOutlineRegular />
               </button>
             )}
           />
@@ -658,4 +774,4 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
       copiedLabel={t('hover.copied')}
     />
   )
-}
+}, sessionRowPropsEqual)

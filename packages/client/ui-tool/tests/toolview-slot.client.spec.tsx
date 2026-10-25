@@ -75,8 +75,16 @@ async function bench(nodes: ToolResultNode[]) {
   runtime.slots.installLocale(locale)
   await runtime.sessions.add({
     id: SID,
-    summary: { title: 'S', displayTitle: 'S' },
-    snapshot: { nodes, chat: toolChatSnapshot(nodes) },
+    summary: { title: 'S', displayTitle: 'S', blank: false },
+    snapshot: {
+      nodes,
+      chat: toolChatSnapshot(nodes),
+      // Fixture defaults are blank/cold (hero); content benches need an active
+      // transcript or ConversationRoot never mounts conversation.session rows.
+      blank: false,
+      composerPhase: 'active',
+      openState: 'open',
+    },
     session: {
       loadOlder: vi.fn<ISession['loadOlder']>(),
       prompt: vi.fn<ISession['prompt']>(async () => ({ ok: true, value: { accepted: true } })),
@@ -98,6 +106,7 @@ describe('keyed toolview hole through the real machinery', () => {
     // bash: the sample plugin's keyed registration took the row (root
     // session → global arm, decided inside the component off useSessions).
     expect(view.container.querySelector('[data-sample="bash"]')).not.toBeNull()
+    // LocaleRuntime follows jsdom navigator → en dictionary.
     expect(view.getByText('Bash')).toBeTruthy()
     expect(view.getByText('Build')).toBeTruthy()
     // mystery: no registration under that key → render-site fallback.
@@ -134,7 +143,10 @@ describe('keyed toolview hole through the real machinery', () => {
     view.getByText('src/a.ts').click()
     expect(b.layout.openDetails).not.toHaveBeenCalled()
     await vi.waitFor(() => {
-      expect(b.runtime.workspaces.calls).toContainEqual({ method: 'openPath', args: ['src/a.ts'] })
+      expect(b.runtime.workspaces.calls).toContainEqual({
+        method: 'openPath',
+        args: ['/proj/s1/src/a.ts'],
+      })
     })
     await b.runtime.dispose()
   })

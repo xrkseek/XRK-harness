@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import {
-  IconChevronDownOutline14,
-  IconStopFill16,
+  IconChevronDownOutlineRegular,
+  IconStopFillRegular,
   StateDot,
   TerminalBlock,
   type TerminalBlockLabels,
@@ -201,7 +201,7 @@ function KillButton({
       title={title}
       onClick={onPress}
     >
-      <IconStopFill16 size={10} />
+      <IconStopFillRegular size={10} />
       {state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
     </button>
   )
@@ -241,7 +241,7 @@ export function JobRows({
             {expandable
               ? (
                 <span className={css.chevronBox} aria-hidden>
-                  <IconChevronDownOutline14
+                  <IconChevronDownOutlineRegular
                     size={10}
                     className={expanded ? css.chevronOpen : undefined}
                   />

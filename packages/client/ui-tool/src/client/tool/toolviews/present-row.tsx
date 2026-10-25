@@ -4,10 +4,11 @@
 // Preparing uses streamed args / presentCall title via toolRowModel (no phase FSM).
 
 import type { Context } from '@xrkseek/cordis'
-import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconBrowseOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
+import { localizeToolTitle } from '../models/localize-tool-title.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 
@@ -37,8 +38,8 @@ export function PresentRow({ toolName, block, cwd, home, openFile, inspect, t }:
       t={t}
       variant={model.variant}
       toolName={toolName}
-      icon={<IconBrowseOutline16 size={14} />}
-      title={model.title}
+      icon={<IconBrowseOutlineRegular size={14} />}
+      title={localizeToolTitle(toolName, model.variant, model.title, t)}
       summary={model.summary}
       summarySuffix={presentSuffix(model.state, t)}
       body={model.body}

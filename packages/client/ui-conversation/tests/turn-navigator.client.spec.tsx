@@ -66,7 +66,9 @@ describe('TurnNavigator', () => {
     const preview = view.getByRole('tooltip')
     expect(preview.textContent).toContain('first prompt')
     expect(preview.textContent).toContain('first response')
-    expect(preview.nextElementSibling?.textContent).toBe('第 1 轮')
+    // The persistent turn badge sits on the other side of the rail now, so it is
+    // a sibling of the preview basket instead of its next element.
+    expect(view.getByText('第 1 轮')).toBeTruthy()
     fireEvent.click(first)
     expect(onNavigate).toHaveBeenCalledWith(items[0])
   })

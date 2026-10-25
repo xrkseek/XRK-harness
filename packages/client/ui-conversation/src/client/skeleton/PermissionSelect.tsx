@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { PermissionSelect as PermissionSelectValue } from '@xrkseek/xrk-permission-presets/client'
-import { IconChevronDownOutline14, Menu, RiskConfirmation } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutlineRegular, Menu, RiskConfirmation } from '@xrkseek/client-ui-primitives'
 import type { MenuEntry } from '@xrkseek/client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import css from './PermissionSelect.module.css'
@@ -224,7 +224,7 @@ export function PermissionSelect({
             <span className={css.triggerLabel}>{currentLabel}</span>
             {/* Same glyph + open rotation as the sibling ModelSelect trigger. */}
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
-              <IconChevronDownOutline14 />
+              <IconChevronDownOutlineRegular />
             </span>
           </button>
         }

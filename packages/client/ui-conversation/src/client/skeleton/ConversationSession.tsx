@@ -23,6 +23,13 @@ interface Breadcrumb {
 
 const DEFAULT_VIEW_ID = 'chat'
 
+/** Mount-only seed selectors — see `pinFirstSelection`. */
+const selectInputDraft = (s: { readonly draft: string }): string => s.draft
+const selectStoredDraft = (s: { readonly draft: string }): string => s.draft
+
+/** Equality that never invalidates: the FIRST selection is held for the component's life. */
+const pinFirstSelection = (): boolean => true
+
 /** Resolve by id and keep stale persisted selections on the stable Chat fallback. */
 function resolveActiveView(tabs: readonly ViewTab[], selectedId: string | null): ViewTab | undefined {
   const requestedId = selectedId ?? DEFAULT_VIEW_ID
@@ -180,17 +187,25 @@ export function ConversationSession({
   const active = resolveActiveView(tabs, selectedId)
   const composerPhase = useSession(s => s.composerPhase)
   const blank = useSession(s => s.blank)
-  const inputState = useInput(s => s)
-  const storedDraft = useStore(s => s.draft)
+  // The seed effect below only ever reads the drafts as they are at MOUNT.
+  // `useInput(s => s)` subscribed this whole shell to every input change, so a
+  // keystroke re-rendered the header, the view ring and the composer subtree;
+  // `useStore(s => s.draft)` did the same one mirror write later. Pin both
+  // selections instead: each hook keeps one live subscription (React requires
+  // one) but `useSyncExternalStoreWithSelector` holds the first selection, so
+  // the shell stops re-rendering per keystroke.
+  const mountInputDraft = useInput(selectInputDraft, pinFirstSelection)
+  const mountStoredDraft = useStore(selectStoredDraft, pinFirstSelection)
   // `?? null`: persisted snapshots from before the inspect field rehydrate without it.
   const inspect = useStore(s => s.inspect ?? null)
 
   useEffect(() => {
-    if (inputState.draft === '' && storedDraft !== '') inputActions.setDraft(storedDraft)
+    if (mountInputDraft === '' && mountStoredDraft !== '') inputActions.setDraft(mountStoredDraft)
     const unmirror = bindDraftMirror(actions.setDraft)
     return () => { unmirror() }
-    // Mount-only (deps pinned to inputActions): later store writes come from
-    // the machine mirror, not this seed effect.
+    // Mount-only (deps pinned to inputActions): the two drafts above are the
+    // mount-time seed; later store writes come from the machine mirror.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputActions])
 
   useEffect(() => () => {

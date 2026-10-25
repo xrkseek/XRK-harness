@@ -4,7 +4,7 @@
  */
 import type { ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconPersonalizationOutline16, Tooltip } from '@xrkseek/client-ui-primitives'
+import { IconPersonalizationOutlineRegular, Tooltip } from '@xrkseek/client-ui-primitives'
 import css from './PluginsHomeButton.module.css'
 
 /** Injected open face from `ctx.settingsNav` (purity-safe). */
@@ -33,7 +33,7 @@ export function PluginsHomeButton({
         onClick={() => { openPlugins() }}
       >
         <span className={css.icon} aria-hidden>
-          <IconPersonalizationOutline16 size={wide ? 16 : 18} />
+          <IconPersonalizationOutlineRegular size={wide ? 16 : 18} />
         </span>
         {wide ? <span className={css.label}>{label}</span> : null}
       </button>

@@ -98,6 +98,15 @@ const user = (seq: number, text: string): UserMessageNode => ({
   content: [{ type: 'text', text }] as never,
   source: null,
 })
+/**
+ * Fixture-only opener: production UserMessageNode has no `turn`, but the
+ * snapshot fixture places a row on a Turn when `'turn' in node`. Rail
+ * `navigation.items()` only lists Turns that own a visible user opener.
+ */
+const userOnTurn = (seq: number, text: string, turn: number): UserMessageNode => ({
+  ...user(seq, text),
+  turn,
+} as UserMessageNode & { turn: number })
 const steering = (seq: number, text: string): SteeringMessageNode => ({
   kind: 'steering',
   messageId: `steer-${seq}` as SteeringMessageNode['messageId'],
@@ -315,6 +324,10 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     withdrawSteer: vi.fn(),
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
+    // Settings → General: process runs follow the work-details mode and the
+    // auto-expand-tools switch; the standard mode is the shipped default.
+    useToolsDefaultExpanded: ((selector: (value: boolean) => unknown) => selector(false)) as never,
+    useTranscriptView: ((selector: (value: 'standard') => unknown) => selector('standard')) as never,
     // Mirrors the real lookup chain (conversation namespace, then common).
     t,
   }
@@ -592,7 +605,9 @@ describe('ChatView', () => {
     expect(view.getByText('本地回显').closest('[data-submission-echo]')).not.toBeNull()
     // Same flow row from echo through durable: round / inject / edit-delete stay put.
     expect(view.getByText('第 1 轮')).toBeTruthy()
-    expect(view.container.querySelector('[data-pending-inject]')).not.toBeNull()
+    // No placeholder inject row: the Host's pre-message context write grows the
+    // real row from zero height instead of painting a phantom header first.
+    expect(view.container.querySelector('[data-pending-inject]')).toBeNull()
     expect(view.getByRole('button', { name: '编辑并重新发送' }).getAttribute('aria-disabled')).toBe('true')
     expect(view.getByRole('button', { name: '删除此消息及之后' }).getAttribute('aria-disabled')).toBe('true')
     const echoRow = view.container.querySelector('[data-send-flow="rpc:req-local-transcript"]')
@@ -615,7 +630,7 @@ describe('ChatView', () => {
     expect(view.container.querySelector('[data-send-flow="rpc:req-local-transcript"]')).toBe(echoRow)
   })
 
-  it('does not reserve an inject header when the window already has context rows', () => {
+  it('never paints a placeholder inject row while a send is in flight', () => {
     const pending = {
       requestId: 'req-later-round' as RpcId,
       placement: 'transcript' as const,
@@ -1189,6 +1204,17 @@ describe('ChatView', () => {
     ])
     expect(view.queryByRole('button', { name: '继续' })).toBeNull()
     expect(view.queryByText('本轮运行失败')).toBeNull()
+  })
+
+  it('shows a mid-turn cap cue above an auto-continue 继续 bubble', () => {
+    const continued: UserMessageNode = {
+      ...user(2, '继续'),
+      source: { kind: 'auto-continue', round: 1 },
+    }
+    const h = makeHarness({ nodes: [user(1, '写长文'), continued] })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByRole('status').textContent).toBe('已达到输出 token 上限，正在自动继续…')
+    expect(view.getByText('继续')).toBeTruthy()
   })
 
   it('hands the trajectory callback to the Tool seat', () => {
@@ -2297,11 +2323,22 @@ describe('ChatView', () => {
   })
 
   it('keeps an unloaded jump armed when the repage returns the same window head', async () => {
+    // Opener user rows (with turn) make 5/6/7 loaded rail marks; outline round
+    // keeps aria-labels as 第 N 轮 (missing round falls back to prompted index).
     const h = makeHarness({
-      nodes: [assistant(50, 'a5', 5), assistant(60, 'a6', 6), assistant(70, 'a7', 7)],
+      nodes: [
+        userOnTurn(49, 'q5', 5), assistant(50, 'a5', 5),
+        userOnTurn(59, 'q6', 6), assistant(60, 'a6', 6),
+        userOnTurn(69, 'q7', 7), assistant(70, 'a7', 7),
+      ],
       hasMore: true,
     })
-    h.setTurnOutline([{ turn: 2, seq: 20, prompt: '早先的提问', response: '早先的回答' }])
+    h.setTurnOutline([
+      { turn: 2, seq: 20, round: 2, prompt: '早先的提问', response: '早先的回答' },
+      { turn: 5, seq: 49, round: 5, prompt: 'q5', response: 'a5' },
+      { turn: 6, seq: 59, round: 6, prompt: 'q6', response: 'a6' },
+      { turn: 7, seq: 69, round: 7, prompt: 'q7', response: 'a7' },
+    ])
     const view = render(<h.ChatView {...h.props} />)
     const mark = (turn: number): HTMLElement => view.getByRole('button', {
       name: turn < 5 ? `加载并跳转到第 ${turn} 轮` : `跳转到第 ${turn} 轮`,
@@ -2322,9 +2359,16 @@ describe('ChatView', () => {
   })
 
   it('lands a still-armed unloaded jump once a later page finally covers the Turn', async () => {
-    const window1 = [assistant(50, 'a5', 5), assistant(60, 'a6', 6)]
+    const window1 = [
+      userOnTurn(49, 'q5', 5), assistant(50, 'a5', 5),
+      userOnTurn(59, 'q6', 6), assistant(60, 'a6', 6),
+    ]
     const h = makeHarness({ nodes: window1, hasMore: true })
-    h.setTurnOutline([{ turn: 2, seq: 20, prompt: '早先的提问', response: '早先的回答' }])
+    h.setTurnOutline([
+      { turn: 2, seq: 20, round: 2, prompt: '早先的提问', response: '早先的回答' },
+      { turn: 5, seq: 49, round: 5, prompt: 'q5', response: 'a5' },
+      { turn: 6, seq: 59, round: 6, prompt: 'q6', response: 'a6' },
+    ])
     const view = render(<h.ChatView {...h.props} />)
 
     fireEvent.click(view.getByRole('button', { name: '加载并跳转到第 2 轮' }))
@@ -2336,18 +2380,31 @@ describe('ChatView', () => {
     // A later page prepends the Turn. The next settle — the plain pull's
     // loadingOlder flip re-tick — has to carry the jump the rest of the way.
     // Fresh timing/turn-end maps are what the fixture reads as a new page.
-    act(() => { h.set({ nodes: [assistant(20, 'a2', 2), ...window1], turnTimings: new Map(), turnEnds: new Map() }) })
+    act(() => {
+      h.set({
+        nodes: [userOnTurn(19, 'q2', 2), assistant(20, 'a2', 2), ...window1],
+        turnTimings: new Map(),
+        turnEnds: new Map(),
+      })
+    })
     act(() => { h.set({ loadingOlder: true }) })
     act(() => { h.set({ loadingOlder: false }) })
     expect(view.getByRole('button', { name: '跳转到第 2 轮' }).getAttribute('aria-current')).toBe('true')
   })
 
   it('keeps an uncovered Turn armed when the window already spans its seq', async () => {
-    const window1 = [assistant(50, 'a5', 5), assistant(60, 'a6', 6)]
+    const window1 = [
+      userOnTurn(49, 'q5', 5), assistant(50, 'a5', 5),
+      userOnTurn(59, 'q6', 6), assistant(60, 'a6', 6),
+    ]
     // The outline's seq sits inside the loaded window while its Turn is not
     // there: nothing to page, and the row the Turn needs does not exist yet.
     const h = makeHarness({ nodes: window1, hasMore: true })
-    h.setTurnOutline([{ turn: 8, seq: 60, prompt: '缺口里的提问', response: '缺口里的回答' }])
+    h.setTurnOutline([
+      { turn: 5, seq: 49, round: 5, prompt: 'q5', response: 'a5' },
+      { turn: 6, seq: 59, round: 6, prompt: 'q6', response: 'a6' },
+      { turn: 8, seq: 60, round: 8, prompt: '缺口里的提问', response: '缺口里的回答' },
+    ])
     const view = render(<h.ChatView {...h.props} />)
 
     fireEvent.click(view.getByRole('button', { name: '加载并跳转到第 8 轮' }))
@@ -2358,7 +2415,13 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: '加载并跳转到第 8 轮' }).getAttribute('aria-busy')).toBeNull()
     expect(h.props.loadThrough).toHaveBeenCalledTimes(1)
 
-    act(() => { h.set({ nodes: [assistant(80, 'a8', 8), ...window1], turnTimings: new Map(), turnEnds: new Map() }) })
+    act(() => {
+      h.set({
+        nodes: [userOnTurn(79, 'q8', 8), assistant(80, 'a8', 8), ...window1],
+        turnTimings: new Map(),
+        turnEnds: new Map(),
+      })
+    })
     act(() => { h.set({ loadingOlder: true }) })
     act(() => { h.set({ loadingOlder: false }) })
     expect(view.getByRole('button', { name: '跳转到第 8 轮' }).getAttribute('aria-current')).toBe('true')

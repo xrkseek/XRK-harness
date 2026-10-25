@@ -205,9 +205,8 @@ export class Session implements SessionFace {
       )
       : new ConversationNodeAssembler(options.conversation.events, options.conversation.views)
     this.notifier = new Notifier(() => {
-      let leftoverStream = false
       if (!this.skipConversationFlush) {
-        leftoverStream = this.drainDeferredStreamAppends()
+        this.drainDeferredStreamAppends()
         this.conversation.flush()
       } else if (this.conversation.needsWindowReplace()) {
         // Soft keydown still materializes an unflushed window replace (open with
@@ -216,9 +215,6 @@ export class Session implements SessionFace {
       }
       this.skipConversationFlush = false
       this.snapshotCache = this.buildSnapshot()
-      // Time-sliced drain: continue ASAP (skip adaptive gap) so the assembler
-      // catches the durable log without waiting another full paint budget.
-      if (leftoverStream) queueMicrotask(() => { this.notifier.continueFrameDirty() })
     })
     this.snapshotCache = this.buildSnapshot()
   }
@@ -348,6 +344,7 @@ export class Session implements SessionFace {
               : []),
             delivery: mode,
             clientTimeZone: resolvedClientTimeZone(),
+            ...(requestId === undefined ? {} : { requestId }),
           }, signal)).result
           result = routed.ok ? { ok: true, value: { accepted: true } } : routed
         }
@@ -914,29 +911,26 @@ export class Session implements SessionFace {
 
   /**
    * Apply coalesced token deltas into the conversation assembler (events[] already
-   * holds them for seq continuity). Merges same-run deltas; stream paints may
-   * stop after a short time slice so one frame cannot monopolize the main thread.
-   * Structural events pass `forceAll` so ordering stays contiguous.
-   * @returns true when deferred work remains (caller should re-arm stream paint).
+   * holds them for seq continuity). Merges same-run deltas into one append so one
+   * paint does O(runs) `matchInput` work instead of O(chunks).
+   *
+   * The whole batch lands in one paint. This used to stop after a 8ms time slice
+   * and hand the remainder to the next frame, which is what let the assembler
+   * fall permanently behind a fast model: the drain could not outrun the arrival
+   * rate, so the transcript kept typing after Host had already settled and every
+   * click waited behind the backlog. DSH has no slice; a merged batch of token
+   * deltas is one string concat plus one assembler pass, which is cheaper than
+   * the scheduling it needed.
    */
-  private drainDeferredStreamAppends(options?: { forceAll?: boolean }): boolean {
-    if (this.deferredStreamAppends.length === 0) return false
+  private drainDeferredStreamAppends(): void {
+    if (this.deferredStreamAppends.length === 0) return
     const batch = this.deferredStreamAppends
     this.deferredStreamAppends = []
-    const merged = mergeDeferredStreamBatch(batch)
-    const forceAll = options?.forceAll === true
-    const started = Date.now()
-    let index = 0
-    for (; index < merged.length; index++) {
-      if (!forceAll && index > 0 && Date.now() - started >= STREAM_DRAIN_SLICE_MS) break
-      const item = merged[index]!
+    for (const item of mergeDeferredStreamBatch(batch)) {
       this.queueMirror.acceptDurable(item.event)
       this.conversation.append({ event: item.event, view: item.view })
       this.observeSubmissionEvent(item.event)
     }
-    if (index >= merged.length) return false
-    this.deferredStreamAppends = merged.slice(index)
-    return true
   }
 
   /** Seq-guarded append shared by stitching and the open-state live path. */
@@ -992,7 +986,7 @@ export class Session implements SessionFace {
       return
     }
     // Structural events must see every prior coalesced chunk before append.
-    this.drainDeferredStreamAppends({ forceAll: true })
+    this.drainDeferredStreamAppends()
     this.scheduleConversation(this.appendLive(event, view))
   }
 
@@ -1232,9 +1226,6 @@ function scheduleFrame(fn: () => void): void {
 function isStreamCoalescableChunk(event: SessionEvent): boolean {
   return event.type === 'assistant/chunk' && isTokenDelta(event.data.chunk)
 }
-
-/** Max wall time spent applying deferred stream chunks inside one paint. */
-const STREAM_DRAIN_SLICE_MS = 8
 
 type DeferredStreamItem = { event: SessionEvent; view: ToolEventView | undefined }
 

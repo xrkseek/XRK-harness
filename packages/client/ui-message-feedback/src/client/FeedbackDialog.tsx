@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Button, IconCheckOutline16, Modal, Toast,
+  Button, IconCheckOutlineRegular, Modal, Toast,
 } from '@xrkseek/client-ui-primitives'
 import type { FeedbackCategory } from './dialog.ts'
 import type { FeedbackDialogProps } from './slots.ts'
@@ -49,7 +49,7 @@ export function FeedbackDialog({ useDialog, edit, submit, dismiss, dismissToast,
         <Toast
           key={toast}
           text={t('toast.recorded')}
-          icon={<span className={css.toastIcon}><IconCheckOutline16 size={12} /></span>}
+          icon={<span className={css.toastIcon}><IconCheckOutlineRegular size={12} /></span>}
           anchor={card}
           onDone={onToastDone}
         />

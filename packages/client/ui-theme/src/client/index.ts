@@ -10,6 +10,7 @@
 import type { Context } from '@xrkseek/cordis'
 import type { BoundActions } from '@xrkseek/client-ui-slots'
 import type { ClientContext, SettingsScope } from '@xrkseek/client-runtime/client'
+import { ICON_SYMBOLS, type IconSymbolId } from '@xrkseek/client-ui-primitives'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
@@ -21,6 +22,7 @@ import type { FontSizeRowInjected } from './FontSizeRow.tsx'
 import { FontSizeRow } from './FontSizeRow.tsx'
 import { createAppearanceRowStore, createFontSizeRowStore } from './settings-store.ts'
 import { en, zh, type ThemeKey } from './locales.ts'
+import { installIconSprite, type IconReplacements } from './icon-sprite.ts'
 import {
   DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN,
   isThemePreference, THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE,
@@ -75,6 +77,14 @@ export interface ThemeDefinition {
   colorScheme: 'light' | 'dark'
   /** Alias-layer overrides applied as inline CSS variables over the base palette. */
   tokens: ThemeTokens
+  /**
+   * Optional product-icon artwork replacements, keyed by sprite symbol id.
+   *
+   * A theme that ships its own artwork swaps glyphs without touching any call
+   * site: the sprite is rebuilt from these on `theme/change` and every `<use>`
+   * follows. Absent entries keep the ui-primitives default artwork.
+   */
+  icons?: IconReplacements | undefined
 }
 
 /** Immutable theme state published on every change. */
@@ -93,6 +103,47 @@ export interface ThemeSnapshot {
   themes: readonly ThemeDefinition[]
   /** Monotonic change counter (registry or active changes). */
   revision: number
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+/**
+ * Validate and freeze a theme's icon replacements before they can reach the
+ * document sprite.
+ *
+ * A replacement is injected as a `<symbol>` into the live document, so it is
+ * untrusted markup at a privilege boundary (a theme can come from a plugin): an
+ * unknown symbol id, a document that is not an SVG-namespace `<svg viewBox>`
+ * root, a document-wide `<style>` or `<script>`, or an element id outside the
+ * symbol's own namespace would break another glyph, leak a style into the
+ * transcript, or execute script.
+ * @param definition - The theme being registered.
+ * @returns a frozen copy of the replacements, or undefined when there are none.
+ */
+function validateIcons({ id, icons }: ThemeDefinition): IconReplacements | undefined {
+  // Untyped callers may pass null; treat it like an absent field.
+  if (icons == null) return undefined
+  const copy: Partial<Record<IconSymbolId, string>> = {}
+  for (const [name, markup] of Object.entries<unknown>(icons)) {
+    const fail = (problem: string): never => {
+      throw new TypeError(`theme "${id}" icon "${name}" ${problem}`)
+    }
+    if (!Object.hasOwn(ICON_SYMBOLS, name)) fail('is not an ICON_SYMBOLS id')
+    if (typeof markup !== 'string') fail('must be an SVG document string')
+    copy[name as IconSymbolId] = markup as string
+    /* v8 ignore next -- needs a documentless run, where no sprite renders either */
+    if (typeof DOMParser === 'undefined') continue
+    const root = new DOMParser().parseFromString(markup as string, 'image/svg+xml').documentElement
+    if (root.namespaceURI !== SVG_NS || root.localName !== 'svg' || root.querySelector('parsererror') !== null) {
+      fail('is not a well-formed SVG-namespace <svg> document')
+    }
+    if (!root.hasAttribute('viewBox')) fail('needs a viewBox')
+    if (root.querySelector('style, script') !== null) fail('must not contain <style> or <script>')
+    for (const element of root.querySelectorAll('[id]')) {
+      if (!element.id.startsWith(`${name}-`)) fail(`element id "${element.id}" must start with "${name}-"`)
+    }
+  }
+  return Object.freeze(copy)
 }
 
 /** One theme token exposed to pre-definition Cordis inspection. */
@@ -284,12 +335,17 @@ export class ThemeRuntime {
     if (this.themes.some(t => t.id === definition.id)) {
       throw new Error(`theme "${definition.id}" is already registered`)
     }
-    this.themes = [...this.themes, definition]
+    const icons = validateIcons(definition)
+    // Always overwrite the field, even with `undefined`: an untyped caller can
+    // pass `icons: null`, and leaving that on the stored definition would reach
+    // the sprite as a null replacement map.
+    const registered: ThemeDefinition = { ...definition, icons }
+    this.themes = [...this.themes, registered]
     this.publish()
     return () => {
-      if (!this.themes.some(t => t.id === definition.id)) return
-      this.themes = this.themes.filter(t => t.id !== definition.id)
-      if (this.preference === definition.id) {
+      if (!this.themes.some(t => t.id === registered.id)) return
+      this.themes = this.themes.filter(t => t.id !== registered.id)
+      if (this.preference === registered.id) {
         this.preference = DEFAULT_PREFERENCE
       }
       this.publish()
@@ -460,6 +516,11 @@ export function apply(ctx: ClientContext): void {
   const host = ctx.settingsScope.bind<ThemeSettings>({ namespace: THEME_SETTINGS_NAMESPACE })
   const theme = new ThemeRuntime(ctx, host)
   ctx.provide('theme', theme)
+  // Mount the document icon sprite once: every product icon renders through a
+  // `<use href="#dsw-icon-<glyph>-<weight>">`, so a theme that ships artwork can
+  // replace a glyph without any call site changing (and `currentColor` plus CSS
+  // variables resolve at each use site instead of being baked into the markup).
+  installIconSprite(ctx, theme.getTheme().active.icons)
 
   ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en }), 'ui-theme: settings row dictionaries')
 

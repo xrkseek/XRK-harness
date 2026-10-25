@@ -313,6 +313,7 @@ describe('ToolRow', () => {
   it('renders leading icon, title and summary while collapsed', () => {
     const view = render(<ToolRow {...rowProps} />)
     expect(view.queryByTestId('tool-icon')).not.toBeNull()
+    // ToolRow paints the title prop as-is; localization is the card/row call site.
     expect(view.getByText('Bash')).toBeTruthy()
     expect(view.getByText('List files')).toBeTruthy()
     expect(view.container.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false')
@@ -583,7 +584,7 @@ describe('GenericToolCard', () => {
 
   it('renders the classified variant row from the frozen slice', () => {
     const view = render(<GenericToolCard {...props('bash', result())} />)
-    expect(view.getByText('Bash')).toBeTruthy()
+    expect(view.getByText('终端')).toBeTruthy()
     expect(view.getByText('List files')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
   })
@@ -592,7 +593,7 @@ describe('GenericToolCard', () => {
     const view = render(
       <GenericToolCard {...props('todo_write', running({ name: 'todo_write', argsRaw: '{"note":"x"}' }))} />,
     )
-    expect(view.getByText('Tool call')).toBeTruthy()
+    expect(view.getByText('工具调用')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="others"]')).not.toBeNull()
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
   })
@@ -604,7 +605,7 @@ describe('GenericToolCard', () => {
         argsRaw: '{"file_path":"src/x.ts","old_string":"before","new_string":"after"}',
       }))} />,
     )
-    expect(view.getByText('Edit')).toBeTruthy()
+    expect(view.getByText('编辑')).toBeTruthy()
     expect(view.getByText('src/x.ts')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="edit"]')).not.toBeNull()
     expect(view.container.querySelector('svg')).not.toBeNull()
@@ -617,7 +618,7 @@ describe('GenericToolCard', () => {
         argsRaw: '{"file_path":"src/x.ts","content":"hello"}',
       }))} />,
     )
-    expect(view.getByText('Write')).toBeTruthy()
+    expect(view.getByText('写入')).toBeTruthy()
     expect(view.getByText('src/x.ts')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="write"]')).not.toBeNull()
     expect(view.container.querySelector('svg')).not.toBeNull()
@@ -626,7 +627,7 @@ describe('GenericToolCard', () => {
   it('passes the owner inspect callback through to the expanded row pill', () => {
     const inspect = vi.fn()
     const view = render(<GenericToolCard {...props('bash', result())} inspect={inspect} />)
-    fireEvent.click(view.getByRole('button', { name: /Bash/ }))
+    fireEvent.click(view.getByRole('button', { name: /终端/ }))
     fireEvent.click(view.getByText('Inspect'))
     expect(inspect).toHaveBeenCalledTimes(1)
   })
@@ -659,7 +660,7 @@ describe('PresentRow', () => {
       name: 'present',
       argsRaw: '{"files":[{"path":"report.txt"}]}',
     }))} />)
-    expect(view.getByText('Present')).toBeTruthy()
+    expect(view.getByText('交付物')).toBeTruthy()
     expect(view.getByText('report.txt')).toBeTruthy()
     expect(view.getByText(zh['present.delivering'])).toBeTruthy()
 

@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import { IconCheckOutline16 } from './icons/index.tsx'
+import { IconCheckOutlineRegular } from './icons/index.tsx'
 import { usePointerGrace } from './pointer-grace.ts'
 import css from './Menu.module.css'
 
@@ -215,7 +215,30 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       onCloseRef.current()
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current()
+      if (e.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      // WAI-ARIA menu keyboard model. The items are real <button>s, so
+      // Enter/Space already work; only the roving focus keys were missing.
+      const list = listRef.current
+      if (list === null) return
+      if (!(e.target instanceof Node) || !list.contains(e.target)) return
+      if (e.altKey || e.ctrlKey || e.metaKey) return
+      const key = e.key
+      if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Home' && key !== 'End') return
+      const items = Array.from(
+        list.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ).filter((item) => !(item as HTMLButtonElement).disabled)
+      if (items.length === 0) return
+      const current = items.indexOf(document.activeElement as HTMLElement)
+      let next: number
+      if (key === 'Home') next = 0
+      else if (key === 'End') next = items.length - 1
+      else if (key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length
+      else next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length
+      e.preventDefault()
+      items[next]?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -309,7 +332,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
             )
             : <span className={css.itemLabel}>{entry.label}</span>}
           {/* Selection marker is a trailing check (figma .Menu_cell), not a fill. */}
-          {selected && <IconCheckOutline16 className={css.check} />}
+          {selected && <IconCheckOutlineRegular className={css.check} />}
         </button>
         {subOpen && entry.submenu !== undefined && (
           <div

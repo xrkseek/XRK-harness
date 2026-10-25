@@ -1,7 +1,7 @@
 import {
-  IconCheckOutline16,
-  IconLoadingOutline16,
-  IconWarningOutline16,
+  IconCheckOutlineRegular,
+  IconLoadingOutlineRegular,
+  IconWarningOutlineRegular,
 } from './icons/index.tsx'
 import css from './ConnectionIndicator.module.css'
 
@@ -60,7 +60,7 @@ export function ConnectionIndicator({
   if (state === 'recovered') {
     return (
       <div className={`${css.indicator} ${css.success}`} role="status" aria-label={recoveredLabel}>
-        <span className={css.icon} aria-hidden="true"><IconCheckOutline16 size={14} /></span>
+        <span className={css.icon} aria-hidden="true"><IconCheckOutlineRegular size={14} /></span>
         <span className={css.label}>
           {sizeLabels}
           <span className={css.stateLabel}>{recoveredLabel}</span>
@@ -80,8 +80,8 @@ export function ConnectionIndicator({
     >
       <span className={`${css.icon} ${connecting ? css.iconSpinner : ''}`} aria-hidden="true">
         {connecting
-          ? <IconLoadingOutline16 size={14} />
-          : <IconWarningOutline16 size={14} />}
+          ? <IconLoadingOutlineRegular size={14} />
+          : <IconWarningOutlineRegular size={14} />}
       </span>
       <span className={css.label}>
         {sizeLabels}

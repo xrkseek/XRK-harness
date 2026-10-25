@@ -30,11 +30,38 @@ import css from './views.module.css'
 
 const EMPTY_TURN_IDS: ReadonlySet<number> = new Set()
 
-/** Last non-empty ledger per session. A loading open keeps it until the new tail lands. */
-const trajectoryPaint = new Map<string, {
+type TrajectoryPaint = {
   turns: readonly TrajectoryTurnModel[]
   lastIndex: number
-}>()
+}
+
+/**
+ * Last non-empty ledger per session. A loading open keeps it until the new tail lands.
+ * Bounded LRU: a long-lived process must not pin the full model of every session that
+ * was ever displayed, so only the most recently published ledgers survive.
+ */
+const TRAJECTORY_PAINT_LIMIT = 3
+const trajectoryPaint = new Map<string, TrajectoryPaint>()
+
+/** Pure read (never reorders) so rendering stays side-effect free. */
+function readTrajectoryPaint(sessionId: string): TrajectoryPaint | undefined {
+  return trajectoryPaint.get(sessionId)
+}
+
+function writeTrajectoryPaint(sessionId: string, paint: TrajectoryPaint): void {
+  trajectoryPaint.delete(sessionId)
+  trajectoryPaint.set(sessionId, paint)
+  while (trajectoryPaint.size > TRAJECTORY_PAINT_LIMIT) {
+    const oldest = trajectoryPaint.keys().next()
+    if (oldest.done === true) break
+    trajectoryPaint.delete(oldest.value)
+  }
+}
+
+function dropTrajectoryPaint(sessionId: string): void {
+  trajectoryPaint.delete(sessionId)
+}
+
 const EMPTY_RECORD_IDS: ReadonlySet<string> = new Set()
 const SEARCH_INDEX_THROTTLE_MS = 3_000
 
@@ -276,11 +303,21 @@ export function TrajectoryView({
     nodes, eventLocations, partialTurn, partialStep,
     runningCalls, requests, callSchemas,
   ])
-  if (nodes.length > 0) {
-    trajectoryPaint.set(liveSessionId, finalized)
-  }
+  // Render stays read-only. The ledger is published after commit and released on unmount,
+  // so the module map is both bounded (LRU above) and self-cleaning. The id goes through a
+  // ref so a session switch does not evict a ledger the next switch back would have hit.
+  const hasLedger = nodes.length > 0
+  const liveSessionIdRef = useRef(liveSessionId)
+  liveSessionIdRef.current = liveSessionId
+  useEffect(() => {
+    if (!hasLedger) return
+    writeTrajectoryPaint(liveSessionId, finalized)
+  }, [hasLedger, liveSessionId, finalized])
+  useEffect(() => () => {
+    dropTrajectoryPaint(liveSessionIdRef.current)
+  }, [])
   const painted = nodes.length === 0 && historyLoading
-    ? trajectoryPaint.get(liveSessionId) ?? finalized
+    ? readTrajectoryPaint(liveSessionId) ?? finalized
     : finalized
   const timelinePartialSignature = partialStructureSignature(partial)
   const timelinePartial = useMemo<ConversationSnapshot['partial']>(() => partial === null

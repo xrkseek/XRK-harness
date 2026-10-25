@@ -18,8 +18,8 @@ import {
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@xrkseek/xrk-api-remotes/client'
 import {
-  IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconWarningOutline16, Toast,
+  IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
+  IconWarningOutlineRegular, Toast,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -437,7 +437,7 @@ export function ModelSelect(
       >
         <span className={css.triggerLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
-        <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
+        <IconChevronDownOutlineRegular className={clsx(css.chevron, open && css.chevronOpen)} />
       </button>
 
       {open && (
@@ -467,7 +467,7 @@ export function ModelSelect(
               >
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>{modelLabel}</span>
-                <IconChevronRightOutline14 className={css.cellChevron} />
+                <IconChevronRightOutlineRegular className={css.cellChevron} />
               </button>
               {reasoning !== undefined && (
                 <button
@@ -480,7 +480,7 @@ export function ModelSelect(
                 >
                   <span className={css.cellLabel}>{t('menu.effort')}</span>
                   <span className={css.cellValue}>{effortLabel}</span>
-                  <IconChevronRightOutline14 className={css.cellChevron} />
+                  <IconChevronRightOutlineRegular className={css.cellChevron} />
                 </button>
               )}
             </>
@@ -550,7 +550,7 @@ export function ModelSelect(
                                   )}
                                 </span>
                                 <span className={css.check}>
-                                  {selected ? <IconCheckOutline16 /> : null}
+                                  {selected ? <IconCheckOutlineRegular /> : null}
                                 </span>
                               </button>
                             )
@@ -597,7 +597,7 @@ export function ModelSelect(
                       )}
                     </span>
                     <span className={css.check}>
-                      {effectiveEffort === level.effort ? <IconCheckOutline16 /> : null}
+                      {effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
                     </span>
                   </button>
                 ))}
@@ -609,7 +609,7 @@ export function ModelSelect(
         <Toast
           key={toast.seq}
           text={toast.text}
-          icon={<IconWarningOutline16 />}
+          icon={<IconWarningOutlineRegular />}
           anchor={rootRef.current?.closest<HTMLElement>('[data-composer-card]') ?? null}
           onDone={() => { setToast(null) }}
         />

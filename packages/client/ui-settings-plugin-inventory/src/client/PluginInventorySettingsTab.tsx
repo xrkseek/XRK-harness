@@ -2,13 +2,13 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type
 import type { PluginEntryId, PluginInventorySnapshot } from '@xrkseek/xrk-api-remotes/client'
 import {
   Button,
-  IconBrowseOutline16,
-  IconCheckOutline16,
-  IconChevronDownOutline14,
-  IconEllipsisOutline16,
-  IconEnhanceOutline16,
-  IconSearchOutline16,
-  IconSettingsOutline16,
+  IconBrowseOutlineRegular,
+  IconCheckOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconEllipsisOutlineRegular,
+  IconEnhanceOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSettingsOutlineRegular,
   Menu,
   Modal,
   StateDot,
@@ -123,11 +123,11 @@ function resolveInstallRegistry(
 
 function kindArtwork(
   kind: PluginInventorySnapshot['entries'][number]['kind'] | undefined,
-): { readonly Icon: typeof IconBrowseOutline16; readonly labelKey: PluginInventoryLocaleKey } {
-  if (kind === 'client') return { Icon: IconBrowseOutline16, labelKey: 'artworkClient' }
-  if (kind === 'process') return { Icon: IconSettingsOutline16, labelKey: 'artworkProcess' }
-  if (kind === 'both') return { Icon: IconEnhanceOutline16, labelKey: 'artworkBoth' }
-  return { Icon: IconEnhanceOutline16, labelKey: 'artworkDefault' }
+): { readonly Icon: typeof IconBrowseOutlineRegular; readonly labelKey: PluginInventoryLocaleKey } {
+  if (kind === 'client') return { Icon: IconBrowseOutlineRegular, labelKey: 'artworkClient' }
+  if (kind === 'process') return { Icon: IconSettingsOutlineRegular, labelKey: 'artworkProcess' }
+  if (kind === 'both') return { Icon: IconEnhanceOutlineRegular, labelKey: 'artworkBoth' }
+  return { Icon: IconEnhanceOutlineRegular, labelKey: 'artworkDefault' }
 }
 
 /** Reload the product shell so client halves remount (Desktop chrome or location). */
@@ -636,7 +636,7 @@ export function PluginInventorySettingsTab({
             aria-expanded={installGuideOpen}
             onClick={() => { setInstallGuideOpen((open) => !open) }}
           >
-            <IconChevronDownOutline14
+            <IconChevronDownOutlineRegular
               className={installGuideOpen ? css.guideChevronOpen : css.guideChevron}
             />
             {t(installGuideOpen ? 'installGuideHide' : 'installGuideShow')}
@@ -715,7 +715,7 @@ export function PluginInventorySettingsTab({
             )
             : null}
           <label className={css.search}>
-            <IconSearchOutline16 aria-hidden="true" />
+            <IconSearchOutlineRegular aria-hidden="true" />
             <span className={css.visuallyHidden}>{t('search')}</span>
             <input
               type="search"
@@ -774,7 +774,7 @@ export function PluginInventorySettingsTab({
                   aria-controls={`${catalogId}-preset`}
                   onClick={() => { setPresetOpen(value => !value) }}
                 >
-                  <IconChevronDownOutline14 className={css.scopeChevron} data-open={presetOpen || undefined} aria-hidden="true" />
+                  <IconChevronDownOutlineRegular className={css.scopeChevron} data-open={presetOpen || undefined} aria-hidden="true" />
                   <span className={css.scopeTitle}>{t('presetTitle')}</span>
                 </button>
                 <Menu
@@ -801,7 +801,7 @@ export function PluginInventorySettingsTab({
                       onClick={() => { setSwitcherOpen(value => !value) }}
                     >
                       <span>{presetLabel(selectedPreset, t)}</span>
-                      <IconChevronDownOutline14 aria-hidden="true" />
+                      <IconChevronDownOutlineRegular aria-hidden="true" />
                     </button>
                   )}
                 />
@@ -831,7 +831,7 @@ export function PluginInventorySettingsTab({
                           >
                             <div className={css.cardContent} data-static="true">
                               <span className={css.artwork} data-kind="composition" aria-hidden="true">
-                                <IconEnhanceOutline16 size={16} />
+                                <IconEnhanceOutlineRegular size={16} />
                               </span>
                               <span className={css.cardTitleBlock}>
                                 <span className={css.cardTitleRow}>
@@ -884,7 +884,7 @@ export function PluginInventorySettingsTab({
                 aria-controls={`${catalogId}-global`}
                 onClick={() => { setGlobalOpen(value => !value) }}
               >
-                <IconChevronDownOutline14 className={css.scopeChevron} data-open={globalOpen || undefined} aria-hidden="true" />
+                <IconChevronDownOutlineRegular className={css.scopeChevron} data-open={globalOpen || undefined} aria-hidden="true" />
                 <span className={css.scopeTitle}>{t('globalTitle')}</span>
               </button>
               <span className={css.scopeCount} data-plugin-count={filteredEntries.length}>
@@ -1052,7 +1052,7 @@ export function PluginInventorySettingsTab({
                               </span>
                             )
                             : null}
-                          <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
+                          <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
                         </span>
                       </button>
                       {managed ? (
@@ -1099,7 +1099,7 @@ export function PluginInventorySettingsTab({
                                   ))
                                 }}
                               >
-                                <IconEllipsisOutline16 size={14} />
+                                <IconEllipsisOutlineRegular size={14} />
                               </button>
                             )}
                             items={[
@@ -1259,7 +1259,7 @@ export function PluginInventorySettingsTab({
           <Toast
             key={toast.seq}
             text={toast.text}
-            icon={<IconCheckOutline16 size={14} />}
+            icon={<IconCheckOutlineRegular size={14} />}
             anchor={rootRef.current}
             onDone={() => { setToast(null) }}
           />

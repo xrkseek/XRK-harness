@@ -118,6 +118,28 @@ export function hasAgentWorkBefore(
   return false
 }
 
+/**
+ * Earliest identity of any agent-work row still inside the live turns.
+ *
+ * `hasAgentWorkBefore` answers "did work land before this row" by scanning the
+ * whole window, which is O(n) per question. Callers that ask it once per row —
+ * the flow tail scan does — pay O(n²). This computes the same threshold once:
+ * `hasAgentWorkBefore(rows, id) === earliestAgentWorkId(rows) < id`.
+ */
+export function earliestAgentWorkId(
+  nodes: Iterable<TimedChatRow>,
+  latestTurn?: number | null,
+): number {
+  let earliest = Number.POSITIVE_INFINITY
+  for (const node of nodes) {
+    if (!isAgentWorkRow(node.kind)) continue
+    if (node.location !== undefined && isHistoricClosedTurn(node.location, latestTurn)) continue
+    const id = rowSteerIdentity(node.data)
+    if (typeof id === 'number' && id < earliest) earliest = id
+  }
+  return earliest
+}
+
 function rowText(data: TimedChatRow['data']): string {
   const parts: string[] = []
   for (const block of data?.content ?? []) {

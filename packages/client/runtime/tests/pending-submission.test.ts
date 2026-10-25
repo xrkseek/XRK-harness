@@ -37,7 +37,10 @@ function bareApi(onPrompt?: (payload: unknown) => Promise<unknown>): {
       history: () => Promise.resolve(ok({ events: [], hasMore: false })),
     },
     subagents: {
-      prompt: () => Promise.resolve(ok({ messageId: 'm' as never })),
+      prompt: (payload: unknown) => {
+        prompts.push(payload)
+        return Promise.resolve(ok({ messageId: 'm' as never }))
+      },
       history: () => Promise.resolve(ok({ events: [], hasMore: false })),
       interrupt: () => Promise.resolve(ok({ accepted: true as const })),
     },
@@ -225,6 +228,23 @@ describe('beginSubmission', () => {
     const handle = session.beginSubmission({ mode: 'queue', text: '带 id', attachments: [] })
     await session.prompt([{ type: 'text', text: '带 id' }], 'queue', undefined, handle.requestId)
     expect(prompts[0]).toMatchObject({ requestId: handle.requestId, sessionId: SID })
+  })
+
+  it('passes requestId through to subagent.prompt', async () => {
+    const PARENT = 'fk-parent' as SessionId
+    const { api, prompts } = bareApi()
+    const session = new Session(SID, api, remotes(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    const handle = session.beginSubmission({ mode: 'steer', text: '子插队', attachments: [] })
+    await session.prompt([{ type: 'text', text: '子插队' }], 'steer', undefined, handle.requestId)
+    expect(prompts[0]).toMatchObject({
+      requestId: handle.requestId,
+      parentSessionId: PARENT,
+      childSessionId: SID,
+      delivery: 'steer',
+    })
   })
 
   it('dispose retires unsettled echoes as failed', () => {

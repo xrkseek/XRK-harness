@@ -12,21 +12,17 @@
 // model-facing text through ToolRow's Output section instead.
 
 import type { Context } from '@xrkseek/cordis'
-import { IconSearchOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconSearchOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
+import { localizeToolTitle } from '../models/localize-tool-title.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 
 /** Full row props: the toolview runtime share plus the standard locale seat. */
 type SearchRowProps = ToolCallViewProps & PropsLocale<'conversation'>
-
-const SEARCH_TITLES: Record<string, string> = {
-  grep: 'Grep',
-  glob: 'Glob',
-}
 
 /**
  * Search row: icon + Grep/Glob · {summary} in the shared ToolRow chrome, with the
@@ -44,8 +40,8 @@ export function SearchRow({ toolName, block, inspect, t }: SearchRowProps) {
       t={t}
       variant={model.variant}
       toolName={toolName}
-      icon={<IconSearchOutline16 size={14} />}
-      title={SEARCH_TITLES[toolName] ?? model.title}
+      icon={<IconSearchOutlineRegular size={14} />}
+      title={localizeToolTitle(toolName, model.variant, model.title, t)}
       // The result view's replacement title outranks the args-derived summary,
       // matching the terminal card's description precedence.
       summary={search?.title ?? model.summary}

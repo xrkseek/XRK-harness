@@ -9,7 +9,7 @@
 
 import { memo, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { IconDatabaseOutline16, IconGaugeOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { UseProjection } from '@xrkseek/client-runtime/client'
 import type { SnapshotSelectorHook } from '@xrkseek/client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
@@ -83,7 +83,7 @@ function TimePill({ stats, t, dialog }: {
     return (
       <span className={css.anchor}>
         <span className={css.pill}>
-          <IconGaugeOutline16 />
+          <IconGaugeOutlineRegular />
           {label}
         </span>
       </span>
@@ -99,7 +99,7 @@ function TimePill({ stats, t, dialog }: {
         aria-label={tps === null ? counts : `${counts} · ${tps}`}
         onClick={() => { setOpen(!open) }}
       >
-        <IconGaugeOutline16 />
+        <IconGaugeOutlineRegular />
         {label}
       </button>
       {open && createPortal(
@@ -112,7 +112,7 @@ function TimePill({ stats, t, dialog }: {
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconGaugeOutline16 />
+              <IconGaugeOutlineRegular />
               {t('stats.dialog.title')}
             </span>
           </div>
@@ -172,7 +172,7 @@ function UsagePill({ usage, t, dialog }: {
         aria-label={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
         onClick={() => { setOpen(!open) }}
       >
-        <IconDatabaseOutline16 />
+        <IconDatabaseOutlineRegular />
         <span className={css.label}>
           {totalText}
           {cacheHitText !== null && (
@@ -193,7 +193,7 @@ function UsagePill({ usage, t, dialog }: {
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconDatabaseOutline16 />
+              <IconDatabaseOutlineRegular />
               {t('stats.dialog.usageTitle')}
             </span>
             <span className={dialogCss.titleValue}>{exactCount(total, t)}</span>

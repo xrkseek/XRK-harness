@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
+import { IconCloseFillRegular } from '@xrkseek/client-ui-primitives'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat and
 // its {locked} owner share).
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -61,7 +61,7 @@ export function PlanChip({ useProjection, locked, exitPlanMode, t }: PlanChipPro
         {/* Design literal, not copy: the chip wordmark stays 'Plan' in every locale. */}
         Plan
         <span className={css.close} aria-hidden>
-          <IconCloseFill14 size={12} />
+          <IconCloseFillRegular size={12} />
         </span>
       </button>
       {/* Failure copy stays English (error-surface policy: not localized). */}

@@ -5,7 +5,7 @@
  * whose Session is gone has no row and no action; the set itself stays host-owned.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, IconSearchOutline16, Modal } from '@xrkseek/client-ui-primitives'
+import { Button, IconSearchOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { SessionId } from '@xrkseek/client-runtime/client'
 import { relativeTime } from './tree.ts'
@@ -225,7 +225,7 @@ export function ArchivedSessionsSection(props: ArchivedSessionsSectionProps): Re
     <div className={css.section}>
       <p className={css.hint}>{t('storageHint')}</p>
       <div className={css.search}>
-        <IconSearchOutline16 aria-hidden="true" />
+        <IconSearchOutlineRegular aria-hidden="true" />
         <input
           type="search"
           value={query}

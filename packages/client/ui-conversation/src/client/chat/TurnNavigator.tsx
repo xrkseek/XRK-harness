@@ -254,19 +254,21 @@ function TurnNavigatorRail({ items, activeTurn, busyTurn, onNavigate, t }: TurnN
           </div>
         </div>
         {clusterItem !== undefined && clusterPosition !== undefined && (
-          <div className={css.cluster} style={clusterPosition}>
+          <>
             {preview !== undefined && (
-              <div id={previewId} role="tooltip" className={css.preview}>
-                <div className={css.previewPrompt}>
-                  {preview.prompt || t('chat.turnNavigation.turn', { turn: preview.round })}
+              <div className={css.cluster} style={clusterPosition}>
+                <div id={previewId} role="tooltip" className={css.preview}>
+                  <div className={css.previewPrompt}>
+                    {preview.prompt || t('chat.turnNavigation.turn', { turn: preview.round })}
+                  </div>
+                  {preview.response !== '' && <div className={css.previewResponse}>{preview.response}</div>}
                 </div>
-                {preview.response !== '' && <div className={css.previewResponse}>{preview.response}</div>}
               </div>
             )}
-            <span className={css.turnNumber} aria-hidden>
+            <span className={css.turnBadge} style={clusterPosition} aria-hidden>
               {t('chat.turnNavigation.turn', { turn: clusterItem.round })}
             </span>
-          </div>
+          </>
         )}
       </nav>
     </div>

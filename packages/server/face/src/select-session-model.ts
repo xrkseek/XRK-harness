@@ -3,11 +3,6 @@
  */
 
 import { assertPolicyAllow, PolicyGateError } from "@xrkseek/policy";
-import {
-  contentHasImage,
-  type MessageContent,
-} from "@xrkseek/protocol";
-import { readSessionEvents } from "@xrkseek/core-session";
 import { sessionNotFoundMessage } from "./face-error-text.js";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
@@ -62,25 +57,6 @@ function publishSelectedContextWindow(
       provider: selected.provider,
     };
   });
-}
-
-function sessionHasImageContent(
-  runtime: FaceRuntime,
-  sessionId: string,
-): boolean {
-  if (runtime.sessionHasImage.has(sessionId)) return true;
-  if (runtime.sessionImageScanned.has(sessionId)) return false;
-  for (const ev of readSessionEvents(runtime.store, sessionId)) {
-    if (ev.type !== "user/message" && ev.type !== "prompt/admitted") continue;
-    const content = (ev as { content?: MessageContent }).content;
-    if (content !== undefined && contentHasImage(content)) {
-      runtime.sessionHasImage.add(sessionId);
-      runtime.sessionImageScanned.add(sessionId);
-      return true;
-    }
-  }
-  runtime.sessionImageScanned.add(sessionId);
-  return false;
 }
 
 export async function selectSessionModel(
@@ -161,9 +137,10 @@ export async function selectSessionModel(
       },
     };
   }
-  let resolved;
   try {
-    resolved = resolveLlmForSelection(runtime, selected);
+    // Validates provider/model (and effort) are routable. Image history is
+    // fine on a text-only route — assemble projects via projectImagesForTextModel.
+    resolveLlmForSelection(runtime, selected);
   } catch (err) {
     switchSlot.release();
     const message = err instanceof Error ? err.message : String(err);
@@ -181,18 +158,6 @@ export async function selectSessionModel(
       error: {
         code: "model-unavailable",
         message,
-        details: { provider, model },
-      },
-    };
-  }
-  const modalities = resolved.adapter.inputModalities ?? ["text"];
-  if (sessionHasImageContent(runtime, sessionId) && !modalities.includes("image")) {
-    switchSlot.release();
-    return {
-      ok: false,
-      error: {
-        code: "model-unavailable",
-        message: `Model "${model}" does not accept image input, but this session already contains images; select an image-capable model.`,
         details: { provider, model },
       },
     };

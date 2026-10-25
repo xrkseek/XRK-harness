@@ -2,9 +2,6 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as primitives from '@xrkseek/client-ui-primitives'
-import {
-  IconApiOutline14, IconArchiveOutline20, IconFolderClose16, IconGoalOutline16, IconSendOutline16,
-} from '@xrkseek/client-ui-primitives'
 
 afterEach(cleanup)
 
@@ -14,60 +11,83 @@ const icons = Object.fromEntries(
   Object.entries(primitives).filter(([name]) => name.startsWith('Icon')),
 ) as Record<string, (p: primitives.IconProps) => React.JSX.Element>
 const iconNames = Object.keys(icons)
-const dshFluentAliases = iconNames.filter((name) => /(?:Regular|Medium)$/.test(name))
-const glyphNames = iconNames.filter((name) => !/(?:Regular|Medium)$/.test(name))
+const glyphCount = Object.keys(primitives.ICON_ARTWORK).length
 
-describe('ic_ds_ icon set', () => {
-  it('exports the full icon set (glyph exports; Fluent-size aliases counted separately)', () => {
-    expect(glyphNames.length).toBe(74)
+describe('product icon set', () => {
+  it('gives every glyph a regular and a medium component', () => {
+    // One glyph in the artwork table is reserved for composite artwork and is
+    // not exposed on its own, so callers see (glyphs - 1) × 2 components.
+    expect(iconNames).toHaveLength(2 * (glyphCount - 1))
+    for (const name of iconNames.filter(candidate => candidate.endsWith('Regular'))) {
+      expect(iconNames).toContain(name.replace(/Regular$/, 'Medium'))
+    }
   })
 
-  it('aliases DSH Fluent-size icon names onto the same glyphs', () => {
-    expect(dshFluentAliases.sort()).toEqual([
-      'IconBranchOutlineRegular',
-      'IconCheckOutlineMedium',
-      'IconChevronDownOutlineMedium',
-      'IconCloseOutlineRegular',
-      'IconCopyOutlineRegular',
-      'IconDownloadOutlineRegular',
-      'IconRefreshOutlineRegular',
-      'IconSearchOutlineRegular',
-      'IconStopFillRegular',
-    ])
-    expect(primitives.IconDownloadOutlineRegular).toBe(primitives.IconDownloadOutline16)
+  it('publishes one default sprite symbol per glyph and weight', () => {
+    expect(Object.keys(primitives.ICON_SYMBOLS)).toHaveLength(2 * glyphCount)
   })
 
-  it.each(iconNames)('%s renders an svg with currentColor fills and no hardcoded palette', (name) => {
-    const Icon = icons[name]!
-    const { container } = render(<Icon />)
-    const svg = container.querySelector('svg')
-    expect(svg).not.toBeNull()
-    const markup = container.innerHTML
-    expect(markup).not.toMatch(/#[0-9a-fA-F]{3,8}"/)
-    expect(markup).toContain('currentColor')
+  it('keeps element ids unique inside every symbol', () => {
+    // A repeated id would make one glyph's gradient/clip leak into another's.
+    const ids = Object.values(primitives.ICON_SYMBOLS)
+      .flatMap(markup => [...markup.matchAll(/\sid="([^"]+)"/g)].map(([, id]) => id))
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('renders a sprite reference, not an inlined path', () => {
+    const { container } = render(<primitives.IconSearchOutlineMedium />)
+    const svg = container.querySelector('svg')!
+    expect(svg.getAttribute('data-icon')).toBe('dsw-icon-search-outline-medium')
+    expect(container.querySelector('use')!.getAttribute('href')).toBe('#dsw-icon-search-outline-medium')
+    // The artwork lives in the sprite; the use site carries no path of its own.
+    expect(container.querySelector('path')).toBeNull()
+  })
+
+  it('uses 1px regular and 1.3px medium strokes', () => {
+    expect(primitives.ICON_REGULAR_STROKE).toBe(1)
+    expect(primitives.ICON_MEDIUM_STROKE).toBe(1.3)
+    expect(primitives.ICON_SYMBOLS['dsw-icon-search-outline-regular'])
+      .toBe(primitives.ICON_ARTWORK['search-outline'].svg(primitives.ICON_REGULAR_STROKE))
+    expect(primitives.ICON_SYMBOLS['dsw-icon-search-outline-medium'])
+      .toBe(primitives.ICON_ARTWORK['search-outline'].svg(primitives.ICON_MEDIUM_STROKE))
+  })
+
+  it('keeps every default glyph free of a hardcoded palette', () => {
+    for (const markup of Object.values(primitives.ICON_SYMBOLS)) {
+      expect(markup).not.toMatch(/#[0-9a-fA-F]{3,8}"/)
+      expect(markup).toContain('currentColor')
+    }
+  })
+
+  it('keeps a non-square glyph at its drawn ratio', () => {
+    const { container } = render(<primitives.IconTreeCornerRegular size={20} />)
+    const svg = container.querySelector('svg')!
+    // aspect [8, 10]: width follows the ratio, height stays the requested size.
+    expect(svg.getAttribute('height')).toBe('20')
+    expect(svg.getAttribute('width')).toBe('16')
+  })
+
+  it('defaults each glyph to its own drawn size', () => {
+    const search = render(<primitives.IconSearchOutlineRegular />)
+    expect(search.container.querySelector('svg')!.getAttribute('width')).toBe('16')
+    const globe = render(<primitives.IconGlobeOutlineRegular />)
+    expect(globe.container.querySelector('svg')!.getAttribute('width')).toBe('14')
+    const corner = render(<primitives.IconTreeCornerRegular />)
+    expect(corner.container.querySelector('svg')!.getAttribute('height')).toBe('10')
   })
 
   it('size and className props land on the root svg', () => {
-    const { container } = render(<IconSendOutline16 size={20} className="x" />)
+    const { container } = render(<primitives.IconSendOutlineRegular size={20} className="x" />)
     const svg = container.querySelector('svg')!
     expect(svg.getAttribute('width')).toBe('20')
     expect(svg.getAttribute('height')).toBe('20')
     expect(svg.classList.contains('x')).toBe(true)
   })
 
-  it('each glyph defaults to its own drawn size, not one set-wide default', () => {
-    const api = render(<IconApiOutline14 />)
-    expect(api.container.querySelector('svg')!.getAttribute('width')).toBe('14')
-    const folder = render(<IconFolderClose16 />)
-    expect(folder.container.querySelector('svg')!.getAttribute('width')).toBe('16')
-    const archive = render(<IconArchiveOutline20 />)
-    expect(archive.container.querySelector('svg')!.getAttribute('width')).toBe('20')
-  })
-
-  it('renders reusable goal glyphs without document-global ids', () => {
-    const { container } = render(<><IconGoalOutline16 /><IconGoalOutline16 /></>)
-    expect(container.querySelector('[id]')).toBeNull()
-    expect(container.querySelector('[clip-path]')).toBeNull()
+  it('ships the bell glyph XRK adds on top of the DSH artwork table', () => {
+    expect(primitives.ICON_ARTWORK['bell-outline']).toBeDefined()
+    const { container } = render(<primitives.IconBellOutlineRegular />)
+    expect(container.querySelector('use')!.getAttribute('href')).toBe('#dsw-icon-bell-outline-regular')
   })
 })
 

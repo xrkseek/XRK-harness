@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconAgentPresetOutline16, IconChevronDownOutline14, Menu } from '@xrkseek/client-ui-primitives'
+import { IconAgentPresetOutlineRegular, IconChevronDownOutlineRegular, Menu } from '@xrkseek/client-ui-primitives'
 // Type-only: pulls the ui-conversation SlotMap merge (the hero seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type { AgentPresetSeatState } from './seat-store.ts'
@@ -142,9 +142,9 @@ export function AgentPresetSeat({ load, select, introduced, useAgentPresetSeat, 
       disabled={state.busy || lockedSurface}
       onClick={lockedSurface ? undefined : () => { setOpen(value => !value) }}
     >
-      <IconAgentPresetOutline16 className={introducing ? `${css.seatIcon} ${css.introIcon}` : css.seatIcon} />
+      <IconAgentPresetOutlineRegular className={introducing ? `${css.seatIcon} ${css.introIcon}` : css.seatIcon} />
       {shownLabel}
-      {!lockedSurface && <IconChevronDownOutline14 className={css.chevron} />}
+      {!lockedSurface && <IconChevronDownOutlineRegular className={css.chevron} />}
     </button>
   )
 

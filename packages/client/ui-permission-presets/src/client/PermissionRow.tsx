@@ -8,7 +8,7 @@ import { memo, useEffect, useState, type FormEvent, type ReactNode } from 'react
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconChevronDownOutline14, IconCloseFill14, Menu, RiskConfirmation,
+  IconChevronDownOutlineRegular, IconCloseFillRegular, Menu, RiskConfirmation,
 } from '@xrkseek/client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
 import type { PermissionSettingsKey } from './locales.ts'
@@ -119,7 +119,7 @@ const ExtraWritableRootsInput = memo(function ExtraWritableRootsInput({
                   disabled={disabled}
                   onClick={() => { void save(value.filter((entry) => entry !== root)) }}
                 >
-                  <IconCloseFill14 size={12} />
+                  <IconCloseFillRegular size={12} />
                 </button>
               </li>
             ))}
@@ -229,7 +229,7 @@ export function PermissionRow({ load, select, saveRoots, usePermission, t }: Per
               onClick={() => { setOpen(value => !value) }}
             >
               {label}
-              <IconChevronDownOutline14 className={css.chevron} />
+              <IconChevronDownOutlineRegular className={css.chevron} />
             </button>
           )}
         />

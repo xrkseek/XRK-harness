@@ -12,6 +12,7 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import type { MarkdownFileMentions } from '@xrkseek/client-ui-primitives'
 import type { MessageId } from '@xrkseek/client-connection/client'
+import type { TranscriptViewMode } from '../../submission-settings.ts'
 import type {} from '@xrkseek/client-ui-layout/client'
 import type { ComposerBlock } from '../input/blocks.ts'
 import type {
@@ -526,6 +527,16 @@ export interface ChatNodeOwnerProps {
   deleteAt: (seq: number) => void
   /** Withdraw one still-pending next-step steer (`session.updateQueue` remove). */
   withdrawSteer: (itemId: MessageId) => void
+  /**
+   * ChatView's flow-tail verdict for this row: it sits in the trailing 插队
+   * cluster because the turn it interrupted is still open and Host has not
+   * promoted it into the next request. The row paints 「发送中」 and withholds
+   * edit/delete from this verdict, never from the queue row — Host drops the
+   * row the moment it admits the steer, so keying the chrome off the row made
+   * the bubble flip to an ordinary send mid-turn. Absent means "not 插队":
+   * body rows, promoted steers, and idle sends all take the plain path.
+   */
+  steer?: boolean | undefined
   /** Session-authorized durable image loader (tool image cards + message galleries). */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
   /** Render a historical image group through the attachment slot. */
@@ -896,6 +907,19 @@ export interface ChatScrollPosition {
  * outside the view (layout orchestration; the session object layer).
  */
 export interface ChatViewInjected {
+  /**
+   * Live Chat display preferences.
+   *
+   * `toolsDefaultExpanded` is the Settings → General switch that makes every
+   * tool row start open. The same reader asked for the detail, so a completed
+   * Turn's process run must not fold it away — the run follows this switch
+   * rather than folding unconditionally.
+   */
+  hooks: {
+    readonly toolsDefaultExpanded: import('@xrkseek/client-runtime/client').SnapshotStore<boolean>
+    /** Work-details mode: how much of a settled Turn's process run stays visible. */
+    readonly transcriptView: import('@xrkseek/client-runtime/client').SnapshotStore<TranscriptViewMode>
+  }
   /** Selection write + details panel opening in one gesture (store action + layout orchestration). */
   openDetails: (target: SelectionTarget) => void
   /**
@@ -956,7 +980,7 @@ export type ChatViewSlotProps =
     | 'conversation.message.files'
     | 'conversation.attachment.preview'
   >
-  & PropsStore<ChatStore> & ChatViewInjected & PropsLocale<'conversation'>
+  & PropsStore<ChatStore> & InjectFace<ChatViewInjected> & PropsLocale<'conversation'>
 
 /** Full props of the attachment plugin's composer entry. */
 export type ComposerAttachmentsProps =

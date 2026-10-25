@@ -60,7 +60,8 @@ describe('ToolCallTree', () => {
     expect(row?.getAttribute('data-chat-anchor-key')).toBe('call:w1')
     expect(row?.getAttribute('data-selected')).toBe('true')
     expect(view.container.querySelector('[data-variant="others"]')).not.toBeNull()
-    expect(view.getByText('w1')).toBeTruthy()
+    // call:null → empty wire name; title is the localized others variant.
+    expect(view.getByText('工具调用')).toBeTruthy()
   })
 
   it('recursively renders a selected leaf without selecting its ancestors', () => {

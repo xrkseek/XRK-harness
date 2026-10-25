@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconChevronLeftOutline14, IconChevronRightOutline14 } from '@xrkseek/client-ui-primitives'
+import { IconChevronLeftOutlineRegular, IconChevronRightOutlineRegular } from '@xrkseek/client-ui-primitives'
 import css from './AttachmentRail.module.css'
 
 /** Minimal rail item; rendering is delegated to `renderItem`. */
@@ -139,7 +139,7 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, re
           aria-label={labels.scrollLeft}
           onClick={() => { page(-1) }}
         >
-          <IconChevronLeftOutline14 />
+          <IconChevronLeftOutlineRegular />
         </button>
       )}
       <div
@@ -162,7 +162,7 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, re
           aria-label={labels.scrollRight}
           onClick={() => { page(1) }}
         >
-          <IconChevronRightOutline14 />
+          <IconChevronRightOutlineRegular />
         </button>
       )}
     </div>

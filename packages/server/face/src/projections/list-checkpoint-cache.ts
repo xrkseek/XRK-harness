@@ -109,11 +109,32 @@ export function createFaceListProjectionCache(
     }
   };
 
+  // Cache writes used to run synchronously inside `remember`, i.e. on the open
+  // RPC's tail — one full JSON rewrite of every session per open. Debounce it;
+  // a crash only loses the last few hundred ms and cold list falls back to
+  // `listHints` (never wrong, just slower).
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleFlush = (): void => {
+    if (flushTimer !== undefined) return;
+    flushTimer = setTimeout(() => {
+      flushTimer = undefined;
+      flush();
+    }, 500);
+    (flushTimer as { unref?: () => void }).unref?.();
+  };
+  const flushNow = (): void => {
+    if (flushTimer !== undefined) {
+      clearTimeout(flushTimer);
+      flushTimer = undefined;
+    }
+    flush();
+  };
+
   /** Drop a corrupt/unusable row so cold list falls back to listHints. */
   const discard = (sessionId: string): void => {
     if (!sessions.delete(sessionId)) return;
     dirty = true;
-    flush();
+    scheduleFlush();
   };
 
   return {
@@ -128,7 +149,7 @@ export function createFaceListProjectionCache(
         checkpoint: structuredClone(picked),
       });
       dirty = true;
-      flush();
+      scheduleFlush();
     },
 
     cachedSnapshot(sessionId, registry) {
@@ -165,6 +186,6 @@ export function createFaceListProjectionCache(
       discard(sessionId);
     },
 
-    flush,
+    flush: flushNow,
   };
 }

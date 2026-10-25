@@ -6,7 +6,7 @@
 // share the store seat exists for) and derives the call material from the
 // session snapshot — no data of its own.
 
-import { Fragment } from 'react'
+import { Fragment, useMemo } from 'react'
 import { CodeBlock } from '@xrkseek/client-ui-primitives'
 import { shallowEqual } from '@xrkseek/client-runtime/client'
 import type { ConversationSnapshot, RunningToolCall, ToolCallBlock, ToolResultNode } from '@xrkseek/client-runtime/client'
@@ -74,6 +74,23 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
   const material = useSession(
     s => (callId === undefined ? null : materialFor(s, callId)),
     (a, b) => shallowEqual(a, b))
+  // `pretty` parses AND re-stringifies the whole args blob; the panel re-renders
+  // on unrelated store frames, so keep the formatted text off the render path.
+  const argsRaw = material?.argsRaw ?? null
+  const prettyArgs = useMemo(
+    () => (argsRaw === null ? '' : pretty(argsRaw)),
+    [argsRaw],
+  )
+  const resultBlock = material?.block
+  // Settled result content is immutable snapshots, but a block can be appended
+  // to in place — the length is the cheap guard that keeps the memo honest.
+  const resultContentLength = resultBlock !== undefined && 'kind' in resultBlock
+    ? resultBlock.content.length
+    : -1
+  const rawResult = useMemo(
+    () => (resultBlock !== undefined && 'kind' in resultBlock ? rawResultText(resultBlock) : ''),
+    [resultBlock, resultContentLength],
+  )
 
   return (
     <div className={css.root}>
@@ -97,10 +114,10 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
             ? <div className={css.empty}>{t('details.notInWindow')}</div>
             : (
               <>
-                {material.argsRaw !== null && (
+                {argsRaw !== null && (
                   <section className={css.section}>
                     <div className={css.sectionLabel}>{t('details.input')}</div>
-                    <CodeBlock code={pretty(material.argsRaw)} lang="json" copyLabel={t('copy')} copiedLabel={t('copied')} />
+                    <CodeBlock code={prettyArgs} lang="json" copyLabel={t('copy')} copiedLabel={t('copied')} />
                   </section>
                 )}
                 <section className={css.section}>
@@ -114,7 +131,7 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
                       fallback: 'kind' in material.block
                         ? (
                           <pre className={css.code} data-error={material.block.isError || undefined}>
-                            {rawResultText(material.block)}
+                            {rawResult}
                           </pre>
                         )
                         : <div className={css.empty}>{t('details.running')}</div>,

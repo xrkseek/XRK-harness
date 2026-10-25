@@ -85,7 +85,6 @@ import {
   routeServed,
 } from "../model-catalog.js";
 import { reserveModelSessionSlot } from "../model-session-cap.js";
-import { liveRouteAllowsImageInput } from "../llm-resolve.js";
 import { selectSessionModel } from "../select-session-model.js";
 import {
   clearSessionModelSelection,
@@ -580,7 +579,9 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
     }
     runtime.listProjectionCache.remember(
       sessionId,
-      runtime.projections.checkpoint(sessionId),
+      runtime.projections.checkpoint(sessionId, {
+        keys: [...SESSION_LIST_PROJECTION_KEYS],
+      }),
     );
   }
 
@@ -696,18 +697,11 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     };
   }
   if (hasImage) {
-    // Face intake max (Host may allow paste) AND live adapter route (Registry).
+    // Host-level intake gate only. A text-only *route* still accepts the
+    // durable image into session history; agent-loop projects placeholders
+    // via projectImagesForTextModel when assembling for that LLM.
     const faceIntake = runtime.inputModalities ?? ["text"];
     if (!faceIntake.includes("image")) {
-      return {
-        ok: false,
-        error: {
-          code: "unsupported-modality",
-          message: "active route does not accept image input",
-        },
-      };
-    }
-    if (!liveRouteAllowsImageInput(runtime, sessionId)) {
       return {
         ok: false,
         error: {

@@ -3,7 +3,7 @@
 // source image is visible alongside the prompt / generated output.
 
 import type { Context } from '@xrkseek/cordis'
-import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconBrowseOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { imageGenCardModel } from '../models/image-gen-card-model.ts'
@@ -44,7 +44,7 @@ export function ImageGenRow({
       t={t}
       variant="others"
       toolName={toolName}
-      icon={<IconBrowseOutline16 size={14} />}
+      icon={<IconBrowseOutlineRegular size={14} />}
       title="Image generation"
       summary={summary}
       body={null}

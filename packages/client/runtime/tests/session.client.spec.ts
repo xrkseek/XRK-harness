@@ -580,6 +580,32 @@ describe('prompt and cancel errors', () => {
     ])
   })
 
+  it('passes beginSubmission requestId through subagent.prompt', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    await session.open()
+    const handle = session.beginSubmission({ mode: 'steer', text: '插队', attachments: [] })
+    const prompted = await session.prompt(
+      [{ type: 'text', text: '插队' }],
+      'steer',
+      undefined,
+      handle.requestId,
+    )
+    expect(prompted).toEqual({ ok: true, value: { accepted: true } })
+    expect(api.callsOf('subagent.prompt')).toEqual([
+      {
+        parentSessionId: PARENT, childSessionId: SID, mode: 'continuable',
+        content: [{ type: 'text', text: '插队' }],
+        delivery: 'steer',
+        clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+        requestId: handle.requestId,
+      },
+    ])
+  })
+
   it('lands an interrupt business failure in promptError with op=stop', async () => {
     const api = new FakeApiClient()
     api.onSubagentInterrupt = () => Promise.resolve(err({

@@ -114,7 +114,10 @@ export interface SessionProjectionRegistry {
    */
   stateOf(sessionId: string, key: string): unknown | undefined;
   /** Persistable host states for every registered unit (wired + host-only). */
-  checkpoint(sessionId: string): ProjectionCheckpoint;
+  checkpoint(
+    sessionId: string,
+    options?: { readonly keys?: readonly string[] },
+  ): ProjectionCheckpoint;
   /**
    * Seq to pass persistence `readFrom` before {@link restore} (DSH cold ladder).
    * `undefined` when no unit is registered.
@@ -438,9 +441,16 @@ export function createSessionProjectionRegistry(
       };
     },
 
-    checkpoint(sessionId) {
+    checkpoint(sessionId, options) {
       const rows: ProjectionCheckpoint = {};
+      // Key filtering matters: `cellFor` folds the whole log for a unit that
+      // has never been materialized, and callers like the cold list cache want
+      // two keys out of ~17. Cloning (and folding) the other fifteen was pure
+      // work — on a 6k-event session it dominated the open RPC tail.
+      const wanted =
+        options?.keys === undefined ? undefined : new Set(options.keys);
       for (const registration of registrations.values()) {
+        if (wanted !== undefined && !wanted.has(registration.def.key)) continue;
         const cell = cellFor(registration, sessionId);
         rows[registration.def.key] = {
           ver: registration.def.stateVersion,

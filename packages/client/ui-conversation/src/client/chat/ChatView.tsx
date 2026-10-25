@@ -24,13 +24,12 @@ import {
   normalizeAttachmentId,
 } from '@xrkseek/client-runtime/client'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
-import { Button, IconChevronDownOutline14, Modal } from '@xrkseek/client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
-import { ContextInjectionPending } from './ContextInjectionRow.tsx'
 import {
   collectUserShapedSeqs, durableSteerPending, groupPendingByChrome,
-  hasAgentWorkBefore, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn, isTurnInFlight,
+  earliestAgentWorkId, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn, isTurnInFlight,
   latestTurnNumber, rowSteerIdentity, runningTurnStartTime,
   turnsAreSettled,
 } from './pending-input-chrome.ts'
@@ -38,6 +37,9 @@ import { isAtFlowFloor, readingLineY, resolveActiveTurn } from './active-turn.ts
 import { shouldShowFlowWaiting, hasActiveTurnSurface } from './flow-waiting.ts'
 import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat, UserSendFlow } from './ChatNodeSeat.tsx'
+import { ProcessGroupSeat } from './ProcessGroupSeat.tsx'
+import { flowEntries } from '../conversation-nodes/process-groups.ts'
+import { presentationPolicyFor } from '../conversation-nodes/presentation-policy.ts'
 import { ResubmitConfirm } from './ResubmitConfirm.tsx'
 import {
   completeResubmitConfirm,
@@ -83,12 +85,17 @@ interface PagingAnchor {
   top: number
 }
 
-/** Find an already-rendered settled row without interpolating a selector. */
+/** Find an already-rendered settled row by its anchor identity.
+ *
+ * The attribute selector resolves in native code, matching how the e2e suite
+ * locates the same rows. The old loop built a `NodeList` over every rendered
+ * row and compared in JS, and `realizePendingJump` runs this from a layout
+ * effect on every frame while a jump is armed — on a long transcript that was
+ * an O(rows) JS scan per frame. `key` is always a `node:`/`call:` identity, so
+ * quoting the value only needs `\` and `"`. */
 function anchorElement(list: HTMLElement, key: string): HTMLElement | null {
-  for (const row of list.querySelectorAll<HTMLElement>('[data-chat-anchor-key]')) {
-    if (row.dataset.chatAnchorKey === key) return row
-  }
-  return null
+  const quoted = key.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+  return list.querySelector<HTMLElement>(`[data-chat-anchor-key="${quoted}"]`)
 }
 
 /**
@@ -123,50 +130,111 @@ function flowTop(row: HTMLElement, scrollport: HTMLElement): number {
 }
 
 /** Select a visible stable node/call identity, falling back only when layout
- * has not exposed a visible box yet. */
-function pagingAnchor(list: HTMLElement, scrollport: HTMLElement): HTMLElement | null {
-  const viewport = scrollport.getBoundingClientRect()
+ * has not exposed a visible box yet. `viewport` lets the caller reuse the one
+ * scrollport rect it already had to read instead of forcing a second layout. */
+function pagingAnchor(
+  list: HTMLElement,
+  scrollport: HTMLElement,
+  viewport: DOMRect = scrollport.getBoundingClientRect(),
+): HTMLElement | null {
   const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
   const visibleBottom = composer?.getBoundingClientRect().top ?? viewport.bottom
-  // Scroll events are hot: hit-test a few points through the stretched flow
-  // rows before considering the full mounted set. The fallback keeps jsdom
-  // and pre-layout states deterministic; a virtualizer naturally bounds it.
+  // One probe on the reading line (viewport.top + 1), where the reader's eye
+  // enters the flow — the same single point DSH uses. Four points (top/third/
+  // half/bottom) were tried to tolerate gaps between rows, but every probe is
+  // a hit test that forces layout, and a miss still fell through to the sweep
+  // below, so on a long transcript the scroll handler paid 4 hit tests plus a
+  // full row scan per frame.
   if (typeof document.elementsFromPoint === 'function' && visibleBottom > viewport.top) {
     const content = list.getBoundingClientRect()
     const left = Math.max(viewport.left, content.left)
     const right = Math.min(viewport.right, content.right)
     const x = left + Math.max(0, right - left) / 2
-    const height = visibleBottom - viewport.top
-    const points = [1, Math.min(32, height / 3), height / 2, Math.max(1, height - 1)]
-    for (const offset of points) {
-      for (const element of document.elementsFromPoint(x, viewport.top + offset)) {
-        const row = element instanceof HTMLElement
-          ? element.closest<HTMLElement>('[data-chat-anchor-key]')
-          : null
-        if (row !== null && list.contains(row)) return row
-      }
+    for (const element of document.elementsFromPoint(x, viewport.top + 1)) {
+      const row = element instanceof HTMLElement
+        ? element.closest<HTMLElement>('[data-chat-anchor-key]')
+        : null
+      if (row !== null && list.contains(row)) return row
     }
   }
-  const rows = [...list.querySelectorAll<HTMLElement>('[data-chat-anchor-key]')]
-  const visibleRows = rows.filter((row) => {
-    const rect = row.getBoundingClientRect()
-    return rect.bottom > viewport.top && rect.top < visibleBottom
-  })
-  return visibleRows[0] ?? rows[0] ?? null
+  // Rows are laid out in document order, so their tops increase monotonically:
+  // binary-search the first row whose bottom clears the reading line instead of
+  // measuring every row. jsdom reports a zero rect for everything, which walks
+  // to the end and returns `rows[0]` — exactly what the old full sweep returned.
+  // `:not(:empty)` matches DSH's capturePosition sweep and this view's own
+  // `.flowItem:empty { display: none }` rule: an empty keyed row still sits in
+  // the DOM with a zero rect, and naming it as the anchor would restore the
+  // reader to a row nothing paints.
+  const rows = list.querySelectorAll<HTMLElement>('[data-chat-anchor-key]:not(:empty)')
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (rows.item(middle).getBoundingClientRect().bottom > viewport.top) high = middle
+    else low = middle + 1
+  }
+  const candidate = rows[low]
+  if (candidate !== undefined && candidate.getBoundingClientRect().top < visibleBottom) {
+    return candidate
+  }
+  return rows[0] ?? null
 }
 
 type ChatScrollPosition = NonNullable<ReturnType<ChatViewSlotProps['chatScroll']['read']>>
 
-/** Capture a reflow-resistant reader position from the current rendered window. */
-function scrollPosition(list: HTMLElement, scrollport: HTMLElement): ChatScrollPosition | null {
-  const row = pagingAnchor(list, scrollport)
+/** The row the last probe resolved under the reading edge. */
+interface AnchorProbe {
+  row: HTMLElement | null
+}
+
+/** Capture a reflow-resistant reader position from the current rendered window.
+ *
+ * A scroll tick usually stays inside the row that already straddles the
+ * reading line, so the probe is remembered and reused: re-running the hit test
+ * plus the monotonic row scan resolved the same element, and on a long
+ * transcript that was a hit test, a `querySelector`, and four forced layout
+ * reads per frame. Only a tick that crosses a row boundary re-probes. */
+function scrollPosition(
+  list: HTMLElement,
+  scrollport: HTMLElement,
+  probe?: AnchorProbe,
+): ChatScrollPosition | null {
+  const viewport = scrollport.getBoundingClientRect()
+  const held = probe?.row ?? null
+  if (held !== null && held.isConnected && list.contains(held)) {
+    const heldKey = held.dataset.chatAnchorKey
+    const rect = held.getBoundingClientRect()
+    if (heldKey !== undefined && rect.bottom > viewport.top + 1 && rect.top <= viewport.top + 1) {
+      return { anchorKey: heldKey, anchorTop: rect.top - viewport.top, scrollTop: scrollport.scrollTop }
+    }
+  }
+  const row = pagingAnchor(list, scrollport, viewport)
   const anchorKey = row?.dataset.chatAnchorKey
-  if (row === null || anchorKey === undefined) return null
+  if (row === null || anchorKey === undefined) {
+    if (probe !== undefined) probe.row = null
+    return null
+  }
+  if (probe !== undefined) probe.row = row
   return {
     anchorKey,
-    anchorTop: flowTop(row, scrollport),
+    anchorTop: row.getBoundingClientRect().top - viewport.top,
     scrollTop: scrollport.scrollTop,
   }
+}
+
+/** First anchorable row in document order — the paging anchor.
+ *
+ * A prepend shifts every row by the same delta, so holding the first row still
+ * keeps the reader's place with one selector and one rect, no hit test and no
+ * row scan. `scrollPosition` keeps the viewport probe because a saved reading
+ * position has to name the row the reader sees, not the top of the loaded
+ * window; the two used to share one probe, which made paging pay for the
+ * viewport semantics it never needed. */
+function documentOrderAnchor(list: HTMLElement, scrollport: HTMLElement): PagingAnchor | null {
+  const row = list.querySelector<HTMLElement>('[data-chat-anchor-key]:not(:empty)')
+  const key = row?.dataset.chatAnchorKey
+  if (row === null || key === undefined) return null
+  return { key, top: flowTop(row, scrollport) }
 }
 
 /** Host/OS refusal text for the file-open dialog; empty throws keep a locale fallback. */
@@ -228,13 +296,15 @@ function humanBubbleText(data: { readonly content?: readonly unknown[] }): strin
 }
 
 /** Inbox can stamp the opener as `steering` when inject already started a step. */
-function isOpenerDuplicateSteer(
-  node: ReturnType<ChatSnapshot['nodes']['get']>,
+/** Text of the earliest user opener in the window.
+ *
+ * Lifted out of `isOpenerDuplicateSteer`: that predicate used to rescan every
+ * row on every call, and four `filter`/`some` passes over the transcript called
+ * it once per row — O(n²) on every render, including every keystroke in the
+ * composer. The opener is now found once per render and compared in O(1). */
+function earliestOpenerText(
   rows: readonly { readonly kind: string; readonly data?: { readonly seq?: number; readonly time?: number; readonly content?: readonly unknown[] } }[],
-): boolean {
-  if (node === undefined || node.kind !== 'steering') return false
-  const text = humanBubbleText(node.data as { readonly content?: readonly unknown[] })
-  if (text === '') return false
+): string {
   let earliestId = Number.POSITIVE_INFINITY
   let openerText = ''
   for (const row of rows) {
@@ -246,7 +316,16 @@ function isOpenerDuplicateSteer(
       openerText = humanBubbleText(row.data ?? {})
     }
   }
-  return openerText !== '' && openerText === text
+  return openerText
+}
+
+function isOpenerDuplicateSteer(
+  node: ReturnType<ChatSnapshot['nodes']['get']>,
+  openerText: string,
+): boolean {
+  if (node === undefined || node.kind !== 'steering') return false
+  const text = humanBubbleText(node.data as { readonly content?: readonly unknown[] })
+  return text !== '' && openerText !== '' && openerText === text
 }
 
 function promptRpcId(node: ReturnType<ChatSnapshot['nodes']['get']>): string | undefined {
@@ -266,7 +345,12 @@ function isLiveSteerRow(
   node: ReturnType<ChatSnapshot['nodes']['get']>,
   live: boolean,
   userSeqs: readonly number[],
-  rows: readonly { readonly kind: string; readonly data?: { readonly seq?: number; readonly time?: number; readonly finalNode?: { readonly seq?: number } } }[],
+  /**
+   * `earliestAgentWorkId` for the window, not the rows: this predicate runs
+   * once per row in the flow-tail scan, and re-deriving "did work land before
+   * me" from the rows each time is what made that scan quadratic.
+   */
+  earliestAgentWork: number,
   latestTurn: number | null,
 ): boolean {
   if (node === undefined || (node.kind !== 'user' && node.kind !== 'steering')) return false
@@ -274,7 +358,7 @@ function isLiveSteerRow(
   if (id === undefined) return false
   return durableSteerPending(
     node.kind, node.location, id, live, userSeqs,
-    hasAgentWorkBefore(rows, id, latestTurn), latestTurn,
+    earliestAgentWork < id, latestTurn,
   )
 }
 
@@ -378,7 +462,7 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
       waitingEpisodeStartedAt.set(sessionId, startedAt)
     }
     const tick = (): void => {
-      const elapsed = Math.max(0, Date.now() - startedAt!)
+      const elapsed = Math.max(0, Date.now() - startedAt)
       elapsedRef.current = elapsed
       if (elapsed < TURN_STATUS_CLOCK_AFTER_MS) {
         hideClock()
@@ -419,8 +503,15 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
  */
 export function ChatView({
   useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
-  fileMentions, t,
+  fileMentions, useToolsDefaultExpanded, useTranscriptView, t,
 }: ChatViewSlotProps) {
+  // Settings → General. A reader who asked for every tool row to start open
+  // also asked not to have a completed Turn's process run folded away, so the
+  // fold decision below reads this instead of folding unconditionally.
+  const toolsDefaultExpanded = useToolsDefaultExpanded(value => value)
+  // Work-details mode resolves to capability flags; renderers read the flags,
+  // never the mode name (same shape DSH uses, one table row per mode).
+  const policy = presentationPolicyFor(useTranscriptView(value => value))
   const order = useSession(s => s.chat.order)
   const nodeStore = useSession(s => s.chat.nodes)
   const turnNavigationItems = useSession(s => s.chat.navigation.items())
@@ -609,14 +700,24 @@ export function ChatView({
   // 插队中 follows Host `running` (same latch as Stop). Draining tools after
   // cancel must not keep follow-ups painted as 插队.
   const agentLive = running
+  // NOTE: none of this may be memoised on `nodeStore`/`order`. The node store
+  // is a mutable class instance whose identity never changes, and the builder
+  // deliberately reuses `order` arrays when their contents match, so both are
+  // stable across content updates — a memo keyed on them would keep rendering
+  // the first transcript it ever saw. The work below is cheap now that each
+  // pass is O(n) instead of O(n²); correctness beats a cache that cannot see
+  // the update.
   const chatRows = [...nodeStore.values()]
+  // The earliest opener is found once; `isOpenerDuplicateSteer` used to rescan
+  // every row for it on every call, which is what made these passes quadratic.
+  const openerText = earliestOpenerText(chatRows)
   const userSeqs = collectUserShapedSeqs(
-    chatRows.filter(node => !isOpenerDuplicateSteer(node, chatRows)),
+    chatRows.filter(node => !isOpenerDuplicateSteer(node, openerText)),
     latestTurn,
   )
   const hasUserOpener = chatRows.some(node =>
     node.kind === 'user'
-    && !isOpenerDuplicateSteer(node, chatRows)
+    && !isOpenerDuplicateSteer(node, openerText)
     && !isHistoricClosedTurn(node.location, latestTurn))
   // Ctrl+Enter flush of 排队 is 插队 once a real user opener exists and the
   // agent is live. Steering-only leftovers (closed-parent subagent notices)
@@ -624,21 +725,29 @@ export function ChatView({
   // not this flight — otherwise a new send flashes 「发送中」.
   const hasAgentWork = hasLiveAgentWork(chatRows, latestTurn)
   const steerPendingChrome = agentLive && (hasUserOpener || hasAgentWork)
+  // Every `isLiveSteerRow` below asks whether agent work landed before its row.
+  // One pass answers all of them: the predicate compares against this id
+  // instead of rescanning the window per row.
+  const earliestAgentWork = earliestAgentWorkId(chatRows, latestTurn)
   // Turn body (opener + assistant so far) → waiting → 插队 cluster.
   let trailingSteerAt = order.length
   for (let i = order.length - 1; i >= 0; i--) {
     const node = nodeStore.get(order[i]!)
-    if (isLiveSteerRow(node, agentLive, userSeqs, chatRows, latestTurn)) {
+    // `steerPendingChrome`, not raw `running`: after every turn has closed the
+    // Host may still report running while tools drain, and a late steer (or a
+    // subagent notice past the last turn end) must not keep the trailing
+    // cluster alive. Same latch the pending-input chrome below already uses.
+    if (isLiveSteerRow(node, steerPendingChrome, userSeqs, earliestAgentWork, latestTurn)) {
       trailingSteerAt = i
       continue
     }
     break
   }
   const bodyOrder = order.slice(0, trailingSteerAt).filter(key => (
-    !isOpenerDuplicateSteer(nodeStore.get(key), chatRows)
+    !isOpenerDuplicateSteer(nodeStore.get(key), openerText)
   ))
   const trailingSteerOrder = order.slice(trailingSteerAt).filter(key => (
-    !isOpenerDuplicateSteer(nodeStore.get(key), chatRows)
+    !isOpenerDuplicateSteer(nodeStore.get(key), openerText)
   ))
   let skippedTrailingRunningStep = false
   let lastDurableKey: string | null = null
@@ -646,7 +755,7 @@ export function ChatView({
     const key = order[i]!
     const node = nodeStore.get(key)
     if (node === undefined) continue
-    if (isLiveSteerRow(node, agentLive, userSeqs, chatRows, latestTurn)) continue
+    if (isLiveSteerRow(node, steerPendingChrome, userSeqs, earliestAgentWork, latestTurn)) continue
     if (node.kind === 'assistant-step' && (node.data as { status?: string }).status === 'running') {
       skippedTrailingRunningStep = true
       continue
@@ -676,20 +785,6 @@ export function ChatView({
   // still has no context rows, keep a same-height header under the echo so
   // the bubble does not drop when the log write lands. Later turns often
   // skip inject — do not paint a phantom row there.
-  const contextCount = bodyOrder.reduce((count, key) => (
-    nodeStore.get(key)?.kind === 'context' ? count + 1 : count
-  ), 0)
-  const sendEchoLive = pendingGroups.some(group => (
-    group.chrome === 'send' && group.items.some(input => input.kind === 'echo')
-  ))
-  const injectHold = useRef<{ active: boolean; baseline: number }>({ active: false, baseline: 0 })
-  if (!sendEchoLive) injectHold.current.active = false
-  else if (!injectHold.current.active) {
-    injectHold.current = { active: true, baseline: contextCount }
-  }
-  const reserveInject = sendEchoLive
-    && injectHold.current.baseline === 0
-    && contextCount === 0
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -715,6 +810,8 @@ export function ChatView({
   /** Paging anchor: semantic row/position at click, updated by reader scrolls
    * while the request is pending and restored after the prepend lands. */
   const anchorRef = useRef<PagingAnchor | null>(null)
+  /** Last row resolved under the reading edge; reused while it still straddles it. */
+  const anchorProbeRef = useRef<AnchorProbe>({ row: null })
   /** Unloaded-rail jump waiting for its turn/start seq to enter the window. */
   const pendingJumpRef = useRef<{ turn: number; seq: number } | null>(null)
   const jumpRepageHeadRef = useRef<number | null>(null)
@@ -824,7 +921,7 @@ export function ChatView({
     atBottomRef.current = isAtBottom
     setAtBottom(isAtBottom)
     setActiveTurn(turn)
-    const position = isAtBottom ? null : scrollPosition(local, el)
+    const position = isAtBottom ? null : scrollPosition(local, el, anchorProbeRef.current)
     if (isAtBottom) chatScroll.save(null)
     else if (position !== null) chatScroll.save(position)
   }
@@ -880,7 +977,7 @@ export function ChatView({
         const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
         atBottomRef.current = isAtBottom
         setAtBottom(isAtBottom)
-        const normalized = isAtBottom ? null : scrollPosition(local, el)
+        const normalized = isAtBottom ? null : scrollPosition(local, el, anchorProbeRef.current)
         if (isAtBottom) chatScroll.save(null)
         else if (normalized !== null) chatScroll.save(normalized)
       }
@@ -956,7 +1053,7 @@ export function ChatView({
     // Avoid re-rendering ChatView on every wheel tick while the follow chrome
     // state is unchanged (Vercel rerender-use-ref-transient-values).
     setAtBottom(current => (current === isAtBottom ? current : isAtBottom))
-    const position = isAtBottom ? null : scrollPosition(local, el)
+    const position = isAtBottom ? null : scrollPosition(local, el, anchorProbeRef.current)
     if (isAtBottom) {
       anchorRef.current = null
     } else if (anchorRef.current !== null && position !== null) {
@@ -964,6 +1061,9 @@ export function ChatView({
     }
     // Continuous save (unmount happens after ref detach, so saving there is
     // too late); pinned-to-bottom clears so a remount keeps following.
+    // NOTE: this stays synchronous. Deferring it to rAF was tried and breaks
+    // the anchored-prepend / remount restore semantics the tests lock down
+    // (jsdom has no elementsFromPoint, so the fallback sweep IS the path there).
     if (isAtBottom) chatScroll.save(null)
     else if (position !== null) chatScroll.save(position)
     observedTopRef.current = el.scrollTop
@@ -1095,14 +1195,8 @@ export function ChatView({
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: the paging button renders inside the list tree. */
     if (local !== null) {
-      const el = scrollerOf(local)
-      const row = pagingAnchor(local, el)
-      if (row !== null && row.dataset.chatAnchorKey !== undefined) {
-        anchorRef.current = {
-          key: row.dataset.chatAnchorKey,
-          top: flowTop(row, el),
-        }
-      }
+      const anchor = documentOrderAnchor(local, scrollerOf(local))
+      if (anchor !== null) anchorRef.current = anchor
     }
     loadOlder()
   }
@@ -1142,7 +1236,10 @@ export function ChatView({
       : { key: landed.dataset.chatAnchorKey, top: flowTop(landed, el) }
   }, [loadingOlder, loadThrough])
 
-  const nodeSeat = {
+  // Stable identity so a group seat's memo comparison can pass: the seat holds
+  // this object as one prop, and a fresh literal per render would re-render
+  // every member row of every settled group on unrelated state changes.
+  const nodeSeat = useMemo(() => ({
     useSession,
     selectedCallId,
     cwd,
@@ -1161,13 +1258,52 @@ export function ChatView({
     fileMentions,
     renderSlot,
     t,
-  }
+  }), [
+    useSession, selectedCallId, cwd, roundByTurn, requestOpenFile, inspectCall,
+    forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage,
+    renderMessageImages, renderMessageFiles, fileMentions, renderSlot, t,
+  ])
 
   // One list so a send keeps `rpc:<id>` from the echo through the durable
   // user node. A second list would unmount the row when the log write lands.
+  // Folds that land above the reader restore the offset themselves. Route the
+  // write through here so the observed-top ledger records it; otherwise the
+  // scroll handler reads the restored offset as reader input and drops follow.
+  const writeFoldScroll = useCallback((scrollport: HTMLElement, top: number): void => {
+    scrollport.scrollTop = top
+    observedTopRef.current = scrollport.scrollTop
+  }, [])
+  // A fold moves every row below it, compensated or not, so the persisted
+  // reading anchor has to be re-sampled even when `scrollTop` itself stayed
+  // put. Reusing the scroll handler keeps the follow latch and the saved
+  // position on the same code path they always take.
+  const handleFoldSettled = useCallback((): void => { onScrollRef.current() }, [])
   const columnRows: ReactNode[] = []
   const seenSendRpc = new Set<string>()
-  for (const nodeKey of bodyOrder) {
+  // Process runs fold here rather than in the projection: the committed row
+  // order already is the projection's output, so grouping is a pure read, and
+  // fold state lives in the seat instead of the snapshot.
+  for (const entry of flowEntries(bodyOrder, key => nodeStore.get(key), {
+    grouping: policy.stepGrouping,
+    latestTurn,
+  })) {
+    if (entry.kind === 'group') {
+      columnRows.push(
+        <ProcessGroupSeat
+          key={entry.key}
+          entry={entry}
+          nodeSeat={nodeSeat}
+          t={t}
+          deferFold={atBottom}
+          foldCompletedTurns={policy.foldCompletedTurns && !toolsDefaultExpanded}
+          detailTitles={policy.detailTitles}
+          writeScroll={writeFoldScroll}
+          onFoldSettled={handleFoldSettled}
+        />,
+      )
+      continue
+    }
+    const nodeKey = entry.key
     const node = nodeStore.get(nodeKey)
     const rpc = promptRpcId(node)
     if (rpc !== undefined && node?.kind === 'user') {
@@ -1187,42 +1323,43 @@ export function ChatView({
     }
     columnRows.push(<ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} />)
   }
-  if (reserveInject) {
-    columnRows.push(
-      <div key="pending-inject" className={css.flowItem} data-pending-inject="">
-        <ContextInjectionPending t={t} />
-      </div>,
-    )
-  }
   for (const group of pendingGroups) {
     if (group.chrome !== 'send') continue
-    const live = group.items.flatMap((input) => (
-      input.kind === 'echo' && !seenSendRpc.has(input.submission.requestId)
-        ? [input]
-        : []
+    // A downgraded steer must still paint. It reaches this branch when the turn
+    // it was queued against has closed (or Host already admitted it and the
+    // chrome latch dropped): the row is no longer 插队, but it is still a
+    // pending send the reader typed — dropping it here is what made a queued
+    // message vanish from the transcript between two renders.
+    const live = group.items.filter((input) => (
+      input.kind === 'steer' || !seenSendRpc.has(input.submission.requestId)
     ))
     if (live.length === 0) continue
     // One echo → stable `rpc:` seat through durable handoff. Several idle
     // echoes still stack in one bubble (queue-before-turn), like before.
-    if (live.length === 1) {
-      const rpc = live[0]!.submission.requestId
+    const first = live[0]!
+    if (live.length === 1 && first.kind === 'echo') {
+      const rpc = first.submission.requestId
       columnRows.push(
         <UserSendFlow
           key={`rpc:${rpc}`}
           flowKey={`rpc:${rpc}`}
-          submission={live[0]!.submission}
+          submission={first.submission}
           round={nextSendRound}
           {...nodeSeat}
         />,
       )
       continue
     }
-    const key = live.map((input) => input.submission.requestId).join('+')
+    const key = live.map((input) => (
+      input.kind === 'echo' ? input.submission.requestId : String(input.item.id)
+    )).join('+')
     const content = live.flatMap(pendingInputContent)
-    const preview = live.find((input) => input.submission.attachments.length > 0)
-    const previewAttachments = preview === undefined
-      ? undefined
-      : previewAttachmentsOf(preview.submission.attachments)
+    const preview = live.find((input) => (
+      input.kind === 'echo' && input.submission.attachments.length > 0
+    ))
+    const previewAttachments = preview !== undefined && preview.kind === 'echo'
+      ? previewAttachmentsOf(preview.submission.attachments)
+      : undefined
     columnRows.push(
       <div key={key} className={css.flowItem} data-chat-round={nextSendRound}>
         <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: nextSendRound })}</div>
@@ -1323,7 +1460,7 @@ export function ChatView({
           {columnRows}
           <TurnStatus visible={showFlowWaiting} startTime={runningTurnStart} sessionId={sessionId} t={t} />
           {trailingSteerOrder.map(nodeKey => (
-            <ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} />
+            <ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...nodeSeat} steer />
           ))}
           {pendingGroups.filter(group => group.chrome === 'steer').flatMap(renderSteerGroup)}
         </div>
@@ -1339,7 +1476,7 @@ export function ChatView({
                 if (local !== null) toBottom(scrollerOf(local))
               }}
             >
-              <IconChevronDownOutline14 />
+              <IconChevronDownOutlineRegular />
             </button>
           </div>
         )}

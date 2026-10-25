@@ -98,6 +98,7 @@ describe('apply wiring', () => {
     expect(b.slots.entries('settings.general.item').map(entry => entry.options.id)).toEqual([
       'composer-enter',
       'tools-default-expanded',
+      'transcript-view',
     ])
     await b.runtime.dispose()
   })

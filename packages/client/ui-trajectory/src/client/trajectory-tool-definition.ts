@@ -162,10 +162,18 @@ function interruption(
 ): { seq: number; time: number } | undefined {
   const location = context.start?.location
   if (location?.kind !== 'step' && location?.kind !== 'turn') return undefined
-  // Match chat: a closed step with an open turn is still an in-flight call.
-  if (location.turn.status !== 'closed') return undefined
-  if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
-  return location.turn.end
+  // Match chat: turn closed settles dangling shells; open turn keeps wait_agent
+  // alive after its step/end until a newer step starts (auto-continue / next call).
+  if (location.turn.status === 'closed') {
+    if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
+    return location.turn.end
+  }
+  if (location.kind !== 'step' || location.step.end === undefined) return undefined
+  const stepNo = location.step.step
+  const superseded = location.turn.steps.some(
+    candidate => candidate.step > stepNo && candidate.start !== undefined,
+  )
+  return superseded ? location.step.end : undefined
 }
 
 function projectCall(

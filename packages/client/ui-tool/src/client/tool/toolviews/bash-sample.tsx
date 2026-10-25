@@ -17,10 +17,11 @@ import type { KeyboardEvent } from 'react'
 import type { Context } from '@xrkseek/cordis'
 import clsx from 'clsx'
 import {
-  IconApiOutline14, IconChevronDownOutline14, InspectAction, StateDot, TerminalBlock,
+  IconApiOutlineRegular, IconChevronDownOutlineRegular, InspectAction, StateDot, TerminalBlock,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
+import { localizeToolTitle } from '../models/localize-tool-title.ts'
 import { terminalBlockLabels, terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { toolRowModel, type ToolRowState } from '../models/tool-call-model.ts'
 import { useToolExpandState } from '../tool-default-expanded.ts'
@@ -35,7 +36,7 @@ function leadingFor(state: ToolRowState) {
     case 'error': return <StateDot state="error" />
     case 'stopped': return <StateDot state="warning" />
     // Running keeps the icon — the row sweep carries the in-flight signal.
-    default: return <IconApiOutline14 size={14} />
+    default: return <IconApiOutlineRegular size={14} />
   }
 }
 
@@ -82,12 +83,12 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
     toggleExpand()
   }
   const leading = open
-    ? <IconChevronDownOutline14 className={css.chevron} />
+    ? <IconChevronDownOutlineRegular className={css.chevron} />
     : expandable
       ? (
         <>
           <span className={css.iconIdle}>{leadingFor(state)}</span>
-          <IconChevronDownOutline14 className={clsx(css.chevron, css.chevronHover)} />
+          <IconChevronDownOutlineRegular className={clsx(css.chevron, css.chevronHover)} />
         </>
       )
       : leadingFor(state)
@@ -107,7 +108,9 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
       >
         <span className={css.leading}>{leading}</span>
         {status !== null && <span className={css.visuallyHidden}>{status}</span>}
-        <span className={css.title}>{model.title}</span>
+        <span className={css.title}>
+          {localizeToolTitle(toolName, model.variant, model.title, t)}
+        </span>
         <span className={css.sep} aria-hidden />
         {/* The terminal presenter's description is the contractual
             above-card summary; a failure's first line outranks both. */}

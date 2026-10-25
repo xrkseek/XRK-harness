@@ -1,7 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import type { JobView } from '@xrkseek/client-runtime/client'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconChevronDownOutline14, IconChevronUpOutline14 } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@xrkseek/client-ui-primitives'
 import { isLiveJob, orderedJobs, type JobListActions } from './job-list-shared.ts'
 import { JobRows } from './JobRows.tsx'
 import type { JobListInjected } from './JobListAction.tsx'
@@ -60,7 +60,7 @@ export function JobInputDock({ sessionId, useSessions, killJob, backgroundJob, t
                   {t('count.live.other', { count: liveJobs.length })}
                 </span>
                 <span className={css.chevron} aria-hidden>
-                  {collapsed ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+                  {collapsed ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
                 </span>
               </button>
               {collapsed && primary !== undefined

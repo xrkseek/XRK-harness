@@ -231,3 +231,57 @@
 .modalAction {
   min-width: 72px;
 }
+
+/* A Turn's process run folds behind one header.
+   The body is a grid row animated 1fr → 0fr rather than `display: none`:
+   a folded member has to keep its box in the flow, or it leaves the
+   `data-chat-anchor-key` order that scroll restore and the reading probe
+   read. `min-height: 0` is what lets the row actually collapse — a grid
+   item defaults to `min-height: auto` and refuses to shrink below content. */
+/* Header chrome comes from the shared `DisclosureRow` (same 24px row and
+   chevron as ReasoningRow and the tool cards), so only the collapsed summary
+   needs a rule here: the run's counts sit where ReasoningRow puts its preview
+   line, and must truncate instead of pushing the chevron. */
+.processGroupSummary {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.processGroupBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 180ms ease;
+}
+
+.processGroupBody[data-folded] {
+  grid-template-rows: 0fr;
+}
+
+/* A fold that lands above the reader is applied without the transition: the
+   seat restores the scroll offset in the same commit, so an animated height
+   would fight the compensation and leave the reader's content drifting. */
+[data-instant] .processGroupBody {
+  transition: none;
+}
+
+/* Same rule for readers who asked the OS for less motion: the fold still
+   happens, it just lands at once instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .processGroupBody {
+    transition: none;
+  }
+}
+
+.processGroupInner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}

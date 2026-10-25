@@ -78,8 +78,14 @@ async function bench(nodes: ToolResultNode[]) {
   runtime.slots.installLocale(locale)
   await runtime.sessions.add({
     id: SID,
-    summary: { title: 'S', displayTitle: 'S', cwd: '/proj' },
-    snapshot: { nodes, chat: toolChatSnapshot(nodes) },
+    summary: { title: 'S', displayTitle: 'S', cwd: '/proj', blank: false },
+    snapshot: {
+      nodes,
+      chat: toolChatSnapshot(nodes),
+      blank: false,
+      composerPhase: 'active',
+      openState: 'open',
+    },
     session: {
       loadOlder: vi.fn<ISession['loadOlder']>(),
       prompt: vi.fn<ISession['prompt']>(async () => ({ ok: true, value: { accepted: true } })),

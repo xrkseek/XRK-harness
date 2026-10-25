@@ -47,7 +47,25 @@ export function effectiveSandboxMode(
   events: readonly SessionEvent[],
   fallback: SandboxMode = "workspace-write",
 ): SandboxMode {
-  return foldPermissionKnobs(events).sandbox ?? fallback;
+  return lastSandboxMode(events) ?? fallback;
+}
+
+/**
+ * Last explicit `sandbox/mode` in the log.
+ *
+ * Only `sandbox/mode` writes the sandbox knob (`applyPermissionKnobEvent`
+ * leaves it untouched for preset/approval), so a backwards scan is exactly
+ * equivalent to folding the whole log — but O(1) instead of O(n). The path gate
+ * asks this on every tool call.
+ */
+export function lastSandboxMode(
+  events: readonly SessionEvent[],
+): SandboxMode | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type === "sandbox/mode") return event.mode;
+  }
+  return undefined;
 }
 
 export function effectiveApprovalPolicy(

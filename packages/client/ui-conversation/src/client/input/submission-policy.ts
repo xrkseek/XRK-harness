@@ -12,12 +12,18 @@ import {
   BUSY_ENTER_FIELD,
   DEFAULT_BUSY_ENTER_BEHAVIOR,
   DEFAULT_TOOLS_DEFAULT_EXPANDED,
+  DEFAULT_TRANSCRIPT_VIEW_MODE,
   TOOLS_DEFAULT_EXPANDED_FIELD,
+  TRANSCRIPT_VIEW_FIELD,
 } from '../../submission-settings.ts'
-import type { ConversationSettings } from '../../submission-settings.ts'
+import type { ConversationSettings, TranscriptViewMode } from '../../submission-settings.ts'
 import { resolveSubmitMode } from './resolve-submit-mode.ts'
 
-export { DEFAULT_BUSY_ENTER_BEHAVIOR, DEFAULT_TOOLS_DEFAULT_EXPANDED } from '../../submission-settings.ts'
+export {
+  DEFAULT_BUSY_ENTER_BEHAVIOR, DEFAULT_TOOLS_DEFAULT_EXPANDED,
+  DEFAULT_TRANSCRIPT_VIEW_MODE, TRANSCRIPT_VIEW_MODES,
+} from '../../submission-settings.ts'
+export type { TranscriptViewMode } from '../../submission-settings.ts'
 export { resolveSubmitMode } from './resolve-submit-mode.ts'
 
 /**
@@ -30,6 +36,8 @@ export class ComposerSubmissionPolicy {
   readonly busyEnter: SnapshotStore<BusyEnterBehavior> = createSnapshotStore(DEFAULT_BUSY_ENTER_BEHAVIOR)
   /** When true, chat tool rows mount expanded. */
   readonly toolsDefaultExpanded: SnapshotStore<boolean> = createSnapshotStore(DEFAULT_TOOLS_DEFAULT_EXPANDED)
+  /** How much of a settled Turn's process run the transcript keeps visible. */
+  readonly transcriptView: SnapshotStore<TranscriptViewMode> = createSnapshotStore(DEFAULT_TRANSCRIPT_VIEW_MODE)
   private readonly host: SettingsScope<ConversationSettings> | undefined
 
   /**
@@ -88,6 +96,16 @@ export class ComposerSubmissionPolicy {
   }
 
   /**
+   * Change how much process detail a settled Turn keeps visible.
+   * @param mode - compact, standard, detailed, or verbose.
+   */
+  setTranscriptView(mode: TranscriptViewMode): void {
+    if (this.transcriptView.getSnapshot() === mode) return
+    this.transcriptView.set(mode)
+    void this.host?.set(TRANSCRIPT_VIEW_FIELD, mode)
+  }
+
+  /**
    * Adopt the scope's accepted durable behavior without writing it back.
    * @param host - the constructor-narrowed scope driving this adoption.
    */
@@ -105,6 +123,12 @@ export class ComposerSubmissionPolicy {
       && this.toolsDefaultExpanded.getSnapshot() !== section.toolsDefaultExpanded
     ) {
       this.toolsDefaultExpanded.set(section.toolsDefaultExpanded)
+    }
+    if (
+      section.transcriptView !== undefined
+      && this.transcriptView.getSnapshot() !== section.transcriptView
+    ) {
+      this.transcriptView.set(section.transcriptView)
     }
   }
 }

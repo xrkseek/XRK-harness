@@ -12,8 +12,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  IconCloseOutline16,
-  IconRefreshOutline16,
+  IconCloseOutlineRegular,
+  IconRefreshOutlineRegular,
   Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
@@ -80,7 +80,7 @@ export function DesktopChrome({ t }: DesktopChromeProps): ReactNode {
             aria-label={t('desktop.reload')}
             onClick={() => { void bridge.reload() }}
           >
-            <IconRefreshOutline16 size={14} />
+            <IconRefreshOutlineRegular size={14} />
           </button>
         </Tooltip>
         {darwin ? null : (
@@ -115,7 +115,7 @@ export function DesktopChrome({ t }: DesktopChromeProps): ReactNode {
                 aria-label={t('desktop.close')}
                 onClick={() => { void bridge.close() }}
               >
-                <IconCloseOutline16 size={14} />
+                <IconCloseOutlineRegular size={14} />
               </button>
             </Tooltip>
           </>

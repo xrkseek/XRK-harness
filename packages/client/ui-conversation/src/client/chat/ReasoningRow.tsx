@@ -1,6 +1,6 @@
 /** Assistant reasoning disclosure, independent of Tool-call presentation. */
-import { useEffect, useRef, useState } from 'react'
-import { DisclosureRow, IconThinkOutline14 } from '@xrkseek/client-ui-primitives'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DisclosureRow, IconThinkOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { useThrottledVisualUpdate } from './use-throttled-visual-update.ts'
 import a11yCss from './accessibility.module.css'
@@ -29,6 +29,56 @@ function latestLine(text: string): string {
  *  lays out the tail so a long reasoning stream cannot pin the main thread. */
 const LIVE_THINK_CHARS = 12_000
 
+/** Whole-char blocks for the frozen/live split — see {@link splitThinkBody}. */
+const FREEZE_CHUNK_CHARS = 1_024
+/**
+ * Newest characters kept mutable — one DOM text write per streaming frame, so
+ * keep it small: the whole 12k node used to be rewritten for every token. The
+ * floor alignment below can leave up to one chunk extra, i.e. 512–1535 chars.
+ */
+const LIVE_TAIL_CHARS = 512
+
+/** Bounded memo: a long session must not pin one entry per assistant step. */
+const EXPANDED_BY_KEY_MAX = 200
+
+/**
+ * Remember one row's disclosure state, newest last, oldest evicted.
+ * Re-setting an existing key refreshes its position so the cap drops the least
+ * recently touched step, not the oldest step id.
+ */
+function rememberExpanded(key: string, open: boolean): void {
+  expandedByKey.delete(key)
+  expandedByKey.set(key, open)
+  while (expandedByKey.size > EXPANDED_BY_KEY_MAX) {
+    const oldest = expandedByKey.keys().next()
+    if (oldest.done === true) break
+    expandedByKey.delete(oldest.value)
+  }
+}
+
+/**
+ * Split the visible reasoning window into an immutable prefix and a small live
+ * tail. Both cuts are quantized to whole chunks of the ABSOLUTE text length, so
+ * while tokens arrive the prefix string only changes every
+ * {@link FREEZE_CHUNK_CHARS} characters: React then leaves that text node alone
+ * and rewrites just the tail instead of re-laying out the whole block.
+ * Concatenating the two halves always reproduces the same visible window the
+ * single-node version rendered.
+ * @param text - complete or streaming reasoning text.
+ * @param running - whether this block is the streaming tail.
+ * @returns the frozen prefix and the mutable tail (their concatenation is the
+ * visible window).
+ */
+function splitThinkBody(text: string, running: boolean): { frozen: string; live: string } {
+  if (!running) return { frozen: text, live: '' }
+  const align = (value: number): number => (
+    Math.floor(Math.max(0, value) / FREEZE_CHUNK_CHARS) * FREEZE_CHUNK_CHARS
+  )
+  const windowStart = align(text.length - LIVE_THINK_CHARS)
+  const boundary = Math.max(windowStart, align(text.length - LIVE_TAIL_CHARS))
+  return { frozen: text.slice(windowStart, boundary), live: text.slice(boundary) }
+}
+
 /**
  * Render one assistant reasoning block as the Think disclosure row.
  * @param props.text - complete or streaming reasoning text.
@@ -52,9 +102,10 @@ export function ReasoningRow({
   ))
   const summaryRef = useRef<HTMLSpanElement>(null)
   const summary = running ? latestLine(text) : firstLine(text)
-  const bodyText = running && text.length > LIVE_THINK_CHARS
-    ? text.slice(text.length - LIVE_THINK_CHARS)
-    : text
+  // Halves are recomputed per streamed frame, but both cuts are chunk-aligned,
+  // so the frozen string keeps the same value between cuts and React skips
+  // that text node — only the live tail is rewritten in the DOM.
+  const body = useMemo(() => splitThinkBody(text, running), [text, running])
   const scheduleSummaryScroll = useThrottledVisualUpdate(() => {
     const element = summaryRef.current
     if (element === null) return
@@ -65,9 +116,9 @@ export function ReasoningRow({
   }, [running, scheduleSummaryScroll, summary])
 
   const toggle = (): void => {
-    setExpanded((value) => {
+      setExpanded((value) => {
       const next = !value
-      if (persistKey !== undefined) expandedByKey.set(persistKey, next)
+      if (persistKey !== undefined) rememberExpanded(persistKey, next)
       return next
     })
   }
@@ -80,7 +131,7 @@ export function ReasoningRow({
         leadingClassName={css.leading}
         titleClassName={css.title}
         chevronClassName={css.chevron}
-        icon={<IconThinkOutline14 size={14} />}
+        icon={<IconThinkOutlineRegular size={14} />}
         title={t('think.title')}
         open={expanded}
         expandable
@@ -93,7 +144,9 @@ export function ReasoningRow({
           </>
         )}
       >
-        <div className={css.thinkBody}>{bodyText}</div>
+        {/* Two adjacent text nodes, no whitespace between: the frozen half keeps
+            an identical string across frames, so only the live tail mutates. */}
+        <div className={css.thinkBody}>{body.frozen}{body.live}</div>
       </DisclosureRow>
     </div>
   )

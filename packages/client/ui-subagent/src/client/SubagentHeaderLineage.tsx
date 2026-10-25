@@ -7,7 +7,7 @@ import {
   type SessionSummary, type SubagentAddress, type SubagentCatalogSnapshot,
 } from '@xrkseek/client-runtime/client'
 import {
-  IconChevronDownOutline14, IconChevronRightOutline14, IconRefreshOutline14, StateDot,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, StateDot,
   subagentActivityDot,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
@@ -261,7 +261,7 @@ function CatalogRows({
             className={css.refresh}
             onClick={() => { refresh(parentSessionId) }}
           >
-            <IconRefreshOutline14 />
+            <IconRefreshOutlineRegular />
             {t('retry')}
           </button>
         </div>
@@ -389,7 +389,7 @@ function CatalogRows({
                     aria-label={t(isExpanded ? 'branch.collapse' : 'branch.expand', { label })}
                     onClick={toggle}
                   >
-                    <IconChevronRightOutline14 />
+                    <IconChevronRightOutlineRegular />
                   </button>
                 )}
               <div className={css.clickarea}>
@@ -825,7 +825,7 @@ function CatalogDropdown({
           )}
         {variant === 'switcher'
           ? <SubagentSwitcherIcon />
-          : <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />}
+          : <IconChevronDownOutlineRegular className={open ? css.triggerOpen : undefined} />}
       </button>
       {open && createPortal((
         <div

@@ -215,6 +215,19 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
 }
 
 /**
+ * Compact capacity for the picker tail. Field editors still use decimal
+ * {@link formatCapacity} (256K → 256000); probe rows often ship binary sizes
+ * (131072) that would otherwise print as raw digits.
+ */
+function formatProbeCapacity(value: number): string {
+  const decimal = formatCapacity(value)
+  if (decimal !== String(value)) return decimal
+  if (!Number.isInteger(value) || value <= 0 || value % 1024 !== 0) return decimal
+  const kib = value / 1024
+  return kib % 1024 === 0 ? `${String(kib / 1024)}M` : `${String(kib)}K`
+}
+
+/**
  * What a probe learned about one candidate, as a compact tail.
  *
  * Capacities are what the picker exists to save the user from typing, and a
@@ -224,8 +237,12 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
  */
 function candidateFacts(candidate: DiscoveredModelView): string | undefined {
   const parts: string[] = []
-  if (candidate.contextWindow !== undefined) parts.push(`${formatCapacity(candidate.contextWindow)} ctx`)
-  if (candidate.maxTokens !== undefined) parts.push(`${formatCapacity(candidate.maxTokens)} out`)
+  if (candidate.contextWindow !== undefined) {
+    parts.push(`${formatProbeCapacity(candidate.contextWindow)} ctx`)
+  }
+  if (candidate.maxTokens !== undefined) {
+    parts.push(`${formatProbeCapacity(candidate.maxTokens)} out`)
+  }
   if (candidate.reasoning !== undefined) {
     parts.push(candidate.reasoning.efforts.map(effort => effort.id).join('/'))
   }
@@ -748,12 +765,19 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     checked={picked.has(candidate.id)}
                     onChange={() => { toggle(candidate.id) }}
                   />
-                  {/* The id is the string adoption writes; the facts behind it
-                      are what the user is deciding to accept. */}
-                  <span className={styles['candidateId']}>{candidate.id}</span>
+                  {/* One row: id grows, facts stay right. Both ellipsis — never
+                      overflow-wrap:anywhere beside a nowrap facts tail (that
+                      was the one-character column). title keeps the full line. */}
+                  <span className={styles['candidateId']} title={candidate.id}>
+                    {candidate.id}
+                  </span>
                   {facts === undefined
                     ? null
-                    : <span className={styles['candidateFacts']}>{facts}</span>}
+                    : (
+                      <span className={styles['candidateFacts']} title={facts}>
+                        {facts}
+                      </span>
+                    )}
                 </label>
               </li>
             )

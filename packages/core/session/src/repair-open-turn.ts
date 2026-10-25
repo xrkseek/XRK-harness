@@ -146,7 +146,18 @@ function closeOneOpenTurn(
   out: SessionEvent[],
   ts: () => number,
 ): void {
-  const log = (): readonly SessionEvent[] => [...events, ...out];
+  // `out` grows while this pass runs; rebuilding `[...events, ...out]` on every
+  // probe copied the whole log dozens of times (O(n²) on a crashed 6k log).
+  // Cache the join and only rebuild when `out` actually grew.
+  let cachedLog: readonly SessionEvent[] | undefined;
+  let cachedOutLen = -1;
+  const log = (): readonly SessionEvent[] => {
+    if (cachedLog === undefined || cachedOutLen !== out.length) {
+      cachedLog = out.length === 0 ? events : [...events, ...out];
+      cachedOutLen = out.length;
+    }
+    return cachedLog;
+  };
 
   const pushSettlements = (): void => {
     for (const d of listDanglingToolCalls(log())) {

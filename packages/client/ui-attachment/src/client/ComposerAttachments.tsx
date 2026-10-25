@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { IconCloseFill14 } from '@xrkseek/client-ui-primitives'
+import { IconCloseFillRegular } from '@xrkseek/client-ui-primitives'
 import type {
   ComposerAttachment, ComposerAttachmentsProps, ComposerImageAttachment,
 } from '@xrkseek/client-ui-conversation/client'
@@ -145,7 +145,7 @@ export function ComposerAttachments({
             aria-label={t('image.remove', { name: attachment.file.name })}
             onClick={() => { onRemoveImage(attachment.id) }}
           >
-            <IconCloseFill14 size={12} />
+            <IconCloseFillRegular size={12} />
           </button>
         </div>
       )

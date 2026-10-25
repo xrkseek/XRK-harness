@@ -4,10 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  IconChevronRightOutline14,
-  IconSettingsOutline16,
-  IconSparkle16,
-  IconUserOutline16,
+  IconChevronRightOutlineRegular,
+  IconSettingsOutlineRegular,
+  IconSparkleRegular,
+  IconUserOutlineRegular,
   JsonTree,
   MarkdownText,
   Tooltip,
@@ -107,11 +107,11 @@ function CompactedIcon(): ReactNode {
 }
 
 const KIND_ICON: Record<TrajectoryCellKind, ReactNode> = {
-  system: <IconSettingsOutline16 size={13} />,
-  user: <IconUserOutline16 size={13} />,
+  system: <IconSettingsOutlineRegular size={13} />,
+  user: <IconUserOutlineRegular size={13} />,
   context: <InformationIcon />,
   compacted: <CompactedIcon />,
-  message: <IconSparkle16 size={13} />,
+  message: <IconSparkleRegular size={13} />,
   tool: <ToolWrenchIcon />,
   subtool: <ToolWrenchIcon />,
 }
@@ -1077,7 +1077,7 @@ function SourceBlocks({
                 <span className={css.sourceBlockLabel}>
                   {`Block #${index + 1} ${block.type}`}
                 </span>
-                <IconChevronRightOutline14 className={css.sourceBlockJumpIcon} size={12} />
+                <IconChevronRightOutlineRegular className={css.sourceBlockJumpIcon} size={12} />
               </button>
             )
             : (
@@ -1222,7 +1222,7 @@ function ToolCatalog({ tools }: { tools: ConversationPromptSnapshot['tools'] }) 
       {tools.map((tool, index) => (
         <details className={css.toolCatalogItem} key={`${tool.name}:${index}`}>
           <summary className={css.toolCatalogSummary}>
-            <IconChevronRightOutline14 className={css.toolCatalogChevron} size={12} />
+            <IconChevronRightOutlineRegular className={css.toolCatalogChevron} size={12} />
             <ToolGlyph />
             <span className={css.toolCatalogName}>{tool.name}</span>
             <span className={css.toolCatalogDescription}>{tool.description}</span>
@@ -1388,7 +1388,7 @@ function MarkdownRecordContent({
             onClick={() => { onThinkingExpandedChange(!thinkingExpanded) }}
           >
             Thinking
-            <IconChevronRightOutline14 className={css.thinkingChevron} size={12} />
+            <IconChevronRightOutlineRegular className={css.thinkingChevron} size={12} />
           </button>
           {thinkingExpanded && (
             <MarkdownFragment
@@ -1671,7 +1671,7 @@ function OverviewSection({
           onClick={onOpen}
         >
           <span>{label}</span>
-          <IconChevronRightOutline14 className={css.overviewTitleIcon} size={12} />
+          <IconChevronRightOutlineRegular className={css.overviewTitleIcon} size={12} />
         </button>
       </h3>
       <div
@@ -2782,7 +2782,7 @@ export function TrajectoryTable({
                               ? 'Compacted'
                               : 'Assistant Message'}
                           </span>
-                          <IconChevronRightOutline14
+                          <IconChevronRightOutlineRegular
                             className={css.overviewHierarchyJumpIconTight}
                             size={11}
                           />
@@ -2906,7 +2906,7 @@ export function TrajectoryTable({
                           onClick={() => { activateTab('source') }}
                         >
                           <span>{messageSourceLabel(selected.cell.messageSource)}</span>
-                          <IconChevronRightOutline14
+                          <IconChevronRightOutlineRegular
                             className={css.overviewHierarchyJumpIconTight}
                             size={11}
                           />
@@ -2931,7 +2931,7 @@ export function TrajectoryTable({
                             }}
                           >
                             <span>Request #{selectedAssistantRequest ?? '—'}</span>
-                            <IconChevronRightOutline14
+                            <IconChevronRightOutlineRegular
                               className={css.overviewHierarchyJumpIconTight}
                               size={11}
                             />
@@ -2944,7 +2944,7 @@ export function TrajectoryTable({
                             onClick={() => { openRecordSummary(selectedParentMessage) }}
                           >
                             <span>Assistant Message</span>
-                            <IconChevronRightOutline14
+                            <IconChevronRightOutlineRegular
                               className={css.overviewHierarchyJumpIconTight}
                               size={11}
                             />
@@ -2957,7 +2957,7 @@ export function TrajectoryTable({
                             onClick={() => { openRecordSummary(selectedParentTool) }}
                           >
                             <span>Tool Call</span>
-                            <IconChevronRightOutline14
+                            <IconChevronRightOutlineRegular
                               className={css.overviewHierarchyJumpIconTight}
                               size={11}
                             />

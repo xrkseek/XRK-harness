@@ -261,6 +261,29 @@ describe('built-in conversation node Definitions', () => {
       timing: { firstTokenTime: 1_700_000_000_032 },
     }])
 
+    // Max-tokens auto-continue starts a later step while the turn stays open:
+    // truncated stream shells from the closed step must settle (stop the sweep).
+    const supersededByLaterStep = snapshot(assembler([
+      at(40, 'turn/start', { turn: 13 }),
+      at(41, 'step/start', { turn: 13, step: 1 }),
+      at(42, 'assistant/chunk', {
+        turn: 13,
+        step: 1,
+        chunk: { type: 'tool-call-delta', index: 0, id: 'call-trunc', name: 'bash', argumentsDelta: '{"c' },
+      }),
+      at(43, 'step/end', { turn: 13, step: 1 }),
+      at(44, 'user/message', {
+        ...textMessage('umsg-continue', '继续'),
+        source: { kind: 'auto-continue', round: 1 },
+      }, { surfaceOp: 'append' }),
+      at(45, 'step/start', { turn: 13, step: 2 }),
+    ]))
+    expect((node(supersededByLaterStep, 'tool-call')?.data as ToolChatData).root).toMatchObject({
+      kind: 'tool-result',
+      callId: 'call-trunc',
+      error: { code: 'interrupted' },
+    })
+
     const interruptedToolOnlyValue = assembler([
       at(35, 'turn/start', { turn: 5 }),
       at(36, 'step/start', { turn: 5, step: 1 }),
@@ -1860,10 +1883,10 @@ describe('built-in conversation node Definitions', () => {
     expect(opening).toHaveLength(1)
     expect(opening[0]?.turn).toBe(1)
     expect(opening[0]?.prompt).toBe('navigate here')
-    expect(opening[0]?.response).toBe('first')
+    // Live streaming text is intentionally omitted from the rail preview so
+    // every token does not republish navigation.items() / re-render ChatView.
+    expect(opening[0]?.response).toBe('')
 
-    // Content-only upsert: the node keeps its key, so the rail's preview has to
-    // follow the in-place update rather than the last structural publication.
     value.append(at(5, 'assistant/chunk', {
       turn: 1,
       step: 1,
@@ -1871,8 +1894,20 @@ describe('built-in conversation node Definitions', () => {
     }))
     value.flush()
     const streamed = snapshot(value).navigation.items()
-    expect(streamed[0]?.response).toBe('first and more')
-    expect(streamed).not.toBe(opening)
+    expect(streamed[0]?.response).toBe('')
+    expect(streamed).toBe(opening)
+
+    // Settled step fills the preview once.
+    value.append(at(6, 'assistant/message', {
+      turn: 1,
+      step: 1,
+      message: assistantMessage('a1', 'first and more'),
+    }, { surfaceOp: 'append' }))
+    value.append(at(7, 'step/end', { turn: 1, step: 1 }))
+    value.flush()
+    const settled = snapshot(value).navigation.items()
+    expect(settled[0]?.response).toBe('first and more')
+    expect(settled).not.toBe(opening)
   })
 
   it('bounds each rail preview instead of copying the whole transcript', () => {

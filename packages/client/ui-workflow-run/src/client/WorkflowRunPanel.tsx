@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import {
-  DisclosureRow, IconChevronRightOutline14, StateDot,
+  DisclosureRow, IconChevronRightOutlineRegular, StateDot,
   type DisclosureRowProps, type StateDotState,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
@@ -139,7 +139,7 @@ function RunHeader({ children, count, name, requiresExpansion, status, t }: {
 }) {
   return (
     <StatusDisclosure
-      icon={<IconChevronRightOutline14 />}
+      icon={<IconChevronRightOutlineRegular />}
       title={t('run.title', { name })}
       requiresExpansion={requiresExpansion}
       expandOnRowClick
@@ -202,7 +202,7 @@ function PhaseSection({ phase, navigable, openSession, t }: {
 }) {
   return (
     <StatusDisclosure
-      icon={<IconChevronRightOutline14 />}
+      icon={<IconChevronRightOutlineRegular />}
       title={readablePhase(phase.phase, t)}
       cleanCycleKey={phase.members.length}
       requiresExpansion={phaseRequiresExpansion(phase)}

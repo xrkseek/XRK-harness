@@ -30,6 +30,8 @@ import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
 import { ToolsExpandRow } from './settings/ToolsExpandRow.tsx'
 import type { ToolsExpandRowInjected } from './settings/ToolsExpandRow.tsx'
+import { TranscriptViewRow } from './settings/TranscriptViewRow.tsx'
+import type { TranscriptViewRowInjected } from './settings/TranscriptViewRow.tsx'
 import { ChatView } from './chat/ChatView.tsx'
 import { StatsLine } from './chat/StatsLine.tsx'
 import {
@@ -216,6 +218,18 @@ export function apply(ctx: Context): void {
       },
     }),
   }, ToolsExpandRow))
+
+  // Work-details mode: how much of a settled Turn's process run stays visible.
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'transcript-view',
+    order: 22,
+    locale: NS,
+    inject: (): TranscriptViewRowInjected => ({
+      hooks: { transcriptView: submissionPolicy.transcriptView },
+      setTranscriptView: (mode) => { submissionPolicy.setTranscriptView(mode) },
+    }),
+  }, TranscriptViewRow))
 
   // Live tool-row expand preference for ui-tool (ToolCallTree inject).
   ctx.provide('conversationUiPrefs', {
@@ -523,6 +537,13 @@ export function apply(ctx: Context): void {
       const conversation = concreteConversation(ctx)
       const scoped = scopedConversation(sessions, sessionId)
       return {
+        // Same live store the Settings switch and ui-tool's ToolCallTree read:
+        // the chat view folds a completed Turn's process run only when the
+        // reader has NOT asked for every tool row to start open.
+        hooks: {
+          toolsDefaultExpanded: submissionPolicy.toolsDefaultExpanded,
+          transcriptView: submissionPolicy.transcriptView,
+        },
         // Demoted Detail column: Status lives in `details` via ui-plan.
         // File open: community `xrkh-better-sidebar` (when present) + OS
         // `workspaces.openPath` — no first-party floating Files panel.

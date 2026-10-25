@@ -4,11 +4,12 @@
 // plugin fills that slot; this layer only supplies references + loadImage.
 
 import type { Context } from '@xrkseek/cordis'
-import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconBrowseOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { imageCardModel } from '../models/image-card-model.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
+import { localizeToolTitle } from '../models/localize-tool-title.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 
@@ -31,8 +32,8 @@ export function ReadImageRow({
       t={t}
       variant={model.variant}
       toolName={toolName}
-      icon={<IconBrowseOutline16 size={14} />}
-      title={model.title}
+      icon={<IconBrowseOutlineRegular size={14} />}
+      title={localizeToolTitle(toolName, model.variant, model.title, t)}
       summary={model.summary}
       body={null}
       // Image card owns the envelope text; avoid JSON.stringified attachment under it.

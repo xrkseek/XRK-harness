@@ -3,8 +3,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconEditOutline16,
-  IconFolderOpenOutline16, IconRefreshOutline16, IconTrashOutline16, Tooltip, writeClipboard,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, IconEditOutlineRegular,
+  IconFolderOpenOutlineRegular, IconRefreshOutlineRegular, IconTrashOutlineRegular, Tooltip, writeClipboard,
 } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -107,7 +107,7 @@ export function MessageIconActions({
       {clock === 'start' ? clockEl : null}
       <Tooltip label={copied ? t('copied') : t('copy')} side="bottom">
         <button type="button" className={css.action} aria-label={copied ? t('copied') : t('copy')} onClick={onCopy}>
-          {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
+          {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
         </button>
       </Tooltip>
       {extraActions}
@@ -121,7 +121,7 @@ export function MessageIconActions({
             data-unavailable={onEdit === undefined || undefined}
             onClick={onEdit}
           >
-            <IconEditOutline16 />
+            <IconEditOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -135,14 +135,14 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onRegenerate}
           >
-            <IconRefreshOutline16 />
+            <IconRefreshOutlineRegular />
           </button>
         </Tooltip>
       )}
       {onWithdraw !== undefined && (
         <Tooltip label={t('message.withdrawSteer')} side="bottom">
           <button type="button" className={css.action} aria-label={t('message.withdrawSteer')} onClick={onWithdraw}>
-            <IconTrashOutline16 />
+            <IconTrashOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -156,7 +156,7 @@ export function MessageIconActions({
             data-unavailable={onDelete === undefined || undefined}
             onClick={onDelete}
           >
-            <IconTrashOutline16 />
+            <IconTrashOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -170,7 +170,7 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onRestore}
           >
-            <IconFolderOpenOutline16 />
+            <IconFolderOpenOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -186,7 +186,7 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onBranch}
           >
-            <IconBranchOutline16 />
+            <IconBranchOutlineRegular />
           </button>
         </Tooltip>
       )}

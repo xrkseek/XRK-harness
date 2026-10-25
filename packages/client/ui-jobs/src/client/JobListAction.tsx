@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobView } from '@xrkseek/client-runtime/client'
-import { IconChevronDownOutline14, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutlineRegular, useDismissOnOutsidePointer } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -188,7 +188,7 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
         }}
       >
         <span className={css.count}>{countLabel}</span>
-        <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />
+        <IconChevronDownOutlineRegular className={open ? css.triggerOpen : undefined} />
       </button>
       {menu !== null ? createPortal(menu, document.body) : null}
     </div>

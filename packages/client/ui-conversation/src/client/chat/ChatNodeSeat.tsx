@@ -4,7 +4,6 @@ import { JsonBlock } from '@xrkseek/client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { PendingSubmissionBubble, userMessageHasReaderSurface } from './MessageItem.tsx'
-import { usePostStreamLive } from './use-post-stream-live.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
@@ -23,7 +22,7 @@ type RoutedChatNodeOwner = {
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, selectedCallId, cwd, roundByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
-  loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
+  steer, loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
   const routedNode = node as ChatNode | undefined
@@ -40,19 +39,15 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       regenerateAt,
       deleteAt,
       withdrawSteer,
+      steer,
       loadImage,
       renderMessageImages,
       renderMessageFiles,
       fileMentions,
     }, [
-    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage,
+    node, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, steer, loadImage,
     renderMessageImages, renderMessageFiles, fileMentions,
   ])
-  const streamingAssistant = routedNode?.kind === 'assistant-step'
-    && (routedNode.data as { readonly status?: string }).status === 'running'
-  // Grace after settle: flipping off `data-live` the same frame as streaming
-  // ends lets content-visibility:auto blank an expanded Think row briefly.
-  const postStreamLive = usePostStreamLive(streamingAssistant === true)
   if (routedNode === undefined || owner === null) return null
   // Caption-only user rows (model handle text, no card) must not keep a
   // round label and an action strip — that is a second bubble per file.
@@ -70,11 +65,13 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // Runtime dispatch owns the correlation: every Node's discriminant is the
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.
+  // No `data-live` grace any more: `.flowItem` stopped carrying
+  // `content-visibility: auto` (ChatView.module.css:63-67 records the Chromium
+  // ghost paint that forced it out), which left a per-row 480 ms settle timer
+  // with no consumer — on a long transcript that was one timer plus one
+  // re-render per row on every settle. Re-introducing paint containment means
+  // bringing the grace back (git history: use-post-stream-live.ts).
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
-  // Running assistants need live layout for scroll-follow. Turn-tails also: Stop
-  // materializes a tall ChangedFiles card in one paint, and content-visibility
-  // auto/skip has left a second ghost copy of that card in Chromium.
-  const live = postStreamLive || routedNode.kind === 'turn-tail'
   const round = hostTurn === undefined ? undefined : roundByTurn.get(hostTurn)
   const roundLabelKey = routedNode.kind === 'steering'
     ? 'chat.turnNavigation.steer'
@@ -89,7 +86,6 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-flow-kind={routedNode.kind}
       data-chat-turn={turn}
       data-chat-round={round}
-      data-live={live || undefined}
     >
       {roundLabelKey !== null && round !== undefined ? (
         <div className={css.roundLabel}>{t(roundLabelKey, { turn: round })}</div>

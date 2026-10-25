@@ -7,7 +7,7 @@
 import type { MessageId } from '@xrkseek/xrk-llm/brand'
 import type { ContentBlock } from '@xrkseek/xrk-llm/types'
 import type { SessionId } from '@xrkseek/xrk-session/types'
-import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { RpcId, RpcRequest, RpcResponse } from './rpc.ts'
 import type { HistoryEntry, SessionProjectionsBlock } from './sessions.ts'
 
 /**
@@ -132,6 +132,12 @@ export interface SubagentsApi {
         delivery?: 'queue' | 'steer'
         /** Optional browser zone sampled for this exact human prompt. */
         clientTimeZone?: string
+        /**
+         * Optional client-minted submission identity. When present, Face stamps
+         * it onto the child's admit so local submission echoes can match the
+         * Host queue row and retire against the durable `user/message`.
+         */
+        requestId?: RpcId
       }
     >,
     signal: AbortSignal,

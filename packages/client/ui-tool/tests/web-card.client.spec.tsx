@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 // The web render intent on the web side: the pure webCardModel derivation over
 // resultView, and the conversation render sites that consume it — the keyed
 // WebRow (registered under both web_search and web_fetch), the GenericToolCard
@@ -20,7 +20,7 @@ import type { ToolResultView } from '@xrkseek/xrk-api-remotes/client'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
 import type { SelectionTarget } from '@xrkseek/client-ui-conversation/client'
 import type { ToolCallOwnerProps } from '@xrkseek/client-ui-tool/client'
-import { IconGlobeOutline14 } from '@xrkseek/client-ui-primitives'
+import { IconGlobeOutlineRegular } from '@xrkseek/client-ui-primitives'
 import { webCardModel } from '../src/client/tool/models/web-card-model.ts'
 import { createChatStore } from '@xrkseek/client-ui-conversation/src/client/stores.ts'
 import { GenericToolCard } from '../src/client/tool/toolviews/GenericToolCard.tsx'
@@ -141,10 +141,10 @@ describe('chat row web body', () => {
   }
 
   it('the WebRow collapses to the summary row, expanding to the full search card', () => {
-    const globe = render(<IconGlobeOutline14 />).container.querySelector('svg')!.outerHTML
+    const globe = render(<IconGlobeOutlineRegular />).container.querySelector('svg')!.outerHTML
     const view = render(<WebRow {...rowProps(settledSearch(), 'web_search')} />)
     // Collapsed: the summary row alone, no card in the DOM.
-    expect(view.getByText('Search')).toBeTruthy()
+    expect(view.getByText('网络搜索')).toBeTruthy()
     expect(view.container.querySelector('svg')?.outerHTML).toBe(globe)
     expect(view.queryByText('Titled')).toBeNull()
     expect(view.container.querySelector('[data-web]')).toBeNull()
@@ -158,7 +158,7 @@ describe('chat row web body', () => {
 
   it('the WebRow expands to the fetch card, titled Fetch', () => {
     const view = render(<WebRow {...rowProps(settledFetch(), 'web_fetch')} />)
-    expect(view.getByText('Fetch')).toBeTruthy()
+    expect(view.getByText('抓取网页')).toBeTruthy()
     expect(view.container.querySelector('[data-web]')).toBeNull()
     toggleRow(view)
     // The url shows as the card's link; scope to the card.
@@ -169,7 +169,7 @@ describe('chat row web body', () => {
 
   it('a running web call is the summary row alone, with nothing to expand', () => {
     const view = render(<WebRow {...rowProps(runningSearch(), 'web_search')} />)
-    expect(view.getByText('Search')).toBeTruthy()
+    expect(view.getByText('网络搜索')).toBeTruthy()
     expect(view.queryByText('Titled')).toBeNull()
     // No card material and no expandable body: clicking the row reveals nothing.
     expect(view.container.querySelector('[data-expandable]')).toBeNull()
@@ -180,7 +180,7 @@ describe('chat row web body', () => {
     const view = render(<WebRow {...rowProps(settledSearch({
       isError: true, resultView: { card: 'generic' },
     }), 'web_search')} />)
-    expect(view.getByText('Search')).toBeTruthy()
+    expect(view.getByText('网络搜索')).toBeTruthy()
     expect(view.container.querySelector('[data-web]')).toBeNull()
     // The row reflects the error state so the summary line still reads as failed.
     expect(view.container.querySelector('[data-state="error"]')).not.toBeNull()

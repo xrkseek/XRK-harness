@@ -11,7 +11,7 @@
 import { useEffect } from 'react'
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconAgentPresetOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconAgentPresetOutlineRegular } from '@xrkseek/client-ui-primitives'
 // Type-only: pulls the ui-conversation SlotMap merge (the header actions).
 import type {} from '@xrkseek/client-ui-conversation/client'
 import type { AgentPresetSettingsState } from './settings-store.ts'
@@ -57,7 +57,7 @@ export function AgentPresetLabel({
   const text = resolvePresetDisplayText(preset, option, t)
   return (
     <span className={css.label} title={text.description ?? t('headerHint')}>
-      <IconAgentPresetOutline16 size={14} className={css.icon} />
+      <IconAgentPresetOutlineRegular size={14} className={css.icon} />
       {text.name}
     </span>
   )

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { IconChevronDownOutline14 } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type {
   CronApiClient,
   CronJobMutationResponse,
@@ -203,7 +203,7 @@ export function ScheduleSettingsTab({
                         {job.nextRunAt !== null && job.enabled ? (
                           <time className={css.nextRun} dateTime={job.nextRunAt}>{formatTimestamp(job.nextRunAt)}</time>
                         ) : null}
-                        <IconChevronDownOutline14 className={css.chevron} size={12} aria-hidden="true" />
+                        <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
                       </span>
                     </button>
                     {open ? (

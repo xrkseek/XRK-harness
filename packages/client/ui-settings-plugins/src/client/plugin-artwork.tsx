@@ -5,27 +5,27 @@
 
 import type { ReactNode } from 'react'
 import {
-  IconApiOutline14,
-  IconBellOutline16,
-  IconBrowseOutline16,
-  IconChecklistOutline14,
-  IconCodeOutline16,
-  IconCordisPluginOutline14,
-  IconDatabaseOutline16,
-  IconFolderOpenOutline16,
-  IconGaugeOutline16,
-  IconGlobeOutline14,
-  IconGoalOutline16,
-  IconLinkOutline16,
-  IconPersonalizationOutline16,
-  IconPlayOutline16,
-  IconQueueOutline14,
-  IconSearchOutline16,
-  IconSettingsOutline14,
-  IconSkillOutline16,
-  IconSparkle16,
-  IconThinkOutline14,
-  IconWarningOutline16,
+  IconApiOutlineRegular,
+  IconBellOutlineRegular,
+  IconBrowseOutlineRegular,
+  IconChecklistOutlineRegular,
+  IconCodeOutlineRegular,
+  IconCordisPluginOutlineRegular,
+  IconDatabaseOutlineRegular,
+  IconFolderOpenOutlineRegular,
+  IconGaugeOutlineRegular,
+  IconGlobeOutlineRegular,
+  IconGoalOutlineRegular,
+  IconLinkOutlineRegular,
+  IconPersonalizationOutlineRegular,
+  IconPlayOutlineRegular,
+  IconQueueOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSettingsOutlineRegular,
+  IconSkillOutlineRegular,
+  IconSparkleRegular,
+  IconThinkOutlineRegular,
+  IconWarningOutlineRegular,
   type IconProps,
 } from '@xrkseek/client-ui-primitives'
 import type { PluginsSettingsLocaleKey } from './locales.ts'
@@ -33,28 +33,28 @@ import type { PluginsSettingsLocaleKey } from './locales.ts'
 type Artwork = (props: IconProps) => ReactNode
 
 const ARTWORK: Partial<Record<PluginsSettingsLocaleKey, Artwork>> = {
-  mcpTitle: IconApiOutline14,
-  webSearchTitle: IconSearchOutline16,
-  bashTitle: IconCodeOutline16,
-  agentLoopTitle: IconThinkOutline14,
-  workspaceInjectTitle: IconFolderOpenOutline16,
-  telemetryTitle: IconGaugeOutline16,
-  sandboxTitle: IconSettingsOutline14,
-  computerUseTitle: IconGoalOutline16,
-  browserTitle: IconBrowseOutline16,
-  voiceTitle: IconBellOutline16,
-  imageGenTitle: IconSparkle16,
-  videoGenTitle: IconPlayOutline16,
-  videoAnalyzeTitle: IconBrowseOutline16,
-  curatedMemoryTitle: IconDatabaseOutline16,
-  a2aInboundTitle: IconQueueOutline14,
-  externalAgentTitle: IconSkillOutline16,
-  cronTitle: IconChecklistOutline14,
-  autoReviewTitle: IconWarningOutline16,
-  memoryEmbedTitle: IconPersonalizationOutline16,
-  hostTitle: IconGlobeOutline14,
-  channelsTitle: IconQueueOutline14,
-  sshRemoteTitle: IconLinkOutline16,
+  mcpTitle: IconApiOutlineRegular,
+  webSearchTitle: IconSearchOutlineRegular,
+  bashTitle: IconCodeOutlineRegular,
+  agentLoopTitle: IconThinkOutlineRegular,
+  workspaceInjectTitle: IconFolderOpenOutlineRegular,
+  telemetryTitle: IconGaugeOutlineRegular,
+  sandboxTitle: IconSettingsOutlineRegular,
+  computerUseTitle: IconGoalOutlineRegular,
+  browserTitle: IconBrowseOutlineRegular,
+  voiceTitle: IconBellOutlineRegular,
+  imageGenTitle: IconSparkleRegular,
+  videoGenTitle: IconPlayOutlineRegular,
+  videoAnalyzeTitle: IconBrowseOutlineRegular,
+  curatedMemoryTitle: IconDatabaseOutlineRegular,
+  a2aInboundTitle: IconQueueOutlineRegular,
+  externalAgentTitle: IconSkillOutlineRegular,
+  cronTitle: IconChecklistOutlineRegular,
+  autoReviewTitle: IconWarningOutlineRegular,
+  memoryEmbedTitle: IconPersonalizationOutlineRegular,
+  hostTitle: IconGlobeOutlineRegular,
+  channelsTitle: IconQueueOutlineRegular,
+  sshRemoteTitle: IconLinkOutlineRegular,
 }
 
 /**
@@ -63,6 +63,6 @@ const ARTWORK: Partial<Record<PluginsSettingsLocaleKey, Artwork>> = {
  * @returns a 16px glyph.
  */
 export function pluginArtwork(titleKey: PluginsSettingsLocaleKey): ReactNode {
-  const Artwork = ARTWORK[titleKey] ?? IconCordisPluginOutline14
+  const Artwork = ARTWORK[titleKey] ?? IconCordisPluginOutlineRegular
   return <Artwork size={16} />
 }

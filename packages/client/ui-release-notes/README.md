@@ -56,9 +56,11 @@ absolutely positioned over the bell's top-right corner, so the label never
 reflows when it appears or clears, and it is `aria-hidden` (the button's
 `aria-label` carries the state).
 
-`IconBellOutline16` is hand-authored: the design set ships no bell export. It
-follows the `ic_ds_*` outline idiom per `ui-primitives/README.md`, which already
-documents redrawn approximations as accepted practice.
+`IconBellOutlineRegular` is drawn on top of the DSH artwork table: the design
+set ships no bell glyph, so `ui-primitives/src/icons/artwork.ts` carries a
+`bell-outline` entry in the same 16×16 / 1px-stroke idiom as the rest of the
+product set. It renders through the shared sprite like every other glyph, so a
+theme can still replace it.
 
 ## Known limitations
 

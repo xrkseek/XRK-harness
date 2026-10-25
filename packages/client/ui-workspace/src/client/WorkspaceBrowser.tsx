@@ -12,18 +12,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconAgentPresetOutline16, IconCloseFill14, IconPersonalizationOutline16,
-  IconProjectAddOutline16, IconSearchOutline16, Menu, Modal, Tooltip,
+  Button, IconAgentPresetOutlineRegular, IconCloseFillRegular, IconPersonalizationOutlineRegular,
+  IconProjectAddOutlineRegular, IconSearchOutlineRegular, Menu, Modal, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import {
   WorkspaceArchiveActiveError,
-  type SessionId, type SessionListState, type SessionSearchResultItem,
+  type SessionId, type SessionSearchResultItem,
   type WorkspaceId, type WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY,
-  type ArchiveViewMode, type SessionNode, type SessionOrderBy,
+  type ArchiveViewMode, type SessionListFacts, type SessionNode, type SessionOrderBy,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
@@ -100,8 +100,31 @@ function reconciledSessionOrder(sessionIds: readonly SessionId[], stored: readon
   return ordered
 }
 
+/**
+ * Equality for the sidebar's list-facts slice: exactly the three fields the
+ * tree derivation reads. `jobsBySession` / `subagentsByParent` /
+ * `currentAddress` / `phase` ride the same snapshot at chat frequency and must
+ * not invalidate the derivation (or every row memo behind it).
+ */
+function sameSessionListFacts(a: SessionListFacts, b: SessionListFacts): boolean {
+  return a.ids === b.ids && a.byId === b.byId && a.current === b.current
+}
+
+/**
+ * Read the derivation slice of the global session list.
+ * @param useSessions - the slot's standard list hook.
+ * @returns the three list facts {@link deriveGroups} / {@link deriveFlat} /
+ * {@link deriveSearchResults} consume, stable while those fields are stable.
+ */
+function useSessionListFacts(useSessions: WorkspaceBrowserProps['useSessions']): SessionListFacts {
+  return useSessions(
+    (state): SessionListFacts => ({ ids: state.ids, byId: state.byId, current: state.current }),
+    sameSessionListFacts,
+  )
+}
+
 /** Newest update first with stable Session identity as the tie-break. */
-function compareSessionRecency(a: SessionId, b: SessionId, byId: SessionListState['byId']): number {
+function compareSessionRecency(a: SessionId, b: SessionId, byId: SessionListFacts['byId']): number {
   const aUpdatedAt = byId[a]?.updatedAt ?? Number.NEGATIVE_INFINITY
   const bUpdatedAt = byId[b]?.updatedAt ?? Number.NEGATIVE_INFINITY
   if (aUpdatedAt !== bUpdatedAt) return bUpdatedAt - aUpdatedAt
@@ -115,7 +138,7 @@ function nextSessionOrderAccount({
   sessionIds: readonly SessionId[]
   previousOrder: readonly string[] | undefined
   previousUpdatedAt: Readonly<Record<string, number>>
-  list: SessionListState
+  list: SessionListFacts
   orderBy: SessionOrderBy
   sortByRecency: boolean
 }): { order: SessionId[]; updatedAt: Record<string, number>; changed: boolean } {
@@ -209,7 +232,7 @@ function ViewOptionsMenu({
             aria-label={t('viewOptions.label')}
             onClick={() => { setOpen(v => !v) }}
           >
-            <IconPersonalizationOutline16 />
+            <IconPersonalizationOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -293,13 +316,31 @@ function SessionTree({
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   home, t,
 }: SessionTreeProps) {
-  const list = useSessions(s => s)
+  const list = useSessionListFacts(useSessions)
+  const phase = useSessions(s => s.phase)
   const current = list.current
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<string[]>([])
   // Transient drag marker state; the selected mode owns the resulting order.
   const [drag, setDrag] = useState<DragState | null>(null)
+  /**
+   * Mirror of {@link drag} for the row handlers. Those must keep one identity
+   * per row (a fresh closure per row per render defeats every row memo), so
+   * they read the live gesture from the ref instead of closing over state.
+   * Written only by {@link applyDrag} — never during render.
+   */
+  const dragRef = useRef<DragState | null>(null)
+  const applyDrag = useCallback((next: DragState | null): void => {
+    dragRef.current = next
+    setDrag(next)
+  }, [])
   const sessionDropCommitted = useRef(false)
   const [workspaceDrag, setWorkspaceDrag] = useState<WorkspaceDragState | null>(null)
+  /** Live workspace gesture for the stable row handlers; see {@link dragRef}. */
+  const workspaceDragRef = useRef<WorkspaceDragState | null>(null)
+  const applyWorkspaceDrag = useCallback((next: WorkspaceDragState | null): void => {
+    workspaceDragRef.current = next
+    setWorkspaceDrag(next)
+  }, [])
   const workspaceDropCommitted = useRef(false)
   const previousOrderBy = useRef(orderBy)
   const nativeDragActive = drag !== null || workspaceDrag !== null
@@ -321,7 +362,7 @@ function SessionTree({
     return list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))
   }, [list, workspaces])
   useEffect(() => {
-    if (list.phase !== 'ready') return
+    if (phase !== 'ready') return
     const switchedToUpdated = previousOrderBy.current !== 'updated' && orderBy === 'updated'
     previousOrderBy.current = orderBy
     const accounts = [
@@ -346,7 +387,7 @@ function SessionTree({
         syncSessionOrderAccount(key, next.order.map(id => id as string), next.updatedAt)
       }
     }
-  }, [list, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
+  }, [list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
   const orderedWorkspaces = useMemo(() => {
     return workspaces.map((workspace) => {
       const stored = sessionOrderByAccount[workspace.workspaceId as string]
@@ -367,11 +408,17 @@ function SessionTree({
     }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds),
     [list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds, pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount],
   )
-  const now = Date.now()
+  /**
+   * Relative-time clock for the rows: one read per derivation change instead of
+   * a render-time `Date.now()`. A fresh value per render would invalidate every
+   * row memo (and every row's time label would still only change on a re-render,
+   * exactly as before — no timer is introduced here).
+   */
+  const now = useMemo(() => Date.now(), [groups])
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (sessionDropCommitted.current) return
     sessionDropCommitted.current = true
-    setDrag(null)
+    applyDrag(null)
     const group = groups.find(candidate => candidate.key === activeDrag.accountKey)
     if (group === undefined) return
     const targetIndex = group.sessions.findIndex(session => session.id === over.id)
@@ -396,13 +443,48 @@ function SessionTree({
       console.warn('session reorder rejected:', reason)
     })
   }
+  /**
+   * Latest-commit mirror for the row handlers. The commit functions close over
+   * the derived groups and orders, so they change on every list update; the row
+   * handlers must not (a new `drag` closure per row per render defeats every row
+   * memo). Effects run before the next pointer event, so the ref is current when
+   * a drop lands.
+   */
+  const commitSessionDragRef = useRef<(
+    activeDrag: DragState, over: NonNullable<DragState['over']>
+  ) => void>(() => {})
+  useEffect(() => {
+    commitSessionDragRef.current = commitSessionDrag
+  })
+  const startSessionDrag = useCallback((accountKey: string, sessionId: SessionNode['id']): void => {
+    sessionDropCommitted.current = false
+    applyDrag({ accountKey, sessionId, over: null })
+  }, [applyDrag])
+  const hoverSessionDrag = useCallback((sessionId: SessionNode['id'], half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
+    const active = dragRef.current
+    if (active === null) return
+    applyDrag({ ...active, over: { id: sessionId, half } })
+  }, [applyDrag])
+  const dropSessionDrag = useCallback((sessionId: SessionNode['id'], half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
+    const active = dragRef.current
+    if (active === null) return
+    commitSessionDragRef.current(active, { id: sessionId, half })
+  }, [])
+  const endSessionDrag = useCallback((): void => {
+    const active = dragRef.current
+    if (active?.over !== null && active?.over !== undefined) commitSessionDragRef.current(active, active.over)
+    else applyDrag(null)
+    sessionDropCommitted.current = false
+  }, [applyDrag])
   const commitWorkspaceDrag = (
     activeDrag: WorkspaceDragState,
     over: NonNullable<WorkspaceDragState['over']>,
   ): void => {
     if (workspaceDropCommitted.current) return
     workspaceDropCommitted.current = true
-    setWorkspaceDrag(null)
+    applyWorkspaceDrag(null)
     const rowIndex = workspaces.findIndex(workspace => workspace.workspaceId === over.id)
     if (rowIndex === -1) return
     const anchor = over.half === 'before' ? over.id : workspaces[rowIndex + 1]?.workspaceId
@@ -416,6 +498,36 @@ function SessionTree({
       console.warn('workspace reorder rejected:', reason)
     })
   }
+  /** Workspace-row counterpart of {@link commitSessionDragRef}. */
+  const commitWorkspaceDragRef = useRef<(
+    activeDrag: WorkspaceDragState, over: NonNullable<WorkspaceDragState['over']>
+  ) => void>(() => {})
+  useEffect(() => {
+    commitWorkspaceDragRef.current = commitWorkspaceDrag
+  })
+  const startWorkspaceDrag = useCallback((workspaceId: WorkspaceId): void => {
+    workspaceDropCommitted.current = false
+    applyWorkspaceDrag({ workspaceId, over: null })
+  }, [applyWorkspaceDrag])
+  /** Move the insert marker onto another Workspace row (long-press reorder). */
+  const markWorkspaceDrag = useCallback((overId: string, half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: Rows arms hover only after its long-press starts this drag. */
+    const active = workspaceDragRef.current
+    if (active === null) return
+    applyWorkspaceDrag({ ...active, over: { id: overId as WorkspaceId, half } })
+  }, [applyWorkspaceDrag])
+  const endWorkspaceDrag = useCallback((): void => {
+    const active = workspaceDragRef.current
+    if (active?.over !== null && active?.over !== undefined) commitWorkspaceDragRef.current(active, active.over)
+    else applyWorkspaceDrag(null)
+    workspaceDropCommitted.current = false
+  }, [applyWorkspaceDrag])
+  const dropWorkspace = useCallback((workspaceId: WorkspaceId, half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: the section's onDrop is mounted only while a workspace drag is live. */
+    const active = workspaceDragRef.current
+    if (active === null) return
+    commitWorkspaceDragRef.current(active, { id: workspaceId, half })
+  }, [])
   const workspaceDropAtListStart = groups[0]?.workspaceId !== undefined
     && workspaceDrag?.over?.id === groups[0].workspaceId
     && workspaceDrag.over.half === 'before'
@@ -436,38 +548,13 @@ function SessionTree({
           const workspaceMarker = workspaceId !== undefined && workspaceDrag?.over?.id === workspaceId
             ? workspaceDrag.over.half
             : null
+          // Row-stable handlers behind a per-render object: the row memo compares
+          // the object's facts (present/absent), never the closure identity.
           const workspaceDragProps = workspaceId === undefined ? undefined : {
-            start: () => {
-              workspaceDropCommitted.current = false
-              setWorkspaceDrag({ workspaceId, over: null })
-            },
-            hover: (overId: string, half: 'before' | 'after') => {
-              setWorkspaceDrag(active => active === null
-                ? active
-                : { ...active, over: { id: overId as WorkspaceId, half } })
-            },
-            end: () => {
-              if (workspaceDrag?.over !== null && workspaceDrag?.over !== undefined) {
-                commitWorkspaceDrag(workspaceDrag, workspaceDrag.over)
-              } else {
-                setWorkspaceDrag(null)
-              }
-              workspaceDropCommitted.current = false
-            },
+            start: () => { startWorkspaceDrag(workspaceId) },
+            hover: markWorkspaceDrag,
+            end: endWorkspaceDrag,
           }
-          const hoverWorkspace = workspaceId === undefined
-            ? undefined
-            : (half: 'before' | 'after') => {
-              setWorkspaceDrag(active => active === null
-                ? active
-                : { ...active, over: { id: workspaceId, half } })
-            }
-          const dropWorkspace = workspaceId === undefined
-            ? undefined
-            : (half: 'before' | 'after') => {
-              if (workspaceDrag === null) return
-              commitWorkspaceDrag(workspaceDrag, { id: workspaceId, half })
-            }
           return (
           // Group section: header row + expanded top-level session rows. The
           // inter-group breathing room is the section's own margin
@@ -480,18 +567,18 @@ function SessionTree({
                 workspaceMarker === 'after' && css.workspaceDropAfter,
               )}
               data-workspace-id={workspaceId}
-              onDragOver={workspaceDrag === null || hoverWorkspace === undefined
+              onDragOver={workspaceDrag === null || workspaceId === undefined
                 ? undefined
                 : (e) => {
                   e.preventDefault()
                   e.dataTransfer.dropEffect = 'move'
-                  hoverWorkspace(workspaceGroupHalf(e))
+                  markWorkspaceDrag(workspaceId, workspaceGroupHalf(e))
                 }}
-              onDrop={workspaceDrag === null || dropWorkspace === undefined
+              onDrop={workspaceDrag === null || workspaceId === undefined
                 ? undefined
                 : (e) => {
                   e.preventDefault()
-                  dropWorkspace(workspaceGroupHalf(e))
+                  dropWorkspace(workspaceId, workspaceGroupHalf(e))
                 }}
             >
               <ProjectRowItem
@@ -537,27 +624,15 @@ function SessionTree({
               // Session drag never leaves its group. Ungrouped writes only the
               // browser-local account; real Workspaces may also write Host order.
                 const sameGroupDrag = drag !== null && drag.accountKey === group.key
+                // Per-render object over row-stable handlers; the row memo reads
+                // `active` / `marker` as facts and never the closure identity.
                 const dragProps = {
-                  start: () => {
-                    sessionDropCommitted.current = false
-                    setDrag({ accountKey: group.key, sessionId: node.id, over: null })
-                  },
+                  start: () => { startSessionDrag(group.key, node.id) },
                   active: sameGroupDrag,
                   marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
-                  hover: (half: 'before' | 'after') => {
-                  /* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
-                    setDrag(d => (d === null ? d : { ...d, over: { id: node.id, half } }))
-                  },
-                  drop: (half: 'before' | 'after') => {
-                  /* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
-                    if (drag === null) return
-                    commitSessionDrag(drag, { id: node.id, half })
-                  },
-                  end: () => {
-                    if (drag?.over !== null && drag?.over !== undefined) commitSessionDrag(drag, drag.over)
-                    else setDrag(null)
-                    sessionDropCommitted.current = false
-                  },
+                  hover: (half: 'before' | 'after') => { hoverSessionDrag(node.id, half) },
+                  drop: (half: 'before' | 'after') => { dropSessionDrag(node.id, half) },
+                  end: endSessionDrag,
                 }
                 return (
                   <SessionNodeItem
@@ -619,7 +694,8 @@ function FlatList({
   | 'setSessionOrder'
   | 't'
 >) {
-  const list = useSessions(s => s)
+  const list = useSessionListFacts(useSessions)
+  const phase = useSessions(s => s.phase)
   const baseRows = useMemo(
     () => deriveFlat(list, archivedSessionIds, archiveMode, pinnedSessionIds),
     [list, archivedSessionIds, archiveMode, pinnedSessionIds],
@@ -627,7 +703,7 @@ function FlatList({
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
   useEffect(() => {
-    if (list.phase !== 'ready') return
+    if (phase !== 'ready') return
     const previousOrder = sessionOrderByAccount[FLAT_SESSION_ORDER_KEY]
     const previousUpdatedAt = sessionUpdatedAtByAccount[FLAT_SESSION_ORDER_KEY] ?? {}
     const switchedToUpdated = previousOrderBy.current !== 'updated' && orderBy === 'updated'
@@ -643,7 +719,7 @@ function FlatList({
     if (next.changed) {
       syncSessionOrderAccount(FLAT_SESSION_ORDER_KEY, next.order.map(id => id as string), next.updatedAt)
     }
-  }, [list, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, sessionIds, syncSessionOrderAccount])
+  }, [list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, sessionIds, syncSessionOrderAccount])
   const rows = useMemo(() => {
     const byId = new Map(baseRows.map(row => [row.id, row]))
     return reconciledSessionOrder(sessionIds, sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
@@ -653,12 +729,18 @@ function FlatList({
       })
   }, [baseRows, sessionOrderByAccount, sessionIds])
   const [drag, setDrag] = useState<DragState | null>(null)
+  /** Live gesture for the stable row handlers; see the tree's {@link dragRef}. */
+  const dragRef = useRef<DragState | null>(null)
+  const applyDrag = useCallback((next: DragState | null): void => {
+    dragRef.current = next
+    setDrag(next)
+  }, [])
   const dropCommitted = useRef(false)
   useNativeDragAcceptance(drag !== null)
   const commitDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (dropCommitted.current) return
     dropCommitted.current = true
-    setDrag(null)
+    applyDrag(null)
     const targetIndex = rows.findIndex(row => row.id === over.id)
     if (targetIndex === -1) return
     const anchor = over.half === 'before' ? over.id : rows[targetIndex + 1]?.id
@@ -671,7 +753,35 @@ function FlatList({
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
     setSessionOrder(FLAT_SESSION_ORDER_KEY, nextOrder.map(id => id as string))
   }
-  const now = Date.now()
+  /** Latest-commit mirror for the row handlers (see the tree's `commitSessionDragRef`). */
+  const commitDragRef = useRef<(activeDrag: DragState, over: NonNullable<DragState['over']>) => void>(() => {})
+  useEffect(() => {
+    commitDragRef.current = commitDrag
+  })
+  const startRowDrag = useCallback((sessionId: SessionNode['id']): void => {
+    dropCommitted.current = false
+    applyDrag({ accountKey: FLAT_SESSION_ORDER_KEY, sessionId, over: null })
+  }, [applyDrag])
+  const hoverRowDrag = useCallback((sessionId: SessionNode['id'], half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
+    const active = dragRef.current
+    if (active === null) return
+    applyDrag({ ...active, over: { id: sessionId, half } })
+  }, [applyDrag])
+  const dropRowDrag = useCallback((sessionId: SessionNode['id'], half: 'before' | 'after'): void => {
+    /* v8 ignore next 2 -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
+    const active = dragRef.current
+    if (active === null) return
+    commitDragRef.current(active, { id: sessionId, half })
+  }, [])
+  const endRowDrag = useCallback((): void => {
+    const active = dragRef.current
+    if (active?.over !== null && active?.over !== undefined) commitDragRef.current(active, active.over)
+    else applyDrag(null)
+    dropCommitted.current = false
+  }, [applyDrag])
+  /** One clock read per row recomputation; see the tree's `now`. */
+  const now = useMemo(() => Date.now(), [rows])
   return (
     <div className={clsx(css.treeBody, css.wide)}>
       <div className={clsx(css.list, css.flatList)} role="tree" aria-label={t('section.sessions')}>
@@ -693,23 +803,12 @@ function FlatList({
               onPinToggle={onSessionPinToggle}
               flat
               drag={{
-                start: () => {
-                  dropCommitted.current = false
-                  setDrag({ accountKey: FLAT_SESSION_ORDER_KEY, sessionId: node.id, over: null })
-                },
+                start: () => { startRowDrag(node.id) },
                 active,
                 marker: active && drag.over?.id === node.id ? drag.over.half : null,
-                hover: (half) => {
-                  setDrag(current => current === null ? current : { ...current, over: { id: node.id, half } })
-                },
-                drop: (half) => {
-                  if (drag !== null) commitDrag(drag, { id: node.id, half })
-                },
-                end: () => {
-                  if (drag?.over !== null && drag?.over !== undefined) commitDrag(drag, drag.over)
-                  else setDrag(null)
-                  dropCommitted.current = false
-                },
+                hover: half => { hoverRowDrag(node.id, half) },
+                drop: half => { dropRowDrag(node.id, half) },
+                end: endRowDrag,
               }}
               t={t}
             />
@@ -747,7 +846,7 @@ function SearchResults({
   remote: RemoteSearchState
   resultLimit: number
 }) {
-  const list = useSessions(s => s)
+  const list = useSessionListFacts(useSessions)
   const currentRemote = remote.query === query
     ? remote
     : { query, status: 'loading' as const, items: [], hasMore: false }
@@ -1004,11 +1103,13 @@ export function WorkspaceBrowser({
       setSessionRenameError(reason instanceof Error ? reason.message : String(reason))
     })
   }
-  const onSessionRename = (sessionId: SessionNode['id'], currentTitle: string) => {
+  // Row callbacks are identity-stable: every row memo compares them, so a new
+  // closure per parent render would re-render the whole list.
+  const onSessionRename = useCallback((sessionId: SessionNode['id'], currentTitle: string): void => {
     setSessionRenameTarget({ sessionId, currentTitle })
     setSessionRenameDraft(currentTitle)
     setSessionRenameError(null)
-  }
+  }, [])
 
   // Idle archive stays one-shot. Host refuses with session-active while a
   // turn / job / subagent is live — confirm then retry with force:true.
@@ -1036,7 +1137,7 @@ export function WorkspaceBrowser({
       setArchiveError(reason instanceof Error ? reason.message : String(reason))
     })
   }
-  const onSessionArchive = (sessionId: SessionNode['id']) => {
+  const onSessionArchive = useCallback((sessionId: SessionNode['id']): void => {
     archiveSession(sessionId).catch((reason: unknown) => {
       if (reason instanceof WorkspaceArchiveActiveError) {
         setArchiveTarget({
@@ -1048,28 +1149,36 @@ export function WorkspaceBrowser({
       }
       console.warn('session archive rejected:', reason)
     })
-  }
-  const onSessionPinToggle = (sessionId: SessionNode['id'], pinned: boolean) => {
+  }, [archiveSession])
+  const onSessionPinToggle = useCallback((sessionId: SessionNode['id'], pinned: boolean): void => {
     ;(pinned ? unpinSession : pinSession)(sessionId).catch((reason: unknown) => {
       console.warn('session pin rejected:', reason)
     })
-  }
-  const onWorkspacePinToggle = (workspaceId: WorkspaceId, pinned: boolean) => {
+  }, [pinSession, unpinSession])
+  const onWorkspacePinToggle = useCallback((workspaceId: WorkspaceId, pinned: boolean): void => {
     ;(pinned ? unpinWorkspace : pinWorkspace)(workspaceId).catch((reason: unknown) => {
       console.warn('workspace pin rejected:', reason)
     })
-  }
+  }, [pinWorkspace, unpinWorkspace])
 
   // Fork can take a while on large logs (Host seed + open). Keep a simple
   // blocking chrome so the sidebar stays responsive to the eye.
   const [forking, setForking] = useState(false)
-  const runFork = useCallback((sessionId: SessionId) => {
-    if (forking) return
+  /**
+   * Re-entrancy gate as a ref: the callback feeds every row's `onFork`, and a
+   * `forking` state dependency would hand the rows a new closure on each start
+   * (and an older one could re-enter while the overlay is up).
+   */
+  const forkingRef = useRef(false)
+  const runFork = useCallback((sessionId: SessionId): void => {
+    if (forkingRef.current) return
+    forkingRef.current = true
     setForking(true)
-    Promise.resolve(forkSession(sessionId)).finally(() => {
+    void Promise.resolve(forkSession(sessionId)).finally(() => {
+      forkingRef.current = false
       setForking(false)
     })
-  }, [forkSession, forking])
+  }, [forkSession])
 
   // Delete dialog is separate from the row so a successful removal can
   // unmount that row without tearing down the in-flight confirmation state.
@@ -1106,6 +1215,17 @@ export function WorkspaceBrowser({
     })
   }
 
+  // Dialog openers handed to the memoized workspace rows (stable identities).
+  const onWorkspaceRenameRequest = useCallback((workspaceId: WorkspaceId, currentTitle: string): void => {
+    setRenameTarget({ workspaceId, currentTitle })
+    setRenameDraft(currentTitle)
+    setRenameError(null)
+  }, [])
+  const onWorkspaceDeleteRequest = useCallback((workspaceId: WorkspaceId, title: string): void => {
+    setDeleteTarget({ workspaceId, title })
+    setDeleteError(null)
+  }, [])
+
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
       <div className={css.sectionHeader}>
@@ -1136,7 +1256,7 @@ export function WorkspaceBrowser({
                     setSearchExpanded(true)
                   }}
                 >
-                  <IconSearchOutline16 size={searchExpanded ? 11 : 14} />
+                  <IconSearchOutlineRegular size={searchExpanded ? 11 : 14} />
                 </button>
               </Tooltip>
               <input
@@ -1165,7 +1285,7 @@ export function WorkspaceBrowser({
                     setSearchExpanded(false)
                   }}
                 >
-                  <IconCloseFill14 />
+                  <IconCloseFillRegular />
                 </button>
               )}
             </div>
@@ -1180,7 +1300,7 @@ export function WorkspaceBrowser({
                 aria-label={t('team.aria')}
                 onClick={() => { setTeamOpen(true) }}
               >
-                <IconAgentPresetOutline16 size={16} />
+                <IconAgentPresetOutlineRegular size={16} />
               </button>
             </Tooltip>
           )}
@@ -1209,7 +1329,7 @@ export function WorkspaceBrowser({
                   setWsPickerOpen(v => !v)
                 }}
               >
-                <IconProjectAddOutline16 size={wide ? 16 : 18} />
+                <IconProjectAddOutlineRegular size={wide ? 16 : 18} />
               </button>
             </Tooltip>
           )}
@@ -1246,7 +1366,7 @@ export function WorkspaceBrowser({
               expandSidebar()
             }}
           >
-            <IconSearchOutline16 size={18} />
+            <IconSearchOutlineRegular size={18} />
           </button>
         </Tooltip>
       </div>}
@@ -1310,15 +1430,8 @@ export function WorkspaceBrowser({
                 orderBy={orderBy}
                 home={home}
                 t={t}
-                onRenameRequest={(workspaceId, currentTitle) => {
-                  setRenameTarget({ workspaceId, currentTitle })
-                  setRenameDraft(currentTitle)
-                  setRenameError(null)
-                }}
-                onDeleteRequest={(workspaceId, title) => {
-                  setDeleteTarget({ workspaceId, title })
-                  setDeleteError(null)
-                }}
+                onRenameRequest={onWorkspaceRenameRequest}
+                onDeleteRequest={onWorkspaceDeleteRequest}
                 onWorkspacePinToggle={onWorkspacePinToggle}
               />
             ))}

@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExterna
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPlusOutlineRegular, IconWarningOutlineRegular, Toast, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -575,7 +575,7 @@ export const InputBar = memo(function InputBar({
         <Toast
           key={toast.seq}
           text={toast.text}
-          icon={<IconWarningOutline16 />}
+          icon={<IconWarningOutlineRegular />}
           anchor={cardRef.current}
           onDone={dismissToast}
         />
@@ -671,7 +671,7 @@ export const InputBar = memo(function InputBar({
                 onMouseDown={keepFocus}
                 onClick={onToggleCommandMenu}
               >
-                <IconPlusOutline16 size={14} />
+                <IconPlusOutlineRegular size={14} />
               </button>
             </Tooltip>
             <input

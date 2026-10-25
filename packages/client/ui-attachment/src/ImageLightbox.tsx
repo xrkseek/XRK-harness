@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { IconCloseOutline16, IconDownloadOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconCloseOutlineRegular, IconDownloadOutlineRegular } from '@xrkseek/client-ui-primitives'
 import css from './ImageLightbox.module.css'
 
 /** Lightbox strings the owner resolves from its own locale namespace. */
@@ -125,10 +125,10 @@ export function ImageLightbox({ src, alt, labels, onClose }: {
           disabled={saving}
           onClick={onDownload}
         >
-          <IconDownloadOutline16 size={16} />
+          <IconDownloadOutlineRegular size={16} />
         </button>
         <button ref={closeRef} type="button" className={css.action} aria-label={labels.close} onClick={onClose}>
-          <IconCloseOutline16 size={16} />
+          <IconCloseOutlineRegular size={16} />
         </button>
       </div>
     </div>,

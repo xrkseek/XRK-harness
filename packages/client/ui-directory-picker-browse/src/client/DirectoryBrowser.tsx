@@ -37,9 +37,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutline16, IconChevronLeftOutline14, IconChevronRightOutline14, IconClockOutline16,
-  IconDatabaseOutline16, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
-  IconPlusOutline16, Modal,
+  Button, IconCheckOutlineRegular, IconChevronLeftOutlineRegular, IconChevronRightOutlineRegular, IconClockOutlineRegular,
+  IconDatabaseOutlineRegular, IconEditOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
+  IconPlusOutlineRegular, Modal,
 } from '@xrkseek/client-ui-primitives'
 import type { DirectoryEntry, DirectoryListing, DirectoryPlace } from '@xrkseek/client-runtime/client'
 import { DirectoryBrowseError } from '@xrkseek/client-runtime/client'
@@ -164,10 +164,10 @@ function placePathHint(path: string, home: string | undefined): string {
 }
 
 function placeIcon(kind: PickerPlace['kind']) {
-  if (kind === 'drive') return <IconDatabaseOutline16 size={22} />
-  if (kind === 'recent') return <IconClockOutline16 size={22} />
-  if (kind === 'home') return <IconFolderOpen16 size={22} />
-  return <IconFolderClose16 size={22} />
+  if (kind === 'drive') return <IconDatabaseOutlineRegular size={22} />
+  if (kind === 'recent') return <IconClockOutlineRegular size={22} />
+  if (kind === 'home') return <IconFolderOpenRegular size={22} />
+  return <IconFolderCloseRegular size={22} />
 }
 
 function placeMatches(place: PickerPlace, needle: string, t: Translate): boolean {
@@ -373,10 +373,10 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
               onClick={() => { onPick(entry) }}
             >
               {selected
-                ? <IconFolderOpen16 size={16} className={css.rowIconSelected} />
-                : <IconFolderClose16 size={16} className={css.rowIcon} />}
+                ? <IconFolderOpenRegular size={16} className={css.rowIconSelected} />
+                : <IconFolderCloseRegular size={16} className={css.rowIcon} />}
               <span className={css.rowName}>{entry.name}</span>
-              <IconChevronRightOutline14 size={12} className={css.rowChevron} />
+              <IconChevronRightOutlineRegular size={12} className={css.rowChevron} />
             </button>
           </span>
         )
@@ -1052,7 +1052,7 @@ export function DirectoryBrowser({
                   <span className={css.crumbTrail} role="navigation" ref={crumbTrailRef}>
                     {crumbs.map((crumb, index) => (
                       <span key={crumb.path} className={css.crumbSeat}>
-                        {index > 0 && <IconChevronRightOutline14 size={12} className={css.crumbChevron} />}
+                        {index > 0 && <IconChevronRightOutlineRegular size={12} className={css.crumbChevron} />}
                         <button
                           type="button"
                           className={css.crumb}
@@ -1100,7 +1100,7 @@ export function DirectoryBrowser({
                       setPathDraft(base.endsWith(sep) ? base : `${base}${sep}`)
                     }}
                   >
-                    <IconEditOutline16 size={14} className={css.crumbEditGlyph} />
+                    <IconEditOutlineRegular size={14} className={css.crumbEditGlyph} />
                   </button>
                 </>
               )
@@ -1197,7 +1197,7 @@ export function DirectoryBrowser({
               disabled={parentInert}
               onClick={returnToPlaces}
             >
-              <IconChevronLeftOutline14 size={14} />
+              <IconChevronLeftOutlineRegular size={14} />
               {t('browser.places')}
             </button>
           )}
@@ -1243,7 +1243,7 @@ export function DirectoryBrowser({
             <>
               <Button
                 variant="outline"
-                icon={<IconPlusOutline16 size={14} />}
+                icon={<IconPlusOutlineRegular size={14} />}
                 disabled={parent === null || loading || parentInert || draftPending}
                 onClick={() => {
                   setFolderDraft('')
@@ -1267,7 +1267,7 @@ export function DirectoryBrowser({
                 {t('browser.showHidden')}
                 {/* Trailing check (Menu's selected vocabulary): the label never
                   * shifts when the pressed state toggles. */}
-                {showHidden && <IconCheckOutline16 size={14} />}
+                {showHidden && <IconCheckOutlineRegular size={14} />}
               </button>
             </>
           )}

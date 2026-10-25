@@ -7,8 +7,9 @@ import { CONVERSATION_SETTINGS_NAMESPACE, ConversationSettingsSchema } from './s
 export {
   BUSY_ENTER_BEHAVIORS, BUSY_ENTER_FIELD, CONVERSATION_SETTINGS_NAMESPACE,
   DEFAULT_BUSY_ENTER_BEHAVIOR, DEFAULT_TOOLS_DEFAULT_EXPANDED,
-  TOOLS_DEFAULT_EXPANDED_FIELD,
-  type BusyEnterBehavior, type ConversationSettings,
+  DEFAULT_TRANSCRIPT_VIEW_MODE, TOOLS_DEFAULT_EXPANDED_FIELD,
+  TRANSCRIPT_VIEW_FIELD, TRANSCRIPT_VIEW_MODES,
+  type BusyEnterBehavior, type ConversationSettings, type TranscriptViewMode,
 } from './submission-settings.ts'
 
 /**

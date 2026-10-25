@@ -12,8 +12,8 @@ import type { PendingSubmission, SessionId } from '@xrkseek/client-runtime/clien
 import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import {
   FileTypeIcon, fileSizeText,
-  IconCheckOutline16, IconChevronDownOutline14, IconChevronUpOutline14, IconCloseOutline16,
-  IconEditOutline16, IconPaperclipOutline16, IconQueueOutline14, IconSendOutline14, IconTrashOutline16, Tooltip,
+  IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
+  IconEditOutlineRegular, IconPaperclipOutlineRegular, IconQueueOutlineRegular, IconSendOutlineRegular, IconTrashOutlineRegular, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { QueueAction, QueueItemId, QueueRow } from '../contract/queue.ts'
 import { NS } from '../locales.ts'
@@ -273,12 +273,12 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
           disabled={interactionActive || rowCount === 1}
           onClick={() => { setCollapsed(value => !value) }}
         >
-          <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
+          <span className={css.lead} aria-hidden><IconQueueOutlineRegular /></span>
           <span className={css.title}>{t('queue.title')}</span>
           <span className={css.count}>{t('queue.count', { n: rowCount })}</span>
           {rowCount > 1 && (
             <span className={css.chevron} aria-hidden>
-              {collapsed && !interactionActive ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+              {collapsed && !interactionActive ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
             </span>
           )}
         </button>
@@ -294,13 +294,13 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                 {queueMutable && (
                   <div className={css.actions}>
                     <button type="button" className={css.action} aria-label={t('queue.edit')} title={t('queue.sending')} disabled>
-                      <IconEditOutline16 size={14} />
+                      <IconEditOutlineRegular size={14} />
                     </button>
                     <button type="button" className={css.action} aria-label={t('queue.remove')} title={t('queue.sending')} disabled>
-                      <IconTrashOutline16 size={14} />
+                      <IconTrashOutlineRegular size={14} />
                     </button>
                     <button type="button" className={css.action} aria-label={t('queue.steer')} title={t('queue.sending')} disabled>
-                      <IconSendOutline14 />
+                      <IconSendOutlineRegular />
                     </button>
                   </div>
                 )}
@@ -526,7 +526,7 @@ function HostQueueRow({
                       document.getElementById(`${fileInputId}-${row.id}`)?.click()
                     }}
                   >
-                    <IconPaperclipOutline16 size={14} />
+                    <IconPaperclipOutlineRegular size={14} />
                   </button>
                 </Tooltip>
                 <Tooltip label={t('queue.save')} side="bottom">
@@ -537,7 +537,7 @@ function HostQueueRow({
                     disabled={busy !== null || !canSaveEdit}
                     onClick={() => { void saveEdit() }}
                   >
-                    <IconCheckOutline16 size={14} />
+                    <IconCheckOutlineRegular size={14} />
                   </button>
                 </Tooltip>
                 <Tooltip label={t('queue.cancelEdit')} side="bottom">
@@ -548,7 +548,7 @@ function HostQueueRow({
                     disabled={busy !== null}
                     onClick={() => { setEditing(null) }}
                   >
-                    <IconCloseOutline16 size={14} />
+                    <IconCloseOutlineRegular size={14} />
                   </button>
                 </Tooltip>
               </>
@@ -565,7 +565,7 @@ function HostQueueRow({
                       setEditing({ id: row.id, text: row.text, files: [] })
                     }}
                   >
-                    <IconEditOutline16 size={14} />
+                    <IconEditOutlineRegular size={14} />
                   </button>
                 </Tooltip>
                 <Tooltip label={t('queue.remove')} side="bottom">
@@ -582,7 +582,7 @@ function HostQueueRow({
                       )
                     }}
                   >
-                    <IconTrashOutline16 size={14} />
+                    <IconTrashOutlineRegular size={14} />
                   </button>
                 </Tooltip>
                 <Tooltip
@@ -602,7 +602,7 @@ function HostQueueRow({
                       )
                     }}
                   >
-                    <IconSendOutline14 />
+                    <IconSendOutlineRegular />
                   </button>
                 </Tooltip>
               </>

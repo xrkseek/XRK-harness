@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  IconChevronDownOutline14, IconChevronRightOutline14, IconPlusOutline16, IconTrashOutline16,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -399,7 +399,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     title={props.t('modelAdvanced')}
                     onClick={() => { toggle(index) }}
                   >
-                    {expanded.has(index) ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+                    {expanded.has(index) ? <IconChevronDownOutlineRegular /> : <IconChevronRightOutlineRegular />}
                   </button>
                   <button
                     type="button"
@@ -409,7 +409,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     disabled={props.disabled}
                     onClick={() => { remove(index) }}
                   >
-                    <IconTrashOutline16 size={14} />
+                    <IconTrashOutlineRegular size={14} />
                   </button>
                 </div>
                 {expanded.has(index)
@@ -514,7 +514,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
         disabled={props.disabled}
         onClick={() => { props.onChange([...props.models.map(model => ({ ...model })), { id: '' }]) }}
       >
-        <IconPlusOutline16 size={14} />
+        <IconPlusOutlineRegular size={14} />
         {props.t('addModel')}
       </button>
     </section>

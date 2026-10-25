@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  IconChevronDownOutline14, Menu, Tooltip, type MenuItem,
+  IconChevronDownOutlineRegular, Menu, Tooltip, type MenuItem,
 } from '@xrkseek/client-ui-primitives'
 import type { ObservableSnapshot } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
@@ -142,7 +142,7 @@ export function OpenInAppAction(props: OpenInAppActionProps): ReactNode {
             aria-label={t('menu.toggle')}
             onClick={() => { setOpen(value => !value) }}
           >
-            <IconChevronDownOutline14 size={11} />
+            <IconChevronDownOutlineRegular size={11} />
           </button>
         </div>
       )}

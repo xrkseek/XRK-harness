@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import {
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconPlusOutlineRegular,
+  IconTrashOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import { PluginCard } from './PluginCard.tsx'
 import type { McpCardFace, McpRowStatus, McpServerRow } from './mcp-card-controller.ts'
@@ -126,7 +126,7 @@ export function McpCard(props: McpCardProps) {
           disabled={disabled}
           onClick={addFromPaste}
         >
-          <IconPlusOutline16 size={14} />
+          <IconPlusOutlineRegular size={14} />
           {t('mcpAddServer')}
         </button>
         {pasteHint ? <p className={css.invalid} role="status">{pasteHint}</p> : null}
@@ -227,7 +227,7 @@ function ServerSummary({ t, row, disabled, onRemove, loginOauth, logoutOauth, ca
           disabled={disabled}
           onClick={onRemove}
         >
-          <IconTrashOutline16 size={14} />
+          <IconTrashOutlineRegular size={14} />
         </button>
       </div>
     </li>

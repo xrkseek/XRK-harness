@@ -76,7 +76,7 @@ describe('Tool presentation tails', () => {
     }
     const view = render(<BashRow {...bashProps(settled)} />)
     const row = view.container.querySelector('[data-sample="bash"]')!
-    expect(row.textContent).toContain('Bash')
+    expect(row.textContent).toContain('终端')
     expect(row.textContent).toContain('Build')
     expect(row.getAttribute('data-clickable')).toBeNull()
   })
@@ -99,7 +99,7 @@ describe('Tool presentation tails', () => {
 
     const runningView = render(<BashRow {...bashProps(running)} />)
     expect(runningView.container.querySelector('[data-state="running"]')).not.toBeNull()
-    expect(runningView.getByText('Bash')).toBeTruthy()
+    expect(runningView.getByText('终端')).toBeTruthy()
     expect(runningView.getByText('List')).toBeTruthy()
     runningView.unmount()
 

@@ -221,7 +221,9 @@ describe("Face session.attachment / image prompt", () => {
     if (!res.result.ok) expect(res.result.error.code).toBe("attachment-error");
   });
 
-  it("rejects image when Face intake allows but live route is text-only", async () => {
+  it("admits image when Face intake allows even if live route is text-only", async () => {
+    // Text-only LLM routes project images at assemble; selection/prompt must
+    // not refuse durable intake when Host Face already permits image paste.
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-face-text-route-"));
     await writeFile(
       path.join(dir, "settings.yaml"),
@@ -270,8 +272,8 @@ describe("Face session.attachment / image prompt", () => {
         { type: "image", mediaType: "image/png", data: PNG_B64 },
       ],
     });
-    expect(res.result.ok).toBe(false);
-    if (!res.result.ok) expect(res.result.error.code).toBe("attachment-error");
+    expect(res.result.ok).toBe(true);
+    expect(runtime.sessionHasImage.has(sessionId)).toBe(true);
   });
 
   it("persists image refs then session.attachment returns base64", async () => {

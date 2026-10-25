@@ -251,12 +251,21 @@ function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
 function interruption(context: ConversationNodeContext<ToolState>): { seq: number; time: number } | undefined {
   const location = context.start?.location
   if (location?.kind !== 'step' && location?.kind !== 'turn') return undefined
-  // A closed step is not a tool result. wait_agent stays inside the open turn
-  // until it returns; painting Interrupted here stops the running sweep while
-  // Host `running` still shows 深潜中.
-  if (location.turn.status !== 'closed') return undefined
-  if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
-  return location.turn.end
+  // Turn closed: settle every dangling shell (Stop / final max-tokens / etc.).
+  if (location.turn.status === 'closed') {
+    if (location.kind === 'step' && location.step.end !== undefined) return location.step.end
+    return location.turn.end
+  }
+  // Open turn: wait_agent may keep a call alive after its step/end with no
+  // later step — do not interrupt that (Host still 深潜中). Once a newer step
+  // has started (max-tokens auto-continue, next LLM call), earlier dangling
+  // stream shells must stop the running sweep or they keep flashing as live.
+  if (location.kind !== 'step' || location.step.end === undefined) return undefined
+  const stepNo = location.step.step
+  const superseded = location.turn.steps.some(
+    candidate => candidate.step > stepNo && candidate.start !== undefined,
+  )
+  return superseded ? location.step.end : undefined
 }
 
 function fallbackState(context: ConversationNodeContext<ToolState>): ToolState | undefined {

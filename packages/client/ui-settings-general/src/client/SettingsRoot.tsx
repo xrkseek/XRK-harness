@@ -20,8 +20,8 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   ConnectionIndicator,
-  IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
-  IconSettingsOutline16,
+  IconAgentPresetOutlineRegular, IconCloseOutlineRegular, IconDataOutlineRegular,
+  IconSettingsOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import type { ConnectionIndicatorState } from '@xrkseek/client-ui-primitives'
 import {
@@ -43,9 +43,9 @@ const HOME_ONLY_SECTIONS = new Set(['plugins'])
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
-  if (id === 'models') return <IconDataOutline16 className={css.navIcon} size={16} />
-  if (id === 'agent-presets') return <IconAgentPresetOutline16 className={css.navIcon} size={16} />
-  return <IconSettingsOutline16 className={css.navIcon} size={16} />
+  if (id === 'models') return <IconDataOutlineRegular className={css.navIcon} size={16} />
+  if (id === 'agent-presets') return <IconAgentPresetOutlineRegular className={css.navIcon} size={16} />
+  return <IconSettingsOutlineRegular className={css.navIcon} size={16} />
 }
 
 type PanelProps = {
@@ -197,7 +197,7 @@ function SettingsPanel({
               ? <h2 className={css.homeTitle} id={titleId}>{homeRow.label}</h2>
               : <div className={css.actions}>{renderSlot('settings.action', {})}</div>}
             <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
-              <IconCloseOutline16 size={14} />
+              <IconCloseOutlineRegular size={14} />
               <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
             </button>
           </div>

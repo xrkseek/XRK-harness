@@ -703,6 +703,8 @@ select.input {
 }
 
 .fetchDialog {
+  /* Modal defaults to 380px; this picker needs room for id + capacity tail. */
+  width: min(520px, 100%);
   max-width: 520px;
 
   /* The candidate list scrolls inside this dialog, an elevated surface, so the
@@ -716,48 +718,81 @@ select.input {
 .fetchPickerToolbar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .candidateList {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 320px;
+  max-height: 360px;
   margin: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  /* Candidate rows scroll under a 320px cap inside the settings form; an edge
+  /* Candidate rows scroll under a height cap inside the settings form; an edge
      overscroll must not scroll the settings page itself. */
   overscroll-behavior: contain;
-  padding: 0;
+  padding: 4px;
   list-style: none;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .candidate {
-  border-radius: 6px;
+  min-width: 0;
+  border-radius: 8px;
 }
 
 .candidateLabel {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
   cursor: pointer;
+}
+
+.candidateLabel:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.candidateLabel:has(input:checked) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.candidateLabel input {
+  flex: none;
+  margin: 0;
 }
 
 .candidateId {
   flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--ds-font-family-code);
   font-size: 13px;
-  overflow-wrap: anywhere;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Capacities and thinking levels a probe found, kept quieter than the id. */
 .candidateFacts {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-width: 46%;
+  min-width: 0;
   font-size: 12px;
+  line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 /* iOS Safari zooms the page when focusing inputs under 16px (U-7). */

@@ -11,7 +11,7 @@
  */
 import { Fragment, useEffect, useRef, useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconChevronRightOutline14, useAnchoredMaxHeight } from '@xrkseek/client-ui-primitives'
+import { IconChevronRightOutlineRegular, useAnchoredMaxHeight } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import css from './MenuView.module.css'
 import type { MenuViewInjected } from './slots.ts'
@@ -159,7 +159,7 @@ export function MenuView({ menu, headers, onPick, onHighlight, onCrumb, onDismis
                                 onPick(group.source, index, 'drill')
                               }}
                             >
-                              <IconChevronRightOutline14 />
+                              <IconChevronRightOutlineRegular />
                             </span>
                           </span>
                         )}

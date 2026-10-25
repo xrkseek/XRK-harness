@@ -234,6 +234,12 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     ...(typeof p.clientTimeZone === "string"
       ? { clientTimeZone: p.clientTimeZone }
       : {}),
+    // Pass through client beginSubmission identity so Host queue rpcId matches
+    // the local echo (same as session.prompt). Face unary rpcId alone left
+    // unmatched "发送中" chrome with copy-only until the next steer.
+    ...(typeof p.requestId === "string" && p.requestId.length > 0
+      ? { requestId: p.requestId }
+      : {}),
   });
   if (!prompted.ok) return prompted;
   runtime.agentTeamTasks.markResumed(childSessionId);

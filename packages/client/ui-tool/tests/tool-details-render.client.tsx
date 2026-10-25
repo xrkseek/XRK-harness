@@ -38,6 +38,8 @@ export function toolChatSnapshot(
       getTurn: () => empty,
       getStep: () => empty,
     },
+    // ChatView selects navigation.items(); omit → crash → empty session slot.
+    navigation: { items: () => empty },
     timeline: { turnOrder: [], turns: new Map() },
     legacy: {
       nodes: settled,

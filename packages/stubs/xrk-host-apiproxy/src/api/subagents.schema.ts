@@ -94,6 +94,7 @@ export const subagentPromptRequestSchema = z.object({
   content: z.array(contentBlockSchema),
   delivery: z.union([z.literal('queue'), z.literal('steer')]).optional(),
   clientTimeZone: z.string().optional(),
+  requestId: z.string().min(1).optional(),
 }) as unknown as z.ZodType<RequestPayload<'subagent.prompt'>>
 
 /** subagent.interrupt request payload. */

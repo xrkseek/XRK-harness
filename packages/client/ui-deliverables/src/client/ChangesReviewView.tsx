@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import {
   DiffBlock,
-  IconChevronDownOutline14,
+  IconChevronDownOutlineRegular,
   Menu,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
@@ -133,7 +133,7 @@ export function ChangesReviewView({
               onClick={() => { setMenuOpen((value) => !value) }}
             >
               <span className={css.selectorPath}>{activeFile.display}</span>
-              <IconChevronDownOutline14 />
+              <IconChevronDownOutlineRegular />
             </button>
           }
         />

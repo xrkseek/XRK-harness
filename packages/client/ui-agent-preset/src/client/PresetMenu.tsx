@@ -9,7 +9,7 @@
  * label marks it rather than presenting every preset as shipped and vetted.
  */
 
-import { IconChevronDownOutline14, Menu } from '@xrkseek/client-ui-primitives'
+import { IconChevronDownOutlineRegular, Menu } from '@xrkseek/client-ui-primitives'
 import type { AgentPresetOption } from './settings-store.ts'
 import { presetDisplayText, type AgentPresetSettingsKey } from './locales.ts'
 
@@ -76,7 +76,7 @@ export function PresetMenu({
           onClick={() => { onOpenChange(!open) }}
         >
           {label}
-          <IconChevronDownOutline14 className={chevronClassName} />
+          <IconChevronDownOutlineRegular className={chevronClassName} />
         </button>
       )}
     />

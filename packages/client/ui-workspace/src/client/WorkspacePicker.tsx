@@ -11,7 +11,7 @@
 import type { ReactNode, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Button, IconFolderClose16, IconPlusOutline16, Menu, Modal, type MenuEntry,
+  Button, IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Modal, type MenuEntry,
 } from '@xrkseek/client-ui-primitives'
 import type {
   WorkspaceId, WorkspaceListState, WorkspaceView,
@@ -111,7 +111,7 @@ export function WorkspacePickFlow({
     if (flowOpen && !flowAvailable) setFlowOpen(false)
   }, [flowOpen, flowAvailable])
   const addEntries: MenuEntry[] = flowAvailable
-    ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutline16 size={16} />, disabled: flowBusy }]
+    ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutlineRegular size={16} />, disabled: flowBusy }]
     : []
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
@@ -138,7 +138,7 @@ export function WorkspacePickFlow({
         id: workspace.workspaceId,
         label: workspace.workspaceId === 'ws_default' ? t('workspace.xiangyang') : workspace.title,
         description: workspace.path,
-        icon: <IconFolderClose16 size={16} />,
+        icon: <IconFolderCloseRegular size={16} />,
         disabled: flowBusy,
       }))
       : [{

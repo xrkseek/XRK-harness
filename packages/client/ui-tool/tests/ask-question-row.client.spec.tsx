@@ -113,9 +113,9 @@ describe('AskQuestionRow', () => {
     expect(screen.getByText(`ask_user_question · ${ARGS}`)).toBeTruthy()
   })
 
-  it('window-truncated result (call head lost) falls back to the callId summary', () => {
+  it('window-truncated result (call head lost) falls back to the tool name summary', () => {
     render(<AskQuestionRow {...rowProps(resultNode('', null, { call: null }))} />)
-    expect(screen.getByText('ask_user_question · c1')).toBeTruthy()
+    expect(screen.getByText('ask_user_question')).toBeTruthy()
   })
 
   it('leading toggle expands the raw args body', () => {

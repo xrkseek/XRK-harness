@@ -9,11 +9,12 @@
 // section, its first line in the collapsed summary.
 
 import type { Context } from '@xrkseek/cordis'
-import { IconEditOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconEditOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { diffCardModel } from '../models/diff-card-model.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
+import { localizeToolTitle } from '../models/localize-tool-title.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 
@@ -40,8 +41,8 @@ export function FileMutationRow({ toolName, block, cwd, home, openFile, inspect,
       t={t}
       variant={model.variant}
       toolName={toolName}
-      icon={<IconEditOutline16 size={14} />}
-      title={model.title}
+      icon={<IconEditOutlineRegular size={14} />}
+      title={localizeToolTitle(toolName, model.variant, model.title, t)}
       summary={model.summary}
       body={body}
       output={model.output}

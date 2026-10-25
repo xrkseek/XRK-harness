@@ -12,6 +12,14 @@ import {
 /** Group key for Sessions outside every Workspace. */
 export const UNGROUPED_KEY = ''
 
+/**
+ * The list facts every derivation in this module reads. Deliberately narrower
+ * than {@link SessionListState}: `jobsBySession` / `subagentsByParent` /
+ * `currentAddress` change at chat frequency and must not invalidate the tree
+ * derivation (or every row memo behind it).
+ */
+export type SessionListFacts = Pick<SessionListState, 'ids' | 'byId' | 'current'>
+
 /** Display label for the ungrouped bucket row. */
 export const UNGROUPED_LABEL = 'Ungrouped'
 
@@ -156,7 +164,7 @@ function sessionVisible(
 
 /** Archived summaries that belong to a workspace by cwd===path (Face list strips them). */
 function archivedSummariesForWorkspace(
-  list: SessionListState,
+  list: SessionListFacts,
   workspace: WorkspaceView,
   archived: ReadonlySet<SessionId>,
   accounted: ReadonlySet<SessionId>,
@@ -222,7 +230,7 @@ function orderedUngrouped(members: readonly SessionSummary[], stored: readonly s
  * falls back to recency before that order is initialized.
  */
 function groupByWorkspace(
-  list: SessionListState,
+  list: SessionListFacts,
   workspaces: readonly WorkspaceView[],
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
@@ -352,7 +360,7 @@ function sessionNode(
  * @returns group sections in render order.
  */
 export function deriveGroups(
-  list: SessionListState,
+  list: SessionListFacts,
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
@@ -403,7 +411,7 @@ export function deriveGroups(
  * @returns flat rows in render order.
  */
 export function deriveFlat(
-  list: SessionListState,
+  list: SessionListFacts,
   archivedSessionIds: readonly SessionId[],
   archiveMode: ArchiveViewMode = 'hidden',
   pinnedSessionIds: readonly SessionId[] = [],
@@ -455,7 +463,7 @@ export interface RelativeTime {
  * @returns bounded deduplicated flat rows and a refine-query hint bit.
  */
 export function deriveSearchResults(
-  list: SessionListState,
+  list: SessionListFacts,
   workspaces: readonly WorkspaceView[],
   query: string,
   archivedSessionIds: readonly SessionId[],

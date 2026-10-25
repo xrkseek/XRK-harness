@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   BrandWordmark, BrandMark,
-  IconNewChatOutline16, IconPanelLeftOutline16,
+  IconNewChatOutlineRegular, IconPanelLeftOutlineRegular,
   Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { SidebarRootComponentProps } from './contract/slots.ts'
@@ -152,7 +152,7 @@ export function SidebarRoot({
           >
             {!wide && <BrandMark className={css.railMark} size={24} />}
             {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
-            <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
+            <IconPanelLeftOutlineRegular className={css.panelIcon} size={wide ? 16 : 18} />
           </button>
         </Tooltip>
       </div>
@@ -165,7 +165,7 @@ export function SidebarRoot({
           aria-label={t('session.new.label')}
           onClick={() => { startSession() }}
         >
-          <IconNewChatOutline16 size={wide ? 14 : 18} />
+          <IconNewChatOutlineRegular size={wide ? 14 : 18} />
           {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
         </button>
       </Tooltip>

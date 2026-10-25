@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   DiffBlock,
-  IconChevronDownOutline14,
+  IconChevronDownOutlineRegular,
   Menu,
   diffHunkFromWorkspaceFileDiff,
 } from '@xrkseek/client-ui-primitives'
@@ -18,8 +18,32 @@ type PlanTranslate = TranslateNS<'plan'>
 
 const GROUPED = new Intl.NumberFormat('en-US')
 
-/** Last diff per session + turn + path. Refresh still replaces it. */
+/**
+ * Last diff per `sessionId \0 turnSeq \0 path`. Refresh still replaces it.
+ * Bounded LRU: a long-lived window must not pin every diff it ever previewed.
+ * `null` is a real cached value ("no diff"), so reads test `has` instead of `=== undefined`.
+ */
+const DIFF_PAINT_LIMIT = 32
 const diffPaint = new Map<string, WorkspaceFileDiff | null>()
+
+function readDiffPaint(key: string): WorkspaceFileDiff | null | undefined {
+  if (!diffPaint.has(key)) return undefined
+  const value = diffPaint.get(key) ?? null
+  // Touch on read so eviction order follows real usage, not first write.
+  diffPaint.delete(key)
+  diffPaint.set(key, value)
+  return value
+}
+
+function writeDiffPaint(key: string, value: WorkspaceFileDiff | null): void {
+  diffPaint.delete(key)
+  diffPaint.set(key, value)
+  while (diffPaint.size > DIFF_PAINT_LIMIT) {
+    const oldest = diffPaint.keys().next()
+    if (oldest.done === true) break
+    diffPaint.delete(oldest.value)
+  }
+}
 
 export type OverviewChangesFile = {
   readonly path: string
@@ -115,7 +139,7 @@ function PickTrigger({
       {...(reviewFile !== undefined ? { 'data-review-file': reviewFile } : {})}
     >
       <span className={css.pickLabel}>{label}</span>
-      <IconChevronDownOutline14 className={css.pickChevron} data-open={open ? '' : undefined} />
+      <IconChevronDownOutlineRegular className={css.pickChevron} data-open={open ? '' : undefined} />
     </button>
   )
 }
@@ -207,13 +231,13 @@ export function OverviewChangesPanel({
     const turnSeq = activeTurn.seq
     const index = safeIndex
     const paintKey = `${sessionId}\0${turnSeq}\0${activeFilePath}`
-    const cached = diffPaint.get(paintKey)
-    setDiff(cached === undefined ? undefined : cached)
+    const cached = readDiffPaint(paintKey)
+    setDiff(cached)
     setError(undefined)
     void loadFileDiffRef.current(turnSeq, index, ac.signal).then(
       (value) => {
         if (ac.signal.aborted) return
-        diffPaint.set(paintKey, value)
+        writeDiffPaint(paintKey, value)
         setDiff(value)
       },
       (err: unknown) => {

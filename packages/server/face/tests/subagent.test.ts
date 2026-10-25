@@ -140,6 +140,7 @@ describe("Face subagent", () => {
       mode: "continuable",
       delivery: "steer",
       content: [{ type: "text", text: "插话" }],
+      requestId: "client-echo-steer",
     });
     expect(steered.result.ok).toBe(true);
     // Parent mirror is fire-and-forget via resolveAgent().then — flush microtasks.
@@ -151,6 +152,10 @@ describe("Face subagent", () => {
     expect(String(parentAdmits[0]?.content)).toContain("User message to background subagent");
     expect(String(parentAdmits[0]?.content)).toContain("go");
     expect(String(parentAdmits[1]?.content)).toContain("插话");
+    // Client beginSubmission id must land in admitRpcMap (not Face unary rpcId),
+    // or local steer echoes stay unmatched ("发送中" + copy-only).
+    expect([...runtime.admitRpcMap.values()]).toContain("client-echo-steer");
+    expect([...runtime.admitRpcMap.values()]).not.toContain("pr-steer");
 
     const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {
       parentSessionId: parentId,

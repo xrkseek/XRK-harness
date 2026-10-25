@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  Button, IconFolderClose16, Modal,
+  Button, IconFolderCloseRegular, Modal,
 } from '@xrkseek/client-ui-primitives'
 import type { SessionId, WorkspaceId } from '@xrkseek/client-runtime/client'
 import type {
@@ -515,7 +515,7 @@ export function TeamRoster({
                 <p className={css.subhead}>{t('team.workspace')}</p>
                 <div className={css.workspaceBar}>
                   <span className={css.workspaceIdentity}>
-                    <IconFolderClose16 size={16} />
+                    <IconFolderCloseRegular size={16} />
                     <span className={css.workspaceTitle}>
                       {currentWorkspace?.title ?? t('team.workspaceNone')}
                     </span>

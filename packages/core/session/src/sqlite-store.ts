@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { SessionEvent } from "@xrkseek/protocol";
@@ -106,9 +106,22 @@ export interface PersistentSessionStoreOptions {
    * `sessions.db`.
    */
   readonly shared?: boolean;
+  /**
+   * WAL size (bytes) above which an idle flush may run a TRUNCATE checkpoint
+   * to give the disk space back. Default 64 MiB; tests lower it so they do not
+   * have to write 64 MiB to observe the shrink.
+   */
+  readonly walShrinkMinBytes?: number;
+  /**
+   * Minimum spacing between WAL shrink attempts (default 60 s). Tests pass 0 so
+   * a single `flush()` can observe the reclaim.
+   */
+  readonly walShrinkIntervalMs?: number;
 }
 
 const ID_RE = /^[A-Za-z0-9._-]+$/;
+/** Diagnostic switch: print why an idle WAL reclaim was skipped. */
+const DEBUG_WAL_CHECKPOINT = Boolean(process.env.XRK_DEBUG_WAL);
 /** Physical schema v3: durable rows may be packed chunk rows (expanded on load). */
 const SCHEMA_VERSION = SQLITE_SCHEMA_CURRENT;
 const DB_NAME = "sessions.db";
@@ -334,6 +347,74 @@ function schemaVersion(db: DatabaseSync): number {
   return row ? Number(row.value) || 0 : 0;
 }
 
+/**
+ * Cheap self-heal probe for the current-schema fast path.
+ *
+ * `schema_version` alone is not proof the objects survive — a hand-edited or
+ * partially restored DB can carry the version with `events` dropped. This
+ * reads `sqlite_master` (an in-memory catalog lookup, no page scan, no write
+ * lock) so the fast path still repairs a broken store instead of failing later
+ * inside a prepared INSERT.
+ */
+function schemaObjectsPresent(db: DatabaseSync): boolean {
+  const row = db
+    .prepare(
+      "SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('events', 'sessions', 'search_fts')",
+    )
+    .get() as { n: number } | undefined;
+  return (row?.n ?? 0) >= 3;
+}
+
+/** v4: add the list-hint columns to a pre-existing `sessions` table. */
+function addSessionHintColumns(db: DatabaseSync): void {
+  const cols = new Set(
+    (db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[]).map(
+      (column) => column.name,
+    ),
+  );
+  const additions: readonly (readonly [string, string])[] = [
+    ["last_ts", "ALTER TABLE sessions ADD COLUMN last_ts INTEGER NOT NULL DEFAULT 0"],
+    ["event_count", "ALTER TABLE sessions ADD COLUMN event_count INTEGER NOT NULL DEFAULT 0"],
+    ["has_turn_start", "ALTER TABLE sessions ADD COLUMN has_turn_start INTEGER NOT NULL DEFAULT 0"],
+    ["has_command_run", "ALTER TABLE sessions ADD COLUMN has_command_run INTEGER NOT NULL DEFAULT 0"],
+  ];
+  for (const [name, ddl] of additions) {
+    if (!cols.has(name)) db.exec(ddl);
+  }
+}
+
+/**
+ * v4 backfill: one pass over `events` fills every session's hint columns.
+ *
+ * The old cold `session.list` path ran three scans **per session** (`MAX(ts)`
+ * plus two `json_extract` probes). On the 205-session store that measured
+ * ≈7 s; this is a single grouped scan paid once at migration time.
+ */
+function backfillSessionHints(db: DatabaseSync): void {
+  db.exec("INSERT OR IGNORE INTO sessions (id) SELECT DISTINCT session_id FROM events");
+  db.exec("DROP TABLE IF EXISTS temp._session_hint_agg");
+  db.exec(`
+    CREATE TEMP TABLE _session_hint_agg AS
+    SELECT session_id,
+           MAX(ts) AS last_ts,
+           COUNT(*) AS event_count,
+           MAX(CASE WHEN json_extract(payload, '$.type') = 'turn/start' THEN 1 ELSE 0 END) AS has_turn_start,
+           MAX(CASE WHEN json_extract(payload, '$.type') = 'command/run' THEN 1 ELSE 0 END) AS has_command_run
+    FROM events
+    GROUP BY session_id
+  `);
+  db.exec(`
+    UPDATE sessions SET
+      last_ts = a.last_ts,
+      event_count = a.event_count,
+      has_turn_start = a.has_turn_start,
+      has_command_run = a.has_command_run
+    FROM _session_hint_agg a
+    WHERE a.session_id = sessions.id
+  `);
+  db.exec("DROP TABLE temp._session_hint_agg");
+}
+
 function setSchemaVersion(db: DatabaseSync, version: number): void {
   db.prepare(
     "INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -367,7 +448,22 @@ function rebuildFts(db: DatabaseSync): void {
 
 function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): void {
   db.exec(`PRAGMA journal_mode = ${journalMode}`);
-  db.exec("PRAGMA synchronous = FULL");
+  // WAL + FULL fsyncs on every commit, and a turn has at least four durability
+  // boundaries. NORMAL keeps crash safety at transaction granularity (only the
+  // last commit can be lost) and `repairOpenTurnEvents` already settles open
+  // turns. `user/message` still upgrades to FULL around its own transaction in
+  // `flushPending`, so a queued human message is never the one that is lost.
+  db.exec(
+    journalMode === "WAL"
+      ? "PRAGMA synchronous = NORMAL"
+      : "PRAGMA synchronous = FULL",
+  );
+  if (journalMode === "WAL") {
+    // Without these the WAL only ever grows: a long reader blocks the implicit
+    // autocheckpoint and nothing else reclaims the file (seen at 535 MB).
+    db.exec("PRAGMA wal_autocheckpoint = 1000");
+    db.exec("PRAGMA journal_size_limit = 67108864");
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
@@ -379,7 +475,11 @@ function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): vo
     ensureTables: () => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
-          id TEXT PRIMARY KEY
+          id TEXT PRIMARY KEY,
+          last_ts INTEGER NOT NULL DEFAULT 0,
+          event_count INTEGER NOT NULL DEFAULT 0,
+          has_turn_start INTEGER NOT NULL DEFAULT 0,
+          has_command_run INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS events (
           session_id TEXT NOT NULL,
@@ -393,6 +493,10 @@ function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): vo
           ON events (session_id, seq);
       `);
     },
+    ensureSessionHints: () => {
+      addSessionHintColumns(db);
+      backfillSessionHints(db);
+    },
     ensureFts: () => {
       ensureFts(db);
     },
@@ -404,9 +508,14 @@ function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): vo
 
   const stored = schemaVersion(db);
   if (stored >= SCHEMA_VERSION) {
-    // Idempotent open on current schema — still ensure tables/FTS exist.
-    hooks.ensureTables();
-    hooks.ensureFts();
+    // A current schema_version means the migration chain already built every
+    // table/index/FTS object. Re-running the full DDL on every Host start takes
+    // the write lock on a multi-hundred-MB file for nothing, so only verify
+    // (cheap sqlite_master lookup) and repair when something is actually gone.
+    if (process.env.XRK_SQLITE_VERIFY_SCHEMA === "1" || !schemaObjectsPresent(db)) {
+      hooks.ensureTables();
+      hooks.ensureFts();
+    }
     return;
   }
   const next = migrateSqliteSchema(stored, hooks);
@@ -472,6 +581,40 @@ function lastEventTsFromDb(db: DatabaseSync, sessionId: string): number | null {
     .prepare("SELECT MAX(ts) AS ts FROM events WHERE session_id = ?")
     .get(sessionId) as { ts: number | null } | undefined;
   return row?.ts ?? null;
+}
+
+/**
+ * v4 fast path: read the maintained hint columns instead of scanning `events`.
+ * Returns undefined for rows the backfill never touched (pre-v4 archive DB,
+ * or a session whose events were removed) so callers keep the legacy scans.
+ */
+function sessionHintsFromDb(
+  db: DatabaseSync,
+  sessionId: string,
+): SessionListHints | undefined {
+  let row:
+    | {
+        last_ts: number;
+        event_count: number;
+        has_turn_start: number;
+        has_command_run: number;
+      }
+    | undefined;
+  try {
+    row = db
+      .prepare(
+        "SELECT last_ts, event_count, has_turn_start, has_command_run FROM sessions WHERE id = ?",
+      )
+      .get(sessionId) as typeof row;
+  } catch {
+    return undefined;
+  }
+  if (row === undefined || row.event_count <= 0) return undefined;
+  return {
+    lastEventTs: row.last_ts > 0 ? row.last_ts : null,
+    hasTurnStart: row.has_turn_start === 1,
+    hasCommandRun: row.has_command_run === 1,
+  };
 }
 
 function loadSessionIds(db: DatabaseSync): Set<string> {
@@ -602,6 +745,35 @@ export function createPersistentSessionStore(
     : db.prepare(
         "INSERT INTO search_fts (session_id, seq, text) VALUES (?, ?, ?)",
       );
+  // v4 list hints: maintained inside the same write transaction as the events,
+  // so `session.list` never has to scan `events` again. `MAX(...)` keeps the
+  // newest ts and the sticky flags monotonic under out-of-order batches.
+  const upsertSessionHints = shared
+    ? undefined
+    : db.prepare(
+        `INSERT INTO sessions (id, last_ts, event_count, has_turn_start, has_command_run)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           last_ts = MAX(sessions.last_ts, excluded.last_ts),
+           event_count = sessions.event_count + excluded.event_count,
+           has_turn_start = MAX(sessions.has_turn_start, excluded.has_turn_start),
+           has_command_run = MAX(sessions.has_command_run, excluded.has_command_run)`,
+      );
+  const updateSessionHints = (
+    sessionId: string,
+    events: readonly SessionEvent[],
+  ): void => {
+    if (upsertSessionHints === undefined) return;
+    let lastTs = 0;
+    let turnStart = 0;
+    let commandRun = 0;
+    for (const event of events) {
+      if (event.ts > lastTs) lastTs = event.ts;
+      if (event.type === "turn/start") turnStart = 1;
+      else if (event.type === "command/run") commandRun = 1;
+    }
+    upsertSessionHints.run(sessionId, lastTs, events.length, turnStart, commandRun);
+  };
 
   const allocateSeq = (sessionId: string): number => {
     let next = nextSeqBySession.get(sessionId);
@@ -643,8 +815,80 @@ export function createPersistentSessionStore(
     else pendingCount.set(sessionId, next);
   };
 
+  const WAL_SHRINK_MIN_BYTES =
+    options.walShrinkMinBytes ?? 64 * 1024 * 1024;
+  const WAL_SHRINK_INTERVAL_MS = options.walShrinkIntervalMs ?? 60_000;
+  let lastWalShrinkAt = 0;
+
+  /** `-wal` size, or 0 when the file does not exist (nothing pending). */
+  const walBytes = (file: string): number => {
+    try {
+      return statSync(`${file}-wal`).size;
+    } catch {
+      return 0;
+    }
+  };
+
+  /**
+   * `TRUNCATE` gives the disk space back; `PASSIVE`/`FULL` only copy frames
+   * into the database and leave the file at its peak size.
+   *
+   * One statement does both the checkpoint and the busy report: a separate
+   * PASSIVE probe first left its statement open (node:sqlite finalizes on GC),
+   * which made the following TRUNCATE see `busy`. This connection has no
+   * `busy_timeout`, so a real reader returns `busy` immediately instead of
+   * stalling a flush.
+   */
+  const walCheckpointTruncate = (conn: DatabaseSync): void => {
+    try {
+      conn.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
+    } catch (error) {
+      /* busy reader or closed mid-flush — the next flush retries */
+      if (DEBUG_WAL_CHECKPOINT) {
+        console.error("[session-store] wal checkpoint failed:", error);
+      }
+    }
+  };
+
+  /**
+   * Shrink a WAL that outgrew `journal_size_limit` while the process stayed up.
+   *
+   * `wal_autocheckpoint` keeps copying frames back into the database, but the
+   * file itself only shrinks on a TRUNCATE checkpoint — and this store only did
+   * that in `close()`. A Host that runs for days therefore kept its historical
+   * peak next to the database (measured: a 561 MB `-wal` beside a 788 MB file,
+   * with every frame already durable). PASSIVE runs first because it never
+   * blocks and reports whether a reader still pins the log; TRUNCATE only
+   * follows when nothing is busy, and this connection has no `busy_timeout`, so
+   * a reader that appears in between makes TRUNCATE return `busy` instead of
+   * stalling the flush.
+   */
+  const shrinkWal = (): void => {
+    if (shared || journalMode !== "WAL") return;
+    const targets: Array<readonly [DatabaseSync, string]> = [
+      [db, dbPath],
+      [archiveDb, archivePath],
+    ];
+    // Stat before the rate limit: the common flush has no oversized WAL, and
+    // skipping the clock check keeps the next real overflow from waiting out
+    // an interval that a harmless flush consumed.
+    const over = targets.filter(
+      ([, file]) => walBytes(file) >= WAL_SHRINK_MIN_BYTES,
+    );
+    if (over.length === 0) return;
+    const now = Date.now();
+    if (now - lastWalShrinkAt < WAL_SHRINK_INTERVAL_MS) return;
+    lastWalShrinkAt = now;
+    for (const [conn] of over) walCheckpointTruncate(conn);
+  };
+
   const flushPending = (onlySessionId?: string): void => {
-    if (shared || pending.length === 0) return;
+    if (shared || pending.length === 0) {
+      // Nothing to write, but the WAL may still hold a peak from earlier
+      // flushes — this is the cheapest place to notice and reclaim it.
+      shrinkWal();
+      return;
+    }
     const batch: PendingEvent[] = [];
     if (onlySessionId === undefined) {
       batch.push(...pending);
@@ -672,6 +916,11 @@ export function createPersistentSessionStore(
       list.push(row.event);
     }
     const seqSnapshot = new Map(nextSeqBySession);
+    // Human input is the one thing a power cut must not swallow: upgrade to
+    // FULL for the transaction carrying it, then fall back to NORMAL. PRAGMA
+    // synchronous cannot change inside a transaction, so it brackets BEGIN.
+    const needsFullSync = batch.some((row) => row.event.type === "user/message");
+    if (needsFullSync) db.exec("PRAGMA synchronous = FULL");
     db.exec("BEGIN IMMEDIATE");
     try {
       for (const sessionId of order) {
@@ -681,6 +930,7 @@ export function createPersistentSessionStore(
           writeRecord(sessionId, record);
         }
         indexJoinedTextChunks(sessionId, events);
+        updateSessionHints(sessionId, events);
       }
       db.exec("COMMIT");
     } catch (err) {
@@ -695,7 +945,16 @@ export function createPersistentSessionStore(
       for (const row of batch) notePending(row.sessionId, 1);
       pending = batch.concat(pending);
       throw err;
+    } finally {
+      if (needsFullSync) {
+        try {
+          db.exec("PRAGMA synchronous = NORMAL");
+        } catch {
+          /* closed mid-flush */
+        }
+      }
     }
+    shrinkWal();
   };
 
   const persistImmediate = (id: string, frozen: SessionEvent): void => {
@@ -794,6 +1053,7 @@ export function createPersistentSessionStore(
           for (const frozen of frozenRepairs) {
             persistImmediate(id, frozen);
           }
+          updateSessionHints(id, frozenRepairs);
           db.exec("COMMIT");
         } catch (err) {
           try {
@@ -1019,6 +1279,9 @@ export function createPersistentSessionStore(
       try {
         db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(sid);
         db.prepare("DELETE FROM events WHERE session_id = ?").run(sid);
+        db.prepare(
+          "UPDATE sessions SET last_ts = 0, event_count = 0, has_turn_start = 0, has_command_run = 0 WHERE id = ?",
+        ).run(sid);
         nextSeqBySession.set(sid, 0);
         if (frozen.length > 0) {
           const packed = packChunkRunsForExport(frozen);
@@ -1026,6 +1289,7 @@ export function createPersistentSessionStore(
             writeRecord(sid, record);
           }
           indexJoinedTextChunks(sid, frozen);
+          updateSessionHints(sid, frozen);
         }
         db.exec("COMMIT");
       } catch (err) {
@@ -1055,6 +1319,9 @@ export function createPersistentSessionStore(
         return computeListHints(cached);
       }
       const source = sourceDbFor(id);
+      const hints = sessionHintsFromDb(source, id);
+      if (hints !== undefined) return hints;
+      // Pre-v4 rows (or a stripped archive) still fall back to the scans.
       return {
         lastEventTs: lastEventTsFromDb(source, id),
         hasTurnStart: hasTurnStartInDb(source, id),
@@ -1132,6 +1399,19 @@ export function createPersistentSessionStore(
       try {
         flushPending();
         if (!shared) {
+          // Reclaim the WAL before VACUUM. `TRUNCATE` only succeeds when no
+          // reader holds an old snapshot; a busy result is fine (next start
+          // retries), and `journal_size_limit` caps the file meanwhile.
+          try {
+            db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+          } catch {
+            /* busy reader — leave it for the next checkpoint */
+          }
+          try {
+            archiveDb.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+          } catch {
+            /* busy reader */
+          }
           maybeVacuum(db, {
             minFreeBytes: VACUUM_MIN_FREE_BYTES,
             minFreeRatio: VACUUM_MIN_FREE_RATIO,

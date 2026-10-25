@@ -14,7 +14,7 @@
 // answer, not an escape hatch.
 
 import { useState } from 'react'
-import { Button, IconEditOutline16, MarkdownText } from '@xrkseek/client-ui-primitives'
+import { Button, IconEditOutlineRegular, MarkdownText } from '@xrkseek/client-ui-primitives'
 import type { PendingQuestion, PlanReview, QuestionComposerProps } from './contract/slots.ts'
 import css from './PlanReviewPanel.module.css'
 
@@ -73,7 +73,7 @@ export function PlanReviewPanel({ pending, review, t }: PlanReviewPanelProps) {
           <div className={css.feedback} role="status">{error}</div>
           <div className={css.actions}>
             <Button
-              variant="ghost" className={css.discuss} icon={<IconEditOutline16 size={14} />}
+              variant="ghost" className={css.discuss} icon={<IconEditOutlineRegular size={14} />}
               disabled={busy} onClick={() => { settle(() => pending.cancel()) }}
             >
               {t('plan.discuss')}

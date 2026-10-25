@@ -4,7 +4,7 @@
  * The shell renders the surrounding chrome (button, nav heading row) and
  * reads each entry's `label` option for aria text.
  */
-import { IconSettingsOutline14, IconSettingsOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconSettingsOutlineRegular, IconSettingsOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import css from './chrome.module.css'
 
@@ -22,7 +22,7 @@ export type HeaderContentProps = PropsRuntime<'settings.header'> & PropsLocale<'
 export function TriggerContent({ wide, t }: TriggerContentProps) {
   return (
     <>
-      {wide ? <IconSettingsOutline16 size={16} /> : <IconSettingsOutline14 size={18} />}
+      {wide ? <IconSettingsOutlineRegular size={16} /> : <IconSettingsOutlineRegular size={18} />}
       {wide && <span className={css.triggerLabel}>{t('trigger')}</span>}
     </>
   )

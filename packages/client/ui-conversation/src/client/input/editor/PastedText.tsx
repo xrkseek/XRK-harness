@@ -14,8 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Button,
-  IconInspectOutline12,
-  IconTrashOutline16,
+  IconInspectOutlineRegular,
+  IconTrashOutlineRegular,
   Modal,
   writeClipboard,
 } from '@xrkseek/client-ui-primitives'
@@ -138,7 +138,7 @@ export function PastedText({
           aria-label={VIEW_HINT}
           onClick={openSurface}
         >
-          <IconInspectOutline12 size={14} />
+          <IconInspectOutlineRegular size={14} />
         </button>
         <button
           type="button"
@@ -147,7 +147,7 @@ export function PastedText({
           aria-label={DELETE_HINT}
           onClick={onDelete}
         >
-          <IconTrashOutline16 />
+          <IconTrashOutlineRegular />
         </button>
       </span>
       <Modal

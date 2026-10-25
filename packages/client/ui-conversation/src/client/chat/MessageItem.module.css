@@ -353,6 +353,19 @@
   font-weight: 600;
 }
 
+/* Mid-turn auto-continue cue (not the terminal turn/end max-tokens notice). */
+.autoContinueCap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding: 0 2px;
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
 @keyframes retry-shimmer {
   from {
     background-position: 100% 50%;

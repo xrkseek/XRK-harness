@@ -32,99 +32,153 @@ let presenceSettingsRuntime: PresenceSettingsRuntime | undefined
 /** Wire the Host-backed presence prefs into PresenceBall. */
 export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): void {
   presenceSettingsRuntime = runtime
+  // A new runtime owns its own state — drop the merged snapshot so the next
+  // read re-seeds from it instead of serving the previous runtime's look.
+  presenceLookCache = undefined
+}
+
+function noop(): void {}
+
+/**
+ * The whole Settings presence surface in one snapshot. The ball used to run
+ * nine separate `useSyncExternalStore` reads over the same runtime; each one
+ * carried an inline `subscribe` (new identity per render), so React tore down
+ * and re-added every subscription on every paint.
+ */
+interface PresenceLook {
+  readonly enabled: boolean
+  readonly shape: PresenceShape
+  readonly color: PresenceColor
+  readonly engineHat: string
+  readonly engineGlasses: string
+  readonly engineHeld: string
+  readonly overlayHat: string
+  readonly overlayGlasses: string
+  readonly overlayHeld: string
+}
+
+const DEFAULT_PRESENCE_LOOK: PresenceLook = {
+  enabled: DEFAULT_PRESENCE_ENABLED,
+  shape: DEFAULT_PRESENCE_SHAPE,
+  color: DEFAULT_PRESENCE_COLOR,
+  engineHat: 'none',
+  engineGlasses: 'none',
+  engineHeld: 'none',
+  overlayHat: '',
+  overlayGlasses: '',
+  overlayHeld: '',
+}
+
+function readPresenceLook(): PresenceLook {
+  const runtime = presenceSettingsRuntime
+  if (runtime === undefined) return DEFAULT_PRESENCE_LOOK
+  return {
+    enabled: runtime.getEnabled(),
+    shape: runtime.getShape(),
+    color: runtime.getColor(),
+    engineHat: runtime.getEngineHat(),
+    engineGlasses: runtime.getEngineGlasses(),
+    engineHeld: runtime.getEngineHeld(),
+    overlayHat: runtime.getOverlayHat(),
+    overlayGlasses: runtime.getOverlayGlasses(),
+    overlayHeld: runtime.getOverlayHeld(),
+  }
+}
+
+function samePresenceLook(a: PresenceLook, b: PresenceLook): boolean {
+  return a.enabled === b.enabled
+    && a.shape === b.shape
+    && a.color === b.color
+    && a.engineHat === b.engineHat
+    && a.engineGlasses === b.engineGlasses
+    && a.engineHeld === b.engineHeld
+    && a.overlayHat === b.overlayHat
+    && a.overlayGlasses === b.overlayGlasses
+    && a.overlayHeld === b.overlayHeld
+}
+
+/** Fingerprint hold — `useSyncExternalStore` requires a reference-stable snapshot. */
+let presenceLookCache: PresenceLook | undefined
+
+function presenceLookSnapshot(): PresenceLook {
+  const next = readPresenceLook()
+  const cached = presenceLookCache
+  if (cached !== undefined && samePresenceLook(cached, next)) return cached
+  presenceLookCache = next
+  return next
+}
+
+function presenceLookServerSnapshot(): PresenceLook {
+  return DEFAULT_PRESENCE_LOOK
+}
+
+function presenceEnabledSnapshot(): boolean {
+  return presenceLookSnapshot().enabled
+}
+
+function presenceEnabledServerSnapshot(): boolean {
+  return DEFAULT_PRESENCE_ENABLED
+}
+
+/**
+ * Module-level subscribe: stable identity across renders (React only keeps the
+ * subscription alive when this does not change), while still reading the live
+ * runtime — `bindPresenceSettingsRuntime` may land after first paint.
+ */
+function subscribePresenceSettings(onStoreChange: () => void): () => void {
+  const runtime = presenceSettingsRuntime
+  if (runtime === undefined) return noop
+  return runtime.subscribe(onStoreChange)
+}
+
+const DARK_ATTRIBUTE = 'data-ds-dark-theme'
+const darkListeners = new Set<() => void>()
+let darkObserver: MutationObserver | undefined
+
+/**
+ * One shared `body[data-ds-dark-theme]` observer for every ball on the page.
+ * The old inline subscribe built a fresh MutationObserver per render and
+ * re-`observe()`d document.body each time.
+ */
+function subscribeChromeDark(onStoreChange: () => void): () => void {
+  if (typeof document === 'undefined') return noop
+  darkListeners.add(onStoreChange)
+  if (darkObserver === undefined) {
+    darkObserver = new MutationObserver(() => {
+      for (const listener of darkListeners) listener()
+    })
+    darkObserver.observe(document.body, { attributes: true, attributeFilter: [DARK_ATTRIBUTE] })
+  }
+  return () => {
+    darkListeners.delete(onStoreChange)
+    if (darkListeners.size === 0) {
+      darkObserver?.disconnect()
+      darkObserver = undefined
+    }
+  }
+}
+
+function chromeDarkSnapshot(): boolean {
+  return typeof document !== 'undefined' && document.body.hasAttribute(DARK_ATTRIBUTE)
+}
+
+function chromeDarkServerSnapshot(): boolean {
+  return false
+}
+
+/** One Settings subscription for the whole look. */
+function usePresenceLook(): PresenceLook {
+  return useSyncExternalStore(subscribePresenceSettings, presenceLookSnapshot, presenceLookServerSnapshot)
 }
 
 /** Master switch from Settings → General; false hides header dock + Overview rail. */
 export function usePresenceEnabled(): boolean {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getEnabled() ?? DEFAULT_PRESENCE_ENABLED,
-    () => DEFAULT_PRESENCE_ENABLED,
-  )
-}
-
-function usePresenceShape(): PresenceShape {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getShape() ?? DEFAULT_PRESENCE_SHAPE,
-    () => DEFAULT_PRESENCE_SHAPE,
-  )
-}
-
-function usePresenceEngineHat(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getEngineHat() ?? 'none',
-    () => 'none',
-  )
-}
-
-function usePresenceEngineGlasses(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getEngineGlasses() ?? 'none',
-    () => 'none',
-  )
-}
-
-function usePresenceEngineHeld(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getEngineHeld() ?? 'none',
-    () => 'none',
-  )
-}
-
-function usePresenceOverlayHat(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getOverlayHat() ?? '',
-    () => '',
-  )
-}
-
-function usePresenceOverlayGlasses(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getOverlayGlasses() ?? '',
-    () => '',
-  )
-}
-
-function usePresenceOverlayHeld(): string {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getOverlayHeld() ?? '',
-    () => '',
-  )
-}
-
-function usePresenceColor(): PresenceColor {
-  return useSyncExternalStore(
-    (onStoreChange) => presenceSettingsRuntime?.subscribe(onStoreChange) ?? (() => {}),
-    () => presenceSettingsRuntime?.getColor() ?? DEFAULT_PRESENCE_COLOR,
-    () => DEFAULT_PRESENCE_COLOR,
-  )
+  return useSyncExternalStore(subscribePresenceSettings, presenceEnabledSnapshot, presenceEnabledServerSnapshot)
 }
 
 /** Follow `body[data-ds-dark-theme]` so light/dark palette paints stay in sync. */
 function useChromeDark(): boolean {
-  return useSyncExternalStore(
-    (onStoreChange) => {
-      if (typeof document === 'undefined') return () => {}
-      const obs = new MutationObserver(onStoreChange)
-      obs.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
-      return () => { obs.disconnect() }
-    },
-    () => typeof document !== 'undefined' && document.body.hasAttribute('data-ds-dark-theme'),
-    () => false,
-  )
-}
-
-function usePresencePaint(): PresencePaint {
-  const color = usePresenceColor()
-  const dark = useChromeDark()
-  return resolvePresencePaint(color, dark)
+  return useSyncExternalStore(subscribeChromeDark, chromeDarkSnapshot, chromeDarkServerSnapshot)
 }
 
 const SCRIPT_BASE = '/presence/emotion-ball'
@@ -622,34 +676,27 @@ export const PresenceBall = memo(function PresenceBall({
   readonly clickHint?: string
 }) {
   const persona = sessionBallPersona(sessionId ?? 'default')
-  const settingsShape = usePresenceShape()
-  const settingsPaint = usePresencePaint()
-  const settingsEngineHat = usePresenceEngineHat()
-  const settingsEngineGlasses = usePresenceEngineGlasses()
-  const settingsEngineHeld = usePresenceEngineHeld()
-  const settingsHat = usePresenceOverlayHat()
-  const settingsGlasses = usePresenceOverlayGlasses()
-  const settingsHeld = usePresenceOverlayHeld()
+  const look = usePresenceLook()
   const dark = useChromeDark()
   const shape: PresenceShape = memberLook && isPresenceShape(memberLook.shape)
     ? memberLook.shape
-    : settingsShape
+    : look.shape
   const paint: PresencePaint = memberLook && isPresenceColor(memberLook.color)
     ? resolvePresencePaint(memberLook.color, dark)
-    : settingsPaint
+    : resolvePresencePaint(look.color, dark)
   const split = splitLegacyKit(memberLook?.kit)
   const engineHat = memberLook
     ? (memberLook.kitHat ?? split.hat)
-    : settingsEngineHat
+    : look.engineHat
   const engineGlasses = memberLook
     ? (memberLook.kitGlasses ?? split.glasses)
-    : settingsEngineGlasses
+    : look.engineGlasses
   const engineHeld = memberLook
     ? (memberLook.kitHeld ?? 'none')
-    : settingsEngineHeld
-  const overlayHat = memberLook ? (memberLook.overlayHat ?? '') : settingsHat
-  const overlayGlasses = memberLook ? (memberLook.overlayGlasses ?? '') : settingsGlasses
-  const overlayHeld = memberLook ? (memberLook.overlayHeld ?? '') : settingsHeld
+    : look.engineHeld
+  const overlayHat = memberLook ? (memberLook.overlayHat ?? '') : look.overlayHat
+  const overlayGlasses = memberLook ? (memberLook.overlayGlasses ?? '') : look.overlayGlasses
+  const overlayHeld = memberLook ? (memberLook.overlayHeld ?? '') : look.overlayHeld
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')

@@ -1,7 +1,7 @@
 /** Always-visible trajectory Inspect control under expanded tool / skill bodies. */
 import type { ButtonHTMLAttributes } from 'react'
 import clsx from 'clsx'
-import { IconInspectOutline12 } from './icons/index.tsx'
+import { IconInspectOutlineRegular } from './icons/index.tsx'
 import css from './InspectAction.module.css'
 
 export type InspectActionProps = {
@@ -28,7 +28,7 @@ export function InspectAction({
       onClick={onClick}
       {...rest}
     >
-      <IconInspectOutline12 />
+      <IconInspectOutlineRegular />
       {label}
     </button>
   )

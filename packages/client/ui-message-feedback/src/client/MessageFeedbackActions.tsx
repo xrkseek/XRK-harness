@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  IconDislikeOutline16, IconLikeOutline16, Tooltip,
+  IconDislikeOutlineRegular, IconLikeOutlineRegular, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import type { MessageFeedbackRating } from '@xrkseek/xrk-message-feedback/types'
 import type { MessageFeedbackActionProps } from './slots.ts'
@@ -98,7 +98,7 @@ export function MessageFeedbackActions({ messageId, ensure, rate, toggle, clearN
           onPointerEnter={seed}
           onClick={() => { onRate('positive') }}
         >
-          <IconLikeOutline16 />
+          <IconLikeOutlineRegular />
         </button>
       </Tooltip>
       <Tooltip label={dislikeLabel} side="bottom">
@@ -113,7 +113,7 @@ export function MessageFeedbackActions({ messageId, ensure, rate, toggle, clearN
           onPointerEnter={seed}
           onClick={() => { onRate('negative') }}
         >
-          <IconDislikeOutline16 />
+          <IconDislikeOutlineRegular />
         </button>
       </Tooltip>
       {rating !== undefined && !noteOpen && (

@@ -7,7 +7,7 @@ import clsx from 'clsx'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-settings/client'
 import type {} from '@xrkseek/client-ui-settings-plugins/client'
-import { IconSparkle16, Switch } from '@xrkseek/client-ui-primitives'
+import { IconSparkleRegular, Switch } from '@xrkseek/client-ui-primitives'
 import {
   PRESENCE_COLORS,
   PRESENCE_COLOR_PALETTES,
@@ -302,7 +302,7 @@ export function PresenceShapeRow({
           onClick={() => { setOpen(!open) }}
         >
           <span className={css.icon} aria-hidden="true">
-            <IconSparkle16 size={16} />
+            <IconSparkleRegular size={16} />
           </span>
           <span className={css.headText}>
             <span className={css.name}>{t('presenceEnabled.title')}</span>

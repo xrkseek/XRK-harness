@@ -199,6 +199,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     // Parent row: the code variant with the model-authored description.
     const codeRoot = view.container.querySelector('[data-variant="code"]')
     expect(codeRoot).not.toBeNull()
+    // LocaleRuntime follows jsdom navigator → en dictionary.
     expect(view.getByText('Code')).toBeTruthy()
     expect(view.getByText('List the notes directory')).toBeTruthy()
 

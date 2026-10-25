@@ -37,6 +37,7 @@ import {
   type FaceListProjectionCache,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
+import { SESSION_LIST_PROJECTION_KEYS } from "./projections/snapshot-keys.js";
 import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent, routeFromRequestHeader, FACE_USAGE_ROUTE_PLACEHOLDER } from "./adapt/index.js";
 import {
   formatJobCompletionNotice,
@@ -356,7 +357,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
    * best-effort inside the cache (in-memory row retained).
    */
   const rememberListProjections = (sessionId: string): void => {
-    listProjectionCache.remember(sessionId, projections.checkpoint(sessionId));
+    // Only the list-tier keys are cached; asking `checkpoint` for all ~17 units
+    // folded the whole log for units that were never materialized.
+    listProjectionCache.remember(
+      sessionId,
+      projections.checkpoint(sessionId, {
+        keys: [...SESSION_LIST_PROJECTION_KEYS],
+      }),
+    );
   };
 
   const rpcAdmitMap = new Map<string, string>();

@@ -196,9 +196,9 @@
   outline-offset: 2px;
 }
 
-/* Persistent "which turn am I" + hover basket: one cluster left of the
-   ticks, vertically centred on the same mark. Number sits against the card
-   (row-reverse: badge toward the rail). */
+/* Hover basket only: the preview card sits left of the ticks, vertically
+   centred on the same mark. The persistent turn badge lives on the other side
+   (`.turnBadge`) so the two never fight for the same strip. */
 .cluster {
   position: absolute;
   top: calc(
@@ -213,7 +213,17 @@
   transform: translateY(-50%);
 }
 
-.turnNumber {
+/* Persistent "which turn am I" badge, parked to the RIGHT of the ticks.
+   `pointer-events: none` keeps the width-drag handle (z-index 8) reachable
+   underneath it. */
+.turnBadge {
+  position: absolute;
+  top: calc(
+    var(--turn-natural-position) + var(--turn-rail-inset) - var(--turn-scroll-top, 0px)
+  );
+  left: calc(100% + 6px);
+  transform: translateY(-50%);
+  pointer-events: none;
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 8px;

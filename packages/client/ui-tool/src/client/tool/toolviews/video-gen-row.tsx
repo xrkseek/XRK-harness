@@ -1,7 +1,7 @@
 // video_generate toolview: status summary + file/media preview card.
 
 import type { Context } from '@xrkseek/cordis'
-import { IconBrowseOutline16 } from '@xrkseek/client-ui-primitives'
+import { IconBrowseOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import {
@@ -52,7 +52,7 @@ export function VideoGenRow({
       t={t}
       variant="others"
       toolName={toolName}
-      icon={<IconBrowseOutline16 size={14} />}
+      icon={<IconBrowseOutlineRegular size={14} />}
       title="Video generation"
       summary={summary}
       body={null}

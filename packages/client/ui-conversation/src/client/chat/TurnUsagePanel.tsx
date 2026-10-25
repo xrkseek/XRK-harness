@@ -4,7 +4,7 @@
 
 import { createPortal } from 'react-dom'
 import {
-  IconClockOutline16, IconDatabaseOutline16,
+  IconClockOutlineRegular, IconDatabaseOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import type { TurnTokenUsage } from '../contract/chat-nodes.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
@@ -72,7 +72,7 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
         aria-expanded={open}
         onClick={() => { setOpen(!open) }}
       >
-        <IconDatabaseOutline16 />
+        <IconDatabaseOutlineRegular />
         <span className={css.label}>{t('message.turnUsage.consumed', { total })}</span>
       </button>
       {open && createPortal(
@@ -85,7 +85,7 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconDatabaseOutline16 />
+              <IconDatabaseOutlineRegular />
               {t('message.turnUsage.title')}
             </span>
             <span className={dialogCss.titleValue}>{formatExactCount(usage.totalTokens, t)}</span>
@@ -151,7 +151,7 @@ export function TurnTimePanel({ runMs, tokensPerSecond, ttftMs, t }: TurnTimePan
         aria-expanded={open}
         onClick={() => { setOpen(!open) }}
       >
-        <IconClockOutline16 />
+        <IconClockOutlineRegular />
         <span className={css.label}>{t('message.ranFor', { duration: formatRunDuration(runMs, t) })}</span>
       </button>
       {open && createPortal(
@@ -164,7 +164,7 @@ export function TurnTimePanel({ runMs, tokensPerSecond, ttftMs, t }: TurnTimePan
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconClockOutline16 />
+              <IconClockOutlineRegular />
               {t('message.turnTime.title')}
             </span>
           </div>

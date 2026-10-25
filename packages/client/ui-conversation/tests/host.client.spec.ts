@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@xrkseek/xrk-settings'
 import {
   CONVERSATION_SETTINGS_NAMESPACE, DEFAULT_BUSY_ENTER_BEHAVIOR,
-  DEFAULT_TOOLS_DEFAULT_EXPANDED, apply,
+  DEFAULT_TOOLS_DEFAULT_EXPANDED, DEFAULT_TRANSCRIPT_VIEW_MODE, apply,
 } from '@xrkseek/client-ui-conversation'
 
 class MemorySettings extends SettingsProvider {
@@ -24,11 +24,13 @@ describe('ui-conversation host', () => {
     expect(ctx.settings.get(ns)).toEqual({
       busyEnter: DEFAULT_BUSY_ENTER_BEHAVIOR,
       toolsDefaultExpanded: DEFAULT_TOOLS_DEFAULT_EXPANDED,
+      transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE,
     })
     await ctx.settings.update(ns, { busyEnter: 'steer' })
     expect(ctx.settings.get(ns)).toEqual({
       busyEnter: 'steer',
       toolsDefaultExpanded: DEFAULT_TOOLS_DEFAULT_EXPANDED,
+      transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE,
     })
     await expect(ctx.settings.update(ns, { busyEnter: 'invalid' })).rejects.toThrow()
     await fiber.dispose()

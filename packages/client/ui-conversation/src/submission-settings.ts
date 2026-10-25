@@ -11,6 +11,23 @@ export const BUSY_ENTER_FIELD = 'busyEnter'
 /** Field: chat tool rows start expanded when true. */
 export const TOOLS_DEFAULT_EXPANDED_FIELD = 'toolsDefaultExpanded'
 
+/** Field carrying how much of a Turn's process run the transcript shows. */
+export const TRANSCRIPT_VIEW_FIELD = 'transcriptView'
+
+/**
+ * Work-details modes, ordered from quietest to most explicit.
+ *
+ * `verbose` is the "always expanded" posture: a completed Turn never folds its
+ * process run and its rows are not grouped at all.
+ */
+export const TRANSCRIPT_VIEW_MODES = ['compact', 'standard', 'detailed', 'verbose'] as const
+
+/** How much process detail a settled Turn keeps on screen. */
+export type TranscriptViewMode = typeof TRANSCRIPT_VIEW_MODES[number]
+
+/** Default keeps grouping and folding, with group titles naming what ran. */
+export const DEFAULT_TRANSCRIPT_VIEW_MODE: TranscriptViewMode = 'standard'
+
 /** Busy-Enter behaviors accepted at settings and input boundaries. */
 export const BUSY_ENTER_BEHAVIORS = ['queue', 'steer'] as const
 
@@ -29,10 +46,13 @@ export interface ConversationSettings {
   busyEnter: BusyEnterBehavior
   /** When true, ToolRow / Bash rows mount expanded. */
   toolsDefaultExpanded: boolean
+  /** How much of a Turn's process run the transcript shows. */
+  transcriptView: TranscriptViewMode
 }
 
 /** Durable conversation schema; also the wire envelope the browser scope validates against. */
 export const ConversationSettingsSchema: z<ConversationSettings> = z.object({
   [BUSY_ENTER_FIELD]: z.union([...BUSY_ENTER_BEHAVIORS]).default(DEFAULT_BUSY_ENTER_BEHAVIOR),
   [TOOLS_DEFAULT_EXPANDED_FIELD]: z.boolean().default(DEFAULT_TOOLS_DEFAULT_EXPANDED),
+  [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_MODES]).default(DEFAULT_TRANSCRIPT_VIEW_MODE),
 })

@@ -232,11 +232,6 @@ function imageInEvent(event: SessionEvent, match: (ref: ImageAttachmentRef) => b
   return undefined
 }
 
-/** True when the current model-visible surface contains an image. */
-function messagesHaveImage(messages: readonly { content: readonly ContentBlock[] }[]): boolean {
-  return messages.some(message => contentHasImage(message.content))
-}
-
 /** Resolve the first reference matching one opaque id. */
 function referencedImage(events: readonly SessionEvent[], attachmentId: string): ImageAttachmentRef | undefined {
   for (const event of events) {
@@ -2280,18 +2275,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 ? {}
                 : { reasoningEffort: ReasoningEffortId(reasoningEffort) },
             })
-            const pendingImage = [...found.agent.inbox.nextTurn, ...found.agent.inbox.nextStep]
-              .some(message => contentHasImage(message.content))
-            if (pendingImage || messagesHaveImage(found.agent.session.deriveMessages())) {
-              const info = await ctx.llm.resolveModelInfo(resolved.provider, resolved.model)
-              if (info.inputModalities !== undefined && !info.inputModalities.includes('image')) {
-                return err(request, {
-                  code: 'model-unavailable',
-                  message: `Model "${resolved.model}" does not accept image input, but this session already contains images; select an image-capable model.`,
-                  details: { provider, model },
-                })
-              }
-            }
+            // Text-only routes may follow a vision session: assemble projects
+            // images to placeholders — do not refuse the selection.
             const selected: ModelSelection = {
               provider: resolved.provider,
               model: resolved.model,

@@ -141,9 +141,10 @@ describe('TodoRow', () => {
     expect(screen.getByText(`todo_write · ${argsRaw}`)).toBeTruthy()
   })
 
-  it('window-truncated result falls back to the callId summary', () => {
+  it('window-truncated result falls back to the tool name summary', () => {
     render(<TodoRow {...rowProps(resultNode('', { call: null }))} />)
-    expect(screen.getByText('todo_write · c1')).toBeTruthy()
+    // No callId flash: empty args → others summary is just the wire name.
+    expect(screen.getByText('todo_write')).toBeTruthy()
   })
 
   it('injects the keyed toolview declaration directly', () => {

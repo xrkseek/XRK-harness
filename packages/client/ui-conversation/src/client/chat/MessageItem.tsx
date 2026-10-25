@@ -528,7 +528,7 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, rende
  * (`steering`); regenerate lives on the turn-tail and never targets steering.
  */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, editAt, deleteAt, withdrawSteer, renderMessageImages, renderMessageFiles, useSession, t,
+  node, steer = false, editAt, deleteAt, withdrawSteer, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   const pendingAdmitId = useSession((s) => {
@@ -545,13 +545,17 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   const canEdit = text.trim() !== ''
   const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
   const editing = editStaging !== null && editStaging.seq === data.seq
-  return (
+  const autoContinue = data.source !== null
+    && typeof data.source === 'object'
+    && 'kind' in data.source
+    && data.source.kind === 'auto-continue'
+  const bubble = (
     <UserStyleBubble
       content={data.content}
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      steer={pendingAdmitId !== undefined}
+      steer={steer}
       editing={editing}
       t={t}
       actions={copyText => (
@@ -561,12 +565,29 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           clock="start"
           className={css.actions}
           t={t}
-          onEdit={pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
-          onDelete={pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
+          // Two different questions, deliberately kept apart: `steer` is
+          // ChatView's flow-tail verdict (still mid-turn → no edit/delete),
+          // `pendingAdmitId` is whether a withdrawable queue row still exists.
+          // Host drops that row on admit while the verdict keeps the row in the
+          // trailing cluster, so a single condition cannot answer both.
+          onEdit={steer || pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
+          onDelete={steer || pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
           onWithdraw={pendingAdmitId === undefined ? undefined : () => { withdrawSteer(pendingAdmitId) }}
         />
       )}
     />
+  )
+  if (!autoContinue) return bubble
+  // Mid-turn cue: terminal turn/end max-tokens notice only lands when auto-
+  // continue is exhausted; without this strip users only see flashing tools.
+  return (
+    <>
+      <div className={css.autoContinueCap} role="status">
+        <StateDot state="warning" />
+        <span>{t('message.maxTokens.autoContinue')}</span>
+      </div>
+      {bubble}
+    </>
   )
 })
 

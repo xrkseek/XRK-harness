@@ -1,7 +1,7 @@
 /** Draft generic-file card for the composer attachment rail (DSH-shaped). */
 
 import clsx from 'clsx'
-import { fileExtension, FileTypeIcon, fileSizeText, IconCloseFill14 } from '@xrkseek/client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, IconCloseFillRegular } from '@xrkseek/client-ui-primitives'
 import type { DraftFileUpload } from '@xrkseek/client-ui-conversation/client'
 import css from './FileCard.module.css'
 
@@ -65,7 +65,7 @@ export function FileCard({ file, upload, labels, onRemove, onRetry }: {
         aria-label={labels.remove}
         onClick={onRemove}
       >
-        <IconCloseFill14 size={12} />
+        <IconCloseFillRegular size={12} />
       </button>
       {uploading && (
         <div className={css.progressTrack} aria-hidden="true">

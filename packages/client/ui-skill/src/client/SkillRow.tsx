@@ -4,7 +4,7 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutline14, IconSkillOutline16, InspectAction, StateDot,
+  IconChevronDownOutlineRegular, IconSkillOutlineRegular, InspectAction, StateDot,
 } from '@xrkseek/client-ui-primitives'
 import type { ToolCallViewProps } from '@xrkseek/client-ui-tool/client'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
@@ -82,19 +82,19 @@ function leadingFor(state: SkillRowState): ReactNode {
   switch (state) {
     case 'error': return <StateDot state="error" />
     case 'stopped': return <StateDot state="warning" />
-    default: return <IconSkillOutline16 size={14} />
+    default: return <IconSkillOutlineRegular size={14} />
   }
 }
 
 /** Leading disclosure slot: state icon at rest, chevron on hover or while open. */
 function disclosureLeading(state: SkillRowState, open: boolean, expandable: boolean): ReactNode {
-  if (open) return <IconChevronDownOutline14 className={css.chevron} />
+  if (open) return <IconChevronDownOutlineRegular className={css.chevron} />
   const icon = leadingFor(state)
   if (!expandable) return icon
   return (
     <>
       <span className={css.iconIdle}>{icon}</span>
-      <IconChevronDownOutline14 className={`${css.chevron} ${css.chevronHover}`} />
+      <IconChevronDownOutlineRegular className={`${css.chevron} ${css.chevronHover}`} />
     </>
   )
 }

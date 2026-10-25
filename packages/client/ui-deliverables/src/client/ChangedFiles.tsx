@@ -5,9 +5,9 @@
  */
 import { useCallback, useState } from 'react'
 import {
-  IconChevronDownOutline14,
-  IconChevronUpOutline14,
-  IconCodeOutline16,
+  IconChevronDownOutlineRegular,
+  IconChevronUpOutlineRegular,
+  IconCodeOutlineRegular,
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ChangesTurnData } from './turn-deliverables.ts'
@@ -81,7 +81,7 @@ export function ChangedFiles({
     <button type="button" className={css.header} aria-label={t('changes.openReview')}
       aria-expanded={openOverviewReview !== undefined ? undefined : reviewing}
       onClick={onHeaderClick}>
-      <span className={css.tile}><IconCodeOutline16 size={18} /></span>
+      <span className={css.tile}><IconCodeOutlineRegular size={18} /></span>
       <span className={css.titles}>
         <span className={css.title}>{t('changes.title', { count: String(changes.total) })}</span>
         <span className={css.stat}><Counts t={t} added={changes.added} deleted={changes.deleted} /></span>
@@ -112,7 +112,7 @@ export function ChangedFiles({
       aria-label={t(expanded ? 'changes.collapseAria' : 'changes.expandAria', { count: String(changes.files.length) })}
       onClick={() => { setExpanded(value => !value) }}>
       <span>{t(expanded ? 'changes.collapse' : 'changes.all', { count: String(changes.files.length) })}</span>
-      {expanded ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+      {expanded ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
     </button>}
     {reviewing
       ? (

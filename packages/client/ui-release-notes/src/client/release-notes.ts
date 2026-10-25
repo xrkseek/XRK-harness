@@ -65,6 +65,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.19',
+    date: '2026-10-24',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '会话列表改读索引列（schema v4 自动迁移）：长库冷列表从秒级到毫秒级；WAL 空闲回落，不再长期停在历史峰值。',
+        en: 'Session list reads index columns now (schema v4 auto-migrates): long stores open in milliseconds instead of seconds, and an idle WAL falls back instead of parking at its historical peak.',
+      },
+      {
+        zh: 'Turn 内过程折叠 + 设置「过程详情」：连续思考/工具行可折成一组；视口内不折、折叠不跳字；可调精简到始终展开。',
+        en: 'In-Turn process folding + Settings “Process detail”: consecutive reasoning/tool rows can collapse into one group; never inside your viewport, text does not jump; Compact through Always expanded.',
+      },
+      {
+        zh: '图片输入放宽：纯文本路由不再拒图入库（组装时投影占位符）；会话里已有图片也不再阻止切到文本模型。',
+        en: 'Relaxed image intake: a text-only route no longer rejects images at admission (placeholders at assembly), and existing images no longer block switching to a text model.',
+      },
+      {
+        zh: '自动续写撞上限时显示「正在自动继续」；被下一步顶替的流式工具行不再一直闪 running；Overview 概况不再卡在「正在读取」。',
+        en: 'Auto-continue shows a live max-tokens cue; superseded streaming tool rows stop the running sweep; Overview Status no longer sticks on loading.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.19 接管 @latest。完整清单见 docs/releases/v0.6.19.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.19 now owns @latest. Full list in docs/releases/v0.6.19.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.18',
     date: '2026-10-24',
     title: {

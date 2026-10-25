@@ -6,15 +6,15 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@xrkseek/client-ui-slots'
 import type { PlanKey } from './locales.ts'
 import {
-  IconBrowseOutline16,
-  IconChecklistOutline14,
-  IconChevronDownOutline14,
-  IconCloseFill14,
-  IconCodeOutline16,
-  IconDataOutline16,
-  IconGaugeOutline16,
-  IconStopFill16,
-  IconThinkOutline16,
+  IconBrowseOutlineRegular,
+  IconChecklistOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconCloseFillRegular,
+  IconCodeOutlineRegular,
+  IconDataOutlineRegular,
+  IconGaugeOutlineRegular,
+  IconStopFillRegular,
+  IconThinkOutlineRegular,
   StateDot,
   TerminalBlock,
   EMPTY_WORKSPACE_CHANGES_TURNS,
@@ -317,7 +317,7 @@ function SectionCard({
         title={open ? t('preview.collapse') : t('preview.expand')}
         onClick={() => { setOpen((prev) => !prev) }}
       >
-        <IconChevronDownOutline14 size={14} className={css.sectionChevron} />
+        <IconChevronDownOutlineRegular size={14} className={css.sectionChevron} />
         <span className={css.sectionTitle}>{title}</span>
         {meta ? <span className={css.sectionMeta}>{meta}</span> : null}
       </button>
@@ -539,7 +539,7 @@ function StatusJobsList({
                 }}
               >
                 <StateDot state={live ? 'ongoing' : 'done'} size={8} />
-                <IconChevronDownOutline14
+                <IconChevronDownOutlineRegular
                   size={10}
                   className={expanded ? css.jobChevronOpen : css.jobChevron}
                 />
@@ -625,7 +625,7 @@ function StatusKillButton({
         killJob(jobId)
       }}
     >
-      <IconStopFill16 size={10} />
+      <IconStopFillRegular size={10} />
       {armed ? <span className={css.jobKillLabel}>{t('preview.status.jobsKillConfirm')}</span> : null}
     </button>
   )
@@ -2052,10 +2052,9 @@ export function PreviewTabs({
       void loadPreviewTabs(sessionId).then((next) => {
         statusLastLatencyMs.current = performance.now() - started
         statusLoadInFlight.current = false
-        if (!alive) {
-          statusLoadQueued.current = false
-          return
-        }
+        // Stale after Strict Mode / tick remount: cleanup already cleared the
+        // coalesce flags so the live effect can start its own flight.
+        if (!alive) return
         setLoaded((prev) => {
           const merged: PreviewTabLoad = {
             plan: next.plan ?? prev.plan,
@@ -2075,13 +2074,18 @@ export function PreviewTabs({
       }, () => {
         statusLastLatencyMs.current = performance.now() - started
         statusLoadInFlight.current = false
+        if (!alive) return
         statusLoadQueued.current = false
-        if (alive) setRefreshing(false)
+        setRefreshing(false)
       })
     }
     run()
     return () => {
       alive = false
+      // Release the latch so a remount (React Strict Mode, statusTick bump) is
+      // not stuck behind a flight that will discard its result as stale.
+      statusLoadInFlight.current = false
+      statusLoadQueued.current = false
       setRefreshing(false)
     }
   }, [sessionId, statusTick, parentId])
@@ -2213,7 +2217,7 @@ export function PreviewTabs({
               tabIndex={tab === 'status' ? 0 : -1}
               onClick={() => { selectTab('status') }}
             >
-              <IconGaugeOutline16 size={12} className={css.tabIcon} />
+              <IconGaugeOutlineRegular size={12} className={css.tabIcon} />
               {t('preview.status')}
             </button>
             <button
@@ -2225,7 +2229,7 @@ export function PreviewTabs({
               tabIndex={tab === 'changes' ? 0 : -1}
               onClick={() => { selectTab('changes') }}
             >
-              <IconCodeOutline16 size={12} className={css.tabIcon} />
+              <IconCodeOutlineRegular size={12} className={css.tabIcon} />
               {t('preview.changes')}
             </button>
             <button
@@ -2237,7 +2241,7 @@ export function PreviewTabs({
               tabIndex={tab === 'context' ? 0 : -1}
               onClick={() => { selectTab('context') }}
             >
-              <IconDataOutline16 size={12} className={css.tabIcon} />
+              <IconDataOutlineRegular size={12} className={css.tabIcon} />
               {t('preview.context')}
             </button>
             <button
@@ -2249,7 +2253,7 @@ export function PreviewTabs({
               tabIndex={tab === 'todos' ? 0 : -1}
               onClick={() => { selectTab('todos') }}
             >
-              <IconChecklistOutline14 size={12} className={css.tabIcon} />
+              <IconChecklistOutlineRegular size={12} className={css.tabIcon} />
               {t('preview.todos')}
             </button>
             <button
@@ -2261,7 +2265,7 @@ export function PreviewTabs({
               tabIndex={tab === 'canvas' ? 0 : -1}
               onClick={() => { selectTab('canvas') }}
             >
-              <IconBrowseOutline16 size={12} className={css.tabIcon} />
+              <IconBrowseOutlineRegular size={12} className={css.tabIcon} />
               {t('preview.canvas')}
             </button>
         </div>
@@ -2271,7 +2275,7 @@ export function PreviewTabs({
           aria-label={t('preview.close')}
           onClick={() => { closeDetails() }}
         >
-          <IconCloseFill14 size={14} />
+          <IconCloseFillRegular size={14} />
         </button>
       </div>
       <div className={css.tools} aria-label={t('preview.status.tools')}>
@@ -2309,7 +2313,7 @@ export function PreviewTabs({
               })
             }}
           >
-            <IconChevronDownOutline14 size={14} className={css.presenceCollapseIcon} />
+            <IconChevronDownOutlineRegular size={14} className={css.presenceCollapseIcon} />
           </button>
         </div>
         {delegatedOverview
@@ -2541,7 +2545,7 @@ export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenP
       aria-pressed={open}
       data-xrk-status-toggle=""
     >
-      <IconGaugeOutline16 size={16} />
+      <IconGaugeOutlineRegular size={16} />
       <span className={css.triggerLabel}>{t('preview.open')}</span>
     </button>
   )

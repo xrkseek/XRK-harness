@@ -13,7 +13,7 @@ import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import type { InjectFace, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { LocalizedText } from '@xrkseek/client-locale/client'
 import {
-  Button, IconBellOutline16, IconChevronDownOutline14, Modal,
+  Button, IconBellOutlineRegular, IconChevronDownOutlineRegular, Modal,
 } from '@xrkseek/client-ui-primitives'
 import type { ReleaseNotesState, ReleaseNotesStore } from './release-notes-store.ts'
 import type { ReleaseNotesKey } from './locales.ts'
@@ -85,7 +85,7 @@ export function ReleaseNotesButton({
       >
         <span className={css.dot} data-unread={state.unread} aria-hidden />
         <span className={css.icon} aria-hidden>
-          <IconBellOutline16 size={wide ? 16 : 18} />
+          <IconBellOutlineRegular size={wide ? 16 : 18} />
         </span>
         {wide ? <span className={css.label}>{t('button')}</span> : null}
       </button>
@@ -142,7 +142,7 @@ export function ReleaseNotesButton({
                       </span>
                       <span className={css.entrySummary}>
                         <h3 className={css.entryTitle}>{resolveText(note.title)}</h3>
-                        <IconChevronDownOutline14
+                        <IconChevronDownOutlineRegular
                           className={isOpen ? `${css.chevron} ${css.chevronOpen}` : css.chevron}
                           size={14}
                         />

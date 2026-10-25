@@ -4,13 +4,19 @@
  */
 
 import path from "node:path";
-import { readSessionEvents, type SessionStore } from "@xrkseek/core-session";
+import {
+  readSessionEvents,
+  SessionLogOffset,
+  type SessionStore,
+} from "@xrkseek/core-session";
 
 export class SessionPathAllowlist {
   private readonly permanent = new Map<string, Set<string>>();
   private readonly once = new Map<string, Set<string>>();
   /** Child → parent for inherited allowlist views. */
   private readonly parentOf = new Map<string, string>();
+  /** Log length already folded per session (avoids re-scanning on every open). */
+  private readonly primedLen = new Map<string, number>();
 
   /** Link child so {@link list} includes the parent's permanent paths. */
   inherit(childSessionId: string, parentSessionId: string): void {
@@ -21,7 +27,24 @@ export class SessionPathAllowlist {
   /** Hydrate permanent entries from durable `path/allowlisted` events. */
   hydrate(store: SessionStore, sessionId: string): void {
     if (!store.has(sessionId)) return;
-    for (const event of readSessionEvents(store, sessionId)) {
+    // Only fold events appended since the last hydrate. `readEvents(from)` is a
+    // slice over the resident log, so a second open pays O(new events) instead
+    // of another O(log) walk (this runs on every open and every agent bind).
+    //
+    // The saved offset is a prefix length of the log this view last saw. A log
+    // that got shorter behind us (evicted and re-read, archive move, repair
+    // rewrite) leaves it past the end: `readEvents(from)` would return nothing
+    // and every later `path/allowlisted` would be skipped for the rest of the
+    // process, which reads to the user as "path is not allowlisted". Detect
+    // that and fold from the top instead — the full-range read reuses the
+    // resident array, so the probe costs a comparison, not a copy.
+    const primed = this.primedLen.get(sessionId) ?? 0;
+    const resident = readSessionEvents(store, sessionId).length;
+    const from = primed <= resident ? primed : 0;
+    const events = readSessionEvents(store, sessionId, SessionLogOffset(from));
+    if (events.length === 0) return;
+    this.primedLen.set(sessionId, from + events.length);
+    for (const event of events) {
       if (event.type !== "path/allowlisted") continue;
       this.addPermanent(sessionId, event.path, { persist: false });
     }
@@ -92,6 +115,7 @@ export class SessionPathAllowlist {
     this.permanent.delete(sessionId);
     this.once.delete(sessionId);
     this.parentOf.delete(sessionId);
+    this.primedLen.delete(sessionId);
     for (const [child, parent] of this.parentOf) {
       if (parent === sessionId) this.parentOf.delete(child);
     }
