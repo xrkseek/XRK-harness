@@ -58,6 +58,7 @@ describe('flowEntries', () => {
       tools: 3,
       reasoning: 0,
       toolNames: [],
+      toolCallNames: [],
       runningTool: undefined,
       running: false,
     })
@@ -84,6 +85,7 @@ describe('flowEntries', () => {
       tools: 1,
       reasoning: 1,
       toolNames: [],
+      toolCallNames: [],
       runningTool: undefined,
       running: false,
     })
@@ -161,6 +163,7 @@ describe('flowEntries', () => {
     expect(group?.kind).toBe('group')
     if (group?.kind !== 'group') throw new Error('expected group')
     expect(group.summary.toolNames).toEqual(['bash', 'Read'])
+    expect(group.summary.toolCallNames).toEqual(['bash', 'bash', 'Read'])
     expect(group.summary.running).toBe(true)
     expect(group.summary.runningTool).toBe('bash')
   })

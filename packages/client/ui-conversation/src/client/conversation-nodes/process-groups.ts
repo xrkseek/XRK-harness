@@ -24,6 +24,11 @@ export interface ProcessGroupSummary {
    * Empty when the projection has not named the roots yet.
    */
   readonly toolNames: readonly string[]
+  /**
+   * One entry per tool call (duplicates kept) for Cursor-style activity
+   * counts ("Explored 6 files, 1 search").
+   */
+  readonly toolCallNames: readonly string[]
   /** Name of the tool still running, when exactly one root is in flight. */
   readonly runningTool: string | undefined
   /** Whether any tool root in the group has not settled. */
@@ -103,6 +108,7 @@ export function flowEntries(
     let tools = 0
     let reasoning = 0
     const toolNames: string[] = []
+    const toolCallNames: string[] = []
     const seen = new Set<string>()
     let runningTool: string | undefined
     let running = false
@@ -110,9 +116,12 @@ export function flowEntries(
       if (member.node.kind === 'tool-call') {
         tools += 1
         const name = toolNameOf(member.node)
-        if (name !== undefined && !seen.has(name)) {
-          seen.add(name)
-          toolNames.push(name)
+        if (name !== undefined) {
+          toolCallNames.push(name)
+          if (!seen.has(name)) {
+            seen.add(name)
+            toolNames.push(name)
+          }
         }
         if (toolRunning(member.node)) {
           running = true
@@ -134,7 +143,7 @@ export function flowEntries(
       key: `process:${first.key}`,
       turn: pendingTurn,
       closed,
-      summary: { tools, reasoning, toolNames, runningTool, running },
+      summary: { tools, reasoning, toolNames, toolCallNames, runningTool, running },
       members: pending.map(member => ({ key: member.key })),
     })
     pending = []

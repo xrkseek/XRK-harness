@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { ProcessGroupSeat } from '../src/client/chat/ProcessGroupSeat.tsx'
+import type { ProcessFoldWhen } from '../src/client/conversation-nodes/presentation-policy.ts'
 import type { FlowEntry } from '../src/client/conversation-nodes/process-groups.ts'
 
 afterEach(cleanup)
@@ -29,6 +30,7 @@ function group(closed: boolean, overrides: Partial<Extract<FlowEntry, { kind: 'g
       tools: 2,
       reasoning: 1,
       toolNames: ['bash', 'Read'],
+      toolCallNames: ['bash', 'Read'],
       runningTool: undefined,
       running: false,
       ...overrides,
@@ -61,7 +63,7 @@ function renderSeat(
   entry: FlowEntry & { kind: 'group' },
   overrides: Partial<{
     deferFold: boolean
-    foldCompletedTurns: boolean
+    foldWhen: ProcessFoldWhen
     idleSettled: boolean
     detailTitles: boolean
     liveProcessDetail: boolean
@@ -71,7 +73,7 @@ function renderSeat(
 ) {
   const props = {
     deferFold: false,
-    foldCompletedTurns: true,
+    foldWhen: 'process',
     idleSettled: false,
     detailTitles: true,
     liveProcessDetail: true,
@@ -92,7 +94,7 @@ function stageFold(
         nodeSeat={seat}
         t={t}
         deferFold={false}
-        foldCompletedTurns
+        foldWhen="process"
         detailTitles
         liveProcessDetail
         writeScroll={writeScroll}
@@ -109,8 +111,52 @@ function stageFold(
 }
 
 describe('ProcessGroupSeat', () => {
-  it('keeps an open Turn flat', () => {
-    const view = renderSeat(group(false))
+  it('keeps an open Turn flat while a tool is still running', () => {
+    const view = renderSeat(group(false, { running: true, runningTool: 'bash' }))
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+  })
+
+  it('folds an open Turn once every tool has settled (answer may still stream)', async () => {
+    // Standard mode: process collapses when the tool burst ends — not only
+    // after turn/end — so the final answer is not watched with the run open.
+    const view = renderSeat(group(false, { running: false }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('re-opens when a new tool burst starts on the same Turn', async () => {
+    const view = renderSeat(group(false, { running: false }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(false, { running: true, runningTool: 'bash', toolNames: ['bash', 'Read'] })}
+        nodeSeat={seat}
+        t={t}
+        deferFold={false}
+        foldWhen="process"
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    })
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('keeps a thinking-only open Turn flat until close or idle', () => {
+    const view = renderSeat(group(false, {
+      tools: 0,
+      reasoning: 1,
+      toolNames: [],
+      toolCallNames: [],
+      running: false,
+    }))
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
   })
@@ -144,7 +190,7 @@ describe('ProcessGroupSeat', () => {
           nodeSeat={seat}
           t={t}
           deferFold
-          foldCompletedTurns
+          foldWhen="process"
           detailTitles
           liveProcessDetail
           writeScroll={(el, top) => writes.push([el, top])}
@@ -184,7 +230,12 @@ describe('ProcessGroupSeat', () => {
 
   it('gives the height a fold above the reader would eat back to the offset', () => {
     const writes: Array<[HTMLElement, number]> = []
-    const { view, scrollport, root } = stageFold(group(false), (el, top) => writes.push([el, top]))
+    // Keep a tool in flight so the seat starts open; this case measures a
+    // manual fold, not the auto-fold-on-tools-settled path.
+    const { view, scrollport, root } = stageFold(
+      group(false, { running: true, runningTool: 'bash' }),
+      (el, top) => writes.push([el, top]),
+    )
     // First read is the open run, the second is the committed folded run: the
     // lower edge climbs by 80, which is exactly the distance the rows below it
     // would have jumped.
@@ -202,7 +253,10 @@ describe('ProcessGroupSeat', () => {
 
   it('keeps the transition when the reader can see the run folding', () => {
     const writes: Array<[HTMLElement, number]> = []
-    const { view, root } = stageFold(group(false), (el, top) => writes.push([el, top]))
+    const { view, root } = stageFold(
+      group(false, { running: true, runningTool: 'bash' }),
+      (el, top) => writes.push([el, top]),
+    )
     root.getBoundingClientRect = () => rectOf(120, 220)
     fireEvent.click(toggle(view.container) as HTMLElement)
     // A run in view is the thing the reader is watching; restoring the offset
@@ -213,7 +267,7 @@ describe('ProcessGroupSeat', () => {
 
   it('re-samples the reading anchor once a fold has landed', () => {
     const onFoldSettled = vi.fn()
-    const view = renderSeat(group(false), { onFoldSettled })
+    const view = renderSeat(group(false, { running: true, runningTool: 'bash' }), { onFoldSettled })
     // Mount is not a fold: sampling there would clobber a position a remount
     // just restored.
     expect(onFoldSettled).not.toHaveBeenCalled()
@@ -228,11 +282,11 @@ describe('ProcessGroupSeat', () => {
     const view = render(
       <div data-conversation-scroll>
         <ProcessGroupSeat
-          entry={group(false)}
+          entry={group(false, { running: true, runningTool: 'bash' })}
           nodeSeat={seat}
           t={t}
           deferFold={false}
-          foldCompletedTurns
+          foldWhen="process"
           detailTitles
           liveProcessDetail
         />
@@ -249,7 +303,7 @@ describe('ProcessGroupSeat', () => {
           nodeSeat={seat}
           t={t}
           deferFold={false}
-          foldCompletedTurns
+          foldWhen="process"
           detailTitles
           liveProcessDetail
         />
@@ -261,7 +315,7 @@ describe('ProcessGroupSeat', () => {
   })
 
   it('keeps a closed Turn flat when the mode never folds', async () => {
-    const view = renderSeat(group(true), { foldCompletedTurns: false })
+    const view = renderSeat(group(true), { foldWhen: 'never' })
     // `verbose` in the work-details mode: a settled run stays exactly as it is.
     await vi.waitFor(() => {
       expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
@@ -272,7 +326,7 @@ describe('ProcessGroupSeat', () => {
   it('folds an open Turn once the session is idle and every tool has settled', async () => {
     // Host cleared `running` (session-status) but mux never delivered turn/end.
     const view = renderSeat(group(false, { running: false }), {
-      foldCompletedTurns: true,
+      foldWhen: 'process',
       idleSettled: true,
     })
     await vi.waitFor(() => {
@@ -283,7 +337,7 @@ describe('ProcessGroupSeat', () => {
 
   it('folds after a mode flip that starts allowing fold on an already-closed Turn', async () => {
     const entry = group(true)
-    const view = renderSeat(entry, { foldCompletedTurns: false })
+    const view = renderSeat(entry, { foldWhen: 'never' })
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
     view.rerender(
       <ProcessGroupSeat
@@ -291,7 +345,7 @@ describe('ProcessGroupSeat', () => {
         nodeSeat={seat}
         t={t}
         deferFold={false}
-        foldCompletedTurns
+        foldWhen="process"
         detailTitles
         liveProcessDetail
       />,
@@ -303,27 +357,40 @@ describe('ProcessGroupSeat', () => {
     })
   })
 
-  it('counts steps instead of naming them in quiet modes', async () => {
-    const view = renderSeat(group(true), { detailTitles: false })
-    await vi.waitFor(() => {
-      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
-    })
-    // The stub keeps the key and its params, so the count must survive the mode.
-    expect(view.container.textContent).toContain('chat.process.steps')
-    expect(view.container.textContent).not.toContain('bash')
-  })
-
-  it('names tools on a settled detailed header', async () => {
+  it('uses a Cursor-style activity line as the folded title', async () => {
     const view = renderSeat(group(true))
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
-    expect(summary(view.container)?.textContent).toContain('bash')
-    expect(summary(view.container)?.textContent).toContain('Read')
+    // Folded chrome replaces「过程 · N 步」with verb + counts — no tool names,
+    // no process title prefix, and no summary seat beside the title.
+    expect(view.container.textContent).toContain('chat.process.summary.explored')
+    expect(view.container.textContent).toContain('chat.process.summary.commands')
+    expect(view.container.textContent).toContain('chat.process.summary.thoughts')
+    expect(view.container.textContent).not.toContain('chat.process.title')
+    expect(view.container.textContent).not.toContain('bash')
+    expect(summary(view.container)).toBeNull()
+  })
+
+  it('keeps step counts on an open quiet-mode header', () => {
+    // Quiet modes drop the taxonomy while the run is still open; once folded
+    // the title becomes the activity line (same for every mode).
+    const view = renderSeat(
+      group(false, { running: true, runningTool: 'bash', toolCallNames: ['bash'] }),
+      { detailTitles: false, liveProcessDetail: false },
+    )
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    expect(summary(view.container)?.textContent).toContain('chat.process.steps')
+    expect(summary(view.container)?.textContent).not.toContain('bash')
   })
 
   it('shows the running tool with the live shimmer class while open', () => {
-    const view = renderSeat(group(false, { running: true, runningTool: 'bash', toolNames: ['bash'] }))
+    const view = renderSeat(group(false, {
+      running: true,
+      runningTool: 'bash',
+      toolNames: ['bash'],
+      toolCallNames: ['bash'],
+    }))
     expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
     expect(summary(view.container)?.textContent).toBe('bash')
     expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
@@ -334,6 +401,7 @@ describe('ProcessGroupSeat', () => {
       tools: 0,
       reasoning: 1,
       toolNames: [],
+      toolCallNames: [],
       running: false,
       runningTool: undefined,
     }))
@@ -343,33 +411,35 @@ describe('ProcessGroupSeat', () => {
   })
 
   it('stops the live shimmer once every tool has settled on an still-open Turn', () => {
+    // Keep foldWhen=turn so the run stays expanded while tools are done —
+    // standard would latch closed and drop the open-run summary seat.
     const view = renderSeat(group(false, {
       tools: 2,
       reasoning: 1,
       toolNames: ['bash', 'Read'],
+      toolCallNames: ['bash', 'Read'],
       running: false,
       runningTool: undefined,
-    }))
+    }), { foldWhen: 'turn' })
     expect(view.container.querySelector('[data-process-running]')).toBeNull()
     expect(summary(view.container)?.className).not.toMatch(/processGroupSummaryLive/)
     expect(summary(view.container)?.textContent).toContain('bash')
   })
 
   it('toggles from a click on the whole disclosure row', () => {
-    const view = renderSeat(group(false))
+    const view = renderSeat(group(false, { running: true, runningTool: 'bash' }))
     const row = view.container.querySelector('[data-disclosure-row]') as HTMLElement
     expect(row.hasAttribute('data-expandable')).toBe(true)
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
     fireEvent.click(row)
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
   })
 
-  it('separates the process title from the summary', async () => {
-    const view = renderSeat(group(true))
-    await vi.waitFor(() => {
-      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
-    })
+  it('separates the process title from the open-run summary', () => {
+    const view = renderSeat(group(false, { running: true, runningTool: 'bash' }))
     // DisclosureRow puts title then collapsedContent; the sep is aria-hidden.
     const row = view.container.querySelector('[data-disclosure-row]')
+    expect(row?.textContent).toContain('chat.process.title')
     expect(row?.querySelector('[aria-hidden]')).not.toBeNull()
     expect(summary(view.container)).not.toBeNull()
   })

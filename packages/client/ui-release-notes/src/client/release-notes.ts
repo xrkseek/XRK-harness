@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.22',
+    date: '2026-10-25',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '过程收起后显示「查看了 N 个文件…」类活动摘要（对齐 Cursor），不再是「过程 · N 步」。',
+        en: 'Folded process rows show a Cursor-style activity line (Explored N files…) instead of “Process · N steps”.',
+      },
+      {
+        zh: '过程详情四档收起时机写清：精简立刻收、标准工具跑完收、详细 Turn 结束再收、始终展开不收。',
+        en: 'Process detail fold timing is explicit: Compact immediate, Standard when tools settle, Detailed at Turn end, Always expanded never.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.22 接管 @latest。完整清单见 docs/releases/v0.6.22.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.22 now owns @latest. Full list in docs/releases/v0.6.22.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.21',
     date: '2026-10-25',
     title: {

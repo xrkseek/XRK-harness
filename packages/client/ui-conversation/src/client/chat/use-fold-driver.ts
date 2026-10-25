@@ -16,10 +16,12 @@
  *   frame from React. A run the reader can see keeps the transition instead.
  *
  * Auto-fold policy (work-details modes with `foldCompletedTurns`):
- * once the Turn closes, the run latches closed. Floor-follow and above-viewport
- * runs fold instantly (no height transition) so the sticky composer never
- * rides a mid-animation short content height. An on-screen run away from the
- * floor keeps the transition so the answer does not jump.
+ * once the owning seat reports the run settled (tools burst done, Turn
+ * closed, or session idle), the run latches closed. A later tool burst on
+ * the same seat clears that latch. Floor-follow and above-viewport runs fold
+ * instantly (no height transition) so the sticky composer never rides a
+ * mid-animation short content height. An on-screen run away from the floor
+ * keeps the transition so the answer does not jump.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -177,8 +179,15 @@ export function useFoldDriver({
   // Do not latch `'open'` when folding is disallowed: that permanently blocks
   // a later mode / preference flip (verbose → standard) from ever folding a
   // Turn that already closed.
+  //
+  // When `closed` flips back to false (a new tool burst in the same Turn),
+  // drop the auto-latch so the run expands again. A reader pin still wins.
   useEffect(() => {
-    if (!closed || !foldAllowed || latched === 'closed') return
+    if (!closed) {
+      if (latched === 'closed') setLatched(null)
+      return
+    }
+    if (!foldAllowed || latched === 'closed') return
     // Floor-follow: skip the height transition. Mid-transition short content
     // lets the sticky composer paint mid-column for a few frames (input lift).
     if (deferFold) {

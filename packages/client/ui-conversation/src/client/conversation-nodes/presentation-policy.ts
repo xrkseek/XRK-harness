@@ -6,6 +6,12 @@
  * The shape is kept here so a new mode is one table row, but the flags are
  * limited to what XRK's renderer can actually honour — a flag nothing reads
  * would be a setting that lies about what it does.
+ *
+ * Four points on the fold axis (low → high detail):
+ * - compact: group immediately and stay folded as「过程」
+ * - standard: fold when the process burst finishes (tools settle)
+ * - detailed: keep the live run open with the fold animation; fold when the Turn ends
+ * - verbose: no grouping and no auto-fold
  */
 
 import type { TranscriptViewMode } from '../../submission-settings.ts'
@@ -19,12 +25,34 @@ export type StepGrouping =
   /** No grouping at all — every process row renders inline. */
   | 'none'
 
+/**
+ * When a grouped process run auto-folds.
+ *
+ * Ordered from the quietest transcript to the most expanded.
+ */
+export type ProcessFoldWhen =
+  /** Latch folded as soon as the group exists (even while tools still run). */
+  | 'immediate'
+  /** Fold once every tool in the burst has settled (answer may still stream). */
+  | 'process'
+  /** Fold only after the Turn closes (or the session idles with tools settled). */
+  | 'turn'
+  /** Never auto-fold. */
+  | 'never'
+
 /** Presentation capabilities selected by one work-details mode. */
 export interface ChatPresentationPolicy {
   /** Preference identity for diagnostics and stable policy objects. */
   readonly mode: TranscriptViewMode
-  /** Whether a normally completed Turn folds its process run. */
+  /**
+   * Whether auto-fold is allowed at all.
+   *
+   * Derived from {@link foldWhen}; kept so older call sites can still gate on a
+   * boolean without learning the four-point axis.
+   */
   readonly foldCompletedTurns: boolean
+  /** When a grouped run latches closed. */
+  readonly foldWhen: ProcessFoldWhen
   /** Where a group may appear at all. */
   readonly stepGrouping: StepGrouping
   /**
@@ -42,6 +70,7 @@ export interface ChatPresentationPolicy {
 const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   compact: {
     mode: 'compact',
+    foldWhen: 'immediate',
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
     detailTitles: false,
@@ -49,6 +78,7 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   },
   standard: {
     mode: 'standard',
+    foldWhen: 'process',
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
     detailTitles: true,
@@ -56,13 +86,18 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   },
   detailed: {
     mode: 'detailed',
+    foldWhen: 'turn',
     foldCompletedTurns: true,
-    stepGrouping: 'history',
+    // Live Turn stays grouped so the fold animation has a run to collapse when
+    // the Turn ends — history-only grouping left detailed looking like "never
+    // folds" for the turn the reader is watching.
+    stepGrouping: 'collapsed',
     detailTitles: true,
     liveProcessDetail: true,
   },
   verbose: {
     mode: 'verbose',
+    foldWhen: 'never',
     foldCompletedTurns: false,
     stepGrouping: 'none',
     detailTitles: true,
@@ -78,4 +113,29 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
  */
 export function presentationPolicyFor(mode: TranscriptViewMode): ChatPresentationPolicy {
   return POLICIES[mode]
+}
+
+/**
+ * Whether a process group should latch closed under one fold policy.
+ * @param foldWhen - mode's fold timing.
+ * @param entry - closed flag and running summary for the group.
+ * @param idleSettled - Host idle with every tool settled (lost turn/end).
+ */
+export function processGroupSettled(
+  foldWhen: ProcessFoldWhen,
+  entry: { readonly closed: boolean; readonly summary: { readonly running: boolean; readonly tools: number } },
+  idleSettled: boolean,
+): boolean {
+  switch (foldWhen) {
+    case 'immediate':
+      return true
+    case 'process': {
+      const toolsBurstDone = !entry.summary.running && entry.summary.tools > 0
+      return entry.closed || idleSettled || toolsBurstDone
+    }
+    case 'turn':
+      return entry.closed || idleSettled
+    case 'never':
+      return false
+  }
 }

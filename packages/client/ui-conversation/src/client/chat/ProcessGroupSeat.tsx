@@ -19,13 +19,21 @@ import type { ComponentProps } from 'react'
 import { DisclosureRow, IconChecklistOutlineRegular } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { FlowEntry, ProcessGroupSummary } from '../conversation-nodes/process-groups.ts'
+import {
+  countProcessActivity,
+  formatProcessActivity,
+} from '../conversation-nodes/process-activity.ts'
+import {
+  processGroupSettled,
+  type ProcessFoldWhen,
+} from '../conversation-nodes/presentation-policy.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { useFoldDriver } from './use-fold-driver.ts'
 import css from './ChatView.module.css'
 
 type GroupEntry = Extract<FlowEntry, { kind: 'group' }>
 
-/** How many distinct tool names the collapsed header keeps before `+N`. */
+/** How many distinct tool names the open-run detail keeps before `+N`. */
 const TOOL_NAME_CAP = 3
 
 type GroupProps = {
@@ -35,12 +43,12 @@ type GroupProps = {
   /** Whether the reader was pinned to the floor when the Turn closed. */
   readonly deferFold: boolean
   /**
-   * Whether a completed Turn may fold this run at all.
+   * When this run auto-folds (work-details mode).
    *
-   * The work-details mode decides (`verbose` never folds). Tool-row default
-   * expand is a separate preference and does not veto this.
+   * `never` keeps the run flat. Tool-row default expand is a separate
+   * preference and does not veto folding.
    */
-  readonly foldCompletedTurns: boolean
+  readonly foldWhen: ProcessFoldWhen
   /**
    * Session is idle and this run has no in-flight tools. Used when Host has
    * cleared `running` but the Turn Location has not closed yet (lost turn/end).
@@ -71,17 +79,19 @@ type GroupProps = {
   readonly onFoldSettled?: (() => void) | undefined
 }
 
-/** Collapsed / live summary line for a group header. */
-function groupTitle(
+/**
+ * Open-run detail beside「过程」(live tool name, or taxonomy when settled but
+ * still expanded). Folded chrome uses {@link foldedTitle} instead — Cursor
+ * style is a single activity line, not "Process · N steps".
+ */
+function openDetail(
   summary: ProcessGroupSummary,
-  closed: boolean,
+  settled: boolean,
   detail: boolean,
   liveDetail: boolean,
   t: ChatViewSlotProps['t'],
 ): string {
-  // Open run + live detail: name in-flight work. Once every tool has settled,
-  // fall through to the settled title even if the Turn is still open.
-  if (!closed && liveDetail && (summary.running || (summary.tools === 0 && summary.reasoning > 0))) {
+  if (!settled && liveDetail && (summary.running || (summary.tools === 0 && summary.reasoning > 0))) {
     if (summary.runningTool !== undefined) return summary.runningTool
     if (summary.running) return t('row.running')
     if (summary.reasoning > 0 && summary.tools === 0) return t('think.title')
@@ -97,6 +107,14 @@ function groupTitle(
   return parts.join(' · ')
 }
 
+/** Folded header title: "Explored 6 files, 1 search". */
+function foldedTitle(summary: ProcessGroupSummary, t: ChatViewSlotProps['t']): string {
+  return formatProcessActivity(
+    countProcessActivity(summary.toolCallNames, summary.reasoning),
+    t as Parameters<typeof formatProcessActivity>[1],
+  )
+}
+
 /** First few unique tool names, with a `+N` tail when the list is longer. */
 function formatToolNames(names: readonly string[]): string | undefined {
   if (names.length === 0) return undefined
@@ -107,16 +125,14 @@ function formatToolNames(names: readonly string[]): string | undefined {
 
 /** Rows hidden behind one header inside a Turn's process run. */
 export const ProcessGroupSeat = memo(function ProcessGroupSeat({
-  entry, nodeSeat, t, deferFold, foldCompletedTurns, idleSettled = false,
+  entry, nodeSeat, t, deferFold, foldWhen, idleSettled = false,
   detailTitles, liveProcessDetail, writeScroll, onFoldSettled,
 }: GroupProps) {
-  // Fold when the Turn closed, or when Host already went idle with every tool
-  // settled (Desktop can clear `running` via host/session-status before a
-  // missing mux turn/end refreshes Location status).
-  const settled = entry.closed || idleSettled
+  // Timing comes from the work-details mode (immediate / process / turn / never).
+  const settled = processGroupSettled(foldWhen, entry, idleSettled)
   const { rootRef, folded, toggle } = useFoldDriver({
     closed: settled,
-    foldAllowed: foldCompletedTurns,
+    foldAllowed: foldWhen !== 'never',
     deferFold,
     writeScroll,
     onSettled: onFoldSettled,
@@ -129,7 +145,14 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     entry.summary.running
     || (entry.summary.tools === 0 && entry.summary.reasoning > 0)
   )
-  const title = groupTitle(entry.summary, settled, detailTitles, liveProcessDetail, t)
+  // Folded: one Cursor-style activity line as the title (no "过程 ·" prefix).
+  // Open: keep「过程」+ live/settled detail beside it.
+  const headerTitle = folded
+    ? foldedTitle(entry.summary, t)
+    : t('chat.process.title')
+  const openSummary = folded
+    ? undefined
+    : openDetail(entry.summary, settled, detailTitles, liveProcessDetail, t)
 
   return (
     <div
@@ -142,23 +165,24 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     >
       <DisclosureRow
         icon={<IconChecklistOutlineRegular />}
-        title={t('chat.process.title')}
+        title={headerTitle}
         open={!folded}
         expandable
         expandOnRowClick
         keepContentWhenOpen
         onToggle={toggle}
-        collapsedContent={
+        titleClassName={folded ? css.processGroupFoldedTitle : undefined}
+        collapsedContent={openSummary === undefined ? undefined : (
           <>
             <span className={css.processGroupSep} aria-hidden />
             <span
               className={live ? css.processGroupSummaryLive : css.processGroupSummary}
               data-process-summary=""
             >
-              {title}
+              {openSummary}
             </span>
           </>
-        }
+        )}
       />
       <div className={css.processGroupBody} data-folded={folded || undefined} data-process-group-body="">
         <div className={css.processGroupInner}>
@@ -171,7 +195,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   )
 }, (previous: GroupProps, next: GroupProps) => (
   previous.deferFold === next.deferFold
-  && previous.foldCompletedTurns === next.foldCompletedTurns
+  && previous.foldWhen === next.foldWhen
   && previous.idleSettled === next.idleSettled
   && previous.detailTitles === next.detailTitles
   && previous.liveProcessDetail === next.liveProcessDetail
@@ -192,4 +216,6 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   && previous.entry.summary.runningTool === next.entry.summary.runningTool
   && previous.entry.summary.toolNames.length === next.entry.summary.toolNames.length
   && previous.entry.summary.toolNames.every((name, index) => name === next.entry.summary.toolNames[index])
+  && previous.entry.summary.toolCallNames.length === next.entry.summary.toolCallNames.length
+  && previous.entry.summary.toolCallNames.every((name, index) => name === next.entry.summary.toolCallNames[index])
 ))

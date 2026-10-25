@@ -1295,7 +1295,7 @@ export function ChatView({
           nodeSeat={nodeSeat}
           t={t}
           deferFold={atBottom}
-          foldCompletedTurns={policy.foldCompletedTurns}
+          foldWhen={policy.foldWhen}
           idleSettled={!sessionRunning && !entry.summary.running}
           detailTitles={policy.detailTitles}
           liveProcessDetail={policy.liveProcessDetail}

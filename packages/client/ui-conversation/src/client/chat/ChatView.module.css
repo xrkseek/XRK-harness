@@ -265,6 +265,16 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Folded activity line (Cursor-style): the title *is* the summary, muted. */
+.processGroupFoldedTitle {
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 /* Open-run detail: same brand-blue shimmer as the turn-status band, so a
    folded header still reads as "in flight" when a tool is running. */
 .processGroupSummaryLive {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { presentationPolicyFor } from '../src/client/conversation-nodes/presentation-policy.ts'
+import {
+  presentationPolicyFor,
+  processGroupSettled,
+} from '../src/client/conversation-nodes/presentation-policy.ts'
 import { TRANSCRIPT_VIEW_MODES } from '../src/submission-settings.ts'
 
 describe('presentationPolicyFor', () => {
@@ -11,11 +14,18 @@ describe('presentationPolicyFor', () => {
     expect(presentationPolicyFor('verbose').foldCompletedTurns).toBe(false)
   })
 
-  it('only groups history in detailed', () => {
+  it('maps each mode onto the four-point foldWhen axis', () => {
+    expect(presentationPolicyFor('compact').foldWhen).toBe('immediate')
+    expect(presentationPolicyFor('standard').foldWhen).toBe('process')
+    expect(presentationPolicyFor('detailed').foldWhen).toBe('turn')
+    expect(presentationPolicyFor('verbose').foldWhen).toBe('never')
+  })
+
+  it('groups every mode that can fold, and leaves verbose flat', () => {
     expect(presentationPolicyFor('compact').stepGrouping).toBe('collapsed')
     expect(presentationPolicyFor('standard').stepGrouping).toBe('collapsed')
-    // The live Turn stays flat; the reader is watching those rows arrive.
-    expect(presentationPolicyFor('detailed').stepGrouping).toBe('history')
+    // Detailed stays grouped so the live Turn still has a run to animate closed.
+    expect(presentationPolicyFor('detailed').stepGrouping).toBe('collapsed')
     expect(presentationPolicyFor('verbose').stepGrouping).toBe('none')
   })
 
@@ -38,5 +48,31 @@ describe('presentationPolicyFor', () => {
       expect(presentationPolicyFor(mode)).toBe(presentationPolicyFor(mode))
       expect(presentationPolicyFor(mode).mode).toBe(mode)
     }
+  })
+})
+
+describe('processGroupSettled', () => {
+  const openRunning = { closed: false, summary: { running: true, tools: 2 } }
+  const openSettled = { closed: false, summary: { running: false, tools: 2 } }
+  const closedSettled = { closed: true, summary: { running: false, tools: 2 } }
+
+  it('latches immediately under compact', () => {
+    expect(processGroupSettled('immediate', openRunning, false)).toBe(true)
+  })
+
+  it('folds standard once the tool burst ends', () => {
+    expect(processGroupSettled('process', openRunning, false)).toBe(false)
+    expect(processGroupSettled('process', openSettled, false)).toBe(true)
+    expect(processGroupSettled('process', closedSettled, false)).toBe(true)
+  })
+
+  it('keeps detailed open until the Turn closes', () => {
+    expect(processGroupSettled('turn', openSettled, false)).toBe(false)
+    expect(processGroupSettled('turn', closedSettled, false)).toBe(true)
+    expect(processGroupSettled('turn', openSettled, true)).toBe(true)
+  })
+
+  it('never settles under verbose', () => {
+    expect(processGroupSettled('never', closedSettled, true)).toBe(false)
   })
 })

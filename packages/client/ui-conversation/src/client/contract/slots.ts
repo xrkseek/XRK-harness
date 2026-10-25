@@ -917,7 +917,8 @@ export interface ChatViewInjected {
    *
    * `toolsDefaultExpanded` is the Settings → General switch that makes every
    * tool row start open inside a process run. Process auto-fold follows the
-   * work-details mode (`transcriptView`), not this switch.
+   * work-details mode and settles when the tool burst ends (not only after
+   * turn/end); this switch does not veto that.
    */
   hooks: {
     readonly toolsDefaultExpanded: import('@xrkseek/client-runtime/client').SnapshotStore<boolean>
