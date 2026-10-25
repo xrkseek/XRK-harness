@@ -6,7 +6,7 @@
 // The 'conversation.input.dock' SlotMap declaration lives in
 // ../contract/slots.ts beside the other input-region slots.
 import type { Context } from '@xrkseek/cordis'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type { PendingSubmission, SessionId } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
@@ -23,8 +23,12 @@ import css from './QueueDock.module.css'
 export interface QueueDockInjected {
   updateQueue: (itemId: QueueItemId, action: QueueAction) => Promise<'ok' | 'steer-queued'>
   notify: (level: 'info' | 'error', text: string) => void
-  /** Resolve one durable queued image into a session-scoped browser URL. */
-  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  /** Resolve one durable queued image into a session-scoped browser URL.
+   * `peek` returns the settled URL synchronously once the cache holds it, so a
+   * re-rendered row paints instead of dropping back to its placeholder. */
+  loadImage: ((attachment: ImageAttachmentRef) => Promise<string>) & {
+    peek?: (attachment: ImageAttachmentRef) => string | undefined
+  }
 }
 
 /**
@@ -131,15 +135,17 @@ function QueueThumb({ attachment, loadImage, label }: {
   loadImage: QueueDockInjected['loadImage']
   label: string
 }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const [url, setUrl] = useState<string | null>(() => loadImage.peek?.(attachment) ?? null)
+  const loadRef = useRef(loadImage)
+  useEffect(() => { loadRef.current = loadImage }, [loadImage])
   useEffect(() => {
     let alive = true
-    loadImage(attachment).then(
+    loadRef.current(attachment).then(
       (resolved) => { if (alive) setUrl(resolved) },
       () => { /* placeholder retained */ },
     )
     return () => { alive = false }
-  }, [attachment, loadImage])
+  }, [attachment])
   return url === null
     ? <span className={css.thumb} aria-hidden />
     : <img className={css.thumb} src={url} alt={label} />
@@ -589,21 +595,27 @@ function HostQueueRow({
                   label={running ? t('queue.steer.hint') : t('queue.steer.unavailable')}
                   side="bottom"
                 >
-                  <button
-                    type="button"
-                    className={css.action}
-                    aria-label={t('queue.steer')}
-                    disabled={busy !== null || !running}
-                    onClick={() => {
-                      void applyAction(
-                        row.id,
-                        { kind: 'steer' },
-                        t('queue.steerFailed'),
-                      )
-                    }}
-                  >
-                    <IconSendOutlineRegular />
-                  </button>
+                  {/* A disabled control swallows React's synthetic mouse events,
+                      which is exactly when this bubble is the only explanation
+                      the user gets ("steer needs a running turn"). Anchor the
+                      tooltip on a wrapper so the hint survives the disable. */}
+                  <span className={css.actionWrap}>
+                    <button
+                      type="button"
+                      className={css.action}
+                      aria-label={t('queue.steer')}
+                      disabled={busy !== null || !running}
+                      onClick={() => {
+                        void applyAction(
+                          row.id,
+                          { kind: 'steer' },
+                          t('queue.steerFailed'),
+                        )
+                      }}
+                    >
+                      <IconSendOutlineRegular />
+                    </button>
+                  </span>
                 </Tooltip>
               </>
             )}
@@ -638,7 +650,10 @@ export const queueDockEntry = {
         return {
           updateQueue: (itemId, action) => conversation.updateQueue(itemId, action),
           notify: (level, text) => { conversation.input.for(actx).notify(level, text) },
-          loadImage: attachment => conversation.resolveImage(sessionId, attachment),
+          loadImage: Object.assign(
+            (attachment: ImageAttachmentRef) => conversation.resolveImage(sessionId, attachment),
+            { peek: (attachment: ImageAttachmentRef) => conversation.peekImage(sessionId, attachment) },
+          ),
         }
       },
     }, QueueDock))

@@ -17,6 +17,16 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
+ * Real focus stops inside the dialog. The selector alone over-matches: icon
+ * children (`<use href="#…">` inside a button's SVG) carry `href` but are not
+ * tab stops, and counting them would leave the last button off the wrap point
+ * — Tab would then fall through to the page behind the modal.
+ */
+function focusStops(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((node) => node.tabIndex >= 0)
+}
+
+/**
  * Best-effort browser download for a same-origin or blob image URL.
  * Cross-origin hosts that omit CORS still get an anchor with `download` set;
  * the browser may open a new tab instead of saving — that is acceptable.
@@ -75,7 +85,7 @@ export function ImageLightbox({ src, alt, labels, onClose }: {
       if (event.key !== 'Tab') return
       const root = rootRef.current
       if (root === null) return
-      const nodes = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)]
+      const nodes = focusStops(root)
       if (nodes.length === 0) return
       const first = nodes[0]!
       const last = nodes[nodes.length - 1]!

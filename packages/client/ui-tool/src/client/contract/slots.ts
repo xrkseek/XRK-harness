@@ -17,6 +17,12 @@ export interface ToolImagesOwnerProps {
   align: 'start' | 'end'
   /** Force compact tiles (collapsed tool-row thumb). */
   compact?: boolean
+  /**
+   * Long-edge cap of a lone image preview. An expanded Tool card passes the
+   * inspect size so the picture is the point; omission keeps the message
+   * bubble's 240px rule.
+   */
+  maxEdge?: number
 }
 
 /** Owner currency of the Tool file-card slot (same shape as message files). */

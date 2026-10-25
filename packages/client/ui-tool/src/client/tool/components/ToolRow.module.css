@@ -243,9 +243,11 @@
   margin: 4px 0 4px 4px;
 }
 
-/* Expanded image tools show the bitmap, not another cropped thumb. */
-.imageBody img {
-  object-fit: contain;
+/* Expanded image tools show the bitmap, not another cropped thumb: hand the
+   attachment frame the fit mode through its own variable, so this wins over
+   that package's `cover` default regardless of stylesheet order. */
+.imageBody {
+  --message-image-fit: contain;
 }
 
 /* The recovery footer for a capped search: the result text (its `Full 閳?stored

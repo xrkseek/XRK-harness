@@ -16,10 +16,10 @@
  *   frame from React. A run the reader can see keeps the transition instead.
  *
  * Auto-fold policy (work-details modes with `foldCompletedTurns`):
- * once the Turn closes, the run latches closed. A reader at the floor or with
- * the run on screen still gets the fold — that is what "标准 / 精简" promise —
- * but the height transition stays on so the answer does not jump. Only a run
- * entirely above the viewport takes the instant + scroll-compensation path.
+ * once the Turn closes, the run latches closed. Floor-follow and above-viewport
+ * runs fold instantly (no height transition) so the sticky composer never
+ * rides a mid-animation short content height. An on-screen run away from the
+ * floor keeps the transition so the answer does not jump.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -45,14 +45,13 @@ export interface FoldDriverOptions {
   /**
    * Whether a closed Turn may fold this run at all.
    *
-   * The work-details mode decides (`verbose` never folds) and the live
-   * "auto-expand tools" switch overrides it.
+   * The work-details mode decides (`verbose` never folds).
    */
   readonly foldAllowed: boolean
   /**
-   * Reserved for callers that still sample floor-follow at close time.
-   * Auto-fold no longer keeps the run open for a floor reader; the flag is
-   * kept so ChatView's prop surface stays stable.
+   * Reader was pinned to the floor when the Turn settled. Forces an instant
+   * fold (no grid-row transition) so the sticky composer cannot paint mid-
+   * column during the collapse.
    */
   readonly deferFold: boolean
   /** Writes `scrollTop` through the owner of the observed-top ledger. */
@@ -82,6 +81,7 @@ export interface FoldDriver {
 export function useFoldDriver({
   closed,
   foldAllowed,
+  deferFold,
   writeScroll,
   onSettled,
 }: FoldDriverOptions): FoldDriver {
@@ -173,17 +173,25 @@ export function useFoldDriver({
 
   // The latch is taken before the DOM changes, so `foldAbove` still measures
   // the run at its open height.
+  //
+  // Do not latch `'open'` when folding is disallowed: that permanently blocks
+  // a later mode / preference flip (verbose → standard) from ever folding a
+  // Turn that already closed.
   useEffect(() => {
-    if (!closed || latched !== null) return
-    if (!foldAllowed) {
-      setLatched('open')
+    if (!closed || !foldAllowed || latched === 'closed') return
+    // Floor-follow: skip the height transition. Mid-transition short content
+    // lets the sticky composer paint mid-column for a few frames (input lift).
+    if (deferFold) {
+      const root = rootRef.current
+      if (root !== null) root.dataset[INSTANT_ATTR] = ''
+      setLatched('closed')
       return
     }
-    // In view (including a floor-following reader): fold with the height
-    // transition. Above the viewport: instant fold + scroll compensation.
+    // In view (not at floor): fold with the height transition.
+    // Above the viewport: instant fold + scroll compensation.
     if (readableNow()) setLatched('closed')
     else foldAbove(() => setLatched('closed'))
-  }, [closed, foldAllowed, latched, foldAbove, readableNow])
+  }, [closed, foldAllowed, deferFold, latched, foldAbove, readableNow])
 
   const toggle = useCallback((): void => {
     if (folded) setPinned(false)

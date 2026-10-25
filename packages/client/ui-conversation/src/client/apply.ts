@@ -4,6 +4,7 @@ import { resolveSlotLabel, type BoundActions } from '@xrkseek/client-ui-slots'
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
 } from '@xrkseek/client-runtime/client'
+import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
@@ -566,7 +567,12 @@ export function apply(ctx: Context): void {
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadThrough: (seq) => scoped.loadThrough(seq),
-        loadImage: attachment => conversation.resolveImage(sessionId, attachment),
+        // `peek` lets a remounting tile (collapsed thumb → expanded card) paint
+        // the already-loaded bitmap instead of flashing its placeholder.
+        loadImage: Object.assign(
+          (attachment: ImageAttachmentRef) => conversation.resolveImage(sessionId, attachment),
+          { peek: (attachment: ImageAttachmentRef) => conversation.peekImage(sessionId, attachment) },
+        ),
         // Unregistered 'trajectory' id is safe: the tab ring falls back to
         // the first view, and the untouched inspect target stays inert.
         inspectCall: (callId) => {

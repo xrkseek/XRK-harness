@@ -21,6 +21,8 @@
   place-items: center;
   min-width: 44px;
   min-height: 44px;
+  /* A Tool card's larger lone-image box must never push the column wider. */
+  max-width: 100%;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
@@ -36,11 +38,23 @@
   min-height: 64px;
 }
 
+/* Expanded Tool card: a multi-image gallery still tiles, but at inspect size
+   (the lightbox keeps the original for the full-size look). */
+.frame[data-variant='tile'][data-large] {
+  width: 148px;
+  height: 148px;
+  min-width: 148px;
+  min-height: 148px;
+  border-radius: 12px;
+}
+
 .frame img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Cover inside a message bubble (a cropped peek); an expanded Tool card sets
+     `--message-image-fit: contain` so its larger box never crops the picture. */
+  object-fit: var(--message-image-fit, cover);
 }
 
 /* Pre-intake preview arm: the frame is pinned to the 240px single box and

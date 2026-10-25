@@ -9,7 +9,7 @@
 // Expand state is component-local view state; initial open follows Settings
 // `ui-conversation.toolsDefaultExpanded` (ToolDefaultExpandedContext).
 
-import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   CodeBlock, DiffBlock, DisclosureRow, InspectAction, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
@@ -28,6 +28,20 @@ import { useToolExpandState } from '../tool-default-expanded.ts'
 import css from './ToolRow.module.css'
 
 type MediaRenderSlot = PropsRenderSlots<'tool.call.images' | 'tool.call.files'>['renderSlot']
+
+/**
+ * Session image loader, structurally the attachment package's `ImageLoader`:
+ * owners may expose the settled URL synchronously so a re-mount (collapsed
+ * thumb → expanded card, or a re-render) paints instead of flashing.
+ */
+type ToolImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) & {
+  peek?: (attachment: ImageAttachmentRef) => string | undefined
+}
+
+/** Long-edge cap requested from the image gallery for an expanded Tool card:
+ * larger than a chat bubble's preview, because the card exists to show what
+ * the call actually produced (the click-through lightbox holds the original). */
+const TOOL_IMAGE_MAX_EDGE = 520
 
 export interface ToolRowProps {
   /** The render site's conversation locale seat (terminal/code body copy). */
@@ -60,7 +74,7 @@ export interface ToolRowProps {
   files?: FileCardModel | null | undefined
   /** Dispatch image/file galleries through tool-owned slots. */
   renderSlot?: MediaRenderSlot | undefined
-  loadImage?: ((attachment: ImageAttachmentRef) => Promise<string>) | undefined
+  loadImage?: ToolImageLoader | undefined
   search?: SearchCardModel | null | undefined
   web?: WebBlockProps | null | undefined
   state: ToolRowState
@@ -92,17 +106,21 @@ function CollapsedThumb({
   loadImage,
 }: {
   attachment: ImageAttachmentRef
-  loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  loadImage: ToolImageLoader
 }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const [url, setUrl] = useState<string | null>(() => loadImage.peek?.(attachment) ?? null)
+  // The chat node rebuilds `loadImage` every paint; the attachment is the only
+  // real identity, so a re-render must not reset the peek back to a placeholder.
+  const loadRef = useRef(loadImage)
+  useEffect(() => { loadRef.current = loadImage }, [loadImage])
   useEffect(() => {
     let alive = true
-    void loadImage(attachment).then(
+    void loadRef.current(attachment).then(
       (next) => { if (alive) setUrl(next) },
       () => { /* peek is best-effort */ },
     )
     return () => { alive = false }
-  }, [attachment, loadImage])
+  }, [attachment])
   if (url === null) {
     return <span className={css.thumbPlaceholder} aria-hidden data-tool-thumb="" />
   }
@@ -252,6 +270,7 @@ export function ToolRow({
                             images: entries.map((entry) => ({ attachment: entry.attachment })),
                             loadImage,
                             align: 'start',
+                            maxEdge: TOOL_IMAGE_MAX_EDGE,
                           })
                           : (
                             <div className={css.mediaFallback} role="status">

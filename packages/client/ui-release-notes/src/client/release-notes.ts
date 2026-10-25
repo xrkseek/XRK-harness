@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.21',
+    date: '2026-10-25',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '标准模式结束后过程必折；贴底即时收起，输入框不再被过渡帧抬到中部；工具 settle 后扫光即停。',
+        en: 'Standard always folds when a Turn settles; floor-follow folds instantly so the composer stays docked; shimmer stops once tools settle.',
+      },
+      {
+        zh: '队列缩略图与工具卡图片支持同步 peek，展开工具卡预览更大；禁用「转向」仍能看到提示。',
+        en: 'Queue thumbs and tool-card images support synchronous peek (larger expanded previews); disabled Steer still shows its tip.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.21 接管 @latest。完整清单见 docs/releases/v0.6.21.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.21 now owns @latest. Full list in docs/releases/v0.6.21.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.20',
     date: '2026-10-25',
     title: {

@@ -121,6 +121,24 @@ describe('MessageImage', () => {
     expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
   })
 
+  it('does not reload when the owner rebuilds its loader identity', async () => {
+    const first = vi.fn().mockResolvedValue('blob:first')
+    const view = render(<MessageImage image={{ attachment }} load={first} variant="single" labels={labels} />)
+    await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
+    const second = vi.fn().mockResolvedValue('blob:second')
+    view.rerender(<MessageImage image={{ attachment }} load={second} variant="single" labels={labels} />)
+    // The chat node rebuilds its loader every paint; that is not a load trigger.
+    expect(second).not.toHaveBeenCalled()
+    expect(view.getByAltText('history.png').getAttribute('src')).toBe('blob:first')
+  })
+
+  it('paints a cached URL on the first frame through the loader peek', () => {
+    const load = Object.assign(vi.fn(() => new Promise<string>(() => {})), { peek: () => 'blob:cached' })
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
+    expect(view.getByAltText('history.png').getAttribute('src')).toBe('blob:cached')
+    expect(view.queryByText('图片加载中…')).toBeNull()
+  })
+
   it('pins a dimension-less preview to the bounded fallback box and promotes on load', async () => {
     // The submission echo's first frame carries no intrinsic size; without a
     // fixed box the raster would render at its natural resolution. The frame
@@ -200,6 +218,40 @@ describe('ImageGallery', () => {
     expect(several.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(3)
   })
 
+  it('raises the lone preview to the expanded Tool-card box when the owner asks', () => {
+    const load = vi.fn(() => new Promise<string>(() => {}))
+    const view = render(
+      <ImageGallery images={[{ attachment }]} load={load} align="start" maxEdge={520} labels={labels} />,
+    )
+    const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
+    expect(frame.getAttribute('style')).toContain('width: 520px')
+    expect(frame.getAttribute('style')).toContain('height: 260px')
+    view.unmount()
+    // The message rule stays untouched for the same attachment.
+    const message = render(<ImageGallery images={[{ attachment }]} load={load} align="start" labels={labels} />)
+    expect(message.getByRole('button', { name: 'history.png，点击查看原图' }).getAttribute('style'))
+      .toContain('width: 240px')
+  })
+
+  it('keeps several tool images in an inspect-sized tile grid', () => {
+    const load = vi.fn(() => new Promise<string>(() => {}))
+    const view = render(
+      <ImageGallery
+        images={[{ attachment }, { attachment }]}
+        load={load}
+        align="start"
+        maxEdge={520}
+        labels={labels}
+      />,
+    )
+    expect(view.container.querySelectorAll('[data-variant="tile"][data-large]')).toHaveLength(2)
+    // Without the tool size, tiles stay the 64px history grid.
+    const history = render(
+      <ImageGallery images={[{ attachment }, { attachment }]} load={load} align="start" labels={labels} />,
+    )
+    expect(history.container.querySelectorAll('[data-variant="tile"][data-large]')).toHaveLength(0)
+  })
+
   it('renders the conversation slot entry with translated labels', async () => {
     const t = ((key: string, params?: Readonly<Record<string, unknown>>) => {
       const translated: Record<string, string> = {
@@ -246,11 +298,14 @@ describe('ImageGallery', () => {
       images: [{ attachment }],
       loadImage,
       align: 'end',
+      maxEdge: 520,
       t,
     }
     const view = render(<MessageImages {...props} />)
     await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
-    expect(view.getByRole('button', { name: 'history.png，点击查看原图' })).toBeTruthy()
+    // The tool-call owner's inspect size reaches the gallery through the slot.
+    expect(view.getByRole('button', { name: 'history.png，点击查看原图' }).getAttribute('style'))
+      .toContain('width: 520px')
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
   })
 })

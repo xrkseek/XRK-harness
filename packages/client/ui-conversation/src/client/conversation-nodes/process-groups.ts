@@ -63,10 +63,17 @@ export function flowEntries(
     readonly grouping?: 'collapsed' | 'history' | 'none'
     /** Turns at or below this one are history; needed by `history`. */
     readonly latestTurn?: number | null
+    /**
+     * Timeline turn status. Preferred over the first member's Location when
+     * present: a turn/end can refresh the timeline before every member Node
+     * carries a closed Location, and auto-fold must not wait on that race.
+     */
+    readonly turnClosed?: (turn: number) => boolean
   },
 ): FlowEntry[] {
   const grouping = options?.grouping ?? 'collapsed'
   const latestTurn = options?.latestTurn ?? null
+  const turnClosed = options?.turnClosed
   const entries: FlowEntry[] = []
   let pending: { readonly key: string; readonly node: ChatNode }[] = []
   let pendingTurn: number | undefined
@@ -117,13 +124,16 @@ export function flowEntries(
     }
     const first = pending[0]
     if (first === undefined) return
+    const closed = pendingTurn !== undefined && turnClosed !== undefined
+      ? turnClosed(pendingTurn)
+      : closedTurn(first.node)
     entries.push({
       kind: 'group',
       // The first member is a stable identity: a prepend or a new tool row at
       // the tail never changes which group already-open rows belong to.
       key: `process:${first.key}`,
       turn: pendingTurn,
-      closed: closedTurn(first.node),
+      closed,
       summary: { tools, reasoning, toolNames, runningTool, running },
       members: pending.map(member => ({ key: member.key })),
     })

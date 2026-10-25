@@ -503,17 +503,16 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
  */
 export function ChatView({
   useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
-  fileMentions, useToolsDefaultExpanded, useTranscriptView, t,
+  fileMentions, useToolsDefaultExpanded: _toolsDefaultExpanded, useTranscriptView, t,
 }: ChatViewSlotProps) {
-  // Settings → General. A reader who asked for every tool row to start open
-  // also asked not to have a completed Turn's process run folded away, so the
-  // fold decision below reads this instead of folding unconditionally.
-  const toolsDefaultExpanded = useToolsDefaultExpanded(value => value)
   // Work-details mode resolves to capability flags; renderers read the flags,
   // never the mode name (same shape DSH uses, one table row per mode).
+  // `toolsDefaultExpanded` opens ToolRow details inside a run only — it must
+  // not veto Standard/Compact auto-fold (that switch never promised that).
   const policy = presentationPolicyFor(useTranscriptView(value => value))
   const order = useSession(s => s.chat.order)
   const nodeStore = useSession(s => s.chat.nodes)
+  const sessionRunning = useSession(s => s.running)
   const turnNavigationItems = useSession(s => s.chat.navigation.items())
   const turnOutline = useProjection('turnOutline')
   const timeline = useSession(s => s.chat.timeline)
@@ -1286,6 +1285,7 @@ export function ChatView({
   for (const entry of flowEntries(bodyOrder, key => nodeStore.get(key), {
     grouping: policy.stepGrouping,
     latestTurn,
+    turnClosed: turn => timeline.turns.get(turn)?.status === 'closed',
   })) {
     if (entry.kind === 'group') {
       columnRows.push(
@@ -1295,7 +1295,8 @@ export function ChatView({
           nodeSeat={nodeSeat}
           t={t}
           deferFold={atBottom}
-          foldCompletedTurns={policy.foldCompletedTurns && !toolsDefaultExpanded}
+          foldCompletedTurns={policy.foldCompletedTurns}
+          idleSettled={!sessionRunning && !entry.summary.running}
           detailTitles={policy.detailTitles}
           liveProcessDetail={policy.liveProcessDetail}
           writeScroll={writeFoldScroll}

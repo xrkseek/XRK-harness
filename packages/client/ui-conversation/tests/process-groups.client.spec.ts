@@ -174,6 +174,17 @@ describe('node predicates', () => {
     expect(closedTurn(tool('t1', { status: 'unknown' }))).toBe(false)
   })
 
+  it('prefers the timeline turnClosed callback over a stale member Location', () => {
+    // Member Nodes still say open; timeline already saw turn/end.
+    const entries = entriesOf(
+      [tool('t1', { status: 'open' }), tool('t2', { status: 'open' })],
+      { turnClosed: () => true },
+    )
+    expect(entries[0]?.kind).toBe('group')
+    if (entries[0]?.kind !== 'group') throw new Error('expected group')
+    expect(entries[0].closed).toBe(true)
+  })
+
   it('keeps blank reasoning out of the process run', () => {
     const blank = stub('x', 'assistant-step', { blocks: [{ kind: 'reasoning', text: '   ' }] })
     expect(isProcessMember(blank)).toBe(false)

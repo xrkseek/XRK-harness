@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 import { ImageLightbox } from './ImageLightbox.tsx'
@@ -9,6 +9,9 @@ import css from './MessageImage.module.css'
 export type ImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) & {
   peek?: (attachment: ImageAttachmentRef) => string | undefined
 }
+
+/** Long-edge cap of a lone preview inside a message bubble (DeepSeek Chat rule). */
+export const MESSAGE_IMAGE_MAX_EDGE = 240
 
 /** One gallery entry: a durable admitted reference, or a submission echo's local preview. */
 export type MessageImageSpec =
@@ -42,17 +45,21 @@ export interface MessageImageLabels {
   lightbox: ImageLightboxLabels
 }
 
-/** Display box for a lone image (DeepSeek Chat rule): long edge 240px with
- * the rendered aspect ratio clamped to [0.25, 4] — the overflow is cropped by
+/** Display box for a lone image (DeepSeek Chat rule): long edge `maxEdge`
+ * (240px in a message bubble, larger inside an expanded Tool card) with the
+ * rendered aspect ratio clamped to [0.25, 4] — the overflow is cropped by
  * `object-fit: cover` — and never upscaled past the image's natural size. The
  * crop anchor keeps the top of very tall images and the left of very wide
  * ones, where the informative content usually starts. */
 function singleFit(
   dimensions: { readonly width: number; readonly height: number },
+  maxEdge: number = MESSAGE_IMAGE_MAX_EDGE,
 ): { width: number; height: number; objectPosition: string } {
   const natural = dimensions.width / dimensions.height
   const ratio = Math.min(4, Math.max(0.25, natural))
-  const box = ratio >= 1 ? { width: 240, height: 240 / ratio } : { width: 240 * ratio, height: 240 }
+  const box = ratio >= 1
+    ? { width: maxEdge, height: maxEdge / ratio }
+    : { width: maxEdge * ratio, height: maxEdge }
   const scale = Math.min(1, dimensions.width / box.width, dimensions.height / box.height)
   return {
     width: Math.max(1, Math.round(box.width * scale)),
@@ -109,13 +116,18 @@ function PreviewFallback({ src, alt, onPromote }: {
  * @param props.load - session-authorized URL loader for the durable arm.
  * @param props.variant - `single` for a message's lone image, `tile` otherwise.
  * @param props.labels - resolved strings (tooltip, loading, retry, lightbox).
+ * @param props.maxEdge - long-edge cap of the `single` box; a Tool card passes
+ * the larger tool edge so an expanded card shows a real picture.
+ * @param props.large - render a `tile` at the expanded Tool-card tile size.
  * @returns the bounded thumbnail button, or the retry control on failure.
  */
-export function MessageImage({ image, load, variant, labels }: {
+export function MessageImage({ image, load, variant, labels, maxEdge, large = false }: {
   image: MessageImageSpec
   load: ImageLoader
   variant: 'single' | 'tile'
   labels: MessageImageLabels
+  maxEdge?: number | undefined
+  large?: boolean | undefined
 }) {
   const preview = 'preview' in image ? image.preview : undefined
   const attachment = 'attachment' in image ? image.attachment : undefined
@@ -128,6 +140,12 @@ export function MessageImage({ image, load, variant, labels }: {
   const [natural, setNatural] = useState<{ readonly width: number; readonly height: number } | null>(null)
   const request = useCallback(() => { setAttempt(a => a + 1) }, [])
   const close = useCallback(() => { setOpen(false) }, [])
+  // Owners build the loader inline on every render (the chat node's props are
+  // rebuilt each paint), so the identity is not a load trigger: only the
+  // attachment and an explicit retry are. Kept in a ref so the effect still
+  // calls the current loader.
+  const loadRef = useRef(load)
+  useEffect(() => { loadRef.current = load }, [load])
   const dimensions = useMemo(() => dimensionsOf(image), [image])
   // Protocol width/height are the model-facing raster, often a downscale.
   // Once the loaded bitmap is larger, fit the preview to that bitmap (still
@@ -150,18 +168,22 @@ export function MessageImage({ image, load, variant, labels }: {
     || decoded.height > declared.height
   ) ? decoded : declared
   const fit = useMemo(
-    () => variant === 'single' && fitSource !== undefined ? singleFit(fitSource) : undefined,
-    [fitSource, variant],
+    () => variant === 'single' && fitSource !== undefined ? singleFit(fitSource, maxEdge) : undefined,
+    [fitSource, maxEdge, variant],
   )
 
   useEffect(() => {
     if (attachment === undefined) return
     let live = true
+    const loader = loadRef.current
     setError(false)
-    setLoaded(load.peek?.(attachment) ?? null)
-    void load(attachment).then((url) => { if (live) setLoaded(url) }).catch(() => { if (live) setError(true) })
+    // A new attachment owns new intrinsic size: never fit it to the previous
+    // bitmap's decoded geometry.
+    setDecoded(null)
+    setLoaded(loader.peek?.(attachment) ?? null)
+    void loader(attachment).then((url) => { if (live) setLoaded(url) }).catch(() => { if (live) setError(true) })
     return () => { live = false }
-  }, [attachment, load, attempt])
+  }, [attachment, attempt])
 
   const src = preview?.url ?? loaded
   const label = ('label' in image ? image.label : undefined)
@@ -175,7 +197,7 @@ export function MessageImage({ image, load, variant, labels }: {
   const frameStyle = fit !== undefined
     ? { width: fit.width, height: fit.height }
     : previewUnknown
-      ? { width: 240, height: 240 }
+      ? { width: maxEdge ?? MESSAGE_IMAGE_MAX_EDGE, height: maxEdge ?? MESSAGE_IMAGE_MAX_EDGE }
       : undefined
   const promote = useCallback((width: number, height: number) => {
     setNatural(current => (current?.width === width && current?.height === height ? current : { width, height }))
@@ -187,6 +209,7 @@ export function MessageImage({ image, load, variant, labels }: {
         type="button"
         className={css.frame}
         data-variant={variant}
+        {...(variant === 'tile' && large ? { 'data-large': '' } : {})}
         style={frameStyle}
         title={labels.open}
         aria-label={labels.openNamed(label)}
@@ -220,16 +243,20 @@ export function MessageImage({ image, load, variant, labels }: {
 }
 
 /** Wrapping image group shared by user and assistant history: a lone image
- * renders large unless its owner requests compact tiles; several always tile. */
-export function ImageGallery({ images, load, align, compact = false, labels }: {
+ * renders large unless its owner requests compact tiles; several always tile.
+ * `maxEdge` raises the lone-image box (and the tile grid) for an expanded Tool
+ * card, where the picture is the point rather than a chat attachment echo. */
+export function ImageGallery({ images, load, align, compact = false, maxEdge, labels }: {
   images: readonly MessageImageSpec[]
   load: ImageLoader
   align: 'start' | 'end'
   compact?: boolean
+  maxEdge?: number | undefined
   labels: MessageImageLabels
 }) {
   if (images.length === 0) return null
   const variant = compact || images.length > 1 ? 'tile' : 'single'
+  const large = maxEdge !== undefined && maxEdge > MESSAGE_IMAGE_MAX_EDGE
   return (
     <div className={css.gallery} data-align={align}>
       {images.map((image, index) => (
@@ -238,6 +265,8 @@ export function ImageGallery({ images, load, align, compact = false, labels }: {
           image={image}
           load={load}
           variant={variant}
+          maxEdge={maxEdge}
+          large={large}
           labels={labels}
         />
       ))}

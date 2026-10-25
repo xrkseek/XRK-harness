@@ -103,6 +103,11 @@ export interface MessageImagesOwnerProps {
   align: 'start' | 'end'
   /** Force every image into the compact message-attachment tile size. */
   compact?: boolean
+  /**
+   * Long-edge cap of a lone image preview. Tool cards raise it so an expanded
+   * card shows a real picture; omission keeps the message bubble's 240px rule.
+   */
+  maxEdge?: number
 }
 
 /** Slot-backed renderer used by chat nodes without importing an attachment implementation. */
@@ -911,9 +916,8 @@ export interface ChatViewInjected {
    * Live Chat display preferences.
    *
    * `toolsDefaultExpanded` is the Settings → General switch that makes every
-   * tool row start open. The same reader asked for the detail, so a completed
-   * Turn's process run must not fold it away — the run follows this switch
-   * rather than folding unconditionally.
+   * tool row start open inside a process run. Process auto-fold follows the
+   * work-details mode (`transcriptView`), not this switch.
    */
   hooks: {
     readonly toolsDefaultExpanded: import('@xrkseek/client-runtime/client').SnapshotStore<boolean>

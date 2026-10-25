@@ -8,6 +8,7 @@ import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import { resolveWorkspacePath } from '@xrkseek/client-runtime/client'
 import { classifyTool, resultText, toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
+import type { ToolRowProps } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { PresentRow } from '../src/client/tool/toolviews/present-row.tsx'
 import { zh } from '@xrkseek/client-ui-conversation/src/client/locales.ts'
@@ -515,6 +516,37 @@ describe('ToolRow media cards', () => {
     expect(view.getByRole('status').textContent).toContain('gen.png')
     expect(view.queryByText('OUT')).toBeNull()
     expect(view.queryByText('IN')).toBeNull()
+  })
+
+  it('asks the image gallery for the expanded card size', () => {
+    const loadImage = vi.fn(async () => 'blob:expanded')
+    const renderSlot = vi.fn(() => <span data-testid="gallery" />)
+    const view = render(
+      <ToolRow
+        t={t}
+        variant="others"
+        toolName="image_generate"
+        icon={<span />}
+        title="Image generation"
+        summary="a prompt"
+        body={null}
+        image={{
+          label: '1 image',
+          images: [{ attachment: imageAttachment }],
+          text: '',
+        }}
+        loadImage={loadImage}
+        renderSlot={renderSlot as unknown as ToolRowProps['renderSlot']}
+        state="ok"
+      />,
+    )
+    fireEvent.click(view.getByRole('button'))
+    expect(view.queryByTestId('gallery')).not.toBeNull()
+    // The card asks for a real picture, not the message bubble's 240px preview.
+    expect(renderSlot).toHaveBeenCalledWith(
+      'tool.call.images',
+      expect.objectContaining({ maxEdge: 520, align: 'start' }),
+    )
   })
 
   it('renders collapsed thumb when loadImage resolves', async () => {

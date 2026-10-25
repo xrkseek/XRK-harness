@@ -62,6 +62,7 @@ function renderSeat(
   overrides: Partial<{
     deferFold: boolean
     foldCompletedTurns: boolean
+    idleSettled: boolean
     detailTitles: boolean
     liveProcessDetail: boolean
     writeScroll: (scrollport: HTMLElement, top: number) => void
@@ -71,6 +72,7 @@ function renderSeat(
   const props = {
     deferFold: false,
     foldCompletedTurns: true,
+    idleSettled: false,
     detailTitles: true,
     liveProcessDetail: true,
     ...overrides,
@@ -129,6 +131,34 @@ describe('ProcessGroupSeat', () => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('folds at the floor without scroll-compensation writes (instant, no mid-lift)', async () => {
+    // Floor-follow skips the height transition; compensation is only for
+    // above-viewport folds. A compensation write here would fight pin-to-bottom.
+    const writes: Array<[HTMLElement, number]> = []
+    const view = render(
+      <div data-conversation-scroll>
+        <ProcessGroupSeat
+          entry={group(true)}
+          nodeSeat={seat}
+          t={t}
+          deferFold
+          foldCompletedTurns
+          detailTitles
+          liveProcessDetail
+          writeScroll={(el, top) => writes.push([el, top])}
+        />
+      </div>,
+    )
+    const scrollport = view.container.querySelector<HTMLElement>('[data-conversation-scroll]')!
+    const root = view.container.querySelector<HTMLElement>('[data-process-group]')!
+    scrollport.getBoundingClientRect = () => rectOf(0, 600)
+    root.getBoundingClientRect = () => rectOf(100, 400)
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(writes).toHaveLength(0)
   })
 
   it('never conditionally renders the body, so folded rows keep their anchors', async () => {
@@ -239,6 +269,40 @@ describe('ProcessGroupSeat', () => {
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
   })
 
+  it('folds an open Turn once the session is idle and every tool has settled', async () => {
+    // Host cleared `running` (session-status) but mux never delivered turn/end.
+    const view = renderSeat(group(false, { running: false }), {
+      foldCompletedTurns: true,
+      idleSettled: true,
+    })
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(view.container.querySelector('[data-process-running]')).toBeNull()
+  })
+
+  it('folds after a mode flip that starts allowing fold on an already-closed Turn', async () => {
+    const entry = group(true)
+    const view = renderSeat(entry, { foldCompletedTurns: false })
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    view.rerender(
+      <ProcessGroupSeat
+        entry={entry}
+        nodeSeat={seat}
+        t={t}
+        deferFold={false}
+        foldCompletedTurns
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    // Must not have latched `'open'` while fold was disallowed — Standard after
+    // Verbose still auto-folds a Turn that already closed.
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+  })
+
   it('counts steps instead of naming them in quiet modes', async () => {
     const view = renderSeat(group(true), { detailTitles: false })
     await vi.waitFor(() => {
@@ -265,7 +329,7 @@ describe('ProcessGroupSeat', () => {
     expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
   })
 
-  it('shimmers an open run even before any tool is in flight', () => {
+  it('shimmers an open run that is still only thinking', () => {
     const view = renderSeat(group(false, {
       tools: 0,
       reasoning: 1,
@@ -276,6 +340,19 @@ describe('ProcessGroupSeat', () => {
     expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
     expect(summary(view.container)?.textContent).toBe('think.title')
     expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+  })
+
+  it('stops the live shimmer once every tool has settled on an still-open Turn', () => {
+    const view = renderSeat(group(false, {
+      tools: 2,
+      reasoning: 1,
+      toolNames: ['bash', 'Read'],
+      running: false,
+      runningTool: undefined,
+    }))
+    expect(view.container.querySelector('[data-process-running]')).toBeNull()
+    expect(summary(view.container)?.className).not.toMatch(/processGroupSummaryLive/)
+    expect(summary(view.container)?.textContent).toContain('bash')
   })
 
   it('toggles from a click on the whole disclosure row', () => {

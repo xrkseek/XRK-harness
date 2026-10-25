@@ -436,8 +436,15 @@ describe('QueueDock', () => {
     })
 
     act(() => { source.push({ ...running, running: false }) })
-    expect(rendered.getByLabelText('立即插队')).toHaveProperty('disabled', true)
-    expect(rendered.getByLabelText('立即插队').getAttribute('title')).toBe('仅运行中可插队')
+    const steer = rendered.getByLabelText('立即插队')
+    expect(steer).toHaveProperty('disabled', true)
+    // The reason rides the shared Tooltip bubble now, not a native title
+    // attribute: hover the anchor and read the bubble the user actually sees.
+    // React wires `onMouseEnter` through the `mouseover` event, so drive that.
+    fireEvent.mouseOver(steer)
+    await waitFor(() => {
+      expect(rendered.getByRole('tooltip').textContent).toBe('仅运行中可插队')
+    })
   })
 
   it('steers a focused queue row on Enter', async () => {

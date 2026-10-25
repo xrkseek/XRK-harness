@@ -324,8 +324,8 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     withdrawSteer: vi.fn(),
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
-    // Settings → General: process runs follow the work-details mode and the
-    // auto-expand-tools switch; the standard mode is the shipped default.
+    // Settings → General: process runs follow the work-details mode; the
+    // standard mode is the shipped default. Tools-default-expanded is orthogonal.
     useToolsDefaultExpanded: ((selector: (value: boolean) => unknown) => selector(false)) as never,
     useTranscriptView: ((selector: (value: 'standard') => unknown) => selector('standard')) as never,
     // Mirrors the real lookup chain (conversation namespace, then common).

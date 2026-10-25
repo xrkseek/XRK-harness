@@ -305,3 +305,10 @@
   cursor: default;
   opacity: 0.4;
 }
+
+/* Tooltip anchor wrapper: `display: contents` keeps the button in the action
+   row's layout while giving the bubble a node that still receives hover when
+   the button itself is disabled. */
+.actionWrap {
+  display: contents;
+}

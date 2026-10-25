@@ -400,8 +400,13 @@
   flex: 1 0 auto;
   /* Fill the scrollport minus the sticky composer so folding a process run
      (content shorter than one screen) does not lift the input mid-column.
-     --dsh-composer-height is published by the seat ResizeObserver. */
-  min-height: calc(100% - var(--dsh-composer-height, 152px));
+     Prefer the px viewport the seat ResizeObserver publishes — bare `100%`
+     occasionally fails to resolve against the scrollport and the sticky
+     composer then sits mid-column until the next layout. */
+  min-height: calc(
+    var(--dsh-conversation-viewport-height, 100%)
+    - var(--dsh-composer-height, 152px)
+  );
 }
 
 .root[data-phase='active'] .composerSeat {

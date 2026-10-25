@@ -178,6 +178,39 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('peeks a settled historical image URL and forgets it once released', async () => {
+    const b = await bench(attachmentId => Promise.resolve({
+      ok: true as const,
+      value: {
+        attachment: {
+          attachmentId, mediaType: 'image/png' as const, bytes: 3, width: 1, height: 1,
+        },
+        data: Uint8Array.of(1, 2, 3),
+      },
+    }))
+    const urls = stubObjectUrls(() => 'blob:hist-1')
+    try {
+      const sessionId = b.runtime.sessions.behavior('s1').sessionId
+      const attachment = {
+        attachmentId: AttachmentId('image-2'), mediaType: 'image/png' as const, bytes: 3, width: 1, height: 1,
+      }
+      expect(b.root.peekImage(sessionId, attachment)).toBeUndefined()
+      const first = b.root.resolveImage(sessionId, attachment)
+      // Still loading: the synchronous peek must not invent a URL.
+      expect(b.root.peekImage(sessionId, attachment)).toBeUndefined()
+      await expect(first).resolves.toBe('blob:hist-1')
+      expect(b.root.peekImage(sessionId, attachment)).toBe('blob:hist-1')
+      // Cache hit: a remounting tile gets the same object URL, no second blob.
+      await expect(b.root.resolveImage(sessionId, attachment)).resolves.toBe('blob:hist-1')
+      expect(urls.created).toHaveBeenCalledTimes(1)
+      b.root.releaseSessionImages(sessionId)
+      expect(b.root.peekImage(sessionId, attachment)).toBeUndefined()
+    } finally {
+      urls.restore()
+    }
+    await b.runtime.dispose()
+  })
+
   it('invalidates pending historical image loads when the rendered session is released', async () => {
     const read = Promise.withResolvers<Awaited<ReturnType<SessionFace['readAttachment']>>>()
     const b = await bench(() => read.promise)

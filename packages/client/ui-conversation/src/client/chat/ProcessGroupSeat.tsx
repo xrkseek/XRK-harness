@@ -37,11 +37,15 @@ type GroupProps = {
   /**
    * Whether a completed Turn may fold this run at all.
    *
-   * The work-details mode decides (`verbose` never folds), and the live
-   * "auto-expand tools" switch overrides it: a reader who asked for every tool
-   * row to start open did not ask for the run around them to be hidden.
+   * The work-details mode decides (`verbose` never folds). Tool-row default
+   * expand is a separate preference and does not veto this.
    */
   readonly foldCompletedTurns: boolean
+  /**
+   * Session is idle and this run has no in-flight tools. Used when Host has
+   * cleared `running` but the Turn Location has not closed yet (lost turn/end).
+   */
+  readonly idleSettled?: boolean | undefined
   /** Whether the header names what ran, or only counts steps. */
   readonly detailTitles: boolean
   /**
@@ -75,13 +79,12 @@ function groupTitle(
   liveDetail: boolean,
   t: ChatViewSlotProps['t'],
 ): string {
-  // Open run + live detail (DSH `liveProcessDetail`): name the in-flight work.
-  if (!closed && liveDetail) {
+  // Open run + live detail: name in-flight work. Once every tool has settled,
+  // fall through to the settled title even if the Turn is still open.
+  if (!closed && liveDetail && (summary.running || (summary.tools === 0 && summary.reasoning > 0))) {
     if (summary.runningTool !== undefined) return summary.runningTool
     if (summary.running) return t('row.running')
     if (summary.reasoning > 0 && summary.tools === 0) return t('think.title')
-    const names = formatToolNames(summary.toolNames)
-    if (names !== undefined) return names
     return t('row.running')
   }
   if (!detail) return t('chat.process.steps', { count: summary.tools + summary.reasoning })
@@ -104,20 +107,29 @@ function formatToolNames(names: readonly string[]): string | undefined {
 
 /** Rows hidden behind one header inside a Turn's process run. */
 export const ProcessGroupSeat = memo(function ProcessGroupSeat({
-  entry, nodeSeat, t, deferFold, foldCompletedTurns, detailTitles, liveProcessDetail,
-  writeScroll, onFoldSettled,
+  entry, nodeSeat, t, deferFold, foldCompletedTurns, idleSettled = false,
+  detailTitles, liveProcessDetail, writeScroll, onFoldSettled,
 }: GroupProps) {
+  // Fold when the Turn closed, or when Host already went idle with every tool
+  // settled (Desktop can clear `running` via host/session-status before a
+  // missing mux turn/end refreshes Location status).
+  const settled = entry.closed || idleSettled
   const { rootRef, folded, toggle } = useFoldDriver({
-    closed: entry.closed,
+    closed: settled,
     foldAllowed: foldCompletedTurns,
     deferFold,
     writeScroll,
     onSettled: onFoldSettled,
   })
-  // DSH shimmers the whole process label while the Turn is still open — not
-  // only while a tool root is in flight — so a folded header still reads live.
-  const live = !entry.closed
-  const title = groupTitle(entry.summary, entry.closed, detailTitles, liveProcessDetail, t)
+  // Shimmer only while work is still in flight inside the run. An open Turn
+  // with every tool settled (final answer still streaming outside the group)
+  // must not keep the blue sweep going — that used to last until Stop forced
+  // turn/end.
+  const live = !settled && (
+    entry.summary.running
+    || (entry.summary.tools === 0 && entry.summary.reasoning > 0)
+  )
+  const title = groupTitle(entry.summary, settled, detailTitles, liveProcessDetail, t)
 
   return (
     <div
@@ -160,6 +172,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
 }, (previous: GroupProps, next: GroupProps) => (
   previous.deferFold === next.deferFold
   && previous.foldCompletedTurns === next.foldCompletedTurns
+  && previous.idleSettled === next.idleSettled
   && previous.detailTitles === next.detailTitles
   && previous.liveProcessDetail === next.liveProcessDetail
   && previous.t === next.t

@@ -76,6 +76,13 @@ export interface IConversation {
    * @returns browser URL valid until its rendered session is released.
    */
   resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string>
+  /**
+   * Synchronously read a historical image URL that has already resolved.
+   * @param sessionId - owning session authorization scope.
+   * @param attachment - durable image reference.
+   * @returns the cached browser URL, or `undefined` while it is still loading.
+   */
+  peekImage(sessionId: SessionId, attachment: ImageAttachmentRef): string | undefined
 }
 
 /**
@@ -108,6 +115,9 @@ interface ImageUrlEntry {
   readonly sessionId: SessionId
   readonly generation: number
   readonly pending: Promise<string>
+  /** Back-filled once `pending` settles, so a remounting tile can paint on the
+   * first frame instead of resetting to its loading placeholder. */
+  url?: string
 }
 
 /** Unsupported browser-declared image type, localized by the UI boundary. */
@@ -441,12 +451,18 @@ export class ConversationController extends Service implements IConversation {
         if ((this.imageGenerations.get(sessionId) ?? 0) !== generation) {
           throw new Error('historical image scope was released before loading completed')
         }
-        if (typeof URL.createObjectURL !== 'function') {
-          return `data:${result.value.attachment.mediaType};base64,${bytesToBase64(result.value.data)}`
-        }
-        const bytes = Uint8Array.from(result.value.data)
-        const url = URL.createObjectURL(new Blob([bytes.buffer], { type: result.value.attachment.mediaType }))
-        this.createdImageUrls.add(url)
+        const url = typeof URL.createObjectURL !== 'function'
+          ? `data:${result.value.attachment.mediaType};base64,${bytesToBase64(result.value.data)}`
+          : URL.createObjectURL(new Blob(
+            [Uint8Array.from(result.value.data).buffer],
+            { type: result.value.attachment.mediaType },
+          ))
+        if (url.startsWith('blob:')) this.createdImageUrls.add(url)
+        // Publish the settled URL for the synchronous peek: an expanding tool
+        // card asks again the moment it mounts, and a cache hit must not flash
+        // the loading placeholder.
+        const entry = this.imageUrls.get(key)
+        if (entry !== undefined && entry.pending === pending) entry.url = url
         return url
       })
       .catch((error: unknown) => {
@@ -456,6 +472,17 @@ export class ConversationController extends Service implements IConversation {
     this.imageUrls.set(key, { sessionId, generation, pending })
     this.trimImageUrlCache(sessionId)
     return pending
+  }
+
+  /**
+   * Synchronously read a historical image URL that has already resolved.
+   * @param sessionId - owning session authorization scope.
+   * @param attachment - durable image reference.
+   * @returns the cached browser URL, or `undefined` while it is still loading.
+   */
+  peekImage(sessionId: SessionId, attachment: ImageAttachmentRef): string | undefined {
+    if (this.disposed) return undefined
+    return this.imageUrls.get(`${sessionId}:${attachment.attachmentId}`)?.url
   }
 
   /**
