@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.6.23',
+    date: '2026-10-26',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '子代理不再报「agent scope disposed during materialize」：同一会话两路并发解析只建一次，设置 / MCP 变更也不再杀掉正在启动的会话。',
+        en: 'Subagents stop failing with “agent scope disposed during materialize”: two concurrent resolves of one session share a single build, and settings / MCP changes no longer kill a session that is still starting.',
+      },
+      {
+        zh: '工作树租约自愈：检出被删 / 分支没了就标为「已丢失」，快进受阻时给出 ahead / behind，并可「重放后合回」。',
+        en: 'Worktree leases heal: a vanished checkout or branch is marked lost, a blocked fast-forward reports ahead / behind, and a replay-then-merge action folds it back.',
+      },
+      {
+        zh: '模型列表刷新按上游增删行、补齐空字段，不覆盖你手改的显示名；社区插件大资源改走 gzip。',
+        en: 'Model-list refresh follows the provider listing without overwriting a hand-edited display name; large community plugin assets are gzipped.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.6.23 接管 @latest。完整清单见 docs/releases/v0.6.23.md。',
+        en: 'npm @xrkseek/harness-cli@0.6.23 now owns @latest. Full list in docs/releases/v0.6.23.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.22',
     date: '2026-10-25',
     title: {
