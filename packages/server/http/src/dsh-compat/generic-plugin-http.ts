@@ -151,7 +151,7 @@ function tryServePluginFile(
     const st = statSync(abs);
     if (!st.isFile()) return false;
     const ext = path.extname(abs).toLowerCase();
-    // Office preview ships ~22 MB uncompressed; without gzip the classic
+    // Office preview ships ~22 MB uncompressed; without gzip the classic
     // `<script src>` often fires `error` before parse. Mirror apps/web static.
     const gzip = acceptGzip(req) && GZIP_EXTS.has(ext);
     const headers: Record<string, string> = {
