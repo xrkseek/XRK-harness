@@ -8,10 +8,13 @@
  * would be a setting that lies about what it does.
  *
  * Four points on the fold axis (low → high detail):
- * - compact: group immediately and stay folded as「过程」
- * - standard: fold when the process burst finishes (tools settle)
- * - detailed: keep the live run open with the fold animation; fold when the Turn ends
+ * - compact: open while tools run (「过程」+ live shimmer); fold when the burst settles
+ * - standard: same fold timing; open chrome keeps tool-name taxonomy
+ * - detailed: keep the live run open; fold when the Turn ends
  * - verbose: no grouping and no auto-fold
+ *
+ * `immediate` remains on the axis for seats that latch while tools still run
+ * (tests / future modes); no product mode selects it today.
  */
 
 import type { TranscriptViewMode } from '../../submission-settings.ts'
@@ -70,11 +73,14 @@ export interface ChatPresentationPolicy {
 const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   compact: {
     mode: 'compact',
-    foldWhen: 'immediate',
+    // Same timing as standard: open while tools run so「过程」+ live tool
+    // stay visible; fold to the activity line once the burst settles.
+    foldWhen: 'process',
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
+    // Quiet settled open chrome (step counts); folded title is always activity.
     detailTitles: false,
-    liveProcessDetail: false,
+    liveProcessDetail: true,
   },
   standard: {
     mode: 'standard',

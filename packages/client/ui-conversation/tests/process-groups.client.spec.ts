@@ -57,8 +57,9 @@ describe('flowEntries', () => {
     expect(group.summary).toEqual({
       tools: 3,
       reasoning: 0,
-      toolNames: [],
-      toolCallNames: [],
+      // Stubs have no projected name — placeholder keeps folded chrome off「0 步」.
+      toolNames: ['tool'],
+      toolCallNames: ['tool', 'tool', 'tool'],
       runningTool: undefined,
       running: false,
     })
@@ -67,12 +68,17 @@ describe('flowEntries', () => {
     expect(group.key).toBe('process:t1')
   })
 
-  it('keeps a lone process row inline instead of hiding it behind a header', () => {
-    const entries = entriesOf([tool('t1'), replyStep('a1')])
-    expect(entries).toEqual([
-      { kind: 'node', key: 't1' },
-      { kind: 'node', key: 'a1' },
-    ])
+  it('groups a lone process row so a later tool appends without remounting', () => {
+    // Identity stays `process:t1` from the first tool — waiting for a second
+    // row used to remount t1 under a new group and flash open→fold at the floor.
+    const one = entriesOf([tool('t1'), replyStep('a1')])
+    expect(one).toHaveLength(2)
+    expect(one[0]).toMatchObject({ kind: 'group', key: 'process:t1' })
+    expect(one[1]).toEqual({ kind: 'node', key: 'a1' })
+    const two = entriesOf([tool('t1'), tool('t2'), replyStep('a1')])
+    expect(two[0]).toMatchObject({ kind: 'group', key: 'process:t1' })
+    if (two[0]?.kind !== 'group') throw new Error('expected group')
+    expect(two[0].members.map(member => member.key)).toEqual(['t1', 't2'])
   })
 
   it('counts a reasoning-only step as process and a reply step as the answer', () => {
@@ -84,8 +90,8 @@ describe('flowEntries', () => {
     expect(group.summary).toEqual({
       tools: 1,
       reasoning: 1,
-      toolNames: [],
-      toolCallNames: [],
+      toolNames: ['tool'],
+      toolCallNames: ['tool'],
       runningTool: undefined,
       running: false,
     })

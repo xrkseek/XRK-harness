@@ -422,6 +422,32 @@ describe('ConversationRoot resident composer', () => {
     expect(b.slotCalls).toContain('conversation.session.header.utilities')
   })
 
+  it('active phase: publishes band CSS vars so viewArea min-height holds the composer floor', () => {
+    // Folding a short process run must not lift the sticky seat mid-column:
+    // viewArea min-height = viewport − composer, driven by these live vars.
+    const b = mount(conversationSnapshot())
+    const host = b.view.container.querySelector('[data-conversation-scroll]') as HTMLElement
+    const viewArea = b.view.container.querySelector('[class*="viewArea"]') as HTMLElement | null
+    expect(host.style.getPropertyValue('--dsh-composer-height')).toMatch(/^\d+(\.\d+)?px$/)
+    expect(host.style.getPropertyValue('--dsh-conversation-viewport-height')).toMatch(/^\d+(\.\d+)?px$/)
+    expect(viewArea).not.toBeNull()
+  })
+
+  it('active viewArea CSS holds the composer floor without flex-end packing', async () => {
+    // flex-end put a free band above the transcript; min-height alone keeps
+    // the sticky seat on the scrollport floor after a process fold.
+    const { readFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const css = await readFile(
+      join(process.cwd(), 'packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css'),
+      'utf8',
+    )
+    expect(css).toMatch(/\.root\[data-phase='active'\] \.viewArea\s*\{[^}]*min-height:/s)
+    expect(css).not.toMatch(
+      /\.root\[data-phase='active'\] \.viewArea\s*\{[^}]*justify-content:\s*flex-end/s,
+    )
+  })
+
   it('sticky composer seat wraps the whole overlay chain, not only the fallback stack', () => {
     const b = mount(conversationSnapshot(), undefined, undefined, { overlayTakeover: true })
     const seat = b.view.container.querySelector('[data-composer-seat]')

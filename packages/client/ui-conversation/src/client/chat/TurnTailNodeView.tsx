@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useLayoutEffect, useState, type ReactNode } from 'react'
 import type { PropsRenderSlots } from '@xrkseek/client-ui-slots'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '../contract/slots.ts'
 import { stopLabelKey, turnAbortCause, turnEndedAsStop } from '../conversation-nodes/common.ts'
@@ -50,9 +50,11 @@ function userPromptText(content: readonly unknown[]): string {
  * `hasLaterChatNode` / `branchUnavailable` so mid-history forks stay gated.
  *
  * Assembler only materializes visible tails after turn/end. Host `running` on
- * the tip Turn still suppresses the footer: wait_agent / subagent drain can
- * leave a closed tip while Overview says 回合进行中. Prior closed turns keep
- * their footers. Stop with no text reply still owes 「已停止」+用时 once idle.
+ * a still-latest closed tip suppresses the footer once (wait_agent / subagent
+ * drain: Overview says 回合进行中). After the footer has painted while idle,
+ * keep it — otherwise the next send flips `running` before `turn/start` and
+ * the tip looks like wait_agent for one frame (文件变动 / 赞 / 复制 flash off).
+ * Stop with no text reply still owes 「已停止」+用时 once idle.
  */
 export const TurnTailNodeView = memo(function TurnTailNodeView({
   node, openFile, forkAt, restoreAt, regenerateAt, renderSlot, renderSlotChain, t, useSession,
@@ -61,8 +63,10 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const hasLaterChatNode = useSession(snapshot =>
     snapshot.chat.locations.getTurn(data.turn).at(-1) !== node.key)
   // Host busy latch is outside the event timeline — only the tip footer waits.
-  const suppressTipWhileRunning = useSession(snapshot =>
+  const tipBusyWhileLatest = useSession(snapshot =>
     snapshot.running && latestTurnNumber(snapshot.chat.timeline) === data.turn)
+  // Latch after an idle paint so the next-send running race cannot unmount us.
+  const [keepFooter, setKeepFooter] = useState(false)
   // Regenerate re-runs the turn opener only — skip `steering` 插话 (step inject).
   const regenerateSource = useSession((snapshot) => {
     const keys = snapshot.chat.locations.getTurn(data.turn)
@@ -78,6 +82,10 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
+  useLayoutEffect(() => {
+    if (turn?.status === 'closed' && !tipBusyWhileLatest) setKeepFooter(true)
+  }, [turn?.status, tipBusyWhileLatest])
+  const suppressTipWhileRunning = tipBusyWhileLatest && !keepFooter
   if (turn === undefined || turn.status !== 'closed' || suppressTipWhileRunning) return null
   const closing = data.closing
   const owner: TurnTailOwnerProps = { turn, seq: closing?.finalNode.seq ?? data.seq, openFile }

@@ -114,11 +114,16 @@ export type ProcessActivityTranslate = (
 
 /**
  * Build the folded header line (Cursor-style verb + counts).
+ * @param counts - activity buckets from tool names + reasoning.
+ * @param t - locale seat.
+ * @param fallbackSteps - when buckets are empty but the group still has
+ *   members (nameless roots), prefer this over claiming「0 步」.
  * @returns a single line; falls back to step count when nothing classified.
  */
 export function formatProcessActivity(
   counts: ProcessActivityCounts,
   t: ProcessActivityTranslate,
+  fallbackSteps?: number,
 ): string {
   const parts: string[] = []
   if (counts.files > 0) parts.push(t('chat.process.summary.explored', { count: counts.files }))
@@ -129,9 +134,10 @@ export function formatProcessActivity(
   if (counts.other > 0) parts.push(t('chat.process.summary.tools', { count: counts.other }))
   if (counts.reasoning > 0) parts.push(t('chat.process.summary.thoughts', { count: counts.reasoning }))
   if (parts.length === 0) {
+    const fromBuckets = counts.files + counts.searches + counts.commands + counts.edits
+      + counts.web + counts.other + counts.reasoning
     return t('chat.process.steps', {
-      count: counts.files + counts.searches + counts.commands + counts.edits
-        + counts.web + counts.other + counts.reasoning,
+      count: fromBuckets > 0 ? fromBuckets : Math.max(0, fallbackSteps ?? 0),
     })
   }
   return parts.join(t('chat.process.summary.join'))

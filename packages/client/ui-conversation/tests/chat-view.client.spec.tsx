@@ -1418,6 +1418,24 @@ describe('ChatView', () => {
     expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
   })
 
+  it('keeps a settled tip footer when running flips before the next turn/start', () => {
+    // Next send sets running=true before Host emits turn/start; latestTurn is
+    // still the closed tip. Without an idle latch that race hid 文件变动 /
+    // 赞 / 复制 for one frame. wait_agent (never painted idle) still suppresses.
+    const chat = chatSnapshotFixture({
+      nodes: [user(1, 'hi'), assistant(2, 'done')],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 8_000 }]]),
+      turnEnds: new Map([[1, 3]]),
+    })
+    const h = makeHarness({ running: false, chat })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
+    const copiesIdle = view.getAllByRole('button', { name: '复制' }).length
+    act(() => { h.set({ running: true, chat }) })
+    expect(view.container.querySelectorAll('[data-turn-tail]')).toHaveLength(1)
+    expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(copiesIdle)
+  })
+
   it('turn/end error shows turn-error chrome without 已停止', () => {
     const h = makeHarness({
       chat: chatSnapshotFixture({

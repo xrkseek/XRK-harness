@@ -7,11 +7,10 @@
  * DSH also splits a per-member action surface (`ChatGroupSeat`); an XRK group
  * only folds, so one header over the rows is the whole surface.
  *
- * Members stay mounted while folded. `display: none` rows would drop out of the
- * `data-chat-anchor-key` order the scroll restore and the reading probe read,
- * so a folded group would look like it deleted rows instead of hiding them —
- * which is why the header comes from `DisclosureRow` (chrome only) and the body
- * is rendered here instead of as that component's conditional children.
+ * Members stay mounted while folded. The body uses `hidden="until-found"`
+ * (DSH searchable-hidden) so layout drops in one frame — grid-row collapse
+ * painted mid-heights that lifted the sticky composer. Header chrome stays
+ * outside the hidden body; paging probes skip `[hidden]` subtrees like DSH.
  */
 
 import { memo } from 'react'
@@ -40,8 +39,6 @@ type GroupProps = {
   readonly entry: GroupEntry
   readonly nodeSeat: Omit<ComponentProps<typeof ChatNodeSeat>, 'nodeKey'>
   readonly t: ChatViewSlotProps['t']
-  /** Whether the reader was pinned to the floor when the Turn closed. */
-  readonly deferFold: boolean
   /**
    * When this run auto-folds (work-details mode).
    *
@@ -86,12 +83,12 @@ type GroupProps = {
  */
 function openDetail(
   summary: ProcessGroupSummary,
-  settled: boolean,
   detail: boolean,
   liveDetail: boolean,
   t: ChatViewSlotProps['t'],
 ): string {
-  if (!settled && liveDetail && (summary.running || (summary.tools === 0 && summary.reasoning > 0))) {
+  // Live naming follows in-flight tools, not the fold latch.
+  if (liveDetail && (summary.running || (summary.tools === 0 && summary.reasoning > 0))) {
     if (summary.runningTool !== undefined) return summary.runningTool
     if (summary.running) return t('row.running')
     if (summary.reasoning > 0 && summary.tools === 0) return t('think.title')
@@ -112,6 +109,7 @@ function foldedTitle(summary: ProcessGroupSummary, t: ChatViewSlotProps['t']): s
   return formatProcessActivity(
     countProcessActivity(summary.toolCallNames, summary.reasoning),
     t as Parameters<typeof formatProcessActivity>[1],
+    summary.tools + summary.reasoning,
   )
 }
 
@@ -125,7 +123,7 @@ function formatToolNames(names: readonly string[]): string | undefined {
 
 /** Rows hidden behind one header inside a Turn's process run. */
 export const ProcessGroupSeat = memo(function ProcessGroupSeat({
-  entry, nodeSeat, t, deferFold, foldWhen, idleSettled = false,
+  entry, nodeSeat, t, foldWhen, idleSettled = false,
   detailTitles, liveProcessDetail, writeScroll, onFoldSettled,
 }: GroupProps) {
   // Timing comes from the work-details mode (immediate / process / turn / never).
@@ -133,26 +131,30 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   const { rootRef, folded, toggle } = useFoldDriver({
     closed: settled,
     foldAllowed: foldWhen !== 'never',
-    deferFold,
     writeScroll,
     onSettled: onFoldSettled,
   })
-  // Shimmer only while work is still in flight inside the run. An open Turn
-  // with every tool settled (final answer still streaming outside the group)
-  // must not keep the blue sweep going — that used to last until Stop forced
-  // turn/end.
-  const live = !settled && (
-    entry.summary.running
+  // Shimmer tracks tools still in flight — independent of fold latch (manual
+  // fold or `foldWhen: immediate` can hide the body while a tool still runs).
+  const live = entry.summary.running
     || (entry.summary.tools === 0 && entry.summary.reasoning > 0)
-  )
-  // Folded: one Cursor-style activity line as the title (no "过程 ·" prefix).
-  // Open: keep「过程」+ live/settled detail beside it.
-  const headerTitle = folded
+  // Folded + live: keep「过程」as the title and put the in-flight tool in the
+  // summary seat (same shape as open) — a title of bare `bash` read as a
+  // tool-row expand, not a process fold.
+  // Folded + settled: activity line ("Explored N files…").
+  // Open:「过程」+ live/settled detail beside it.
+  const showLiveChrome = live && (folded || liveProcessDetail)
+  const liveLabel = entry.summary.runningTool
+    ?? (entry.summary.running ? t('row.running') : t('think.title'))
+  const headerTitle = folded && !showLiveChrome
     ? foldedTitle(entry.summary, t)
     : t('chat.process.title')
   const openSummary = folded
-    ? undefined
-    : openDetail(entry.summary, settled, detailTitles, liveProcessDetail, t)
+    ? (showLiveChrome ? liveLabel : undefined)
+    : openDetail(entry.summary, detailTitles, liveProcessDetail, t)
+  const titleClassName = folded && !showLiveChrome
+    ? css.processGroupFoldedTitle
+    : undefined
 
   return (
     <div
@@ -171,12 +173,12 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
         expandOnRowClick
         keepContentWhenOpen
         onToggle={toggle}
-        titleClassName={folded ? css.processGroupFoldedTitle : undefined}
+        titleClassName={titleClassName}
         collapsedContent={openSummary === undefined ? undefined : (
           <>
             <span className={css.processGroupSep} aria-hidden />
             <span
-              className={live ? css.processGroupSummaryLive : css.processGroupSummary}
+              className={showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary}
               data-process-summary=""
             >
               {openSummary}
@@ -184,7 +186,19 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
           </>
         )}
       />
-      <div className={css.processGroupBody} data-folded={folded || undefined} data-process-group-body="">
+      <div
+        className={css.processGroupBody}
+        data-folded={folded || undefined}
+        data-process-group-body=""
+        // DSH searchable-hidden: sync on the ref callback so expand never
+        // paints a frame still carrying until-found (React 18 has no string
+        // `hidden` prop).
+        ref={(el) => {
+          if (el === null) return
+          if (folded) el.setAttribute('hidden', 'until-found')
+          else el.removeAttribute('hidden')
+        }}
+      >
         <div className={css.processGroupInner}>
           {entry.members.map(member => (
             <ChatNodeSeat key={member.key} nodeKey={member.key} {...nodeSeat} />
@@ -194,8 +208,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     </div>
   )
 }, (previous: GroupProps, next: GroupProps) => (
-  previous.deferFold === next.deferFold
-  && previous.foldWhen === next.foldWhen
+  previous.foldWhen === next.foldWhen
   && previous.idleSettled === next.idleSettled
   && previous.detailTitles === next.detailTitles
   && previous.liveProcessDetail === next.liveProcessDetail

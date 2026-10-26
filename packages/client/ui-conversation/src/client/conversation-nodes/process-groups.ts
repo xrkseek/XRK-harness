@@ -21,12 +21,13 @@ export interface ProcessGroupSummary {
   readonly reasoning: number
   /**
    * Tool names in first-seen order (duplicates collapsed).
-   * Empty when the projection has not named the roots yet.
+   * Nameless roots use the placeholder `"tool"` so folded chrome never
+   * claims zero steps while members exist.
    */
   readonly toolNames: readonly string[]
   /**
    * One entry per tool call (duplicates kept) for Cursor-style activity
-   * counts ("Explored 6 files, 1 search").
+   * counts ("Explored 6 files, 1 search"). Nameless roots use `"tool"`.
    */
   readonly toolCallNames: readonly string[]
   /** Name of the tool still running, when exactly one root is in flight. */
@@ -97,9 +98,9 @@ export function flowEntries(
 
   const flush = (): void => {
     if (pending.length === 0) return
-    // One process row reads better inline: a header over a single row hides
-    // nothing and adds a second title.
-    if (pending.length < 2 || !groups(pendingTurn)) {
+    // Group from the first process row. Waiting for a second tool remounted the
+    // first row under a new `process:` key and flashed open→fold at the floor.
+    if (!groups(pendingTurn)) {
       for (const member of pending) entries.push({ kind: 'node', key: member.key })
       pending = []
       pendingTurn = undefined
@@ -115,13 +116,13 @@ export function flowEntries(
     for (const member of pending) {
       if (member.node.kind === 'tool-call') {
         tools += 1
-        const name = toolNameOf(member.node)
-        if (name !== undefined) {
-          toolCallNames.push(name)
-          if (!seen.has(name)) {
-            seen.add(name)
-            toolNames.push(name)
-          }
+        // Nameless but visible roots still need a label: otherwise the folded
+        // activity line falls through to「0 步」while the group clearly ran.
+        const name = toolNameOf(member.node) ?? 'tool'
+        toolCallNames.push(name)
+        if (!seen.has(name)) {
+          seen.add(name)
+          toolNames.push(name)
         }
         if (toolRunning(member.node)) {
           running = true

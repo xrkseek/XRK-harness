@@ -43,4 +43,10 @@ describe('formatProcessActivity', () => {
       'chat.process.steps:{"count":0}',
     )
   })
+
+  it('uses fallbackSteps when buckets are empty but the group still ran', () => {
+    expect(formatProcessActivity(countProcessActivity([], 0), t, 3)).toBe(
+      'chat.process.steps:{"count":3}',
+    )
+  })
 })

@@ -4,27 +4,21 @@
  * DSH keeps this apart from the group chrome (`InputFoldDriver` owns measure →
  * compensate → settle; the seat only renders). XRK needs the same split for the
  * same reason: the fold has to measure the run *before* the DOM changes, then
- * give the lost height back to `scrollTop` *after* the commit, and that pair of
- * measurements has nothing to do with what a header looks like.
+ * give the lost height back to `scrollTop` *after* the commit when the run
+ * sits above the reader.
  *
- * What it deliberately does NOT do, unlike DSH's driver:
- * - no spacer/padding phase — XRK's flow uses flex `gap` and a grid-row
- *   transition, so there is no margin to grow; the fold is one height change.
- * - no frame-by-frame animation of `scrollTop` — a run above the reading line
- *   folds without the transition and restores the offset in the same commit
- *   (`data-instant`), because a CSS-animated height cannot be compensated per
- *   frame from React. A run the reader can see keeps the transition instead.
+ * Collapse uses `hidden="until-found"` on the body (DSH searchable-hidden) so
+ * height drops in one layout — never grid-template-rows mid-heights that lift
+ * the sticky composer. Floor fill is ConversationRoot's viewArea min-height.
+ * In-view floor folds apply with no turn-spacer; only above-reader folds
+ * compensate scrollTop.
  *
- * Auto-fold policy (work-details modes with `foldCompletedTurns`):
- * once the owning seat reports the run settled (tools burst done, Turn
- * closed, or session idle), the run latches closed. A later tool burst on
- * the same seat clears that latch. Floor-follow and above-viewport runs fold
- * instantly (no height transition) so the sticky composer never rides a
- * mid-animation short content height. An on-screen run away from the floor
- * keeps the transition so the answer does not jump.
+ * Auto-fold policy: once the seat reports settled, the run latches closed.
+ * A later tool burst clears that latch. Mount already-settled starts folded
+ * so the first paint never flashes open height.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 /** Scrollport owning an element; the same attribute ChatView's scroll code reads. */
 export function scrollerOf(from: HTMLElement): HTMLElement | null {
@@ -38,24 +32,15 @@ interface PendingCopy {
   readonly scrollport: HTMLElement
 }
 
-/** Which `data-` attribute carries the one-frame "skip the transition" flag. */
-const INSTANT_ATTR = 'instant'
-
 export interface FoldDriverOptions {
-  /** Whether the owning Turn has closed; before that the run stays flat. */
+  /** Whether the owning Turn / process burst has settled; before that the run stays flat. */
   readonly closed: boolean
   /**
-   * Whether a closed Turn may fold this run at all.
+   * Whether a settled run may fold at all.
    *
    * The work-details mode decides (`verbose` never folds).
    */
   readonly foldAllowed: boolean
-  /**
-   * Reader was pinned to the floor when the Turn settled. Forces an instant
-   * fold (no grid-row transition) so the sticky composer cannot paint mid-
-   * column during the collapse.
-   */
-  readonly deferFold: boolean
   /** Writes `scrollTop` through the owner of the observed-top ledger. */
   readonly writeScroll?: ((scrollport: HTMLElement, top: number) => void) | undefined
   /** Called after a fold or unfold has landed in the DOM. */
@@ -72,22 +57,24 @@ export interface FoldDriver {
 }
 
 /**
- * Own one run's fold state, its latch, and its scroll compensation.
+ * Own one run's fold state, its latch, and above-reader scroll compensation.
  *
- * The latch is taken once when the Turn closes: policy-allowed runs fold.
+ * The latch is taken once when the run settles: policy-allowed runs fold.
  * A later scroll never re-decides. The reader's pin (manual toggle) overrides
  * the latch for the life of the seat.
- * @param options - Turn state, policy, and the owner's ledger hooks.
+ * @param options - settle state, policy, and the owner's ledger hooks.
  * @returns the ref to bind, the current fold state, and the toggle.
  */
 export function useFoldDriver({
   closed,
   foldAllowed,
-  deferFold,
   writeScroll,
   onSettled,
 }: FoldDriverOptions): FoldDriver {
-  const [latched, setLatched] = useState<'open' | 'closed' | null>(null)
+  // Mount already settled → first paint is folded (no open-height flash).
+  const [latched, setLatched] = useState<'open' | 'closed' | null>(
+    () => (closed && foldAllowed ? 'closed' : null),
+  )
   const [pinned, setPinned] = useState<boolean | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const pendingCopyRef = useRef<PendingCopy | null>(null)
@@ -97,28 +84,8 @@ export function useFoldDriver({
   const folded = pinned ?? (latched === 'closed' && foldAllowed)
 
   /**
-   * Whether the run is inside the reader's viewport right now.
-   *
-   * Used only to choose animated vs instant fold — never to keep a closed
-   * Turn open. Keeping it open on sight made "标准" look like it never folds.
-   */
-  const readableNow = useCallback((): boolean => {
-    const root = rootRef.current
-    if (root === null) return false
-    const scrollport = scrollerOf(root)
-    if (scrollport === null) return false
-    const rect = root.getBoundingClientRect()
-    const view = scrollport.getBoundingClientRect()
-    return rect.bottom > view.top && rect.top < view.bottom
-  }, [])
-
-  /**
-   * Apply a fold that lands above the reader, skipping that one transition.
-   *
-   * A run that shrinks entirely above the reading line drags everything below
-   * it up: the reader's content moves even though he never touched it. For that
-   * case only, restore the scroll offset in the same commit, so what he reads
-   * stays exactly where it was.
+   * Apply a fold: above-reader → scroll compensation; in-view → plain apply
+   * (floor fill is viewArea min-height, not a turn spacer).
    */
   const foldAbove = useCallback((apply: () => void): void => {
     const root = rootRef.current
@@ -128,12 +95,10 @@ export function useFoldDriver({
       return
     }
     const rect = root.getBoundingClientRect()
-    if (rect.bottom >= scrollport.getBoundingClientRect().top) {
-      apply()
-      return
+    const portTop = scrollport.getBoundingClientRect().top
+    if (rect.bottom < portTop) {
+      pendingCopyRef.current = { bottom: rect.bottom, scrollport }
     }
-    pendingCopyRef.current = { bottom: rect.bottom, scrollport }
-    root.dataset[INSTANT_ATTR] = ''
     apply()
   }, [])
 
@@ -141,9 +106,6 @@ export function useFoldDriver({
   // the reader would have seen.
   useLayoutEffect(() => {
     const root = rootRef.current
-    // Always drop the transition override, even when no compensation was
-    // staged: a stale one would silently disable every later fold animation.
-    if (root !== null) delete root.dataset[INSTANT_ATTR]
     // Mount is not a fold: sampling then would overwrite the position a remount
     // just restored.
     const changed = previousFoldedRef.current !== null && previousFoldedRef.current !== folded
@@ -153,14 +115,8 @@ export function useFoldDriver({
       pendingCopyRef.current = null
       if (root !== null) {
         const after = root.getBoundingClientRect()
-        // The run's lower edge moves up by exactly the height it gave back, so
-        // the offset that keeps the reader's content still is that same shift.
-        // The base is the CURRENT offset, not the one read before the commit:
-        // one Turn can close several runs at once, and each fold has to stack
-        // on the compensation the previous one already applied. Clamping
-        // matters for a reader already at the floor — the browser may have
-        // clamped `scrollTop` when the content got shorter, and the target then
-        // equals the new floor, so following survives the fold.
+        // The run's lower edge moves up by exactly the height it gave back.
+        // Base is the CURRENT offset so stacked folds in one Turn compound.
         const floorMax = Math.max(0, pending.scrollport.scrollHeight - pending.scrollport.clientHeight)
         const top = Math.min(
           Math.max(0, pending.scrollport.scrollTop + (after.bottom - pending.bottom)),
@@ -173,34 +129,22 @@ export function useFoldDriver({
     if (changed) onSettled?.()
   }, [folded, writeScroll, onSettled])
 
-  // The latch is taken before the DOM changes, so `foldAbove` still measures
-  // the run at its open height.
+  // Latch before paint. A post-paint effect would flash the open height first.
   //
   // Do not latch `'open'` when folding is disallowed: that permanently blocks
-  // a later mode / preference flip (verbose → standard) from ever folding a
-  // Turn that already closed.
+  // a later mode flip (verbose → standard) from ever folding a settled run.
   //
-  // When `closed` flips back to false (a new tool burst in the same Turn),
-  // drop the auto-latch so the run expands again. A reader pin still wins.
-  useEffect(() => {
+  // When `closed` flips back to false (a new tool burst), drop the auto-latch.
+  // Always go through foldAbove: it no-ops compensation when the run is in
+  // view, and avoids a second getBoundingClientRect before the measure.
+  useLayoutEffect(() => {
     if (!closed) {
       if (latched === 'closed') setLatched(null)
       return
     }
     if (!foldAllowed || latched === 'closed') return
-    // Floor-follow: skip the height transition. Mid-transition short content
-    // lets the sticky composer paint mid-column for a few frames (input lift).
-    if (deferFold) {
-      const root = rootRef.current
-      if (root !== null) root.dataset[INSTANT_ATTR] = ''
-      setLatched('closed')
-      return
-    }
-    // In view (not at floor): fold with the height transition.
-    // Above the viewport: instant fold + scroll compensation.
-    if (readableNow()) setLatched('closed')
-    else foldAbove(() => setLatched('closed'))
-  }, [closed, foldAllowed, deferFold, latched, foldAbove, readableNow])
+    foldAbove(() => setLatched('closed'))
+  }, [closed, foldAllowed, latched, foldAbove])
 
   const toggle = useCallback((): void => {
     if (folded) setPinned(false)

@@ -402,7 +402,10 @@
      (content shorter than one screen) does not lift the input mid-column.
      Prefer the px viewport the seat ResizeObserver publishes — bare `100%`
      occasionally fails to resolve against the scrollport and the sticky
-     composer then sits mid-column until the next layout. */
+     composer then sits mid-column until the next layout.
+     Do NOT flex-end-pack: that put a free band above the transcript. Do NOT
+     add a DSH turn-spacer for process-settle folds — that pad has no next
+     message to reclaim it and parked a blank under the dock. */
   min-height: calc(
     var(--dsh-conversation-viewport-height, 100%)
     - var(--dsh-composer-height, 152px)

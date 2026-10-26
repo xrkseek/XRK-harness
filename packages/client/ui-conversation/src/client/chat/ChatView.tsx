@@ -165,7 +165,10 @@ function pagingAnchor(
   // `.flowItem:empty { display: none }` rule: an empty keyed row still sits in
   // the DOM with a zero rect, and naming it as the anchor would restore the
   // reader to a row nothing paints.
-  const rows = list.querySelectorAll<HTMLElement>('[data-chat-anchor-key]:not(:empty)')
+  // Skip folded process bodies (`hidden="until-found"`) like DSH's probe.
+  const rows = list.querySelectorAll<HTMLElement>(
+    '[data-chat-anchor-key]:not(:empty):not([hidden]):not([hidden] *)',
+  )
   let low = 0
   let high = rows.length
   while (low < high) {
@@ -231,7 +234,9 @@ function scrollPosition(
  * window; the two used to share one probe, which made paging pay for the
  * viewport semantics it never needed. */
 function documentOrderAnchor(list: HTMLElement, scrollport: HTMLElement): PagingAnchor | null {
-  const row = list.querySelector<HTMLElement>('[data-chat-anchor-key]:not(:empty)')
+  const row = list.querySelector<HTMLElement>(
+    '[data-chat-anchor-key]:not(:empty):not([hidden]):not([hidden] *)',
+  )
   const key = row?.dataset.chatAnchorKey
   if (row === null || key === undefined) return null
   return { key, top: flowTop(row, scrollport) }
@@ -1095,7 +1100,7 @@ export function ChatView({
     const nextHeight = el.scrollHeight
     const growth = nextHeight - prevHeight
     lastScrollHeightRef.current = nextHeight
-    const floor = Math.max(0, nextHeight - el.clientHeight)
+    const floor = Math.max(0, el.scrollHeight - el.clientHeight)
     const distance = floor - el.scrollTop
     if (!shouldFollowContentGrowth({
       atBottom: atBottomRef.current,
@@ -1112,8 +1117,10 @@ export function ChatView({
     chatScroll.save(null)
   }
   // Streaming, tool disclosures, and other flow changes resize the column;
-  // the sticky composer (jobs/todo/queue docks) resizes outside it. This
-  // observer owns ChatView's dynamic-height follow decisions.
+  // sticky composer docks (jobs/todo/queue/better-sidebar) resize the seat.
+  // Growth near the floor re-pins via shouldFollowContentGrowth. Process-group
+  // collapse is CSS-instant and does not animate mid-heights that lift the
+  // seat — this observer still re-pins on dock growth.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current
@@ -1294,7 +1301,6 @@ export function ChatView({
           entry={entry}
           nodeSeat={nodeSeat}
           t={t}
-          deferFold={atBottom}
           foldWhen={policy.foldWhen}
           idleSettled={!sessionRunning && !entry.summary.running}
           detailTitles={policy.detailTitles}

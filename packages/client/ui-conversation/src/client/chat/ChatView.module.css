@@ -265,8 +265,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Folded activity line (Cursor-style): the title *is* the summary, muted. */
-.processGroupFoldedTitle {
+/* Folded activity line (Cursor-style): the title *is* the summary, muted.
+   Beat DisclosureRow `.title { flex: none }` so long lines ellipsis. */
+:global([data-process-group]) .processGroupFoldedTitle {
   color: var(--dsw-alias-label-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -275,9 +276,16 @@
   flex: 1 1 auto;
 }
 
-/* Open-run detail: same brand-blue shimmer as the turn-status band, so a
-   folded header still reads as "in flight" when a tool is running. */
-.processGroupSummaryLive {
+/* Live text sweep — open summary *and* folded title while a tool is in flight. */
+.processGroupSummaryLive,
+:global([data-process-group]) .processGroupTitleLive {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  font-size: 14px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: linear-gradient(
     90deg,
     var(--dsw-static-deepseek-500) 0%,
@@ -296,7 +304,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .processGroupSummaryLive {
+  .processGroupSummaryLive,
+  :global([data-process-group]) .processGroupTitleLive {
     animation: none;
     background: none;
     color: var(--dsw-alias-label-secondary);
@@ -304,35 +313,23 @@
   }
 }
 
+/* Folded body uses `hidden="until-found"` (DSH searchable-hidden) — layout
+   drops in one frame. Do NOT animate height with grid-template-rows: mid
+   heights lift the sticky composer even when transition is later cleared.
+   Author `display: flex` must not sit on the same rule as the host: it
+   outranks the UA `[hidden]` / until-found hide (same trap as `.turnStatus`). */
 .processGroupBody {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows 180ms ease;
+  min-width: 0;
 }
 
-.processGroupBody[data-folded] {
-  grid-template-rows: 0fr;
-}
-
-/* A fold that lands above the reader is applied without the transition: the
-   seat restores the scroll offset in the same commit, so an animated height
-   would fight the compensation and leave the reader's content drifting. */
-[data-instant] .processGroupBody {
-  transition: none;
-}
-
-/* Same rule for readers who asked the OS for less motion: the fold still
-   happens, it just lands at once instead of sliding. */
-@media (prefers-reduced-motion: reduce) {
-  .processGroupBody {
-    transition: none;
-  }
+.processGroupBody:not([hidden]) {
+  display: flex;
+  flex-direction: column;
 }
 
 .processGroupInner {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 0;
-  overflow: hidden;
+  min-width: 0;
 }

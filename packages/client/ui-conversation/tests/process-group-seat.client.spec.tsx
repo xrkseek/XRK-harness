@@ -62,7 +62,6 @@ function rectOf(top: number, bottom: number): DOMRect {
 function renderSeat(
   entry: FlowEntry & { kind: 'group' },
   overrides: Partial<{
-    deferFold: boolean
     foldWhen: ProcessFoldWhen
     idleSettled: boolean
     detailTitles: boolean
@@ -72,8 +71,7 @@ function renderSeat(
   }> = {},
 ) {
   const props = {
-    deferFold: false,
-    foldWhen: 'process',
+    foldWhen: 'process' as ProcessFoldWhen,
     idleSettled: false,
     detailTitles: true,
     liveProcessDetail: true,
@@ -93,7 +91,6 @@ function stageFold(
         entry={entry}
         nodeSeat={seat}
         t={t}
-        deferFold={false}
         foldWhen="process"
         detailTitles
         liveProcessDetail
@@ -137,7 +134,6 @@ describe('ProcessGroupSeat', () => {
         entry={group(false, { running: true, runningTool: 'bash', toolNames: ['bash', 'Read'] })}
         nodeSeat={seat}
         t={t}
-        deferFold={false}
         foldWhen="process"
         detailTitles
         liveProcessDetail
@@ -161,27 +157,23 @@ describe('ProcessGroupSeat', () => {
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
   })
 
-  it('folds a closed Turn when the reader was away from the floor', async () => {
+  it('folds a closed Turn when the reader was away from the floor', () => {
+    // Already settled on mount → first paint is folded (no open flash).
     const view = renderSeat(group(true))
-    await vi.waitFor(() => {
-      expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
-    })
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
   })
 
-  it('folds a closing Turn even when the reader is at the floor', async () => {
-    const view = renderSeat(group(true), { deferFold: true })
+  it('folds a closing Turn even when the reader is at the floor', () => {
+    const view = renderSeat(group(true))
     // Standard mode promises auto-fold on completion; floor-follow must not
-    // leave the run permanently open.
-    await vi.waitFor(() => {
-      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
-    })
+    // leave the run permanently open — and must not flash open first.
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('folds at the floor without scroll-compensation writes (instant, no mid-lift)', async () => {
-    // Floor-follow skips the height transition; compensation is only for
-    // above-viewport folds. A compensation write here would fight pin-to-bottom.
+  it('mounts a settled run folded without compensation writes', () => {
+    // Mount-already-folded skips the open flash; no above-viewport compensation.
     const writes: Array<[HTMLElement, number]> = []
     const view = render(
       <div data-conversation-scroll>
@@ -189,7 +181,6 @@ describe('ProcessGroupSeat', () => {
           entry={group(true)}
           nodeSeat={seat}
           t={t}
-          deferFold
           foldWhen="process"
           detailTitles
           liveProcessDetail
@@ -197,14 +188,102 @@ describe('ProcessGroupSeat', () => {
         />
       </div>,
     )
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    expect(writes).toHaveLength(0)
+  })
+
+  it('collapses an in-view settled run without scroll compensation writes', async () => {
+    // Body takes `hidden="until-found"` (DSH). Floor fill is viewArea
+    // min-height — no turn spacer and no scrollTop write for in-view folds.
+    const writes: Array<[HTMLElement, number]> = []
+    const view = render(
+      <div data-conversation-scroll>
+        <ProcessGroupSeat
+          entry={group(false, { running: true, runningTool: 'bash', toolCallNames: ['bash'] })}
+          nodeSeat={seat}
+          t={t}
+          foldWhen="process"
+          detailTitles
+          liveProcessDetail
+          writeScroll={(el, top) => writes.push([el, top])}
+        />
+      </div>,
+    )
+    const root = view.container.querySelector<HTMLElement>('[data-process-group]')!
+    const scrollport = view.container.querySelector<HTMLElement>('[data-conversation-scroll]')!
+    scrollport.getBoundingClientRect = () => rectOf(0, 600)
+    root.getBoundingClientRect = () => rectOf(120, 220)
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    view.rerender(
+      <div data-conversation-scroll>
+        <ProcessGroupSeat
+          entry={group(false, { running: false, toolCallNames: ['bash'] })}
+          nodeSeat={seat}
+          t={t}
+          foldWhen="process"
+          detailTitles
+          liveProcessDetail
+          writeScroll={(el, top) => writes.push([el, top])}
+        />
+      </div>,
+    )
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+      expect(body(view.container)?.getAttribute('hidden')).toBe('until-found')
+    })
+    expect(writes).toHaveLength(0)
+  })
+
+  it('auto-folds above the reader and compensates the lost height', async () => {
+    // Same path as a manual fold: measure before latch, restore after commit.
+    // Keep the scrollport + seat DOM stable across the settle flip so rootRef
+    // and the mocked rects stay the nodes the driver measures.
+    const writes: Array<[HTMLElement, number]> = []
+    const writeScroll = (el: HTMLElement, top: number): void => { writes.push([el, top]) }
+    const seatProps = {
+      nodeSeat: seat,
+      t,
+      foldWhen: 'process' as const,
+      detailTitles: true,
+      liveProcessDetail: true,
+      writeScroll,
+    }
+    const view = render(
+      <div data-conversation-scroll>
+        <ProcessGroupSeat
+          entry={group(false, { running: true, runningTool: 'bash', toolCallNames: ['bash'] })}
+          {...seatProps}
+        />
+      </div>,
+    )
     const scrollport = view.container.querySelector<HTMLElement>('[data-conversation-scroll]')!
     const root = view.container.querySelector<HTMLElement>('[data-process-group]')!
+    Object.defineProperty(scrollport, 'scrollHeight', { value: 1200, configurable: true })
+    Object.defineProperty(scrollport, 'clientHeight', { value: 600, configurable: true })
+    scrollport.scrollTop = 400
     scrollport.getBoundingClientRect = () => rectOf(0, 600)
-    root.getBoundingClientRect = () => rectOf(100, 400)
+    let reads = 0
+    root.getBoundingClientRect = () => {
+      reads += 1
+      // First sample (pre-latch) entirely above the scrollport; post-commit
+      // lower edge climbed by 80 — rows below would jump without compensation.
+      const bottom = reads === 1 ? -100 : -180
+      return rectOf(bottom - 100, bottom)
+    }
+    view.rerender(
+      <div data-conversation-scroll>
+        <ProcessGroupSeat
+          entry={group(false, { running: false, toolCallNames: ['bash'] })}
+          {...seatProps}
+        />
+      </div>,
+    )
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
-    expect(writes).toHaveLength(0)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]?.[0]).toBe(scrollport)
+    expect(writes[0]?.[1]).toBe(320)
   })
 
   it('never conditionally renders the body, so folded rows keep their anchors', async () => {
@@ -218,14 +297,17 @@ describe('ProcessGroupSeat', () => {
   })
 
   it('pins the reader choice over the latch', async () => {
-    const view = renderSeat(group(true), { deferFold: true })
+    const view = renderSeat(group(true))
     await vi.waitFor(() => {
       expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
+      expect(body(view.container)?.getAttribute('hidden')).toBe('until-found')
     })
     fireEvent.click(toggle(view.container) as HTMLElement)
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(body(view.container)?.hasAttribute('hidden')).toBe(false)
     fireEvent.click(toggle(view.container) as HTMLElement)
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(body(view.container)?.getAttribute('hidden')).toBe('until-found')
   })
 
   it('gives the height a fold above the reader would eat back to the offset', () => {
@@ -251,7 +333,7 @@ describe('ProcessGroupSeat', () => {
     expect(writes[0]?.[1]).toBe(320)
   })
 
-  it('keeps the transition when the reader can see the run folding', () => {
+  it('does not compensate scroll when the reader can see the run folding', () => {
     const writes: Array<[HTMLElement, number]> = []
     const { view, root } = stageFold(
       group(false, { running: true, runningTool: 'bash' }),
@@ -259,10 +341,8 @@ describe('ProcessGroupSeat', () => {
     )
     root.getBoundingClientRect = () => rectOf(120, 220)
     fireEvent.click(toggle(view.container) as HTMLElement)
-    // A run in view is the thing the reader is watching; restoring the offset
-    // there would fight the animation instead of protecting the reading line.
+    // In-view collapse is CSS-instant; compensating here would jump the floor.
     expect(writes).toHaveLength(0)
-    expect(root.hasAttribute('data-instant')).toBe(false)
   })
 
   it('re-samples the reading anchor once a fold has landed', () => {
@@ -285,7 +365,6 @@ describe('ProcessGroupSeat', () => {
           entry={group(false, { running: true, runningTool: 'bash' })}
           nodeSeat={seat}
           t={t}
-          deferFold={false}
           foldWhen="process"
           detailTitles
           liveProcessDetail
@@ -302,7 +381,6 @@ describe('ProcessGroupSeat', () => {
           entry={group(true)}
           nodeSeat={seat}
           t={t}
-          deferFold={false}
           foldWhen="process"
           detailTitles
           liveProcessDetail
@@ -344,7 +422,6 @@ describe('ProcessGroupSeat', () => {
         entry={entry}
         nodeSeat={seat}
         t={t}
-        deferFold={false}
         foldWhen="process"
         detailTitles
         liveProcessDetail
@@ -394,6 +471,61 @@ describe('ProcessGroupSeat', () => {
     expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
     expect(summary(view.container)?.textContent).toBe('bash')
     expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+  })
+
+  it('keeps「过程」+ live tool shimmer on a folded immediate run', () => {
+    // foldWhen=immediate (axis point): chrome must still name the in-flight tool
+    // with the sweep — live is not gated on `!settled` / quiet settled titles.
+    // Title stays「过程」so a folded live run never reads as a bare tool row.
+    const view = renderSeat(
+      group(false, {
+        running: true,
+        runningTool: 'bash',
+        toolNames: ['bash'],
+        toolCallNames: ['bash'],
+      }),
+      { foldWhen: 'immediate', liveProcessDetail: false, detailTitles: false },
+    )
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    expect(body(view.container)?.getAttribute('hidden')).toBe('until-found')
+    expect(view.container.querySelector('[data-process-running]')).not.toBeNull()
+    expect(view.container.textContent).toContain('chat.process.title')
+    expect(summary(view.container)?.textContent).toBe('bash')
+    expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+  })
+
+  it('swaps the folded live tool for the activity line once the burst settles', async () => {
+    const view = renderSeat(
+      group(false, {
+        running: true,
+        runningTool: 'bash',
+        toolNames: ['bash'],
+        toolCallNames: ['bash'],
+      }),
+      { foldWhen: 'immediate', liveProcessDetail: false, detailTitles: false },
+    )
+    expect(summary(view.container)?.className).toMatch(/processGroupSummaryLive/)
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(false, {
+          running: false,
+          toolNames: ['bash'],
+          toolCallNames: ['bash'],
+        })}
+        nodeSeat={seat}
+        t={t}
+        foldWhen="immediate"
+        detailTitles={false}
+        liveProcessDetail={false}
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(view.container.querySelector('[data-process-running]')).toBeNull()
+    })
+    expect(view.container.textContent).toContain('chat.process.summary.commands')
+    expect(view.container.textContent).not.toContain('bash')
+    expect(summary(view.container)).toBeNull()
+    expect(view.container.innerHTML).not.toMatch(/processGroupSummaryLive/)
   })
 
   it('shimmers an open run that is still only thinking', () => {

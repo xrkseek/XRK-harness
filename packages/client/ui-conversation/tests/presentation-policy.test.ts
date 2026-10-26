@@ -15,7 +15,8 @@ describe('presentationPolicyFor', () => {
   })
 
   it('maps each mode onto the four-point foldWhen axis', () => {
-    expect(presentationPolicyFor('compact').foldWhen).toBe('immediate')
+    // Compact matches standard timing so「过程」stays open while tools run.
+    expect(presentationPolicyFor('compact').foldWhen).toBe('process')
     expect(presentationPolicyFor('standard').foldWhen).toBe('process')
     expect(presentationPolicyFor('detailed').foldWhen).toBe('turn')
     expect(presentationPolicyFor('verbose').foldWhen).toBe('never')
@@ -36,10 +37,12 @@ describe('presentationPolicyFor', () => {
     expect(presentationPolicyFor('verbose').detailTitles).toBe(true)
   })
 
-  it('shows live process detail only in standard and detailed', () => {
-    expect(presentationPolicyFor('compact').liveProcessDetail).toBe(false)
+  it('shows live process detail in every mode that groups process runs', () => {
+    // Open chrome names the live tool; a folded+running line still shimmers too.
+    expect(presentationPolicyFor('compact').liveProcessDetail).toBe(true)
     expect(presentationPolicyFor('standard').liveProcessDetail).toBe(true)
     expect(presentationPolicyFor('detailed').liveProcessDetail).toBe(true)
+    // Verbose has no group header — live detail lives on each tool / think row.
     expect(presentationPolicyFor('verbose').liveProcessDetail).toBe(false)
   })
 
@@ -56,11 +59,11 @@ describe('processGroupSettled', () => {
   const openSettled = { closed: false, summary: { running: false, tools: 2 } }
   const closedSettled = { closed: true, summary: { running: false, tools: 2 } }
 
-  it('latches immediately under compact', () => {
+  it('latches immediately when foldWhen is immediate', () => {
     expect(processGroupSettled('immediate', openRunning, false)).toBe(true)
   })
 
-  it('folds standard once the tool burst ends', () => {
+  it('folds compact/standard once the tool burst ends', () => {
     expect(processGroupSettled('process', openRunning, false)).toBe(false)
     expect(processGroupSettled('process', openSettled, false)).toBe(true)
     expect(processGroupSettled('process', closedSettled, false)).toBe(true)

@@ -44,5 +44,37 @@ describe("shouldFollowContentGrowth", () => {
         threshold: 24,
       }),
     ).toBe(false);
+    expect(
+      shouldFollowContentGrowth({
+        atBottom: false,
+        distanceFromBottom: 10,
+        growth: -80,
+        threshold: 24,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips a no-op shrink write when already clamped to the floor", () => {
+    // Browser already clamped; rewriting scrollTop mid sticky layout can hitch
+    // the composer. viewArea min-height + hidden collapse keep the seat put.
+    expect(
+      shouldFollowContentGrowth({
+        atBottom: true,
+        distanceFromBottom: 0,
+        growth: -120,
+        threshold: 24,
+      }),
+    ).toBe(false);
+  });
+
+  it("re-pins shrink when scrollTop still sits past the new floor", () => {
+    expect(
+      shouldFollowContentGrowth({
+        atBottom: true,
+        distanceFromBottom: -80,
+        growth: -120,
+        threshold: 24,
+      }),
+    ).toBe(true);
   });
 });

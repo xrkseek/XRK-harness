@@ -5,10 +5,30 @@
 import { createReadStream, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { createGzip } from "node:zlib";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "./underlying/http-json.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
+
+/** Same set web static uses — community plugin JS can be multi‑MB (office). */
+const GZIP_EXTS = new Set([
+  ".js",
+  ".mjs",
+  ".css",
+  ".json",
+  ".svg",
+  ".map",
+  ".txt",
+  ".html",
+]);
+
+function acceptGzip(req: IncomingMessage): boolean {
+  const raw = req.headers["accept-encoding"];
+  if (raw === undefined) return false;
+  const value = Array.isArray(raw) ? raw.join(",") : raw;
+  return /(?:^|,)\s*gzip(?:\s|;|,|$)/i.test(value);
+}
 
 export interface PluginAssetOptions {
   readonly pluginsDir?: string;
@@ -122,6 +142,7 @@ export function looksCordisHostApiTail(tail: string): boolean {
 }
 
 function tryServePluginFile(
+  req: IncomingMessage,
   res: ServerResponse,
   abs: string,
   method: string,
@@ -129,16 +150,31 @@ function tryServePluginFile(
   try {
     const st = statSync(abs);
     if (!st.isFile()) return false;
-    res.writeHead(200, {
+    const ext = path.extname(abs).toLowerCase();
+    // Office preview ships ~22 MB uncompressed; without gzip the classic
+    // `<script src>` often fires `error` before parse. Mirror apps/web static.
+    const gzip = acceptGzip(req) && GZIP_EXTS.has(ext);
+    const headers: Record<string, string> = {
       "content-type": contentType(abs),
-      "content-length": String(st.size),
       "cache-control": "no-store",
-    });
+    };
+    if (gzip) {
+      headers["content-encoding"] = "gzip";
+      headers.vary = "Accept-Encoding";
+    } else {
+      headers["content-length"] = String(st.size);
+    }
+    res.writeHead(200, headers);
     if (method === "HEAD") {
       res.end();
       return true;
     }
-    createReadStream(abs).pipe(res);
+    const stream = createReadStream(abs);
+    if (!gzip) {
+      stream.pipe(res);
+      return true;
+    }
+    stream.pipe(createGzip()).pipe(res);
     return true;
   } catch {
     return false;
@@ -182,7 +218,7 @@ export async function handlePluginAssetHttp(
       targetResolved.startsWith(baseResolved + path.sep) ||
       targetResolved === baseResolved
     ) {
-      if (tryServePluginFile(res, abs, method)) return true;
+      if (tryServePluginFile(req, res, abs, method)) return true;
     }
   }
 
