@@ -196,27 +196,110 @@ describe("createHostAgentCache", () => {
 });
 
 describe("deferBusyAgentInvalidate", () => {
-  it("defers badge rebuilds for busy or draining sessions and rebuilds idle ones", async () => {
+  it("defers badge rebuilds for busy, draining, or materializing sessions and rebuilds idle ones", async () => {
     const deferred: string[] = [];
     const invalidated: string[] = [];
     const sessions = [
-      { id: "busy-turn", drainActive: false, busy: true },
-      { id: "draining", drainActive: true, busy: false },
-      { id: "idle", drainActive: false, busy: false },
-      { id: "both", drainActive: true, busy: true },
+      { id: "busy-turn", drainActive: false, busy: true, materializing: false },
+      { id: "draining", drainActive: true, busy: false, materializing: false },
+      { id: "building", drainActive: false, busy: false, materializing: true },
+      { id: "idle", drainActive: false, busy: false, materializing: false },
+      { id: "both", drainActive: true, busy: true, materializing: false },
     ];
     for (const row of sessions) {
       await deferBusyAgentInvalidate({
         sessionId: row.id,
         drainActive: row.drainActive,
         busy: row.busy,
+        materializing: row.materializing,
         defer: (id) => deferred.push(id),
         invalidate: async (id) => {
           invalidated.push(id);
         },
       });
     }
-    expect(deferred).toEqual(["busy-turn", "draining", "both"]);
+    expect(deferred).toEqual(["busy-turn", "draining", "building", "both"]);
     expect(invalidated).toEqual(["idle"]);
+  });
+
+  it("force tears down even while materializing", async () => {
+    const deferred: string[] = [];
+    const invalidated: string[] = [];
+    await deferBusyAgentInvalidate({
+      sessionId: "building",
+      drainActive: false,
+      busy: false,
+      materializing: true,
+      force: true,
+      defer: (id) => deferred.push(id),
+      invalidate: async (id) => {
+        invalidated.push(id);
+      },
+    });
+    expect(deferred).toEqual([]);
+    expect(invalidated).toEqual(["building"]);
+  });
+});
+
+describe("createHostAgentCache concurrent resolve", () => {
+  it("shares one materialize when two callers resolve the same fresh session", async () => {
+    const cache = createHostAgentCache([]);
+    const agent = fakeAgent();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const create = vi.fn(async () => {
+      await gate;
+      return agent;
+    });
+
+    const first = cache.resolve("fresh", create);
+    const second = cache.resolve("fresh", create);
+    // Both callers park inside one build instead of racing to rebuild: the
+    // second used to see "scope present, handle absent" and dispose the first.
+    expect(cache.isMaterializing("fresh")).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
+    release();
+    const [a1, a2] = await Promise.all([first, second]);
+    expect(a1).toBe(agent);
+    expect(a2).toBe(agent);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(agent.aborted).toBe(false);
+    expect(cache.isMaterializing("fresh")).toBe(false);
+    await cache.dispose();
+  });
+
+  it("keeps a materializing session out of an invalidate-all sweep", async () => {
+    const cache = createHostAgentCache([]);
+    const agent = fakeAgent();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const building = cache.resolve("fresh", async () => {
+      await gate;
+      return agent;
+    });
+    expect(cache.isMaterializing("fresh")).toBe(true);
+
+    // Mirrors Host's skip: a session mid-build is protected, so a cache-wide
+    // invalidate (settings ns change / MCP remount) leaves it alone.
+    await cache.invalidateAll({
+      skip: (id) => cache.isMaterializing(id),
+    });
+    release();
+    await expect(building).resolves.toBe(agent);
+    expect(agent.aborted).toBe(false);
+    await cache.dispose();
+  });
+
+  it("reports isMaterializing false once a session is cached", async () => {
+    const cache = createHostAgentCache([]);
+    const agent = fakeAgent();
+    await cache.resolve("cached", async () => agent);
+    expect(cache.isMaterializing("cached")).toBe(false);
+    expect(cache.isBusy("cached")).toBe(false);
+    await cache.dispose();
   });
 });

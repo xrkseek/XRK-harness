@@ -18,17 +18,28 @@ export interface AgentResolveOpts {
 }
 
 /**
- * Badge / cwd rebuilds share the settings rule: do not dispose a live turn.
- * The caller invalidates the deferred id once that session's drain goes idle.
+ * Badge / cwd rebuilds share the settings rule: do not dispose a live turn
+ * (or a mid-build materialize — `isBusy` is still false then). The caller
+ * invalidates the deferred id once that session's drain goes idle.
+ *
+ * `force` is for intentional rebuilds that must win over an in-flight create
+ * (isolated worktree cwd bind): those callers await invalidate then prompt.
  */
 export function deferBusyAgentInvalidate(input: {
   readonly sessionId: string;
   readonly drainActive: boolean;
   readonly busy: boolean;
+  /** True while {@link HostAgentCache.resolve} is still building this id. */
+  readonly materializing?: boolean;
+  /** Tear down even while busy / draining / materializing. */
+  readonly force?: boolean;
   readonly defer: (sessionId: string) => void;
   readonly invalidate: (sessionId: string) => Promise<void> | void;
 }): Promise<void> | void {
-  if (input.drainActive || input.busy) {
+  if (
+    !input.force
+    && (input.drainActive || input.busy || input.materializing === true)
+  ) {
     input.defer(input.sessionId);
     return;
   }
@@ -58,6 +69,12 @@ export interface HostAgentCache {
   ): Promise<AgentHandle>;
   /** True while the cached agent latch is mid-turn (stream / tools). */
   isBusy(sessionId: string): boolean;
+  /**
+   * True while a resolve is building this session's agent. Such a session has a
+   * scope but no registered handle yet, so `isBusy` is false — callers that
+   * decide whether it is safe to drop caches must treat it as protected.
+   */
+  isMaterializing(sessionId: string): boolean;
   /**
    * True when a nested child realm under this session is still protected
    * (busy / drain-active / pending invalidate). Drain flush must not dispose
@@ -92,6 +109,8 @@ export function createHostAgentCache(
 
   const agents = new Map<string, AgentHandle>();
   const scopes = new Map<string, Scope>();
+  /** In-flight materialize per session; a second resolve waits instead of rebuilding. */
+  const materializing = new Map<string, Promise<AgentHandle>>();
   /** Child → parent when the child realm is nested under the parent's scope. */
   const nestParent = new Map<string, string>();
 
@@ -171,10 +190,73 @@ export function createHostAgentCache(
     }
   }
 
+  /**
+   * Build one session's agent and register it.
+   *
+   * Only ever entered through {@link resolve}, which owns the single-flight
+   * bookkeeping — two callers arriving during the same window used to see
+   * "scope present, handle absent" and each rebuild: the second caller disposed
+   * the first one's scope mid-`create()`, and the first threw
+   * `agent scope disposed during materialize`. Every delegated spawn hits that
+   * window (drain admit + spawn warm-up resolve the same fresh session id at
+   * once), so it surfaced as "subagents are broken" rather than a rare race.
+   */
+  async function materialize(
+    sessionId: string,
+    create: () => Promise<AgentHandle>,
+    resolveOpts?: AgentResolveOpts,
+  ): Promise<AgentHandle> {
+    const existingScope = scopes.get(sessionId);
+    const existing = agents.get(sessionId);
+    if (existing || existingScope) {
+      agents.delete(sessionId);
+      scopes.delete(sessionId);
+      if (existingScope && existingScope.state !== ScopeState.Disposed) {
+        await existingScope.dispose();
+      }
+    }
+
+    const child = openScope(sessionId, resolveOpts?.parentSessionId);
+    scopes.set(sessionId, child);
+
+    await child.activate(async () => {
+      // Touch inject so consumer edge is live for Ordering on host dispose.
+      child.inject(HOST_PLUGINS_KEY);
+      const agent = await create();
+      // A cache-wide invalidate can still cascade-dispose this scope while
+      // create() awaits (MCP remount, settings ns change); refuse to register
+      // effects on a terminal scope.
+      if (
+        child.state !== ScopeState.Loading &&
+        child.state !== ScopeState.Active
+      ) {
+        agent.abort({ kind: "disposed" });
+        throw new Error(
+          `agent scope disposed during materialize: ${sessionId}`,
+        );
+      }
+      child.effect(
+        () => () => {
+          agent.abort({ kind: "disposed" });
+        },
+        { label: `agent.abort(${sessionId})` },
+      );
+      agents.set(sessionId, agent);
+    });
+
+    const agent = agents.get(sessionId);
+    if (!agent) {
+      scopes.delete(sessionId);
+      if (child.state !== ScopeState.Disposed) await child.dispose();
+      throw new Error(`agent scope failed to materialize: ${sessionId}`);
+    }
+    return agent;
+  }
+
   return {
     hostScope,
 
-    async resolve(sessionId, create, resolveOpts) {
+    resolve(sessionId, create, resolveOpts) {
       pruneDisposed();
       const existingScope = scopes.get(sessionId);
       const existing = agents.get(sessionId);
@@ -183,54 +265,38 @@ export function createHostAgentCache(
         existingScope &&
         existingScope.state !== ScopeState.Disposed
       ) {
-        return existing;
+        return Promise.resolve(existing);
       }
-      if (existing || existingScope) {
-        agents.delete(sessionId);
-        scopes.delete(sessionId);
-        if (existingScope && existingScope.state !== ScopeState.Disposed) {
-          await existingScope.dispose();
+      const inflight = materializing.get(sessionId);
+      if (inflight) return inflight;
+      // One retry: a concurrent per-session invalidate (cwd / badge) can still
+      // dispose the scope while create() awaits — invalidateAll already skips
+      // materializing, but deferBusy used to treat mid-build as idle.
+      const run = materialize(sessionId, create, resolveOpts).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("agent scope disposed during materialize:")) {
+          throw err;
         }
-      }
-
-      const child = openScope(sessionId, resolveOpts?.parentSessionId);
-      scopes.set(sessionId, child);
-
-      await child.activate(async () => {
-        // Touch inject so consumer edge is live for Ordering on host dispose.
-        child.inject(HOST_PLUGINS_KEY);
-        const agent = await create();
-        // Parent invalidate can cascade-dispose this scope while create()
-        // awaits; refuse to register effects on a terminal scope.
-        if (
-          child.state !== ScopeState.Loading &&
-          child.state !== ScopeState.Active
-        ) {
-          agent.abort({ kind: "disposed" });
-          throw new Error(
-            `agent scope disposed during materialize: ${sessionId}`,
-          );
-        }
-        child.effect(
-          () => () => {
-            agent.abort({ kind: "disposed" });
-          },
-          { label: `agent.abort(${sessionId})` },
-        );
-        agents.set(sessionId, agent);
+        return materialize(sessionId, create, resolveOpts);
       });
-
-      const agent = agents.get(sessionId);
-      if (!agent) {
-        scopes.delete(sessionId);
-        if (child.state !== ScopeState.Disposed) await child.dispose();
-        throw new Error(`agent scope failed to materialize: ${sessionId}`);
-      }
-      return agent;
+      materializing.set(sessionId, run);
+      void run.then(
+        () => {
+          if (materializing.get(sessionId) === run) materializing.delete(sessionId);
+        },
+        () => {
+          if (materializing.get(sessionId) === run) materializing.delete(sessionId);
+        },
+      );
+      return run;
     },
 
     isBusy(sessionId) {
       return agents.get(sessionId)?.isBusy() === true;
+    },
+
+    isMaterializing(sessionId) {
+      return materializing.has(sessionId);
     },
 
     hasProtectedNestedChild,

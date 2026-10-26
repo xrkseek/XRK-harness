@@ -1015,9 +1015,13 @@ export function createHostManager(): HostManager {
             // Drain-active: mid-turn on the Hub bookkeeping path.
             // isBusy: subagent / edge cases where latch is live but drain
             // was not marked — disposing those was painting disposed 「已停止」.
+            // isMaterializing: has a scope but no handle yet (agent still being
+            // built). Disposing it aborts that build with "agent scope disposed
+            // during materialize", which a fresh spawn hits immediately.
             if (
               !drainActiveBox.isActive(sessionId) &&
-              !agentCache.isBusy(sessionId)
+              !agentCache.isBusy(sessionId) &&
+              !agentCache.isMaterializing(sessionId)
             ) {
               return false;
             }
@@ -2009,7 +2013,8 @@ export function createHostManager(): HostManager {
                   if (pending === sid) continue;
                   if (
                     drainActiveBox.isActive(pending) ||
-                    agentCache.isBusy(pending)
+                    agentCache.isBusy(pending) ||
+                    agentCache.isMaterializing(pending)
                   ) {
                     continue;
                   }
@@ -2019,7 +2024,8 @@ export function createHostManager(): HostManager {
                     agentCache.hasProtectedNestedChild(pending, (id) =>
                       pendingAgentInvalidate.has(id) ||
                       drainActiveBox.isActive(id) ||
-                      agentCache.isBusy(id),
+                      agentCache.isBusy(id) ||
+                      agentCache.isMaterializing(id),
                     )
                   ) {
                     continue;
@@ -2408,11 +2414,13 @@ export function createHostManager(): HostManager {
         ...(config.runtime.policyFile
           ? { settingsDocumentPath: path.resolve(config.runtime.policyFile) }
           : {}),
-        invalidateAgent: (sessionId) =>
+        invalidateAgent: (sessionId, opts) =>
           deferBusyAgentInvalidate({
             sessionId,
             drainActive: drainActiveBox.isActive(sessionId),
             busy: agentCache.isBusy(sessionId),
+            materializing: agentCache.isMaterializing(sessionId),
+            ...(opts?.force === true ? { force: true } : {}),
             defer: (id) => {
               pendingAgentInvalidate.add(id);
             },
