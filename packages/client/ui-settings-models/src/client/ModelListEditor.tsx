@@ -14,35 +14,18 @@
  * rows the user can still fill in by hand.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient } from '@xrkseek/xrk-api-remotes/client'
 import { Button, Modal } from '@xrkseek/client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
-import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import { adopt, candidateFacts, numberOf, syncListedModels, textOf, type ModelDraft } from './model-list-sync.ts'
 import { messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
-/**
- * One configured model row. Structurally open, exactly like the DeepSeek
- * catalog editor's rows: a profile field this card does not edit — one a future
- * schema adds, or one hand-written in `settings.yaml` — has to survive being
- * edited here rather than being dropped by a rebuild.
- */
-export type ModelDraft = DeepSeekModelDraft
-
-/** A row's text field, or the empty string when unset or not a string. */
-function textOf(model: ModelDraft, key: string): string {
-  const value = model[key]
-  return typeof value === 'string' ? value : ''
-}
-
-/** A row's numeric field, or `undefined` when unset or not a number. */
-function numberOf(model: ModelDraft, key: string): number | undefined {
-  const value = model[key]
-  return typeof value === 'number' ? value : undefined
-}
+/** Re-exported for the hand-declared provider card, which shares the row shape. */
+export type { ModelDraft }
 
 /** What an interrogation needs, taken from the live form. */
 export interface ProbeTarget {
@@ -151,102 +134,13 @@ function capacitySpelling(value: number | undefined): string {
   return value === undefined ? '' : formatCapacity(value)
 }
 
-/** Capacities a listing may disclose. Existing numbers stay; blanks fill in. */
-const DISCLOSED_CAPACITIES = ['contextWindow', 'maxTokens', 'softBudgetMaxTokens'] as const
-
-/**
- * Refresh only the rows the user already configured.
- * - Missing from the provider listing → drop.
- * - Still listed → keep id / display name and any capacity already set.
- * - Blank capacity the listing disclosed → fill it.
- * - Blank intake modes the listing disclosed → fill them.
- * - Thinking menu the listing disclosed → replace.
- * - Blank id → draft still being typed, keep.
- * Never copies upstream `name` onto a hand-edited display name.
- */
-function syncListedModels(
-  rows: readonly ModelDraft[],
-  listed: readonly DiscoveredModelView[],
-): ModelDraft[] {
-  const byId = new Map(listed.map(model => [model.id, model]))
-  const next: ModelDraft[] = []
-  for (const row of rows) {
-    const id = textOf(row, 'id')
-    if (id === '') {
-      next.push(row)
-      continue
-    }
-    const upstream = byId.get(id)
-    if (upstream === undefined) continue
-    let merged: ModelDraft = row
-    if (upstream.reasoning !== undefined) {
-      merged = { ...merged, reasoning: upstream.reasoning }
-    }
-    for (const field of DISCLOSED_CAPACITIES) {
-      const disclosed = upstream[field]
-      if (numberOf(merged, field) === undefined && typeof disclosed === 'number') {
-        merged = { ...merged, [field]: disclosed }
-      }
-    }
-    // Intake modes behave like the capacities: a hand-set pair is a decision,
-    // a missing one is a blank the listing (or the catalog behind it) may fill.
-    if (merged['inputModalities'] === undefined && upstream.inputModalities !== undefined) {
-      merged = { ...merged, inputModalities: [...upstream.inputModalities] }
-    }
-    next.push(merged)
-  }
-  return next
-}
-
-/** Adopt a candidate, keeping whatever capacities the provider disclosed. */
-function adopt(candidate: DiscoveredModelView): ModelDraft {
-  return {
-    id: candidate.id,
-    ...candidate.name === undefined ? {} : { name: candidate.name },
-    ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
-    ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
-    ...candidate.softBudgetMaxTokens === undefined ? {} : { softBudgetMaxTokens: candidate.softBudgetMaxTokens },
-    ...candidate.inputModalities === undefined
-      ? {}
-      : { inputModalities: [...candidate.inputModalities] },
-    // OFM / community listings carry a thinking menu on the row.
-    ...candidate.reasoning === undefined ? {} : { reasoning: candidate.reasoning },
-  }
-}
-
-/**
- * Compact capacity for the picker tail. Field editors still use decimal
- * {@link formatCapacity} (256K → 256000); probe rows often ship binary sizes
- * (131072) that would otherwise print as raw digits.
- */
-function formatProbeCapacity(value: number): string {
-  const decimal = formatCapacity(value)
-  if (decimal !== String(value)) return decimal
-  if (!Number.isInteger(value) || value <= 0 || value % 1024 !== 0) return decimal
-  const kib = value / 1024
-  return kib % 1024 === 0 ? `${String(kib / 1024)}M` : `${String(kib)}K`
-}
-
-/**
- * What a probe learned about one candidate, as a compact tail.
- *
- * Capacities are what the picker exists to save the user from typing, and a
- * thinking menu is invisible until the row is adopted and the model selector is
- * opened — so the picker states both. Absent facts stay absent rather than
- * being spelled as zero.
- */
-function candidateFacts(candidate: DiscoveredModelView): string | undefined {
-  const parts: string[] = []
-  if (candidate.contextWindow !== undefined) {
-    parts.push(`${formatProbeCapacity(candidate.contextWindow)} ctx`)
-  }
-  if (candidate.maxTokens !== undefined) {
-    parts.push(`${formatProbeCapacity(candidate.maxTokens)} out`)
-  }
-  if (candidate.reasoning !== undefined) {
-    parts.push(candidate.reasoning.efforts.map(effort => effort.id).join('/'))
-  }
-  return parts.length > 0 ? parts.join(' · ') : undefined
+/** Field-wise probe identity: a fresh object per render compares by value. */
+function sameProbeTarget(left: ModelListEditorProps['probe'], right: ModelListEditorProps['probe']): boolean {
+  return left.settingsNs === right.settingsNs
+    && left.provider === right.provider
+    && left.baseURL === right.baseURL
+    && left.api === right.api
+    && left.apiKey === right.apiKey
 }
 
 /**
@@ -257,6 +151,24 @@ function candidateFacts(candidate: DiscoveredModelView): string | undefined {
 export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const { models, onChange, probe, api, t, disabled } = props
   const [probeKind, setProbeKind] = useState<'fetch' | 'refresh' | undefined>(undefined)
+  /**
+   * Newest probe target. A discovery request can outlive the configuration it
+   * was launched for: the base URL, API and key stay editable while it is in
+   * flight (only the two buttons take `busy`), so an answer that arrives after
+   * the reader changed them describes a provider they are no longer editing.
+   * Dropping it beats stamping the old listing — and its failure line — onto
+   * the new draft.
+   */
+  const latestProbe = useRef(probe)
+  latestProbe.current = probe
+  /**
+   * Newest row draft. `refresh` merges the upstream answer into the rows it can
+   * see, and the rows stay editable while that probe runs — merging into the
+   * launch-time snapshot dropped whatever the reader typed in the meantime,
+   * which reads as the list quietly reverting under the cursor.
+   */
+  const latestModels = useRef(models)
+  latestModels.current = models
   const busy = probeKind !== undefined
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [notice, setNotice] = useState<string | undefined>(undefined)
@@ -328,16 +240,20 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const askListing = async (options?: {
     readonly allowEmpty?: boolean
   }): Promise<readonly DiscoveredModelView[] | undefined> => {
+    const launched = probe
     setFailure(undefined)
     setNotice(undefined)
     try {
       const response = await api.llm.discoverModels({
-        settingsNs: probe.settingsNs,
-        ...probe.provider === undefined ? {} : { provider: probe.provider },
-        ...probe.baseURL === undefined || probe.baseURL.length === 0 ? {} : { baseURL: probe.baseURL },
-        ...probe.api === undefined ? {} : { api: probe.api },
-        ...probe.apiKey === undefined ? {} : { apiKey: probe.apiKey },
+        settingsNs: launched.settingsNs,
+        ...launched.provider === undefined ? {} : { provider: launched.provider },
+        ...launched.baseURL === undefined || launched.baseURL.length === 0 ? {} : { baseURL: launched.baseURL },
+        ...launched.api === undefined ? {} : { api: launched.api },
+        ...launched.apiKey === undefined ? {} : { apiKey: launched.apiKey },
       })
+      // The draft moved on while this was in flight: its model list and its
+      // failure both describe a provider the reader has already replaced.
+      if (!sameProbeTarget(launched, latestProbe.current)) return undefined
       if (!response.result.ok) {
         setFailure(response.result.error.message)
         return undefined
@@ -349,6 +265,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       }
       return found
     } catch (error) {
+      if (!sameProbeTarget(launched, latestProbe.current)) return undefined
       // The transport rejected rather than answering; without this the button
       // would stay busy with nothing shown.
       setFailure(messageOf(error))
@@ -377,7 +294,9 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       // Empty listing is a real answer: every configured id is gone upstream.
       const found = await askListing({ allowEmpty: true })
       if (found === undefined) return
-      onChange(syncListedModels(models, found))
+      // Merge into the live rows, not the launch-time ones: an edit typed
+      // while the probe was out must survive the answer.
+      onChange(syncListedModels(latestModels.current, found))
       // Row positions move when stale ids leave, so open capacity editors
       // and half-typed buffers would land on the wrong row.
       setExpanded(new Set())

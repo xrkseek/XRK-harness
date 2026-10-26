@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Model-list editing, endpoint interrogation, and hand-declared provider creation. */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@xrkseek/schemastery'
 import { bindSnapshotSelector } from '@xrkseek/client-web-react'
@@ -561,6 +561,71 @@ describe('endpoint interrogation', () => {
         efforts: [{ id: 'high', name: 'High' }],
         defaultEffort: 'high',
       },
+    }])
+  })
+
+  it('drops a discoverModels answer when the draft changed while it was in flight', async () => {
+    // The base URL stays editable while a probe runs, so an answer can arrive
+    // for a provider the reader has already left. Its models must not open the
+    // picker, and its failure must not land on the new draft.
+    const pending: Array<(value: RpcResponse<unknown>) => void> = []
+    const discover = vi.fn(() => new Promise<RpcResponse<unknown>>((resolve) => { pending.push(resolve) }))
+    await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'kept', contextWindow: 111 }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    fireEvent.change(screen.getByDisplayValue('https://proxy.example/v1'), {
+      target: { value: 'https://other.example/v1' },
+    })
+    expect(discover).toHaveBeenCalledTimes(1)
+
+    await act(async () => { pending[0]!(ok({ models: [{ id: 'stale-only', contextWindow: 8 }] })) })
+
+    // No picker over the new draft, no phantom failure, buttons usable again.
+    expect(screen.queryByText('stale-only')).toBeNull()
+    expect(screen.queryByDisplayValue('stale-only')).toBeNull()
+    expect(screen.getByText(en.fetchModels)).toBeTruthy()
+  })
+
+  it('keeps a display name typed while a refresh is in flight', async () => {
+    // The rows stay editable while the probe runs, so the answer must merge
+    // into the live draft. Merging into the launch-time snapshot silently
+    // reverted the name under the cursor.
+    const pending: Array<(value: RpcResponse<unknown>) => void> = []
+    const discover = vi.fn(() => new Promise<RpcResponse<unknown>>((resolve) => { pending.push(resolve) }))
+    const { mutate } = await mountSection({
+      discover,
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'kept', contextWindow: 111 }],
+        },
+      },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.refreshModels }))
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Typed while out' } })
+
+    await act(async () => { pending[0]!(ok({ models: [{ id: 'kept', contextWindow: 4096 }] })) })
+    await screen.findByText(en.refreshModelsDone)
+
+    expect(screen.getByDisplayValue('Typed while out')).toBeTruthy()
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'kept',
+      name: 'Typed while out',
+      contextWindow: 111,
     }])
   })
 

@@ -137,6 +137,7 @@ export interface PreviewTabsInjected {
   mergeTeamWorktree?: (input: {
     readonly leaseId: string
     readonly pruneAfter?: boolean
+    readonly strategy?: 'ff-only' | 'rebase-ff'
   }) => void | Promise<void>
   /**
    * Peek Host `jobs.output` for a Status job row (same bridge as header Jobs).
@@ -1136,9 +1137,11 @@ function StatusPanel({
                           {task.worktreeBranch ?? ''}
                           {task.worktreeLeaseStatus === 'retained'
                             ? ` · ${t('preview.status.teamTasksWorktreeRetained')}`
-                            : task.worktreeLeaseStatus
-                              ? ` · ${task.worktreeLeaseStatus}`
-                              : ''}
+                            : task.worktreeLeaseStatus === 'lost'
+                              ? ` · ${t('preview.status.teamTasksWorktreeLost')}`
+                              : task.worktreeLeaseStatus
+                                ? ` · ${task.worktreeLeaseStatus}`
+                                : ''}
                         </span>
                       )
                       : null}
@@ -1205,6 +1208,7 @@ function StatusPanel({
                         {mergeTeamWorktree
                           && task.worktreeId
                           && task.worktreeLeaseStatus !== 'reclaimed'
+                          && task.worktreeLeaseStatus !== 'lost'
                           ? (
                             <button
                               type="button"
@@ -1217,6 +1221,26 @@ function StatusPanel({
                               }}
                             >
                               {t('preview.status.teamTasksMerge')}
+                            </button>
+                          )
+                          : null}
+                        {mergeTeamWorktree
+                          && task.worktreeId
+                          && task.worktreeLeaseStatus === 'retained'
+                          ? (
+                            <button
+                              type="button"
+                              className={css.teamAction}
+                              title={t('preview.status.teamTasksRebaseMergeHint')}
+                              onClick={() => {
+                                void runTeamAction(task.id, () => mergeTeamWorktree({
+                                  leaseId: task.worktreeId!,
+                                  pruneAfter: true,
+                                  strategy: 'rebase-ff',
+                                }))
+                              }}
+                            >
+                              {t('preview.status.teamTasksRebaseMerge')}
                             </button>
                           )
                           : null}

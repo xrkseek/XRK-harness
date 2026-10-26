@@ -318,6 +318,7 @@ export function apply(ctx: ClientContext): void {
       mergeTeamWorktree: async (input: {
         readonly leaseId: string
         readonly pruneAfter?: boolean
+        readonly strategy?: 'ff-only' | 'rebase-ff'
       }) => {
         const response = await fetch('/api/worktree.merge', {
           method: 'POST',
@@ -328,6 +329,7 @@ export function apply(ctx: ClientContext): void {
             payload: {
               leaseId: input.leaseId,
               ...(input.pruneAfter === false ? {} : { pruneAfter: true }),
+              ...(input.strategy === 'rebase-ff' ? { strategy: 'rebase-ff' } : {}),
             },
           }),
         })
