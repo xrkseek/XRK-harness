@@ -25,6 +25,22 @@ function git(cwd: string, args: string[]): void {
   });
 }
 
+/** Git output as text, for assertions that need a path or a message. */
+function gitOut(cwd: string, args: string[]): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "t",
+      GIT_AUTHOR_EMAIL: "t@example.com",
+      GIT_COMMITTER_NAME: "t",
+      GIT_COMMITTER_EMAIL: "t@example.com",
+    },
+  }).trim();
+}
+
 function repo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "xrk-mwt-"));
   git(dir, ["init"]);
@@ -169,5 +185,183 @@ describe("managed worktree allocate / reclaim / Teams bind", () => {
     expect(merged?.merged).toBe(false);
     expect(merged?.reason).toMatch(/dirty/i);
     expect(manager.get(lease!.id)?.status).toBe("active");
+  });
+});
+
+describe("managed worktree reconcile + divergence diagnosis", () => {
+  it("marks a lease lost once its checkout is gone, keeping branch and base", () => {
+    const root = repo();
+    const persist = path.join(
+      mkdtempSync(path.join(tmpdir(), "xrk-mwt-persist-")),
+      "managed-worktrees.json",
+    );
+    const manager = new ManagedWorktreeManager(persist);
+    const lease = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "gone",
+    })!;
+    git(root, ["worktree", "remove", "--force", lease.path]);
+    expect(existsSync(lease.path)).toBe(false);
+
+    const report = manager.reconcile({ now: 4242 });
+    expect(report).toMatchObject({ checked: 1, lost: 1 });
+    const after = manager.get(lease.id)!;
+    expect(after.status).toBe("lost");
+    expect(after.lost).toMatchObject({
+      reason: "checkout-missing",
+      checkedAt: 4242,
+    });
+    // Audit trail survives: the row still names the branch nobody merged.
+    expect(after.branch).toBe(lease.branch);
+    expect(after.baseCommit).toBe(lease.baseCommit);
+
+    // Persisted, so a restart does not resurrect the dead lease as active.
+    expect(new ManagedWorktreeManager(persist).get(lease.id)?.status).toBe("lost");
+    // A second pass has nothing to do.
+    expect(manager.reconcile().lost).toBe(0);
+  });
+
+  it("marks a lease lost when the branch behind a live checkout is gone", () => {
+    const root = repo();
+    const detached = path.join(
+      mkdtempSync(path.join(tmpdir(), "xrk-mwt-detach-")),
+      "wt",
+    );
+    git(root, ["worktree", "add", "--detach", detached, "HEAD"]);
+    const persist = path.join(
+      mkdtempSync(path.join(tmpdir(), "xrk-mwt-persist-")),
+      "managed-worktrees.json",
+    );
+    writeFileSync(
+      persist,
+      JSON.stringify({
+        leases: [
+          {
+            id: "ghost",
+            path: detached,
+            branch: "never-existed",
+            repoRoot: root,
+            baseCommit: "deadbeef",
+            parentSessionId: "p",
+            createdAt: 0,
+            status: "active",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const report = new ManagedWorktreeManager(persist).reconcile();
+    expect(report.lost).toBe(1);
+    expect(
+      new ManagedWorktreeManager(persist).get("ghost")?.lost?.reason,
+    ).toBe("branch-missing");
+  });
+
+  it("leaves healthy and already-reclaimed leases alone", () => {
+    const root = repo();
+    const manager = new ManagedWorktreeManager();
+    const live = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "live",
+    })!;
+    const done = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "done",
+    })!;
+    manager.reclaim(done.id);
+    expect(done.id).not.toBe(live.id);
+
+    const report = manager.reconcile();
+    expect(report).toMatchObject({ checked: 1, lost: 0 });
+    expect(manager.get(live.id)?.status).toBe("active");
+    expect(manager.get(done.id)?.status).toBe("reclaimed");
+  });
+
+  it("reports ahead/behind when ff-only cannot fold a diverged branch", () => {
+    const root = repo();
+    const manager = new ManagedWorktreeManager();
+    const lease = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "diverge",
+    })!;
+    writeFileSync(path.join(lease.path, "child.txt"), "child\n", "utf8");
+    git(lease.path, ["add", "child.txt"]);
+    git(lease.path, ["commit", "-m", "child"]);
+    writeFileSync(path.join(root, "parent.txt"), "parent\n", "utf8");
+    git(root, ["add", "parent.txt"]);
+    git(root, ["commit", "-m", "parent"]);
+
+    const merged = manager.mergeIntoParent(lease.id);
+    expect(merged).toMatchObject({
+      ok: false,
+      merged: false,
+      ahead: 1,
+      behind: 1,
+    });
+    expect(merged?.reason).toMatch(/1 ahead/);
+    expect(manager.get(lease.id)?.status).toBe("active");
+  });
+
+  it("rebase-ff replays a diverged branch and then fast-forwards", () => {
+    const root = repo();
+    const manager = new ManagedWorktreeManager();
+    const lease = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "rebase-me",
+    })!;
+    writeFileSync(path.join(lease.path, "child.txt"), "child\n", "utf8");
+    git(lease.path, ["add", "child.txt"]);
+    git(lease.path, ["commit", "-m", "child"]);
+    writeFileSync(path.join(root, "parent.txt"), "parent\n", "utf8");
+    git(root, ["add", "parent.txt"]);
+    git(root, ["commit", "-m", "parent"]);
+
+    const merged = manager.mergeIntoParent(lease.id, {
+      strategy: "rebase-ff",
+      pruneAfter: true,
+    });
+    expect(merged, JSON.stringify(merged)).toMatchObject({
+      ok: true,
+      merged: true,
+      rebased: true,
+    });
+    // Both sides of the history land in the parent, linearly.
+    expect(existsSync(path.join(root, "child.txt"))).toBe(true);
+    expect(existsSync(path.join(root, "parent.txt"))).toBe(true);
+    expect(gitOut(root, ["rev-list", "--merges", "--count", "HEAD"])).toBe("0");
+    expect(manager.get(lease.id)?.status).toBe("reclaimed");
+  });
+
+  it("rebase-ff aborts a conflicting replay and keeps the lease", () => {
+    const root = repo();
+    const manager = new ManagedWorktreeManager();
+    const lease = manager.allocate({
+      parentCwd: root,
+      parentSessionId: "p",
+      subagentId: "conflict",
+    })!;
+    writeFileSync(path.join(lease.path, "README.md"), "child version\n", "utf8");
+    git(lease.path, ["add", "README.md"]);
+    git(lease.path, ["commit", "-m", "child edit"]);
+    writeFileSync(path.join(root, "README.md"), "parent version\n", "utf8");
+    git(root, ["add", "README.md"]);
+    git(root, ["commit", "-m", "parent edit"]);
+
+    const merged = manager.mergeIntoParent(lease.id, { strategy: "rebase-ff" });
+    expect(merged, JSON.stringify(merged)).toMatchObject({
+      ok: false,
+      merged: false,
+    });
+    expect(merged?.reason).toMatch(/rebase/);
+    expect(manager.get(lease.id)?.status).toBe("active");
+    // The abort left no rebase state behind: a later merge can still run.
+    const rebaseDir = gitOut(lease.path, ["rev-parse", "--git-path", "rebase-merge"]);
+    expect(existsSync(path.resolve(lease.path, rebaseDir))).toBe(false);
+    expect(gitOut(lease.path, ["status", "--porcelain"])).toBe("");
   });
 });

@@ -142,7 +142,9 @@ async function setSessionWorkingDirectoryUnlocked(
     /* membership + map already committed; log best-effort */
   }
 
-  void runtime.invalidateAgent?.(sessionId);
+  // Cwd already committed — rebuild must not wait for an in-flight create
+  // that captured the previous root.
+  void runtime.invalidateAgent?.(sessionId, { force: true });
   return { ok: true, cwd: abs, changed: true };
 }
 

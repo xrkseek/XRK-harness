@@ -322,7 +322,7 @@ export interface SessionStatusTeamTask {
   readonly worktreePath?: string;
   readonly worktreeBranch?: string;
   readonly worktreeId?: string;
-  /** Managed lease status (`active` · `retained` · `reclaimed`) when known. */
+  /** Managed lease status (`active` · `retained` · `reclaimed` · `lost`) when known. */
   readonly worktreeLeaseStatus?: string;
   /** Truncated completion / failure preview from the task board. */
   readonly resultPreview?: string;

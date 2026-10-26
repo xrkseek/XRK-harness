@@ -8,7 +8,8 @@ import { createSessionWorktree } from "../session-worktree.js";
 
 /**
  * `worktree.merge` — fold a managed lease into the parent checkout.
- * Payload: `{ leaseId, pruneAfter? }`. Conflict / dirty parent → ok:false, lease retained.
+ * Payload: `{ leaseId, pruneAfter?, strategy? }` where strategy is `ff-only`
+ * (default) or `rebase-ff`. Conflict / dirty parent → ok:false, lease retained.
  */
 export const worktreeMerge: FaceHandler = async (runtime, _rpcId, payload) => {
   const p = asRecord(payload);
@@ -20,8 +21,12 @@ export const worktreeMerge: FaceHandler = async (runtime, _rpcId, payload) => {
     };
   }
   const pruneAfter = p.pruneAfter === true;
+  // Anything but an explicit `rebase-ff` stays on the conservative default:
+  // replaying commits rewrites the child branch, so it must be asked for.
+  const strategy = p.strategy === "rebase-ff" ? "rebase-ff" : "ff-only";
   const result = runtime.managedWorktrees.mergeIntoParent(leaseId, {
     pruneAfter,
+    strategy,
   });
   if (!result) {
     return {
@@ -34,6 +39,16 @@ export const worktreeMerge: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   return { ok: true, value: result };
 };
+
+/**
+ * `worktree.reconcile` — mark leases whose checkout vanished as `lost`.
+ * Startup runs this once; the RPC exists for a long-lived Face where the
+ * checkout was removed by hand after boot. Payload: none.
+ */
+export const worktreeReconcile: FaceHandler = async (runtime) => ({
+  ok: true,
+  value: runtime.managedWorktrees.reconcile(),
+});
 
 /**
  * `worktree.create` — allocate a linked checkout under `.xrk/worktrees/<name>`

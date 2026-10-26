@@ -323,8 +323,14 @@ export interface FaceRuntime {
    * permissions options until an integration mounts.
    */
   readonly permissionAuto: FacePermissionAutoGate;
-  /** Drop cached agent when preset changes (host wires). May be async (compose dispose). */
-  invalidateAgent?(sessionId: string): void | Promise<void>;
+  /**
+   * Drop cached agent when preset / cwd changes (host wires). May be async
+   * (compose dispose). `force` tears down even mid-materialize (worktree bind).
+   */
+  invalidateAgent?(
+    sessionId: string,
+    opts?: { readonly force?: boolean },
+  ): void | Promise<void>;
   /**
    * Session leaving the live set (archive / Host stop). Host may run curated-memory
    * Phase1 consolidate. Best-effort; failures must not block Face.

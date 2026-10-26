@@ -200,7 +200,10 @@ export interface CreateFaceRuntimeOptions {
   }>;
   /** Product-shell boot entries listed in inventory. */
   readonly webPlugins?: readonly FaceWebPlugin[];
-  readonly invalidateAgent?: (sessionId: string) => void | Promise<void>;
+  readonly invalidateAgent?: (
+    sessionId: string,
+    opts?: { readonly force?: boolean },
+  ) => void | Promise<void>;
   /**
    * Host Phase1 / teardown hook when a session leaves the live set
    * (archive). Optional — Host may also run consolidate on stop.
@@ -389,6 +392,15 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const managedWorktrees = new ManagedWorktreeManager(
     managedWorktreesPath(options.subagentPersistPath),
   );
+  // A checkout can vanish while Face is down (`git worktree remove` by hand, a
+  // pruned temp dir, `git branch -D`). Reconcile once at startup so a lease
+  // never advertises 「合回」 for a merge that cannot run. Best-effort: a broken
+  // lease must not block the runtime from coming up.
+  try {
+    managedWorktrees.reconcile();
+  } catch {
+    /* git unavailable / timeout — reconcile retries on the next boot */
+  }
   const productHome = options.productDir?.trim() || resolveXrkHome();
   {
     const persisted = loadSessionModelSelections(sessionModelsPath(productHome));
@@ -993,7 +1005,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   const invalidateAgent = options.invalidateAgent
-    ? async (sessionId: string) => {
+    ? async (
+      sessionId: string,
+      opts?: { readonly force?: boolean },
+    ) => {
         rememberedTools.delete(sessionId);
         jobUnsubs.get(sessionId)?.();
         jobUnsubs.delete(sessionId);
@@ -1004,7 +1019,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         subagentIdleEpoch.delete(sessionId);
         subagentIdleFailCount.delete(sessionId);
         suppressSubagentCompletion.delete(sessionId);
-        await options.invalidateAgent!(sessionId);
+        await options.invalidateAgent!(sessionId, opts);
       }
     : undefined;
   if (invalidateAgent) {

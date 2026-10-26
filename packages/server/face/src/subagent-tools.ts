@@ -1195,11 +1195,11 @@ function createSubagentTool(
         await ensureSessionWorkingDirectory(options.runtime, childId).catch(
           () => undefined,
         );
-        // Worktree bind failure must not leak the child: swallow and let the
-        // prompt below decide the spawn's fate (or the catch backstop).
-        await Promise.resolve(options.runtime.invalidateAgent?.(childId)).catch(
-          () => undefined,
-        );
+        // Worktree bind must win over any mid-build with the parent cwd
+        // (`force`). Swallow so the prompt below still decides spawn fate.
+        await Promise.resolve(
+          options.runtime.invalidateAgent?.(childId, { force: true }),
+        ).catch(() => undefined);
       } else if (rosterMember?.kind === "advanced") {
         // 公文包 (briefcase) only — session cwd stays parent workspace.
         const rosterWs =
