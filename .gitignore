@@ -90,3 +90,12 @@ scripts/locale-ja-en-map*.json
 session-agent-presets.json.*.tmp
 xiangyang-workspace/
 
+
+# One-off locale scaffolding (keep verify-locale-parity.ts only)
+scripts/check-ja-counts.mjs
+scripts/diff-locale-keys.mjs
+scripts/dump-scaffold-missing-en.mjs
+scripts/extract-locale-strings.mjs
+scripts/scaffold-locale-ja.mjs
+scripts/vendor-bun.mjs
+scripts/form-orphan-as-const.mjs
