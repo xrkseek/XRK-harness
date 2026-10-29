@@ -239,7 +239,7 @@ describe("FaceAgentRosterStore", () => {
       kitHat: "halo",
     });
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.playbook).toContain(
-      "titles.manager",
+      "mid-tier project seat",
     );
   });
 

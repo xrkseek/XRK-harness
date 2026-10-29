@@ -100,8 +100,8 @@ describe("commands/execute + list", () => {
         {
           name: "plan",
           description:
-            "Enter or leave plan mode (session collaboration; not a tool badge)",
-          input: { hint: "[off|message]" },
+            "Retired — replies with migration hint (outline → todo_write)",
+          input: { hint: "[ignored]" },
         },
         {
           name: "rollback",
@@ -334,8 +334,8 @@ describe("commands/execute + list", () => {
         {
           name: "plan",
           description:
-            "Enter or leave plan mode (session collaboration; not a tool badge)",
-          input: { hint: "[off|message]" },
+            "Retired — replies with migration hint (outline → todo_write)",
+          input: { hint: "[ignored]" },
         },
         {
           name: "rollback",

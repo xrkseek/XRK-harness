@@ -83,7 +83,7 @@ describe("session inject documents", () => {
     ).toContain("<external_collab_board>");
   });
 
-  it("omits posture for ordinary coding badges", async () => {
+  it("injects coding_parent posture for harness badges", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-inj-post-"));
     const runtime = createFaceRuntime({
       store: createMemorySessionStore(),
@@ -104,9 +104,9 @@ describe("session inject documents", () => {
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
     const docs = listSessionInjectDocuments(runtime, sessionId);
-    expect(docs.some((d) => d.path === SESSION_POSTURE_PATH)).toBe(false);
+    expect(docs.some((d) => d.path === SESSION_POSTURE_PATH)).toBe(true);
     expect(
-      readSessionInjectDocument(runtime, sessionId, SESSION_POSTURE_PATH),
-    ).toBeUndefined();
+      readSessionInjectDocument(runtime, sessionId, SESSION_POSTURE_PATH)?.content,
+    ).toMatch(/coding_parent/);
   });
 });

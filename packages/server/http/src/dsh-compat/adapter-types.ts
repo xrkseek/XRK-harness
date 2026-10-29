@@ -71,6 +71,11 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
   Pick<WalletOptions, "walletPort" | "face" | "xrkHome"> & {
     readonly workspaceRoot?: string;
     /**
+     * Honor X-Forwarded-Host for mobile-access WAN/LAN gate class
+     * (or set env `XRK_TRUST_PROXY=1`).
+     */
+    readonly trustProxy?: boolean;
+    /**
      * Face `auto-review` product + Credentials token for the HTTP classifier.
      * Called per classify/status so Settings saves apply without Host restart.
      */

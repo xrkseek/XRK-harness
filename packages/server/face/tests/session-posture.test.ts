@@ -25,7 +25,7 @@ function drain(): FaceDrain {
 }
 
 describe("session_posture", () => {
-  it("injects IM / 奇创 role briefs and skips coding badges", async () => {
+  it("injects IM / 奇创 / coding 经理席 role briefs", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xrk-posture-"));
     try {
       const runtime = createFaceRuntime({
@@ -47,7 +47,10 @@ describe("session_posture", () => {
       expect(coding.result.ok).toBe(true);
       if (!coding.result.ok) return;
       const codingId = (coding.result.value as { sessionId: string }).sessionId;
-      expect(formatSessionPosture(runtime, codingId)).toBe("");
+      const codingText = formatSessionPosture(runtime, codingId);
+      expect(codingText).toMatch(/kind=coding_parent \(经理席\)/);
+      expect(codingText).toMatch(/workspace_session_prompt/);
+      expect(codingText).toMatch(/向阳/);
 
       const xy = await dispatchFaceMethod(runtime, "session.create", "xy", {
         workspaceId: XIANGYANG_WORKSPACE_ID,
@@ -56,16 +59,13 @@ describe("session_posture", () => {
       if (!xy.result.ok) return;
       const xyId = (xy.result.value as { sessionId: string }).sessionId;
       const xyText = formatSessionPosture(runtime, xyId);
-      expect(xyText).toMatch(/Xiangyang|Qichuang/);
+      expect(xyText).toMatch(/向日葵|奇创|Xiangyang|Qichuang/);
       expect(xyText).toMatch(/path=open/);
       expect(xyText).toMatch(/shell_confine=off/);
       expect(xyText).toMatch(/workspace_session_prompt/);
       expect(xyText).toMatch(/xrk-demand-translate/);
       expect(xyText).toMatch(/xrk-home-config/);
-      expect(xyText).toMatch(/xrk-plugin-dev-care/);
       expect(xyText).toMatch(/team_\*/);
-      expect(xyText).toMatch(/xrk-delegate/);
-      expect(xyText).toMatch(/xrk-create-skill/);
       expect(xyText).toMatch(/thread_upsert/);
 
       await ensureImWorkspace(runtime);

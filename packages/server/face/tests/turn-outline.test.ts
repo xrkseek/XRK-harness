@@ -199,12 +199,9 @@ describe("Face turnOutline projection", () => {
     });
     registry.drive(session.id, store.get(session.id).events[3]!, 4);
 
+    // turn/start folds an empty-prompt slot but publishedTurnOutline hides it,
+    // so mux stays quiet until the human user/message lands.
     expect(pushed.filter((row) => row.key === "turnOutline")).toEqual([
-      {
-        key: "turnOutline",
-        value: [],
-        seq: 1,
-      },
       {
         key: "turnOutline",
         value: [{ turn: 1, seq: 1, round: 1, prompt: "ask", response: "" }],

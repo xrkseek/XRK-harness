@@ -42,9 +42,9 @@ export default defineConfig({
       // a build, so tests resolve the sources directly like the core/* set above.
       pkg("xrk-agent", "packages/stubs/xrk-agent/src/index.ts"),
       pkg("xrk-commands", "packages/stubs/xrk-commands/src/index.ts"),
-      pkg("xrk-llm", "packages/stubs/xrk-llm/src/index.ts"),
+      // xrk-llm / xrk-session: longer subpaths must land before package roots
+      // (Object.fromEntries keeps first-key order; Vite alias is prefix-matched).
       pkg("xrk-scope", "packages/stubs/xrk-scope/src/index.ts"),
-      pkg("xrk-session", "packages/stubs/xrk-session/src/index.ts"),
       pkg("xrk-session-projection", "packages/stubs/xrk-session-projection/src/index.ts"),
       pkg("xrk-token-meter", "packages/stubs/xrk-token-meter/src/index.ts"),
       pkg("xrk-tools", "packages/stubs/xrk-tools/src/index.ts"),
@@ -81,9 +81,11 @@ export default defineConfig({
       ["@xrkseek/xrk-session-reference/config", path.join(root, "packages/context/session-reference/src/config.ts")],
       ["@xrkseek/xrk-session-reference/uri", path.join(root, "packages/context/session-reference/src/uri.ts")],
       ["@xrkseek/xrk-session-reference/types", path.join(root, "packages/context/session-reference/src/types.ts")],
+      // stubs lib/ is gitignored — keep Vitest on TypeScript sources.
+      // Longer subpaths before package roots (Vite alias is prefix-matched;
+      // Object.fromEntries keeps first-key insertion order on overwrite).
       ["@xrkseek/xrk-session/types", path.join(root, "packages/stubs/xrk-session/src/types.ts")],
-      // stubs lib/ is gitignored — keep Vitest on TypeScript sources
-      // Longer subpaths before package-root / `/api` (Vite alias is prefix-matched).
+      ["@xrkseek/xrk-session", path.join(root, "packages/stubs/xrk-session/src/index.ts")],
       [
         "@xrkseek/xrk-host-apiproxy/api/events.schema",
         path.join(root, "packages/stubs/xrk-host-apiproxy/src/api/events.schema.ts"),
@@ -96,7 +98,6 @@ export default defineConfig({
       ["@xrkseek/xrk-host-apiproxy/client", path.join(root, "packages/stubs/xrk-host-apiproxy/src/fetch/client.ts")],
       ["@xrkseek/xrk-host-apiproxy", path.join(root, "packages/stubs/xrk-host-apiproxy/src/index.ts")],
       ["@xrkseek/xrk-workflow", path.join(root, "packages/stubs/xrk-workflow/src/index.ts")],
-      // Longer subpath must appear before the package-root alias (object alias is prefix-matched).
       ["@xrkseek/xrk-llm/message", path.join(root, "packages/stubs/xrk-llm/src/message.ts")],
       ["@xrkseek/xrk-llm/src/error.ts", path.join(root, "packages/stubs/xrk-llm/src/error.ts")],
       ["@xrkseek/xrk-llm", path.join(root, "packages/stubs/xrk-llm/src/index.ts")],

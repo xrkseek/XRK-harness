@@ -123,6 +123,8 @@ describe("mobile-access wan pin cookie", () => {
     const handler = createDshCompatPublicHandler({
       pluginsDir,
       xrkHome: home,
+      // Tests simulate a reverse-proxy WAN hop via X-Forwarded-Host.
+      trustProxy: true,
     });
     const server = createServer(async (req, res) => {
       const claimed = await handler(req, res);

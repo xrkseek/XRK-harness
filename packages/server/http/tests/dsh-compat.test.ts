@@ -1144,6 +1144,8 @@ process.exit(0);
     const handler = createDshCompatPublicHandler({
       pluginsDir,
       xrkHome: path.join(root, "home"),
+      // Tests simulate a reverse-proxy WAN hop via X-Forwarded-Host.
+      trustProxy: true,
     });
 
     await withPublicHandler(handler, async (base) => {

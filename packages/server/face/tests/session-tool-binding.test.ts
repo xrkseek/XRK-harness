@@ -30,7 +30,7 @@ const FACE_SESSION_TOOLS = [
   "thread_switch",
   "thread_upsert",
   "workspace_list",
-  "workspace_create",
+  // workspace_create stays on 向阳 admin — coding 经理席 is create-light.
   "workspace_session_prompt",
 ];
 
