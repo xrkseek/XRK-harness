@@ -128,6 +128,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
   private write(ops: SettingsPathOpView[]): Promise<void> {
     this.readGeneration += 1
     const generation = ++this.writeGeneration
+    // Publish the intended section immediately so dual consumers (e.g. Boss
+    // 装扮 in ui-workspace + Overview PresenceBall in ui-plan) do not wait on
+    // the Host round-trip. Revision fencing still uses the last confirmed Host
+    // revision; accept()/read() reconcile with Host truth when the wire lands.
+    this.publishOptimistic(ops)
     return this.enqueue(async () => {
       const mutateOnce = async (): Promise<'ok' | 'conflict' | 'fail'> => {
         const revision = this.getSnapshot().revision
@@ -161,6 +166,21 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       if (!this.disposed && generation === this.writeGeneration) {
         await this.read(++this.readGeneration)
       }
+    })
+  }
+
+  /**
+   * Merge path ops into the last ready section and notify subscribers without
+   * touching Host revision. Skipped until the first accepted Host view exists.
+   */
+  private publishOptimistic(ops: SettingsPathOpView[]): void {
+    if (this.persistence === 'memory' || this.disposed || ops.length === 0) return
+    const current = this.getSnapshot()
+    if (current.status !== 'ready' || current.value === undefined) return
+    const next = applySettingsPathOps(current.value, ops)
+    if (Object.is(next, current.value)) return
+    this.store.update((draft) => {
+      draft.value = next as T
     })
   }
 
@@ -233,6 +253,10 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
         return
       }
       draft.status = 'ready'
+      // Keep the prior section reference when Host confirms the same payload
+      // (e.g. optimistic write already published). Avoids thrashing dual
+      // consumers / EmotionBall for a no-op settlement.
+      if (samePlainSection(draft.value, decoded)) return
       draft.value = decoded
     })
   }
@@ -252,6 +276,83 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
     }
     return failure === undefined ? view.value as T : undefined
   }
+}
+
+/** Shallow section equality — keys + `Object.is` on each value. */
+function samePlainSection(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a === null || Array.isArray(a)) return false
+  if (typeof b !== 'object' || b === null || Array.isArray(b)) return false
+  const left = a as Record<string, unknown>
+  const right = b as Record<string, unknown>
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(right, key)) return false
+    if (!Object.is(left[key], right[key])) return false
+  }
+  return true
+}
+
+/** Apply Face path ops onto a plain section object (shallow-clone along the path). */
+function applySettingsPathOps(value: unknown, ops: readonly SettingsPathOpView[]): unknown {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value
+  let root: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  let changed = false
+  for (const op of ops) {
+    const path = op.path
+    if (path.length === 0) continue
+    if (path.length === 1) {
+      const key = String(path[0])
+      if (op.op === 'unset') {
+        if (!(key in root)) continue
+        const next = { ...root }
+        delete next[key]
+        root = next
+        changed = true
+        continue
+      }
+      if (Object.is(root[key], op.value)) continue
+      root = { ...root, [key]: op.value }
+      changed = true
+      continue
+    }
+    // Nested path: clone each object level, then set/unset the leaf.
+    const clone: Record<string, unknown> = { ...root }
+    let cursor: Record<string, unknown> = clone
+    let ok = true
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const key = String(path[i])
+      const child = cursor[key]
+      if (typeof child !== 'object' || child === null || Array.isArray(child)) {
+        if (op.op === 'unset') {
+          ok = false
+          break
+        }
+        const created: Record<string, unknown> = {}
+        cursor[key] = created
+        cursor = created
+        continue
+      }
+      const nextChild = { ...(child as Record<string, unknown>) }
+      cursor[key] = nextChild
+      cursor = nextChild
+    }
+    if (!ok) continue
+    const leaf = String(path[path.length - 1])
+    if (op.op === 'unset') {
+      if (!(leaf in cursor)) continue
+      delete cursor[leaf]
+    } else if (Object.is(cursor[leaf], op.value)) {
+      continue
+    } else {
+      cursor[leaf] = op.value
+    }
+    root = clone
+    changed = true
+  }
+  return changed ? root : value
 }
 
 declare module '@xrkseek/cordis' {

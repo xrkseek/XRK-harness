@@ -2,13 +2,9 @@
 
 > **读者**：维护者
 
-Cloudflare **Worker**（不是 Pages 静态站）：`GET /` 在边缘拉目录，渲染产品壳（浅色 / 深色 / 跟随系统）+ 可点预置干员；Windows 下载、macOS 标明不支持；页脚挂 GitHub / npm。安装包 302 到 `HARNESS_ORIGIN`（AGT `:6969`；当前无域名，默认明文 `http://103.236.89.174:6969`）。
+Cloudflare **Worker**（不是 Pages 静态站）：`GET /` 渲染产品壳。Windows 安装包在 **GitHub Release**；**中国时区**（或 CF 国家 CN·HK·MO·TW）默认中文页 + 镜像加速（GitHub 直连为第二按钮）；**其它时区**默认英文页 + 原生 GitHub。壳内 **electron-updater** 仍读 AGT（`HARNESS_ORIGIN`）。
 
-```bash
-npx wrangler deploy --config apps/site/wrangler.toml
-```
-
-控制台选 **Workers**，项目名 `xrk-harness`（`wrangler.toml` 的 `name`）。构建根目录设 `apps/site`。改 origin 用 `HARNESS_ORIGIN`。干员名册与 `seedGlobalRosterMembers` 对齐。
+控制台选 **Workers**，项目名 `xrk-harness`（`wrangler.toml` 的 `name`）。构建根目录 `apps/site`。可选 env：`HARNESS_ORIGIN`（更新源 / 目录）、`GITHUB_PROXY_PREFIX`（默认 `https://ghfast.top/`）。
 
 ---
 
@@ -16,10 +12,6 @@ npx wrangler deploy --config apps/site/wrangler.toml
 
 > **Audience**: Maintainers
 
-Cloudflare **Worker** (not a static Pages site). `GET /` fetches the catalog and renders the product shell (light / dark / system) plus a clickable seed roster. Windows is the only desktop download; macOS is listed as unsupported. GitHub and npm are in the nav. Installer bytes 302 to `HARNESS_ORIGIN` (AGT `:6969`; plain IP default `http://103.236.89.174:6969` while no domain).
+Cloudflare **Worker** (not Pages). Windows installers are **GitHub Release** assets. **China-ish TZ / CF CN·HK·MO·TW**: Chinese page + mirror primary (GitHub secondary). **Everyone else**: English page + native GitHub. Desktop **electron-updater** still uses AGT (`HARNESS_ORIGIN`).
 
-```bash
-npx wrangler deploy --config apps/site/wrangler.toml
-```
-
-In the dashboard pick **Workers**, project name `xrk-harness` (the `name` in `wrangler.toml`). Set the build root to `apps/site`. Change origin with `HARNESS_ORIGIN`.
+Workers project name `xrk-harness`. Build root `apps/site`. Optional env: `HARNESS_ORIGIN`, `GITHUB_PROXY_PREFIX` (default `https://ghfast.top/`).

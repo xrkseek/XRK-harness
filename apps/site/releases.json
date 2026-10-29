@@ -9,19 +9,19 @@
       "version": "0.7.0-rc.1",
       "filename": "xrk-harness-0.7.0-rc.1-win-x64.exe",
       "feed": "/api/harness/desktop/win-x64/nightly.yml",
-      "download": "/api/harness/download/win-x64"
+      "download": "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.0-rc.1/xrk-harness-0.7.0-rc.1-win-x64.exe"
     },
     {
       "target": "mac-arm64",
       "available": false,
       "feed": "/api/harness/desktop/mac-arm64/nightly.yml",
-      "download": "/api/harness/download/mac-arm64"
+      "download": ""
     },
     {
       "target": "mac-x64",
       "available": false,
       "feed": "/api/harness/desktop/mac-x64/nightly.yml",
-      "download": "/api/harness/download/mac-x64"
+      "download": ""
     }
   ]
 }

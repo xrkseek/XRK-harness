@@ -120,9 +120,16 @@ function useChromeDark(): boolean {
   )
 }
 
+type DressingImages = {
+  readonly hat?: string
+  readonly glasses?: string
+  readonly held?: string
+}
+
 type EmotionBallHandle = {
   destroy: () => void
   setLite?: (on: boolean) => void
+  setDressing?: (hat: string, glasses: string, held?: string, images?: string | DressingImages) => void
 }
 
 type EmotionBallNs = {
@@ -425,6 +432,7 @@ export function CompanionBall({
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const [ready, setReady] = useState(false)
 
+  // Remount for body geometry only; dressing uses setDressing below.
   const mount = useCallback(() => {
     const el = mountRef.current
     if (!el || empty) return
@@ -460,9 +468,21 @@ export function CompanionBall({
       ballRef.current = null
       setReady(false)
     }
-  }, [empty, emotion, paint.body, paint.eyes, resolvedShape, resolvedHat, resolvedGlasses, heldBuiltin, overlayHat, overlayGlasses, overlayHeld, face])
+    // Initial dressing is baked into create(); later kit/overlay swaps go through setDressing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empty, emotion, paint.body, paint.eyes, resolvedShape])
 
   useEffect(() => mount(), [mount])
+
+  useEffect(() => {
+    const ball = ballRef.current
+    if (!ball || !ready || empty) return
+    ball.setDressing?.(resolvedHat, resolvedGlasses, heldBuiltin ?? 'none', {
+      hat: (overlayHat || face) ?? '',
+      glasses: overlayGlasses ?? '',
+      held: overlayHeld ?? '',
+    })
+  }, [ready, empty, resolvedHat, resolvedGlasses, heldBuiltin, overlayHat, overlayGlasses, overlayHeld, face])
 
   return (
     <span

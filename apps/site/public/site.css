@@ -599,6 +599,7 @@ html[data-theme="dark"] .composer { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
 }
 .row h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .row p { margin: 4px 0 0; color: var(--tertiary); font-variant-numeric: tabular-nums; }
+.dl-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .cli {
   margin-top: 20px;
   display: flex;

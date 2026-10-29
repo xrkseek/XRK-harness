@@ -1882,8 +1882,12 @@ export function PreviewTabs({
   const officeBossSeat = Boolean(
     status?.delegate?.parentSessionId === sessionId && status?.parentCompanionBall,
   )
+  // Child Overview left seat is also Boss when Face labels the parent with the seat title
+  // (no mid AI). Those seats must use live Settings look — same as office home.
+  const leftSeatLiveBossLook = officeBossSeat
+    || status?.delegate?.parentLabel === seatTitles.boss
   // Office Boss label uses Settings nickname when set; AI-parent seats keep Face labels.
-  const bossSeatLabel = officeBossSeat
+  const bossSeatLabel = leftSeatLiveBossLook
     ? delegateSeatCaption(seatTitles.boss, bossMood.bossNickname || undefined)
     : delegateSeatCaption(seatTitles.boss, status?.delegate?.parentLabel)
   // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
@@ -2396,7 +2400,11 @@ export function PreviewTabs({
             >
               <PresenceBall
                 sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
-                {...(status?.parentCompanionBall ? { memberLook: status.parentCompanionBall } : {})}
+                // Boss look is live Settings `ui-presence` (same as mood on office home) —
+                // do not freeze Face `parentCompanionBall` or Team edits wait on Status poll.
+                {...(status?.parentCompanionBall && !leftSeatLiveBossLook
+                  ? { memberLook: status.parentCompanionBall }
+                  : {})}
                 {...(bossPresence ? { presence: bossPresence } : {})}
                 pairSeat
                 seat="from"

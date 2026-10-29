@@ -295,9 +295,12 @@ if (existsSync(path.join(SUNFLOWER_SRC, "xrk.plugin.json"))) {
     process.platform === "win32" ? "bun.exe" : "bun");
   if (!existsSync(bunExe)) {
     const line =
-      "stage: bundled Bun missing — the sunflower-free lane will be unavailable " +
-      "on user machines. Run `pnpm vendor:bun` first.";
-    if (process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1") {
+      "stage: bundled Bun missing — Windows users need `pnpm vendor:bun`; " +
+      "macOS/Linux install Bun locally (extensions/xrk-sunflower-free/README.md).";
+    if (
+      process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1" ||
+      process.platform === "win32"
+    ) {
       console.error(line);
       process.exit(1);
     }

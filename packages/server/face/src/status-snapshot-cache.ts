@@ -102,13 +102,25 @@ export function statusSnapshotRevision(
       ].join(":");
     })
     .join(";");
-  // Shared Boss mood (ui-presence) paints Overview left seat on every office session.
+  // Shared Boss presence (ui-presence) paints Overview left seat — mood + look.
+  // Outfit edits in 干员团队 must bust Status cache the same way Team dress does.
   const presenceUser = runtime.settingsNamespaces.view("ui-presence")
     .value as Record<string, unknown>;
-  const bossMoodFp = [
+  const bossPresenceFp = [
     typeof presenceUser.moodId === "string" ? presenceUser.moodId : "",
     typeof presenceUser.statusLine === "string" ? presenceUser.statusLine : "",
     typeof presenceUser.moodAt === "number" ? String(presenceUser.moodAt) : "0",
+    typeof presenceUser.bossNickname === "string" ? presenceUser.bossNickname : "",
+    typeof presenceUser.shape === "string" ? presenceUser.shape : "",
+    typeof presenceUser.color === "string" ? presenceUser.color : "",
+    typeof presenceUser.kit === "string" ? presenceUser.kit : "",
+    typeof presenceUser.kitHat === "string" ? presenceUser.kitHat : "",
+    typeof presenceUser.kitGlasses === "string" ? presenceUser.kitGlasses : "",
+    typeof presenceUser.kitHeld === "string" ? presenceUser.kitHeld : "",
+    typeof presenceUser.overlayHat === "string" ? presenceUser.overlayHat : "",
+    typeof presenceUser.overlayGlasses === "string" ? presenceUser.overlayGlasses : "",
+    typeof presenceUser.overlayHeld === "string" ? presenceUser.overlayHeld : "",
+    typeof presenceUser.stickers === "string" ? presenceUser.stickers : "",
   ].join(":");
   // eventCount covers projection cells that fold from the durable log.
   return [
@@ -124,7 +136,7 @@ export function statusSnapshotRevision(
     homeFp,
     badge,
     rosterLookFp,
-    bossMoodFp,
+    bossPresenceFp,
   ].join("|");
 }
 

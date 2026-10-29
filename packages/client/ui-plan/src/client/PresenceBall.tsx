@@ -1010,10 +1010,22 @@ export const PresenceBall = memo(function PresenceBall({
       ballRef.current = null
       setReady(false)
     }
-    // Remount when Settings shape/color, chrome scheme, session seed, or engine
-    // gate changes. Emotion id is applied in the follow-up effect.
+    // Remount only when body geometry changes (shape / paint / seed / engine
+    // gate). Kit + overlay dressing hot-update via setDressing — remounting the
+    // whole EmotionBall on every 装扮 click was the main latency users felt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld, renderGen])
+  }, [engineActive, shape, paint.body, paint.eyes, persona.seed, renderGen])
+
+  // Dressing hot path — swap hat / glasses / held without tearing down the ball.
+  useEffect(() => {
+    const ball = ballRef.current
+    if (!ball || !ready) return
+    ball.setDressing?.(engineHat, engineGlasses, engineHeld, {
+      hat: overlayHat,
+      glasses: overlayGlasses,
+      held: overlayHeld,
+    })
+  }, [ready, engineHat, engineGlasses, engineHeld, overlayHat, overlayGlasses, overlayHeld])
 
   // Runtime FX budget — never remount for lite toggles. While a heavy accent
   // holds full FX, skip; the timer restores from perfLiteRef when it ends.

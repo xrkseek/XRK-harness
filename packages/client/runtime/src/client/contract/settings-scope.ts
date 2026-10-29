@@ -72,10 +72,11 @@ export interface SettingsScope<T> {
    */
   subscribe(listener: () => void): () => void
   /**
-   * Queue one field write. Rapid writes preserve mutation order, each carries
-   * the latest known namespace revision, and only the latest settlement may
-   * publish; a rejected or failed latest write reloads Host state instead.
-   * A revision conflict refreshes once and retries the same op before recovering.
+   * Queue one field write. The local snapshot publishes the intended value
+   * immediately (optimistic); the Host round-trip still fences on revision and
+   * reconciles. Rapid writes preserve mutation order; a rejected or failed
+   * latest write reloads Host state instead. A revision conflict refreshes once
+   * and retries the same op before recovering.
    * @param field - scalar field inside the namespace section.
    * @param value - JSON-shaped value selected by the user.
    * @returns settlement after the write and any latest-write recovery read.

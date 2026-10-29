@@ -40,6 +40,7 @@ description: >-
 | 仓结构与插件开发 | `.agents/skills/xrk-harness-architecture/` · `xrk-harness-monorepo/` |
 | 办事流程总表 | `.agents/AGENTS.md`「办事流程」段 |
 | Face 投影层（init 不可共享常量、编号对齐 wire map、stateVersion） | `.agents/context/face-projections.md` |
+| 向日葵免费（Bun 按平台 vendor；无 Bun 则跳过 OpenCode、Kilo 直连） | `.agents/context/sunflower-free-lane.md` |
 | 子代理（角色工具面 `child_gap` · 并发限流 · 何时委派 · 输出 12k spill） | `.agents/context/subagents.md` |
 | 检索仓内符号（先 CodeGraph 再 grep） | `.agents/skills/codegraph-retrieval/SKILL.md` |
 

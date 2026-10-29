@@ -203,7 +203,9 @@ describe('SettingsScopeController', () => {
     await vi.waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     first.resolve(ok(view({ preference: 'dark' }, 5)))
     await Promise.all([dark, light])
-    expect(published.map(section => section?.preference)).toEqual([undefined, 'system', 'light'])
+    // Optimistic publish lands dark then light before Host settles; superseded
+    // mutate(dark) must not republish over the newer optimistic light.
+    expect(published.map(section => section?.preference)).toEqual([undefined, 'system', 'dark', 'light'])
     expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'light' }, revision: 6 })
     expect(mutate).toHaveBeenNthCalledWith(1, {
       ns: 'ui-test',
@@ -298,7 +300,8 @@ describe('SettingsScopeController', () => {
     await scope.load()
     await scope.set('preference', 'dark')
     expect(mutate).toHaveBeenCalledOnce()
-    expect(published.map(section => section?.preference)).toEqual([undefined, 'system', 'light'])
+    // Optimistic dark, then Host recovery read republishes light.
+    expect(published.map(section => section?.preference)).toEqual([undefined, 'system', 'dark', 'light'])
   })
 
   it('does not recover superseded rejected or thrown writes', async () => {

@@ -6,10 +6,11 @@
  *   Kilo：`isFree` listing（不探单模）；
  *   上游恒 `public`，不读用户密钥。
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import path from "node:path";
+import { homedir } from "node:os";
 import {
   DEFAULT_FREE_MODEL,
   FREE_MODELS,
@@ -27,36 +28,35 @@ export const SUNFLOWER_KEY_ENV = "XRK_SUNFLOWER_SIDECAR_KEY";
 
 export { KILO_BASE, fetchKiloFreeCatalog } from "./kilo.mjs";
 
-/** Bun：显式 env → vendor → npm 全局 → PATH 旁路。 */
+/**
+ * Locate Bun for the OpenCode sidecar.
+ * Order: `XRK_SUNFLOWER_BUN` → plugin `vendor/` → `~/.bun/bin` → PATH (`which`/`where`).
+ * Windows Desktop ships `vendor/bun.exe`; macOS/Linux expect a normal Bun install.
+ */
 export function resolveBunBinary(env = process.env, here = import.meta.dirname) {
   const explicit = env.XRK_SUNFLOWER_BUN?.trim();
   if (explicit) return existsSync(explicit) ? explicit : undefined;
 
-  for (const name of ["bun.exe", "bun"]) {
-    const vendored = path.join(here, "vendor", name);
-    if (existsSync(vendored)) return vendored;
+  const bunName = process.platform === "win32" ? "bun.exe" : "bun";
+  const vendored = path.join(here, "vendor", bunName);
+  if (existsSync(vendored)) return vendored;
+
+  const home = env.HOME?.trim() || env.USERPROFILE?.trim() || homedir();
+  if (home) {
+    const bunHome = path.join(home, ".bun", "bin", bunName);
+    if (existsSync(bunHome)) return bunHome;
   }
 
-  const appData = env.APPDATA?.trim();
-  if (process.platform === "win32" && appData) {
-    const npmBin = path.join(
-      appData,
-      "npm",
-      "node_modules",
-      "bun",
-      "bin",
-      "bun.exe",
-    );
-    if (existsSync(npmBin)) return npmBin;
-  }
-  const execDir = path.dirname(process.execPath);
-  for (const rel of [
-    path.join("node_modules", "bun", "bin", "bun.exe"),
-    path.join("..", "node_modules", "bun", "bin", "bun.exe"),
-    path.join("node_modules", "bun", "bin", "bun"),
-  ]) {
-    const candidate = path.join(execDir, rel);
-    if (existsSync(candidate)) return candidate;
+  const probe = spawnSync(
+    process.platform === "win32" ? "where" : "which",
+    ["bun"],
+    { encoding: "utf8", windowsHide: true },
+  );
+  if (probe.status === 0) {
+    for (const line of String(probe.stdout ?? "").split(/\r?\n/u)) {
+      const hit = line.trim();
+      if (hit && existsSync(hit)) return hit;
+    }
   }
   return undefined;
 }
@@ -202,49 +202,54 @@ export async function createPlugin(options = {}) {
       ? []
       : await kiloFetch(options.kilo ?? {}).catch(() => []);
 
+  // No Bun → skip OpenCode; Kilo stays on the keyless gateway (no apiKeyEnv).
+  const override = options.sidecar?.bunBinary;
+  const bunBinary =
+    typeof override === "string" && override.trim()
+      ? existsSync(override.trim())
+        ? override.trim()
+        : undefined
+      : resolveBunBinary(process.env);
   const wantOpenCode = options.skipOpenCode !== true;
-  const wantSidecar = wantOpenCode || kiloModels.length > 0;
 
   /** @type {Awaited<ReturnType<typeof spawnSidecar>> | undefined} */
   let handle;
   /** @type {string[]} */
   let openCodeIds = [];
 
-  if (wantSidecar) {
+  if (bunBinary && (wantOpenCode || kiloModels.length > 0)) {
     handle = await spawnSidecar({
       ...options.sidecar,
+      bunBinary,
       kiloModelIds: kiloModels.map((m) => m.id),
       kiloBase: KILO_BASE,
     });
+    if (handle && !(await sidecarHealthy(handle))) {
+      console.warn("[sunflower-free] sidecar unhealthy — Kilo direct if listed");
+      await handle.stop().catch(() => {});
+      handle = undefined;
+    }
+  } else if (!bunBinary && wantOpenCode) {
+    console.warn(
+      "[sunflower-free] Bun not found — OpenCode omitted; install Bun or set XRK_SUNFLOWER_BUN (see extensions/xrk-sunflower-free/README.md)",
+    );
   }
 
-  if (wantOpenCode) {
-    if (handle && (await sidecarHealthy(handle))) {
-      const probe =
-        options.probeUsableModels ?? probeUsableModels;
-      try {
-        openCodeIds = await probe(handle, FREE_MODELS);
-      } catch (error) {
-        console.warn(
-          `[sunflower-free] OpenCode probe failed (${error?.message ?? error}); omit OpenCode rows`,
-        );
-        openCodeIds = [];
-      }
-      if (openCodeIds.length === 0) {
-        console.warn(
-          "[sunflower-free] OpenCode free pool: no usable models on this Host",
-        );
-      }
-    } else if (handle) {
-      console.warn("[sunflower-free] OpenCode sidecar unhealthy");
-      if (kiloModels.length === 0) {
-        await handle.stop().catch(() => {});
-        handle = undefined;
-      }
-    } else {
-      console.warn("[sunflower-free] OpenCode sidecar unavailable (no bun?)");
+  if (wantOpenCode && handle) {
+    try {
+      openCodeIds = await (options.probeUsableModels ?? probeUsableModels)(
+        handle,
+        FREE_MODELS,
+      );
+    } catch (error) {
+      console.warn(
+        `[sunflower-free] OpenCode probe failed (${error?.message ?? error}); omit OpenCode rows`,
+      );
+      openCodeIds = [];
     }
-  } else if (handle && !(await sidecarHealthy(handle))) {
+  }
+
+  if (handle && openCodeIds.length === 0 && kiloModels.length === 0) {
     await handle.stop().catch(() => {});
     handle = undefined;
   }
@@ -253,18 +258,12 @@ export async function createPlugin(options = {}) {
     ...openCodeIds.map((id) => openCodeCatalogEntry(id)),
     ...kiloModels,
   ];
-
   if (catalogModels.length === 0) {
     if (handle) await handle.stop().catch(() => {});
     return emptyPlugin("no usable free lanes on this Host");
   }
 
-  const defaultModel = pickDefaultModel(
-    openCodeIds,
-    kiloModels,
-    catalogModels,
-  );
-
+  const defaultModel = pickDefaultModel(openCodeIds, kiloModels, catalogModels);
   /** @type {object} */
   const brand = handle
     ? {
@@ -278,8 +277,7 @@ export async function createPlugin(options = {}) {
         defaultModel,
         models: catalogModels,
         autoCatalog: true,
-        notes:
-          "向日葵免费：OpenCode 本机可用项 + Kilo listing（上游 public）。",
+        notes: "向日葵免费：OpenCode + Kilo（sidecar）。",
       }
     : {
         id: SUNFLOWER_BRAND_ID,
@@ -290,13 +288,15 @@ export async function createPlugin(options = {}) {
         defaultModel,
         models: catalogModels,
         autoCatalog: true,
-        notes: "向日葵免费（无 Bun，仅 Kilo 直连）。",
+        notes: "向日葵免费：仅 Kilo 直连（本机无 Bun）。",
       };
 
   if (handle) process.env[SUNFLOWER_KEY_ENV] = handle.key;
+  else delete process.env[SUNFLOWER_KEY_ENV];
 
   console.info(
-    `[sunflower-free] catalog opencode=${openCodeIds.length} kilo=${kiloModels.length}`,
+    `[sunflower-free] catalog opencode=${openCodeIds.length} kilo=${kiloModels.length}` +
+      (handle ? " via=sidecar" : " via=kilo-direct"),
   );
 
   return {

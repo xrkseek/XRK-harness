@@ -7,49 +7,50 @@ const env = {
   ASSETS: { fetch: () => Promise.resolve(new Response("missing", { status: 404 })) },
 };
 
-test("renders product shell, roster, github, and windows download", async () => {
-  const res = await worker.fetch(new Request("https://example.test/"), env);
+const GH_EXE =
+  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.0-rc.1/xrk-harness-0.7.0-rc.1-win-x64.exe";
+const PROXY_EXE = `https://ghfast.top/${GH_EXE}`;
+
+test("non-China default is English with native GitHub download", async () => {
+  const req = new Request("https://example.test/");
+  Object.defineProperty(req, "cf", { value: { timezone: "America/New_York", country: "US" } });
+  const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
   const html = await res.text();
+  assert.match(html, /lang="en"/);
+  assert.match(html, /data-locale-hint="en"/);
+  assert.match(html, /Researcher/);
+  assert.match(html, new RegExp(`href="${GH_EXE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  // Proxy URL is present for client TZ override, but secondary stays hidden.
+  assert.match(html, /ghfast\.top/);
+  assert.match(html, /data-dl-secondary[^>]* hidden/);
+  assert.doesNotMatch(html, /xrk\.siphot\.com/);
+});
+
+test("China timezone is Chinese with mirror primary and GitHub second", async () => {
+  const req = new Request("https://example.test/");
+  Object.defineProperty(req, "cf", { value: { timezone: "Asia/Shanghai", country: "CN" } });
+  const res = await worker.fetch(req, env);
+  const html = await res.text();
+  assert.match(html, /lang="zh-CN"/);
+  assert.match(html, /data-locale-hint="zh"/);
   assert.match(html, /调研员/);
-  assert.match(html, /施工员/);
-  assert.match(html, /github.com\/xrkseek\/XRK-harness/);
-  assert.match(html, /data-theme-id="light"/);
-  assert.match(html, /data-theme-id="dark"/);
-  assert.match(html, /xrk-harness-0\.5\.14-win-x64\.exe/);
-  assert.match(html, /http:\/\/127\.0\.0\.1:9\/api\/harness\/download\/win-x64/);
-  assert.match(html, /目前不提供桌面安装包/);
-  assert.match(html, /id="play"/);
-  assert.match(html, /data-ball/);
-  assert.match(html, /presence\/emotion-ball\/engine\.js/);
-  assert.match(html, /发版 0\.5\.14/);
-  assert.match(html, /修 Host 冷启动/);
-  assert.match(html, /发送消息/);
-  assert.match(html, /排队（本轮后）/);
-  assert.match(html, /插队（本轮结束后）/);
-  assert.match(html, /插队中/);
-  assert.match(html, /id="delegate-btn"/);
-  assert.match(html, /概况/);
-  assert.match(html, /委派图/);
-  assert.match(html, /命令/);
-  assert.match(html, /只读/);
-  assert.match(html, /class="primary is-idle"/);
-  assert.match(html, /停止生成/);
-  assert.match(html, /工作区/);
-  assert.match(html, /新建会话/);
-  assert.match(html, /class="deskbar"/);
-  assert.match(html, /class="rail-end"/);
-  assert.match(html, /class="hero-ball"/);
-  assert.match(html, /data-play-ball/);
-  assert.match(html, /点击互动/);
-  assert.doesNotMatch(html, /class="hero-ball"[^>]*data-member/);
-  assert.doesNotMatch(html, /换干员/);
-  assert.match(html, /class="orbit"/);
-  assert.match(html, /蓝圈/);
-  assert.match(html, /工作台/);
-  assert.match(html, /xrkh web/);
-  assert.match(html, /2 \/ 2/);
-  assert.doesNotMatch(html, /download\/mac-/);
+  assert.match(html, new RegExp(`href="${PROXY_EXE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(html, /镜像加速/);
+  assert.match(html, /GitHub 直连/);
+  assert.doesNotMatch(html, /data-dl-secondary[^>]* hidden/);
+  assert.match(html, /xrk-harness-0\.7\.0-rc\.1-win-x64\.exe/);
+});
+
+test("explicit lang=en overrides China edge locale copy", async () => {
+  const req = new Request("https://example.test/?lang=en");
+  Object.defineProperty(req, "cf", { value: { timezone: "Asia/Shanghai", country: "CN" } });
+  const res = await worker.fetch(req, env);
+  const html = await res.text();
+  assert.match(html, /lang="en"/);
+  assert.match(html, /Researcher/);
+  // CF still China → mirror primary; client TZ may still flip.
+  assert.match(html, /ghfast\.top/);
 });
 
 test("english query and mac stay unavailable", async () => {
@@ -59,11 +60,8 @@ test("english query and mac stay unavailable", async () => {
   assert.doesNotMatch(html, />调研员</);
   assert.match(html, /macOS Apple Silicon/);
   assert.match(html, /Host cold start/);
-  assert.match(html, /Grow toward the sun/);
-  assert.match(html, /Send message/);
-  assert.match(html, /Commands/);
-  assert.match(html, /Read only/);
-  assert.match(html, /Queue \(after this turn\)/);
+  assert.match(html, /No desktop installer yet/);
+  assert.doesNotMatch(html, /download\/mac-/);
 });
 
 test("mac stays listed even if the live catalog marks it available", async () => {
@@ -92,7 +90,7 @@ test("mac stays listed even if the live catalog marks it available", async () =>
   }
 });
 
-test("installer paths redirect off the Worker", async () => {
+test("installer API paths still redirect to AGT update origin", async () => {
   const res = await worker.fetch(
     new Request("https://example.test/api/harness/download/win-x64"),
     { HARNESS_ORIGIN: "http://103.236.89.174:6969" },

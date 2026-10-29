@@ -210,10 +210,13 @@ export function createElectronBuilderConfig(
         cpSync(sunflowerSrc, sunflowerDest, { recursive: true });
         const bunName = process.platform === "win32" ? "bun.exe" : "bun";
         if (!existsSync(join(sunflowerDest, "vendor", bunName))) {
-          console.warn(
-            "xrk desktop afterPack: bundled Bun missing — the sunflower-free " +
-              "lane will be unavailable on user machines. Run `pnpm vendor:bun` first.",
-          );
+          // Windows ships Bun so OpenCode works on empty machines. Other
+          // platforms document a local Bun install — Kilo still works without it.
+          const msg =
+            `xrk desktop afterPack: no ${bunName} under sunflower vendor ` +
+            "(run `pnpm vendor:bun`). See extensions/xrk-sunflower-free/README.md.";
+          if (process.platform === "win32") throw new Error(msg);
+          console.warn(msg);
         }
       }
       if (!updateUrl) return;

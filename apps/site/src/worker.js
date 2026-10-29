@@ -1,6 +1,8 @@
 /**
  * Cloudflare Worker product page.
- * Installer bytes redirect to HARNESS_ORIGIN (AGT :6969; plain IP while no domain).
+ * Desktop installers are GitHub Release assets. Visitors in China-ish timezones
+ * (or CF country CN/HK/MO/TW) get a gh-proxy mirror link; others get GitHub direct.
+ * HARNESS_ORIGIN remains for optional live catalog / legacy /api/harness/* proxy.
  */
 import fallbackCatalog from "../releases.json" with { type: "json" };
 
@@ -8,6 +10,18 @@ const DEFAULT_ORIGIN = "http://103.236.89.174:6969";
 const GITHUB = "https://github.com/xrkseek/XRK-harness";
 const NPM = "https://www.npmjs.com/package/@xrkseek/harness-cli";
 const DOCS = `${GITHUB}/blob/main/docs/getting-started.md`;
+/** Prefix that accepts a full https://github.com/... URL after it. */
+const DEFAULT_GITHUB_PROXY = "https://ghfast.top/";
+const CN_TIMEZONES = new Set([
+  "Asia/Shanghai",
+  "Asia/Chongqing",
+  "Asia/Harbin",
+  "Asia/Urumqi",
+  "Asia/Hong_Kong",
+  "Asia/Macau",
+  "Asia/Taipei",
+]);
+const CN_COUNTRIES = new Set(["CN", "HK", "MO", "TW"]);
 
 /** Keep in sync with seedGlobalRosterMembers in packages/server/face. */
 const SEEDS = [
@@ -82,6 +96,8 @@ const LABELS = {
     docs: "文档",
     npm: "npm",
     download: "下载",
+    downloadGithub: "GitHub 直连",
+    downloadProxy: "镜像加速",
     win: "Windows x64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
@@ -151,6 +167,8 @@ const LABELS = {
     docs: "Docs",
     npm: "npm",
     download: "Download",
+    downloadGithub: "GitHub",
+    downloadProxy: "Mirror",
     win: "Windows x64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
@@ -218,31 +236,91 @@ function isMacTarget(target) {
   return String(target || "").startsWith("mac-");
 }
 
-function downloadHref(row, env) {
+function githubProxyPrefix(env) {
+  const raw = String(env.GITHUB_PROXY_PREFIX || DEFAULT_GITHUB_PROXY).trim();
+  if (!raw) return DEFAULT_GITHUB_PROXY;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
+/** Prefer GitHub Release asset for the marketing download button. */
+function githubAssetUrl(row) {
   if (isMacTarget(row?.target)) return "";
-  if (!row?.available || !row.download) return "";
-  if (/^https?:\/\//i.test(row.download)) return row.download;
-  const path = row.download.startsWith("/") ? row.download : `/${row.download}`;
-  return `${origin(env)}${path}`;
+  if (!row?.available) return "";
+  const explicit = String(row.download || "").trim();
+  if (/^https:\/\/github\.com\//i.test(explicit)) return explicit;
+  const version = String(row.version || "").trim();
+  const filename = String(row.filename || "").trim();
+  if (!version || !filename) return "";
+  const tag = version.startsWith("v") ? version : `v${version}`;
+  return `${GITHUB}/releases/download/${tag}/${filename}`;
+}
+
+function proxiedGithubUrl(assetUrl, env) {
+  if (!assetUrl) return "";
+  return `${githubProxyPrefix(env)}${assetUrl}`;
+}
+
+/** China-ish visitors: CF timezone or country. Client script may still flip. */
+function preferGithubProxy(request) {
+  const tz = request?.cf?.timezone;
+  if (tz && CN_TIMEZONES.has(tz)) return true;
+  const cc = request?.cf?.country;
+  if (cc && CN_COUNTRIES.has(cc)) return true;
+  return false;
+}
+
+/**
+ * China TZ: mirror primary, GitHub as second source.
+ * Else: GitHub only. data-dl-* always present so client TZ can override CF.
+ */
+function downloadButtons(row, env, t, preferProxy) {
+  const github = githubAssetUrl(row);
+  if (!github) {
+    return `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`;
+  }
+  const mirror = proxiedGithubUrl(github, env);
+  const primaryHref = preferProxy ? mirror : github;
+  const primaryLabel = preferProxy ? t.downloadProxy : t.download;
+  const secondaryHidden = preferProxy ? "" : " hidden";
+  return `<span class="dl-actions" data-dl-pair data-proxy-label="${escapeHtml(t.downloadProxy)}" data-github-label="${escapeHtml(t.downloadGithub)}" data-plain-label="${escapeHtml(t.download)}">
+    <a class="btn" data-dl-primary data-dl-github="${escapeHtml(github)}" data-dl-proxy="${escapeHtml(mirror)}" href="${escapeHtml(primaryHref)}">${escapeHtml(primaryLabel)}</a>
+    <a class="btn btn-outline" data-dl-secondary data-dl-github="${escapeHtml(github)}" href="${escapeHtml(github)}"${secondaryHidden}>${escapeHtml(t.downloadGithub)}</a>
+  </span>`;
 }
 
 function ballMount(member, extraClass = "") {
   return `<span class="stage ${extraClass}"><span class="mount" data-ball data-shape="${escapeHtml(member.shape)}" data-color="${escapeHtml(member.color)}"></span></span>`;
 }
 
-function renderPage(catalog, env, zh) {
+function renderPage(catalog, env, zh, request) {
   const t = zh ? LABELS.zh : LABELS.en;
+  const preferProxy = preferGithubProxy(request);
   const live = Array.isArray(catalog.products) ? catalog.products : [];
+  // Marketing download URLs come from releases.json (GitHub). Live AGT catalog
+  // may refresh version/filename/available for the auto-update feed path only.
   const products = (fallbackCatalog.products || []).map((base) => {
     const hit = live.find((row) => row.target === base.target) || {};
     if (isMacTarget(base.target)) {
       return { ...base, ...hit, target: base.target, available: false };
     }
-    return { ...base, ...hit, target: base.target };
+    return {
+      ...base,
+      ...hit,
+      target: base.target,
+      download: base.download,
+      version: hit.version || base.version,
+      filename: hit.filename || base.filename,
+      available: Boolean(base.available || hit.available),
+    };
   });
   const cli = catalog.cli || fallbackCatalog.cli || "npm i -g @xrkseek/harness-cli";
   const win = products.find((row) => row.target === "win-x64");
-  const winHref = downloadHref(win, env);
+  const winGithub = githubAssetUrl(win);
+  const winHref = winGithub
+    ? preferProxy
+      ? proxiedGithubUrl(winGithub, env)
+      : winGithub
+    : "";
   const first = SEEDS[0];
   const firstName = zh ? first.name : first.nameEn;
   const firstBrief = zh ? first.brief : first.briefEn;
@@ -256,12 +334,11 @@ function renderPage(catalog, env, zh) {
   }).join("");
   const rows = products.map((row) => {
     const mac = isMacTarget(row.target);
-    const href = downloadHref(row, env);
     const label = t[TARGET_KEY[row.target] || ""] || row.target;
     const meta = mac ? t.macOff : row.available ? [row.version, row.filename].filter(Boolean).join(" · ") : t.wait;
-    const btn = href
-      ? `<a class="btn" href="${escapeHtml(href)}">${escapeHtml(t.download)}</a>`
-      : `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`;
+    const btn = mac
+      ? `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`
+      : downloadButtons(row, env, t, preferProxy);
     return `<article class="row"><div><h2>${escapeHtml(label)}</h2><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
   }).join("");
   const orbit = SEEDS.map((m) =>
@@ -273,11 +350,11 @@ function renderPage(catalog, env, zh) {
     </article>`).join("");
   const dots = (zh ? FLOW.zh : FLOW.en).map((_, i) =>
     `<button type="button" class="dot${i === 0 ? " on" : ""}" data-scene-dot="${i}" aria-label="${i + 1}"></button>`).join("");
-  const cta = winHref
-    ? `<a class="btn" href="${escapeHtml(winHref)}">${escapeHtml(t.get)}</a>`
+  const cta = winGithub
+    ? `<a class="btn" data-dl-cta data-dl-github="${escapeHtml(winGithub)}" data-dl-proxy="${escapeHtml(proxiedGithubUrl(winGithub, env))}" href="${escapeHtml(winHref)}">${escapeHtml(t.get)}</a>`
     : `<span class="btn" aria-disabled="true">${escapeHtml(t.get)}</span>`;
   return `<!doctype html>
-<html lang="${zh ? "zh-CN" : "en"}">
+<html lang="${zh ? "zh-CN" : "en"}" data-locale-hint="${preferProxy ? "zh" : "en"}">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -291,6 +368,44 @@ function renderPage(catalog, env, zh) {
         var p = localStorage.getItem("xrk-site-theme") || "system";
         var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {}
+      // Visitor TZ is source of truth: UTC+8 → zh + mirror; else en + GitHub.
+      try {
+        var cn = new Date().getTimezoneOffset() === -480;
+        var hasLang = /(?:^|[?&])lang=/.test(location.search);
+        if (!hasLang) {
+          var want = cn ? "zh" : "en";
+          var hint = document.documentElement.getAttribute("data-locale-hint") || "";
+          if (want !== hint) {
+            location.replace(location.pathname + "?lang=" + want + location.hash);
+            return;
+          }
+        }
+        document.addEventListener("DOMContentLoaded", function () {
+          document.querySelectorAll("[data-dl-pair]").forEach(function (wrap) {
+            var primary = wrap.querySelector("[data-dl-primary]");
+            var secondary = wrap.querySelector("[data-dl-secondary]");
+            if (!primary) return;
+            var gh = primary.getAttribute("data-dl-github");
+            var px = primary.getAttribute("data-dl-proxy");
+            if (!gh || !px) return;
+            if (cn) {
+              primary.href = px;
+              primary.textContent = wrap.getAttribute("data-proxy-label") || primary.textContent;
+              if (secondary) secondary.hidden = false;
+            } else {
+              primary.href = gh;
+              primary.textContent = wrap.getAttribute("data-plain-label") || primary.textContent;
+              if (secondary) secondary.hidden = true;
+            }
+          });
+          document.querySelectorAll("a[data-dl-cta]").forEach(function (a) {
+            var gh = a.getAttribute("data-dl-github");
+            var px = a.getAttribute("data-dl-proxy");
+            if (!gh || !px) return;
+            a.href = cn ? px : gh;
+          });
+        });
       } catch (e) {}
     })();
   </script>
@@ -510,8 +625,15 @@ export default {
     }
     if (url.pathname === "/" || url.pathname === "") {
       const catalog = await loadCatalog(env);
-      const zh = url.searchParams.get("lang") !== "en";
-      return new Response(renderPage(catalog, env, zh), {
+      const lang = url.searchParams.get("lang");
+      // Explicit ?lang= wins; otherwise China TZ/country → zh, else en.
+      const zh =
+        lang === "zh"
+          ? true
+          : lang === "en"
+            ? false
+            : preferGithubProxy(request);
+      return new Response(renderPage(catalog, env, zh, request), {
         headers: {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "public, max-age=60",

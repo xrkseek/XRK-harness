@@ -142,6 +142,18 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_LLM_MODEL` | 可选模型覆盖 |
 | `XRK_LLM_BASE_URL` | 可选 baseUrl（`custom` 等常需） |
 | brand `apiKeyEnv` | 如 `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY` · `OPENAI_API_KEY`（见 presets 表；**不是**统一的 `XRK_LLM_API_KEY`） |
+| `XRK_SUNFLOWER_BUN` | 可选；向日葵免费 OpenCode sidecar 用的 Bun 绝对路径 |
+
+### 向日葵免费（OpenCode + Kilo）
+
+内置插件 `xrk-sunflower-free`（模型目录里的 **向日葵免费**）：
+
+| 平台 | Bun |
+|------|-----|
+| Windows Desktop | 安装包自带；空机也可开 OpenCode 池 |
+| macOS / Linux | **不随包**。本机安装 Bun 后即可（官方安装脚本默认 `~/.bun/bin`，或 Homebrew / 其它方式进 `PATH`）。也可设 `XRK_SUNFLOWER_BUN` |
+
+无 Bun 时：OpenCode 行不出现；**Kilo 免费池仍可用**（直连，无需填密钥）。落点与探测细节见 [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md)。
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md)。
 
@@ -451,6 +463,18 @@ Preset selection: [profiles.md](./profiles.md).
 | `XRK_LLM_MODEL` | Optional model override |
 | `XRK_LLM_BASE_URL` | Optional baseUrl (often required for `custom`) |
 | brand `apiKeyEnv` | e.g. `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY` · `OPENAI_API_KEY` (see presets table; **not** a unified `XRK_LLM_API_KEY`) |
+| `XRK_SUNFLOWER_BUN` | Optional absolute path to Bun for the sunflower-free OpenCode sidecar |
+
+### Sunflower free (OpenCode + Kilo)
+
+Built-in plugin `xrk-sunflower-free` (**向日葵免费** in the model catalog):
+
+| Platform | Bun |
+|------|-----|
+| Windows Desktop | Shipped in the installer; OpenCode pool works on empty machines |
+| macOS / Linux | **Not bundled**. Install Bun locally (official installer → `~/.bun/bin`, or Homebrew / anything on `PATH`). Or set `XRK_SUNFLOWER_BUN` |
+
+Without Bun: OpenCode rows are omitted; the **Kilo free pool still works** (direct, no API key). Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md).
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md).
 

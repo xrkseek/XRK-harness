@@ -52,6 +52,7 @@ import {
   ensureDshCompatHostPlugin,
   ensureSunflowerFreePlugin,
   DSH_COMPAT_HOST_PLUGIN_ID,
+  SUNFLOWER_FREE_PLUGIN_ID,
   createLiveHostPluginsPublicHandler,
   createHttpServer,
   createXrkPluginPublicHandler,
@@ -805,13 +806,20 @@ export function createHostManager(): HostManager {
       const deferManagedPlugins =
         String(process.env.XRK_SURFACE ?? "").trim() === "desktop";
 
+      // Built-ins loaded outside pluginsDir (dsh-compat Host fiber + sunflower
+      // free LLM). Without preserveIds, Desktop's deferred reconcile unregisters
+      // them → dispose clears XRK_SUNFLOWER_SIDECAR_KEY while the brand stays.
+      const builtInPreserveIds = [
+        DSH_COMPAT_HOST_PLUGIN_ID,
+        SUNFLOWER_FREE_PLUGIN_ID,
+      ] as const;
       let loadedPluginIds: string[] = [];
       const loadManagedPlugins = async (): Promise<void> => {
         if (!managedPluginsRootReady()) return;
         const bootPlugins = await reconcileManagedProcessPlugins(
           loader,
           resolvedPluginsDir,
-          { preserveIds: [DSH_COMPAT_HOST_PLUGIN_ID] },
+          { preserveIds: [...builtInPreserveIds] },
         );
         loadedPluginIds = [...bootPlugins.ids];
         for (const failure of bootPlugins.failures) {
@@ -2441,7 +2449,7 @@ export function createHostManager(): HostManager {
               ...(options?.reloadIds !== undefined
                 ? { reloadIds: options.reloadIds }
                 : {}),
-              preserveIds: [DSH_COMPAT_HOST_PLUGIN_ID],
+              preserveIds: [...builtInPreserveIds],
             },
           );
           loadedPluginIds = [...synced.ids];
@@ -3640,7 +3648,11 @@ export function createHostManager(): HostManager {
       }
       if (deferManagedPlugins) {
         void loadManagedPlugins()
-          .then(() => {
+          .then(async () => {
+            // Defense in depth: if preserveIds ever drops sunflower, re-ensure
+            // so SIDECAR_KEY / sidecar stay alive for the free lane.
+            await ensureSunflowerFreePlugin(loader);
+            refreshFacePlugins();
             rebuildPolicyEngine();
             log?.info(
               `desktop process plugins ready (${String(loadedPluginIds.length)})`,

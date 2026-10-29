@@ -97,5 +97,4 @@ scripts/diff-locale-keys.mjs
 scripts/dump-scaffold-missing-en.mjs
 scripts/extract-locale-strings.mjs
 scripts/scaffold-locale-ja.mjs
-scripts/vendor-bun.mjs
 scripts/form-orphan-as-const.mjs

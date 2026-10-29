@@ -50,4 +50,35 @@ describe("status snapshot revision cache", () => {
     expect(second).not.toBe(first);
     expect(second.sessionId).toBe(first.sessionId);
   });
+
+  it("busts cache when Boss outfit fields change in ui-presence", async () => {
+    const runtime = bareRuntime();
+    const created = await dispatchFaceMethod(runtime, "session.create", "c3", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const before = buildSessionStatusSnapshot(runtime, sessionId);
+    const revBefore = statusSnapshotRevision(runtime, sessionId);
+
+    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
+      shape: "wedge",
+      color: "sage",
+      kitHat: "bow",
+      kitGlasses: "specs",
+      kitHeld: "tea",
+    });
+
+    const revAfter = statusSnapshotRevision(runtime, sessionId);
+    expect(revAfter).not.toBe(revBefore);
+
+    const after = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(after).not.toBe(before);
+    expect(after.parentCompanionBall).toMatchObject({
+      shape: "wedge",
+      color: "sage",
+      kitHat: "bow",
+      kitGlasses: "specs",
+      kitHeld: "tea",
+    });
+  });
 });

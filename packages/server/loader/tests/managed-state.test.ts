@@ -353,10 +353,19 @@ describe("managed-state soft-disable", () => {
       kind: "host",
       createPublicHandler: () => async () => false,
     });
-    const kept = await reconcileManagedProcessPlugins(loader, root, {
-      preserveIds: ["dsh-compat-host"],
+    loader.register({
+      id: "xrk-sunflower-free",
+      kind: "llm",
+      llmBrands: [],
     });
-    expect(kept.ids.sort()).toEqual(["dsh-compat-host", "keep-tools"]);
+    const kept = await reconcileManagedProcessPlugins(loader, root, {
+      preserveIds: ["dsh-compat-host", "xrk-sunflower-free"],
+    });
+    expect(kept.ids.sort()).toEqual([
+      "dsh-compat-host",
+      "keep-tools",
+      "xrk-sunflower-free",
+    ]);
   });
 
   it("soft-disable unload pairs dispose", async () => {
