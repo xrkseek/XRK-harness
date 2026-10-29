@@ -299,6 +299,16 @@ function ensureProduceArtifacts() {
     );
     if ((prep.status ?? 1) !== 0) process.exit(prep.status ?? 1);
   }
+  // Stub `lib/` is gitignored; package.json main still points at lib/index.js.
+  // Emit types + package-root shims before pnpm deploy copies the tree.
+  process.stdout.write("package-desktop: stub:types…\n");
+  const stubs = spawnSync(
+    process.execPath,
+    [path.join(ROOT, "scripts", "emit-stub-types.mjs")],
+    { cwd: ROOT, stdio: "inherit" },
+  );
+  if ((stubs.status ?? 1) !== 0) process.exit(stubs.status ?? 1);
+
   // Always refresh host-bundle so workspace Face/pipe fixes are not skipped by a
   // stale deploy tree from an earlier package run.
   process.stdout.write("package-desktop: prepare-host-bundle…\n");

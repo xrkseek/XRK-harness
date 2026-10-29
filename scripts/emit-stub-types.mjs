@@ -1,5 +1,11 @@
 /**
- * Emit packages/stubs/<name>/lib/types via tsc (input for client:types).
+ * Emit packages/stubs/<name>/lib/types via tsc (input for client:types),
+ * then write package-root shims that package.json `main` / `exports["."]` expect.
+ *
+ * Stub tsconfigs use `outDir: lib/types`, but most package.json files still
+ * point `main` / `exports["."].default` at `lib/index.js` (and `./invariant`
+ * at `lib/invariant.js`). Without those shims, Node ESM resolution fails for
+ * host-bundle / pnpm deploy (Desktop smoke: ERR_MODULE_NOT_FOUND).
  *
  * Client tsconfigs set `"types": []`, so stubs that import `node:*` need an
  * explicit `--types node` override. tsc still emits on type errors; warn and
@@ -8,7 +14,7 @@
  *   pnpm stub:types
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,6 +27,25 @@ function tscCli() {
   return cli;
 }
 
+/** Write `lib/<name>.js` → `export * from "./types/<name>.js"` when types emit exists. */
+function writePackageRootShims(stubDir) {
+  const libDir = path.join(stubDir, "lib");
+  const pairs = [
+    ["index.js", "types/index.js"],
+    ["invariant.js", "types/invariant.js"],
+  ];
+  for (const [shimName, typesRel] of pairs) {
+    const typesFile = path.join(libDir, typesRel);
+    if (!existsSync(typesFile)) continue;
+    mkdirSync(libDir, { recursive: true });
+    writeFileSync(
+      path.join(libDir, shimName),
+      `export * from "./${typesRel.replace(/\\/g, "/")}";\n`,
+      "utf8",
+    );
+  }
+}
+
 function main() {
   const tsc = tscCli();
   const names = readdirSync(STUBS, { withFileTypes: true })
@@ -29,7 +54,8 @@ function main() {
     .sort();
   const failed = [];
   for (const name of names) {
-    const tsconfig = path.join(STUBS, name, "tsconfig.json");
+    const stubDir = path.join(STUBS, name);
+    const tsconfig = path.join(stubDir, "tsconfig.json");
     if (!existsSync(tsconfig)) continue;
     process.stdout.write(`stub-types ${name}\n`);
     const result = spawnSync(
@@ -40,8 +66,8 @@ function main() {
         stdio: "inherit",
       },
     );
-    const entry = path.join(STUBS, name, "lib", "types", "index.d.ts");
-    const alt = path.join(STUBS, name, "lib", "types", "client", "index.d.ts");
+    const entry = path.join(stubDir, "lib", "types", "index.d.ts");
+    const alt = path.join(stubDir, "lib", "types", "client", "index.d.ts");
     if (!existsSync(entry) && !existsSync(alt) && result.status !== 0) {
       process.stderr.write(`  missing types emit for ${name}\n`);
       failed.push(name);
@@ -52,6 +78,7 @@ function main() {
         `  warn ${name}: tsc ${result.status} (emit kept for client:types)\n`,
       );
     }
+    writePackageRootShims(stubDir);
   }
   if (failed.length) {
     throw new Error(`stub:types failed (${failed.length}): ${failed.join(", ")}`);
