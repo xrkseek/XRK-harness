@@ -108,21 +108,21 @@ Cursor 锁住 `app.asar`（`EBUSY`）时设 `XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=
 不要整目录盲传旧版大 exe。只推本版：
 
 数据根（勿放错）：`/root/cs/XRK-AGT/data/harness-download/`（= AGT `paths.data` + `harness-download`）。  
-官网 HTTPS：`https://xrk.siphot.com/api/harness/…`（只服务 `/releases` · `/download/:target` · 相对路径）。  
-壳内更新 **exe 绝对 URL** 用 `local.md` 里的直连 `http://IP:6969/api/harness`（公网 HTTPS 大文件会卡 0%）。
+官网 / Worker：`HARNESS_ORIGIN` 当前挂明文 `http://IP:6969`（无域名）；下载 302 到同 origin。  
+壳内更新 **exe 绝对 URL** 同样用 `http://IP:6969/api/harness`（写 `local.md` / `.env.windows`）。
 
 1. 本地 stage：
    - `…/bin/win-x64/xrk-harness-N-win-x64.exe` ← 从 `*-unsigned.exe` **复制改名**
    - 同名 `.blockmap`
    - `nightly.yml` / `latest.yml`：`version: N`，`url`/`path` 用  
      **`http://<AGT-IP>:6969/api/harness/desktop/bin/win-x64/xrk-harness-N-win-x64.exe`**  
-     （IP 只写 `local.md`；**官网**仍走 siphot 相对 `/download/...`，不要改 `releases.json` 去指明文 IP）
+     （IP 只写 `local.md` / `.env.windows`；`releases.json` 继续用相对 `/api/harness/...`，Worker 靠 `HARNESS_ORIGIN` 拼绝对地址）
 2. **先传完整 exe + blockmap**（`stat` 大小 == 本地；直连 `HEAD` Content-Length 对齐）
 3. **再** 上传两个 yml（半截包 + 完整清单 → `sha512 checksum mismatch`）
 4. 传断必须 `rm` 半截再重传
 5. 核对：
    - `HEAD http://<AGT-IP>:6969/api/harness/desktop/bin/…/xrk-harness-N-win-x64.exe` → 200 + 完整长度
-   - `GET https://xrk.siphot.com/api/harness/releases` → `available:true`、version=N（官网不变）
+   - `GET http://<AGT-IP>:6969/api/harness/releases` → `available:true`、version=N
    - `GET …/desktop/win-x64/nightly.yml` → `version: N` 且 **exe url 为明文 IP**
 
 SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
@@ -153,8 +153,5 @@ SSH 命令与密码只在 `local.md` / 本机 mcp，**不入库、不回显**。
 - 半截 exe（传断）必须删掉再传；`HEAD` Content-Length 必须等于 yml `size`。
 - 同版本重打覆盖同名产物与 `nightly.yml`。
 - Node ≥26；不用 Cursor helper `node.exe`。
-- 官网 `xrk.siphot.com` 在部分本机 / 网络下 **DNS 直接 NXDOMAIN**（`Resolve-DnsName` 报"DNS 名称不存在"，
-  curl 直连与 `-x` 代理都 `http=000`）。这时**不要**判定"更新源没生效"：壳内 electron-updater 与下载页真正读的是
-  AGT 明文源 `http://<IP>:6969/api/harness/releases`，先打它核对（`version` / `bytes` / `available`）。
-  2026-10-16 发 v0.6.1 时即如此：6969 已返回 0.6.1，siphot 侧 000 属解析问题，与本轮发布无关。
+- 无域名期间不要再查 `xrk.siphot.com`；以 `http://<IP>:6969/api/harness/releases` 为准。
 - 密钥、SSH 密码、VPS 路径、本机盘符不入库、不回显。
