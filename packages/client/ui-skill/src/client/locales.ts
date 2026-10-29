@@ -23,3 +23,14 @@ export const en = {
   'row.instructions': 'Instructions',
   'menu.userOnly': 'user-only',
 } satisfies Record<SkillKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'row.running': 'スキルを読み込み中',
+  'row.failed': 'スキルの読み込みに失敗しました',
+  'row.stopped': 'スキルの読み込みを停止しました',
+  'row.instructions': '指示',
+  'menu.userOnly': 'ユーザーのみ',
+} as const satisfies Record<SkillKey, string>
+
+

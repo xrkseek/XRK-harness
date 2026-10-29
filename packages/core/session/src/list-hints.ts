@@ -10,17 +10,27 @@ export function computeListHints(
   events: readonly SessionEvent[],
 ): SessionListHints {
   if (events.length === 0) {
-    return { lastEventTs: null, hasTurnStart: false, hasCommandRun: false };
+    return {
+      lastEventTs: null,
+      eventCount: 0,
+      hasTurnStart: false,
+      hasCommandRun: false,
+    };
   }
+  // Match durable hint columns: `last_ts = MAX(ts)` (not “last row’s ts”).
+  // Title / end-seed often use `Date.now()` while replayed prefix keeps small
+  // synthetic clocks — last-row would disagree with the cold DB path.
+  let lastEventTs = events[0]!.ts;
   let hasTurnStart = false;
   let hasCommandRun = false;
   for (const event of events) {
+    if (event.ts > lastEventTs) lastEventTs = event.ts;
     if (event.type === "turn/start") hasTurnStart = true;
     else if (event.type === "command/run") hasCommandRun = true;
-    if (hasTurnStart && hasCommandRun) break;
   }
   return {
-    lastEventTs: events[events.length - 1]?.ts ?? null,
+    lastEventTs,
+    eventCount: events.length,
     hasTurnStart,
     hasCommandRun,
   };

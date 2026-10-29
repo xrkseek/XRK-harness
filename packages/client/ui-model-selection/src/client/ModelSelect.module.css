@@ -117,7 +117,8 @@
 @media (max-width: 767px) {
   .trigger {
     height: 40px;
-    max-width: min(220px, 46vw);
+    /* Share the ~360 toolbar with attach + access + send — don't shove wrap. */
+    max-width: min(148px, 38vw);
     touch-action: manipulation;
   }
 
@@ -277,6 +278,13 @@
   min-width: 0;
 }
 
+.modelTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .modelName {
   overflow: hidden;
   color: inherit;
@@ -284,6 +292,18 @@
   line-height: 20px;
   font-weight: 500;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modalityBadge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 500;
   white-space: nowrap;
 }
 

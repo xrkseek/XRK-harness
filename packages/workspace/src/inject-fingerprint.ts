@@ -10,6 +10,7 @@ import {
   resolveSkillDirs,
   skillDirsFingerprint,
 } from "./skill-dirs.js";
+import { standingCatalogSkillDirCandidates } from "./standing-skill-dirs.js";
 import { resolveUserProductHome } from "./user-product-home.js";
 
 export interface InjectFingerprintOptions {
@@ -19,6 +20,8 @@ export interface InjectFingerprintOptions {
   readonly homeDir?: string;
   readonly includeUserHomeSkills?: boolean;
   readonly extraSkillDirs?: readonly string[];
+  /** When `minimal`, workspace skill trees are omitted from the standing catalog. */
+  readonly audience?: "user" | "subagent" | "minimal";
 }
 
 async function markerFingerprint(base: string, rel: string): Promise<string> {
@@ -45,9 +48,13 @@ export async function computeInjectFingerprint(
   const parts: string[] = [`root:${root}`, `product:${productDir}`];
 
   if (options.includeUserHome !== false) {
-    const home = path.resolve(options.homeDir ?? homedir());
-    for (const rel of HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS) {
-      parts.push(`home:${await markerFingerprint(home, rel)}`);
+    const skipHomeConvention =
+      options.audience === "subagent" || options.audience === "minimal";
+    if (!skipHomeConvention) {
+      const home = path.resolve(options.homeDir ?? homedir());
+      for (const rel of HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS) {
+        parts.push(`home:${await markerFingerprint(home, rel)}`);
+      }
     }
     const userProduct = resolveUserProductHome(options.homeDir);
     for (const rel of HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS) {
@@ -63,17 +70,23 @@ export async function computeInjectFingerprint(
   parts.push(`ws-product:${await markerFingerprint(productDir, "AGENTS.md")}`);
 
   const skillDirs = await resolveSkillDirs({
-    workspaceRoot: root,
-    productDir,
-    includeUserHome:
-      options.includeUserHome !== false &&
-      options.includeUserHomeSkills === true,
-    ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+    skillDirs: standingCatalogSkillDirCandidates({
+      workspaceRoot: root,
+      productDir,
+      ...(options.audience !== undefined
+        ? { audience: options.audience }
+        : {}),
+      ...(options.extraSkillDirs?.length
+        ? { extraSkillDirs: options.extraSkillDirs }
+        : {}),
+      ...(options.includeUserHome !== undefined
+        ? { includeUserHome: options.includeUserHome }
+        : {}),
+      includeUserHomeSkills: options.includeUserHomeSkills === true,
+      ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+    }),
   });
-  const extra = options.extraSkillDirs?.length
-    ? await resolveSkillDirs({ skillDirs: options.extraSkillDirs })
-    : [];
-  parts.push(await skillDirsFingerprint([...skillDirs, ...extra]));
+  parts.push(await skillDirsFingerprint(skillDirs));
 
   return parts.join("|");
 }

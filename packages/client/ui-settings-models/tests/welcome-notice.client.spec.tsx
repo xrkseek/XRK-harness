@@ -71,7 +71,7 @@ describe('WelcomeNotice', () => {
     expect(zh.welcomeBody).toBe(WELCOME_NOTICE_COPY.zh.body)
   })
 
-  it('renders one blocking modal action and focuses the title', async () => {
+  it('renders one blocking modal action and focuses Continue (not the title)', async () => {
     const h = mount()
     const dialog = await screen.findByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title })
     for (const paragraph of WELCOME_NOTICE_COPY.zh.body.split('\n\n')) {
@@ -79,8 +79,10 @@ describe('WelcomeNotice', () => {
     }
     expect(dialog.querySelectorAll('p')).toHaveLength(2)
     expect(dialog.querySelectorAll('button')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel })).toBeTruthy()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: WELCOME_NOTICE_COPY.zh.title }))
+    const continueBtn = screen.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel })
+    expect(continueBtn).toBeTruthy()
+    // Title focus paints a mobile "selected" ring; primary action is the stop.
+    expect(document.activeElement).toBe(continueBtn)
     expect(h.appRoot.inert).toBe(true)
 
     fireEvent.keyDown(document, { key: 'Escape' })

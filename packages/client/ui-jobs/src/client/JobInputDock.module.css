@@ -101,7 +101,19 @@
   overscroll-behavior: contain;
 }
 
-/* Single-job: the list is the whole card 閳?keep one quiet pad. */
+/* Single-job: the list is the whole card — keep one quiet pad. */
 .body > .list:first-child {
   padding: 4px;
+}
+
+/* Phone: expanded job dock sits in the sticky composer seat — keep transcript air. */
+@media (max-width: 767px) {
+  .header {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .list {
+    max-height: min(22vh, 160px);
+  }
 }

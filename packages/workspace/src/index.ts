@@ -23,6 +23,8 @@ import {
   type SessionPolicyAnchor,
 } from "./workspace-anchor.js";
 import { computeInjectFingerprint } from "./inject-fingerprint.js";
+import { resolveUserProductHome } from "./user-product-home.js";
+import { standingCatalogSkillDirCandidates } from "./standing-skill-dirs.js";
 
 export type { WorkspaceBudgetEvent } from "./durable-inject.js";
 
@@ -42,6 +44,7 @@ export {
 
 export type { RuntimeSurface, SessionPolicyAnchor } from "./workspace-anchor.js";
 export {
+  formatProductHomeAnchor,
   formatRuntimeSurfaceAnchor,
   formatSessionPolicyAnchor,
   normalizeRuntimeSurface,
@@ -69,23 +72,20 @@ export interface WorkspaceInjectorOptions {
   /** Include user-home global layer for instructions (default true). */
   readonly includeUserHome?: boolean;
   /**
-   * Include `~/…/skills` in the durable skill-catalog inject (default **false**).
-   * Codex / DSH progressive disclosure: home skills stay reachable via the
-   * `skill` tool / `skill.list`; the standing catalog is workspace-scoped so
-   * hundreds of home skills do not re-enter every turn.
+   * Also list non-product home skill trees (`~/.agents/skills`, …) in the
+   * standing catalog (default **false**). Product-home `{XRK_HOME}/skills`
+   * always enters when {@link includeUserHome} is on. Workspace trees always
+   * enter (progressive disclosure = catalog vs skill body, not thinner trees).
    */
   readonly includeUserHomeSkills?: boolean;
   /**
-   * `subagent` skips the home persona layer (SOUL.md / USER.md / home
-   * AGENTS.md): a delegated child gets its identity from the spawn preamble,
-   * while workspace rules and the skills catalog stay on.
-   * `minimal` is the 干员 default: same persona skip, no skill catalog.
+   * Only gates manager ledger `XRK.md`. Standing + home/workspace convention
+   * + skill catalog roots are the same for every audience.
    */
   readonly audience?: "user" | "subagent" | "minimal";
   /**
-   * Extra skills roots always merged into the standing catalog (even when
-   * `audience` is `minimal`). Used for advanced 干员 pack skills on children —
-   * never passed on the parent session.
+   * Extra skills roots merged into the standing catalog (e.g. advanced 干员
+   * pack on children — never on the parent session).
    */
   readonly extraSkillDirs?: readonly string[];
   /** Test override for user-home root. */
@@ -166,26 +166,40 @@ export function createWorkspaceInjector(
       const instructionBlocks = sectionsToInstructionBlocks(sections);
       const changes = sectionsToInstructionChanges(sections);
 
-      // Standing catalog = workspace skills unless minimal; extraSkillDirs
-      // (干员 pack) always merge so a child can see pack skills without the parent catalog.
-      const skipWorkspaceSkills = options.audience === "minimal";
-      const includeHomeSkills =
-        !skipWorkspaceSkills && options.includeUserHomeSkills === true;
-      const baseDirs = skipWorkspaceSkills
-        ? []
-        : await resolveSkillDirs({
-        workspaceRoot: root,
-        productDir,
-        includeUserHome: includeHomeSkills,
-        ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+      // Catalog + skill-tool roots: {@link standingCatalogSkillDirCandidates}.
+      const skillDirs = await resolveSkillDirs({
+        skillDirs: standingCatalogSkillDirCandidates({
+          workspaceRoot: root,
+          productDir,
+          ...(options.audience !== undefined
+            ? { audience: options.audience }
+            : {}),
+          ...(options.extraSkillDirs?.length
+            ? { extraSkillDirs: options.extraSkillDirs }
+            : {}),
+          ...(options.includeUserHome !== undefined
+            ? { includeUserHome: options.includeUserHome }
+            : {}),
+          includeUserHomeSkills: options.includeUserHomeSkills === true,
+          ...(options.homeDir !== undefined
+            ? { homeDir: options.homeDir }
+            : {}),
+        }),
       });
-      const extraDirs = options.extraSkillDirs?.length
-        ? await resolveSkillDirs({ skillDirs: options.extraSkillDirs })
-        : [];
-      const skillDirs = [...baseDirs, ...extraDirs];
+      const preferred =
+        options.extraSkillDirs?.length ? options.extraSkillDirs : undefined;
       const skills =
-        skillDirs.length === 0 ? [] : await listSkills({ skillDirs });
-      const skillCatalog = buildSkillCatalogPayload(skills, budget);
+        skillDirs.length === 0
+          ? []
+          : await listSkills({
+              skillDirs,
+              workspaceRoot: root,
+              ...(preferred ? { preferredSkillDirs: preferred } : {}),
+            });
+      const skillCatalog = buildSkillCatalogPayload(skills, budget, {
+        workspaceRoot: root,
+        ...(preferred ? { preferredSkillDirs: preferred } : {}),
+      });
       const skillBlock = formatSkillCatalog(skills);
 
       const previewBlocks = [
@@ -256,16 +270,31 @@ export {
 } from "./inject-sources.js";
 
 export {
+  createInstructionAuthorityRegistry,
+  DEFAULT_INSTRUCTION_AUTHORITY,
+  type InstructionAuthorityEntry,
+  type InstructionAuthorityRegistry,
+  type InstructionLane,
+} from "./instruction-authority.js";
+
+export {
   resolveUnderUserProductHome,
   resolveUserProductHome,
   userProductHomeLogicalPrefix,
 } from "./user-product-home.js";
 
 export {
+  standingCatalogSkillDirCandidates,
+  standingSkillToolSourceOptions,
+  type StandingCatalogSkillDirOptions,
+} from "./standing-skill-dirs.js";
+
+export {
   formatSkillCatalog,
   isSkillName,
   listSkills,
   listSkillsFromWorkspace,
+  listStandingCatalogSkills,
   listSkillsInDir,
   loadSkill,
   parseSkillMarkdown,
@@ -341,6 +370,7 @@ export {
   digestWorkspaceText,
   foldLatestWorkspaceInjectDigests,
   formatAvailableSkillsXml,
+  orderSkillsForCatalogBudget,
   planWorkspaceInjectAppends,
   type DurableInstructionsPayload,
   type DurableSkillCatalogPayload,
@@ -380,16 +410,16 @@ export interface ResolveWorkspaceInjectOptions {
    */
   readonly sessionPolicy?: SessionPolicyAnchor;
   /**
-   * Who this inject is for. `user` (default) gets the full standing persona
-   * (home SOUL.md / USER.md / IDENTITY.md / home AGENTS.md). `subagent` skips
-   * that persona layer — a delegated child's identity is its spawn preamble,
-   * not the parent's "you are the user's agent" standing docs — but keeps the
-   * workspace project docs that describe the codebase it is working on.
-   * `minimal` also skips the skill catalog (干员 default).
+   * Who this inject is for. Every audience keeps product standing (`~/.xrk`
+   * AGENTS/SOUL). `subagent` / `minimal` skip home **convention** drafts
+   * (`~/.agents` AGENTS/rules/context). Seat identity still comes from spawn /
+   * playbook. `minimal` skips workspace skill trees (公文包 via extraSkillDirs).
    */
   readonly audience?: "user" | "subagent" | "minimal";
   /** Child-only pack skill roots (see WorkspaceInjectorOptions.extraSkillDirs). */
   readonly extraSkillDirs?: readonly string[];
+  /** Test override for OS home (product-home anchor + injector homeDir). */
+  readonly homeDir?: string;
 }
 
 export interface ResolvedWorkspaceInject {
@@ -419,6 +449,7 @@ export async function resolveWorkspaceInject(
       ...(options.extraSkillDirs?.length
         ? { extraSkillDirs: options.extraSkillDirs }
         : {}),
+      ...(options.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
     });
 
   const out = await injector.inject(
@@ -430,13 +461,18 @@ export async function resolveWorkspaceInject(
     options.displayTitle,
     options.surface ?? resolveRuntimeSurface(),
     options.sessionPolicy,
+    resolveUserProductHome(options.homeDir),
   );
   const instructionBlocks = anchor
     ? [anchor, ...out.instructionBlocks]
     : out.instructionBlocks;
   const priorChanges = out.instructions?.source.changes ?? [{ action: "set" as const }];
   const instructionChanges = anchor
-    ? [{ action: "set" as const, path: "workspace-root" }, ...priorChanges]
+    ? [
+        { action: "set" as const, path: "workspace-root" },
+        { action: "set" as const, path: "product-home" },
+        ...priorChanges,
+      ]
     : priorChanges;
   const instructions = buildInstructionsPayload(
     instructionBlocks,

@@ -1,12 +1,10 @@
 id: models-config
-title: 配置模型
-description: Settings 添加模型 ID 或从提供方获取
+title: Configure models
+description: Settings Models card + chat chip (load xrk-models-settings)
 prompt: |
-  Follow skill **xrk-models-settings**:
-  1. Settings → Models: provider + API key (+ base URL if custom)
-  2. Prefer **添加模型** + Model ID; optional **获取可用模型** (default all checked, deselect extras)
-  3. Apply/Save provider card
-  4. In chat: model chip search when many models, or /model
+  Load skill **xrk-models-settings**. Guide or perform: Settings → Models (provider + API key,
+  Base URL if custom) → add Model ID (optional fetch list) → **Save** the card → pick in chat chip
+  or `/model`. Do not mutate settings without confirmation. Keys stay in Credentials.
 instructions: |
-  Do not require fetch before manual ID. Do not mutate settings without confirmation.
+  Empty picker usually means unsaved card — save before debugging the chip.
 parameters: []

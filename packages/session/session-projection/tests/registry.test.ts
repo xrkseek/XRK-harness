@@ -156,6 +156,44 @@ describe("createSessionProjectionRegistry", () => {
     expect(changes).toEqual([]);
   });
 
+  it("stays quiet when state is new but wire view is equal", () => {
+    const events: SessionEvent[] = [];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "bag",
+      stateVersion: 1,
+      init: () => ({ n: 0, tick: 0 }),
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        // First message bumps n; later messages only refresh host-only tick.
+        if (state.n === 0) return { n: 1, tick: 1 };
+        return { n: state.n, tick: state.tick + 1 };
+      },
+      wire: {
+        view: (state) => ({ n: state.n }),
+        parse(value: unknown) {
+          if (!value || typeof value !== "object") throw new Error("bad");
+          const n = (value as { n?: unknown }).n;
+          if (typeof n !== "number") throw new Error("bad n");
+          return { n };
+        },
+      },
+    });
+    const changes: unknown[] = [];
+    registry.onChanged((_id, _key, value) => changes.push(value));
+    const first = userMessage(1, "a");
+    events.push(first);
+    registry.drive("s1", first, 1);
+    expect(changes).toEqual([{ n: 1 }]);
+    changes.length = 0;
+    const second = userMessage(2, "b");
+    events.push(second);
+    registry.drive("s1", second, 2);
+    expect(changes).toEqual([]);
+  });
+
   it("late register folds history before first drive", () => {
     const events: SessionEvent[] = [userMessage(1, "a"), userMessage(2, "b")];
     const registry = createSessionProjectionRegistry({
@@ -233,5 +271,189 @@ describe("createSessionProjectionRegistry", () => {
 
     events = [userMessage(1, "one"), userMessage(2, "two")];
     expect(registry.snapshot("s1").values.count).toBe(2);
+  });
+
+  it("drive after log identity change rebuilds instead of keeping stale cells", () => {
+    let events: SessionEvent[] = [userMessage(1, "old-a"), userMessage(2, "old-b")];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "count",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        return { n: state.n + 1 };
+      },
+      wire: {
+        view: (s) => s.n,
+        parse: (v) => Number(v),
+      },
+    });
+    registry.drive("s1", events[0]!, 1);
+    registry.drive("s1", events[1]!, 2);
+    expect(registry.snapshot("s1").values.count).toBe(2);
+
+    // Same sessionId, new log (delete+recreate / truncate replacePrefix).
+    const next = userMessage(1, "fresh");
+    events = [next];
+    registry.drive("s1", next, 1);
+    expect(registry.snapshot("s1").values.count).toBe(1);
+  });
+
+  it("seedFromCheckpoint installs cells and only catch-up folds the tail", () => {
+    const events: SessionEvent[] = [
+      userMessage(1, "a"),
+      userMessage(2, "b"),
+      userMessage(3, "c"),
+    ];
+    let applies = 0;
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "count",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        applies += 1;
+        return { n: state.n + 1 };
+      },
+      wire: {
+        view: (s) => s.n,
+        parse: (v) => Number(v),
+      },
+    });
+
+    // Checkpoint as-of seq 2 (two messages folded).
+    registry.seedFromCheckpoint(
+      "s1",
+      { count: { ver: 1, seq: 2, val: { n: 2 } } },
+      { keys: ["count"] },
+    );
+    expect(applies).toBe(1); // only event 3
+    expect(registry.snapshot("s1").values.count).toBe(3);
+    expect(applies).toBe(1);
+  });
+
+  it("parseState rejects bad checkpoint rows on seed and viewCheckpoint", () => {
+    const events: SessionEvent[] = [userMessage(1, "a")];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "count",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      parseState(value: unknown) {
+        if (!value || typeof value !== "object") throw new Error("bad");
+        const n = (value as { n?: unknown }).n;
+        if (typeof n !== "number" || !Number.isSafeInteger(n)) {
+          throw new Error("bad n");
+        }
+        return { n };
+      },
+      apply(state, event) {
+        if (event.type !== "user/message") return state;
+        return { n: state.n + 1 };
+      },
+      wire: {
+        view: (s) => s.n,
+        parse: (v) => Number(v),
+      },
+    });
+
+    registry.seedFromCheckpoint("s1", {
+      count: { ver: 1, seq: 0, val: { n: "nope" } },
+    });
+    // Bad seed skipped → full fold from init.
+    expect(registry.snapshot("s1").values.count).toBe(1);
+
+    expect(
+      registry.viewCheckpoint({
+        count: { ver: 1, seq: 1, val: { n: "nope" } },
+      }),
+    ).toEqual({});
+  });
+
+  it("checkpoint asserts lossless JSON", () => {
+    const events: SessionEvent[] = [];
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => events,
+    });
+    registry.register({
+      key: "poison",
+      stateVersion: 1,
+      init: () => ({ when: new Date(0) }),
+      apply: (state) => state,
+    });
+    expect(() => registry.checkpoint("s1")).toThrow(/losslessly JSON/i);
+  });
+
+  it("summaryKeys is opt-in and stable until unregister", () => {
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => [],
+    });
+    registry.register({
+      key: "heavy",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply: (state) => state,
+      wire: {
+        view: (state) => state.n,
+        parse: (v) => {
+          if (typeof v !== "number") throw new Error("bad");
+          return v;
+        },
+      },
+    });
+    const offList = registry.register({
+      key: "list",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply: (state) => state,
+      wire: {
+        summary: true,
+        view: (state) => state.n,
+        parse: (v) => {
+          if (typeof v !== "number") throw new Error("bad");
+          return v;
+        },
+      },
+    });
+    const first = registry.summaryKeys();
+    expect([...first]).toEqual(["list"]);
+    expect(registry.summaryKeys()).toBe(first);
+    offList();
+    expect([...registry.summaryKeys()]).toEqual([]);
+  });
+
+  it("refuses to share a key across conflicting summary flags", () => {
+    const registry = createSessionProjectionRegistry({
+      getEvents: () => [],
+    });
+    const def = {
+      key: "title",
+      stateVersion: 1,
+      init: () => ({ n: 0 }),
+      apply: (state: { n: number }) => state,
+      wire: {
+        summary: true,
+        view: (state: { n: number }) => state.n,
+        parse: (v: unknown) => {
+          if (typeof v !== "number") throw new Error("bad");
+          return v;
+        },
+      },
+    };
+    registry.register(def);
+    expect(() =>
+      registry.register({
+        ...def,
+        wire: { ...def.wire, summary: false },
+      }),
+    ).toThrow(/summary=true/);
   });
 });

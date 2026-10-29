@@ -3,6 +3,9 @@
  *
  * XRK-Harness posture (Codex-aligned progressive disclosure):
  * - **`.xrk/` native first** — wins on skill name clash within a layer.
+ * - **Workspace convention vendors are additive**: if `.agents` / `.claude` /
+ *   `.cursor/rules` / `.codex` / root `AGENTS.md` exist, **each is attempted**
+ *   (content-deduped) so multi-agent tools can share one repo.
  * - **Home `~/.cursor/**`**: never injected (Cursor IDE maintainer tree).
  * - **Workspace `{root}/.cursor/rules/**`**: injected when present (`xrk-inject: false` opts out per file).
  * - **Skills catalog**: workspace trees only by default; home trees via `skill` tool on demand.
@@ -77,12 +80,16 @@ export const HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS = [
   ".agents/context",
   ".claude/CLAUDE.md",
   ".codex/AGENTS.md",
+  /** Manager-only ledger (`audience=user`); fingerprint always tracked. */
+  "XRK.md",
 ] as const;
 
 /** Standing files under the global product home (`XRK_HOME` / `~/.xrk`). */
 export const HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS = [
   "AGENTS.md",
   "SOUL.md",
+  /** Manager / 向日葵 ledger (audience=user only at inject time). */
+  "XRK.md",
 ] as const;
 
 /**
@@ -92,6 +99,7 @@ export const HOME_PRODUCT_INSTRUCTION_FINGERPRINT_MARKERS = [
 export const HOME_INSTRUCTION_FINGERPRINT_MARKERS = [
   ".xrk/AGENTS.md",
   ".xrk/SOUL.md",
+  ".xrk/XRK.md",
   ...HOME_OS_INSTRUCTION_FINGERPRINT_MARKERS,
 ] as const;
 
@@ -99,6 +107,8 @@ export const WORKSPACE_INSTRUCTION_FINGERPRINT_MARKERS = [
   ...HOME_INSTRUCTION_FINGERPRINT_MARKERS,
   ".cursor/rules",
   "CODEX.md",
+  /** Manager-only project ledger (`audience=user`). */
+  "XRK.md",
   ".github/copilot-instructions.md",
   ".github/instructions",
   "AGENTS.md",

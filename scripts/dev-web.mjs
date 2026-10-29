@@ -1,7 +1,7 @@
 /**
  * Watch client plugin sources and rebuild `lib/client.js` on change, then
  * re-assemble into `apps/web/dist/plugins` so `xrkh web` serves fresh bundles
- * (static Host reads dist, not packages/*/lib).
+ * (static Host reads dist, not each package's lib/ tree).
  */
 import { spawn } from "node:child_process";
 import { existsSync, watch } from "node:fs";

@@ -183,6 +183,11 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
+.companionSlot {
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+}
 
 /* Project leading slot: folder by default, expand arrow on row hover/focus. */
 .projectRow .chevron { display: none; }
@@ -209,14 +214,17 @@
   gap: 4px;
 }
 
+/* Status-only pin mark next to the title. Hidden until pinned; on hover the
+   rowActions pin toggle takes over (desktop). Phone keeps this mark and hides
+   the grey idle pin button so titles keep room. */
 .pinBadge {
   flex: none;
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-state-business-primary);
 }
 
 /* Compact channel mark for reserved ws_im — not a card or promo chip. */
@@ -469,7 +477,9 @@
 }
 
 /* Phone / touch: taller rows, and surface trailing actions without hover
-   (coarse pointers never get :hover, so the ellipsis would stay unreachable). */
+   (coarse pointers never get :hover, so the ellipsis would stay unreachable).
+   Drop the always-visible grey pin toggle — pin/unpin lives in ⋯; a pinned
+   row still shows the small blue pinBadge beside the title. */
 @media (max-width: 767px) {
   .projectRow {
     height: 44px;
@@ -480,13 +490,26 @@
   }
 
   .iconButton {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     touch-action: manipulation;
   }
 
   .rowActions {
-    gap: 4px;
+    gap: 0;
+  }
+
+  .pinToggle {
+    display: none;
+  }
+
+  .projectRow.projectPinned .pinBadge {
+    display: inline-flex;
+  }
+
+  .projectText {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 }
 
@@ -498,5 +521,14 @@
 
   .sessionRow .time {
     display: none;
+  }
+
+  /* Touch desktops / tablets without hover: same pin policy as phone. */
+  .pinToggle {
+    display: none;
+  }
+
+  .projectRow.projectPinned .pinBadge {
+    display: inline-flex;
   }
 }

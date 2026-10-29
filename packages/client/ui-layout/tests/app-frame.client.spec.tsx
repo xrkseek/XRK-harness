@@ -121,6 +121,8 @@ function mountFrame() {
     'sidebar.open': 'Open sidebar',
     'sidebar.close': 'Close sidebar',
     'sidebar.dialog': 'Sidebar',
+    'details.open': 'Status',
+    'details.close': 'Close Status',
   }[key] ?? key)) as AppFrameProps['t']
   const openSession = vi.fn()
   const openSubagent = vi.fn()
@@ -492,11 +494,31 @@ describe('AppFrame — phone drawer chrome', () => {
     expect(tracks(frame)).toEqual([0, 0])
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     expect(getByLabelText('Open sidebar')).toBeTruthy()
+    expect(getByLabelText('Status')).toBeTruthy()
     expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({
       collapsed: false,
       width: SIDEBAR_DEFAULT,
     })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('phone Status chrome opens the details sheet', () => {
+    frameWidth = 390
+    const { frame, getByLabelText, queryByLabelText } = mountFrame()
+    expect(document.documentElement.hasAttribute('data-xrk-layout-status')).toBe(true)
+    act(() => { getByLabelText('Status').click() })
+    expect(frame.hasAttribute('data-details-collapsed')).toBe(false)
+    expect(queryByLabelText('Status')).toBeNull()
+    expect(queryByLabelText('Open sidebar')).toBeNull()
+  })
+
+  it('hides phone Status chrome on a blank Session', () => {
+    frameWidth = 390
+    selectedSessionBlank.current = true
+    const { queryByLabelText, getByLabelText } = mountFrame()
+    expect(queryByLabelText('Status')).toBeNull()
+    expect(getByLabelText('Open sidebar')).toBeTruthy()
+    expect(document.documentElement.hasAttribute('data-xrk-layout-status')).toBe(false)
   })
 
   it('toggle opens a drawer over full-bleed center without growing grid tracks', () => {

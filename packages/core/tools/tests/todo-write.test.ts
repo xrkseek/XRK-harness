@@ -6,51 +6,15 @@ import {
 } from "../src/index.js";
 
 describe("todo_write toolEvents", () => {
-  it("keeps a short static description (open-list tips are dynamic)", () => {
+  it("keeps a short static description (open-list tips are standingPlan / fragments)", () => {
     const tool = createStdTools().find((t) => t.name === "todo_write");
     expect(tool).toBeDefined();
     const d = tool!.description.toLowerCase();
     expect(d).toContain("standing task list");
     expect(d).toContain("pending | in_progress | completed");
-    // Completion discipline is standingPlan / dynamicSchema — not always on.
+    // Completion discipline is standingPlanMessage — not tools[] description.
     expect(d).not.toMatch(/stale in_progress|same turn you finish/);
-    expect(tool!.dynamicSchema?.()).toBeUndefined();
-  });
-
-  it("dynamicSchema adds completion tip only while open items remain", async () => {
-    const tools = createToolRegistry();
-    const std = createStdTools();
-    for (const t of std) tools.register(t);
-    const tool = std.find((t) => t.name === "todo_write")!;
-    await runToolDetailed({
-      registry: tools,
-      call: {
-        id: "c0",
-        name: "todo_write",
-        arguments: {
-          todos: [
-            { id: "1", content: "ship", status: "in_progress" },
-            { id: "2", content: "docs", status: "pending" },
-          ],
-        },
-      },
-    });
-    const open = tool.dynamicSchema?.();
-    expect(open?.description).toMatch(/same turn|Open list active/i);
-    await runToolDetailed({
-      registry: tools,
-      call: {
-        id: "c1",
-        name: "todo_write",
-        arguments: {
-          todos: [
-            { id: "1", content: "ship", status: "completed" },
-            { id: "2", content: "docs", status: "completed" },
-          ],
-        },
-      },
-    });
-    expect(tool.dynamicSchema?.()).toBeUndefined();
+    expect(tool!.dynamicSchema).toBeUndefined();
   });
 
   it("emits todo/write side event for standing plan", async () => {

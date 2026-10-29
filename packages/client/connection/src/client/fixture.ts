@@ -2713,6 +2713,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           agentPreset: 'default',
           cwd: '/tmp/fixture',
           workspaceLabel: 'fixture',
+          disclosure: { direct: 3, deferred: 0, expanded: 0 },
           tools: [
             {
               name: 'read_file',
@@ -2738,6 +2739,11 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
             },
           ],
         })
+      },
+      pressBand: (request) => {
+        const missing = requireSession(request)
+        if (missing !== undefined) return missing
+        return ok(request, { generation: 0, tree: null })
       },
     },
     subagents: {

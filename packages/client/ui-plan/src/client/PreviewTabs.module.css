@@ -104,8 +104,10 @@
 
 .delegatePair {
   display: grid;
+  /* Stages top-aligned — align-items:end made the smaller 委派方 ball sink
+     under the taller 被委派方 stage (经理 floated above 老板). */
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: end;
+  align-items: start;
   gap: 2px 4px;
   width: 100%;
   min-width: 0;
@@ -131,7 +133,9 @@
   justify-content: center;
   gap: 4px;
   width: 52px;
-  padding-bottom: 36px;
+  /* Sit beside stage mid (~155px runway), not the meta footer. */
+  margin-top: 56px;
+  padding-bottom: 0;
   color: var(--dsw-alias-label-tertiary);
   flex: none;
   pointer-events: none;
@@ -140,6 +144,7 @@
 
 .delegatePair[data-collapsed] .delegateArrow {
   width: 36px;
+  margin-top: 0;
   padding-bottom: 0;
 }
 
@@ -167,6 +172,48 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--dsw-alias-label-secondary);
+}
+
+.bossSharedChip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 2px;
+  padding: 5px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    border-color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
+}
+
+.bossSharedChip:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, var(--dsw-alias-border-l2));
+}
+
+.bossSharedLabel {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.bossSharedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 @keyframes delegateFlow {
@@ -224,7 +271,9 @@
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .presenceCollapse:hover {
@@ -234,7 +283,7 @@
 
 .presenceCollapseIcon {
   display: block;
-  transition: transform 160ms var(--ds-ease-in-out, ease);
+  transition: transform var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease);
 }
 
 .presenceRail[data-collapsed] .presenceCollapseIcon {
@@ -276,7 +325,15 @@
   letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  transition:
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    box-shadow var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    transform var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
+}
+
+.tab:active:not([aria-selected='true']) {
+  transform: scale(0.96);
 }
 
 .tabIcon {
@@ -284,7 +341,7 @@
   display: block;
   opacity: 0.5;
   margin-block: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .tab:hover {
@@ -339,7 +396,9 @@
   cursor: pointer;
   position: relative;
   z-index: 2;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .close:hover {
@@ -361,7 +420,7 @@
   scrollbar-color:
     color-mix(in srgb, var(--dsw-alias-label-tertiary) 32%, transparent)
     transparent;
-  transition: opacity 160ms ease;
+  transition: opacity var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease);
 }
 
 .body::-webkit-scrollbar {
@@ -386,16 +445,16 @@
   user-select: none;
 }
 
-/* Tab / Session content enter — short, barely noticeable. */
+/* Tab / Session content enter — ZCode: fast, low drama, opacity+transform. */
 .pane {
   min-width: 0;
-  animation: overviewPaneIn 170ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: overviewPaneIn var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease) both;
 }
 
 @keyframes overviewPaneIn {
   from {
     opacity: 0;
-    transform: translateY(2px);
+    transform: translateY(4px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -512,7 +571,9 @@
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l2) 70%, transparent);
   background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 72%, transparent);
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    border-color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .todoItem:hover {
@@ -577,7 +638,9 @@
   border-radius: 11px;
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease),
+    box-shadow var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease);
 }
 
 .summary[data-busy] {
@@ -768,7 +831,9 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color 100ms ease, background 100ms ease;
+  transition:
+    color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease),
+    background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .summaryToggle:hover {
@@ -787,7 +852,7 @@
   min-width: 0;
   max-width: 100%;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 2.5%, transparent);
-  transition: border-color 120ms ease;
+  transition: border-color var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .section:hover {
@@ -808,7 +873,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .sectionHeader:hover {
@@ -823,7 +888,9 @@
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   opacity: 0.65;
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 120ms ease;
+  transition:
+    transform var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease),
+    opacity var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .sectionHeader:hover .sectionChevron,
@@ -886,12 +953,18 @@
 .sectionBody:not([hidden]) {
   border-top-color: var(--dsw-alias-border-l2);
   padding-top: 8px;
-  animation: overviewSectionBodyIn 180ms ease both;
+  animation: overviewSectionBodyIn var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease) both;
 }
 
 @keyframes overviewSectionBodyIn {
-  from { opacity: 0.35; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .mono {
@@ -1505,6 +1578,60 @@
   margin: 0;
 }
 
+/* Phone Status sheet: larger close + safe-area so chrome clears the notch. */
+@media (max-width: 767px) {
+  .header {
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    gap: 8px;
+  }
+
+  .close {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    touch-action: manipulation;
+  }
+
+  .tabs {
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: none;
+    min-height: 40px;
+    padding: 8px 10px;
+    touch-action: manipulation;
+  }
+
+  .body {
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    overscroll-behavior-y: contain;
+  }
+
+  .presenceRail {
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Phone always shows the stage ball — drop the desktop collapsed min-heights. */
+  .presenceRail[data-delegate]:not([data-collapsed]) {
+    min-height: 0;
+  }
+
+  .delegatePair:not([data-collapsed]) {
+    min-height: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .root[data-pending]::before,
   .root[data-refreshing]::before {
@@ -1519,17 +1646,25 @@
     animation: none;
   }
 
+  .tab:active:not([aria-selected='true']) {
+    transform: none;
+  }
+
   .tab,
   .tabIcon,
   .close,
   .summaryToggle,
   .spillOpen,
   .teamAction,
+  .bossSharedChip,
+  .todoItem,
   .itemRow,
   .graphEdge,
   .trigger,
   .section,
+  .sectionHeader,
   .sectionChevron,
+  .summary,
   .body {
     transition: none;
   }

@@ -32,6 +32,7 @@ import {
   sessionIdsOnThread,
 } from "./session-thread-publish.js";
 import { SIDELINE_MAX } from "./session-thread-store.js";
+import { refuseCrossAgentHomeLane } from "./agent-home-boundary.js";
 
 export interface BindSessionThreadToolsOptions {
   readonly runtime: FaceRuntime;
@@ -188,6 +189,10 @@ export function bindSessionThreadTools(
         siblingOk,
       });
       if (problem) return { content: problem, isError: true };
+      const laneProblem = refuseCrossAgentHomeLane(runtime, sessionId, targetId);
+      if (laneProblem) {
+        return { content: `thread_message: ${laneProblem}`, isError: true };
+      }
       if (messageOnly && !siblingOk) {
         return {
           content:

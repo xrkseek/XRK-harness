@@ -9,6 +9,12 @@ import { randomUUID } from "node:crypto";
 export interface SessionEventBase {
   readonly type: string;
   readonly ts: number;
+  /**
+   * Forward-compat: when a newer Harness writes a type this build does not
+   * know, `true` lets the reader skip the row; omit / false → refuse the log
+   * (DSH `ignorable` — prefer refuse over a silently truncated rebuild).
+   */
+  readonly ignorable?: true;
 }
 
 export interface TurnStartEvent extends SessionEventBase {
@@ -38,7 +44,9 @@ export type TurnEndReason =
   | { readonly kind: "error"; readonly error: unknown }
   | { readonly kind: "max-tokens" }
   | { readonly kind: "interrupted" }
-  | { readonly kind: "blocked" };
+  | { readonly kind: "blocked" }
+  /** Synthetic closer when a fork seeds an unfinished parent turn. */
+  | { readonly kind: "forked" };
 
 /** Coerce `AbortSignal.reason` / unknown into a durable cancel cause. */
 export function parseTurnEndCancelCause(raw: unknown): TurnEndCancelCause {
@@ -64,6 +72,17 @@ export interface TurnEndEvent extends SessionEventBase {
   readonly type: "turn/end";
   readonly turnId: string;
   readonly reason: TurnEndReason;
+}
+
+/**
+ * Marks the end of an inherited fork prefix (DSH `session/end-seed`).
+ * Only constructor / {@link forkSession} may append this; plugins treat an
+ * unmatched `compaction/start` before this marker as a prior lifecycle.
+ */
+export interface SessionEndSeedEvent extends SessionEventBase {
+  readonly type: "session/end-seed";
+  /** True when the preceding events were copied from a parent session. */
+  readonly inherited?: boolean;
 }
 
 export interface StepStartEvent extends SessionEventBase {
@@ -698,6 +717,7 @@ export interface JobSettledEvent extends SessionEventBase {
 export type SessionEvent =
   | TurnStartEvent
   | TurnEndEvent
+  | SessionEndSeedEvent
   | StepStartEvent
   | StepEndEvent
   | UserMessageEvent
@@ -737,6 +757,7 @@ export type SessionEvent =
 const SESSION_EVENT_TYPES = new Set<SessionEvent["type"]>([
   "turn/start",
   "turn/end",
+  "session/end-seed",
   "step/start",
   "step/end",
   "user/message",

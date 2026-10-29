@@ -20,12 +20,13 @@ Host-only 键只进 StateMap（单元省略 `wire`）——`snapshot` / `onChang
 ```ts
 ProjectionDefinition = {
   key, stateVersion,
-  init(), apply(state, event),  // 同引用 = 无下游
-  wire?: { view(state), parse(value) },  // 省略 = host-only
+  init(), apply(state, event),  // 同引用 = 无下游；新对象但 view 等价也不推 mux
+  parseState?(value),           // 可选：checkpoint 种子形状校验，抛错当缺行
+  wire?: { view(state), parse(value), summary?: true },  // 省略 = host-only；summary 为列表 opt-in
 }
 ```
 
-Face 默认单元（`packages/server/face/src/projections/units`）一律带 `wire`。内部字段（如 title `pinned`、tokenUsage `last`）留在 state，`view` 只出客户端需要的切片。
+Face 默认单元（`packages/server/face/src/projections/units`）一律带 `wire`。内部字段（如 title `pinned`、tokenUsage `last`）留在 state，`view` 只出客户端需要的切片。复杂形状单元（`title` · `turnOutline` · `costUsage` · `contextTimeline`）提供 `parseState`。列表行键（`title` · `sessionListMetadata`）声明 `wire.summary: true`；本仓是 **opt-in**（与 DSH 默认纳入 + `summary:false` 相反），新增重单元不会误进冷列表。
 
 ## 注册表 API
 
@@ -35,8 +36,10 @@ Face 默认单元（`packages/server/face/src/projections/units`）一律带 `wi
 | `drive(sessionId, event, seq)` | Face 在 `session/event` 同 seq 后驱动 |
 | `snapshot` | 一致切面：wired + sidecar；`asOfSeq` = 日志长度（空为 `-1`） |
 | `stateOf` | 借读 host 态；未注册 → `undefined` |
-| `checkpoint` | 全部单元状态（含 host-only），供缓存写侧 |
-| `restoreFloor` · `viewCheckpoint` · `restore` | 冷读阶梯 |
+| `checkpoint` | 全部单元状态（含 host-only）；落盘前 `assertLosslessJson` |
+| `seedFromCheckpoint` | 冷打开装 list-tier cell，仅 catch-up 尾部 |
+| `restoreFloor` · `viewCheckpoint` · `restore` | 冷读阶梯（`parseState` 失败当缺行） |
+| `summaryKeys` | 已注册且 `wire.summary: true` 的键集（Face `session.list` / list-cache） |
 | `setSidecar` | Host 叠加（如 `goal`） |
 | `evictSession` | 丢弃内存 cell（SQLite LRU） |
 
@@ -53,7 +56,7 @@ Face 封装：`createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | 载体 | 预算 |
 | --- | --- |
 | `session.list`（已加载） | `title` · `sessionListMetadata` |
-| `session.list`（冷） | list-checkpoint 文件列；miss / 解析残缺 → 仅 `listHints`（禁止静默半截错状态） |
+| `session.list`（冷） | list-checkpoint 文件列；miss / 解析残缺 → 仅 `listHints`（禁止静默半截错状态）；列表身份 `formatVersion` 升级后可走 `cachedPredecessorTitle` 只出标题（不 hydrate） |
 | `session.history` 尾页 | 轻量 meter/stats · **`turnOutline`** · **`workspaceChanges`** + `contextTimeline` / `contextHeaders` |
 | `session.history` + `beforeSeq` | **无** `projections` 块 |
 | SQLite LRU 淘汰 | 先 remember list checkpoint（磁盘 I/O best-effort，内存行保留），再 `evictSession`；remember 失败则跳过淘汰 |
@@ -115,12 +118,13 @@ Host-only keys go only into StateMap (unit omits `wire`) — `snapshot` / `onCha
 ```ts
 ProjectionDefinition = {
   key, stateVersion,
-  init(), apply(state, event),  // same reference = no downstream
-  wire?: { view(state), parse(value) },  // omit = host-only
+  init(), apply(state, event),  // same ref = quiet; new object with equal view also quiet
+  parseState?(value),           // optional: checkpoint seed shape; throw = miss
+  wire?: { view(state), parse(value), summary?: true },  // omit = host-only; summary = list opt-in
 }
 ```
 
-Face default units (`packages/server/face/src/projections/units`) always carry `wire`. Internal fields (e.g. title `pinned`, tokenUsage `last`) stay in state; `view` emits only the client slice.
+Face default units (`packages/server/face/src/projections/units`) always carry `wire`. Internal fields (e.g. title `pinned`, tokenUsage `last`) stay in state; `view` emits only the client slice. Complex-shape units (`title` · `turnOutline` · `costUsage` · `contextTimeline`) supply `parseState`. List-row keys (`title` · `sessionListMetadata`) declare `wire.summary: true`. This repo is **opt-in** (opposite of DSH's default-include + `summary: false`), so a new heavy unit cannot leak into cold list rows.
 
 ## Registry API
 
@@ -130,8 +134,10 @@ Face default units (`packages/server/face/src/projections/units`) always carry `
 | `drive(sessionId, event, seq)` | Face drives after `session/event` at the same seq |
 | `snapshot` | Consistent cut: wired + sidecar; `asOfSeq` = log length (empty = `-1`) |
 | `stateOf` | Borrow host state; unregistered → `undefined` |
-| `checkpoint` | All unit state (including host-only) for cache write side |
-| `restoreFloor` · `viewCheckpoint` · `restore` | Cold-read ladder |
+| `checkpoint` | All unit state (including host-only); `assertLosslessJson` before persist |
+| `seedFromCheckpoint` | Cold-open list-tier cells; catch up the tail only |
+| `restoreFloor` · `viewCheckpoint` · `restore` | Cold-read ladder (`parseState` failure = missing row) |
+| `summaryKeys` | Registered keys with `wire.summary: true` (Face `session.list` / list-cache) |
 | `setSidecar` | Host overlay (e.g. `goal`) |
 | `evictSession` | Drop in-memory cells (SQLite LRU) |
 
@@ -148,7 +154,7 @@ Face wrapper: `createFaceProjectionRegistry` ≡ `createSessionProjectionRegistr
 | Carrier | Budget |
 | --- | --- |
 | `session.list` (loaded) | `title` · `sessionListMetadata` |
-| `session.list` (cold) | list-checkpoint file column; miss / corrupt parse → `listHints` only (never partial silent wrong) |
+| `session.list` (cold) | list-checkpoint file column; miss / corrupt parse → `listHints` only (never partial silent wrong); after a list-identity `formatVersion` bump, `cachedPredecessorTitle` may serve title-only (never hydrates) |
 | `session.history` tail | light meter/stats · **`turnOutline`** · **`workspaceChanges`** + `contextTimeline` / `contextHeaders` |
 | `session.history` with `beforeSeq` | **no** `projections` block |
 | SQLite LRU eviction | remember list checkpoint (I/O best-effort, in-memory retained), then `evictSession`; remember failure skips eviction |

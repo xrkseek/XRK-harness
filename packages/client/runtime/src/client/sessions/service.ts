@@ -16,7 +16,7 @@
  */
 import type { Context, Fiber } from '@xrkseek/cordis'
 import type {
-  IApiClient, RpcError, RpcResult, SessionId, SubagentAddress, JobView, WorkspaceId,
+  BandSnapshot, IApiClient, RpcError, RpcResult, SessionId, SubagentAddress, JobView, WorkspaceId,
 } from '@xrkseek/xrk-api-remotes/client'
 // Value import from the inline-safe wire layer (not the connection plugin):
 // plugin-to-plugin value imports are a bundle purity error.
@@ -101,6 +101,11 @@ export interface SessionListState {
    * for a session without tasks — so consumers read absence, never a sentinel.
    */
   jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>
+  /**
+   * Claude Code mods AbovePrompt band per session, last-wins from
+   * `session/band`. Absent key = no band drawn (or cleared on re-subscribe).
+   */
+  bandBySession: Readonly<Record<SessionId, BandSnapshot>>
   /** Current session's catalog-derived address, absent on ordinary navigation. */
   currentAddress: SubagentAddress | undefined
 }
@@ -362,7 +367,7 @@ export class SessionRuntime implements ISessions {
     )
     this.list = createSnapshotStore<SessionListState>({
       ids: [], byId: {}, current: undefined, phase: 'pending',
-      subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
+      subagentsByParent: {}, jobsBySession: {}, bandBySession: {}, currentAddress: undefined,
     })
     // The manager owns wire truth; the store is its projection. Manager
     // notifications are already microtask-batched.
@@ -511,8 +516,11 @@ export class SessionRuntime implements ISessions {
   search(
     query: string,
     signal: AbortSignal,
-  ): Promise<RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>> {
-    return this.manager.search(query, signal)
+    opts?: { cursor?: string },
+  ): Promise<
+    RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean; cursor?: string }>
+  > {
+    return this.manager.search(query, signal, opts)
   }
 
   /**
@@ -560,6 +568,8 @@ export class SessionRuntime implements ISessions {
     agentPreset?: string
     /** Session whose pinned model selection the Host copies onto the new one. */
     inheritFrom?: SessionId
+    /** Top-level identity session (agent-home workspace + roster member). */
+    memberId?: string
   } = {}): Promise<SessionId> {
     const staged = opts.agentPreset ?? this.createAgentPresetProvider?.()
     const result = await this.manager.create({
@@ -776,7 +786,7 @@ export class SessionRuntime implements ISessions {
   /** Project the manager's list snapshot into the store (title derivation is display-only). */
   private projectList(): void {
     const {
-      items, current, phase, subagentsByParent, jobsBySession, currentAddress,
+      items, current, phase, subagentsByParent, jobsBySession, bandBySession, currentAddress,
     } = this.manager.getListSnapshot()
     const ids: SessionId[] = []
     const byId: Record<SessionId, SessionSummary> = {}
@@ -854,7 +864,9 @@ export class SessionRuntime implements ISessions {
         ...(currentAddress === undefined ? {} : { subagentAddress: currentAddress }),
       })
     }
-    this.list.set({ ids, byId, current, phase, subagentsByParent, jobsBySession, currentAddress })
+    this.list.set({
+      ids, byId, current, phase, subagentsByParent, jobsBySession, bandBySession, currentAddress,
+    })
     this.pruneScopes()
   }
 

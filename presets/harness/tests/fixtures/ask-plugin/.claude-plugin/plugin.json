@@ -1,0 +1,5 @@
+{
+  "name": "ask-plugin",
+  "version": "0.1.0",
+  "description": "Fixture: calls $.ui.ask on session.start so the harness wiring is exercised."
+}

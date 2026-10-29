@@ -182,13 +182,19 @@ export function ModelSelect(
     load()
   }, [available, load])
 
+  // Keyboard arrows (search focused) need scroll-into-view; pointer hover must
+  // not — chasing the highlight under the cursor yanks the scrollbar.
+  const scrollHighlightRef = useRef(false)
+
   useEffect(() => {
     // Reset the virtual highlight when the filtered set or pane changes.
+    scrollHighlightRef.current = false
     setHighlight(0)
   }, [search, pane, open])
 
   useEffect(() => {
-    if (!open || pane !== 'model') return
+    if (!open || pane !== 'model' || !scrollHighlightRef.current) return
+    scrollHighlightRef.current = false
     const row = rootRef.current?.querySelector('[data-model-highlight="true"]')
     if (row !== null && row !== undefined && typeof row.scrollIntoView === 'function') {
       row.scrollIntoView({ block: 'nearest' })
@@ -334,6 +340,7 @@ export function ModelSelect(
         const len = flatModels.length
         if (len === 0) return
         const step = event.key === 'ArrowDown' ? 1 : -1
+        scrollHighlightRef.current = true
         setHighlight(index => (index + step + len) % len)
         return
       }
@@ -544,7 +551,17 @@ export function ModelSelect(
                                 onClick={() => { choose({ provider: group.id, model: model.id }) }}
                               >
                                 <span className={css.optionCopy}>
-                                  <span className={css.modelName}>{markQuery(model.name, search)}</span>
+                                  <span className={css.modelTitleRow}>
+                                    <span className={css.modelName}>{markQuery(model.name, search)}</span>
+                                    {model.inputModalities?.includes('image') === true && (
+                                      <span
+                                        className={css.modalityBadge}
+                                        title={t('badge.multimodalTitle')}
+                                      >
+                                        {t('badge.multimodal')}
+                                      </span>
+                                    )}
+                                  </span>
                                   {model.description !== undefined && (
                                     <span className={css.description}>{model.description}</span>
                                   )}

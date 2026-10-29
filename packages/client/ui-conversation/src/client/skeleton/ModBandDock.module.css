@@ -1,0 +1,124 @@
+/* Claude Code mods AbovePrompt band — dock strip above the composer card. */
+
+.root {
+  box-sizing: border-box;
+  flex: none;
+  margin: 0 auto calc(0px - var(--dsh-composer-stack-gap, 6px));
+  width: calc(
+    100% -
+    var(--dsh-composer-side-clearance) -
+    var(--dsh-composer-side-clearance) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset)
+  );
+  max-width: calc(
+    var(--dsh-composer-card-max-width) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset) -
+    var(--dsh-composer-dock-inset)
+  );
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  max-height: min(28vh, 200px);
+  padding: 8px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-specific-tip);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+@media (max-width: 767px) {
+  .body {
+    max-height: min(18vh, 120px);
+    padding: 6px 8px;
+  }
+
+  .button {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+}
+
+.box {
+  display: flex;
+  min-width: 0;
+}
+
+.box[data-direction='row'] {
+  flex-direction: row;
+  align-items: center;
+}
+
+.box[data-direction='column'] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.box[data-border='true'] {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.text[data-bold='true'] {
+  font-weight: 600;
+}
+
+.text[data-dim='true'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.text[data-italic='true'] {
+  font-style: italic;
+}
+
+.text[data-underline='true'] {
+  text-decoration: underline;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-primary);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-secondary);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hotkey {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}

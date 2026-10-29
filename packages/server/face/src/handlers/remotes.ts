@@ -123,9 +123,13 @@ export const commandsList: FaceHandler = async (runtime, _rpcId, payload) => {
   const agentId = String(args.agentId ?? "");
   const session = sessionFromAgentId(runtime, agentId);
   if (!session.ok) return session;
+  // Plugin commands are per session (a plugin registers on `session.start`),
+  // so the panel has to ask this session's agent rather than a global table.
+  const agent = await runtime.resolveAgent(agentId).catch(() => undefined);
   const commands = await listFaceCommandDescriptors(
     runtime.loadSlashRecipes,
     runtime.plugins,
+    agent?.pluginCommands?.list(),
   );
   return { ok: true, value: commands };
 };

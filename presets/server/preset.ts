@@ -91,6 +91,7 @@ export function createServerAgentFactory(
     contextFragmentProviders,
     workingDirectoryTools,
     createWorktreeTools,
+    userQuestions,
   }) => {
     const llm =
       resolveLlm?.(sessionId) ??
@@ -179,6 +180,7 @@ export function createServerAgentFactory(
         : {}),
       ...(workingDirectoryTools ? { workingDirectoryTools } : {}),
       ...(createWorktreeTools ? { createWorktreeTools } : {}),
+      ...(userQuestions ? { userQuestions } : {}),
     });
     return composition.createAgent();
   };

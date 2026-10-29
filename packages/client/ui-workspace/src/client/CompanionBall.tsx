@@ -394,6 +394,7 @@ export function CompanionBall({
   overlayHeld,
   face,
   empty,
+  compact,
   emotion = '02',
 }: {
   readonly shape: string
@@ -408,6 +409,8 @@ export function CompanionBall({
   /** @deprecated hat alias */
   readonly face?: string
   readonly empty?: boolean
+  /** 18px glyph for sidebar workspace rows. */
+  readonly compact?: boolean
   readonly emotion?: string
 }) {
   const dark = useChromeDark()
@@ -462,7 +465,11 @@ export function CompanionBall({
   useEffect(() => mount(), [mount])
 
   return (
-    <span className={css.stage} data-empty={empty ? '' : undefined}>
+    <span
+      className={css.stage}
+      data-empty={empty ? '' : undefined}
+      data-compact={compact ? '' : undefined}
+    >
       {empty ? <span className={css.plus} aria-hidden>+</span> : null}
       <span ref={mountRef} className={css.mount} data-ready={ready && !empty ? '' : undefined} aria-hidden />
       {/* 装扮贴图全部进引擎层（hatG/specsG/heldG）：按轮廓与眼球锚点逐帧布局，

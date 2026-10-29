@@ -14,6 +14,8 @@ export interface MobileGateSnapshot {
   readonly lanToken: string;
   readonly wanToken: string;
   readonly instanceId: string;
+  /** Bind / listen private IPv4 literals that stay PIN-free (同源 IP). */
+  readonly ownLanHosts?: readonly string[];
 }
 
 export interface MobileGateDecision {
@@ -40,11 +42,20 @@ export function hostOnly(hostHeader: string | undefined): string {
   return raw.split(":")[0] ?? raw;
 }
 
-/** Prefer X-Forwarded-Host (tunnel / reverse proxy) over Host. */
-export function effectiveRequestHost(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-host"];
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return hostOnly(forwarded.split(",")[0]!.trim());
+/**
+ * Authority used for gate classification.
+ * Default: only `Host` (ignores attacker-controlled X-Forwarded-Host).
+ * When `trustProxy` is true, prefer the first X-Forwarded-Host hop.
+ */
+export function effectiveRequestHost(
+  req: IncomingMessage,
+  trustProxy = false,
+): string {
+  if (trustProxy) {
+    const forwarded = req.headers["x-forwarded-host"];
+    if (typeof forwarded === "string" && forwarded.trim()) {
+      return hostOnly(forwarded.split(",")[0]!.trim());
+    }
   }
   return hostOnly(req.headers.host);
 }
@@ -58,6 +69,7 @@ export function classifyRequestHost(host: string): RequestHostClass {
     if (a === 10) return "lan";
     if (a === 192 && b === 168) return "lan";
     if (a === 172 && b >= 16 && b <= 31) return "lan";
+    if (a === 169 && b === 254) return "lan";
   }
   return "wan";
 }
@@ -66,9 +78,29 @@ export function isMobileGateExemptPath(pathname: string): boolean {
   return pathname === "/health" || pathname.startsWith("/mobile-access/");
 }
 
+function ownLanSet(snapshot: MobileGateSnapshot): Set<string> {
+  const out = new Set<string>();
+  for (const raw of snapshot.ownLanHosts ?? []) {
+    const h = hostOnly(raw);
+    if (h) out.add(h);
+  }
+  return out;
+}
+
+function pinAllowed(
+  credentials: MobileGateCredentials,
+  snapshot: MobileGateSnapshot,
+  preferWan: boolean,
+): boolean {
+  if (credentials.hasDeviceSession) return true;
+  if (preferWan) {
+    return Boolean(snapshot.wanToken) && credentials.hasWanPin;
+  }
+  return Boolean(snapshot.lanToken) && credentials.hasLanPin;
+}
+
 /**
- * Loopback free; public Host → wan PIN/session;
- * private LAN Host → lan PIN/session when lanAuthEnabled.
+ * Loopback free; bind LAN IP (ownLanHosts) free; other LAN / WAN → PIN.
  */
 export function evaluateMobileGate(
   pathname: string,
@@ -83,26 +115,19 @@ export function evaluateMobileGate(
   if (hostClass === "loopback") {
     return { mode: "none", allowed: true };
   }
-  if (hostClass === "wan") {
-    const allowed =
-      credentials.hasDeviceSession ||
-      (Boolean(snapshot.wanToken) && credentials.hasWanPin);
-    return {
-      mode: "wan",
-      allowed,
-      pinPath: "/mobile-access/wan-pin",
-    };
-  }
-  if (snapshot.lanAuthEnabled === false) {
+  const own = ownLanSet(snapshot);
+  if (hostClass === "lan" && own.has(hostOnly(host))) {
     return { mode: "none", allowed: true };
   }
-  const allowed =
-    credentials.hasDeviceSession ||
-    (Boolean(snapshot.lanToken) && credentials.hasLanPin);
+  if (hostClass === "lan" && snapshot.lanAuthEnabled === false) {
+    return { mode: "none", allowed: true };
+  }
+  // Non-own private Host or public Host → shared WAN PIN surface.
+  const allowed = pinAllowed(credentials, snapshot, true);
   return {
-    mode: "lan",
+    mode: "wan",
     allowed,
-    pinPath: "/mobile-access/lan-pin",
+    pinPath: "/mobile-access/wan-pin",
   };
 }
 

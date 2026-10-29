@@ -1,10 +1,10 @@
 id: mcp-attach
-title: 挂载 / 改 MCP
-description: settings_mutate ns=mcp（全局 Host ~/.xrk）
+title: Attach / edit MCP
+description: Host Settings MCP via settings_mutate (global ~/.xrk)
 prompt: |
-  Use **settings_get** / **settings_mutate** on Host Settings (global ~/.xrk — not the workspace folder).
-  For MCP: set/merge servers[] + allowConnect; may edit args/cwd/proxy env (HTTP_PROXY…).
-  Wait for tool result (connect). Verify with /mcp.
+  Load skill **xrk-capability-attach**. Use **settings_get** then **settings_mutate** on Host Settings
+  (global `~/.xrk`, not the workspace folder) to add/edit MCP: `servers[]`, allowConnect, args/cwd/proxy env.
+  Wait for remount; verify with `/mcp`. Never put secrets in MCP env — Credentials only.
 instructions: |
-  Prefer settings_mutate over coaching Settings paste. Do not write secrets into mcp env.
+  Prefer settings_mutate over pasting Settings YAML by hand.
 parameters: []

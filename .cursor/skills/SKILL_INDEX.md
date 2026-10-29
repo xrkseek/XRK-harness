@@ -59,7 +59,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **`xrk-harness-architecture`** | 本仓 overlay | 本仓架构总览 |
 | **`xrk-plugin-author`** · **`xrk-plugin-kind`** · **`xrk-plugin-verify`** | CLI seeds | 写插件 / 选型 / 验证 |
 | **`xrk-create-skill`** · **`xrk-models-settings`** · **`xrk-capability-attach`** | CLI seeds | 写 skill / 配模型 / 挂 MCP |
-| **`xrk-plan-build`** · **`xrk-delegate`** · **`xrk-code-review`** | CLI seeds | Plan→Build / 委派 / 只读审 diff |
+| **`xrk-delegate`** · **`xrk-code-review`** · **`xrk-craft`** | CLI seeds | 委派 / 只读审 diff / 工艺阶梯（大活走站立同会话 outline→todo） |
 
 会话徽章用 **XRK Harness**（`harness`）或 **Frugal**（省钱）；全局人格可放 `~/.xrk/`。见 [`.agents/README.md`](../../.agents/README.md)。
 

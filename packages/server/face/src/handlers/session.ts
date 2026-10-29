@@ -2,11 +2,13 @@ import {
   AdmitNotPendingError,
   listPendingAdmits,
   readSessionEvents,
+  releaseSessionResident,
   sessionEventCount,
   truncateSession,
   withdrawAdmit,
 } from "@xrkseek/core-session";
 import { forgetRequestHeaderCache } from "@xrkseek/core-agent-loop";
+import { resetFaceStateAfterLogCut } from "../log-cut-reset.js";
 import {
   type AgentCancelCause,
   type MessageContent,
@@ -17,7 +19,6 @@ import {
 import {
   FACE_AGENT_PRESET_IDS,
   canonicalAgentPresetId,
-  resolveAgentPresetProfile,
 } from "../presets-catalog.js";
 import { isAgentTeamSpawnRole } from "../agent-team-roles.js";
 import { appearanceLookWire } from "../agent-roster-store.js";
@@ -30,16 +31,19 @@ import {
 import { dressingFromPresence } from "../presence-dressing.js";
 import { toWireHistoryEntry, collectToolCallArgsForPage, routeFromRequestHeader } from "../adapt/index.js";
 import { rewritePendingAdmit } from "../update-queue-rewrite.js";
-import {
-  DEFAULT_HISTORY_MAX_MESSAGES,
-  dropSupersededStreamDeltas,
-  paginateSessionHistory,
-  trimHistoryPageToWireBudget,
-} from "../adapt/history-paginate.js";
+  import {
+    clampHistoryMaxMessages,
+    dropSupersededStreamDeltas,
+    paginateSessionHistory,
+    trimHistoryPageToWireBudget,
+  } from "../adapt/history-paginate.js";
 import { tryFaceSlashCommand } from "../slash.js";
-import { commitPlanMode } from "../plan-mode.js";
 import { SessionTitleInvalidError } from "../projections/index.js";
 import { parseSearchQuery, searchSessions } from "../session-search.js";
+import {
+  parseEventWindowPayload,
+  readSessionEventWindow,
+} from "../session-event-window.js";
 import { IM_AGENT_PRESET_ID, IM_WORKSPACE_ID } from "../im-workspace.js";
 import { ensureImWorkspace } from "../im-workspace-ensure.js";
 import {
@@ -56,6 +60,7 @@ import {
 import { asRecord, type FaceHandler } from "./types.js";
 import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
+import { publishWorkspaceChanged } from "../workspace-member-look.js";
 import {
   createListWorkSlice,
   maybeYieldListWork,
@@ -99,8 +104,12 @@ import {
 } from "../session-cwd.js";
 import { canvasWorkspaceIdForSession } from "../canvas-tools.js";
 import {
+  listProjectionIdentityFromHints,
+  lowestCheckpointSeq,
+} from "../projections/list-checkpoint-cache.js";
+import {
   historyPageIncludesProjections,
-  SESSION_LIST_PROJECTION_KEYS,
+  sessionListProjectionKeys,
   sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "../projections/snapshot-keys.js";
@@ -166,6 +175,51 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       ok: false,
       error: { code: "invalid-payload", message: attach.error },
     };
+  }
+  // Top-level identity (no parent): validate before minting a session.
+  const identityMemberIdEarly =
+    !parentSessionId && typeof p.memberId === "string"
+      ? p.memberId.trim()
+      : "";
+  if (identityMemberIdEarly) {
+    const homeWsId = attach.workspaceId?.trim() ?? "";
+    const homeRow = homeWsId ? runtime.workspaces.get(homeWsId) : undefined;
+    if (
+      !homeRow ||
+      homeRow.kind !== "agent-home" ||
+      homeRow.boundMemberId !== identityMemberIdEarly
+    ) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message:
+            "identity session requires workspaceId of that member's agent-home",
+        },
+      };
+    }
+    const home = runtime.agentRoster.findHome(identityMemberIdEarly);
+    const member = home
+      ? runtime.agentRoster.get(home.rosterWorkspaceId, identityMemberIdEarly)
+      : undefined;
+    if (!member) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message: `unknown memberId: ${identityMemberIdEarly}`,
+        },
+      };
+    }
+    if (!member.ready) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message: `member ${identityMemberIdEarly} is not ready`,
+        },
+      };
+    }
   }
   const requestedId =
     typeof p.sessionId === "string" && p.sessionId.trim()
@@ -315,6 +369,12 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
       canvasWorkspaceIdForSession(runtime, parentSessionId),
       sessionId,
     );
+  } else if (identityMemberIdEarly && attach.workspaceId) {
+    runtime.sessionIdentities.bind({
+      sessionId,
+      memberId: identityMemberIdEarly,
+      workspaceId: attach.workspaceId,
+    });
   }
   const bound =
     runtime.sessionAgentPresets.get(sessionId) ?? agentPreset;
@@ -368,21 +428,10 @@ export const sessionCreate: FaceHandler = async (runtime, _rpcId, payload) => {
   } else if (!runtime.sessionModels.has(sessionId)) {
     runtime.sessionModels.set(sessionId, { ...predictedRoute });
   }
-  const boundPreset =
-    runtime.sessionAgentPresets.get(sessionId) ??
-    canonicalAgentPresetId(resolveDefaultAgentPreset(runtime));
-  if (
-    !parentSessionId &&
-    resolveAgentPresetProfile(boundPreset).planModeDefault
-  ) {
-    commitPlanMode(runtime.store, sessionId, true);
-  }
+  // planModeDefault / auto-commit removed — product plan mode retired.
   publishSessionAdded(runtime, sessionId);
   if (workspace) {
-    runtime.bus.publishHost({
-      type: "host/workspace-changed",
-      workspace,
-    });
+    publishWorkspaceChanged(runtime, workspace);
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   // Live session now counts in occupancy — drop the pending credit.
@@ -410,12 +459,23 @@ export const sessionList: FaceHandler = async (runtime) => {
     const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
     const snap =
       hints !== undefined && !loaded
-        ? runtime.listProjectionCache.cachedSnapshot(
-            sessionId,
-            runtime.projections,
-          )
+        ? (() => {
+            const identity = listProjectionIdentityFromHints(hints);
+            return (
+              runtime.listProjectionCache.cachedSnapshot(
+                sessionId,
+                runtime.projections,
+                identity,
+              )
+              ?? runtime.listProjectionCache.cachedPredecessorTitle(
+                sessionId,
+                runtime.projections,
+                identity,
+              )
+            );
+          })()
         : runtime.projections.snapshot(sessionId, {
-            keys: [...SESSION_LIST_PROJECTION_KEYS],
+            keys: [...sessionListProjectionKeys(runtime.projections)],
           });
     const meta = snap?.values.sessionListMetadata;
     const blank =
@@ -480,46 +540,98 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "sessionId required" },
     };
   }
-  const events = readSessionEvents(runtime.store, sessionId);
-  runtime.wireIds.primeFromLog(sessionId, events);
-  // Resident eviction drops the in-memory allowlist; durable `path/allowlisted`
-  // rows live in the log — refill before any tool path gate runs.
-  runtime.pathAllowlist.hydrate(runtime.store, sessionId);
 
   const beforeSeq =
     typeof p.beforeSeq === "number" ? p.beforeSeq : undefined;
-  const maxMessages =
-    typeof p.maxMessages === "number"
-      ? p.maxMessages
-      : DEFAULT_HISTORY_MAX_MESSAGES;
+  const maxMessages = clampHistoryMaxMessages(p.maxMessages);
 
-  const raw = paginateSessionHistory(events, beforeSeq, maxMessages);
+  /**
+   * R8 cold first page: expand only a durable suffix + scan singles for wire
+   * primes. loadOlder / already-resident sessions keep the full-log path.
+   */
+  const tailBudget = Math.min(5_000, Math.max(500, maxMessages * 100));
+  const wantTail =
+    beforeSeq === undefined
+    && runtime.store.isLoaded?.(sessionId) !== true
+    && typeof runtime.store.readEventsTail === "function";
+  const tail = wantTail
+    ? runtime.store.readEventsTail!(sessionId, tailBudget)
+    : undefined;
+
+  let events: readonly SessionEvent[];
+  let baseIndex = 0;
+  let usedTail = false;
+  if (tail !== undefined) {
+    events = tail.events;
+    baseIndex = tail.baseIndex;
+    usedTail = true;
+    if (typeof runtime.store.scanDurableSingles === "function") {
+      runtime.store.scanDurableSingles(sessionId, (event) => {
+        if (event.type === "turn/start" && typeof event.turnId === "string") {
+          runtime.wireIds.turn(sessionId, event.turnId);
+        } else if (
+          event.type === "step/start"
+          && typeof event.turnId === "string"
+          && typeof event.stepId === "string"
+        ) {
+          runtime.wireIds.step(sessionId, event.turnId, event.stepId);
+        } else if (event.type === "path/allowlisted") {
+          runtime.pathAllowlist.addPermanent(sessionId, event.path, {
+            persist: false,
+          });
+        }
+      });
+      const total =
+        runtime.store.listHints?.(sessionId)?.eventCount
+        ?? baseIndex + events.length;
+      runtime.wireIds.notePrimed(sessionId, total);
+    }
+  } else {
+    events = readSessionEvents(runtime.store, sessionId);
+    runtime.wireIds.primeFromLog(sessionId, events);
+    // Resident eviction drops the in-memory allowlist; durable `path/allowlisted`
+    // rows live in the log — refill before any tool path gate runs.
+    runtime.pathAllowlist.hydrate(runtime.store, sessionId);
+  }
+
+  const raw = paginateSessionHistory(
+    events,
+    // Tail window is already a suffix; beforeSeq is absolute — remap when needed.
+    usedTail
+      ? undefined
+      : beforeSeq,
+    maxMessages,
+  );
+  const absoluteStart = baseIndex + raw.startIndex;
   // Absolute seq from the raw page index — drop/trim may remove rows, but must
   // not renumber survivors (client loadOlder requires tailSeq + 1 === baseSeq).
   const seqByEvent = new Map<SessionEvent, number>();
   for (let i = 0; i < raw.events.length; i++) {
     const event = raw.events[i];
-    if (event !== undefined) seqByEvent.set(event, raw.startIndex + i + 1);
+    if (event !== undefined) seqByEvent.set(event, absoluteStart + i + 1);
   }
   const stripped = dropSupersededStreamDeltas(raw.events);
   // Byte budget after delta drop — tool dumps can still blow past the wire
   // budget with few transcript messages; shrink from the older side.
   const fitted = trimHistoryPageToWireBudget(
     stripped,
-    raw.startIndex,
-    raw.hasMore,
+    absoluteStart,
+    // Suffix window: older rows may exist beyond the expanded tail.
+    raw.hasMore || (usedTail && baseIndex > 0),
   );
   const pageEvents = fitted.events;
   const pageStartSeq = pageEvents[0] !== undefined
-    ? (seqByEvent.get(pageEvents[0]) ?? raw.startIndex + 1)
-    : raw.startIndex + 1;
-  const pageStartIndex = pageStartSeq - 1;
+    ? (seqByEvent.get(pageEvents[0]) ?? absoluteStart + 1)
+    : absoluteStart + 1;
+  // Indices into the `events` window (0-based). Absolute page start is
+  // `baseIndex + relativePageStart` when the cold-tail path is active.
+  const relativePageStart = usedTail ? pageStartSeq - 1 - baseIndex : pageStartSeq - 1;
   const inbox = runtime.inboxWire.fresh();
   // Seed pending admits from the prefix so in-page prompt/promoted resolves to
   // agent/inbox/spliced (fresh projector otherwise drops the promote as ignorable
   // when prompt/admitted fell before this page's cut — loadOlder then lost the
   // claim and painted mid-turn 插话 as a plain opener).
-  for (let i = 0; i < pageStartIndex; i++) {
+  for (let i = 0; i < relativePageStart; i++) {
     const prior = events[i];
     if (
       prior !== undefined
@@ -530,7 +642,17 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
       inbox.project(prior);
     }
   }
-  const toolArgs = collectToolCallArgsForPage(events, pageEvents, seqByEvent);
+  // Tool-arg pairing indexes into `events`; remap absolute wire seq → window index.
+  const toolSeqByEvent = usedTail
+    ? (() => {
+        const relative = new Map<SessionEvent, number>();
+        for (const [event, abs] of seqByEvent) {
+          relative.set(event, abs - baseIndex);
+        }
+        return relative;
+      })()
+    : seqByEvent;
+  const toolArgs = collectToolCallArgsForPage(events, pageEvents, toolSeqByEvent);
   const wireCtxBase = {
     sessionId,
     ids: runtime.wireIds,
@@ -543,7 +665,7 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
   // Seed route from the last request/header before the page, then walk only
   // page events (same attribution as a full-log scan; O(page) not O(log)).
   let modelRoute = runtime.sessionModels.get(sessionId);
-  for (let i = pageStartIndex - 1; i >= 0; i--) {
+  for (let i = relativePageStart - 1; i >= 0; i--) {
     const seeded = routeFromRequestHeader(events[i]!);
     if (seeded) {
       modelRoute = seeded;
@@ -571,18 +693,71 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
 
   let projections: ReturnType<typeof snapshotWireBlock> | undefined;
   if (historyPageIncludesProjections(beforeSeq)) {
-    const snap = runtime.projections.snapshot(sessionId, {
-      keys: [...sessionHistoryTailProjectionKeys()],
-    });
-    if (Object.keys(snap.values).length > 0) {
-      projections = snapshotWireBlock(snap);
-    }
-    runtime.listProjectionCache.remember(
+    const hints = runtime.store.listHints?.(sessionId) ?? {
+      lastEventTs: null,
+      eventCount: sessionEventCount(runtime.store, sessionId),
+      hasTurnStart: false,
+      hasCommandRun: false,
+    };
+    const identity = listProjectionIdentityFromHints(hints);
+    const listKeys = sessionListProjectionKeys(runtime.projections);
+    const historyKeys = sessionHistoryTailProjectionKeys();
+    const listSeeded = runtime.listProjectionCache.peekCheckpoint(
       sessionId,
-      runtime.projections.checkpoint(sessionId, {
-        keys: [...SESSION_LIST_PROJECTION_KEYS],
-      }),
+      identity,
     );
+    const historySeeded = runtime.listProjectionCache.peekHistoryCheckpoint(
+      sessionId,
+      identity,
+    );
+    /**
+     * R9 cold tail: durable history checkpoint → `viewCheckpoint` only.
+     * Skipping `snapshot` avoids hydrating the full log just for projections
+     * (which used to erase the R8 suffix win on first open).
+     */
+    if (usedTail && historySeeded !== undefined) {
+      const values = runtime.projections.viewCheckpoint(historySeeded);
+      if (Object.keys(values).length > 0) {
+        projections = snapshotWireBlock({
+          asOfSeq: lowestCheckpointSeq(historySeeded),
+          values,
+        });
+      }
+      if (listSeeded !== undefined) {
+        runtime.listProjectionCache.remember(sessionId, listSeeded, identity);
+      }
+    } else {
+      // List-tier seed then fold history keys (hydrates when cells are cold).
+      if (listSeeded !== undefined) {
+        runtime.projections.seedFromCheckpoint(sessionId, listSeeded, {
+          keys: [...listKeys],
+        });
+      }
+      if (historySeeded !== undefined) {
+        runtime.projections.seedFromCheckpoint(sessionId, historySeeded, {
+          keys: [...historyKeys],
+        });
+      }
+      const snap = runtime.projections.snapshot(sessionId, {
+        keys: [...historyKeys],
+      });
+      if (Object.keys(snap.values).length > 0) {
+        projections = snapshotWireBlock(snap);
+      }
+      runtime.listProjectionCache.remember(
+        sessionId,
+        runtime.projections.checkpoint(sessionId, {
+          keys: [...listKeys, ...historyKeys],
+        }),
+        identity,
+      );
+    }
+  }
+
+  // Cold observation (DSH `session.page`): browsing history must not pin the
+  // full log after the page is built. Open turns stay resident (repair pin).
+  if (!runtime.drain.isActive(sessionId)) {
+    releaseSessionResident(runtime.store, sessionId);
   }
 
   return {
@@ -598,7 +773,44 @@ export const sessionHistory: FaceHandler = async (runtime, _rpcId, payload) => {
 export const sessionSearch: FaceHandler = async (runtime, _rpcId, payload) => {
   const parsed = parseSearchQuery(payload);
   if (!parsed.ok) return parsed;
-  return { ok: true, value: searchSessions(runtime.store, parsed.value) };
+  return {
+    ok: true,
+    value: searchSessions(runtime.store, parsed.value.query, {
+      ...(parsed.value.cursor !== undefined
+        ? { cursor: parsed.value.cursor }
+        : {}),
+    }),
+  };
+};
+
+/** Bounded raw-event neighborhood (DSH `readEvent` / SessionEventWindow). */
+export const sessionEventWindow: FaceHandler = async (
+  runtime,
+  _rpcId,
+  payload,
+) => {
+  const parsed = parseEventWindowPayload(payload);
+  if (!parsed.ok) return parsed;
+  const { sessionId } = parsed.value;
+  if (!runtime.store.has(sessionId)) {
+    return {
+      ok: false,
+      error: { code: "not-found", message: `session not found: ${sessionId}` },
+    };
+  }
+  const window = readSessionEventWindow(runtime.store, parsed.value);
+  // Cold observation — do not pin the LRU for a window peek.
+  releaseSessionResident(runtime.store, sessionId);
+  if (window === undefined) {
+    return {
+      ok: false,
+      error: {
+        code: "not-found",
+        message: `seq ${parsed.value.seq} not in session log`,
+      },
+    };
+  }
+  return { ok: true, value: window };
 };
 
 export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
@@ -942,10 +1154,15 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   forgetRequestHeaderCache(sessionId);
   const sets = runtime.workspaces.forgetSession(sessionId);
+  runtime.sessionIdentities.forget(sessionId);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
 
-  runtime.listProjectionCache.forget(sessionId);
-  runtime.wireIds.clear(sessionId);
+    runtime.listProjectionCache.forget(sessionId);
+    // Folded cells outlive a deleted session otherwise: they are only evicted
+    // by the store LRU, so every deleted log keeps a full copy of its projection
+    // state resident for the life of the process.
+    runtime.projections.evictSession(sessionId);
+    runtime.wireIds.clear(sessionId);
   runtime.inboxWire.clear(sessionId);
   runtime.toolDisclosure.forget(sessionId);
   runtime.pathAllowlist.forget(sessionId);
@@ -1188,6 +1405,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
     runtime.forkLineage.attach({
       parentSessionId: sessionId,
       childSessionId: child.id,
+      ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
     });
     const wsKey = canvasWorkspaceIdForSession(runtime, sessionId);
     const parentBind = runtime.sessionThreads.bindOf(wsKey, sessionId);
@@ -1217,10 +1435,7 @@ export const sessionFork: FaceHandler = async (runtime, _rpcId, payload) => {
   }
   publishSessionAdded(runtime, child.id);
   if (workspace) {
-    runtime.bus.publishHost({
-      type: "host/workspace-changed",
-      workspace,
-    });
+    publishWorkspaceChanged(runtime, workspace);
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   forkSlot.release();
@@ -1302,24 +1517,8 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
     };
   }
 
-  const n = sessionEventCount(runtime.store, sessionId);
-  runtime.seq.ensureAtLeast(sessionId, n);
-  // Edit-resubmit cuts the log in place; wire turn numbers must follow the
-  // kept prefix (or restart at 1). Leaving the pre-cut map marks the next
-  // turnId as 第 2 轮 even when the first opener was removed.
-  runtime.wireIds.clear(sessionId);
-  runtime.wireIds.primeFromLog(
-    sessionId,
-    readSessionEvents(runtime.store, sessionId),
-  );
-  runtime.inboxWire.clear(sessionId);
-  // Expanded MCP schemas are not in the log. Leaving them keeps the next
-  // resubmit over the soft budget after the conversation itself was cut.
-  runtime.toolDisclosure.forget(sessionId);
-  runtime.pathAllowlist.forget(sessionId);
-  runtime.pathAllowlist.hydrate(runtime.store, sessionId);
-  void runtime.projections.snapshot(sessionId);
-  forgetRequestHeaderCache(sessionId);
+  // Edit-resubmit / checkpoint truncateChat: wire + projections must match the kept prefix.
+  const n = resetFaceStateAfterLogCut(runtime, sessionId);
 
   return {
     ok: true,

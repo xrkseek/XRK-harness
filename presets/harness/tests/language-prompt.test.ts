@@ -4,10 +4,9 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createHarnessComposition } from "../preset.js";
 
-const DEFAULT_PERSONA =
-  "You are a coding agent with filesystem, shell, and web tools.";
+const DEFAULT_PERSONA = "You are a coding agent with filesystem, shell, and web tools.";
 
-async function assemble(locale?: "zh" | "en"): Promise<string> {
+async function assemble(locale?: "zh" | "en" | "ja"): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "xrk-lang-"));
   const composition = createHarnessComposition({
     workspaceRoot: root,
@@ -41,6 +40,15 @@ describe("harness language prompt section (Face `locale`)", () => {
     expect(prompt).not.toContain("界面语言为简体中文");
   });
 
+  it("forces Japanese reasoning and replies when locale is ja", async () => {
+    const prompt = await assemble("ja");
+    expect(prompt).toContain("UI 言語は日本語です");
+    expect(prompt).toContain("thinking / reasoning");
+    expect(prompt).toContain("翻訳しない");
+    expect(prompt).not.toContain("The UI language is English");
+    expect(prompt).not.toContain("界面语言为简体中文");
+  });
+
   it("follows the user's language when no preference was persisted", async () => {
     const prompt = await assemble();
     expect(prompt).toContain("No explicit UI locale was configured");
@@ -50,9 +58,7 @@ describe("harness language prompt section (Face `locale`)", () => {
 
   it("sits after the persona and registers exactly once", async () => {
     const prompt = await assemble("zh");
-    expect(prompt.indexOf(DEFAULT_PERSONA)).toBeLessThan(
-      prompt.indexOf("# Language"),
-    );
+    expect(prompt.indexOf(DEFAULT_PERSONA)).toBeLessThan(prompt.indexOf("# Language"));
     expect(count(prompt, "# Language")).toBe(1);
   });
 });

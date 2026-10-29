@@ -9,6 +9,72 @@
   padding: 24px;
 }
 
+/* Enter / exit: opacity + transform only (both compositor-friendly, no layout
+   or paint of the page behind). ZCode's motion rule — fast, low-drama, the
+   transition explains the state change instead of decorating it. The exit
+   window is kept in sync with EXIT_MS in Modal.tsx. */
+.root[data-state='open'] .mask {
+  /* Slightly longer than --ds-motion-fast: mask can trail the card a hair. */
+  animation: modal-mask-in 160ms var(--ds-ease-out) both;
+}
+
+.root[data-state='open'] .dialog {
+  animation: modal-dialog-in 180ms var(--ds-ease-out) both;
+  will-change: opacity, transform;
+}
+
+.root[data-state='closing'] .mask {
+  /* 120ms must match EXIT_MS in Modal.tsx (faster out than --ds-motion-fast). */
+  animation: modal-mask-out 120ms var(--ds-ease-in) both;
+}
+
+.root[data-state='closing'] .dialog {
+  animation: modal-dialog-out 120ms var(--ds-ease-in) both;
+  will-change: opacity, transform;
+}
+
+@keyframes modal-mask-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-mask-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modal-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-dialog-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.99);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root[data-state='open'] .mask,
+  .root[data-state='open'] .dialog,
+  .root[data-state='closing'] .mask,
+  .root[data-state='closing'] .dialog {
+    animation: none;
+    will-change: auto;
+  }
+}
+
 /* User/spec mask: rgba(0,0,0,0.24) + blur(2px) via --dsw-alias-bg-mask-1 /
    --dsw-mask-blur (light); dark theme raises mask opacity. */
 .mask {
@@ -103,27 +169,49 @@
 }
 
 @media (max-width: 767px) {
+  /* True phone sheet: fill the viewport — max-height alone left half-empty
+     cards that still looked like "fullscreen" chrome. */
   .root {
     align-items: stretch;
-    justify-content: flex-end;
+    justify-content: stretch;
     padding: 0;
   }
 
   .dialog {
     width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 0px));
-    border-radius: 20px 20px 0 0;
-    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
   }
 
-  @supports (height: 100dvh) {
-    .dialog {
-      max-height: calc(100dvh - env(safe-area-inset-top, 0px));
-    }
+  .content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .footer {
+    flex: none;
+    padding-top: 12px;
   }
 
   .header {
-    padding: 18px max(14px, env(safe-area-inset-right, 0px)) 12px
+    flex: none;
+    padding: 14px max(14px, env(safe-area-inset-right, 0px)) 10px
       max(20px, env(safe-area-inset-left, 0px));
   }
 

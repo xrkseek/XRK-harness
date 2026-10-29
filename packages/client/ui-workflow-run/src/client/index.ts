@@ -4,7 +4,7 @@ import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { WorkflowRunPanel, type WorkflowRunInjected } from './WorkflowRunPanel.tsx'
-import { en, NS, type WorkflowRunKey, zh } from './locales.ts'
+import { en, ja, NS, type WorkflowRunKey, zh } from './locales.ts'
 import { workflowRunDefinition } from './workflow-definition.ts'
 
 declare module '@xrkseek/client-ui-slots' {
@@ -20,7 +20,7 @@ export const inject = ['conversationEvents', 'slots', 'sessions', 'locale']
 /** Register the workflow Definition, dictionary, and keyed Chat renderer. */
 export function apply(ctx: ClientContext): void {
   ctx.conversationEvents.register(workflowRunDefinition)
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workflow-run: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-workflow-run: dictionaries')
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'workflow-run',

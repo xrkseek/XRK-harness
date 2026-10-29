@@ -37,6 +37,18 @@ export default defineConfig({
       pkg("exec-lsp", "packages/exec/lsp/src/index.ts"),
       pkg("exec-pty", "packages/exec/pty/src/index.ts"),
       pkg("exec-subprocess", "packages/exec/subprocess/src/index.ts"),
+      // DSH-compatibility layer (`packages/stubs/*`). These packages ship a
+      // real `src/` but their `main` points at a `lib/` that only exists after
+      // a build, so tests resolve the sources directly like the core/* set above.
+      pkg("xrk-agent", "packages/stubs/xrk-agent/src/index.ts"),
+      pkg("xrk-commands", "packages/stubs/xrk-commands/src/index.ts"),
+      pkg("xrk-llm", "packages/stubs/xrk-llm/src/index.ts"),
+      pkg("xrk-scope", "packages/stubs/xrk-scope/src/index.ts"),
+      pkg("xrk-session", "packages/stubs/xrk-session/src/index.ts"),
+      pkg("xrk-session-projection", "packages/stubs/xrk-session-projection/src/index.ts"),
+      pkg("xrk-token-meter", "packages/stubs/xrk-token-meter/src/index.ts"),
+      pkg("xrk-tools", "packages/stubs/xrk-tools/src/index.ts"),
+      pkg("xrk-typert-protocol", "packages/stubs/xrk-typert-protocol/src/index.ts"),
       pkg("exec-shell", "packages/exec/shell/src/index.ts"),
       pkg("exec-sandbox", "packages/exec/sandbox/src/index.ts"),
       pkg("exec-voice", "packages/exec/voice/src/index.ts"),

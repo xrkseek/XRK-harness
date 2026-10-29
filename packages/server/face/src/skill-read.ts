@@ -3,7 +3,10 @@
  */
 
 import path from "node:path";
-import { loadSkill } from "@xrkseek/workspace";
+import {
+  loadSkill,
+  standingSkillToolSourceOptions,
+} from "@xrkseek/workspace";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
 import { classifySkillSource } from "./skill-source.js";
@@ -89,7 +92,14 @@ export async function skillRead(
     };
   }
 
-  const skill = await loadSkill({ workspaceRoot: root, name });
+  const skill = await loadSkill({
+    ...standingSkillToolSourceOptions({
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      audience: "user",
+    }),
+    name,
+  });
   if (!skill) {
     return {
       ok: false,

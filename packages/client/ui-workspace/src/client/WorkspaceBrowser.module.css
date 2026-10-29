@@ -20,6 +20,93 @@
   padding-right: 0;
 }
 
+/* Wide layout: project workspaces above, 干员 homes below, draggable split. */
+.splitColumn {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.splitPane {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.splitPaneUpper {
+  flex: none;
+}
+
+.splitPaneLower {
+  flex: 1;
+  min-height: 112px;
+}
+
+/* Keep the last session row clear of the Agents header / fade crush. */
+.splitPaneUpper .listArea {
+  padding-bottom: 6px;
+}
+
+.splitPaneLower .sectionHeader {
+  margin-top: 2px;
+}
+
+.splitHandle {
+  flex: none;
+  height: 6px;
+  margin: 2px 4px;
+  border: 0;
+  border-radius: 3px;
+  padding: 0;
+  background: transparent;
+  cursor: row-resize;
+  position: relative;
+}
+
+.splitHandle::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: var(--dsw-alias-border-l2);
+  pointer-events: none;
+}
+
+.splitHandle:hover::after,
+.splitHandle:focus-visible::after {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.splitHandle:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.agentEmpty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 8px 8px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.agentEmptyTitle {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
 .iconButton {
   flex: none;
   display: inline-flex;
@@ -45,7 +132,7 @@
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   height: 36px;
   padding-left: 4px;
@@ -57,15 +144,18 @@
 }
 
 .root:not(.rail) .sectionHeader {
-  margin-top: 2px;
+  margin-top: 0;
   margin-right: -4px;
 }
 
 .sectionLabel {
-  flex: none;
-  max-width: 45%;
+  /* Grow into free header space before search/actions — a fixed 45% cap
+     clipped "Agent workspaces" to "Agent workspac" on typical sidebar widths. */
+  flex: 1 1 auto;
+  max-width: none;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 20px;
   opacity: 1;
@@ -80,6 +170,7 @@
 }
 
 .sectionLabelHidden {
+  flex: 0 1 0;
   max-width: 0;
   margin-right: -4px;
   opacity: 0;
@@ -582,9 +673,63 @@
   }
 }
 
-/* Phone: drawer owns motion 閳?skip the wide remount fade. */
+/* Phone: drawer owns motion — skip the wide remount fade. */
 @media (max-width: 767px) {
   .wide {
     animation: none;
   }
+}
+
+/* Phone drawer: tab between 工作区 and 干员工作区 (vertical split crushed both). */
+.phoneLaneTabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  margin: 0 4px 6px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--dsw-alias-fill-tsp-secondary);
+}
+
+.phoneLaneTab {
+  flex: 1;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.phoneLaneTab[aria-selected='true'] {
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-text-primary) 10%, transparent);
+}
+
+.splitColumn[data-phone-lane='workspaces'] [data-phone-pane='agents'],
+.splitColumn[data-phone-lane='agents'] [data-phone-pane='workspaces'] {
+  display: none;
+}
+
+.splitColumn[data-phone-lane] .splitPaneUpper,
+.splitColumn[data-phone-lane] .splitPaneLower {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Lane tab already names the section — drop the duplicate label row title. */
+.splitColumn[data-phone-lane] .sectionLabel {
+  display: none;
+}
+
+.splitColumn[data-phone-lane] .sectionHeader {
+  justify-content: flex-end;
 }

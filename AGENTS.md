@@ -1,8 +1,12 @@
+---
+xrk-inject: false
+---
+
 # AGENTS.md — XRK-Harness
 
 > **读者**：维护者 · Coding Agent（**笔记**，不是终端用户手册）。
 
-> **Host inject**：若工作区存在 **`.agents/AGENTS.md`**（或 `.xrk/AGENTS.md`），产品 Agent **不注入**根维护者 `AGENTS.md`（对标 XRK-AGT 根 `AGENTS.md` vs `agents/workspace/AGENTS.md`）。**Cursor 改内核仍读本文件。**
+> **Host inject**：本文件带 `xrk-inject: false`，产品 Agent **不注入**（Cursor 改内核仍读）。工作区产品层用 `.agents/` / `.xrk/` 增量；根与 overlay **可同时注入**（无同文重复即可）。
 
 面向**克隆本仓、改代码 / 写测 / 同步教科书**的人。
 
@@ -14,6 +18,17 @@
 | Cursor Canvas | **本机草稿**（不入库） |
 
 冲突时以**代码**为准；能力是否可依赖以 [docs/status.md](./docs/status.md) 为准。**不要**把笔记里的禁令抄进教科书。
+
+---
+
+## 产品站立种子 vs 本文件
+
+| 载体 | 读者 | 写什么 |
+|------|------|--------|
+| **`apps/cli/seeds/standing/`** → `~/.xrk/AGENTS.md` · `SOUL.md` | **终端用户产品 Agent**（全席员工手册） | 怎么干活、听谁的、路由到哪本 skill；**禁止**塞注入图层 / 指纹刷新 / 本仓改码红线 |
+| **本文件（根 `AGENTS.md`）** | 维护者 · Cursor Coding Agent | 改本仓；Host **不**把本文件注入产品 Agent（有工作区 `.agents/AGENTS.md` 时更是） |
+
+注入分层、audience、`XRK.md` 仅父会话、指纹覆盖等：**教科书** [docs/workspace-inject.md](./docs/workspace-inject.md) · [docs/skills-layers.md](./docs/skills-layers.md)；改口径落点用笔记 skill **`xrk-inject-layer`**。手改 `~/.xrk/AGENTS.md` 会被 establish 指纹盖掉——改 seed 源再建立。
 
 ---
 

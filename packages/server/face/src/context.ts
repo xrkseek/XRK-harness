@@ -192,6 +192,11 @@ export interface FaceRuntime {
   readonly sessionThreads: import("./session-thread-store.js").FaceSessionThreadStore;
   /** Workspace Agent Team 干员 roster. */
   readonly agentRoster: import("./agent-roster-store.js").FaceAgentRosterStore;
+  /**
+   * Top-level identity sessions (sidebar 干员 pane): main Agent = roster
+   * member, not a subagent child.
+   */
+  readonly sessionIdentities: import("./session-identity-store.js").FaceSessionIdentityStore;
   /** Per-session Overview emotion-ball sticky state (`presence_set`). */
   readonly presence: FacePresenceStore;
   /** Session-scoped turn/step numbers for DSH wire events. */
@@ -366,6 +371,30 @@ export interface FaceRuntime {
    */
   jobViewsFor(sessionId: string): JobView[] | undefined;
   publishJobs(sessionId: string, opts?: { baseline?: boolean }): void;
+  /**
+   * Latest Claude Code mods AbovePrompt snapshot for a session, if any.
+   * Used as the mux subscribe baseline (like jobs).
+   */
+  bandSnapshotFor(
+    sessionId: string,
+  ):
+    | {
+        readonly generation: number;
+        readonly tree: readonly unknown[] | null;
+      }
+    | undefined;
+  /** Run a band button press through the agent's pluginBand source. */
+  pressBand(
+    sessionId: string,
+    generation: number,
+    actionId: string,
+  ): Promise<
+    | {
+        readonly generation: number;
+        readonly tree: readonly unknown[] | null;
+      }
+    | undefined
+  >;
   /**
    * Stop / cancel published `running:false` while the drain latch may still
    * be joining. Status `delivery.turnActive` follows this bit so Overview

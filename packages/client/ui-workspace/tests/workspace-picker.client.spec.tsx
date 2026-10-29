@@ -21,10 +21,20 @@ afterEach(() => {
 const t: WorkspacePickerProps['t'] = makeTranslate(zh, commonZh)
 
 const wid = (id: string) => id as WorkspaceId
-function workspace(id: string, title = id): WorkspaceView {
+function workspace(
+  id: string,
+  title = id,
+  kind: WorkspaceView['kind'] = 'project',
+): WorkspaceView {
   return {
-    workspaceId: wid(id), path: `/projects/${id}`, title, sessionIds: [],
-    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    workspaceId: wid(id),
+    path: kind === 'agent-home' ? `/agent-homes/${id}` : `/projects/${id}`,
+    title,
+    sessionIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...(kind === undefined ? {} : { kind }),
+    ...(kind === 'agent-home' ? { boundMemberId: `mem_${id}` } : {}),
   }
 }
 function hook<T>(snapshot: T) {
@@ -123,6 +133,47 @@ describe('WorkspacePicker', () => {
     expect(entries).toHaveLength(2)
     fireEvent.click(entries[1]!)
     expect(b.onPick).toHaveBeenCalledWith(wid('beta'))
+  })
+
+  it('keeps project and agent-home lists separate', () => {
+    mount([
+      workspace('proj', 'Project Tree', 'project'),
+      workspace('agent', 'Agent Home', 'agent-home'),
+    ])
+    expect(screen.getByRole('menuitem', { name: /^Project Tree/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /^Agent Home/ })).toBeNull()
+  })
+
+  it('lists only agent homes when the selected workspace is an agent-home', () => {
+    const items = [
+      workspace('proj', 'Project Tree', 'project'),
+      workspace('agent', 'Agent Home', 'agent-home'),
+      workspace('agent2', 'Other Home', 'agent-home'),
+    ]
+    const onPick = vi.fn()
+    const onClose = vi.fn()
+    const anchorRef = anchor()
+    const { probe, renderSlot } = flowProbe()
+    const occupancy = occupancySource()
+    render(
+      <WorkspacePicker
+        open
+        anchorRef={anchorRef}
+        useSessions={hook(sessions)}
+        useWorkspaces={hook(workspaceState(items))}
+        selectedId={wid('agent')}
+        onPick={onPick}
+        onClose={onClose}
+        createWorkspace={vi.fn()}
+        useDirectoryFlow={occupancy.useDirectoryFlow}
+        renderSlot={renderSlot}
+        t={t}
+      />,
+    )
+    expect(screen.queryByRole('menuitem', { name: /^Project Tree/ })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: /^Agent Home/ })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /^Other Home/ })).toBeTruthy()
+    void probe
   })
 
   it('always offers search and filters by title or path (model-menu shape)', () => {

@@ -8,6 +8,8 @@ import { toFetchHandler } from '@xrkseek/xrk-host-apiproxy'
 import { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
 import { assertTrustedAuthority, isTrustedApiRequest } from './api-request-trust.ts'
+import { isPrivateLanHostname } from './loopback-hostname.ts'
+import { apiKeyElevatesRequest } from './operator-elevation.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { rejectWebSocketUpgrade, WebSocketDownlinks } from './websocket-downlink.ts'
 
@@ -57,30 +59,49 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Bind LAN IP literals that may call privileged methods without a PIN
+   * elevating the operator (同源 IP). DNS names never belong here.
+   */
+  privilegedHosts?: string[]
+  /**
+   * When true, a request that already cleared the outer trust fence may call
+   * privileged methods (Host injects PIN / API-key elevation).
+   */
+  isOperatorElevated?: (request: Request) => boolean
   /** Maximum buffered JSON body for every `/api` request. */
   maxRequestBodyBytes?: number
 }
 
 export const Config: z<ConnectionConfig> = z.object({
   trustedHosts: z.array(String).default([]),
+  privilegedHosts: z.array(String).default([]),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
 })
 
+/** Listen bind from Host (`XRK_SERVE_HOST`) when Cordis config omits privilegedHosts. */
+function bindHostFromEnv(): string | undefined {
+  const raw = typeof process !== 'undefined'
+    ? process.env.XRK_SERVE_HOST?.trim().toLowerCase()
+    : undefined
+  if (!raw) return undefined
+  if (!isPrivateLanHostname(raw)) return undefined
+  return raw
+}
+
 /**
- * Methods gated to loopback even on a trusted-host deployment. Native dialogs
- * act on the host machine; the settings and credential domains mutate the
- * user's configuration and secret store, and READING them is equally
- * privileged — `settings.describe` returns every exposed namespace's
- * configuration and `credentials.describe` reports whether an arbitrary
- * environment-variable name is configured and where from, which is
- * reconnaissance no anonymous caller should have. `trustedHosts` is a
- * DNS-rebinding fence, explicitly not authentication, so the whole
- * configuration plane stays loopback-same-origin until a real authentication
- * layer exists. `llm.discoverModels` belongs to that plane on both counts: it
- * carries a draft credential, and it makes the HOST issue a GET to a URL the
- * caller chose and reports back the status or the parsed body — an anonymous
- * LAN caller would have a probe for whatever the host can reach and the
- * browser cannot.
+ * Methods gated to loopback / intentional private-LAN bind even on a
+ * trusted-host (DNS) deployment. Native dialogs act on the host machine; the
+ * settings and credential domains mutate the user's configuration and secret
+ * store, and READING them is equally privileged — `settings.describe` returns
+ * every exposed namespace's configuration and `credentials.describe` reports
+ * whether an arbitrary environment-variable name is configured and where from.
+ * `trustedHosts` DNS names remain a rebinding fence, not authentication — a
+ * declared `harness.example` still cannot call these. Private IPv4 literals
+ * (RFC1918) are allowed when the operator bound the Host there (`xrkh serve
+ * --host 10.x`) and the browser is same-origin to that address: Origin /
+ * sec-fetch-site still block cross-site callers. `llm.discoverModels` belongs
+ * to this plane on both counts (draft credential + Host-side URL fetch).
  *
  * The model catalog (`llm.providers`, `llm.models`) is deliberately NOT here:
  * it carries provider ids, display names, and model lists — no endpoints,
@@ -124,17 +145,54 @@ const PRIVILEGED_METHODS = new Set([
 ])
 
 /**
+ * Privileged plane: loopback always; bind LAN IPs in `privilegedHosts` with
+ * same-origin markers; optional Host-injected operator elevation (PIN / key);
+ * else `XRK_API_KEY` on the request. DNS `trustedHosts` alone never qualifies.
+ */
+function isPrivilegedApiRequest(
+  request: Request,
+  privilegedHosts: readonly string[],
+  isOperatorElevated?: (request: Request) => boolean,
+): boolean {
+  if (isTrustedApiRequest(request, [])) return true
+  if (isOperatorElevated?.(request) === true) return true
+  if (apiKeyElevatesRequest(request)) return true
+  if (privilegedHosts.length === 0) return false
+  const host = request.headers.get('host')
+  if (!host) return false
+  let hostname: string
+  try {
+    hostname = new URL(`http://${host}`).hostname
+  } catch {
+    return false
+  }
+  if (!privilegedHosts.some((entry) => entry.toLowerCase() === hostname.toLowerCase())) {
+    return false
+  }
+  return isTrustedApiRequest(request, [hostname])
+}
+
+/**
  * Mounts the API gateway under the browser transport prefix. Every request on
  * the prefix passes the browser-trust fence first (DNS-rebinding and
  * cross-site defense — [api-request-trust](./api-request-trust.ts));
- * privileged methods additionally pass it with an empty trust list, which
- * pins them to loopback.
+ * privileged methods additionally require loopback, the bind LAN IP, or an
+ * elevated operator (PIN / API key). DNS `trustedHosts` alone is not enough.
  * @param ctx - Host plugin context.
  * @param config - resolved plugin config (schema defaults applied).
  */
 export function apply(ctx: Context, config?: ConnectionConfig): void {
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
-  const trustedHosts = config?.trustedHosts ?? []
+  const envBind = bindHostFromEnv()
+  const privilegedHosts = [
+    ...new Set([
+      ...(config?.privilegedHosts ?? []),
+      ...(envBind ? [envBind] : []),
+    ].map((h) => h.toLowerCase())),
+  ]
+  const trustedHosts = [
+    ...new Set([...(config?.trustedHosts ?? []), ...privilegedHosts]),
+  ]
   const maxRequestBodyBytes = config?.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
   // Config boundary: a malformed entry fails the load loudly here rather than
   // silently authorizing its hostname prefix at request time.
@@ -149,7 +207,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         : undefined
       if (method !== undefined
         && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, [])) {
+        && !isPrivilegedApiRequest(request, privilegedHosts, config?.isOperatorElevated)) {
         return new Response('forbidden', { status: 403 })
       }
       if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {

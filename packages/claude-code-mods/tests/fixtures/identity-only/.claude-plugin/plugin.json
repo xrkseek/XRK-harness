@@ -1,0 +1,5 @@
+{
+  "name": "identity-only",
+  "version": "0.2.0",
+  "description": "Fixture: a plugin with no hook modules at all."
+}

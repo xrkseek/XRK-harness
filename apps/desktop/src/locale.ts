@@ -1,6 +1,6 @@
-/** Typed English and Chinese copy owned by the Electron shell (menus · dialogs). */
+/** Typed English / Chinese / Japanese copy owned by the Electron shell (menus · dialogs). */
 
-/** English is the key-set source of truth; non-zh locales fall back here. */
+/** English is the key-set source of truth; unknown locales fall back here. */
 export const en = {
   application: "Application",
   windowTitle: "XRK Harness",
@@ -40,16 +40,37 @@ export const zh = {
   updateFailedTitle: "更新失败",
 } as const satisfies DesktopMessages;
 
+export const ja = {
+  application: "アプリケーション",
+  windowTitle: "XRK Harness",
+  startupFailed: "XRK Harness Desktop を起動できませんでした",
+  checkUpdatesMenu: "更新を確認…",
+  updateCheckFailedTitle: "更新の確認に失敗しました",
+  unknownError: "不明なエラー",
+  updateCheckTitle: "更新を確認",
+  updateCurrent: "すでに最新版です。",
+  updateTitle: "XRK Harness Desktop の更新",
+  updateAvailable: "利用可能な更新があります",
+  updateDetail:
+    "XRK Harness Desktop {version}\n\nこのリリースには対応する Host と Web dist が含まれます。インストール後にアプリが再起動します。",
+  installAndRestart: "インストールして再起動",
+  later: "後で",
+  updateFailedTitle: "更新に失敗しました",
+} as const satisfies DesktopMessages;
+
 export interface DesktopLocale {
-  readonly id: "en" | "zh-CN";
+  readonly id: "en" | "zh-CN" | "ja";
   readonly messages: DesktopMessages;
 }
 
-/** Map Chromium / OS locale tags onto the two shipped dictionaries. */
+/** Map Chromium / OS / product locale tags onto the shipped dictionaries. */
 export function resolveDesktopLocale(locale: string): DesktopLocale {
   const normalized = locale.trim().toLowerCase();
   if (normalized === "zh" || normalized.startsWith("zh-")) {
     return { id: "zh-CN", messages: zh };
+  }
+  if (normalized === "ja" || normalized.startsWith("ja-")) {
+    return { id: "ja", messages: ja };
   }
   return { id: "en", messages: en };
 }

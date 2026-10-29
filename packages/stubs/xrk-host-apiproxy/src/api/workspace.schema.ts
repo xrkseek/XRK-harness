@@ -20,6 +20,19 @@ export const workspaceViewSchema = z.object({
   sessionIds: z.array(sessionIdSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+  kind: z.enum(['project', 'agent-home']).optional(),
+  boundMemberId: z.string().optional(),
+  boundMemberAppearance: z.object({
+    shape: z.string(),
+    color: z.string(),
+    kit: z.string().optional(),
+    kitHat: z.string().optional(),
+    kitGlasses: z.string().optional(),
+    kitHeld: z.string().optional(),
+    overlayHat: z.string().optional(),
+    overlayGlasses: z.string().optional(),
+    overlayHeld: z.string().optional(),
+  }).optional(),
 }) satisfies z.ZodType<Wire<WorkspaceView>>
 
 /** workspace.list request payload (empty object literal). */

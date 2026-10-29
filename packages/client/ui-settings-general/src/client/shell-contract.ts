@@ -49,6 +49,8 @@ export type SettingsRootInjected = {
     sections: HostObservable<readonly SettingsSectionRow[]>
     /** settings.onboarding ledger projected into coordinator order. */
     onboardingSteps: HostObservable<readonly SettingsOnboardingStep[]>
+    /** Host package version from `host.describe` (Web foot chip). */
+    hostVersion: HostObservable<string>
   }
 }
 

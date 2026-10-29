@@ -17,23 +17,24 @@
 
 Inject 按节顺序追加；同名正文 dedupe；**后出现的节更接近当轮任务**。Skills catalog 同样：home 低优先级，项目内高优先级。节渲染带 `> source: <path>` 溯源行（压缩后仍可辨来源）。
 
-**子代理 audience**：Host 为委派子会话设 `audience: subagent` 时，**跳过**家目录站立人格（`~/.xrk` / `~/.agents` 的 SOUL.md · USER.md · IDENTITY.md · 家 AGENTS.md）。子身份来自 Face spawn 前缀；工作区项目文档与 skills catalog **仍注入**。
+**Audience**：只闸 **经理 ledger `XRK.md`**（`audience=user` 才注；干员家 / 委派子会话不注）。产品站立、家约定（`~/.agents` · `~/.claude` · `~/.codex`）、工作区约定、skill catalog **全席同注**（存在都尝试）。徽章与权限只管**工具运行时面**，不管上下文。渐进披露 = catalog 列名 → `skill` 拉正文，不是少注约定。权威车道见 `<instruction_authority>`（`createInstructionAuthorityRegistry`，插件可 `register`）。
 
-**真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）。
+**真源**：`packages/workspace/src/inject-sources.ts`（`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill 根列表）· `ecosystem-instructions.ts` · `workspace-anchor.ts`。
 
 ## 注入策略（Codex 对齐）
 
-与 Codex 相同的核心原则：**instructions 窄、skills 渐进披露**。
+与 Codex 相同的核心原则：**instructions 窄、skills 渐进披露**（catalog 列 name+一行 → `skill` 拉正文；**没有** `skill_search`——`tool_search` 只服务延迟工具）。Catalog 截断头序：**公文包**（干员/其子会话）→ **工作区 + 种子 `xrk-*`** → 其它全局；同名冲突公文包赢。
 
 | 种类 | 全局 `~/…` | 工作区 `{root}/…` |
 |------|------------|-------------------|
-| **Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents/*` · `~/.xrk/` 站立文件 | 同上 + `CODEX.md` · `.cursor/rules/**` · `.github/*` · 根 `AGENTS.md`/`CLAUDE.md`（有产品 overlay 时跳过根 `AGENTS.md`） |
+| **产品站立** | **`~/.xrk/`**（AGENTS/SOUL/USER/IDENTITY/TOOLS …；全席） | `{workspace}/.xrk/` 同形 overlay |
+| **约定 Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules/context（**全席**） | **存在都尝试注入**（多智能体同仓）：`.codex/` · `CODEX.md` · `.claude/` · `.agents/` · `.cursor/rules/**` · `.github/*` · 根 `AGENTS.md`/`CLAUDE.md` · 与 `.xrk/` **并行**（内容去重；单文件 `xrk-inject: false` 跳过） |
+| **经理 ledger `XRK.md`** | **`~/.xrk/XRK.md`**（站立种子 · fingerprint，同 AGENTS；仅 `audience=user`）· 遗留 **`~/XRK.md`** | **`{workspace}/.xrk/XRK.md`**（同 AGENTS overlay）· 遗留根 **`XRK.md`**；干员家 / 委派子会话不注 |
 | **`~/.cursor/**`** | **永不注入**（Cursor IDE 维护树） | — |
 | **`{root}/.cursor/rules/**`** | — | **注入**（单文件 `xrk-inject: false` 可跳过） |
-| **Skill catalog** | 默认**不含** home skills | **`.xrk/skills`** → `.agents` → `.cursor` → `.claude` → `.codex`（兼容） |
-| **Skill 工具 / `skill.list`** | **`~/.xrk/skills`** · `~/.agents` · `~/.claude` · `~/.codex`（**不含** `~/.cursor/skills`） | 同上 + `{productDir}/skills` |
+| **Skill catalog / `skill` 工具 / `skill.list` / `/skills`** | **始终含** `{XRK_HOME}/skills`（产品种子 **与** 用户安装）；其它 `~/…/skills` 默认关 | 候选同形；**截断/展示头序**：公文包 → 工作区+`xrk-*` → 全局。同名公文包赢。无 `skill_search` |
 
-跨项目人格放 **`~/.agents/`** 或 **`~/.xrk/`**，不要放 **`~/.cursor/`**。
+跨项目人格写 **`~/.xrk/`**（或工作区 `.xrk/`）；业界约定写 **`~/.agents/`**（AGENTS/rules/context/skills）。不要放 **`~/.cursor/`**。
 
 ## 产品目录
 
@@ -41,7 +42,7 @@ assistant / context / rules / recipes 默认：`{workspaceRoot}/.xrk`（**不强
 
 **Skills 不强制该目录。** Inject / `skill` / `skill.list` 自动导入已有 skill 树；缺目录则跳过。
 
-存在 `{workspace}/.agents/AGENTS.md` 或 `{workspace}/.xrk/AGENTS.md` 时，工作区根 `AGENTS.md` **不**注入。分层说明：[skills-layers.md](./skills-layers.md)。
+工作区里各厂商约定目录 **存在都尝试注入**（不是互斥二选一）：`.agents/` · `.claude/` · `.cursor/rules/` · `.codex/` · `CODEX.md` · `.github/` · 根 `AGENTS.md`/`CLAUDE.md` · `.xrk/` 站立——方便 Cursor / Claude / Codex / 本产品 Agent 同仓协作。内容去重；同一份手册只留一处；维护者笔记用 `xrk-inject: false`。家目录 `~/.cursor/**` 仍不注（IDE 维护树）。分层说明：[skills-layers.md](./skills-layers.md)。
 
 ## 持久注入（会话日志）
 
@@ -66,16 +67,20 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 低 → 高优先级（后列更接近当轮任务）。**Skills 正文**仍为独立 catalog inject，不在此列表。
 
-1. **用户主目录**（`HOME_CONVENTION_INJECT`）：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/*` · `~/.xrk/` 站立文件
-2. **工作区**（`WORKSPACE_CONVENTION_INJECT`）：同上 + `CODEX.md` · `.cursor/rules/**` · `.github/*`
-3. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
-4. 工作区根 `AGENTS.md`（无 `.agents/` 或 `.xrk/AGENTS.md` 时）
-5. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
-6. Skills → 独立 catalog inject（仅工作区根，除非 `includeUserHomeSkills: true`）
+1. **产品站立** `~/.xrk/` AGENTS/SOUL/…（全席；`includeUserHome` 默认开）
+2. **家约定**（`HOME_CONVENTION_INJECT`；**全席**）：`~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents` AGENTS/rules/context
+3. **经理 ledger**（仅 `audience=user`）：站立 `~/.xrk/XRK.md`（+ 遗留 `~/XRK.md`）
+4. **工作区约定**（`WORKSPACE_CONVENTION_INJECT`；**存在都注**）：`.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules/context · `.cursor/rules/**` · `.github/*`
+5. `{workspace}/.xrk/`：`SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`；同档 **`XRK.md`**（仅 user）
+6. 工作区根 `AGENTS.md`（始终尝试；`xrk-inject: false` 跳过）；遗留根 `XRK.md`（仅 user，顺序在约定层）
+7. 工作区根 `CLAUDE.md`（仅 `@AGENTS.md` 单行时跳过）
+8. Skills → 独立 catalog inject（见上表；产品家 `{XRK_HOME}/skills` 始终入表）
+
+锚点段（`resolveWorkspaceInject`）：`## Workspace root` → 可选 `## Product home`（绝对路径）→ 可选 `## Runtime surface` → 可选 `## Session policy`。
 
 ## 运行形态（Runtime surface）
 
-工作区根锚点（`## Workspace root`）同一节内还会追加 `## Runtime surface` 段 —— **仅当**入口声明了形态，让模型知道人在看哪种壳：
+工作区根锚点（`## Workspace root`）同一节内还会追加 `## Product home`（产品数据根绝对路径）与 `## Runtime surface` 段 —— 后者**仅当**入口声明了形态，让模型知道人在看哪种壳：
 
 | `XRK_SURFACE` | 壳 |
 |---------------|----|
@@ -89,11 +94,12 @@ Face 聊天将非 `user` source 渲染为折叠的**上下文注入**行；Traje
 
 | 目的 | 放哪 |
 |------|------|
-| 跨项目默认偏好（产品种子） | `~/.xrk/AGENTS.md`（`xrkh web` 写入；人格向薄说明，对标 Codex；**不**自动种 SOUL/IDENTITY） |
-| 跨项目 / 本仓人格 / 语气（可选） | 工作区 `.agents/SOUL.md` · `IDENTITY.md`（推荐）；或 `~/.agents/AGENTS.md` · `rules/`。家目录 `~/.xrk/SOUL.md` 是产品种子（fingerprint 刷新），勿当用户可编辑落点 |
+| 跨项目默认偏好（产品种子） | `~/.xrk/AGENTS.md` · `SOUL.md`（`xrkh web` 写入；fingerprint 刷新；全席可见） |
+| 本仓人格 / 语气（可选） | **`{workspace}/.xrk/SOUL.md` · `IDENTITY.md`**（推荐）；业界 `.agents/` **不**注入 SOUL |
+| 跨项目约定草稿 | `~/.agents/AGENTS.md` · `rules/` · `context/`（父席；干员/子代理跳过） |
 | 跨项目「用户是谁」事实 | **策展** `{XRK_HOME}/memories/USER.md`（`memory` 工具；**不是**站立 `~/.xrk/USER.md`） |
 | 站立可选 `USER.md` | 仅人格草稿 inject；与策展 `memories/USER.md` 分文件，勿混写 |
-| 跨项目 skill | `~/.agents/skills/<name>/SKILL.md` |
+| 跨项目 skill | **`{XRK_HOME}/skills/<name>/`**（入 catalog / `skill` / `skill.list`；勿与产品种子同名）；或 `~/.agents/skills/`（默认不进 catalog，需 `includeUserHomeSkills`） |
 | 单项目规则（含 Cursor 格式） | `{workspace}/.cursor/rules/*.mdc`（**不是** `~/.cursor/rules`） |
 | 单项目插件开发 / 架构 | 仓库内 `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/`（**只写增量**；勿抄 `apps/cli/seeds/`） |
 | 本机私密偏好（不进 git） | `~/.xrk/` 或 `~/.agents/` |
@@ -162,23 +168,24 @@ Turn-scoped / recomputable ephemeral context uses **[context-fragments](./contex
 
 Sections append in order; duplicate bodies dedupe; **later sections are closer to the turn**. Skill catalog follows the same rule: home is lower priority than project trees. Each rendered section carries a `> source: <path>` provenance line.
 
-**Subagent audience**: when Host sets `audience: subagent` for a delegated child, the **home standing persona** is skipped (`~/.xrk` / `~/.agents` SOUL.md · USER.md · IDENTITY.md · home AGENTS.md). Child identity comes from the Face spawn preamble; workspace project docs and the skills catalog **stay on**.
+**Audience**: gates **manager ledger `XRK.md` only** (`audience=user`; not 干员家 / delegated children). Product standing, home convention (`~/.agents` · `~/.claude` · `~/.codex`), workspace convention, and skill catalog are the **same for every audience**. Badge and permission control the **tool runtime surface only**, not context. Progressive disclosure = catalog names → `skill` loads bodies — not thinner convention inject. Authority lanes: `<instruction_authority>` (`createInstructionAuthorityRegistry`; plugins may `register`).
 
-**Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists).
+**Source of truth**: `packages/workspace/src/inject-sources.ts` (`HOME_CONVENTION_INJECT` · `WORKSPACE_CONVENTION_INJECT` · skill root lists) · `ecosystem-instructions.ts` · `workspace-anchor.ts`.
 
 ## Inject policy (Codex-aligned)
 
-Same core principle as Codex: **narrow instructions, progressive skill disclosure**.
+Same core principle as Codex: **narrow instructions, progressive skill disclosure** (catalog = name+blurb → `skill` loads body; **no** `skill_search` — `tool_search` is for deferred tools only). Catalog truncate head: **公文包** (干员 / their children) → **workspace + seed `xrk-*`** → other globals; briefcase wins name clashes.
 
 | Kind | Global `~/…` | Workspace `{root}/…` |
 |------|--------------|----------------------|
-| **Instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents/*` · `~/.xrk/` standing files | Same + `CODEX.md` · `.cursor/rules/**` · `.github/*` · root `AGENTS.md`/`CLAUDE.md` (root `AGENTS.md` skipped when product overlay exists) |
+| **Product standing** | **`~/.xrk/`** (AGENTS/SOUL/USER/IDENTITY/TOOLS …; every audience) | Same shape under `{workspace}/.xrk/` |
+| **Convention instructions** | `.codex/AGENTS.md` · `.claude/*` · `.agents` AGENTS/rules/context (**every audience**) | **All present vendors attempted** (multi-agent same workspace): `.codex/` · `CODEX.md` · `.claude/` · `.agents/` · `.cursor/rules/**` · `.github/*` · root `AGENTS.md`/`CLAUDE.md` **alongside** `.xrk/` (content-deduped; per-file `xrk-inject: false` skips) |
+| **Manager ledger `XRK.md`** | **`~/.xrk/XRK.md`** (standing seed · fingerprint, same as AGENTS; `audience=user` only) · legacy **`~/XRK.md`** | **`{workspace}/.xrk/XRK.md`** (same overlay shape as AGENTS) · legacy root **`XRK.md`**; not 干员家 / delegated children |
 | **`~/.cursor/**`** | **Never injected** (Cursor IDE maintainer tree) | — |
 | **`{root}/.cursor/rules/**`** | — | **Injected** (per-file opt-out via `xrk-inject: false`) |
-| **Skill catalog** | Home skills **excluded by default** | **`.xrk/skills`** → `.agents` → `.cursor` → `.claude` → `.codex` (compat) |
-| **`skill` tool / `skill.list`** | **`~/.xrk/skills`** · `~/.agents` · `~/.claude` · `~/.codex` (**excludes** `~/.cursor/skills`) | Same + `{productDir}/skills` |
+| **Skill catalog / `skill` tool / `skill.list` / `/skills`** | **Always includes** `{XRK_HOME}/skills` (seeds + installs); other `~/…/skills` off by default | Shared roots; **truncate/display head**: briefcase → workspace+`xrk-*` → globals. Briefcase wins clashes. No `skill_search` |
 
-Put cross-project persona under **`~/.agents/`** or **`~/.xrk/`**, not **`~/.cursor/`**.
+Put cross-project persona under **`~/.xrk/`** (or workspace `.xrk/`); industry convention under **`~/.agents/`** (AGENTS/rules/context/skills). Not **`~/.cursor/`**.
 
 ## Product dir
 
@@ -186,7 +193,7 @@ assistant / context / rules / recipes default to `{workspaceRoot}/.xrk` (**no fo
 
 **Skills do not require that directory.** Inject / `skill` / `skill.list` import existing skill trees automatically; missing dirs are skipped.
 
-When `{workspace}/.agents/AGENTS.md` or `{workspace}/.xrk/AGENTS.md` exists, the workspace-root `AGENTS.md` is **not** injected. Layering: [skills-layers.md](./skills-layers.md).
+Workspace convention vendors are **additive when present** (not mutually exclusive): `.agents/` · `.claude/` · `.cursor/rules/` · `.codex/` · `CODEX.md` · `.github/` · root `AGENTS.md`/`CLAUDE.md` · `.xrk/` standing — so Cursor / Claude / Codex / product Agents can share one repo. Content-deduped; keep one handbook copy; maintainer notes use `xrk-inject: false`. Home `~/.cursor/**` is still never injected (IDE maintainer tree). Layering: [skills-layers.md](./skills-layers.md).
 
 ## Durable inject (session log)
 
@@ -211,22 +218,27 @@ Budget: character cap (default 32k; **Settings → Plugins → Plugin configurat
 
 Low → high priority (later rows closer to the turn). Skill **bodies** remain a separate catalog inject, not in this list.
 
-1. **User home** (`HOME_CONVENTION_INJECT`): `~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents/*` · `~/.xrk/` standing files
-2. **Workspace** (`WORKSPACE_CONVENTION_INJECT`): same + `CODEX.md` · `.cursor/rules/**` · `.github/*`
-3. `{workspace}/.xrk/`: `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`
-4. Workspace-root `AGENTS.md` (when neither `.agents/` nor `.xrk/AGENTS.md` exists)
-5. Workspace-root `CLAUDE.md` (skipped when it is only a single `@AGENTS.md` line)
-6. Skills → separate catalog inject (workspace roots only unless `includeUserHomeSkills: true`)
+1. **Product standing** `~/.xrk/` AGENTS/SOUL/… (every audience; `includeUserHome` default on)
+2. **Home convention** (`HOME_CONVENTION_INJECT`; **every audience**): `~/.codex/AGENTS.md` · `~/.claude/*` · `~/.agents` AGENTS/rules/context
+3. **Manager ledger** (`audience=user` only): standing `~/.xrk/XRK.md` (+ legacy `~/XRK.md`)
+4. **Workspace convention** (`WORKSPACE_CONVENTION_INJECT`; **all present**): `.codex/AGENTS.md` · `CODEX.md` · `.claude/CLAUDE.md`+`rules/` · `.agents` AGENTS/rules/context · `.cursor/rules/**` · `.github/*`
+5. `{workspace}/.xrk/`: `SOUL.md` · `USER.md` · `IDENTITY.md` · `TOOLS.md` · `AGENTS.md` · `assistant.md` · `context/*` · `rules.md` · `subagents.md`; plus **`XRK.md`** (user only)
+6. Workspace-root `AGENTS.md` (always attempted; `xrk-inject: false` skips); legacy root `XRK.md` (user only, earlier with ledger)
+7. Workspace-root `CLAUDE.md` (skipped when it is only a single `@AGENTS.md` line)
+8. Skills → separate catalog inject (see table; product-home `{XRK_HOME}/skills` always listed)
+
+Anchor block (`resolveWorkspaceInject`): `## Workspace root` → optional `## Product home` (absolute path) → optional `## Runtime surface` → optional `## Session policy`.
 
 ## Where to put persona
 
 | Goal | Location |
 |------|----------|
-| Cross-project defaults (product seed) | `~/.xrk/AGENTS.md` (`xrkh web`; thin Codex-style persona guidance; **does not** auto-seed SOUL/IDENTITY) |
-| Cross-project / workspace persona / tone (optional) | Workspace `.agents/SOUL.md` · `IDENTITY.md` (preferred); or `~/.agents/AGENTS.md` · `rules/`. Home `~/.xrk/SOUL.md` is a product seed (fingerprint refresh) — not a user-edit landing zone |
+| Cross-project defaults (product seed) | `~/.xrk/AGENTS.md` · `SOUL.md` (`xrkh web`; fingerprint refresh; every audience) |
+| Workspace persona / tone (optional) | **`{workspace}/.xrk/SOUL.md` · `IDENTITY.md`** (preferred); industry `.agents/` does **not** inject SOUL |
+| Cross-project convention drafts | `~/.agents/AGENTS.md` · `rules/` · `context/` (parents; skipped for 干员/subagents) |
 | Cross-project “who the user is” facts | **Curated** `{XRK_HOME}/memories/USER.md` (`memory` tool; **not** standing `~/.xrk/USER.md`) |
 | Standing optional `USER.md` | Persona-draft inject only; separate file from curated `memories/USER.md` |
-| Cross-project skill | `~/.agents/skills/<name>/SKILL.md` |
+| Cross-project skill | **`{XRK_HOME}/skills/<name>/`** (catalog / `skill` / `skill.list`; avoid seed names); or `~/.agents/skills/` (off catalog unless `includeUserHomeSkills`) |
 | Project rules (including Cursor format) | `{workspace}/.cursor/rules/*.mdc` (**not** `~/.cursor/rules`) |
 | Single-project plugin / architecture | In-repo `.agents/AGENTS.md` · `.agents/context/` · `.agents/skills/` (**overlay only**; do not copy `apps/cli/seeds/`) |
 | Local private preferences (not in git) | `~/.xrk/` or `~/.agents/` |

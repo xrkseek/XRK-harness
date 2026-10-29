@@ -76,6 +76,15 @@ export function workspaceCheckpointStoreFor(
     runGit: runGit ?? defaultRunner ?? createProcessGitRunner(),
   });
   stores.set(key, store);
+  // The store disables `maintenance.auto` so git never grabs the object lock
+  // underneath a concurrent snapshot — which also means nothing else packs the
+  // loose objects those commits produce. Pack once per process on first use:
+  // `gc --auto` detaches itself (gc.autoDetach) and no-ops while the loose
+  // count is under `gc.auto`. An injected runner means a test double, which is
+  // not expected to answer `count-objects`.
+  if (runGit === undefined && defaultRunner === undefined) {
+    void store.reclaim().catch(() => undefined);
+  }
   return store;
 }
 
@@ -244,10 +253,24 @@ export function formatRestorePlan(plan: RestorePlan): string {
   return `Checkpoint ${plan.id.slice(0, 12)}: ${plan.fileCount} files in snapshot; untracked extras (kept unless --prune): ${extra}`;
 }
 
-export function formatRestoreResult(result: RestoreResult): string {
+export function formatRestoreResult(
+  result: RestoreResult & {
+    readonly chatSeq?: number;
+    readonly eventCount?: number;
+    readonly chatAhead?: boolean;
+    readonly chatTruncated?: boolean;
+  },
+): string {
   const removed =
     result.removed.length === 0
       ? ""
       : ` Removed ${result.removed.length} extra path(s).`;
-  return `Restored workspace from ${result.id.slice(0, 12)} (${result.restored} paths).${removed} Chat lineage unchanged — use Branch for a forked session.`;
+  const base = `Restored workspace from ${result.id.slice(0, 12)} (${result.restored} paths).${removed}`;
+  if (result.chatTruncated) {
+    return `${base} Chat truncated to checkpoint seq ${String(result.chatSeq ?? "?")} (${String(result.eventCount ?? "?")} events kept).`;
+  }
+  if (result.chatAhead) {
+    return `${base} Warning: chat still has ${String(result.eventCount)} events while files match seq ${String(result.chatSeq)} — pass truncateChat or use session.truncate / Branch.`;
+  }
+  return `${base} Chat lineage unchanged — use Branch for a forked session.`;
 }

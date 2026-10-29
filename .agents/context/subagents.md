@@ -2,6 +2,8 @@
 
 对标 DSH 委派习惯 + Codex review/plan：子代理是**独立会话**，不是免费线程。
 
+> **`subagent` ≠ `minimal`。** `subagent` = 父席用来派子会话的**工具**（以及被派出的子会话）。`minimal` = 一种**瘦工具面/徽章**（本地向、常无 peer 协作）。二者不要混着比「谁有员工手册」——手册（`~/.xrk`）两边都可以有。
+
 ## 默认
 
 - 小改自己做；独立调研 / 范围清晰的实现片 / 只读 review 再用 `subagent`。
@@ -48,7 +50,7 @@
 | 意图 | Skill |
 |------|--------|
 | 何时委派 / 封顶 | **`xrk-delegate`** |
-| Plan → Build | **`xrk-plan-build`** |
+| Large / ambiguous work | Same session: outline → ask → `todo_write` → build |
 | 只读审 diff | **`xrk-code-review`** |
 
 系统路由段由 Host 注入 `tool:subagent`（仅徽章允许子代理时）。

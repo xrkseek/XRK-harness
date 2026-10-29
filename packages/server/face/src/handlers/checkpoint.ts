@@ -6,12 +6,18 @@
 import { sessionNotFoundMessage } from "../face-error-text.js";
 import type { FaceHandler } from "./types.js";
 import { asRecord } from "./types.js";
-import { readSessionEvents } from "@xrkseek/core-session";
+import {
+  readSessionEvents,
+  sessionEventCount,
+  truncateSession,
+} from "@xrkseek/core-session";
+import type { WorkspaceCheckpointRecord } from "@xrkseek/checkpoint";
 import {
   checkpointFail,
   findCheckpointAtOrBefore,
   workspaceCheckpointStoreForSession,
 } from "../workspace-checkpoint.js";
+import { resetFaceStateAfterLogCut } from "../log-cut-reset.js";
 
 function requireSession(
   runtime: Parameters<FaceHandler>[0],
@@ -36,6 +42,25 @@ function requireSession(
     };
   }
   return { ok: true };
+}
+
+/** Chat vs file-restore alignment (checkpoint.seq = event count at snapshot). */
+function chatAlignFields(
+  runtime: Parameters<FaceHandler>[0],
+  sessionId: string,
+  record: WorkspaceCheckpointRecord,
+): {
+  readonly chatSeq: number;
+  readonly eventCount: number;
+  readonly chatAhead: boolean;
+} {
+  const eventCount = sessionEventCount(runtime.store, sessionId);
+  const chatSeq = record.seq;
+  return {
+    chatSeq,
+    eventCount,
+    chatAhead: eventCount > chatSeq,
+  };
 }
 
 export const sessionCheckpointList: FaceHandler = async (runtime, _rpcId, payload) => {
@@ -74,6 +99,7 @@ export const sessionCheckpointPlanRestore: FaceHandler = async (
   try {
     const store = workspaceCheckpointStoreForSession(runtime, sessionId);
     let targetId = id;
+    let record: WorkspaceCheckpointRecord | undefined;
     if (!targetId && atSeq !== undefined) {
       const hit = findCheckpointAtOrBefore(store, sessionId, atSeq);
       if (!hit) {
@@ -87,6 +113,7 @@ export const sessionCheckpointPlanRestore: FaceHandler = async (
         };
       }
       targetId = hit.id;
+      record = hit;
     }
     if (!targetId) {
       return {
@@ -97,8 +124,18 @@ export const sessionCheckpointPlanRestore: FaceHandler = async (
         },
       };
     }
+    record ??= store.list().find((r) => r.id === targetId);
     const plan = await store.planRestore(targetId);
-    return { ok: true, value: plan };
+    const align = record
+      ? chatAlignFields(runtime, sessionId, record)
+      : undefined;
+    return {
+      ok: true,
+      value: {
+        ...plan,
+        ...(align ?? {}),
+      },
+    };
   } catch (err) {
     return checkpointFail(err);
   }
@@ -120,10 +157,12 @@ export const sessionCheckpointRestore: FaceHandler = async (
       ? Math.floor(p.atSeq)
       : undefined;
   const prune = p.prune === true;
+  const truncateChat = p.truncateChat === true;
 
   try {
     const store = workspaceCheckpointStoreForSession(runtime, sessionId);
     let targetId = id;
+    let record: WorkspaceCheckpointRecord | undefined;
     if (!targetId && atSeq !== undefined) {
       const hit = findCheckpointAtOrBefore(store, sessionId, atSeq);
       if (!hit) {
@@ -137,6 +176,7 @@ export const sessionCheckpointRestore: FaceHandler = async (
         };
       }
       targetId = hit.id;
+      record = hit;
     }
     if (!targetId) {
       return {
@@ -147,8 +187,63 @@ export const sessionCheckpointRestore: FaceHandler = async (
         },
       };
     }
+    record ??= store.list().find((r) => r.id === targetId);
+    if (!record) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message: `unknown checkpoint ${targetId}`,
+          details: { checkpointCode: "unknown-checkpoint" },
+        },
+      };
+    }
+
     const result = await store.restore(targetId, { prune });
-    return { ok: true, value: result };
+    const align = chatAlignFields(runtime, sessionId, record);
+
+    let chatTruncated = false;
+    let eventCount = align.eventCount;
+    if (truncateChat && align.chatAhead) {
+      if (typeof runtime.store.replacePrefix !== "function") {
+        return {
+          ok: false,
+          error: {
+            code: "truncate-unsupported",
+            message:
+              "workspace restored but session store cannot truncateChat (no replacePrefix)",
+          },
+        };
+      }
+      if (runtime.drain.isActive(sessionId)) {
+        await runtime.drain.cancel(sessionId);
+      }
+      try {
+        // checkpoint.seq is the event count at snapshot → keep [0, seq).
+        truncateSession(runtime.store, sessionId, record.seq);
+      } catch (err) {
+        return {
+          ok: false,
+          error: {
+            code: "truncate-failed",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        };
+      }
+      eventCount = resetFaceStateAfterLogCut(runtime, sessionId);
+      chatTruncated = true;
+    }
+
+    return {
+      ok: true,
+      value: {
+        ...result,
+        chatSeq: align.chatSeq,
+        eventCount,
+        chatAhead: eventCount > align.chatSeq,
+        chatTruncated,
+      },
+    };
   } catch (err) {
     return checkpointFail(err);
   }

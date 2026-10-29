@@ -20,7 +20,7 @@
 
 1. **奇创 = orchestrator**，永不 nested `subagent`；实现落编码 peer。
 2. **IM = channel orchestrator**；实现落编码工作区，不在 `ws_im` 改业务仓。
-3. **delegated_child** 跳过家目录站立人格；身份来自 spawn 前缀 + turn-start 短 `<session_capability>` + 小队板。
+3. **delegated_child** 保留产品站立（`~/.xrk`），跳过家约定草稿（`~/.agents`）；席位身份来自 spawn 前缀 + turn-start 短 `<session_capability>` + 小队板。
 4. **主线**是发现钉，不是发信门槛；任意父会话可 `thread_message` 另一父会话。
 5. **父↔子**用 `send_message` / `followup_task`；**子↔子**与**对等父**用 `thread_message`。
 6. 干员看见**同父小队**与自身任务，不看见全仓主线 / global 编排板。
@@ -82,7 +82,7 @@ Session **badge** (tool_surface) and workspace are orthogonal. Face also derives
 
 1. **Qichuang = orchestrator** — never nested `subagent`; implement on coding peers.
 2. **IM = channel orchestrator** — implement in coding workspaces, not inside `ws_im`.
-3. **delegated_child** skips home standing persona; identity = spawn preamble + turn-start short `<session_capability>` + teammate board.
+3. **delegated_child** keeps product standing (`~/.xrk`) and skips home convention drafts (`~/.agents`); seat identity = spawn preamble + turn-start short `<session_capability>` + teammate board.
 4. **主线** is a discovery pin, not a messaging gate; any parent may `thread_message` any parent.
 5. **Parent↔child** uses `send_message` / `followup_task`; **child↔child** and **parent↔parent** use `thread_message`.
 6. Children see their **same-parent squad** and own task — not the full workspace 主线 / global orchestration board.

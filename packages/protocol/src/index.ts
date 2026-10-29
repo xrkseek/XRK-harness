@@ -100,6 +100,7 @@ export {
   type TurnEndReason,
   type TurnEndCancelCause,
   type AgentCancelCause,
+  type SessionEndSeedEvent,
   type TurnStartEvent,
   type UserMessageEvent,
   type UserMessageSource,
@@ -185,4 +186,11 @@ export {
   isValidSessionEvent,
   parseSessionEvent,
   SessionEventParseError,
+  type SessionEventParseCode,
 } from "./validate.js";
+export {
+  assertLosslessJson,
+  isJsonValue,
+  snapshotJsonValue,
+  type JsonValue,
+} from "./json-value.js";

@@ -26,6 +26,7 @@ import type { RpcResponse } from './rpc.ts'
 export interface RpcMethodMap {
   'session.list': SessionsApi['list']
   'session.search': SessionsApi['search']
+  'session.eventWindow': SessionsApi['eventWindow']
   'session.create': SessionsApi['create']
   'session.history': SessionsApi['history']
   'session.models': SessionsApi['models']
@@ -39,6 +40,7 @@ export interface RpcMethodMap {
   'session.cancel': SessionsApi['cancel']
   'session.delete': SessionsApi['delete']
   'session.tools': SessionsApi['tools']
+  'session.pressBand': SessionsApi['pressBand']
   'subagent.list': SubagentsApi['list']
   'subagent.history': SubagentsApi['history']
   'subagent.prompt': SubagentsApi['prompt']

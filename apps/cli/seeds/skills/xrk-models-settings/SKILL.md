@@ -9,7 +9,7 @@ description: >-
 # 模型设置
 
 **Settings → Models**；密钥在 **Credentials**。对话切换用模型芯片或 `/model`。  
-与 UI 同一写入路径。向阳总控 / 一并改 MCP·主题 → 先 **`xrk-home-config`**；本 skill 专治模型卡与芯片。
+与 UI 同一写入路径。MCP / 主题 / 其它 Host 设置 → **`xrk-capability-attach`**；本 skill 专治模型卡与芯片。
 
 ```
 - [ ] 1. 提供方 + API 密钥（自定义需 Base URL）
@@ -25,7 +25,7 @@ description: >-
 | 选择器空 | 至少一行模型 ID **且已保存** |
 | fetch 失败 | 仍可手填 ID；查密钥 / Base URL / 代理 |
 | 列表太长 | 芯片搜索或 `/model` |
-| 要的是 MCP 不是模型 | **`xrk-capability-attach`** / 向阳 **`xrk-home-config`** |
+| 要的是 MCP 不是模型 | **`xrk-capability-attach`** |
 | 要的是 干员不是模型 | **`xrk-delegate`** |
 
 ## 反模式

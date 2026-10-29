@@ -47,6 +47,14 @@ export class FaceWireIdMaps {
   }
 
   /**
+   * Mark primed length after a durable scan that did not pass a full events
+   * array (R8 cold history). Same contract as {@link primeFromLog} completion.
+   */
+  notePrimed(sessionId: string, logLength: number): void {
+    this.primedLen.set(sessionId, Math.max(0, Math.floor(logLength)));
+  }
+
+  /**
    * Number every turn/step in durable log order. History and the first live
    * append of a session must call this before wiring — otherwise the first
    * `turn/start` seen after process start or LRU eviction becomes wire `1`,

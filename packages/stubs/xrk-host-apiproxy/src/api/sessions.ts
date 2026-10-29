@@ -12,7 +12,7 @@ import type { SessionEvent, SessionId } from '@xrkseek/xrk-session/types'
 // cordis Context merge (via dsh-agent) must not enter client aggregates.
 import type { SessionProjectionMap } from '@xrkseek/xrk-session-projection/types'
 import type { RpcId, RpcRequest, RpcResponse } from './rpc.ts'
-import type { ToolEventView } from './events.ts'
+import type { BandSnapshot, ToolEventView } from './events.ts'
 import type { WorkspaceId } from './workspace.ts'
 
 declare module '@xrkseek/xrk-session-projection/types' {
@@ -172,6 +172,8 @@ export interface ModelCatalogModel {
   name: string
   /** Optional provider-supplied description. */
   description?: string
+  /** Declared intake modalities (e.g. text + image = multimodal). */
+  inputModalities?: Array<'text' | 'image'>
   /** Exact-route reasoning metadata when the adapter exposes it. */
   reasoning?: ModelReasoning
 }
@@ -288,6 +290,22 @@ export interface SessionSearchItem {
   snippet: string
 }
 
+/** One raw-log row in a `session.eventWindow` response (Face seq is 1-based). */
+export interface SessionEventWindowRow {
+  seq: number
+  type: string
+  ts: number
+}
+
+/** Bounded neighborhood around one Face seq. */
+export interface SessionEventWindowValue {
+  sessionId: SessionId
+  seq: number
+  startSeq: number
+  endSeq: number
+  events: SessionEventWindowRow[]
+}
+
 /** Session-domain unary methods (the map keys session.* of RpcMethodMap). */
 export interface SessionsApi {
   /** Lists persisted sessions (updatedAt descending). v1 returns everything; cursor is a reserved seat, unimplemented. */
@@ -295,13 +313,29 @@ export interface SessionsApi {
 
   /**
    * Searches the current user/assistant/steering message surface across
-   * sessions visible to `list`. Results contain at most 20 sessions and carry
-   * no continuation cursor; `hasMore` asks the client to refine the query.
+   * sessions visible to `list`. Results contain at most 20 sessions; when
+   * `hasMore` is true, pass response `cursor` back to continue the same query.
    */
   search(
-    request: RpcRequest<{ query: string }>,
+    request: RpcRequest<{ query: string; cursor?: string }>,
     signal: AbortSignal,
-  ): Promise<RpcResponse<{ items: SessionSearchItem[]; hasMore: boolean }>>
+  ): Promise<
+    RpcResponse<{ items: SessionSearchItem[]; hasMore: boolean; cursor?: string }>
+  >
+
+  /**
+   * Reads a bounded raw-event neighborhood around one Face seq
+   * (`before`/`after` each ≤ 50, default 3). Cold observation; does not pin
+   * the session resident LRU.
+   */
+  eventWindow(
+    request: RpcRequest<{
+      sessionId: SessionId
+      seq: number
+      before?: number
+      after?: number
+    }>,
+  ): Promise<RpcResponse<SessionEventWindowValue>>
 
   /**
    * Creates a real session and its idle agent. At most one of `workspaceId` /
@@ -324,7 +358,15 @@ export interface SessionsApi {
    * copy, not a lineage link: an unknown source, or one that never pinned its
    * own selection, is ignored and the normal default resolution applies.
    */
-  create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string; inheritFrom?: SessionId }>):
+  create(request: RpcRequest<{
+    workspaceId?: WorkspaceId
+    cwd?: string
+    sessionId?: SessionId
+    agentPreset?: string
+    inheritFrom?: SessionId
+    /** Top-level identity session (agent-home) or subagent spawn member. */
+    memberId?: string
+  }>):
   Promise<RpcResponse<{ sessionId: SessionId; agentPreset?: string }>>
 
   /**
@@ -465,6 +507,19 @@ export interface SessionsApi {
    * Hidden `exposure` rows are omitted. Unknown ids fail with `session-not-found`.
    */
   tools(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<SessionToolsValue>>
+
+  /**
+   * Press a button on the Claude Code mods AbovePrompt band. Stale
+   * generation/actionId pairs are ignored host-side (returns the current
+   * snapshot unchanged). Absent band → `band-unavailable`.
+   */
+  pressBand(
+    request: RpcRequest<{
+      sessionId: SessionId
+      generation: number
+      actionId: string
+    }>,
+  ): Promise<RpcResponse<BandSnapshot>>
 
 }
 

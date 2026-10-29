@@ -1,7 +1,7 @@
 /**
  * Model catalog + shared default selection (DSH `agent-default-model` parity).
  */
-import type { BrandEntry } from "@xrkseek/llm-registry";
+import { asBrandModelEntry, type BrandEntry } from "@xrkseek/llm-registry";
 import { readSessionEvents } from "@xrkseek/core-session";
 import type { FaceRuntime } from "./context.js";
 import { DEFAULT_DEEPSEEK_MODELS } from "./settings-schemas.js";
@@ -290,16 +290,45 @@ function piAiProviderModels(
   return asModelRows(profile.models);
 }
 
+function brandModelsAsFace(brand: BrandEntry): FaceModelEntry[] {
+  const fromBrand = (brand.models ?? [])
+    .map((spec) => asBrandModelEntry(spec))
+    .filter((entry) => entry.id.length > 0);
+  if (fromBrand.length > 0) {
+    return fromBrand.map((entry) => ({
+      id: entry.id,
+      name: entry.name ?? entry.id,
+      ...(entry.description ? { description: entry.description } : {}),
+      ...(entry.contextWindow !== undefined
+        ? { contextWindow: entry.contextWindow }
+        : {}),
+      ...(entry.inputModalities
+        ? { inputModalities: entry.inputModalities }
+        : {}),
+    }));
+  }
+  if (brand.defaultModel) {
+    return [{ id: brand.defaultModel, name: brand.defaultModel }];
+  }
+  return [];
+}
+
 function modelsForBrand(
   runtime: FaceRuntime,
   brand: BrandEntry,
 ): FaceModelEntry[] {
   if (brand.id === "deepseek") return deepseekModels(runtime);
+  // Self-routed plugin brands own their roster (listing-first). A thin
+  // settings profile must not hide plugin rows (e.g. free-lane catalogs).
+  const selfRouted = brand.autoCatalog === true && Boolean(brand.defaultModel);
+  if (selfRouted) return brandModelsAsFace(brand);
   const configured = piAiProviderModels(runtime, brand.id);
   if (configured.length > 0) return configured;
-  // Seed defaultModel only when a profile already exists for this brand.
-  if (brand.defaultModel && piAiProviderProfile(runtime, brand.id)) {
-    return [{ id: brand.defaultModel, name: brand.defaultModel }];
+  // A brand that is its own complete route lists catalog models (or
+  // defaultModel) without a user profile; everything else still needs
+  // `llm-pi-ai.providers.<id>`.
+  if (piAiProviderProfile(runtime, brand.id)) {
+    return brandModelsAsFace(brand);
   }
   return [];
 }
@@ -316,13 +345,19 @@ export function buildFaceModelCatalog(
   const groups: FaceModelProviderGroup[] = [];
   for (const brand of runtime.registry.listBrands()) {
     if (brand.id === "deepseek") {
+      // 没配凭证就不进目录：默认列表只留随产品内置的车道。配好 key 后
+      // 下一次读目录就会带出来（applies: "live"）。
+      if (!providerHasUsableCredential(runtime, brand.id)) continue;
       const models = deepseekModels(runtime);
       if (models.length === 0) continue;
       groups.push({ id: brand.id, name: brand.displayName, models });
       continue;
     }
     if (!brand.baseUrl && brand.id !== "ollama") continue;
-    if (!piAiProviderProfile(runtime, brand.id)) continue;
+    // A self-routed brand (plugin declares `autoCatalog` + `defaultModel`) is
+    // already a complete route; every other brand needs a user profile first.
+    const selfRouted = brand.autoCatalog === true && Boolean(brand.defaultModel);
+    if (!selfRouted && !piAiProviderProfile(runtime, brand.id)) continue;
     const models = modelsForBrand(runtime, brand);
     if (models.length === 0) continue;
     groups.push({
@@ -351,7 +386,16 @@ export function buildFaceModelCatalog(
     groups.map((group) => ({ provider: group.id, group })),
     preferred,
   ).map((row) => row.group);
-  return { groups: ordered, failures: [] };
+  // 自带完整路由（零配置即可用）的 provider 置顶；其余保持用户偏好顺序。
+  const selfRoutedIds = new Set(
+    runtime.registry
+      .listBrands()
+      .filter((b) => b.autoCatalog === true)
+      .map((b) => b.id),
+  );
+  const pinned = ordered.filter((group) => selfRoutedIds.has(group.id));
+  const rest = ordered.filter((group) => !selfRoutedIds.has(group.id));
+  return { groups: [...pinned, ...rest], failures: [] };
 }
 
 /** Look up catalog contextWindow for a selection (Face contextPressure denominator). */
@@ -475,6 +519,15 @@ export function resolveSessionModelSelection(
     } catch {
       /* fall through */
     }
+  }
+
+  // 目录已按「路由可用」过滤过（凭证 / 车道 / profile 门禁）。默认取第一组
+  // 第一条，跟着产品目录走，而不是写死某一家 provider。
+  const catalogGroups = buildFaceModelCatalog(runtime).groups;
+  const headGroup = catalogGroups[0];
+  const headModel = headGroup?.models[0];
+  if (headGroup && headModel) {
+    return { provider: headGroup.id, model: headModel.id };
   }
 
   const credentialed = runtime.registry

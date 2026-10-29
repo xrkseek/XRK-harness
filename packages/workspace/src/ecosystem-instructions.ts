@@ -45,10 +45,9 @@ export interface CollectEcosystemInstructionsOptions {
   /** Test override for user-home root (default `os.homedir()`). */
   readonly homeDir?: string;
   /**
-   * `subagent` skips the standing persona layer (home SOUL.md / USER.md /
-   * IDENTITY.md / home AGENTS.md). Delegated children get their identity from
-   * the spawn preamble; what they still need is the project docs describing
-   * the codebase — which come from the workspace layer and stay on.
+   * Only gates the manager ledger `XRK.md` (`user` = inject; `subagent` /
+   * `minimal` = skip). Home product standing + home convention + workspace
+   * convention always inject when present. Badge / permission never use this.
    */
   readonly audience?: "user" | "subagent" | "minimal";
   readonly includeSkills?: boolean;
@@ -80,14 +79,28 @@ function stripMdcFrontmatter(raw: string): string {
   return body.slice(end + 4).replace(/^\r?\n/, "");
 }
 
-/** Frontmatter gate: `xrk-inject: false` skips Host product inject (Cursor may still read the rule). */
-function mdcHostInjectEnabled(raw: string): boolean {
+/** Frontmatter gate: `xrk-inject: false` skips Host product inject (Cursor may still read the file). */
+function markdownHostInjectEnabled(raw: string): boolean {
   const body = raw.replace(/^\uFEFF/, "");
   if (!body.startsWith("---")) return true;
   const end = body.indexOf("\n---", 3);
   if (end <= 0) return true;
   const fm = body.slice(3, end);
   return !/^xrk-inject:\s*false\s*$/im.test(fm);
+}
+
+/** @deprecated Prefer {@link markdownHostInjectEnabled}. */
+function mdcHostInjectEnabled(raw: string): boolean {
+  return markdownHostInjectEnabled(raw);
+}
+
+/** Drop leading YAML frontmatter so inject body stays model-facing prose. */
+function stripYamlFrontmatter(raw: string): string {
+  const body = raw.replace(/^\uFEFF/, "");
+  if (!body.startsWith("---")) return raw;
+  const end = body.indexOf("\n---", 3);
+  if (end <= 0) return raw;
+  return body.slice(end + 4).replace(/^\r?\n/, "");
 }
 
 function isAgentsImportOnly(text: string): boolean {
@@ -104,9 +117,12 @@ async function pushFile(
 ): Promise<void> {
   const raw = await readIfExists(absPath);
   if (!raw?.trim()) return;
-  const digest = raw.trim();
+  if (!markdownHostInjectEnabled(raw)) return;
+  const body = stripYamlFrontmatter(raw);
+  if (!body.trim()) return;
+  const digest = body.trim();
   if (seen.has(digest)) return;
-  const clipped = clipToBudget(logicalPath, raw, budget);
+  const clipped = clipToBudget(logicalPath, body, budget);
   if (!clipped.trim()) return;
   seen.add(digest);
   sections.push({ path: logicalPath, body: clipped });
@@ -176,9 +192,10 @@ async function pushMarkdownDir(
 }
 
 const PRODUCT_STANDING_FILES = [
-  // Persona / standing drafts under `{XRK_HOME}` (and workspace `.xrk/`).
-  // Host seeds home `SOUL.md` with fingerprint refresh (same as AGENTS.md).
-  // User-authored persona: workspace `.agents/SOUL.md` (overlay wins).
+  // Persona / standing under product dirs (`{XRK_HOME}` and workspace `.xrk/`).
+  // Host seeds home `AGENTS.md` + `SOUL.md` + `XRK.md` (fingerprint refresh).
+  // User-authored persona overlays: `{workspace}/.xrk/{SOUL,IDENTITY,USER,TOOLS}.md`.
+  // Industry `.agents/` is AGENTS / rules / context / skills only (no SOUL inject).
   // Standing USER.md ≠ curated `{XRK_HOME}/memories/USER.md` (exec-memory).
   "SOUL.md",
   "USER.md",
@@ -186,6 +203,13 @@ const PRODUCT_STANDING_FILES = [
   "TOOLS.md",
   "AGENTS.md",
 ] as const;
+
+/**
+ * Same standing dirs / digest path as {@link PRODUCT_STANDING_FILES}, but only
+ * for workspace-frequent seats (经理 · 向日葵 · coding/IM parents = audience=user).
+ * Never pushed for 干员家 / delegated children (`subagent` | `minimal`).
+ */
+const MANAGER_STANDING_FILES = ["XRK.md"] as const;
 
 /** Multi-vendor convention paths under one base directory. */
 async function pushConventionLayer(
@@ -383,15 +407,37 @@ async function pushProductStanding(
   }
 }
 
+/** Manager / 向日葵 ledger under the same product dirs as AGENTS.md. */
+async function pushManagerStanding(
+  sections: InstructionSection[],
+  productDir: string,
+  logicalPrefix: string,
+  budget: InjectBudget,
+  seen: Set<string>,
+): Promise<void> {
+  if (!(await exists(productDir))) return;
+  for (const name of MANAGER_STANDING_FILES) {
+    await pushFile(
+      sections,
+      path.join(productDir, name),
+      `${logicalPrefix}${name}`,
+      budget,
+      seen,
+    );
+  }
+}
+
 /**
  * Gather agent instruction markdown from multi-vendor convention paths.
  * Policy: {@link HOME_CONVENTION_INJECT} · {@link WORKSPACE_CONVENTION_INJECT} in `inject-sources.ts`.
- * Low → high priority in output order (later sections appear closer to the turn):
+ * Low → high in output order (later sections sit closer to the turn):
  *
- * 1. User home when `includeUserHome`
- * 2. Workspace convention paths
- * 3. Workspace `{productDir}` (default `.xrk/`)
- * 4. Workspace root `AGENTS.md` / `CLAUDE.md` (unless product overlay exists)
+ * 1. Home product standing `~/.xrk` AGENTS/SOUL/… (every audience)
+ * 2. Home convention `~/.agents` · `~/.claude` · `~/.codex` (every audience)
+ * 3. Manager ledger `XRK.md` — `audience=user` only (经理 / 向日葵 parents)
+ * 4. Workspace convention (every present vendor)
+ * 5. Workspace `{productDir}` AGENTS/SOUL/… (default `.xrk/`)
+ * 6. Workspace root `AGENTS.md` / `CLAUDE.md` (`xrk-inject: false` opts out)
  *
  * Skills trees are handled separately (skill catalog).
  */
@@ -404,10 +450,20 @@ export async function collectEcosystemInstructions(
   const seen = new Set<string>();
   const scan = createScanBudget();
   const includeUserHome = options.includeUserHome !== false;
-  const isSubagent =
-    options.audience === "subagent" || options.audience === "minimal";
+  /** Manager ledger only — never gates standing / convention / skills. */
+  const managerLedger =
+    options.audience !== "subagent" && options.audience !== "minimal";
+  const homeProduct = resolveUserProductHome(options.homeDir);
+  const homeProductPrefix = userProductHomeLogicalPrefix(options.homeDir);
 
-  if (includeUserHome && !isSubagent) {
+  if (includeUserHome) {
+    await pushProductStanding(
+      sections,
+      homeProduct,
+      homeProductPrefix,
+      options.budget,
+      seen,
+    );
     const home = path.resolve(options.homeDir ?? homedir());
     await pushConventionLayer(
       sections,
@@ -418,10 +474,29 @@ export async function collectEcosystemInstructions(
       HOME_CONVENTION_INJECT,
       scan,
     );
-    await pushProductStanding(
+    if (managerLedger) {
+      await pushManagerStanding(
+        sections,
+        homeProduct,
+        homeProductPrefix,
+        options.budget,
+        seen,
+      );
+      await pushFile(
+        sections,
+        path.join(home, "XRK.md"),
+        "~/XRK.md",
+        options.budget,
+        seen,
+      );
+    }
+  }
+
+  if (managerLedger) {
+    await pushFile(
       sections,
-      resolveUserProductHome(options.homeDir),
-      userProductHomeLogicalPrefix(options.homeDir),
+      path.join(root, "XRK.md"),
+      "XRK.md",
       options.budget,
       seen,
     );
@@ -437,18 +512,26 @@ export async function collectEcosystemInstructions(
     scan,
   );
   await pushProductStanding(sections, productDir, ".xrk/", options.budget, seen);
-
-  const productAgents = await readIfExists(path.join(productDir, "AGENTS.md"));
-  const agentsAgents = await readIfExists(path.join(root, ".agents", "AGENTS.md"));
-  if (!productAgents?.trim() && !agentsAgents?.trim()) {
-    await pushFile(
+  if (managerLedger) {
+    await pushManagerStanding(
       sections,
-      path.join(root, "AGENTS.md"),
-      "AGENTS.md",
+      productDir,
+      ".xrk/",
       options.budget,
       seen,
     );
   }
+
+  // Root AGENTS.md always attempted alongside every present vendor overlay
+  // (.agents / .claude / .cursor/rules / .codex / .xrk) — multi-agent same-repo.
+  // Opt out per file via `xrk-inject: false` (this monorepo's maintainer AGENTS).
+  await pushFile(
+    sections,
+    path.join(root, "AGENTS.md"),
+    "AGENTS.md",
+    options.budget,
+    seen,
+  );
 
   const claudeRoot = await readIfExists(path.join(root, "CLAUDE.md"));
   if (claudeRoot?.trim() && !isAgentsImportOnly(claudeRoot)) {

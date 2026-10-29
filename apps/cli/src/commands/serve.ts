@@ -20,6 +20,7 @@ import path from "node:path";
 import { assertSafeHost, type ParsedArgs } from "../parse-args.js";
 import {
   ensureProductWebDist,
+  readCliVersion,
   repoRoot,
 } from "../product-paths.js";
 import { establishProductHomeSeeds } from "../user-skill-seeds.js";
@@ -159,7 +160,7 @@ async function runServeInner(
       runtime,
     },
     factory,
-    { logger: log },
+    { logger: log, version: readCliVersion() },
   );
 
   const health = instance.health();

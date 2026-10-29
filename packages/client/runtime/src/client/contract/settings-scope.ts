@@ -49,6 +49,15 @@ export interface SettingsScopeSpec<T> {
 }
 
 /**
+ * One path-addressed edit for {@link SettingsScope.patch}. Mirrors Host
+ * `settings.mutate` ops without importing the Face wire package into the
+ * runtime contract layer.
+ */
+export type SettingsScopePathOp =
+  | { readonly op: 'set'; readonly path: readonly string[]; readonly value: unknown }
+  | { readonly op: 'unset'; readonly path: readonly string[] }
+
+/**
  * Reactive owner handle over one namespace's durable section — the browser
  * mirror of the Host-side `SettingsScope` owner seam. Domain services read
  * and observe the snapshot and route explicit user choices through `set`.
@@ -66,6 +75,7 @@ export interface SettingsScope<T> {
    * Queue one field write. Rapid writes preserve mutation order, each carries
    * the latest known namespace revision, and only the latest settlement may
    * publish; a rejected or failed latest write reloads Host state instead.
+   * A revision conflict refreshes once and retries the same op before recovering.
    * @param field - scalar field inside the namespace section.
    * @param value - JSON-shaped value selected by the user.
    * @returns settlement after the write and any latest-write recovery read.
@@ -78,4 +88,12 @@ export interface SettingsScope<T> {
    * @returns settlement after the clear and any latest-write recovery read.
    */
   unset(field: string): Promise<void>
+  /**
+   * Queue several path ops in one Host mutate (single revision bump). Use for
+   * fields that must land together (mood + tip + moodAt). Shares {@link set}'s
+   * ordering, conflict-retry, and recovery contract.
+   * @param ops - path edits applied atomically by the Host.
+   * @returns settlement after the write and any latest-write recovery read.
+   */
+  patch(ops: readonly SettingsScopePathOp[]): Promise<void>
 }

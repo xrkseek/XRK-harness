@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { SessionEvent } from "@xrkseek/protocol";
-import {
-  DEFAULT_HISTORY_MAX_MESSAGES,
-  dropSupersededStreamDeltas,
-  estimateHistoryPageChars,
-  messageGroupStartIndex,
-  paginateSessionHistory,
-  paginateSessionHistoryForReplay,
-  trimHistoryPageToWireBudget,
-} from "../src/adapt/history-paginate.js";
+  import {
+    clampHistoryMaxMessages,
+    DEFAULT_HISTORY_MAX_MESSAGES,
+    dropSupersededStreamDeltas,
+    estimateHistoryPageChars,
+    MAX_HISTORY_MAX_MESSAGES,
+    messageGroupStartIndex,
+    paginateSessionHistory,
+    paginateSessionHistoryForReplay,
+    trimHistoryPageToWireBudget,
+  } from "../src/adapt/history-paginate.js";
 
 function chunk(
   turnId: string,
@@ -187,5 +189,69 @@ describe("Face history message-boundary pagination (DSH parity)", () => {
     const lastKept = stripped[stripped.length - 1]!;
     expect(seqByEvent.get(lastKept)).toBe(raw.startIndex + raw.events.length);
     expect(seqByEvent.get(lastKept)!).toBeGreaterThan(stripped.length);
+  });
+
+  it("keeps only the latest tool/result per callId (prune replacement)", () => {
+    const events: SessionEvent[] = [
+      { type: "turn/start", ts: 1, turnId: "t1" },
+      {
+        type: "tool/result",
+        ts: 2,
+        turnId: "t1",
+        stepId: "s1",
+        result: {
+          toolCallId: "c1",
+          name: "bash",
+          content: "HUGE_ORIGINAL_OUTPUT",
+        },
+      },
+      {
+        type: "tool/result",
+        ts: 3,
+        turnId: "t1",
+        stepId: "s1",
+        result: {
+          toolCallId: "c1",
+          name: "bash",
+          content: "…pruned…",
+        },
+      },
+      {
+        type: "tool/result",
+        ts: 4,
+        turnId: "t1",
+        stepId: "s1",
+        result: {
+          toolCallId: "c2",
+          name: "read",
+          content: "other",
+        },
+      },
+    ];
+    const kept = dropSupersededStreamDeltas(events);
+    expect(kept.filter((e) => e.type === "tool/result")).toEqual([
+      events[2],
+      events[3],
+    ]);
+  });
+});
+
+describe("clampHistoryMaxMessages", () => {
+  it("keeps a sane client page size", () => {
+    expect(clampHistoryMaxMessages(200)).toBe(200);
+    expect(clampHistoryMaxMessages(1)).toBe(1);
+  });
+
+  it("clamps an absurd value instead of paging the whole log", () => {
+    expect(clampHistoryMaxMessages(1e9)).toBe(MAX_HISTORY_MAX_MESSAGES);
+    expect(clampHistoryMaxMessages(5_000)).toBe(MAX_HISTORY_MAX_MESSAGES);
+  });
+
+  it("falls back to the default on junk, and floors fractions", () => {
+    expect(clampHistoryMaxMessages(undefined)).toBe(DEFAULT_HISTORY_MAX_MESSAGES);
+    expect(clampHistoryMaxMessages(Number.NaN)).toBe(DEFAULT_HISTORY_MAX_MESSAGES);
+    expect(clampHistoryMaxMessages("200")).toBe(DEFAULT_HISTORY_MAX_MESSAGES);
+    expect(clampHistoryMaxMessages(-5)).toBe(1);
+    expect(clampHistoryMaxMessages(12.7)).toBe(12);
   });
 });

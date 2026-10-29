@@ -24,7 +24,6 @@ export type TranscriptViewRowProps =
   & InjectFace<TranscriptViewRowInjected>
 
 const LABELS = {
-  compact: 'settings.transcriptView.compact',
   standard: 'settings.transcriptView.standard',
   detailed: 'settings.transcriptView.detailed',
   verbose: 'settings.transcriptView.verbose',
@@ -33,9 +32,10 @@ const LABELS = {
 /**
  * Render the work-details selector.
  *
- * Four points on one axis (see `presentationPolicyFor`): compact / standard
- * group and auto-fold; detailed groups history only; verbose never groups or
- * folds. Standard and detailed also surface live tool detail on open runs.
+ * Three points on one axis (see `presentationPolicyFor`): standard groups and
+ * auto-folds when the tool burst settles; detailed folds when the Turn ends;
+ * verbose never groups or folds. Standard and detailed also surface live tool
+ * detail on open runs.
  * @param props - composed Settings slot props.
  * @returns the preference row.
  */

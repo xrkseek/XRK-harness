@@ -33,6 +33,13 @@ describe('ui-conversation host', () => {
       transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE,
     })
     await expect(ctx.settings.update(ns, { busyEnter: 'invalid' })).rejects.toThrow()
+    // Retired work-details id rewrites to standard so old user docs keep loading.
+    await ctx.settings.update(ns, { transcriptView: 'compact' })
+    expect(ctx.settings.get(ns)).toEqual({
+      busyEnter: 'steer',
+      toolsDefaultExpanded: DEFAULT_TOOLS_DEFAULT_EXPANDED,
+      transcriptView: DEFAULT_TRANSCRIPT_VIEW_MODE,
+    })
     await fiber.dispose()
     expect(ctx.settings.describe().map(row => row.ns)).not.toContain(ns)
   })

@@ -1,0 +1,5 @@
+{
+  "name": "tool-rewrite",
+  "version": "0.1.0",
+  "description": "Fixture: replaces every Bash result with its own text after the call runs."
+}

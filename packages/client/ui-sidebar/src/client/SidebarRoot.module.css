@@ -216,15 +216,16 @@
 }
 
 /* Utility rows between New Session and workspaces (DSH panellist geometry).
-   Inset hairline separates the panellist from the workspace tree. */
+   Inset hairline separates the panellist from the workspace tree. Keep the
+   pad/margin under the row tight so the workspace list gets the vertical room. */
 .utilityList {
   position: relative;
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 0 0 12px;
-  padding: 0 0 12px;
+  margin: 0 0 4px;
+  padding: 0 0 6px;
   border: 0;
 }
 
@@ -263,8 +264,8 @@
 
 .collapsed .utilityList {
   gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
 }
 
 .collapsed .utilityList::after {

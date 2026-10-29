@@ -37,6 +37,7 @@ import {
   resolveSessionCwd,
 } from "./session-cwd.js";
 import { canvasWorkspaceIdForSession } from "./canvas-tools.js";
+import { refuseCrossAgentHomeLane } from "./agent-home-boundary.js";
 import { orchestratorSurface } from "./session-kind.js";
 import {
   closeAgentDescription,
@@ -1692,6 +1693,10 @@ function createTeamGraphTool(
         if (!from || !to) {
           return { content: "team_graph link requires from and to", isError: true };
         }
+        const laneProblem = refuseCrossAgentHomeLane(options.runtime, from, to);
+        if (laneProblem) {
+          return { content: `team_graph link: ${laneProblem}`, isError: true };
+        }
         const edge = graph.linkPeers(from, to, a.label);
         if (!edge) {
           return { content: "team_graph link failed (empty or self)", isError: true };
@@ -2353,7 +2358,7 @@ export function bindAskParentTool(
   const tool: ToolDefinition = {
     name: "ask",
     description:
-      "Ask the human one blocker question. Card → human_face (see capability). You get the answer.",
+      "Ask the parent session one blocker question. Card opens on the parent composer. You get the answer.",
     parameters: {
       type: "object",
       properties: {
@@ -2380,7 +2385,7 @@ export function bindAskParentTool(
       additionalProperties: false,
     },
     dynamicSchema: () => ({
-      description: `ask → human_face via parent ${options.parentSessionId} (${label}). Not ask_user. One blocker.`,
+      description: `ask → card on parent session ${options.parentSessionId} (${label}). Parent answers. Not ask_user. One blocker.`,
     }),
     presentCall: (args) => ({
       card: "generic",

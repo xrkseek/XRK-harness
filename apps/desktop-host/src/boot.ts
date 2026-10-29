@@ -129,6 +129,7 @@ export async function bootXrkDesktopHost(options: {
   const factory = createServerAgentFactory({
     workspaceRoot: config.runtime.workspaceRoot,
   });
+  const hostVersion = packageVersion();
   const instance = await manager.spawn(
     {
       ...config,
@@ -142,6 +143,9 @@ export async function bootXrkDesktopHost(options: {
     },
     factory,
     {
+      // Prefer Electron app version when the shell stamped XRK_PRODUCT_VERSION;
+      // otherwise Face falls back to this desktop-host package stamp.
+      version: process.env.XRK_PRODUCT_VERSION?.trim() || hostVersion,
       logger: {
         info: (msg) => {
           process.stderr.write(`${DESKTOP_HOST_PACKAGE_NAME}: ${msg}\n`);
@@ -177,7 +181,7 @@ export async function bootXrkDesktopHost(options: {
 
   return {
     instance,
-    hostVersion: packageVersion(),
+    hostVersion: process.env.XRK_PRODUCT_VERSION?.trim() || hostVersion,
     origin,
     fetch: (request) => instance.http.fetch(request),
     dispose: () => {

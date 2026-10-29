@@ -156,6 +156,30 @@ export function createTurnOutlineProjectionUnit(): ProjectionDefinition<
     // Sharing one instance lets a streaming session's draft bleed into the
     // next session's first `user/message`, which forwards the field.
     init: () => ({ turns: [], draft: "", seenTurnIds: [] }),
+    parseState(value: unknown): TurnOutlineState {
+      if (!value || typeof value !== "object") {
+        throw new Error("turnOutline state must be an object");
+      }
+      const v = value as Record<string, unknown>;
+      if (!Array.isArray(v.turns)) {
+        throw new Error("turnOutline.state.turns must be an array");
+      }
+      if (typeof v.draft !== "string") {
+        throw new Error("turnOutline.state.draft must be a string");
+      }
+      if (!Array.isArray(v.seenTurnIds)) {
+        throw new Error("turnOutline.state.seenTurnIds must be an array");
+      }
+      const turns = v.turns.map(parseFoldEntry);
+      const seenTurnIds: string[] = [];
+      for (const id of v.seenTurnIds) {
+        if (typeof id !== "string" || id === "") {
+          throw new Error("turnOutline.state.seenTurnIds must be non-empty strings");
+        }
+        seenTurnIds.push(id);
+      }
+      return { turns, draft: v.draft, seenTurnIds };
+    },
     apply(state, event: SessionEvent, seq: number): TurnOutlineState {
       switch (event.type) {
         case "turn/start": {

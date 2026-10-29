@@ -44,3 +44,26 @@ export const en = {
   'timed.remaining': '{s}s left',
   'timed.expired': 'Timed out — you can still answer',
 } satisfies Record<QuestionKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'error.incomplete': '先にこの質問を完了してください。',
+  'error.unanswered': '選択肢を選ぶか、自由回答を入力してください。',
+  'nav.prev': '前の質問',
+  'nav.next': '次の質問',
+  'nav.minimize': '質問カードを折りたたむ',
+  'nav.maximize': '質問カードを展開',
+  'nav.cancel': 'すべての質問を閉じる',
+  'option.recommended': '推奨',
+  'custom.placeholder': '回答を入力',
+  'action.skip': 'この質問をスキップ',
+  'action.next': '次へ',
+  'plan.header': 'プランレビュー',
+  'plan.approve': '承認',
+  'plan.decline': '拒否',
+  'plan.discuss': 'これについて話す',
+  'timed.remaining': '残り {s}秒',
+  'timed.expired': 'タイムアウトしました — まだ回答できます',
+} as const satisfies Record<QuestionKey, string>
+
+

@@ -1,0 +1,6 @@
+{
+  "name": "token-weather",
+  "version": "0.1.0",
+  "description": "Fixture: reports context pressure once a session starts.",
+  "author": { "name": "fixture" }
+}

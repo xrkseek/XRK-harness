@@ -369,7 +369,7 @@
 }
 
 .root[data-pair]:not([data-compact]) {
-  gap: 8px;
+  gap: 6px;
 }
 
 .root[data-pair]:not([data-compact]) .stage {
@@ -382,9 +382,19 @@
   max-width: 16ch;
 }
 
+.root[data-pair]:not([data-compact]) .emotion {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.root[data-pair]:not([data-compact]) .role {
+  font-size: 10px;
+}
+
 .root[data-seat='from']:not([data-compact]) .stage {
+  /* Slightly quieter 委派方 — keep transform-origin top so pair stages stay level. */
   transform: scale(0.92);
-  transform-origin: 50% 88%;
+  transform-origin: 50% 0%;
   opacity: 0.92;
 }
 
@@ -398,4 +408,61 @@
 .root[data-compact] .role {
   font-size: 10px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Phone: keep a readable ball without the desktop 270px runway (that height
+   forces people to collapse → flat chip that no longer reads as a 球). */
+@media (max-width: 767px) {
+  .root:not([data-compact]) .stage {
+    width: min(100%, 148px);
+    min-height: 0;
+    aspect-ratio: 4 / 5;
+    border-radius: 16px;
+  }
+
+  .root[data-pair]:not([data-compact]) .stage {
+    width: min(100%, 112px);
+    min-height: 0;
+  }
+
+  /* Collapsed chip: round stage so it still reads as the presence ball. */
+  .root[data-compact] .stage {
+    border-radius: 50%;
+  }
+
+  /* Header dock on phone: contact chip — ball + mood (+ tip/sideline). */
+  .root[data-compact][data-density='header'] {
+    width: 100%;
+    height: 40px;
+    gap: 6px;
+    padding: 2px 8px 2px 2px;
+    border-radius: 20px;
+    justify-content: flex-start;
+  }
+
+  .root[data-compact][data-density='header'] .stage {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex: none;
+  }
+
+  .root[data-compact][data-density='header'] .meta {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0;
+  }
+
+  .root[data-compact][data-density='header'] .emotion {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .root[data-compact][data-density='header'] .tips {
+    font-size: 9px;
+    line-height: 1.2;
+  }
 }

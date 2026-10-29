@@ -3,6 +3,7 @@ import { SESSION_QUERY_ROUTING_PROMPT_TEXT } from "@xrkseek/core-tools";
 import {
   extractSessionSearchTexts,
   readSessionEvents,
+  releaseSessionResident,
   type SessionStore,
 } from "@xrkseek/core-session";
 import {
@@ -17,6 +18,10 @@ import {
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
   searchSessions,
 } from "./session-search.js";
+import {
+  SESSION_EVENT_WINDOW_MAX,
+  readSessionEventWindow,
+} from "./session-event-window.js";
 import { buildSessionStatusSnapshot } from "./session-status.js";
 import { deriveSessionKind } from "./session-kind.js";
 import { sessionInspectDescription } from "./session-tool-copy.js";
@@ -27,6 +32,16 @@ export { SESSION_QUERY_ROUTING_PROMPT_TEXT };
 export const SESSION_READ_MAX_BYTES = DEFAULT_MAX_REFERENCE_BYTES;
 /** Max ancestor / descendant rows returned by `session_trace`. */
 export const SESSION_TRACE_MAX_NODES = 32;
+
+type TraceNode = {
+  readonly id: string;
+  readonly label?: string;
+  readonly mode?: string;
+  /** `subagent` Face roster link, or UI `fork` lineage. */
+  readonly via?: "subagent" | "fork";
+  /** 1-based Face seq when `via: "fork"` and the cut was recorded. */
+  readonly atSeq?: number;
+};
 
 export interface BindSessionQueryToolsOptions {
   readonly runtime: FaceRuntime;
@@ -223,49 +238,102 @@ export function createSessionReadTool(
   };
 }
 
+function parentLink(
+  runtime: FaceRuntime,
+  sessionId: string,
+): TraceNode | undefined {
+  const sub = runtime.subagents.getByChild(sessionId);
+  if (sub) {
+    return {
+      id: sub.parentSessionId,
+      label: sub.label,
+      mode: sub.mode,
+      via: "subagent",
+    };
+  }
+  const fork = runtime.forkLineage.getByChild(sessionId);
+  if (fork) {
+    return {
+      id: fork.parentSessionId,
+      mode: "fork",
+      via: "fork",
+      ...(fork.atSeq !== undefined ? { atSeq: fork.atSeq } : {}),
+    };
+  }
+  return undefined;
+}
+
 function collectAncestors(
   runtime: FaceRuntime,
   sessionId: string,
   max: number,
-): { id: string; label?: string; mode?: string }[] {
-  const out: { id: string; label?: string; mode?: string }[] = [];
+): {
+  readonly nodes: TraceNode[];
+  readonly truncated: boolean;
+  readonly unresolvedParentId?: string;
+} {
+  const out: TraceNode[] = [];
   let cur = sessionId;
   for (let i = 0; i < max; i += 1) {
-    const link = runtime.subagents.getByChild(cur);
-    if (!link) break;
-    out.push({
-      id: link.parentSessionId,
-      label: link.label,
-      mode: link.mode,
-    });
-    cur = link.parentSessionId;
+    const link = parentLink(runtime, cur);
+    if (!link) {
+      return { nodes: out, truncated: false };
+    }
+    out.push(link);
+    cur = link.id;
   }
-  return out;
+  const next = parentLink(runtime, cur);
+  if (next) {
+    return {
+      nodes: out,
+      truncated: true,
+      unresolvedParentId: next.id,
+    };
+  }
+  return { nodes: out, truncated: false };
 }
 
 function collectDescendants(
   runtime: FaceRuntime,
   sessionId: string,
   max: number,
-): { id: string; label?: string; mode?: string }[] {
-  const out: { id: string; label?: string; mode?: string }[] = [];
+): {
+  readonly nodes: TraceNode[];
+  readonly truncated: boolean;
+} {
+  const out: TraceNode[] = [];
   const queue = [sessionId];
   const seen = new Set<string>([sessionId]);
-  while (queue.length > 0 && out.length < max) {
+  let truncated = false;
+  while (queue.length > 0) {
     const id = queue.shift()!;
-    for (const link of runtime.subagents.list(id)) {
-      if (seen.has(link.childSessionId)) continue;
-      seen.add(link.childSessionId);
-      out.push({
+    const children: TraceNode[] = [
+      ...runtime.subagents.list(id).map((link) => ({
         id: link.childSessionId,
         label: link.label,
         mode: link.mode,
-      });
-      if (out.length >= max) break;
-      queue.push(link.childSessionId);
+        via: "subagent" as const,
+      })),
+      ...runtime.forkLineage.listByParent(id).map((link) => ({
+        id: link.childSessionId,
+        mode: "fork",
+        via: "fork" as const,
+        ...(link.atSeq !== undefined ? { atSeq: link.atSeq } : {}),
+      })),
+    ];
+    for (const child of children) {
+      if (seen.has(child.id)) continue;
+      if (out.length >= max) {
+        truncated = true;
+        break;
+      }
+      seen.add(child.id);
+      out.push(child);
+      queue.push(child.id);
     }
+    if (truncated) break;
   }
-  return out;
+  return { nodes: out, truncated };
 }
 
 export function createSessionTraceTool(
@@ -274,7 +342,8 @@ export function createSessionTraceTool(
   return {
     name: "session_trace",
     description:
-      "Trace parent/child lineage for one session via the Face subagent graph. " +
+      "Trace parent/child lineage for one session via Face subagent links and " +
+      "UI fork lineage. Returns complete/truncated flags when the walk hits the cap. " +
       "Unauthorized / missing sessions are reported without leaking hidden ids.",
     parameters: {
       type: "object",
@@ -313,16 +382,23 @@ export function createSessionTraceTool(
           isError: true,
         };
       }
-      const ancestors = collectAncestors(
+      const up = collectAncestors(
         runtime,
         sessionId,
         SESSION_TRACE_MAX_NODES,
-      ).filter((row) => sameWorkspace(runtime, parentSessionId, row.id));
-      const descendants = collectDescendants(
+      );
+      const down = collectDescendants(
         runtime,
         sessionId,
         SESSION_TRACE_MAX_NODES,
-      ).filter((row) => sameWorkspace(runtime, parentSessionId, row.id));
+      );
+      const ancestors = up.nodes.filter((row) =>
+        sameWorkspace(runtime, parentSessionId, row.id),
+      );
+      const descendants = down.nodes.filter((row) =>
+        sameWorkspace(runtime, parentSessionId, row.id),
+      );
+      const truncated = up.truncated || down.truncated;
       return {
         content: JSON.stringify(
           {
@@ -332,12 +408,132 @@ export function createSessionTraceTool(
             },
             ancestors,
             descendants,
+            complete: !truncated,
+            truncated,
+            ...(up.unresolvedParentId !== undefined
+              ? { unresolvedParentId: up.unresolvedParentId }
+              : {}),
             note:
-              "Lineage from Face subagent links only; fork/UI rewind edges may appear as mode=fork.",
+              "Lineage from Face subagent links ∪ UI fork lineage (via=subagent|fork).",
           },
           null,
           2,
         ),
+      };
+    },
+  };
+}
+
+export function createSessionEventWindowTool(
+  options: BindSessionQueryToolsOptions,
+): ToolDefinition {
+  return {
+    name: "session_event_window",
+    description:
+      "Read a bounded raw-event window around one Face seq in a same-cwd session " +
+      `(before/after each ≤ ${SESSION_EVENT_WINDOW_MAX}; default 3). ` +
+      "Use after session_search / session_read when you need neighbors of one event.",
+    parameters: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "Target session id (same cwd as this chat).",
+        },
+        seq: {
+          type: "integer",
+          description: "Face wire seq of the target event (1-based).",
+          minimum: 1,
+        },
+        before: {
+          type: "integer",
+          description: `Preceding events to include (0..${SESSION_EVENT_WINDOW_MAX}, default 3).`,
+          minimum: 0,
+          maximum: SESSION_EVENT_WINDOW_MAX,
+        },
+        after: {
+          type: "integer",
+          description: `Following events to include (0..${SESSION_EVENT_WINDOW_MAX}, default 3).`,
+          minimum: 0,
+          maximum: SESSION_EVENT_WINDOW_MAX,
+        },
+      },
+      required: ["session_id", "seq"],
+    },
+    isConcurrencySafe: () => true,
+    presentCall: (args) => ({
+      card: "generic",
+      title: "session_event_window",
+      kind: "read",
+      rawInput: args,
+    }),
+    async execute(args) {
+      const a = args as {
+        session_id?: string;
+        seq?: number;
+        before?: number;
+        after?: number;
+      };
+      const sessionId = String(a.session_id ?? "").trim();
+      if (!sessionId) {
+        return {
+          content: "session_event_window: session_id required",
+          isError: true,
+        };
+      }
+      const { runtime, parentSessionId } = options;
+      if (!runtime.store.has(sessionId)) {
+        return {
+          content: `session_event_window: session not found (${sessionId})`,
+          isError: true,
+        };
+      }
+      if (!sameWorkspace(runtime, parentSessionId, sessionId)) {
+        return {
+          content:
+            "session_event_window: target session is outside this workspace (cwd mismatch)",
+          isError: true,
+        };
+      }
+      if (
+        typeof a.seq !== "number" ||
+        !Number.isSafeInteger(a.seq) ||
+        a.seq < 1
+      ) {
+        return {
+          content: "session_event_window: seq must be a positive integer",
+          isError: true,
+        };
+      }
+      const before =
+        a.before === undefined
+          ? 3
+          : Math.min(
+              SESSION_EVENT_WINDOW_MAX,
+              Math.max(0, Math.floor(a.before)),
+            );
+      const after =
+        a.after === undefined
+          ? 3
+          : Math.min(
+              SESSION_EVENT_WINDOW_MAX,
+              Math.max(0, Math.floor(a.after)),
+            );
+      const window = readSessionEventWindow(runtime.store, {
+        sessionId,
+        seq: a.seq,
+        before,
+        after,
+      });
+      releaseSessionResident(runtime.store, sessionId);
+      if (window === undefined) {
+        return {
+          content: `session_event_window: seq ${a.seq} not in session log`,
+          isError: true,
+        };
+      }
+      return {
+        content: JSON.stringify(window, null, 2),
       };
     },
   };
@@ -478,6 +674,7 @@ export function bindSessionQueryTools(
     createSessionInspectTool(options),
     createSessionSearchTool(options),
     createSessionReadTool(options),
+    createSessionEventWindowTool(options),
     createSessionTraceTool(options),
   ]) {
     registerTool(tools, tool);

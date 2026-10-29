@@ -12,4 +12,10 @@ export interface HostLogger {
 
 export type HostSpawnOptions = {
   readonly logger?: HostLogger;
+  /**
+   * Product package version advertised on `host.describe` (Settings foot chip).
+   * CLI passes `readCliVersion()`; Desktop Host passes the Electron app version.
+   * Falls back to `XRK_PRODUCT_VERSION`, then `"0.0.0"`.
+   */
+  readonly version?: string;
 };

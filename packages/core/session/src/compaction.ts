@@ -450,28 +450,42 @@ export function deriveMessagesUnwindowed(
   );
 }
 
+type FoldedChatRow = {
+  readonly message: ChatMessage;
+  /** Stable context-fragment id; same id keeps only the latest row in-window. */
+  readonly fragmentId?: string;
+};
+
 function foldChat(
   events: readonly SessionEvent[],
   markSource: readonly SessionEvent[],
   indexOffset: number,
 ): ChatMessage[] {
   const offloadMarks = foldImageOffloadMarks(markSource);
-  const messages: ChatMessage[] = [];
+  const rows: FoldedChatRow[] = [];
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]!;
     const absSeq = i + indexOffset;
     switch (ev.type) {
-      case "user/message":
-        messages.push({
-          role: "user",
-          content: projectOffloadedImages(
-            ev.content,
-            offloadMarks.get(absSeq),
-          ),
+      case "user/message": {
+        const fragmentId =
+          ev.source?.kind === "context-fragment"
+            ? ev.source.fragmentId
+            : undefined;
+        rows.push({
+          message: {
+            role: "user",
+            content: projectOffloadedImages(
+              ev.content,
+              offloadMarks.get(absSeq),
+            ),
+          },
+          ...(fragmentId !== undefined ? { fragmentId } : {}),
         });
         break;
+      }
       case "safety/notice":
-        messages.push({ role: "user", content: ev.content });
+        rows.push({ message: { role: "user", content: ev.content } });
         break;
       case "assistant/message": {
         // DSH deriveEventMessage: skip usage-only / content-less assistants
@@ -480,13 +494,15 @@ function foldChat(
         const hasReasoning = Boolean(ev.reasoning?.trim());
         const hasText = Boolean(ev.content.trim());
         if (!hasTools && !hasReasoning && !hasText) break;
-        messages.push({
-          role: "assistant",
-          content: ev.content,
-          ...(ev.toolCalls ? { toolCalls: ev.toolCalls } : {}),
-          // DSH serializeAssistant (dsh-v0.1.0-rc.8): every reasoning-carrying
-          // turn keeps CoT for gateway re-encode; omit only when empty.
-          ...(ev.reasoning?.trim() ? { reasoning: ev.reasoning } : {}),
+        rows.push({
+          message: {
+            role: "assistant",
+            content: ev.content,
+            ...(ev.toolCalls ? { toolCalls: ev.toolCalls } : {}),
+            // DSH serializeAssistant (dsh-v0.1.0-rc.8): every reasoning-carrying
+            // turn keeps CoT for gateway re-encode; omit only when empty.
+            ...(ev.reasoning?.trim() ? { reasoning: ev.reasoning } : {}),
+          },
         });
         break;
       }
@@ -502,13 +518,15 @@ function foldChat(
           ...(ev.result.isError ? { isError: true as const } : {}),
         };
         // Latest surface wins (prune appends a replacement with the same callId).
-        const existing = messages.findIndex(
-          (m) => m.role === "tool" && m.toolCallId === ev.result.toolCallId,
+        const existing = rows.findIndex(
+          (r) =>
+            r.message.role === "tool" &&
+            r.message.toolCallId === ev.result.toolCallId,
         );
         if (existing >= 0) {
-          messages[existing] = msg;
+          rows[existing] = { message: msg };
         } else {
-          messages.push(msg);
+          rows.push({ message: msg });
         }
         break;
       }
@@ -516,7 +534,21 @@ function foldChat(
         break;
     }
   }
-  return messages;
+  // Context fragments re-append every turn with a stable fragmentId. Keep the
+  // latest body at its chronological slot; drop earlier same-id snapshots so
+  // hot updates (permission / tool routing / seat) do not stack stale prose.
+  const seenFragmentIds = new Set<string>();
+  const kept: ChatMessage[] = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i]!;
+    if (row.fragmentId !== undefined) {
+      if (seenFragmentIds.has(row.fragmentId)) continue;
+      seenFragmentIds.add(row.fragmentId);
+    }
+    kept.push(row.message);
+  }
+  kept.reverse();
+  return kept;
 }
 
 export interface CompactionOptions {

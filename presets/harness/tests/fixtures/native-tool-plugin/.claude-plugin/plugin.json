@@ -1,0 +1,5 @@
+{
+  "name": "native-tool",
+  "version": "0.1.0",
+  "description": "Fixture: registers a tool through $, then answers for it and calls it back."
+}

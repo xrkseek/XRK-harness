@@ -9,14 +9,23 @@ import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_ENABLED,
+  DEFAULT_PRESENCE_MOOD_AT,
+  DEFAULT_PRESENCE_MOOD_ID,
   DEFAULT_PRESENCE_SHAPE,
+  DEFAULT_PRESENCE_STATUS_LINE,
+  DEFAULT_PRESENCE_TITLE_SCHEME,
+  DEFAULT_STATUS_PRESETS,
   isPresenceColor,
   isPresenceShape,
   resolvePresencePaint,
+  resolveStatusPresetsForLocale,
+  seatTitlesForScheme,
   splitLegacyKit,
   type PresenceColor,
   type PresencePaint,
+  type PresenceSeatTitles,
   type PresenceShape,
+  type PresenceTitleSchemeId,
 } from '../presence-settings.ts'
 import { PresenceKitMark } from './PresenceKitMark.tsx'
 import {
@@ -28,6 +37,9 @@ import css from './PresenceBall.module.css'
 
 /** Set by ui-plan apply when Host settingsScope is available. */
 let presenceSettingsRuntime: PresenceSettingsRuntime | undefined
+/** Active product UI locale — kept in sync from ui-plan apply. */
+let presenceUiLocale: 'zh' | 'en' | 'ja' = 'zh'
+let seatTitlesCache: SeatTitlesSnapshot | undefined
 
 /** Wire the Host-backed presence prefs into PresenceBall. */
 export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): void {
@@ -35,6 +47,27 @@ export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): v
   // A new runtime owns its own state — drop the merged snapshot so the next
   // read re-seeds from it instead of serving the previous runtime's look.
   presenceLookCache = undefined
+  bossMoodCache = undefined
+  seatTitlesCache = undefined
+}
+
+/** Live write face for Overview Boss status sheet (same Host scope as Settings). */
+export function getPresenceSettingsRuntime(): PresenceSettingsRuntime | undefined {
+  return presenceSettingsRuntime
+}
+
+/** Keep Boss tip chips aligned with the active product UI language. */
+export function bindPresenceUiLocale(locale: string): void {
+  const next = locale === 'en' || locale === 'ja' ? locale : 'zh'
+  if (presenceUiLocale === next) return
+  presenceUiLocale = next
+  bossMoodCache = undefined
+  seatTitlesCache = undefined
+}
+
+/** Active UI language for locale-aware seat-title presets. */
+export function getPresenceUiLocale(): 'zh' | 'en' | 'ja' {
+  return presenceUiLocale
 }
 
 function noop(): void {}
@@ -174,6 +207,111 @@ function usePresenceLook(): PresenceLook {
 /** Master switch from Settings → General; false hides header dock + Overview rail. */
 export function usePresenceEnabled(): boolean {
   return useSyncExternalStore(subscribePresenceSettings, presenceEnabledSnapshot, presenceEnabledServerSnapshot)
+}
+
+export interface BossMoodSnapshot {
+  readonly moodId: string
+  readonly statusLine: string
+  readonly bossNickname: string
+  readonly moodAt: number
+  readonly statusPresets: readonly string[]
+}
+
+const DEFAULT_BOSS_MOOD: BossMoodSnapshot = {
+  moodId: DEFAULT_PRESENCE_MOOD_ID,
+  statusLine: DEFAULT_PRESENCE_STATUS_LINE,
+  bossNickname: '',
+  moodAt: DEFAULT_PRESENCE_MOOD_AT,
+  statusPresets: DEFAULT_STATUS_PRESETS,
+}
+
+let bossMoodCache: BossMoodSnapshot | undefined
+
+function readBossMood(): BossMoodSnapshot {
+  const runtime = presenceSettingsRuntime
+  if (runtime === undefined) return DEFAULT_BOSS_MOOD
+  return {
+    moodId: runtime.getMoodId(),
+    statusLine: runtime.getStatusLine(),
+    bossNickname: runtime.getBossNickname(),
+    moodAt: runtime.getMoodAt(),
+    statusPresets: resolveStatusPresetsForLocale(
+      runtime.getStatusPresets(),
+      presenceUiLocale,
+    ),
+  }
+}
+
+function sameBossMood(a: BossMoodSnapshot, b: BossMoodSnapshot): boolean {
+  return a.moodId === b.moodId
+    && a.statusLine === b.statusLine
+    && a.bossNickname === b.bossNickname
+    && a.moodAt === b.moodAt
+    && a.statusPresets.length === b.statusPresets.length
+    && a.statusPresets.every((tip, i) => tip === b.statusPresets[i])
+}
+
+function bossMoodSnapshot(): BossMoodSnapshot {
+  const next = readBossMood()
+  const cached = bossMoodCache
+  if (cached !== undefined && sameBossMood(cached, next)) return cached
+  bossMoodCache = next
+  return next
+}
+
+function bossMoodServerSnapshot(): BossMoodSnapshot {
+  return DEFAULT_BOSS_MOOD
+}
+
+/** Operator work mood for the Overview Boss seat (live Settings `ui-presence`). */
+export function useBossMood(): BossMoodSnapshot {
+  return useSyncExternalStore(subscribePresenceSettings, bossMoodSnapshot, bossMoodServerSnapshot)
+}
+
+export type SeatTitlesSnapshot = PresenceSeatTitles & {
+  readonly scheme: PresenceTitleSchemeId
+}
+
+const DEFAULT_SEAT_TITLES: SeatTitlesSnapshot = {
+  scheme: DEFAULT_PRESENCE_TITLE_SCHEME,
+  ...seatTitlesForScheme(DEFAULT_PRESENCE_TITLE_SCHEME, 'zh'),
+}
+
+function readSeatTitlesSnapshot(): SeatTitlesSnapshot {
+  const runtime = presenceSettingsRuntime
+  if (runtime === undefined) {
+    return {
+      scheme: DEFAULT_PRESENCE_TITLE_SCHEME,
+      ...seatTitlesForScheme(DEFAULT_PRESENCE_TITLE_SCHEME, presenceUiLocale),
+    }
+  }
+  const scheme = runtime.getTitleScheme()
+  const titles = runtime.getSeatTitles(presenceUiLocale)
+  return { scheme, ...titles }
+}
+
+function sameSeatTitles(a: SeatTitlesSnapshot, b: SeatTitlesSnapshot): boolean {
+  return a.scheme === b.scheme
+    && a.boss === b.boss
+    && a.manager === b.manager
+    && a.agent === b.agent
+}
+
+function seatTitlesSnapshot(): SeatTitlesSnapshot {
+  const next = readSeatTitlesSnapshot()
+  const cached = seatTitlesCache
+  if (cached !== undefined && sameSeatTitles(cached, next)) return cached
+  seatTitlesCache = next
+  return next
+}
+
+/** Classic 老板 / 经理 / 干员 titles from Settings `ui-presence.titleScheme`. */
+export function useSeatTitles(): SeatTitlesSnapshot {
+  return useSyncExternalStore(
+    subscribePresenceSettings,
+    seatTitlesSnapshot,
+    () => DEFAULT_SEAT_TITLES,
+  )
 }
 
 /** Follow `body[data-ds-dark-theme]` so light/dark palette paints stay in sync. */
@@ -378,6 +516,11 @@ export function derivePresenceEmotion(input: {
     readonly tips?: string
     readonly source: 'tool'
     readonly updatedAt?: number
+    /**
+     * Operator Boss mood from Settings — never TTL / fleet / idle overwrite.
+     * Only a fresh manual edit (new moodId / tips) changes the face.
+     */
+    readonly pinned?: boolean
   }
   readonly turnActive: boolean
   readonly runningJobs: number
@@ -408,6 +551,15 @@ export function derivePresenceEmotion(input: {
       source: 'local',
       tipKey: 'local',
       ...(input.local.tips ? { tips: input.local.tips } : {}),
+    }
+  }
+
+  // Pinned Boss status: user-owned only — skip auto standby / turn rotation.
+  if (input.presence?.emotionId && input.presence.pinned) {
+    return {
+      emotionId: input.presence.emotionId,
+      source: 'tool',
+      ...(input.presence.tips ? { tips: input.presence.tips } : {}),
     }
   }
 
@@ -609,6 +761,8 @@ export const PresenceBall = memo(function PresenceBall({
   pairSeat = false,
   seat,
   roleLabel,
+  captionHint,
+  onStageClick,
   t,
   loadingLabel,
   errorLabel,
@@ -621,6 +775,8 @@ export const PresenceBall = memo(function PresenceBall({
     readonly tips?: string
     readonly source: 'tool'
     readonly updatedAt?: number
+    /** See {@link derivePresenceEmotion} — Boss mood never auto-overwrites. */
+    readonly pinned?: boolean
   }
   readonly turnActive: boolean
   readonly runningJobs: number
@@ -669,6 +825,16 @@ export const PresenceBall = memo(function PresenceBall({
   readonly seat?: 'from' | 'to'
   /** Caption under the ball (委派方 / 被委派方 · name). */
   readonly roleLabel?: string
+  /**
+   * Secondary tip when presence tips are empty (e.g. session sideline on the
+   * phone header chip). Does not invent a sticky presence beat.
+   */
+  readonly captionHint?: string
+  /**
+   * Override click-to-play. Boss Overview uses this to open the status sheet
+   * instead of cycling random emotions.
+   */
+  readonly onStageClick?: () => void
   readonly t: (key: string, params?: Record<string, string>) => string
   readonly loadingLabel: string
   readonly errorLabel: string
@@ -753,6 +919,7 @@ export const PresenceBall = memo(function PresenceBall({
     ...(local ? { local } : {}),
   })
   const display = presenceDisplay(emotion, t)
+  const tipLine = display.tip ?? captionHint
   const resting = emotion.tipKey === 'sleep' || emotion.tipKey === 'standby'
   // Stream isolation budget: lite only for real work. Idle ambient / sleep keep full FX.
   const perfLite = workBusy
@@ -949,16 +1116,20 @@ export const PresenceBall = memo(function PresenceBall({
   }, [ready])
 
   const onStageActivate = (): void => {
+    // Bounce first so the click always shows motion even if emotion is unchanged.
+    const ball = ballRef.current
+    ball?.bounce?.()
+    ball?.resetIdle?.()
+    if (onStageClick) {
+      onStageClick()
+      return
+    }
     const id = pickRotated(CLICK_IDS, clickIndexRef.current)
     clickIndexRef.current += 1
     const stamp = Date.now()
     setLocal({ emotionId: id })
     setNowMs(stamp)
     setLastActivityAt(stamp)
-    // Bounce first so the click always shows motion even if emotion is unchanged.
-    const ball = ballRef.current
-    ball?.bounce?.()
-    ball?.resetIdle?.()
   }
 
   return (
@@ -996,7 +1167,7 @@ export const PresenceBall = memo(function PresenceBall({
         </div>
         {error ? <div className={css.error}>{errorLabel}: {error}</div> : null}
       </button>
-      <div className={css.meta}>
+      <div className={css.meta} data-presence-meta="">
         {roleLabel
           ? <span className={css.role}>{roleLabel}</span>
           : null}
@@ -1004,8 +1175,8 @@ export const PresenceBall = memo(function PresenceBall({
           <span className={css.emotion}>{display.name}</span>
           {!compact && !pairSeat ? <span className={css.id}>{emotion.emotionId}</span> : null}
         </div>
-        {display.tip
-          ? <p className={css.tips} title={compact ? display.tip : undefined}>{display.tip}</p>
+        {tipLine
+          ? <p className={css.tips} title={compact ? tipLine : undefined}>{tipLine}</p>
           : null}
       </div>
     </div>

@@ -92,6 +92,7 @@ function abnormalHeadDetail(reason: TurnEndReason): string | undefined {
   if (reason.kind === "interrupted") return "interrupted mid-turn";
   if (reason.kind === "max-tokens") return "stopped at max tokens";
   if (reason.kind === "blocked") return "blocked";
+  if (reason.kind === "forked") return "closed for fork";
   return undefined;
 }
 

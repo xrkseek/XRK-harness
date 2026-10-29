@@ -43,7 +43,7 @@ Face mux 使用独立的 `FaceMuxSeq`（见 [host-face.md](./host-face.md)），
 | `store.readEvents(id, from?, to?)` | 仓必选；冷会话水合 |
 | `readSessionEvents(store, id, from?, to?)` | 品牌默认值的封装，委托 `readEvents` |
 | `sessionEventCount` / `sessionEventAt` / `lastSessionEvent` / `sessionEventsFrom` | 长度、单条、末条、后缀 |
-| `computeListHints` / `sessionListHints` | 列表元数据（`lastEventTs` · `hasTurnStart`）；优先 `store.listHints` |
+| `computeListHints` / `sessionListHints` | 列表元数据（`lastEventTs` · `eventCount` · `hasTurnStart` · `hasCommandRun`）；优先 `store.listHints` |
 
 `SessionLogReader` = `Pick<SessionStore, "readEvents">`。
 
@@ -76,7 +76,7 @@ const cursor = SessionSeqCursor(-1);
 
 ## 持久化仓
 
-`createPersistentSessionStore`：打开时懒加载会话 id；`get` / `readEvents` 时水合事件。默认取得 `sessions.write.lock` 独占写租约（跨进程）；另一**存活** Host 抛 `SessionsDirInUseError`；持锁进程已退出时清一次过期锁再抢；巡检用 `{ shared: true }`（只读 DB；create/append 抛错；open-turn 修复仅内存）。`eventsRef(id)` 返回已驻留数组。列表元数据走 `listHints`。驻留 LRU 默认上限 8；**未闭合 turn 不驱逐**（可临时超上限）。淘汰前 `flush` chunk 批，再通知 Face checkpoint（`onEvict` 结束后再从 LRU 摘除，避免回调内 `get` 留下幽灵驻留项）。
+`createPersistentSessionStore`：打开时懒加载会话 id；`get` / `readEvents` 时水合事件。默认取得 `sessions.write.lock` 独占写租约（跨进程）；另一**存活** Host 抛 `SessionsDirInUseError`；持锁进程已退出时清一次过期锁再抢；巡检用 `{ shared: true }`（只读 DB；create/append 抛错；open-turn 修复仅内存）。`eventsRef(id)` 返回已驻留数组。列表元数据走 `listHints`。驻留 LRU 默认上限 8；**未闭合 turn 不驱逐**（可临时超上限）。淘汰前 `flush` chunk 批，再通知 Face checkpoint（`onEvict` 结束后再从 LRU 摘除，避免回调内 `get` 留下幽灵驻留项）。闲置会话还可经 `releaseResident(id)` 主动卸下（Face `session.history` / `session.search` 冷观察后调用）。后台 microtask flush 失败会暂停 auto-drain 并记入 `flushFailureReport()`；显式 `flush()` / `close()` 重试。未知事件类型若带 `ignorable: true`，读路径跳过该行；否则拒读整段（见 [protocol-events.md](./protocol-events.md)）。
 
 物理行可为 `text-chunks` / `tool-call-chunks`；展开后的事件下标与磁盘 `seq` 不同，因此区间读在冷 miss 时先水合全文再切片。耐久屏障是 `flush()`（见 [session.md](./session.md)）。
 
@@ -131,7 +131,7 @@ Ranges are half-open `[from, to)`; out-of-range behavior matches `Array.prototyp
 | `store.readEvents(id, from?, to?)` | Required on every store; hydrates cold sessions |
 | `readSessionEvents(store, id, from?, to?)` | Branded defaults; delegates to `readEvents` |
 | `sessionEventCount` / `sessionEventAt` / `lastSessionEvent` / `sessionEventsFrom` | Length, one event, tail, suffix |
-| `computeListHints` / `sessionListHints` | List metadata (`lastEventTs` · `hasTurnStart`); prefers `store.listHints` |
+| `computeListHints` / `sessionListHints` | List metadata (`lastEventTs` · `eventCount` · `hasTurnStart` · `hasCommandRun`); prefers `store.listHints` |
 
 `SessionLogReader` = `Pick<SessionStore, "readEvents">`.
 
@@ -164,7 +164,7 @@ const cursor = SessionSeqCursor(-1);
 
 ## Persistent store
 
-`createPersistentSessionStore` lazy-loads session ids on open and hydrates on `get` / `readEvents`. By default it takes an exclusive `sessions.write.lock` lease (cross-process); another **live** Host throws `SessionsDirInUseError`; a dead holder's stale file is cleared once then the acquire retries; inspectors pass `{ shared: true }` (read-only DB; create/append throw; open-turn repair is memory-only). `eventsRef(id)` returns the resident array. List metadata uses `listHints`. Resident LRU defaults to 8; **open turns are never evicted** (the set may temporarily exceed the cap). Eviction flushes chunk batches, then notifies Face for checkpoints (residentOrder is updated only after `onEvict`, so a callback `get` cannot leave a stale LRU entry).
+`createPersistentSessionStore` lazy-loads session ids on open and hydrates on `get` / `readEvents`. By default it takes an exclusive `sessions.write.lock` lease (cross-process); another **live** Host throws `SessionsDirInUseError`; a dead holder's stale file is cleared once then the acquire retries; inspectors pass `{ shared: true }` (read-only DB; create/append throw; open-turn repair is memory-only). `eventsRef(id)` returns the resident array. List metadata uses `listHints`. Resident LRU defaults to 8; **open turns are never evicted** (the set may temporarily exceed the cap). Eviction flushes chunk batches, then notifies Face for checkpoints (residentOrder is updated only after `onEvict`, so a callback `get` cannot leave a stale LRU entry). Idle sessions may also drop via `releaseResident(id)` after Face cold observation (`session.history` / `session.search`). Background microtask flush failures pause auto-drain and surface via `flushFailureReport()`; explicit `flush()` / `close()` retry. Unknown event types with `ignorable: true` are skipped on read; otherwise the whole load refuses (see [protocol-events.md](./protocol-events.md)).
 
 Physical rows may be `text-chunks` / `tool-call-chunks`; expanded event indices differ from disk `seq`, so cold range reads hydrate the full log then slice in memory. Durability barrier: `flush()` (see [session.md](./session.md)).
 

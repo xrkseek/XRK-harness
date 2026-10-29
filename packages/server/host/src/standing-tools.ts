@@ -16,7 +16,11 @@ import { createDefaultWebAccess, createWebTools } from "@xrkseek/exec-web";
 import { createLspTools } from "@xrkseek/exec-lsp";
 import { createPtyTools } from "@xrkseek/exec-pty";
 import { resolveToolPreset } from "@xrkseek/server-face";
-import { createSkillTools, createProposeSkillTool } from "@xrkseek/workspace";
+import {
+  createSkillTools,
+  createProposeSkillTool,
+  standingSkillToolSourceOptions,
+} from "@xrkseek/workspace";
 
 export function createStandingToolRegistry(options: {
   readonly workspaceRoot: string;
@@ -26,9 +30,11 @@ export function createStandingToolRegistry(options: {
   const fs = createFsLocalProvider({ root: options.workspaceRoot });
   for (const tool of createFsTools(fs)) tools.register(tool);
   for (const tool of createStdTools()) tools.register(tool);
-  for (const tool of createSkillTools({
-    workspaceRoot: options.workspaceRoot,
-  })) {
+  for (const tool of createSkillTools(
+    standingSkillToolSourceOptions({
+      workspaceRoot: options.workspaceRoot,
+    }),
+  )) {
     tools.register(tool);
   }
   tools.register(

@@ -35,10 +35,11 @@ import type {} from '@xrkseek/client-ui-settings-plugins/client'
 import type {} from '@xrkseek/xrk-plan-mode/client'
 import {
   PRESENCE_SETTINGS_NAMESPACE,
+  resolveStatusPresetsForLocale,
   type PresenceSettings,
 } from '../presence-settings.ts'
 import { PlanChip } from './PlanModeControl.tsx'
-import { bindPresenceSettingsRuntime } from './PresenceBall.tsx'
+import { bindPresenceSettingsRuntime, bindPresenceUiLocale } from './PresenceBall.tsx'
 import { PresenceDock } from './PresenceDock.tsx'
 import { PresenceShapeRow, type PresenceShapeRowInjected } from './PresenceShapeRow.tsx'
 import { PresenceSettingsRuntime } from './presence-settings-runtime.ts'
@@ -46,7 +47,7 @@ import { createPresenceShapeRowStore } from './presence-settings-store.ts'
 import { PreviewOpenButton, PreviewTabs, type PreviewTabsInjected } from './PreviewTabs.tsx'
 import { peekJobOutput as defaultPeekJobOutput } from './job-output-peek.ts'
 import { createOverviewSessionSoftFaces } from './overview-session-faces.ts'
-import { en, zh, type PlanKey } from './locales.ts'
+import { en, ja, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
 export { openCanvasInOverview } from './canvas-focus.ts'
@@ -82,7 +83,7 @@ export const inject = [
  */
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plan: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-plan: dictionaries')
 
   const presenceHost = ctx.settingsScope.bind<PresenceSettings>({
     namespace: PRESENCE_SETTINGS_NAMESPACE,
@@ -93,6 +94,13 @@ export function apply(ctx: ClientContext): void {
   const presencePrefsStore = createPresenceShapeRowStore()
   let presencePrefsBound: BoundActions<typeof presencePrefsStore> | undefined
   const syncPresencePrefs = (): void => {
+    const locale = ctx.locale.getSnapshot().active
+    const uiLocale = locale === 'en' || locale === 'ja' ? locale : 'zh'
+    bindPresenceUiLocale(uiLocale)
+    const statusPresets = resolveStatusPresetsForLocale(
+      presenceSettings.getStatusPresets(),
+      uiLocale,
+    )
     presencePrefsBound?.sync(
       presenceSettings.getEnabled(),
       presenceSettings.getShape(),
@@ -105,10 +113,19 @@ export function apply(ctx: ClientContext): void {
       presenceSettings.getOverlayGlasses(),
       presenceSettings.getOverlayHeld(),
       presenceSettings.getStickers(),
+      presenceSettings.getMoodId(),
+      presenceSettings.getStatusLine(),
+      presenceSettings.getMoodAt(),
+      statusPresets,
+      presenceSettings.getTitleScheme(),
+      presenceSettings.getTitleBoss(),
+      presenceSettings.getTitleManager(),
+      presenceSettings.getTitleAgent(),
       presenceSettings.getRevision(),
     )
   }
   presenceSettings.subscribe(() => { syncPresencePrefs() })
+  ctx.locale.subscribe(() => { syncPresencePrefs() })
   const presencePrefsInjected = (
     actions: BoundActions<typeof presencePrefsStore>,
   ): PresenceShapeRowInjected => {
@@ -121,6 +138,10 @@ export function apply(ctx: ClientContext): void {
       setSlot: (slot, pick) => { presenceSettings.setSlot(slot, pick) },
       addSticker: (image, slot) => presenceSettings.addSticker(image, slot),
       removeSticker: (id) => { presenceSettings.removeSticker(id) },
+      addStatusPreset: (tip) => presenceSettings.addStatusPreset(tip),
+      removeStatusPreset: (tip) => { presenceSettings.removeStatusPreset(tip) },
+      setTitleScheme: (scheme) => { presenceSettings.setTitleScheme(scheme) },
+      setSeatTitle: (seat, raw) => { presenceSettings.setSeatTitle(seat, raw) },
     }
   }
   // Presence ball is a first-class Plugins-home module (hot toggle), not General.
@@ -178,6 +199,7 @@ export function apply(ctx: ClientContext): void {
           sessionId,
           (id) => ctx.sessions.binding(id),
         )
+        // Ball tap = bounce only; Overview opens from AppFrame 概况 / desktop Status.
         return { presenceCues: soft.presenceCues }
       },
     }, PresenceDock),

@@ -426,6 +426,16 @@
 }
 
 @media (max-width: 767px) {
+  /* Sticky seat already eats the short viewport — tighten card + stats stack. */
+  .root:has([data-composer-stats]) {
+    padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .card {
+    gap: 8px;
+    padding-top: 8px;
+  }
+
   .add {
     width: 40px;
     height: 40px;
@@ -442,12 +452,36 @@
   .primary {
     width: 40px;
     height: 40px;
+    /* Desktop lifts send 2px vs smaller chips; phone chips are 40px too — keep flush. */
+    transform: none;
     touch-action: manipulation;
   }
 
+  /* Termux ~360px: keep attach · access · model · send on ONE toolbar row.
+     Wrapping put permission on line 1 and model/send on line 2 (staircase). */
   .row {
-    gap: 10px;
-    padding: 4px 8px 8px;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 8px;
+  }
+
+  .tools {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .modes {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .trailing {
+    flex: 0 0 auto;
+    margin-left: 0;
+    gap: 6px;
   }
 }
 

@@ -6,7 +6,7 @@
 // trigger when it closes. These assert all three so a future refactor cannot
 // quietly drop one and leave keyboard users stranded.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Modal } from '@xrkseek/client-ui-primitives'
 
 afterEach(() => {
@@ -102,5 +102,26 @@ describe('Modal focus management', () => {
     )
     fireEvent.keyDown(document, { key: 'Escape', bubbles: true })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // ZCode's motion rule (DESIGN.md §Motion): the transition explains the state
+  // change instead of the element disappearing on the same frame `open` flips.
+  // The card therefore has to survive one exit window, and must not survive it
+  // when the user asked for less motion.
+  it('keeps the card for the exit window, then unmounts', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="Exit">body</Modal>,
+    )
+    expect(document.querySelector('[data-state="open"]')).not.toBeNull()
+
+    rerender(<Modal open={false} onClose={() => {}} title="Exit">body</Modal>)
+    // Still mounted, now in the closing phase, so the fade can play.
+    expect(document.querySelector('[data-state="closing"]')).not.toBeNull()
+    expect(screen.queryByRole('dialog')).not.toBeNull()
+
+    act(() => { vi.advanceTimersByTime(200) })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    vi.useRealTimers()
   })
 })

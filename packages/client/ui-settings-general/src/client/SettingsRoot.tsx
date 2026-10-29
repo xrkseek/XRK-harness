@@ -206,7 +206,11 @@ function SettingsPanel({
             className={css.options}
             onFocusCapture={onOptionsFocusCapture}
           >
-            {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
+            {active !== undefined ? (
+              <div key={active} className={css.optionsPane}>
+                {renderSlot('settings.section', { close: onClose }, { only: active })}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -221,7 +225,7 @@ function SettingsPanel({
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, bindOpenSection, useConnectionState, useConnectionPhase, useSections, useOnboardingSteps, useSessions, renderSlot, t,
+    wide, reconnect, bindOpenSection, useConnectionState, useConnectionPhase, useSections, useOnboardingSteps, useHostVersion, useSessions, renderSlot, t,
   } = props
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
@@ -272,6 +276,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
     () => rows.filter(row => !HOME_ONLY_SECTIONS.has(row.id)),
     [rows],
   )
+  const hostVersion = useHostVersion(v => v)
   const connectionState = useConnectionState(state => state)
   const connectionPhase = useConnectionPhase(state => state)
   const previousConnectionState = useRef(connectionState)
@@ -339,9 +344,9 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           className={clsx(css.trigger, !wide && css.rail)}
           aria-haspopup="dialog"
           aria-expanded={open}
-          // Rail mode paints only the icon; name the control so narrow viewports
-          // still expose a "Settings" accessible name (audit B-11).
-          aria-label={wide ? undefined : t('trigger')}
+          // Always name the control: rail and wide icon-only (English collapse)
+          // paint only the gear — visible「设置」still matches this label.
+          aria-label={t('trigger')}
           onClick={() => {
             // Gear opens ordinary Settings — never a leftover home surface.
             setActiveId(undefined)
@@ -361,7 +366,9 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           restartActionLabel={t('connection.restart')}
           onReconnect={reconnect}
         />
-        {wide && connectionIndicator === undefined ? <DesktopReleaseFooter t={t} /> : null}
+        {wide && connectionIndicator === undefined
+          ? <DesktopReleaseFooter t={t} hostVersion={hostVersion} />
+          : null}
       </div>
       {open && (
         <SettingsPanel

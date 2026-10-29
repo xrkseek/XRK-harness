@@ -13,6 +13,8 @@ export interface WorkspacePersistEntry {
   readonly title: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly kind?: "project" | "agent-home";
+  readonly boundMemberId?: string;
 }
 
 export interface WorkspacePersistDoc {
@@ -61,11 +63,21 @@ export function loadWorkspaceDoc(runtime: FaceRuntime): WorkspacePersistDoc | nu
         if (!row || typeof row !== "object" || Array.isArray(row)) continue;
         const pathVal = String((row as { path?: unknown }).path ?? "").trim();
         if (!pathVal) continue;
+        const kindRaw = String((row as { kind?: unknown }).kind ?? "").trim();
+        const kind =
+          kindRaw === "agent-home" ? ("agent-home" as const) : ("project" as const);
+        const boundMemberId = String(
+          (row as { boundMemberId?: unknown }).boundMemberId ?? "",
+        ).trim();
         entries[id] = {
           path: pathVal,
           title: String((row as { title?: unknown }).title ?? path.basename(pathVal)),
           createdAt: String((row as { createdAt?: unknown }).createdAt ?? new Date().toISOString()),
           updatedAt: String((row as { updatedAt?: unknown }).updatedAt ?? new Date().toISOString()),
+          kind,
+          ...(kind === "agent-home" && boundMemberId
+            ? { boundMemberId }
+            : {}),
         };
       }
     }

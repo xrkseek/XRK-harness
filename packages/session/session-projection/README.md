@@ -14,8 +14,8 @@ wire values.
 | --- | --- |
 | `SessionProjectionMap` | Merge-extensible **client** view table |
 | `SessionProjectionStateMap` | Merge-extensible **host** fold-state table |
-| `ProjectionDefinition` | `{ key, stateVersion, init, apply, wire? }` — omit `wire` for host-only |
-| `createSessionProjectionRegistry` | `register` · `drive` · `snapshot` (views only) · `stateOf` · `checkpoint` · `restoreFloor` / `viewCheckpoint` / `restore` · `onChanged` · `setSidecar` |
+| `ProjectionDefinition` | `{ key, stateVersion, init, apply, parseState?, wire? }` — omit `wire` for host-only; optional `parseState` gates checkpoint restore / seed; `wire.summary: true` opts into list/summary |
+| `createSessionProjectionRegistry` | `register` · `drive` · `snapshot` (views only) · `stateOf` · `checkpoint` (lossless JSON) · `seedFromCheckpoint` · `restoreFloor` / `viewCheckpoint` / `restore` · `summaryKeys` · `onChanged` · `setSidecar` |
 
 No Cordis. No protocol vocabulary on this layer.
 

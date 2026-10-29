@@ -58,6 +58,13 @@
   .column {
     gap: 14px;
   }
+
+  .toBottom {
+    width: 44px;
+    height: 44px;
+    margin-top: -44px;
+    touch-action: manipulation;
+  }
 }
 
 /* Settled-flow identity boundary. Neutral today; natural virtualizer unit
@@ -233,14 +240,12 @@
 }
 
 /* A Turn's process run folds behind one header.
-   The body is a grid row animated 1fr → 0fr rather than `display: none`:
-   a folded member has to keep its box in the flow, or it leaves the
-   `data-chat-anchor-key` order that scroll restore and the reading probe
-   read. `min-height: 0` is what lets the row actually collapse — a grid
-   item defaults to `min-height: auto` and refuses to shrink below content. */
-/* Header chrome comes from the shared `DisclosureRow` (same 24px row and
-   chevron as ReasoningRow and the tool cards). Separator + summary match
-   ReasoningRow / ToolRow so "过程" never sits flush against the detail. */
+   Fold state is owned by `useFoldDriver` (measure → compensate → settle).
+   The body uses `hidden="until-found"` so height drops in one frame —
+   never animate grid-template-rows (mid heights lift the sticky composer).
+   Members stay mounted so `data-chat-anchor-key` order survives the fold.
+   Header chrome comes from shared `DisclosureRow`; separator + summary
+   match ReasoningRow / ToolRow so "过程" never sits flush against detail. */
 .processGroupSep {
   flex: none;
   width: 2px;

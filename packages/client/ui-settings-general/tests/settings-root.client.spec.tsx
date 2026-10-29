@@ -121,6 +121,7 @@ function mount(options: {
       return select(currentConnectionPhase)
     },
     useOnboardingSteps: select => select(steps),
+    useHostVersion: select => select('0.7.0-test'),
     useSections: (select) => {
       const [, force] = useState(0)
       useEffect(() => {

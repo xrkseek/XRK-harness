@@ -47,5 +47,29 @@ export const en: Record<WorkflowRunKey, string> = {
   'status.interrupted': 'Interrupted',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'run.title': '{name}',
+  'run.members.one': 'メンバー {count} 人',
+  'run.members.other': 'メンバー {count} 人',
+  'run.empty': '開始したメンバーはありません',
+  'phase.unassigned': '未フェーズ',
+  'phase.empty': 'フェーズ名が空です',
+  'statusCount.running': '実行中 {count}',
+  'statusCount.completed': '完了 {count}',
+  'statusCount.failed': '失敗 {count}',
+  'statusCount.cancelled': 'キャンセル {count}',
+  'statusCount.interrupted': '中断 {count}',
+  'member.empty': 'メンバー名が空です',
+  'member.open': '{name} を開く',
+  'status.running': '実行中',
+  'status.completed': '完了',
+  'status.failed': '失敗',
+  'status.cancelled': 'キャンセル済み',
+  'status.interrupted': '中断',
+} as const satisfies Record<WorkflowRunKey, string>
+
+
+
 /** Union of this namespace's dictionary keys. */
 export type WorkflowRunKey = keyof typeof zh

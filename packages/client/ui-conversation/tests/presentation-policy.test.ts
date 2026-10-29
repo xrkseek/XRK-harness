@@ -7,31 +7,26 @@ import { TRANSCRIPT_VIEW_MODES } from '../src/submission-settings.ts'
 
 describe('presentationPolicyFor', () => {
   it('folds a completed run in every mode except the expanded one', () => {
-    expect(presentationPolicyFor('compact').foldCompletedTurns).toBe(true)
     expect(presentationPolicyFor('standard').foldCompletedTurns).toBe(true)
     expect(presentationPolicyFor('detailed').foldCompletedTurns).toBe(true)
     // `verbose` is the always-expanded posture: the run is never hidden.
     expect(presentationPolicyFor('verbose').foldCompletedTurns).toBe(false)
   })
 
-  it('maps each mode onto the four-point foldWhen axis', () => {
-    // Compact matches standard timing so「过程」stays open while tools run.
-    expect(presentationPolicyFor('compact').foldWhen).toBe('process')
+  it('maps each mode onto the foldWhen axis', () => {
     expect(presentationPolicyFor('standard').foldWhen).toBe('process')
     expect(presentationPolicyFor('detailed').foldWhen).toBe('turn')
     expect(presentationPolicyFor('verbose').foldWhen).toBe('never')
   })
 
   it('groups every mode that can fold, and leaves verbose flat', () => {
-    expect(presentationPolicyFor('compact').stepGrouping).toBe('collapsed')
     expect(presentationPolicyFor('standard').stepGrouping).toBe('collapsed')
     // Detailed stays grouped so the live Turn still has a run to animate closed.
     expect(presentationPolicyFor('detailed').stepGrouping).toBe('collapsed')
     expect(presentationPolicyFor('verbose').stepGrouping).toBe('none')
   })
 
-  it('drops the taxonomy before the count', () => {
-    expect(presentationPolicyFor('compact').detailTitles).toBe(false)
+  it('keeps taxonomy on modes that group process runs', () => {
     expect(presentationPolicyFor('standard').detailTitles).toBe(true)
     expect(presentationPolicyFor('detailed').detailTitles).toBe(true)
     expect(presentationPolicyFor('verbose').detailTitles).toBe(true)
@@ -39,7 +34,6 @@ describe('presentationPolicyFor', () => {
 
   it('shows live process detail in every mode that groups process runs', () => {
     // Open chrome names the live tool; a folded+running line still shimmers too.
-    expect(presentationPolicyFor('compact').liveProcessDetail).toBe(true)
     expect(presentationPolicyFor('standard').liveProcessDetail).toBe(true)
     expect(presentationPolicyFor('detailed').liveProcessDetail).toBe(true)
     // Verbose has no group header — live detail lives on each tool / think row.
@@ -63,7 +57,7 @@ describe('processGroupSettled', () => {
     expect(processGroupSettled('immediate', openRunning, false)).toBe(true)
   })
 
-  it('folds compact/standard once the tool burst ends', () => {
+  it('folds standard once the tool burst ends', () => {
     expect(processGroupSettled('process', openRunning, false)).toBe(false)
     expect(processGroupSettled('process', openSettled, false)).toBe(true)
     expect(processGroupSettled('process', closedSettled, false)).toBe(true)

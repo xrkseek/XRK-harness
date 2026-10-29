@@ -182,6 +182,9 @@ describe("resolveForkCut", () => {
 describe("Face session.fork", () => {
   it("cuts at turn/end and excludes later inputs and model settings", async () => {
     const store = createMemorySessionStore();
+    // Unique child id — forkLineage persists under product home (attach is
+    // idempotent on child; fixed ids collide across runs).
+    const childId = `fork-turn-cut-${Date.now().toString(36)}`;
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
@@ -237,7 +240,7 @@ describe("Face session.fork", () => {
     const forked = await dispatchFaceMethod(runtime, "session.fork", "f1", {
       sessionId: parentId,
       atSeq: assistantSeq,
-      newSessionId: "fork-turn-cut",
+      newSessionId: childId,
     });
     expect(forked.result.ok).toBe(true);
     if (!forked.result.ok) return;
@@ -248,9 +251,15 @@ describe("Face session.fork", () => {
       atSeq: number;
     };
     expect(child.parentSessionId).toBe(parentId);
-    expect(child.sessionId).toBe("fork-turn-cut");
-    expect(child.eventCount).toBe(afterFirst);
+    expect(child.sessionId).toBe(childId);
+    // Prefix length + session/end-seed inheritance marker.
+    expect(child.eventCount).toBe(afterFirst + 1);
     expect(child.atSeq).toBe(assistantSeq);
+    expect(runtime.forkLineage.getByChild(child.sessionId)).toEqual({
+      parentSessionId: parentId,
+      childSessionId: child.sessionId,
+      atSeq: assistantSeq,
+    });
 
     const childEvents = store.get(child.sessionId).events;
     expect(childEvents.some((e) => e.type === "prompt/admitted")).toBe(false);
@@ -272,27 +281,28 @@ describe("Face session.fork", () => {
       reasoningEffort: "high",
     });
 
+    const omittedId = `fork-last-turn-${Date.now().toString(36)}`;
     const omitted = await dispatchFaceMethod(runtime, "session.fork", "f2", {
       sessionId: parentId,
-      newSessionId: "fork-last-turn",
+      newSessionId: omittedId,
     });
     expect(omitted.result.ok).toBe(true);
     if (omitted.result.ok) {
       const v = omitted.result.value as { eventCount: number };
-      // Last completed turn includes turn 2; still excludes nothing after its end.
-      expect(v.eventCount).toBe(store.get(parentId).events.length);
+      // Last completed turn includes turn 2 + session/end-seed.
+      expect(v.eventCount).toBe(store.get(parentId).events.length + 1);
     }
 
     const open = await dispatchFaceMethod(runtime, "session.fork", "f3", {
       sessionId: parentId,
       atSeq: store.get(parentId).events.length + 10,
-      newSessionId: "fork-past-end",
+      newSessionId: `fork-past-end-${Date.now().toString(36)}`,
     });
     expect(open.result.ok).toBe(true);
 
     const clash = await dispatchFaceMethod(runtime, "session.fork", "f4", {
       sessionId: parentId,
-      newSessionId: "fork-turn-cut",
+      newSessionId: childId,
     });
     expect(clash.result.ok).toBe(false);
     if (!clash.result.ok) {
@@ -302,6 +312,7 @@ describe("Face session.fork", () => {
 
   it("keeps legacy beforeSeq as a raw exclusive offset", async () => {
     const store = createMemorySessionStore();
+    const childId = `fork-raw-${Date.now().toString(36)}`;
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
@@ -331,12 +342,13 @@ describe("Face session.fork", () => {
     const partial = await dispatchFaceMethod(runtime, "session.fork", "f", {
       sessionId: parentId,
       beforeSeq: 1,
-      newSessionId: "fork-raw",
+      newSessionId: childId,
     });
     expect(partial.result.ok).toBe(true);
     if (partial.result.ok) {
       const v = partial.result.value as { eventCount: number; beforeSeq: number };
-      expect(v.eventCount).toBe(1);
+      // Raw offset 1 + session/end-seed.
+      expect(v.eventCount).toBe(2);
       expect(v.beforeSeq).toBe(1);
     }
   });
@@ -510,6 +522,7 @@ describe("Face session.fork", () => {
 
   it("copies 主线 bind to the UI fork child and leaves the parent bound", async () => {
     const store = createMemorySessionStore();
+    const childId = `fork-thread-${Date.now().toString(36)}`;
     const runtime = createFaceRuntime({
       store,
       workspaceRoot: process.cwd(),
@@ -534,7 +547,7 @@ describe("Face session.fork", () => {
 
     const forked = await dispatchFaceMethod(runtime, "session.fork", "f", {
       sessionId: parentId,
-      newSessionId: "fork-thread",
+      newSessionId: childId,
     });
     expect(forked.result.ok).toBe(true);
     if (!forked.result.ok) return;
@@ -543,22 +556,13 @@ describe("Face session.fork", () => {
       threadId: thread.id,
       sideline: "working",
     });
-    expect(runtime.sessionThreads.bindOf(wsId, "fork-thread")).toEqual({
+    expect(runtime.sessionThreads.bindOf(wsId, childId)).toEqual({
       threadId: thread.id,
       sideline: "working",
     });
 
-    const status = await dispatchFaceMethod(runtime, "session.status", "st", {
-      sessionId: "fork-thread",
-    });
-    expect(status.result.ok).toBe(true);
-    if (!status.result.ok) return;
-    const snap = status.result.value as {
-      companionBall?: unknown;
-      delegate?: unknown;
-    };
-    expect(snap.companionBall).toBeUndefined();
-    expect(snap.delegate).toBeUndefined();
+    // UI fork is not on the subagent graph (home Overview / 经理球, not 委派方).
+    expect(runtime.subagents.getByChild(childId)).toBeUndefined();
   });
 });
 

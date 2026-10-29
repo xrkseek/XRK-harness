@@ -25,6 +25,19 @@ const ADD_WORKSPACE = '::add-workspace'
 /** Last non-empty workspace list, so a pending baseline does not blank the menu. */
 let lastWorkspaceItems: readonly WorkspaceView[] = []
 
+/** agent-home rows live in the 干员 pane; everything else is a project tree. */
+function isAgentHome(workspace: WorkspaceView): boolean {
+  return workspace.kind === 'agent-home'
+}
+
+/** Filter the Host list to one sidebar pane's currency. */
+function filterWorkspaceList(
+  items: readonly WorkspaceView[],
+  kind: 'project' | 'agent-home',
+): readonly WorkspaceView[] {
+  return items.filter((row) => (kind === 'agent-home' ? isAgentHome(row) : !isAgentHome(row)))
+}
+
 /** Test-only: drop the last-good workspace list paint. */
 export function resetWorkspacePickerPaintForTests(): void {
   lastWorkspaceItems = []
@@ -56,6 +69,11 @@ export interface WorkspacePickFlowProps {
   side?: 'bottom' | 'top' | 'right'
   /** Currently active workspace (trailing check in the picker list). */
   selectedId?: WorkspaceId | undefined
+  /**
+   * Which pane's rows to list. `project` hides agent-home; `agent-home` hides
+   * project trees. `auto` follows the selected row's kind (default project).
+   */
+  listKind?: 'project' | 'agent-home' | 'auto'
 }
 
 /**
@@ -76,6 +94,7 @@ export function WorkspacePickFlow({
   addOnly = false,
   side = 'bottom',
   selectedId,
+  listKind = 'auto',
 }: WorkspacePickFlowProps) {
   const workspaceSnapshot = useWorkspaces(state => state)
   const workspaces = workspaceSnapshot.items
@@ -110,15 +129,28 @@ export function WorkspacePickFlow({
   useEffect(() => {
     if (flowOpen && !flowAvailable) setFlowOpen(false)
   }, [flowOpen, flowAvailable])
+
+  const resolvedKind = useMemo((): 'project' | 'agent-home' => {
+    if (listKind === 'project' || listKind === 'agent-home') return listKind
+    const selected = workspaces.find((row) => row.workspaceId === selectedId)
+    return selected !== undefined && isAgentHome(selected) ? 'agent-home' : 'project'
+  }, [listKind, selectedId, workspaces])
+
   const addEntries: MenuEntry[] = flowAvailable
-    ? [{ id: ADD_WORKSPACE, label: t('menu.addWorkspace'), icon: <IconPlusOutlineRegular size={16} />, disabled: flowBusy }]
+    ? [{
+      id: ADD_WORKSPACE,
+      label: resolvedKind === 'agent-home' ? t('agent.addWorkspace') : t('menu.addWorkspace'),
+      icon: <IconPlusOutlineRegular size={16} />,
+      disabled: flowBusy,
+    }]
     : []
   // With workspaces listed, the add action pins below the scroll region
   // (divider + always visible); otherwise it IS the menu.
-  if (workspaces.length > 0) lastWorkspaceItems = workspaces
-  const listed = workspaces.length > 0 || workspaceSnapshot.phase !== 'pending'
-    ? workspaces
-    : lastWorkspaceItems
+  const scopedAll = filterWorkspaceList(workspaces, resolvedKind)
+  if (scopedAll.length > 0) lastWorkspaceItems = scopedAll
+  const listed = scopedAll.length > 0 || workspaceSnapshot.phase !== 'pending'
+    ? scopedAll
+    : filterWorkspaceList(lastWorkspaceItems, resolvedKind)
   const pinAdd = !addOnly && listed.length > 0
   const needle = query.trim().toLowerCase()
   const visibleWorkspaces = useMemo(() => {
@@ -223,14 +255,15 @@ export function WorkspacePickFlow({
         items={items}
         {...pinAdd ? {
           footer: addEntries,
-          listMaxHeight: 360,
+          // Phone Menu CSS lifts the viewport cap; keep a taller desktop budget.
+          listMaxHeight: 480,
           header: (
             <input
               className={css.pickerSearch}
               type="search"
               value={query}
-              placeholder={t('picker.search')}
-              aria-label={t('picker.searchAria')}
+              placeholder={resolvedKind === 'agent-home' ? t('search.agents.placeholder') : t('picker.search')}
+              aria-label={resolvedKind === 'agent-home' ? t('search.agents.aria') : t('picker.searchAria')}
               autoFocus
               onChange={(event) => { setQuery(event.target.value) }}
               onKeyDown={(event) => { event.stopPropagation() }}
@@ -296,6 +329,9 @@ export function WorkspacePicker({
       useDirectoryFlow={useDirectoryFlow}
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
       selectedId={selectedId}
+      // Hero / blank session: follow the active row — project trees never list
+      // 干员 homes, and an agent-home session only offers other agent homes.
+      listKind="auto"
       onPick={onPick}
       onClose={onClose}
     />

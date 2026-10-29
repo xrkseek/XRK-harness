@@ -58,3 +58,29 @@ export const en = {
   'overlay.aria': '/{command} options',
   'listbox.aria': '/{command} matches',
 } satisfies Record<CommandKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'description.compact': '古い会話履歴を圧縮',
+  'description.export': 'このセッションログを ZIP でダウンロード',
+  'description.feedback': 'このセッションへのフィードバックを記録',
+  'description.goal': 'セッションの目標を設定または差し替え',
+  'description.permission': 'サンドボックスモードと承認ポリシーを切替（セッションのツールバッジではない）',
+  'description.plan': 'プランモードの開始 / 終了（セッション共同作業。ツールバッジではありません）',
+  'description.mcp': '設定済み MCP サーバーとマウント状態を一覧（詳細は /mcp verbose）',
+  'description.status': 'セッションバッジ、権限、プラン、テーマ、モデル、cwd を表示',
+  'description.model': 'プロバイダー／モデルの表示または切替（Codex 風 /model provider/model）',
+  'description.theme': '外観の設定（即時反映）: light|dark|system',
+  'description.skills': 'ワークスペースのスキルを一覧',
+  'description.auto-review': 'AI 自動レビューの切替、または拒否された再試行の承認',
+  'search.placeholder': '検索…',
+  'search.aria': 'オプションを絞り込み',
+  'status.loading': 'オプションを読み込み中…',
+  'status.applying': '適用中…',
+  'status.empty': '選択肢なし',
+  retry: '再試行',
+  'overlay.aria': '/{command} のオプション',
+  'listbox.aria': '/{command} の一致',
+} as const satisfies Record<CommandKey, string>
+
+

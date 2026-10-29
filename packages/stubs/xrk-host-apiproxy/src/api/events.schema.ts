@@ -67,6 +67,14 @@ export const muxFrameSchema = z.discriminatedUnion('type', [
     })),
   }),
   z.object({ type: z.literal('session/jobs'), sessionId: sessionIdSchema, jobs: z.array(taskViewSchema) }),
+  z.object({
+    type: z.literal('session/band'),
+    sessionId: sessionIdSchema,
+    generation: z.number().int().nonnegative(),
+    // Tree shape is validated on pressBand; mux frames stay soft so a bad
+    // plugin tree cannot drop the whole stream (same posture as projection value).
+    tree: z.array(z.unknown()).nullable(),
+  }),
   // value stays wide: it already passed its unit's own schema on the host,
   // and deep-validating here would import every domain's schema into the carrier.
   z.object({ type: z.literal('session/projection'), sessionId: sessionIdSchema, key: z.string().min(1), value: z.unknown(), seq: z.number().int().nonnegative() }),

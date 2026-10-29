@@ -68,9 +68,11 @@ describe("session query tools", () => {
     expect(tools.get("session_inspect")).toBeTruthy();
     expect(tools.get("session_search")).toBeTruthy();
     expect(tools.get("session_read")).toBeTruthy();
+    expect(tools.get("session_event_window")).toBeTruthy();
     expect(tools.get("session_trace")).toBeTruthy();
     expect(SESSION_QUERY_ROUTING_PROMPT_TEXT).toContain("session_inspect");
     expect(SESSION_QUERY_ROUTING_PROMPT_TEXT).toContain("session_search");
+    expect(SESSION_QUERY_ROUTING_PROMPT_TEXT).toContain("session_event_window");
 
     const inspectSelf = await tools.get("session_inspect")!.execute({
       session_id: parent,
@@ -138,8 +140,74 @@ describe("session query tools", () => {
     const trace = await tools.get("session_trace")!.execute({});
     expect(trace.isError).toBeFalsy();
     const traceBody = JSON.parse(String(trace.content)) as {
-      descendants: { id: string }[];
+      descendants: { id: string; via?: string }[];
+      complete: boolean;
+      truncated: boolean;
     };
     expect(traceBody.descendants.some((d) => d.id === other.id)).toBe(true);
+    expect(traceBody.complete).toBe(true);
+    expect(traceBody.truncated).toBe(false);
+
+    // Host may append `session/title` after the user message; locate the
+    // user/message seq instead of assuming a fixed 3-event prefix.
+    const peekAll = await tools.get("session_event_window")!.execute({
+      session_id: other.id,
+      seq: 1,
+      before: 0,
+      after: 20,
+    });
+    expect(peekAll.isError).toBeFalsy();
+    const peekBody = JSON.parse(String(peekAll.content)) as {
+      events: { seq: number; type: string }[];
+    };
+    const userSeq = peekBody.events.find((e) => e.type === "user/message")?.seq;
+    expect(userSeq).toEqual(expect.any(Number));
+
+    const win = await tools.get("session_event_window")!.execute({
+      session_id: other.id,
+      seq: userSeq,
+      before: 1,
+      after: 1,
+    });
+    expect(win.isError).toBeFalsy();
+    const winBody = JSON.parse(String(win.content)) as {
+      seq: number;
+      events: { seq: number; type: string }[];
+    };
+    expect(winBody.seq).toBe(userSeq);
+    expect(winBody.events.some((e) => e.type === "user/message")).toBe(true);
+    expect(winBody.events.length).toBeGreaterThanOrEqual(2);
+
+    // Unique id: FaceForkLineageStore persists under product home and
+    // `attach` refuses to overwrite an existing child→parent edge.
+    const forkChild = store.create(`fork-child-${parent}`);
+    runtime.sessionCwds.set(forkChild.id, runtime.workspaceRoot);
+    runtime.forkLineage.attach({
+      parentSessionId: parent,
+      childSessionId: forkChild.id,
+    });
+    const forkTrace = await tools.get("session_trace")!.execute({
+      session_id: forkChild.id,
+    });
+    expect(forkTrace.isError).toBeFalsy();
+    const forkBody = JSON.parse(String(forkTrace.content)) as {
+      ancestors: { id: string; via?: string }[];
+    };
+    expect(forkBody.ancestors.some((a) => a.id === parent && a.via === "fork")).toBe(
+      true,
+    );
+
+    const rpc = await dispatchFaceMethod(
+      runtime,
+      "session.eventWindow",
+      "ew1",
+      { sessionId: other.id, seq: userSeq, before: 0, after: 0 },
+    );
+    expect(rpc.result.ok).toBe(true);
+    if (rpc.result.ok) {
+      const v = rpc.result.value as { events: { type: string }[] };
+      expect(v.events).toHaveLength(1);
+      expect(v.events[0]!.type).toBe("user/message");
+    }
   });
 });

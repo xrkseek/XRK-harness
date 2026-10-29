@@ -884,11 +884,30 @@ describe('PreviewTabs', () => {
 })
 
 describe('PreviewOpenButton', () => {
+  const sessionId = 's-open' as never
+  const useSessionsSettled = ((select: (s: never) => unknown) => select({
+    ids: [sessionId],
+    byId: { [sessionId]: { blank: false } },
+    current: sessionId,
+    phase: 'ready',
+    subagentsByParent: {},
+    jobsBySession: {},
+    currentAddress: undefined,
+  } as never)) as never
+
   it('opens the details column and says what it opens', () => {
     const openPreview = vi.fn()
     const closePreview = vi.fn()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
-    render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
+    render(
+      <PreviewOpenButton
+        openPreview={openPreview}
+        closePreview={closePreview}
+        t={t}
+        sessionId={sessionId}
+        useSessions={useSessionsSettled}
+      />,
+    )
     const button = screen.getByRole('button', { name: '概况' })
     expect(button.getAttribute('title')).toContain('/status')
     expect(button.getAttribute('aria-pressed')).toBe('false')
@@ -901,10 +920,40 @@ describe('PreviewOpenButton', () => {
     document.documentElement.setAttribute(DETAILS_INSET_ATTR, '')
     const openPreview = vi.fn()
     const closePreview = vi.fn()
-    render(<PreviewOpenButton openPreview={openPreview} closePreview={closePreview} t={t} />)
+    render(
+      <PreviewOpenButton
+        openPreview={openPreview}
+        closePreview={closePreview}
+        t={t}
+        sessionId={sessionId}
+        useSessions={useSessionsSettled}
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: '关闭概况栏' }))
     expect(closePreview).toHaveBeenCalledTimes(1)
     expect(openPreview).not.toHaveBeenCalled()
     document.documentElement.removeAttribute(DETAILS_INSET_ATTR)
+  })
+
+  it('hides on a blank Session', () => {
+    const useSessionsBlank = ((select: (s: never) => unknown) => select({
+      ids: [sessionId],
+      byId: { [sessionId]: { blank: true } },
+      current: sessionId,
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: {},
+      currentAddress: undefined,
+    } as never)) as never
+    const { container } = render(
+      <PreviewOpenButton
+        openPreview={vi.fn()}
+        closePreview={vi.fn()}
+        t={t}
+        sessionId={sessionId}
+        useSessions={useSessionsBlank}
+      />,
+    )
+    expect(container.querySelector('[data-xrk-status-toggle]')).toBeNull()
   })
 })

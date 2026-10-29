@@ -26,6 +26,10 @@
      keeping a full-bleed sheet off the sensor housing. */
   --ds-safe-h: calc(var(--ds-safe-left) + var(--ds-safe-right));
   --ds-safe-v: calc(var(--ds-safe-top) + var(--ds-safe-bottom));
+  /* Soft keyboard overlay height (ui-layout visualViewport bridge). 0 when
+     the layout viewport already resized (interactive-widget=resizes-content)
+     or the keyboard is closed. Sticky composers read this as `bottom`. */
+  --xrk-keyboard-inset: 0px;
 }
 
 /* Coarse pointer: drop the ~300ms double-tap-zoom delay on everything the user

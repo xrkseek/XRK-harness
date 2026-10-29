@@ -92,6 +92,57 @@ describe("session.search", () => {
     const result = searchSessions(store, "shared-token");
     expect(result.items).toHaveLength(SESSION_SEARCH_RESULT_LIMIT);
     expect(result.hasMore).toBe(true);
+    expect(result.cursor).toEqual(expect.any(String));
+  });
+
+  it("continues from cursor without repeating prior hits", () => {
+    const store = createMemorySessionStore();
+    const ids: string[] = [];
+    for (let i = 0; i < SESSION_SEARCH_RESULT_LIMIT + 3; i++) {
+      const id = newSession(store).id;
+      ids.push(id);
+      store.append(id, {
+        type: "user/message",
+        ts: i + 1,
+        turnId: `t${i}`,
+        content: `page-token hit-${i}`,
+      });
+    }
+    const first = searchSessions(store, "page-token");
+    expect(first.hasMore).toBe(true);
+    expect(first.cursor).toBeDefined();
+    const second = searchSessions(store, "page-token", {
+      cursor: first.cursor,
+    });
+    const firstIds = new Set(first.items.map((i) => i.sessionId));
+    for (const item of second.items) {
+      expect(firstIds.has(item.sessionId)).toBe(false);
+    }
+    expect(first.items.length + second.items.length).toBe(
+      SESSION_SEARCH_RESULT_LIMIT + 3,
+    );
+    expect(second.hasMore).toBe(false);
+  });
+
+  it("rejects cursor that does not match query", async () => {
+    const store = createMemorySessionStore();
+    for (let i = 0; i < SESSION_SEARCH_RESULT_LIMIT + 1; i++) {
+      const id = newSession(store).id;
+      store.append(id, {
+        type: "user/message",
+        ts: i,
+        turnId: `t${i}`,
+        content: "cursor-mismatch-token",
+      });
+    }
+    const first = searchSessions(store, "cursor-mismatch-token");
+    expect(first.cursor).toBeDefined();
+    const runtime = bareRuntime(store);
+    const res = await dispatchFaceMethod(runtime, "session.search", "bad-cur", {
+      query: "other-query",
+      cursor: first.cursor,
+    });
+    expect(res.result.ok).toBe(false);
   });
 
   it("ranks newest activity first and hits pending admits", async () => {

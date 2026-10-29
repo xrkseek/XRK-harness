@@ -154,14 +154,30 @@ export interface DeliverablesMatch {
 }
 
 /**
+ * Settlement boundary for a turn's deliverables card.
+ *
+ * `workspace/changes` is appended before `turn/end` but **after** the closing
+ * Assistant whenever the turn ends on a tool call, and a coalesced second
+ * announcement lands later still. Filtering on the closing Assistant's seq (the
+ * tail's anchor) therefore dropped a card that had just painted — the
+ * "flash, then gone" at the end of a fix turn. A tail always speaks for its
+ * whole turn (`turn-tail` is one node per turn), so the boundary is `turn/end`;
+ * only a window that lost the end event falls back to the tail anchor.
+ */
+function settlementSeq(owner: TurnTailOwnerProps): number {
+  return owner.turn.end?.seq ?? owner.seq
+}
+
+/**
  * Claim the turn-tail chain when the closing turn announced changes or file lanes.
  * Open Turns (mid-step / steered next-step) never claim — ending UI is turn/end only.
  */
 export function selectDeliverables(owner: TurnTailOwnerProps): DeliverablesMatch | null {
   if (owner.turn.status !== 'closed') return null
   const data = owner.turn.data.get('deliverables')
-  const changes = changesForClosing(data, owner.seq)
-  const lanes = fileLanesForClosing(data, owner.seq)
+  const boundary = settlementSeq(owner)
+  const changes = changesForClosing(data, boundary)
+  const lanes = fileLanesForClosing(data, boundary)
   const produced = lanes.created
   const emptyLanes = lanes.created.length === 0
     && lanes.modified.length === 0
@@ -173,7 +189,7 @@ export function selectDeliverables(owner: TurnTailOwnerProps): DeliverablesMatch
 
 /** @deprecated Prefer {@link selectDeliverables}; kept for produced-only tests. */
 export function selectProducedFiles(owner: TurnTailOwnerProps): readonly string[] | null {
-  const paths = producedForClosing(owner.turn.data.get('deliverables'), owner.seq)
+  const paths = producedForClosing(owner.turn.data.get('deliverables'), settlementSeq(owner))
   return paths.length === 0 ? null : paths
 }
 

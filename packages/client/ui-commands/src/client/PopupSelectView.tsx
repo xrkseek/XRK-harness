@@ -42,15 +42,18 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   )
   const cardRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  // Keyboard arrows need scroll-into-view; pointer hover must not chase.
+  const scrollHighlightRef = useRef(false)
   // The card is bottom-anchored above the composer; clamp the design cap to
   // the space above it, re-measured on every store update.
   const maxHeight = useAnchoredMaxHeight(cardRef, MAX_HEIGHT, state)
   const active = state.open ? state.active : null
 
-  // The search input keeps focus while arrows move a virtual highlight, so
-  // the browser never scrolls the active row into view — do it here.
+  // Search keeps focus while arrows move a virtual highlight — scroll only
+  // for those keyboard moves (not onMouseEnter highlight sync).
   useEffect(() => {
-    if (active === null) return
+    if (active === null || !scrollHighlightRef.current) return
+    scrollHighlightRef.current = false
     cardRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [active])
 
@@ -96,10 +99,12 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
     switch (ev.key) {
       case 'ArrowDown':
         ev.preventDefault()
+        scrollHighlightRef.current = true
         popup.move(1)
         return
       case 'ArrowUp':
         ev.preventDefault()
+        scrollHighlightRef.current = true
         popup.move(-1)
         return
       case 'Enter':

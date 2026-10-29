@@ -310,6 +310,64 @@ export function createContextTimelineProjectionUnit(): ProjectionDefinition<
       turnOrdinal: 0,
       stepOrdinal: 0,
     }),
+    parseState(value: unknown): ContextTimelineState {
+      // Structural gate only: reject half-written / wrong-shape cache rows.
+      // Deep node schemas stay in wire.parse; bump stateVersion on fold changes.
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("contextTimeline state must be an object");
+      }
+      const v = value as Record<string, unknown>;
+      const int = (k: string): number => {
+        const n = v[k];
+        if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 0) {
+          throw new Error(`contextTimeline.state.${k} must be a non-negative int`);
+        }
+        return n;
+      };
+      const arr = <T>(k: string): readonly T[] => {
+        const a = v[k];
+        if (!Array.isArray(a)) {
+          throw new Error(`contextTimeline.state.${k} must be an array`);
+        }
+        return a as readonly T[];
+      };
+      const optStr = (k: string): string | undefined => {
+        const s = v[k];
+        if (s === undefined) return undefined;
+        if (typeof s !== "string") {
+          throw new Error(`contextTimeline.state.${k} must be string | undefined`);
+        }
+        return s;
+      };
+      const optPos = (k: string): number | undefined => {
+        const n = v[k];
+        if (n === undefined) return undefined;
+        if (typeof n !== "number" || !Number.isSafeInteger(n) || n <= 0) {
+          throw new Error(
+            `contextTimeline.state.${k} must be a positive int | undefined`,
+          );
+        }
+        return n;
+      };
+      const model = optStr("model");
+      const provider = optStr("provider");
+      const contextWindow = optPos("contextWindow");
+      return {
+        applied: int("applied"),
+        system: int("system"),
+        tools: int("tools"),
+        toolList: arr("toolList"),
+        requests: arr("requests"),
+        events: arr("events"),
+        nodes: arr("nodes"),
+        archive: arr("archive"),
+        turnOrdinal: int("turnOrdinal"),
+        stepOrdinal: int("stepOrdinal"),
+        ...(model !== undefined ? { model } : {}),
+        ...(provider !== undefined ? { provider } : {}),
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
+      };
+    },
     apply(state, event: SessionEvent): ContextTimelineState {
       const seq = state.applied + 1;
       const next = withApplied(state, seq, {});

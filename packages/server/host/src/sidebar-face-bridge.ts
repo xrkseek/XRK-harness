@@ -6,6 +6,7 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import type { ShellService } from "@xrkseek/exec-shell";
 import {
   SUBAGENT_PREVIEW_TEXT_MAX,
+  type SubagentPreviewOutcome,
   type SubagentPreviewSummary,
 } from "@xrkseek/protocol";
 import {
@@ -17,6 +18,7 @@ import {
   lastAssistantBodyText,
   openNativePath,
   toFaceWireSessionEvent,
+  type ChildOutcome,
   type FaceRuntime,
   type FaceSubagentLink,
 } from "@xrkseek/server-face";
@@ -29,6 +31,22 @@ import { liveLineFromSessionEvents } from "./sidebar-live-line.js";
 
 const JOB_OUTPUT_LIMIT = 256_000;
 const CHANGES_EVENTS_CAP = 4000;
+
+/** Wire preview omits `forked` — treat as completed for sidebar dots. */
+function toPreviewOutcome(outcome: ChildOutcome): SubagentPreviewOutcome {
+  if (outcome.kind === "forked") {
+    return {
+      kind: "completed",
+      ...(outcome.cause !== undefined ? { cause: outcome.cause } : {}),
+      ...(outcome.quietMs !== undefined ? { quietMs: outcome.quietMs } : {}),
+    };
+  }
+  return {
+    kind: outcome.kind,
+    ...(outcome.cause !== undefined ? { cause: outcome.cause } : {}),
+    ...(outcome.quietMs !== undefined ? { quietMs: outcome.quietMs } : {}),
+  };
+}
 
 /** One descendant link plus BFS depth from the preview/live root (1 = direct). */
 type DescendantLink = {
@@ -156,7 +174,7 @@ export function createSidebarFaceBridgeFromFace(
           ? ("running" as const)
           : ("inactive" as const);
         const events = readSessionEvents(face.store, link.childSessionId);
-        const outcome = describeChildOutcome(events);
+        const outcome = toPreviewOutcome(describeChildOutcome(events));
         const live =
           activity === "running"
             ? liveLineFromSessionEvents(events)
@@ -209,7 +227,9 @@ export function createSidebarFaceBridgeFromFace(
             ? ("running" as const)
             : ("inactive" as const);
           const outcome = face.store.has(n.id)
-            ? describeChildOutcome(readSessionEvents(face.store, n.id))
+            ? toPreviewOutcome(
+                describeChildOutcome(readSessionEvents(face.store, n.id)),
+              )
             : undefined;
           return {
             ...n,

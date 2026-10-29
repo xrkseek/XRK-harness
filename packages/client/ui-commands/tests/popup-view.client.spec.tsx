@@ -137,13 +137,17 @@ describe('PopupSelectView', () => {
     expect(fireEvent.keyDown(search, { key: 'ArrowRight' })).toBe(true)
   })
 
-  it('scrolls the highlighted row into view when the highlight moves', async () => {
+  it('scrolls the highlighted row into view on keyboard move, not pointer hover', async () => {
     const { search } = await mountOpen()
     scrollIntoView.mockClear()
-    act(() => { fireEvent.keyDown(search, { key: 'ArrowDown' }) })
     const options = screen.getAllByRole('option')
+    act(() => { fireEvent.mouseEnter(options[1]!) })
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(options[1]!.getAttribute('aria-selected')).toBe('true')
+    act(() => { fireEvent.keyDown(search, { key: 'ArrowDown' }) })
+    const after = screen.getAllByRole('option')
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
-    expect(scrollIntoView.mock.instances.at(-1)).toBe(options[1])
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(after[2])
   })
 
   it('caps the card height at the design maximum when the composer sits low enough', async () => {

@@ -78,6 +78,7 @@ const LINT_PATHS = [
   "packages/server",
   "packages/web-runtime",
   "packages/sdk",
+  "packages/claude-code-mods",
   "presets",
   "apps/cli/src",
   "apps/desktop/src",
@@ -106,6 +107,17 @@ runNode(path.join(ROOT, "node_modules/eslint/bin/eslint.js"), [
       "--experimental-strip-types",
       path.join(ROOT, "scripts/verify-client-ui-i18n.ts"),
       "--desktop-only",
+    ],
+    { stdio: "inherit", cwd: ROOT, env: childEnv() },
+  );
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
+{
+  const r = spawnSync(
+    NODE,
+    [
+      "--experimental-strip-types",
+      path.join(ROOT, "scripts/verify-locale-parity.ts"),
     ],
     { stdio: "inherit", cwd: ROOT, env: childEnv() },
   );

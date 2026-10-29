@@ -22,9 +22,15 @@ import {
 } from './CompanionBall.tsx'
 import {
   addDressingSticker,
+  BOSS_NICKNAME_MAX,
   removeDressingSticker,
+  setBossLookField,
+  setBossNickname,
+  useBossLook,
+  useBossNickname,
   useDressingStickers,
   usePresenceModuleEnabled,
+  useSeatTitles,
 } from './dressing-scope.ts'
 import {
   FACE_MAX,
@@ -37,7 +43,6 @@ import {
   stickerIdFromPick,
   stickerRef,
   stickersForSlot,
-  type DressingSlot,
   type DressingSticker,
 } from './dressing-library.ts'
 import css from './TeamRoster.module.css'
@@ -48,6 +53,7 @@ import {
   parseMemberImportBytes,
   type SpawnRole,
 } from './member-pack.ts'
+import { catalogMemberBrief, catalogMemberName } from './catalog-labels.ts'
 
 type Translate = WorkspaceBrowserProps['t']
 type ToolMode = 'inherit' | 'allow' | 'deny'
@@ -97,30 +103,20 @@ function splitToolNames(raw: string): string[] {
   return raw.split(/[\s,]+/).map(n => n.trim().toLowerCase()).filter(Boolean)
 }
 
-function memberInitial(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) return '?'
-  return trimmed.slice(0, 1).toLocaleUpperCase()
-}
-
 function MemberGlyph({
   presenceOn,
-  name,
   look,
 }: {
   presenceOn: boolean
-  name: string
   look: ReturnType<typeof appearanceOf>
 }) {
   if (!presenceOn) {
     return (
       <span
-        className={css.initialGlyph}
+        className={css.listSwatch}
         style={{ background: companionPaint(look.color, false).body }}
         aria-hidden
-      >
-        {memberInitial(name)}
-      </span>
+      />
     )
   }
   return (
@@ -139,27 +135,64 @@ function MemberGlyph({
 
 function MemberBall({
   member,
+  displayName,
+  displayBrief,
   stickers,
   selected,
   disabled,
   seedLabel,
   advancedLabel,
   notReadyLabel,
+  roleLabel,
   presenceOn,
   onSelect,
 }: {
   member: AgentTeamMemberRow
+  displayName: string
+  displayBrief?: string
   stickers: readonly DressingSticker[]
   selected: boolean
   disabled: boolean
   seedLabel: string
   advancedLabel: string
   notReadyLabel: string
+  roleLabel: string
   presenceOn: boolean
   onSelect: () => void
 }) {
   const look = appearanceOf(member, stickers)
-  const title = member.brief ? `${member.name} — ${member.brief}` : member.name
+  const title = displayBrief ? `${displayName} — ${displayBrief}` : displayName
+  if (!presenceOn) {
+    const meta = [roleLabel, displayBrief?.trim()].filter(Boolean).join(' · ')
+    return (
+      <button
+        type="button"
+        className={selected ? css.listRowOn : css.listRow}
+        disabled={disabled}
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={title}
+        title={title}
+      >
+        <MemberGlyph presenceOn={false} look={look} />
+        <span className={css.listBody}>
+          <span className={css.listNameRow}>
+            <span className={css.listName}>{displayName}</span>
+            {member.kind === 'advanced'
+              ? <span className={css.listTag}>{advancedLabel}</span>
+              : null}
+            {member.catalog === true || member.seed === true
+              ? <span className={css.listTag}>{seedLabel}</span>
+              : null}
+            {member.ready === false
+              ? <span className={css.listTagWarn}>{notReadyLabel}</span>
+              : null}
+          </span>
+          {meta ? <span className={css.listMeta}>{meta}</span> : null}
+        </span>
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -171,13 +204,13 @@ function MemberBall({
       title={title}
     >
       <span className={css.ballGlyphWrap}>
-        <MemberGlyph presenceOn={presenceOn} name={member.name} look={look} />
+        <MemberGlyph presenceOn={presenceOn} look={look} />
         {member.kind === 'advanced'
           ? <span className={css.advancedMark} title={advancedLabel}>{advancedLabel}</span>
           : null}
       </span>
       <span className={css.ballCaption}>
-        <span className={css.ballName}>{member.name}</span>
+        <span className={css.ballName}>{displayName}</span>
         {member.catalog === true || member.seed === true
           ? <span className={css.seed}>{seedLabel}</span>
           : null}
@@ -191,6 +224,101 @@ function MemberBall({
 
 function isDraftMemberId(id: string | null): id is 'new-global' | 'new-workspace' {
   return id === 'new-global' || id === 'new-workspace'
+}
+
+function isBossSeatId(id: string | null): id is 'boss' {
+  return id === 'boss'
+}
+
+/** Fixed 老板 seat ball — look comes from Host `ui-presence`, not roster. */
+function BossSeatBall({
+  selected,
+  disabled,
+  displayName,
+  look,
+  presenceOn,
+  seedLabel,
+  onSelect,
+}: {
+  selected: boolean
+  disabled: boolean
+  displayName: string
+  look: {
+    shape: string
+    color: string
+    engineHat: string
+    engineGlasses: string
+    engineHeld: string
+    overlayHat?: string
+    overlayGlasses?: string
+    overlayHeld?: string
+  }
+  presenceOn: boolean
+  seedLabel: string
+  onSelect: () => void
+}) {
+  if (!presenceOn) {
+    return (
+      <button
+        type="button"
+        className={selected ? css.listRowOn : css.listRow}
+        disabled={disabled}
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={displayName}
+        title={displayName}
+      >
+        <MemberGlyph presenceOn={false} look={{
+          shape: look.shape,
+          color: look.color,
+          kitHat: look.engineHat,
+          kitGlasses: look.engineGlasses,
+          kitHeld: look.engineHeld,
+          engineHat: look.engineHat,
+          engineGlasses: look.engineGlasses,
+          engineHeld: look.engineHeld,
+          ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
+          ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
+          ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
+        }}
+        />
+        <span className={css.listBody}>
+          <span className={css.listNameRow}>
+            <span className={css.listName}>{displayName}</span>
+            <span className={css.listTag}>{seedLabel}</span>
+          </span>
+        </span>
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={selected ? css.ballCardOn : css.ballCard}
+      disabled={disabled}
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={displayName}
+      title={displayName}
+    >
+      <span className={css.ballGlyphWrap}>
+        <CompanionBall
+          shape={look.shape}
+          color={look.color}
+          kitHat={look.engineHat}
+          kitGlasses={look.engineGlasses}
+          kitHeld={look.engineHeld}
+          {...(look.overlayHat ? { overlayHat: look.overlayHat } : {})}
+          {...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {})}
+          {...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {})}
+        />
+      </span>
+      <span className={css.ballCaption}>
+        <span className={css.ballName}>{displayName}</span>
+        <span className={css.seed}>{seedLabel}</span>
+      </span>
+    </button>
+  )
 }
 
 function NewMemberBall({
@@ -208,6 +336,23 @@ function NewMemberBall({
   presenceOn: boolean
   onSelect: () => void
 }) {
+  if (!presenceOn) {
+    return (
+      <button
+        type="button"
+        className={selected ? css.listRowOn : css.listRow}
+        disabled={disabled}
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={label}
+      >
+        <span className={`${css.listSwatch} ${css.listSwatchEmpty}`} aria-hidden>+</span>
+        <span className={css.listBody}>
+          <span className={css.listName}>{caption}</span>
+        </span>
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -217,9 +362,7 @@ function NewMemberBall({
       aria-pressed={selected}
       aria-label={label}
     >
-      {presenceOn
-        ? <CompanionBall shape="blob" color="cream" empty />
-        : <span className={`${css.initialGlyph} ${css.initialGlyphEmpty}`} aria-hidden>+</span>}
+      <CompanionBall shape="blob" color="cream" empty />
       <span className={css.ballName}>{caption}</span>
     </button>
   )
@@ -238,7 +381,6 @@ export function TeamRoster({
   listTeam,
   upsertTeamMember,
   removeTeamMember,
-  dispatchTeam,
   exportTeamMember,
   importTeamPack,
 }: {
@@ -254,12 +396,15 @@ export function TeamRoster({
   listTeam: NonNullable<WorkspaceBrowserProps['listTeam']>
   upsertTeamMember: NonNullable<WorkspaceBrowserProps['upsertTeamMember']>
   removeTeamMember?: WorkspaceBrowserProps['removeTeamMember']
-  dispatchTeam: NonNullable<WorkspaceBrowserProps['dispatchTeam']>
   exportTeamMember?: WorkspaceBrowserProps['exportTeamMember']
   importTeamPack?: WorkspaceBrowserProps['importTeamPack']
 }) {
   const stickers = useDressingStickers()
   const presenceOn = usePresenceModuleEnabled()
+  const seatTitles = useSeatTitles()
+  const bossLook = useBossLook()
+  const bossNickname = useBossNickname()
+  const [bossNickDraft, setBossNickDraft] = useState(bossNickname)
   const workspaces = useWorkspaces(state => state.items)
   const currentWorkspace = useMemo(
     () => sessionId === undefined
@@ -272,8 +417,11 @@ export function TeamRoster({
   const [members, setMembers] = useState<readonly AgentTeamMemberRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | 'new-global' | 'new-workspace' | null>(null)
+  const [selectedId, setSelectedId] = useState<
+    string | 'boss' | 'new-global' | 'new-workspace' | null
+  >(null)
   const [name, setName] = useState('')
+  const [nickname, setNickname] = useState('')
   const [playbook, setPlaybook] = useState('')
   const [role, setRole] = useState<SpawnRole>('worker')
   const [shape, setShape] = useState<string>('blob')
@@ -286,23 +434,106 @@ export function TeamRoster({
   const [brief, setBrief] = useState('')
   const [toolsMode, setToolsMode] = useState<ToolMode>('inherit')
   const [toolsNames, setToolsNames] = useState('')
-  const [task, setTask] = useState('')
   const [exportHint, setExportHint] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
-  const selected = selectedId && !isDraftMemberId(selectedId)
+  const bossSelected = isBossSeatId(selectedId)
+  const selected = selectedId && !isDraftMemberId(selectedId) && !bossSelected
     ? members.find(row => row.id === selectedId)
     : undefined
-  const globalMembers = members.filter(row => row.scope === 'global')
-  const workspaceMembers = members.filter(row => row.scope !== 'global')
+  const managerMember = members.find(row => row.id === 'mem_seed_manager')
+  const sunflowerMember = members.find(row => row.id === 'mem_seed_xrkseek')
+  /** Built-in office seats: 老板 · 经理 · 向日葵 share one rail row. */
+  const seatMembers = [managerMember, sunflowerMember].filter(
+    (row): row is AgentTeamMemberRow => row != null,
+  )
+
+  useEffect(() => {
+    if (!bossSelected) return
+    setBossNickDraft((prev) => (prev === bossNickname ? prev : bossNickname))
+  }, [bossSelected, bossNickname])
+  const bossRailLook = useMemo(() => {
+    const kitHat = bossLook.kitHat
+    const kitGlasses = bossLook.kitGlasses
+    const kitHeld = bossLook.kitHeld
+    return {
+      shape: bossLook.shape,
+      color: bossLook.color,
+      engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
+      engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
+      engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
+      ...(resolveStickerOverlay(kitHat, stickers)
+        ? { overlayHat: resolveStickerOverlay(kitHat, stickers)! }
+        : {}),
+      ...(resolveStickerOverlay(kitGlasses, stickers)
+        ? { overlayGlasses: resolveStickerOverlay(kitGlasses, stickers)! }
+        : {}),
+      ...(resolveStickerOverlay(kitHeld, stickers)
+        ? { overlayHeld: resolveStickerOverlay(kitHeld, stickers)! }
+        : {}),
+    }
+  }, [bossLook, stickers])
+  const seatIds = new Set(seatMembers.map(row => row.id))
+  const globalMembers = members.filter(
+    row => row.scope !== 'workspace' && !seatIds.has(row.id),
+  )
+  const workspaceMembers = members.filter(row => row.scope === 'workspace')
+  const workspaceTitleById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of workspaces) {
+      if (row.kind === 'agent-home') continue
+      map.set(row.workspaceId, row.title)
+    }
+    return map
+  }, [workspaces])
+  /** Group workspace-scoped 干员 by owning project; current canvas first. */
+  const workspaceGroups = useMemo(() => {
+    const byId = new Map<string, AgentTeamMemberRow[]>()
+    for (const member of workspaceMembers) {
+      const wid = member.workspaceId
+        ?? (member.scope === 'workspace' ? currentWorkspace?.workspaceId : undefined)
+      if (!wid) continue
+      const bucket = byId.get(wid)
+      if (bucket) bucket.push(member)
+      else byId.set(wid, [member])
+    }
+    const currentId = currentWorkspace?.workspaceId
+    if (currentId && !byId.has(currentId)) byId.set(currentId, [])
+    const ids = [...byId.keys()]
+    ids.sort((a, b) => {
+      if (a === currentId) return -1
+      if (b === currentId) return 1
+      const ta = workspaceTitleById.get(a) ?? a
+      const tb = workspaceTitleById.get(b) ?? b
+      return ta.localeCompare(tb, 'zh')
+    })
+    return ids.map((id) => ({
+      workspaceId: id,
+      title: workspaceTitleById.get(id) ?? id,
+      current: id === currentId,
+      members: byId.get(id) ?? [],
+    }))
+  }, [workspaceMembers, currentWorkspace?.workspaceId, workspaceTitleById])
   const catalogSeed = selected?.catalog === true
     && selected.scope === 'global'
+  const managerSelected = selected?.id === 'mem_seed_manager'
+  const sunflowerSelected = selected?.id === 'mem_seed_xrkseek'
+  /** Catalog playbook / name locked; 经理可改装扮；catalog 昵称除向日葵外可改。 */
+  const fieldsLocked = Boolean(catalogSeed)
+  const appearanceLocked = Boolean(catalogSeed) && !managerSelected
+  const nicknameLocked = sunflowerSelected
   const canDelete = selected !== undefined
     && removeTeamMember !== undefined
     && !catalogSeed
   const canExport = selected !== undefined
     && !isDraftMemberId(selectedId)
     && !catalogSeed
+  // Boss look writes live into ui-presence — no roster Save.
+  const canSave = !busy && selectedId !== null && !bossSelected && (
+    managerSelected
+    || (catalogSeed && !sunflowerSelected)
+    || (!catalogSeed && name.trim() !== '' && playbook.trim() !== '')
+  )
 
   const reload = async () => {
     if (sessionId === undefined) return
@@ -313,7 +544,9 @@ export function TeamRoster({
     const look = member
       ? appearanceOf(member, stickers)
       : { shape: 'blob', color: 'cream', kitHat: 'none', kitGlasses: 'none', kitHeld: 'none' }
-    setName(member?.name ?? '')
+    // Catalog seeds keep Chinese Host names; the editor shows locale labels.
+    setName(member ? catalogMemberName(member.id, member.name, t, seatTitles) : '')
+    setNickname(member?.nickname ?? '')
     setPlaybook(member?.playbook ?? '')
     setRole((ROLES.includes(member?.role as SpawnRole) ? member?.role : 'worker') as SpawnRole)
     setShape(look.shape)
@@ -323,7 +556,9 @@ export function TeamRoster({
     setKitHeld(look.kitHeld)
     setScope(member?.scope === 'global' ? 'global' : 'workspace')
     setInject(member?.inject === 'subagent' ? 'subagent' : 'minimal')
-    setBrief(member?.brief ?? '')
+    setBrief(member
+      ? (catalogMemberBrief(member.id, member.brief, t, seatTitles) ?? '')
+      : '')
     if (member?.tools?.names?.length) {
       setToolsMode(member.tools.mode === 'deny' ? 'deny' : 'allow')
       setToolsNames(member.tools.names.join(','))
@@ -331,14 +566,12 @@ export function TeamRoster({
       setToolsMode('inherit')
       setToolsNames('')
     }
-    setTask('')
   }
 
   useEffect(() => {
     if (!open) return
     setError(null)
     setSelectedId(null)
-    setTask('')
     setWsPickOpen(false)
     if (sessionId === undefined) {
       setMembers([])
@@ -415,8 +648,9 @@ export function TeamRoster({
   }
 
   const persistMember = () => {
-    if (sessionId === undefined || busy || name.trim() === '' || playbook.trim() === '' || selectedId === null) return
-    if (catalogSeed) return
+    if (sessionId === undefined || busy || selectedId === null) return
+    if (isDraftMemberId(selectedId) && (name.trim() === '' || playbook.trim() === '')) return
+    if (catalogSeed && !managerSelected && !selected) return
     void run(async () => {
       const names = splitToolNames(toolsNames)
       const tools =
@@ -425,6 +659,33 @@ export function TeamRoster({
           : names.length > 0
             ? { mode: toolsMode, names }
             : null
+      const appearance = {
+        shape,
+        color,
+        kit: resolveEnginePick(kitHat, HAT_BUILTINS) !== 'none'
+          ? resolveEnginePick(kitHat, HAT_BUILTINS)
+          : resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
+        kitHat,
+        kitGlasses,
+        kitHeld,
+      }
+      // Catalog：写装扮（经理）与昵称（除向日葵）；其它预置字段由 Face 忽略。
+      if (catalogSeed && selected) {
+        const saved = await upsertTeamMember(sessionId, {
+          id: selected.id,
+          name: selected.name,
+          playbook: selected.playbook,
+          role: selected.role,
+          scope: 'global',
+          appearance,
+          ...(!sunflowerSelected
+            ? { nickname: nickname.trim() || null }
+            : {}),
+        })
+        setSelectedId(saved.id)
+        return
+      }
+      if (name.trim() === '' || playbook.trim() === '') return
       const saved = await upsertTeamMember(sessionId, {
         name: name.trim(),
         playbook: playbook.trim(),
@@ -432,18 +693,10 @@ export function TeamRoster({
         scope,
         inject,
         brief: brief.trim(),
+        nickname: nickname.trim() || null,
         ...(tools !== undefined ? { tools } : {}),
         ...(selected ? { id: selected.id } : {}),
-        appearance: {
-          shape,
-          color,
-          kit: resolveEnginePick(kitHat, HAT_BUILTINS) !== 'none'
-            ? resolveEnginePick(kitHat, HAT_BUILTINS)
-            : resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
-          kitHat,
-          kitGlasses,
-          kitHeld,
-        },
+        appearance,
       })
       setSelectedId(saved.id)
     })
@@ -480,18 +733,64 @@ export function TeamRoster({
             <aside className={css.rail}>
               <section className={css.section}>
                 <h3 className={css.heading}>{t('team.members')}</h3>
-                <p className={css.subhead}>{t('team.global')}</p>
-                <div className={css.ballField}>
-                  {globalMembers.map((member) => (
+                <p className={css.subhead}>{t('team.seats')}</p>
+                <div className={presenceOn ? css.ballFieldSeats : css.ballFieldList}>
+                  <BossSeatBall
+                    selected={bossSelected}
+                    disabled={busy}
+                    displayName={
+                      bossNickname.trim()
+                        || t('team.boss', { boss: seatTitles.boss })
+                    }
+                    look={bossRailLook}
+                    presenceOn={presenceOn}
+                    seedLabel={t('team.seed')}
+                    onSelect={() => {
+                      setSelectedId('boss')
+                      setError(null)
+                      setExportHint(null)
+                    }}
+                  />
+                  {seatMembers.map((member) => (
                     <MemberBall
                       key={member.id}
                       member={member}
+                      displayName={catalogMemberName(
+                        member.id, member.name, t, seatTitles,
+                      )}
+                      displayBrief={catalogMemberBrief(
+                        member.id, member.brief, t, seatTitles,
+                      )}
                       stickers={stickers}
                       selected={selectedId === member.id}
                       disabled={busy}
                       seedLabel={t('team.seed')}
                       advancedLabel={t('team.advanced')}
                       notReadyLabel={t('team.notReady')}
+                      roleLabel={t(`team.role.${member.role ?? 'default'}` as WorkspaceKey)}
+                      presenceOn={presenceOn}
+                      onSelect={() => {
+                        setSelectedId(member.id)
+                        loadMember(member)
+                      }}
+                    />
+                  ))}
+                </div>
+                <p className={css.subhead}>{t('team.global')}</p>
+                <div className={presenceOn ? css.ballField : css.ballFieldList}>
+                  {globalMembers.map((member) => (
+                    <MemberBall
+                      key={member.id}
+                      member={member}
+                      displayName={catalogMemberName(member.id, member.name, t, seatTitles)}
+                      displayBrief={catalogMemberBrief(member.id, member.brief, t, seatTitles)}
+                      stickers={stickers}
+                      selected={selectedId === member.id}
+                      disabled={busy}
+                      seedLabel={t('team.seed')}
+                      advancedLabel={t('team.advanced')}
+                      notReadyLabel={t('team.notReady')}
+                      roleLabel={t(`team.role.${member.role ?? 'default'}` as WorkspaceKey)}
                       presenceOn={presenceOn}
                       onSelect={() => {
                         setSelectedId(member.id)
@@ -542,6 +841,8 @@ export function TeamRoster({
                   useDirectoryFlow={useDirectoryFlow}
                   renderDirectoryFlow={renderDirectoryFlow}
                   selectedId={currentWorkspace?.workspaceId}
+                  // Team binds 干员 to project trees — never list agent homes here.
+                  listKind="project"
                   side="bottom"
                   onPick={(workspaceId) => {
                     setWsPickOpen(false)
@@ -549,40 +850,66 @@ export function TeamRoster({
                   }}
                   onClose={() => { setWsPickOpen(false) }}
                 />
-                {workspaceMembers.length === 0 ? (
+                {workspaceGroups.length === 0 ? (
                   <p className={css.empty}>{t('team.workspaceEmpty')}</p>
                 ) : null}
-                <div className={css.ballField}>
-                  {workspaceMembers.map((member) => (
-                    <MemberBall
-                      key={member.id}
-                      member={member}
-                      stickers={stickers}
-                      selected={selectedId === member.id}
-                      disabled={busy}
-                      seedLabel={t('team.seed')}
-                      advancedLabel={t('team.advanced')}
-                      notReadyLabel={t('team.notReady')}
-                      presenceOn={presenceOn}
-                      onSelect={() => {
-                        setSelectedId(member.id)
-                        loadMember(member)
-                      }}
-                    />
-                  ))}
-                  <NewMemberBall
-                    selected={selectedId === 'new-workspace'}
-                    disabled={busy}
-                    caption={t('team.memberNew')}
-                    label={t('team.memberNewWorkspace')}
-                    presenceOn={presenceOn}
-                    onSelect={() => {
-                      setSelectedId('new-workspace')
-                      loadMember(undefined)
-                      setScope('workspace')
-                    }}
-                  />
-                </div>
+                {workspaceGroups.map((group) => (
+                  <div key={group.workspaceId} className={css.workspaceGroup}>
+                    <p className={css.workspaceGroupHead}>
+                      <IconFolderCloseRegular size={14} />
+                      <span className={css.workspaceGroupTitle}>{group.title}</span>
+                      {group.current
+                        ? <span className={css.workspaceGroupBadge}>{t('team.workspaceCurrent')}</span>
+                        : null}
+                    </p>
+                    {group.members.length === 0 && !group.current ? (
+                      <p className={css.empty}>{t('team.workspaceOtherEmpty')}</p>
+                    ) : null}
+                    <div className={presenceOn ? css.ballField : css.ballFieldList}>
+                      {group.members.map((member) => (
+                        <MemberBall
+                          key={`${group.workspaceId}:${member.id}`}
+                          member={member}
+                          displayName={catalogMemberName(member.id, member.name, t, seatTitles)}
+                          displayBrief={catalogMemberBrief(member.id, member.brief, t, seatTitles)}
+                          stickers={stickers}
+                          selected={selectedId === member.id}
+                          disabled={busy}
+                          seedLabel={t('team.seed')}
+                          advancedLabel={t('team.advanced')}
+                          notReadyLabel={t('team.notReady')}
+                          roleLabel={t(`team.role.${member.role ?? 'default'}` as WorkspaceKey)}
+                          presenceOn={presenceOn}
+                          onSelect={() => {
+                            if (
+                              member.workspaceId
+                              && currentWorkspace?.workspaceId
+                              && member.workspaceId !== currentWorkspace.workspaceId
+                            ) {
+                              startSession(member.workspaceId as WorkspaceId)
+                            }
+                            setSelectedId(member.id)
+                            loadMember(member)
+                          }}
+                        />
+                      ))}
+                      {group.current ? (
+                        <NewMemberBall
+                          selected={selectedId === 'new-workspace'}
+                          disabled={busy}
+                          caption={t('team.memberNew')}
+                          label={t('team.memberNewWorkspace')}
+                          presenceOn={presenceOn}
+                          onSelect={() => {
+                            setSelectedId('new-workspace')
+                            loadMember(undefined)
+                            setScope('workspace')
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </section>
             </aside>
 
@@ -604,19 +931,193 @@ export function TeamRoster({
                   <ol className={css.howTo}>
                     <li>{t('team.howTo.pick')}</li>
                     <li>{t('team.howTo.edit')}</li>
-                    <li>{t('team.howTo.dispatch')}</li>
                     <li>{t('team.howTo.share')}</li>
                   </ol>
                 </div>
+              ) : bossSelected ? (
+                <div className={css.editor}>
+                  <p className={css.fieldHint}>
+                    {t('team.bossHint', { boss: seatTitles.boss })}
+                  </p>
+                  <div className={css.field}>
+                    <label className={css.label} htmlFor="team-boss-nickname">
+                      {t('team.bossNickname')}
+                    </label>
+                    <input
+                      id="team-boss-nickname"
+                      className={css.input}
+                      value={bossNickDraft}
+                      maxLength={BOSS_NICKNAME_MAX}
+                      placeholder={t('team.bossNicknamePlaceholder')}
+                      disabled={busy}
+                      onChange={(e) => { setBossNickDraft(e.target.value) }}
+                      onBlur={() => { setBossNickname(bossNickDraft) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          setBossNickname(bossNickDraft)
+                          ;(e.target as HTMLInputElement).blur()
+                        }
+                      }}
+                    />
+                    <p className={css.fieldHint}>{t('team.bossLive')}</p>
+                  </div>
+                  <div className={css.field}>
+                    <span className={css.label}>{t('team.bossLook', { boss: seatTitles.boss })}</span>
+                    {!presenceOn ? (
+                      <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
+                    ) : (
+                      <>
+                        <CompanionBall
+                          shape={bossLook.shape}
+                          color={bossLook.color}
+                          kitHat={resolveEnginePick(bossLook.kitHat, HAT_BUILTINS)}
+                          kitGlasses={resolveEnginePick(bossLook.kitGlasses, GLASSES_BUILTINS)}
+                          kitHeld={resolveEnginePick(bossLook.kitHeld, HELD_BUILTINS)}
+                          overlayHat={resolveStickerOverlay(bossLook.kitHat, stickers)}
+                          overlayGlasses={resolveStickerOverlay(bossLook.kitGlasses, stickers)}
+                          overlayHeld={resolveStickerOverlay(bossLook.kitHeld, stickers)}
+                        />
+                        <div className={css.picks} role="group" aria-label={t('team.shape')}>
+                          {COMPANION_SHAPES.map((id) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={bossLook.shape === id ? css.pickOn : css.pick}
+                              aria-label={t(`team.shape.${id}` as WorkspaceKey)}
+                              aria-pressed={bossLook.shape === id}
+                              disabled={busy}
+                              onClick={() => { setBossLookField('shape', id) }}
+                            >
+                              <CompanionShapeGlyph shape={id} />
+                            </button>
+                          ))}
+                        </div>
+                        <div className={css.picks} role="group" aria-label={t('team.color')}>
+                          {COMPANION_COLORS.map((id) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={bossLook.color === id ? css.swatchOn : css.swatch}
+                              style={{ background: companionPaint(id, false).body }}
+                              aria-label={t(`team.color.${id}` as WorkspaceKey)}
+                              aria-pressed={bossLook.color === id}
+                              disabled={busy}
+                              onClick={() => { setBossLookField('color', id) }}
+                            />
+                          ))}
+                        </div>
+                        <p className={css.faceHint}>{t('team.overlayHint')}</p>
+                        {([
+                          ['hat', bossLook.kitHat, 'kitHat', HAT_BUILTINS],
+                          ['glasses', bossLook.kitGlasses, 'kitGlasses', GLASSES_BUILTINS],
+                          ['held', bossLook.kitHeld, 'kitHeld', HELD_BUILTINS],
+                        ] as const).map(([slot, pick, field, builtins]) => (
+                          <div
+                            key={slot}
+                            className={css.picks}
+                            role="group"
+                            aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
+                          >
+                            {builtins.map((id) => (
+                              <button
+                                key={id}
+                                type="button"
+                                className={pick === id ? css.pickOn : css.pick}
+                                aria-label={t(`team.kit.${id}` as WorkspaceKey)}
+                                aria-pressed={pick === id}
+                                disabled={busy}
+                                onClick={() => { setBossLookField(field, id) }}
+                              >
+                                <CompanionKitMark
+                                  kit={id}
+                                  {...(css.kitGlyph ? { className: css.kitGlyph } : {})}
+                                />
+                              </button>
+                            ))}
+                            {stickersForSlot(stickers, slot).map((row) => {
+                              const ref = stickerRef(row.id)
+                              return (
+                                <div
+                                  key={row.id}
+                                  className={pick === ref ? css.overlayCubeOn : css.overlayCube}
+                                >
+                                  <button
+                                    type="button"
+                                    className={css.pick}
+                                    disabled={busy}
+                                    aria-pressed={pick === ref}
+                                    onClick={() => { setBossLookField(field, ref) }}
+                                  >
+                                    <span
+                                      className={css.overlayThumb}
+                                      style={{ backgroundImage: `url(${row.image})` }}
+                                    />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={css.overlayClear}
+                                    disabled={busy}
+                                    aria-label={t('team.faceClear')}
+                                    onClick={() => {
+                                      removeDressingSticker(row.id)
+                                      if (pick === ref) setBossLookField(field, 'none')
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              )
+                            })}
+                            <div className={css.overlayAdd}>
+                              <span className={css.overlayEmpty}>+</span>
+                              <input
+                                className={css.overlayFile}
+                                type="file"
+                                accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
+                                disabled={busy}
+                                aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  e.target.value = ''
+                                  if (!file) return
+                                  const reader = new FileReader()
+                                  reader.onload = () => {
+                                    const next = String(reader.result ?? '')
+                                    if (next.length > FACE_MAX) {
+                                      setError(t('team.faceTooBig'))
+                                      return
+                                    }
+                                    const id = addDressingSticker(next, slot)
+                                    if (!id) {
+                                      setError(t('team.faceTooBig'))
+                                      return
+                                    }
+                                    setBossLookField(field, stickerRef(id))
+                                  }
+                                  reader.readAsDataURL(file)
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className={css.editor}>
-                  {catalogSeed ? (
+                  {managerSelected ? (
+                    <p className={css.fieldHint}>{t('team.managerHint', { manager: seatTitles.manager })}</p>
+                  ) : sunflowerSelected ? (
+                    <p className={css.fieldHint}>{t('team.sunflowerHint')}</p>
+                  ) : catalogSeed ? (
                     <p className={css.fieldHint}>{t('team.catalogHint')}</p>
                   ) : null}
-                  {isDraftMemberId(selectedId) ? null : (
+                  {isDraftMemberId(selectedId) || managerSelected || sunflowerSelected ? null : (
                     <p className={css.fieldHint}>{t('team.editorHint')}</p>
                   )}
-                  <fieldset className={css.editorLock} disabled={busy || catalogSeed}>
+                  <fieldset className={css.editorLock} disabled={busy || fieldsLocked}>
                   <div className={css.field}>
                     <label className={css.label} htmlFor="team-member-name">{t('team.memberName')}</label>
                     <input
@@ -756,6 +1257,35 @@ export function TeamRoster({
                     ) : null}
                   </div>
                   <div className={css.field}>
+                    <label className={css.label} htmlFor="team-playbook">{t('team.memberPlaybook')}</label>
+                    <textarea
+                      id="team-playbook"
+                      className={css.textarea}
+                      value={playbook}
+                      placeholder={t('team.playbookPlaceholder')}
+                      disabled={busy}
+                      rows={5}
+                      onChange={(e) => { setPlaybook(e.target.value) }}
+                    />
+                  </div>
+                  </fieldset>
+                  <div className={css.field}>
+                    <label className={css.label} htmlFor="team-member-nickname">{t('team.memberNickname')}</label>
+                    <input
+                      id="team-member-nickname"
+                      className={css.input}
+                      value={nickname}
+                      maxLength={24}
+                      placeholder={t('team.nicknamePlaceholder')}
+                      disabled={busy || nicknameLocked}
+                      onChange={(e) => { setNickname(e.target.value) }}
+                    />
+                    {sunflowerSelected
+                      ? <p className={css.fieldHint}>{t('team.nicknameLocked')}</p>
+                      : null}
+                  </div>
+                  <fieldset className={css.editorLock} disabled={busy || appearanceLocked}>
+                  <div className={css.field}>
                     <span className={css.label}>{t('team.look')}</span>
                     {!presenceOn ? (
                       <p className={css.presenceOff} role="status">{t('team.presenceOff')}</p>
@@ -883,18 +1413,6 @@ export function TeamRoster({
                     </>
                     )}
                   </div>
-                  <div className={css.field}>
-                    <label className={css.label} htmlFor="team-playbook">{t('team.memberPlaybook')}</label>
-                    <textarea
-                      id="team-playbook"
-                      className={css.textarea}
-                      value={playbook}
-                      placeholder={t('team.playbookPlaceholder')}
-                      disabled={busy}
-                      rows={5}
-                      onChange={(e) => { setPlaybook(e.target.value) }}
-                    />
-                  </div>
                   </fieldset>
                   {selected !== undefined && !isDraftMemberId(selectedId) && selected.ready === false ? (
                     <div className={css.readyGate} role="note">
@@ -949,7 +1467,7 @@ export function TeamRoster({
                     </div>
                   ) : null}
                   <div className={css.row}>
-                    {catalogSeed ? (
+                    {catalogSeed && !managerSelected ? (
                       <Button
                         variant="primary"
                         disabled={busy}
@@ -963,10 +1481,10 @@ export function TeamRoster({
                     ) : (
                       <Button
                         variant="primary"
-                        disabled={busy || name.trim() === '' || playbook.trim() === ''}
+                        disabled={!canSave}
                         onClick={() => { persistMember() }}
                       >
-                        {saveLabel}
+                        {managerSelected ? t('team.memberSave') : saveLabel}
                       </Button>
                     )}
                     {isDraftMemberId(selectedId) ? (
@@ -1042,35 +1560,6 @@ export function TeamRoster({
                       </Button>
                     )}
                   </div>
-                  {selected && (
-                    <div className={css.dispatch}>
-                      <label className={css.label} htmlFor="team-task">{t('team.dispatch')}</label>
-                      <p className={css.fieldHint}>{t('team.dispatchHint')}</p>
-                      <textarea
-                        id="team-task"
-                        className={css.textarea}
-                        value={task}
-                        placeholder={t('team.taskPlaceholder')}
-                        disabled={busy}
-                        rows={5}
-                        onChange={(e) => { setTask(e.target.value) }}
-                      />
-                      <Button
-                        variant="primary"
-                        disabled={busy || task.trim() === ''}
-                        onClick={() => {
-                          const next = task.trim()
-                          void run(async () => {
-                            await dispatchTeam(sessionId, selected.id, next)
-                            setTask('')
-                            onClose()
-                          })
-                        }}
-                      >
-                        {t('team.dispatchConfirm')}
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

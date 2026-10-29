@@ -74,14 +74,25 @@ function trimBeforeSeqCut(
     if (event.type === "turn/end") acc.end = i;
   }
 
+  // Only the *trailing* open / human-less turns stay out of the seed: they
+  // would open the child on a ghost turn. Scanning forward and returning at the
+  // first offender also dropped every completed turn behind it, so a mid-history
+  // subagent / goal / IM injection (all human-less) silently truncated the
+  // context an edit-resubmit kept. Keep walking instead: later human-led turns
+  // advance the window, an unfinished turn ends it.
   let cut = 0;
   let sawStart = false;
   for (const turnId of order) {
     const acc = byId.get(turnId);
     if (acc === undefined || !acc.started) continue;
     sawStart = true;
-    if (acc.end === undefined || !acc.hasHuman) return acc.start;
-    cut = acc.end + 1;
+    // An open turn cannot seed a prefix — nothing after it is contiguous with
+    // its own end, so the window stops at the last completed human turn. Only
+    // when none has closed yet does the seed fall back to everything ahead of
+    // this turn (the seed records / permission grants that live before any turn
+    // framing) instead of dropping the whole prefix.
+    if (acc.end === undefined) return cut > 0 ? cut : acc.start;
+    if (acc.hasHuman) cut = acc.end + 1;
   }
   return sawStart ? cut : end;
 }

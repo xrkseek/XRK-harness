@@ -1,7 +1,8 @@
 /**
- * Desktop update notice in the same Settings-foot slot as Host reconnect chrome.
- * Hidden on web, on the collapsed rail, and while a connection indicator is up.
- * Confirm / progress use the in-page Modal (not Electron native dialogs).
+ * Version chip in the Settings foot row (Web + Desktop).
+ * Desktop: opens the in-app update sheet when `xrkDesktop` is present.
+ * Web: read-only Host package version from `host.describe`.
+ * Hidden while reconnect chrome owns the same seat, and on the collapsed rail.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, ConnectionIndicator, Modal } from '@xrkseek/client-ui-primitives'
@@ -33,27 +34,40 @@ function desktopRelease(): DesktopReleaseBridge | undefined {
   return root
 }
 
-export type DesktopReleaseFooterProps = PropsLocale<'settings'>
-
-const NOOP = () => {}
+export type DesktopReleaseFooterProps = PropsLocale<'settings'> & {
+  /** Host package version from `host.describe` (Web / Desktop fallback). */
+  readonly hostVersion?: string
+}
 
 function clampPercent(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) return 0
   return Math.max(0, Math.min(100, Math.round(value)))
 }
 
-/** Host-reconnect-shaped chip plus in-app update dialog. */
-export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNode {
+function shortVersion(raw: string): string {
+  const trimmed = raw.trim()
+  if (trimmed === '') return ''
+  return trimmed.startsWith('v') || trimmed.startsWith('V') ? trimmed.slice(1) : trimmed
+}
+
+/** Compact version pill; Desktop adds update check / install dialog. */
+export function DesktopReleaseFooter({ t, hostVersion }: DesktopReleaseFooterProps): ReactNode {
   const bridge = desktopRelease()
-  const [installed, setInstalled] = useState('')
+  const [installed, setInstalled] = useState(() => shortVersion(hostVersion ?? ''))
   const [state, setState] = useState<DesktopUpdateState>({ phase: 'idle' })
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (!bridge) return
+    const fromHost = shortVersion(hostVersion ?? '')
+    if (!bridge) {
+      setInstalled(fromHost)
+      return
+    }
     let alive = true
     void bridge.version().then((value) => {
-      if (alive && value.trim() !== '') setInstalled(value.trim())
+      if (!alive) return
+      const next = shortVersion(value)
+      setInstalled(next !== '' ? next : fromHost)
     })
     void bridge.updates.snapshot().then((next) => {
       if (alive) setState(next)
@@ -65,17 +79,29 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
       alive = false
       off()
     }
-  }, [bridge])
+  }, [bridge, hostVersion])
 
-  if (!bridge || installed === '') return null
+  if (installed === '') return null
+
+  const versionLabel = t('release.version', { version: installed })
+
+  // Web (and Desktop without update bridge): static short chip.
+  if (!bridge) {
+    return (
+      <span className={css.chip}>
+        <span className={css.version} title={versionLabel} aria-label={versionLabel}>
+          {versionLabel}
+        </span>
+      </span>
+    )
+  }
 
   const ready = state.phase === 'ready'
   const available = state.phase === 'available' || ready
   const installing = state.phase === 'installing'
   const checking = state.phase === 'checking'
   const downloading = installing || (state.phase === 'available' && !ready)
-  const shown = available && state.version ? state.version : installed
-  const versionLabel = t('release.version', { version: installed })
+  const shown = available && state.version ? shortVersion(state.version) : installed
   const availableLabel = t('release.available', { version: shown })
   const checkingLabel = t('release.checking')
   const installLabel = t('release.install')
@@ -87,10 +113,7 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
   const openSheet = () => {
     setOpen(true)
     if (!bridge) return
-    // Update already queued / downloading — just show the sheet.
     if (available || installing) return
-    // Optimistic `checking` so the first click paints progress (IPC round-trip
-    // otherwise leaves the idle "up to date" copy until the second interaction).
     setState({ phase: 'checking' })
     void bridge.updates.check().then((next) => {
       setState(next)
@@ -174,22 +197,13 @@ export function DesktopReleaseFooter({ t }: DesktopReleaseFooterProps): ReactNod
       )
       : (
         <button type="button" className={css.hit} onClick={openSheet} aria-label={checkLabel}>
-          <ConnectionIndicator
-            state="recovered"
-            disconnectedLabel={availableLabel}
-            reconnectLabel={checkLabel}
-            connectingLabel={checkingLabel}
-            recoveredLabel={versionLabel}
-            reconnectActionLabel={checkLabel}
-            restartActionLabel={checkingLabel}
-            onReconnect={NOOP}
-          />
+          <span className={css.version} title={versionLabel}>{versionLabel}</span>
         </button>
       )
 
   return (
     <>
-      {chip}
+      <div className={css.chip}>{chip}</div>
       <Modal
         open={open}
         onClose={closeSheet}

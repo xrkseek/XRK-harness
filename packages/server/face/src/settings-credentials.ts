@@ -26,6 +26,10 @@ import {
 } from "./face-schema.js";
 import { applyLivePermissionDefaultPreset } from "./permissions.js";
 import {
+  readBossStatusFields,
+  scheduleBossStatusBroadcast,
+} from "./boss-status-broadcast.js";
+import {
   ConfigParseError,
   ensureSettingsDocument,
   mergeLayers,
@@ -131,10 +135,12 @@ const UI_THEMES = new Set<UiTheme>(["system", "light", "dark"]);
 const MAX_LOCALE = 32;
 const MAX_SECRET = 8192;
 
-/** DSH locale plugin only ships `zh` | `en`. */
-function faceLocalePreference(locale: string): "zh" | "en" {
+/** Client locale plugin ships `zh` | `en` | `ja`. */
+function faceLocalePreference(locale: string): "zh" | "en" | "ja" {
   const lower = locale.trim().toLowerCase();
-  return lower.startsWith("zh") ? "zh" : "en";
+  if (lower.startsWith("zh")) return "zh";
+  if (lower.startsWith("ja")) return "ja";
+  return "en";
 }
 
 const LOCALE_SCHEMA = FACE_LOCALE_SCHEMA;
@@ -1449,6 +1455,13 @@ export async function settingsMutateFace(
     ns,
     result.view.revision,
   ]);
+  if (ns === "ui-presence") {
+    scheduleBossStatusBroadcast(
+      runtime,
+      readBossStatusFields(snapshotUser as Record<string, unknown>),
+      readBossStatusFields(result.view.value as Record<string, unknown>),
+    );
+  }
   if (ns === "permission") {
     await applyLivePermissionDefaultPreset(
       runtime,

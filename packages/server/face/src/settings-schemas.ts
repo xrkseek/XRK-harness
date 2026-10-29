@@ -486,6 +486,17 @@ const UiConversationConfig = Schema.object({
   toolsDefaultExpanded: Schema.boolean().default(false),
 });
 
+const DEFAULT_BOSS_STATUS_PRESETS_JSON = JSON.stringify([
+  "摸鱼中",
+  "认真打工",
+  "开会中",
+  "咖啡续命",
+  "别催我",
+  "灵感来了",
+  "等回复",
+  "深潜 debug",
+]);
+
 /** Companion body shape + named palette in session header / Status rail (client ui-plan). */
 const UiPresenceConfig = Schema.object({
   /** When false, hide the ball; chat / Status / tools keep working. */
@@ -500,6 +511,29 @@ const UiPresenceConfig = Schema.object({
   overlayGlasses: Schema.string().default(""),
   overlayHeld: Schema.string().default(""),
   stickers: Schema.string().default("[]"),
+  /** Operator (Boss) work mood — emotion-ball id shown on Overview left seat. */
+  moodId: Schema.string().default("16"),
+  /** Free-text status under the Boss ball (e.g. 摸鱼中). */
+  statusLine: Schema.string().default(""),
+  /** Optional Boss call-name for `<seat_identity>` (e.g. 阿凯). */
+  bossNickname: Schema.string().default(""),
+  moodAt: Schema.number().default(0),
+  /** JSON string[] of tip chips; edited in Plugins → 表情球. */
+  statusPresets: Schema.string().default(DEFAULT_BOSS_STATUS_PRESETS_JSON),
+  /**
+   * Seat titles (独立于表情球外观开关). Preset id + three editable strings;
+   * empty custom fields fall back to the preset.
+   */
+  titleScheme: Schema.union([
+    "office",
+    "corp",
+    "crew",
+    "guild",
+  ] as const).default("office"),
+  /** Empty = follow titleScheme × UI locale; non-empty = free-form any language. */
+  titleBoss: Schema.string().default(""),
+  titleManager: Schema.string().default(""),
+  titleAgent: Schema.string().default(""),
 });
 
 /**
@@ -507,15 +541,9 @@ const UiPresenceConfig = Schema.object({
  * Registry brands surface via `llm.providers` as the Settings add directory.
  */
 function buildPiAiCatalogBase(): Record<string, unknown> {
-  return {
-    providers: {
-      ollama: {
-        displayName: "Ollama（OpenAI 兼容端口）",
-        api: "openai-chat",
-        baseURL: "http://127.0.0.1:11434/v1",
-      },
-    },
-  };
+  // 出厂不带任何 provider profile：模型列表默认只显示随产品内置的免费车道。
+  // Ollama / DeepSeek 等仍在 Registry 里，用户可在 Settings → 模型 手动添加。
+  return { providers: {} };
 }
 
 export interface FaceSettingsNamespaceSpec {
@@ -566,6 +594,15 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         overlayGlasses: "",
         overlayHeld: "",
         stickers: "[]",
+        moodId: "16",
+        statusLine: "",
+        bossNickname: "",
+        moodAt: 0,
+        statusPresets: DEFAULT_BOSS_STATUS_PRESETS_JSON,
+        titleScheme: "office",
+        titleBoss: "",
+        titleManager: "",
+        titleAgent: "",
       },
       applies: "live",
     },
@@ -578,7 +615,9 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "agent-default-model",
       schema: schemasteryJson(AgentDefaultModelConfig) as FaceSchemaEnvelope,
-      base: { provider: "deepseek", model: "deepseek-flash" },
+      // 出厂不写死某家 provider：留空后 `resolveSessionModelSelection` 取模型
+      // 目录首项（目录只收「路由可用」的 provider），用户显式选过则以用户为准。
+      base: {},
       applies: "live",
     },
     {

@@ -9,7 +9,7 @@ import type {} from '@xrkseek/client-locale/client'
 import type {} from '@xrkseek/client-ui-layout/client'
 import { OpenInAppController } from './controller.ts'
 import { OpenInAppAction, type OpenInAppActionInjected } from './OpenInAppAction.tsx'
-import { en, NS, zh, type OpenInAppKey } from './locales.ts'
+import { en, ja, NS, zh, type OpenInAppKey } from './locales.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -44,7 +44,7 @@ export function apply(ctx: ClientContext): void {
       unsubHost()
     }
   }, 'open-in-app: probe apps after Face connect')
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'open-in-app: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'open-in-app: dictionaries')
   ctx.slots.inject('details.status.utilities', () => ctx.slots.register({
     name: 'details.status.utilities',
     id: 'open-in-app',

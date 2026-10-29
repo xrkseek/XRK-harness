@@ -150,6 +150,10 @@ export class WorkspaceRuntime implements IWorkspaces {
         return summary.id
       }
     }
+    const identityMemberId =
+      workspace.kind === 'agent-home' && typeof workspace.boundMemberId === 'string'
+        ? workspace.boundMemberId.trim()
+        : ''
     const attempt = this.sessions.create({
       workspaceId,
       localCwd: workspace.path,
@@ -157,6 +161,7 @@ export class WorkspaceRuntime implements IWorkspaces {
       // effective model route over instead of making them pick again. Read
       // from the pre-create snapshot, so the new session cannot be its own source.
       ...(sessions.current === undefined ? {} : { inheritFrom: sessions.current }),
+      ...(identityMemberId ? { memberId: identityMemberId } : {}),
     })
       .then((sessionId) => {
         // Create RPC and host/workspace-changed are unordered: pin membership

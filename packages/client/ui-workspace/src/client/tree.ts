@@ -58,6 +58,9 @@ export type SessionOrderBy = 'manual' | 'updated'
  */
 export type ArchiveViewMode = 'hidden' | 'all' | 'archived-only'
 
+/** Live Team look for an agent-home workspace header (sidebar CompanionBall). */
+export type GroupCompanionLook = NonNullable<WorkspaceView['boundMemberAppearance']>
+
 /** One workspace group section: header row facts + visible top-level session rows. */
 export interface GroupNode {
   /** Group key: the workspace id or {@link UNGROUPED_KEY}. */
@@ -77,6 +80,8 @@ export interface GroupNode {
   containsCurrent: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
+  /** agent-home rows carry the bound 干员 look; project groups omit this. */
+  companionLook?: GroupCompanionLook
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -105,6 +110,11 @@ export interface TreeView {
   expandedGroups: readonly string[]
   /** Browser-local order for Sessions without a backing Workspace account. */
   ungroupedOrder?: readonly string[]
+  /**
+   * Sessions owned by the other sidebar pane (e.g. project ids when deriving
+   * the 干员 tree). Kept out of Ungrouped so a session never appears twice.
+   */
+  excludeFromUngrouped?: ReadonlySet<SessionId>
 }
 
 interface Group {
@@ -235,10 +245,14 @@ function groupByWorkspace(
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
   archiveMode: ArchiveViewMode,
+  excludeFromUngrouped?: ReadonlySet<SessionId>,
 ): Group[] {
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
   const assignedArchived = new Set<SessionId>()
+  if (excludeFromUngrouped) {
+    for (const id of excludeFromUngrouped) accounted.add(id)
+  }
   for (const workspace of workspaces) {
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
@@ -378,9 +392,25 @@ export function deriveGroups(
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder, archiveMode)) {
+  const lookByWorkspace = new Map<string, GroupCompanionLook>()
+  for (const workspace of workspaces) {
+    if (workspace.boundMemberAppearance) {
+      lookByWorkspace.set(workspace.workspaceId, workspace.boundMemberAppearance)
+    }
+  }
+  for (const g of groupByWorkspace(
+    list,
+    workspaces,
+    archived,
+    view.ungroupedOrder,
+    archiveMode,
+    view.excludeFromUngrouped,
+  )) {
     const expanded = expandedGroups.has(g.key)
     const ordered = sectionMembers(g.sessions, pinnedSessionIds, archived)
+    const companionLook = g.workspaceId !== undefined
+      ? lookByWorkspace.get(g.workspaceId)
+      : undefined
     groups.push({
       key: g.key,
       workspaceId: g.workspaceId,
@@ -394,6 +424,7 @@ export function deriveGroups(
       sessions: expanded
         ? ordered.map(session => sessionNode(session, descendants, pinned, archived))
         : [],
+      ...(companionLook ? { companionLook } : {}),
     })
   }
   return groups

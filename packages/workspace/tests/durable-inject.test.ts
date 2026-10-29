@@ -142,13 +142,77 @@ describe("durable workspace inject", () => {
     const payload = buildSkillCatalogPayload(skills, budget);
     expect(payload).toBeDefined();
     const truncAt = payload!.content.indexOf("[skill catalog truncated]");
-expect(truncAt).toBeGreaterThan(0);
-expect(payload!.content.slice(0, truncAt).trimEnd().length).toBeLessThanOrEqual(400);
-expect(payload!.content).toContain("[skill catalog truncated]");
-// a truncated catalog must still tell the model how to find the missing skills
-expect(payload!.content).toContain("skills/*/SKILL.md");
+    expect(truncAt).toBeGreaterThan(0);
+    expect(payload!.content.slice(0, truncAt).trimEnd().length).toBeLessThanOrEqual(400);
     expect(payload!.content).toContain("[skill catalog truncated]");
+    // a truncated catalog must still tell the model how to find the missing skills
+    expect(payload!.content).toContain("skills/*/SKILL.md");
     expect(payload!.source.entries.length).toBeLessThan(skills.length);
+  });
+
+  it("keeps workspace + xrk-* ahead of globals; 公文包 ahead of workspace when preferred", () => {
+    const ws = path.join(tmpdir(), "xrk-cat-prio-ws");
+    const pack = path.join(tmpdir(), "xrk-cat-prio-pack");
+    const skills = [
+      {
+        name: "zzz-noise",
+        description: "Home install noise that sorts last alphabetically",
+        modelInvocable: true,
+        userInvocable: true,
+        dirName: "zzz-noise",
+        directory: path.join(tmpdir(), ".xrk", "skills", "zzz-noise"),
+      },
+      {
+        name: "xrk-delegate",
+        description: "Product seed",
+        modelInvocable: true,
+        userInvocable: true,
+        dirName: "xrk-delegate",
+        directory: path.join(tmpdir(), ".xrk", "skills", "xrk-delegate"),
+      },
+      {
+        name: "aaa-home",
+        description: "Early alphabet home install",
+        modelInvocable: true,
+        userInvocable: true,
+        dirName: "aaa-home",
+        directory: path.join(tmpdir(), ".xrk", "skills", "aaa-home"),
+      },
+      {
+        name: "ws-overlay",
+        description: "Workspace overlay",
+        modelInvocable: true,
+        userInvocable: true,
+        dirName: "ws-overlay",
+        directory: path.join(ws, ".agents", "skills", "ws-overlay"),
+      },
+      {
+        name: "pack-skill",
+        description: "干员 公文包",
+        modelInvocable: true,
+        userInvocable: true,
+        dirName: "pack-skill",
+        directory: path.join(pack, "pack-skill"),
+      },
+    ];
+    const budget = {
+      left: 900,
+      events: [] as import("../src/index.js").WorkspaceBudgetEvent[],
+    };
+    const payload = buildSkillCatalogPayload(skills, budget, {
+      workspaceRoot: ws,
+      preferredSkillDirs: [pack],
+    });
+    expect(payload).toBeDefined();
+    const names = payload!.source.entries.map((e) => e.name);
+    expect(names[0]).toBe("pack-skill");
+    expect(names.indexOf("ws-overlay")).toBeLessThan(names.indexOf("aaa-home"));
+    expect(names.indexOf("xrk-delegate")).toBeLessThan(
+      Math.min(
+        names.includes("aaa-home") ? names.indexOf("aaa-home") : Infinity,
+        names.includes("zzz-noise") ? names.indexOf("zzz-noise") : Infinity,
+      ),
+    );
   });
 
   it("memoizes inject across turns when injector is reused", async () => {
@@ -209,17 +273,26 @@ expect(payload!.content).toContain("skills/*/SKILL.md");
     expect(a2).toEqual([]);
   });
 
-  it("excludes home skills from standing catalog by default (Codex progressive disclosure)", async () => {
+  it("includes product-home skills (seeds + user installs); excludes other home vendors by default", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "xrk-ws-no-home-cat-"));
     const home = await mkdtemp(path.join(tmpdir(), "xrk-home-skills-"));
     const product = path.join(root, ".xrk");
+    const homeProduct = path.join(home, ".xrk");
     await mkdir(path.join(product, "skills", "proj"), { recursive: true });
+    await mkdir(path.join(homeProduct, "skills", "user-installed"), {
+      recursive: true,
+    });
     await mkdir(path.join(home, ".agents", "skills", "home-only"), {
       recursive: true,
     });
     await writeFile(
       path.join(product, "skills", "proj", "SKILL.md"),
       "---\ndescription: Project\n---\n# P\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(homeProduct, "skills", "user-installed", "SKILL.md"),
+      "---\ndescription: UserInstalled\n---\n# U\n",
       "utf8",
     );
     await writeFile(
@@ -235,8 +308,9 @@ expect(payload!.content).toContain("skills/*/SKILL.md");
       includeUserHome: true,
     });
     const def = await defaultInj.inject();
-    expect(def.skillCatalog?.source.entries.map((e) => e.name)).toEqual([
+    expect(def.skillCatalog?.source.entries.map((e) => e.name).sort()).toEqual([
       "proj",
+      "user-installed",
     ]);
 
     const withHome = createWorkspaceInjector({
@@ -248,7 +322,31 @@ expect(payload!.content).toContain("skills/*/SKILL.md");
     });
     const opted = await withHome.inject();
     expect(opted.skillCatalog?.source.entries.map((e) => e.name).sort()).toEqual(
-      ["home-only", "proj"],
+      ["home-only", "proj", "user-installed"],
     );
+
+    const minimal = createWorkspaceInjector({
+      root,
+      productDir: product,
+      homeDir: home,
+      audience: "minimal",
+      extraSkillDirs: [path.join(home, "briefcase-skills")],
+    });
+    await mkdir(path.join(home, "briefcase-skills", "pack-skill"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(home, "briefcase-skills", "pack-skill", "SKILL.md"),
+      "---\ndescription: Pack\n---\n# B\n",
+      "utf8",
+    );
+    const thin = await minimal.inject();
+    // audience no longer thins workspace skill trees — same roots as parents,
+    // plus extraSkillDirs (公文包).
+    expect(thin.skillCatalog?.source.entries.map((e) => e.name).sort()).toEqual([
+      "pack-skill",
+      "proj",
+      "user-installed",
+    ]);
   });
 });

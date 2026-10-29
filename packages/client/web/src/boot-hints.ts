@@ -6,8 +6,8 @@
 
 import type { LoaderStatus } from './loader-status.ts'
 
-/** Splash language: product Settings `zh` / `en`, else Desktop / browser. */
-export type BootLang = 'zh' | 'en'
+/** Splash language: product Settings `zh` / `en` / `ja`, else Desktop / browser. */
+export type BootLang = 'zh' | 'en' | 'ja'
 
 /**
  * Desktop Host attach stages from main (spawn → composition → Fetch ready).
@@ -64,6 +64,20 @@ const ZH: Record<BootHintKey, string> = {
   retry: '重试 Host',
 }
 
+const JA: Record<BootHintKey, string> = {
+  plugins: 'プラグインを呼び出しています…',
+  pluginsProgress: 'プラグインを呼び出しています… {done}/{total}',
+  connecting: 'Face に接続しています…',
+  contacting: 'Host に身元を確認しています…',
+  streams: 'イベントストリームを開いています…',
+  sessions: 'セッションを並べています…',
+  backoff: '一息ついてから再試行…',
+  halted: 'Host が停止しました — フッターで再接続するか、ここで再試行…',
+  failedTitle: 'プラグインの読み込みに失敗しました',
+  hostFailedTitle: 'Host を起動できませんでした',
+  retry: 'Host を再試行',
+}
+
 /** Fun rotating lines while Host is still coming up (index by elapsed bucket). */
 const HOST_TIPS_EN: Record<Exclude<BootHostPhase, 'ready'>, readonly string[]> = {
   starting: [
@@ -114,11 +128,37 @@ const HOST_TIPS_ZH: Record<Exclude<BootHostPhase, 'ready'>, readonly string[]> =
   ],
 }
 
+const HOST_TIPS_JA: Record<Exclude<BootHostPhase, 'ready'>, readonly string[]> = {
+  starting: [
+    'Host を起こしています…',
+    'Host プロセスをつついています…',
+    'Host、起きてください…',
+    '新しい Host を用意しています…',
+    '二度ノック — Host はだいたい出ます…',
+  ],
+  attaching: [
+    'Host をシェルに収めています…',
+    'IPC パイプをつないでいます…',
+    'Host がスタックを組み立て中…',
+    'プリセットが舞台裏で整列中…',
+    'セッションエンジンを暖めています…',
+    'Face にドアの場所を教えています…',
+    'まだ煮込んでいます — もうすぐ…',
+    'Host は遠回りしています…',
+    '最後のボルトを締めています…',
+    '待つことも機能のひとつ…',
+    'あと少し — 靴ひもを結んでいます…',
+    'もう一息で開演…',
+  ],
+}
+
 /** Milliseconds per tip rotation within one Host phase. */
 export const BOOT_HOST_TIP_INTERVAL_MS = 2_000
 
 function dict(lang: BootLang): Record<BootHintKey, string> {
-  return lang === 'zh' ? ZH : EN
+  if (lang === 'zh') return ZH
+  if (lang === 'ja') return JA
+  return EN
 }
 
 function fill(template: string, values: Readonly<Record<string, string>>): string {
@@ -137,16 +177,19 @@ function pickHostTip(
   lang: BootLang,
   elapsedMs: number | undefined,
 ): string {
-  const pool = (lang === 'zh' ? HOST_TIPS_ZH : HOST_TIPS_EN)[phase]
+  const pool = (
+    lang === 'zh' ? HOST_TIPS_ZH : lang === 'ja' ? HOST_TIPS_JA : HOST_TIPS_EN
+  )[phase]
   return pool[tipBucket(elapsedMs) % pool.length]!
 }
 
-/** Map a locale id / BCP-47 tag onto splash zh|en. */
+/** Map a locale id / BCP-47 tag onto splash zh|en|ja. */
 export function bootLangFromTag(tag: string | undefined): BootLang | undefined {
   if (tag === undefined) return undefined
   const primary = tag.trim().toLowerCase().split('-')[0]
   if (primary === 'zh') return 'zh'
   if (primary === 'en') return 'en'
+  if (primary === 'ja') return 'ja'
   return undefined
 }
 

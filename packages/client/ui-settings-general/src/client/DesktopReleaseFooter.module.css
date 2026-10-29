@@ -1,5 +1,36 @@
+/* Compact version / update chip beside Settings (same foot row). */
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  /* Beat SettingsRoot `.triggerRow > :not(.trigger)` if specificity drifts. */
+  width: fit-content;
+}
+
+.version {
+  display: inline-block;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 9.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
 .hit {
   display: inline-flex;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   border: none;
@@ -7,7 +38,12 @@
   cursor: pointer;
   color: inherit;
   font: inherit;
-  border-radius: 8px;
+  border-radius: 999px;
+}
+
+.hit:hover .version {
+  background: color-mix(in srgb, var(--dsw-alias-label-secondary) 18%, transparent);
+  color: var(--dsw-alias-label-primary);
 }
 
 .hit:focus-visible {

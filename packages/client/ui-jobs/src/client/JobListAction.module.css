@@ -227,6 +227,31 @@
   cursor: pointer;
 }
 
+@media (max-width: 767px) {
+  .trigger {
+    min-height: 40px;
+    padding: 6px 4px;
+    touch-action: manipulation;
+  }
+
+  .menu {
+    width: min(420px, calc(100vw - 32px - var(--ds-safe-h)));
+    max-height: min(48dvh, calc(100dvh - var(--ds-safe-v) - 96px));
+  }
+
+  .row {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .stop {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    touch-action: manipulation;
+  }
+}
+
 .stop:hover,
 .stop:focus-visible {
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);

@@ -10,7 +10,8 @@ const ignoreImplicitDismiss = (): void => {}
 /**
  * Render a blocking onboarding dialog and keep the application root inert.
  * @param props.title - accessible and visible dialog title.
- * @param props.focusTitle - focus the title when the step has no form control.
+ * @param props.focusTitle - legacy: focus the title (avoid — mobile paints a
+ *   selection ring). Prefer focusing the primary action in the step body.
  * @param props.children - step-owned body and actions.
  * @returns the body-portaled modal.
  */
@@ -32,7 +33,9 @@ export function OnboardingModal({
   }, [])
 
   useEffect(() => {
-    if (focusTitle) titleRef.current?.focus()
+    if (!focusTitle) return
+    // preventScroll: phone chrome already scrolled the sheet to the top.
+    titleRef.current?.focus({ preventScroll: true })
   }, [focusTitle])
 
   return (
@@ -44,7 +47,13 @@ export function OnboardingModal({
       className={css.dialog as string}
     >
       <div className={css.content}>
-        <h2 ref={titleRef} className={css.title} tabIndex={focusTitle ? -1 : undefined}>{title}</h2>
+        <h2
+          ref={titleRef}
+          className={css.title}
+          tabIndex={focusTitle ? -1 : undefined}
+        >
+          {title}
+        </h2>
         <div className={css.body}>{children}</div>
       </div>
     </Modal>

@@ -173,6 +173,15 @@ export const sessionEventJsonSchema = {
     },
     {
       type: "object",
+      required: ["type", "ts"],
+      properties: baseProps({
+        type: { const: "session/end-seed" },
+        inherited: { type: "boolean" },
+      }),
+      additionalProperties: false,
+    },
+    {
+      type: "object",
       required: ["type", "ts", "turnId", "stepId"],
       properties: baseProps({
         type: { const: "step/start" },

@@ -50,11 +50,26 @@ function presenceScope(
       snapshot = {
         ...snapshot,
         value: { ...snapshot.value!, [field]: value } as PresenceSettings,
-        revision: snapshot.revision + 1,
+        revision: (snapshot.revision ?? 0) + 1,
       }
       for (const listener of listeners) listener()
     },
     unset: async () => undefined,
+    patch: async (ops) => {
+      let value = { ...snapshot.value! } as PresenceSettings
+      for (const op of ops) {
+        const field = op.path[0]
+        if (typeof field !== 'string') continue
+        if (op.op === 'set') (value as Record<string, unknown>)[field] = op.value
+        else delete (value as Record<string, unknown>)[field]
+      }
+      snapshot = {
+        ...snapshot,
+        value,
+        revision: (snapshot.revision ?? 0) + 1,
+      }
+      for (const listener of listeners) listener()
+    },
   }
 }
 
@@ -95,6 +110,7 @@ describe('PresenceDock', () => {
   afterEach(() => {
     cleanup()
     document.documentElement.removeAttribute('data-xrk-layout-details')
+    document.documentElement.removeAttribute('data-xrk-layout-phone')
     document.querySelector('[data-dsh-frame]')?.remove()
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -155,6 +171,44 @@ describe('PresenceDock', () => {
       expect(ball).toBeTruthy()
       expect(ball?.getAttribute('data-density')).toBe('header')
     })
+  })
+
+  it('portals an icon ball into the phone chrome seat', async () => {
+    document.documentElement.setAttribute('data-xrk-layout-phone', '')
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    const slot = document.createElement('span')
+    slot.setAttribute('data-phone-presence-slot', '')
+    frame.appendChild(slot)
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      const dock = slot.querySelector('[data-presence-dock]')
+      expect(dock).toBeTruthy()
+      expect(dock?.hasAttribute('data-phone-dock')).toBe(true)
+      expect(slot.querySelector('[data-overview-presence][data-compact]')).toBeTruthy()
+    })
+
+    document.documentElement.removeAttribute('data-xrk-layout-phone')
+  })
+
+  it('uses companionBall (or agent fallback), never Settings boss look alone', async () => {
+    const frame = document.createElement('div')
+    frame.setAttribute('data-dsh-frame', '')
+    frame.setAttribute('data-details-collapsed', '')
+    document.body.appendChild(frame)
+
+    renderDock()
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-presence]')).toBeTruthy()
+    })
+    // Fallback memberLook is always passed — PresenceBall must not paint with
+    // only Settings ui-presence (老板). Companion shape arrives via status poll.
+    expect(document.querySelector('[data-presence-dock]')).toBeTruthy()
   })
 
   it('unmounts entirely when presence is disabled', () => {

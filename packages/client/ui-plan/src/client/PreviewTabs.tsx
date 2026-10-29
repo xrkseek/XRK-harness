@@ -25,7 +25,9 @@ import {
 import { OverviewChangesPanel, type OverviewChangesTurn } from './OverviewChangesPanel.tsx'
 import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
-import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
+import { BossStatusSheet } from './BossStatusSheet.tsx'
+import { PresenceBall, useBossMood, usePresenceEnabled, useSeatTitles } from './PresenceBall.tsx'
+import { delegateSeatCaption } from './seat-caption.ts'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -58,15 +60,11 @@ import css from './PreviewTabs.module.css'
 
 export { overviewStatusPollMs } from './overview-status-poll.ts'
 
-/**
- * Matches `LAYOUT_INSET_ATTR.details` from ui-layout's public insets contract.
- * Value-importing `@xrkseek/client-ui-layout/client` is forbidden across client
- * plugins (bundle purity); the stamp string is the durable CSS selector.
- */
-const DETAILS_INSET_ATTR = 'data-xrk-layout-details'
-
 /** Persist Overview presence rail collapsed chrome across reloads. */
 const PRESENCE_COLLAPSED_KEY = 'xrk.overview.presenceCollapsed'
+
+/** Matches AppFrame `PHONE_MAX` (768 exclusive) — glanceable ball needs room. */
+const PHONE_VIEWPORT_MQ = '(max-width: 767px)'
 
 function readPresenceCollapsed(): boolean {
   try {
@@ -84,10 +82,19 @@ function writePresenceCollapsed(collapsed: boolean): void {
   }
 }
 
-function delegateSeatCaption(role: string, name: string | undefined): string {
-  const n = name?.trim()
-  if (!n || n === 'untitled') return role
-  return `${role} · ${n}`
+function subscribePhoneViewport(onStoreChange: () => void): () => void {
+  const mq = window.matchMedia(PHONE_VIEWPORT_MQ)
+  mq.addEventListener('change', onStoreChange)
+  return () => { mq.removeEventListener('change', onStoreChange) }
+}
+
+function readPhoneViewport(): boolean {
+  return window.matchMedia(PHONE_VIEWPORT_MQ).matches
+}
+
+/** Phone Overview always shows the real ball (collapsed chip reads as "no ball"). */
+function usePhoneViewport(): boolean {
+  return useSyncExternalStore(subscribePhoneViewport, readPhoneViewport, () => false)
 }
 
 /**
@@ -1796,13 +1803,22 @@ export function PreviewTabs({
   const [refreshing, setRefreshing] = useState(false)
   const [boundSessionId, setBoundSessionId] = useState(sessionId)
   const [presenceCollapsed, setPresenceCollapsed] = useState(readPresenceCollapsed)
+  const [bossEditorOpen, setBossEditorOpen] = useState(false)
   // Details column stays mounted at width 0. Keep the presence rail in layout
   // so expand does not insert a tall ball and shove Status. Engine waits for
   // the header PresenceDock to exit (one EmotionBall at a time).
   const presenceEnabled = usePresenceEnabled()
+  const bossMood = useBossMood()
+  const seatTitles = useSeatTitles()
   const overviewOpen = useOverviewOpen()
+  const phoneViewport = usePhoneViewport()
+  // Phone sheet: never use the flat Sleeping/Asleep chip — always the stage ball.
+  const presenceRailCompact = presenceCollapsed && !phoneViewport
   const [presenceEngineReady, setPresenceEngineReady] = useState(() => overviewOpen)
   const overviewWasOpen = useRef(overviewOpen)
+  useEffect(() => {
+    if (presenceRailCompact || !overviewOpen) setBossEditorOpen(false)
+  }, [presenceRailCompact, overviewOpen])
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const tabsRef = useRef<HTMLDivElement | null>(null)
   const scrollRestored = useRef(false)
@@ -1862,6 +1878,24 @@ export function PreviewTabs({
   const delegatedOverview =
     sessionOrigin === 'subagent' ||
     (Boolean(status?.companionBall) && Boolean(status?.delegate))
+  /** Workspace office pair: left seat is the human operator (Boss), not a parent AI. */
+  const officeBossSeat = Boolean(
+    status?.delegate?.parentSessionId === sessionId && status?.parentCompanionBall,
+  )
+  // Office Boss label uses Settings nickname when set; AI-parent seats keep Face labels.
+  const bossSeatLabel = officeBossSeat
+    ? delegateSeatCaption(seatTitles.boss, bossMood.bossNickname || undefined)
+    : delegateSeatCaption(seatTitles.boss, status?.delegate?.parentLabel)
+  // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
+  const bossPresence = officeBossSeat
+    ? {
+        emotionId: bossMood.moodId,
+        source: 'tool' as const,
+        pinned: true as const,
+        updatedAt: bossMood.moodAt || Date.now(),
+        ...(bossMood.statusLine ? { tips: bossMood.statusLine } : {}),
+      }
+    : status?.parentPresence
   // Cold empty only — keep prior Status on screen while soft-refreshing.
   const paintPending = !ready && status === null
   // Live catalog / jobs / running bits — re-pull Face session.status so Overview
@@ -2311,7 +2345,7 @@ export function PreviewTabs({
       <div
         className={css.presenceRail}
         data-overview-presence-rail=""
-        data-collapsed={presenceCollapsed ? '' : undefined}
+        data-collapsed={presenceRailCompact ? '' : undefined}
         data-delegate={delegatedOverview ? '' : undefined}
         aria-label={t('preview.status.presence')}
         aria-hidden={!overviewOpen || undefined}
@@ -2319,66 +2353,84 @@ export function PreviewTabs({
       >
         <div className={css.presenceRailHead}>
           <span className={css.presenceRailTitle}>{t('preview.status.presence')}</span>
-          {!presenceCollapsed
-            ? <span className={css.presenceRailHint}>{t('preview.status.presenceClick')}</span>
+          {!presenceRailCompact
+            ? (
+              <span className={css.presenceRailHint}>
+                {officeBossSeat
+                  ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
+                  : t('preview.status.presenceClick')}
+              </span>
+            )
             : null}
-          <button
-            type="button"
-            className={css.presenceCollapse}
-            aria-expanded={!presenceCollapsed}
-            aria-label={t(presenceCollapsed
-              ? 'preview.status.presenceExpand'
-              : 'preview.status.presenceCollapse')}
-            onClick={() => {
-              setPresenceCollapsed((prev) => {
-                const next = !prev
-                writePresenceCollapsed(next)
-                return next
-              })
-            }}
-          >
-            <IconChevronDownOutlineRegular size={14} className={css.presenceCollapseIcon} />
-          </button>
+          {/* Phone always keeps the stage ball — hide the collapse control. */}
+          {phoneViewport
+            ? null
+            : (
+              <button
+                type="button"
+                className={css.presenceCollapse}
+                aria-expanded={!presenceCollapsed}
+                aria-label={t(presenceCollapsed
+                  ? 'preview.status.presenceExpand'
+                  : 'preview.status.presenceCollapse')}
+                onClick={() => {
+                  setPresenceCollapsed((prev) => {
+                    const next = !prev
+                    writePresenceCollapsed(next)
+                    return next
+                  })
+                }}
+              >
+                <IconChevronDownOutlineRegular size={14} className={css.presenceCollapseIcon} />
+              </button>
+            )}
         </div>
         {delegatedOverview
           ? (
             <div
               className={css.delegatePair}
-              data-collapsed={presenceCollapsed ? '' : undefined}
+              data-collapsed={presenceRailCompact ? '' : undefined}
               data-pending={!status?.companionBall ? '' : undefined}
               role="group"
-              aria-label={`${delegateSeatCaption(t('preview.status.presenceHome'), status?.delegate?.parentLabel)} ${t('preview.status.presenceDelegate')} ${delegateSeatCaption(t('preview.status.presenceMember'), status?.delegate?.childLabel)}`}
+              aria-label={`${bossSeatLabel} ${t('preview.status.presenceDelegate')} ${delegateSeatCaption(seatTitles.manager, status?.delegate?.childLabel)}`}
             >
               <PresenceBall
                 sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
                 {...(status?.parentCompanionBall ? { memberLook: status.parentCompanionBall } : {})}
-                {...(status?.parentPresence ? { presence: status.parentPresence } : {})}
+                {...(bossPresence ? { presence: bossPresence } : {})}
                 pairSeat
                 seat="from"
-                roleLabel={delegateSeatCaption(
-                  t('preview.status.presenceHome'),
-                  status?.delegate?.parentLabel,
-                )}
-                turnActive={fromTurnActive}
+                roleLabel={bossSeatLabel}
+                // Office Boss is user mood only — never mirror session busy/idle.
+                turnActive={officeBossSeat ? false : fromTurnActive}
                 runningJobs={0}
-                runningSubs={fromSubs}
+                runningSubs={officeBossSeat ? 0 : fromSubs}
                 fleetHealth="ok"
-                queued={fromQueued}
-                steering={fromSteering}
-                activityAt={status?.parentPresence?.updatedAt ?? 0}
-                compact={presenceCollapsed}
+                queued={officeBossSeat ? 0 : fromQueued}
+                steering={officeBossSeat ? 0 : fromSteering}
+                activityAt={bossPresence?.updatedAt ?? 0}
+                compact={presenceRailCompact}
                 engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
                 t={t as (key: string, params?: Record<string, string>) => string}
                 loadingLabel={t('preview.status.presenceLoading')}
                 errorLabel={t('preview.status.presenceError')}
-                clickHint={t('preview.status.presenceClick')}
+                clickHint={officeBossSeat
+                  ? t('preview.status.bossEditHint', { boss: bossSeatLabel })
+                  : t('preview.status.presenceClick')}
+                {...(officeBossSeat
+                  ? {
+                      onStageClick: () => {
+                        setBossEditorOpen((prev) => !prev)
+                      },
+                    }
+                  : {})}
               />
               <div className={css.delegateArrow} aria-hidden>
                 <svg viewBox="0 0 48 28">
                   <path d="M2 16C12 16 16 6 24 6s12 10 22 10" />
                   <polygon points="40,11 47,16 40,21" />
                 </svg>
-                {!presenceCollapsed
+                {!presenceRailCompact
                   ? <span className={css.delegateCaption}>{t('preview.status.presenceDelegate')}</span>
                   : null}
               </div>
@@ -2389,7 +2441,7 @@ export function PreviewTabs({
                 pairSeat
                 seat="to"
                 roleLabel={delegateSeatCaption(
-                  t('preview.status.presenceMember'),
+                  seatTitles.manager,
                   status?.delegate?.childLabel,
                 )}
                 turnActive={ownTurnActive}
@@ -2404,13 +2456,36 @@ export function PreviewTabs({
                   presenceCue.activityAt,
                   status?.presence?.updatedAt ?? 0,
                 )}
-                compact={presenceCollapsed}
+                compact={presenceRailCompact}
                 engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
                 t={t as (key: string, params?: Record<string, string>) => string}
                 loadingLabel={t('preview.status.presenceLoading')}
                 errorLabel={t('preview.status.presenceError')}
                 clickHint={t('preview.status.presenceClick')}
               />
+              {officeBossSeat && !presenceRailCompact
+                ? (
+                  <>
+                    <button
+                      type="button"
+                      className={css.bossSharedChip}
+                      onClick={() => { setBossEditorOpen((prev) => !prev) }}
+                    >
+                      <span className={css.bossSharedLabel}>{t('preview.status.bossShared', { boss: bossSeatLabel })}</span>
+                      <span className={css.bossSharedText}>
+                        {bossMood.statusLine
+                          || t(`preview.status.emotion.${bossMood.moodId}` as PlanKey)
+                          || t('preview.status.bossSharedEmpty')}
+                      </span>
+                    </button>
+                    <BossStatusSheet
+                      open={bossEditorOpen}
+                      onClose={() => { setBossEditorOpen(false) }}
+                      t={t}
+                    />
+                  </>
+                )
+                : null}
             </div>
           )
           : presenceEnabled
@@ -2418,6 +2493,7 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={sessionId}
                 {...(status?.presence ? { presence: status.presence } : {})}
+                {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
                 turnActive={ownTurnActive}
                 runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
                 runningSubs={ownSubs}
@@ -2430,7 +2506,7 @@ export function PreviewTabs({
                   presenceCue.activityAt,
                   status?.presence?.updatedAt ?? 0,
                 )}
-                compact={presenceCollapsed}
+                compact={presenceRailCompact}
                 engineActive={overviewOpen && presenceEngineReady}
                 t={t as (key: string, params?: Record<string, string>) => string}
                 loadingLabel={t('preview.status.presenceLoading')}
@@ -2544,21 +2620,24 @@ export type PreviewOpenProps =
  * Session-header toggle for the Status (details) column.
  * Same cluster as Files / Jobs — not under the composer. Reads the layout
  * insets stamp (`data-xrk-layout-details`) so a second click closes.
+ * Hidden on blank Sessions (Overview has nothing to show — same rule as the
+ * phone floating Status chip).
  */
-export function PreviewOpenButton({ openPreview, closePreview, t }: PreviewOpenProps) {
-  const [open, setOpen] = useState(() => document.documentElement.hasAttribute(DETAILS_INSET_ATTR))
-  useEffect(() => {
-    const sync = (): void => {
-      setOpen(document.documentElement.hasAttribute(DETAILS_INSET_ATTR))
-    }
-    sync()
-    const observer = new MutationObserver(sync)
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: [DETAILS_INSET_ATTR],
-    })
-    return () => { observer.disconnect() }
-  }, [])
+export function PreviewOpenButton({
+  openPreview,
+  closePreview,
+  t,
+  sessionId,
+  useSessions,
+}: PreviewOpenProps) {
+  const canOpen = useSessions((s) => {
+    const row = s.byId[sessionId]
+    return row !== undefined && row.blank === false
+  })
+  // Frame `data-details-collapsed` (desktop column + phone sheet). Do not use
+  // layout insets — phone sheets publish details=0 and never stamp the attr.
+  const open = useOverviewOpen()
+  if (!canOpen) return null
   return (
     <button
       type="button"

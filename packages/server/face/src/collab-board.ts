@@ -36,7 +36,16 @@ export interface CollabBoardThreadRow {
 export interface CollabBoardPeerRow {
   readonly sessionId: string;
   readonly title?: string;
+  /** Formal seat / member name. */
+  readonly identity?: string;
+  readonly nickname?: string;
+  /** Roster role or seat duty one-liner. */
+  readonly duty?: string;
+  /** Open todo count from standing plan projection. */
+  readonly todoOpen?: number;
   readonly sideline?: string;
+  /** Bound 主线 title when pinned (parents only). */
+  readonly mainline?: string;
   readonly self?: boolean;
   readonly running?: boolean;
 }
@@ -64,32 +73,27 @@ export function formatCollabBoardText(input: {
   const canSpawn = input.canSpawn !== false;
   const surface = input.surface ?? "coding";
   // Ids + one spout verb. Dispatch chains live in <session_posture> / capability.
+  // Lane: project/向阳/IM boards never list agent-home peers (same-workspace peers only).
   const teamLead =
     surface === "im"
-      ? "Roster · 主线 · peers. Spawn coding: `subagent` member_id + workspace_id. Peers: workspace_session_prompt → thread_message."
+      ? "Roster · peers (project lane). Channel→bridge: im_send. Spawn coding: `subagent` member_id + workspace_id. Peers: workspace_session_prompt → thread_message. Never agent-home. Admin mint → 向阳."
       : surface === "qichuang"
-        ? "Roster · 主线 · peers. No nested subagent — match member, then workspace_session_prompt → thread_message (optional thread_upsert)."
+        ? "Roster · peers (向日葵 admin). workspace_create + settings_* here. Dispatch: workspace_session_prompt → thread_message. Never agent-home."
         : canSpawn
-          ? "Roster · 主线 · peers. Spawn: `subagent` member_id when a name/brief fits. Playbooks stay on the member."
+          ? "Roster · peers (经理 coding-light). Spawn: `subagent` member_id. Same-ws peer: workspace_session_prompt → thread_message. Settings/create·delete WS → 向阳. Never agent-home."
           : "Roster (no subagent tools) — Skill-load matching work here. Members:";
   const lines = [teamLead, input.membersCatalog];
   lines.push(
     "",
-    "主线 (24h) — discovery pin. `thread_message` any parent session_id (pin optional). Unpinned → below / session_search.",
+    "Peers — id · who · duty · todo open · 支线 · 主线(parents). `thread_message` same-lane only. `*` = you.",
   );
   if (recent.length === 0) {
-    lines.push("(none)");
     const peers = input.unboundPeers ?? [];
-    if (peers.length > 0) {
-      lines.push(
-        "Unpinned parents — `thread_message` by session_id. `*` = you. Sideline = now:",
-      );
+    if (peers.length === 0) {
+      lines.push("(none)");
+    } else {
       for (const peer of peers) {
-        const mark = peer.self ? "*" : "";
-        const title = peer.title ? ` 「${clipBrief(peer.title)}」` : "";
-        const tip = peer.sideline ? ` · ${clipBrief(peer.sideline)}` : "";
-        const run = peer.running ? " · running" : "";
-        lines.push(`- ${peer.sessionId}${mark}${title}${tip}${run}`);
+        lines.push(`- ${formatPeerLine(peer)}`);
       }
     }
   } else {
@@ -97,22 +101,80 @@ export function formatCollabBoardText(input: {
       const sessions = thread.sessions
         .map((s) => {
           const mark = s.self ? "*" : "";
-          const tip = s.sideline ? ` · ${clipBrief(s.sideline)}` : "";
+          const tip = s.sideline ? ` · 支线=${clipBrief(s.sideline)}` : "";
           return `${s.sessionId}${mark}${tip}`;
         })
         .join("; ");
       const brief = thread.brief ? ` — ${clipBrief(thread.brief)}` : "";
       lines.push(
-        `- ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
+        `- 主线 ${thread.id} 「${thread.title}」${brief}${sessions ? ` · ${sessions}` : ""}`,
       );
     }
   }
   return lines.join("\n").slice(0, BOARD_MAX_CHARS);
 }
 
+function formatPeerLine(peer: CollabBoardPeerRow): string {
+  const mark = peer.self ? "*" : "";
+  const title = peer.title ? ` 「${clipBrief(peer.title)}」` : "";
+  const who = peer.identity
+    ? peer.nickname
+      ? ` who=${clipBrief(peer.identity)}（${clipBrief(peer.nickname)}）`
+      : ` who=${clipBrief(peer.identity)}`
+    : "";
+  const duty = peer.duty ? ` duty=${clipBrief(peer.duty)}` : "";
+  const todos =
+    peer.todoOpen !== undefined ? ` todo_open=${peer.todoOpen}` : "";
+  const tip = peer.sideline ? ` 支线=${clipBrief(peer.sideline)}` : "";
+  const main = peer.mainline
+    ? ` 主线=「${clipBrief(peer.mainline)}」`
+    : " 主线=none";
+  const run = peer.running ? " · running" : "";
+  return `${peer.sessionId}${mark}${title}${who}${duty}${todos}${tip}${main}${run}`;
+}
+
 function clipBrief(value: string): string {
   const one = value.replace(/\s+/g, " ").trim();
   return one.length <= BRIEF_MAX ? one : `${one.slice(0, BRIEF_MAX - 1)}…`;
+}
+
+function countOpenTodos(runtime: FaceRuntime, sessionId: string): number | undefined {
+  const todos = runtime.projections.stateOf(sessionId, "todos") as
+    | ReadonlyArray<{ readonly status?: string }>
+    | null
+    | undefined;
+  if (!todos || todos.length === 0) return undefined;
+  return todos.filter((t) => t.status !== "completed" && t.status !== "cancelled")
+    .length;
+}
+
+function peerIdentityBits(
+  runtime: FaceRuntime,
+  sessionId: string,
+): {
+  readonly identity?: string;
+  readonly nickname?: string;
+  readonly duty?: string;
+} {
+  const identity = runtime.sessionIdentities.get(sessionId);
+  if (identity) {
+    const home = runtime.agentRoster.findHome(identity.memberId);
+    const member = home
+      ? runtime.agentRoster.get(home.rosterWorkspaceId, identity.memberId)
+      : undefined;
+    const name = member?.name?.trim() || identity.memberId;
+    const nick = member?.nickname?.trim();
+    const duty = member?.role?.trim() || member?.playbook?.trim().slice(0, 80);
+    return {
+      identity: name,
+      ...(nick ? { nickname: nick } : {}),
+      ...(duty ? { duty } : {}),
+    };
+  }
+  const badge = effectiveSessionAgentPreset(runtime, sessionId);
+  if (badge === "qichuang") return { identity: "向日葵", duty: "admin/orchestrator" };
+  if (badge === "im") return { identity: "IM", duty: "channel orchestrator" };
+  return { identity: "经理", duty: "coding parent" };
 }
 
 /**
@@ -151,12 +213,20 @@ export function listUnboundParentPeers(
     const bind = runtime.sessionThreads.bindOf(workspaceId, id);
     const tip = bind?.sideline ?? runtime.presence.get(id)?.tips;
     const sideline = tip ? tip : undefined;
+    const mainline = bind
+      ? runtime.sessionThreads.get(workspaceId, bind.threadId)?.title
+      : undefined;
+    const who = peerIdentityBits(runtime, id);
+    const todoOpen = countOpenTodos(runtime, id);
     const hints = runtime.store.listHints?.(id);
     const sortAt = Math.max(hints?.lastEventTs ?? 0, meta?.lastPromptAt ?? 0);
     scored.push({
       sessionId: id,
       ...(title ? { title } : {}),
+      ...who,
+      ...(todoOpen !== undefined ? { todoOpen } : {}),
       ...(sideline ? { sideline } : {}),
+      ...(mainline?.trim() ? { mainline: mainline.trim() } : {}),
       ...(id === selfId ? { self: true } : {}),
       ...(runtime.drain.isActive(id) ? { running: true } : {}),
       sortAt,
@@ -173,6 +243,9 @@ export interface TeamMateRow {
   readonly self?: boolean;
   readonly memberId?: string;
   readonly role?: string;
+  readonly nickname?: string;
+  readonly duty?: string;
+  readonly todoOpen?: number;
   readonly sideline?: string;
   readonly running?: boolean;
 }
@@ -192,21 +265,30 @@ export function formatTeamMateBoardText(input: {
 }): string {
   const lines = [
     `squad · parent=${input.parentSessionId} · * = you`,
-    "siblings → thread_message. Parent↔you = send_message / followup_task (on parent). FINAL→parent (capability).",
+    "siblings → thread_message (no 主线 on child collab). Parent↔you = send_message / followup_task. FINAL→parent.",
     "",
-    "Teammates:",
+    "Teammates — id · who · duty · todo · 支线 (主线=n/a):",
   ];
   if (input.mates.length === 0) {
     lines.push("(none)");
   } else {
     for (const mate of input.mates) {
       const mark = mate.self ? "*" : "";
+      const who = mate.nickname
+        ? ` who=${clipBrief(mate.label)}（${clipBrief(mate.nickname)}）`
+        : ` who=${clipBrief(mate.label)}`;
       const member = mate.memberId ? ` member=${mate.memberId}` : "";
-      const role = mate.role ? ` role=${mate.role}` : "";
-      const tip = mate.sideline ? ` · ${clipBrief(mate.sideline)}` : "";
+      const duty = mate.duty
+        ? ` duty=${clipBrief(mate.duty)}`
+        : mate.role
+          ? ` duty=${mate.role}`
+          : "";
+      const todos =
+        mate.todoOpen !== undefined ? ` todo_open=${mate.todoOpen}` : "";
+      const tip = mate.sideline ? ` 支线=${clipBrief(mate.sideline)}` : "";
       const run = mate.running ? " · running" : "";
       lines.push(
-        `- ${mate.sessionId}${mark} 「${clipBrief(mate.label)}」${member}${role}${tip}${run}`,
+        `- ${mate.sessionId}${mark}${who}${member}${duty}${todos}${tip} 主线=n/a${run}`,
       );
     }
   }
@@ -233,12 +315,32 @@ function linkToMateRow(
   selfId: string,
 ): TeamMateRow {
   const sideline = mateSideline(runtime, link.childSessionId);
+  const todoOpen = countOpenTodos(runtime, link.childSessionId);
+  let nickname: string | undefined;
+  let duty: string | undefined;
+  if (link.memberId) {
+    const home = runtime.agentRoster.findHome(link.memberId);
+    const member = home
+      ? runtime.agentRoster.get(home.rosterWorkspaceId, link.memberId)
+      : undefined;
+    nickname = member?.nickname?.trim() || undefined;
+    duty =
+      member?.role?.trim() ||
+      link.role?.trim() ||
+      member?.playbook?.trim().slice(0, 80) ||
+      undefined;
+  } else if (link.role) {
+    duty = link.role.trim();
+  }
   return {
     sessionId: link.childSessionId,
     label: link.label.trim() || "subagent",
     ...(link.childSessionId === selfId ? { self: true } : {}),
     ...(link.memberId ? { memberId: link.memberId } : {}),
     ...(link.role ? { role: link.role } : {}),
+    ...(nickname ? { nickname } : {}),
+    ...(duty ? { duty } : {}),
+    ...(todoOpen !== undefined ? { todoOpen } : {}),
     ...(sideline ? { sideline } : {}),
     ...(runtime.drain.isActive(link.childSessionId) ? { running: true } : {}),
   };

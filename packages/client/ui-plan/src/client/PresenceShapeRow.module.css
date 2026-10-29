@@ -6,7 +6,10 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-xl, 12px);
   background: var(--dsw-alias-bg-layer-3);
-  transition: border-color .16s, background .16s, box-shadow .16s;
+  transition:
+    border-color var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease),
+    background var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease),
+    box-shadow var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease);
 }
 
 .card:hover {
@@ -95,6 +98,18 @@
   gap: 8px;
 }
 
+.liveBanner {
+  margin: 0 0 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, var(--dsw-alias-bg-layer-1));
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 550;
+  color: var(--dsw-alias-label-primary);
+}
+
 .title {
   font-size: 14px;
   font-weight: 400;
@@ -117,27 +132,29 @@
 }
 
 .cubeRow {
-  display: flex;
-  align-items: stretch;
+  display: grid;
+  /* Wide enough for「老板 · 经理 · 干员」on one line (11px). */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .shapeCube {
   box-sizing: border-box;
-  flex: 1 1 140px;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 16px 20px;
+  padding: 16px 12px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 16px;
   background: transparent;
   font: inherit;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
 }
@@ -156,6 +173,68 @@
   height: 36px;
   display: block;
   color: var(--dsw-alias-label-primary);
+}
+
+.schemeName {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.schemeTrio {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titleFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.titleField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.titleFieldLabel {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.titleFieldInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.titleFieldInput:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+@media (max-width: 560px) {
+  .titleFields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .subtitle {
@@ -217,12 +296,15 @@
 
 @media (max-width: 767px) {
   .cubeRow {
+    /* Phone: 2-up so scheme trio (老板 · 经理 · 干员) stays one line. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
   .shapeCube,
   .colorCube {
-    flex: 1 1 0;
+    flex: unset;
+    width: 100%;
     min-width: 0;
     min-height: 72px;
     padding: 12px 6px;
@@ -321,6 +403,78 @@
   border-radius: 999px;
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.presetEditRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.presetEditChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 4px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.presetEditRemove {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.presetEditRemove:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.presetAddRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.presetAddInput {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.presetAddBtn {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 0;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, var(--dsw-alias-bg-layer-1));
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
 }
 

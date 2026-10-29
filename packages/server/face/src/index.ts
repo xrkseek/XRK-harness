@@ -171,10 +171,13 @@ export {
   seedGlobalRosterMembers,
   mergeGlobalSeedMembers,
   GLOBAL_ROSTER_ID,
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
   MEMBER_FILE_TOOLS,
   applyRosterToolPolicy,
   formatRosterCatalog,
   catalogMemberWriteProblem,
+  displayMemberName,
   type AgentRosterMember,
   type ListedRosterMember,
   type MemberToolPolicy,
@@ -212,6 +215,33 @@ export {
   createSessionPostureFragmentProvider,
   formatSessionPosture,
 } from "./session-posture.js";
+export { createInstructionAuthorityFragmentProvider } from "./instruction-authority-fragment.js";
+export {
+  createBossStatusFragmentProvider,
+  formatBossStatusInjectBody,
+  formatBossStatusUserMessage,
+  isBossStatusAudienceSession,
+  readBossStatusFields,
+  scheduleBossStatusBroadcast,
+} from "./boss-status-broadcast.js";
+export {
+  createSeatIdentityFragmentProvider,
+  formatSeatIdentity,
+  formatNamedSeat,
+} from "./seat-identity.js";
+export {
+  DEFAULT_SEAT_TITLE_SCHEME,
+  SEAT_TITLE_SCHEMES,
+  isSeatTitleSchemeId,
+  parseSeatTitleLocale,
+  parseSeatTitleScheme,
+  readSeatTitles,
+  readUiLocalePreference,
+  seatTitlesForScheme,
+  type SeatTitleLocale,
+  type SeatTitleSchemeId,
+  type SeatTitles,
+} from "./seat-titles.js";
 export {
   deriveSessionKind,
   orchestratorSurface,

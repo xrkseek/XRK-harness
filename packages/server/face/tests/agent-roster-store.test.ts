@@ -44,6 +44,8 @@ describe("FaceAgentRosterStore", () => {
     const store = new FaceAgentRosterStore(home());
     const names = store.list(GLOBAL_ROSTER_ID).map((row) => row.name);
     expect(names).toEqual([
+      "经理",
+      "向日葵",
       "调研员",
       "施工员",
       "审稿员",
@@ -55,6 +57,8 @@ describe("FaceAgentRosterStore", () => {
     ]);
     expect(store.list("ws")).toEqual([]);
     expect(store.listVisible("ws").map((row) => row.scope)).toEqual([
+      "global",
+      "global",
       "global",
       "global",
       "global",
@@ -171,12 +175,92 @@ describe("FaceAgentRosterStore", () => {
     );
     const store = new FaceAgentRosterStore(dir);
     const ids = store.list(GLOBAL_ROSTER_ID).map((row) => row.id);
+    expect(ids).toContain("mem_seed_manager");
+    expect(ids).toContain("mem_seed_xrkseek");
     expect(ids).toContain("mem_seed_researcher");
     expect(ids).toContain("mem_seed_worker");
     expect(ids).not.toContain("mem_seed_release");
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "workspace researcher",
+      "the researcher",
     );
+    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.name).toBe("经理");
+    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_xrkseek")?.name).toBe("向日葵");
+  });
+
+  it("lists workspace members from every roster file for the Team panel", () => {
+    const dir = home();
+    const store = new FaceAgentRosterStore(dir);
+    expect(
+      store.upsert("ws_alpha", {
+        name: "甲侧",
+        playbook: "alpha only",
+        role: "worker",
+      })?.id,
+    ).toBeTruthy();
+    expect(
+      store.upsert("ws_beta", {
+        name: "乙侧",
+        playbook: "beta only",
+        role: "worker",
+      })?.id,
+    ).toBeTruthy();
+    const panel = store.listForTeamPanel("ws_alpha");
+    const workspaceRows = panel.filter((row) => row.scope === "workspace");
+    expect(workspaceRows.map((row) => row.workspaceId).sort()).toEqual([
+      "ws_alpha",
+      "ws_beta",
+    ]);
+    expect(workspaceRows.find((row) => row.name === "甲侧")?.workspaceId).toBe("ws_alpha");
+    expect(workspaceRows.find((row) => row.name === "乙侧")?.workspaceId).toBe("ws_beta");
+    // Current canvas members stay tagged even via listVisible.
+    expect(
+      store.listVisible("ws_alpha").find((row) => row.name === "甲侧")?.workspaceId,
+    ).toBe("ws_alpha");
+  });
+
+  it("keeps 经理 costume across catalog seed refresh", () => {
+    const dir = home();
+    const store = new FaceAgentRosterStore(dir);
+    const patched = store.patchCatalogAppearance("mem_seed_manager", {
+      shape: "heart",
+      color: "coral",
+      kitHat: "halo",
+    });
+    expect(patched?.appearance).toMatchObject({
+      shape: "heart",
+      color: "coral",
+      kitHat: "halo",
+    });
+    // Force re-merge by constructing a second store on the same home.
+    const again = new FaceAgentRosterStore(dir);
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.appearance).toMatchObject({
+      shape: "heart",
+      color: "coral",
+      kitHat: "halo",
+    });
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.playbook).toContain(
+      "titles.manager",
+    );
+  });
+
+  it("keeps catalog nicknames across refresh; 向日葵 nickname stays locked", () => {
+    const dir = home();
+    const store = new FaceAgentRosterStore(dir);
+    expect(
+      store.patchCatalogMeta("mem_seed_manager", { nickname: "阿经" })?.nickname,
+    ).toBe("阿经");
+    expect(
+      store.patchCatalogMeta("mem_seed_researcher", { nickname: "小研" })?.nickname,
+    ).toBe("小研");
+    expect(
+      store.patchCatalogMeta("mem_seed_xrkseek", { nickname: "花" }),
+    ).toBeUndefined();
+    const again = new FaceAgentRosterStore(dir);
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.nickname).toBe("阿经");
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.nickname).toBe(
+      "小研",
+    );
+    expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_xrkseek")?.nickname).toBeUndefined();
   });
 
   it("drops leftover seed rows no longer in the catalog", () => {
@@ -226,7 +310,7 @@ describe("FaceAgentRosterStore", () => {
       }),
     ).toBeUndefined();
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "workspace researcher",
+      "the researcher",
     );
     mkdirSync(path.join(dir, "agent-rosters"), { recursive: true });
     writeFileSync(
@@ -247,7 +331,7 @@ describe("FaceAgentRosterStore", () => {
     );
     const again = new FaceAgentRosterStore(dir);
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.playbook).toContain(
-      "workspace researcher",
+      "the researcher",
     );
     expect(again.get(GLOBAL_ROSTER_ID, "mem_seed_researcher")?.seed).toBe(true);
     expect(

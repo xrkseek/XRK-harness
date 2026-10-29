@@ -90,10 +90,12 @@ export function JobListAction({ sessionId, useSessions, killJob, backgroundJob, 
       const menu = menuRef.current
       if (trigger === null) return
       const r = trigger.getBoundingClientRect()
-      const MARGIN = 12
+      // Phone: keep the portaled menu clear of notches / home indicator.
+      const phone = document.documentElement.hasAttribute('data-xrk-layout-phone')
+      const MARGIN = phone ? 16 : 12
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const detailsInset = readDetailsInsetPx()
+      const detailsInset = phone ? 0 : readDetailsInsetPx()
       const lw = menu !== null && menu.offsetWidth > 0 ? menu.offsetWidth : 420
       const lh = menu !== null && menu.offsetHeight > 0 ? menu.offsetHeight : 0
       let x = r.right - lw

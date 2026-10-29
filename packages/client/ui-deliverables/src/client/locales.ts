@@ -70,4 +70,41 @@ export const en: Record<DeliverablesKey, string> = {
   'diff.unchanged': 'Unchanged content (metadata-only or empty comparison)',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'produced.label': '作成',
+  'lanes.created': '作成',
+  'lanes.modified': '変更',
+  'lanes.deleted': '削除',
+  'produced.moreOne': '+ 1 ファイル',
+  'produced.more': '+ {count} ファイル',
+  'produced.open': '{name} を開く',
+  'produced.preview': '{name} をプレビュー',
+  'produced.actions': '{name} のその他のファイル操作',
+  'produced.defaultApp': '既定のアプリで開く',
+  'produced.reveal': 'ファイルマネージャで表示',
+  'produced.showInFolder': 'フォルダで表示',
+  'changes.title': '{count} ファイル変更',
+  'changes.added': '+{count}',
+  'changes.deleted': '-{count}',
+  'changes.binary': 'バイナリ',
+  'changes.oversized': '大きすぎます',
+  'changes.openReview': 'このターンの変更を Status で確認',
+  'changes.viewDiff': '{name} の差分を表示',
+  'changes.all': '全 {count} ファイル',
+  'changes.collapse': '折りたたむ',
+  'changes.expandAria': '変更ファイル {count} 件をすべて展開',
+  'changes.collapseAria': '変更ファイル一覧を折りたたむ',
+  'changes.loading': '比較を読み込み中…',
+  'changes.unavailable': 'このファイルでは比較できません',
+  'changes.missing': 'このターンの変更内容はもう利用できません',
+  'changes.previewFile': '{name} をプレビュー',
+  'changes.selectFile': 'レビューするファイルを選択',
+  'diff.created': 'このターンで作成',
+  'diff.deleted': 'このターンで削除',
+  'diff.unchanged': '内容に変更なし（メタデータのみ、または空の比較）',
+} as const satisfies Record<DeliverablesKey, string>
+
+
+
 export type DeliverablesKey = keyof typeof zh

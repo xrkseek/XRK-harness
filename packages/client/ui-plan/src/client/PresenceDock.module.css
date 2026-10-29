@@ -2,6 +2,9 @@
  * Header presence: taller chip out of titleRow height flow.
  * Seat keeps a width reservation while visible so left chrome does not jump;
  * exit collapses that width on the same duration as the fade (no hard cut).
+ *
+ * Phone: portal into AppFrame `[data-phone-presence-slot]` as an icon-only
+ * ball (menu | ball | 概况). Tap bounces; Overview is the gauge only.
  */
 
 .seat {
@@ -12,7 +15,6 @@
   width: min(220px, 46vw);
   height: 0;
   z-index: 2;
-  /* Match shell / better-sidebar motion so Overview open and dock handoff share a curve. */
   transition: width var(--xrkh-sidebar-motion-duration, var(--ds-transition-duration-slow, 380ms))
     var(--xrkh-sidebar-motion-ease, var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1)));
 }
@@ -77,6 +79,75 @@
   to {
     opacity: 0;
     transform: translateY(-50%) translateX(10px) scale(0.96);
+  }
+}
+
+/* Phone chrome: icon-only circle between menu and 概况. */
+.seat[data-phone-dock] {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  transition: none;
+}
+
+.seat[data-phone-dock][data-phase='exit'],
+.seat[data-phone-dock][data-phase='gone'] {
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.seat[data-phone-dock] .dock {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 36px;
+  height: 36px;
+  transform: none;
+  overflow: visible;
+}
+
+.seat[data-phone-dock] .dock :global([data-overview-presence]) {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 0;
+  border-radius: 50%;
+  background: var(--dsw-alias-button-floating-fill);
+  border: 1px solid var(--dsw-alias-border-l2);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-text-primary) 8%, transparent);
+}
+
+.seat[data-phone-dock] .dock :global([data-presence-meta]) {
+  display: none;
+}
+
+.seat[data-phone-dock] .dock :global([data-overview-presence] button) {
+  width: 34px;
+  height: 34px;
+}
+
+.seat[data-phone-dock][data-phase='enter'] .dock,
+.seat[data-phone-dock][data-phase='exit'] .dock {
+  animation: none;
+}
+
+@media (max-width: 767px) {
+  .seat:not([data-phone-dock]) {
+    width: min(132px, 38vw);
+  }
+
+  .seat:not([data-phone-dock])[data-phase='exit'],
+  .seat:not([data-phone-dock])[data-phase='gone'] {
+    width: 0;
+  }
+
+  .seat:not([data-phone-dock]) .dock {
+    width: min(132px, 38vw);
+    height: 40px;
   }
 }
 

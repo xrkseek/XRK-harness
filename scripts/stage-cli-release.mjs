@@ -285,6 +285,33 @@ if (!existsSync(path.join(STAGE, "seeds", "skills", "xrk-capability-attach", "SK
   process.exit(1);
 }
 
+// 内置 LLM 车道：插件目录 + 随包分发的 Bun（`pnpm vendor:bun` 生成）。
+// 放 STAGE/extensions 是因为 CLI 从自身安装位置向上找 `extensions/<id>`；
+// 桌面包同理由 afterPack 拷到 resources/host/extensions。
+const SUNFLOWER_SRC = path.join(ROOT, "extensions", "xrk-sunflower-free");
+if (existsSync(path.join(SUNFLOWER_SRC, "xrk.plugin.json"))) {
+  copyDirSync(SUNFLOWER_SRC, path.join(STAGE, "extensions", "xrk-sunflower-free"));
+  const bunExe = path.join(STAGE, "extensions", "xrk-sunflower-free", "vendor",
+    process.platform === "win32" ? "bun.exe" : "bun");
+  if (!existsSync(bunExe)) {
+    const line =
+      "stage: bundled Bun missing — the sunflower-free lane will be unavailable " +
+      "on user machines. Run `pnpm vendor:bun` first.";
+    if (process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1") {
+      console.error(line);
+      process.exit(1);
+    }
+    console.warn(line);
+  }
+} else {
+  const line = "stage: extensions/xrk-sunflower-free missing";
+  if (process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1") {
+    console.error(line);
+    process.exit(1);
+  }
+  console.warn(line);
+}
+
 const stagedPkgPath = path.join(STAGE, "package.json");
 const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));
 delete staged.private;
@@ -317,7 +344,7 @@ for (const n of names) {
 }
 staged.dependencies = dependencies;
 staged.bundleDependencies = names;
-staged.files = ["dist", "product-web", "seeds", "README.md"];
+staged.files = ["dist", "product-web", "seeds", "extensions", "README.md"];
 staged.publishConfig = {
   access: "public",
   registry: "https://registry.npmjs.org",

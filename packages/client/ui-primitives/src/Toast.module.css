@@ -31,8 +31,8 @@
   box-shadow: var(--dsw-shadow-lv3);
   transform: translateX(-50%);
   animation:
-    dsh-toast-in 160ms ease-out,
-    dsh-toast-fade 1000ms ease 3000ms forwards;
+    dsh-toast-in 160ms var(--ds-ease-out),
+    dsh-toast-fade 1000ms var(--ds-ease-in-out) 3000ms forwards;
 }
 
 .icon {
@@ -68,6 +68,6 @@
    not movement) still ends the banner before the timed unmount. */
 @media (prefers-reduced-motion: reduce) {
   .toast {
-    animation: dsh-toast-fade 1000ms ease 3000ms forwards;
+    animation: dsh-toast-fade 1000ms var(--ds-ease-in-out) 3000ms forwards;
   }
 }

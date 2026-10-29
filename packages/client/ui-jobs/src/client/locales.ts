@@ -95,5 +95,53 @@ export const en: Record<JobKey, string> = {
   'dock.aria': 'Running background jobs',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'count.live.one': 'バックグラウンドジョブ {count} 件が実行中',
+  'count.live.other': 'バックグラウンドジョブ {count} 件が実行中',
+  'count.idle.one': 'バックグラウンドジョブ {count} 件',
+  'count.idle.other': 'バックグラウンドジョブ {count} 件',
+  'list.aria': 'バックグラウンドジョブ',
+  'section.live': '実行中',
+  'section.settled': '完了',
+  'status.running': '実行中',
+  'status.stopping': '停止中',
+  'status.completed': '完了',
+  'status.killed': 'キャンセル済み',
+  'status.failed': '失敗',
+  'duration.seconds': '{seconds}秒',
+  'duration.minutes': '{minutes}分 {seconds}秒',
+  'duration.hours': '{hours}時間 {minutes}分',
+  'duration.title.live': '{duration} 実行中',
+  'duration.title.done': '{duration} かかりました',
+  'action.stop': '停止',
+  'action.background': 'バックグラウンド',
+  'action.stop.aria': 'ジョブ {label} を停止',
+  'action.background.aria': 'ジョブ {label} をバックグラウンドへ',
+  'kill.confirmAction': '停止を確認',
+  'kill.confirmTitle': 'もう一度押して停止を確認',
+  'kill.failedTitle': '停止要求に失敗 — 再試行',
+  'row.expandAria': '{label} の出力を展開',
+  'row.collapseAria': '{label} の出力を折りたたむ',
+  'output.truncated': '出力を切り詰め（末尾を保持）',
+  'output.error': '出力を読み取れませんでした: {error}',
+  'terminal.signal': 'シグナル {signal}',
+  'terminal.exitCode': '終了 {code}',
+  'terminal.running': '実行中',
+  'terminal.failed': '失敗',
+  'terminal.done': '完了',
+  'terminal.copy': 'コピー',
+  'terminal.copied': 'コピーしました',
+  'terminal.noOutput': 'まだ出力はありません',
+  'terminal.collapseAria': '出力を折りたたむ',
+  'terminal.collapse': '折りたたむ',
+  'terminal.expandAria': 'あと {n} 行を表示',
+  'terminal.expand': '… ほか {n} 行',
+  'dock.title': 'バックグラウンドジョブ',
+  'dock.aria': '実行中のバックグラウンドジョブ',
+} as const satisfies Record<JobKey, string>
+
+
+
 /** Key domain of the `job` namespace (zh is the source of truth). */
 export type JobKey = keyof typeof zh

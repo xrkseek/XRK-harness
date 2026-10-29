@@ -420,24 +420,248 @@ export const LOGIN_PAGE_JS = `(() => {
 })()
 `;
 
+/** Gate pages share product-shell first-paint (index.html) light/dark floors. */
+const GATE_SHELL_CSS = `
+:root {
+  color-scheme: light dark;
+  --gate-bg: #f4f4f5;
+  --gate-fg: #14161a;
+  --gate-muted: #5c6168;
+  --gate-border: rgb(0 0 0 / 12%);
+  --gate-fill: #14161a;
+  --gate-fill-fg: #f4f4f5;
+  --gate-fill-hover: #2a2d33;
+  --gate-error: #c41e1e;
+  --gate-field: #ffffff;
+  --gate-ring: #5c6168;
+  --gate-ring-dim: rgb(0 0 0 / 14%);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --gate-bg: #151517;
+  --gate-fg: #e8e8ea;
+  --gate-muted: #9a9aa3;
+  --gate-border: rgb(255 255 255 / 12%);
+  --gate-fill: #e8e8ea;
+  --gate-fill-fg: #151517;
+  --gate-fill-hover: #c4c4cc;
+  --gate-error: #f25a5a;
+  --gate-field: #1c1c1f;
+  --gate-ring: #c4c4cc;
+  --gate-ring-dim: rgb(255 255 255 / 12%);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  min-height: 100dvh;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--gate-fg);
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 70%), transparent 55%),
+    radial-gradient(90% 70% at 50% 120%, rgb(20 22 26 / 4%), transparent 50%),
+    var(--gate-bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgb(255 255 255 / 6%), transparent 55%),
+    radial-gradient(90% 70% at 50% 120%, rgb(0 0 0 / 35%), transparent 50%),
+    var(--gate-bg);
+}
+.gate {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(1.5rem, env(safe-area-inset-top))
+    max(1.25rem, env(safe-area-inset-right))
+    max(1.75rem, env(safe-area-inset-bottom))
+    max(1.25rem, env(safe-area-inset-left));
+}
+.panel {
+  width: min(100%, 22.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.mark {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  color: var(--gate-fg);
+  margin: 0 0 1.75rem;
+  text-align: center;
+}
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.375rem, 4.2vw, 1.625rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-align: center;
+}
+.hint {
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--gate-muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+#access-pin {
+  width: 100%;
+  height: 3.25rem;
+  padding: 0 1rem;
+  border: 1px solid var(--gate-border);
+  border-radius: 14px;
+  background: var(--gate-field);
+  color: var(--gate-fg);
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.28em;
+  text-align: center;
+  caret-color: var(--gate-fg);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+#access-pin::placeholder {
+  color: var(--gate-muted);
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+#access-pin:focus-visible {
+  border-color: var(--gate-fg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gate-fg) 18%, transparent);
+}
+#access-pin[aria-invalid="true"] {
+  border-color: var(--gate-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gate-error) 22%, transparent);
+}
+#pin-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 2.75rem;
+  margin: 0;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 18px;
+  background: var(--gate-fill);
+  color: var(--gate-fill-fg);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 560;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+#pin-submit:hover:not(:disabled) { background: var(--gate-fill-hover); }
+#pin-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+#pin-submit:focus-visible {
+  outline: 2px solid var(--gate-fg);
+  outline-offset: 2px;
+}
+#pin-status {
+  min-height: 1.25rem;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--gate-muted);
+}
+#pin-status[data-tone="error"] { color: var(--gate-error); }
+#pin-status[data-tone="busy"] { color: var(--gate-muted); }
+@media (max-width: 480px) {
+  #access-pin {
+    height: 3.5rem;
+    font-size: 1.5rem;
+    letter-spacing: 0.32em;
+    border-radius: 16px;
+  }
+  #pin-submit { height: 3rem; font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #access-pin, #pin-submit { transition: none; }
+}
+`.replace(/\n/g, "");
+
+const GATE_THEME_BOOT = `(function(){
+  var dark = typeof matchMedia !== "undefined"
+    && matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+})();`;
+
 function pinPageHtml(mode: "lan" | "wan", title: string): string {
+  const kind = mode === "wan" ? "远程" : "局域网";
   return `<!doctype html>
 <html lang="zh-CN">
+<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${title}</title>
-<main style="font-family:system-ui,sans-serif;max-width:28rem;margin:2rem auto;padding:0 1rem">
-  <h1>${title}</h1>
-  <p>输入桌面端移动访问设置中显示的 ${mode === "wan" ? "远程" : "局域网"} 访问 PIN。</p>
-  <form id="pin-form">
-    <label style="display:block;margin:.75rem 0">PIN
-      <input id="access-pin" inputmode="numeric" autocomplete="one-time-code" required style="width:100%;padding:.5rem">
-    </label>
-    <button type="submit" style="padding:.5rem 1rem">继续</button>
-    <output id="pin-status" style="display:block;margin-top:.75rem"></output>
-  </form>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f4f5" media="(prefers-color-scheme: light)">
+<title>${title} · XRK Harness</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>${GATE_SHELL_CSS}</style>
+<script>${GATE_THEME_BOOT}</script>
+</head>
+<body>
+<main class="gate">
+  <div class="panel">
+    <div class="mark" aria-hidden="true">HARNESS</div>
+    <h1>${title}</h1>
+    <p class="hint">输入 Host 启动日志中的 8 位${kind}访问 PIN。</p>
+    <form id="pin-form" novalidate>
+      <label class="field-label" for="access-pin">访问 PIN</label>
+      <input
+        id="access-pin"
+        name="pin"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        enterkeyhint="go"
+        maxlength="8"
+        pattern="[0-9]{8}"
+        placeholder="········"
+        required
+        autofocus
+        spellcheck="false"
+        aria-describedby="pin-status"
+      >
+      <button id="pin-submit" type="submit">进入</button>
+      <output id="pin-status" role="status" aria-live="polite"></output>
+    </form>
+  </div>
 </main>
 <script src="/mobile-access/${mode}-pin.js" defer></script>
+</body>
 </html>`;
 }
 
@@ -445,22 +669,68 @@ function pinPageJs(mode: "lan" | "wan"): string {
   return `(() => {
   const status = document.getElementById('pin-status')
   const input = document.getElementById('access-pin')
-  document.getElementById('pin-form')?.addEventListener('submit', async (event) => {
+  const submit = document.getElementById('pin-submit')
+  const form = document.getElementById('pin-form')
+  let busy = false
+
+  const setStatus = (text, tone) => {
+    if (!status) return
+    status.textContent = text
+    if (tone) status.dataset.tone = tone
+    else delete status.dataset.tone
+  }
+
+  const setBusy = (next) => {
+    busy = next
+    if (submit) submit.disabled = next
+    if (input) input.readOnly = next
+  }
+
+  input?.addEventListener('input', () => {
+    const digits = (input.value || '').replace(/\\D/g, '').slice(0, 8)
+    if (input.value !== digits) input.value = digits
+    input.removeAttribute('aria-invalid')
+    if (status?.dataset.tone === 'error') setStatus('')
+  })
+
+  form?.addEventListener('submit', async (event) => {
     event.preventDefault()
-    status.textContent = '验证中…'
-    const response = await fetch('/mobile-access/auth/${mode}-pin', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pin: input?.value ?? '' }),
-    })
-    if (!response.ok) {
-      status.textContent = 'PIN 不正确'
+    if (busy) return
+    const pin = (input?.value || '').trim()
+    if (!/^\\d{8}$/.test(pin)) {
+      input?.setAttribute('aria-invalid', 'true')
+      setStatus('请输入 8 位数字 PIN', 'error')
+      input?.focus()
+      input?.select()
       return
     }
-    const next = new URLSearchParams(location.search).get('return') || '/'
-    location.replace(next)
+    setBusy(true)
+    setStatus('验证中…', 'busy')
+    try {
+      const response = await fetch('/mobile-access/auth/${mode}-pin', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      if (!response.ok) {
+        input?.setAttribute('aria-invalid', 'true')
+        setStatus('PIN 不正确，请核对启动日志后重试', 'error')
+        setBusy(false)
+        input?.focus()
+        input?.select()
+        return
+      }
+      try { sessionStorage.setItem('xrk.operatorAccess', '1') } catch {}
+      const next = new URLSearchParams(location.search).get('return') || '/'
+      location.replace(next)
+    } catch {
+      setStatus('无法连接 Host，请检查网络后重试', 'error')
+      setBusy(false)
+    }
   })
+
+  queue?.focus()
 })()
 `;
 }

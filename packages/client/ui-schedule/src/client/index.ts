@@ -11,7 +11,7 @@ import type {} from '@xrkseek/client-locale/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { createCronApiClient, type CronApiClient } from './cron-api.ts'
-import { en, zh, type ScheduleLocaleKey } from './locales.ts'
+import { en, ja, zh, type ScheduleLocaleKey } from './locales.ts'
 import {
   ScheduleSettingsTab,
   type ScheduleSettingsTabInjected,
@@ -49,7 +49,7 @@ export const inject = ['slots', 'locale']
 
 /** Contribute the read-only task directory to the session header. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-schedule: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-schedule: dictionaries')
 
   const t = ctx.locale.bind(NS)
   // One client per plugin instance: the tab re-reads through it on mount and

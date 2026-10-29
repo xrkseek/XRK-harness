@@ -43,6 +43,14 @@ describe('detectTrigger word boundaries', () => {
     expect(atEnd('C:/path')).toBeNull()
   })
 
+  it('does not treat line/block comments as slash commands', () => {
+    expect(atEnd('// note')).toBeNull()
+    expect(atEnd('/* block')).toBeNull()
+    expect(atEnd('/** JSDoc')).toBeNull()
+    expect(atEnd('  /** Registry brand')).toBeNull()
+    expect(atEnd('say /* x')).toBeNull()
+  })
+
   it('still triggers when a colon is not a scheme separator', () => {
     // ':' preceded by whitespace / at index 0 is ordinary punctuation.
     expect(atEnd('note: /go')).toMatchObject({ trigger: '/', query: 'go' })

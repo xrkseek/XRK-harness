@@ -352,6 +352,9 @@ describe("session status snapshot", () => {
     const parent = await create("c-home");
     const untitled = await create("c-untitled");
     const kitted = await create("c-kitted");
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     runtime.subagents.attach({
       parentSessionId: parent,
       childSessionId: untitled,
@@ -365,7 +368,11 @@ describe("session status snapshot", () => {
       label: "发版员",
       appearance: { shape: "wedge", color: "sage", kit: "bow" },
     });
-    expect(buildSessionStatusSnapshot(runtime, parent).companionBall).toBeUndefined();
+    const parentSnap = buildSessionStatusSnapshot(runtime, parent);
+    // Project sessions always show Boss → 经理 office pair.
+    expect(parentSnap.delegate?.parentSessionId).toBe(parent);
+    expect(parentSnap.parentCompanionBall).toBeDefined();
+    expect(parentSnap.companionBall).toBeDefined();
     expect(buildSessionStatusSnapshot(runtime, untitled).companionBall).toEqual({
       shape: "blob",
       color: "cream",
@@ -379,8 +386,12 @@ describe("session status snapshot", () => {
     expect(buildSessionStatusSnapshot(runtime, untitled).delegate).toEqual({
       parentSessionId: parent,
       childLabel: "untitled",
+      parentLabel: "老板",
     });
-    expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toBeUndefined();
+    // Root parent's look on the child Overview is Boss (ui-presence), not undefined.
+    expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toEqual(
+      parentSnap.parentCompanionBall,
+    );
     runtime.presence.set(parent, {
       emotionId: "31",
       tips: "发版员已接手，我这边只读盘点",
@@ -390,7 +401,16 @@ describe("session status snapshot", () => {
       tips: "发版员已接手，我这边只读盘点",
       source: "tool",
     });
-    expect(buildSessionStatusSnapshot(runtime, parent).parentPresence).toBeUndefined();
+    // Office root: left seat is operator mood from ui-presence (not AI presence_set).
+    expect(buildSessionStatusSnapshot(runtime, parent).parentPresence).toMatchObject({
+      emotionId: "16",
+      source: "tool",
+    });
+    // Bare create lands on Xiangyang → Boss → 向日葵 (not project 经理).
+    expect(parentSnap.delegate).toEqual({
+      parentSessionId: parent,
+      childLabel: "向日葵",
+    });
   });
 
   it("gives nested children dual balls: immediate parent look + own look", async () => {
@@ -403,6 +423,9 @@ describe("session status snapshot", () => {
     const home = await create("c-home");
     const mid = await create("c-mid");
     const leaf = await create("c-leaf");
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     runtime.subagents.attach({
       parentSessionId: home,
       childSessionId: mid,
@@ -418,9 +441,16 @@ describe("session status snapshot", () => {
       appearance: { shape: "squircle", color: "sky", kit: "cap" },
     });
     const midSnap = buildSessionStatusSnapshot(runtime, mid);
-    expect(midSnap.parentCompanionBall).toBeUndefined();
+    // Mid's parent is the project root → left seat is Boss.
+    expect(midSnap.parentCompanionBall).toEqual(
+      buildSessionStatusSnapshot(runtime, home).parentCompanionBall,
+    );
     expect(midSnap.companionBall).toEqual({ shape: "wedge", color: "sage" });
-    expect(midSnap.delegate).toEqual({ parentSessionId: home, childLabel: "发版员" });
+    expect(midSnap.delegate).toEqual({
+      parentSessionId: home,
+      childLabel: "发版员",
+      parentLabel: "老板",
+    });
     const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
     expect(leafSnap.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
     expect(leafSnap.companionBall).toEqual({

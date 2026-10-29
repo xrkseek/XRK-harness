@@ -595,14 +595,19 @@ describe("createPersistentSessionStore", () => {
     }
     a.flush();
     const child = forkSession(a, src, 12, "forked");
-    expect(child.events).toHaveLength(12);
-    expect(a.readEvents(child.id)).toHaveLength(12);
+    // Prefix (12) + session/end-seed.
+    expect(child.events).toHaveLength(13);
+    expect(child.events.at(-1)?.type).toBe("session/end-seed");
+    expect(a.readEvents(child.id)).toHaveLength(13);
     a.close();
 
     const b = track(createPersistentSessionStore(dir));
-    expect(b.readEvents("forked")).toHaveLength(12);
+    expect(b.readEvents("forked")).toHaveLength(13);
     expect(
-      b.readEvents("forked").map((e) => ("content" in e ? e.content : undefined)),
+      b
+        .readEvents("forked")
+        .slice(0, 12)
+        .map((e) => ("content" in e ? e.content : undefined)),
     ).toEqual(Array.from({ length: 12 }, (_, i) => `m${i}`));
   });
 
@@ -823,5 +828,47 @@ describe("createPersistentSessionStore", () => {
     expect(reloaded.get(ids[2]!).events).toHaveLength(63);
     expect(reloaded.get(ids[1]!).events).toHaveLength(64);
     expect([...reloaded.searchSessionIds(span)].sort()).toEqual([...ids].sort());
+  });
+
+  it("replacePrefix tail-deletes when the kept prefix is unchanged", () => {
+    const dir = tempDir();
+    const store = track(createPersistentSessionStore(dir));
+    const s = store.create("cut").id;
+    for (let i = 0; i < 6; i++) {
+      store.append(s, {
+        type: "turn/start",
+        ts: i * 2 + 1,
+        turnId: `t${i}`,
+      });
+      store.append(s, {
+        type: "turn/end",
+        ts: i * 2 + 2,
+        turnId: `t${i}`,
+        reason: { kind: "completed" },
+      });
+    }
+    store.flush();
+    expect(store.get(s).events).toHaveLength(12);
+
+    const kept = store.get(s).events.slice(0, 4);
+    store.replacePrefix!(s, kept);
+    expect(store.get(s).events).toHaveLength(4);
+    expect(store.get(s).events.map((e) => e.type)).toEqual([
+      "turn/start",
+      "turn/end",
+      "turn/start",
+      "turn/end",
+    ]);
+
+    store.close();
+    const reloaded = track(createPersistentSessionStore(dir));
+    expect(reloaded.get(s).events).toHaveLength(4);
+    // Append after a tail-cut must continue seq without clobbering the prefix.
+    reloaded.append(s, {
+      type: "turn/start",
+      ts: 100,
+      turnId: "t-new",
+    });
+    expect(reloaded.get(s).events).toHaveLength(5);
   });
 });

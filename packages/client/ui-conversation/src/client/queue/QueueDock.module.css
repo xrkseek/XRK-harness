@@ -312,3 +312,24 @@
 .actionWrap {
   display: contents;
 }
+
+@media (max-width: 767px) {
+  .header {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .list {
+    max-height: min(18vh, 120px);
+  }
+
+  .row {
+    min-height: 40px;
+  }
+
+  .action {
+    min-height: 36px;
+    min-width: 36px;
+    touch-action: manipulation;
+  }
+}

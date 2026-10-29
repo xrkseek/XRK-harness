@@ -13,6 +13,7 @@
     { "path": "packages/core/system-prompt" },
     { "path": "packages/runtime-diagnostics/invariants" },
     { "path": "packages/spill" },
+    { "path": "packages/claude-code-mods" },
     { "path": "packages/llm/llm" },
     { "path": "packages/llm/openai-compatible" },
     { "path": "packages/llm/deepseek" },

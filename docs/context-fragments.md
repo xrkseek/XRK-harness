@@ -13,6 +13,10 @@
 
 AGENTS.md / skills catalog 保持 fragment 之外的角色；ephemeral env / recap 不进 inject。
 
+**窗内 last-wins：** `appendContextFragments` 每轮仍会 append 新的 `user/message`（会话日志全量保留）；`deriveMessages` / `foldChat` 对 `source.kind === "context-fragment"` 且同 `fragmentId` **只把最新一条放进模型窗**，避免热更后堆叠旧快照（权限、席位、工具路由类活文案）。
+
+**双轴：** 注入**通道**（system · durable · fragment · tools[] · derive）可以不同；会变的**说明文案**应在内容层按碎片语义管理（稳定 id · 可重算 · last-wins）。`tools[]` 只保留薄契约（name · 短 description · JSON schema），整份 catalog 不当碎片。对接图见 Cursor Canvas `context-engineering-layers`。
+
 ## 阶段
 
 | Phase | Harness 接线 |
@@ -65,6 +69,10 @@ Host 在 **turn-start** 注册 `collab-board`：当前工作区 **Agent Team 短
 | Mid-tool | `deferContext` | After tool results | plain text (no typed source) |
 
 Do not move AGENTS.md / skill catalogs into fragments; do not put ephemeral env / recap into inject.
+
+**In-window last-wins:** `appendContextFragments` still appends a new `user/message` each turn (full session log retained); `deriveMessages` / `foldChat` keep **only the latest** `context-fragment` row per `fragmentId` in the model window so hot updates do not stack stale snapshots.
+
+**Two axes:** delivery **channels** (system · durable · fragment · tools[] · derive) may differ; living **prose** should be managed with fragment semantics (stable id · recompute · last-wins). Keep `tools[]` a thin contract (name · short description · JSON schema)—do not fragment the whole catalog. Alignment map: Cursor Canvas `context-engineering-layers`.
 
 ## Phases
 

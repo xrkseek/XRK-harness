@@ -29,6 +29,7 @@ import {
   permissionSelectFromEvents,
 } from "./permissions.js";
 import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
+import { publishWorkspaceChanged } from "./workspace-member-look.js";
 
 const MAX_LIST_ENTRIES = 200;
 const MAX_LIST_DEPTH = 5;
@@ -326,11 +327,14 @@ export async function workspaceListFace(
   }
   const refreshed = runtime.workspaces.list(runtime.store.list());
   // Hide empty ws_im on bridge (no external IM); show when gateway wired.
-  const items = refreshed.items.filter((row) => {
-    if (row.workspaceId !== IM_WORKSPACE_ID) return true;
-    if (row.sessionIds.length > 0) return true;
-    return gateway !== "bridge";
-  });
+  const { withBoundMemberLook } = await import("./workspace-member-look.js");
+  const items = refreshed.items
+    .filter((row) => {
+      if (row.workspaceId !== IM_WORKSPACE_ID) return true;
+      if (row.sessionIds.length > 0) return true;
+      return gateway !== "bridge";
+    })
+    .map((row) => withBoundMemberLook(runtime, row));
   return {
     ok: true,
     value: {
@@ -367,10 +371,7 @@ export async function workspaceCreateFace(
   }
   const result = runtime.workspaces.create(raw);
   await persistWorkspaceDoc(runtime, runtime.workspaces);
-  runtime.bus.publishHost({
-    type: "host/workspace-changed",
-    workspace: result.workspace,
-  });
+  publishWorkspaceChanged(runtime, result.workspace);
   return { ok: true, value: result };
 }
 
@@ -415,10 +416,7 @@ export async function workspaceRenameFace(
     };
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
-  runtime.bus.publishHost({
-    type: "host/workspace-changed",
-    workspace,
-  });
+  publishWorkspaceChanged(runtime, workspace);
   return { ok: true, value: { workspace } };
 }
 
@@ -699,6 +697,8 @@ export async function workspaceDeleteFace(
       },
     };
   }
+  const prior = runtime.workspaces.get(workspaceId);
+  const agentHomeDelete = prior?.kind === "agent-home";
   const result = runtime.workspaces.delete(workspaceId);
   if (!result.ok) {
     if (result.reason.startsWith("unknown")) {
@@ -719,6 +719,14 @@ export async function workspaceDeleteFace(
         details: {},
       },
     };
+  }
+  // Agent-home delete: drop identity (home is gone) but keep session logs
+  // unbound so they surface under 干员「未分组」(project pane has
+  // includeUngrouped=false — orphans never mix into the project tree).
+  if (agentHomeDelete) {
+    for (const sid of result.movedSessionIds) {
+      runtime.sessionIdentities.forget(sid);
+    }
   }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
@@ -829,9 +837,6 @@ export async function workspaceInsertSessionBeforeFace(
       autoGate: runtime.permissionAuto,
     });
   }
-  runtime.bus.publishHost({
-    type: "host/workspace-changed",
-    workspace,
-  });
+  publishWorkspaceChanged(runtime, workspace);
   return { ok: true, value: { workspace } };
 }

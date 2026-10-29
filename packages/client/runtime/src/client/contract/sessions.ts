@@ -88,7 +88,10 @@ export interface ISessions {
   search(
     query: string,
     signal: AbortSignal,
-  ): Promise<RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>>
+    opts?: { cursor?: string },
+  ): Promise<
+    RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean; cursor?: string }>
+  >
   /**
    * Fork a session from a completed-turn prefix of the source; on resolution
    * the child is in the list store and `open()` can target it.

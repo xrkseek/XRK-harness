@@ -11,6 +11,7 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `type` | 必填字段（除 `ts`） | 说明 |
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket；`turn/end.reason` 见下节「结束原因」。OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop 去截断 toolCalls → `{ kind: "max-tokens" }`（sticky）。`stop` 且无正文/工具 → `EMPTY_RESPONSE`（仅有推理不算成功）；未知 finish（如 `content_filter`）→ `ProviderFinishError`；非 max-tokens 的残缺 tool JSON → `IncompleteToolCallError`；三者均写 `turn/end` `{ kind: "error" }` 后抛出 |
+| `session/end-seed` | （可选 `inherited`） | **Log-only** — fork / seed 继承前缀结束标记；`forkSession` 写入；不进 `deriveMessages`；Face wire `ignorable` |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **或** `ContentBlock[]`（text / image+`ImageAttachmentRef`（可选 `offloaded: true` 投影）/ file+`FileAttachmentRef`）；可选 `messageId`（Face 行 id；同 turn 多条 inject/人话必须唯一）；可选 `rpcId`；可选 `rpcIds`（同轮合并 steer 的其余 echo id；壳与队列一次卸掉）；可选 `source`（`user` · `skill-catalog` · `agent-instructions` · `plugin`；非 `user` = 持久上下文注入，仍进 `deriveMessages`） |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta；可选 `kind`：`text`\|`reasoning`\|`usage`\|`tool-call`；`usage` 时带 `usage`；`tool-call` 时带 `toolCallId` · 可选 `toolName` · `argumentsDelta`；可选 `index` |
@@ -49,21 +50,24 @@ Append-only session facts（`@xrkseek/protocol`）。模型可见历史由 `deri
 | `assistant/message.interrupted` | `true` | 用户/宿主 **取消** 时，已流式到达的文本/推理/工具前缀固化进日志，使 `deriveMessages` 与用户所见一致 | `finalizeCancelledTurn`（`@xrkseek/core-agent-loop`） |
 | `turn/end.reason` · `aborted` | `{ kind: "aborted", reason: AgentCancelCause }` | **实时取消**（Stop / 父会话 / hook / dispose / legacy） | 同上；`reason` 为 `user` · `parent` · `hook` · `disposed` · `legacy` |
 | `turn/end.reason` · `interrupted` | `{ kind: "interrupted" }` | **仅崩溃恢复**：进程挂了留下未闭合 turn/step；加载时合成闭合 | `repairOpenTurnEvents`（`@xrkseek/core-session`） |
+| `turn/end.reason` · `forked` | `{ kind: "forked" }` | **仅 fork seed**：父前缀仍有未闭合 turn 时，子日志用该原因配平后再写 `session/end-seed` | `buildForkSeed` / `closeOpenTurns`（`@xrkseek/core-session`） |
 
 对照：活会话点 Stop → 消息可带 `interrupted: true`，turn 仍是 **`aborted`**；壳英文 UI 显示 `Stopped`（`message.stopped`）。冷启动修开洞 turn → turn 是 **`interrupted`**，没有 `AgentCancelCause`。产品壳验收：`product-shell-cancel.e2e.ts`。
 
 其它 `turn/end.reason`：`completed` · `error` · `max-tokens` · `blocked`。`error` 的壳展示见 `displayFailureMessage`（AUTH 脱敏）与 `product-shell-error.e2e.ts`。工具悬挂结算见 [tool-settlement.md](./tool-settlement.md)。
 
-## Runtime validation
+## 运行时校验
 
-| API | Behavior |
-|-----|----------|
-| `parseSessionEvent(unknown)` | Strict parse; throws `SessionEventParseError` |
-| `assertSessionEvent` | Alias of parse |
-| `isValidSessionEvent` | Soft boolean |
-| `isSessionEvent` | **Loose** gate (known `type` + numeric `ts` only) |
+| API | 行为 |
+|-----|------|
+| `parseSessionEvent(unknown)` | 严格解析；抛 `SessionEventParseError`（可选 `code`） |
+| `assertSessionEvent` | 同 parse |
+| `isValidSessionEvent` | 软布尔 |
+| `isSessionEvent` | **宽松**门（已知 `type` + 数值 `ts`） |
 
-`createMemorySessionStore().append` runs `assertSessionEvent` before freeze — bad shapes fail at the write boundary.
+基字段可选 `ignorable?: true`：未知 `type` 且带该标记 → `code: "unknown-ignorable"`，持久化读路径**跳过**该行；未知且无标记 → `code: "unknown-required"`，**拒读**整段日志（不截断后 repair）。
+
+`createMemorySessionStore().append` 在 freeze 前跑 `assertSessionEvent` — 坏形状在写边界失败。
 
 ## TokenUsage
 
@@ -103,6 +107,7 @@ Window compaction: [session-compaction.md](./session-compaction.md).
 | `type` | Required fields (beyond `ts`) | Notes |
 |--------|-------------------------------|--------|
 | `turn/start` · `turn/end` | `turnId` | Turn bracket; `turn/end.reason` in “End reasons” below. OpenAI `finish_reason: length` / Anthropic `stop_reason: max_tokens` → keep/drop truncated toolCalls → `{ kind: "max-tokens" }` (sticky). `stop` with no content/tools → `EMPTY_RESPONSE` (reasoning alone is not a successful step); unknown finish (e.g. `content_filter`) → `ProviderFinishError`; incomplete tool JSON that is not max-tokens → `IncompleteToolCallError`; all three write `turn/end` `{ kind: "error" }` then throw |
+| `session/end-seed` | (optional `inherited`) | **Log-only** — marks end of fork/seed inherited prefix; written by `forkSession`; not in `deriveMessages`; Face wire `ignorable` |
 | `step/start` · `step/end` | `turnId`, `stepId` | Provider step |
 | `user/message` | `turnId`, `content` | `content`: `string` **or** `ContentBlock[]` (text / image+`ImageAttachmentRef` (optional projected `offloaded: true`) / file+`FileAttachmentRef`); optional `messageId` (Face row id; must be unique across inject/human lines in the same turn); optional `rpcId`; optional `rpcIds` (remaining echo ids when same-turn steers coalesce; shell and queue retire together); optional `source` (`user` · `skill-catalog` · `agent-instructions` · `plugin`; non-`user` = durable context inject, still in `deriveMessages`) |
 | `assistant/chunk` | `turnId`, `stepId`, `text` | Stream delta; optional `kind`: `text`\|`reasoning`\|`usage`\|`tool-call`; `usage` carries `usage`; `tool-call` carries `toolCallId` · optional `toolName` · `argumentsDelta`; optional `index` |
@@ -141,6 +146,7 @@ Two different “interrupt” surfaces — do not conflate them.
 | `assistant/message.interrupted` | `true` | On user/host **cancel**, freeze streamed text/reasoning/tool prefix into the log so `deriveMessages` matches what the user saw | `finalizeCancelledTurn` (`@xrkseek/core-agent-loop`) |
 | `turn/end.reason` · `aborted` | `{ kind: "aborted", reason: AgentCancelCause }` | **Live cancel** (Stop / parent session / hook / dispose / legacy) | Same; `reason` is `user` · `parent` · `hook` · `disposed` · `legacy` |
 | `turn/end.reason` · `interrupted` | `{ kind: "interrupted" }` | **Crash recovery only**: process died with an open turn/step; synthesize closure on load | `repairOpenTurnEvents` (`@xrkseek/core-session`) |
+| `turn/end.reason` · `forked` | `{ kind: "forked" }` | **Fork seed only**: when the parent prefix still has an open turn, child log balances with this reason before `session/end-seed` | `buildForkSeed` / `closeOpenTurns` (`@xrkseek/core-session`) |
 
 Live Stop: message may set `interrupted: true`; turn ends as **`aborted`**; English shell shows `Stopped` (`message.stopped`). Cold-start repair of an open turn: turn ends as **`interrupted`** with no `AgentCancelCause`. Product-shell gate: `product-shell-cancel.e2e.ts`.
 
@@ -150,10 +156,12 @@ Other `turn/end.reason` values: `completed` · `error` · `max-tokens` · `block
 
 | API | Behavior |
 |-----|----------|
-| `parseSessionEvent(unknown)` | Strict parse; throws `SessionEventParseError` |
+| `parseSessionEvent(unknown)` | Strict parse; throws `SessionEventParseError` (optional `code`) |
 | `assertSessionEvent` | Alias of parse |
 | `isValidSessionEvent` | Soft boolean |
 | `isSessionEvent` | **Loose** gate (known `type` + numeric `ts` only) |
+
+Optional base field `ignorable?: true`: unknown `type` with the flag → `code: "unknown-ignorable"`, durable load **skips** the row; unknown without → `code: "unknown-required"`, **refuse** the whole log (no truncated repair).
 
 `createMemorySessionStore().append` runs `assertSessionEvent` before freeze — bad shapes fail at the write boundary.
 

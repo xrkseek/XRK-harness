@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyRequestHost,
+  effectiveRequestHost,
   evaluateMobileGate,
   hostOnly,
   isMobileGateExemptPath,
@@ -23,6 +24,17 @@ describe("mobile-gate-kit", () => {
   it("parses host header with port", () => {
     expect(hostOnly("10.0.0.1:8099")).toBe("10.0.0.1");
     expect(hostOnly("[::1]:8099")).toBe("::1");
+  });
+
+  it("ignores X-Forwarded-Host unless trustProxy", () => {
+    const req = {
+      headers: {
+        host: "10.79.1.2:8787",
+        "x-forwarded-host": "127.0.0.1",
+      },
+    } as import("node:http").IncomingMessage;
+    expect(effectiveRequestHost(req)).toBe("10.79.1.2");
+    expect(effectiveRequestHost(req, true)).toBe("127.0.0.1");
   });
 
   it("exempts health and mobile-access surfaces", () => {
@@ -60,23 +72,49 @@ describe("mobile-gate-kit", () => {
     expect(ok.mode).toBe("wan");
   });
 
-  it("requires lan pin on private LAN when lanAuthEnabled", () => {
+  it("leaves bind LAN (ownLanHosts) free without PIN", () => {
     const snap = {
       running: true,
       lanAuthEnabled: true,
       lanToken: "11111111",
       wanToken: "22222222",
       instanceId: "abc",
+      ownLanHosts: ["10.79.1.2"],
     };
-    const denied = evaluateMobileGate("/plugins/a.js", "10.79.1.2", snap, {
+    expect(
+      evaluateMobileGate("/", "10.79.1.2", snap, {
+        hasDeviceSession: false,
+        hasLanPin: false,
+        hasWanPin: false,
+      }),
+    ).toEqual({ mode: "none", allowed: true });
+  });
+
+  it("requires wan pin for non-own private LAN Host", () => {
+    const snap = {
+      running: true,
+      lanAuthEnabled: true,
+      lanToken: "11111111",
+      wanToken: "22222222",
+      instanceId: "abc",
+      ownLanHosts: ["10.79.1.2"],
+    };
+    const denied = evaluateMobileGate("/plugins/a.js", "10.0.0.1", snap, {
+      hasDeviceSession: false,
+      hasLanPin: true,
+      hasWanPin: false,
+    });
+    expect(denied.mode).toBe("wan");
+    expect(denied.allowed).toBe(false);
+
+    const ok = evaluateMobileGate("/", "10.0.0.1", snap, {
       hasDeviceSession: false,
       hasLanPin: false,
       hasWanPin: true,
     });
-    expect(denied.mode).toBe("lan");
-    expect(denied.allowed).toBe(false);
+    expect(ok.allowed).toBe(true);
 
-    const openLan = evaluateMobileGate("/", "10.79.1.2", {
+    const openLan = evaluateMobileGate("/", "10.0.0.1", {
       ...snap,
       lanAuthEnabled: false,
     }, {

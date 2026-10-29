@@ -66,7 +66,7 @@ pnpm --filter @xrkseek/harness-desktop clean:build
 
 开发投影默认不下载捆绑 Node；验证捆绑 runtime / seed / 插件事务时走打包准备路径。日常产品配置优先 **Settings UI**；Desktop 不另起平行设置真源。
 
-相关单测（`apps/desktop/tests`）：单实例 · host-protocol · host-process · 开发投影 · 打包目标/路径矩阵 · 签名/更新 env · i18n 字典键集等。壳文案：`src/locale.ts`（中英同键；非 zh 英文 fallback）；`pnpm check` 含 `verify-client-ui-i18n --desktop-only`。
+相关单测（`apps/desktop/tests`）：单实例 · host-protocol · host-process · 开发投影 · 打包目标/路径矩阵 · 签名/更新 env · i18n 字典键集等。壳文案：`src/locale.ts`（中 / 英 / 日同键；其它语言英文 fallback）；`pnpm check` 含 `verify-client-ui-i18n --desktop-only`。
 
 ## 打包环境变量
 
@@ -167,7 +167,7 @@ pnpm --filter @xrkseek/harness-desktop clean:build
 
 Development projection does not download the bundled Node by default; use packaging prep paths to exercise bundled runtime / seed / plugin transactions. Day-to-day product config stays in **Settings UI**; Desktop does not invent a parallel settings source.
 
-Related unit tests (`apps/desktop/tests`): single-instance · host-protocol · host-process · development projection · packaging target/path matrix · signing/update env · i18n key sets, etc. Shell copy: `src/locale.ts` (matching en+zh keys; English fallback for non-zh); `pnpm check` includes `verify-client-ui-i18n --desktop-only`.
+Related unit tests (`apps/desktop/tests`): single-instance · host-protocol · host-process · development projection · packaging target/path matrix · signing/update env · i18n key sets, etc. Shell copy: `src/locale.ts` (matching en+zh+ja keys; English fallback otherwise); `pnpm check` includes `verify-client-ui-i18n --desktop-only`.
 
 ## Packaging environment variables
 

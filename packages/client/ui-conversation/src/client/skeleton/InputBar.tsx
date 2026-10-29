@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExterna
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutlineRegular, IconWarningOutlineRegular, Toast, Tooltip,
+  IconPaperclipOutlineRegular, IconPlusOutlineRegular, IconWarningOutlineRegular, Toast, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -190,6 +190,26 @@ export const InputBar = memo(function InputBar({
   }, [notice, sessionId, showToast])
   const cardRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  // Phone: when the soft keyboard opens, keep the composer card in the
+  // visual viewport (hero is centered; sticky seat uses --xrk-keyboard-inset).
+  useEffect(() => {
+    const card = cardRef.current
+    if (card === null) return
+    const onFocusIn = (): void => {
+      if (typeof matchMedia === 'function' && !matchMedia('(max-width: 767px)').matches) return
+      const seat = card.closest('[data-composer-seat]')
+      const target = seat instanceof HTMLElement ? seat : card
+      const reveal = (): void => {
+        target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      }
+      reveal()
+      window.setTimeout(reveal, 120)
+      window.setTimeout(reveal, 320)
+    }
+    card.addEventListener('focusin', onFocusIn)
+    return () => { card.removeEventListener('focusin', onFocusIn) }
+  }, [])
 
   // The Access seat's data: the host-computed permissions projection
   // (undefined = capability absent → the chip renders nothing).
@@ -426,6 +446,24 @@ export const InputBar = memo(function InputBar({
     // Reset so picking the same file again re-fires the change event.
     e.target.value = ''
     if (picked.length > 0) intakeImages(picked)
+  }
+  // Phone has no drag-drop; the paperclip opens the native picker. Prefer
+  // explicit image MIME types so iOS/Android offer Gallery + Camera; when
+  // generic file uploads are projected, also allow */* for Files apps.
+  // Never set `capture` — it forces camera-only on many Android WebViews.
+  const fileAccept = useMemo((): string => {
+    const imageTypes = imageLimits?.mediaTypes
+    const images = imageTypes !== undefined && imageTypes.length > 0
+      ? imageTypes.join(',')
+      : 'image/png,image/jpeg,image/webp,image/gif'
+    if (fileLimits !== undefined) return `${images},*/*`
+    return images
+  }, [fileLimits, imageLimits])
+  const canPickAttach = canAcceptDrop && addImages !== undefined
+  const onOpenAttach = (): void => {
+    if (!canPickAttach) return
+    if (keyboard !== undefined && keyboard.pickFiles()) return
+    fileInputRef.current?.click()
   }
 
   // The keymap handlers read live bar state through this ref so the editor
@@ -679,8 +717,21 @@ export const InputBar = memo(function InputBar({
               type="file"
               multiple
               hidden
+              accept={fileAccept}
               onChange={onPickFiles}
             />
+            <Tooltip label={t('input.attach')} side="top">
+              <button
+                type="button"
+                className={css.add}
+                aria-label={t('input.attach')}
+                disabled={!canPickAttach || locked || machineBusy}
+                onMouseDown={keepFocus}
+                onClick={onOpenAttach}
+              >
+                <IconPaperclipOutlineRegular size={14} />
+              </button>
+            </Tooltip>
             <div className={css.modes}>
               {accessSelect}
               {renderSlot('conversation.input.plan', { locked })}

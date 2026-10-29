@@ -23,15 +23,68 @@ const kit = { useSessions: unusedHook, useWorkspaces: unusedHook, useConnectionS
 
 describe('chrome content', () => {
   it('TriggerContent renders the icon with the label in the wide column', () => {
-    const { container } = render(<TriggerContent {...kit} wide t={t} />)
+    const { container } = render(
+      <button type="button">
+        <TriggerContent {...kit} wide t={t} />
+      </button>,
+    )
     expect(container.querySelector('svg')).toBeTruthy()
     expect(screen.getByText('Settings')).toBeTruthy()
+    expect(container.querySelector('[data-label="on"]')).toBeTruthy()
   })
 
   it('TriggerContent drops the label in the rail state', () => {
     const { container } = render(<TriggerContent {...kit} wide={false} t={t} />)
     expect(container.querySelector('svg')).toBeTruthy()
     expect(screen.queryByText('Settings')).toBeNull()
+    expect(container.querySelector('[data-label="off"]')).toBeTruthy()
+  })
+
+  it('TriggerContent keeps the gear and drops Settings when the foot cannot fit the word', () => {
+    class FakeResizeObserver {
+      private readonly cb: ResizeObserverCallback
+      constructor(cb: ResizeObserverCallback) { this.cb = cb }
+      observe(): void { this.cb([], this as unknown as ResizeObserver) }
+      unobserve(): void { /* noop */ }
+      disconnect(): void { /* noop */ }
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.textContent === 'Settings') return 64
+        if (this.getAttribute('aria-hidden') === 'true') return 16
+        if (this.textContent?.startsWith('v')) return 72
+        return 120
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        // Foot row: gear budget after version chip is too tight for "Settings".
+        if (this.tagName === 'DIV') return 96
+        return 40
+      },
+    })
+
+    const { container } = render(
+      <div>
+        <button type="button">
+          <TriggerContent {...kit} wide t={t} />
+        </button>
+        <span>v0.6.23</span>
+      </div>,
+    )
+    expect(container.querySelector('svg')).toBeTruthy()
+    expect(screen.queryByText('Settings')).toBeNull()
+    expect(container.querySelector('[data-label="off"]')).toBeTruthy()
+
+    if (width) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', width)
+    if (client) Object.defineProperty(HTMLElement.prototype, 'clientWidth', client)
+    vi.unstubAllGlobals()
   })
 
   it('HeaderContent and CloseLabel render their translated text', () => {
@@ -57,9 +110,14 @@ describe('DesktopReleaseFooter', () => {
     delete (globalThis as { xrkDesktop?: unknown }).xrkDesktop
   })
 
-  it('hides on web when the Desktop bridge is absent', () => {
+  it('hides when neither Desktop bridge nor Host version is available', () => {
     const { container } = render(<DesktopReleaseFooter t={interpolate} />)
     expect(container.firstChild).toBeNull()
+  })
+
+  it('shows a static Host version chip on web', () => {
+    render(<DesktopReleaseFooter t={interpolate} hostVersion="0.7.0-rc.1" />)
+    expect(screen.getByLabelText('v0.7.0-rc.1')).toBeTruthy()
   })
 
   it('uses the Host reconnect chip for an available update', async () => {
@@ -110,7 +168,7 @@ describe('DesktopReleaseFooter', () => {
     expect(install).toHaveBeenCalledOnce()
   })
 
-  it('shows the installed version as a status chip when no update is waiting', async () => {
+  it('shows the installed version as a compact chip when no update is waiting', async () => {
     ;(globalThis as { xrkDesktop?: unknown }).xrkDesktop = {
       version: async () => '0.5.13',
       updates: {
@@ -122,7 +180,8 @@ describe('DesktopReleaseFooter', () => {
     }
     render(<DesktopReleaseFooter t={interpolate} />)
     await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'v0.5.13' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Check for updates v0.5.13' })).toBeTruthy()
+      expect(screen.getByText('v0.5.13')).toBeTruthy()
     })
   })
 

@@ -36,7 +36,11 @@ import {
   memberPackDir,
   catalogMemberExportProblem,
   catalogMemberWriteProblem,
+  isCatalogSeedMemberId,
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
   parseMemberAppearance,
+  parseMemberNickname,
   parseMemberToolPolicy,
   parseRosterScope,
   type ListedRosterMember,
@@ -54,6 +58,10 @@ import {
 } from "../session-thread-publish.js";
 import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 import { sessionCreate, sessionPrompt } from "./session.js";
+import {
+  mintAgentHomeForMember,
+  unbindAgentHomeForMember,
+} from "../agent-home.js";
 
 function sessionIdOf(payload: unknown): string {
   const args = remoteArgs(payload);
@@ -182,8 +190,16 @@ export const teamList: FaceHandler = async (runtime, _rpcId, payload) => {
     value: {
       workspaceId,
       members: runtime.agentRoster
-        .listVisible(workspaceId)
-        .map((row) => listMemberForClient(runtime, workspaceId, row)),
+        .listForTeamPanel(workspaceId)
+        .map((row) =>
+          listMemberForClient(
+            runtime,
+            row.scope === "workspace" && row.workspaceId
+              ? row.workspaceId
+              : workspaceId,
+            row,
+          ),
+        ),
     },
   };
 };
@@ -196,10 +212,6 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
   const idProblem = memberIdProblem(args.id);
   if (idProblem) {
     return { ok: false, error: { code: "invalid-payload", message: idProblem } };
-  }
-  const catalogProblem = catalogMemberWriteProblem(args.id);
-  if (catalogProblem) {
-    return { ok: false, error: { code: "invalid-payload", message: catalogProblem } };
   }
   const roleRaw = typeof args.role === "string" ? args.role : "worker";
   const canvasId = canvasWorkspaceIdForSession(runtime, sessionId);
@@ -223,6 +235,77 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
     appearanceArg &&
     typeof appearanceArg === "object" &&
     Object.keys(appearanceArg).length > 0;
+  const rawId = typeof args.id === "string" ? args.id.trim() : "";
+  const nicknameArg =
+    args.nickname === null
+      ? null
+      : typeof args.nickname === "string"
+        ? args.nickname
+        : undefined;
+  if (rawId === SUNFLOWER_MEMBER_ID && nicknameArg !== undefined) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid-payload",
+        message: `catalog member ${SUNFLOWER_MEMBER_ID} nickname is locked`,
+      },
+    };
+  }
+  // Catalog: mint 干员 home; patch costume (经理) / nickname (all but 向日葵).
+  // Seed playbook stays frozen.
+  if (rawId && isCatalogSeedMemberId(rawId)) {
+    let listed = runtime.agentRoster
+      .listVisible(canvasId)
+      .find((row) => row.id === rawId);
+    if (!listed) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid-payload",
+          message: `catalog member ${rawId} not found`,
+        },
+      };
+    }
+    const wantAppearance =
+      rawId === MANAGER_MEMBER_ID && hasAppearance;
+    const wantNickname = nicknameArg !== undefined;
+    if (wantAppearance || wantNickname) {
+      const patched = runtime.agentRoster.patchCatalogMeta(rawId, {
+        ...(wantAppearance
+          ? {
+              appearance: parseMemberAppearance(appearanceArg, {
+                shape: listed.appearance.shape,
+                color: listed.appearance.color,
+              }),
+            }
+          : {}),
+        ...(wantNickname ? { nickname: nicknameArg } : {}),
+      });
+      if (patched) {
+        listed =
+          runtime.agentRoster
+            .listVisible(canvasId)
+            .find((row) => row.id === rawId) ?? {
+              ...patched,
+              scope: "global" as const,
+              catalog: true as const,
+            };
+      }
+    }
+    const home = await mintAgentHomeForMember(runtime, listed, canvasId);
+    return {
+      ok: true,
+      value: {
+        workspaceId: "global",
+        member: listMemberForClient(runtime, canvasId, listed),
+        homeWorkspaceId: home.workspaceId,
+      },
+    };
+  }
+  const catalogProblem = catalogMemberWriteProblem(args.id);
+  if (catalogProblem) {
+    return { ok: false, error: { code: "invalid-payload", message: catalogProblem } };
+  }
   const toolsRaw =
     args.tools && typeof args.tools === "object" ? args.tools : undefined;
   const tools = parseMemberToolPolicy(toolsRaw);
@@ -231,6 +314,9 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
     playbook: String(args.playbook ?? ""),
     role: isAgentTeamSpawnRole(roleRaw) ? roleRaw : "worker",
     ...(typeof args.brief === "string" ? { brief: args.brief } : {}),
+    ...(nicknameArg !== undefined
+      ? { nickname: nicknameArg === null ? null : parseMemberNickname(nicknameArg) ?? null }
+      : {}),
     ...(args.inject === "subagent" || args.inject === "minimal"
       ? { inject: args.inject }
       : {}),
@@ -259,7 +345,16 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "name and playbook required" },
     };
   }
-  return { ok: true, value: { workspaceId: scope === "global" ? "global" : canvasId, member } };
+  // Explicit user add / edit — mint 干员 home (not catalog seed sync).
+  const home = await mintAgentHomeForMember(runtime, member, canvasId);
+  return {
+    ok: true,
+    value: {
+      workspaceId: scope === "global" ? "global" : canvasId,
+      member,
+      homeWorkspaceId: home.workspaceId,
+    },
+  };
 };
 
 export const teamRemove: FaceHandler = async (runtime, _rpcId, payload) => {
@@ -285,6 +380,7 @@ export const teamRemove: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!ok) {
     return { ok: false, error: { code: "invalid-payload", message: "unknown member id" } };
   }
+  await unbindAgentHomeForMember(runtime, id);
   return { ok: true, value: { workspaceId, deleted: true, id } };
 };
 
@@ -317,7 +413,15 @@ export const teamCapture: FaceHandler = async (runtime, _rpcId, payload) => {
   if (!member) {
     return { ok: false, error: { code: "invalid-payload", message: "could not save member" } };
   }
-  return { ok: true, value: { workspaceId: scope === "global" ? "global" : canvasId, member } };
+  const home = await mintAgentHomeForMember(runtime, member, canvasId);
+  return {
+    ok: true,
+    value: {
+      workspaceId: scope === "global" ? "global" : canvasId,
+      member,
+      homeWorkspaceId: home.workspaceId,
+    },
+  };
 };
 
 export const teamDispatch: FaceHandler = async (runtime, rpcId, payload) => {
@@ -567,6 +671,7 @@ export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
     memberId: member.id,
     productHome: runtime.agentRoster.home,
   });
+  const home = await mintAgentHomeForMember(runtime, member, canvasId);
   return {
     ok: true,
     value: {
@@ -578,6 +683,7 @@ export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
       skillNames: placed.skillNames,
       ...(placed.envPrep ? { envPrep: placed.envPrep } : {}),
       ready: false,
+      homeWorkspaceId: home.workspaceId,
     },
   };
 };

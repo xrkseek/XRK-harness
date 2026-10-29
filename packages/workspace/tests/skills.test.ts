@@ -8,6 +8,7 @@ import {
   isSkillName,
   listSkills,
   listSkillsFromWorkspace,
+  listStandingCatalogSkills,
   loadSkill,
   parseSkillMarkdown,
 } from "../src/index.js";
@@ -86,6 +87,65 @@ Do the ping.
         name: "from-claude",
       }),
     ).toMatchObject({ name: "from-claude" });
+  });
+
+  it("listStandingCatalogSkills includes product-home installs, not ~/.agents by default", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "xrk-skill-standing-"));
+    const home = await mkdtemp(path.join(tmpdir(), "xrk-skill-standing-home-"));
+    const productHomeSkill = path.join(home, ".xrk", "skills", "user-installed");
+    const agentsSkill = path.join(home, ".agents", "skills", "agents-only");
+    const wsSkill = path.join(ws, ".agents", "skills", "proj");
+    await mkdir(productHomeSkill, { recursive: true });
+    await mkdir(agentsSkill, { recursive: true });
+    await mkdir(wsSkill, { recursive: true });
+    await writeFile(
+      path.join(productHomeSkill, "SKILL.md"),
+      "---\ndescription: Product home install\n---\n# U\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(agentsSkill, "SKILL.md"),
+      "---\ndescription: Agents only\n---\n# A\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(wsSkill, "SKILL.md"),
+      "---\ndescription: Project\n---\n# P\n",
+      "utf8",
+    );
+    const listed = await listStandingCatalogSkills({
+      workspaceRoot: ws,
+      homeDir: home,
+      audience: "user",
+    });
+    expect(listed.map((s) => s.name).sort()).toEqual(["proj", "user-installed"]);
+  });
+
+  it("公文包 preferredSkillDirs beat workspace on the same skill name", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "xrk-skill-pack-"));
+    const pack = await mkdtemp(path.join(tmpdir(), "xrk-skill-pack-root-"));
+    const wsSkill = path.join(ws, ".agents", "skills", "shared");
+    const packSkill = path.join(pack, "shared");
+    await mkdir(wsSkill, { recursive: true });
+    await mkdir(packSkill, { recursive: true });
+    await writeFile(
+      path.join(wsSkill, "SKILL.md"),
+      "---\nname: shared\ndescription: from workspace\n---\n# Ws\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(packSkill, "SKILL.md"),
+      "---\nname: shared\ndescription: from pack\n---\n# Pack\n",
+      "utf8",
+    );
+    const listed = await listStandingCatalogSkills({
+      workspaceRoot: ws,
+      extraSkillDirs: [pack],
+      includeUserHome: false,
+    });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.description).toBe("from pack");
+    expect(listed[0]?.directory).toBe(packSkill);
   });
 
   it(".xrk wins over .claude on the same skill name", async () => {

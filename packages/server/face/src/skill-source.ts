@@ -3,7 +3,10 @@
  */
 
 import path from "node:path";
-import { SKILL_VENDOR_PRIORITY } from "@xrkseek/workspace";
+import {
+  SKILL_VENDOR_PRIORITY,
+  resolveUserProductHome,
+} from "@xrkseek/workspace";
 
 /** Standing catalog layer for `skill.list`. */
 export type SkillListLayer = "workspace" | "home" | "other";
@@ -76,10 +79,12 @@ function rootLabel(
  * Map a skill `directory` (…/skills/<name>) to a wire source.
  * @param skillDirectory - absolute path to the skill folder (contains SKILL.md)
  * @param workspaceRoot - session / Host project root
+ * @param homeDir - optional test override for product-home resolution
  */
 export function classifySkillSource(
   skillDirectory: string,
   workspaceRoot: string,
+  homeDir?: string,
 ): SkillListSource {
   const skillsParent = path.resolve(skillDirectory, "..");
   const ws = path.resolve(workspaceRoot);
@@ -87,6 +92,19 @@ export function classifySkillSource(
     skillsParent === ws ||
     skillsParent.startsWith(ws + path.sep) ||
     skillsParent.replace(/\\/g, "/").startsWith(ws.replace(/\\/g, "/") + "/");
+
+  // Relocated `XRK_HOME` may not end with `.xrk/skills` — still product home.
+  const productSkills = path.resolve(
+    path.join(resolveUserProductHome(homeDir), "skills"),
+  );
+  if (skillsParent === productSkills) {
+    return {
+      layer: "home",
+      vendor: "xrk",
+      root: "~/.xrk/skills",
+    };
+  }
+
   const layer: SkillListLayer = underWs ? "workspace" : "home";
   // productDir/skills and odd overlays stay "other" when not under a known vendor.
   const vendor = vendorFromDir(skillsParent);

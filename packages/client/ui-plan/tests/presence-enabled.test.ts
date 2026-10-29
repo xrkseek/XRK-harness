@@ -37,12 +37,28 @@ function mockPresenceScope(
     snapshot = {
       ...snapshot,
       value: { ...snapshot.value!, [field]: value } as PresenceSettings,
-      revision: snapshot.revision + 1,
+      revision: (snapshot.revision ?? 0) + 1,
+    }
+    for (const listener of listeners) listener()
+  })
+  const patch = vi.fn(async (ops: readonly { op: 'set' | 'unset'; path: readonly string[]; value?: unknown }[]) => {
+    let value = { ...snapshot.value! } as PresenceSettings
+    for (const op of ops) {
+      const field = op.path[0]
+      if (typeof field !== 'string') continue
+      if (op.op === 'set') (value as Record<string, unknown>)[field] = op.value
+      else delete (value as Record<string, unknown>)[field]
+    }
+    snapshot = {
+      ...snapshot,
+      value,
+      revision: (snapshot.revision ?? 0) + 1,
     }
     for (const listener of listeners) listener()
   })
   return {
     set,
+    patch,
     publish: (next) => {
       snapshot = {
         ...snapshot,
@@ -50,7 +66,7 @@ function mockPresenceScope(
         value: next.value
           ? ({ ...snapshot.value, ...next.value } as PresenceSettings)
           : snapshot.value,
-        revision: next.revision ?? snapshot.revision + 1,
+        revision: next.revision ?? (snapshot.revision ?? 0) + 1,
       }
       for (const listener of listeners) listener()
     },
@@ -62,6 +78,7 @@ function mockPresenceScope(
       },
       set,
       unset: vi.fn(async () => undefined),
+      patch,
     },
   }
 }

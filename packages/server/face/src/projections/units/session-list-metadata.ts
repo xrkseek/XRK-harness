@@ -14,6 +14,21 @@ export function createSessionListMetadataUnit(): ProjectionDefinition<
     key: "sessionListMetadata",
     stateVersion: 1,
     init: () => ({ blank: true, lastPromptAt: null }),
+    parseState(value: unknown): SessionListMetadata {
+      if (value === null || typeof value !== "object") {
+        throw new Error("sessionListMetadata state must be an object");
+      }
+      const v = value as { blank?: unknown; lastPromptAt?: unknown };
+      if (typeof v.blank !== "boolean") {
+        throw new Error("sessionListMetadata.state.blank must be boolean");
+      }
+      if (!(v.lastPromptAt === null || typeof v.lastPromptAt === "number")) {
+        throw new Error(
+          "sessionListMetadata.state.lastPromptAt must be number|null",
+        );
+      }
+      return { blank: v.blank, lastPromptAt: v.lastPromptAt };
+    },
     apply(state, event: SessionEvent): SessionListMetadata {
       // Leave blank on the first agent turn *or* slash command so Hero can
       // render durable command cards (/mcp, /status, …) without a prompt.
@@ -32,6 +47,7 @@ export function createSessionListMetadataUnit(): ProjectionDefinition<
       return { blank, lastPromptAt };
     },
     wire: {
+      summary: true,
       view: (state) => state,
       parse(value: unknown): SessionListMetadata {
         if (value === null || typeof value !== "object") {

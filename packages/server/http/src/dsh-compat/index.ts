@@ -317,6 +317,7 @@ export {
   tryHandleMobileAccessGate,
 };
 export {
+  armAccessGateForListen,
   injectMobileAccessShellIntoHtml,
   XRK_MOBILE_SHELL_CSS,
 } from "./mobile-access.js";

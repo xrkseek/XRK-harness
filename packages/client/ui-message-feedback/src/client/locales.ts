@@ -73,3 +73,37 @@ export const en = {
   'error.generic': 'Could not save feedback',
   'error.noteTooLarge': 'The description is too long; shorten it and submit again',
 } satisfies Record<MessageFeedbackKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'action.like': '良い応答',
+  'action.likeActive': '評価を削除',
+  'action.dislike': '良くない回答',
+  'action.dislikeActive': '評価を削除',
+  'note.open': 'メモを追加',
+  'note.placeholder': '良かった点や問題点は？（任意）',
+  'note.save': '保存',
+  'note.cancel': 'キャンセル',
+  'note.aria': 'フィードバックメモ',
+  'dialog.title': 'フィードバックを送信',
+  'dialog.categories': 'フィードバックのカテゴリ',
+  'dialog.detail': 'フィードバックの詳細',
+  'dialog.hint': '改善のため詳細を記入してください。送信内容には関連する会話の一部が含まれます。',
+  'category.task-result': 'タスク結果',
+  'category.instruction-following': '指示の理解と遵守',
+  'category.product-interaction': '製品機能と操作',
+  'category.service-stability': 'サービスの安定性',
+  'category.resource-cost': 'リソース使用量とコスト',
+  'category.security-privacy-permission': 'セキュリティ、プライバシー、権限',
+  'category.other': 'その他',
+  'toast.recorded': 'フィードバックありがとうございます',
+  submit: '送信',
+  submitting: '送信中…',
+  close: '閉じる',
+  'error.conflict': 'このフィードバックは別の場所で変更されました。最新の状態を表示しています',
+  'error.load': 'フィードバックを読み込めませんでした',
+  'error.generic': 'フィードバックを保存できませんでした',
+  'error.noteTooLarge': '説明が長すぎます。短くしてから再送信してください',
+} as const satisfies Record<MessageFeedbackKey, string>
+
+

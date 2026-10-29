@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatProductHomeAnchor,
   formatWorkspaceRootAnchor,
   normalizeRuntimeSurface,
   resolveRuntimeSurface,
@@ -20,6 +21,25 @@ describe("workspace root anchor", () => {
     const text = formatWorkspaceRootAnchor("/repo/app");
     expect(text).toContain("/repo/app");
     expect(text).not.toContain("Display name:");
+  });
+
+  it("appends Product home when given", () => {
+    const text = formatWorkspaceRootAnchor(
+      "/repo/app",
+      undefined,
+      "web",
+      undefined,
+      "D:\\data\\.xrk",
+    );
+    expect(text).toContain("## Product home");
+    expect(text).toContain("D:\\data\\.xrk");
+    expect(text).toContain("XRK_HOME");
+    expect(text).toContain("## Runtime surface");
+  });
+
+  it("formatProductHomeAnchor is empty for blank input", () => {
+    expect(formatProductHomeAnchor("")).toBe("");
+    expect(formatProductHomeAnchor("  ")).toBe("");
   });
 
   it("appends the runtime surface paragraph (desktop vs web)", () => {

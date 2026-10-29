@@ -181,6 +181,7 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   switchThread?: (sessionId: SessionId, threadId: string) => Promise<void>
   listTeam?: (sessionId: SessionId) => Promise<readonly AgentTeamMemberRow[]>
   upsertTeamMember?: (sessionId: SessionId, input: {
+    readonly nickname?: string | null
     readonly name: string
     readonly playbook: string
     readonly role?: string
@@ -203,9 +204,10 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
     readonly kind?: 'thin' | 'advanced'
     readonly ready?: boolean
-  }) => Promise<{ readonly id: string }>
+  }) => Promise<{ readonly id: string; readonly homeWorkspaceId?: string }>
   removeTeamMember?: (sessionId: SessionId, memberId: string, scope?: 'global' | 'workspace') => Promise<void>
   captureTeamMember?: (sessionId: SessionId) => Promise<void>
+  /** @deprecated Dispatch UI removed — spawn via tools / subagent. */
   dispatchTeam?: (sessionId: SessionId, memberId: string, task: string) => Promise<void>
   /** Thin → JSON; advanced → zip (Face materializes pack skills). */
   exportTeamMember?: (sessionId: SessionId, memberId: string) => Promise<{
@@ -233,6 +235,8 @@ export type WorkspaceThreadRow = {
 export type AgentTeamMemberRow = {
   readonly id: string
   readonly name: string
+  /** Optional short call-name; locked on 向日葵. */
+  readonly nickname?: string
   readonly playbook: string
   readonly role: string
   readonly seed?: true
@@ -252,6 +256,8 @@ export type AgentTeamMemberRow = {
     readonly overlayHeld?: string
   }
   readonly scope?: 'global' | 'workspace'
+  /** Owning project workspace when `scope === 'workspace'`. */
+  readonly workspaceId?: string
   readonly brief?: string
   readonly inject?: string
   readonly tools?: { readonly mode: string; readonly names: readonly string[] }

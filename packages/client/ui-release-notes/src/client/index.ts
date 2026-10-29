@@ -19,7 +19,7 @@ import type {} from '@xrkseek/client-ui-sidebar/client'
 import { ReleaseNotesButton } from './ReleaseNotesButton.tsx'
 import type { ReleaseNotesButtonInjected } from './ReleaseNotesButton.tsx'
 import { ReleaseNotesStore } from './release-notes-store.ts'
-import { en, zh, type ReleaseNotesKey } from './locales.ts'
+import { en, ja, zh, type ReleaseNotesKey } from './locales.ts'
 import { RELEASE_NOTES_SETTINGS_NAMESPACE } from './release-notes-copy.ts'
 
 export type { ReleaseNotesButtonInjected, ReleaseNotesButtonProps } from './ReleaseNotesButton.tsx'
@@ -48,7 +48,7 @@ export const inject = ['slots', 'locale', 'connection', 'remote']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-release-notes: copy dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-release-notes: copy dictionaries')
 
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new ReleaseNotesStore(

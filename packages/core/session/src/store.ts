@@ -13,6 +13,8 @@ export interface SessionRecord {
 /** Face `session.list` fast path — avoid loading full logs for cold sessions. */
 export interface SessionListHints {
   readonly lastEventTs: number | null;
+  /** Durable event count (list / cold-cache identity without hydrating). */
+  readonly eventCount: number;
   /** Agent turn started — session leaves the blank / New Session reuse pool. */
   readonly hasTurnStart: boolean;
   /**
@@ -35,6 +37,18 @@ export interface SessionStore {
    * {@link forkSession} falls back to append when absent.
    */
   seed?(id: string | undefined, events: readonly SessionEvent[]): SessionRecord;
+  /**
+   * Fork fast path: SQL-copy durable prefix rows from `sourceId`, then append
+   * `suffix` (open-turn closers + `session/end-seed`). Returns `undefined` when
+   * the store cannot use the fast path (caller falls back to {@link seed}).
+   * Optional — memory stores omit this.
+   */
+  seedFromSession?(
+    sourceId: string,
+    keepLogical: number,
+    childId: string | undefined,
+    suffix: readonly SessionEvent[],
+  ): SessionRecord | undefined;
   /**
    * Replace an existing session's log with `events` (same id). Used by
    * Cursor-style edit/delete truncate — not fork. Optional on lightweight
@@ -83,4 +97,36 @@ export interface SessionStore {
   listHints?(id: string): SessionListHints;
   /** True when the full log is already resident (optional). */
   isLoaded?(id: string): boolean;
+  /**
+   * Cold history first page (R8): expand only a physical **suffix** of the log.
+   * `baseIndex` is the absolute 0-based index of `events[0]` in the full logical
+   * log (from `listHints.eventCount`). Returns `undefined` when the store cannot
+   * serve a reliable suffix (missing hints / empty). Does **not** install the
+   * suffix as the resident full log.
+   */
+  readEventsTail?(
+    id: string,
+    maxLogical: number,
+  ): { readonly events: readonly SessionEvent[]; readonly baseIndex: number } | undefined;
+  /**
+   * Walk durable rows without expanding packed chunk runs. Used to prime Face
+   * wire turn/step maps on a cold history open (R8) without hydrating 10k+ chunks.
+   */
+  scanDurableSingles?(
+    id: string,
+    visit: (event: SessionEvent) => void,
+  ): void;
+  /**
+   * Durability barrier: commit pending writes for one session, or every
+   * session when `sessionId` is omitted. Memory stores omit this; the
+   * persistent store implements it. Agent-loop calls it before LLM stream
+   * and before tool bodies (DSH-style semantic checkpoints).
+   */
+  flush?(sessionId?: string): void;
+  /**
+   * Drop an idle session's in-memory log after cold observation (history /
+   * search). Returns false when the session is missing, not resident, or
+   * still has an open turn (pinned). Memory stores omit this.
+   */
+  releaseResident?(sessionId: string): boolean;
 }

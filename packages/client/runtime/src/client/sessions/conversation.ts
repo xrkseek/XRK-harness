@@ -407,11 +407,16 @@ export type OpenState = 'cold' | 'loading' | 'open' | 'error'
  */
 export type ComposerPhase = 'blank' | 'engaging' | 'active'
 
-/** Send/stop failure surfaced in the input error strip; op picks the user-facing copy (发送失败 vs 停止失败). */
-export interface PromptError {
-  op: 'send' | 'stop'
-  error: RpcError
-}
+  /**
+   * Composer-strip failure; `op` picks the user-facing copy (发送失败 / 停止失败 /
+   * 截断失败). `resubmit` covers edit-resubmit truncation — a cut that failed
+   * must never be followed by the re-prompt, or the old turn and the edited
+   * message both survive.
+   */
+  export interface PromptError {
+    op: 'send' | 'stop' | 'resubmit'
+    error: RpcError
+  }
 
 /**
  * Stable live per-key reader. An old ChatSnapshot observes later flushes

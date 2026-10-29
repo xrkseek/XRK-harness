@@ -31,6 +31,11 @@ export {
   wrapStoreForSessionTelemetry,
   type WrapStoreForSessionTelemetryOptions,
 } from "./wrap-store.js";
+export {
+  applyRedaction,
+  basicRedactionRule,
+  type RedactionRule,
+} from "./redact.js";
 
 /** Face `session-telemetry` product shape (Settings SoT). */
 export type SessionTelemetryMode = "off" | "memory" | "otlp";

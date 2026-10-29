@@ -10,11 +10,16 @@ export const BOOTING_ATTR = 'data-xrk-booting' as const
  * Leave `#xrk-boot-skeleton` visible until {@link clearBooting}: AppRoot (z=100)
  * covers it; hiding early leaves a blank `#root` frame on remount.
  */
-export function stampBooting(lang?: 'zh' | 'en'): void {
+export function stampBooting(lang?: 'zh' | 'en' | 'ja'): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.setAttribute(BOOTING_ATTR, '')
-  if (lang !== undefined) root.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en')
+  if (lang !== undefined) {
+    root.setAttribute(
+      'lang',
+      lang === 'zh' ? 'zh-CN' : lang === 'ja' ? 'ja' : 'en',
+    )
+  }
   document.getElementById('xrk-boot-skeleton')?.removeAttribute('hidden')
 }
 

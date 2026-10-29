@@ -23,7 +23,8 @@ import {
   fitProducedFiles, ProducedFiles, type ProducedFilesProps,
 } from '../src/client/ProducedFiles.tsx'
 import {
-  basename, deliverablesDefinition, fileLanesForClosing, producedFileMentions, producedForClosing, selectDeliverables, selectProducedFiles,
+  basename, changesForClosing, deliverablesDefinition, fileLanesForClosing, producedFileMentions,
+  producedForClosing, selectDeliverables, selectProducedFiles,
   type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -331,6 +332,33 @@ describe('produced-file Turn data', () => {
       status: 'open' as const,
     }
     expect(selectDeliverables({ turn: openTurn, seq: 2, openFile: () => {} })).toBeNull()
+  })
+
+  it('settles the change card on turn/end, not on the closing message', () => {
+    // A fix turn: the closing assistant speaks at 20, the diff tool lands at 40,
+    // the coalesced workspace/changes at 60, turn/end at 70. The tail anchors on
+    // the closing assistant, so filtering the turn-level summary on that seq hid
+    // a card that had already painted — the "flash, then gone" end of a fix turn.
+    const data: DeliverablesTurnData = {
+      produced: [{ seq: 40, path: 'a.ts', op: 'modify' }],
+      changes: {
+        seq: 60,
+        turnId: 'turn_1',
+        cwd: '/w',
+        total: 1,
+        added: 3,
+        deleted: 1,
+        files: [{ path: 'a.ts', display: 'a.ts', added: 3, deleted: 1 }],
+      },
+    }
+    expect(changesForClosing(data, 20)).toBeNull()
+    const matched = selectDeliverables({
+      turn: { ...turnLocation(1, data), end: { seq: 70 } as TurnLocation['end'] },
+      seq: 20,
+      openFile: () => {},
+    })
+    expect(matched?.changes?.seq).toBe(60)
+    expect(matched?.lanes.modified).toEqual(['a.ts'])
   })
 
   it('ignores calls without mutation locations, orphan results, and replacement results', () => {

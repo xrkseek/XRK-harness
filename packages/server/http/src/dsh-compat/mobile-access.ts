@@ -44,8 +44,12 @@ import { qrSvgForText } from "./pocket-qrcode.js";
  */
 export const XRK_MOBILE_SHELL_CSS = `/* XRK shell mobile seam */
 @media (max-width: 900px) {
-  [data-slot="conversation.session.header.actions"],
-  [data-slot="conversation.session.header.utilities"] {
+  /* Hide header Status twin (AppFrame phoneChrome owns Overview). Keep
+     PresenceDock in utilities — do not blank the whole utilities seat. */
+  [data-slot="conversation.session.header.actions"] {
+    display: none !important;
+  }
+  [data-slot="conversation.session.header.utilities"] > :not([data-presence-dock]) {
     display: none !important;
   }
   [role="tablist"] {
@@ -67,6 +71,10 @@ export function injectMobileAccessShellIntoHtml(html: string): string {
 
 export interface MobileAccessOptions {
   readonly xrkHome?: string;
+  /** Bind private IPv4 literals that stay PIN-free (同源 IP). */
+  readonly ownLanHosts?: readonly string[];
+  /** When true (or XRK_TRUST_PROXY), honor X-Forwarded-Host for gate class. */
+  readonly trustProxy?: boolean;
 }
 
 interface MobileState extends MobileAuthState {
@@ -241,6 +249,57 @@ export function ensureMobileAccessRunning(
   if (!state.wanToken) state.wanToken = mint8DigitPin();
   saveState(options, state);
   return state;
+}
+
+function isLoopbackBindHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (!h || h === "localhost" || h === "::1" || h === "[::1]") return true;
+  return h === "127.0.0.1" || h.startsWith("127.");
+}
+
+/**
+ * Arm the access gate for a non-loopback listen and remint PINs each process
+ * start (unless the operator locked a custom PIN). Loopback binds leave the
+ * gate idle.
+ */
+export function armAccessGateForListen(
+  options: MobileAccessOptions,
+  bindHost: string,
+  bindPort: number,
+): {
+  readonly armed: boolean;
+  readonly lanToken: string;
+  readonly wanToken: string;
+  readonly origin: string;
+} {
+  if (isLoopbackBindHost(bindHost)) {
+    const state = loadState(options);
+    return {
+      armed: false,
+      lanToken: state.lanToken,
+      wanToken: state.wanToken,
+      origin: "",
+    };
+  }
+  let state = ensureInstanceId(loadState(options));
+  const origin = `http://${bindHost}:${String(bindPort)}`;
+  const remintLan = !state.lanPinCustom;
+  const remintWan = !state.wanPinCustom;
+  state = {
+    ...state,
+    running: true,
+    origin,
+    csrf: state.csrf || mintToken(),
+    lanToken: remintLan ? mint8DigitPin() : state.lanToken || mint8DigitPin(),
+    wanToken: remintWan ? mint8DigitPin() : state.wanToken || mint8DigitPin(),
+  };
+  saveState(options, state);
+  return {
+    armed: true,
+    lanToken: state.lanToken,
+    wanToken: state.wanToken,
+    origin,
+  };
 }
 
 function mintToken(): string {

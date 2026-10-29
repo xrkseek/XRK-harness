@@ -22,7 +22,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@xrkseek/client-ui-slots'
-import { ShortcutsPanel, type ShortcutEntry } from '@xrkseek/client-ui-primitives'
+import {
+  IconGaugeOutlineRegular,
+  ShortcutsPanel,
+  type ShortcutEntry,
+} from '@xrkseek/client-ui-primitives'
 import {
   computeColumns, phoneDrawerWidth, resolveShellTracks,
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT,
@@ -31,6 +35,8 @@ import {
   rememberDetailsOpen,
   selectDetailsOpenMemory,
 } from './details-open-memory.ts'
+import { LAYOUT_INSET_ATTR } from './layout-insets.ts'
+import { bindVisualViewportKeyboard } from './visual-viewport-keyboard.ts'
 import {
   SHELL_SHORTCUT_DEFS,
   comboFromEvent,
@@ -261,6 +267,9 @@ export function AppFrame({
       return true
     }
     if (id === 'layout.toggleDetails') {
+      // Blank / no Session: Overview is unavailable — do not leave a latent
+      // open preference that would flash Status when the Session settles.
+      if (detailsSessionRef.current === undefined) return true
       if (detailsCollapsedRef.current) actions.openDetails()
       else actions.closeDetails()
       return true
@@ -430,6 +439,19 @@ export function AppFrame({
       phone,
     })
   }, [cols.details, cols.sidebar, detailsCollapsed, phone, publishLayoutInsets])
+
+  // Stamp Status availability for ConversationRoot phone title padding (menu
+  // alone vs menu + Status chip). Cleared on blank / no Session.
+  useEffect(() => {
+    const root = document.documentElement
+    if (detailsSession !== undefined) root.setAttribute(LAYOUT_INSET_ATTR.status, '')
+    else root.removeAttribute(LAYOUT_INSET_ATTR.status)
+    return () => { root.removeAttribute(LAYOUT_INSET_ATTR.status) }
+  }, [detailsSession])
+
+  // Soft keyboard: publish --xrk-keyboard-inset so sticky composers / hero
+  // dock above overlay keyboards (resizes-content leaves inset ≈ 0).
+  useEffect(() => bindVisualViewportKeyboard(), [])
 
   useEffect(() => () => { clearLayoutInsets() }, [clearLayoutInsets])
 
@@ -693,15 +715,33 @@ export function AppFrame({
         conflictHint={conflictHint}
       />
       {phone && sidebarCollapsed && detailsCollapsed && (
-        <button
-          ref={menuRef}
-          type="button"
-          className={css.phoneMenu}
-          aria-label={t('sidebar.open')}
-          onClick={() => { actions.toggleSidebar() }}
-        >
-          <span className={css.phoneMenuIcon} aria-hidden />
-        </button>
+        <div className={css.phoneChrome}>
+          <button
+            ref={menuRef}
+            type="button"
+            className={css.phoneMenu}
+            aria-label={t('sidebar.open')}
+            onClick={() => { actions.toggleSidebar() }}
+          >
+            <span className={css.phoneMenuIcon} aria-hidden />
+          </button>
+          {/* PresenceDock portals an icon ball here (bounce on tap). */}
+          {detailsSession !== undefined && (
+            <span className={css.phonePresenceSlot} data-phone-presence-slot="" />
+          )}
+          {/* Overview sheet — only this control opens 概况 on phone. */}
+          {detailsSession !== undefined && (
+            <button
+              type="button"
+              className={css.phoneStatus}
+              aria-label={t('details.open')}
+              title={t('details.open')}
+              onClick={() => { actions.openDetails() }}
+            >
+              <IconGaugeOutlineRegular size={16} aria-hidden />
+            </button>
+          )}
+        </div>
       )}
       {drawerOpen && (
         <button

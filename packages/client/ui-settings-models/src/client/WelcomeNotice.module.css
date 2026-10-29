@@ -27,10 +27,23 @@
 
 .primary {
   min-width: 120px;
+  min-height: 40px;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 767px) {
+  .copy {
+    font-size: 15px;
+    line-height: 24px;
+    text-wrap: pretty;
+  }
+
+  .actions {
+    margin-top: 28px;
+    justify-content: stretch;
+  }
+
   .primary {
     width: 100%;
+    min-height: 44px;
   }
 }

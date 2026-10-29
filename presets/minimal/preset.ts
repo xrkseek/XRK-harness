@@ -52,6 +52,7 @@ import {
   createSlashResolver,
   loadOfficeRecipes,
   appendWorkspaceInjectsIfChanged,
+  standingSkillToolSourceOptions,
   SKILL_TOOL_GUIDANCE,
   type ResolveWorkspaceInjectOptions,
   type WorkspaceInjector,
@@ -165,10 +166,18 @@ export function createMinimalComposition(
   for (const tool of createFsTools(fs)) {
     tools.register(tool);
   }
-  for (const tool of createSkillTools({
-    workspaceRoot: injectOpts.root,
-    productDir,
-  })) {
+  for (const tool of createSkillTools(
+    standingSkillToolSourceOptions({
+      workspaceRoot: injectOpts.root,
+      productDir,
+      ...(injectOpts.audience !== undefined
+        ? { audience: injectOpts.audience }
+        : {}),
+      ...(injectOpts.extraSkillDirs?.length
+        ? { extraSkillDirs: injectOpts.extraSkillDirs }
+        : {}),
+    }),
+  )) {
     tools.register(tool);
   }
   tools.register(

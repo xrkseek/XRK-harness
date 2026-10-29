@@ -2016,6 +2016,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return ok(request, { items: await listVisibleSessionSummaries() })
       },
 
+      async eventWindow(request) {
+        // XRK Face Host serves this via `dispatchFaceMethod("session.eventWindow")`.
+        // The Cordis ApiProxy stub has no raw-log window reader of its own.
+        return err(request, {
+          code: 'internal',
+          message: 'session.eventWindow is not available on this ApiProxy stub',
+          details: {},
+        })
+      },
+
       async search(request, signal) {
         const cancelled = () => err<{ items: SessionSearchItem[]; hasMore: boolean }>(request, {
           code: 'cancelled',
@@ -2624,6 +2634,48 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           message: 'session.delete is not available on this deployment',
           details: { sessionId: request.payload.sessionId },
         }))
+      },
+
+      // Live tool catalog + mods band presses are Face Host-owned.
+      tools(request) {
+        return Promise.resolve(err(request, {
+          code: 'session-tools-unsupported',
+          message: 'session.tools is not available on this deployment',
+          details: { sessionId: request.payload.sessionId },
+        }))
+      },
+
+      pressBand(request) {
+        const mods = ctx.get('claudeCodeMods' as never) as
+          | {
+              pressBand?: (
+                agent: unknown,
+                generation: number,
+                actionId: string,
+              ) => Promise<{ generation: number; tree: unknown }>
+            }
+          | undefined
+        const agent = ctx.agents.get(request.payload.sessionId)
+        if (agent === undefined) {
+          return Promise.resolve(err(request, {
+            code: 'session-not-found',
+            message: `session "${request.payload.sessionId}" not found (not attached)`,
+            details: { sessionId: request.payload.sessionId },
+          }))
+        }
+        if (mods?.pressBand === undefined) {
+          return Promise.resolve(err(request, {
+            code: 'band-unavailable',
+            message: 'no plugin band for this session',
+            details: { sessionId: request.payload.sessionId },
+          }))
+        }
+        return mods
+          .pressBand(agent, request.payload.generation, request.payload.actionId)
+          .then((snap) => ok(request, {
+            generation: snap.generation,
+            tree: snap.tree as never,
+          }))
       },
     },
 

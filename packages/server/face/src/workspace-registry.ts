@@ -10,6 +10,9 @@ import {
   XIANGYANG_WORKSPACE_TITLE,
 } from "./xiangyang-workspace.js";
 
+/** Project trees vs 干员 home directories (sidebar upper / lower panes). */
+export type FaceWorkspaceKind = "project" | "agent-home";
+
 export interface FaceWorkspaceView {
   readonly workspaceId: string;
   readonly path: string;
@@ -17,6 +20,10 @@ export interface FaceWorkspaceView {
   readonly sessionIds: string[];
   readonly createdAt: string;
   updatedAt: string;
+  /** Absent / legacy rows are project. */
+  readonly kind: FaceWorkspaceKind;
+  /** Set when kind is agent-home — the roster member that owns this cwd. */
+  readonly boundMemberId?: string;
 }
 
 export class FaceWorkspaceRegistry {
@@ -47,6 +54,7 @@ export class FaceWorkspaceRegistry {
       title: XIANGYANG_WORKSPACE_TITLE,
       createdAt: now,
       updatedAt: now,
+      kind: "project",
     });
     this.order.push(id);
     this.sessionOrder.set(id, []);
@@ -135,10 +143,102 @@ export class FaceWorkspaceRegistry {
       title: defaultWorkspaceTitle(abs),
       createdAt: now,
       updatedAt: now,
+      kind: "project",
     });
     this.order.push(id);
     this.sessionOrder.set(id, []);
     return { workspace: this.view(id)!, created: true };
+  }
+
+  /**
+   * Mint or refresh a 干员 home workspace under a fixed path. Idempotent by
+   * `boundMemberId` (one home per member). Does not create project workspaces.
+   */
+  ensureAgentHome(opts: {
+    readonly absPath: string;
+    readonly memberId: string;
+    readonly title: string;
+  }): { workspace: FaceWorkspaceView; created: boolean } {
+    const memberId = opts.memberId.trim();
+    const abs = path.resolve(opts.absPath);
+    const title = opts.title.trim() || memberId;
+    if (!memberId) {
+      throw new Error("ensureAgentHome requires memberId");
+    }
+    for (const row of this.workspaces.values()) {
+      if (row.kind === "agent-home" && row.boundMemberId === memberId) {
+        this.workspaces.set(row.workspaceId, {
+          ...row,
+          path: abs,
+          title,
+          updatedAt: new Date().toISOString(),
+          kind: "agent-home",
+          boundMemberId: memberId,
+        });
+        return { workspace: this.view(row.workspaceId)!, created: false };
+      }
+    }
+    const byPath = this.findByPath(abs);
+    if (byPath) {
+      const row = this.workspaces.get(byPath.workspaceId)!;
+      this.workspaces.set(byPath.workspaceId, {
+        ...row,
+        title,
+        updatedAt: new Date().toISOString(),
+        kind: "agent-home",
+        boundMemberId: memberId,
+      });
+      return { workspace: this.view(byPath.workspaceId)!, created: false };
+    }
+    this.seq += 1;
+    const id = `ws_${this.seq}`;
+    const now = new Date().toISOString();
+    this.workspaces.set(id, {
+      workspaceId: id,
+      path: abs,
+      title,
+      createdAt: now,
+      updatedAt: now,
+      kind: "agent-home",
+      boundMemberId: memberId,
+    });
+    this.order.push(id);
+    this.sessionOrder.set(id, []);
+    return { workspace: this.view(id)!, created: true };
+  }
+
+  /**
+   * Drop agent-home binding for a member. Sessions stay on disk; Face delete
+   * archives them so they do not reappear under project 未分组.
+   */
+  unbindAgentHome(memberId: string): {
+    workspaceId?: string;
+    movedSessionIds: string[];
+  } {
+    const id = memberId.trim();
+    if (!id) return { movedSessionIds: [] };
+    for (const row of [...this.workspaces.values()]) {
+      if (row.kind !== "agent-home" || row.boundMemberId !== id) continue;
+      const deleted = this.delete(row.workspaceId);
+      if (deleted.ok) {
+        return {
+          workspaceId: row.workspaceId,
+          movedSessionIds: deleted.movedSessionIds,
+        };
+      }
+    }
+    return { movedSessionIds: [] };
+  }
+
+  findAgentHomeByMember(
+    memberId: string,
+  ): Omit<FaceWorkspaceView, "sessionIds"> | undefined {
+    const id = memberId.trim();
+    if (!id) return undefined;
+    for (const row of this.workspaces.values()) {
+      if (row.kind === "agent-home" && row.boundMemberId === id) return row;
+    }
+    return undefined;
   }
 
   /**
@@ -161,6 +261,10 @@ export class FaceWorkspaceRegistry {
         title: trimmedTitle || existing.title,
         createdAt: existing.createdAt,
         updatedAt: new Date().toISOString(),
+        kind: existing.kind ?? "project",
+        ...(existing.boundMemberId
+          ? { boundMemberId: existing.boundMemberId }
+          : {}),
       });
       if (!this.order.includes(id)) this.order.push(id);
       if (!this.sessionOrder.has(id)) this.sessionOrder.set(id, []);
@@ -173,6 +277,7 @@ export class FaceWorkspaceRegistry {
       title: trimmedTitle,
       createdAt: now,
       updatedAt: now,
+      kind: "project",
     });
     this.order.push(id);
     this.sessionOrder.set(id, []);
@@ -444,6 +549,8 @@ export class FaceWorkspaceRegistry {
       sessionIds: ids,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      kind: row.kind ?? "project",
+      ...(row.boundMemberId ? { boundMemberId: row.boundMemberId } : {}),
     };
   }
 
@@ -451,7 +558,14 @@ export class FaceWorkspaceRegistry {
     order: string[];
     entries: Record<
       string,
-      { path: string; title: string; createdAt: string; updatedAt: string }
+      {
+        path: string;
+        title: string;
+        createdAt: string;
+        updatedAt: string;
+        kind?: FaceWorkspaceKind;
+        boundMemberId?: string;
+      }
     >;
     seq: number;
     membership: Record<string, string>;
@@ -462,7 +576,14 @@ export class FaceWorkspaceRegistry {
   } {
     const entries: Record<
       string,
-      { path: string; title: string; createdAt: string; updatedAt: string }
+      {
+        path: string;
+        title: string;
+        createdAt: string;
+        updatedAt: string;
+        kind?: FaceWorkspaceKind;
+        boundMemberId?: string;
+      }
     > = {};
     for (const [id, row] of this.workspaces) {
       entries[id] = {
@@ -470,6 +591,8 @@ export class FaceWorkspaceRegistry {
         title: row.title,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        kind: row.kind ?? "project",
+        ...(row.boundMemberId ? { boundMemberId: row.boundMemberId } : {}),
       };
     }
     const membership: Record<string, string> = {};
@@ -503,7 +626,14 @@ export class FaceWorkspaceRegistry {
       entries: Readonly<
         Record<
           string,
-          { path: string; title: string; createdAt: string; updatedAt: string }
+          {
+            path: string;
+            title: string;
+            createdAt: string;
+            updatedAt: string;
+            kind?: FaceWorkspaceKind | string;
+            boundMemberId?: string;
+          }
         >
       >;
       seq: number;
@@ -546,21 +676,38 @@ export class FaceWorkspaceRegistry {
         title: XIANGYANG_WORKSPACE_TITLE,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        kind: "project",
       });
       if (!this.order.includes(defaultId)) this.order.push(defaultId);
       this.sessionOrder.set(defaultId, []);
     }
 
+    const rowKind = (
+      raw: { kind?: string; boundMemberId?: string },
+    ): { kind: FaceWorkspaceKind; boundMemberId?: string } => {
+      const kind = raw.kind === "agent-home" ? "agent-home" : "project";
+      const bound =
+        kind === "agent-home" && typeof raw.boundMemberId === "string"
+          ? raw.boundMemberId.trim()
+          : "";
+      return {
+        kind,
+        ...(bound ? { boundMemberId: bound } : {}),
+      };
+    };
+
     for (const id of doc.order) {
       if (id === defaultId) continue;
       const row = doc.entries[id];
       if (!row) continue;
+      const meta = rowKind(row);
       this.workspaces.set(id, {
         workspaceId: id,
         path: path.resolve(row.path),
         title: row.title,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        ...meta,
       });
       if (!this.order.includes(id)) this.order.push(id);
       this.sessionOrder.set(id, []);
@@ -568,12 +715,14 @@ export class FaceWorkspaceRegistry {
 
     for (const [id, row] of Object.entries(doc.entries)) {
       if (id === defaultId || this.workspaces.has(id)) continue;
+      const meta = rowKind(row);
       this.workspaces.set(id, {
         workspaceId: id,
         path: path.resolve(row.path),
         title: row.title,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        ...meta,
       });
       if (!this.order.includes(id)) this.order.push(id);
       this.sessionOrder.set(id, []);

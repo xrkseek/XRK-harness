@@ -97,5 +97,54 @@ export const en: Record<SubagentKey, string> = {
   'readonly.body': 'The parent session is offline; reopen it to continue sending messages.',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'diagnostic.corrupt': '破損したセッション記録',
+  'diagnostic.unsupported': '非対応のサブエージェント記録バージョン',
+  'diagnostic.unavailable': 'セッション記録は一時的に利用できません',
+  'duration.seconds': '{seconds}秒',
+  'duration.minutes': '{minutes}分 {seconds}秒',
+  'duration.hours': '{hours}時間 {minutes}分 {seconds}秒',
+  'duration.days': '{days}日',
+  'duration.daysHours': '{days}日 {hours}時間',
+  'duration.months': '約{months}か月',
+  'duration.monthsDays': '約{months}か月 {days}日',
+  'duration.years': '約{years}年',
+  'duration.yearsMonths': '約{years}年 {months}か月',
+  'duration.exactDays': '{days}日 {hours}時間 {minutes}分 {seconds}秒',
+  'duration.exactTitle': '合計稼働時間: {duration}',
+  'loading.label': 'サブエージェントを読み込み中…',
+  'loading.aria': 'サブエージェントを読み込み中',
+  'load.error': 'サブエージェントを読み込めません',
+  retry: '再試行',
+  'mode.oneShot': 'ワンショット',
+  'mode.continuable': '継続可',
+  'activity.running': '実行中',
+  'activity.inactive': '未実行',
+  'outcome.completed': '完了',
+  'outcome.abortedByParent': '親により停止',
+  'outcome.abortedByUser': '停止済み',
+  'outcome.abortedOther': '中止',
+  'outcome.error': 'エラーで終了',
+  'outcome.interrupted': '中断',
+  'outcome.maxTokens': '最大トークンで停止',
+  'outcome.blocked': 'ブロック',
+  'outcome.none': '未完了',
+  'branch.collapse': '{label} の子孫を折りたたむ',
+  'branch.expand': '{label} の子孫を展開',
+  'count.total.one': 'サブエージェント {count} 件',
+  'count.total.other': 'サブエージェント {count} 件',
+  'count.running.one': 'サブエージェント {count} 件が実行中',
+  'count.running.other': 'サブエージェント {count} 件が実行中',
+  'switcher.aria': 'サブエージェント切替: {title}',
+  'tree.aria': 'サブエージェントセッション',
+  'readonly.oneShot.title': 'ワンショット・サブエージェント記録',
+  'readonly.title': 'このサブエージェントは現在読み取り専用です',
+  'readonly.oneShot.body': 'ワンショットタスクは追従入力を受け付けません。実行記録はここで確認できます。',
+  'readonly.body': '親セッションはオフラインです。メッセージを続けるには再開してください。',
+} as const satisfies Record<SubagentKey, string>
+
+
+
 /** Key domain of the `subagent` namespace (zh is the source of truth). */
 export type SubagentKey = keyof typeof zh

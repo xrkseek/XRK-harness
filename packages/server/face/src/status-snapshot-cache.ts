@@ -70,6 +70,46 @@ export function statusSnapshotRevision(
       ].join(":")
     : "";
   const badge = runtime.sessionAgentPresets.get(sessionId) ?? "";
+  // Live roster looks (Team dress edits must bust Status / Overview cache).
+  const lookMemberId =
+    (parentLink && parentLink.mode !== "fork" ? parentLink.memberId : undefined)
+    ?? runtime.sessionIdentities.get(sessionId)?.memberId
+    ?? "";
+  const parentLookMemberId =
+    parentLink && parentLink.mode !== "fork"
+      ? (runtime.subagents.getByChild(parentLink.parentSessionId)?.memberId ?? "")
+      : "";
+  const rosterLookFp = [lookMemberId, parentLookMemberId]
+    .filter(Boolean)
+    .map((id) => {
+      const home = runtime.agentRoster.findHome(id);
+      const member = home
+        ? runtime.agentRoster.get(home.rosterWorkspaceId, id)
+        : undefined;
+      const a = member?.appearance;
+      if (!a) return id;
+      return [
+        id,
+        a.shape,
+        a.color,
+        a.kit ?? "",
+        a.kitHat ?? "",
+        a.kitGlasses ?? "",
+        a.kitHeld ?? "",
+        a.overlayHat ?? a.face ?? "",
+        a.overlayGlasses ?? "",
+        a.overlayHeld ?? "",
+      ].join(":");
+    })
+    .join(";");
+  // Shared Boss mood (ui-presence) paints Overview left seat on every office session.
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const bossMoodFp = [
+    typeof presenceUser.moodId === "string" ? presenceUser.moodId : "",
+    typeof presenceUser.statusLine === "string" ? presenceUser.statusLine : "",
+    typeof presenceUser.moodAt === "number" ? String(presenceUser.moodAt) : "0",
+  ].join(":");
   // eventCount covers projection cells that fold from the durable log.
   return [
     eventCount,
@@ -83,6 +123,8 @@ export function statusSnapshotRevision(
     childLive,
     homeFp,
     badge,
+    rosterLookFp,
+    bossMoodFp,
   ].join("|");
 }
 

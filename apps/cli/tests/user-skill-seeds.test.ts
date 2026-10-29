@@ -52,9 +52,10 @@ describe("ensureUserSkillSeeds", () => {
       expect(first.installed).toContain("xrk-capability-attach");
       expect(first.installed).toContain("xrk-create-skill");
       expect(first.installed).toContain("xrk-adapt-workspace");
-      expect(first.installed).toContain("xrk-plan-build");
+      expect(first.installed).not.toContain("xrk-plan-build");
       expect(first.installed).toContain("xrk-delegate");
       expect(first.installed).toContain("xrk-code-review");
+      expect(first.installed).toContain("xrk-product-home");
       const skillPath = path.join(
         home,
         "skills",
@@ -96,6 +97,39 @@ describe("ensureUserSkillSeeds", () => {
       expect(third.installed).toEqual([]);
       expect(third.refreshed).toEqual([]);
       expect(third.skipped).toContain("demo");
+    });
+  });
+
+  it("removes retired bundled skills still listed in the seed manifest", async () => {
+    await withTempDirs(async (home, seeds) => {
+      await makeSeedRoot(seeds, {
+        keep: { "SKILL.md": skillMd("keep", "v1") },
+        gone: { "SKILL.md": skillMd("gone", "v1") },
+      });
+      await ensureUserSkillSeeds(home, seeds);
+      expect(existsSync(path.join(home, "skills", "gone", "SKILL.md"))).toBe(
+        true,
+      );
+
+      await rm(path.join(seeds, "gone"), { recursive: true, force: true });
+      const pruned = await ensureUserSkillSeeds(home, seeds);
+      expect(pruned.removed).toEqual(["gone"]);
+      expect(existsSync(path.join(home, "skills", "gone"))).toBe(false);
+      expect(existsSync(path.join(home, "skills", "keep", "SKILL.md"))).toBe(
+        true,
+      );
+      // User install not in manifest stays.
+      await mkdir(path.join(home, "skills", "user-only"), { recursive: true });
+      await writeFile(
+        path.join(home, "skills", "user-only", "SKILL.md"),
+        skillMd("user-only", "mine"),
+        "utf8",
+      );
+      const again = await ensureUserSkillSeeds(home, seeds);
+      expect(again.removed).toEqual([]);
+      expect(
+        existsSync(path.join(home, "skills", "user-only", "SKILL.md")),
+      ).toBe(true);
     });
   });
 
@@ -231,11 +265,12 @@ describe("ensureUserSkillSeeds", () => {
     });
   });
 
-  it("seeds AGENTS.md and SOUL.md as fingerprint-refreshable under home", async () => {
+  it("seeds AGENTS.md, SOUL.md, and XRK.md as fingerprint-refreshable under home", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "xrk-home-seed-"));
     try {
       const all = await ensureUserHomeSeeds(home);
       expect(all.standing.installed).toContain("AGENTS.md");
+      expect(all.standing.installed).toContain("XRK.md");
       expect(all.standing.installed).toContain("SOUL.md");
       const agents = await readFile(path.join(home, "AGENTS.md"), "utf8");
       expect(agents).toContain("XRK-Harness");
@@ -243,10 +278,13 @@ describe("ensureUserSkillSeeds", () => {
       expect(agents).toContain("## Craft");
       expect(agents).toContain("xrk-presence");
       const soul = await readFile(path.join(home, "SOUL.md"), "utf8");
-      expect(soul).toContain(".agents/SOUL.md");
-      expect(soul).toContain("fingerprint");
+      expect(soul).toContain(".xrk/SOUL.md");
+      expect(soul).toContain("harness gnome");
       expect(all.recipes.installed.length).toBeGreaterThan(0);
       expect(existsSync(path.join(home, "recipes", "plan-build.yaml"))).toBe(
+        false,
+      );
+      expect(existsSync(path.join(home, "recipes", "code-review.yaml"))).toBe(
         true,
       );
       expect(existsSync(path.join(home, "IDENTITY.md"))).toBe(false);
@@ -259,14 +297,20 @@ describe("ensureUserSkillSeeds", () => {
       expect(
         existsSync(path.join(home, "skills", "xrk-attachment", "SKILL.md")),
       ).toBe(true);
+      expect(
+        existsSync(path.join(home, "skills", "xrk-product-home", "SKILL.md")),
+      ).toBe(true);
 
       const again = await ensureUserStandingSeeds(home);
       expect(again.installed).toEqual([]);
       expect(again.skipped).toEqual(
-        expect.arrayContaining(["AGENTS.md", "SOUL.md"]),
+        expect.arrayContaining(["AGENTS.md", "SOUL.md", "XRK.md"]),
+      );
+      expect(await readFile(path.join(home, "XRK.md"), "utf8")).toContain(
+        "Workspace-frequent seats only",
       );
 
-      // Same as AGENTS: seed fingerprint unchanged → skip (edit .agents, not home).
+      // Same as AGENTS: seed fingerprint unchanged → skip (edit workspace .xrk, not home).
       await writeFile(path.join(home, "SOUL.md"), "# my soul\n", "utf8");
       const sticky = await ensureUserStandingSeeds(home);
       expect(sticky.refreshed).not.toContain("SOUL.md");
@@ -284,7 +328,7 @@ describe("ensureUserSkillSeeds", () => {
         );
         await writeFile(
           path.join(seedDir, "SOUL.md"),
-          "# Soul\nv2 product seed\n.agents/SOUL.md\n",
+          "# Soul\nv2 product seed\n.xrk/SOUL.md\n",
           "utf8",
         );
         const bumped = await ensureUserStandingSeeds(home, seedDir);
@@ -308,7 +352,7 @@ describe("ensureUserSkillSeeds", () => {
         lines.push(msg);
       });
       expect(seeded.standing.installed).toEqual(
-        expect.arrayContaining(["AGENTS.md", "SOUL.md"]),
+        expect.arrayContaining(["AGENTS.md", "SOUL.md", "XRK.md"]),
       );
       expect(lines.some((l) => l.includes("standing") && l.includes("AGENTS.md"))).toBe(
         true,

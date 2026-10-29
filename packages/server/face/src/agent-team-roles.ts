@@ -269,7 +269,7 @@ export function applySubagentSpawnPreamble(
               : []),
           ]
         : []),
-    "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Repo AGENTS.md is not your persona.",
+    "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Home standing (~/.xrk) is skipped — cwd workspace AGENTS.md (member playbook when present) + <seat_identity> are your seat; do not treat a parent-repo root AGENTS.md as identity theater.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);
   const body = tasked.trim();

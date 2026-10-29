@@ -35,7 +35,7 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("mem_68a69c0a9fdc4b53");
     expect(text).toContain("Spawn: `subagent`");
     expect(text).toContain("thread_message");
-    expect(text).toContain("pin optional");
+    expect(text).toContain("经理 coding-light");
     expect(text).toContain("th_fresh");
     expect(text).toContain("sess_parent*");
     expect(text).toContain("写 changelog");
@@ -44,7 +44,7 @@ describe("formatCollabBoardText", () => {
     expect(text).not.toContain("playbook:");
   });
 
-  it("says none when no 主线 in the window", () => {
+  it("says none when no 主线 in the window and no unbound peers", () => {
     const text = formatCollabBoardText({
       now,
       membersCatalog: "(no Agent Team members yet)",
@@ -52,9 +52,10 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("(none)");
     expect(text).toContain("no Agent Team members yet");
+    expect(text).toContain("todo open");
   });
 
-  it("lists unpinned parents when the 主线 window is empty", () => {
+  it("lists unpinned parents with who · duty · todo · 支线 · 主线", () => {
     const text = formatCollabBoardText({
       now,
       membersCatalog: "(no Agent Team members yet)",
@@ -63,19 +64,29 @@ describe("formatCollabBoardText", () => {
         {
           sessionId: "sess_peer",
           title: "写注入目录",
+          identity: "发版员",
+          nickname: "小发",
+          duty: "整理变更并发版",
+          todoOpen: 2,
           sideline: "补 collab board",
+          mainline: "0.7 发版",
           running: true,
         },
-        { sessionId: "sess_self", title: "当前会话", self: true },
+        { sessionId: "sess_self", title: "当前会话", identity: "经理", self: true },
       ],
     });
-    expect(text).toContain("(none)");
-    expect(text).toContain("Unpinned parents");
+    expect(text).not.toContain("(none)");
     expect(text).toContain("sess_peer");
     expect(text).toContain("写注入目录");
+    expect(text).toContain("who=发版员");
+    expect(text).toContain("小发");
+    expect(text).toContain("duty=整理变更并发版");
+    expect(text).toContain("todo_open=2");
     expect(text).toContain("补 collab board");
+    expect(text).toContain("主线=「0.7 发版」");
     expect(text).toContain("running");
     expect(text).toContain("sess_self*");
+    expect(text).toContain("主线=none");
   });
 
   it("tells Frugal badges to Skill-load instead of spawn", () => {
@@ -87,7 +98,7 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("no subagent tools");
     expect(text).toContain("Skill-load");
-    expect(text).not.toContain("spawn `subagent`");
+    expect(text).not.toContain("Spawn: `subagent`");
   });
 
   it("IM surface keeps thread_message and points subagent at coding workspaces", () => {
@@ -108,9 +119,11 @@ describe("formatCollabBoardText", () => {
     expect(text).toContain("workspace_id");
     expect(text).toContain("thread_message");
     expect(text).toContain("th_x");
+    expect(text).toContain("im_send");
+    expect(text).toContain("project lane");
   });
 
-  it("奇创 surface prefers workspace_session_prompt over nested subagents", () => {
+  it("奇创 surface prefers admin tools and peer dispatch", () => {
     const text = formatCollabBoardText({
       now,
       surface: "qichuang",
@@ -120,13 +133,15 @@ describe("formatCollabBoardText", () => {
     });
     expect(text).toContain("workspace_session_prompt");
     expect(text).toContain("thread_message");
-    expect(text).toContain("No nested subagent");
+    expect(text).toContain("向日葵 admin");
+    expect(text).toContain("settings_*");
+    expect(text).toContain("workspace_create");
     expect(text).not.toContain("Spawn: `subagent`");
   });
 });
 
 describe("formatTeamMateBoardText", () => {
-  it("lists siblings, marks self, and includes own task", () => {
+  it("lists siblings with who · duty · todo · 支线 and marks 主线 n/a", () => {
     const text = formatTeamMateBoardText({
       parentSessionId: "sess_parent",
       mates: [
@@ -135,6 +150,9 @@ describe("formatTeamMateBoardText", () => {
           label: "调研",
           memberId: "mem_scout",
           role: "researcher",
+          nickname: "小研",
+          duty: "workspace researcher",
+          todoOpen: 1,
           self: true,
           running: true,
         },
@@ -155,8 +173,13 @@ describe("formatTeamMateBoardText", () => {
     expect(text).toContain("squad · parent=sess_parent");
     expect(text).toContain("sess_a*");
     expect(text).toContain("member=mem_scout");
+    expect(text).toContain("who=调研");
+    expect(text).toContain("小研");
+    expect(text).toContain("duty=workspace researcher");
+    expect(text).toContain("todo_open=1");
     expect(text).toContain("sess_b");
     expect(text).toContain("改 collab");
+    expect(text).toContain("主线=n/a");
     expect(text).toContain("thread_message");
     expect(text).toContain("your_task: task_1");
     expect(text).toContain("收集证据");

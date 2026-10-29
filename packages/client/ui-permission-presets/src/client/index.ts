@@ -28,7 +28,7 @@ import type { PermissionSelect } from '@xrkseek/xrk-permission-presets/client'
 import { PermissionRow } from './PermissionRow.tsx'
 import type { PermissionRowInjected } from './PermissionRow.tsx'
 import {
-  accessEn, accessZh, en, zh,
+  accessEn, accessJa, accessZh, en, ja, zh,
 } from './locales.ts'
 import {
   AUTO_REVIEW_PRESET, displayPermissionPreset, FULL_ACCESS_PRESET,
@@ -127,6 +127,23 @@ export function apply(ctx: ClientContext): void {
         'auto.confirm.acknowledge': accessEn['auto.confirm.acknowledge'],
         'auto.confirm.enable': accessEn['auto.confirm.enable'],
       }),
+      ctx.locale.register(ACCESS_NS, 'ja', {
+        'preset.readOnly': accessJa['preset.readOnly'],
+        'preset.workspaceWrite': accessJa['preset.workspaceWrite'],
+        'preset.fullAccess': accessJa['preset.fullAccess'],
+        'confirm.title': accessJa['confirm.title'],
+        'confirm.description': accessJa['confirm.description'],
+        'confirm.acknowledge': accessJa['confirm.acknowledge'],
+        'confirm.cancel': accessJa['confirm.cancel'],
+        'confirm.enable': accessJa['confirm.enable'],
+        'auto.label': accessJa['auto.label'],
+        'auto.badge': accessJa['auto.badge'],
+        'auto.description': accessJa['auto.description'],
+        'auto.confirm.title': accessJa['auto.confirm.title'],
+        'auto.confirm.description': accessJa['auto.confirm.description'],
+        'auto.confirm.acknowledge': accessJa['auto.confirm.acknowledge'],
+        'auto.confirm.enable': accessJa['auto.confirm.enable'],
+      }),
     ]
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-permission: session popup confirmation dictionaries')
@@ -135,7 +152,7 @@ export function apply(ctx: ClientContext): void {
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>
     sessions.binding(session.sessionId)?.session
 
-  ctx.effect(() => ctx.locale.register('settings.permission', { zh, en }), 'ui-permission: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.permission', { zh, en, ja }), 'ui-permission: settings row dictionaries')
 
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new PermissionPresetSettingsController(connection.api)

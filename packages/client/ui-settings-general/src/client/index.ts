@@ -30,7 +30,7 @@ import { SidebarAgentPushRows } from './SidebarAgentPushRows.tsx'
 import type { SidebarAgentPushInjected } from './SidebarAgentPushRows.tsx'
 import { SidebarAgentPushStore } from './sidebar-agent-push-store.ts'
 import { refreshDocumentIfLoaded, SettingsDocumentStore } from './settings-document-store.ts'
-import { en, zh, type SettingsKey } from './locales.ts'
+import { en, ja, zh, type SettingsKey } from './locales.ts'
 
 export type {
   CloseLabelProps, HeaderContentProps, TriggerContentProps,
@@ -68,7 +68,7 @@ export const inject = ['slots', 'locale', 'connection', 'settingsNav']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-general: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-general: dictionaries')
 
   // Copy freshness is framework-owned: components read the standard `t`
   // seat, and the nav label is a thunk the owner resolves per render — no
@@ -162,6 +162,10 @@ export function apply(ctx: ClientContext): void {
           return onboardingSteps
         },
         subscribe: listener => ctx.slots.subscribe('settings.onboarding', listener),
+      },
+      hostVersion: {
+        getSnapshot: () => connection.hostDescription.getSnapshot()?.version ?? '',
+        subscribe: listener => connection.hostDescription.subscribe(listener),
       },
     },
   })

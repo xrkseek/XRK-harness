@@ -14,6 +14,43 @@ export type FactoryKind =
   | "responses"
   | "gemini";
 
+/** One catalog row a brand may advertise (id required; rest optional). */
+export interface BrandModelEntry {
+  readonly id: string;
+  readonly name?: string;
+  readonly description?: string;
+  /** Declared context window (tokens); omit → Face leaves unset. */
+  readonly contextWindow?: number;
+  /** Declared intake modalities; omit → Face leaves unset (adapter default). */
+  readonly inputModalities?: readonly ("text" | "image")[];
+}
+
+/** Brand catalog model: bare id string or a richer entry. */
+export type BrandModelSpec = string | BrandModelEntry;
+
+export function brandModelId(spec: BrandModelSpec): string {
+  return typeof spec === "string" ? spec.trim() : spec.id.trim();
+}
+
+export function asBrandModelEntry(spec: BrandModelSpec): BrandModelEntry {
+  if (typeof spec === "string") return { id: spec.trim() };
+  const contextWindow =
+    typeof spec.contextWindow === "number" &&
+    Number.isFinite(spec.contextWindow) &&
+    spec.contextWindow > 0
+      ? Math.floor(spec.contextWindow)
+      : undefined;
+  return {
+    id: spec.id.trim(),
+    ...(spec.name?.trim() ? { name: spec.name.trim() } : {}),
+    ...(spec.description?.trim() ? { description: spec.description.trim() } : {}),
+    ...(contextWindow !== undefined ? { contextWindow } : {}),
+    ...(spec.inputModalities && spec.inputModalities.length > 0
+      ? { inputModalities: [...spec.inputModalities] }
+      : {}),
+  };
+}
+
 export interface BrandEntry {
   readonly id: string;
   readonly displayName: string;
@@ -23,7 +60,22 @@ export interface BrandEntry {
   readonly authMode?: AuthMode;
   readonly apiKeyEnv?: string;
   readonly defaultModel?: string;
+  /**
+   * Optional catalog rows for `autoCatalog` brands. When set (and non-empty),
+   * Face lists these instead of a single `defaultModel`. Omit to keep the
+   * one-model fallback. Entries may be plain ids or
+   * `{ id, name?, contextWindow?, inputModalities? }`.
+   */
+  readonly models?: readonly BrandModelSpec[];
   readonly notes?: string;
+  /**
+   * The brand row itself is a complete route (baseUrl + defaultModel, no user
+   * profile required). Catalog lists `models` when present, else `defaultModel`
+   * alone. Used by bundled providers whose endpoint is decided at runtime; a
+   * provider the user must configure first keeps relying on
+   * `llm-pi-ai.providers.<id>`.
+   */
+  readonly autoCatalog?: boolean;
 }
 
 export interface ResolveInput {

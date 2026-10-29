@@ -37,6 +37,17 @@ describe("classifySkillSource", () => {
       root: "~/.claude/skills",
     });
   });
+
+  it("tags product-home skills as home/xrk even under a test homeDir", () => {
+    const ws = path.join(os.tmpdir(), "xrk-skill-src-ws2");
+    const home = path.join(os.tmpdir(), "xrk-skill-src-product-home");
+    const productSkill = path.join(home, ".xrk", "skills", "user-installed");
+    expect(classifySkillSource(productSkill, ws, home)).toMatchObject({
+      layer: "home",
+      vendor: "xrk",
+      root: "~/.xrk/skills",
+    });
+  });
 });
 
 describe("classifySessionToolSurface", () => {

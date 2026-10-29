@@ -842,5 +842,43 @@ describe("llm plugins", () => {
       true,
     );
   });
+
+  it("load keeps llmBrands from a disk plugin (asPlugin whitelist)", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-llm-brand-"));
+    await writePlugin(root, "brand-plugin", {
+      id: "brand-plugin",
+      kind: "llm",
+      body: `export function createPlugin() {
+  return {
+    id: "brand-plugin",
+    kind: "llm",
+    llmBrands: [
+      {
+        id: "self-routed",
+        displayName: "Self Routed",
+        protocol: "openai-chat",
+        baseUrl: "http://127.0.0.1:1/v1",
+        defaultModel: "m1",
+        models: ["m1", "m2"],
+        autoCatalog: true,
+      },
+    ],
+  };
+}
+`,
+    });
+    const loader = createPluginLoader();
+    const [hit] = await loader.discover(root);
+    const plugin = await loader.load(hit!);
+    // 回归锁：`asPlugin` 曾只拷贝 id/kind/tools/… 白名单字段，从磁盘加载的
+    // `kind: "llm"` 插件因此丢掉 llmBrands，brand 永远进不了 Registry。
+    expect(plugin.llmBrands?.length).toBe(1);
+    expect(plugin.llmBrands?.[0]).toMatchObject({
+      id: "self-routed",
+      defaultModel: "m1",
+      models: ["m1", "m2"],
+      autoCatalog: true,
+    });
+  });
 });
 

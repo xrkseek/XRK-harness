@@ -163,7 +163,19 @@ describe('MenuView', () => {
     expect(screen.getByRole('listbox').getAttribute('aria-activedescendant')).toBeNull()
   })
 
-  it('scrolls the highlighted option into view when the highlight moves', () => {
+  it('does not scroll when pointer hover syncs the highlight', () => {
+    const { menu, onHighlight } = mount(openState())
+    scrollIntoView.mockClear()
+    const options = screen.getAllByRole('option')
+    act(() => {
+      fireEvent.mouseEnter(options[1]!)
+      menu.set(openState({ highlight: { source: 'command', index: 1 } }))
+    })
+    expect(onHighlight).toHaveBeenCalledWith('command', 1)
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('scrolls the highlighted option into view on keyboard/store highlight moves', () => {
     const { menu } = mount(openState())
     scrollIntoView.mockClear()
     act(() => { menu.set(openState({ highlight: { source: 'command', index: 1 } })) })

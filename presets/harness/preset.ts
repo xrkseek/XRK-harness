@@ -1,4 +1,5 @@
 import { createAgent, type AgentHandle } from "@xrkseek/core-agent";
+import { createHarnessMods } from "./mods.js";
 import {
   createMemorySessionStore,
   readSessionEvents,
@@ -194,6 +195,7 @@ import {
   mergeRecipesById,
   appendWorkspaceInjectsIfChanged,
   resolveProductHome,
+  standingSkillToolSourceOptions,
   noteLearningLoopTurn,
   consumeLearningLoopNudge,
   learningLoopNudgeText,
@@ -230,9 +232,20 @@ export interface HarnessCompositionOptions {
    * section — reasoning + replies follow it. Omitted = match the user's own
    * language (still never defaults to English-only reasoning).
    */
-  readonly locale?: "zh" | "en";
+  readonly locale?: "zh" | "en" | "ja";
   readonly sessionStore?: SessionStore;
   readonly sessionId?: string;
+  /**
+   * Where Claude Code plugins are installed. Defaults to
+   * `<productHome>/plugins/claude-code`; set it for tests or a deployment that
+   * keeps plugin directories elsewhere. A missing directory means "no plugins".
+   */
+  readonly claudeCodePluginsRoot?: string;
+  /**
+   * Face question broker (or test double) for Claude Code `$.ui.ask`.
+   * Host wires this from `FaceQuestionBroker` when spawning a session agent.
+   */
+  readonly userQuestions?: import("@xrkseek/claude-code-mods").UserQuestionsService;
   readonly fs?: FsService;
   /**
    * When true, skip local `path.resolve` workspace sandbox (SSH / remote cwd).
@@ -988,10 +1001,14 @@ export function createHarnessComposition(
     readSessionEvents(store, sessionId),
     "workspace-write",
   );
+  // One subprocess service for the session: plugins asking for `$.process.run`
+  // must go through the same runner (and the same sandbox/spill behaviour) as
+  // the shell tools, not a second copy.
+  const rootSubprocess = sharedShell ? undefined : createLocalSubprocess();
   const rootShell =
     sharedShell ??
     createLocalShell({
-      subprocess: createLocalSubprocess(),
+      subprocess: rootSubprocess!,
       defaultCwd: options.workspaceRoot,
       spillDir: defaultSpillDir(),
       ...(shouldConfineSandbox(sandboxMode)
@@ -1049,15 +1066,18 @@ export function createHarnessComposition(
   if (options.createWorktreeTools) {
     tools.register(createCreateWorktreeTool(options.createWorktreeTools));
   }
-  for (const tool of createSkillTools({
-    ...(injectOpts.audience === "minimal" && injectOpts.extraSkillDirs?.length
-      ? { skillDirs: [] as string[] } // skip workspace catalog roots; pack via extra
-      : { workspaceRoot: injectOpts.root, productDir }),
-    ...(injectOpts.extraSkillDirs?.length
-      ? { extraSkillDirs: injectOpts.extraSkillDirs }
-      : {}),
-    includeUserHome: false,
-  })) {
+  for (const tool of createSkillTools(
+    standingSkillToolSourceOptions({
+      workspaceRoot: injectOpts.root,
+      productDir,
+      ...(injectOpts.audience !== undefined
+        ? { audience: injectOpts.audience }
+        : {}),
+      ...(injectOpts.extraSkillDirs?.length
+        ? { extraSkillDirs: injectOpts.extraSkillDirs }
+        : {}),
+    }),
+  )) {
     tools.register(tool);
   }
   tools.register(
@@ -1496,29 +1516,42 @@ export function createHarnessComposition(
   prompts.register({
     id: "language",
     order: 1,
-    content: () =>
-      options.locale === "zh"
-        ? [
-            "# Language",
-            "界面语言为简体中文。",
-            "- 一律使用简体中文进行思考（thinking / reasoning / 规划 / 工具调用前的判断）以及最终回复。不得用英文起笔推理。",
-            "- 保持原样、不要翻译：代码、命令、文件路径、API 与工具名、参数键名、标识符、日志原文、报错文本。",
-            "- 引用工具输出时保留原文，解释部分用中文。",
-            "- 用户主动用英文提问时仍可用英文回复，但界面为中文期间默认中文。",
-          ].join("\n")
-        : options.locale === "en"
-          ? [
-              "# Language",
-              "The UI language is English.",
-              "- Reason (thinking, planning, pre-tool narration) and reply in English.",
-              "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
-            ].join("\n")
-          : [
-              "# Language",
-              "No explicit UI locale was configured.",
-              "- Reason and reply in the same natural language as the user's latest message: if the user writes Chinese, think and answer in Chinese.",
-              "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
-            ].join("\n"),
+    content: () => {
+      if (options.locale === "zh") {
+        return [
+          "# Language",
+          "界面语言为简体中文。",
+          "- 一律使用简体中文进行思考（thinking / reasoning / 规划 / 工具调用前的判断）以及最终回复。不得用英文起笔推理。",
+          "- 保持原样、不要翻译：代码、命令、文件路径、API 与工具名、参数键名、标识符、日志原文、报错文本。",
+          "- 引用工具输出时保留原文，解释部分用中文。",
+          "- 用户主动用英文提问时仍可用英文回复，但界面为中文期间默认中文。",
+        ].join("\n");
+      }
+      if (options.locale === "en") {
+        return [
+          "# Language",
+          "The UI language is English.",
+          "- Reason (thinking, planning, pre-tool narration) and reply in English.",
+          "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+        ].join("\n");
+      }
+      if (options.locale === "ja") {
+        return [
+          "# Language",
+          "UI 言語は日本語です。",
+          "- 思考（thinking / reasoning / 計画 / ツール呼び出し前の判断）と最終返信は日本語で行う。英語で推論を始めない。",
+          "- コード、コマンド、ファイルパス、API・ツール名、パラメータキー、識別子、ログ原文、エラー文はそのまま残し、翻訳しない。",
+          "- ツール出力を引用するときは原文を保ち、説明は日本語で書く。",
+          "- ユーザーが英語で質問した場合は英語で答えてよいが、UI が日本語の間は既定で日本語。",
+        ].join("\n");
+      }
+      return [
+        "# Language",
+        "No explicit UI locale was configured.",
+        "- Reason and reply in the same natural language as the user's latest message: if the user writes Chinese, think and answer in Chinese.",
+        "- Keep code, commands, file paths, tool and parameter names, identifiers and raw tool output verbatim.",
+      ].join("\n");
+    },
   });
   if (curatedMemory) {
     // Policy is always present (even with empty files) so a new session does not
@@ -1795,6 +1828,27 @@ export function createHarnessComposition(
     } satisfies ContextFragmentProvider);
   }
 
+  // Claude Code plugins: installed directories under the product home become
+  // live hooks on this composition's pipeline. Loading is lazy (first
+  // `createAgent()`), so a checkout with no plugins installed pays nothing.
+  const mods = createHarnessMods({
+    pipeline,
+    tools,
+    fs,
+    ...(rootSubprocess === undefined ? {} : { subprocess: rootSubprocess }),
+    sessionId,
+    store,
+    model: llm.id,
+    workspaceRoot: options.workspaceRoot,
+    pluginsRoot:
+      options.claudeCodePluginsRoot ??
+      path.join(productHome, "plugins", "claude-code"),
+    ...(options.userQuestions === undefined
+      ? {}
+      : { userQuestions: options.userQuestions }),
+    report: (line) => console.warn(line),
+  });
+
   return {
     id: presetId,
     description:
@@ -1844,7 +1898,7 @@ export function createHarnessComposition(
           routingNames = undefined;
         }
       };
-      return createAgent({
+      const handle = await createAgent({
         sessionId,
         store,
         llm,
@@ -2009,6 +2063,11 @@ export function createHarnessComposition(
           ? { autoContinueMaxRounds: options.autoContinueMaxRounds }
           : {}),
       });
+      // Plugins that want to observe the session start see the agent before its
+      // first prompt; a plugin that registers a command must be registered by
+      // then, so this is awaited rather than fired and forgotten.
+      await mods.attach(handle);
+      return mods.wrap(handle);
     },
     dumpConfig(patch = {}) {
       return {
@@ -2034,6 +2093,9 @@ export function createHarnessComposition(
       };
     },
     async dispose() {
+      // `session.end` first: a plugin's hook still reads `$.state` here, and the
+      // runtime must unload before the seams it used are torn down.
+      await mods.dispose();
       // Session-end Phase1 via leased pipeline (shares claim with Host finalize).
       if (curatedMemory) {
         try {

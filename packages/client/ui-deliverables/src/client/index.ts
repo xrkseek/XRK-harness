@@ -12,7 +12,7 @@ import type {} from '@xrkseek/client-ui-layout/client'
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
 import { ChangesReviewController } from './changes-review-controller.ts'
-import { en, NS, zh, type DeliverablesKey } from './locales.ts'
+import { en, ja, NS, zh, type DeliverablesKey } from './locales.ts'
 import {
   deliverablesDefinition, producedFileMentions, selectDeliverables,
 } from './turn-deliverables.ts'
@@ -51,7 +51,7 @@ export function apply(ctx: ClientContext): void {
   const changesReview = new ChangesReviewController()
   ctx.provide('changesReview', changesReview)
   ctx.conversationEvents.register(deliverablesDefinition)
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-deliverables: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-deliverables: dictionaries')
   ctx.slots.inject(
     'conversation.chat.turnTail',
     () => ctx.slots.register({

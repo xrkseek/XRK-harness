@@ -1,0 +1,295 @@
+/* Match Plugins → 表情球 / Overview rail chrome (dsw tokens only). */
+
+.sheet {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding: 10px 12px 12px;
+  border-radius: var(--dsw-radius-xl, 12px);
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+  /* Sidebar density: keep sheet copy at 10–12px (match presence rail). */
+  font-size: 12px;
+  line-height: 1.35;
+  animation: bossSheetIn var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease) both;
+}
+
+@keyframes bossSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.headText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--dsw-alias-label-primary);
+}
+
+.subtitle {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.close {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section + .section {
+  margin-top: 10px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.moodGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 5px;
+}
+
+.moodChip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 38px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.moodChip:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: var(--dsw-alias-border-l1, var(--dsw-alias-label-dimmed));
+}
+
+.moodSelected {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l2));
+  background: var(--dsw-alias-bg-module-platform);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
+.moodId {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.moodName {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tipRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tipInput {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.tipInput:focus {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.clearTip {
+  flex: none;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 0;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.presetRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.presetChip {
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.presetChip:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.presetSelected {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l2));
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.liveHint {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-tertiary);
+  transition: color 160ms ease;
+}
+
+.savedFlash {
+  color: var(--dsw-alias-state-business-primary, var(--dsw-alias-label-primary));
+  font-weight: 650;
+}
+
+.saveBtn {
+  position: relative;
+  flex: none;
+  height: 32px;
+  min-width: 72px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 0;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, var(--dsw-alias-bg-layer-1));
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    opacity 120ms ease,
+    transform 100ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Dense rail: extend hit area without growing the visible chip. */
+.saveBtn::before {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, var(--dsw-alias-bg-layer-1));
+}
+
+.saveBtn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.saveBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.saveBtn:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}

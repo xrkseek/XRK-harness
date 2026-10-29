@@ -9,7 +9,7 @@
 | 种类 | 典型路径 | 进模型方式 |
 |----|------|------------|
 | **Rules / 站立说明** | `~/.agents/` · **`~/.xrk/`（产品数据根 / system data）** · `{workspace}/.agents/` · `{workspace}/.xrk/` · 工作区 `.cursor/rules/**` | 持久 `user/message` · `source: agent-instructions` |
-| **Skills** | 工作区 `skills/<name>/SKILL.md`（**仅用户自建**）；home 经 `skill` 工具（**不含** `~/.cursor/skills`） | 工作区 → 站立 `skill-catalog`；home → `skill` 工具 / `skill.list`（catalog 默认不灌入） |
+| **Skills** | 工作区 `skills/<name>/SKILL.md`；产品家 `{XRK_HOME}/skills`（种子 + 用户安装）；可选其它 home（**不含** `~/.cursor/skills`） | 站立 `skill-catalog` ≡ `skill` 工具 ≡ Face `skill.list` / `/skills`（`standingCatalogSkillDirCandidates`） |
 
 ### 权限边界（产品 vs 用户）
 
@@ -27,7 +27,7 @@
 | 文件 | 含义 |
 |------|------|
 | `AGENTS.md` | 工作区角色与边界（产品只种子薄 `~/.xrk/AGENTS.md`；**不**自动种 SOUL/IDENTITY） |
-| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **可选**人格 / 语气 / 工具表（用户手写；存在才注入） |
+| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **可选**人格 / 语气 / 工具表（用户手写于 **`.xrk/`**；存在才注入；业界 `.agents/` 不注入 SOUL） |
 | `USER.md`（站立） | **可选**人格草稿；**不是**策展 `{XRK_HOME}/memories/USER.md` |
 | `assistant.md` | 站立说明 |
 | `rules.md` | 项目规则 |
@@ -36,14 +36,14 @@
 | `recipes/*.yaml` | `/id` 斜杠配方 |
 | `skills/*/SKILL.md` | Skill 目录 |
 
-**Identity 产品决策（保持薄）**：家目录种 `AGENTS.md` + `SOUL.md`（均 fingerprint 随产品刷新）。用户自定人设写工作区 `.agents/SOUL.md` / `IDENTITY.md`（覆盖注入）；「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
+**Identity 产品决策（保持薄）**：家目录种 `AGENTS.md` + `SOUL.md`（均 fingerprint 随产品刷新；**全席**可见）。用户自定人设写工作区 **`.xrk/SOUL.md` / `IDENTITY.md`**（覆盖注入）；业界 `.agents/` 只承载 AGENTS/rules/context/skills。「用户是谁」的事实真源是策展 `memories/USER.md`（见 [curated-memory.md](./curated-memory.md)）。不自动种 Honcho 式用户建模，也不自动种匿名用户 id 文件。
 
 ## Skills（运行时）
 
 | 机制 | 行为 |
 |------|------|
 | 多根导入 | 已存在的目录自动扫；缺则跳过（不 mkdir） |
-| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**镜像到 **`~/.xrk`**：`skills/*`、人格向薄 **`AGENTS.md`**（对标 Codex 全局说明）、`recipes/*`。与 bundled 指纹不一致或缺文件 → 覆盖写入。用户自建 skill / 改人格写工作区 **`.agents/`**（或 `.xrk/`），不要改 home 默认种子。工作区不自动 mkdir `.xrk` |
+| **CLI 用户种子** | **`xrkh web` / `serve` 启动时**镜像到 **`{XRK_HOME}`**：bundled `skills/*`、人格向薄 **`AGENTS.md`**、`recipes/*`。与 bundled 指纹不一致或缺文件 → **仅覆盖同名种子目录**。用户安装的 **其它名字** skill 可放在 `{XRK_HOME}/skills/`（入 catalog）；勿改种子同名目录（fingerprint 会刷掉）。工作区自建也可写 **`.agents/skills`** / **`.xrk/skills`**。工作区不自动 mkdir `.xrk` |
 | `disable-model-invocation: true` | 不进 catalog、`skill` 工具拒绝 |
 | `user-invocable: false` | `/skill-name` 不展开 |
 | 非法布尔 frontmatter | **整 skill 丢弃**（fail-closed） |
@@ -76,7 +76,7 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 
 | 层 | 管什么 | 典型落点 |
 |----|--------|----------|
-| **人格 / 站立** | 像谁、边界、语气 | `.agents/` 的 `IDENTITY` · `SOUL` · `TOOLS` · `AGENTS.md` |
+| **人格 / 站立** | 像谁、边界、语气 | `.xrk/` 的 `IDENTITY` · `SOUL` · `TOOLS`；约定角色用 `.agents/AGENTS.md` |
 | **MCP 挂载（默认）** | 模型可调外部工具 | 设置 → 插件 → MCP；见 [modules/mcp.md](./modules/mcp.md)「终端用户如何挂能力」 |
 | **进程插件** | 仓库内自有 tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
 
@@ -91,7 +91,7 @@ Spec 形态：`./path` · `file:` / `link:` 本地目录；`github:owner/repo` �
 | **`xrk-harness-monorepo`** | monorepo 总控 |
 | **`xrk-harness-architecture`** | 仓结构地图 |
 
-产品默认剧本（`xrk-capability-attach` · `xrk-plugin-*` · `xrk-delegate` · `xrk-plan-build` 等）只在 **`apps/cli/seeds/skills/`** → `~/.xrk/skills/`，经 `skill` 工具加载。
+产品默认剧本（`xrk-capability-attach` · `xrk-plugin-*` · `xrk-delegate` · `xrk-craft` 等）只在 **`apps/cli/seeds/skills/`** → `~/.xrk/skills/`，经 `skill` 工具加载。
 
 本仓产品面落点：`extensions/`（对照示例 `example-tools`）。
 
@@ -113,7 +113,7 @@ The product Agent reads rules and skills from **global** and **workspace** layer
 | Kind | Typical paths | How it reaches the model |
 |----|------|------------|
 | **Rules / standing instructions** | `~/.agents/` · **`~/.xrk/` (product system data)** · `{workspace}/.agents/` · `{workspace}/.xrk/` · workspace `.cursor/rules/**` | Durable `user/message` · `source: agent-instructions` |
-| **Skills** | Workspace `skills/<name>/SKILL.md` (**user-created only**); home via `skill` tool (**excludes** `~/.cursor/skills`) | Workspace → standing `skill-catalog`; home → `skill` tool / `skill.list` (catalog excludes home by default) |
+| **Skills** | Workspace `skills/<name>/SKILL.md`; product-home `{XRK_HOME}/skills` (seeds + user installs); optional other home (**excludes** `~/.cursor/skills`) | Standing `skill-catalog` ≡ `skill` tool ≡ Face `skill.list` / `/skills` (`standingCatalogSkillDirCandidates`) |
 
 ### Authority boundary (product vs user)
 
@@ -131,7 +131,7 @@ Optional directories; **never auto-created**. Common files:
 | File | Meaning |
 |------|------|
 | `AGENTS.md` | Workspace role and boundaries (product seeds only a thin `~/.xrk/AGENTS.md`; **does not** auto-seed SOUL/IDENTITY) |
-| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **Optional** persona / tone / tool notes (user-authored; injected when present) |
+| `SOUL.md` · `IDENTITY.md` · `TOOLS.md` | **Optional** persona / tone / tool notes (user-authored under **`.xrk/`**; injected when present; industry `.agents/` does not inject SOUL) |
 | `USER.md` (standing) | **Optional** persona draft; **not** curated `{XRK_HOME}/memories/USER.md` |
 | `assistant.md` | Standing instructions |
 | `rules.md` | Project rules |
@@ -140,14 +140,14 @@ Optional directories; **never auto-created**. Common files:
 | `recipes/*.yaml` | `/id` slash recipes |
 | `skills/*/SKILL.md` | Skill trees |
 
-**Identity product decision (stay thin)**: home seeds `AGENTS.md` + `SOUL.md` (both fingerprint-refreshed with the product). User-authored persona lives in workspace `.agents/SOUL.md` / `IDENTITY.md` (overlay wins); factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
+**Identity product decision (stay thin)**: home seeds `AGENTS.md` + `SOUL.md` (both fingerprint-refreshed; **every audience**). User-authored persona lives in workspace **`.xrk/SOUL.md` / `IDENTITY.md`** (overlay wins); industry `.agents/` carries AGENTS/rules/context/skills only. Factual “who the user is” lives in curated `memories/USER.md` ([curated-memory.md](./curated-memory.md)). No automatic Honcho-style user modeling and no auto-seeded anonymous-user-id file.
 
 ## Skills (runtime)
 
 | Mechanism | Behavior |
 |------|------|
 | Multi-root import | Scan existing dirs; skip missing (no mkdir) |
-| **CLI user seeds** | On **`xrkh web` / `serve`**, mirror under **`~/.xrk`**: `skills/*`, a thin persona-shaped `AGENTS.md` (Codex-style global guidance), and `recipes/*`. Rewrite when the bundled fingerprint differs or the home copy is missing. Author custom skills / persona in workspace **`.agents/`** (or `.xrk/`), not by editing home seed copies. **Never** mkdir workspace `.xrk` |
+| **CLI user seeds** | On **`xrkh web` / `serve`**, mirror under **`{XRK_HOME}`**: bundled `skills/*`, a thin persona-shaped `AGENTS.md`, and `recipes/*`. Rewrite **only same-named seed dirs** when the bundled fingerprint differs or the home copy is missing. User-installed skills with **other names** may live under `{XRK_HOME}/skills/` (they enter the catalog); do not edit seed-named dirs (fingerprint refresh overwrites them). Workspace installs may also use **`.agents/skills`** / **`.xrk/skills`**. **Never** mkdir workspace `.xrk` |
 | `disable-model-invocation: true` | Out of catalog; `skill` tool rejects |
 | `user-invocable: false` | `/skill-name` does not expand |
 | Illegal boolean frontmatter | **Whole skill discarded** (fail-closed) |
@@ -180,7 +180,7 @@ After a complex task, the model may call **`propose_skill`** with a class-level 
 
 | Layer | Owns | Typical landing |
 |----|------|----------|
-| **Persona / standing** | Voice and boundaries | `.agents/` `IDENTITY` · `SOUL` · `TOOLS` · `AGENTS.md` |
+| **Persona / standing** | Voice and boundaries | `.xrk/` `IDENTITY` · `SOUL` · `TOOLS`; convention role via `.agents/AGENTS.md` |
 | **MCP attach (default)** | External model-callable tools | Settings → Plugins → MCP; see [modules/mcp.md](./modules/mcp.md) “How end users attach capabilities” |
 | **Process plugins** | In-repo tools/prompt/commands | `extensions/<id>/` + `plugin add` + restart |
 
@@ -195,7 +195,7 @@ When this repository is the workspace, plugins live under **`extensions/<plugin-
 | **`xrk-harness-monorepo`** | Monorepo router |
 | **`xrk-harness-architecture`** | Repo map |
 
-Default product playbooks (`xrk-capability-attach`, `xrk-plugin-*`, `xrk-delegate`, `xrk-plan-build`, …) live only in **`apps/cli/seeds/skills/`** → `~/.xrk/skills/` and load via the `skill` tool.
+Default product playbooks (`xrk-capability-attach`, `xrk-plugin-*`, `xrk-delegate`, `xrk-craft`, …) live only in **`apps/cli/seeds/skills/`** → `~/.xrk/skills/` and load via the `skill` tool.
 
 Product surface in this repo: `extensions/` (see `example-tools`).
 

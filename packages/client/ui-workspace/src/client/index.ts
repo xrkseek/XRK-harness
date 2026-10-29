@@ -25,9 +25,9 @@ import {
   ArchivedSessionsSection,
   type ArchivedSessionsSectionInjected,
 } from './ArchivedSessionsSection.tsx'
-import { archivedEn, archivedZh, type ArchivedSessionsLocaleKey } from './archived-locales.ts'
-import { en, zh, type WorkspaceKey } from './locales.ts'
-import { bindDressingHost, PRESENCE_NS } from './dressing-scope.ts'
+import { archivedEn, archivedJa, archivedZh, type ArchivedSessionsLocaleKey } from './archived-locales.ts'
+import { en, ja, zh, type WorkspaceKey } from './locales.ts'
+import { bindDressingHost, bindSeatTitleLocale, PRESENCE_NS } from './dressing-scope.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
@@ -69,12 +69,18 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection'
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-workspace: dictionaries')
   ctx.effect(
-    () => ctx.locale.register(ARCHIVED_NS, { zh: archivedZh, en: archivedEn }),
+    () => ctx.locale.register(ARCHIVED_NS, { zh: archivedZh, en: archivedEn, ja: archivedJa }),
     'ui-workspace: archived-session dictionaries',
   )
   bindDressingHost(ctx.settingsScope.bind({ namespace: PRESENCE_NS }))
+  const syncSeatTitleLocale = (): void => {
+    const locale = ctx.locale.getSnapshot().active
+    bindSeatTitleLocale(locale === 'en' || locale === 'ja' ? locale : 'zh')
+  }
+  syncSeatTitleLocale()
+  ctx.locale.subscribe(syncSeatTitleLocale)
   const connection = ctx.get('connection') as ConnectionHandle
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
@@ -158,7 +164,11 @@ export function apply(ctx: ClientContext): void {
         ? String((member as { id?: unknown }).id ?? '')
         : ''
       if (!id) throw new Error('team.upsert missing member id')
-      return { id }
+      const homeWorkspaceId = typeof result.value.homeWorkspaceId === 'string'
+        ? result.value.homeWorkspaceId
+        : undefined
+      await ctx.workspaces.refresh()
+      return { id, ...(homeWorkspaceId ? { homeWorkspaceId } : {}) }
     },
     removeTeamMember: async (sessionId, id, scope) => {
       const result = await ctx.remote.team.remove({

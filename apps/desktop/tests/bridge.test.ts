@@ -7,7 +7,7 @@ import {
   DESKTOP_IPC,
   type DesktopUpdateState,
 } from "../src/ipc.js";
-import { formatDesktopMessage, resolveDesktopLocale, en, zh } from "../src/locale.js";
+import { formatDesktopMessage, resolveDesktopLocale, en, ja, zh } from "../src/locale.js";
 
 describe("desktop application menu", () => {
   it("hides the menu bar on Windows/Linux", () => {
@@ -46,16 +46,19 @@ describe("desktop application menu", () => {
 });
 
 describe("desktop locale", () => {
-  it("ships matching English and Chinese key sets with English fallback", () => {
+  it("ships matching English / Chinese / Japanese key sets with English fallback", () => {
     expect(Object.keys(zh).sort()).toEqual(Object.keys(en).sort());
+    expect(Object.keys(ja).sort()).toEqual(Object.keys(en).sort());
     expect(resolveDesktopLocale("zh-Hans-CN")).toEqual({
       id: "zh-CN",
       messages: zh,
     });
+    expect(resolveDesktopLocale("ja-JP")).toEqual({ id: "ja", messages: ja });
     expect(resolveDesktopLocale("en-US")).toEqual({ id: "en", messages: en });
     expect(resolveDesktopLocale("fr-FR")).toEqual({ id: "en", messages: en });
     expect(en.checkUpdatesMenu.length).toBeGreaterThan(0);
     expect(zh.checkUpdatesMenu).toContain("检查");
+    expect(ja.checkUpdatesMenu).toContain("更新");
   });
 
   it("formats named placeholders", () => {

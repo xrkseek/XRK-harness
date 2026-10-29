@@ -31,7 +31,8 @@ export function threadMessageDescription(input: {
     );
   }
   return (
-    "Message another parent session by session_id (any workspace). " +
+    "Message another parent session by session_id (same collab lane only: " +
+    "project↔project or agent-home↔agent-home — never cross). " +
     "主线 pin is optional — do not thread_switch first. " +
     "Peer keeps its own chat. Delivery is steer. wait=true (default) returns the next assistant message."
   );

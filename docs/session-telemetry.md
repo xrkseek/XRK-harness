@@ -12,6 +12,8 @@ OpenTelemetry **会话遥测**缝：`@xrkseek/session-telemetry`。对会话 app
 | Record | `channel: ledger \| ops` · severity · attributes · body |
 | Provider | memory（CI）· OTLP/HTTP logs |
 | Consumer | `wrapStoreForSessionTelemetry`（Harness 按 Face Settings 与/或 env 挂） |
+| Redaction | 默认 `basicRedactionRule`：ledger body 抹掉 `content`/`text`/`args`/`result` 等正文字段，只留结构 + 字节长度；规则抛错则丢弃该条；测例可传 `redactionRules: []` |
+| `event.seq` | append 后取 `readEvents(id).length`（与 Face 1-based 一致），不在包装器本地自增 |
 
 Capture **永不阻断**回合；导出失败丢弃该批。
 
@@ -44,6 +46,8 @@ OpenTelemetry **session-telemetry** seam: `@xrkseek/session-telemetry`. Live-cap
 | Record | `channel: ledger \| ops` · severity · attributes · body |
 | Provider | memory (CI) · OTLP/HTTP logs |
 | Consumer | `wrapStoreForSessionTelemetry` (Harness mounts from Face Settings and/or env) |
+| Redaction | Default `basicRedactionRule`: strip ledger body fields like `content`/`text`/`args`/`result`, keep structure + byte lengths; rule throw drops the record; tests may pass `redactionRules: []` |
+| `event.seq` | After append, `readEvents(id).length` (Face 1-based); no local wrapper counter |
 
 Capture **never blocks** turns; failed export batches are dropped.
 

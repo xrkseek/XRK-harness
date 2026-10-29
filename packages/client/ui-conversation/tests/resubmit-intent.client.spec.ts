@@ -154,12 +154,15 @@ describe('confirmAndExecuteResubmit', () => {
         calls.prompt.push(content.map((c) => c.text).join(''))
       },
     }
-    return {
-      binding: () => ({ session }),
-      truncate: async (opts: { sessionId: string; beforeSeq: number }) => {
-        calls.truncate.push(opts)
-      },
-    }
+      return {
+        binding: () => ({ session }),
+        truncate: async (opts: { sessionId: string; beforeSeq: number }) => {
+          calls.truncate.push(opts)
+          // The real contract returns RpcResult; the executor now checks `ok`
+          // before re-prompting, so returning void here would crash it.
+          return { ok: true as const, value: { sessionId: opts.sessionId, eventCount: 0 } }
+        },
+      }
   }
 
   it('regenerate always opens keep/revert confirm even on idle tip', async () => {

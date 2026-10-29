@@ -24,10 +24,11 @@ description: >-
 | MCP / 外观 / Host 设置 | **`xrk-capability-attach`** |
 | 配模型 | **`xrk-models-settings`** |
 | 写 skill | **`xrk-create-skill`** |
-| 先计划再做 | **`xrk-plan-build`** |
+| 大活 / 含糊 | 同会话：问清 → outline → `todo_write` + `presence_set` → 开工 |
 | 开子代理 | **`xrk-delegate`** |
 | 审代码 | **`xrk-code-review`** |
 | 看板 / 画布 | **`xrk-canvas`** |
+| 家目录 / `.xrk` 地图 | **`xrk-product-home`** |
 | 进程插件 | **`xrk-plugin-kind`** → author → verify |
 
 ## 反模式

@@ -135,6 +135,17 @@ export class FakeApiClient implements IApiClient {
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
     cancel: (payload: unknown) => this.record('session.cancel', payload, this.onCancel(payload)),
     delete: (payload: unknown) => this.record('session.delete', payload, this.onDelete(payload)),
+    tools: (payload: unknown) => this.record('session.tools', payload, Promise.resolve(ok({
+      agentPreset: 'harness',
+      cwd: '/',
+      workspaceLabel: 'workspace',
+      disclosure: { direct: 0, deferred: 0, expanded: 0 },
+      tools: [],
+    }))),
+    pressBand: (payload: unknown) => this.record('session.pressBand', payload, Promise.resolve(ok({
+      generation: 0,
+      tree: null,
+    }))),
   }
 
   readonly subagents: IApiClient['subagents'] = {

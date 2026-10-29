@@ -1,0 +1,179 @@
+.dialog {
+  width: min(520px, 92vw);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-wrap: pretty;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.empty > p {
+  margin: 0;
+  max-width: 28ch;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+  width: 100%;
+  justify-items: stretch;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 120ms var(--ds-ease-out, ease-out),
+    box-shadow 120ms var(--ds-ease-out, ease-out),
+    transform 100ms var(--ds-ease-out, ease-out);
+}
+
+.tile:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-secondary);
+}
+
+.tile:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.tile[data-selected] {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 1px var(--dsw-alias-state-business-primary);
+}
+
+.tile[data-added],
+.tile:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tileName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.tileOrigin {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.tileBadge {
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.initial {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.error {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-danger);
+}
+
+/* Phone sheet: balanced 2-column tiles (auto-fill left a ragged left column). */
+@media (max-width: 767px) {
+  .dialog {
+    width: 100%;
+  }
+
+  .body {
+    gap: 14px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .tile {
+    min-height: 112px;
+    padding: 14px 10px 12px;
+    border-radius: 14px;
+  }
+
+  .tileName {
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .tileOrigin {
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  .initial {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+
+  .tile:active:not(:disabled) {
+    transform: none;
+  }
+}

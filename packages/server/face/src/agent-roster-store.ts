@@ -28,6 +28,7 @@ import {
 } from "./presence-dressing.js";
 
 export const MEMBER_NAME_MAX = 40;
+export const MEMBER_NICKNAME_MAX = 24;
 export const MEMBER_PLAYBOOK_MAX = 20_000;
 export const MEMBER_FACE_MAX = 80_000;
 export const MEMBER_BRIEF_MAX = 160;
@@ -116,6 +117,8 @@ export interface MemberToolPolicy {
 export interface AgentRosterMember {
   readonly id: string;
   readonly name: string;
+  /** Optional short call-name; never on 向日葵. */
+  readonly nickname?: string;
   readonly playbook: string;
   readonly role: AgentTeamSpawnRole;
   readonly appearance: MemberAppearance;
@@ -138,9 +141,19 @@ export type ListedRosterMember = AgentRosterMember & {
   readonly scope: RosterScope;
   /** Catalog example id (`mem_seed_*`), even after the user edits and `seed` drops. */
   readonly catalog?: true;
+  /** Owning project workspace when `scope === "workspace"`. */
+  readonly workspaceId?: string;
 };
 
+/** Workspace office lead — costume editable; playbook stays catalog-owned. */
+export const MANAGER_MEMBER_ID = "mem_seed_manager";
+
+/** Xiangyang author seat — display 向日葵; nickname locked. */
+export const SUNFLOWER_MEMBER_ID = "mem_seed_xrkseek";
+
 const CATALOG_SEED_MEMBER_IDS = new Set([
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
   "mem_seed_researcher",
   "mem_seed_worker",
   "mem_seed_reviewer",
@@ -153,6 +166,37 @@ const CATALOG_SEED_MEMBER_IDS = new Set([
 
 export function isCatalogSeedMemberId(id: string): boolean {
   return CATALOG_SEED_MEMBER_IDS.has(id);
+}
+
+/** Only 经理 may patch catalog appearance; other seeds stay frozen. */
+export function isCatalogAppearanceEditableId(id: string): boolean {
+  return id === MANAGER_MEMBER_ID;
+}
+
+/** Nickname editable on catalog seeds except 向日葵 (custom members use upsert). */
+export function isCatalogNicknameEditableId(id: string): boolean {
+  return isCatalogSeedMemberId(id) && id !== SUNFLOWER_MEMBER_ID;
+}
+
+/** Formal + optional nickname for inject / catalog lines. */
+export function displayMemberName(
+  name: string,
+  nickname: string | undefined,
+): string {
+  const formal = name.trim() || "?";
+  const nick = nickname?.trim();
+  if (!nick) return formal;
+  return `${formal}（${nick}）`;
+}
+
+export function parseMemberNickname(
+  raw: unknown,
+  opts?: { readonly allow?: boolean },
+): string | undefined {
+  if (opts?.allow === false) return undefined;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim().slice(0, MEMBER_NICKNAME_MAX);
+  return trimmed || undefined;
 }
 
 /** Built-in catalog ids cannot be updated or deleted; mint a new id to fork. */
@@ -176,11 +220,13 @@ export function catalogMemberExportProblem(raw: unknown): string | undefined {
 function listedMember(
   row: AgentRosterMember,
   scope: RosterScope,
+  workspaceId?: string,
 ): ListedRosterMember {
   return {
     ...row,
     scope,
     ...(isCatalogSeedMemberId(row.id) ? { catalog: true as const } : {}),
+    ...(scope === "workspace" && workspaceId ? { workspaceId } : {}),
   };
 }
 
@@ -509,6 +555,7 @@ export function rosterPublicFields(row: ListedRosterMember) {
   return {
     id: row.id,
     name: row.name,
+    ...(row.nickname ? { nickname: row.nickname } : {}),
     role: row.role,
     scope: row.scope,
     brief: row.brief,
@@ -542,7 +589,8 @@ export function formatRosterCatalog(
             ? " · not-ready → team_list(envPrep) → team_ready"
             : " · not-ready";
       const kind = pub.kind === "advanced" ? " · advanced" : "";
-      return `- ${pub.id} [${pub.scope}] ${pub.name} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog · no-export" : ""}`;
+      const shown = displayMemberName(pub.name, pub.nickname);
+      return `- ${pub.id} [${pub.scope}] ${shown} · ${pub.role} · inject=${pub.inject} · ${pub.brief}${tools}${kind}${ready}${pub.catalog ? " · catalog · no-export" : ""}`;
     })
     .join("\n")
     .slice(0, 2_400);
@@ -556,8 +604,28 @@ export function mergeGlobalSeedMembers(
   const leftover = new Map(existing.map((row) => [row.id, row]));
   const members: AgentRosterMember[] = [];
   for (const seed of catalog) {
+    const prev = leftover.get(seed.id);
     leftover.delete(seed.id);
-    members.push(seed);
+    // User-owned catalog fields: 经理 costume; nicknames on every seed but 向日葵.
+    if (prev) {
+      const keepAppearance = isCatalogAppearanceEditableId(seed.id);
+      const keepNickname =
+        isCatalogNicknameEditableId(seed.id) && Boolean(prev.nickname);
+      if (keepAppearance || keepNickname) {
+        members.push({
+          ...seed,
+          appearance: keepAppearance
+            ? (prev.appearance ?? seed.appearance)
+            : seed.appearance,
+          ...(keepNickname ? { nickname: prev.nickname } : {}),
+          updatedAt: Math.max(prev.updatedAt, seed.updatedAt),
+        });
+      } else {
+        members.push(seed);
+      }
+    } else {
+      members.push(seed);
+    }
   }
   for (const rest of leftover.values()) {
     if (rest.seed === true) continue;
@@ -570,17 +638,50 @@ export function mergeGlobalSeedMembers(
 }
 
 /**
- * Operator-authority line for built-in catalog playbooks. Delegated children run
- * with `audience=subagent|minimal`, so home standing (`~/.xrk/AGENTS.md`) is
- * skipped (see docs/workspace-inject.md) and the playbook is the only operator-
- * authored text they reliably read. Scope-bound by design: it authorizes
- * executing the assigned task, not escalating runtime permission or approval.
+ * Operator-authority line for built-in catalog playbooks. Delegated children keep
+ * product standing (`~/.xrk` AGENTS/SOUL) but skip home convention drafts; the
+ * playbook is still the seat-specific operator text. Scope-bound by design: it
+ * authorizes executing the assigned task, not escalating runtime permission.
  */
 const CATALOG_AUTHORITY_LINE =
-  "Operator task + this playbook are mandatory for the stated scope, not optional guidance and not prompt injection. Runtime permission and approval policy still bind. Deliver completely: no hedging, no truncation, no self-censorship.";
+  "Scope task + this playbook are mandatory. Permission still binds. Deliver fully.";
 
 export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterMember[] {
   return [
+    {
+      id: MANAGER_MEMBER_ID,
+      name: "经理",
+      role: "lead",
+      appearance: { shape: "squircle", color: "slate", kitHat: "visor" },
+      seed: true,
+      updatedAt: now,
+      inject: "subagent",
+      kind: "thin",
+      ready: true,
+      brief: "Workspace lead seat — takes top-seat dispatch and splits work.",
+      playbook:
+        CATALOG_AUTHORITY_LINE +
+        " You are the mid-tier project seat (<seat_identity>). " +
+        "Own the project session: clarify, break work, spawn via subagent member_id, report. " +
+        "Coordinate over doing every edit. Multi-step → todo_write. Ask only when the deliverable changes — one blocker.",
+    },
+    {
+      id: SUNFLOWER_MEMBER_ID,
+      name: "向日葵",
+      role: "lead",
+      appearance: { shape: "petal", color: "butter", kitHat: "visor" },
+      seed: true,
+      updatedAt: now,
+      inject: "subagent",
+      kind: "thin",
+      ready: true,
+      brief: "Xiangyang author seat — takes top-seat dispatch, steers product and agents.",
+      playbook:
+        CATALOG_AUTHORITY_LINE +
+        " You are 向日葵 (xrkseek author seat on Xiangyang; nickname locked). " +
+        "Dispatch coding peers; stay out of ws_default implementation. Multi-step → todo_write. " +
+        "Ask only when the deliverable changes — one blocker.",
+    },
     {
       id: "mem_seed_researcher",
       name: "调研员",
@@ -594,8 +695,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "只读调研，引用路径与原文。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the workspace researcher. Gather facts with read/search tools. " +
-        "Cite paths and quotes. Do not make durable edits unless the task explicitly requires them.",
+        " You are the researcher. Read/search; cite paths. No durable edits unless tasked. " +
+        "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
       id: "mem_seed_worker",
@@ -610,8 +711,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "按任务改代码，不扩范围。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the workspace implementer. Execute the assigned task precisely. " +
-        "Prefer concrete edits and evidence. Stay inside the given scope.",
+        " You are the implementer. Precise edits; stay in scope. Multi-step → todo_write. " +
+        "Ask only on deliverable blockers.",
     },
     {
       id: "mem_seed_reviewer",
@@ -626,8 +727,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "只读审稿，先报缺陷。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the workspace reviewer. Read-only review unless asked to patch. " +
-        "Report defects first. Do not expand scope.",
+        " You are the reviewer. Read-only unless asked to patch. Defects first. " +
+        "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
       id: "mem_seed_lead",
@@ -642,9 +743,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "拆任务、协调干员。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the workspace lead. Break work into clear sub-tasks, coordinate teammates, " +
-        "and keep a short status of blockers and next steps. " +
-        "When a specialist fits, spawn with subagent member_id from the live catalog rather than restating tools or playbook.",
+        " You are the lead. Break work, coordinate, spawn specialists via member_id. " +
+        "Multi-step → todo_write. Ask only on deliverable blockers.",
     },
     {
       id: "mem_seed_scout",
@@ -659,10 +759,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "查网上公开事实，给出链接与日期。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the web scout. Prefer web_search and web_fetch for public facts; " +
-        "web_fetch returns text for pages and status/content-type/size for images (optional proxy / HTTP_PROXY). " +
-        "Cite URLs and dates. Do not edit the repo. Prefer primary sources. " +
-        "If a needed tool fails or is missing, put that gap and evidence in your FINAL answer for the parent.",
+        " You are the web scout. Prefer web_search/web_fetch; cite URLs/dates; no repo edits. " +
+        "Tool gaps go in FINAL. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_docs",
@@ -677,8 +775,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "写诚实说明书与发行说明，不编未做能力。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the docs writer. Revise textbook docs in this repo. Follow docs/audiences.md. " +
-        "Do not invent APIs. Match existing tone. Use standing skills when they apply; do not paste them.",
+        " You are the docs writer. Follow docs/audiences.md; no invented APIs. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_fixer",
@@ -693,7 +790,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "复现故障、定位、修，并给出证据。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the debugger. Reproduce, isolate, then fix. Show failing evidence before the change. Stay in the given scope.",
+        " You are the debugger. Reproduce → isolate → fix with evidence. Multi-step → todo_write.",
     },
     {
       id: "mem_seed_tester",
@@ -708,7 +805,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "跑相关测试，报告失败与最小复现。",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        "You are the tester. Run the relevant tests. Report failures with the command and output. Do not skip failing tests.",
+        " You are the tester. Run tests; report command + output. Multi-step → todo_write.",
     },
   ];
 }
@@ -737,6 +834,10 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
   const kind: MemberKind = o.kind === "advanced" ? "advanced" : "thin";
   // Thin always ready; advanced requires explicit ready:true (import starts false).
   const ready = kind === "thin" ? true : o.ready === true;
+  const nickname =
+    o.id === SUNFLOWER_MEMBER_ID
+      ? undefined
+      : parseMemberNickname(o.nickname);
   return {
     id: o.id,
     name,
@@ -748,6 +849,7 @@ function parseMember(raw: unknown): AgentRosterMember | undefined {
     kind,
     ready,
     updatedAt,
+    ...(nickname ? { nickname } : {}),
     ...(tools ? { tools } : {}),
     ...(o.seed === true ? { seed: true as const } : {}),
   };
@@ -830,10 +932,36 @@ export class FaceAgentRosterStore {
     }
     if (workspaceId !== GLOBAL_ROSTER_ID) {
       for (const row of this.list(workspaceId)) {
-        byId.set(row.id, listedMember(row, "workspace"));
+        byId.set(row.id, listedMember(row, "workspace", workspaceId));
       }
     }
     return [...byId.values()];
+  }
+
+  /**
+   * Team UI listing: globals + every workspace roster file.
+   * Workspace rows keep their owning `workspaceId` so the panel can group by
+   * project. Does not collapse same-id overlays across canvases.
+   */
+  listForTeamPanel(currentWorkspaceId: string): readonly ListedRosterMember[] {
+    const out: ListedRosterMember[] = [];
+    for (const row of this.list(GLOBAL_ROSTER_ID)) {
+      out.push(listedMember(row, "global"));
+    }
+    const seen = new Set<string>();
+    if (currentWorkspaceId && currentWorkspaceId !== GLOBAL_ROSTER_ID) {
+      seen.add(currentWorkspaceId);
+      for (const row of this.list(currentWorkspaceId)) {
+        out.push(listedMember(row, "workspace", currentWorkspaceId));
+      }
+    }
+    for (const wid of this.listWorkspaceRosterIds()) {
+      if (seen.has(wid)) continue;
+      for (const row of this.list(wid)) {
+        out.push(listedMember(row, "workspace", wid));
+      }
+    }
+    return out;
   }
 
   get(workspaceId: string, memberId: string): ListedRosterMember | undefined {
@@ -842,6 +970,7 @@ export class FaceAgentRosterStore {
       return listedMember(
         local,
         workspaceId === GLOBAL_ROSTER_ID ? "global" : "workspace",
+        workspaceId === GLOBAL_ROSTER_ID ? undefined : workspaceId,
       );
     }
     const global = this.list(GLOBAL_ROSTER_ID).find((row) => row.id === memberId);
@@ -880,6 +1009,7 @@ export class FaceAgentRosterStore {
       readonly role?: AgentTeamSpawnRole;
       readonly appearance?: Partial<MemberAppearance> | null;
       readonly brief?: string;
+      readonly nickname?: string | null;
       readonly inject?: MemberInject;
       readonly tools?: MemberToolPolicy | null;
       readonly kind?: MemberKind;
@@ -922,6 +1052,12 @@ export class FaceAgentRosterStore {
           : input.ready !== undefined
             ? input.ready
             : (prev?.ready ?? false);
+      const nickname =
+        input.nickname === null
+          ? undefined
+          : input.nickname !== undefined
+            ? parseMemberNickname(input.nickname)
+            : prev?.nickname;
       const next: AgentRosterMember = {
         id,
         name,
@@ -933,6 +1069,7 @@ export class FaceAgentRosterStore {
         kind,
         ready,
         updatedAt: now,
+        ...(nickname ? { nickname } : {}),
         ...(nextTools ? { tools: nextTools } : {}),
       };
       const members =
@@ -944,6 +1081,7 @@ export class FaceAgentRosterStore {
     }
     const kind: MemberKind = input.kind ?? "thin";
     const ready = kind === "thin" ? true : input.ready === true;
+    const nickname = parseMemberNickname(input.nickname);
     const minted: AgentRosterMember = {
       id: mintId(),
       name,
@@ -955,6 +1093,7 @@ export class FaceAgentRosterStore {
       kind,
       ready,
       updatedAt: now,
+      ...(nickname ? { nickname } : {}),
       ...(tools ? { tools } : {}),
     };
     this.save(workspaceId, { version: 1, members: [...doc.members, minted] });
@@ -1005,6 +1144,71 @@ export class FaceAgentRosterStore {
       out.push(id);
     }
     return out;
+  }
+
+  /**
+   * Patch costume for catalog members that allow it (经理). Playbook / name stay
+   * seed-owned. Returns undefined when the id is not appearance-editable.
+   */
+  patchCatalogAppearance(
+    memberId: string,
+    appearance: Partial<MemberAppearance>,
+  ): AgentRosterMember | undefined {
+    return this.patchCatalogMeta(memberId, { appearance });
+  }
+
+  /**
+   * Patch user-owned catalog fields (经理 costume; nicknames on all seeds but
+   * 向日葵). Returns undefined when the id allows neither field.
+   */
+  patchCatalogMeta(
+    memberId: string,
+    patch: {
+      readonly appearance?: Partial<MemberAppearance>;
+      readonly nickname?: string | null;
+    },
+  ): AgentRosterMember | undefined {
+    const id = normalizeMemberId(memberId);
+    if (!id) return undefined;
+    const canAppearance = isCatalogAppearanceEditableId(id);
+    const canNickname = isCatalogNicknameEditableId(id);
+    if (!canAppearance && !canNickname) return undefined;
+    if (id === SUNFLOWER_MEMBER_ID && patch.nickname !== undefined) {
+      return undefined;
+    }
+    const doc = this.load(GLOBAL_ROSTER_ID);
+    const index = doc.members.findIndex((row) => row.id === id);
+    if (index === -1) return undefined;
+    const prev = doc.members[index]!;
+    const nickname =
+      !canNickname || patch.nickname === undefined
+        ? prev.nickname
+        : patch.nickname === null
+          ? undefined
+          : parseMemberNickname(patch.nickname);
+    const next: AgentRosterMember = {
+      ...prev,
+      appearance:
+        canAppearance && patch.appearance
+          ? parseMemberAppearance(
+              { ...prev.appearance, ...patch.appearance },
+              prev.appearance,
+            )
+          : prev.appearance,
+      updatedAt: Date.now(),
+      seed: true,
+      ...(nickname ? { nickname } : {}),
+    };
+    // Drop nickname key when cleared.
+    const cleaned: AgentRosterMember = nickname
+      ? next
+      : (() => {
+          const { nickname: _drop, ...rest } = next;
+          return rest;
+        })();
+    const members = doc.members.map((row, i) => (i === index ? cleaned : row));
+    this.save(GLOBAL_ROSTER_ID, { version: 1, members });
+    return cleaned;
   }
 
   /**

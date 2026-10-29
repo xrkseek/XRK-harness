@@ -68,13 +68,18 @@ export {
 export { installDefaultFaceProjections } from "./install-defaults.js";
 export {
   createFaceListProjectionCache,
+  listProjectionIdentityFromHints,
+  LIST_PROJECTION_IDENTITY_VERSION,
+  lowestCheckpointSeq,
   type FaceListProjectionCache,
+  type ListProjectionIdentity,
 } from "./list-checkpoint-cache.js";
 export {
   SESSION_CONTEXT_PROJECTION_KEYS,
   SESSION_HISTORY_PROJECTION_KEYS,
   SESSION_LIST_PROJECTION_KEYS,
   historyPageIncludesProjections,
+  sessionListProjectionKeys,
   sessionHistoryTailProjectionKeys,
   snapshotWireBlock,
 } from "./snapshot-keys.js";

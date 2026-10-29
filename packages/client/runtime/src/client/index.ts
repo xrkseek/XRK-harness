@@ -57,7 +57,7 @@ export { routeWorkspaceOpenFile } from './workspaces/open-file-route.ts'
 // Contract only: the scope implementation and its Host transport belong to
 // dsh-client-ui-settings (see that package's settings-scope.ts).
 export type {
-  SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec,
+  SettingsScope, SettingsScopePathOp, SettingsScopeSnapshot, SettingsScopeSpec,
 } from './contract/settings-scope.ts'
 export type { Session } from './sessions/session.ts'
 export { JUMP_PAGE_MESSAGES } from './sessions/session.ts'
@@ -71,7 +71,7 @@ export type {
   SessionBinding, SessionListState, SessionProvideContribution, SessionProvideDescriptor, SessionSummary,
 } from './sessions/service.ts'
 export type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot } from './sessions/manager.ts'
-export type { SubagentAddress, JobView } from '@xrkseek/client-connection/client'
+export type { SubagentAddress, BandNode, BandSnapshot, JobView } from '@xrkseek/client-connection/client'
 export type { WorkspaceListPhase } from './workspaces/manager.ts'
 export type { WorkspaceListState } from './workspaces/service.ts'
 export type {

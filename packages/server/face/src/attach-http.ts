@@ -110,6 +110,17 @@ function writeMuxBaseline(
         }),
       );
     }
+    const band = runtime.bandSnapshotFor(sessionId);
+    if (band !== undefined) {
+      send(
+        serverRequestFrame(newRpcId(), {
+          type: "session/band",
+          sessionId,
+          generation: band.generation,
+          tree: band.tree,
+        }),
+      );
+    }
   }
 }
 

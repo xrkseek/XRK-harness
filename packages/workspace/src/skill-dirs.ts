@@ -15,7 +15,14 @@ export interface SkillDirSourceOptions {
   readonly skillDirs?: readonly string[];
   /** Always appended after the primary roots (干员 pack skills on children). */
   readonly extraSkillDirs?: readonly string[];
+  /** Clash / catalog-budget prefer (usually same as extraSkillDirs). */
+  readonly preferredSkillDirs?: readonly string[];
   readonly includeUserHome?: boolean;
+  /**
+   * When `workspaceRoot` is set, include workspace vendor skill trees
+   * (default **true**). Set false to resolve home-only roots.
+   */
+  readonly includeWorkspaceSkills?: boolean;
   readonly homeDir?: string;
 }
 
@@ -62,8 +69,10 @@ export async function resolveSkillDirs(
           await push(underProduct ?? path.join(home, rel));
         }
       }
-      for (const rel of WORKSPACE_SKILL_REL_DIRS) {
-        await push(path.join(root, rel));
+      if (options.includeWorkspaceSkills !== false) {
+        for (const rel of WORKSPACE_SKILL_REL_DIRS) {
+          await push(path.join(root, rel));
+        }
       }
     }
 

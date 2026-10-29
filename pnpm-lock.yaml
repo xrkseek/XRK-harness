@@ -240,19 +240,11 @@ importers:
         specifier: ^4.1.8
         version: 4.1.11(@types/node@22.20.1)(@vitest/coverage-v8@2.1.9(supports-color@7.2.0)(vitest@2.1.9(@types/node@24.13.3)(happy-dom@20.14.5)(jsdom@25.0.1(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)))(happy-dom@20.14.5)(jsdom@25.0.1(supports-color@7.2.0))(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0))
 
-  extensions/a2a:
-    dependencies:
-      '@xrkseek/a2a':
-        specifier: workspace:*
-        version: link:../../packages/a2a
-
   extensions/dsh-compat:
     dependencies:
       '@xrkseek/server-http':
         specifier: workspace:*
         version: link:../../packages/server/http
-
-  extensions/git-worktrees: {}
 
   packages/a2a:
     dependencies:
@@ -289,6 +281,54 @@ importers:
       '@xrkseek/xrk-home-paths':
         specifier: workspace:*
         version: link:../util/home-paths
+
+  packages/claude-code-mods:
+    dependencies:
+      '@xrkseek/cordis':
+        specifier: workspace:*
+        version: link:../cordis
+      '@xrkseek/core-tools':
+        specifier: workspace:*
+        version: link:../core/tools
+      '@xrkseek/exec-fs':
+        specifier: workspace:*
+        version: link:../exec/fs
+      '@xrkseek/exec-subprocess':
+        specifier: workspace:*
+        version: link:../exec/subprocess
+      '@xrkseek/schemastery':
+        specifier: workspace:*
+        version: link:../schemastery
+      '@xrkseek/xrk-agent':
+        specifier: workspace:*
+        version: link:../stubs/xrk-agent
+      '@xrkseek/xrk-commands':
+        specifier: workspace:*
+        version: link:../stubs/xrk-commands
+      '@xrkseek/xrk-llm':
+        specifier: workspace:*
+        version: link:../stubs/xrk-llm
+      '@xrkseek/xrk-scope':
+        specifier: workspace:*
+        version: link:../stubs/xrk-scope
+      '@xrkseek/xrk-session':
+        specifier: workspace:*
+        version: link:../stubs/xrk-session
+      '@xrkseek/xrk-token-meter':
+        specifier: workspace:*
+        version: link:../stubs/xrk-token-meter
+      '@xrkseek/xrk-tools':
+        specifier: workspace:*
+        version: link:../stubs/xrk-tools
+      '@xrkseek/xrk-typert-protocol':
+        specifier: workspace:*
+        version: link:../stubs/xrk-typert-protocol
+      '@xrkseek/xrk-user-questions':
+        specifier: workspace:*
+        version: link:../stubs/xrk-user-questions
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/client/connection:
     dependencies:
@@ -4218,6 +4258,9 @@ importers:
       '@xrkseek/attachment':
         specifier: workspace:*
         version: link:../../packages/attachment
+      '@xrkseek/claude-code-mods':
+        specifier: workspace:*
+        version: link:../../packages/claude-code-mods
       '@xrkseek/code-runtime':
         specifier: workspace:*
         version: link:../../packages/code-runtime

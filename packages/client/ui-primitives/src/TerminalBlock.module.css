@@ -105,7 +105,12 @@
 
 .cwd {
   flex: none;
+  max-width: 36%;
+  min-width: 0;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* `pre`, not `nowrap`: the prompt row renders the command verbatim, and

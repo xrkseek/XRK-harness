@@ -1,8 +1,8 @@
-import { foldPlanMode } from "@xrkseek/protocol";
 import { readSessionEvents, sessionEventCount } from "@xrkseek/core-session";
+import type { PluginCommandSource } from "@xrkseek/core-agent";
 import { resolveXrkHome } from "@xrkseek/server-config";
 import {
-  listSkillsFromWorkspace,
+  listStandingCatalogSkills,
   loadOfficeRecipes,
   mergeRecipesById,
   type Recipe,
@@ -19,13 +19,7 @@ import {
   permissionSelectFromEvents,
 } from "./permissions.js";
 import { isOrchestrationWorkspaceId } from "./xiangyang-workspace.js";
-import {
-  commitPlanMode,
-  narratePlanCommand,
-  planWantedFromArgs,
-  previewPlanSet,
-  steerPlanMessage,
-} from "./plan-mode.js";
+import { commitPlanMode } from "./plan-mode.js";
 import { narrateAutoReviewCommand } from "./projections/units/auto-review.js";
 import { parseAutoReviewSlashInput } from "./auto-review-slash.js";
 import { approvePendingAutoReview } from "./auto-review-approve.js";
@@ -102,6 +96,15 @@ export function parseFaceCommandLine(
 export async function listFaceCommandDescriptors(
   loadRecipes: SlashRecipesLoader | undefined,
   plugins?: FaceRuntime["plugins"],
+  /**
+   * Commands the session's plugin host contributes (Claude Code mods).
+   *
+   * Listed **after** builtins and process plugins: a name Face already answers
+   * must keep answering it, or a plugin could quietly take over `/compact`.
+   * Recipes keep priority too — `/some-recipe` is a prompt template the user
+   * wrote, and a plugin reusing that id would shadow it.
+   */
+  extras?: readonly FaceCommandDescriptor[],
 ): Promise<readonly FaceCommandDescriptor[]> {
   const pluginCommands = collectFacePluginCommands(plugins);
   const used = new Set(pluginCommands.map((c) => c.name));
@@ -164,8 +167,9 @@ export async function listFaceCommandDescriptors(
       : [
           {
             name: "plan",
-            description: "Enter or leave plan mode (session collaboration; not a tool badge)",
-            input: { hint: "[off|message]" },
+            description:
+              "Retired — replies with migration hint (outline → todo_write)",
+            input: { hint: "[ignored]" },
           },
         ]),
     ...(used.has("mcp")
@@ -259,7 +263,19 @@ export async function listFaceCommandDescriptors(
       };
     });
 
-  return [...fromPlugins, ...builtins, ...fromRecipes].sort((a, b) =>
+  const reserved = new Set([
+    ...used,
+    ...fromRecipes.map((descriptor) => descriptor.name),
+  ]);
+  const fromMods: FaceCommandDescriptor[] = (extras ?? [])
+    .filter((c) => COMMAND_NAME.test(c.name) && !reserved.has(c.name))
+    .map((c) => ({
+      name: c.name,
+      description: c.description,
+      ...(c.input ? { input: c.input } : {}),
+    }));
+
+  return [...fromPlugins, ...builtins, ...fromMods, ...fromRecipes].sort((a, b) =>
     a.name < b.name ? -1 : 1,
   );
 }
@@ -443,11 +459,15 @@ export async function executeFaceCommand(
         text: "Usage: /skills",
       });
     }
-    const skills = await listSkillsFromWorkspace(runtime.workspaceRoot);
+    const skills = await listStandingCatalogSkills({
+      workspaceRoot: runtime.workspaceRoot,
+      productDir: path.join(runtime.workspaceRoot, ".xrk"),
+      audience: "user",
+    });
     if (skills.length === 0) {
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
-        text: "No skills found under workspace / home skill roots.",
+        text: "No skills found under product-home / workspace skill roots.",
       });
     }
     const lines = skills.map((s) => {
@@ -496,25 +516,15 @@ export async function executeFaceCommand(
   }
 
   if (parsed.name === "plan") {
-    const wanted = planWantedFromArgs(parsed.rawInput);
-    const events = readSessionEvents(runtime.store, sessionId);
-    const loggedActive = foldPlanMode(events);
-    const outcome = previewPlanSet(events, wanted);
-    const text = narratePlanCommand(outcome, wanted, loggedActive);
-    const execution = appendCommandPair(
-      runtime,
-      sessionId,
-      parsed,
-      { kind: "success", text },
-      undefined,
-      parsed.rawInput,
-    );
-    if (outcome === "committed") {
-      commitPlanMode(runtime.store, sessionId, wanted);
-    }
-    if (steerPlanMessage(runtime.store, sessionId, parsed.rawInput)) {
-      runtime.drain.wake(sessionId);
-    }
+    // Product plan mode retired — keep slash for muscle memory / old UI.
+    // command/run name=plan would leave projection `pending` unless we
+    // settle with plan/mode inactive (no steer / no activate).
+    const execution = appendCommandPair(runtime, sessionId, parsed, {
+      kind: "success",
+      text:
+        "Plan mode is retired. For large work: same session — headed outline → ask when the deliverable changes → todo_write → build. Old plan/mode log events still fold for replay.",
+    });
+    commitPlanMode(runtime.store, sessionId, false);
     return execution;
   }
 
@@ -700,9 +710,17 @@ export async function executeFaceCommand(
         });
       }
       const result = await store.restore(target.id, { prune });
+      const eventCount = sessionEventCount(runtime.store, sessionId);
+      const chatSeq = target.seq;
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
-        text: formatRestoreResult(result),
+        text: formatRestoreResult({
+          ...result,
+          chatSeq,
+          eventCount,
+          chatAhead: eventCount > chatSeq,
+          chatTruncated: false,
+        }),
       });
     } catch (err) {
       return appendCommandPair(runtime, sessionId, parsed, {
@@ -712,12 +730,69 @@ export async function executeFaceCommand(
     }
   }
 
+  // Last resort: commands the session's plugin host registered (Claude Code
+  // mods). Asked after everything Face knows, so a builtin or process plugin
+  // always wins a name a plugin happens to reuse.
+  const source = await pluginCommandSource(runtime, sessionId);
+  if (source !== undefined) {
+    const hit = source.list().find((command) => command.name === parsed.name);
+    if (hit !== undefined) {
+      return settleHostCommand(runtime, sessionId, parsed, source);
+    }
+  }
+
   // Recipes / unknown names: not Face commands — caller admits as text.
   return undefined;
 }
 
 function mintCommandId(): string {
   return `cmd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * The extra command source the session's agent carries, if its host wraps one.
+ *
+ * `resolveAgent` is cached Host-side, so this does not rebuild a composition;
+ * a session that never had an agent gets one here, which is what makes the
+ * plugin's `session.start` registrations exist in the first place.
+ */
+async function pluginCommandSource(
+  runtime: FaceRuntime,
+  sessionId: string,
+): Promise<PluginCommandSource | undefined> {
+  const agent = await runtime
+    .resolveAgent(sessionId)
+    .catch(() => undefined);
+  return agent?.pluginCommands;
+}
+
+/**
+ * Run one command off a host-contributed source.
+ *
+ * The source appends its own `command/run` / `command/done` pair and reports
+ * the id (its contract), so this records nothing: a typed `/name` and a
+ * `$.command.run` from inside a plugin leave one pair each, never two.
+ */
+async function settleHostCommand(
+  runtime: FaceRuntime,
+  sessionId: string,
+  parsed: { readonly name: string; readonly rawInput: string },
+  source: PluginCommandSource,
+): Promise<FaceCommandExecution> {
+  try {
+    const execution = await source.execute(`/${parsed.name}${parsed.rawInput}`);
+    if (execution !== undefined) return execution;
+  } catch (err) {
+    // A source that throws instead of answering still leaves the run visible.
+    return appendCommandPair(runtime, sessionId, parsed, {
+      kind: "error",
+      text: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return appendCommandPair(runtime, sessionId, parsed, {
+    kind: "error",
+    text: `/${parsed.name} is registered but answered nothing`,
+  });
 }
 
 async function settlePluginCommand(

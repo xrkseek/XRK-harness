@@ -65,12 +65,12 @@ Canvas = 工作区级、可跨会话保留的声明式看板，在右侧 **概�
 |------|------|------|
 | `markdown` / `md` | `body`（CommonMark 字符串：标题/列表/代码/表） | 结论、说明；**不要**塞嵌套 AST 对象 |
 | `kpi` | `items[{label,value,tone?}]` | 少而醒目的指标；`tone` 给数值着色 |
-| `callout` | `title?` · `body` · `tone?` | 根因 / 警示 / 要点框（左色条；body 也吃 markdown） |
+| `callout` | `title?` · `body` · `tone?` | 根因 / 警示 / 要点框（表面 tint + 标题色；body 也吃 markdown） |
 | `table` | `columns` · `rows` | 对照 / inventory |
 | `series` | `title` · `points[{x,y}]` · `tone?` | 简易趋势（y 为有限数字） |
 
 `tone`（可选）：`neutral` · `good` · `warn` · `bad` · `accent`  
-— KPI 数值色、callout 左边条、series 柱色。缺省：KPI=`neutral`，callout=`warn`，series=`accent`。
+— KPI 数值色、callout 边框/背景 tint、series 柱色。缺省：KPI=`neutral`，callout=`warn`，series=`accent`。
 
 最小 upsert 形状：
 

@@ -15,6 +15,9 @@ export const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
 export type SessionGroupBy = 'workspace' | 'flat'
 export type { SessionOrderBy, ArchiveViewMode }
 
+/** Default upper-pane fraction of the workspace/agent vertical split. */
+export const DEFAULT_SIDEBAR_SPLIT_RATIO = 0.55
+
 /** Workspace browser viewing state persisted across surface remounts and reloads. */
 type WorkspaceViewState = {
   groupBy: SessionGroupBy
@@ -27,6 +30,11 @@ type WorkspaceViewState = {
   sessionOrderByAccount: Record<string, string[]>
   /** Last observed update timestamps per order account for one-time promotion events. */
   sessionUpdatedAtByAccount: Record<string, Record<string, number>>
+  /**
+   * Upper (project workspaces) pane height as a fraction of the split column
+   * (0–1). Lower pane is 干员 homes. Wide layout only.
+   */
+  splitRatio: number
 }
 
 /**
@@ -46,6 +54,7 @@ type WorkspaceViewActions = {
     updatedAt: Record<string, number>,
   ) => void
   setSessionOrder: (draft: WorkspaceViewState, accountKey: string, order: string[]) => void
+  setSplitRatio: (draft: WorkspaceViewState, ratio: number) => void
 }
 
 /**
@@ -61,6 +70,7 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       groupExpansion: {},
       sessionOrderByAccount: {},
       sessionUpdatedAtByAccount: {},
+      splitRatio: DEFAULT_SIDEBAR_SPLIT_RATIO,
     }),
     persist: 'xrk.workspace.view.v6',
     actions: {
@@ -86,6 +96,9 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       },
       setSessionOrder: (d, accountKey: string, order: string[]) => {
         d.sessionOrderByAccount[accountKey] = order
+      },
+      setSplitRatio: (d, ratio: number) => {
+        d.splitRatio = Math.min(0.85, Math.max(0.15, ratio))
       },
     },
   })

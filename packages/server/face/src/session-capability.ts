@@ -8,7 +8,6 @@ import { readSessionEvents } from "@xrkseek/core-session";
 import {
   effectiveApprovalPolicy,
   effectiveSandboxMode,
-  foldPlanMode,
   pathAccessModeFromSandbox,
   shouldConfineSandbox,
 } from "@xrkseek/protocol";
@@ -29,6 +28,7 @@ import {
   formatMemberPackInventoryLines,
   listMemberPackInventory,
 } from "./agent-member-pack.js";
+import { subagentDepth } from "./subagent-tools.js";
 
 /** Affirmative permission copy for the model (path gate only). */
 function permissionBrief(permission: string): string {
@@ -53,7 +53,7 @@ function surfaceBrief(badge: string): string {
     case "shell":
       return "kind=coding_parent · fs+bash+PTY — no web/lsp/subagents/peers.";
     case "frugal":
-      return "kind=coding_parent · full tools + peers · no subagents — one session; xrk-plan-build for large work.";
+      return "kind=coding_parent · full tools + peers · no subagents — one session; large work: outline → ask → todo_write → build.";
     case "shallow":
       return "kind=coding_parent · full tools + subagents + peers — spawn when parallel helps (per-model live session cap).";
     case "harness":
@@ -122,18 +122,24 @@ function formatDelegatedCapability(
   const briefcase = link.memberId
     ? advancedBriefcaseCapabilityLines(runtime, link.memberId)
     : [];
+  const depth = subagentDepth(runtime, sessionId);
+  const nestBrief =
+    depth <= 1
+      ? "L1 child — report FINAL to parent; no identity theater beyond playbook + seat_identity."
+      : `L${depth} nested — stay narrow; FINAL bubbles one parent at a time; do not restate manager standing.`;
   const lines = [
     "kind: delegated_child",
     `parent: ${link.parentSessionId}`,
     `you: ${sessionId}`,
     `human_face: ${humanFace}`,
+    `depth: ${depth}`,
     `role: ${role}`,
     `caps: ${roleCapsHint(link.role)}`,
     `cwd: ${cwd}`,
     ...briefcase,
     ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
     ...(link.label.trim() ? [`label: ${link.label.trim()}`] : []),
-    "brief: FINAL→parent (only visible result; include hard failures). ask→human_face. siblings→thread_message. catalog=truth. no self-spawn unless tasked.",
+    `brief: ${nestBrief} FINAL→parent (only visible result; include hard failures). ask→parent (card on parent session). siblings→thread_message. catalog=truth. no self-spawn unless tasked.`,
     `omitted: ${omittedChildTools(link.role)}`,
     ...childGapLines(runtime, sessionId),
   ];
@@ -177,7 +183,6 @@ export function formatSessionCapability(
   const approval = effectiveApprovalPolicy(events);
   const badge = effectiveSessionAgentPreset(runtime, sessionId);
   const allowN = runtime.pathAllowlist.count(sessionId);
-  const planOn = foldPlanMode(events);
   const tools = runtime.tools?.list() ?? [];
   const counts = countExposures(tools);
   const expanded = runtime.toolDisclosure.count(sessionId);
@@ -195,7 +200,6 @@ export function formatSessionCapability(
     `path_allowlist: ${allowN} objects (session+settings)`,
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];
-  if (planOn) lines.push("plan: on");
   lines.push(...childGapLines(runtime, sessionId));
   return lines.join("\n");
 }

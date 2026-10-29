@@ -8,7 +8,7 @@ import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 import { JobListAction, type JobListInjected } from './JobListAction.tsx'
 import { JobInputDock } from './JobInputDock.tsx'
 import type {} from '@xrkseek/client-locale/client'
-import { en, NS, zh, type JobKey } from './locales.ts'
+import { en, ja, NS, zh, type JobKey } from './locales.ts'
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -27,7 +27,7 @@ export const inject = ['sessions', 'slots', 'locale']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-job: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-job: dictionaries')
   const sessions = ctx.sessions
   const jobActions = (ownerSessionId: SessionId): JobListInjected => ({
     killJob(jobId) {

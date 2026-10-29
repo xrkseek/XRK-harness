@@ -80,6 +80,7 @@ describe("image/offload", () => {
     expect(store.get(child.id).events.map((e) => e.type)).toEqual([
       "user/message",
       "image/offload",
+      "session/end-seed",
     ]);
     const derived = deriveMessages(store.get(child.id).events);
     const content = derived[0]!.content;

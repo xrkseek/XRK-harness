@@ -9,11 +9,16 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconAgentPresetOutlineRegular, IconCloseFillRegular, IconPersonalizationOutlineRegular,
-  IconProjectAddOutlineRegular, IconSearchOutlineRegular, Menu, Modal, Tooltip,
+  Button, IconCloseFillRegular, IconPersonalizationOutlineRegular,
+  IconProjectAddOutlineRegular, IconSearchOutlineRegular, IconUsersOutlineRegular,
+  Menu, Modal, Tooltip,
 } from '@xrkseek/client-ui-primitives'
 import {
   WorkspaceArchiveActiveError,
@@ -26,9 +31,10 @@ import {
   type ArchiveViewMode, type SessionListFacts, type SessionNode, type SessionOrderBy,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
-import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
+import { DEFAULT_SIDEBAR_SPLIT_RATIO, FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
 import { TeamRoster } from './TeamRoster.tsx'
+import { AddAgentPanel } from './AddAgentPanel.tsx'
 import css from './WorkspaceBrowser.module.css'
 
 /**
@@ -42,6 +48,30 @@ const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /** Session rows visible per Workspace before the local overflow control. */
 const COLLAPSED_SESSION_LIMIT = 5
+/** Matches AppFrame phone inset stamp — avoid value-importing ui-layout. */
+const PHONE_LAYOUT_ATTR = 'data-xrk-layout-phone'
+
+type PhoneSidebarLane = 'workspaces' | 'agents'
+
+function subscribePhoneShell(onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => {}
+  const obs = new MutationObserver(onChange)
+  obs.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: [PHONE_LAYOUT_ATTR],
+  })
+  return () => { obs.disconnect() }
+}
+
+function readPhoneShell(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.documentElement.hasAttribute(PHONE_LAYOUT_ATTR)
+}
+
+/** True when AppFrame is in phone overlay mode (drawer, not desktop rail). */
+function usePhoneShell(): boolean {
+  return useSyncExternalStore(subscribePhoneShell, readPhoneShell, () => false)
+}
 
 /** Keep controlled input and RPC payload inside the session.search wire contract. */
 function sanitizeSearchQuery(value: string): string {
@@ -303,6 +333,18 @@ type SessionTreeProps = Pick<
   orderBy: SessionOrderBy
   /** Host account home; POSIX Workspace hover paths may display as `~`. */
   home?: string | undefined
+  /**
+   * When false, omit the 未分组 bucket. Project pane keeps this false —
+   * orphans live under 干员工作区 only.
+   */
+  includeUngrouped?: boolean
+  /**
+   * Sessions owned by the other pane (e.g. project workspace membership when
+   * deriving the 干员 tree). Must not appear as 未分组 orphans.
+   */
+  excludeFromUngrouped?: ReadonlySet<SessionId>
+  /** When false, omit the empty-tree copy (干员 pane uses its own empty banner). */
+  showEmpty?: boolean
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -315,6 +357,9 @@ function SessionTree({
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
   home, t,
+  includeUngrouped = true,
+  excludeFromUngrouped,
+  showEmpty = true,
 }: SessionTreeProps) {
   const list = useSessionListFacts(useSessions)
   const phase = useSessions(s => s.phase)
@@ -358,9 +403,13 @@ function SessionTree({
     [groupExpansion],
   )
   const ungroupedSessionIds = useMemo(() => {
+    if (!includeUngrouped) return [] as SessionId[]
     const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
+    if (excludeFromUngrouped) {
+      for (const id of excludeFromUngrouped) accounted.add(id)
+    }
     return list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))
-  }, [list, workspaces])
+  }, [excludeFromUngrouped, includeUngrouped, list, workspaces])
   useEffect(() => {
     if (phase !== 'ready') return
     const switchedToUpdated = previousOrderBy.current !== 'updated' && orderBy === 'updated'
@@ -370,7 +419,9 @@ function SessionTree({
         key: workspace.workspaceId as string,
         sessionIds: workspace.sessionIds.filter(id => list.byId[id] !== undefined),
       })),
-      { key: UNGROUPED_KEY, sessionIds: ungroupedSessionIds },
+      ...(includeUngrouped
+        ? [{ key: UNGROUPED_KEY, sessionIds: ungroupedSessionIds }]
+        : []),
     ]
     for (const { key, sessionIds } of accounts) {
       const previousOrder = sessionOrderByAccount[key]
@@ -387,7 +438,7 @@ function SessionTree({
         syncSessionOrderAccount(key, next.order.map(id => id as string), next.updatedAt)
       }
     }
-  }, [list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
+  }, [includeUngrouped, list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
   const orderedWorkspaces = useMemo(() => {
     return workspaces.map((workspace) => {
       const stored = sessionOrderByAccount[workspace.workspaceId as string]
@@ -399,15 +450,24 @@ function SessionTree({
     () => reconciledSessionOrder(ungroupedSessionIds, sessionOrderByAccount[UNGROUPED_KEY]),
     [sessionOrderByAccount, ungroupedSessionIds],
   )
-  const groups = useMemo(
-    () => deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
+  const groups = useMemo(() => {
+    const derived = deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
       expandedGroups,
-      ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
-        ? {}
-        : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds),
-    [list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds, pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount],
-  )
+      ...(includeUngrouped && sessionOrderByAccount[UNGROUPED_KEY] !== undefined
+        ? { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }
+        : {}),
+      ...(excludeFromUngrouped !== undefined
+        ? { excludeFromUngrouped }
+        : {}),
+    }, archiveMode, pinnedSessionIds, pinnedWorkspaceIds)
+    return includeUngrouped
+      ? derived
+      : derived.filter(group => group.key !== UNGROUPED_KEY)
+  }, [
+    list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds,
+    pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount, includeUngrouped,
+    excludeFromUngrouped,
+  ])
   /**
    * Relative-time clock for the rows: one read per derivation change instead of
    * a render-time `Date.now()`. A fresh value per render would invalidate every
@@ -540,7 +600,7 @@ function SessionTree({
         role="tree"
         aria-label={t('section.sessions')}
       >
-        {groups.length === 0 && (
+        {showEmpty && groups.length === 0 && (
           <div className={css.empty}>{t('empty.none')}</div>
         )}
         {groups.map((group) => {
@@ -676,6 +736,7 @@ function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, onSessionPinToggle,
   archivedSessionIds, pinnedSessionIds, archiveMode,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  excludeSessionIds,
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -693,13 +754,17 @@ function FlatList({
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
   | 't'
->) {
+> & {
+  /** Sessions belonging to agent-home workspaces (lower pane) — omit from flat. */
+  excludeSessionIds?: ReadonlySet<SessionId>
+}) {
   const list = useSessionListFacts(useSessions)
   const phase = useSessions(s => s.phase)
-  const baseRows = useMemo(
-    () => deriveFlat(list, archivedSessionIds, archiveMode, pinnedSessionIds),
-    [list, archivedSessionIds, archiveMode, pinnedSessionIds],
-  )
+  const baseRows = useMemo(() => {
+    const rows = deriveFlat(list, archivedSessionIds, archiveMode, pinnedSessionIds)
+    if (!excludeSessionIds || excludeSessionIds.size === 0) return rows
+    return rows.filter(row => !excludeSessionIds.has(row.id))
+  }, [list, archivedSessionIds, archiveMode, pinnedSessionIds, excludeSessionIds])
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
   useEffect(() => {
@@ -930,7 +995,6 @@ export function WorkspaceBrowser({
   listTeam,
   upsertTeamMember,
   removeTeamMember,
-  dispatchTeam,
   exportTeamMember,
   importTeamPack,
 }: WorkspaceBrowserProps) {
@@ -942,8 +1006,8 @@ export function WorkspaceBrowser({
   const currentSessionId = useSessions(state => state.current)
   const teamAvailable = listTeam !== undefined
     && upsertTeamMember !== undefined
-    && dispatchTeam !== undefined
   const [teamOpen, setTeamOpen] = useState(false)
+  const [addAgentOpen, setAddAgentOpen] = useState(false)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -954,6 +1018,51 @@ export function WorkspaceBrowser({
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
+  const splitRatio = useStore(s => s.splitRatio ?? DEFAULT_SIDEBAR_SPLIT_RATIO)
+  const phoneShell = usePhoneShell()
+  const [phoneLane, setPhoneLane] = useState<PhoneSidebarLane>('workspaces')
+  // The query outlives the tree and the input (both wide-only) so collapsing
+  // does not silently drop an in-progress filter.
+  const [query, setQuery] = useState('')
+  const [searchExpanded, setSearchExpanded] = useState(false)
+  const [agentQuery, setAgentQuery] = useState('')
+  const [agentSearchExpanded, setAgentSearchExpanded] = useState(false)
+  const normalizedQuery = sanitizeSearchQuery(query).trim()
+  const normalizedAgentQuery = sanitizeSearchQuery(agentQuery).trim().toLowerCase()
+  const agentSearchRoot = useRef<HTMLDivElement>(null)
+  const agentSearchInput = useRef<HTMLInputElement>(null)
+  const projectWorkspaces = useMemo(
+    () => workspaces.filter(row => row.kind !== 'agent-home'),
+    [workspaces],
+  )
+  const agentWorkspacesAll = useMemo(
+    () => workspaces.filter(row => row.kind === 'agent-home' && Boolean(row.boundMemberId)),
+    [workspaces],
+  )
+  const agentWorkspaces = useMemo(() => {
+    if (normalizedAgentQuery === '') return agentWorkspacesAll
+    return agentWorkspacesAll.filter((row) => {
+      const title = row.title.toLowerCase()
+      const member = (row.boundMemberId ?? '').toLowerCase()
+      return title.includes(normalizedAgentQuery) || member.includes(normalizedAgentQuery)
+    })
+  }, [agentWorkspacesAll, normalizedAgentQuery])
+  const agentSessionIds = useMemo(() => {
+    const ids = new Set<SessionId>()
+    for (const row of agentWorkspacesAll) {
+      for (const id of row.sessionIds) ids.add(id)
+    }
+    return ids
+  }, [agentWorkspacesAll])
+  const projectSessionIds = useMemo(() => {
+    const ids = new Set<SessionId>()
+    for (const row of projectWorkspaces) {
+      for (const id of row.sessionIds) ids.add(id)
+    }
+    return ids
+  }, [projectWorkspaces])
+  const splitColumnRef = useRef<HTMLDivElement>(null)
+  const splitDragRef = useRef<{ startY: number; startRatio: number } | null>(null)
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
@@ -962,11 +1071,6 @@ export function WorkspaceBrowser({
       ...workspaces.map(workspace => workspace.workspaceId as string),
     ])
   }, [actions.retainAccountKeys, workspacePhase, workspaces])
-  // The query outlives the tree and the input (both wide-only) so collapsing
-  // does not silently drop an in-progress filter.
-  const [query, setQuery] = useState('')
-  const [searchExpanded, setSearchExpanded] = useState(false)
-  const normalizedQuery = sanitizeSearchQuery(query).trim()
   const [remoteSearch, setRemoteSearch] = useState<RemoteSearchState>({
     query: '',
     status: 'idle',
@@ -1010,6 +1114,23 @@ export function WorkspaceBrowser({
     document.addEventListener('click', onClick)
     return () => { document.removeEventListener('click', onClick) }
   }, [normalizedQuery, wide, searchExpanded])
+
+  useEffect(() => {
+    if (!wide || !agentSearchExpanded) return
+    agentSearchInput.current?.focus({ preventScroll: true })
+  }, [wide, agentSearchExpanded])
+
+  useEffect(() => {
+    if (!wide || !agentSearchExpanded) return
+    const onClick = (event: MouseEvent): void => {
+      if (!(event.target instanceof Node) || agentSearchRoot.current?.contains(event.target) === true) return
+      agentSearchInput.current?.blur()
+      if (normalizedAgentQuery !== '') return
+      setAgentSearchExpanded(false)
+    }
+    document.addEventListener('click', onClick)
+    return () => { document.removeEventListener('click', onClick) }
+  }, [normalizedAgentQuery, wide, agentSearchExpanded])
 
   useEffect(() => {
     if (normalizedQuery === '') {
@@ -1182,7 +1303,11 @@ export function WorkspaceBrowser({
 
   // Delete dialog is separate from the row so a successful removal can
   // unmount that row without tearing down the in-flight confirmation state.
-  const [deleteTarget, setDeleteTarget] = useState<{ workspaceId: WorkspaceId; title: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    workspaceId: WorkspaceId
+    title: string
+    kind?: 'project' | 'agent-home'
+  } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteCommittedId, setDeleteCommittedId] = useState<WorkspaceId | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -1222,104 +1347,217 @@ export function WorkspaceBrowser({
     setRenameError(null)
   }, [])
   const onWorkspaceDeleteRequest = useCallback((workspaceId: WorkspaceId, title: string): void => {
-    setDeleteTarget({ workspaceId, title })
+    const kind = workspaces.find(row => row.workspaceId === workspaceId)?.kind
+    setDeleteTarget({
+      workspaceId,
+      title,
+      ...(kind === 'agent-home' || kind === 'project' ? { kind } : {}),
+    })
     setDeleteError(null)
+  }, [workspaces])
+
+  const openTeamRoster = useCallback((): void => {
+    if (!teamAvailable) return
+    if (currentSessionId === undefined) startSession()
+    setTeamOpen(true)
+  }, [teamAvailable, currentSessionId, startSession])
+
+  const openAddAgent = useCallback((): void => {
+    if (!teamAvailable) return
+    if (currentSessionId === undefined) startSession()
+    setAddAgentOpen(true)
+  }, [teamAvailable, currentSessionId, startSession])
+
+  const boundMemberIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const row of workspaces) {
+      if (row.kind === 'agent-home' && row.boundMemberId) {
+        ids.add(row.boundMemberId)
+      }
+    }
+    return ids
+  }, [workspaces])
+
+  const workspaceTitleById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of workspaces) {
+      map.set(row.workspaceId, row.title)
+    }
+    return map
+  }, [workspaces])
+
+  const onSplitPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>): void => {
+    const column = splitColumnRef.current
+    if (!column) return
+    event.preventDefault()
+    splitDragRef.current = { startY: event.clientY, startRatio: splitRatio }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [splitRatio])
+
+  const onSplitPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>): void => {
+    const drag = splitDragRef.current
+    const column = splitColumnRef.current
+    if (!drag || !column) return
+    const height = column.getBoundingClientRect().height
+    if (height <= 0) return
+    const next = drag.startRatio + (event.clientY - drag.startY) / height
+    actions.setSplitRatio(next)
+  }, [actions])
+
+  const onSplitPointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>): void => {
+    splitDragRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }, [])
+
+  const onSplitKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      actions.setSplitRatio(splitRatio - 0.03)
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      actions.setSplitRatio(splitRatio + 0.03)
+    }
+  }, [actions, splitRatio])
+
+  const projectList = wide && (normalizedQuery !== ''
+    ? (
+      <SearchResults
+        useSessions={useSessions}
+        open={open}
+        workspaces={projectWorkspaces}
+        archivedSessionIds={archivedSessionIds}
+        archiveMode={archiveMode}
+        query={normalizedQuery}
+        remote={remoteSearch}
+        resultLimit={searchResultLimit}
+        t={t}
+      />
+    )
+    : groupBy === 'flat'
+      ? (
+        <FlatList
+          useSessions={useSessions} open={open} forkSession={runFork}
+          onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+          onSessionPinToggle={onSessionPinToggle}
+          archivedSessionIds={archivedSessionIds}
+          pinnedSessionIds={pinnedSessionIds}
+          archiveMode={archiveMode}
+          orderBy={orderBy}
+          sessionOrderByAccount={sessionOrderByAccount}
+          sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
+          syncSessionOrderAccount={actions.syncSessionOrderAccount}
+          setSessionOrder={actions.setSessionOrder}
+          excludeSessionIds={agentSessionIds}
+          t={t}
+        />
+      )
+      : (
+        <SessionTree
+          useSessions={useSessions}
+          onSessionRename={onSessionRename}
+          onSessionArchive={onSessionArchive}
+          onSessionPinToggle={onSessionPinToggle}
+          forkSession={runFork}
+          workspaces={projectWorkspaces}
+          groupExpansion={groupExpansion}
+          setGroupExpanded={actions.setGroupExpanded}
+          sessionOrderByAccount={sessionOrderByAccount}
+          sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
+          syncSessionOrderAccount={actions.syncSessionOrderAccount}
+          setSessionOrder={actions.setSessionOrder}
+          archivedSessionIds={archivedSessionIds}
+          pinnedSessionIds={pinnedSessionIds}
+          pinnedWorkspaceIds={pinnedWorkspaceIds}
+          archiveMode={archiveMode}
+          startSession={startSession}
+          open={open}
+          insertWorkspaceBefore={insertWorkspaceBefore}
+          insertSessionBefore={insertSessionBefore}
+          orderBy={orderBy}
+          home={home}
+          t={t}
+          onRenameRequest={onWorkspaceRenameRequest}
+          onDeleteRequest={onWorkspaceDeleteRequest}
+          onWorkspacePinToggle={onWorkspacePinToggle}
+          includeUngrouped={false}
+        />
+      ))
+
+  const agentList = wide && (
+    normalizedAgentQuery !== '' && agentWorkspaces.length === 0
+      ? (
+        <div className={css.agentEmpty}>{t('search.noMatches')}</div>
+      )
+      : (
+        <>
+          {agentWorkspacesAll.length === 0
+            ? (
+              <div className={css.agentEmpty}>
+                <span className={css.agentEmptyTitle}>{t('agent.empty')}</span>
+                <span>{t('agent.emptyHint')}</span>
+              </div>
+            )
+            : null}
+          <SessionTree
+            useSessions={useSessions}
+            onSessionRename={onSessionRename}
+            onSessionArchive={onSessionArchive}
+            onSessionPinToggle={onSessionPinToggle}
+            forkSession={runFork}
+            workspaces={agentWorkspaces}
+            groupExpansion={groupExpansion}
+            setGroupExpanded={actions.setGroupExpanded}
+            sessionOrderByAccount={sessionOrderByAccount}
+            sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
+            syncSessionOrderAccount={actions.syncSessionOrderAccount}
+            setSessionOrder={actions.setSessionOrder}
+            archivedSessionIds={archivedSessionIds}
+            pinnedSessionIds={pinnedSessionIds}
+            pinnedWorkspaceIds={pinnedWorkspaceIds}
+            archiveMode={archiveMode}
+            startSession={startSession}
+            open={open}
+            insertWorkspaceBefore={insertWorkspaceBefore}
+            insertSessionBefore={insertSessionBefore}
+            orderBy={orderBy}
+            home={home}
+            t={t}
+            onRenameRequest={onWorkspaceRenameRequest}
+            onDeleteRequest={onWorkspaceDeleteRequest}
+            onWorkspacePinToggle={onWorkspacePinToggle}
+            includeUngrouped
+            excludeFromUngrouped={projectSessionIds}
+            showEmpty={false}
+          />
+        </>
+      )
+  )
 
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
-      <div className={css.sectionHeader}>
-        {wide && (
-          <span className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}>
-            {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
-          </span>
-        )}
-        {wide && (
-          <div className={clsx(css.searchSlot, searchExpanded && css.searchSlotExpanded)}>
-            <div
-              ref={searchRoot}
-              className={clsx(css.search, searchExpanded && css.searchExpanded)}
-              onClick={() => {
-                setWsPickerOpen(false)
-                setSearchExpanded(true)
-                searchInput.current?.focus()
-              }}
-            >
-              <Tooltip label={t('search')} side="bottom" disabled={searchExpanded}>
-                <button
-                  type="button"
-                  className={css.searchButton}
-                  aria-label={t('search.sessions.aria')}
-                  aria-expanded={searchExpanded}
-                  onClick={() => {
-                    setWsPickerOpen(false)
-                    setSearchExpanded(true)
-                  }}
-                >
-                  <IconSearchOutlineRegular size={searchExpanded ? 11 : 14} />
-                </button>
-              </Tooltip>
-              <input
-                ref={searchInput}
-                className={css.searchInput}
-                type="text"
-                placeholder={t('search.placeholder')}
-                maxLength={SEARCH_QUERY_MAX_CODE_UNITS}
-                value={query}
-                tabIndex={searchExpanded ? 0 : -1}
-                onChange={(e) => { setQuery(sanitizeSearchQuery(e.target.value)) }}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Escape') return
-                  setQuery('')
-                  setSearchExpanded(false)
-                }}
-              />
-              {searchExpanded && (
-                <button
-                  type="button"
-                  className={css.clearButton}
-                  aria-label={t('search.clear')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setQuery('')
-                    setSearchExpanded(false)
-                  }}
-                >
-                  <IconCloseFillRegular />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        <div className={clsx(css.headerActions, wide && searchExpanded && css.headerActionsHidden)}>
-          {wide && teamAvailable && (
-            <Tooltip label={t('team.title')} side="bottom">
+      {/* Rail: search + add workspace only (split is wide-only). */}
+      {!wide && (
+        <>
+          <div className={css.search}>
+            <Tooltip label={t('search')}>
               <button
                 type="button"
-                className={css.iconButton}
-                aria-label={t('team.aria')}
-                onClick={() => { setTeamOpen(true) }}
+                className={css.searchButton}
+                aria-label={t('search.sessions.aria')}
+                onClick={() => {
+                  setSearchExpanded(true)
+                  setSearchOnExpand(true)
+                  expandSidebar()
+                }}
               >
-                <IconAgentPresetOutlineRegular size={16} />
+                <IconSearchOutlineRegular size={18} />
               </button>
             </Tooltip>
-          )}
-          {wide && (
-            <ViewOptionsMenu
-              groupBy={groupBy}
-              orderBy={orderBy}
-              archiveMode={archiveMode}
-              onGroupPick={(mode) => { actions.setGroupBy(mode) }}
-              onOrderPick={(mode) => { actions.setOrderBy(mode) }}
-              onArchivePick={(mode) => { actions.setArchiveMode(mode) }}
-              t={t}
-            />
-          )}
-          {/* Adding is the button's one action, so a composition with no
-              picking affordance has nothing to offer here: the region hides the
-              button rather than leaving a dead one in the header. */}
+          </div>
           {directoryFlowAvailable && (
-            <Tooltip label={t('workspace.add')} side="bottom">
+            <Tooltip label={t('workspace.add')}>
               <button
                 ref={wsPlusRef}
                 type="button"
@@ -1329,12 +1567,269 @@ export function WorkspaceBrowser({
                   setWsPickerOpen(v => !v)
                 }}
               >
-                <IconProjectAddOutlineRegular size={wide ? 16 : 18} />
+                <IconProjectAddOutlineRegular size={18} />
               </button>
             </Tooltip>
           )}
+        </>
+      )}
+
+      {wide && (
+        <div
+          className={css.splitColumn}
+          ref={splitColumnRef}
+          {...(phoneShell ? { 'data-phone-lane': phoneLane } : {})}
+        >
+          {phoneShell ? (
+            <div className={css.phoneLaneTabs} role="tablist" aria-label={t('splitter.aria')}>
+              <button
+                type="button"
+                role="tab"
+                className={css.phoneLaneTab}
+                aria-selected={phoneLane === 'workspaces'}
+                onClick={() => { setPhoneLane('workspaces') }}
+              >
+                {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={css.phoneLaneTab}
+                aria-selected={phoneLane === 'agents'}
+                onClick={() => { setPhoneLane('agents') }}
+              >
+                {t('section.agents')}
+              </button>
+            </div>
+          ) : null}
+          <div
+            className={clsx(css.splitPane, css.splitPaneUpper)}
+            data-phone-pane="workspaces"
+            style={phoneShell
+              ? undefined
+              : { flex: `0 0 ${Math.round(splitRatio * 1000) / 10}%` }}
+          >
+            <div className={css.sectionHeader} data-phone-section-chrome="">
+              <span className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}>
+                {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
+              </span>
+              <div className={clsx(css.searchSlot, searchExpanded && css.searchSlotExpanded)}>
+                <div
+                  ref={searchRoot}
+                  className={clsx(css.search, searchExpanded && css.searchExpanded)}
+                  onClick={() => {
+                    setWsPickerOpen(false)
+                    setSearchExpanded(true)
+                    searchInput.current?.focus()
+                  }}
+                >
+                  <Tooltip label={t('search')} side="bottom" disabled={searchExpanded}>
+                    <button
+                      type="button"
+                      className={css.searchButton}
+                      aria-label={t('search.sessions.aria')}
+                      aria-expanded={searchExpanded}
+                      onClick={() => {
+                        setWsPickerOpen(false)
+                        setSearchExpanded(true)
+                      }}
+                    >
+                      <IconSearchOutlineRegular size={searchExpanded ? 11 : 14} />
+                    </button>
+                  </Tooltip>
+                  <input
+                    ref={searchInput}
+                    className={css.searchInput}
+                    type="text"
+                    placeholder={t('search.placeholder')}
+                    maxLength={SEARCH_QUERY_MAX_CODE_UNITS}
+                    value={query}
+                    tabIndex={searchExpanded ? 0 : -1}
+                    onChange={(e) => { setQuery(sanitizeSearchQuery(e.target.value)) }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Escape') return
+                      setQuery('')
+                      setSearchExpanded(false)
+                    }}
+                  />
+                  {searchExpanded && (
+                    <button
+                      type="button"
+                      className={css.clearButton}
+                      aria-label={t('search.clear')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setQuery('')
+                        setSearchExpanded(false)
+                      }}
+                    >
+                      <IconCloseFillRegular />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={clsx(css.headerActions, searchExpanded && css.headerActionsHidden)}>
+                <ViewOptionsMenu
+                  groupBy={groupBy}
+                  orderBy={orderBy}
+                  archiveMode={archiveMode}
+                  onGroupPick={(mode) => { actions.setGroupBy(mode) }}
+                  onOrderPick={(mode) => { actions.setOrderBy(mode) }}
+                  onArchivePick={(mode) => { actions.setArchiveMode(mode) }}
+                  t={t}
+                />
+                {teamAvailable && (
+                  <Tooltip label={t('team.title')} side="bottom">
+                    <button
+                      type="button"
+                      className={css.iconButton}
+                      aria-label={t('team.title')}
+                      onClick={openTeamRoster}
+                    >
+                      <IconUsersOutlineRegular size={16} />
+                    </button>
+                  </Tooltip>
+                )}
+                {directoryFlowAvailable && (
+                  <Tooltip label={t('workspace.add')} side="bottom">
+                    <button
+                      ref={wsPlusRef}
+                      type="button"
+                      className={css.iconButton}
+                      aria-label={t('workspace.add')}
+                      onClick={() => { setWsPickerOpen(v => !v) }}
+                    >
+                      <IconProjectAddOutlineRegular size={16} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <WorkspacePickFlow
+                t={t}
+                open={wsPickerOpen}
+                anchorRef={wsPlusRef}
+                useWorkspaces={useWorkspaces}
+                createWorkspace={createWorkspace}
+                useDirectoryFlow={useDirectoryFlow}
+                renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
+                addOnly
+                side="right"
+                onPick={(workspaceId) => {
+                  setWsPickerOpen(false)
+                  startSession(workspaceId)
+                }}
+                onClose={() => { setWsPickerOpen(false) }}
+              />
+            </div>
+            <div className={css.listArea} data-pane="project">{projectList}</div>
+          </div>
+
+          {phoneShell ? null : (
+            <button
+              type="button"
+              className={css.splitHandle}
+              aria-label={t('splitter.aria')}
+              aria-orientation="horizontal"
+              aria-valuemin={15}
+              aria-valuemax={85}
+              aria-valuenow={Math.round(splitRatio * 100)}
+              onPointerDown={onSplitPointerDown}
+              onPointerMove={onSplitPointerMove}
+              onPointerUp={onSplitPointerUp}
+              onPointerCancel={onSplitPointerUp}
+              onKeyDown={onSplitKeyDown}
+            />
+          )}
+
+          <div
+            className={clsx(css.splitPane, css.splitPaneLower)}
+            data-phone-pane="agents"
+          >
+            <div className={css.sectionHeader} data-phone-section-chrome="">
+              <span className={clsx(css.sectionLabel, css.wide, agentSearchExpanded && css.sectionLabelHidden)}>
+                {t('section.agents')}
+              </span>
+              <div className={clsx(css.searchSlot, agentSearchExpanded && css.searchSlotExpanded)}>
+                <div
+                  ref={agentSearchRoot}
+                  className={clsx(css.search, agentSearchExpanded && css.searchExpanded)}
+                  onClick={() => {
+                    setAgentSearchExpanded(true)
+                    agentSearchInput.current?.focus()
+                  }}
+                >
+                  <Tooltip label={t('search')} side="bottom" disabled={agentSearchExpanded}>
+                    <button
+                      type="button"
+                      className={css.searchButton}
+                      aria-label={t('search.agents.aria')}
+                      aria-expanded={agentSearchExpanded}
+                      onClick={() => { setAgentSearchExpanded(true) }}
+                    >
+                      <IconSearchOutlineRegular size={agentSearchExpanded ? 11 : 14} />
+                    </button>
+                  </Tooltip>
+                  <input
+                    ref={agentSearchInput}
+                    className={css.searchInput}
+                    type="text"
+                    placeholder={t('search.agents.placeholder')}
+                    maxLength={SEARCH_QUERY_MAX_CODE_UNITS}
+                    value={agentQuery}
+                    tabIndex={agentSearchExpanded ? 0 : -1}
+                    onChange={(e) => { setAgentQuery(sanitizeSearchQuery(e.target.value)) }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Escape') return
+                      setAgentQuery('')
+                      setAgentSearchExpanded(false)
+                    }}
+                  />
+                  {agentSearchExpanded && (
+                    <button
+                      type="button"
+                      className={css.clearButton}
+                      aria-label={t('search.clear')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAgentQuery('')
+                        setAgentSearchExpanded(false)
+                      }}
+                    >
+                      <IconCloseFillRegular />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={clsx(css.headerActions, agentSearchExpanded && css.headerActionsHidden)}>
+                <ViewOptionsMenu
+                  groupBy={groupBy}
+                  orderBy={orderBy}
+                  archiveMode={archiveMode}
+                  onGroupPick={(mode) => { actions.setGroupBy(mode) }}
+                  onOrderPick={(mode) => { actions.setOrderBy(mode) }}
+                  onArchivePick={(mode) => { actions.setArchiveMode(mode) }}
+                  t={t}
+                />
+                {teamAvailable && (
+                  <Tooltip label={t('agent.addWorkspace')} side="bottom">
+                    <button
+                      type="button"
+                      className={css.iconButton}
+                      aria-label={t('agent.addWorkspace')}
+                      onClick={openAddAgent}
+                    >
+                      <IconProjectAddOutlineRegular size={16} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+            <div className={css.listArea} data-pane="agents">{agentList}</div>
+          </div>
         </div>
-        {/* Add flow + its error dialog (same package — direct composition). */}
+      )}
+
+      {!wide && (
         <WorkspacePickFlow
           t={t}
           open={wsPickerOpen}
@@ -1351,91 +1846,7 @@ export function WorkspaceBrowser({
           }}
           onClose={() => { setWsPickerOpen(false) }}
         />
-      </div>
-
-      {/* The collapsed rail keeps search as its own 36px control. */}
-      {!wide && <div className={css.search}>
-        <Tooltip label={t('search')}>
-          <button
-            type="button"
-            className={css.searchButton}
-            aria-label={t('search.sessions.aria')}
-            onClick={() => {
-              setSearchExpanded(true)
-              setSearchOnExpand(true)
-              expandSidebar()
-            }}
-          >
-            <IconSearchOutlineRegular size={18} />
-          </button>
-        </Tooltip>
-      </div>}
-
-      {/* Always-mounted seat keeps the region's flex slot while the list
-          itself is wide-only. */}
-      <div className={css.listArea}>
-        {wide && (normalizedQuery !== ''
-          ? (
-            <SearchResults
-              useSessions={useSessions}
-              open={open}
-              workspaces={workspaces}
-              archivedSessionIds={archivedSessionIds}
-              archiveMode={archiveMode}
-              query={normalizedQuery}
-              remote={remoteSearch}
-              resultLimit={searchResultLimit}
-              t={t}
-            />
-          )
-          : groupBy === 'flat'
-            ? (
-              <FlatList
-                useSessions={useSessions} open={open} forkSession={runFork}
-                onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
-                onSessionPinToggle={onSessionPinToggle}
-                archivedSessionIds={archivedSessionIds}
-                pinnedSessionIds={pinnedSessionIds}
-                archiveMode={archiveMode}
-                orderBy={orderBy}
-                sessionOrderByAccount={sessionOrderByAccount}
-                sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
-                syncSessionOrderAccount={actions.syncSessionOrderAccount}
-                setSessionOrder={actions.setSessionOrder}
-                t={t}
-              />
-            )
-            : (
-              <SessionTree
-                useSessions={useSessions}
-                onSessionRename={onSessionRename}
-                onSessionArchive={onSessionArchive}
-                onSessionPinToggle={onSessionPinToggle}
-                forkSession={runFork}
-                workspaces={workspaces}
-                groupExpansion={groupExpansion}
-                setGroupExpanded={actions.setGroupExpanded}
-                sessionOrderByAccount={sessionOrderByAccount}
-                sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
-                syncSessionOrderAccount={actions.syncSessionOrderAccount}
-                setSessionOrder={actions.setSessionOrder}
-                archivedSessionIds={archivedSessionIds}
-                pinnedSessionIds={pinnedSessionIds}
-                pinnedWorkspaceIds={pinnedWorkspaceIds}
-                archiveMode={archiveMode}
-                startSession={startSession}
-                open={open}
-                insertWorkspaceBefore={insertWorkspaceBefore}
-                insertSessionBefore={insertSessionBefore}
-                orderBy={orderBy}
-                home={home}
-                t={t}
-                onRenameRequest={onWorkspaceRenameRequest}
-                onDeleteRequest={onWorkspaceDeleteRequest}
-                onWorkspacePinToggle={onWorkspacePinToggle}
-              />
-            ))}
-      </div>
+      )}
 
       <Modal
         open={renameTarget !== null}
@@ -1510,7 +1921,12 @@ export function WorkspaceBrowser({
         title={t('delete.workspace')}
         {...deleteTarget === null
           ? {}
-          : { description: t('delete.desc', { name: deleteTarget.title }) }}
+          : {
+              description: t(
+                deleteTarget.kind === 'agent-home' ? 'delete.descAgentHome' : 'delete.desc',
+                { name: deleteTarget.title },
+              ),
+            }}
         footer={(
           <>
             <Button variant="outline" disabled={deleting} onClick={closeDelete}>{t('cancel')}</Button>
@@ -1571,24 +1987,37 @@ export function WorkspaceBrowser({
         {archiving && <div className={css.deleteStatus} role="status">{t('archive.active.pending')}</div>}
         {archiveError !== null && <div className={css.renameError} role="alert">{archiveError}</div>}
       </Modal>
-      {teamAvailable && (
-        <TeamRoster
-          open={teamOpen}
-          onClose={() => { setTeamOpen(false) }}
-          sessionId={currentSessionId}
-          t={t}
-          useWorkspaces={useWorkspaces}
-          createWorkspace={createWorkspace}
-          useDirectoryFlow={useDirectoryFlow}
-          renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
-          startSession={startSession}
-          listTeam={listTeam}
-          upsertTeamMember={upsertTeamMember}
-          removeTeamMember={removeTeamMember}
-          dispatchTeam={dispatchTeam}
-          exportTeamMember={exportTeamMember}
-          importTeamPack={importTeamPack}
-        />
+      {teamAvailable && listTeam && upsertTeamMember && (
+        <>
+          <TeamRoster
+            open={teamOpen}
+            onClose={() => { setTeamOpen(false) }}
+            sessionId={currentSessionId}
+            t={t}
+            useWorkspaces={useWorkspaces}
+            createWorkspace={createWorkspace}
+            useDirectoryFlow={useDirectoryFlow}
+            renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
+            startSession={startSession}
+            listTeam={listTeam}
+            upsertTeamMember={upsertTeamMember}
+            removeTeamMember={removeTeamMember}
+            exportTeamMember={exportTeamMember}
+            importTeamPack={importTeamPack}
+          />
+          <AddAgentPanel
+            open={addAgentOpen}
+            onClose={() => { setAddAgentOpen(false) }}
+            sessionId={currentSessionId}
+            t={t}
+            boundMemberIds={boundMemberIds}
+            workspaceTitleById={workspaceTitleById}
+            listTeam={listTeam}
+            upsertTeamMember={upsertTeamMember}
+            startSession={startSession}
+            onOpenTeam={() => { setAddAgentOpen(false); setTeamOpen(true) }}
+          />
+        </>
       )}
       {forking && (
         <div className={css.forkOverlay} role="status" aria-live="polite" aria-busy="true">

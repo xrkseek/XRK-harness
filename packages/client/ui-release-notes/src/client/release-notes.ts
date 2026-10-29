@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.0-rc.1',
+    date: '2026-10-29',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '0.7.x 正式线首个 rc：大会话读写提速（编辑重发尾删 · fork SQL 前缀 · 冷开尾读 / 投影盘缓存）。',
+        en: 'First 0.7.x formal-line rc: large-session I/O (edit-resubmit tail-delete · fork SQL prefix · cold tail read / projection disk cache).',
+      },
+      {
+        zh: '上下文工程：Audience 只闸 XRK.md；家约定全席同注；`<instruction_authority>`；skill 渐进披露（无 skill_search）；经理 coding-light / 向阳管设置。',
+        en: 'Context engineering: Audience gates XRK.md only; home convention every seat; `<instruction_authority>`; progressive skills (no skill_search); manager coding-light / 向阳 owns Settings.',
+      },
+      {
+        zh: 'Claude Code mods 入产品；Boss 心情条 · 添加干员；产品 plan 模式退役。',
+        en: 'Claude Code mods in-product; Boss mood sheet · Add-agent; product plan mode retired.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.7.0-rc.1（@rc）；@latest 仍为 0.6.23。完整清单见 docs/releases/v0.7.0-rc.1.md。',
+        en: 'npm @xrkseek/harness-cli@0.7.0-rc.1 (@rc); @latest stays on 0.6.23. Full list in docs/releases/v0.7.0-rc.1.md.',
+      },
+    ],
+  },
+  {
     version: '0.6.23',
     date: '2026-10-26',
     title: {
@@ -269,8 +295,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Archive while busy confirms then force-stops; timed ask shows a live countdown.',
       },
       {
-        zh: '内置干员 playbook 带 operator 权威首行（子会话不读家站立）；站立种子补 Instruction authority。',
-        en: 'Catalog playbooks open with an operator-authority line (children skip home standing); standing seed adds Instruction authority.',
+        zh: '内置干员 playbook 带 operator 权威首行；站立种子补 Instruction authority（当时子席跳过家站立；现行解封见 workspace-inject）。',
+        en: 'Catalog playbooks open with an operator-authority line; standing seed adds Instruction authority (children skipped home standing at ship; see workspace-inject for current unseal).',
       },
       {
         zh: 'npm @xrkseek/harness-cli@0.6.15 接管 @latest。完整清单见 docs/releases/v0.6.15.md。',

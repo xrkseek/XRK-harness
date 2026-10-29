@@ -17,6 +17,8 @@ import type { MenuItem, StateDotState } from '@xrkseek/client-ui-primitives'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import { relativeTime } from '../tree.ts'
+import { CompanionBall } from '../CompanionBall.tsx'
+import { usePresenceModuleEnabled } from '../dressing-scope.ts'
 import css from './Rows.module.css'
 
 /** The standard locale seat, prop-passed from the browser root. */
@@ -141,11 +143,24 @@ interface ProjectRowItemProps {
  * @param b - next group node.
  * @returns whether both headers paint identically.
  */
+function sameCompanionLook(
+  a: GroupNode['companionLook'],
+  b: GroupNode['companionLook'],
+): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.shape === b.shape && a.color === b.color
+    && a.kit === b.kit && a.kitHat === b.kitHat && a.kitGlasses === b.kitGlasses
+    && a.kitHeld === b.kitHeld && a.overlayHat === b.overlayHat
+    && a.overlayGlasses === b.overlayGlasses && a.overlayHeld === b.overlayHeld
+}
+
 function sameGroupHeader(a: GroupNode, b: GroupNode): boolean {
   return a.key === b.key && a.workspaceId === b.workspaceId && a.label === b.label
     && a.cwd === b.cwd && a.createdAt === b.createdAt && a.pinned === b.pinned
     && a.sessionCount === b.sessionCount && a.expanded === b.expanded
     && a.containsCurrent === b.containsCurrent
+    && sameCompanionLook(a.companionLook, b.companionLook)
 }
 
 /**
@@ -184,6 +199,8 @@ export const ProjectRowItem = memo(function ProjectRowItem(
   { group, onToggle, onCreate, actions, drag, home, t }: ProjectRowItemProps,
 ) {
   const row = group
+  const presenceOn = usePresenceModuleEnabled()
+  const companionLook = presenceOn ? row.companionLook : undefined
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
   // Xiangyang wire title is English; zh UI remaps via locale.
   const label = row.workspaceId === undefined
@@ -307,8 +324,23 @@ export const ProjectRowItem = memo(function ProjectRowItem(
         }
       }}
     >
-      <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
-        {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
+      <span className={clsx(css.slot, css.folder, active && css.folderActive, companionLook && css.companionSlot)}>
+        {companionLook
+          ? (
+            <CompanionBall
+              compact
+              shape={companionLook.shape}
+              color={companionLook.color}
+              {...(companionLook.kit ? { kit: companionLook.kit } : {})}
+              {...(companionLook.kitHat ? { kitHat: companionLook.kitHat } : {})}
+              {...(companionLook.kitGlasses ? { kitGlasses: companionLook.kitGlasses } : {})}
+              {...(companionLook.kitHeld ? { kitHeld: companionLook.kitHeld } : {})}
+              {...(companionLook.overlayHat ? { overlayHat: companionLook.overlayHat } : {})}
+              {...(companionLook.overlayGlasses ? { overlayGlasses: companionLook.overlayGlasses } : {})}
+              {...(companionLook.overlayHeld ? { overlayHeld: companionLook.overlayHeld } : {})}
+            />
+          )
+          : row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
       </span>
       <span className={clsx(css.slot, css.chevron)}>
         <IconTriangleRightFillRegular className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
@@ -332,7 +364,7 @@ export const ProjectRowItem = memo(function ProjectRowItem(
           <>
             <button
               type="button"
-              className={clsx(css.iconButton, row.pinned && css.pinActive)}
+              className={clsx(css.iconButton, css.pinToggle, row.pinned && css.pinActive)}
               aria-label={t(row.pinned ? 'actions.unpinWorkspace.aria' : 'actions.pinWorkspace.aria', { name: label })}
               onClick={(e) => {
                 e.stopPropagation()

@@ -117,6 +117,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 
 | 目标 | 路径 |
 |------|------|
+| 界面语言（中文 / English / 日本語） | **设置 → 通用 → 语言** |
 | 模型与密钥 | **设置 → 模型** · **设置 → 凭据** |
 | MCP / 搜索 / 终端 / Agent 循环 / 工作区注入 | **设置 → 插件 → 插件配置** |
 | 默认权限档 | **设置 → 权限**（live：仍停在旧默认的会话会跟推）；会话内 Access 芯片或 `/permission` |
@@ -282,6 +283,7 @@ After starting `web`:
 
 | Goal | Path |
 |------|------|
+| UI language (中文 / English / 日本語) | **Settings → General → Language** |
 | Model and keys | **Settings → Models** · **Settings → Credentials** |
 | MCP / search / shell / agent loop / workspace inject | **Settings → Plugins → Plugin configuration** |
 | Default permission preset | **Settings → Permissions** (live: sessions still on the prior default follow); in-session Access chip or `/permission` |

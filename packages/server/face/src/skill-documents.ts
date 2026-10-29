@@ -8,7 +8,7 @@ import {
   collectEcosystemInstructions,
   createInjectBudget,
   formatAvailableSkillsXml,
-  listSkillsFromWorkspace,
+  listStandingCatalogSkills,
 } from "@xrkseek/workspace";
 
 /** Catalog layer for one inject document. */
@@ -74,8 +74,13 @@ export async function listInjectDocuments(
       bytes: s.body.length,
     }));
 
-  // Standing skill catalog (workspace skills only — matches Host default inject).
-  const skills = await listSkillsFromWorkspace(root, { includeUserHome: false });
+  // Standing skill catalog (= Host inject + skill tool roots).
+  const skills = await listStandingCatalogSkills({
+    workspaceRoot: root,
+    productDir: path.join(root, ".xrk"),
+    audience: "user",
+    ...(options?.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+  });
   const catalog = formatAvailableSkillsXml(skills);
   if (catalog.trim()) {
     out.push({
@@ -99,7 +104,12 @@ export async function readInjectDocument(
 ): Promise<{ readonly path: string; readonly content: string } | undefined> {
   const root = path.resolve(workspaceRoot);
   if (logicalPath === SKILL_CATALOG_PATH) {
-    const skills = await listSkillsFromWorkspace(root, { includeUserHome: false });
+    const skills = await listStandingCatalogSkills({
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      audience: "user",
+      ...(options?.homeDir !== undefined ? { homeDir: options.homeDir } : {}),
+    });
     const catalog = formatAvailableSkillsXml(skills);
     if (!catalog.trim()) return undefined;
     return { path: SKILL_CATALOG_PATH, content: catalog };

@@ -20,7 +20,7 @@ import { AppRoot } from '@xrkseek/client-web/src/AppRoot.tsx'
 import { createLoaderStatusStore, createSignal } from '@xrkseek/client-web/src/loader-status.ts'
 
 /** Pin English so zh navigator locales do not flip default splash copy. */
-const en = createSignal<'zh' | 'en'>('en')
+const en = createSignal<'zh' | 'en' | 'ja'>('en')
 
 function mount() {
   const settled = createSignal(false)
@@ -113,7 +113,7 @@ describe('AppRoot', () => {
     const settled = createSignal(false)
     const error = createSignal<string | undefined>(undefined)
     const status = createLoaderStatusStore()
-    const zh = createSignal<'zh' | 'en'>('zh')
+    const zh = createSignal<'zh' | 'en' | 'ja'>('zh')
     const { getByText, queryByTestId } = render(
       <AppRoot
         settled={settled}

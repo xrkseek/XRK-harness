@@ -59,7 +59,8 @@
   cursor: pointer;
   pointer-events: auto;
   transform: translate(-100%, -50%);
-  transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Side rail only — keep short; transcript folds must not animate height. */
+  transition: height var(--ds-motion-fast) var(--ds-ease-out);
 }
 
 /* The frame's inner scroller: no visible scrollbar, no scroll chaining into
@@ -288,6 +289,14 @@
 @container (max-width: 900px) {
   .slot {
     display: none;
+  }
+}
+
+/* Termux / WebView often miss @container — hide the rail on phone viewports. */
+@media (max-width: 767px) {
+  .slot,
+  .frame {
+    display: none !important;
   }
 }
 

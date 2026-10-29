@@ -183,3 +183,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 767px) {
+  .header {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .list {
+    max-height: min(18vh, 120px);
+  }
+
+  .item {
+    min-height: 40px;
+    padding: 8px 6px;
+  }
+}

@@ -60,6 +60,35 @@ export const en = {
   'auto.confirm.enable': 'Enable Auto review',
 } satisfies Record<PermissionSettingsKey, string>
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  title: '権限',
+  description: 'コーディングワークスペースの新規セッションのみに適用されるデフォルト権限です。IM / 向阳はフルアクセスのまま、この設定を無視します。チャットではコーディングセッションで /permission を使ってください。',
+  boundary: '注意: フルアクセスはシェル閉じ込めと承認プロンプトをスキップし、残りの確認は拒否されます。相対パスはセッションワークスペース内に留まり、絶対パスの I/O は追加の書き込み可能ルート / 製品ホームに従います。Sandbox Provider はワークスペース書き込み / 読み取り専用のときのみ適用されます。',
+  'roots.label': '追加の書き込み可能ルート',
+  'roots.hint': 'ファイルツールが書き込める、ワークスペース外の絶対パスのディレクトリです（プロダクトホームは既定で読み書き可）。変更はすぐ反映されます。',
+  'roots.placeholder': '絶対パス（既定には ~/.xrk を含む）',
+  'roots.add': '追加',
+  'roots.remove': '削除',
+  loading: '読み込み中',
+  unavailable: '利用不可',
+  'preset.readOnly': '読み取り専用',
+  'preset.workspaceWrite': 'ワークスペース書き込み',
+  'preset.fullAccess': 'フルアクセス',
+  'preset.auto': '自動レビュー',
+  'confirm.title': 'フルアクセスを有効にしますか？',
+  'confirm.description': 'フルアクセスでは、新規セッションの確認手順が減り、機密操作・ファイル変更・外部コマンドなどより多くの操作を直接実行できます。以降のタスクを信頼できる場合のみ使用してください。',
+  'confirm.acknowledge': 'リスクを理解したうえで続行します',
+  'confirm.cancel': 'キャンセル',
+  'confirm.enable': 'フルアクセスを有効化',
+  'auto.confirm.title': 'Auto review（実験的）を有効にしますか？',
+  'auto.confirm.description': '自動レビュー = サンドボックスなし＋呼び出しごとレビュー。新規セッションではネイティブツールと PTC 内部呼び出しを実行前にレビューし、拒否時のみ確認します。試験的機能 — 誤許可・誤拒否があり得て、トークンも余分に使います。',
+  'auto.confirm.acknowledge': 'これらのリスクを理解したうえで続行します',
+  'auto.confirm.enable': 'Auto review を有効化',
+} as const satisfies Record<PermissionSettingsKey, string>
+
+
+
 /** Simplified Chinese dictionary for the current-session popup gate. */
 export const accessZh = {
   'preset.readOnly': '仅可查看',
@@ -99,4 +128,23 @@ export const accessEn = {
   'auto.confirm.description': 'Auto review = no sandbox + per-call review. Before every native tool call and PTC inner call, heuristic / HTTP / session-LLM classifies allow vs deny; you approve or reject each denial. Experimental — can falsely allow or deny, and uses extra tokens.',
   'auto.confirm.acknowledge': 'I understand these risks and want to continue',
   'auto.confirm.enable': 'Enable Auto review',
+} satisfies Record<PermissionAccessKey, string>
+
+/** Japanese dictionary for the current-session popup gate. */
+export const accessJa = {
+  'preset.readOnly': '読み取り専用',
+  'preset.workspaceWrite': 'ワークスペース書き込み',
+  'preset.fullAccess': 'フルアクセス',
+  'confirm.title': 'フルアクセスを有効にしますか？',
+  'confirm.description': 'フルアクセスでは確認手順が減り、機密操作・ファイル変更・外部コマンドなどより多くの操作を直接実行できます。現在のタスクを信頼できる場合のみ使用してください。',
+  'confirm.acknowledge': 'リスクを理解したうえで続行します',
+  'confirm.cancel': 'キャンセル',
+  'confirm.enable': 'フルアクセスを有効化',
+  'auto.label': '自動レビュー',
+  'auto.badge': 'EXP',
+  'auto.description': 'サンドボックスなし＋呼び出しごとレビュー（実験）: ネイティブツールと PTC 内部呼び出しを、ヒューリスティック / HTTP / セッション LLM が実行前に審査します。',
+  'auto.confirm.title': 'Auto review（実験的）を有効にしますか？',
+  'auto.confirm.description': '自動レビュー = サンドボックスなし＋呼び出しごとレビュー。ネイティブツールと PTC 内部呼び出しの前にヒューリスティック / HTTP / セッション LLM が許可／拒否を判定し、拒否時のみあなたが承認または却下します。試験的機能 — 誤許可・誤拒否があり得て、トークンも余分に使います。',
+  'auto.confirm.acknowledge': 'これらのリスクを理解したうえで続行します',
+  'auto.confirm.enable': 'Auto review を有効化',
 } satisfies Record<PermissionAccessKey, string>

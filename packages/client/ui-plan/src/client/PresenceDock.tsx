@@ -2,8 +2,13 @@
  * Compact PresenceBall on the conversation header while Overview is closed.
  * When Overview opens, exit toward the details column, then unmount so the
  * Overview rail can own the ball.
+ *
+ * Phone: portal an icon-only ball into AppFrame `[data-phone-presence-slot]`
+ * (menu | ball | 概况). Tap bounces like desktop — Overview opens only from
+ * the gauge. Title-row chip stays for desktop.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
@@ -21,6 +26,18 @@ import { overviewStatusPollMs } from './overview-status-poll.ts'
 import css from './PresenceDock.module.css'
 
 const NOOP_SUBSCRIBE = (_listener: () => void): (() => void) => () => {}
+const PHONE_ATTR = 'data-xrk-layout-phone'
+const PHONE_SLOT = '[data-phone-presence-slot]'
+
+/**
+ * Header dock is Overview「被委派方」, never Settings 老板 look.
+ * Face `companionBall` usually fills this; until status lands (or reconnect),
+ * keep a bare agent default so the chip does not flash Boss 装扮.
+ */
+const HEADER_AGENT_FALLBACK_LOOK = Object.freeze({
+  shape: 'blob',
+  color: 'cream',
+})
 
 export { PRESENCE_DOCK_ENTER_MS, PRESENCE_DOCK_EXIT_MS } from './presence-handoff.ts'
 
@@ -30,6 +47,11 @@ export interface PresenceDockInjected {
     getSnapshot: () => PresenceSessionCues
     subscribe: (listener: () => void) => () => void
   }
+  /**
+   * @deprecated Header ball no longer opens Overview (bounce only). Kept so
+   * older inject faces stay type-compatible.
+   */
+  openPreview?: () => void
 }
 
 export type PresenceDockProps =
@@ -39,6 +61,50 @@ export type PresenceDockProps =
 
 /** idle = visible, no motion; enter/exit = animated; gone = unmounted. */
 type DockPhase = 'idle' | 'enter' | 'exit' | 'gone'
+
+function readPhonePresenceSlot(): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  if (!document.documentElement.hasAttribute(PHONE_ATTR)) return null
+  return document.querySelector(PHONE_SLOT)
+}
+
+/** Live phone chrome seat (null on desktop / Overview open). */
+function usePhonePresenceSlot(overviewOpen: boolean): HTMLElement | null {
+  const [slot, setSlot] = useState<HTMLElement | null>(() => (
+    overviewOpen ? null : readPhonePresenceSlot()
+  ))
+
+  useEffect(() => {
+    if (overviewOpen) {
+      setSlot(null)
+      return
+    }
+    let cancelled = false
+    const sync = (): void => {
+      if (cancelled) return
+      const next = readPhonePresenceSlot()
+      setSlot((prev) => (prev === next ? prev : next))
+    }
+    sync()
+    const raf = window.requestAnimationFrame(sync)
+    const obs = new MutationObserver(sync)
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: [PHONE_ATTR],
+    })
+    const frameEl = document.querySelector('[data-dsh-frame]')
+    if (frameEl !== null) {
+      obs.observe(frameEl, { childList: true, subtree: true })
+    }
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(raf)
+      obs.disconnect()
+    }
+  }, [overviewOpen])
+
+  return slot
+}
 
 /**
  * Header utilities seat: glanceable emotion ball when Status column is closed.
@@ -51,6 +117,7 @@ export function PresenceDock({
 }: PresenceDockProps) {
   const presenceEnabled = usePresenceEnabled()
   const overviewOpen = useOverviewOpen()
+  const phoneSlot = usePhonePresenceSlot(overviewOpen)
   const [phase, setPhase] = useState<DockPhase>(() => (overviewOpen ? 'gone' : 'idle'))
   const phaseRef = useRef(phase)
   phaseRef.current = phase
@@ -62,6 +129,10 @@ export function PresenceDock({
   const statusLoadInFlight = useRef(false)
   const statusLoadQueued = useRef(false)
 
+  const sideline = useSessions((s) => {
+    const line = s.byId[sessionId]?.sideline?.trim()
+    return line && line.length > 0 ? line : undefined
+  })
   const parentRunning = useSessions((s) => s.byId[sessionId]?.running ?? false)
   const childRunning = useSessions((s) => {
     const catalog = s.subagentsByParent[sessionId]
@@ -94,7 +165,6 @@ export function PresenceDock({
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
 
-  // Soft handoff with Overview column open/close (no enter motion on first paint).
   useEffect(() => {
     if (animTimer.current !== undefined) {
       window.clearTimeout(animTimer.current)
@@ -172,20 +242,25 @@ export function PresenceDock({
     }
     void loadSessionStatus(sessionId).then(
       (next) => { finish(next) },
-      () => { finish(null) },
+      () => {
+        statusLastLatencyMs.current = performance.now() - started
+        statusLoadInFlight.current = false
+        if (statusLoadQueued.current) {
+          statusLoadQueued.current = false
+          if (alive) setStatusTick((n) => n + 1)
+        }
+      },
     )
     return () => { alive = false }
   }, [visible, sessionId, statusTick])
 
-  // Settings master switch: hide seat entirely so chat / header pills stay put.
   if (!presenceEnabled) return null
 
-  // Width-only seat in the title row; taller chip is absolutely centered so
-  // Status / preset pills do not reflow when Overview opens.
-  return (
+  const seat = (
     <div
       className={css.seat}
       data-presence-dock=""
+      data-phone-dock={phoneSlot ? '' : undefined}
       data-phase={phase === 'idle' ? undefined : phase}
       aria-label={phase === 'gone' ? undefined : t('preview.status.presence')}
       aria-hidden={phase === 'exit' || phase === 'gone' || undefined}
@@ -197,7 +272,7 @@ export function PresenceDock({
             <PresenceBall
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
-              {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
+              memberLook={status?.companionBall ?? HEADER_AGENT_FALLBACK_LOOK}
               turnActive={
                 (status?.delivery.turnActive ?? false)
                 || parentRunning
@@ -221,6 +296,7 @@ export function PresenceDock({
               )}
               compact
               density="header"
+              {...(sideline && !phoneSlot ? { captionHint: sideline } : {})}
               t={t as (key: string, params?: Record<string, string>) => string}
               loadingLabel={t('preview.status.presenceLoading')}
               errorLabel={t('preview.status.presenceError')}
@@ -230,4 +306,7 @@ export function PresenceDock({
         )}
     </div>
   )
+
+  if (phoneSlot) return createPortal(seat, phoneSlot)
+  return seat
 }

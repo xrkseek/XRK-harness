@@ -61,6 +61,9 @@ function runtime(opts?: {
       : {}),
     ...(opts?.plugins !== undefined ? { plugins: opts.plugins } : {}),
     ...(opts?.secretStore !== undefined ? { secretStore: opts.secretStore } : {}),
+    ...(opts?.settingsDocumentPath !== undefined
+      ? { settingsDocumentPath: opts.settingsDocumentPath }
+      : {}),
     ...(opts?.hostPublic
       ? {
           hostPublic: {
@@ -1418,7 +1421,15 @@ describe("Face credentials U2", () => {
   });
 
   it("llm.providers and llm.models honor llm-pi-ai.providerOrder", async () => {
-    const rt = runtime({ bootstrapApiKey: "" });
+    // DeepSeek 现在要凭证齐备才进目录；这里显式给一个 key，让排序断言
+    // 覆盖 deepseek 与其它 provider 的相对位置。
+    const poDir = await mkdtemp(path.join(tmpdir(), "xrk-provider-order-"));
+    await writeFile(
+      path.join(poDir, ".credentials.yaml"),
+      "DEEPSEEK_API_KEY: sk-test-provider-order\n",
+      "utf8",
+    );
+    const rt = runtime({ bootstrapApiKey: "", productDir: poDir });
     const mutate = await dispatchFaceMethod(rt, "settings.mutate", "po0", {
       ns: "llm-pi-ai",
       ops: [
@@ -1463,6 +1474,67 @@ describe("Face credentials U2", () => {
     if (groupIds.includes("ollama")) {
       expect(groupIds.indexOf("deepseek")).toBeLessThan(groupIds.indexOf("ollama"));
     }
+  });
+
+  it("llm.models lists a self-routed plugin brand first and keeps unconfigured providers out", async () => {
+    // 独立的 settings 文档 + productDir：不要读到本机全局 ~/.xrk/settings.yaml，
+    // 否则 `agent-default-model` 会盖过目录首项，掩盖要验证的行为。
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-self-routed-"));
+    const settingsPath = path.join(dir, "settings.yaml");
+    await writeFile(settingsPath, "{}\n", "utf8");
+    const rt = runtime({
+      bootstrapApiKey: "",
+      productDir: dir,
+      settingsDocumentPath: settingsPath,
+    });
+    // Host 侧 `wireCompositionLlm` 把插件 brand 注册进 Registry；这里直接
+    // 调用同一个注册面，验证 catalog 对「自带完整路由」brand 的处理。
+    rt.registry.registerBrand({
+      id: "sunflower-test",
+      displayName: "向日葵免费",
+      protocol: "openai-chat",
+      baseUrl: "http://127.0.0.1:9/v1",
+      defaultModel: "free-model",
+      models: [
+        { id: "free-model", name: "Free", contextWindow: 131_072 },
+        { id: "glm-flash", name: "GLM", contextWindow: 1_048_576 },
+        "other-free",
+      ],
+      apiKeyEnv: "XRK_TEST_SIDECAR_KEY",
+      autoCatalog: true,
+    });
+    const created = await dispatchFaceMethod(rt, "session.create", "sr0", {});
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    const models = await dispatchFaceMethod(rt, "session.models", "sr1", {
+      sessionId,
+    });
+    expect(models.result.ok).toBe(true);
+    if (!models.result.ok) return;
+    const catalog = models.result.value as {
+      current: { provider: string; model: string };
+      groups: {
+        id: string;
+        models: { id: string; contextWindow?: number }[];
+      }[];
+    };
+    // 自带完整路由（autoCatalog + defaultModel）的插件 brand 不需要用户先配
+    // `llm-pi-ai.providers.*` 就进目录，并排在第一位；出厂不再预置 ollama，
+    // deepseek 没凭证也不进目录。brand.models 展开整表（不只挂 default）。
+    expect(catalog.groups.map((g) => g.id)).toEqual(["sunflower-test"]);
+    expect(catalog.groups[0]?.models.map((m) => m.id)).toEqual([
+      "free-model",
+      "glm-flash",
+      "other-free",
+    ]);
+    expect(catalog.groups[0]?.models[0]?.contextWindow).toBe(131_072);
+    expect(catalog.groups[0]?.models[1]?.contextWindow).toBe(1_048_576);
+    // 默认选中跟着目录头走，不再写死 deepseek。
+    expect(catalog.current).toEqual({
+      provider: "sunflower-test",
+      model: "free-model",
+    });
   });
 
   it("llm.providers keeps a broken declared route with a diagnostic error", async () => {

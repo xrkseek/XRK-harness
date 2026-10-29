@@ -1,0 +1,5 @@
+{
+  "name": "harness-guard",
+  "version": "0.1.0",
+  "description": "Fixture: refuses risky shell commands, rewrites prompts, and logs turn boundaries."
+}

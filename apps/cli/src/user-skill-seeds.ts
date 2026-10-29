@@ -8,8 +8,9 @@
  * - **create-once**: install only when missing; never overwrite (kept for
  *   future flat seeds; standing no longer uses it).
  *
- * User persona edits belong in workspace `.agents/SOUL.md` (or `.agents/`),
+ * User persona edits belong in workspace `.xrk/SOUL.md` (or `.xrk/IDENTITY.md`),
  * not `~/.xrk/SOUL.md` — home standing is a product seed and will refresh.
+ * Industry `.agents/` is AGENTS/rules/context/skills (no SOUL inject).
  */
 import {
   access,
@@ -53,6 +54,11 @@ export interface EnsureUserSkillSeedsResult {
   readonly refreshed: readonly string[];
   /** Already present / matching fingerprint (or create-once skip). */
   readonly skipped: readonly string[];
+  /**
+   * Former bundled seed names removed from home because they left the bundle
+   * (only entries still listed in the seed manifest — never user installs).
+   */
+  readonly removed: readonly string[];
 }
 
 export interface EnsureUserHomeSeedsResult {
@@ -70,10 +76,12 @@ type FlatSeedEntry = {
 const STANDING_SEED_ENTRIES: readonly FlatSeedEntry[] = [
   { name: "AGENTS.md", policy: "fingerprint" },
   { name: "SOUL.md", policy: "fingerprint" },
+  /** Manager / 向日葵 ledger — fingerprint like AGENTS; inject only audience=user. */
+  { name: "XRK.md", policy: "fingerprint" },
 ];
 
 function emptySeedResult(targetDir: string): EnsureUserSkillSeedsResult {
-  return { targetDir, installed: [], refreshed: [], skipped: [] };
+  return { targetDir, installed: [], refreshed: [], skipped: [], removed: [] };
 }
 
 function seedResult(
@@ -81,8 +89,9 @@ function seedResult(
   installed: readonly string[],
   refreshed: readonly string[],
   skipped: readonly string[],
+  removed: readonly string[] = [],
 ): EnsureUserSkillSeedsResult {
-  return { targetDir, installed, refreshed, skipped };
+  return { targetDir, installed, refreshed, skipped, removed };
 }
 
 async function pathExists(p: string): Promise<boolean> {
@@ -190,7 +199,11 @@ async function applyFlatSeedFile(
 }
 
 /**
- * Ensure `{XRK_HOME}/skills/<name>/` mirrors each bundled seed.
+ * Ensure `{XRK_HOME}/skills/<name>/` mirrors each **bundled** seed.
+ * Only seed-named directories are refreshed; other installs under
+ * `{XRK_HOME}/skills/` (user-authored / `xrkh skill`) are left alone.
+ * Do not put a user skill under a bundled seed name — fingerprint refresh
+ * will replace it.
  */
 export async function ensureUserSkillSeeds(
   xrkHome: string = resolveXrkHome(),
@@ -200,6 +213,7 @@ export async function ensureUserSkillSeeds(
   const installed: string[] = [];
   const refreshed: string[] = [];
   const skipped: string[] = [];
+  const removed: string[] = [];
 
   if (!existsSync(seedRoot)) {
     return emptySeedResult(targetDir);
@@ -210,10 +224,20 @@ export async function ensureUserSkillSeeds(
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort();
+  const bundled = new Set(names);
 
   const manifestFile = path.join(targetDir, SEED_MANIFEST_NAME);
   const manifest = await readManifest(manifestFile);
   let manifestDirty = false;
+
+  // Drop retired product seeds still tracked in the manifest (not user installs).
+  for (const name of Object.keys(manifest).sort()) {
+    if (bundled.has(name)) continue;
+    await rm(path.join(targetDir, name), { recursive: true, force: true });
+    delete manifest[name];
+    manifestDirty = true;
+    removed.push(name);
+  }
 
   const fingerprints = await Promise.all(
     names.map(async (name) => ({
@@ -245,7 +269,7 @@ export async function ensureUserSkillSeeds(
   }
 
   if (manifestDirty) await writeManifest(manifestFile, manifest);
-  return seedResult(targetDir, installed, refreshed, skipped);
+  return seedResult(targetDir, installed, refreshed, skipped, removed);
 }
 
 /**
@@ -260,6 +284,7 @@ async function ensureFlatFileSeeds(
   const installed: string[] = [];
   const refreshed: string[] = [];
   const skipped: string[] = [];
+  const removed: string[] = [];
 
   if (!existsSync(seedRoot) || entries.length === 0) {
     return emptySeedResult(destDir);
@@ -269,6 +294,15 @@ async function ensureFlatFileSeeds(
   const manifestFile = path.join(destDir, manifestName);
   const manifest = await readManifest(manifestFile);
   let manifestDirty = false;
+  const bundled = new Set(entries.map((e) => e.name));
+
+  for (const name of Object.keys(manifest).sort()) {
+    if (bundled.has(name)) continue;
+    await rm(path.join(destDir, name), { recursive: true, force: true });
+    delete manifest[name];
+    manifestDirty = true;
+    removed.push(name);
+  }
 
   for (const entry of entries) {
     const src = path.join(seedRoot, entry.name);
@@ -296,7 +330,7 @@ async function ensureFlatFileSeeds(
   }
 
   if (manifestDirty) await writeManifest(manifestFile, manifest);
-  return seedResult(destDir, installed, refreshed, skipped);
+  return seedResult(destDir, installed, refreshed, skipped, removed);
 }
 
 /** Global `AGENTS.md` + `SOUL.md` under `{XRK_HOME}`. */
@@ -371,6 +405,9 @@ export function formatHomeSeedLogLines(
     if (row.refreshed.length > 0) {
       lines.push(`home ${label} refreshed: ${row.refreshed.join(", ")}`);
     }
+    if (row.removed.length > 0) {
+      lines.push(`home ${label} removed: ${row.removed.join(", ")}`);
+    }
   }
   return lines;
 }
@@ -387,6 +424,7 @@ export function formatHomeSeedDoctorDetail(
     const prefix = label === "skills" ? "skill" : label === "recipes" ? "recipe" : "standing";
     for (const n of row.installed) parts.push(`${prefix}:${n}`);
     for (const n of row.refreshed) parts.push(`${prefix}~${n}`);
+    for (const n of row.removed) parts.push(`${prefix}-${n}`);
   }
   if (parts.length > 0) return `${parts.join(", ")} → ${home}`;
   return `ok ${path.join(home, "skills")}`;

@@ -1,8 +1,11 @@
-import type { SessionEvent } from "@xrkseek/protocol";
+import type { SessionEvent, TurnEndReason } from "@xrkseek/protocol";
 import {
   danglingSettlement,
   listDanglingToolCalls,
 } from "./dangling.js";
+
+const INTERRUPTED: TurnEndReason = { kind: "interrupted" };
+const FORKED: TurnEndReason = { kind: "forked" };
 
 /** Latest attempt only — skip chunks before the last in-step `llm/retry`. */
 function foldStepStreamChunks(
@@ -145,6 +148,7 @@ function closeOneOpenTurn(
   openTurnIds: ReadonlySet<string>,
   out: SessionEvent[],
   ts: () => number,
+  reason: TurnEndReason,
 ): void {
   // `out` grows while this pass runs; rebuilding `[...events, ...out]` on every
   // probe copied the whole log dozens of times (O(n²) on a crashed 6k log).
@@ -230,7 +234,7 @@ function closeOneOpenTurn(
       type: "turn/end",
       ts: ts(),
       turnId,
-      reason: { kind: "interrupted" },
+      reason,
     });
   }
 }
@@ -245,6 +249,18 @@ export function repairOpenTurnEvents(
   events: readonly SessionEvent[],
   now: () => number = Date.now,
 ): SessionEvent[] {
+  return closeOpenTurns(events, INTERRUPTED, now);
+}
+
+/**
+ * Close every open turn in `events` with the given reason (newest first).
+ * Used by crash repair (`interrupted`) and fork seed (`forked`).
+ */
+export function closeOpenTurns(
+  events: readonly SessionEvent[],
+  reason: TurnEndReason,
+  now: () => number = Date.now,
+): SessionEvent[] {
   const openIds = listOpenTurnIds(events);
   if (openIds.length === 0) return [];
 
@@ -252,10 +268,12 @@ export function repairOpenTurnEvents(
   const out: SessionEvent[] = [];
   const ts = () => now();
 
-  // Newest first: close the abandoned in-flight turn before older orphans.
   for (const turnId of [...openIds].reverse()) {
-    closeOneOpenTurn(events, turnId, openSet, out, ts);
+    closeOneOpenTurn(events, turnId, openSet, out, ts, reason);
   }
 
   return out;
 }
+
+/** Reason used when a fork seeds a prefix that still had an open turn. */
+export const FORKED_TURN_END: TurnEndReason = FORKED;

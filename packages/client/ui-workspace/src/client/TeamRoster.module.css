@@ -82,6 +82,43 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.workspaceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.workspaceGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.workspaceGroupTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.workspaceGroupBadge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -295,6 +332,36 @@
   margin-bottom: 8px;
 }
 
+/* 老板 · 经理 · 向日葵 share one compact seats row. */
+.ballFieldSeats {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 4px 6px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.ballFieldSeats .ballCard,
+.ballFieldSeats .ballCardOn {
+  width: 60px;
+  padding: 6px 2px;
+  gap: 4px;
+}
+
+.ballFieldSeats .ballName {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.ballFieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
 .ballCard,
 .ballCardOn {
   width: 72px;
@@ -315,7 +382,101 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Presence module off: initials stand in for CompanionBall. */
+/* Presence module off: dense list rows (swatch + name), not initial circles. */
+.listRow,
+.listRowOn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listRowOn {
+  border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.listSwatch {
+  flex: none;
+  width: 10px;
+  height: 28px;
+  border-radius: 3px;
+}
+
+.listSwatchEmpty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.listBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.listNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.listName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.listMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.listTag,
+.listTagWarn {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.listTagWarn {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* Legacy initial glyph kept for any residual callers. */
 .initialGlyph {
   display: inline-flex;
   align-items: center;
@@ -620,12 +781,16 @@
 
 .ballCard:hover:not(:disabled),
 .ballCardOn:hover:not(:disabled),
+.listRow:hover:not(:disabled),
+.listRowOn:hover:not(:disabled),
 .item:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .ballCard:focus-visible,
 .ballCardOn:focus-visible,
+.listRow:focus-visible,
+.listRowOn:focus-visible,
 .item:focus-visible,
 .itemActive:focus-visible,
 .segOff:focus-visible,
@@ -639,6 +804,8 @@
 }
 
 .ballCard:disabled,
+.listRow:disabled,
+.listRowOn:disabled,
 .segOff:disabled,
 .segOn:disabled {
   opacity: 0.5;
@@ -666,11 +833,45 @@
   .pair {
     grid-template-columns: 1fr;
   }
+
+  /* Phone drawer: thumb-sized roster rows / segment chips. */
+  .item,
+  .itemActive,
+  .listRow,
+  .listRowOn {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .segOff,
+  .segOn {
+    min-height: 40px;
+    padding: 10px 12px;
+    touch-action: manipulation;
+  }
+
+  /* Phone Modal fills the viewport — drop the 76/88vh desktop card caps. */
+  .dialogWide {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100%;
+  }
+
+  .sheet {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .ballCard,
   .ballCardOn,
+  .listRow,
+  .listRowOn,
   .segOff,
   .segOn {
     transition: background-color 120ms ease-out, border-color 120ms ease-out;

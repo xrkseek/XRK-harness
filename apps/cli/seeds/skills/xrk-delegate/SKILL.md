@@ -7,7 +7,7 @@ description: >-
   「fan out」, 干员/Agent Team 总结经验·建干员·委派·分享·导入·就绪·修订, or
   after Frugal/Shallow badge questions about subagents. For the session that
   manages Team / mints members — not a default load for every spawned 干员.
-  Xiangyang fuzzy asks route via xrk-demand-translate.
+  Not the default load for every spawned 干员.
 ---
 
 # 委派子代理
@@ -16,7 +16,7 @@ Each child = a full model session. Prefer doing it yourself. Spawn only when the
 
 **Who loads this skill：** coding / 向阳 / IM **父会话**在建干员、派活、导入、准备环境、导出时。已派出去的干员默认跟自己的 **playbook** 干活，不必再 `skill xrk-delegate`（除非任务明确要求再建干员）。
 
-**Parity：** `team_*` = Team Roster UI. Settings/MCP → `xrk-home-config` / `xrk-capability-attach`. Skill habits → `xrk-create-skill`（不是干员）.
+**Parity：** `team_*` = Team Roster UI. Settings/MCP → `xrk-capability-attach`. Skill habits → `xrk-create-skill`（不是干员）.
 
 ```
 - [ ] 1. Badge: Frugal/minimal/shell = no spawn; Shallow depth≤1; Harness nests
@@ -56,7 +56,7 @@ Each child = a full model session. Prefer doing it yourself. Spawn only when the
 
 ## Playbook 怎么写（主会话模板）
 
-**Authority 注入点（重要）：** 子会话 `audience` 恒为 `subagent` / `minimal`，Host **跳过家目录站立层**（`~/.xrk/AGENTS.md` · `SOUL.md` 不进子上下文，见 `docs/workspace-inject.md`）。所以 standing 里的 `## Instruction authority` 段**干员看不到**。playbook 是子会话唯一稳定读到的 operator 文本 —— 需要权威口径时，把一行 authority 写进 playbook 首部，别指望站立文件穿透。
+**Playbook authority：** put task-level rules in the playbook header + `<seat_identity>`. Do not paste manager `XRK.md` into child prompts. Home layout → **`xrk-product-home`**.
 
 **Thin：**
 

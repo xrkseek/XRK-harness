@@ -14,6 +14,20 @@ export const en = {
   unreadChip: 'New',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  button: 'リリースノート',
+  dialogTitle: 'リリースノート',
+  close: '閉じる',
+  empty: 'まだ公開されたリリースノートはありません。',
+  unreadBadge: '未読のリリースノート',
+  markFailed: '既読マーカーを保存できませんでした。次回起動時に再表示されます。',
+  pinnedBadge: 'お知らせ',
+  unreadChip: '新規',
+} as const satisfies Record<ReleaseNotesKey, string>
+
+
+
 /** The release-notes namespace key union. */
 export type ReleaseNotesKey = keyof typeof en
 

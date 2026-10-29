@@ -1,5 +1,4 @@
 import type { ChatMessage, SessionEvent } from "@xrkseek/protocol";
-import { assertSessionEvent } from "@xrkseek/protocol";
 
 export {
   SessionBusyError,
@@ -188,7 +187,7 @@ import {
   snapshotEvents,
 } from "./seq.js";
 import { computeListHints } from "./list-hints.js";
-import { deepFreeze, newSessionId } from "./freeze.js";
+import { freezeSessionEvent, newSessionId } from "./freeze.js";
 
 export function createMemorySessionStore(): SessionStore {
   const sessions = new Map<string, SessionEvent[]>();
@@ -224,8 +223,7 @@ export function createMemorySessionStore(): SessionStore {
       if (!events) {
         throw new Error(`session not found: ${id}`);
       }
-      const parsed = assertSessionEvent(event);
-      const frozen = deepFreeze(structuredClone(parsed));
+      const frozen = freezeSessionEvent(event);
       events.push(frozen);
       return frozen;
     },
@@ -236,7 +234,7 @@ export function createMemorySessionStore(): SessionStore {
       }
       const frozen: SessionEvent[] = [];
       for (const event of events) {
-        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+        frozen.push(freezeSessionEvent(event));
       }
       sessions.set(id, frozen);
       return { id, events: frozen };
@@ -248,7 +246,7 @@ export function createMemorySessionStore(): SessionStore {
       }
       const frozen: SessionEvent[] = [];
       for (const event of events) {
-        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+        frozen.push(freezeSessionEvent(event));
       }
       sessions.set(id, frozen);
       return { id, events: frozen };
@@ -399,11 +397,14 @@ export {
   SESSION_INTERCHANGE_VERSION,
   type InterchangeMessage,
 } from "./session-interchange.js";
-export {
-  createPersistentSessionStore,
-  ftsMatchQuery,
-  isLikelyRemoteSessionsPath,
-  resolveSqliteJournalMode,
+  export {
+    createPersistentSessionStore,
+    ftsMatchQuery,
+    planFtsQuery,
+    SessionLogUnreadableError,
+    isLikelyRemoteSessionsPath,
+    type FtsQueryPlan,
+    resolveSqliteJournalMode,
   SESSION_ARCHIVE_DB_FILENAME,
   SESSION_DB_FILENAME,
   SESSION_SCHEMA_VERSION,
@@ -430,13 +431,62 @@ export {
   type TextChunkRow,
   type ToolCallChunkRow,
 } from "./chunk-pack.js";
-export {
+import {
+  closeOpenTurns,
+  FORKED_TURN_END,
   listOpenTurnIds,
   repairOpenTurnEvents,
   sessionHasOpenTurn,
 } from "./repair-open-turn.js";
+export {
+  closeOpenTurns,
+  FORKED_TURN_END,
+  listOpenTurnIds,
+  repairOpenTurnEvents,
+  sessionHasOpenTurn,
+};
 export { extractEventSearchText, extractSessionSearchTexts } from "./search-text.js";
 export { writeTextFileAtomicSync } from "./atomic-write.js";
+
+/**
+ * Durability checkpoint for one session (or every session when `sessionId`
+ * is omitted). No-op on stores without {@link SessionStore.flush}.
+ */
+export function flushSession(
+  store: SessionStore,
+  sessionId?: string,
+): void {
+  store.flush?.(sessionId);
+}
+
+/**
+ * Release a cold-observed session from the resident LRU when it has no open
+ * turn. No-op / false on memory stores or pinned open turns.
+ */
+export function releaseSessionResident(
+  store: SessionStore,
+  sessionId: string,
+): boolean {
+  return store.releaseResident?.(sessionId) ?? false;
+}
+
+/**
+ * Build a fork child seed: parent prefix + forked closers for any open turn +
+ * durable `session/end-seed` inheritance marker (DSH).
+ */
+export function buildForkSeed(
+  prefix: readonly SessionEvent[],
+  now: () => number = Date.now,
+): SessionEvent[] {
+  const closers = closeOpenTurns(prefix, FORKED_TURN_END, now);
+  const seed: SessionEvent[] = [...prefix, ...closers];
+  seed.push({
+    type: "session/end-seed",
+    ts: now(),
+    inherited: true,
+  });
+  return seed;
+}
 
 export function forkSession(
   store: SessionStore,
@@ -449,13 +499,26 @@ export function forkSession(
     boundaryIndex === undefined ? total : Math.max(0, Math.min(boundaryIndex, total)),
   );
   const prefix = readSessionEvents(store, sourceId, SessionLogOffset(0), end);
-  // Bulk seed: one durable commit (SQLite) and no per-event Face mux when the
-  // store implements seed. Fallback keeps lightweight test doubles working.
+  const closers = closeOpenTurns(prefix, FORKED_TURN_END);
+  const suffix: SessionEvent[] = [
+    ...closers,
+    {
+      type: "session/end-seed",
+      ts: Date.now(),
+      inherited: true,
+    },
+  ];
+  // Prefer SQL prefix copy (R6) when the durable store can; else one-shot seed.
+  if (typeof store.seedFromSession === "function") {
+    const hit = store.seedFromSession(sourceId, end, childId, suffix);
+    if (hit) return hit;
+  }
+  const seed = [...prefix, ...suffix];
   if (typeof store.seed === "function") {
-    return store.seed(childId, prefix);
+    return store.seed(childId, seed);
   }
   const child = store.create(childId);
-  for (const ev of prefix) {
+  for (const ev of seed) {
     store.append(child.id, ev);
   }
   return store.get(child.id);

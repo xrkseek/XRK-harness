@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createAgent } from "@xrkseek/core-agent";
-import { createMemorySessionStore } from "@xrkseek/core-session";
+import { createAgent, type PluginCommandSource } from "@xrkseek/core-agent";
+import { createMemorySessionStore, readSessionEvents } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import { faceMethodFromPath } from "../src/wire/index.js";
@@ -958,5 +958,127 @@ describe("DSH shell remotes that must not 404 / NI", () => {
     expect(rows.find((r) => r.pluginId === "dsh/demo")?.hostBridge).toBe(
       "xrk-dsh-compat",
     );
+  });
+});
+
+describe("commands contributed by the session's plugin host", () => {
+  function runtimeWithHostCommands() {
+    const store = createMemorySessionStore();
+    const executed: string[] = [];
+    // The source owns its session's lifecycle pair, so it needs the id the
+    // agent was resolved for — exactly like the mods bridge's own table.
+    let activeSession = "";
+    const commandId = "cmd_test_1";
+    const source: PluginCommandSource = {
+      list: () => [
+        { name: "plugin-hello", description: "Say hello from a plugin" },
+        // A plugin must not be able to take over a name Face already answers.
+        { name: "compact", description: "hijacked" },
+      ],
+      execute: async (line) => {
+        executed.push(line);
+        if (!line.startsWith("/plugin-hello")) return undefined;
+        const rest = line.slice("/plugin-hello".length).trim();
+        const result = { kind: "success" as const, text: `hello from ${rest || "nobody"}` };
+        store.append(activeSession, {
+          type: "command/run",
+          ts: Date.now(),
+          commandId,
+          name: "plugin-hello",
+          source: { kind: "user" },
+          args: rest,
+        });
+        store.append(activeSession, {
+          type: "command/done",
+          ts: Date.now(),
+          commandId,
+          kind: result.kind,
+          text: result.text,
+        });
+        return { commandId, result };
+      },
+    };
+    const base = admittingAgentResolve(store);
+    const runtime = createBareFaceRuntime({
+      store,
+      loadSlashRecipes: async () => [],
+      resolveAgent: async (sessionId) => {
+        activeSession = sessionId;
+        const agent = await base(sessionId);
+        Object.defineProperty(agent, "pluginCommands", {
+          value: source,
+          configurable: true,
+        });
+        return agent;
+      },
+    });
+    return { runtime, store, executed };
+  }
+
+  async function newSession(
+    runtime: ReturnType<typeof runtimeWithHostCommands>["runtime"],
+  ): Promise<string> {
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    return (created.result.value as { sessionId: string }).sessionId;
+  }
+
+  it("lists host commands without letting them shadow builtins", async () => {
+    const { runtime } = runtimeWithHostCommands();
+    const sessionId = await newSession(runtime);
+    const listed = await dispatchFaceMethod(runtime, "commands/list", "l", {
+      args: { agentId: sessionId },
+    });
+    if (!listed.result.ok) throw new Error("list");
+    const rows = listed.result.value as { name: string; description: string }[];
+    expect(rows.filter((row) => row.name === "plugin-hello")).toEqual([
+      { name: "plugin-hello", description: "Say hello from a plugin" },
+    ]);
+    // The builtin keeps its own description: the plugin's is not used.
+    expect(rows.filter((row) => row.name === "compact")).toEqual([
+      {
+        name: "compact",
+        description: "Compact older conversation history",
+      },
+    ]);
+  });
+
+  it("dispatches a typed /name to the host and records the run", async () => {
+    const { runtime, store, executed } = runtimeWithHostCommands();
+    const sessionId = await newSession(runtime);
+    const ran = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/plugin-hello ada" },
+    });
+    if (!ran.result.ok) throw new Error("execute");
+    const execution = ran.result.value as {
+      commandId: string;
+      result: { kind: string; text?: string };
+    };
+    expect(execution.result).toEqual({
+      kind: "success",
+      text: "hello from ada",
+    });
+    expect(executed).toEqual(["/plugin-hello ada"]);
+    // One pair, not two: the source appended it, Face only reported the id.
+    expect(execution.commandId).toBe("cmd_test_1");
+    const runs = readSessionEvents(store, sessionId).filter(
+      (event) => event.type === "command/run",
+    );
+    expect(runs).toHaveLength(1);
+    const dones = readSessionEvents(store, sessionId).filter(
+      (event) => event.type === "command/done",
+    );
+    expect(dones).toHaveLength(1);
+  });
+
+  it("does not ask the host about names it never registered", async () => {
+    const { runtime, executed } = runtimeWithHostCommands();
+    const sessionId = await newSession(runtime);
+    const ran = await dispatchFaceMethod(runtime, "commands/execute", "e2", {
+      args: { agentId: sessionId, line: "/nobody-knows-me" },
+    });
+    if (!ran.result.ok) throw new Error("execute");
+    expect(ran.result.value).toBeUndefined();
+    expect(executed).toEqual([]);
   });
 });

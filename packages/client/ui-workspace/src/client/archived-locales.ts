@@ -74,3 +74,40 @@ export const archivedEn = {
   'time.months': '{n}mo',
   'time.years': '{n}y',
 } satisfies Record<ArchivedSessionsLocaleKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const archivedJa = {
+  nav: 'アーカイブ済みセッション',
+  search: 'アーカイブ済みセッションを検索',
+  loading: 'セッションを読み込み中…',
+  empty: 'アーカイブされたセッションはありません。',
+  unavailable: 'ここに復元できるアーカイブセッションはありません。',
+  emptySearch: '一致するセッションはありません。',
+  storageHint: 'アーカイブは会話ログを稼働中の sessions.db からアーカイブストアへ移します。アーカイブ解除で戻します。完全削除は両方を消し、取り消せません。',
+  unarchive: 'アーカイブ解除',
+  unarchiveNamed: '{title} のアーカイブを解除',
+  delete: '削除',
+  deleteNamed: '{title} を削除',
+  'delete.title': 'セッションを削除',
+  'delete.desc': '「{title}」とその会話ログを完全に削除します。元に戻せません。',
+  'delete.bulkTitle': 'セッションを削除',
+  'delete.bulkDesc': '選択した {n} 件のセッションとその会話ログを完全に削除します。元に戻せません。',
+  'delete.pending': '削除中…',
+  'bulk.toolbar': '一括操作',
+  'bulk.selectAll': 'このリストをすべて選択',
+  'bulk.selectNamed': '{title} を選択',
+  'bulk.selected': '{n} 件選択',
+  'bulk.unarchive': '選択をアーカイブ解除',
+  'bulk.delete': '選択を削除',
+  cancel: 'キャンセル',
+  close: '閉じる',
+  ungrouped: '未グループ',
+  'time.now': 'いま',
+  'time.minutes': '{n}分',
+  'time.hours': '{n}時間',
+  'time.days': '{n}日',
+  'time.months': '{n}か月',
+  'time.years': '{n}年',
+} as const satisfies Record<ArchivedSessionsLocaleKey, string>
+
+

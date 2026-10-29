@@ -1,0 +1,47 @@
+{
+  "name": "@xrkseek/claude-code-mods",
+  "version": "0.1.0",
+  "description": "Claude Code plugin (mods) bridge: load .claude-plugin directories, run hook chains on our agent/tool/session extension points, and serve the $ API.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    },
+    "./examples/*": "./examples/*"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xrkseek/XRK-harness.git",
+    "directory": "packages/claude-code-mods"
+  },
+  "dependencies": {
+    "@xrkseek/cordis": "workspace:*",
+    "@xrkseek/exec-fs": "workspace:*",
+    "@xrkseek/exec-subprocess": "workspace:*",
+    "@xrkseek/schemastery": "workspace:*",
+    "@xrkseek/xrk-agent": "workspace:*",
+    "@xrkseek/xrk-commands": "workspace:*",
+    "@xrkseek/xrk-llm": "workspace:*",
+    "@xrkseek/xrk-scope": "workspace:*",
+    "@xrkseek/xrk-session": "workspace:*",
+    "@xrkseek/xrk-token-meter": "workspace:*",
+    "@xrkseek/xrk-tools": "workspace:*",
+    "@xrkseek/xrk-typert-protocol": "workspace:*",
+    "@xrkseek/xrk-user-questions": "workspace:*",
+    "zod": "^4.4.3",
+    "@xrkseek/core-tools": "workspace:*"
+  },
+  "private": true
+}

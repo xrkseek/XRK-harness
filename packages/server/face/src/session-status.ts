@@ -29,8 +29,17 @@ import type {
   ContextTimelineProjection,
 } from "./projections/units/context-timeline.js";
 import type { AgentTeamTask } from "./agent-team-tasks.js";
-import { appearanceLookWire } from "./agent-roster-store.js";
-import { dressingFromPresence } from "./presence-dressing.js";
+import {
+  appearanceLookWire,
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
+} from "./agent-roster-store.js";
+import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
+import { readSeatTitles, readUiLocalePreference } from "./seat-titles.js";
+import {
+  dressingFromPresence,
+  type PresenceSticker,
+} from "./presence-dressing.js";
 import { costMeterGetState } from "./cost-meter-store.js";
 import { resolveSubagentQuota } from "./subagent-tools.js";
 import { isChildSessionActive } from "./external-agent-runtime.js";
@@ -911,27 +920,76 @@ function liveLineText(
  * blob/cream (no kit) so the client does not fall back to home Settings
  * (shape / color / 装扮).
  */
-function companionBallForChild(
-  link:
-    | {
-        readonly appearance?: {
-          readonly shape: string;
-          readonly color: string;
-          readonly kit?: string;
-          readonly kitHat?: string;
-          readonly kitGlasses?: string;
-          readonly kitHeld?: string;
-          readonly overlayHat?: string;
-          readonly overlayGlasses?: string;
-          readonly overlayHeld?: string;
-          readonly face?: string;
-        };
-      }
-    | undefined,
+type CompanionAppearanceLink = {
+  readonly memberId?: string;
+  readonly appearance?: {
+    readonly shape: string;
+    readonly color: string;
+    readonly kit?: string;
+    readonly kitHat?: string;
+    readonly kitGlasses?: string;
+    readonly kitHeld?: string;
+    readonly overlayHat?: string;
+    readonly overlayGlasses?: string;
+    readonly overlayHeld?: string;
+    readonly face?: string;
+  };
+};
+
+/**
+ * Boss look from Settings `ui-presence` (plugin costume). Not a roster member —
+ * the human operator seat on Overview 委派 pairs.
+ */
+function bossBallFromPresence(
+  user: Record<string, unknown>,
+  stickers: readonly PresenceSticker[],
+): NonNullable<SessionStatusSnapshot["companionBall"]> {
+  const dressing = dressingFromPresence(user);
+  const shape =
+    typeof user.shape === "string" && user.shape ? user.shape : "blob";
+  const color =
+    typeof user.color === "string" && user.color ? user.color : "cream";
+  const overlayHat =
+    typeof user.overlayHat === "string" ? user.overlayHat : undefined;
+  const overlayGlasses =
+    typeof user.overlayGlasses === "string" ? user.overlayGlasses : undefined;
+  const overlayHeld =
+    typeof user.overlayHeld === "string" ? user.overlayHeld : undefined;
+  return appearanceLookWire(
+    {
+      shape: shape as never,
+      color: color as never,
+      kitHat: dressing.kitHat,
+      kitGlasses: dressing.kitGlasses,
+      kitHeld: dressing.kitHeld,
+      ...(overlayHat ? { overlayHat } : {}),
+      ...(overlayGlasses ? { overlayGlasses } : {}),
+      ...(overlayHeld ? { overlayHeld } : {}),
+    },
+    stickers,
+  );
+}
+
+/**
+ * Live roster look when `memberId` is set (open subagents / identity sessions
+ * follow Team edits). Falls back to the frozen spawn snapshot otherwise.
+ */
+function companionBallForMember(
+  runtime: FaceRuntime,
+  link: CompanionAppearanceLink | undefined,
   stickers: ReturnType<typeof dressingFromPresence>["stickers"] = [],
 ): SessionStatusSnapshot["companionBall"] {
   if (!link) return undefined;
-  const look = link.appearance;
+  const memberId = typeof link.memberId === "string" ? link.memberId.trim() : "";
+  let look = link.appearance;
+  if (memberId) {
+    const home = runtime.agentRoster.findHome(memberId);
+    const member = home
+      ? runtime.agentRoster.get(home.rosterWorkspaceId, memberId)
+      : undefined;
+    if (member?.appearance) look = member.appearance;
+  }
+  // Link present but no look yet → default blob/cream (blocks Settings kit leak).
   const shape = typeof look?.shape === "string" && look.shape ? look.shape : "blob";
   const color = typeof look?.color === "string" && look.color ? look.color : "cream";
   return appearanceLookWire({
@@ -1323,18 +1381,129 @@ export function buildSessionStatusSnapshotUncached(
     : undefined;
   const parentDelegated =
     parentLink && parentLink.mode !== "fork" ? parentLink : undefined;
-  const dressing = dressingFromPresence(
-    runtime.settingsNamespaces.view("ui-presence").value as Record<string, unknown>,
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const seatTitles = readSeatTitles(
+    presenceUser,
+    readUiLocalePreference(localeUser),
   );
-  const companionBall = companionBallForChild(childLink, dressing.stickers);
-  const parentCompanionBall = companionBallForChild(
-    parentDelegated,
+  const dressing = dressingFromPresence(presenceUser);
+  const bossBall = bossBallFromPresence(presenceUser, dressing.stickers);
+  const identity = !childLink
+    ? runtime.sessionIdentities.get(sessionId)
+    : undefined;
+  const managerHome = runtime.agentRoster.findHome(MANAGER_MEMBER_ID);
+  const managerMember = managerHome
+    ? runtime.agentRoster.get(managerHome.rosterWorkspaceId, MANAGER_MEMBER_ID)
+    : undefined;
+  const managerBall = companionBallForMember(
+    runtime,
+    { memberId: MANAGER_MEMBER_ID },
     dressing.stickers,
   );
+  const sunflowerHome = runtime.agentRoster.findHome(SUNFLOWER_MEMBER_ID);
+  const sunflowerMember = sunflowerHome
+    ? runtime.agentRoster.get(sunflowerHome.rosterWorkspaceId, SUNFLOWER_MEMBER_ID)
+    : undefined;
+  const sunflowerBall = companionBallForMember(
+    runtime,
+    { memberId: SUNFLOWER_MEMBER_ID },
+    dressing.stickers,
+  );
+  const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
+  // Project sessions: Overview is always Boss → 经理 (委派 UI), not a single
+  // Settings ball. Xiangyang uses Boss → 向日葵. Identity agent-homes are the
+  // same Boss → 干员 pair. Tool children: own look + Boss (or mid-parent).
+  let companionBall: SessionStatusSnapshot["companionBall"];
+  let parentCompanionBall: SessionStatusSnapshot["companionBall"];
+  let delegate: SessionStatusSnapshot["delegate"];
+  if (childLink) {
+    companionBall = companionBallForMember(runtime, childLink, dressing.stickers);
+    parentCompanionBall = parentDelegated
+      ? companionBallForMember(runtime, parentDelegated, dressing.stickers)
+      : bossBall;
+    delegate = {
+      parentSessionId: childLink.parentSessionId,
+      childLabel: childLink.label,
+      ...(parentDelegated?.label
+        ? { parentLabel: parentDelegated.label }
+        : { parentLabel: seatTitles.boss }),
+    };
+  } else if (identity) {
+    const identityHome = runtime.agentRoster.findHome(identity.memberId);
+    const identityMember = identityHome
+      ? runtime.agentRoster.get(identityHome.rosterWorkspaceId, identity.memberId)
+      : undefined;
+    companionBall = companionBallForMember(
+      runtime,
+      { memberId: identity.memberId },
+      dressing.stickers,
+    );
+    parentCompanionBall = bossBall;
+    // Nickname-only when set — UI prefixes the seat title (same as project 经理).
+    const identityNick = identityMember?.nickname?.trim();
+    const identityFormal =
+      identity.memberId === MANAGER_MEMBER_ID
+        ? seatTitles.manager
+        : identityMember?.name?.trim() || identity.memberId;
+    delegate = {
+      parentSessionId: sessionId,
+      childLabel: identityNick || identityFormal,
+    };
+  } else if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+    companionBall = sunflowerBall;
+    parentCompanionBall = bossBall;
+    delegate = {
+      parentSessionId: sessionId,
+      childLabel: sunflowerMember?.name?.trim() || "向日葵",
+    };
+  } else {
+    companionBall = managerBall;
+    parentCompanionBall = bossBall;
+    // Boss seat = human operator mood from Settings `ui-presence` (not AI presence_set).
+    // Omit parentLabel — UI role already shows titles.boss; echoing made「老板 · 老板」.
+    // childLabel = nickname only when set (UI prefixes titles.manager). Sending
+    // `经理（老王）` here made the Overview show「经理 · 经理（老王）」.
+    const managerNick = managerMember?.nickname?.trim();
+    delegate = {
+      parentSessionId: sessionId,
+      childLabel: managerNick || seatTitles.manager,
+    };
+  }
   const homeId =
     childLink?.parentSessionId ??
     team.edges.find((e) => e.kind === "delegates" && e.to === sessionId)?.from;
-  const parentPresence = homeId ? listedPresence(homeId) : undefined;
+  // Office Boss mood also drives the left seat on identity agent-homes
+  // (Boss → 干员), same shared ui-presence fields as Boss → 经理.
+  const officeBossPresence =
+    !childLink
+      ? (() => {
+          const moodRaw =
+            typeof presenceUser.moodId === "string"
+              ? presenceUser.moodId.trim()
+              : "";
+          const moodId = moodRaw || "16";
+          const statusLine =
+            typeof presenceUser.statusLine === "string"
+              ? presenceUser.statusLine.trim().slice(0, 80)
+              : "";
+          const moodAt =
+            typeof presenceUser.moodAt === "number" &&
+            Number.isFinite(presenceUser.moodAt)
+              ? presenceUser.moodAt
+              : Date.now();
+          return {
+            emotionId: moodId,
+            source: "tool" as const,
+            updatedAt: moodAt,
+            ...(statusLine ? { tips: statusLine } : {}),
+          };
+        })()
+      : undefined;
+  const parentPresence =
+    officeBossPresence ?? (homeId ? listedPresence(homeId) : undefined);
   const parentDelivery = homeId
     ? (() => {
         const parentLatch = runtime.drain.isActive(homeId);
@@ -1358,15 +1527,6 @@ export function buildSessionStatusSnapshotUncached(
           ).length,
         };
       })()
-    : undefined;
-  const delegate = childLink
-    ? {
-        parentSessionId: childLink.parentSessionId,
-        childLabel: childLink.label,
-        ...(parentDelegated?.label
-          ? { parentLabel: parentDelegated.label }
-          : {}),
-      }
     : undefined;
 
   return {
@@ -1408,7 +1568,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
           "auto-review classifiers: heuristic | http | session-llm (URL/env → http; Host LLM → session-llm; else heuristic)",
         ]
       : []),
-    `plan: ${snap.plan} (toggle with /plan · /plan off)`,
+    `plan: ${snap.plan} (/plan retired — outline → todo_write in-session; old logs still fold)`,
     `theme: ${snap.theme} (/theme light|dark|system)`,
     `model: ${snap.model.provider}/${snap.model.model}`,
     `cwd: ${snap.cwd}`,

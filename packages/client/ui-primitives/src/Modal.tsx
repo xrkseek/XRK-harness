@@ -3,7 +3,7 @@
 // cannot leave sticky page controls above the mask. This is still an in-page
 // WebUI dialog; it never creates or targets another browser/native window.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
@@ -31,6 +31,19 @@ const FOCUSABLE = [
 
 /** The controls worth landing on first: typing into a dialog should not start at the close button. */
 const TEXT_ENTRY = /^(input|select|textarea)$/i
+
+/**
+ * Exit window for the mask/card fade. Must match `modal-dialog-out` /
+ * `modal-mask-out` in `Modal.module.css` — the node stays mounted exactly this
+ * long so the animation can play, then unmounts.
+ */
+const EXIT_MS = 120
+
+/** Instant teardown when the user asked for less motion. */
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
 
 function tabbable(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
@@ -79,6 +92,26 @@ export function Modal({
   // alone and reads the handler through a ref, so opening is the only trigger.
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+
+  // `closed` → nothing rendered, `open` → visible, `closing` → still mounted so
+  // the exit animation can finish. Without the middle state the dialog vanished
+  // on the same frame `open` flipped, which is why every modal in the app used
+  // to cut instead of transition.
+  const [phase, setPhase] = useState<'open' | 'closing' | 'closed'>(open ? 'open' : 'closed')
+
+  useEffect(() => {
+    if (open) {
+      setPhase('open')
+      return
+    }
+    setPhase((prev) => (prev === 'open' ? 'closing' : prev))
+  }, [open])
+
+  useEffect(() => {
+    if (phase !== 'closing') return
+    const timer = setTimeout(() => setPhase('closed'), prefersReducedMotion() ? 0 : EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [phase])
 
   useEffect(() => {
     if (!open) return
@@ -137,10 +170,10 @@ export function Modal({
     }
   }, [open])
 
-  if (!open) return null
+  if (phase === 'closed') return null
 
   return createPortal((
-    <div className={css.root} role="presentation">
+    <div className={css.root} role="presentation" data-state={phase}>
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div
         ref={dialogRef}

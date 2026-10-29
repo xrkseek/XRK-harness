@@ -8,13 +8,13 @@
  * dispatch) stay on the class, invisible out here.
  */
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
-import type {
-  MessageId, PromptContentPart, QueueAction, RpcResult, SessionId,
-} from '@xrkseek/xrk-api-remotes/client'
-import type { RemoteResult } from '@xrkseek/xrk-typert-protocol'
-import type {
-  ConversationSnapshot, PendingSubmissionAttachment, SessionRequestId,
-} from '../sessions/conversation.ts'
+  import type {
+    MessageId, PromptContentPart, QueueAction, RpcError, RpcResult, SessionId,
+  } from '@xrkseek/xrk-api-remotes/client'
+  import type { RemoteResult } from '@xrkseek/xrk-typert-protocol'
+  import type {
+    ConversationSnapshot, PendingSubmissionAttachment, PromptError, SessionRequestId,
+  } from '../sessions/conversation.ts'
 import type { ObservableSnapshot } from './store.ts'
 
 /**
@@ -103,6 +103,15 @@ export interface ISession {
    * @returns acceptance, or the business error.
    */
   cancel(): Promise<RpcResult<{ accepted: true }>>
+  /**
+   * Surface a failure that belongs to this session's composer strip but does
+   * not travel through {@link prompt} / {@link cancel} — edit-resubmit
+   * truncation, file rollback. The strip toasts it on the next paint and the
+   * next accepted `prompt` clears it.
+   * @param op - user-facing copy selector.
+   * @param error - RPC failure to display.
+   */
+  reportError(op: PromptError['op'], error: RpcError): void
   /** Request cancellation of one background job owned by this session. */
   killJob(jobId: string): Promise<RpcResult<{ outcome: 'requested' | 'already-finished' }>>
   /** Detach a foreground-yield wait so the job keeps running in the background. */

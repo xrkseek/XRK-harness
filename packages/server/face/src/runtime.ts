@@ -11,7 +11,7 @@ import {
   type SessionStore,
 } from "@xrkseek/core-session";
 import type { AgentHandle } from "@xrkseek/core-agent";
-import type { ToolRegistry } from "@xrkseek/core-tools";
+import { EXIT_PLAN_MODE, type ToolRegistry } from "@xrkseek/core-tools";
 import {
   createProviderRegistry,
   type ProviderRegistry,
@@ -34,10 +34,11 @@ import {
   createFaceProjectionRegistry,
   FaceTitleController,
   installDefaultFaceProjections,
+  listProjectionIdentityFromHints,
   type FaceListProjectionCache,
   type FaceProjectionRegistry,
 } from "./projections/index.js";
-import { SESSION_LIST_PROJECTION_KEYS } from "./projections/snapshot-keys.js";
+import { sessionListProjectionKeys } from "./projections/snapshot-keys.js";
 import { FaceInboxWireMaps, FaceToolArgMaps, toMuxSessionEvent, routeFromRequestHeader, FACE_USAGE_ROUTE_PLACEHOLDER } from "./adapt/index.js";
 import {
   formatJobCompletionNotice,
@@ -85,7 +86,6 @@ import { SessionToolDisclosure } from "./tool-disclosure.js";
 import {
   FaceQuestionBroker,
   bindAskUserTool,
-  bindExitPlanModeTool,
   formatLateQuestionSteer,
   formatQuestionAnswer,
   questionRequestedFrame,
@@ -107,6 +107,10 @@ import { bindPresenceTools } from "./presence-tools.js";
 import { bindProposeSkillTool } from "./propose-skill.js";
 import { resolveSessionCwd } from "./session-cwd.js";
 import { FaceWorkspaceRegistry } from "./workspace-registry.js";
+import {
+  FaceSessionIdentityStore,
+  sessionIdentitiesPath,
+} from "./session-identity-store.js";
 import {
   hydrateWorkspaceRegistry,
   persistWorkspaceDoc,
@@ -362,11 +366,18 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const rememberListProjections = (sessionId: string): void => {
     // Only the list-tier keys are cached; asking `checkpoint` for all ~17 units
     // folded the whole log for units that were never materialized.
+    const hints = store.listHints?.(sessionId) ?? {
+      lastEventTs: null,
+      eventCount: 0,
+      hasTurnStart: false,
+      hasCommandRun: false,
+    };
     listProjectionCache.remember(
       sessionId,
       projections.checkpoint(sessionId, {
-        keys: [...SESSION_LIST_PROJECTION_KEYS],
+        keys: [...sessionListProjectionKeys(projections)],
       }),
+      listProjectionIdentityFromHints(hints),
     );
   };
 
@@ -464,6 +475,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       : undefined,
   );
   const agentRoster = new FaceAgentRosterStore(productHome);
+  const sessionIdentities = new FaceSessionIdentityStore(
+    sessionIdentitiesPath(productHome),
+  );
   const presence = new FacePresenceStore();
   const wireIds = new FaceWireIdMaps();
   const toolArgMaps = new FaceToolArgMaps();
@@ -516,6 +530,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   const noticeAdmitIds = new Set<string>();
   /** Optimistic Stop: Status turnActive false while drain join still held. */
   const turnUiIdle = new Set<string>();
+  /** Claude Code mods AbovePrompt watch aborts, by session. */
+  const bandAborts = new Map<string, AbortController>();
+  const rememberedBands = new Map<
+    string,
+    NonNullable<AgentHandle["pluginBand"]>
+  >();
+  const lastBand = new Map<
+    string,
+    { readonly generation: number; readonly tree: readonly unknown[] | null }
+  >();
 
   const hasJobsRegistry = (): boolean =>
     options.jobs !== undefined || rememberedJobs.size > 0;
@@ -565,6 +589,75 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         deliverOwnedJobCompletions(sessionId, agent);
       }),
     );
+  };
+
+  const publishBand = (
+    sessionId: string,
+    snap: {
+      readonly generation: number;
+      readonly tree: readonly unknown[] | null;
+    },
+  ): void => {
+    lastBand.set(sessionId, snap);
+    bus.publishMux({
+      type: "session/band",
+      sessionId,
+      generation: snap.generation,
+      tree: snap.tree,
+    });
+  };
+
+  const bindAgentBand = (sessionId: string, agent: AgentHandle): void => {
+    bandAborts.get(sessionId)?.abort();
+    bandAborts.delete(sessionId);
+    rememberedBands.delete(sessionId);
+    if (!agent.pluginBand) {
+      lastBand.delete(sessionId);
+      return;
+    }
+    rememberedBands.set(sessionId, agent.pluginBand);
+    const ac = new AbortController();
+    bandAborts.set(sessionId, ac);
+    const source = agent.pluginBand;
+    void (async () => {
+      try {
+        for await (const snap of source.watch(ac.signal)) {
+          if (ac.signal.aborted) break;
+          publishBand(sessionId, snap);
+        }
+      } catch {
+        // Aborted or agent disposed mid-watch.
+      }
+    })();
+  };
+
+  const bandSnapshotFor = (
+    sessionId: string,
+  ):
+    | {
+        readonly generation: number;
+        readonly tree: readonly unknown[] | null;
+      }
+    | undefined => lastBand.get(sessionId);
+
+  const pressBand = async (
+    sessionId: string,
+    generation: number,
+    actionId: string,
+  ): Promise<
+    | {
+        readonly generation: number;
+        readonly tree: readonly unknown[] | null;
+      }
+    | undefined
+  > => {
+    const source =
+      rememberedBands.get(sessionId) ??
+      (await resolveAgent(sessionId).catch(() => undefined))?.pluginBand;
+    if (source === undefined) return undefined;
+    const snap = await source.press(generation, actionId);
+    publishBand(sessionId, snap);
+    return snap;
   };
 
   /**
@@ -822,9 +915,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   });
 
   /**
-   * Registries whose Face tools are already bound. `ask_user` /
-   * `exit_plan_mode` rebind through `replace()` (new object identity), so a
-   * second bind inside one turn would make `materializeTools.settle` answer
+   * Registries whose Face tools are already bound. `ask_user`
+   * rebinds through `replace()` (new object identity), so a second bind
+   * inside one turn would make `materializeTools.settle` answer
    * "Stale tool call" for a call the snapshot already captured. One bind per
    * registry; the rest of the binders are keep-first anyway.
    */
@@ -858,6 +951,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         }
         sessionToolsBound.add(agent.tools);
         rememberedTools.set(sessionId, agent.tools);
+        // Product plan mode retired — drop std exit_plan_mode from every surface.
+        agent.tools.unregister(EXIT_PLAN_MODE);
         // Tool surfaces:
         // - IM: channel + roster + orchestrate + thread (pin/mail peers) + search
         //   (Host binds im_send + subagent→coding). No canvas / ask_user.
@@ -909,10 +1004,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               .ask(sessionId, qs, signal, opts)
               .then(formatQuestionAnswer),
           );
-          bindExitPlanModeTool(agent.tools, store, sessionId, (qs, signal) =>
-            questions.ask(sessionId, qs, signal),
-          );
-          bindSettingsTools(agent.tools, runtime);
+          // Coding 经理席 stays tool-light: settings / workspace mint·delete live on 向阳.
+          // (奇创 branch above still binds settings_*.)
           bindSessionQueryTools(agent.tools, {
             runtime,
             parentSessionId: sessionId,
@@ -956,12 +1049,12 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
             bindAskParentTool(agent.tools, {
               parentSessionId: childLink.parentSessionId,
               childLabel: childLink.label,
-              ask: (qs, signal) => {
-                const faceId = runtime.subagents.humanFacingSessionId(
-                  childLink.parentSessionId,
-                );
-                return questions.ask(faceId, qs, signal).then(formatQuestionAnswer);
-              },
+              // Raise the card on the immediate parent (经理父席), not the
+              // walked human_face root — 经理 answers; 经理 asks 老板 via ask_user.
+              ask: (qs, signal) =>
+                questions
+                  .ask(childLink.parentSessionId, qs, signal)
+                  .then(formatQuestionAnswer),
             });
             bindAgentRosterTools(agent.tools, {
               runtime,
@@ -992,10 +1085,26 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
           applyDelegatedInheritMask(agent.tools);
           // Role + member tools policy (child surface may be tighter than parent).
           applyRosterToolPolicy(agent.tools, childLink.role, childLink.tools);
+        } else if (agent.tools) {
+          const identity = runtime.sessionIdentities.get(sessionId);
+          if (identity) {
+            const home = runtime.agentRoster.findHome(identity.memberId);
+            const member = home
+              ? runtime.agentRoster.get(home.rosterWorkspaceId, identity.memberId)
+              : undefined;
+            if (member) {
+              applyRosterToolPolicy(
+                agent.tools,
+                member.role,
+                member.tools,
+              );
+            }
+          }
         }
       }
     }
     bindAgentJobs(sessionId, agent);
+    bindAgentBand(sessionId, agent);
   };
 
   const resolveAgent = async (sessionId: string) => {
@@ -1019,6 +1128,10 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         subagentIdleEpoch.delete(sessionId);
         subagentIdleFailCount.delete(sessionId);
         suppressSubagentCompletion.delete(sessionId);
+        bandAborts.get(sessionId)?.abort();
+        bandAborts.delete(sessionId);
+        rememberedBands.delete(sessionId);
+        lastBand.delete(sessionId);
         await options.invalidateAgent!(sessionId, opts);
       }
     : undefined;
@@ -1166,11 +1279,17 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       !replayingLog &&
       isHumanUserMessageSource(frozen.source)
     ) {
-      titleBox.controller?.maybeFallbackFromUserMessage(
-        id,
-        eventSeq,
-        flattenText(frozen.content),
-      );
+      // Tool-delegated children skip automatic fallback (sidebar noise).
+      // UI forks stay in forkLineage, not subagents — still get titles.
+      const childLink = subagents.getByChild(id);
+      const delegatedChild = childLink && childLink.mode !== "fork";
+      if (!delegatedChild) {
+        titleBox.controller?.maybeFallbackFromUserMessage(
+          id,
+          eventSeq,
+          flattenText(frozen.content),
+        );
+      }
     }
     if (frozen.type === "prompt/promoted") {
       if (noticeAdmitIds.has(frozen.admitId)) {
@@ -1194,6 +1313,16 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
           ? (frozen.reason as { kind: string }).kind
           : undefined;
       runtimeBox.current?.goals.onTurnEnd(id, reasonKind);
+      // DSH durability point: list-tier title/blank must survive a crash
+      // before the next open/history page. Skip log replay (prime path).
+      if (!replayingLog) {
+        try {
+          rememberListProjections(id);
+        } catch {
+          // Same posture as LRU eviction: never fail the append; cold list
+          // falls back to listHints until a later remember succeeds.
+        }
+      }
     }
     return frozen;
   };
@@ -1344,6 +1473,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     canvases,
     sessionThreads,
     agentRoster,
+    sessionIdentities,
     presence,
     wireIds,
     inboxWire,
@@ -1376,6 +1506,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     jobViewsFor,
     publishJobs,
+    bandSnapshotFor,
+    pressBand,
     markTurnUiIdle(sessionId) {
       turnUiIdle.add(sessionId);
     },
@@ -1384,6 +1516,8 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     watchSession(sessionId) {
       publishJobs(sessionId, { baseline: true });
+      const band = bandSnapshotFor(sessionId);
+      if (band !== undefined) publishBand(sessionId, band);
     },
     forkSession(sourceId, boundaryIndex, childId) {
       // Seed via store.seed (or originalAppend fallback): skip per-event mux /

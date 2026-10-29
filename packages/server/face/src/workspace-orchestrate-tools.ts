@@ -1,9 +1,10 @@
 /**
  * Cross-workspace orchestration tools — IM (`ws_im`), 奇创 (向阳空间), and coding.
  *
- * | Tool | IM | 奇创 | coding |
+ * | Tool | IM | 奇创 | coding 经理 |
  * |---|---|---|---|
- * | workspace_list / workspace_create | yes | yes | yes |
+ * | workspace_list | yes | yes | yes |
+ * | workspace_create | yes | yes | **no**（建仓/删仓 → 向阳） |
  * | workspace_session_prompt (peer + wait reply) | yes | yes | yes |
  * | subagent + workspace_id | Host binds for IM only | never | never (local nested only) |
  *
@@ -30,6 +31,7 @@ import {
   workspaceSessionPromptDescription,
 } from "./session-tool-copy.js";
 import { orchestratorSurface } from "./session-kind.js";
+import { isAgentHomeWorkspace } from "./agent-home-boundary.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   if (tools.get(tool.name)) return;
@@ -46,14 +48,17 @@ export interface BindWorkspaceOrchestrateToolsOptions {
 
 function listItems(runtime: FaceRuntime) {
   const listed = runtime.workspaces.list(runtime.store.list());
-  return listed.items.map((row) => ({
-    workspaceId: row.workspaceId,
-    title: row.title,
-    path: row.path,
-    sessionCount: row.sessionIds.length,
-    im: row.workspaceId === IM_WORKSPACE_ID,
-    xiangyang: row.workspaceId === XIANGYANG_WORKSPACE_ID,
-  }));
+  // Orchestrators dispatch into project / coding peers — never 干员 homes.
+  return listed.items
+    .filter((row) => row.kind !== "agent-home")
+    .map((row) => ({
+      workspaceId: row.workspaceId,
+      title: row.title,
+      path: row.path,
+      sessionCount: row.sessionIds.length,
+      im: row.workspaceId === IM_WORKSPACE_ID,
+      xiangyang: row.workspaceId === XIANGYANG_WORKSPACE_ID,
+    }));
 }
 
 function fromLabel(mode: WorkspaceOrchestrateMode): string {
@@ -98,77 +103,83 @@ export function bindWorkspaceOrchestrateTools(
     },
   });
 
-  registerTool(tools, {
-    name: "workspace_create",
-    description:
-      "Create (or adopt) a coding Face workspace by absolute path. " +
-      "Returns workspaceId for later session dispatch. " +
-      "Refuse paths that would become Xiangyang or IM.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "Fully qualified absolute directory" },
-        title: { type: "string", description: "Optional display title" },
+  // Coding 经理席：list + peer prompt only. Mint/rename/delete → 向阳（奇创）.
+  if (mode !== "coding") {
+    registerTool(tools, {
+      name: "workspace_create",
+      description:
+        "Create (or adopt) a coding Face workspace by absolute path. " +
+        "Returns workspaceId for later session dispatch. " +
+        "Refuse paths that would become Xiangyang or IM.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Fully qualified absolute directory",
+          },
+          title: { type: "string", description: "Optional display title" },
+        },
+        required: ["path"],
+        additionalProperties: false,
       },
-      required: ["path"],
-      additionalProperties: false,
-    },
-    isConcurrencySafe: () => false,
-    presentCall: (args) => ({
-      card: "generic",
-      title: "workspace_create",
-      kind: "other",
-      rawInput: args ?? {},
-    }),
-    async execute(args) {
-      const a = (args ?? {}) as Record<string, unknown>;
-      const rawPath = String(a.path ?? "").trim();
-      const title = String(a.title ?? "").trim();
-      if (!rawPath) {
-        return { content: "workspace_create: path required", isError: true };
-      }
-      const created = await dispatchFaceMethod(
-        runtime,
-        "workspace.create",
-        `orch-wc-${Date.now().toString(36)}`,
-        { path: rawPath },
-      );
-      if (!created.result.ok) {
-        return {
-          content: `workspace_create: ${formatToolError(created.result.error)}`,
-          isError: true,
-        };
-      }
-      const value = created.result.value as {
-        workspace: { workspaceId: string; path: string; title: string };
-        created: boolean;
-      };
-      const id = value.workspace.workspaceId;
-      if (id === XIANGYANG_WORKSPACE_ID || id === IM_WORKSPACE_ID) {
-        return {
-          content: "workspace_create: refused reserved workspace id",
-          isError: true,
-        };
-      }
-      if (title) {
-        await dispatchFaceMethod(
+      isConcurrencySafe: () => false,
+      presentCall: (args) => ({
+        card: "generic",
+        title: "workspace_create",
+        kind: "other",
+        rawInput: args ?? {},
+      }),
+      async execute(args) {
+        const a = (args ?? {}) as Record<string, unknown>;
+        const rawPath = String(a.path ?? "").trim();
+        const title = String(a.title ?? "").trim();
+        if (!rawPath) {
+          return { content: "workspace_create: path required", isError: true };
+        }
+        const created = await dispatchFaceMethod(
           runtime,
-          "workspace.rename",
-          `orch-wr-${Date.now().toString(36)}`,
-          { workspaceId: id, title },
+          "workspace.create",
+          `orch-wc-${Date.now().toString(36)}`,
+          { path: rawPath },
         );
-      }
-      const row = runtime.workspaces.get(id);
-      return {
-        content: JSON.stringify({
-          workspaceId: id,
-          path: row?.path ?? value.workspace.path,
-          title: row?.title ?? value.workspace.title,
-          created: value.created,
-        }),
-      };
-    },
-  });
+        if (!created.result.ok) {
+          return {
+            content: `workspace_create: ${formatToolError(created.result.error)}`,
+            isError: true,
+          };
+        }
+        const value = created.result.value as {
+          workspace: { workspaceId: string; path: string; title: string };
+          created: boolean;
+        };
+        const id = value.workspace.workspaceId;
+        if (id === XIANGYANG_WORKSPACE_ID || id === IM_WORKSPACE_ID) {
+          return {
+            content: "workspace_create: refused reserved workspace id",
+            isError: true,
+          };
+        }
+        if (title) {
+          await dispatchFaceMethod(
+            runtime,
+            "workspace.rename",
+            `orch-wr-${Date.now().toString(36)}`,
+            { workspaceId: id, title },
+          );
+        }
+        const row = runtime.workspaces.get(id);
+        return {
+          content: JSON.stringify({
+            workspaceId: id,
+            path: row?.path ?? value.workspace.path,
+            title: row?.title ?? value.workspace.title,
+            created: value.created,
+          }),
+        };
+      },
+    });
+  }
 
   registerTool(tools, {
     name: "workspace_session_prompt",
@@ -230,6 +241,13 @@ export function bindWorkspaceOrchestrateTools(
         return {
           content:
             "workspace_session_prompt: refuse IM workspace — pick a coding workspace",
+          isError: true,
+        };
+      }
+      if (isAgentHomeWorkspace(runtime, workspaceId)) {
+        return {
+          content:
+            "workspace_session_prompt: refuse agent-home — open that 干员 pane session, or pick a coding project workspace",
           isError: true,
         };
       }

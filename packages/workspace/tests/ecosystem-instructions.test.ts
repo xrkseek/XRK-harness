@@ -44,15 +44,75 @@ describe("ecosystem instruction inject", () => {
     );
   });
 
-  it("skips the home standing persona for a subagent audience but keeps workspace docs", async () => {
+  it("co-injects .agents + .claude + .cursor + .codex + root when all present", async () => {
+    const root = await import("node:fs/promises").then((fs) =>
+      fs.mkdtemp(path.join(tmpdir(), "xrk-eco-multi-")),
+    );
+    await mkdir(path.join(root, ".agents", "rules"), { recursive: true });
+    await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+    await mkdir(path.join(root, ".cursor", "rules"), { recursive: true });
+    await mkdir(path.join(root, ".codex"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "# Root AGENTS\nRoot handbook.", "utf8");
+    await writeFile(
+      path.join(root, ".agents", "AGENTS.md"),
+      "# Agents overlay\nAgents handbook.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".claude", "CLAUDE.md"),
+      "# Claude project\nClaude handbook.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".claude", "rules", "style.md"),
+      "# Claude style\nPrefer short diffs.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".cursor", "rules", "node.mdc"),
+      "---\ndescription: Node\n---\n# Cursor rule\nNode ≥26\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".codex", "AGENTS.md"),
+      "# Codex agents\nCodex handbook.",
+      "utf8",
+    );
+
+    const out = await createWorkspaceInjector({ root }).inject();
+    const joined = out.instructionBlocks.join("\n");
+    expect(joined).toContain("Root handbook");
+    expect(joined).toContain("Agents handbook");
+    expect(joined).toContain("Claude handbook");
+    expect(joined).toContain("Prefer short diffs");
+    expect(joined).toContain("Node ≥26");
+    expect(joined).toContain("Codex handbook");
+    expect(joined).toContain("## .agents/AGENTS.md");
+    expect(joined).toContain("## .claude/CLAUDE.md");
+    expect(joined).toContain("## .cursor/rules/node.mdc");
+    expect(joined).toContain("## .codex/AGENTS.md");
+  });
+
+  it("subagent keeps product standing and home convention; only XRK.md is gated", async () => {
     const fs = await import("node:fs/promises");
     const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-sub-"));
     const home = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-home-"));
     const homeProduct = path.join(home, ".xrk");
     await mkdir(homeProduct, { recursive: true });
+    await mkdir(path.join(home, ".agents"), { recursive: true });
     await writeFile(
       path.join(homeProduct, "AGENTS.md"),
-      "# Home persona\nYou are the user's agent. Small asks: do them yourself.",
+      "# Product seed\nYou are the user's agent. Small asks: do them yourself.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(homeProduct, "SOUL.md"),
+      "Product soul tone.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(home, ".agents", "AGENTS.md"),
+      "# Home convention draft\nCross-project draft only.",
       "utf8",
     );
     await writeFile(
@@ -61,35 +121,106 @@ describe("ecosystem instruction inject", () => {
       "utf8",
     );
 
-    // User audience keeps both layers.
     const userOut = await createWorkspaceInjector({
       root,
       homeDir: home,
     }).inject();
-    expect(userOut.instructionBlocks.join("\n")).toContain(
-      "Small asks: do them yourself",
-    );
+    const userJoined = userOut.instructionBlocks.join("\n");
+    expect(userJoined).toContain("Small asks: do them yourself");
+    expect(userJoined).toContain("Cross-project draft only");
 
-    // Subagent audience drops the persona, keeps the project docs.
     const subOut = await createWorkspaceInjector({
       root,
       homeDir: home,
       audience: "subagent",
     }).inject();
     const joined = subOut.instructionBlocks.join("\n");
-    expect(joined).not.toContain("Small asks: do them yourself");
+    expect(joined).toContain("Small asks: do them yourself");
+    expect(joined).toContain("Product soul tone");
+    expect(joined).toContain("Cross-project draft only");
     expect(joined).toContain("Run pnpm check before shipping");
   });
 
-  it("minimal audience skips home persona like subagent", async () => {
+  it("manager-only XRK.md reaches user audience; subagent/minimal skip", async () => {
+    const fs = await import("node:fs/promises");
+    const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-ledger-"));
+    const home = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-ledger-home-"));
+    const homeProduct = path.join(home, ".xrk");
+    const wsProduct = path.join(root, ".xrk");
+    await mkdir(homeProduct, { recursive: true });
+    await mkdir(wsProduct, { recursive: true });
+    await writeFile(
+      path.join(homeProduct, "AGENTS.md"),
+      "# Product seed\nShared standing.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(homeProduct, "XRK.md"),
+      "# Standing manager ledger\nStanding XRK note.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(wsProduct, "XRK.md"),
+      "# Workspace standing ledger\nWorkspace XRK overlay.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(home, "XRK.md"),
+      "# Home manager ledger\nManager-only home note.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "XRK.md"),
+      "# Project manager ledger\nManager-only project note.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "AGENTS.md"),
+      "# Repo rules\nShared project rules.",
+      "utf8",
+    );
+
+    const userJoined = (
+      await createWorkspaceInjector({ root, homeDir: home }).inject()
+    ).instructionBlocks.join("\n");
+    expect(userJoined).toContain("Standing XRK note");
+    expect(userJoined).toContain("Workspace XRK overlay");
+    expect(userJoined).toContain("Manager-only home note");
+    expect(userJoined).toContain("Manager-only project note");
+    expect(userJoined).toContain("Shared standing");
+
+    for (const audience of ["subagent", "minimal"] as const) {
+      const joined = (
+        await createWorkspaceInjector({
+          root,
+          homeDir: home,
+          audience,
+        }).inject()
+      ).instructionBlocks.join("\n");
+      expect(joined).toContain("Shared standing");
+      expect(joined).not.toContain("Standing XRK note");
+      expect(joined).not.toContain("Workspace XRK overlay");
+      expect(joined).not.toContain("Manager-only home note");
+      expect(joined).not.toContain("Manager-only project note");
+      expect(joined).toContain("Shared project rules");
+    }
+  });
+
+  it("minimal audience keeps standing + home convention like subagent", async () => {
     const fs = await import("node:fs/promises");
     const root = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-min-"));
     const home = await fs.mkdtemp(path.join(tmpdir(), "xrk-eco-min-home-"));
     const homeProduct = path.join(home, ".xrk");
     await mkdir(homeProduct, { recursive: true });
+    await mkdir(path.join(home, ".agents"), { recursive: true });
     await writeFile(
       path.join(homeProduct, "AGENTS.md"),
-      "# Home persona\nYou are the user's agent. Small asks: do them yourself.",
+      "# Product seed\nYou are the user's agent. Small asks: do them yourself.",
+      "utf8",
+    );
+    await writeFile(
+      path.join(home, ".agents", "AGENTS.md"),
+      "# Home convention draft\nCross-project draft only.",
       "utf8",
     );
     await writeFile(
@@ -103,7 +234,8 @@ describe("ecosystem instruction inject", () => {
       audience: "minimal",
     }).inject();
     const joined = out.instructionBlocks.join("\n");
-    expect(joined).not.toContain("Small asks: do them yourself");
+    expect(joined).toContain("Small asks: do them yourself");
+    expect(joined).toContain("Cross-project draft only");
     expect(joined).toContain("Run pnpm check before shipping");
   });
 
@@ -142,7 +274,7 @@ describe("ecosystem instruction inject", () => {
     expect(joined).toContain("Product rule");
   });
 
-  it("skips root AGENTS.md when .agents/AGENTS.md defines product workspace role", async () => {
+  it("injects root AGENTS.md alongside .xrk overlay unless xrk-inject:false", async () => {
     const root = await import("node:fs/promises").then((fs) =>
       fs.mkdtemp(path.join(tmpdir(), "xrk-eco4-")),
     );
@@ -150,7 +282,7 @@ describe("ecosystem instruction inject", () => {
     await mkdir(product, { recursive: true });
     await writeFile(
       path.join(root, "AGENTS.md"),
-      "# Maintainer AGENTS\nDo not inject to product agent.",
+      "# Root project AGENTS\nRoot project handbook.",
       "utf8",
     );
     await writeFile(
@@ -162,10 +294,20 @@ describe("ecosystem instruction inject", () => {
     const out = await createWorkspaceInjector({ root, productDir: product }).inject();
     const joined = out.instructionBlocks.join("\n");
     expect(joined).toContain("Product plugin workspace");
-    expect(joined).not.toContain("Do not inject to product agent");
-    expect(out.instructionBlocks.map((b) => b.split("\n")[0])).not.toContain(
-      "## AGENTS.md",
+    expect(joined).toContain("Root project handbook");
+
+    await writeFile(
+      path.join(root, "AGENTS.md"),
+      "---\nxrk-inject: false\n---\n# Maintainer AGENTS\nDo not inject to product agent.\n",
+      "utf8",
     );
+    const opted = await createWorkspaceInjector({
+      root,
+      productDir: product,
+    }).inject();
+    const optedJoined = opted.instructionBlocks.join("\n");
+    expect(optedJoined).toContain("Product plugin workspace");
+    expect(optedJoined).not.toContain("Do not inject to product agent");
   });
 
   it("skips CLAUDE.md when it only imports AGENTS.md", async () => {

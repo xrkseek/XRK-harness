@@ -3,6 +3,10 @@ import path from "node:path";
 import { SKILL_VENDOR_PRIORITY } from "./inject-sources.js";
 import { resolveSkillDirs, skillDirsFingerprint } from "./skill-dirs.js";
 import { shouldSkipScanDir } from "./scan-guards.js";
+import {
+  standingCatalogSkillDirCandidates,
+  type StandingCatalogSkillDirOptions,
+} from "./standing-skill-dirs.js";
 
 export {
   resolveSkillDirs,
@@ -42,6 +46,11 @@ export interface SkillSourceOptions {
   readonly skillDirs?: readonly string[];
   /** Appended after primary roots (advanced 干员 pack skills on children). */
   readonly extraSkillDirs?: readonly string[];
+  /**
+   * Roots that win name clashes and catalog-budget head (干员 公文包).
+   * Usually the same paths as {@link extraSkillDirs}.
+   */
+  readonly preferredSkillDirs?: readonly string[];
   /**
    * Also scan `~/.codex|claude|agents|cursor|xrk/skills` when using workspaceRoot.
    * Default true. Tests that assert exact lists should pass false.
@@ -277,14 +286,34 @@ function vendorRank(skillsRoot: string): number {
   return -1;
 }
 
+function underResolvedRoot(dir: string, root: string): boolean {
+  const resolved = path.resolve(dir);
+  const base = path.resolve(root);
+  return (
+    resolved === base ||
+    resolved.startsWith(base + path.sep) ||
+    resolved.replace(/\\/g, "/").startsWith(base.replace(/\\/g, "/") + "/")
+  );
+}
+
 function skillSourceBeats(
   candidateDir: string,
   incumbentDir: string,
   workspaceRoot: string | undefined,
+  preferredRoots?: ReadonlySet<string>,
 ): boolean {
+  if (preferredRoots && preferredRoots.size > 0) {
+    const candPref = [...preferredRoots].some((r) =>
+      underResolvedRoot(candidateDir, r),
+    );
+    const incPref = [...preferredRoots].some((r) =>
+      underResolvedRoot(incumbentDir, r),
+    );
+    if (candPref !== incPref) return candPref;
+  }
   const ws = workspaceRoot ? path.resolve(workspaceRoot) : undefined;
   const layer = (dir: string) =>
-    ws && path.resolve(dir).startsWith(ws) ? 1 : 0;
+    ws && underResolvedRoot(dir, ws) ? 1 : 0;
   const candidateLayer = layer(candidateDir);
   const incumbentLayer = layer(incumbentDir);
   if (candidateLayer !== incumbentLayer) {
@@ -303,13 +332,24 @@ export async function listSkills(
   const hit = skillListCache.get(fingerprint);
   if (hit !== undefined) return hit.skills;
 
+  const preferred = new Set(
+    [
+      ...(options.preferredSkillDirs ?? []),
+      ...(options.extraSkillDirs ?? []),
+    ].map((d) => path.resolve(d)),
+  );
   const byName = new Map<string, SkillSummary>();
   for (const dir of dirs) {
     for (const skill of await listSkillsInDir(dir)) {
       const prev = byName.get(skill.name);
       if (
         prev === undefined
-        || skillSourceBeats(skill.directory, prev.directory, options.workspaceRoot)
+        || skillSourceBeats(
+          skill.directory,
+          prev.directory,
+          options.workspaceRoot,
+          preferred,
+        )
       ) {
         byName.set(skill.name, skill);
       }
@@ -330,6 +370,30 @@ export async function listSkillsFromWorkspace(
     workspaceRoot,
     ...(options?.includeUserHome !== undefined
       ? { includeUserHome: options.includeUserHome }
+      : {}),
+  });
+}
+
+/**
+ * Skills visible in the standing catalog / `skill` tool / Face `skill.list`.
+ * Prefer this over {@link listSkillsFromWorkspace}, which still scans every
+ * `USER_HOME_SKILL_REL_DIRS` vendor when `includeUserHome` is on.
+ */
+export async function listStandingCatalogSkills(
+  options: StandingCatalogSkillDirOptions,
+): Promise<readonly SkillSummary[]> {
+  const skillDirs = await resolveSkillDirs({
+    skillDirs: standingCatalogSkillDirCandidates(options),
+  });
+  if (skillDirs.length === 0) return [];
+  return listSkills({
+    skillDirs,
+    workspaceRoot: options.workspaceRoot,
+    ...(options.extraSkillDirs?.length
+      ? {
+          preferredSkillDirs: options.extraSkillDirs,
+          extraSkillDirs: options.extraSkillDirs,
+        }
       : {}),
   });
 }
@@ -378,7 +442,7 @@ export function formatSkillCatalog(
   return [
     "## Skills",
     ...lines,
-    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
+    "Progressive skills: catalog = name+blurb; `skill` loads the body (no skill_search). Head: 公文包 → workspace + xrk-* → globals.",
   ].join("\n");
 }
 
@@ -406,4 +470,4 @@ export function renderSkillContent(skill: SkillDefinition): string {
 }
 
 export const SKILL_TOOL_GUIDANCE =
-  "Use the skill tool to load the full instructions for an available skill listed in the Skills catalog. Call it with the exact skill name before acting on a task that names or clearly matches that skill. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising. Sessions with subagent tools: if the Agent Team board lists a fitting member, spawn that member_id instead. Frugal and other no-subagent badges: load the skill and do the job here.";
+  "Load full skill instructions by exact catalog name (progressive disclosure: catalog lists name+blurb only; there is no skill_search — tool_search is for deferred tools). Prefer 公文包 / workspace / xrk-* skills listed first. Frugal: do the work here after loading.";

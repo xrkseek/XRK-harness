@@ -3,7 +3,7 @@
 // List data never enters zustand; React connects via subscribe/getListSnapshot.
 
 import type {
-  IApiClient, HostFrame, MuxFrame, RpcError, RpcRequest, RpcResult, SessionId,
+  BandSnapshot, IApiClient, HostFrame, MuxFrame, RpcError, RpcRequest, RpcResult, SessionId,
   SessionSummary, SubagentAddress, SubagentCatalog, JobView, WorkspaceId,
 } from '@xrkseek/xrk-api-remotes/client'
 // Value import from the inline-safe wire layer (not the connection plugin):
@@ -52,6 +52,11 @@ export interface SessionListSnapshot {
   subagentsByParent: Readonly<Record<SessionId, SubagentCatalogSnapshot>>
   /** Background jobs per session; an absent key is an empty set. */
   jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>
+  /**
+   * Claude Code mods AbovePrompt band per session, last-wins from
+   * `session/band`. Absent key = no band (or cleared).
+   */
+  bandBySession: Readonly<Record<SessionId, BandSnapshot>>
   currentAddress: SubagentAddress | undefined
 }
 
@@ -160,6 +165,8 @@ export class SessionManager {
    * is stored as an absent key, so absence and `[]` are one representation.
    */
   private readonly jobsBySession = new Map<SessionId, readonly JobView[]>()
+  /** Mods AbovePrompt band per session, last-wins from `session/band`. */
+  private readonly bandBySession = new Map<SessionId, BandSnapshot>()
 
   private selected: SessionId | undefined
 
@@ -539,9 +546,20 @@ export class SessionManager {
   async search(
     query: string,
     signal: AbortSignal,
-  ): Promise<RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>> {
+    opts?: { cursor?: string },
+  ): Promise<
+    RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean; cursor?: string }>
+  > {
     try {
-      return (await this.api.sessions.search({ query }, signal)).result
+      return (
+        await this.api.sessions.search(
+          {
+            query,
+            ...(opts?.cursor !== undefined ? { cursor: opts.cursor } : {}),
+          },
+          signal,
+        )
+      ).result
     } catch (error: unknown) {
       return transportError(error)
     }
@@ -564,6 +582,8 @@ export class SessionManager {
       agentPreset?: string
       /** Session whose pinned model selection is copied onto the new one. */
       inheritFrom?: SessionId
+      /** Top-level identity session (agent-home) or subagent spawn member. */
+      memberId?: string
     } = {},
   ): Promise<RpcResult<{ sessionId: SessionId; agentPreset?: string }>> {
     try {
@@ -571,6 +591,7 @@ export class SessionManager {
         ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
         ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
         ...(opts.inheritFrom === undefined ? {} : { inheritFrom: opts.inheritFrom }),
+        ...(opts.memberId === undefined ? {} : { memberId: opts.memberId }),
       }
       const payload = opts.workspaceId !== undefined
         ? { workspaceId: opts.workspaceId, ...shared }
@@ -670,6 +691,7 @@ export class SessionManager {
         this.pendingBuffers.delete(sessionId)
         this.pendingInteractions.delete(sessionId)
         this.jobsBySession.delete(sessionId)
+        this.bandBySession.delete(sessionId)
         this.projectionStores.delete(sessionId)
         this.drop(sessionId)
       }
@@ -787,6 +809,16 @@ export class SessionManager {
       this.notifier.markDirty()
       return
     }
+    if (frame.type === 'session/band') {
+      // Last-wins drawing. `tree: null` still keeps the key so the dock can
+      // clear; only a subscribe re-baseline drops the mirror entirely.
+      this.bandBySession.set(frame.sessionId, {
+        generation: frame.generation,
+        tree: frame.tree,
+      })
+      this.notifier.markDirty()
+      return
+    }
     if (frame.type === 'session/subscribed') {
       // Rows past the host's durable baseline rode state a restart lost; drop
       // them so last-wins cannot pin a phantom value over recomputed truth.
@@ -795,6 +827,7 @@ export class SessionManager {
       // task baseline only when the set is non-empty, so a mirror kept from the
       // previous generation would survive as a phantom list.
       this.jobsBySession.delete(frame.sessionId)
+      this.bandBySession.delete(frame.sessionId)
       this.notifier.markDirty()
       // New mux-generation baseline: discard the previous queue snapshot.
       // The host omits session/queue when the live queue is empty, so retaining
@@ -929,6 +962,7 @@ export class SessionManager {
         // no relative order. Clearing here makes a detached Activation's rows
         // disappear whichever arrives first.
         this.jobsBySession.delete(frame.sessionId)
+        this.bandBySession.delete(frame.sessionId)
         if (!durableSubagent) this.projectionStores.delete(frame.sessionId)
         // A pull already in flight was requested before this removal and can
         // carry the pre-removal parentAvailable:true, which would resurrect
@@ -1288,6 +1322,7 @@ export class SessionManager {
       error: this.listError,
       subagentsByParent: Object.fromEntries(this.catalogs),
       jobsBySession: Object.fromEntries(this.jobsBySession),
+      bandBySession: Object.fromEntries(this.bandBySession),
       currentAddress: current === undefined ? undefined : this.addresses.get(current),
     }
   }

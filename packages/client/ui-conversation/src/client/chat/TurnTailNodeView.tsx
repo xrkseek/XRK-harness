@@ -147,13 +147,19 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
   const assistantActions = messageId === undefined || hasLaterChatNode
     ? null
     : renderSlot('conversation.chat.assistant-actions', { messageId })
-  const actionsUnavailable = data.branchUnavailable || hasLaterChatNode
+  // Regenerate / restore rewrite the transcript tail in place, so they need
+  // this turn to still be the last one. Branch is a turn-cut fork instead: the
+  // Host anchors on the first `turn/end` at or after the seq, so any closed turn
+  // with a final assistant message can seed a branch even with later turns
+  // below it. `branchUnavailable` therefore stays off here — reaching this
+  // render already proved `closing !== null`.
+  const tipActionsUnavailable = data.branchUnavailable || hasLaterChatNode
   return (
     <div
       className={css.root}
       data-turn-tail={data.turn}
       data-time-hover-root
-      data-actions-reveal={actionsUnavailable ? 'hover' : 'always'}
+      data-actions-reveal={tipActionsUnavailable ? 'hover' : 'always'}
     >
       {tail}
       {showStopped ? <span className={css.stopped} role="status">{stoppedText}</span> : null}
@@ -165,10 +171,10 @@ export const TurnTailNodeView = memo(function TurnTailNodeView({
         onRestore={() => { restoreAt(closing.finalNode.seq) }}
         // Only mount regenerate when it can run — hide on non-tip / busy turns
         // rather than showing a disabled refresh (control already existed).
-        onRegenerate={regenerateSource === null || actionsUnavailable
+        onRegenerate={regenerateSource === null || tipActionsUnavailable
           ? undefined
           : () => { regenerateAt(regenerateSource.seq, regenerateSource.text) }}
-        branchUnavailable={actionsUnavailable}
+        tipUnavailable={tipActionsUnavailable}
         className={css.actions}
         extraActions={assistantActions}
         usageAction={usageAction}

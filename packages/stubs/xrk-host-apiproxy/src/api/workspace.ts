@@ -17,6 +17,9 @@ import type { RpcRequest, RpcResponse } from './rpc.ts'
  */
 export type WorkspaceId = Branded<'WorkspaceId'>
 
+/** Project trees vs 干员 home directories (sidebar upper / lower panes). */
+export type WorkspaceKind = 'project' | 'agent-home'
+
 /** One workspace row: the record projection every workspace.* value carries. */
 export interface WorkspaceView {
   workspaceId: WorkspaceId
@@ -33,6 +36,28 @@ export interface WorkspaceView {
   createdAt: string
   /** ISO-8601 last-mutation instant. */
   updatedAt: string
+  /**
+   * `project` (default / legacy) for the upper sidebar pane; `agent-home` for
+   * a 干员 home directory in the lower pane.
+   */
+  kind?: WorkspaceKind
+  /** Roster member id when kind is agent-home. */
+  boundMemberId?: string
+  /**
+   * Live Team look for agent-home rows (sidebar CompanionBall). Absent for
+   * project workspaces or when the roster member was removed.
+   */
+  boundMemberAppearance?: {
+    shape: string
+    color: string
+    kit?: string
+    kitHat?: string
+    kitGlasses?: string
+    kitHeld?: string
+    overlayHat?: string
+    overlayGlasses?: string
+    overlayHeld?: string
+  }
 }
 
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */

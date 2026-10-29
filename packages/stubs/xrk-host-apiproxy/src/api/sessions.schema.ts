@@ -121,6 +121,8 @@ const SESSION_SEARCH_QUERY_MAX_CHARS = 500
 export const sessionSearchRequestSchema = z.object({
   query: z.string().trim().min(1).max(SESSION_SEARCH_QUERY_MAX_CHARS)
     .refine(query => !query.includes('\0'), { message: 'search query must not contain NUL' }),
+  /** Opaque continuation from a prior response when `hasMore` was true. */
+  cursor: z.string().min(1).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.search'>>>
 
 /** One session.search result. */
@@ -139,7 +141,36 @@ export const sessionSearchItemSchema = z.object({
 export const sessionSearchValueSchema = z.object({
   items: z.array(sessionSearchItemSchema).max(SESSION_SEARCH_RESULT_LIMIT),
   hasMore: z.boolean(),
+  /** Pass back as request `cursor` to fetch the next page of the same query. */
+  cursor: z.string().min(1).optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.search'>>>
+
+/** Cap for `session.eventWindow` before/after (Face `SESSION_EVENT_WINDOW_MAX`). */
+const SESSION_EVENT_WINDOW_MAX = 50
+
+/** session.eventWindow request payload. */
+export const sessionEventWindowRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  seq: z.number().int().positive(),
+  before: z.number().int().min(0).max(SESSION_EVENT_WINDOW_MAX).optional(),
+  after: z.number().int().min(0).max(SESSION_EVENT_WINDOW_MAX).optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.eventWindow'>>>
+
+/** One row in a session.eventWindow response. */
+export const sessionEventWindowRowSchema = z.object({
+  seq: z.number().int().positive(),
+  type: z.string().min(1),
+  ts: z.number(),
+})
+
+/** session.eventWindow response value. */
+export const sessionEventWindowValueSchema = z.object({
+  sessionId: sessionIdSchema,
+  seq: z.number().int().positive(),
+  startSeq: z.number().int().positive(),
+  endSeq: z.number().int().positive(),
+  events: z.array(sessionEventWindowRowSchema).max(SESSION_EVENT_WINDOW_MAX * 2 + 1),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.eventWindow'>>>
 
 /** session.create request payload (at most one of workspaceId / cwd). */
 export const sessionCreateRequestSchema = z.object({
@@ -148,6 +179,11 @@ export const sessionCreateRequestSchema = z.object({
   sessionId: sessionIdSchema.optional(),
   agentPreset: z.string().optional(),
   inheritFrom: sessionIdSchema.optional(),
+  /**
+   * With parentSessionId: subagent spawn from roster.
+   * Without parent: top-level identity session (agent-home workspace required).
+   */
+  memberId: z.string().optional(),
 }).refine(
   payload => payload.workspaceId === undefined || payload.cwd === undefined,
   { message: 'session.create accepts workspaceId or cwd, not both' },
@@ -228,6 +264,7 @@ export const modelCatalogModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  inputModalities: z.array(z.enum(['text', 'image'])).optional(),
   reasoning: modelReasoningSchema.optional(),
 }) satisfies z.ZodType<Wire<ModelCatalogModel>>
 
@@ -473,3 +510,29 @@ export const sessionToolsValueSchema = z.object({
   }),
   tools: z.array(sessionToolEntrySchema),
 }) satisfies z.ZodType<Wire<SessionToolsValue>>
+
+/** session.pressBand request payload. */
+export const sessionPressBandRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  generation: z.number().int().nonnegative(),
+  actionId: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.pressBand'>>>
+
+/** Recursive band tree node (Box / Text / Button / text run). */
+const bandNodeSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.object({
+      type: z.enum(['Box', 'Text', 'Button']),
+      props: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+      children: z.array(bandNodeSchema),
+      actionId: z.string().min(1).optional(),
+    }),
+  ]),
+)
+
+/** session.pressBand / session/band snapshot value. */
+export const bandSnapshotSchema = z.object({
+  generation: z.number().int().nonnegative(),
+  tree: z.array(bandNodeSchema).nullable(),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.pressBand'>>>

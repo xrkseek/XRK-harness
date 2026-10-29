@@ -25,5 +25,19 @@ export const en: Record<keyof typeof zh, string> = {
   'dialog.commandFailed': 'Could not start the Session export.',
 }
 
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'header.action': 'セッションログ',
+  'dialog.preparingTitle': 'Session をエクスポート中',
+  'dialog.preparingDescription': 'この Session・子 Session・添付を含む ZIP を準備しています。',
+  'dialog.successTitle': 'Session のダウンロードを開始しました',
+  'dialog.successDescription': 'ブラウザが Session ZIP をダウンロードしています。',
+  'dialog.errorTitle': 'Session のエクスポートに失敗しました',
+  'dialog.close': '閉じる',
+  'dialog.commandFailed': 'Session のエクスポートを開始できませんでした。',
+} as const satisfies Record<SessionLogDownloadKey, string>
+
+
+
 /** Stable locale keys consumed by the shared modal. */
 export type SessionLogDownloadKey = keyof typeof zh

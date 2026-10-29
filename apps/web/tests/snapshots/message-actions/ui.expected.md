@@ -22,9 +22,9 @@
   - img
 - button "Bad response":
   - img
-- button "Branch into a new conversation" [disabled]:
+- button "Branch into a new conversation":
   - img
-- text: Available only on the last message of a completed turn 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
+- text: 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
 - button "Read a.txt":
   - img
   - img

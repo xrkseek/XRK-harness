@@ -57,6 +57,7 @@ export const EVENT_ISOMORPHISM = {
   "plugin/record": "plugin/record",
   "job/registered": "job/registered",
   "job/settled": "job/settled",
+  "session/end-seed": "session/end-seed",
 } as const satisfies Record<SessionEvent["type"], string>;
 
 /** SessionEvent envelope on the Face wire. */
@@ -546,6 +547,7 @@ export function toFaceWireSessionEvent(
     case "context/compaction":
     case "approval/asked":
     case "approval/decided":
+    case "session/end-seed":
       return {
         type: event.type,
         seq,

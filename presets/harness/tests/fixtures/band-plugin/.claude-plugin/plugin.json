@@ -1,0 +1,5 @@
+{
+  "name": "band-plugin",
+  "description": "Draws an AbovePrompt band with a pressable button",
+  "version": "0.0.1"
+}

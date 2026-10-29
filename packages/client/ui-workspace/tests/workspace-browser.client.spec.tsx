@@ -23,6 +23,11 @@ beforeEach(() => { localStorage.clear(); createWorkspaceViewStore().create().act
 // lookup chain (namespace, then common vocabulary, then the key).
 const t: WorkspaceBrowserProps['t'] = makeTranslate(zh, commonZh)
 
+/** Upper pane view-options control (lower 干员 pane mirrors the same label). */
+function openViewOptions(): void {
+  fireEvent.click(screen.getAllByRole('button', { name: '视图选项' })[0]!)
+}
+
 const sid = (id: string) => id as SessionId
 const wid = (id: string) => id as WorkspaceId
 const summary = (id: string, updatedAt: number, overrides: Partial<SessionSummary> = {}): SessionSummary => ({
@@ -149,7 +154,7 @@ describe('WorkspaceBrowser', () => {
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     expect(screen.getByText('分组方式')).toBeTruthy() // the menu heading label
     // Two rules split the menu's three groups: group-by | order-by | archive view.
     expect(screen.getAllByRole('separator')).toHaveLength(2)
@@ -167,14 +172,14 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByText('beta-s')).toBeTruthy()
 
     // Back to workspace grouping through the same menu.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     expect(screen.getByRole('menuitem', { name: '手动排序' }).hasAttribute('disabled')).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '按工作区' }))
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
     expect(screen.getByText('工作区')).toBeTruthy()
 
     // Escape closes the menu without picking.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
@@ -192,7 +197,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaces),
       insertSessionBefore,
     })
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
@@ -211,14 +216,14 @@ describe('WorkspaceBrowser', () => {
       .toEqual(['two', 'three', 'one'])
     expect(insertSessionBefore).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
         .toEqual(['one', 'two', 'three'])
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
     fireEvent.dragStart(one, { dataTransfer: dragData() })
     fireDrag(three, 'drop', 180)
@@ -228,7 +233,8 @@ describe('WorkspaceBrowser', () => {
     const restored = mount({ useSessions: hook(sessions), useWorkspaces: hook(workspaces) })
     expect(restored.store.getSnapshot().groupBy).toBe('flat')
     expect(restored.store.getSnapshot().orderBy).toBe('manual')
-    expect(screen.getAllByRole('treeitem').map(row => row.textContent)).toEqual([
+    const projectTree = document.querySelector('[data-pane="project"]')!
+    expect([...projectTree.querySelectorAll('[role="treeitem"]')].map(row => row.textContent)).toEqual([
       expect.stringContaining('two'),
       expect.stringContaining('three'),
       expect.stringContaining('one'),
@@ -281,7 +287,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['two', 'one'])])),
     })
     fireEvent.click(screen.getByText('alpha'))
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
       const rows = screen.getAllByRole('treeitem').slice(1)
@@ -297,7 +303,7 @@ describe('WorkspaceBrowser', () => {
     fireDrag(two, 'drop', 180)
     expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['two', 'one'])
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '手动排序' }))
     expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
 
@@ -312,7 +318,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getAllByRole('treeitem').slice(1)[0]?.textContent).toContain('two')
 
     // Entering Last updated performs one complete recency sort.
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount.alpha).toEqual(['one', 'two'])
@@ -353,7 +359,7 @@ describe('WorkspaceBrowser', () => {
     // The archive-set echo hides the row in grouped and flat modes.
     rerender(b, { useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'gone-s'])], [sid('gone-s')])) })
     expect(screen.queryByText('gone-s')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     expect(screen.getByText('kept-s')).toBeTruthy()
     expect(screen.queryByText('gone-s')).toBeNull()
@@ -401,15 +407,15 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByText('alpha'))
     fireEvent.click(screen.getByRole('button', { name: '会话“busy-s”的操作' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '归档会话' }))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(archiveSession).toHaveBeenCalledWith(sid('busy-s'))
-    expect(screen.getByText('会话仍在运行')).toBeTruthy()
+    await waitFor(() => {
+      expect(archiveSession).toHaveBeenCalledWith(sid('busy-s'))
+      expect(screen.getByRole('dialog', { name: '会话仍在运行' })).toBeTruthy()
+    })
     expect(screen.getByText(/session turn running/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '停止并归档' }))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(archiveSession).toHaveBeenLastCalledWith(sid('busy-s'), { force: true })
+    await waitFor(() => {
+      expect(archiveSession).toHaveBeenLastCalledWith(sid('busy-s'), { force: true })
+    })
   })
 
   it('renders a fork child as a top-level row without a session twist', () => {
@@ -527,7 +533,7 @@ describe('WorkspaceBrowser', () => {
       expect(screen.getByText('无匹配会话')).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
       expect(input.value).toBe('')
-      expect(screen.getByRole('tree', { name: '会话' })).toBeTruthy()
+      expect(document.querySelector('[data-pane="project"] [role="tree"][aria-label="会话"]')).toBeTruthy()
       // Clicking the field row focuses the input (wide mode).
       fireEvent.click(input.parentElement as HTMLElement)
       expect(document.activeElement).toBe(input)
@@ -918,7 +924,7 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['three', 'one', 'two'])
     expect(insertSessionBefore).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    openViewOptions()
     fireEvent.click(screen.getByRole('menuitem', { name: '最近更新' }))
     await waitFor(() => {
       expect(b.store.getSnapshot().sessionOrderByAccount[UNGROUPED_KEY]).toEqual(['one', 'two', 'three'])
@@ -1064,7 +1070,8 @@ describe('WorkspaceBrowser', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.getByRole('dialog')).toBeTruthy()
     await act(async () => { resolveRename() })
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // Modal keeps the card through its exit window before unmounting.
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
   })
 
   it('rename via Enter, failure surfaces the error, Cancel closes', async () => {
@@ -1088,7 +1095,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.change(input, { target: { value: 'Renamed2' } })
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
   })
 
   it('reports non-Error rename failures as text', async () => {
@@ -1116,7 +1123,7 @@ describe('WorkspaceBrowser', () => {
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话将显示在“未分组”下')
+    expect(dialog.textContent).toContain('其会话会进入下方干员工作区的「未分组」')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
     fireEvent.click(confirm)
@@ -1135,7 +1142,9 @@ describe('WorkspaceBrowser', () => {
     // Workspace frame from leaking into the next gesture.
     expect(screen.getByRole('dialog', { name: '删除工作区' })).toBeTruthy()
     rerender(browser, { useWorkspaces: hook(workspaceState([])) })
-    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    })
   })
 
   it('keeps the delete dialog open on failure and allows retry or cancellation', async () => {
@@ -1154,27 +1163,34 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: '删除工作区' }))
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('denied') })
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    })
   })
 
-  it('Cancel, Escape, and Close dismiss deletion without calling the action', () => {
+  it('Cancel, Escape, and Close dismiss deletion without calling the action', async () => {
     const deleteWorkspace = vi.fn(async () => {})
     mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
       deleteWorkspace,
     })
-    const open = () => {
+    const open = async () => {
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+      })
       fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
       fireEvent.click(screen.getByRole('menuitem', { name: '删除工作区' }))
     }
-    open()
+    await open()
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    open()
+    await open()
     fireEvent.keyDown(document, { key: 'Escape' })
-    open()
+    await open()
     fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     expect(deleteWorkspace).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '删除工作区' })).toBeNull()
+    })
   })
 
   it('search hides drag affordances (rows are not draggable during search)', () => {
@@ -1188,7 +1204,7 @@ describe('WorkspaceBrowser', () => {
     expect(row.hasAttribute('draggable')).toBe(false)
   })
 
-  it('opens Agent Team above the session list and lists 干员', async () => {
+  it('opens 干员团队 from the workspace pane and lists 干员', async () => {
     const listTeam = vi.fn(async () => [{
       id: 'mem_seed_worker',
       name: '施工员',
@@ -1204,9 +1220,8 @@ describe('WorkspaceBrowser', () => {
       startSession,
       listTeam,
       upsertTeamMember: vi.fn(async () => ({ id: 'mem_seed_worker' })),
-      dispatchTeam: vi.fn(async () => {}),
     })
-    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    fireEvent.click(screen.getByRole('button', { name: '干员团队' }))
     await waitFor(() => {
       expect(screen.getByText('施工员')).toBeTruthy()
     })
@@ -1236,9 +1251,8 @@ describe('WorkspaceBrowser', () => {
       startSession: vi.fn(),
       listTeam,
       upsertTeamMember: vi.fn(async () => ({ id: 'mem_new' })),
-      dispatchTeam: vi.fn(async () => {}),
     })
-    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    fireEvent.click(screen.getByRole('button', { name: '干员团队' }))
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '新建全局' })).toBeTruthy()
     })
@@ -1265,14 +1279,14 @@ describe('WorkspaceBrowser', () => {
       startSession: vi.fn(),
       listTeam,
       upsertTeamMember: vi.fn(async () => ({ id: 'mem_fork' })),
-      dispatchTeam: vi.fn(async () => {}),
     })
-    fireEvent.click(screen.getByRole('button', { name: '打开 Agent Team' }))
+    fireEvent.click(screen.getByRole('button', { name: '干员团队' }))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '施工员' })).toBeTruthy()
+      // Accessible name includes the catalog brief (“施工员 — …”).
+      expect(screen.getByRole('button', { name: /施工员/ })).toBeTruthy()
     })
-    fireEvent.click(screen.getByRole('button', { name: '施工员' }))
-    expect(screen.getByText('预置只读、不可导出。要定制请以其为基底新建。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /施工员/ }))
+    expect(screen.getByText('预置职责与 Playbook 只读、不可导出；昵称可改。要定制请以其为基底新建。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '以此为基底新建' }))
     expect(screen.getByRole('button', { name: '工作区', pressed: true })).toBeTruthy()
@@ -1280,5 +1294,83 @@ describe('WorkspaceBrowser', () => {
     const name = screen.getByRole('textbox', { name: '名称' }) as HTMLInputElement
     expect(name.value).toBe('施工员')
     expect(name.disabled).toBe(false)
+  })
+
+  it('opens 添加干员工作区 from the agents pane', async () => {
+    const listTeam = vi.fn(async () => [{
+      id: 'mem_seed_worker',
+      name: '施工员',
+      playbook: 'ship',
+      role: 'worker',
+      scope: 'global' as const,
+      catalog: true as const,
+      updatedAt: 1,
+    }])
+    const upsertTeamMember = vi.fn(async () => ({
+      id: 'mem_seed_worker',
+      homeWorkspaceId: 'ws-home-worker',
+    }))
+    const startSession = vi.fn()
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
+      startSession,
+      listTeam,
+      upsertTeamMember,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '添加干员工作区' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '施工员' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '施工员' }))
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    await waitFor(() => {
+      expect(upsertTeamMember).toHaveBeenCalled()
+      expect(startSession).toHaveBeenCalledWith('ws-home-worker')
+    })
+  })
+
+  it('hides 经理 and 向日葵 from 添加干员工作区', async () => {
+    const listTeam = vi.fn(async () => [
+      {
+        id: 'mem_seed_manager',
+        name: '经理',
+        playbook: 'mgr',
+        role: 'manager',
+        scope: 'global' as const,
+        catalog: true as const,
+        updatedAt: 1,
+      },
+      {
+        id: 'mem_seed_xrkseek',
+        name: '向日葵',
+        playbook: 'sun',
+        role: 'author',
+        scope: 'global' as const,
+        catalog: true as const,
+        updatedAt: 1,
+      },
+      {
+        id: 'mem_seed_worker',
+        name: '施工员',
+        playbook: 'ship',
+        role: 'worker',
+        scope: 'global' as const,
+        catalog: true as const,
+        updatedAt: 1,
+      },
+    ])
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'], 'Alpha')])),
+      listTeam,
+      upsertTeamMember: vi.fn(),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '添加干员工作区' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '施工员' })).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: '经理' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '向日葵' })).toBeNull()
   })
 })

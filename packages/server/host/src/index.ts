@@ -50,6 +50,7 @@ import {
   applyXrkProductBootPolicy,
   chainPublicHandlers,
   ensureDshCompatHostPlugin,
+  ensureSunflowerFreePlugin,
   DSH_COMPAT_HOST_PLUGIN_ID,
   createLiveHostPluginsPublicHandler,
   createHttpServer,
@@ -76,6 +77,7 @@ import {
   mergeWebBootManifests,
   resolveWebBootManifest,
   createXrkWalletPort,
+  armAccessGateForListen,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
   loadSidebarPrefs,
@@ -96,7 +98,6 @@ import {
   isOrchestrationWorkspaceId,
   effectiveHostApiKey,
   ensureMcpLiveIfIdle,
-  isLoopbackAddress,
   timingSafeStringEqual,
   listCredentialSlots,
   peekSettingsYamlSection,
@@ -120,9 +121,12 @@ import {
   applyRosterToolPolicy,
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
+  createBossStatusFragmentProvider,
   createCollabBoardFragmentProvider,
+  createSeatIdentityFragmentProvider,
   createSessionCapabilityFragmentProvider,
   createSessionPostureFragmentProvider,
+  createInstructionAuthorityFragmentProvider,
   canvasWorkspaceIdForSession,
   memberPackSkillsDir,
   resolveSessionModelSelection,
@@ -495,6 +499,33 @@ export type AgentFactory = (input: {
   /** Live route image gate for `read_image`. */
   routeAllowsImage?: () => boolean;
   /**
+   * Face question broker for Claude Code mods `$.ui.ask` (structural; no Cordis).
+   * Host fills from `FaceQuestionBroker` once Face runtime exists.
+   */
+  userQuestions?: {
+    ask(input: {
+      readonly questions: readonly {
+        readonly id: string;
+        readonly question: string;
+        readonly header?: string;
+        readonly detail?: string;
+        readonly options?: readonly {
+          readonly label: string;
+          readonly description?: string;
+        }[];
+        readonly multiSelect?: boolean;
+      }[];
+      readonly agent: { readonly session: { readonly id: string } };
+      readonly signal?: AbortSignal;
+    }): Promise<{
+      readonly answers: readonly {
+        readonly id: string;
+        readonly selected: readonly string[];
+        readonly custom?: string;
+      }[];
+    }>;
+  };
+  /**
    * Host-shared PTY registry (harness/server). Survives agent invalidate so
    * sandbox-mode fence and open sessions stay composition-true.
    */
@@ -575,9 +606,9 @@ export type AgentFactory = (input: {
   workspaceInject?: {
     readonly maxChars?: number;
     /**
-     * `subagent` drops the home persona layer (SOUL.md / USER.md / home
-     * AGENTS.md) — delegated children get their identity from the spawn
-     * preamble, while workspace rules and the skills catalog stay on.
+     * `subagent` / `minimal` skip home **convention** drafts (`~/.agents`) but
+     * keep product standing (`~/.xrk` AGENTS/SOUL). Seat identity still comes
+     * from spawn / playbook; `minimal` thins the skill catalog (公文包).
      */
     readonly audience?: "user" | "subagent" | "minimal";
   };
@@ -643,7 +674,7 @@ export type AgentFactory = (input: {
    * Face `locale` product (Settings SoT) — drives the harness `language` prompt
    * section so reasoning follows the UI language.
    */
-  locale?: "zh" | "en";
+  locale?: "zh" | "en" | "ja";
   /**
    * Auto-review tool pre (Host wires classifier tiers + enable gate).
    * Session Auto = no sandbox + per-call review — not a context-fragment.
@@ -655,7 +686,10 @@ export type AgentFactory = (input: {
    * Seed AGENTS.md / skills stay on workspace inject.
    */
   contextFragmentProviders?: Array<
+    | ReturnType<typeof createInstructionAuthorityFragmentProvider>
+    | ReturnType<typeof createBossStatusFragmentProvider>
     | ReturnType<typeof createCollabBoardFragmentProvider>
+    | ReturnType<typeof createSeatIdentityFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
     | ReturnType<typeof createSessionPostureFragmentProvider>
   >;
@@ -1365,7 +1399,7 @@ export function createHostManager(): HostManager {
           videoAnalyzeEnv?: NodeJS.ProcessEnv;
           curatedMemory?: false | MemoryProvider;
           /** Face `locale.preference` — reasoning/reply language directive. */
-          locale?: "zh" | "en";
+          locale?: "zh" | "en" | "ja";
         };
       } = {};
       const sessionPresetBox: {
@@ -1420,8 +1454,8 @@ export function createHostManager(): HostManager {
           sessionId,
           async () => {
             const pluginSettings = pluginSettingsBox.read?.() ?? {};
-            // Child inject: skip parent persona; advanced pack skills → child
-            // catalog only (never parent). Curated memory is not in the pack.
+            // Child inject: same standing + convention as parents; only XRK.md
+            // ledger is audience-gated. Advanced pack skills → child catalog.
             let childWorkspaceInject:
               | {
                   readonly audience: "subagent" | "minimal";
@@ -1458,6 +1492,37 @@ export function createHostManager(): HostManager {
                 audience,
                 ...(extraSkillDirs.length > 0 ? { extraSkillDirs } : {}),
               };
+            } else {
+              // Top-level identity (干员家): same inject as parents minus XRK.md;
+              // seat playbook still lives on cwd AGENTS / roster.
+              const identity =
+                faceBox.runtime?.sessionIdentities.get(sessionId);
+              if (identity) {
+                const rt = faceBox.runtime;
+                const home = rt?.agentRoster.findHome(identity.memberId);
+                const member = home && rt
+                  ? rt.agentRoster.get(home.rosterWorkspaceId, identity.memberId)
+                  : undefined;
+                const audience =
+                  member?.inject === "subagent"
+                    ? ("subagent" as const)
+                    : ("minimal" as const);
+                const extraSkillDirs: string[] = [];
+                if (member?.kind === "advanced" && rt && home) {
+                  const skillsRoot = memberPackSkillsDir(
+                    member.scope === "global" ? "global" : home.rosterWorkspaceId,
+                    member.id,
+                    rt.agentRoster.home,
+                  );
+                  if (existsSync(skillsRoot)) {
+                    extraSkillDirs.push(skillsRoot);
+                  }
+                }
+                childWorkspaceInject = {
+                  audience,
+                  ...(extraSkillDirs.length > 0 ? { extraSkillDirs } : {}),
+                };
+              }
             }
             const agent = await factory({
               sessionId,
@@ -1684,8 +1749,11 @@ export function createHostManager(): HostManager {
               ...(faceBox.runtime
                 ? {
                     contextFragmentProviders: [
+                      createInstructionAuthorityFragmentProvider(),
                       createSessionCapabilityFragmentProvider(faceBox.runtime),
                       createSessionPostureFragmentProvider(faceBox.runtime),
+                      createBossStatusFragmentProvider(faceBox.runtime),
+                      createSeatIdentityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
                     ],
                     workingDirectoryTools: {
@@ -1748,6 +1816,33 @@ export function createHostManager(): HostManager {
                       : {}),
                   }
                 : {}),
+              // Claude Code `$.ui.ask` → Face question broker (same surface as
+              // ask_user). Live getter: Face may finish wiring after this
+              // composition starts building during boot.
+              userQuestions: {
+                ask: (input: {
+                  readonly questions: readonly import("@xrkseek/server-face").FaceQuestionItem[];
+                  readonly agent: {
+                    readonly session: { readonly id: string };
+                  };
+                  readonly signal?: AbortSignal;
+                }) => {
+                  const broker =
+                    faceBox.questions ?? faceBox.runtime?.questions;
+                  if (!broker) {
+                    return Promise.reject(
+                      new Error(
+                        "$.ui.ask: Face question broker is not ready yet",
+                      ),
+                    );
+                  }
+                  return broker.ask(
+                    input.agent.session.id,
+                    input.questions,
+                    input.signal,
+                  );
+                },
+              },
               autoReviewPre: createAutoReviewToolPre({
                 xrkHome: resolveXrkHome(),
                 // Master switch (Settings) AND session preset === auto (DSH).
@@ -2292,7 +2387,10 @@ export function createHostManager(): HostManager {
           workspaceRoot: config.runtime.workspaceRoot,
           preset: config.runtime.preset,
         }),
-        version: "0.0.0",
+        version:
+          options?.version?.trim()
+          || process.env.XRK_PRODUCT_VERSION?.trim()
+          || "0.0.0",
         defaultAgentPreset: canonicalAgentPresetId(config.runtime.preset),
         registry,
         attachments,
@@ -2938,8 +3036,8 @@ export function createHostManager(): HostManager {
           : undefined;
         const localeNs = faceRuntime.settingsNamespaces.view("locale")
           .value as Record<string, unknown>;
-        const asLocale = (raw: unknown): "zh" | "en" | undefined =>
-          raw === "zh" || raw === "en" ? raw : undefined;
+        const asLocale = (raw: unknown): "zh" | "en" | "ja" | undefined =>
+          raw === "zh" || raw === "en" || raw === "ja" ? raw : undefined;
         // Explicit Settings choice wins; older desktop builds stored the shell
         // language in the `ui` namespace (`ui.locale`) and never wrote
         // `locale.preference`, so honour it instead of dropping to the
@@ -3107,28 +3205,64 @@ export function createHostManager(): HostManager {
         ]);
       };
 
-      const mobileAccessGate = createMobileAccessGateChecker({
+      const bindHost = String(config.runtime.host ?? "127.0.0.1").trim();
+      const ownLanHosts = (() => {
+        const h = bindHost.toLowerCase();
+        const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+        if (!m) return [] as string[];
+        const a = Number(m[1]);
+        const b = Number(m[2]);
+        if (
+          a === 10 ||
+          (a === 192 && b === 168) ||
+          (a === 172 && b >= 16 && b <= 31) ||
+          (a === 169 && b === 254)
+        ) {
+          return [h];
+        }
+        return [] as string[];
+      })();
+      const mobileAccessOptions = {
         xrkHome: resolveXrkHome(),
-      });
+        ...(ownLanHosts.length > 0 ? { ownLanHosts } : {}),
+      };
+      const pinAccessGate = createMobileAccessGateChecker(mobileAccessOptions);
+      const pinAccessHandler = createMobileAccessGateHandler(mobileAccessOptions);
 
-      const faceCheckAuth = (r: IncomingMessage) => {
-        if (!mobileAccessGate(r)) return false;
-        const expected = effectiveHostApiKey(faceRuntime);
-        if (!expected) return true;
+      /** Bearer / x-api-key for automation; elevates past PIN on WAN/LAN. */
+      const requestHostApiKey = (r: IncomingMessage): string | undefined => {
         const auth = r.headers.authorization;
         const headerKey = r.headers["x-api-key"];
         const bearer =
           typeof auth === "string" && auth.startsWith("Bearer ")
             ? auth.slice("Bearer ".length)
             : undefined;
-        const key =
-          bearer ?? (typeof headerKey === "string" ? headerKey : undefined);
-        if (timingSafeStringEqual(key, expected)) return true;
-        // DSH Web 同源不带 Authorization；本机回环放行。
-        return !key && isLoopbackAddress(r.socket.remoteAddress);
+        return (
+          bearer ?? (typeof headerKey === "string" ? headerKey : undefined)
+        );
+      };
+      const apiKeyElevates = (r: IncomingMessage): boolean => {
+        const expected = effectiveHostApiKey(faceRuntime);
+        if (!expected) return false;
+        return timingSafeStringEqual(requestHostApiKey(r), expected);
+      };
+      // Loopback / bind LAN free; WAN + foreign LAN need PIN *or* Host API key.
+      // Browser after PIN must not also need XRK_API_KEY (shell omits Authorization).
+      const mobileAccessGate = (r: IncomingMessage) =>
+        pinAccessGate(r) || apiKeyElevates(r);
+      const faceCheckAuth = (r: IncomingMessage) => mobileAccessGate(r);
+      const mobileAccessPublicHandler = async (
+        req: IncomingMessage,
+        res: ServerResponse,
+      ) => {
+        if (apiKeyElevates(req)) return false;
+        return pinAccessHandler(req, res);
       };
 
       await ensureDshCompatHostPlugin(loader);
+      // 向日葵免费车道：随产品内置的 LLM 插件。车道不可达时插件返回空
+      // `llmBrands`，该 provider 不会进入 registry/catalog，启动不受影响。
+      const sunflowerFreeReady = await ensureSunflowerFreePlugin(loader);
       refreshFacePlugins();
 
       const hostWireCtx = {
@@ -3352,7 +3486,7 @@ export function createHostManager(): HostManager {
               }
             },
           }),
-          createMobileAccessGateHandler({ xrkHome: resolveXrkHome() }),
+          mobileAccessPublicHandler,
           createSidebarPublicHandler({
             xrkHome: resolveXrkHome(),
             defaultCwd: faceRuntime.workspaceRoot,
@@ -3487,8 +3621,20 @@ export function createHostManager(): HostManager {
       const addr = shouldListen
         ? await http.listen()
         : { host: config.runtime.host, port: 0 };
+      process.env.XRK_SERVE_HOST = String(addr.host);
+      process.env.XRK_SERVE_PORT = String(addr.port);
       if (shouldListen) {
         log?.info(`listening ${config.runtime.host}:${addr.port}`);
+        const armed = armAccessGateForListen(
+          mobileAccessOptions,
+          String(addr.host),
+          addr.port,
+        );
+        if (armed.armed) {
+          log?.info(
+            `access gate armed · open ${armed.origin} · PIN ${armed.wanToken} (non-bind / public Host)`,
+          );
+        }
       } else {
         log?.info("http stack ready (listen disabled — pipe / fetch transport)");
       }

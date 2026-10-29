@@ -53,12 +53,14 @@ describe("memory session store", () => {
     const s = store.create("hints");
     expect(store.listHints!(s.id)).toEqual({
       lastEventTs: null,
+      eventCount: 0,
       hasTurnStart: false,
       hasCommandRun: false,
     });
     store.append(s.id, { type: "turn/start", ts: 10, turnId: "t" });
     expect(store.listHints!(s.id)).toEqual({
       lastEventTs: 10,
+      eventCount: 1,
       hasTurnStart: true,
       hasCommandRun: false,
     });
@@ -76,6 +78,7 @@ describe("memory session store", () => {
     });
     expect(store.listHints!(s.id)).toEqual({
       lastEventTs: 3,
+      eventCount: 1,
       hasTurnStart: false,
       hasCommandRun: true,
     });
@@ -297,14 +300,19 @@ describe("jsonl", () => {
 });
 
 describe("forkSession", () => {
-  it("copies events up to boundary", () => {
+  it("copies events up to boundary and appends session/end-seed", () => {
     const store = createMemorySessionStore();
     store.create("src");
     for (const ev of sampleTurn()) {
       store.append("src", ev);
     }
     const child = forkSession(store, "src", 3, "child");
-    expect(child.events).toHaveLength(3);
+    // Prefix (3) + forked closers for the open turn + end-seed.
+    expect(child.events.at(-1)?.type).toBe("session/end-seed");
+    expect(child.events.some((e) => e.type === "turn/end" && e.reason.kind === "forked")).toBe(
+      true,
+    );
+    expect(child.events.length).toBeGreaterThan(3);
     expect(store.get("src").events).toHaveLength(6);
   });
 
@@ -320,9 +328,11 @@ describe("forkSession", () => {
       seedCalls += 1;
       return seeded(id, events);
     };
-    const child = forkSession(store, "src", 4, "via-seed");
+    // Full closed turn (6) — no forked closers, only end-seed.
+    const child = forkSession(store, "src", 6, "via-seed");
     expect(seedCalls).toBe(1);
     expect(child.id).toBe("via-seed");
-    expect(child.events).toHaveLength(4);
+    expect(child.events).toHaveLength(7);
+    expect(child.events.at(-1)?.type).toBe("session/end-seed");
   });
 });

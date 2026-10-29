@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -442,6 +442,10 @@ async function invokeLlmBody(
   }) => void,
 ): Promise<LlmChatResponse> {
   const request = toLlmRequest(input, req);
+  // Semantic durability checkpoint (DSH llm/stream): commit request/header,
+  // prior tool/result, and any pending chunks before the provider call so a
+  // crash cannot leave side-effecting work without a durable prefix.
+  flushSession(input.store, input.sessionId);
   if (!input.llm.stream) {
     return finalizeLlmChatResponse(await input.llm.chat(request));
   }
@@ -1449,6 +1453,11 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     if (input.beforeTools) {
       await input.beforeTools();
     }
+
+    // Semantic durability checkpoint (DSH tools/execute): every tool/call must
+    // be on disk before any tool body runs, so crash repair never invents a
+    // TOOL_NOT_STARTED settlement for work that already mutated the worktree.
+    flushSession(input.store, input.sessionId);
 
     const publishSettledTool = (outcome: RunToolOutcome, callIndex: number): void => {
       for (const te of outcome.toolEvents) {

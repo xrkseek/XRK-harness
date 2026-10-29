@@ -28,7 +28,7 @@ export function createSkillTools(
     {
       name: "skill",
       description:
-        "Load the full instructions for an available skill. Call with the exact skill name from the session skill catalog.",
+        "Load full skill body by exact catalog name (progressive disclosure: catalog is name+blurb only; no skill_search). Prefer skills listed first (公文包 / workspace / xrk-*).",
       parameters: {
         type: "object",
         properties: {

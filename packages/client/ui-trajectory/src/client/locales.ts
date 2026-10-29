@@ -75,3 +75,28 @@ export const en: Record<TrajectoryKey, string> = {
   'toolbar.lead': 'Review by turn: timeline above, ledger below. Select a block for the prompt, tools, and timing.',
   'timeline.empty': 'No timing data',
 }
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'view.trajectory': '軌跡',
+  'toolbar.aria': '軌跡ツールバー',
+  'toolbar.duration': '所要時間',
+  'toolbar.useActualDuration': '実時間を使う',
+  'toolbar.useEqualWidth': '等幅オペレーションを使う',
+  'toolbar.actualTime': '実時間',
+  'toolbar.turns': 'ターン',
+  'toolbar.expandTurns': 'ターンを展開',
+  'toolbar.collapseTurns': 'ターンを折りたたむ',
+  'toolbar.calls': '呼び出し',
+  'toolbar.expandCalls': '呼び出しを展開',
+  'toolbar.collapseCalls': '呼び出しを折りたたむ',
+  'toolbar.search': '軌跡を検索',
+  'toolbar.searchPlaceholder': '検索',
+  'toolbar.density': '密度',
+  'toolbar.densityCompact': '圧縮',
+  'toolbar.densityDetailed': '詳細',
+  'toolbar.lead': 'ターン単位で確認：上がタイムライン、下が台帳。ブロックを選ぶとプロンプト・ツール・タイミングを表示します。',
+  'timeline.empty': 'タイミングデータなし',
+} as const satisfies Record<TrajectoryKey, string>
+
+

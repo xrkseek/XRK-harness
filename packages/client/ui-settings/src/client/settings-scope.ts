@@ -12,8 +12,8 @@ import type {
 } from '@xrkseek/xrk-api-remotes/client'
 import { rehydrateSchema, validateDraft } from '@xrkseek/client-schema-form'
 import {
-  createSnapshotStore, type SettingsScope, type SettingsScopeSnapshot,
-  type SettingsScopeSpec, type SnapshotStore,
+  createSnapshotStore, type SettingsScope, type SettingsScopePathOp,
+  type SettingsScopeSnapshot, type SettingsScopeSpec, type SnapshotStore,
 } from '@xrkseek/client-runtime/client'
 // Type-only, and deliberately NOT `@xrkseek/xrk-api-remotes/client`: this
 // package is reachable from the Host build graph through its feature-package
@@ -98,7 +98,7 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
    * @returns settlement after the write and any latest-write recovery read.
    */
   set(field: string, value: unknown): Promise<void> {
-    return this.write({ op: 'set', path: [field], value })
+    return this.write([{ op: 'set', path: [field], value }])
   }
 
   /**
@@ -108,30 +108,59 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
    * @returns settlement after the clear and any latest-write recovery read.
    */
   unset(field: string): Promise<void> {
-    return this.write({ op: 'unset', path: [field] })
+    return this.write([{ op: 'unset', path: [field] }])
   }
 
-  private write(op: SettingsPathOpView): Promise<void> {
+  /**
+   * Queue several path ops in one Host mutate; see {@link SettingsScope.patch}.
+   * @param ops - path edits applied atomically by the Host.
+   * @returns settlement after the write and any latest-write recovery read.
+   */
+  patch(ops: readonly SettingsScopePathOp[]): Promise<void> {
+    if (ops.length === 0) return Promise.resolve()
+    return this.write(ops.map((op): SettingsPathOpView => (
+      op.op === 'set'
+        ? { op: 'set', path: [...op.path], value: op.value }
+        : { op: 'unset', path: [...op.path] }
+    )))
+  }
+
+  private write(ops: SettingsPathOpView[]): Promise<void> {
     this.readGeneration += 1
     const generation = ++this.writeGeneration
     return this.enqueue(async () => {
-      const revision = this.getSnapshot().revision
-      let response: Awaited<ReturnType<SettingsFace['settings']['mutate']>>
-      try {
-        response = await this.api.settings.mutate({
-          ns: this.spec.namespace,
-          ops: [op],
-          ...(revision === undefined ? {} : { expectedRevision: revision }),
-        })
-      } catch (_settingsWriteFailure) {
-        if (!this.disposed && generation === this.writeGeneration) await this.read(++this.readGeneration)
-        return
+      const mutateOnce = async (): Promise<'ok' | 'conflict' | 'fail'> => {
+        const revision = this.getSnapshot().revision
+        let response: Awaited<ReturnType<SettingsFace['settings']['mutate']>>
+        try {
+          response = await this.api.settings.mutate({
+            ns: this.spec.namespace,
+            ops,
+            ...(revision === undefined ? {} : { expectedRevision: revision }),
+          })
+        } catch (_settingsWriteFailure) {
+          return 'fail'
+        }
+        // Exhausted mocks / empty responses are transport failures, not conflicts.
+        if (response === undefined || response.result === undefined) return 'fail'
+        if (!response.result.ok) return 'conflict'
+        this.accept(response.result.value, generation === this.writeGeneration)
+        return 'ok'
       }
-      if (!response.result.ok) {
-        if (!this.disposed && generation === this.writeGeneration) await this.read(++this.readGeneration)
-        return
+
+      const first = await mutateOnce()
+      if (first === 'ok') return
+      if (this.disposed || generation !== this.writeGeneration) return
+      // Refresh revision after a conflict or transport failure so the next
+      // writer (or our single retry) fences on Host truth — dual plugin binds
+      // used to race expectedRevision and drop nick/status writes silently.
+      await this.read(++this.readGeneration)
+      if (first === 'fail' || this.disposed || generation !== this.writeGeneration) return
+      const second = await mutateOnce()
+      if (second === 'ok') return
+      if (!this.disposed && generation === this.writeGeneration) {
+        await this.read(++this.readGeneration)
       }
-      this.accept(response.result.value, generation === this.writeGeneration)
     })
   }
 
@@ -231,6 +260,11 @@ declare module '@xrkseek/cordis' {
   }
 }
 
+type SharedScopeEntry = {
+  readonly controller: SettingsScopeController<unknown>
+  refs: number
+}
+
 /**
  * The settings domain's base service. Features that own a preference reach the
  * settings transport through this service rather than a shared function: the
@@ -239,6 +273,13 @@ declare module '@xrkseek/cordis' {
  * (`packages/client/tsdown.client.ts`).
  */
 export class SettingsScopeBinder extends Service {
+  /**
+   * One controller per namespace across plugins. Dual binds (e.g. ui-plan +
+   * ui-workspace both own `ui-presence`) must share revision fencing or
+   * interleaved `expectedRevision` writes silently drop nick / mood / dress.
+   */
+  private readonly byNamespace = new Map<string, SharedScopeEntry>()
+
   /**
    * @param ctx - the providing plugin's context.
    */
@@ -253,17 +294,30 @@ export class SettingsScopeBinder extends Service {
    * Listeners exist before the initial background read starts, so activation
    * never blocks on the settings transport. The caller injects `connection`
    * for the transport and `remote` for the forwarded settings invalidation.
+   * Re-binding the same namespace returns the shared controller (refcount);
+   * the first bind's `decode` wins.
    * @param spec - domain-owned namespace contract.
    * @returns the bound scope consumed by the domain's services and rows.
    */
   bind<T>(spec: SettingsScopeSpec<T>): SettingsScope<T> {
     const ctx = this.ctx
     const connection = ctx.get('connection') as ConnectionHandle
-    const controller = new SettingsScopeController<T>(
-      connection.api,
-      spec,
-      connection.isLoopback ? 'host' : 'memory',
-    )
+    const persistence = connection.isLoopback ? 'host' : 'memory'
+    let entry = this.byNamespace.get(spec.namespace)
+    if (entry === undefined) {
+      entry = {
+        controller: new SettingsScopeController<unknown>(
+          connection.api,
+          spec as SettingsScopeSpec<unknown>,
+          persistence,
+        ),
+        refs: 0,
+      }
+      this.byNamespace.set(spec.namespace, entry)
+    }
+    entry.refs += 1
+    const controller = entry.controller as SettingsScopeController<T>
+    const owned = entry
     ctx.effect(() => {
       const refresh = (namespace?: string): void => {
         if (namespace !== undefined && namespace !== spec.namespace) return
@@ -276,6 +330,11 @@ export class SettingsScopeBinder extends Service {
       void controller.load()
       return async () => {
         for (const dispose of disposers) dispose()
+        const current = this.byNamespace.get(spec.namespace)
+        if (current !== owned) return
+        current.refs -= 1
+        if (current.refs > 0) return
+        this.byNamespace.delete(spec.namespace)
         await controller.dispose()
       }
     }, `ui-settings: ${spec.namespace} settings scope`)

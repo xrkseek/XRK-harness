@@ -42,6 +42,29 @@ describe('derivePresenceEmotion', () => {
     })).toMatchObject({ emotionId: '02', tipKey: 'ambient', source: 'auto' })
   })
 
+  it('keeps pinned Boss mood past TTL and through idle/busy', () => {
+    expect(derivePresenceEmotion({
+      presence: {
+        emotionId: '16',
+        tips: '开会中',
+        source: 'tool',
+        pinned: true,
+        updatedAt: 1_000,
+      },
+      turnActive: true,
+      runningJobs: 0,
+      runningSubs: 2,
+      fleetHealth: 'critical',
+      idleMs: 60 * 60_000,
+      nowMs: 1_000 + PRESENCE_TOOL_TTL_MS + 60_000,
+      phase: 3,
+    })).toEqual({
+      emotionId: '16',
+      tips: '开会中',
+      source: 'tool',
+    })
+  })
+
   it('ignores sleep sticky while the session is busy', () => {
     expect(derivePresenceEmotion({
       presence: { emotionId: '00', tips: 'napping', source: 'tool', updatedAt: 5_000 },

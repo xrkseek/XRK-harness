@@ -33,6 +33,11 @@ tool/call (session, by loop)
 
 Pipeline 是显式 `ToolPipeline` 对象（无全局 proxy）。审批 hook `ask` 由 Face `approval/*` 接线。路径越权（`workspace-write` 盘外）走 pre → `ask`（约 5s 确认），白名单是会话路径对象。
 
+## 工具文案 vs 碎片
+
+- **`tools[]`：** 只放薄契约——`name` · 短 `description` · `parameters`；`dynamicSchema` **优先**只改 JSON 形状。
+- **会变的用法说明 / 路由句 / 开单纪律：** 按内容碎片语义管理（稳定 id · 可重算 · 窗内 last-wins）；通道可以是 `context-fragment`、derive 投影（如 `standingPlanMessage`）或日后统一登记的 system 段，但**不要**再把长活文案堆进 `description`。对接图：Canvas `context-engineering-layers` · [context-fragments.md](./context-fragments.md)。
+
 ---
 
 # Tool Pipeline
@@ -69,3 +74,8 @@ tool/call (session, by loop)
 12. **Wire catalog** — `listForModel` filters tools by `ToolDefinition.exposure` (`direct` / `deferred` / `hidden`); with `tool_search`, Deferred schemas stay off the wire until searched (≤8 per call); without search → Direct only (Deferred stay off the wire so MCP schemas cannot blow the soft budget). The Registry stays full. MCP tools default to `exposure: deferred`.
 
 The pipeline is an explicit `ToolPipeline` object (no global proxy). The approval hook `ask` is wired by Face `approval/*`. Path overreach (`workspace-write` off-root) uses pre → `ask` (≈5s); the allowlist is session path objects.
+
+## Tool prose vs fragments
+
+- **`tools[]`:** thin contract only — `name`, short `description`, `parameters`; prefer `dynamicSchema` for JSON shape changes.
+- **Living usage / routing / open-todo discipline:** manage as fragment-semantics content (stable id · recompute · in-window last-wins). Delivery may be `context-fragment`, a derive projection (e.g. `standingPlanMessage`), or a registered system section — do not pile long living prose into `description`. Map: Canvas `context-engineering-layers` · [context-fragments.md](./context-fragments.md).

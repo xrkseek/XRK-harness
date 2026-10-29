@@ -1,6 +1,8 @@
 export type {
   AuthMode,
   BrandEntry,
+  BrandModelEntry,
+  BrandModelSpec,
   FactoryKind,
   ProtocolId,
   ProviderBinding,
@@ -8,6 +10,8 @@ export type {
   RoutableProvider,
 } from "./types.js";
 export {
+  asBrandModelEntry,
+  brandModelId,
   defaultPathForProtocol,
   factoryKindForProtocol,
   normalizeProtocolId,

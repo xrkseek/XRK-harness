@@ -36,3 +36,16 @@ export const en = {
   'candidate.noCwd': '(no cwd)',
   'crumb.root': 'Workspace',
 } satisfies Record<ReferenceKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'section.files': 'ファイルとフォルダ',
+  'section.sessions': 'セッションの会話',
+  'candidate.file': 'ファイル',
+  'candidate.folder': 'フォルダ',
+  'candidate.session': 'セッション',
+  'candidate.noCwd': '（作業ディレクトリなし）',
+  'crumb.root': 'ワークスペース',
+} as const satisfies Record<ReferenceKey, string>
+
+

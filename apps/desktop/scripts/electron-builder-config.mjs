@@ -195,6 +195,27 @@ export function createElectronBuilderConfig(
             "Settings plugin install/update/remove needs XRK_HARNESS_BIN",
         );
       }
+      // 内置 LLM 车道：插件目录 + 随包分发的 Bun。Host 以 cwd=resources/host
+      // 启动，`ensureSunflowerFreePlugin` 从 cwd 向上找 `extensions/<id>`。
+      const sunflowerSrc = join(
+        APP_ROOT,
+        "..",
+        "..",
+        "extensions",
+        "xrk-sunflower-free",
+      );
+      if (existsSync(join(sunflowerSrc, "xrk.plugin.json"))) {
+        const sunflowerDest = join(hostDest, "extensions", "xrk-sunflower-free");
+        rmSync(sunflowerDest, { recursive: true, force: true });
+        cpSync(sunflowerSrc, sunflowerDest, { recursive: true });
+        const bunName = process.platform === "win32" ? "bun.exe" : "bun";
+        if (!existsSync(join(sunflowerDest, "vendor", bunName))) {
+          console.warn(
+            "xrk desktop afterPack: bundled Bun missing — the sunflower-free " +
+              "lane will be unavailable on user machines. Run `pnpm vendor:bun` first.",
+          );
+        }
+      }
       if (!updateUrl) return;
       const yml = [
         "provider: generic",

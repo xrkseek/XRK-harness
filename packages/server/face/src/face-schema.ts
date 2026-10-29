@@ -35,7 +35,8 @@ export const FACE_LOCALE_SCHEMA: FaceSchemaEnvelope = {
   refs: {
     1: { type: "const", value: "zh" },
     2: { type: "const", value: "en" },
-    3: { type: "union", list: [1, 2] },
+    5: { type: "const", value: "ja" },
+    3: { type: "union", list: [1, 2, 5] },
     4: { type: "object", dict: { preference: 3 } },
   },
 };

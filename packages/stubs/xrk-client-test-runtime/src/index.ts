@@ -259,6 +259,7 @@ export function stubSettingsScope(initial: Record<string, unknown> = {}) {
   const listeners = new Set<() => void>()
   const set = vi.fn(() => Promise.resolve())
   const unset = vi.fn(() => Promise.resolve())
+  const patch = vi.fn(() => Promise.resolve())
   return {
     scope: {
       getSnapshot: () => snapshot,
@@ -270,11 +271,13 @@ export function stubSettingsScope(initial: Record<string, unknown> = {}) {
       },
       set,
       unset,
+      patch,
     },
     // The write spies are the scope's own, so `host.set` and `scope.set`
     // assertions see one call log.
     set,
     unset,
+    patch,
     /**
      * Publish a snapshot patch, as one accepted Host read would.
      * @param next - fields the read carried; the rest stand.

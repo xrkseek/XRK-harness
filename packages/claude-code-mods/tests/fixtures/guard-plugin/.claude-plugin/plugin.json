@@ -1,0 +1,5 @@
+{
+  "name": "guard",
+  "version": "0.1.0",
+  "description": "Fixture: refuses force pushes and shell deletions before they run."
+}

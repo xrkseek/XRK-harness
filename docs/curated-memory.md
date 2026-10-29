@@ -9,11 +9,11 @@
 | | 站立（可选 inject） | 策展（本页） |
 |--|-------------------|-------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
-| `SOUL.md` / `IDENTITY.md` | 家目录 `~/.xrk/SOUL.md` = 产品种子（fingerprint）；用户人格优先写工作区 `.agents/SOUL.md` · `IDENTITY.md` | — |
+| `SOUL.md` / `IDENTITY.md` | 家目录 `~/.xrk/SOUL.md` = 产品种子（fingerprint）；用户人格优先写工作区 **`.xrk/SOUL.md` · `IDENTITY.md`** | — |
 | 谁写 | 用户手写 | `memory` 工具 / 回合后笔记 / Phase1 |
 | 进模型 | durable `agent-instructions` inject | **system** 冻结快照 |
 
-产品 Identity 决策：**保持薄**——家目录种子 `AGENTS.md` + `SOUL.md`（均 fingerprint）；用户自定人设写 `.agents/SOUL.md` / `IDENTITY.md`；用户事实走策展 `memories/USER.md`（见 [skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)）。
+产品 Identity 决策：**保持薄**——家目录种子 `AGENTS.md` + `SOUL.md`（均 fingerprint；全席）；用户自定人设写 **`.xrk/SOUL.md` / `IDENTITY.md`**；用户事实走策展 `memories/USER.md`（见 [skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)）。
 
 ## 会话隔离（与站立计划分工）
 
@@ -126,11 +126,11 @@
 | | Standing (optional inject) | Curated (this page) |
 |--|----------------------------|---------------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
-| `SOUL.md` / `IDENTITY.md` | Home `~/.xrk/SOUL.md` = product seed (fingerprint); prefer workspace `.agents/SOUL.md` · `IDENTITY.md` for user persona | — |
+| `SOUL.md` / `IDENTITY.md` | Home `~/.xrk/SOUL.md` = product seed (fingerprint); prefer workspace **`.xrk/SOUL.md` · `IDENTITY.md`** for user persona | — |
 | Who writes | User | `memory` tool / after-turn notes / Phase1 · Phase2 |
 | Into the model | Durable `agent-instructions` inject | **System** frozen snapshot |
 
-Identity product decision: **stay thin** — home seeds `AGENTS.md` + `SOUL.md` (both fingerprint); user persona in `.agents/SOUL.md` / `IDENTITY.md`; factual “who the user is” stays in curated `memories/USER.md` ([skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)).
+Identity product decision: **stay thin** — home seeds `AGENTS.md` + `SOUL.md` (both fingerprint; every audience); user persona in **`.xrk/SOUL.md` / `IDENTITY.md`**; factual “who the user is” stays in curated `memories/USER.md` ([skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)).
 
 ## Session isolation (vs standing plan)
 

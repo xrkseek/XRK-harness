@@ -19,8 +19,11 @@ export const TRANSCRIPT_VIEW_FIELD = 'transcriptView'
  *
  * `verbose` is the "always expanded" posture: a completed Turn never folds its
  * process run and its rows are not grouped at all.
+ *
+ * Former `compact` matched `standard` fold timing and was removed; persisted
+ * `compact` values migrate to {@link DEFAULT_TRANSCRIPT_VIEW_MODE}.
  */
-export const TRANSCRIPT_VIEW_MODES = ['compact', 'standard', 'detailed', 'verbose'] as const
+export const TRANSCRIPT_VIEW_MODES = ['standard', 'detailed', 'verbose'] as const
 
 /** How much process detail a settled Turn keeps on screen. */
 export type TranscriptViewMode = typeof TRANSCRIPT_VIEW_MODES[number]
@@ -50,9 +53,15 @@ export interface ConversationSettings {
   transcriptView: TranscriptViewMode
 }
 
+/** Accept the retired `compact` id and rewrite it to standard on load/write. */
+const TranscriptViewFieldSchema = z.transform(
+  z.union(['compact', ...TRANSCRIPT_VIEW_MODES]),
+  (value): TranscriptViewMode => (value === 'compact' ? DEFAULT_TRANSCRIPT_VIEW_MODE : value),
+).default(DEFAULT_TRANSCRIPT_VIEW_MODE)
+
 /** Durable conversation schema; also the wire envelope the browser scope validates against. */
 export const ConversationSettingsSchema: z<ConversationSettings> = z.object({
   [BUSY_ENTER_FIELD]: z.union([...BUSY_ENTER_BEHAVIORS]).default(DEFAULT_BUSY_ENTER_BEHAVIOR),
   [TOOLS_DEFAULT_EXPANDED_FIELD]: z.boolean().default(DEFAULT_TOOLS_DEFAULT_EXPANDED),
-  [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_MODES]).default(DEFAULT_TRANSCRIPT_VIEW_MODE),
+  [TRANSCRIPT_VIEW_FIELD]: TranscriptViewFieldSchema,
 })

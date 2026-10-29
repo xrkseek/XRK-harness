@@ -6,7 +6,7 @@ import type {} from '@xrkseek/client-ui-settings/client'
 import type { PluginEntryId } from '@xrkseek/xrk-api-remotes/client'
 import type {} from '@xrkseek/xrk-api-remotes/types'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
-import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
+import { en, ja, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
 export type { PluginInstallLog } from './plugin-install-ui-session.ts'
@@ -31,7 +31,7 @@ function throwRemote(label: string, result: { ok: false; error: { code: string; 
 
 /** Contribute the lazy inventory tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugin-inventory: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-settings-plugin-inventory: dictionaries')
 
   const t = ctx.locale.bind(NS)
   const list: PluginInventorySettingsTabInjected['list'] = async () => {

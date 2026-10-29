@@ -3,7 +3,6 @@ import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   createStdTools,
   createToolRegistry,
-  runToolDetailed,
 } from "@xrkseek/core-tools";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
@@ -18,7 +17,7 @@ function bareRuntime(store = createMemorySessionStore()) {
   });
 }
 
-describe("Face plan mode", () => {
+describe("Face plan mode (retired)", () => {
   it("legacy plan agentPreset maps to harness without seeding plan mode", async () => {
     const runtime = bareRuntime();
     const created = await dispatchFaceMethod(runtime, "session.create", "c", {
@@ -37,9 +36,11 @@ describe("Face plan mode", () => {
     });
   });
 
-  it("pins inactive plan projection; /plan commits between turns", async () => {
+  it("/plan replies retired and does not commit plan/mode", async () => {
     const runtime = bareRuntime();
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
+    });
     expect(created.result.ok).toBe(true);
     if (!created.result.ok) return;
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
@@ -55,34 +56,33 @@ describe("Face plan mode", () => {
     expect(on.result.ok).toBe(true);
     if (on.result.ok) {
       expect(on.result.value).toMatchObject({
-        result: { kind: "success", text: "Plan mode on. Use /plan off to leave." },
+        result: {
+          kind: "success",
+          text: expect.stringContaining("Plan mode is retired"),
+        },
       });
     }
-    expect(runtime.projections.snapshot(sessionId).values.plan).toEqual({
-      active: true,
-      pending: false,
-    });
-    const types = runtime.store.get(sessionId).events.map((e) => e.type);
-    expect(types).toContain("command/run");
-    expect(types).toContain("plan/mode");
-    expect(types.lastIndexOf("command/run")).toBeLessThan(
-      types.lastIndexOf("plan/mode"),
-    );
-
-    const off = await dispatchFaceMethod(runtime, "commands/execute", "e2", {
-      args: { agentId: sessionId, line: "/plan off" },
-    });
-    expect(off.result.ok).toBe(true);
     expect(runtime.projections.snapshot(sessionId).values.plan).toEqual({
       active: false,
       pending: false,
     });
+    const types = runtime.store.get(sessionId).events.map((e) => e.type);
+    expect(types).toContain("command/run");
+    // Settles pending from command/run — inactive only, never activate.
+    expect(types).toContain("plan/mode");
+    const mode = runtime.store
+      .get(sessionId)
+      .events.filter((e) => e.type === "plan/mode")
+      .at(-1) as { active?: boolean } | undefined;
+    expect(mode?.active).toBe(false);
   });
 
-  it("/plan <message> steers the suffix", async () => {
+  it("/plan <message> does not steer or activate plan", async () => {
     const store = createMemorySessionStore();
     const runtime = bareRuntime(store);
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
+    });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
 
@@ -90,18 +90,20 @@ describe("Face plan mode", () => {
       args: { agentId: sessionId, line: "/plan draft the migration" },
     });
     expect(exec.result.ok).toBe(true);
-    expect(runtime.projections.snapshot(sessionId).values.plan).toMatchObject({
-      active: true,
+    expect(runtime.projections.snapshot(sessionId).values.plan).toEqual({
+      active: false,
+      pending: false,
     });
     expect(
       store.get(sessionId).events.some((e) => e.type === "prompt/admitted"),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("exit_plan_mode asks plan-review and exits on Approve", async () => {
+  it("bindSessionAgent unregisters exit_plan_mode from std catalog", async () => {
     const store = createMemorySessionStore();
     const tools = createToolRegistry();
     for (const t of createStdTools()) tools.register(t);
+    expect(tools.get("exit_plan_mode")).toBeTruthy();
     const runtime = createBareFaceRuntime({
       store,
       resolveAgent: async (sessionId) => {
@@ -109,43 +111,12 @@ describe("Face plan mode", () => {
         return { ...handle, tools };
       },
     });
-    const created = await dispatchFaceMethod(runtime, "session.create", "c", { cwd: runtime.workspaceRoot });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      cwd: runtime.workspaceRoot,
+    });
     if (!created.result.ok) throw new Error("create");
     const sessionId = (created.result.value as { sessionId: string }).sessionId;
-    await dispatchFaceMethod(runtime, "commands/execute", "p", {
-      args: { agentId: sessionId, line: "/plan" },
-    });
-
     await runtime.resolveAgent(sessionId);
-
-    const runPromise = runToolDetailed({
-      registry: tools,
-      call: {
-        id: "c1",
-        name: "exit_plan_mode",
-        arguments: { plan: "# Ship it\n\nDo the work." },
-      },
-    });
-    await new Promise((r) => setTimeout(r, 20));
-    const pending = runtime.questions.listPending(sessionId);
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.questions[0]?.intent).toEqual({
-      kind: "plan-review",
-      approve: "Approve",
-    });
-    const rpcId = pending[0]!.rpcId;
-    runtime.questions.respondByRpcId(rpcId, {
-      ok: true,
-      value: {
-        sessionId,
-        answer: {
-          answers: [{ id: "plan-review", selected: ["Approve"] }],
-        },
-      },
-    });
-    const out = await runPromise;
-    expect(out.result.isError).toBeFalsy();
-    expect(out.result.content).toContain("Plan approved");
-    expect(out.toolEvents.some((e) => e.type === "plan/mode")).toBe(true);
+    expect(tools.get("exit_plan_mode")).toBeUndefined();
   });
 });

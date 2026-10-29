@@ -1,6 +1,7 @@
 import { access, realpath, stat } from "node:fs/promises";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
+import type { BrandEntry, ProtocolId } from "@xrkseek/llm-registry";
 import type {
   RegisteredPlugin,
   PluginPromptSection,
@@ -9,6 +10,146 @@ import type {
   HostWireContext,
 } from "./types.js";
 import type { DiscoveryHit, PluginManifest } from "./manifest.js";
+
+const PLUGIN_PROTOCOLS: readonly ProtocolId[] = [
+  "openai-chat",
+  "openai-completions",
+  "openai-responses",
+  "anthropic-messages",
+  "gemini-generate",
+];
+
+/**
+ * Validate one `kind: "llm"` plugin brand row.
+ * Brand rows are a public plugin surface, so a typo should fail at load with a
+ * pointed message instead of surfacing as "unknown provider" much later.
+ */
+function asBrandEntry(value: unknown, label: string): BrandEntry {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${label}: brand must be an object`);
+  }
+  const o = value as Record<string, unknown>;
+  if (typeof o.id !== "string" || !o.id.trim()) {
+    throw new Error(`${label}: brand.id must be a non-empty string`);
+  }
+  if (typeof o.displayName !== "string" || !o.displayName.trim()) {
+    throw new Error(`${label}: brand.displayName must be a non-empty string`);
+  }
+  if (
+    typeof o.protocol !== "string" ||
+    !PLUGIN_PROTOCOLS.includes(o.protocol as ProtocolId)
+  ) {
+    throw new Error(
+      `${label}: brand.protocol must be one of ${PLUGIN_PROTOCOLS.join(" | ")}`,
+    );
+  }
+  const optionalString = (key: string): string | undefined => {
+    const raw = o[key];
+    if (raw === undefined) return undefined;
+    if (typeof raw !== "string") {
+      throw new Error(`${label}: brand.${key} must be a string`);
+    }
+    return raw;
+  };
+  const baseUrl = optionalString("baseUrl");
+  const path = optionalString("path");
+  const apiKeyEnv = optionalString("apiKeyEnv");
+  const defaultModel = optionalString("defaultModel");
+  const notes = optionalString("notes");
+  const authMode = optionalString("authMode");
+  if (authMode !== undefined && authMode !== "bearer" && authMode !== "api-key") {
+    throw new Error(`${label}: brand.authMode must be "bearer" | "api-key"`);
+  }
+  const autoCatalogRaw = o.autoCatalog;
+  if (autoCatalogRaw !== undefined && typeof autoCatalogRaw !== "boolean") {
+    throw new Error(`${label}: brand.autoCatalog must be a boolean`);
+  }
+  const autoCatalog = autoCatalogRaw === true ? true : undefined;
+  let models: BrandEntry["models"];
+  if (o.models !== undefined) {
+    if (!Array.isArray(o.models)) {
+      throw new Error(`${label}: brand.models must be an array`);
+    }
+    const parsed: NonNullable<BrandEntry["models"]>[number][] = [];
+    for (let i = 0; i < o.models.length; i += 1) {
+      const row = o.models[i];
+      if (typeof row === "string") {
+        if (!row.trim()) {
+          throw new Error(
+            `${label}: brand.models[${i}] must be a non-empty string`,
+          );
+        }
+        parsed.push(row.trim());
+        continue;
+      }
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        throw new Error(
+          `${label}: brand.models[${i}] must be a string or object`,
+        );
+      }
+      const entry = row as Record<string, unknown>;
+      if (typeof entry.id !== "string" || !entry.id.trim()) {
+        throw new Error(
+          `${label}: brand.models[${i}].id must be a non-empty string`,
+        );
+      }
+      const name =
+        typeof entry.name === "string" && entry.name.trim()
+          ? entry.name.trim()
+          : undefined;
+      const description =
+        typeof entry.description === "string" && entry.description.trim()
+          ? entry.description.trim()
+          : undefined;
+      let contextWindow: number | undefined;
+      if (entry.contextWindow !== undefined) {
+        if (
+          typeof entry.contextWindow !== "number" ||
+          !Number.isFinite(entry.contextWindow) ||
+          entry.contextWindow <= 0
+        ) {
+          throw new Error(
+            `${label}: brand.models[${i}].contextWindow must be a positive number`,
+          );
+        }
+        contextWindow = Math.floor(entry.contextWindow);
+      }
+      let inputModalities: ("text" | "image")[] | undefined;
+      if (entry.inputModalities !== undefined) {
+        if (!Array.isArray(entry.inputModalities)) {
+          throw new Error(
+            `${label}: brand.models[${i}].inputModalities must be an array`,
+          );
+        }
+        inputModalities = entry.inputModalities
+          .map((m) => String(m).trim())
+          .filter((m): m is "text" | "image" => m === "text" || m === "image");
+        if (inputModalities.length === 0) inputModalities = undefined;
+      }
+      parsed.push({
+        id: entry.id.trim(),
+        ...(name ? { name } : {}),
+        ...(description ? { description } : {}),
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
+        ...(inputModalities ? { inputModalities } : {}),
+      });
+    }
+    models = parsed.length > 0 ? parsed : undefined;
+  }
+  return {
+    id: o.id.trim(),
+    displayName: o.displayName.trim(),
+    protocol: o.protocol as ProtocolId,
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+    ...(path !== undefined ? { path } : {}),
+    ...(authMode !== undefined ? { authMode } : {}),
+    ...(apiKeyEnv !== undefined ? { apiKeyEnv } : {}),
+    ...(defaultModel !== undefined ? { defaultModel } : {}),
+    ...(models !== undefined ? { models } : {}),
+    ...(notes !== undefined ? { notes } : {}),
+    ...(autoCatalog !== undefined ? { autoCatalog } : {}),
+  };
+}
 
 function asToolDefinition(value: unknown, label: string): ToolDefinition {
   if (!value || typeof value !== "object") {
@@ -138,6 +279,18 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     commands = o.commands.map((c, i) => asCommand(c, `${label}: commands[${i}]`));
   }
 
+  // `kind: "llm"` 插件贡献 Registry brand 行。漏掉这一段，从磁盘加载的 LLM
+  // 插件就永远注册不出 brand（只有测试里直接构造对象才走得到 registry）。
+  let llmBrands: BrandEntry[] | undefined;
+  if (o.llmBrands !== undefined) {
+    if (!Array.isArray(o.llmBrands)) {
+      throw new Error(`${label}: llmBrands must be an array`);
+    }
+    llmBrands = o.llmBrands.map((b, i) =>
+      asBrandEntry(b, `${label}: llmBrands[${i}]`),
+    );
+  }
+
   let createPublicHandler:
     | ((ctx: HostWireContext) => HostPublicHandlerFn)
     | undefined;
@@ -153,6 +306,7 @@ function asPlugin(value: unknown, label: string): RegisteredPlugin {
     ...(tools ? { tools } : {}),
     ...(promptSections ? { promptSections } : {}),
     ...(commands ? { commands } : {}),
+    ...(llmBrands ? { llmBrands } : {}),
     ...(createPublicHandler ? { createPublicHandler } : {}),
   };
   if (typeof dispose === "function") {

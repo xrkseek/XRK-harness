@@ -15,7 +15,7 @@ import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
 import type { LayoutInsets } from './layout-insets.ts'
 import { ThemePresenter } from './theme-presenter.ts'
-import { NS, en, zh } from './locales.ts'
+import { NS, en, ja, zh } from './locales.ts'
 
 // Contract exports only (export-convergence rule: cross-package consumers
 // keep a symbol exported; test-only/package-internal symbols live off /src).
@@ -182,7 +182,7 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'ui-layout: service + root registration')
 
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-layout: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-layout: dictionaries')
 
   // Theme presentation: pure DOM writes from resolved snapshots — initial
   // state through the getter once, then event-driven only; no React path.

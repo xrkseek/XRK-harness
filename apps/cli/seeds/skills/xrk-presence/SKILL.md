@@ -18,7 +18,7 @@ Tool: **`presence_set`** — only when it appears in your catalog (Face binds it
 | **`tips` / 支线** | Caption **under** the title in the sidebar. Current work. |
 | **`emotionId`** | Optional Overview emotion ball. Accessory; Settings may hide it. |
 
-**Ball off ≠ 支线 off.** `presence_set` / `sideline_set` still update sidebar 支线 when the emotion ball master switch is off. Update `tips` when work shifts — do not wait to be asked.
+**Ball off ≠ 支线 off.** `presence_set` still updates sidebar 支线 when the emotion ball is off. On multi-step work, keep `tips` in sync with the current todo beat — do not wait to be asked. Clear/finish presence when the job ends.
 
 ## Calls
 

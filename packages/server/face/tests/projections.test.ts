@@ -201,6 +201,51 @@ describe("createFaceRuntime projection wire", () => {
     ).toBe(true);
   });
 
+  it("delegated subagent skips automatic title fallback", () => {
+    const store = createMemorySessionStore();
+    const parent = newSession(store);
+    const child = newSession(store);
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      version: "test",
+      drain: {
+        wake() {},
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    runtime.subagents.attach({
+      parentSessionId: parent.id,
+      childSessionId: child.id,
+      mode: "one-shot",
+      label: "worker",
+      role: "worker",
+    });
+    store.append(child.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t1",
+      content: "please implement the delegated task carefully",
+    });
+    expect(runtime.projections.snapshot(child.id).values.title).toBeFalsy();
+
+    store.append(parent.id, {
+      type: "user/message",
+      ts: 2,
+      turnId: "t2",
+      content: "parent prompt should still title",
+    });
+    expect(runtime.projections.snapshot(parent.id).values.title).toMatch(
+      /parent prompt/,
+    );
+  });
+
   it("todos standing plan: todo/write persists across turn/start", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);

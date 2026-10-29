@@ -154,6 +154,92 @@ function projectionTotals(
   };
 }
 
+function parseBuckets(value: unknown, label: string): CostUsageBuckets {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${label} must be an object`);
+  }
+  const v = value as Record<string, unknown>;
+  const num = (k: string): number => {
+    const n = v[k];
+    if (typeof n !== "number" || !Number.isFinite(n)) {
+      throw new Error(`${label}.${k} must be a finite number`);
+    }
+    return n;
+  };
+  return {
+    input: num("input"),
+    output: num("output"),
+    cacheRead: num("cacheRead"),
+    cacheWrite: num("cacheWrite"),
+    reasoning: num("reasoning"),
+    cost: num("cost"),
+  };
+}
+
+function parseBucketMap(
+  value: unknown,
+  label: string,
+): Record<string, CostUsageBuckets> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const out: Record<string, CostUsageBuckets> = {};
+  for (const [key, buckets] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = parseBuckets(buckets, `${label}.${key}`);
+  }
+  return out;
+}
+
+function parseCostUsageProjection(value: unknown): CostUsageProjection {
+  const totals = parseBuckets(value, "costUsage.state.totals");
+  if (!value || typeof value !== "object") {
+    throw new Error("costUsage.state.totals must be an object");
+  }
+  const v = value as Record<string, unknown>;
+  return {
+    ...totals,
+    byModel: parseBucketMap(v.byModel ?? {}, "costUsage.state.totals.byModel"),
+    byProviderModel: parseBucketMap(
+      v.byProviderModel ?? {},
+      "costUsage.state.totals.byProviderModel",
+    ),
+  };
+}
+
+function parseRoute(
+  value: unknown,
+): { provider: string; model: string } | null {
+  if (value === null) return null;
+  if (!value || typeof value !== "object") {
+    throw new Error("costUsage.state.route must be object | null");
+  }
+  const v = value as Record<string, unknown>;
+  if (typeof v.provider !== "string" || typeof v.model !== "string") {
+    throw new Error("costUsage.state.route needs string provider/model");
+  }
+  return { provider: v.provider, model: v.model };
+}
+
+function parseLast(value: unknown): CostUsageState["last"] {
+  if (value === null) return null;
+  if (!value || typeof value !== "object") {
+    throw new Error("costUsage.state.last must be object | null");
+  }
+  const v = value as Record<string, unknown>;
+  if (typeof v.turnId !== "string" || typeof v.stepId !== "string") {
+    throw new Error("costUsage.state.last needs string turnId/stepId");
+  }
+  if (typeof v.modelKey !== "string") {
+    throw new Error("costUsage.state.last.modelKey must be a string");
+  }
+  return {
+    turnId: v.turnId,
+    stepId: v.stepId,
+    modelKey: v.modelKey,
+    buckets: parseBuckets(v.buckets, "costUsage.state.last.buckets"),
+  };
+}
+
 export function createCostUsageProjectionUnit(): ProjectionDefinition<
   "costUsage",
   CostUsageState,
@@ -163,6 +249,16 @@ export function createCostUsageProjectionUnit(): ProjectionDefinition<
     key: "costUsage",
     stateVersion: 1,
     init: () => ({ totals: ZERO, last: null, route: null }),
+    parseState(value: unknown): CostUsageState {
+      if (!value || typeof value !== "object") {
+        throw new Error("costUsage state must be an object");
+      }
+      const v = value as Record<string, unknown>;
+      const totals = parseCostUsageProjection(v.totals);
+      const route = parseRoute(v.route);
+      const last = parseLast(v.last);
+      return { totals, route, last };
+    },
     apply(state, event: SessionEvent): CostUsageState {
       if (event.type === "request/header") {
         return {

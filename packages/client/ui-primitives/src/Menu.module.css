@@ -35,6 +35,9 @@
   border-radius: 12px;
   background: var(--dsw-specific-menu);
   box-shadow: var(--dsw-shadow-lv3);
+  /* ZCode overlay rule: short fade + tiny slide/zoom — clarifies “opened”,
+     does not decorate. Opacity + transform only (compositor-friendly). */
+  animation: menu-surface-in var(--ds-motion-fast) var(--ds-ease-out) both;
   /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens. The
      declaration sits on the card rather than on `.scrollable .viewport`
      because the elevation is a property of this surface, and the custom
@@ -80,6 +83,7 @@
 .sideTop {
   top: auto;
   bottom: calc(100% + 4px);
+  animation-name: menu-surface-in-up;
 }
 
 .alignEnd {
@@ -340,6 +344,35 @@
   right: -10px;
 }
 
+@keyframes menu-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes menu-surface-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list,
+  .submenu {
+    animation: none;
+  }
+}
+
 @media (max-width: 767px) {
   .item,
   .denseList .item {
@@ -353,5 +386,19 @@
     padding: 8px 10px;
     font-size: 14px;
     line-height: 20px;
+  }
+
+  /* Phone popovers: use most of the viewport — 360px felt like a stub sheet. */
+  .portal {
+    max-width: min(100vw - 16px - var(--ds-safe-h), 420px);
+  }
+
+  .portal.scrollable,
+  .scrollable {
+    max-height: min(72dvh, calc(100dvh - 48px - var(--ds-safe-v)));
+  }
+
+  .scrollable .viewport {
+    max-height: min(56dvh, calc(100dvh - 160px - var(--ds-safe-v)));
   }
 }

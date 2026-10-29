@@ -23,6 +23,13 @@ import {
   type MobileGateDecision,
 } from "./underlying/mobile-gate-kit.js";
 
+function trustProxyEnabled(options: MobileAccessOptions): boolean {
+  if (options.trustProxy === true) return true;
+  if (options.trustProxy === false) return false;
+  const raw = process.env.XRK_TRUST_PROXY?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 function credentialsFromRequest(
   req: IncomingMessage,
   options: MobileAccessOptions,
@@ -61,13 +68,16 @@ export function evaluateMobileAccessGate(
   const { snapshot, ...credentials } = credentialsFromRequest(req, options);
   return evaluateMobileGate(
     pathname,
-    effectiveRequestHost(req),
+    effectiveRequestHost(req, trustProxyEnabled(options)),
     {
       running: snapshot.running,
       lanAuthEnabled: snapshot.lanAuthEnabled !== false,
       lanToken: snapshot.lanToken,
       wanToken: snapshot.wanToken,
       instanceId: snapshot.instanceId,
+      ...(options.ownLanHosts && options.ownLanHosts.length > 0
+        ? { ownLanHosts: options.ownLanHosts }
+        : {}),
     },
     credentials,
   );

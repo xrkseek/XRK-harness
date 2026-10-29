@@ -20,3 +20,14 @@ export const en = {
   'toggle.collapse': 'Collapse sidebar',
   'utilities.label': 'Shortcuts',
 } satisfies Record<SidebarKey, string>
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'session.new': '新しいセッション',
+  'session.new.label': '新しいセッション',
+  'toggle.open': 'サイドバーを開く',
+  'toggle.collapse': 'サイドバーを折りたたむ',
+  'utilities.label': 'ショートカット',
+} as const satisfies Record<SidebarKey, string>
+
+

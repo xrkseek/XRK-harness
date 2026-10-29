@@ -64,7 +64,7 @@ export interface AutoReviewToolPreOptions extends Omit<AutoReviewOptions, "produ
   /** Live classifier product (Face Settings URL + Credentials token). */
   readonly product?: () => AutoReviewClassifierOptions["product"] | undefined;
   /** @deprecated Ask UI localizes via displayReason en/zh; audit reason stays English. */
-  readonly locale?: () => "zh" | "en" | undefined;
+  readonly locale?: () => "zh" | "en" | "ja" | undefined;
   /**
    * How classifier `deny` should land: `deny` = final (structured error);
    * `ask` = Face approval (DSH under session approval ask). Default `ask`.

@@ -48,10 +48,15 @@ export function MenuView({ menu, headers, onPick, onHighlight, onCrumb, onDismis
   // when the composer grows).
   const maxHeight = useAnchoredMaxHeight(listRef, MAX_HEIGHT, state)
   const highlight = state.open ? state.highlight : null
-  // Focus stays in the textarea (combobox pattern), so the browser never
-  // scrolls the active option into view on keyboard moves — do it here.
+  // Pointer hover syncs the keyboard highlight but must not yank the list;
+  // only keyboard / store-driven moves scroll the active option into view.
+  const fromPointerRef = useRef(false)
   useEffect(() => {
     if (highlight === null) return
+    if (fromPointerRef.current) {
+      fromPointerRef.current = false
+      return
+    }
     document.getElementById(optionId(highlight.source, highlight.index))
       ?.scrollIntoView({ block: 'nearest' })
   }, [highlight])
@@ -131,7 +136,11 @@ export function MenuView({ menu, headers, onPick, onHighlight, onCrumb, onDismis
                         role="option"
                         aria-selected={active}
                         className={clsx(css.item, active && css.active)}
-                        onMouseEnter={() => { onHighlight(group.source, index) }}
+                        onMouseEnter={() => {
+                          if (active) return
+                          fromPointerRef.current = true
+                          onHighlight(group.source, index)
+                        }}
                         // mousedown, not click: the textarea keeps focus (combobox
                         // pattern) — preventing default stops the focus steal, and the
                         // pick runs before any blur-driven teardown.

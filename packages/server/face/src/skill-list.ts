@@ -1,6 +1,8 @@
 /**
- * skill.list — Face RPC over workspace skill roots
- * (`.xrk` / `.claude` / `.cursor` / `.agents` / `.codex` `/skills`, plus user home).
+ * skill.list — Face RPC over standing catalog roots
+ * (`standingCatalogSkillDirCandidates`: product-home `{XRK_HOME}/skills` +
+ * workspace vendors; optional other home vendors). Same roots as inject
+ * catalog and the `skill` tool.
  * Also lists standing inject documents (AGENTS.md · …) and the session cwd label.
  * Missing roots are skipped; nothing is created.
  */
@@ -8,7 +10,11 @@
 import path from "node:path";
 import type { FaceRuntime } from "./context.js";
 import type { FaceRpcResult } from "./types.js";
-import { listSkillsFromWorkspace, type SkillSummary } from "@xrkseek/workspace";
+import {
+  listSkillsFromWorkspace,
+  listStandingCatalogSkills,
+  type SkillSummary,
+} from "@xrkseek/workspace";
 import {
   classifySkillSource,
   type SkillListSource,
@@ -86,9 +92,11 @@ export async function skillList(
   }
   const root = path.resolve(resolveSessionCwd(runtime, sessionId));
   const [skills, standing] = await Promise.all([
-    listSkillsFromWorkspace(root).then((rows) =>
-      rows.map((s) => toEntry(s, root)),
-    ),
+    listStandingCatalogSkills({
+      workspaceRoot: root,
+      productDir: path.join(root, ".xrk"),
+      audience: "user",
+    }).then((rows) => rows.map((s) => toEntry(s, root))),
     listInjectDocuments(root),
   ]);
   // Session turn-start fragments first so badge / permission are visible.

@@ -55,6 +55,25 @@ describe('deriveGroups', () => {
     expect(groups[1]!.sessions.map(session => session.id)).toEqual([sid('loose')])
   })
 
+  it('keeps other-pane Sessions out of Ungrouped via excludeFromUngrouped', () => {
+    const sessions = list(
+      summary('project-owned', 2, '/projects/a'),
+      summary('agent-owned', 3, '/agents/b'),
+      summary('loose', 4, '/other'),
+    )
+    const groups = deriveGroups(
+      sessions,
+      [workspace('agent', ['agent-owned'])],
+      noArchive,
+      {
+        expandedGroups: [UNGROUPED_KEY, 'agent'],
+        excludeFromUngrouped: new Set([sid('project-owned')]),
+      },
+    )
+    expect(groups.map(group => group.key)).toEqual(['agent', UNGROUPED_KEY])
+    expect(groups[1]!.sessions.map(session => session.id)).toEqual([sid('loose')])
+  })
+
   it('applies stored Ungrouped order and appends new loose Sessions by recency', () => {
     const sessions = list(summary('one', 3), summary('two', 2), summary('new', 4))
     const groups = deriveGroups(

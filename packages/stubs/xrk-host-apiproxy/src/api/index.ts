@@ -49,6 +49,7 @@ export interface ApiProxy {
 export type {
   HistoryEntry, ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   ModelReasoningEffort, ModelSelection, PromptContentPart, QueueAction, SessionModels,
+  SessionEventWindowRow, SessionEventWindowValue,
   SessionListMetadata, SessionProjectionsBlock, SessionSearchItem, SessionsApi, SessionSummary,
   SessionToolEntry, SessionToolsValue, SessionToolsDisclosure, SessionToolSurface,
   TurnOutlineEntry, WorkspaceChangesProjected,
@@ -66,7 +67,17 @@ export type {
   InjectDocumentKind, SkillReadValue, SkillReadSkillValue, SkillReadDocumentValue,
 } from './skills.ts'
 export type { AgentPresetsApi, AgentPresetEntry } from './agent-presets.ts'
-export type { EventsApi, MuxFrame, HostFrame, QueuedInboxItem, ToolCallView, ToolEventView, ToolResultView } from './events.ts'
+export type {
+  BandNode,
+  BandSnapshot,
+  EventsApi,
+  MuxFrame,
+  HostFrame,
+  QueuedInboxItem,
+  ToolCallView,
+  ToolEventView,
+  ToolResultView,
+} from './events.ts'
 export type { GoalsApi, GoalId, GoalRef } from './goals.ts'
 export type { SettingsApi, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView } from './settings.ts'
 export type { CredentialsApi, CredentialView } from './credentials.ts'

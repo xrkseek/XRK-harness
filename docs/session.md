@@ -30,7 +30,13 @@ JSONL 导出：`toJSONL` / `fromJSONL` / `parseJSONL`；ZIP 导出用 `toPackedJ
 
 发模型前硬闸：`assertToolCallsSettled`（按 id 结算）+ `assertAssistantToolCallAdjacency`（`assistant(toolCalls)` 后必须紧跟对应 `tool`，禁止双 assistant 夹断；结算通过仍可能邻接失败 → 本地抛错，不再打到供应商 400）。
 
-**耐久屏障**：`append` 先进入进程内 `pending`。自动落库触发点：（1）耐久边界事件（`user/message` · `turn/*` · `command/*` · `prompt/*`）经 `queueMicrotask`；（2）**该会话**自己的待写条数达到 64；（3）Host 在 drain idle / `stop`（以及搜索、驱逐）调用显式 `store.flush()`。自动落库**只写触发它的那个会话**。Host drain idle 调用 `flush(sessionId)`；驱逐、删除、归档搬移、`replacePrefix` 同样只落相关会话。`session.search` 读已提交的 FTS，并在内存里匹配尚未落盘的 `pending`，不为搜索提交其它会话。无参 `flush()`（关闭、整库 VACUUM 前）仍一次写完队列里所有会话。工具副作用在事件进日志之后执行；未落到 SQLite 的读路径上磁盘可能落后于内存。
+**耐久屏障**：`append` 先进入进程内 `pending`。自动落库触发点：（1）耐久边界事件（`user/message` · `turn/*` · `command/*` · `prompt/*`）经 `queueMicrotask`；（2）**该会话**自己的待写条数达到 64；（3）Host 在 drain idle / `stop`（以及搜索、驱逐）调用显式 `store.flush()`；（4）**agent-loop 语义检查点**：每次发起 LLM 请求前、以及写入全部 `tool/call` 之后 / 工具体执行前，对当前会话 `flush(sessionId)`（对照 DSH `llm/stream` · `tools/execute`）。自动落库**只写触发它的那个会话**。Host drain idle 调用 `flush(sessionId)`；驱逐、删除、归档搬移、`replacePrefix` 同样只落相关会话。`session.search` 读已提交的 FTS，并在内存里匹配尚未落盘的 `pending`，不为搜索提交其它会话。无参 `flush()`（关闭、整库 VACUUM 前）仍一次写完队列里所有会话。工具副作用在事件进日志之后执行；未落到 SQLite 的读路径上磁盘可能落后于内存。
+
+**冷观察释放**：持久化仓提供 `releaseResident(sessionId)`——闲置（无未闭合 turn）会话可在 `session.history` / `session.search` 水合后立刻卸下常驻日志；开着的 turn 仍钉住。搜索最多水合 **48** 个候选会话再截断（`hasMore`）。后台 microtask flush 失败会**暂停自动排空**并累计 `flushFailureReport()`；显式 `flush()` / `close()` 解除暂停。
+
+**写入无损 JSON**：`append` / `seed` / `replacePrefix` 在进驻留表前做 DSH 式无损快照（拒 Map/Set/Date/BigInt/-0/循环等）；失败不落盘。
+
+**Fork 继承边界**：`forkSession` 在子日志末尾追加 `session/end-seed{inherited:true}`；若前缀仍有未闭合 turn，先用 `turn/end{reason:{kind:'forked'}}` 配平。
 
 **同步 flush 代价**：落库事务仍是调用线程上的同步 `BEGIN IMMEDIATE` + 插入 + `COMMIT`，会冻结同一 Host 事件循环（Face mux · Ping · 其它会话的 drain）。按会话自动 flush 避免「会话 A 的边界把会话 B 尚未到边界的模型输出一并写盘」。显式 `flush()` 与本会话满 64 的同步提交仍是设计内阻塞；热路径勿在一次事件循环里堆出超大待写批次。
 
@@ -70,7 +76,13 @@ JSONL export uses `toJSONL` / `fromJSONL` / `parseJSONL`. ZIP export uses `toPac
 
 Pre-LLM hard gates: `assertToolCallsSettled` (settle by id) + `assertAssistantToolCallAdjacency` (`assistant(toolCalls)` must be followed immediately by matching `tool` messages — a second assistant in between fails locally even if ids later settle, instead of an upstream HTTP 400).
 
-**Durability barrier**: `append` first joins an in-process `pending` queue. Automatic persistence fires on (1) durability-boundary events (`user/message` · `turn/*` · `command/*` · `prompt/*`) via `queueMicrotask`, (2) **that session's** own pending count reaching 64, or (3) Host calling explicit `store.flush()` on drain idle / `stop` (also search and eviction). Automatic flushes write **only the session that tripped them**. Host drain idle calls `flush(sessionId)`; eviction, delete, archive move, and `replacePrefix` likewise commit only the affected session. `session.search` reads committed FTS and matches not-yet-flushed `pending` in memory, so a search does not commit other sessions. A no-arg `flush()` (close, before whole-DB VACUUM) still drains every session in the queue. Tool side effects run after the call is logged; without a SQLite write, disk may lag memory on a read path.
+**Durability barrier**: `append` first joins an in-process `pending` queue. Automatic persistence fires on (1) durability-boundary events (`user/message` · `turn/*` · `command/*` · `prompt/*`) via `queueMicrotask`, (2) **that session's** own pending count reaching 64, (3) Host calling explicit `store.flush()` on drain idle / `stop` (also search and eviction), or (4) **agent-loop semantic checkpoints**: before each LLM request and after every `tool/call` is logged / before tool bodies run (`flush(sessionId)`; same idea as DSH `llm/stream` · `tools/execute`). Automatic flushes write **only the session that tripped them**. Host drain idle calls `flush(sessionId)`; eviction, delete, archive move, and `replacePrefix` likewise commit only the affected session. `session.search` reads committed FTS and matches not-yet-flushed `pending` in memory, so a search does not commit other sessions. A no-arg `flush()` (close, before whole-DB VACUUM) still drains every session in the queue. Tool side effects run after the call is logged; without a SQLite write, disk may lag memory on a read path.
+
+**Cold release**: the persistent store exposes `releaseResident(sessionId)` — idle sessions (no open turn) may drop their resident log right after `session.history` / `session.search` hydrate; open turns stay pinned. Search hydrates at most **48** candidates before truncating (`hasMore`). A failed background microtask flush **pauses auto-drain** and increments `flushFailureReport()`; an explicit `flush()` / `close()` clears the pause.
+
+**Lossless JSON writes**: `append` / `seed` / `replacePrefix` take a DSH-style lossless snapshot before residency (reject Map/Set/Date/BigInt/-0/cycles, …); failures never hit disk.
+
+**Fork inheritance boundary**: `forkSession` appends `session/end-seed{inherited:true}` at the child log end; any still-open turn in the prefix is closed with `turn/end{reason:{kind:'forked'}}` first.
 
 **Synchronous flush cost**: the commit is still a sync `BEGIN IMMEDIATE` + inserts + `COMMIT` on the calling thread and freezes the shared Host event loop (Face mux · Ping · other sessions' drains). Per-session automatic flush keeps session A's boundary from forcing session B's still-interior model output into the same commit. Explicit `flush()` and a sync commit when that session hits 64 remain by-design stalls — hot paths must not pile a huge pending batch into one event-loop turn.
 

@@ -21,7 +21,7 @@ import { AppearanceRow } from './AppearanceRow.tsx'
 import type { FontSizeRowInjected } from './FontSizeRow.tsx'
 import { FontSizeRow } from './FontSizeRow.tsx'
 import { createAppearanceRowStore, createFontSizeRowStore } from './settings-store.ts'
-import { en, zh, type ThemeKey } from './locales.ts'
+import { en, ja, zh, type ThemeKey } from './locales.ts'
 import { installIconSprite, type IconReplacements } from './icon-sprite.ts'
 import {
   DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN,
@@ -522,7 +522,7 @@ export function apply(ctx: ClientContext): void {
   // variables resolve at each use site instead of being baked into the markup).
   installIconSprite(ctx, theme.getTheme().active.icons)
 
-  ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en }), 'ui-theme: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en, ja }), 'ui-theme: settings row dictionaries')
 
   const store = createAppearanceRowStore()
   let bound: BoundActions<typeof store> | undefined

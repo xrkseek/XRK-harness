@@ -7,9 +7,8 @@
  * limited to what XRK's renderer can actually honour — a flag nothing reads
  * would be a setting that lies about what it does.
  *
- * Four points on the fold axis (low → high detail):
- * - compact: open while tools run (「过程」+ live shimmer); fold when the burst settles
- * - standard: same fold timing; open chrome keeps tool-name taxonomy
+ * Three points on the fold axis (low → high detail):
+ * - standard: open while tools run (「过程」+ live shimmer); fold when the burst settles
  * - detailed: keep the live run open; fold when the Turn ends
  * - verbose: no grouping and no auto-fold
  *
@@ -51,7 +50,7 @@ export interface ChatPresentationPolicy {
    * Whether auto-fold is allowed at all.
    *
    * Derived from {@link foldWhen}; kept so older call sites can still gate on a
-   * boolean without learning the four-point axis.
+   * boolean without learning the foldWhen axis.
    */
   readonly foldCompletedTurns: boolean
   /** When a grouped run latches closed. */
@@ -71,17 +70,6 @@ export interface ChatPresentationPolicy {
 }
 
 const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
-  compact: {
-    mode: 'compact',
-    // Same timing as standard: open while tools run so「过程」+ live tool
-    // stay visible; fold to the activity line once the burst settles.
-    foldWhen: 'process',
-    foldCompletedTurns: true,
-    stepGrouping: 'collapsed',
-    // Quiet settled open chrome (step counts); folded title is always activity.
-    detailTitles: false,
-    liveProcessDetail: true,
-  },
   standard: {
     mode: 'standard',
     foldWhen: 'process',

@@ -3,6 +3,7 @@
  * as model-visible `user/message` payloads (not system workspaceBlocks).
  */
 import { createHash } from "node:crypto";
+import path from "node:path";
 import type {
   SessionEvent,
   UserMessageSource,
@@ -38,6 +39,47 @@ export function budgetEventsToTruncations(
   }));
 }
 
+function underRoot(dir: string, root: string): boolean {
+  const resolved = path.resolve(dir);
+  const base = path.resolve(root);
+  return (
+    resolved === base ||
+    resolved.startsWith(base + path.sep) ||
+    resolved.replace(/\\/g, "/").startsWith(base.replace(/\\/g, "/") + "/")
+  );
+}
+
+/**
+ * Pack order before budget clip (progressive catalog — keep head, truncate tail):
+ * 0. 公文包 / preferred dirs (干员 · 其子会话)
+ * 1. workspace skills + product seed `xrk-*`
+ * 2. other global / home installs
+ *
+ * No `skill_search` tool — disclosure is this catalog → `skill` loads body.
+ * (`tool_search` is for deferred tools, not skills.)
+ */
+export function orderSkillsForCatalogBudget(
+  skills: readonly SkillSummary[],
+  workspaceRoot?: string,
+  preferredSkillDirs?: readonly string[],
+): SkillSummary[] {
+  const ws = workspaceRoot ? path.resolve(workspaceRoot) : undefined;
+  const preferred = (preferredSkillDirs ?? []).map((d) => path.resolve(d));
+  const underPreferred = (dir: string): boolean =>
+    preferred.some((root) => underRoot(dir, root));
+  const underWs = (dir: string): boolean => (ws ? underRoot(dir, ws) : false);
+  const tier = (s: SkillSummary): number => {
+    if (preferred.length > 0 && underPreferred(s.directory)) return 0;
+    if (underWs(s.directory) || s.name.startsWith("xrk-")) return 1;
+    return 2;
+  };
+  return [...skills].sort((a, b) => {
+    const d = tier(a) - tier(b);
+    if (d !== 0) return d;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 /** DSH-shaped model-facing skill catalog (progressive disclosure). */
 export function formatAvailableSkillsXml(
   skills: readonly SkillSummary[],
@@ -51,7 +93,7 @@ export function formatAvailableSkillsXml(
     "<available_skills>",
     ...lines,
     "</available_skills>",
-    "Use the skill tool with the exact skill name to load full instructions before acting on a matching task. No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
+    "Progressive skills: catalog = name+blurb; call `skill` with the exact name for the body (no skill_search — tool_search is for deferred tools). Head prefers 公文包 (when present), then workspace + xrk-* seeds; globals may be truncated — then shell-list Product home `skills/*/SKILL.md` / workspace `.agents/skills/`.",
     "</system-reminder>",
   ].join("\n");
 }
@@ -93,13 +135,20 @@ export function buildSkillCatalogPayload(
   budget: InjectBudget,
   options?: {
     readonly update?: boolean;
+    readonly workspaceRoot?: string;
+    /** 干员公文包 roots — listed ahead of workspace when truncating. */
+    readonly preferredSkillDirs?: readonly string[];
     readonly selection?: {
       readonly mode?: SkillSelectMode;
       readonly query?: string;
     };
   },
 ): DurableSkillCatalogPayload | undefined {
-  const listed = skills.filter((s) => s.modelInvocable);
+  const listed = orderSkillsForCatalogBudget(
+    skills.filter((s) => s.modelInvocable),
+    options?.workspaceRoot,
+    options?.preferredSkillDirs,
+  );
   if (listed.length === 0) return undefined;
   const mode = options?.selection?.mode ?? "truncate";
   const query = options?.selection?.query;
@@ -109,7 +158,7 @@ export function buildSkillCatalogPayload(
     const packed = selectSkillsForBudget(listed, budget.left, query);
     const full = formatAvailableSkillsXml(packed.selected);
     const content = clipToBudget("skills", full, budget, {
-      suffix: "\n[skill catalog truncated] No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
+      suffix: "\n[skill catalog truncated] Prefer `skill` by exact name. Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` (公文包 / xrk-* / workspace kept first).",
     });
     if (!content.trim()) return undefined;
     const included = listedForClippedCatalog(packed.selected, content);
@@ -141,7 +190,7 @@ export function buildSkillCatalogPayload(
       : undefined;
   const full = formatAvailableSkillsXml(listed);
   const content = clipToBudget("skills", full, budget, {
-    suffix: "\n[skill catalog truncated] No listed skill matches your task? The catalog can be budget-truncated - list $XRK_HOME/skills/*/SKILL.md and .agents/skills/ with the shell before improvising.",
+    suffix: "\n[skill catalog truncated] Prefer `skill` by exact name. Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` (公文包 / xrk-* / workspace kept first).",
   });
   if (!content.trim()) return undefined;
   const included = listedForClippedCatalog(listed, content);

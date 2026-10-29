@@ -67,6 +67,96 @@ export interface AgentRunResult {
   readonly steerBatch?: boolean;
 }
 
+/**
+ * One extra slash command a plugin host contributes to the `/` panel.
+ *
+ * Deliberately just a name and a description: the list is drawn without running
+ * anything, and a plugin host that wants richer metadata can put it in the
+ * description.
+ */
+export interface PluginCommandDescriptor {
+  readonly name: string;
+  readonly description: string;
+  /** String hint for what goes after the name, when the plugin declared one. */
+  readonly input?: { readonly hint: string };
+}
+
+/** What a plugin-contributed command answers with. */
+export interface PluginCommandResult {
+  readonly kind: "success" | "error";
+  readonly text?: string;
+}
+
+/** A settled plugin command: its lifecycle id plus what it answered. */
+export interface PluginCommandExecution {
+  /**
+   * Pairing id of the `command/run` / `command/done` events the source
+   * appended for this invocation.
+   */
+  readonly commandId: string;
+  readonly result: PluginCommandResult;
+}
+
+/**
+ * Session-scoped command source attached by whatever wrapped the handle.
+ *
+ * Claude Code mods (`packages/claude-code-mods`) are the only producer today:
+ * a plugin's `$.command.register` lands in the bridge's own table, and this is
+ * how Face finds it. Face asks **last** — after builtins and process plugins —
+ * so a real command always wins a name a plugin happens to reuse.
+ *
+ * Declared here rather than in the plugin package so Face can consume it
+ * without depending on the mods bridge (or on Cordis).
+ */
+export interface PluginCommandSource {
+  list(): readonly PluginCommandDescriptor[];
+  /**
+   * Run one `/name args` line; `undefined` when the name is not this source's.
+   *
+   * The source appends the `command/run` + `command/done` pair itself and
+   * reports its id, so a caller records nothing twice and a plugin-triggered
+   * run lands in the session log exactly like a typed one.
+   */
+  execute(
+    line: string,
+    signal?: AbortSignal,
+  ): Promise<PluginCommandExecution | undefined>;
+}
+
+/**
+ * Serialized Claude Code mods AbovePrompt band (structural — Face must not
+ * depend on `@xrkseek/claude-code-mods`). Callbacks are host-side action ids.
+ */
+export type PluginBandNode =
+  | string
+  | {
+      readonly type: "Box" | "Text" | "Button";
+      readonly props: Readonly<Record<string, string | number | boolean>>;
+      readonly children: readonly PluginBandNode[];
+      readonly actionId?: string;
+    };
+
+/** One drawn generation of the session's plugin band above the prompt. */
+export interface PluginBandSnapshot {
+  readonly generation: number;
+  readonly tree: readonly PluginBandNode[] | null;
+}
+
+/**
+ * Session-scoped band source attached by the mods wrapper.
+ *
+ * Face watches snapshots and forwards button presses; absent when no mods
+ * runtime is live for the agent.
+ */
+export interface PluginBandSource {
+  current(): Promise<PluginBandSnapshot>;
+  watch(signal: AbortSignal): AsyncIterable<PluginBandSnapshot>;
+  press(
+    generation: number,
+    actionId: string,
+  ): Promise<PluginBandSnapshot>;
+}
+
 export interface AgentHandle {
   /**
    * Continue on the same session log (ADR-0003).
@@ -128,6 +218,16 @@ export interface AgentHandle {
   compactNow?(
     signal?: AbortSignal,
   ): Promise<CompactNowResult>;
+  /**
+   * Extra slash commands contributed by the host that wrapped this handle.
+   * Absent when nothing wraps it — Face then lists only its own commands.
+   */
+  readonly pluginCommands?: PluginCommandSource;
+  /**
+   * Claude Code mods AbovePrompt band. Absent when no mods runtime is live —
+   * Face then emits no `session/band` frames.
+   */
+  readonly pluginBand?: PluginBandSource;
 }
 
 export interface CompactNowResult {

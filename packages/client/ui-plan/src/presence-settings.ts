@@ -77,6 +77,221 @@ export const PRESENCE_STICKERS_FIELD = 'stickers'
 export const PRESENCE_KIT_HAT_FIELD = 'kitHat'
 export const PRESENCE_KIT_GLASSES_FIELD = 'kitGlasses'
 export const PRESENCE_KIT_HELD_FIELD = 'kitHeld'
+/** Operator (Boss) work mood — emotion-ball id; Overview left seat. */
+export const PRESENCE_MOOD_ID_FIELD = 'moodId'
+export const PRESENCE_STATUS_LINE_FIELD = 'statusLine'
+export const PRESENCE_BOSS_NICKNAME_FIELD = 'bossNickname'
+export const PRESENCE_MOOD_AT_FIELD = 'moodAt'
+/** JSON string[] of tip chips users can pick on Overview (Plugins card edits). */
+export const PRESENCE_STATUS_PRESETS_FIELD = 'statusPresets'
+/**
+ * Seat-title prefs live in `ui-presence` for Host co-location with Boss mood,
+ * but they are NOT gated by the presence-ball appearance switch.
+ */
+export const PRESENCE_TITLE_SCHEME_FIELD = 'titleScheme'
+export const PRESENCE_TITLE_BOSS_FIELD = 'titleBoss'
+export const PRESENCE_TITLE_MANAGER_FIELD = 'titleManager'
+export const PRESENCE_TITLE_AGENT_FIELD = 'titleAgent'
+export const DEFAULT_PRESENCE_MOOD_ID = '16'
+export const DEFAULT_PRESENCE_STATUS_LINE = ''
+export const DEFAULT_PRESENCE_BOSS_NICKNAME = ''
+export const DEFAULT_PRESENCE_MOOD_AT = 0
+export const PRESENCE_BOSS_NICKNAME_MAX = 24
+export const PRESENCE_SEAT_TITLE_MAX = 24
+
+/** Classic three-tier seat-title presets (locale supplies the words). */
+export const PRESENCE_TITLE_SCHEMES = [
+  'office',
+  'corp',
+  'crew',
+  'guild',
+] as const
+
+export type PresenceTitleSchemeId = (typeof PRESENCE_TITLE_SCHEMES)[number]
+export type PresenceTitleLocale = 'zh' | 'en' | 'ja'
+
+export type PresenceSeatTitles = {
+  readonly boss: string
+  readonly manager: string
+  readonly agent: string
+}
+
+export const DEFAULT_PRESENCE_TITLE_SCHEME: PresenceTitleSchemeId = 'office'
+
+const PRESENCE_SCHEME_TITLES: Readonly<
+  Record<PresenceTitleSchemeId, Readonly<Record<PresenceTitleLocale, PresenceSeatTitles>>>
+> = {
+  office: {
+    zh: { boss: '老板', manager: '经理', agent: '干员' },
+    en: { boss: 'Boss', manager: 'Manager', agent: 'Agent' },
+    ja: { boss: 'ボス', manager: 'マネージャー', agent: 'エージェント' },
+  },
+  corp: {
+    zh: { boss: '总裁', manager: '主管', agent: '专员' },
+    en: { boss: 'CEO', manager: 'Lead', agent: 'Specialist' },
+    ja: { boss: '社長', manager: '課長', agent: '担当' },
+  },
+  crew: {
+    zh: { boss: '船长', manager: '大副', agent: '水手' },
+    en: { boss: 'Captain', manager: 'First mate', agent: 'Crew' },
+    ja: { boss: '船長', manager: '一等航海士', agent: '船員' },
+  },
+  guild: {
+    zh: { boss: '会长', manager: '干部', agent: '成员' },
+    en: { boss: 'Guild master', manager: 'Officer', agent: 'Member' },
+    ja: { boss: '会長', manager: '幹部', agent: 'メンバー' },
+  },
+}
+
+export const DEFAULT_PRESENCE_SEAT_TITLES: PresenceSeatTitles =
+  PRESENCE_SCHEME_TITLES[DEFAULT_PRESENCE_TITLE_SCHEME].zh
+
+export function isPresenceTitleSchemeId(raw: unknown): raw is PresenceTitleSchemeId {
+  return typeof raw === 'string'
+    && (PRESENCE_TITLE_SCHEMES as readonly string[]).includes(raw)
+}
+
+/** Legacy `en` preset → office (words follow UI locale). */
+export function parseTitleScheme(raw: unknown): PresenceTitleSchemeId {
+  if (raw === 'en') return 'office'
+  return isPresenceTitleSchemeId(raw) ? raw : DEFAULT_PRESENCE_TITLE_SCHEME
+}
+
+export function parseTitleLocale(raw: unknown): PresenceTitleLocale {
+  return raw === 'en' || raw === 'ja' ? raw : 'zh'
+}
+
+export function seatTitlesForScheme(
+  scheme: PresenceTitleSchemeId,
+  locale: PresenceTitleLocale = 'zh',
+): PresenceSeatTitles {
+  return PRESENCE_SCHEME_TITLES[scheme][locale]
+}
+
+export function parseSeatTitle(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  return raw.trim().slice(0, PRESENCE_SEAT_TITLE_MAX)
+}
+
+/** Custom fields win (any language); empty → preset in the given UI locale. */
+export function resolveSeatTitles(input: {
+  readonly titleScheme?: unknown
+  readonly titleBoss?: unknown
+  readonly titleManager?: unknown
+  readonly titleAgent?: unknown
+  readonly locale?: unknown
+}): PresenceSeatTitles {
+  const defaults = seatTitlesForScheme(
+    parseTitleScheme(input.titleScheme),
+    parseTitleLocale(input.locale),
+  )
+  return {
+    boss: parseSeatTitle(input.titleBoss) || defaults.boss,
+    manager: parseSeatTitle(input.titleManager) || defaults.manager,
+    agent: parseSeatTitle(input.titleAgent) || defaults.agent,
+  }
+}
+
+/** True when the three live titles still match a built-in locale variant. */
+export function matchTitleScheme(
+  titles: PresenceSeatTitles,
+): PresenceTitleSchemeId | undefined {
+  for (const id of PRESENCE_TITLE_SCHEMES) {
+    for (const locale of ['zh', 'en', 'ja'] as const) {
+      const row = PRESENCE_SCHEME_TITLES[id][locale]
+      if (
+        row.boss === titles.boss
+        && row.manager === titles.manager
+        && row.agent === titles.agent
+      ) {
+        return id
+      }
+    }
+  }
+  return undefined
+}
+/** Factory Boss tip chips — Chinese product default (also Host legacy seed). */
+export const DEFAULT_STATUS_PRESETS_ZH: readonly string[] = [
+  '摸鱼中',
+  '认真打工',
+  '开会中',
+  '咖啡续命',
+  '别催我',
+  '灵感来了',
+  '等回复',
+  '深潜 debug',
+]
+
+/** Factory Boss tip chips for English UI. */
+export const DEFAULT_STATUS_PRESETS_EN: readonly string[] = [
+  'Slacking',
+  'Heads down',
+  'In a meeting',
+  'Coffee first',
+  "Don't ping",
+  'Idea spark',
+  'Waiting on reply',
+  'Deep debug',
+]
+
+/** Factory Boss tip chips for Japanese UI. */
+export const DEFAULT_STATUS_PRESETS_JA: readonly string[] = [
+  'サボり中',
+  '本気稼働',
+  '会議中',
+  'コーヒー補給',
+  '催促しないで',
+  'ひらめき中',
+  '返信待ち',
+  '深潜デバッグ',
+]
+
+/** @deprecated Prefer {@link DEFAULT_STATUS_PRESETS_ZH} / locale resolve. */
+export const DEFAULT_STATUS_PRESETS: readonly string[] = DEFAULT_STATUS_PRESETS_ZH
+
+function samePresetList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((tip, i) => tip === b[i])
+}
+
+/** True when the list is still an untouched factory set (any shipped language). */
+export function isFactoryStatusPresets(rows: readonly string[]): boolean {
+  return samePresetList(rows, DEFAULT_STATUS_PRESETS_ZH)
+    || samePresetList(rows, DEFAULT_STATUS_PRESETS_EN)
+    || samePresetList(rows, DEFAULT_STATUS_PRESETS_JA)
+}
+
+/**
+ * Resolve tip chips for the active UI language. Empty / factory lists follow
+ * locale; customized lists stay as the user wrote them.
+ */
+export function resolveStatusPresetsForLocale(
+  stored: readonly string[],
+  locale: 'zh' | 'en' | 'ja',
+): string[] {
+  if (stored.length === 0 || isFactoryStatusPresets(stored)) {
+    if (locale === 'en') return [...DEFAULT_STATUS_PRESETS_EN]
+    if (locale === 'ja') return [...DEFAULT_STATUS_PRESETS_JA]
+    return [...DEFAULT_STATUS_PRESETS_ZH]
+  }
+  return [...stored]
+}
+export const PRESENCE_STATUS_PRESETS_MAX = 16
+export const PRESENCE_STATUS_LINE_MAX = 80
+/** Quick moods on the Overview Boss sheet (subset of emotion catalog). */
+export const BOSS_QUICK_MOOD_IDS = [
+  '16',
+  '10',
+  '15',
+  '04',
+  '30',
+  '00',
+  '19',
+  '17',
+  '18',
+  '03',
+  '21',
+  '33',
+] as const
 /** data URL cap — same as Agent Team MEMBER_FACE_MAX. */
 export const PRESENCE_OVERLAY_MAX = 80_000
 export const PRESENCE_STICKERS_MAX = 24
@@ -218,6 +433,15 @@ export interface PresenceSettings {
   overlayGlasses: string
   overlayHeld: string
   stickers: string
+  moodId: string
+  statusLine: string
+  bossNickname: string
+  moodAt: number
+  statusPresets: string
+  titleScheme: PresenceTitleSchemeId
+  titleBoss: string
+  titleManager: string
+  titleAgent: string
 }
 
 export const PresenceSettingsSchema: z<PresenceSettings> = z.object({
@@ -232,7 +456,65 @@ export const PresenceSettingsSchema: z<PresenceSettings> = z.object({
   [PRESENCE_OVERLAY_GLASSES_FIELD]: z.string().default(''),
   [PRESENCE_OVERLAY_HELD_FIELD]: z.string().default(''),
   [PRESENCE_STICKERS_FIELD]: z.string().default('[]'),
+  [PRESENCE_MOOD_ID_FIELD]: z.string().default(DEFAULT_PRESENCE_MOOD_ID),
+  [PRESENCE_STATUS_LINE_FIELD]: z.string().default(DEFAULT_PRESENCE_STATUS_LINE),
+  [PRESENCE_BOSS_NICKNAME_FIELD]: z.string().default(DEFAULT_PRESENCE_BOSS_NICKNAME),
+  [PRESENCE_MOOD_AT_FIELD]: z.number().default(DEFAULT_PRESENCE_MOOD_AT),
+  /* Empty = locale factory chips (see resolveStatusPresetsForLocale). */
+  [PRESENCE_STATUS_PRESETS_FIELD]: z.string().default('[]'),
+  [PRESENCE_TITLE_SCHEME_FIELD]: z.union([...PRESENCE_TITLE_SCHEMES])
+    .default(DEFAULT_PRESENCE_TITLE_SCHEME),
+  /* Empty = follow scheme × UI locale; non-empty = free-form any language. */
+  [PRESENCE_TITLE_BOSS_FIELD]: z.string().default(''),
+  [PRESENCE_TITLE_MANAGER_FIELD]: z.string().default(''),
+  [PRESENCE_TITLE_AGENT_FIELD]: z.string().default(''),
 })
+
+/** Trim + cap Boss nickname for Settings / inject. */
+export function parseBossNickname(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_PRESENCE_BOSS_NICKNAME
+  return raw.trim().slice(0, PRESENCE_BOSS_NICKNAME_MAX)
+}
+
+/**
+ * Parse tip-chip list from Host `statusPresets` JSON.
+ * Empty / invalid → `[]` so the UI can pick locale factory chips via
+ * {@link resolveStatusPresetsForLocale}.
+ */
+export function parseStatusPresets(raw: unknown): string[] {
+  if (typeof raw !== 'string' || !raw.trim()) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    const out: string[] = []
+    for (const row of parsed) {
+      if (typeof row !== 'string') continue
+      const tip = row.trim().slice(0, PRESENCE_STATUS_LINE_MAX)
+      if (!tip || out.includes(tip)) continue
+      out.push(tip)
+      if (out.length >= PRESENCE_STATUS_PRESETS_MAX) break
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export function encodeStatusPresets(rows: readonly string[]): string {
+  return JSON.stringify(rows.slice(0, PRESENCE_STATUS_PRESETS_MAX))
+}
+
+/** Clamp Boss mood id; empty → default focus. */
+export function parseMoodId(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_PRESENCE_MOOD_ID
+  const id = raw.trim()
+  return id || DEFAULT_PRESENCE_MOOD_ID
+}
+
+export function parseStatusLine(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_PRESENCE_STATUS_LINE
+  return raw.trim().slice(0, PRESENCE_STATUS_LINE_MAX)
+}
 
 /** Canonical raster / SVG sticker data URLs (SVG-as-image; scripts do not run). */
 const OVERLAY_RE = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/i

@@ -1,5 +1,5 @@
 /**
- * Kernel boot-hint copy: progressive plugin counts + Host/Face phase labels (zh/en).
+ * Kernel boot-hint copy: progressive plugin counts + Host/Face phase labels (zh/en/ja).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -27,11 +27,17 @@ describe('resolveBootLang', () => {
       productLocaleId: 'en',
       desktopLocaleId: 'zh-CN',
     })).toBe('en')
+    expect(resolveBootLang({
+      productLocaleId: 'ja',
+      desktopLocaleId: 'en',
+    })).toBe('ja')
   })
 
   it('falls back through Desktop then navigator', () => {
     expect(resolveBootLang({ desktopLocaleId: 'zh-CN' })).toBe('zh')
+    expect(resolveBootLang({ desktopLocaleId: 'ja-JP' })).toBe('ja')
     expect(resolveBootLang({ navigatorLanguages: ['zh-Hans-CN', 'en'] })).toBe('zh')
+    expect(resolveBootLang({ navigatorLanguages: ['ja-JP'] })).toBe('ja')
     expect(resolveBootLang({ navigatorLanguages: ['fr-FR'] })).toBe('en')
   })
 })
@@ -98,6 +104,13 @@ describe('bootConnectionHint', () => {
     expect(bootConnectionHint('retry:halted', { lang: 'zh' })).toMatch(/Host 已停/)
     expect(bootSessionsHint('zh')).toBe('正在排队你的会话…')
     expect(bootFailedTitle('zh')).toBe('插件加载失败')
+  })
+
+  it('mirrors Japanese connection phases', () => {
+    expect(bootConnectionHint('handshake:describe', { lang: 'ja' })).toBe('Host に身元を確認しています…')
+    expect(bootHostPhaseHint('starting', 'ja')).toBe('Host を起こしています…')
+    expect(bootSessionsHint('ja')).toBe('セッションを並べています…')
+    expect(bootFailedTitle('ja')).toBe('プラグインの読み込みに失敗しました')
   })
 
   it('never says Starting Host after Fetch is attached', () => {

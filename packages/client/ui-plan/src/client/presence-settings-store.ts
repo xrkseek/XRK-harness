@@ -4,11 +4,17 @@ import {
   DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_ENABLED,
   DEFAULT_PRESENCE_KIT,
+  DEFAULT_PRESENCE_MOOD_AT,
+  DEFAULT_PRESENCE_MOOD_ID,
   DEFAULT_PRESENCE_SHAPE,
+  DEFAULT_PRESENCE_STATUS_LINE,
+  DEFAULT_PRESENCE_TITLE_SCHEME,
+  DEFAULT_STATUS_PRESETS,
   type PresenceColor,
   type PresenceKit,
   type PresenceShape,
   type PresenceSticker,
+  type PresenceTitleSchemeId,
 } from '../presence-settings.ts'
 
 export interface PresencePrefsRowState {
@@ -23,6 +29,14 @@ export interface PresencePrefsRowState {
   overlayGlasses: string
   overlayHeld: string
   stickers: readonly PresenceSticker[]
+  moodId: string
+  statusLine: string
+  moodAt: number
+  statusPresets: readonly string[]
+  titleScheme: PresenceTitleSchemeId
+  titleBoss: string
+  titleManager: string
+  titleAgent: string
   revision: number
 }
 
@@ -40,6 +54,14 @@ type PresencePrefsRowActions = {
     overlayGlasses: string,
     overlayHeld: string,
     stickers: readonly PresenceSticker[],
+    moodId: string,
+    statusLine: string,
+    moodAt: number,
+    statusPresets: readonly string[],
+    titleScheme: PresenceTitleSchemeId,
+    titleBoss: string,
+    titleManager: string,
+    titleAgent: string,
     revision: number,
   ) => void
 }
@@ -62,6 +84,14 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
       overlayGlasses: '',
       overlayHeld: '',
       stickers: [],
+      moodId: DEFAULT_PRESENCE_MOOD_ID,
+      statusLine: DEFAULT_PRESENCE_STATUS_LINE,
+      moodAt: DEFAULT_PRESENCE_MOOD_AT,
+      statusPresets: [...DEFAULT_STATUS_PRESETS],
+      titleScheme: DEFAULT_PRESENCE_TITLE_SCHEME,
+      titleBoss: '',
+      titleManager: '',
+      titleAgent: '',
       revision: -1,
     }),
     actions: {
@@ -78,6 +108,14 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
         overlayGlasses,
         overlayHeld,
         stickers,
+        moodId,
+        statusLine,
+        moodAt,
+        statusPresets,
+        titleScheme,
+        titleBoss,
+        titleManager,
+        titleAgent,
         revision,
       ) => {
         if (revision <= d.revision) return
@@ -92,6 +130,14 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
         d.overlayGlasses = overlayGlasses
         d.overlayHeld = overlayHeld
         d.stickers = stickers
+        d.moodId = moodId
+        d.statusLine = statusLine
+        d.moodAt = moodAt
+        d.statusPresets = statusPresets
+        d.titleScheme = titleScheme
+        d.titleBoss = titleBoss
+        d.titleManager = titleManager
+        d.titleAgent = titleAgent
         d.revision = revision
       },
     },

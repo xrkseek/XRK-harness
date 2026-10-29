@@ -15,6 +15,14 @@
     color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
 }
 
+/* Sidebar workspace row glyph (replaces folder icon on agent-home). */
+.stage[data-compact] {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: transparent;
+}
+
 .stage[data-empty] {
   display: grid;
   place-items: center;

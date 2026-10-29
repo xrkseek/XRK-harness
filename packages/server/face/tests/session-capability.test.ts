@@ -226,7 +226,7 @@ describe("session_capability", () => {
     expect(text).not.toContain(`skill: scout-notes @`);
     expect(text).toContain(`materials: ${materials}`);
     expect(text).not.toContain(`playbook: ${path.join(packHome, "playbook.md")}`);
-    expect(text).toContain("ask→human_face");
+    expect(text).toContain("ask→parent");
     expect(text).toContain("omitted:");
     expect(text).toContain("ask_user");
     expect(text).not.toMatch(/tool_surface: harness/);

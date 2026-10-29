@@ -115,17 +115,35 @@ export function formatSessionPolicyAnchor(
 }
 
 /**
+ * Model-facing product-data root (XRK_HOME / default ~/.xrk).
+ * Always inject beside Workspace root — orthogonal to badge / permission.
+ */
+export function formatProductHomeAnchor(productHome: string): string {
+  const abs = productHome.trim();
+  if (!abs) return "";
+  return [
+    "## Product home",
+    `\`${abs}\``,
+    "XRK-Harness product data root (settings, sessions, seeded skills, agent-homes, spill).",
+    "Not the project cwd. Default display alias `~/.xrk`; env `XRK_HOME` (or legacy `XRK_DSH_HOME` / `DSH_HOME`) overrides the resolved path above.",
+    "When listing seeded skills on disk, use this absolute path's `skills/` directory — do not guess `$XRK_HOME` in the shell unless that env is set.",
+  ].join("\n");
+}
+
+/**
  * Durable inject anchor: absolute workspace root (+ optional runtime surface).
  * @param root - workspace root path.
  * @param displayTitle - sidebar label (display-only).
  * @param surface - runtime surface; appends the `## Runtime surface` paragraph.
  * @param sessionPolicy - optional badge + permission paragraph.
+ * @param productHome - absolute product data root; appends `## Product home`.
  */
 export function formatWorkspaceRootAnchor(
   root: string,
   displayTitle?: string,
   surface?: RuntimeSurface,
   sessionPolicy?: SessionPolicyAnchor,
+  productHome?: string,
 ): string {
   const path = root.trim();
   if (!path) return "";
@@ -137,6 +155,8 @@ export function formatWorkspaceRootAnchor(
     "All relative tool paths resolve here. Shell tools default their cwd to this root — `pwd` / `Get-Location` must show this path, not the Host process directory.",
     "Do not search other drives for the project.",
   ];
+  const productBlock = formatProductHomeAnchor(productHome ?? "");
+  if (productBlock) lines.push("", productBlock);
   const surfaceBlock = formatRuntimeSurfaceAnchor(surface);
   if (surfaceBlock) lines.push("", surfaceBlock);
   const policyBlock = formatSessionPolicyAnchor(sessionPolicy);

@@ -22,10 +22,16 @@ const SAFETY_KINDS = new Set([
 
 const COMPACTION_REASONS = new Set(["auto", "overflow", "manual"]);
 
+/** Discriminator for loaders that may skip forward-compat rows. */
+export type SessionEventParseCode =
+  | "unknown-ignorable"
+  | "unknown-required";
+
 export class SessionEventParseError extends Error {
   constructor(
     message: string,
     readonly path: string = "",
+    readonly code?: SessionEventParseCode,
   ) {
     super(path ? `${path}: ${message}` : message);
     this.name = "SessionEventParseError";
@@ -527,11 +533,34 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       if (!isObject(reasonRaw) || typeof reasonRaw.kind !== "string") {
         throw new SessionEventParseError("reason must be an object with kind", type);
       }
+      const kind = reasonRaw.kind;
+      if (
+        kind !== "completed"
+        && kind !== "aborted"
+        && kind !== "error"
+        && kind !== "max-tokens"
+        && kind !== "interrupted"
+        && kind !== "blocked"
+        && kind !== "forked"
+      ) {
+        throw new SessionEventParseError(`unknown turn/end reason kind "${kind}"`, type);
+      }
       return {
         type,
         ts,
         turnId: reqString(value, "turnId", type),
         reason: reasonRaw as import("./session-events.js").TurnEndReason,
+      };
+    }
+    case "session/end-seed": {
+      const inherited = value.inherited;
+      if (inherited !== undefined && typeof inherited !== "boolean") {
+        throw new SessionEventParseError("inherited must be a boolean", type);
+      }
+      return {
+        type,
+        ts,
+        ...(inherited === true ? { inherited: true as const } : {}),
       };
     }
     case "step/start":
@@ -1567,7 +1596,18 @@ export function parseSessionEvent(value: unknown): SessionEvent {
       };
     }
     default:
-      throw new SessionEventParseError(`unknown event type "${type}"`);
+      if (value.ignorable === true) {
+        throw new SessionEventParseError(
+          `unknown ignorable event type "${type}"`,
+          type,
+          "unknown-ignorable",
+        );
+      }
+      throw new SessionEventParseError(
+        `unknown event type "${type}"`,
+        type,
+        "unknown-required",
+      );
   }
 }
 

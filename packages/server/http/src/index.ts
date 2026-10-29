@@ -11,6 +11,10 @@ import type { AgentHandle } from "@xrkseek/core-agent";
 import { NoPendingAdmitError, SessionBusyError, SessionSafetyLimitError, type SessionStore, lastSessionEvent, readSessionEvents, sessionEventCount, sessionEventsFrom } from "@xrkseek/core-session";
 import { tryServeWebStatic, type WebStaticOptions } from "./static.js";
 export {
+  ensureSunflowerFreePlugin,
+  SUNFLOWER_FREE_PLUGIN_ID,
+} from "./sunflower-free/ensure.js";
+export {
   createDshCompatPublicHandler,
   createTokenLedgerBridgeFromFace,
   createDshCompatHostPlugin,
@@ -42,6 +46,7 @@ export {
   recordAutoReviewFallback,
   readAutoReviewStats,
   createXrkWalletPort,
+  armAccessGateForListen,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
   injectMobileAccessShellIntoHtml,

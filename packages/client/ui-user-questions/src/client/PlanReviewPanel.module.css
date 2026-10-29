@@ -109,15 +109,24 @@
 
 @media (max-width: 720px) {
   .card {
+    max-height: min(70dvh, 560px);
     border-radius: 16px;
   }
 
   .body {
     padding: 10px 12px 4px;
+    overscroll-behavior: contain;
   }
 
   .footer {
     align-items: flex-end;
-    padding: 8px 12px 10px;
+    gap: 10px;
+    padding: 8px 12px max(10px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .actions :global(button),
+  .discuss {
+    min-height: 44px;
+    touch-action: manipulation;
   }
 }

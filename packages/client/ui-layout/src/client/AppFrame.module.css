@@ -272,20 +272,29 @@
   }
 }
 
-.phoneMenu {
+/* Phone floating chrome: sidebar drawer + Status sheet entry (header Status
+   toggle is hard to find beside long titles / tab overflow). */
+.phoneChrome {
   position: absolute;
-  top: max(8px, env(safe-area-inset-top, 0px));
-  left: max(8px, env(safe-area-inset-left, 0px));
+  top: max(6px, env(safe-area-inset-top, 0px));
+  left: max(6px, env(safe-area-inset-left, 0px));
   z-index: 24;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+}
+
+.phoneMenu,
+.phoneStatus {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   margin: 0;
   padding: 0;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--dsw-alias-button-floating-fill);
   color: var(--dsw-alias-text-primary);
   cursor: pointer;
@@ -294,21 +303,42 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-text-primary) 8%, transparent);
 }
 
-.phoneMenu:hover {
+/* Icon ball seat between menu and 概况 (PresenceDock portals in). */
+.phonePresenceSlot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.phoneStatus {
+  /* Match .phoneMenu — square icon control; label lives in aria/title. */
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.phoneMenu:hover,
+.phoneStatus:hover {
   background: var(--dsw-alias-button-floating-hover);
 }
 
-.phoneMenu:active {
+.phoneMenu:active,
+.phoneStatus:active {
   transform: scale(0.96);
 }
 
-.phoneMenu:focus-visible {
+.phoneMenu:focus-visible,
+.phoneStatus:focus-visible {
   outline: 2px solid var(--dsw-alias-text-primary);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .phoneMenu:active {
+  .phoneMenu:active,
+  .phoneStatus:active {
     transform: none;
   }
 }
@@ -328,4 +358,12 @@
   left: var(--xrkh-center-left, var(--xrk-layout-inset-sidebar, 0px));
   right: var(--xrkh-center-right, var(--xrk-layout-inset-details, 0px));
   width: auto;
+}
+
+/* Phone: keep the portaled strip inside the short viewport + home indicator. */
+:global(html[data-xrk-layout-phone] [data-dsh-bottom-panel]) {
+  max-height: min(40dvh, 280px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  overscroll-behavior: contain;
 }

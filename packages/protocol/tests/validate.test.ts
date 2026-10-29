@@ -693,6 +693,7 @@ describe("sessionEventJsonSchema", () => {
     const expected: SessionEvent["type"][] = [
       "turn/start",
       "turn/end",
+      "session/end-seed",
       "step/start",
       "step/end",
       "user/message",

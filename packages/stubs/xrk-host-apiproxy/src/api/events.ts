@@ -22,6 +22,25 @@ import type { WorkspaceView } from './workspace.ts'
 export type { ToolCallView, ToolResultView } from '@xrkseek/xrk-tools/presentation'
 
 /**
+ * One serialized Claude Code mods band node (Box / Text / Button or a text run).
+ * Button `onPress` is replaced by `actionId` the host holds.
+ */
+export type BandNode =
+  | string
+  | {
+      readonly type: 'Box' | 'Text' | 'Button'
+      readonly props: Readonly<Record<string, string | number | boolean>>
+      readonly children: readonly BandNode[]
+      readonly actionId?: string
+    }
+
+/** One drawn generation of the AbovePrompt band. */
+export interface BandSnapshot {
+  readonly generation: number
+  readonly tree: readonly BandNode[] | null
+}
+
+/**
  * Host-computed render intent accompanying a `tool/call` or `tool/result`
  * event. A pure derivation of args/result through the presenter registered at
  * emission time — never persisted (the session log carries only the event), so
@@ -103,6 +122,17 @@ export type MuxFrame =
    * express.
    */
   | { type: 'session/jobs'; sessionId: SessionId; jobs: JobView[] }
+  /**
+   * Claude Code mods AbovePrompt band: one drawn generation. `tree: null`
+   * clears a prior band. Sent as subscribe baseline when a snapshot exists,
+   * then on every redraw / button press.
+   */
+  | {
+      type: 'session/band'
+      sessionId: SessionId
+      generation: number
+      tree: readonly BandNode[] | null
+    }
   /**
    * One projection unit's finished value changed (session-projection RFC).
    * Live push state, never logged — replay recomputes on the host (the

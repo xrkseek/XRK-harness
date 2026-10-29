@@ -39,8 +39,19 @@ export interface MessageIconActionsProps {
    * icon row does not grow when the log write lands.
    */
   reserveEditDelete?: boolean | undefined
-  /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
+  /**
+   * This turn cannot be cut at all (still streaming, aborted mid-turn), so the
+   * branch control stays visible but unavailable.
+   */
   branchUnavailable?: boolean | undefined
+  /**
+   * Regenerate / restore rewrite the transcript tail in place, so they stay
+   * unavailable while later turns exist. Branch does not need the tail: the
+   * Host anchors a turn-cut fork on the first `turn/end` at or after the seq.
+   * Defaults to `branchUnavailable` so callers that gate everything at once
+   * keep their previous behaviour.
+   */
+  tipUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
   className?: string | undefined
   /**
@@ -63,9 +74,10 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, clock, onBranch, onRestore, onEdit, onRegenerate, onDelete, onWithdraw, reserveEditDelete = false, branchUnavailable = false, className,
+  text, time, clock, onBranch, onRestore, onEdit, onRegenerate, onDelete, onWithdraw, reserveEditDelete = false, branchUnavailable = false, tipUnavailable, className,
   extraActions, usageAction, t,
 }: MessageIconActionsProps) {
+  const tipGated = tipUnavailable ?? branchUnavailable
   const day = useCalendarDay()
   const reasonId = useId()
   // Same success chrome as CodeBlock: a short check swap after the write,
@@ -126,14 +138,14 @@ export function MessageIconActions({
         </Tooltip>
       )}
       {onRegenerate !== undefined && (
-        <Tooltip label={branchUnavailable ? t('message.regenerateUnavailable') : t('message.regenerate')} side="bottom">
+        <Tooltip label={tipGated ? t('message.regenerateUnavailable') : t('message.regenerate')} side="bottom">
           <button
             type="button"
             className={css.action}
             aria-label={t('message.regenerate')}
-            aria-disabled={branchUnavailable || undefined}
-            data-unavailable={branchUnavailable || undefined}
-            onClick={branchUnavailable ? undefined : onRegenerate}
+            aria-disabled={tipGated || undefined}
+            data-unavailable={tipGated || undefined}
+            onClick={tipGated ? undefined : onRegenerate}
           >
             <IconRefreshOutlineRegular />
           </button>
@@ -161,14 +173,14 @@ export function MessageIconActions({
         </Tooltip>
       )}
       {onRestore !== undefined && (
-        <Tooltip label={branchUnavailable ? t('message.restoreUnavailable') : t('message.restore')} side="bottom">
+        <Tooltip label={tipGated ? t('message.restoreUnavailable') : t('message.restore')} side="bottom">
           <button
             type="button"
             className={css.action}
             aria-label={t('message.restore')}
-            aria-disabled={branchUnavailable || undefined}
-            data-unavailable={branchUnavailable || undefined}
-            onClick={branchUnavailable ? undefined : onRestore}
+            aria-disabled={tipGated || undefined}
+            data-unavailable={tipGated || undefined}
+            onClick={tipGated ? undefined : onRestore}
           >
             <IconFolderOpenOutlineRegular />
           </button>

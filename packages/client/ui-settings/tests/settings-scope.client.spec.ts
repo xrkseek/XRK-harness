@@ -217,20 +217,87 @@ describe('SettingsScopeController', () => {
     })
   })
 
-  it('recovers the latest rejected or thrown write from Host state', async () => {
+  it('retries once after a revision conflict then recovers if retry fails', async () => {
+    const describeCall = vi.fn()
+      .mockResolvedValueOnce(described({ preference: 'system' }, 2))
+      .mockResolvedValueOnce(described({ preference: 'system' }, 4))
+      .mockResolvedValueOnce(described({ preference: 'light' }, 5))
+    const mutate = vi.fn()
+      .mockResolvedValueOnce(rejected())
+      .mockResolvedValueOnce(rejected())
+    const scope = new SettingsScopeController<UiTestSettings>(
+      { settings: { describe: describeCall, mutate } } as never,
+      { namespace: 'ui-test' },
+    )
+    await scope.load()
+    await scope.set('preference', 'dark')
+    expect(mutate).toHaveBeenCalledTimes(2)
+    // Intermediate refresh may republish the same section; final Host truth wins.
+    expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'light' }, revision: 5 })
+  })
+
+  it('lands a conflicted write on the single revision retry', async () => {
+    const describeCall = vi.fn()
+      .mockResolvedValueOnce(described({ preference: 'system' }, 2))
+      .mockResolvedValueOnce(described({ preference: 'system' }, 7))
+    const mutate = vi.fn()
+      .mockResolvedValueOnce(rejected())
+      .mockResolvedValueOnce(ok(view({ preference: 'dark' }, 8)))
+    const scope = new SettingsScopeController<UiTestSettings>(
+      { settings: { describe: describeCall, mutate } } as never,
+      { namespace: 'ui-test' },
+    )
+    await scope.load()
+    await scope.set('preference', 'dark')
+    expect(mutate).toHaveBeenNthCalledWith(1, {
+      ns: 'ui-test',
+      ops: [{ op: 'set', path: ['preference'], value: 'dark' }],
+      expectedRevision: 2,
+    })
+    expect(mutate).toHaveBeenNthCalledWith(2, {
+      ns: 'ui-test',
+      ops: [{ op: 'set', path: ['preference'], value: 'dark' }],
+      expectedRevision: 7,
+    })
+    expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'dark' }, revision: 8 })
+  })
+
+  it('patches several fields in one mutate', async () => {
+    const describeCall = vi.fn().mockResolvedValueOnce(described({ preference: 'system' }, 1))
+    const mutate = vi.fn().mockResolvedValueOnce(ok(view({ preference: 'dark' }, 2)))
+    const scope = new SettingsScopeController<UiTestSettings>(
+      { settings: { describe: describeCall, mutate } } as never,
+      { namespace: 'ui-test' },
+    )
+    await scope.load()
+    await scope.patch([
+      { op: 'set', path: ['preference'], value: 'dark' },
+      { op: 'unset', path: ['unused'] },
+    ])
+    expect(mutate).toHaveBeenCalledOnce()
+    expect(mutate.mock.calls[0]?.[0]).toMatchObject({
+      ns: 'ui-test',
+      expectedRevision: 1,
+      ops: [
+        { op: 'set', path: ['preference'], value: 'dark' },
+        { op: 'unset', path: ['unused'] },
+      ],
+    })
+  })
+
+  it('recovers a thrown write from Host state without retrying mutate', async () => {
     const describeCall = vi.fn()
       .mockResolvedValueOnce(described({ preference: 'system' }, 2))
       .mockResolvedValueOnce(described({ preference: 'light' }, 3))
-    const mutate = vi.fn()
-      .mockResolvedValueOnce(rejected())
-      .mockRejectedValueOnce(new Error('offline'))
+    const mutate = vi.fn().mockRejectedValueOnce(new Error('offline'))
     const scope = new SettingsScopeController<UiTestSettings>(
       { settings: { describe: describeCall, mutate } } as never,
       { namespace: 'ui-test' },
     )
     const published = trackValues(scope)
+    await scope.load()
     await scope.set('preference', 'dark')
-    await scope.set('preference', 'system')
+    expect(mutate).toHaveBeenCalledOnce()
     expect(published.map(section => section?.preference)).toEqual([undefined, 'system', 'light'])
   })
 
@@ -372,9 +439,12 @@ describe('SettingsScopeController', () => {
   })
 
   it('recovers the Host state when the latest clear is refused', async () => {
-    const mutate = vi.fn().mockResolvedValueOnce(rejected())
+    const mutate = vi.fn()
+      .mockResolvedValueOnce(rejected())
+      .mockResolvedValueOnce(rejected())
     const describeCall = vi.fn()
       .mockResolvedValueOnce(described({ preference: 'dark' }, 3))
+      .mockResolvedValueOnce(described({ preference: 'dark' }, 4))
       .mockResolvedValueOnce(described({ preference: 'light' }, 5))
     const scope = new SettingsScopeController<UiTestSettings>(
       { settings: { describe: describeCall, mutate } } as never,
@@ -384,6 +454,7 @@ describe('SettingsScopeController', () => {
 
     await scope.unset('preference')
 
+    expect(mutate).toHaveBeenCalledTimes(2)
     expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'light' }, revision: 5 })
   })
 })
@@ -445,5 +516,52 @@ describe('SettingsScopeBinder.bind', () => {
     expect(scope.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
     await fiber.dispose()
     expect(describeCall).not.toHaveBeenCalled()
+  })
+
+  it('shares one controller per namespace across plugin fibers', async () => {
+    const describeCall = vi.fn().mockResolvedValue(described({ preference: 'dark' }, 1))
+    const mutate = vi.fn()
+      .mockResolvedValueOnce(ok(view({ preference: 'light' }, 2)))
+      .mockResolvedValueOnce(ok(view({ preference: 'system' }, 3)))
+    const ctx = new Context()
+    ctx.provide('connection', {
+      api: { settings: { describe: describeCall, mutate } },
+      isLoopback: true,
+    } as never)
+    let plan!: SettingsScope<UiTestSettings>
+    let workspace!: SettingsScope<UiTestSettings>
+    new TestRemote(ctx)
+    await ctx.plugin(SettingsScopeBinder).await()
+    const fiberA = ctx.plugin({
+      inject: ['connection', 'remote', 'settingsScope'],
+      apply: (plugin: Context) => {
+        plan = plugin.settingsScope.bind<UiTestSettings>({ namespace: 'ui-test' })
+      },
+    })
+    const fiberB = ctx.plugin({
+      inject: ['connection', 'remote', 'settingsScope'],
+      apply: (plugin: Context) => {
+        workspace = plugin.settingsScope.bind<UiTestSettings>({ namespace: 'ui-test' })
+      },
+    })
+    await fiberA.await()
+    await fiberB.await()
+    expect(plan).toBe(workspace)
+    await vi.waitFor(() => {
+      expect(plan.getSnapshot()).toMatchObject({ status: 'ready', revision: 1 })
+    })
+    await plan.set('preference', 'light')
+    await workspace.set('preference', 'system')
+    expect(mutate).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      ns: 'ui-test',
+      expectedRevision: 1,
+    }))
+    expect(mutate).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      ns: 'ui-test',
+      expectedRevision: 2,
+    }))
+    await fiberA.dispose()
+    expect(workspace.getSnapshot()).toMatchObject({ value: { preference: 'system' }, revision: 3 })
+    await fiberB.dispose()
   })
 })

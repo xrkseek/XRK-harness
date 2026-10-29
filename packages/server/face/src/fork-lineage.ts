@@ -10,6 +10,11 @@ import { tryWriteJsonSidecar } from "./json-sidecar.js";
 export interface FaceForkLink {
   readonly parentSessionId: string;
   readonly childSessionId: string;
+  /**
+   * 1-based Face seq the fork was cut at (`session.fork` `atSeq`), when known.
+   * Omitted for whole-log forks / legacy sidecar rows.
+   */
+  readonly atSeq?: number;
 }
 
 type PersistShape = {
@@ -22,6 +27,20 @@ function defaultPath(productHome?: string): string {
     path.resolve(productHome ?? resolveXrkHome()),
     "fork-lineage.json",
   );
+}
+
+function freezeLink(link: FaceForkLink): FaceForkLink {
+  const atSeq =
+    typeof link.atSeq === "number" &&
+    Number.isSafeInteger(link.atSeq) &&
+    link.atSeq >= 1
+      ? link.atSeq
+      : undefined;
+  return {
+    parentSessionId: link.parentSessionId,
+    childSessionId: link.childSessionId,
+    ...(atSeq !== undefined ? { atSeq } : {}),
+  };
 }
 
 export class FaceForkLineageStore {
@@ -45,10 +64,7 @@ export class FaceForkLineageStore {
           row.parentSessionId &&
           row.childSessionId
         ) {
-          this.byChild.set(row.childSessionId, {
-            parentSessionId: row.parentSessionId,
-            childSessionId: row.childSessionId,
-          });
+          this.byChild.set(row.childSessionId, freezeLink(row));
         }
       }
     } catch {
@@ -70,13 +86,19 @@ export class FaceForkLineageStore {
     return this.byChild.get(childSessionId);
   }
 
+  /** Children whose fork parent is `parentSessionId` (UI fork graph). */
+  listByParent(parentSessionId: string): readonly FaceForkLink[] {
+    const out: FaceForkLink[] = [];
+    for (const link of this.byChild.values()) {
+      if (link.parentSessionId === parentSessionId) out.push(link);
+    }
+    return out;
+  }
+
   attach(link: FaceForkLink): FaceForkLink {
     const existing = this.byChild.get(link.childSessionId);
     if (existing) return existing;
-    const frozen: FaceForkLink = {
-      parentSessionId: link.parentSessionId,
-      childSessionId: link.childSessionId,
-    };
+    const frozen = freezeLink(link);
     this.byChild.set(link.childSessionId, frozen);
     this.save();
     return frozen;

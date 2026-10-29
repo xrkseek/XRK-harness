@@ -28,6 +28,15 @@
   line-height: 28px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
+  text-wrap: balance;
+  /* Programmatic focus must not paint a "selected text" box on mobile. */
+  outline: none;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .body {
@@ -41,17 +50,30 @@
 }
 
 @media (max-width: 767px) {
-  .content {
-    max-height: calc(100vh - 24px);
-    padding: max(20px, env(safe-area-inset-top, 0px))
-      max(20px, env(safe-area-inset-right, 0px))
-      max(20px, env(safe-area-inset-bottom, 0px))
-      max(20px, env(safe-area-inset-left, 0px));
+  /* Phone Modal is full-bleed — vertically settle the welcome block so it
+     does not glue to the browser chrome with a void below. */
+  .dialog {
+    height: 100%;
+    max-height: none;
   }
 
-  @supports (height: 100dvh) {
-    .content {
-      max-height: calc(100dvh - 24px);
-    }
+  .content {
+    height: 100%;
+    max-height: none;
+    justify-content: center;
+    padding:
+      max(48px, calc(env(safe-area-inset-top, 0px) + 28px))
+      max(24px, env(safe-area-inset-right, 0px))
+      max(28px, calc(env(safe-area-inset-bottom, 0px) + 16px))
+      max(24px, env(safe-area-inset-left, 0px));
+  }
+
+  .title {
+    font-size: 22px;
+    line-height: 30px;
+  }
+
+  .body {
+    margin-top: 16px;
   }
 }

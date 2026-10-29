@@ -4,28 +4,34 @@
    panel is a two-column layout — 188px nav rail + content column with a
    54px header and the 24px-padded options area. */
 
+/* Wide foot: [⚙ 设置] …… [v0.6.23] — gear glued to full label; version right.
+ * Label collapse (icon-only) is owned by TriggerContent — no mid-word ellipsis. */
 .triggerRow {
   flex: none;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
   width: calc(100% + 4px);
   margin: 4px -2px;
+  min-width: 0;
 }
 
 .triggerRow.railRow {
   width: 36px;
   margin: 8px 0 10px;
+  gap: 0;
 }
 
-/* Trigger: the 42px foot-row box shared with the Cordis footer action. */
+/* Trigger: intrinsic width; shrinks to icon when the label is dropped. */
 .trigger {
-  flex: 1;
+  flex: none;
   min-width: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   width: auto;
+  max-width: calc(100% - 4.5rem);
   height: 42px;
   margin: 0;
   padding: 0 10px 0 8px;
@@ -34,15 +40,34 @@
   border-radius: 12px;
   background: transparent;
   cursor: pointer;
-  overflow: hidden;
   color: var(--dsw-alias-label-primary);
   font-family: inherit;
   font-size: 14px;
   line-height: 22px;
+  transition: background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .trigger:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Icon-only wide foot: keep the gear hit target square, not a clipped word. */
+.trigger:has([data-label='off']) {
+  width: 42px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+
+/* Version / reconnect chips sit to the right of Settings.
+ * flex-grow would stretch the short `v0.6.x` pill into a thin bar across the
+ * foot — keep intrinsic width; ConnectionIndicator still caps via max-width. */
+.triggerRow > :not(.trigger) {
+  flex: 0 1 auto;
+  margin-left: auto;
+  max-width: min(12.5rem, calc(100% - 3.5rem));
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Rail trigger: the same 36x36 circle box as the other rail controls. */
@@ -55,11 +80,6 @@
   gap: 0;
   padding: 0;
   border-radius: 50%;
-}
-
-.triggerLabel {
-  overflow: hidden;
-  white-space: nowrap;
 }
 
 /* Full-viewport layer (figma Mask 501:29946 #000@24%): mask tokens match the
@@ -78,6 +98,7 @@
   inset: 0;
   background: var(--dsw-alias-bg-mask-1);
   backdrop-filter: var(--dsw-mask-blur);
+  animation: settingsMaskIn 160ms var(--ds-ease-out, ease) both;
 }
 
 /* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
@@ -104,6 +125,25 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  /* Enter only (panel unmounts on close). Match Modal: opacity + transform. */
+  animation: settingsPanelIn 180ms var(--ds-ease-out, ease) both;
+  will-change: opacity, transform;
+}
+
+@keyframes settingsMaskIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes settingsPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Plugins home: full-bleed content, no Settings nav rail. */
@@ -179,6 +219,7 @@
   font-weight: 400;
   color: var(--dsw-alias-label-primary);
   text-align: left;
+  transition: background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .navCell:hover {
@@ -187,6 +228,7 @@
 
 .navCell.active {
   background: var(--dsw-specific-sidebar-nav-item-active);
+  font-weight: 500;
 }
 
 .navIcon {
@@ -246,10 +288,26 @@
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-primary);
+  transition: background var(--ds-motion-instant, 100ms) var(--ds-ease-out, ease);
 }
 
 .close:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.optionsPane {
+  animation: settingsOptionsIn var(--ds-motion-fast, 150ms) var(--ds-ease-out, ease) both;
+}
+
+@keyframes settingsOptionsIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
@@ -273,6 +331,21 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mask,
+  .panel,
+  .optionsPane {
+    animation: none;
+    will-change: auto;
+  }
+
+  .trigger,
+  .navCell,
+  .close {
+    transition: none;
+  }
 }
 
 /* Phone overrides after base rules (same specificity) so they win the cascade. */

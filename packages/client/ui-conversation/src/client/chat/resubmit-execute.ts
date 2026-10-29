@@ -14,6 +14,34 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import { requestResubmitConfirm } from './resubmit-intent.ts'
 
+/**
+ * Run `/rollback seq:N` and say why the files could not be restored, or
+ * `undefined` when they were.
+ *
+ * `/rollback` reports its failures in the result rather than throwing, so a
+ * bare `.catch(() => undefined)` collapsed "this face has no such command" and
+ * "that checkpoint is gone" into the same silent no-op — and the caller then
+ * truncated the conversation regardless.
+ */
+async function rollbackFailure(
+  session: {
+    command(line: string): Promise<
+      | { readonly ok: true; readonly value: { readonly matched: boolean } }
+      | { readonly ok: false; readonly error: { readonly message: string } }
+    >
+  },
+  seq: number,
+): Promise<string | undefined> {
+  try {
+    const result = await session.command(`/rollback seq:${seq}`)
+    if (!result.ok) return result.error.message
+    if (!result.value.matched) return "the face has no /rollback command"
+    return undefined
+  } catch (error: unknown) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
 /** True when the loaded chat window has any node after `seq`. */
 export function chatHasEventsAfterSeq(
   snapshot: ConversationSnapshot,
@@ -105,7 +133,18 @@ export async function executeResubmitAfterChoice(
   const source = sessions.binding(sessionId)?.session
   const sourceLive = editResubmitSourceIsLive(source?.getSnapshot())
   if (opts.choice === 'revert-files' && source !== undefined) {
-    await source.command(`/rollback seq:${opts.seq}`).catch(() => undefined)
+    // `/rollback` finds the checkpoint by the PRE-truncate seq, so it has to run
+    // first. If it fails, stop here: continuing would cut the conversation while
+    // the files stayed where they were, and the user would be told neither half.
+    const failure = await rollbackFailure(source, opts.seq)
+    if (failure !== undefined) {
+      source.reportError('resubmit', {
+        code: 'internal',
+        message: `文件没有回退，对话保持原样：${failure}`,
+        details: {},
+      })
+      return
+    }
   }
   // Stop a live turn before the cut so an interrupted turn/end cannot land
   // after truncate (Face also cancels when active).
@@ -115,7 +154,15 @@ export async function executeResubmitAfterChoice(
   // Face beforeSeq is exclusive; Face then drops the open turn whose
   // `turn/start` sits before this user row.
   const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)
-  await sessions.truncate({ sessionId, beforeSeq })
+  // `truncate` reports business failures in its result rather than throwing, so
+  // ignoring the result used to re-prompt on top of an un-truncated log: the old
+  // turn stayed and the edited message was appended after it. Stop and surface
+  // the failure in the composer strip instead.
+  const cut = await sessions.truncate({ sessionId, beforeSeq })
+  if (!cut.ok) {
+    sessions.binding(sessionId)?.session?.reportError('resubmit', cut.error)
+    return
+  }
   if (opts.text === undefined) return
   const session = sessions.binding(sessionId)?.session
   if (session === undefined) {

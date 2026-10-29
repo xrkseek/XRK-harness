@@ -67,6 +67,7 @@ import {
   sessionRename,
   sessionRespondApproval,
   sessionSearch,
+  sessionEventWindow,
   sessionSelectModel,
   sessionSetWorkingDirectory,
   sessionStatus,
@@ -98,6 +99,7 @@ import {
 } from "./handlers/subagent.js";
 import { worktreeCreate, worktreeMerge, worktreeReconcile } from "./handlers/worktree.js";
 import { jobBackground, jobKill } from "./handlers/job.js";
+import { sessionPressBand } from "./handlers/band.js";
 import {
   commandsExecute,
   commandsList,
@@ -161,6 +163,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.list": sessionList,
   "session.history": sessionHistory,
   "session.search": sessionSearch,
+  "session.eventWindow": sessionEventWindow,
   "session.prompt": sessionPrompt,
   "session.cancel": sessionCancel,
   "session.delete": sessionDelete,
@@ -229,6 +232,7 @@ const HANDLERS: Record<string, FaceHandler> = {
   "session.setWorkingDirectory": sessionSetWorkingDirectory,
   "job.kill": jobKill,
   "job.background": jobBackground,
+  "session.pressBand": sessionPressBand,
   "commands/list": commandsList,
   "commands/execute": commandsExecute,
   "pluginInventory/list": pluginInventoryList,

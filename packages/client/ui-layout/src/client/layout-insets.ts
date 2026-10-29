@@ -57,6 +57,8 @@ export const LAYOUT_INSET_CSS = Object.freeze({
 export const LAYOUT_INSET_ATTR = Object.freeze({
   details: 'data-xrk-layout-details',
   phone: 'data-xrk-layout-phone',
+  /** Settled Session can open Overview / Status (AppFrame stamps; blank clears). */
+  status: 'data-xrk-layout-status',
 } as const)
 
 /** Observable face plugins read via `ctx.layout.insets`. */
@@ -85,6 +87,7 @@ export function clearLayoutInsetsDom(): void {
   root.style.removeProperty(LAYOUT_INSET_CSS.bottom)
   root.removeAttribute(LAYOUT_INSET_ATTR.details)
   root.removeAttribute(LAYOUT_INSET_ATTR.phone)
+  root.removeAttribute(LAYOUT_INSET_ATTR.status)
 }
 
 /** True when two inset snapshots are equal for publish short-circuit. */

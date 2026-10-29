@@ -2,7 +2,10 @@ import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { SessionEvent } from "@xrkseek/protocol";
-import { assertSessionEvent } from "@xrkseek/protocol";
+import {
+  assertSessionEvent,
+  SessionEventParseError,
+} from "@xrkseek/protocol";
 import {
   expandPackedStorageRecords,
   isPackedChunkRow,
@@ -11,7 +14,7 @@ import {
   packChunkRunsForExport,
   type PackedStorageRecord,
 } from "./chunk-pack.js";
-import { deepFreeze, newSessionId } from "./freeze.js";
+import { freezeSessionEvent, newSessionId } from "./freeze.js";
 import {
   repairOpenTurnEvents,
   sessionHasOpenTurn,
@@ -75,6 +78,21 @@ export interface PersistentSessionStore extends SessionStore {
    */
   bindSessionEviction(handler: (sessionId: string) => void): void;
   /**
+   * Drop one idle session from the resident set (cold history / search).
+   * Flushes pending writes and notifies {@link bindSessionEviction} first.
+   * Refuses (returns false) while a turn is still open.
+   */
+  releaseResident(sessionId: string): boolean;
+  /**
+   * Background microtask flush failures (DSH-style loud drain pause).
+   * Cleared after a successful explicit {@link flush}.
+   */
+  flushFailureReport(): {
+    readonly failures: number;
+    readonly paused: boolean;
+    readonly lastError?: string;
+  };
+  /**
    * VACUUM when freelist is meaningful after deletes or archive offload.
    */
   reclaimStorage(): boolean;
@@ -124,6 +142,12 @@ const ID_RE = /^[A-Za-z0-9._-]+$/;
 const DEBUG_WAL_CHECKPOINT = Boolean(process.env.XRK_DEBUG_WAL);
 /** Physical schema v3: durable rows may be packed chunk rows (expanded on load). */
 const SCHEMA_VERSION = SQLITE_SCHEMA_CURRENT;
+
+/**
+ * Consecutive searches that had to fall back because the FTS index could not
+ * be read. Only used to throttle the diagnostic line.
+ */
+let searchIndexFailures = 0;
 const DB_NAME = "sessions.db";
 /** Cold sibling of {@link DB_NAME}: archived session logs live here. */
 const ARCHIVE_DB_NAME = "sessions-archive.db";
@@ -145,6 +169,30 @@ function deleteSessionRows(db: DatabaseSync, id: string): void {
   db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
 }
 
+/**
+ * Run `fn` inside one `BEGIN IMMEDIATE … COMMIT`, rolling back on throw.
+ *
+ * The three deletes above are a single logical removal: they used to autocommit
+ * one by one, so a crash (or a locked FTS index) between them left "skull" rows
+ * — `events` gone while `search_fts` still matched, so search returned a
+ * sessionId that `has()` reports as missing. Callers that already hold a
+ * transaction (`copySessionRows`) must not wrap again.
+ */
+function withImmediate(db: DatabaseSync, run: () => void): void {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    run();
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      /* already rolled back / connection gone */
+    }
+    throw err;
+  }
+}
+
 /** Copy one session's sessions/events/FTS rows from `from` into `to` (replace). */
 function copySessionRows(
   from: DatabaseSync,
@@ -159,10 +207,38 @@ function copySessionRows(
   const ftsRows = from
     .prepare("SELECT seq, text FROM search_fts WHERE session_id = ?")
     .all(id) as { seq: number; text: string }[];
+  // Hints travel with the rows. Inserting a bare `id` left every archived or
+  // restored session at event_count/last_ts 0 forever (the backfill only runs
+  // on a schema bump), which made `session.list` fall back to a full event scan
+  // and reported the session as blank. A missing row stays 0 on purpose: the
+  // hint reader treats <= 0 as "unknown" and rescans correctly.
+  const hints = from
+    .prepare(
+      "SELECT last_ts, event_count, has_turn_start, has_command_run FROM sessions WHERE id = ?",
+    )
+    .get(id) as {
+    last_ts: number;
+    event_count: number;
+    has_turn_start: number;
+    has_command_run: number;
+  } | undefined;
   to.exec("BEGIN IMMEDIATE");
   try {
     deleteSessionRows(to, id);
-    to.prepare("INSERT INTO sessions (id) VALUES (?)").run(id);
+    to.prepare(
+      "INSERT INTO sessions (id, last_ts, event_count, has_turn_start, has_command_run) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      id,
+      hints?.last_ts ?? 0,
+      hints?.event_count ?? 0,
+      hints?.has_turn_start ?? 0,
+      hints?.has_command_run ?? 0,
+    );
+    // One prepared statement reused per row beats chunked multi-value INSERTs
+    // here: measured on an 18,370-row / 45.8 MB session, batching made
+    // offload/restore ~25% *slower* (2,744 / 2,726 ms vs 2,197 / 2,116 ms),
+    // because every chunk needs a fresh `prepare` and SQLite's per-row path
+    // already reuses the compiled statement.
     const insertEvent = to.prepare(
       "INSERT INTO events (session_id, seq, ts, payload) VALUES (?, ?, ?, ?)",
     );
@@ -262,12 +338,42 @@ function assertSafeId(id: string): string {
   return id;
 }
 
-/** Escape a user query for FTS5 MATCH (trigram substring). */
-export function ftsMatchQuery(query: string): string {
-  const trimmed = query.trim();
-  if (!trimmed) return '""';
-  return `"${trimmed.replace(/"/g, '""')}"`;
-}
+  /** Escape a user query for FTS5 MATCH (trigram substring). */
+  export function ftsMatchQuery(query: string): string {
+    const trimmed = query.trim();
+    if (!trimmed) return '""';
+    return `"${trimmed.replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * How one user query should reach `search_fts`.
+   *
+   * The `trigram` tokenizer only indexes runs of three or more code points, so
+   * a shorter needle can never match — SQLite's rule is "substrings consisting
+   * of fewer than 3 unicode characters do not match any rows when used with a
+   * full-text query". Chinese two-character words ("部署", "修复", "测试") and
+   * short acronyms ("AI", "PR") are exactly that shape, and MATCHing them
+   * returned nothing while thousands of matching rows sat in the index. Short
+   * needles therefore take the LIKE scan (`text` is UNINDEXED, so this is a
+   * plain column scan bounded by the DISTINCT id projection).
+   */
+  export type FtsQueryPlan =
+    | { readonly kind: "match"; readonly value: string }
+    | { readonly kind: "like"; readonly value: string }
+    | null;
+
+  export function planFtsQuery(query: string): FtsQueryPlan {
+    const trimmed = query.trim();
+    if (!trimmed) return null;
+    // Code points, not UTF-16 units: the tokenizer counts characters.
+    if ([...trimmed].length >= 3) {
+      return { kind: "match", value: ftsMatchQuery(trimmed) };
+    }
+    return {
+      kind: "like",
+      value: `%${trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)}%`,
+    };
+  }
 
 /**
  * Join text chunks so a token split across indexes stays searchable after flush.
@@ -507,6 +613,16 @@ function initSchema(db: DatabaseSync, journalMode: "WAL" | "DELETE" = "WAL"): vo
   };
 
   const stored = schemaVersion(db);
+  if (stored > SCHEMA_VERSION) {
+    // Direction-aware refusal. A newer build already migrated this file and may
+    // have written rows this build would misread; opening it "successfully"
+    // would rewrite that data under the old shape — silent corruption instead
+    // of a message the user can act on.
+    throw new Error(
+      `sessions.db schema v${stored} is newer than this build (v${SCHEMA_VERSION}):`
+      + " it was written by a newer XRK Harness — upgrade instead of opening it",
+    );
+  }
   if (stored >= SCHEMA_VERSION) {
     // A current schema_version means the migration chain already built every
     // table/index/FTS object. Re-running the full DDL on every Host start takes
@@ -530,19 +646,260 @@ function parseStoragePayload(payload: string): SessionEvent[] {
   return [assertSessionEvent(raw)];
 }
 
+/** True when `prefix` is `full[0..prefix.length)` (JSON-stable event equality). */
+function logicalEventsEqualPrefix(
+  full: readonly SessionEvent[],
+  prefix: readonly SessionEvent[],
+): boolean {
+  if (prefix.length > full.length) return false;
+  for (let i = 0; i < prefix.length; i++) {
+    // Truncate / edit-resubmit usually passes a `slice` of the resident log —
+    // same object identity. JSON.stringify of 16k events was dominating the
+    // R7 fast path (~hundreds of ms) before the cheap DELETE.
+    if (full[i] === prefix[i]) continue;
+    if (JSON.stringify(full[i]) !== JSON.stringify(prefix[i])) return false;
+  }
+  return true;
+}
+
+/**
+ * Map a logical keep-count onto the first *physical* `events.seq` to delete.
+ * Packed chunk rows that straddle the cut force a full rewrite.
+ *
+ * When `totalLogical` is known (resident length / healed hints), walk **DESC**
+ * and only expand the discarded suffix — edit-resubmit / truncate usually drop
+ * a few hundred events off a multi-10k log; ASC-scanning the whole prefix was
+ * the R7 fast-path bottleneck (~1–2 s).
+ */
+function physicalTailCutSeq(
+  db: DatabaseSync,
+  sessionId: string,
+  keepLogical: number,
+  totalLogical?: number,
+): number | "empty" | "noop" | "rewrite" {
+  if (keepLogical <= 0) return "empty";
+  if (
+    typeof totalLogical === "number"
+    && totalLogical >= keepLogical
+    && Number.isFinite(totalLogical)
+  ) {
+    const needDrop = totalLogical - keepLogical;
+    if (needDrop === 0) return "noop";
+    const iter = db
+      .prepare(
+        "SELECT seq, payload FROM events WHERE session_id = ? ORDER BY seq DESC",
+      )
+      .iterate(sessionId) as IterableIterator<{ seq: number; payload: string }>;
+    let dropped = 0;
+    let sawRow = false;
+    for (const row of iter) {
+      sawRow = true;
+      let n: number;
+      try {
+        n = parseStoragePayload(row.payload).length;
+      } catch {
+        return "rewrite";
+      }
+      if (dropped + n < needDrop) {
+        dropped += n;
+        continue;
+      }
+      if (dropped + n === needDrop) {
+        return row.seq;
+      }
+      // Packed row straddles the logical cut.
+      return "rewrite";
+    }
+    if (!sawRow) return "noop";
+    return "rewrite";
+  }
+
+  const rows = db
+    .prepare(
+      "SELECT seq, payload FROM events WHERE session_id = ? ORDER BY seq ASC",
+    )
+    .all(sessionId) as { seq: number; payload: string }[];
+  if (rows.length === 0) return "noop";
+  let logical = 0;
+  for (const row of rows) {
+    if (logical >= keepLogical) return row.seq;
+    let n: number;
+    try {
+      n = parseStoragePayload(row.payload).length;
+    } catch {
+      return "rewrite";
+    }
+    if (logical + n <= keepLogical) {
+      logical += n;
+      continue;
+    }
+    return "rewrite";
+  }
+  return logical === keepLogical ? "noop" : "rewrite";
+}
+
+/**
+ * A stored row this build cannot read: corrupt JSON, an unknown event type, or
+ * a row written by a newer format.
+ *
+ * Loading stops here instead of returning the rows that happened to work,
+ * because `ensureLoaded` feeds whatever it gets straight into crash repair: a
+ * silently truncated view makes the store append a synthetic `turn/end` into
+ * the real log, which pushes every surviving event behind a turn boundary that
+ * never existed. Refusing to load is the only failure that leaves the log
+ * intact, so the caller can tell the user to upgrade instead.
+ */
+export class SessionLogUnreadableError extends Error {
+  constructor(
+    readonly sessionId: string,
+    /** Position of the first unreadable row. */
+    readonly seq: number,
+    readonly reason: string,
+  ) {
+    super(
+      `session log unreadable: ${sessionId} seq ${seq} (${reason}) — refusing to load a partial log`,
+    );
+    this.name = "SessionLogUnreadableError";
+  }
+}
+
 function loadSessionEvents(db: DatabaseSync, id: string): SessionEvent[] {
   const rows = db
-    .prepare("SELECT payload FROM events WHERE session_id = ? ORDER BY seq ASC")
-    .all(id) as { payload: string }[];
+    .prepare("SELECT seq, payload FROM events WHERE session_id = ? ORDER BY seq ASC")
+    .all(id) as { seq: number; payload: string }[];
   const events: SessionEvent[] = [];
   for (const row of rows) {
     try {
       events.push(...parseStoragePayload(row.payload));
-    } catch {
-      break;
+    } catch (error) {
+      // Newer Harness may write pure-info rows with `ignorable: true`. Skipping
+      // keeps the readable prefix intact; required unknowns still refuse load.
+      if (
+        error instanceof SessionEventParseError
+        && error.code === "unknown-ignorable"
+      ) {
+        continue;
+      }
+      throw new SessionLogUnreadableError(
+        id,
+        row.seq,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
   return events;
+}
+
+/**
+ * Expand a physical suffix until at least `maxLogical` events (or the whole log).
+ * Rows are read newest-first then reversed so the result is a chronological suffix.
+ */
+/**
+ * True when `hintedCount` is safe as a logical length for absolute seq.
+ * Packed logs with a stale physical backfill look like count === row count.
+ */
+function eventCountLooksLogical(
+  db: DatabaseSync,
+  id: string,
+  hintedCount: number,
+): boolean {
+  const physical =
+    (db
+      .prepare("SELECT COUNT(*) AS n FROM events WHERE session_id = ?")
+      .get(id) as { n: number } | undefined)?.n ?? 0;
+  if (hintedCount > physical) return true;
+  if (hintedCount < physical) return false;
+  // Equal: only safe when no packed chunk rows (1 event per physical row).
+  const packed = db
+    .prepare(
+      `SELECT 1 AS hit FROM events WHERE session_id = ? AND (
+         json_extract(payload, '$.type') = 'text-chunks'
+         OR json_extract(payload, '$.type') = 'tool-call-chunks'
+       ) LIMIT 1`,
+    )
+    .get(id) as { hit: number } | undefined;
+  return packed === undefined;
+}
+
+function loadSessionEventsTail(
+  db: DatabaseSync,
+  id: string,
+  maxLogical: number,
+): SessionEvent[] {
+  if (maxLogical <= 0) return [];
+  const rows = db
+    .prepare(
+      "SELECT seq, payload FROM events WHERE session_id = ? ORDER BY seq DESC",
+    )
+    .all(id) as { seq: number; payload: string }[];
+  const newestFirst: SessionEvent[][] = [];
+  let logical = 0;
+  for (const row of rows) {
+    try {
+      const expanded = parseStoragePayload(row.payload);
+      newestFirst.push(expanded);
+      logical += expanded.length;
+      if (logical >= maxLogical) break;
+    } catch (error) {
+      if (
+        error instanceof SessionEventParseError
+        && error.code === "unknown-ignorable"
+      ) {
+        continue;
+      }
+      throw new SessionLogUnreadableError(
+        id,
+        row.seq,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+  const out: SessionEvent[] = [];
+  for (let i = newestFirst.length - 1; i >= 0; i--) {
+    out.push(...newestFirst[i]!);
+  }
+  return out;
+}
+
+/** Visit non-packed durable events in seq order (no chunk expansion). */
+function scanDurableSinglesFromDb(
+  db: DatabaseSync,
+  id: string,
+  visit: (event: SessionEvent) => void,
+): void {
+  const rows = db
+    .prepare(
+      "SELECT seq, payload FROM events WHERE session_id = ? ORDER BY seq ASC",
+    )
+    .all(id) as { seq: number; payload: string }[];
+  for (const row of rows) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(row.payload);
+    } catch (error) {
+      throw new SessionLogUnreadableError(
+        id,
+        row.seq,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (isPackedChunkRow(raw)) continue;
+    try {
+      visit(assertSessionEvent(raw));
+    } catch (error) {
+      if (
+        error instanceof SessionEventParseError
+        && error.code === "unknown-ignorable"
+      ) {
+        continue;
+      }
+      throw new SessionLogUnreadableError(
+        id,
+        row.seq,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
 }
 
 function nextSeqFromDb(db: DatabaseSync, sessionId: string): number {
@@ -612,6 +969,7 @@ function sessionHintsFromDb(
   if (row === undefined || row.event_count <= 0) return undefined;
   return {
     lastEventTs: row.last_ts > 0 ? row.last_ts : null,
+    eventCount: row.event_count,
     hasTurnStart: row.has_turn_start === 1,
     hasCommandRun: row.has_command_run === 1,
   };
@@ -677,17 +1035,17 @@ export function createPersistentSessionStore(
 
   const hotIds = loadSessionIds(db);
   const coldIds = loadSessionIds(archiveDb);
-  // Incomplete move left the id in both files — keep hot, drop cold copy.
-  for (const id of [...coldIds]) {
-    if (hotIds.has(id)) {
-      try {
-        deleteSessionRows(archiveDb, id);
-      } catch {
-        /* best-effort */
+    // Incomplete move left the id in both files — keep hot, drop cold copy.
+    for (const id of [...coldIds]) {
+      if (hotIds.has(id)) {
+        try {
+          withImmediate(archiveDb, () => deleteSessionRows(archiveDb, id));
+        } catch {
+          /* best-effort */
+        }
+        coldIds.delete(id);
       }
-      coldIds.delete(id);
     }
-  }
   const sessionIds = new Set<string>([...hotIds, ...coldIds]);
   const sessions = new Map<string, SessionEvent[]>();
   const residentOrder: string[] = [];
@@ -759,7 +1117,11 @@ export function createPersistentSessionStore(
            has_turn_start = MAX(sessions.has_turn_start, excluded.has_turn_start),
            has_command_run = MAX(sessions.has_command_run, excluded.has_command_run)`,
       );
-  const updateSessionHints = (
+  /**
+   * Append-only flush: **add** this batch's length to `event_count`.
+   * Do not use for seed / replacePrefix / repair (those need an absolute set).
+   */
+  const bumpSessionHints = (
     sessionId: string,
     events: readonly SessionEvent[],
   ): void => {
@@ -775,6 +1137,28 @@ export function createPersistentSessionStore(
     upsertSessionHints.run(sessionId, lastTs, events.length, turnStart, commandRun);
   };
 
+  /**
+   * Absolute list hints from a full logical log (seed / truncate / hydrate repair).
+   * `bumpSessionHints` alone would ADD `events.length` onto a stale counter.
+   */
+  const setSessionHints = (
+    sessionId: string,
+    events: readonly SessionEvent[],
+  ): void => {
+    if (shared) return;
+    let lastTs = 0;
+    let turnStart = 0;
+    let commandRun = 0;
+    for (const event of events) {
+      if (event.ts > lastTs) lastTs = event.ts;
+      if (event.type === "turn/start") turnStart = 1;
+      else if (event.type === "command/run") commandRun = 1;
+    }
+    db.prepare(
+      "UPDATE sessions SET last_ts = ?, event_count = ?, has_turn_start = ?, has_command_run = ? WHERE id = ?",
+    ).run(lastTs, events.length, turnStart, commandRun, sessionId);
+  };
+
   const allocateSeq = (sessionId: string): number => {
     let next = nextSeqBySession.get(sessionId);
     if (next === undefined) {
@@ -787,6 +1171,14 @@ export function createPersistentSessionStore(
   const writeRecord = (sessionId: string, record: PackedStorageRecord): void => {
     const seq = allocateSeq(sessionId);
     insertEvent!.run(sessionId, seq, storageTs(record), JSON.stringify(record));
+    // `text-chunks` rows are indexed by `indexJoinedTextChunks`, whose row
+    // carries the flush-boundary prefix and therefore the whole text of this
+    // row as a strict subset. Writing both stored the same conversation twice
+    // in `search_fts` (measured: 165 fully-overlapping (session_id, seq)
+    // pairs in one live session), doubling the index and every archive /
+    // restore / delete copy of it. `MATCH` recall is unchanged: the kept row
+    // is the superset, and search only returns DISTINCT session_id.
+    if (isTextChunkRow(record)) return;
     const text = extractStorageSearchText(record);
     if (text) insertFts!.run(sessionId, seq, text);
   };
@@ -919,10 +1311,12 @@ export function createPersistentSessionStore(
     // Human input is the one thing a power cut must not swallow: upgrade to
     // FULL for the transaction carrying it, then fall back to NORMAL. PRAGMA
     // synchronous cannot change inside a transaction, so it brackets BEGIN.
+    // BEGIN (and the FULL pragma) must sit inside try: a busy/IO throw before
+    // COMMIT would otherwise drop `batch` from `pending` with no restore.
     const needsFullSync = batch.some((row) => row.event.type === "user/message");
-    if (needsFullSync) db.exec("PRAGMA synchronous = FULL");
-    db.exec("BEGIN IMMEDIATE");
     try {
+      if (needsFullSync) db.exec("PRAGMA synchronous = FULL");
+      db.exec("BEGIN IMMEDIATE");
       for (const sessionId of order) {
         const events = bySession.get(sessionId)!;
         const packed = packChunkRunsForExport(events);
@@ -930,14 +1324,14 @@ export function createPersistentSessionStore(
           writeRecord(sessionId, record);
         }
         indexJoinedTextChunks(sessionId, events);
-        updateSessionHints(sessionId, events);
+        bumpSessionHints(sessionId, events);
       }
       db.exec("COMMIT");
     } catch (err) {
       try {
         db.exec("ROLLBACK");
       } catch {
-        /* already rolled back / closed */
+        /* already rolled back / closed / never began */
       }
       restoreSeqMap(seqSnapshot);
       // Prepend this flush's batch so later flush/close can retry; keep any
@@ -984,14 +1378,17 @@ export function createPersistentSessionStore(
   const flushMicrotaskIds = new Set<string>();
   let flushMicrotaskQueued = false;
   let storeClosed = false;
+  let backgroundFlushFailures = 0;
+  let backgroundFlushPaused = false;
+  let lastBackgroundFlushError: string | undefined;
   const scheduleFlushPending = (sessionId: string): void => {
-    if (shared || storeClosed) return;
+    if (shared || storeClosed || backgroundFlushPaused) return;
     flushMicrotaskIds.add(sessionId);
     if (flushMicrotaskQueued) return;
     flushMicrotaskQueued = true;
     queueMicrotask(() => {
       flushMicrotaskQueued = false;
-      if (storeClosed) {
+      if (storeClosed || backgroundFlushPaused) {
         flushMicrotaskIds.clear();
         return;
       }
@@ -1000,8 +1397,22 @@ export function createPersistentSessionStore(
       for (const id of ids) {
         try {
           flushPending(id);
-        } catch {
+        } catch (error) {
           /* pending restored inside flushPending; close()/flush() retries */
+          // A retry that never succeeds is data loss with no trail: the events
+          // look saved in memory and vanish on exit. Pause auto-drain (DSH) so
+          // the next explicit flush()/close() is the only path forward.
+          backgroundFlushFailures += 1;
+          backgroundFlushPaused = true;
+          lastBackgroundFlushError =
+            error instanceof Error ? error.message : String(error);
+          if (backgroundFlushFailures <= 3 || backgroundFlushFailures % 100 === 0) {
+            console.error(
+              `[session-store] background flush failed #${backgroundFlushFailures}`
+              + ` for ${id}; auto-drain paused, events stay queued: `
+              + lastBackgroundFlushError,
+            );
+          }
         }
       }
     });
@@ -1042,9 +1453,7 @@ export function createPersistentSessionStore(
     const events = loadSessionEvents(sourceDbFor(id), id);
     const repairs = repairOpenTurnEvents(events);
     if (repairs.length > 0) {
-      const frozenRepairs = repairs.map((ev) =>
-        deepFreeze(structuredClone(assertSessionEvent(ev))),
-      );
+      const frozenRepairs = repairs.map((ev) => freezeSessionEvent(ev));
       // Cold / shared: memory-only repair (archive is read for turns; shared is RO).
       if (!shared && !offloaded) {
         const seqSnapshot = new Map(nextSeqBySession);
@@ -1053,7 +1462,9 @@ export function createPersistentSessionStore(
           for (const frozen of frozenRepairs) {
             persistImmediate(id, frozen);
           }
-          updateSessionHints(id, frozenRepairs);
+          // Repairs are appends — bump; absolute set happens below against the
+          // full logical log (also heals stale event_count from older builds).
+          bumpSessionHints(id, frozenRepairs);
           db.exec("COMMIT");
         } catch (err) {
           try {
@@ -1071,6 +1482,18 @@ export function createPersistentSessionStore(
     }
     sessions.set(id, events);
     touchResident(id);
+    // Heal durable event_count when it drifted (R7 ADD-bug / partial bump).
+    // R8 cold tail keys absolute seq off this column.
+    if (!shared && !offloaded) {
+      const hinted = sessionHintsFromDb(sourceDbFor(id), id)?.eventCount;
+      if (hinted !== events.length) {
+        try {
+          setSessionHints(id, events);
+        } catch {
+          /* RO / closed */
+        }
+      }
+    }
     return events;
   };
 
@@ -1109,22 +1532,22 @@ export function createPersistentSessionStore(
       return sessionIds.has(id);
     },
 
-    delete(id: string): void {
-      assertWritable();
-      const sid = assertSafeId(id);
-      if (!sessionIds.has(sid)) return;
-      flushPending(sid);
-      if (hotIds.has(sid)) {
-        deleteSessionRows(db, sid);
-        hotIds.delete(sid);
-      }
-      if (coldIds.has(sid)) {
-        deleteSessionRows(archiveDb, sid);
-        coldIds.delete(sid);
-      }
-      sessionIds.delete(sid);
-      dropResident(sid);
-    },
+      delete(id: string): void {
+        assertWritable();
+        const sid = assertSafeId(id);
+        if (!sessionIds.has(sid)) return;
+        flushPending(sid);
+        if (hotIds.has(sid)) {
+          withImmediate(db, () => deleteSessionRows(db, sid));
+          hotIds.delete(sid);
+        }
+        if (coldIds.has(sid)) {
+          withImmediate(archiveDb, () => deleteSessionRows(archiveDb, sid));
+          coldIds.delete(sid);
+        }
+        sessionIds.delete(sid);
+        dropResident(sid);
+      },
 
     reclaimStorage(): boolean {
       if (shared) return false;
@@ -1147,14 +1570,14 @@ export function createPersistentSessionStore(
       if (!sessionIds.has(sid)) {
         throw new Error(`session not found: ${sid}`);
       }
-      if (coldIds.has(sid)) return;
-      flushPending(sid);
-      copySessionRows(db, archiveDb, sid);
-      deleteSessionRows(db, sid);
-      hotIds.delete(sid);
-      coldIds.add(sid);
-      dropResident(sid);
-      maybeVacuum(db, {
+        if (coldIds.has(sid)) return;
+        flushPending(sid);
+        copySessionRows(db, archiveDb, sid);
+        withImmediate(db, () => deleteSessionRows(db, sid));
+        hotIds.delete(sid);
+        coldIds.add(sid);
+        dropResident(sid);
+        maybeVacuum(db, {
         minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
         minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
       });
@@ -1166,13 +1589,13 @@ export function createPersistentSessionStore(
       if (!sessionIds.has(sid)) {
         throw new Error(`session not found: ${sid}`);
       }
-      if (!coldIds.has(sid)) return;
-      flushPending(sid);
-      copySessionRows(archiveDb, db, sid);
-      deleteSessionRows(archiveDb, sid);
-      coldIds.delete(sid);
-      hotIds.add(sid);
-      dropResident(sid);
+        if (!coldIds.has(sid)) return;
+        flushPending(sid);
+        copySessionRows(archiveDb, db, sid);
+        withImmediate(archiveDb, () => deleteSessionRows(archiveDb, sid));
+        coldIds.delete(sid);
+        hotIds.add(sid);
+        dropResident(sid);
       maybeVacuum(archiveDb, {
         minFreeBytes: VACUUM_EXPLICIT_MIN_FREE_BYTES,
         minFreeRatio: VACUUM_EXPLICIT_MIN_FREE_RATIO,
@@ -1190,8 +1613,7 @@ export function createPersistentSessionStore(
       }
       assertHotMutable(id);
       const events = ensureLoaded(id);
-      const parsed = assertSessionEvent(event);
-      const frozen = deepFreeze(structuredClone(parsed));
+      const frozen = freezeSessionEvent(event);
       events.push(frozen);
       try {
         persistEvent(id, frozen);
@@ -1219,7 +1641,7 @@ export function createPersistentSessionStore(
       }
       const frozen: SessionEvent[] = [];
       for (const event of eventsInput) {
-        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+        frozen.push(freezeSessionEvent(event));
       }
       // Create + one packed transaction (not N persistEvent flushes). Chunk
       // runs pack the same way as flushPending so fork seed matches live shape.
@@ -1241,6 +1663,12 @@ export function createPersistentSessionStore(
           writeRecord(sid, record);
         }
         indexJoinedTextChunks(sid, frozen);
+        // Same hints `replacePrefix` maintains. Without this a freshly forked
+        // child sits at event_count 0 / has_turn_start 0 until its first
+        // non-turn-start append, at which point the hint reader stops falling
+        // back to an event scan and `blank` flips true — the sidebar then
+        // offers the new-session button a 6-figure-event branch to reuse.
+        setSessionHints(sid, frozen);
         db.exec("COMMIT");
       } catch (err) {
         try {
@@ -1262,6 +1690,103 @@ export function createPersistentSessionStore(
       return { id: sid, events: frozen };
     },
 
+    /**
+     * Fork R6: `INSERT…SELECT` the parent's durable prefix, then write only
+     * `suffix` (closers + end-seed). Returns undefined → {@link forkSession}
+     * falls back to full `seed` (packed row straddles the cut, or cold source).
+     */
+    seedFromSession(
+      sourceId: string,
+      keepLogical: number,
+      childId: string | undefined,
+      suffix: readonly SessionEvent[],
+    ): SessionRecord | undefined {
+      assertWritable();
+      const src = assertSafeId(sourceId);
+      if (!sessionIds.has(src) || coldIds.has(src)) return undefined;
+      flushPending(src);
+      assertHotMutable(src);
+
+      const sourceEvents = ensureLoaded(src);
+      if (keepLogical > sourceEvents.length) return undefined;
+      const cut = physicalTailCutSeq(db, src, keepLogical, sourceEvents.length);
+      if (cut === "rewrite") return undefined;
+
+      const sid = assertSafeId(childId ?? newSessionId());
+      if (sessionIds.has(sid)) {
+        throw new Error(`session already exists: ${sid}`);
+      }
+      const prefix = sourceEvents.slice(0, keepLogical);
+      const frozenSuffix: SessionEvent[] = [];
+      for (const event of suffix) {
+        frozenSuffix.push(freezeSessionEvent(event));
+      }
+      const frozen = prefix.concat(frozenSuffix);
+
+      const sourceNext =
+        nextSeqBySession.get(src) ?? nextSeqFromDb(db, src);
+      const nextAfterCopy =
+        cut === "empty" ? 0 : cut === "noop" ? sourceNext : cut;
+
+      sessionIds.add(sid);
+      hotIds.add(sid);
+      evictResidents(sid);
+      sessions.set(sid, frozen);
+      touchResident(sid);
+      nextSeqBySession.set(sid, nextAfterCopy);
+      insertSession!.run(sid);
+
+      const seqSnapshot = new Map(nextSeqBySession);
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        if (cut === "noop") {
+          db.prepare(
+            "INSERT INTO events (session_id, seq, ts, payload) "
+              + "SELECT ?, seq, ts, payload FROM events WHERE session_id = ?",
+          ).run(sid, src);
+          db.prepare(
+            "INSERT INTO search_fts (session_id, seq, text) "
+              + "SELECT ?, seq, text FROM search_fts WHERE session_id = ?",
+          ).run(sid, src);
+        } else if (typeof cut === "number") {
+          db.prepare(
+            "INSERT INTO events (session_id, seq, ts, payload) "
+              + "SELECT ?, seq, ts, payload FROM events WHERE session_id = ? AND seq < ?",
+          ).run(sid, src, cut);
+          db.prepare(
+            "INSERT INTO search_fts (session_id, seq, text) "
+              + "SELECT ?, seq, text FROM search_fts WHERE session_id = ? AND seq < ?",
+          ).run(sid, src, cut);
+        }
+        if (frozenSuffix.length > 0) {
+          const packed = packChunkRunsForExport(frozenSuffix);
+          for (const record of packed) {
+            writeRecord(sid, record);
+          }
+          indexJoinedTextChunks(sid, frozenSuffix);
+        }
+        setSessionHints(sid, frozen);
+        db.exec("COMMIT");
+      } catch (err) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+          /* already rolled back / closed */
+        }
+        restoreSeqMap(seqSnapshot);
+        sessionIds.delete(sid);
+        hotIds.delete(sid);
+        dropResident(sid);
+        try {
+          db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
+        } catch {
+          /* best-effort */
+        }
+        throw err;
+      }
+      return { id: sid, events: frozen };
+    },
+
     replacePrefix(id: string, eventsInput: readonly SessionEvent[] = []): SessionRecord {
       assertWritable();
       const sid = assertSafeId(id);
@@ -1272,8 +1797,68 @@ export function createPersistentSessionStore(
       flushPending(sid);
       const frozen: SessionEvent[] = [];
       for (const event of eventsInput) {
-        frozen.push(deepFreeze(structuredClone(assertSessionEvent(event))));
+        frozen.push(freezeSessionEvent(event));
       }
+
+      // Fast path (edit-resubmit / truncate): prefix unchanged → DELETE tail
+      // rows only. Full wipe+rewrite was ~1.6s on a 16k-event session.
+      const current = ensureLoaded(sid);
+      if (
+        frozen.length <= current.length
+        && logicalEventsEqualPrefix(current, frozen)
+      ) {
+        const cut = physicalTailCutSeq(
+          db,
+          sid,
+          frozen.length,
+          current.length,
+        );
+        if (cut === "noop") {
+          sessions.set(sid, frozen);
+          touchResident(sid);
+          return { id: sid, events: frozen };
+        }
+        if (cut === "empty" || typeof cut === "number") {
+          const seqSnapshot = new Map(nextSeqBySession);
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            if (cut === "empty") {
+              db.prepare("DELETE FROM search_fts WHERE session_id = ?").run(sid);
+              db.prepare("DELETE FROM events WHERE session_id = ?").run(sid);
+              nextSeqBySession.set(sid, 0);
+            } else {
+              db.prepare(
+                "DELETE FROM search_fts WHERE session_id = ? AND seq >= ?",
+              ).run(sid, cut);
+              db.prepare(
+                "DELETE FROM events WHERE session_id = ? AND seq >= ?",
+              ).run(sid, cut);
+              nextSeqBySession.set(sid, cut);
+            }
+            if (frozen.length === 0) {
+              db.prepare(
+                "UPDATE sessions SET last_ts = 0, event_count = 0, has_turn_start = 0, has_command_run = 0 WHERE id = ?",
+              ).run(sid);
+            } else {
+              setSessionHints(sid, frozen);
+            }
+            db.exec("COMMIT");
+          } catch (err) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              /* already rolled back / closed */
+            }
+            restoreSeqMap(seqSnapshot);
+            throw err;
+          }
+          sessions.set(sid, frozen);
+          touchResident(sid);
+          return { id: sid, events: frozen };
+        }
+        // cut === "rewrite" (packed row straddles the logical boundary)
+      }
+
       const seqSnapshot = new Map(nextSeqBySession);
       db.exec("BEGIN IMMEDIATE");
       try {
@@ -1289,7 +1874,7 @@ export function createPersistentSessionStore(
             writeRecord(sid, record);
           }
           indexJoinedTextChunks(sid, frozen);
-          updateSessionHints(sid, frozen);
+          setSessionHints(sid, frozen);
         }
         db.exec("COMMIT");
       } catch (err) {
@@ -1322,8 +1907,13 @@ export function createPersistentSessionStore(
       const hints = sessionHintsFromDb(source, id);
       if (hints !== undefined) return hints;
       // Pre-v4 rows (or a stripped archive) still fall back to the scans.
+      const lastEventTs = lastEventTsFromDb(source, id);
       return {
-        lastEventTs: lastEventTsFromDb(source, id),
+        lastEventTs,
+        eventCount:
+          (source
+            .prepare("SELECT COUNT(*) AS n FROM events WHERE session_id = ?")
+            .get(id) as { n: number } | undefined)?.n ?? 0,
         hasTurnStart: hasTurnStartInDb(source, id),
         hasCommandRun: hasCommandRunInDb(source, id),
       };
@@ -1333,27 +1923,112 @@ export function createPersistentSessionStore(
       return sessions.has(id);
     },
 
+    readEventsTail(
+      id: string,
+      maxLogical: number,
+    ):
+      | { readonly events: readonly SessionEvent[]; readonly baseIndex: number }
+      | undefined {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const cap = Math.max(0, Math.floor(maxLogical));
+      if (cap <= 0) {
+        return { events: [], baseIndex: 0 };
+      }
+      const cached = sessions.get(id);
+      if (cached !== undefined) {
+        touchResident(id);
+        if (cached.length <= cap) {
+          return { events: cached, baseIndex: 0 };
+        }
+        const baseIndex = cached.length - cap;
+        return { events: cached.slice(baseIndex), baseIndex };
+      }
+      const source = sourceDbFor(id);
+      const hints = sessionHintsFromDb(source, id);
+      const total = hints?.eventCount;
+      if (typeof total !== "number" || total <= 0) return undefined;
+      // v4 hint backfill used physical COUNT(*). Packed sessions then report
+      // event_count === row count while logical length is larger — refuse the
+      // fast path so Face falls back to a full expand (correct absolute seq).
+      if (!eventCountLooksLogical(source, id, total)) return undefined;
+      const events = loadSessionEventsTail(source, id, cap);
+      if (events.length === 0) return { events: [], baseIndex: total };
+      if (events.length > total) return undefined;
+      return { events, baseIndex: total - events.length };
+    },
+
+    scanDurableSingles(id: string, visit: (event: SessionEvent) => void): void {
+      if (!sessionIds.has(id)) {
+        throw new Error(`session not found: ${id}`);
+      }
+      const cached = sessions.get(id);
+      if (cached !== undefined) {
+        touchResident(id);
+        for (const event of cached) visit(event);
+        return;
+      }
+      scanDurableSinglesFromDb(sourceDbFor(id), id, visit);
+    },
+
     searchSessionIds(query: string): readonly string[] {
-      const match = ftsMatchQuery(query);
-      if (match === '""') return [];
+      const plan = planFtsQuery(query);
+      if (plan === null) return [];
       const ids = new Set<string>();
+      // A common word ("session", "测试"→LIKE) matches thousands of rows. Face
+      // shows 20 with a hasMore flag and then reads every candidate's full log,
+      // so an uncapped candidate list pulls hundreds of sessions into the LRU
+      // and evicts them again one by one.
+      const CANDIDATE_LIMIT = 200;
+      let ftsFailed = false;
       const run = (target: DatabaseSync): void => {
         try {
-          const rows = target
-            .prepare(
-              "SELECT DISTINCT session_id AS id FROM search_fts WHERE search_fts MATCH ?",
-            )
-            .all(match) as { id: string }[];
+          const rows = (plan.kind === "match"
+            ? target
+              .prepare(
+                "SELECT DISTINCT session_id AS id FROM search_fts WHERE search_fts MATCH ? LIMIT ?",
+              )
+              .all(plan.value, CANDIDATE_LIMIT)
+            : target
+              .prepare(
+                "SELECT DISTINCT session_id AS id FROM search_fts WHERE text LIKE ? ESCAPE '\\' LIMIT ?",
+              )
+              .all(plan.value, CANDIDATE_LIMIT)) as { id: string }[];
           for (const row of rows) ids.add(row.id);
         } catch {
-          /* corrupt / missing FTS — skip that DB */
+          /* corrupt / missing FTS — skip that DB, but say so below */
+          ftsFailed = true;
         }
       };
       run(db);
       run(archiveDb);
+      const needle = query.trim().toLowerCase();
+      if (ftsFailed) {
+        // A damaged index must not read as "no results": that is indistinguishable
+        // from a real miss and sends the user hunting for content that is right
+        // there. Scan the resident logs (the same text the index would hold) and
+        // leave a throttled trace for diagnosis.
+        for (const [id, events] of sessions) {
+          if (ids.has(id)) continue;
+          for (const event of events) {
+            const text = extractEventSearchText(event);
+            if (text !== undefined && text.toLowerCase().includes(needle)) {
+              ids.add(id);
+              break;
+            }
+          }
+        }
+        searchIndexFailures += 1;
+        if (searchIndexFailures <= 3 || searchIndexFailures % 100 === 0) {
+          console.error(
+            `[session-store] search index unavailable (#${searchIndexFailures});`
+            + " falling back to resident logs — rebuild FTS to restore cold search",
+          );
+        }
+      }
       // Pending batches are not in FTS yet. Match them in memory so a search
       // does not COMMIT every other session's interior events.
-      const needle = query.trim().toLowerCase();
       const chunkText = new Map<string, string>();
       for (const row of pending) {
         const text = extractEventSearchText(row.event);
@@ -1390,8 +2065,36 @@ export function createPersistentSessionStore(
       return [...ids];
     },
 
+    releaseResident(sessionId: string): boolean {
+      const sid = sessionId;
+      if (!sessionIds.has(sid)) return false;
+      const events = sessions.get(sid);
+      if (events === undefined) return true;
+      // Same pin as LRU eviction: re-hydrate mid-turn would re-run repair and
+      // can insert a synthetic interrupted assistant while the live loop still
+      // streams.
+      if (sessionHasOpenTurn(events)) return false;
+      flushPending(sid);
+      onEvict?.(sid);
+      dropResident(sid);
+      return true;
+    },
+
+    flushFailureReport() {
+      return {
+        failures: backgroundFlushFailures,
+        paused: backgroundFlushPaused,
+        ...(lastBackgroundFlushError !== undefined
+          ? { lastError: lastBackgroundFlushError }
+          : {}),
+      };
+    },
+
     flush(sessionId?: string) {
       flushPending(sessionId);
+      // Explicit barrier cleared the pause — resume microtask auto-drain.
+      backgroundFlushPaused = false;
+      lastBackgroundFlushError = undefined;
     },
 
     close() {

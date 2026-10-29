@@ -1,7 +1,23 @@
-/* Trigger row label (the shell's button provides layout/colors; the label
- * only guards against overflow during the sidebar collapse crossfade). */
+/* Trigger row icon + label (shell button owns layout/colors).
+ * Label is all-or-nothing: never ellipsis mid-word (English "…s"). */
+
+.triggerInner {
+  display: inline-flex;
+  align-items: center;
+  /* Explicit gap: button `gap` does not space icon vs label (single child). */
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.triggerIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .triggerLabel {
-  overflow: hidden;
+  flex: none;
   white-space: nowrap;
 }

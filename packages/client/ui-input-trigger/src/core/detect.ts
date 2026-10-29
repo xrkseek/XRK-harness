@@ -24,6 +24,9 @@ function boundaryOk(draft: string, index: number, char: TriggerChar): boolean {
   if (WORD_CHAR.test(prev)) return false
   if (char === '/') {
     if (prev === '/') return false
+    // `/*` / `/**` comment openers — same carve-out as `//`.
+    const next = draft.charAt(index + 1)
+    if (next === '/' || next === '*') return false
     if (prev === ':' && index >= 2 && !WHITESPACE.test(draft.charAt(index - 2))) return false
   }
   return true
@@ -64,9 +67,13 @@ export const detectTrigger: DetectTrigger = (draft, caret, guard) => {
     if (ch !== '/') continue
     if (guard.tier === 'claimed') continue
     if (!boundaryOk(draft, i, ch)) continue
+    const query = draft.slice(i + 1, caret)
+    // Line/block comments (`//`, `/*`, `/**`) are not slash commands — otherwise
+    // pasting code opens the menu on 「无匹配项」.
+    if (query.startsWith('/') || query.startsWith('*')) continue
     return {
       trigger: ch,
-      query: draft.slice(i + 1, caret),
+      query,
       quoted: false,
       position: draft.search(/\S/) === i ? 'leading' : 'inline',
       span: { start: i, end: caret, draftRev: 0 },

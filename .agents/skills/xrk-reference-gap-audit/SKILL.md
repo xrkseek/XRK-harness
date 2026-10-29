@@ -60,6 +60,11 @@ DSH 的两个坑：① `remote.origin.fetch` 可能被改成**只抓单个 tag**
 
 **本回合终态**：`reference/2026-10-22-status.md`。
 
+**会话底层优化真源（2026-10-27）**：[`docs/session-optimize.md`](../../../docs/session-optimize.md)
+（开放 R6–R12 + 已落地摘要 + 实测摘录）。旧 `docs/dsh-session-ref/*` 对照长文已删。
+`reference/2026-10-25-session-defects.md` 仅作当日修法归档。
+`.tmp` 探针映射：[`/.tmp/compare/INDEX.md`](../../../.tmp/compare/INDEX.md)（过程草稿，不提交）。
+
 **算法/性能**：~~critical-path 库~~ · ~~wait_agent sleep~~ · ~~G1 useConptyDll~~ · ~~G4 禁 PID 偷锁~~ · ~~G6 promptTailGrace~~ · ~~G7 list 时间片~~ · ~~G12 perf:gate~~。仍缺：MCP 共享 / NAS journal / 路由定价 / 工具差分 / 两次结算 / 致命诊断。**G2** 归档 cancel 已有（确认流另排）。
 
 > ⚠️ 「流式工具参数 O(n²)」**已撤回**（见 knowledge-map P-1）；呈现剩 **U7l**（本回合已落地 `partial-args`）。

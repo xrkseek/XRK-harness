@@ -81,9 +81,12 @@
    a host-configured mode without one keeps its text as the sole identifier.
    The 460px cut is the point where the row (attach + modes + model + send)
    starts squeezing labels; the container is the composer row (InputBar .row —
-   anonymous query because CSS modules hash container-names per module). */
-@container (max-width: 460px) {
-  .trigger:has(.triggerIcon) .triggerLabel {
+   anonymous query because CSS modules hash container-names per module).
+   Orch (locked) chips must collapse too — otherwise "Full access" stays and
+   the model/send group wraps onto a second staggered line on ~360px phones. */
+@container (max-width: 520px) {
+  .trigger:has(.triggerIcon) .triggerLabel,
+  .orchChip:has(.triggerIcon) .triggerLabel {
     display: none;
   }
 }
@@ -93,10 +96,18 @@
 }
 
 @media (max-width: 767px) {
-  .trigger {
+  .trigger,
+  .orchChip {
     height: 40px;
-    max-width: min(220px, 46vw);
+    max-width: min(160px, 42vw);
     touch-action: manipulation;
+  }
+
+  /* Belt-and-suspenders vs @container: phone viewports always collapse the
+     mode label so Full access + model stay on one aligned toolbar row. */
+  .trigger:has(.triggerIcon) .triggerLabel,
+  .orchChip:has(.triggerIcon) .triggerLabel {
+    display: none;
   }
 }
 

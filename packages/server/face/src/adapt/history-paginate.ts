@@ -16,9 +16,29 @@ export const DEFAULT_HISTORY_MAX_MESSAGES = 50;
  * can make a 50-message tail tens of MiB). Oversized pages shrink from the
  * older side so the client still gets the newest transcript first.
  */
-export const DEFAULT_HISTORY_MAX_WIRE_CHARS = 1_500_000;
+  export const DEFAULT_HISTORY_MAX_WIRE_CHARS = 1_500_000;
 
-const MESSAGE_TYPES = new Set<string>(["user/message", "assistant/message"]);
+  /** Hard ceiling for a client-supplied `maxMessages` (the default stays 50). */
+  export const MAX_HISTORY_MAX_MESSAGES = 500;
+
+  /**
+   * Coerce a client-supplied page size into `[1, MAX_HISTORY_MAX_MESSAGES]`.
+   *
+   * `session.history` used to take `maxMessages` straight off the payload, so a
+   * fractional, negative, `NaN` or absurd value reached the paginator unchanged
+   * and only the UTF-16 char budget kept the frame bounded.
+   *
+   * @param value - raw payload field; anything non-finite falls back to the default.
+   * @returns a whole number of transcript messages to page.
+   */
+  export function clampHistoryMaxMessages(value: unknown): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return DEFAULT_HISTORY_MAX_MESSAGES;
+    }
+    return Math.min(MAX_HISTORY_MAX_MESSAGES, Math.max(1, Math.floor(value)));
+  }
+
+  const MESSAGE_TYPES = new Set<string>(["user/message", "assistant/message"]);
 
 function sameTurnStep(
   left: SessionEvent,
@@ -170,22 +190,42 @@ export function paginateSessionHistoryForReplay(
   };
 }
 
+/**
+ * Drop wire noise the model fold already collapses:
+ * - `assistant/chunk` superseded by a final `assistant/message` / `tool/call`
+ * - older `tool/result` rows for the same `toolCallId` (prune appends a
+ *   replacement; foldChat keeps latest — history must match)
+ *
+ * Does **not** invent DSH `surfaceOp` / sourceEventSeqs; callId last-write
+ * is the durable contract we already have.
+ */
 export function dropSupersededStreamDeltas(
   events: readonly SessionEvent[],
 ): SessionEvent[] {
   const finalizedSteps = new Set<string>();
   const finalizedToolCalls = new Set<string>();
-  for (const event of events) {
+  const latestToolResultIndex = new Map<string, number>();
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]!;
     if (event.type === "assistant/message") {
       finalizedSteps.add(`${event.turnId}\0${event.stepId}`);
     } else if (event.type === "tool/call") {
       finalizedToolCalls.add(event.call.id);
+    } else if (event.type === "tool/result") {
+      latestToolResultIndex.set(event.result.toolCallId, i);
     }
   }
-  if (finalizedSteps.size === 0 && finalizedToolCalls.size === 0) {
+  if (
+    finalizedSteps.size === 0
+    && finalizedToolCalls.size === 0
+    && latestToolResultIndex.size === 0
+  ) {
     return [...events];
   }
-  return events.filter((event) => {
+  return events.filter((event, index) => {
+    if (event.type === "tool/result") {
+      return latestToolResultIndex.get(event.result.toolCallId) === index;
+    }
     if (event.type !== "assistant/chunk") return true;
     if (
       event.kind === "tool-call"

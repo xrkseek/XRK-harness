@@ -414,7 +414,9 @@
 
 .root[data-phase='active'] .composerSeat {
   position: sticky;
-  bottom: 0;
+  /* Overlay soft keyboards: visualViewport publishes --xrk-keyboard-inset.
+     With interactive-widget=resizes-content the inset stays ~0. */
+  bottom: var(--xrk-keyboard-inset, 0px);
   /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
      paints under a sticking code header while scrolling. */
   z-index: 7;
@@ -467,7 +469,7 @@
      drifts by half the difference — accepted residual risk, recorded in
      ([decision](../../../../../../.agents/notes/implemented/bug-fix/2026-08-12-composer-overlay-seat-width-compensation.md)). */
   right: var(--dsh-scrollbar-width);
-  bottom: 0;
+  bottom: var(--xrk-keyboard-inset, 0px);
   left: 0;
 }
 
@@ -549,7 +551,10 @@
 @media (max-width: 767px) {
   .root {
     --dsh-chat-content-width: 100%;
-    --dsh-composer-side-clearance: 12px;
+    --dsh-composer-side-clearance: 10px;
+    --dsh-composer-stack-gap: 4px;
+    /* Cap draft so the sticky composer does not eat half a short viewport. */
+    --dsh-composer-text-max-height: min(22vh, 140px);
   }
 
   .widthHandle {
@@ -557,8 +562,14 @@
   }
 
   .header {
-    padding: 10px max(12px, env(safe-area-inset-right, 0px)) 0
-      max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
+    /* Right edge only — left inset is owned by phoneChrome so titleRow
+       padding can sit flush against menu|ball|概况 without a mystery gap. */
+    padding: 8px max(10px, env(safe-area-inset-right, 0px)) 0 0;
+  }
+
+  /* Phone AppFrame owns the Status entry — hide the faint header twin. */
+  :global(html[data-xrk-layout-phone]) :global([data-xrk-status-toggle]) {
+    display: none;
   }
 
   .scrollBody {
@@ -572,23 +583,46 @@
     padding-top: max(48px, calc(env(safe-area-inset-top, 0px) + 40px));
   }
 
-  .root[data-phase='active'] .composerSeat {
-    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  /* Keyboard open on empty hero: dock the brand + composer above the keys
+     instead of staying vertically centered under the overlay. */
+  :global(html[data-xrk-keyboard]) .root[data-phase='hero'] .scrollBody {
+    justify-content: flex-end;
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(8px, var(--xrk-keyboard-inset, 0px));
   }
 
+  :global(html[data-xrk-keyboard]) .root[data-phase='hero'] .composerHero {
+    padding-bottom: 8px;
+  }
+
+  /* Bottom safe-area lives on InputBar only — avoid stacking with composerSeat. */
+
   .crumb {
-    max-width: min(140px, 42vw);
-    min-height: 36px;
+    /* Tighter left chrome frees title — let crumbs use a bit more width. */
+    max-width: min(160px, 44vw);
+    min-height: 40px;
     touch-action: manipulation;
   }
 
   .headerUtilities {
-    margin-left: 8px;
-    gap: 4px;
+    /* Title-row presence chip (ball + 状态 / 支线); left chrome is menu|概况 only. */
+    max-width: min(140px, 40vw);
+    margin-left: 4px;
+    gap: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .headerUtilities::-webkit-scrollbar {
+    display: none;
   }
 
   .tabs {
-    gap: 20px;
+    gap: 8px;
+    margin-top: 2px;
+    padding-left: 0;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
@@ -601,13 +635,25 @@
 
   .tab {
     flex: none;
-    padding-bottom: 12px;
-    min-height: 36px;
+    padding-bottom: 10px;
+    min-height: 40px;
+    font-size: 12px;
     touch-action: manipulation;
   }
 
   .titleRow {
+    /* Blank / no Status: phoneChrome = menu only (6 + 36 + 4). */
     min-height: 40px;
+    padding-left: max(50px, calc(env(safe-area-inset-left, 0px) + 46px));
+  }
+
+  /* Settled: menu | ball | 概况 → 6+36+4+36+4+36 = 122, +4 air. */
+  :global(html[data-xrk-layout-status]) .titleRow {
+    padding-left: max(126px, calc(env(safe-area-inset-left, 0px) + 122px));
+  }
+
+  .crumbSeg:last-child {
+    max-width: min(160px, 42vw);
   }
 
   .headerActions {

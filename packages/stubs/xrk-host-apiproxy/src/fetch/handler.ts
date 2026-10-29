@@ -19,6 +19,7 @@ import {
   sessionCancelRequestSchema,
   sessionDeleteRequestSchema,
   sessionToolsRequestSchema,
+  sessionPressBandRequestSchema,
   sessionAttachmentRequestSchema,
   sessionCreateRequestSchema,
   sessionForkRequestSchema,
@@ -29,6 +30,7 @@ import {
   sessionPromptRequestSchema,
   sessionRenameRequestSchema,
   sessionSearchRequestSchema,
+  sessionEventWindowRequestSchema,
   sessionSelectModelRequestSchema,
   sessionUpdateQueueRequestSchema,
 } from '../api/sessions.schema.ts'
@@ -107,6 +109,7 @@ type UnaryRoutes = {
 const UNARY_ROUTES: UnaryRoutes = {
   'session.list': { schema: sessionListRequestSchema, invoke: (api, r) => api.sessions.list(r) },
   'session.search': { schema: sessionSearchRequestSchema, invoke: (api, r, signal) => api.sessions.search(r, signal) },
+  'session.eventWindow': { schema: sessionEventWindowRequestSchema, invoke: (api, r) => api.sessions.eventWindow(r) },
   'session.create': { schema: sessionCreateRequestSchema, invoke: (api, r) => api.sessions.create(r) },
   'session.history': { schema: sessionHistoryRequestSchema, invoke: (api, r) => api.sessions.history(r) },
   'session.models': { schema: sessionModelsRequestSchema, invoke: (api, r) => api.sessions.models(r) },
@@ -120,6 +123,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'session.cancel': { schema: sessionCancelRequestSchema, invoke: (api, r) => api.sessions.cancel(r) },
   'session.delete': { schema: sessionDeleteRequestSchema, invoke: (api, r) => api.sessions.delete(r) },
   'session.tools': { schema: sessionToolsRequestSchema, invoke: (api, r) => api.sessions.tools(r) },
+  'session.pressBand': { schema: sessionPressBandRequestSchema, invoke: (api, r) => api.sessions.pressBand(r) },
   'subagent.list': { schema: subagentListRequestSchema, invoke: (api, r, signal) => api.subagents.list(r, signal) },
   'subagent.history': { schema: subagentHistoryRequestSchema, invoke: (api, r, signal) => api.subagents.history(r, signal) },
   'subagent.prompt': { schema: subagentPromptRequestSchema, invoke: (api, r, signal) => api.subagents.prompt(r, signal) },

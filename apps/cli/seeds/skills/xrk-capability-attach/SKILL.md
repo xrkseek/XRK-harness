@@ -4,7 +4,7 @@ description: >-
   Attach or edit MCP servers and Host Settings via settings_mutate (global
   ~/.xrk). Use when the user asks to install MCP, fix MCP args/proxy, change
   Settings, switch light/dark theme, or 「装 MCP」「改设置」「白天模式」「夜间模式」.
-  Xiangyang beginners: prefer xrk-home-config hub first; this skill is the deep path.
+  Coding / Desktop: this is the default MCP + Host Settings path.
 ---
 
 # Host Settings + MCP
@@ -25,7 +25,7 @@ description: >-
 | 装 / 改 / 删 MCP | 写进程插件（→ **`xrk-plugin-kind`**） |
 | 改 Host Settings 字段 | 改工作区源码里的业务配置 |
 | 切 light / dark / system | 用文件工具手改 yaml（除非用户明确要求） |
-| Deep MCP / settings repair | 向阳零基础总控（→ **`xrk-home-config`**）；干员/Team（→ **`xrk-delegate`**） |
+| 干员 / Team | **`xrk-delegate`** |
 
 ## 工具
 

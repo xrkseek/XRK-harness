@@ -134,6 +134,19 @@ describe("session.checkpoint + /rollback", () => {
       expect(value.extra).toContain("scratch.txt");
     }
 
+    // Grow chat past the snapshot so restore can report chatAhead.
+    store.append(sessionId, {
+      type: "turn/start",
+      ts: 1,
+      turnId: "t1",
+    });
+    store.append(sessionId, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t1",
+      reason: { kind: "completed" },
+    });
+
     const restored = await dispatchFaceMethod(
       runtime,
       "session.checkpoint.restore",
@@ -141,6 +154,38 @@ describe("session.checkpoint + /rollback", () => {
       { sessionId, atSeq: 0 },
     );
     expect(restored.result.ok).toBe(true);
+    if (restored.result.ok) {
+      const value = restored.result.value as {
+        chatSeq: number;
+        eventCount: number;
+        chatAhead: boolean;
+        chatTruncated: boolean;
+      };
+      expect(value.chatSeq).toBe(0);
+      expect(value.eventCount).toBeGreaterThan(value.chatSeq);
+      expect(value.chatAhead).toBe(true);
+      expect(value.chatTruncated).toBe(false);
+    }
+
+    const truncated = await dispatchFaceMethod(
+      runtime,
+      "session.checkpoint.restore",
+      "r2",
+      { sessionId, atSeq: 0, truncateChat: true },
+    );
+    expect(truncated.result.ok).toBe(true);
+    if (truncated.result.ok) {
+      const value = truncated.result.value as {
+        chatSeq: number;
+        eventCount: number;
+        chatAhead: boolean;
+        chatTruncated: boolean;
+      };
+      expect(value.chatTruncated).toBe(true);
+      expect(value.eventCount).toBe(value.chatSeq);
+      expect(value.chatAhead).toBe(false);
+      expect(store.get(sessionId).events).toHaveLength(value.chatSeq);
+    }
   });
 
   it("lists rollback in commands/list and executes /rollback", async () => {

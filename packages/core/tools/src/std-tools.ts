@@ -52,8 +52,7 @@ export function createStdTools(
   options: StdToolsOptions = {},
 ): ToolDefinition[] {
   const todos: { id: string; content: string; status: string }[] = [];
-  const settled = new Set(["completed", "cancelled", "done", "removed"]);
-  /** Catalog baseline — keep short; open-list discipline lives in standingPlan + dynamicSchema. */
+  /** Catalog baseline — keep short; open-list discipline lives in standingPlanMessage (derive). */
   const todoWriteDescription =
     "Replace the session standing task list (full list every call). " +
     "Use for multi-step work; skip a single trivial step. " +
@@ -62,17 +61,6 @@ export function createStdTools(
     {
       name: "todo_write",
       description: todoWriteDescription,
-      dynamicSchema() {
-        // Only when this registry still holds open items (after a prior write
-        // in-process). Session remounts rely on standingPlanMessage instead.
-        if (!todos.some((t) => !settled.has(t.status))) return undefined;
-        return {
-          description:
-            todoWriteDescription +
-            " Open list active: mark a step completed in the same turn you " +
-            "finish it; advance the next pending to in_progress when you continue.",
-        };
-      },
       parameters: {
         type: "object",
         properties: {

@@ -482,6 +482,39 @@ export class WorkspaceCheckpointStore {
     return removed;
   }
 
+  /**
+   * Pack the shadow repo's loose objects when git decides it is worth it.
+   *
+   * {@link baseArgs} disables `maintenance.auto` so a background maintenance
+   * run can never fight a concurrent `add`/`commit` for the object and index
+   * locks. The side effect is that nothing ever packs what those commits
+   * produce: a live shadow repo reached 27,828 loose objects / 12.79 GiB with
+   * zero packs. An explicit `gc --auto` is the cheap half of that trade — git
+   * returns immediately while the loose count is under `gc.auto`, and when it
+   * does run it packs in one pass and only drops unreachable objects older than
+   * `gc.pruneExpire` (two weeks by default), so a recently dropped index record
+   * stays restorable by sha.
+   *
+   * Call this from an idle moment (startup), never per commit: packing is I/O
+   * heavy and the caller must not be holding a snapshot lock.
+   * @param budgetMs - hard git budget; a timeout leaves the repo untouched.
+   * @returns true when the loose-object count actually went down.
+   */
+  async reclaim(budgetMs = 10 * 60_000): Promise<boolean> {
+    const before = await this.looseObjectCount();
+    const result = await this.exec(["gc", "--auto", "--quiet"], budgetMs);
+    if (result.timedOut || result.code !== 0) return false;
+    return (await this.looseObjectCount()) < before;
+  }
+
+  /** Loose object count from `git count-objects -v` (0 when git cannot answer). */
+  private async looseObjectCount(): Promise<number> {
+    const result = await this.exec(["count-objects", "-v"], 30_000);
+    if (result.code !== 0) return 0;
+    const match = /^count:\s*(\d+)$/m.exec(result.stdout);
+    return match === null ? 0 : Number(match[1]);
+  }
+
   private loadIndex(): WorkspaceCheckpointRecord[] {
     const raw = readJsonFile<PersistedIndex>(this.indexFile);
     const records = raw?.records;

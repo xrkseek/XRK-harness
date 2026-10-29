@@ -72,6 +72,16 @@ export type MuxFrame =
       readonly sessionId: string;
       readonly jobs: readonly unknown[];
     }
+  /**
+   * Claude Code mods AbovePrompt band — one drawn generation. `tree: null`
+   * means no mod drew (still pushed so the client clears a prior band).
+   */
+  | {
+      readonly type: "session/band";
+      readonly sessionId: string;
+      readonly generation: number;
+      readonly tree: readonly unknown[] | null;
+    }
   /** 产品壳可应答审批（稳定 rpcId 在 server-request 信封上）。 */
   | {
       readonly type: "approval/requested";
@@ -198,6 +208,19 @@ export type HostFrame =
         readonly sessionIds: readonly string[];
         readonly createdAt: string;
         readonly updatedAt: string;
+        readonly kind?: "project" | "agent-home";
+        readonly boundMemberId?: string;
+        readonly boundMemberAppearance?: {
+          readonly shape: string;
+          readonly color: string;
+          readonly kit?: string;
+          readonly kitHat?: string;
+          readonly kitGlasses?: string;
+          readonly kitHeld?: string;
+          readonly overlayHat?: string;
+          readonly overlayGlasses?: string;
+          readonly overlayHeld?: string;
+        };
       };
     }
   | {

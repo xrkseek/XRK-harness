@@ -1,6 +1,11 @@
 /**
  * Cursor-style confirm when resubmitting from a past user message:
  * Cancel / Don't revert workspace / Revert workspace + truncate lineage.
+ *
+ * The safe choice carries the primary weight: truncating the transcript is
+ * already irreversible, and dropping the workspace to the pre-message state on
+ * top of it is the riskiest click in the dialog. Reverting files stays one
+ * outline button away, never the default-looking action.
  */
 import { Button, Modal } from '@xrkseek/client-ui-primitives'
 import css from './ResubmitConfirm.module.css'
@@ -47,7 +52,7 @@ export function ResubmitConfirm({
             {cancelLabel}
           </Button>
           <Button
-            variant="outline"
+            variant="primary"
             className={css.action}
             disabled={busy}
             onClick={() => { onChoice('keep-files') }}
@@ -55,7 +60,7 @@ export function ResubmitConfirm({
             {keepFilesLabel}
           </Button>
           <Button
-            variant="primary"
+            variant="outline"
             className={css.action}
             disabled={busy}
             onClick={() => { onChoice('revert-files') }}

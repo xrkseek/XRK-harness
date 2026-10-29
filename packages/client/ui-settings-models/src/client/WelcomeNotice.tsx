@@ -57,7 +57,7 @@ export function WelcomeNotice(props: WelcomeNoticeProps): ReactNode {
   const paragraphs = t('welcomeBody').split('\n\n')
 
   return (
-    <OnboardingModal title={t('welcomeTitle')} focusTitle>
+    <OnboardingModal title={t('welcomeTitle')}>
       <div className={css.copy}>
         {paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
       </div>
@@ -67,6 +67,7 @@ export function WelcomeNotice(props: WelcomeNoticeProps): ReactNode {
           variant="primary"
           className={css.primary}
           disabled={state.status === 'saving'}
+          autoFocus
           onClick={() => { void acknowledge() }}
         >
           {t('welcomeContinue')}

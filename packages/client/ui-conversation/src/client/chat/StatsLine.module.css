@@ -66,3 +66,23 @@ button.pill[aria-expanded='true'] {
   color: var(--dsw-alias-separator-primary);
   margin: 0 6px;
 }
+
+@media (max-width: 767px) {
+  .root {
+    gap: 6px;
+    padding: 0 calc(var(--dsh-composer-side-clearance) + 8px);
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .pill {
+    gap: 4px;
+    min-height: 28px;
+    padding: 2px 6px;
+    touch-action: manipulation;
+  }
+
+  .sep {
+    margin: 0 4px;
+  }
+}

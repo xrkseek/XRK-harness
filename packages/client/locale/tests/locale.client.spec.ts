@@ -37,15 +37,21 @@ describe('LocaleRuntime', () => {
     vi.unstubAllGlobals()
   })
 
-  it('translates through the active-locale -> zh -> key chain', () => {
+  it('translates through the active-locale -> en -> zh -> key chain', () => {
     const { svc } = make()
     svc.register('ns', 'zh', { hello: '你好', onlyZh: '仅中文' })
-    svc.register('ns', 'en', { hello: 'Hello' })
+    svc.register('ns', 'en', { hello: 'Hello', onlyEn: 'English only' })
+    svc.register('ns', 'ja', { hello: 'こんにちは' })
     const t = svc.bind('ns')
     expect(svc.getLocale().active).toBe('zh')
     expect(t('hello')).toBe('你好')
     svc.setLocale('en')
     expect(t('hello')).toBe('Hello')
+    expect(t('onlyZh')).toBe('仅中文')
+    svc.setLocale('ja')
+    expect(t('hello')).toBe('こんにちは')
+    // ja miss bridges through en before zh
+    expect(t('onlyEn')).toBe('English only')
     expect(t('onlyZh')).toBe('仅中文')
     expect(t('missing.key')).toBe('missing.key')
   })
@@ -240,11 +246,12 @@ describe('LocaleRuntime', () => {
     expect(svc.getLocale().active).toBe('zh')
   })
 
-  it('exposes the two shipped locales with self-described labels', () => {
+  it('exposes the three shipped locales with self-described labels', () => {
     const { svc } = make()
     expect(svc.getLocale().locales).toEqual([
       { id: 'zh', label: '中文' },
       { id: 'en', label: 'English' },
+      { id: 'ja', label: '日本語' },
     ])
   })
 })

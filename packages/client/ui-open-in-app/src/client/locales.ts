@@ -32,6 +32,23 @@ export const en = {
   'app.windowsterminal': 'Windows Terminal',
   'app.iterm': 'iTerm',
   'app.gnometerminal': 'GNOME Terminal',
-} as const
+}
+
+/** Japanese dictionary, checked complete against the zh key set. */
+export const ja = {
+  'open.tooltip': 'ローカルで開く',
+  'open.title': '{app} で開く',
+  'open.error': '開けませんでした',
+  'menu.toggle': 'アプリを選ぶ',
+  'app.finder': 'Finder',
+  'app.explorer': 'ファイルエクスプローラー',
+  'app.filemanager': 'ファイルマネージャー',
+  'app.cursor': 'カーソル',
+  'app.vscode': 'VS Code',
+  'app.terminal': 'ターミナル',
+  'app.windowsterminal': 'Windows Terminal',
+  'app.iterm': 'iTerm',
+  'app.gnometerminal': 'GNOME Terminal',
+} as const satisfies Record<OpenInAppKey, string>
 
 export type OpenInAppKey = keyof typeof en

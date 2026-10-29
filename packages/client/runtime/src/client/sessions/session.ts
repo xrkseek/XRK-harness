@@ -426,7 +426,20 @@ export class Session implements SessionFace {
    * defensive).
    * @returns the cancel result.
    */
-  async cancel(): Promise<RpcResult<{ accepted: true }>> {
+    /**
+     * Surface a composer-strip failure that came from somewhere other than
+     * `prompt` / `cancel` (edit-resubmit truncation, file rollback). Without
+     * this the caller could only swallow the error, so a failed cut looked
+     * like a successful one.
+     * @param op - user-facing copy selector.
+     * @param error - RPC failure to display.
+     */
+    reportError(op: PromptError['op'], error: RpcError): void {
+      this.promptError = { op, error }
+      this.notifier.markDirty()
+    }
+
+    async cancel(): Promise<RpcResult<{ accepted: true }>> {
     const address = this.address
     if (address !== undefined && address.mode === 'one-shot') {
       const result: RpcResult<{ accepted: true }> = {
@@ -474,6 +487,25 @@ export class Session implements SessionFace {
   async backgroundJob(jobId: string): Promise<RpcResult<{ accepted: true }>> {
     try {
       return (await this.api.jobs.background({ sessionId: this.sessionId, jobId: jobId as never })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /**
+   * Press a Claude Code mods AbovePrompt band button. Host ignores stale
+   * generation/actionId pairs and returns the current snapshot.
+   */
+  async pressBand(
+    generation: number,
+    actionId: string,
+  ): Promise<RpcResult<{ generation: number; tree: readonly unknown[] | null }>> {
+    try {
+      return (await this.api.sessions.pressBand({
+        sessionId: this.sessionId,
+        generation,
+        actionId,
+      })).result
     } catch (error) {
       return transportError(error)
     }

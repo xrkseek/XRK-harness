@@ -511,6 +511,7 @@ function HostQueueRow({
                   type="file"
                   multiple
                   hidden
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/*,*/*"
                   onChange={(event) => {
                     const list = event.currentTarget.files
                     if (list === null || list.length === 0 || editing === null) return
