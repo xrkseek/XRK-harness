@@ -49,13 +49,20 @@ function childEnv() {
   return env;
 }
 
-function runNode(entry, args) {
+function runNode(entry, args, { quiet = false } = {}) {
   const r = spawnSync(NODE, [entry, ...args], {
-    stdio: "inherit",
+    // Quiet: keep GH Actions from treating stub emit `error TS` lines as
+    // check annotations; status still gates exit.
+    stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit",
     cwd: ROOT,
     env: childEnv(),
+    encoding: "utf8",
   });
   if (r.status !== 0) {
+    if (quiet) {
+      if (r.stdout) process.stdout.write(r.stdout);
+      if (r.stderr) process.stderr.write(r.stderr);
+    }
     process.exit(r.status ?? 1);
   }
 }
@@ -91,7 +98,8 @@ const LINT_PATHS = [
 // Stub `lib/types` are gitignored (`packages/stubs/**/lib/`). Packages such as
 // `@xrkseek/claude-code-mods` resolve `@xrkseek/xrk-*` via those emits — CI
 // checkouts have no prior local build, so emit before `tsc -b`.
-runNode(path.join(ROOT, "scripts/emit-stub-types.mjs"), []);
+process.stdout.write("check: emit stub types…\n");
+runNode(path.join(ROOT, "scripts/emit-stub-types.mjs"), [], { quiet: true });
 runNode(path.join(ROOT, "node_modules/typescript/bin/tsc"), [
   "-b",
   "--pretty",
