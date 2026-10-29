@@ -87,6 +87,11 @@ const LINT_PATHS = [
 
 // Invoke repo-local CLIs through this script's Node (≥26), not `pnpm exec`
 // (global pnpm on Windows may spawn IDE-bundled Node 22).
+//
+// Stub `lib/types` are gitignored (`packages/stubs/**/lib/`). Packages such as
+// `@xrkseek/claude-code-mods` resolve `@xrkseek/xrk-*` via those emits — CI
+// checkouts have no prior local build, so emit before `tsc -b`.
+runNode(path.join(ROOT, "scripts/emit-stub-types.mjs"), []);
 runNode(path.join(ROOT, "node_modules/typescript/bin/tsc"), [
   "-b",
   "--pretty",
