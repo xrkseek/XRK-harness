@@ -3262,7 +3262,7 @@ export function createHostManager(): HostManager {
       await ensureDshCompatHostPlugin(loader);
       // 向日葵免费车道：随产品内置的 LLM 插件。车道不可达时插件返回空
       // `llmBrands`，该 provider 不会进入 registry/catalog，启动不受影响。
-      const sunflowerFreeReady = await ensureSunflowerFreePlugin(loader);
+      await ensureSunflowerFreePlugin(loader);
       refreshFacePlugins();
 
       const hostWireCtx = {

@@ -45,8 +45,9 @@ export function wrapStoreForSessionTelemetry(
   ): Partial<Pick<SessionStore, K>> => {
     const fn = store[key];
     if (typeof fn !== "function") return {};
+    // Computed-key object is wider than Partial<Pick<…>>; assert at the return.
     return {
-      [key]: (fn as (...args: never[]) => unknown).bind(store),
+      [key]: fn.bind(store),
     } as Partial<Pick<SessionStore, K>>;
   };
 

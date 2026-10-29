@@ -1898,7 +1898,7 @@ export function createHarnessComposition(
           routingNames = undefined;
         }
       };
-      const handle = await createAgent({
+      const handle = createAgent({
         sessionId,
         store,
         llm,

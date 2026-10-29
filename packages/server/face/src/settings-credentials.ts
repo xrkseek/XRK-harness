@@ -1458,7 +1458,7 @@ export async function settingsMutateFace(
   if (ns === "ui-presence") {
     scheduleBossStatusBroadcast(
       runtime,
-      readBossStatusFields(snapshotUser as Record<string, unknown>),
+      readBossStatusFields(snapshotUser),
       readBossStatusFields(result.view.value as Record<string, unknown>),
     );
   }

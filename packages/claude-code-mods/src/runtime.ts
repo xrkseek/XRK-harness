@@ -220,8 +220,8 @@ export async function createModsRuntime(
   const modTools = new Set<string>();
 
   // Surfaces need the engine to raise `ui.render`; host-ops need redraw to
-  // ask the band to refresh. Both close over locals assigned below.
-  let engine!: ModsEngine<AgentBinding>;
+  // ask the band to refresh. Circular init: surfaces → engine → ops → redraw → surfaces.
+  const engineSlot: { current?: ModsEngine<AgentBinding> } = {};
   const agentOfSession = (sessionId: string): ModAgent | undefined =>
     options.agentOfSession?.(sessionId);
   const surfaces = new SurfaceTable({
@@ -230,7 +230,7 @@ export async function createModsRuntime(
     render: (sessionId, input) => {
       const agent = agentOfSession(sessionId);
       if (agent === undefined) return Promise.resolve(null);
-      return engine.raise<UiRenderInput, UiRenderResult>(
+      return engineSlot.current!.raise<UiRenderInput, UiRenderResult>(
         "ui.render",
         input,
         () => null,
@@ -265,7 +265,7 @@ export async function createModsRuntime(
     redraw,
   });
 
-  engine = new ModsEngine<AgentBinding>({
+  engineSlot.current = new ModsEngine<AgentBinding>({
     ops: (op) => ops[op],
     stateKey: (binding) => binding.agent?.session.id ?? "",
     budgetMs: hookTimeoutMs,
@@ -278,6 +278,7 @@ export async function createModsRuntime(
       surfaces.stateWritten(key, slot);
     },
   });
+  const engine = engineSlot.current;
 
   const pipelineDisposers: (() => void)[] = [];
 
