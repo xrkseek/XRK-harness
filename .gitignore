@@ -83,3 +83,10 @@ apps/cli/product-web/
 /extensions/xrk-sunflower-free/vendor/
 
 session-agent-presets.json
+
+# Local scratch (do not ship)
+scripts/.locale-*
+scripts/locale-ja-en-map*.json
+session-agent-presets.json.*.tmp
+xiangyang-workspace/
+
