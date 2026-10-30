@@ -202,6 +202,14 @@ export interface CreateFaceRuntimeOptions {
       readonly message: string;
     }[];
   }>;
+  /**
+   * Host live-remounts sunflower-free after Settings egress changes
+   * (see {@link FaceRuntime.syncSunflowerFree}).
+   */
+  readonly syncSunflowerFree?: () => Promise<{
+    readonly loaded: boolean;
+    readonly unloaded: boolean;
+  }>;
   /** Product-shell boot entries listed in inventory. */
   readonly webPlugins?: readonly FaceWebPlugin[];
   readonly invalidateAgent?: (
@@ -1483,6 +1491,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
     ...(options.syncMcpServers !== undefined
       ? { syncMcpServers: options.syncMcpServers }
+      : {}),
+    ...(options.syncSunflowerFree !== undefined
+      ? { syncSunflowerFree: options.syncSunflowerFree }
       : {}),
     mcpSyncOverlay: { connectFailures: [], parked: [], connecting: [] },
     ...(options.autoReviewSlashPersist !== undefined
