@@ -355,6 +355,15 @@ export async function hostListOpenInApps(): Promise<
 export async function hostOpenInApp(
   payload: unknown,
 ): Promise<FaceRpcResult<{ opened: true }>> {
+  if (!canOpenNativePath()) {
+    return {
+      ok: false,
+      error: {
+        code: "not-implemented",
+        message: "host.openInApp unsupported on this platform",
+      },
+    };
+  }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return {
       ok: false,

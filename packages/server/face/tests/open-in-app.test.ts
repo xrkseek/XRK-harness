@@ -15,8 +15,13 @@ import { installSpawnDetachedForTests } from "../src/host-open-path.js";
 
 describe("host open-in-app", () => {
   const spawnCalls: { command: string; args: readonly string[] }[] = [];
+  let prevNativeOpen: string | undefined;
 
   beforeEach(() => {
+    // Headless Linux CI has no DISPLAY; force the Desktop Host declaration so
+    // catalog / openInApp exercises match win/mac (spawn is stubbed below).
+    prevNativeOpen = process.env.XRK_NATIVE_OPEN;
+    process.env.XRK_NATIVE_OPEN = "1";
     resetOpenInAppCache();
     spawnCalls.length = 0;
     // Never ShellExecute in unit tests — Win races `cmd /c start` vs temp rm.
@@ -27,6 +32,9 @@ describe("host open-in-app", () => {
 
   afterEach(() => {
     installSpawnDetachedForTests(undefined);
+    if (prevNativeOpen === undefined) delete process.env.XRK_NATIVE_OPEN;
+    else process.env.XRK_NATIVE_OPEN = prevNativeOpen;
+    resetOpenInAppCache();
   });
 
   it("SSH launch env hides the catalog", () => {

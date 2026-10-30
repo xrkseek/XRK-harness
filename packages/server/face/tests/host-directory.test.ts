@@ -15,6 +15,7 @@ import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
+import { canOpenNativePath } from "../src/host-open-path.js";
 import type { FaceDrain } from "../src/context.js";
 
 function drain(): FaceDrain {
@@ -163,7 +164,7 @@ describe("host directory (DSH browse shapes)", () => {
         provider?: string;
       };
       expect(v.version).toBe("test");
-      expect(v.canOpenPath).toBe(true);
+      expect(v.canOpenPath).toBe(canOpenNativePath());
       expect(v.canPty).toBe(true);
       expect(v.remoteExecution).toBeUndefined();
       if (v.provider) {

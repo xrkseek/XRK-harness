@@ -251,19 +251,12 @@ export async function revealNativePath(
 export async function hostOpenPath(
   payload: unknown,
 ): Promise<FaceRpcResult<{ opened: true }>> {
-  if (!canOpenNativePath()) {
-    return {
-      ok: false,
-      error: {
-        code: "not-implemented",
-        message: "host.openPath unsupported on this platform",
-      },
-    };
-  }
+  // Validate path shape before the platform gate so relative / empty inputs
+  // stay bad-request on headless CI Linux (not not-implemented / internal).
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return {
       ok: false,
-      error: { code: "invalid-payload", message: "path required" },
+      error: { code: "bad-request", message: "path required" },
     };
   }
   const body = payload as Record<string, unknown>;
@@ -271,15 +264,24 @@ export async function hostOpenPath(
   if (!path) {
     return {
       ok: false,
-      error: { code: "invalid-payload", message: "path required" },
+      error: { code: "bad-request", message: "path required" },
     };
   }
   if (!fullyQualified(path)) {
     return {
       ok: false,
       error: {
-        code: "invalid-payload",
+        code: "bad-request",
         message: "path must be absolute",
+      },
+    };
+  }
+  if (!canOpenNativePath()) {
+    return {
+      ok: false,
+      error: {
+        code: "not-implemented",
+        message: "host.openPath unsupported on this platform",
       },
     };
   }

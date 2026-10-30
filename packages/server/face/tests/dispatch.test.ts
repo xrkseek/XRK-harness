@@ -12,6 +12,7 @@ import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { createProviderRegistry } from "@xrkseek/llm-registry";
 import { createFaceRuntime } from "../src/runtime.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
+import { canOpenNativePath } from "../src/host-open-path.js";
 
 async function harness() {
   const store = createMemorySessionStore();
@@ -67,7 +68,8 @@ describe("face dispatch", () => {
     if (d.result.ok) {
       expect(d.result.value).toMatchObject({
         version: "test",
-        canOpenPath: true,
+        // Headless Linux CI has no DISPLAY → false; Win/mac/GUI Linux → true.
+        canOpenPath: canOpenNativePath(),
       });
     }
     const fork = await dispatchFaceMethod(runtime, "session.fork", "r2", {});
@@ -396,13 +398,14 @@ describe("face dispatch", () => {
       if (!res.result.ok) throw new Error("discover failed");
       expect(res.result.value).toEqual({
         models: [
-          { id: "acme-large", name: "Acme Large", contextWindow: 65536, softBudgetMaxTokens: 49_000 },
+          // Codex: floor(contextWindow × 0.9)
+          { id: "acme-large", name: "Acme Large", contextWindow: 65536, softBudgetMaxTokens: 58_982 },
           { id: "acme-small", name: "acme-small" },
           {
             id: "codearts/flash",
             name: "flash",
             contextWindow: 128_000,
-            softBudgetMaxTokens: 100_000,
+            softBudgetMaxTokens: 115_200,
             reasoning: {
               efforts: [
                 { id: "on", name: "On" },

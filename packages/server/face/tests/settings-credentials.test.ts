@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import {
   createMemorySecretStore,
@@ -1041,46 +1041,59 @@ describe("Face settings U2", () => {
     });
   });
 
-  it("settings.openDocument ignores client paths and uses Host dump", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "xrk-settings-"));
-    const opened: string[] = [];
-    const rt = runtime({
-      hostPublic: true,
-      productDir: dir,
-      openNativePath: async (target) => {
-        opened.push(target);
-      },
+  describe("settings.openDocument", () => {
+    let prevNativeOpen: string | undefined;
+    beforeEach(() => {
+      // Injected openNativePath still needs the platform gate open (CI Linux).
+      prevNativeOpen = process.env.XRK_NATIVE_OPEN;
+      process.env.XRK_NATIVE_OPEN = "1";
     });
-    const openDoc = await dispatchFaceMethod(
-      rt,
-      "settings.openDocument",
-      "od1",
-      { path: "C:\\Windows\\System32\\drivers\\etc\\hosts" },
-    );
-    expect(openDoc.result.ok).toBe(true);
-    if (openDoc.result.ok) {
-      expect(openDoc.result.value).toEqual({ opened: true });
-    }
-    expect(opened).toHaveLength(1);
-    expect(opened[0]).toBe(path.join(dir, "settings.yaml"));
-    expect(opened[0]!.toLowerCase()).not.toContain("system32");
-  });
+    afterEach(() => {
+      if (prevNativeOpen === undefined) delete process.env.XRK_NATIVE_OPEN;
+      else process.env.XRK_NATIVE_OPEN = prevNativeOpen;
+    });
 
-  it("settings.openDocument prefers an existing policy file", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "xrk-policy-"));
-    const policy = path.join(dir, "policy.json");
-    await writeFile(policy, "{}\n", "utf8");
-    const opened: string[] = [];
-    const rt = runtime({
-      settingsDocumentPath: policy,
-      productDir: dir,
-      openNativePath: async (target) => {
-        opened.push(target);
-      },
+    it("ignores client paths and uses Host dump", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "xrk-settings-"));
+      const opened: string[] = [];
+      const rt = runtime({
+        hostPublic: true,
+        productDir: dir,
+        openNativePath: async (target) => {
+          opened.push(target);
+        },
+      });
+      const openDoc = await dispatchFaceMethod(
+        rt,
+        "settings.openDocument",
+        "od1",
+        { path: "C:\\Windows\\System32\\drivers\\etc\\hosts" },
+      );
+      expect(openDoc.result.ok).toBe(true);
+      if (openDoc.result.ok) {
+        expect(openDoc.result.value).toEqual({ opened: true });
+      }
+      expect(opened).toHaveLength(1);
+      expect(opened[0]).toBe(path.join(dir, "settings.yaml"));
+      expect(opened[0]!.toLowerCase()).not.toContain("system32");
     });
-    const openDoc = await dispatchFaceMethod(rt, "settings.openDocument", "od2", {});
-    expect(openDoc.result.ok).toBe(true);
-    expect(opened).toEqual([policy]);
+
+    it("prefers an existing policy file", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "xrk-policy-"));
+      const policy = path.join(dir, "policy.json");
+      await writeFile(policy, "{}\n", "utf8");
+      const opened: string[] = [];
+      const rt = runtime({
+        settingsDocumentPath: policy,
+        productDir: dir,
+        openNativePath: async (target) => {
+          opened.push(target);
+        },
+      });
+      const openDoc = await dispatchFaceMethod(rt, "settings.openDocument", "od2", {});
+      expect(openDoc.result.ok).toBe(true);
+      expect(opened).toEqual([policy]);
+    });
   });
 });
 
