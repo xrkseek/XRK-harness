@@ -81,6 +81,12 @@ export interface ToolCallOwnerProps {
    * Optional so non-image toolviews and tests need not supply it.
    */
   loadImage?: ((attachment: ImageAttachmentRef) => Promise<string>) | undefined
+  /**
+   * Tree-authorized `tool.call.images` / `tool.call.files` dispatcher.
+   * Sole child declaration lives on `conversation.chat.node`; keyed toolviews
+   * must use this (their own `renderSlot` cannot re-own those holes).
+   */
+  mediaRenderSlot?: PropsRenderSlots<'tool.call.images' | 'tool.call.files'>['renderSlot']
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
 }

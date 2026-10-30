@@ -360,18 +360,21 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
   const args = remoteArgs(payload);
   const spec = String(args.spec ?? "").trim();
   const registry = String(args.registry ?? "").trim();
+  const proxy = String(args.proxy ?? "").trim();
   const requestId = String(args.requestId ?? rpcId).trim() || rpcId;
   if (!spec) {
     return { ok: false, error: { code: "invalid-payload", message: "spec required" } };
   }
   if (!runtime.updateUserPlugin) {
+    const hintParts = ["xrkh plugin add"];
+    if (registry) hintParts.push("--registry", registry);
+    if (proxy) hintParts.push("--proxy", proxy);
+    hintParts.push(spec);
     return {
       ok: false,
       error: {
         code: "unavailable",
-        message: registry
-          ? `Use: xrkh plugin add --registry ${registry} ${spec}`
-          : `Use: xrkh plugin add ${spec}`,
+        message: `Use: ${hintParts.join(" ")}`,
       },
     };
   }
@@ -388,11 +391,14 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
   const mutateOpts = {
     onChunk,
     ...(registry ? { registry } : {}),
+    ...(proxy ? { proxy } : {}),
   };
   const result = await runtime.updateUserPlugin(spec, mutateOpts);
-  const command = registry
-    ? `xrkh plugin add --registry ${registry} ${spec}`
-    : `xrkh plugin add ${spec}`;
+  const commandParts = ["xrkh plugin add"];
+  if (registry) commandParts.push("--registry", registry);
+  if (proxy) commandParts.push("--proxy", proxy);
+  commandParts.push(spec);
+  const command = commandParts.join(" ");
   const log = mutateLogFromResult(command, result);
   if (!result.ok) {
     return {

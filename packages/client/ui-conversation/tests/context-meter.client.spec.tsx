@@ -51,7 +51,8 @@ describe('ContextMeter', () => {
     expect(panel.textContent).toContain('上下文已用')
     expect(panel.textContent).toContain('系统提示词~120')
     expect(panel.textContent).toContain('工具~21.5K')
-    expect(panel.textContent).toContain('对话消息~477K')
+    // Messages fill ring − system − tools (~10.4K), not the raw heuristic 477K.
+    expect(panel.textContent).toContain('对话消息~10.4K')
     // The occupancy bar splits into one colored segment per composition row.
     expect(panel.getElementsByClassName(segmentClass)).toHaveLength(3)
     // Clicking the trigger again toggles the panel shut.
@@ -98,7 +99,42 @@ describe('ContextMeter', () => {
     })
     const trigger = view.getByRole('button', { name: '上下文已用 2%' })
     fireEvent.click(trigger)
-    expect(view.container.querySelector('[role="dialog"]')!.textContent).toContain('~3K / 128K')
+    const panel = view.container.querySelector('[role="dialog"]')!
+    expect(panel.textContent).toContain('~3K / 128K')
+    // used (3K) < system+tools → keep raw heuristic messages (no ring fill).
+    expect(panel.textContent).toContain('对话消息~477K')
+  })
+
+  it('shows an approximate ring when only contextWindow + breakdown exist (no usage)', () => {
+    const view = meter({
+      contextPressure: { contextWindow: 128_000 },
+      contextBreakdown: { systemTokens: 1_000, toolsTokens: 3_000, messageTokens: 12_000 },
+    })
+    // 16000/128000 = 12.5% → 13%
+    fireEvent.click(view.getByRole('button', { name: '上下文已用 13%' }))
+    const panel = view.container.querySelector('[role="dialog"]')!
+    expect(panel.textContent).toContain('~16K / 128K')
+    expect(panel.textContent).toMatch(/提供方未回报 usage/)
+  })
+
+  it('fills 对话消息 so rows sum to the provider ring (undercount residual)', () => {
+    // Photo case: ring ~210K, tools ~11.7K, heuristic messages undercount.
+    const view = meter({
+      contextPressure: { projectedTokens: 210_000, contextWindow: 262_144 },
+      contextBreakdown: {
+        systemTokens: 2_800,
+        toolsTokens: 11_700,
+        messageTokens: 121_000,
+      },
+    })
+    fireEvent.click(view.getByRole('button', { name: '上下文已用 80%' }))
+    const panel = view.container.querySelector('[role="dialog"]')!
+    expect(panel.textContent).toContain('~210K / 262K')
+    expect(panel.textContent).toContain('系统提示词~2.8K')
+    expect(panel.textContent).toContain('工具~11.7K')
+    // 210000 − 2800 − 11700 = 195500 → ~196K
+    expect(panel.textContent).toContain('对话消息~196K')
+    expect(panel.textContent).toMatch(/对话消息按圆环补到/)
   })
 
   it('omits the composition rows while the contextBreakdown projection is absent', () => {

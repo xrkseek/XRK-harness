@@ -222,6 +222,15 @@ export interface FaceRuntime {
     readonly parked?: readonly string[];
   }>;
   /**
+   * Host live-remounts the bundled sunflower-free LLM plugin after Settings
+   * egress changes (apply env → clear probe cache → dispose sidecar → load +
+   * re-probe). Absent → UI still saves, but catalog needs a Host restart.
+   */
+  readonly syncSunflowerFree?: () => Promise<{
+    readonly loaded: boolean;
+    readonly unloaded: boolean;
+  }>;
+  /**
    * Last `syncMcpServers` overlay (parked / connectFailures). Mutate writes;
    * describe/get read so Settings UI does not reclassify failures as parked.
    */
@@ -287,6 +296,8 @@ export interface FaceRuntime {
     spec: string,
     options?: {
       readonly registry?: string;
+      /** npm pack proxy for this install only (`xrkh plugin add --proxy`). */
+      readonly proxy?: string;
       readonly onChunk?: (chunk: {
         readonly stream: "stdout" | "stderr";
         readonly text: string;

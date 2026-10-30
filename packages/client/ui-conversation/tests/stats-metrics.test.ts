@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   billedInputTokens,
   cacheHitPercent,
+  contextBreakdownForMeter,
   contextOccupancy,
   formatDuration,
   formatTokens,
@@ -49,12 +50,44 @@ describe('stats-metrics', () => {
   it('computes context occupancy only when both numerator and capacity are known', () => {
     // Prefer projectedTokens when both are present (DSH context-occupancy).
     expect(contextOccupancy({ pressureTokens: 32_000, projectedTokens: 6_000, contextWindow: 128_000 }))
-      .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000 })
+      .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000, approximate: false })
     expect(contextOccupancy({ pressureTokens: 32_000, contextWindow: 128_000 }))
-      .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000 })
+      .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000, approximate: false })
     expect(contextOccupancy({ pressureTokens: 32_000 })).toBeNull()
     expect(contextOccupancy({ contextWindow: 128_000 })).toBeNull()
     expect(contextOccupancy(undefined)).toBeNull()
     expect(contextOccupancy({ pressureTokens: 300_000, contextWindow: 128_000 })?.percent).toBe(100)
+    // No usage sample — heuristic breakdown fills an approximate ring.
+    expect(contextOccupancy(
+      { contextWindow: 262_144 },
+      { systemTokens: 2_800, toolsTokens: 11_700, messageTokens: 121_000 },
+    )).toEqual({
+      percent: 52,
+      usedTokens: 135_500,
+      contextWindow: 262_144,
+      approximate: true,
+    })
+  })
+
+  it('fills messages so meter rows sum to the provider ring', () => {
+    expect(contextBreakdownForMeter(
+      { systemTokens: 2_800, toolsTokens: 11_700, messageTokens: 121_000 },
+      210_000,
+    )).toEqual({
+      systemTokens: 2_800,
+      toolsTokens: 11_700,
+      messageTokens: 195_500,
+      residualTokens: 74_500,
+    })
+    // Ring smaller than system+tools → keep raw heuristic (no clamp).
+    expect(contextBreakdownForMeter(
+      { systemTokens: 120, toolsTokens: 21_500, messageTokens: 477_000 },
+      3_000,
+    )).toEqual({
+      systemTokens: 120,
+      toolsTokens: 21_500,
+      messageTokens: 477_000,
+      residualTokens: 0,
+    })
   })
 })

@@ -55,6 +55,12 @@ function openCodeSessionHeaders(
 
 export interface ProviderRegistry {
   registerBrand(entry: BrandEntry): void;
+  /**
+   * Drop a brand by id (case-insensitive). Used when a `kind: "llm"` plugin
+   * remounts with a refreshed catalog (e.g. sunflower-free egress change).
+   * @returns whether a brand was removed.
+   */
+  unregisterBrand(id: string): boolean;
   resolve(input: ResolveInput): ProviderBinding;
   createAdapter(
     binding: ProviderBinding,
@@ -113,6 +119,12 @@ export function createProviderRegistry(
         throw new Error(`llm-registry: brand already registered: ${id}`);
       }
       brands.set(id, { ...entry, id });
+    },
+
+    unregisterBrand(id) {
+      const key = id.trim().toLowerCase();
+      if (!key || !brands.has(key)) return false;
+      return brands.delete(key);
     },
 
     resolve(input) {

@@ -21,6 +21,7 @@ import {
   EMPTY_PRESENCE_SESSION_CUES,
   type PresenceSessionCues,
 } from './presence-session-cues.ts'
+import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
 import { loadSessionStatus, type SessionStatusView } from './preview-load.ts'
 import { overviewStatusPollMs } from './overview-status-poll.ts'
 import css from './PresenceDock.module.css'
@@ -28,16 +29,6 @@ import css from './PresenceDock.module.css'
 const NOOP_SUBSCRIBE = (_listener: () => void): (() => void) => () => {}
 const PHONE_ATTR = 'data-xrk-layout-phone'
 const PHONE_SLOT = '[data-phone-presence-slot]'
-
-/**
- * Header dock is Overview「被委派方」, never Settings 老板 look.
- * Face `companionBall` usually fills this; until status lands (or reconnect),
- * keep a bare agent default so the chip does not flash Boss 装扮.
- */
-const HEADER_AGENT_FALLBACK_LOOK = Object.freeze({
-  shape: 'blob',
-  color: 'cream',
-})
 
 export { PRESENCE_DOCK_ENTER_MS, PRESENCE_DOCK_EXIT_MS } from './presence-handoff.ts'
 
@@ -198,6 +189,13 @@ export function PresenceDock({
 
   const visible = presenceEnabled && phase !== 'gone'
 
+  // Drop stale companionBall immediately on session switch — otherwise the chip
+  // keeps the previous seat's look (or paints Settings 老板) until Status returns.
+  useEffect(() => {
+    setStatus(null)
+    setStatusTick((n) => n + 1)
+  }, [sessionId])
+
   useEffect(() => {
     if (!visible || phase === 'exit') return
     setStatusTick((n) => n + 1)
@@ -272,7 +270,7 @@ export function PresenceDock({
             <PresenceBall
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
-              memberLook={status?.companionBall ?? HEADER_AGENT_FALLBACK_LOOK}
+              memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
               turnActive={
                 (status?.delivery.turnActive ?? false)
                 || parentRunning
@@ -296,7 +294,7 @@ export function PresenceDock({
               )}
               compact
               density="header"
-              {...(sideline && !phoneSlot ? { captionHint: sideline } : {})}
+              {...(sideline ? { captionHint: sideline } : {})}
               t={t as (key: string, params?: Record<string, string>) => string}
               loadingLabel={t('preview.status.presenceLoading')}
               errorLabel={t('preview.status.presenceError')}

@@ -54,11 +54,13 @@ function extractTarball(tgz: string, extractDir: string): void {
  * Prefer a local directory when the spec already points at an unpacked
  * package (file:/link:/relative path with package.json). Otherwise npm pack.
  * Optional `registry` becomes `npm pack --registry …` (Settings mirror pick).
+ * Optional `proxy` becomes `npm pack --proxy … --https-proxy …` for **this
+ * pack only** — never sets process env (does not affect Host / other CLI).
  */
 export function fetchPackage(
   spec: string,
   cwd: string = process.cwd(),
-  options: { readonly registry?: string } = {},
+  options: { readonly registry?: string; readonly proxy?: string } = {},
 ): UnpackedPackage {
   const anchored = anchorPathSpec(spec.trim(), cwd);
   const bare =
@@ -97,6 +99,11 @@ export function fetchPackage(
     const npmArgs = ["pack", anchored, "--pack-destination", stage];
     const registry = options.registry?.trim();
     if (registry) npmArgs.push("--registry", registry);
+    const proxy = options.proxy?.trim();
+    if (proxy) {
+      // npm ignores OS/system proxy; only these flags apply to this pack.
+      npmArgs.push("--proxy", proxy, "--https-proxy", proxy);
+    }
     const result = spawnSync(
       "npm",
       npmArgs,

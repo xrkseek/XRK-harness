@@ -71,10 +71,15 @@ export function createWebTools(
       ("env" in options && options.env) || process.env,
     );
 
-  const searchTool: ToolDefinition<{ query?: string; queries?: string[] }> = {
+  const searchTool: ToolDefinition<{
+    query?: string;
+    queries?: string[];
+    proxy?: string;
+  }> = {
     name: "web_search",
     description:
-      "Search the web for current information. Pass `query` or `queries` (searched concurrently). Returns summaries and source URLs.",
+      "Search the web for current information. Pass `query` or `queries` (searched concurrently). Returns summaries and source URLs. " +
+      "Optional proxy (e.g. http://127.0.0.1:7897); otherwise process HTTP_PROXY/HTTPS_PROXY apply when Host installed the env proxy agent.",
     parameters: {
       type: "object",
       properties: {
@@ -83,6 +88,11 @@ export function createWebTools(
           type: "array",
           items: { type: "string" },
           description: "Multiple queries searched in parallel.",
+        },
+        proxy: {
+          type: "string",
+          description:
+            "Optional HTTP(S) proxy URL with host and port (e.g. http://127.0.0.1:7897). Omit to use process HTTP_PROXY/HTTPS_PROXY.",
         },
       },
     },
@@ -101,10 +111,22 @@ export function createWebTools(
       if (!search) {
         return { content: missingSearch, isError: true };
       }
+      const proxyRaw = args?.proxy;
+      const proxy =
+        typeof proxyRaw === "string" && proxyRaw.trim() !== ""
+          ? proxyRaw.trim()
+          : undefined;
       try {
         const results = await Promise.all(
           queries.map((query) =>
-            search.search({ query, maxResults: searchMaxResults }, signal),
+            search.search(
+              {
+                query,
+                maxResults: searchMaxResults,
+                ...(proxy ? { proxy } : {}),
+              },
+              signal,
+            ),
           ),
         );
         const sections = results.map((result, i) => {

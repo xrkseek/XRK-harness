@@ -528,13 +528,6 @@ export function TeamRoster({
   const canExport = selected !== undefined
     && !isDraftMemberId(selectedId)
     && !catalogSeed
-  // Boss look writes live into ui-presence — no roster Save.
-  const canSave = !busy && selectedId !== null && !bossSelected && (
-    managerSelected
-    || (catalogSeed && !sunflowerSelected)
-    || (!catalogSeed && name.trim() !== '' && playbook.trim() !== '')
-  )
-
   const reload = async () => {
     if (sessionId === undefined) return
     setMembers(await listTeam(sessionId))
@@ -647,15 +640,114 @@ export function TeamRoster({
     })
   }
 
+  const liveTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => {
+    if (liveTimer.current !== undefined) window.clearTimeout(liveTimer.current)
+  }, [])
+
+  type LiveLookPatch = {
+    readonly shape?: string
+    readonly color?: string
+    readonly kitHat?: string
+    readonly kitGlasses?: string
+    readonly kitHeld?: string
+    readonly nickname?: string
+  }
+
+  /** Quiet upsert — no busy spinner / full reload (matches 老板席 hot path). */
+  const flushLivePersist = async (patch: LiveLookPatch = {}) => {
+    if (sessionId === undefined || selectedId === null || bossSelected) return
+    if (isDraftMemberId(selectedId)) return
+    if (catalogSeed && !managerSelected && !selected) return
+    const nextShape = patch.shape ?? shape
+    const nextColor = patch.color ?? color
+    const nextHat = patch.kitHat ?? kitHat
+    const nextGlasses = patch.kitGlasses ?? kitGlasses
+    const nextHeld = patch.kitHeld ?? kitHeld
+    const nextNick = patch.nickname ?? nickname
+    const names = splitToolNames(toolsNames)
+    const tools =
+      toolsMode === 'inherit'
+        ? (selected?.tools ? null : undefined)
+        : names.length > 0
+          ? { mode: toolsMode, names }
+          : null
+    const appearance = {
+      shape: nextShape,
+      color: nextColor,
+      kit: resolveEnginePick(nextHat, HAT_BUILTINS) !== 'none'
+        ? resolveEnginePick(nextHat, HAT_BUILTINS)
+        : resolveEnginePick(nextGlasses, GLASSES_BUILTINS),
+      kitHat: nextHat,
+      kitGlasses: nextGlasses,
+      kitHeld: nextHeld,
+    }
+    try {
+      setError(null)
+      let saved: AgentTeamMemberRow
+      if (catalogSeed && selected) {
+        saved = await upsertTeamMember(sessionId, {
+          id: selected.id,
+          name: selected.name,
+          playbook: selected.playbook,
+          role: selected.role,
+          scope: 'global',
+          appearance,
+          ...(!sunflowerSelected
+            ? { nickname: nextNick.trim() || null }
+            : {}),
+        })
+      } else {
+        if (name.trim() === '' || playbook.trim() === '') return
+        saved = await upsertTeamMember(sessionId, {
+          name: name.trim(),
+          playbook: playbook.trim(),
+          role,
+          scope,
+          inject,
+          brief: brief.trim(),
+          nickname: nextNick.trim() || null,
+          ...(tools !== undefined ? { tools } : {}),
+          ...(selected ? { id: selected.id } : {}),
+          appearance,
+        })
+      }
+      setMembers((prev) => {
+        const index = prev.findIndex((row) => row.id === saved.id)
+        if (index < 0) return [...prev, saved]
+        const next = prev.slice()
+        next[index] = saved
+        return next
+      })
+      if (selectedId !== saved.id) setSelectedId(saved.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const scheduleLivePersist = (patch: LiveLookPatch = {}) => {
+    if (selectedId === null || bossSelected || isDraftMemberId(selectedId)) return
+    if (liveTimer.current !== undefined) window.clearTimeout(liveTimer.current)
+    liveTimer.current = window.setTimeout(() => {
+      liveTimer.current = undefined
+      void flushLivePersist(patch)
+    }, 280)
+  }
+
+  /** Draft create / Ctrl+Enter — still explicit. */
   const persistMember = () => {
     if (sessionId === undefined || busy || selectedId === null) return
     if (isDraftMemberId(selectedId) && (name.trim() === '' || playbook.trim() === '')) return
     if (catalogSeed && !managerSelected && !selected) return
+    if (!isDraftMemberId(selectedId)) {
+      void flushLivePersist()
+      return
+    }
     void run(async () => {
       const names = splitToolNames(toolsNames)
       const tools =
         toolsMode === 'inherit'
-          ? (selected?.tools ? null : undefined)
+          ? undefined
           : names.length > 0
             ? { mode: toolsMode, names }
             : null
@@ -669,22 +761,6 @@ export function TeamRoster({
         kitGlasses,
         kitHeld,
       }
-      // Catalog：写装扮（经理）与昵称（除向日葵）；其它预置字段由 Face 忽略。
-      if (catalogSeed && selected) {
-        const saved = await upsertTeamMember(sessionId, {
-          id: selected.id,
-          name: selected.name,
-          playbook: selected.playbook,
-          role: selected.role,
-          scope: 'global',
-          appearance,
-          ...(!sunflowerSelected
-            ? { nickname: nickname.trim() || null }
-            : {}),
-        })
-        setSelectedId(saved.id)
-        return
-      }
       if (name.trim() === '' || playbook.trim() === '') return
       const saved = await upsertTeamMember(sessionId, {
         name: name.trim(),
@@ -695,18 +771,19 @@ export function TeamRoster({
         brief: brief.trim(),
         nickname: nickname.trim() || null,
         ...(tools !== undefined ? { tools } : {}),
-        ...(selected ? { id: selected.id } : {}),
         appearance,
       })
       setSelectedId(saved.id)
     })
   }
 
-  const saveLabel = selected?.scope === 'global' && scope === 'workspace'
+  const draftCreateLabel = selected?.scope === 'global' && scope === 'workspace'
     ? t('team.saveOverride')
     : selected?.scope === 'workspace' && scope === 'global'
       ? t('team.savePromote')
-      : t('team.memberSave')
+      : t('team.memberCreate')
+  const canCreateDraft = !busy && isDraftMemberId(selectedId)
+    && name.trim() !== '' && playbook.trim() !== ''
 
   return (
     <Modal
@@ -1127,6 +1204,7 @@ export function TeamRoster({
                       placeholder={t('team.memberName')}
                       disabled={busy}
                       onChange={(e) => { setName(e.target.value) }}
+                      onBlur={() => { scheduleLivePersist() }}
                     />
                   </div>
                   <div className={css.field}>
@@ -1138,6 +1216,7 @@ export function TeamRoster({
                       placeholder={t('team.briefPlaceholder')}
                       disabled={busy}
                       onChange={(e) => { setBrief(e.target.value) }}
+                      onBlur={() => { scheduleLivePersist() }}
                     />
                   </div>
                   <div className={css.pair}>
@@ -1149,7 +1228,10 @@ export function TeamRoster({
                         aria-labelledby="team-role-label"
                         disabled={busy}
                         value={role}
-                        onChange={(e) => { setRole(e.target.value as SpawnRole) }}
+                        onChange={(e) => {
+                          setRole(e.target.value as SpawnRole)
+                          scheduleLivePersist()
+                        }}
                       >
                         {ROLES.map((id) => (
                           <option key={id} value={id}>{t(`team.role.${id}` as WorkspaceKey)}</option>
@@ -1266,6 +1348,7 @@ export function TeamRoster({
                       disabled={busy}
                       rows={5}
                       onChange={(e) => { setPlaybook(e.target.value) }}
+                      onBlur={() => { scheduleLivePersist() }}
                     />
                   </div>
                   </fieldset>
@@ -1279,10 +1362,14 @@ export function TeamRoster({
                       placeholder={t('team.nicknamePlaceholder')}
                       disabled={busy || nicknameLocked}
                       onChange={(e) => { setNickname(e.target.value) }}
+                      onBlur={() => {
+                        if (nicknameLocked) return
+                        scheduleLivePersist({ nickname })
+                      }}
                     />
                     {sunflowerSelected
                       ? <p className={css.fieldHint}>{t('team.nicknameLocked')}</p>
-                      : null}
+                      : <p className={css.fieldHint}>{t('team.nicknameHint')}</p>}
                   </div>
                   <fieldset className={css.editorLock} disabled={busy || appearanceLocked}>
                   <div className={css.field}>
@@ -1310,7 +1397,10 @@ export function TeamRoster({
                           aria-label={t(`team.shape.${id}` as WorkspaceKey)}
                           aria-pressed={shape === id}
                           disabled={busy}
-                          onClick={() => { setShape(id) }}
+                          onClick={() => {
+                            setShape(id)
+                            scheduleLivePersist({ shape: id })
+                          }}
                         >
                           <CompanionShapeGlyph shape={id} />
                         </button>
@@ -1326,16 +1416,24 @@ export function TeamRoster({
                           aria-label={t(`team.color.${id}` as WorkspaceKey)}
                           aria-pressed={color === id}
                           disabled={busy}
-                          onClick={() => { setColor(id) }}
+                          onClick={() => {
+                            setColor(id)
+                            scheduleLivePersist({ color: id })
+                          }}
                         />
                       ))}
                     </div>
                     <p className={css.faceHint}>{t('team.overlayHint')}</p>
                     {([
-                      ['hat', kitHat, setKitHat, HAT_BUILTINS],
-                      ['glasses', kitGlasses, setKitGlasses, GLASSES_BUILTINS],
-                      ['held', kitHeld, setKitHeld, HELD_BUILTINS],
-                    ] as const).map(([slot, pick, setPick, builtins]) => (
+                      ['hat', kitHat, setKitHat, HAT_BUILTINS, 'kitHat'] as const,
+                      ['glasses', kitGlasses, setKitGlasses, GLASSES_BUILTINS, 'kitGlasses'] as const,
+                      ['held', kitHeld, setKitHeld, HELD_BUILTINS, 'kitHeld'] as const,
+                    ]).map(([slot, pick, setPick, builtins, patchKey]) => {
+                      const applyKit = (next: string) => {
+                        setPick(next)
+                        scheduleLivePersist({ [patchKey]: next })
+                      }
+                      return (
                       <div key={slot} className={css.picks} role="group" aria-label={t(`team.overlay.${slot}` as WorkspaceKey)}>
                         {builtins.map((id) => (
                           <button
@@ -1345,7 +1443,7 @@ export function TeamRoster({
                             aria-label={t(`team.kit.${id}` as WorkspaceKey)}
                             aria-pressed={pick === id}
                             disabled={busy}
-                            onClick={() => { setPick(id) }}
+                            onClick={() => { applyKit(id) }}
                           >
                             <CompanionKitMark kit={id} {...(css.kitGlyph ? { className: css.kitGlyph } : {})} />
                           </button>
@@ -1359,7 +1457,7 @@ export function TeamRoster({
                                 className={css.pick}
                                 disabled={busy}
                                 aria-pressed={pick === ref}
-                                onClick={() => { setPick(ref) }}
+                                onClick={() => { applyKit(ref) }}
                               >
                                 <span className={css.overlayThumb} style={{ backgroundImage: `url(${row.image})` }} />
                               </button>
@@ -1370,7 +1468,7 @@ export function TeamRoster({
                                 aria-label={t('team.faceClear')}
                                 onClick={() => {
                                   removeDressingSticker(row.id)
-                                  if (pick === ref) setPick('none')
+                                  if (pick === ref) applyKit('none')
                                 }}
                               >
                                 ×
@@ -1402,14 +1500,15 @@ export function TeamRoster({
                                   setError(t('team.faceTooBig'))
                                   return
                                 }
-                                setPick(stickerRef(id))
+                                applyKit(stickerRef(id))
                               }
                               reader.readAsDataURL(file)
                             }}
                           />
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                     </>
                     )}
                   </div>
@@ -1478,14 +1577,16 @@ export function TeamRoster({
                       >
                         {t('team.cloneFrom')}
                       </Button>
-                    ) : (
+                    ) : isDraftMemberId(selectedId) ? (
                       <Button
                         variant="primary"
-                        disabled={!canSave}
+                        disabled={!canCreateDraft}
                         onClick={() => { persistMember() }}
                       >
-                        {managerSelected ? t('team.memberSave') : saveLabel}
+                        {draftCreateLabel}
                       </Button>
+                    ) : (
+                      <p className={css.fieldHint}>{t('team.memberLive')}</p>
                     )}
                     {isDraftMemberId(selectedId) ? (
                       <Button

@@ -65,6 +65,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.0-rc.2',
+    date: '2026-10-30',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'DeepSeek 网页搜索：Settings 可钉选（不进 Auto）；web_search 支持 proxy。',
+        en: 'DeepSeek web search: pin in Settings (not Auto); web_search accepts proxy.',
+      },
+      {
+        zh: 'present / 提问 / todo / 图视频生成不进「过程」折叠；present 行强制展开。',
+        en: 'present / ask / todo / image-video gen stay flat (no process fold); present rows force-expanded.',
+      },
+      {
+        zh: '模型列表冷开无伪 hover；长目录可滚；编辑重发 .ok 误报与截断投影虚增轮次已修。',
+        en: 'Model menu: no cold-open pseudo-hover; long lists scroll; edit-resubmit .ok false fail and truncate projection turn inflate fixed.',
+      },
+      {
+        zh: '软预算对齐 Codex：留空按窗×90% 仍主动压；有圆环再取更紧；压缩后保留提供方压力。',
+        en: 'Soft budget (Codex): blank = window×90% still proactive; tighter with provider ring; keep pressure across compact.',
+      },
+      {
+        zh: '会话缓存可回收；跨平台文件打开；读图/生图信封；better-sidebar 手机下载；plugin add --proxy；公网 0.0.0.0（免责）。完整清单见 docs/releases/v0.7.0-rc.2.md。',
+        en: 'Session-cache reclaim; cross-platform file open; image envelope; better-sidebar mobile download; plugin add --proxy; public bind 0.0.0.0 (disclaimer). Full list in docs/releases/v0.7.0-rc.2.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.0-rc.1',
     date: '2026-10-29',
     title: {

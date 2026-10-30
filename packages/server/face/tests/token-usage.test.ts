@@ -351,15 +351,15 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       toolsTokens: 0,
       messageTokens: checkpoint,
     });
-    // The window swap invalidates the prior provider sample (stateVersion 4), so
-    // the pressure meter drops it rather than shrinking by the shadowed delta.
+    // Provider sample stays; surface shadow shrinks projected (DSH / stateVersion 5).
     const pressureAfter = registry.snapshot(session.id).values.contextPressure!
       .projectedTokens;
-    expect(pressureAfter).toBeUndefined();
-    expect(pressureBefore!).toBeGreaterThan(0);
+    expect(pressureAfter).toBeDefined();
+    expect(pressureAfter!).toBeLessThan(pressureBefore!);
+    expect(pressureAfter!).toBeGreaterThan(0);
   });
 
-  it("drops the projected pressure after a swap while breakdown folds to the checkpoint", () => {
+  it("shrinks projected pressure after a swap while breakdown folds to the checkpoint", () => {
     const store = createMemorySessionStore();
     const session = newSession(store);
     const registry = createFaceProjectionRegistry({
@@ -425,10 +425,9 @@ describe("Face tokenUsage / contextPressure / contextBreakdown", () => {
       formatCompactionForModel(compactEv!),
     );
     expect(breakdown.messageTokens).toBe(checkpoint);
-    // Same as above: post-swap the projected pressure is gone until the next
-    // usage sample; the breakdown meter still folds to the checkpoint price.
-    expect(pressure.projectedTokens).toBeUndefined();
+    expect(pressure.projectedTokens).toBeDefined();
+    expect(pressure.projectedTokens!).toBeLessThan(beforePressure);
+    expect(pressure.projectedTokens!).toBeGreaterThan(0);
     expect(beforeBreakdown).toBeGreaterThan(0);
-    expect(beforePressure).toBeGreaterThan(0);
   });
 });

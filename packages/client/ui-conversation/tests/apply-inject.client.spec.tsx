@@ -49,7 +49,16 @@ function sessionFakeFor() {
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
-  runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
+  // Privileged local surface: chat file links may call Host openPath (same gate
+  // as Deliverables / Open In App). WAN / SSH benches override this.
+  runtime.provide('connection', {
+    api: { settings: {} },
+    isLoopback: true,
+    hostDescription: {
+      getSnapshot: () => ({ canOpenPath: true }),
+      subscribe: () => () => {},
+    },
+  })
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
@@ -260,6 +269,22 @@ describe('conversation slot inject API', () => {
     b.runtime.workspaces.stub('openPath', () => Promise.reject(new Error('xdg-open is not available')))
     const { injected } = b.chatViewApi(ROOT)
     await expect(injected.openFile('src/a.ts')).rejects.toThrow('xdg-open is not available')
+    await b.runtime.dispose()
+  })
+
+  it('openFile skips Host openPath on a non-privileged Web surface', async () => {
+    const b = await bench()
+    b.runtime.provide('connection', {
+      api: { settings: {} },
+      isLoopback: false,
+      hostDescription: {
+        getSnapshot: () => ({ canOpenPath: true }),
+        subscribe: () => () => {},
+      },
+    })
+    const { injected } = b.chatViewApi(ROOT)
+    await injected.openFile('src/a.ts')
+    expect(b.runtime.workspaces.calls.filter(c => c.method === 'openPath')).toHaveLength(0)
     await b.runtime.dispose()
   })
 

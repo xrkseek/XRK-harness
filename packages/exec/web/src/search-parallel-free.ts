@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import { callMcpTool } from "./search-mcp-client.js";
+import { resolveFetchFn } from "./fetch-http.js";
 import type {
   FetchFn,
   WebSearch,
@@ -107,19 +108,25 @@ export function createParallelFreeSearch(options: {
         throw new WebError("query is required", "WEB_PROVIDER_ERROR");
       }
       try {
-        const payload = await callMcpTool({
-          url: mcpUrl,
-          toolName: "web_search",
-          toolArgs: {
-            objective: query,
-            search_queries: [query],
-            session_id: randomUUID(),
-          },
-          ...(options.fetch ? { fetch: options.fetch } : {}),
-          signal: combined,
-          clientName: "xrk-harness-parallel-free",
-        });
-        return capSources(mapParallelSources(payload), request.maxResults);
+        const baseFetch = options.fetch ?? globalThis.fetch;
+        const resolved = await resolveFetchFn(baseFetch, request.proxy);
+        try {
+          const payload = await callMcpTool({
+            url: mcpUrl,
+            toolName: "web_search",
+            toolArgs: {
+              objective: query,
+              search_queries: [query],
+              session_id: randomUUID(),
+            },
+            fetch: resolved.fetch,
+            signal: combined,
+            clientName: "xrk-harness-parallel-free",
+          });
+          return capSources(mapParallelSources(payload), request.maxResults);
+        } finally {
+          resolved.close?.();
+        }
       } catch (err) {
         if (err instanceof WebError) {
           if (timed.aborted && !signal?.aborted) {

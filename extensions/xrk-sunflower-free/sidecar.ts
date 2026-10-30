@@ -9,13 +9,14 @@
  *   1. 以车道要求的 system 文本打底，把调用方的 persona 追加在后面；
  *   2. 注入 `read` + `shell` 两个必需的工具定义（形状须逐字）；
  *   3. 按会话铸造并复用会话标识（配额按 session 计）；
- *   4. 上游出口：默认直连（`proxy: false`）。本机 Clash 等可设
- *      `XRK_SUNFLOWER_PROXY` 或 `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`
- *      （例如 `http://127.0.0.1:7897`）换出口 IP；显式 `0`/`false`/`off` 仍直连。
+ *   4. 上游出口：默认直连。插件探测级联（先直连，失败再用 Settings
+ *      `openCodeProxy` / `auto` 发现的本机代理）通过 `POST /__sunflower/egress`
+ *      写入粘性出口；聊天与探针共用赢家，避免探到代理、对话仍直连。
  *
  * 只监听 127.0.0.1，并带每次启动生成的一次性 key：不做开放代理。
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createConnection } from "node:net";
 import { FINGERPRINT } from "./fingerprint.js";
 
 const UPSTREAM = "https://opencode.ai";
@@ -359,11 +360,144 @@ export function resolveUpstreamProxy(
   return fromEnv || false;
 }
 
+/** 本机回环上常见的 HTTP 代理端口（Clash Verge 默认 7897，Clash 传统 7890）。 */
+const LOCAL_PROXY_PORTS: readonly number[] = [
+  7897, 7890, 1087, 10809, 6152, 8889, 1080,
+];
+
+/**
+ * 探测本机回环上可用的 HTTP 代理。
+ *
+ * 这条车道的免费额度按**出口 IP** 计数（实测：直连 5/5 全 429，
+ * 换代理出口后 3/5 可用），所以有本地代理时优先走它；没装代理的机器
+ * 探不到任何端口，保持直连。只探 loopback，不外发本机任何信息。
+ *
+ * 只做 TCP 连通性判断，**不**用外部域名验证：Clash 这类分流代理会按
+ * 域名规则 REJECT/CONNECT 不通（实测 example.com 超时、api.ipify.org
+ * ECONNRESET），拿它当判据会把能用的代理判死。端口白名单本身就是代理
+ * 专用口；万一撞上非代理服务，最坏是探针 unknown → 该行 omit（安全降级，
+ * 不会假阳性）。
+ */
+function canConnect(port: number, timeoutMs = 400): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
+
+export async function discoverLocalProxy(
+  ports: readonly number[] = LOCAL_PROXY_PORTS,
+): Promise<string | undefined> {
+  for (const port of ports) {
+    if (await canConnect(port)) return `http://127.0.0.1:${port}`;
+  }
+  return undefined;
+}
+
 /**
  * OpenCode free-lane bearer. Always anonymous `public` — never a user
  * Go / Zen `oc_sk_…` or OPENCODE_* env (privacy/train policies ≠ free pool).
  */
 export const OPENCODE_PUBLIC_BEARER = "public";
+
+/**
+ * 一项出口设置 → 实际代理。取值：
+ *   留空 → `fallback`（常规代理 env / 直连）
+ *   `off`（或 `0`/`false`）→ 强制直连
+ *   `auto` → 探测本机回环上的常见代理端口
+ *   其它 → 当作显式代理 URL
+ *
+ * 默认直连：不猜端口、不静默改路由。要走代理得用户明写。
+ */
+async function resolveProxySetting(
+  raw: string | undefined,
+  fallback: string | false,
+): Promise<string | false> {
+  const value = (raw ?? "").trim();
+  if (!value) return fallback;
+  const lower = value.toLowerCase();
+  if (lower === "0" || lower === "false" || lower === "off") return false;
+  if (lower === "auto") return (await discoverLocalProxy()) ?? false;
+  return value;
+}
+
+/**
+ * OpenCode 粘性出口。未设置时强制直连——Settings 里的 `openCodeProxy` 只是
+ * **级联候选**，由插件探测决定是否切过去，不能一启动就绑死代理。
+ */
+let stickyOpenCodeEgress: string | false | undefined;
+
+/** @returns {string | false | undefined} undefined = 尚未粘性（按直连）。 */
+export function getStickyOpenCodeEgress(): string | false | undefined {
+  return stickyOpenCodeEgress;
+}
+
+/**
+ * 设置 OpenCode 粘性出口。`auto` = 探测本机回环常见口；失败则直连。
+ * @returns 实际生效的出口（`false` = 直连）。
+ */
+export async function setStickyOpenCodeEgress(
+  raw: string | false | "auto",
+): Promise<string | false> {
+  if (raw === false) {
+    stickyOpenCodeEgress = false;
+    return false;
+  }
+  if (raw === "auto") {
+    stickyOpenCodeEgress = (await discoverLocalProxy()) ?? false;
+    return stickyOpenCodeEgress;
+  }
+  const value = String(raw).trim();
+  if (!value) {
+    stickyOpenCodeEgress = false;
+    return false;
+  }
+  const lower = value.toLowerCase();
+  if (lower === "0" || lower === "false" || lower === "off") {
+    stickyOpenCodeEgress = false;
+    return false;
+  }
+  if (lower === "auto") {
+    stickyOpenCodeEgress = (await discoverLocalProxy()) ?? false;
+    return stickyOpenCodeEgress;
+  }
+  stickyOpenCodeEgress = value;
+  return stickyOpenCodeEgress;
+}
+
+/**
+ * OpenCode 车道出口。免费池按**出口 IP** 计额度：国内直连易 429。
+ * 粘性优先；未粘性时直连（不读 Settings URL，避免跳过「先直连」级联）。
+ */
+export async function resolveEgressProxy(): Promise<string | false> {
+  if (stickyOpenCodeEgress !== undefined) return stickyOpenCodeEgress;
+  return false;
+}
+
+/**
+ * Kilo 车道出口。Kilo 免费池直连可用（实测 `/models` 与
+ * `/chat/completions` 均 200），所以默认直连，只有用户显式配了
+ * `kiloProxy` 才走代理——别把两条车道绑在同一个出口上。
+ */
+let kiloProxyCache: string | false | undefined;
+export async function resolveKiloEgressProxy(): Promise<string | false> {
+  if (kiloProxyCache !== undefined) return kiloProxyCache;
+  kiloProxyCache = await resolveProxySetting(
+    process.env.XRK_SUNFLOWER_KILO_PROXY,
+    false,
+  );
+  return kiloProxyCache;
+}
 
 /** Kilo free-pool base (keyless). Plugin may override via env. */
 export function resolveKiloBase(
@@ -404,7 +538,6 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
   const key = options.key ?? `xrk_sf_${randomBytes(18).toString("hex")}`;
   const pool = new SessionIdPool();
   const doFetch = options.fetchImpl ?? fetch;
-  const upstreamProxy = resolveUpstreamProxy();
   const upstreamBearer = OPENCODE_PUBLIC_BEARER;
   const kiloBase = resolveKiloBase();
   const kiloIds = resolveKiloModelIds();
@@ -423,12 +556,21 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
           upstream: UPSTREAM,
           kilo: kiloBase,
           kiloModels: kiloIds.size,
+          openCodeEgress:
+            stickyOpenCodeEgress === undefined
+              ? null
+              : stickyOpenCodeEgress === false
+                ? null
+                : stickyOpenCodeEgress,
           // 健康检查不暴露 session：配额按 session 计，避免被复用成共享额度。
           sessions: "per-xrkh-session",
         });
       }
 
-      if (!url.pathname.startsWith(PATH_PREFIX)) {
+      // Egress control is auth-gated like /v1 — key required below after this
+      // branch is folded into the authenticated block.
+
+      if (!url.pathname.startsWith(PATH_PREFIX) && url.pathname !== "/__sunflower/egress") {
         return new Response("not found", { status: 404 });
       }
 
@@ -438,6 +580,50 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
           { error: { type: "unauthorized", message: "sunflower sidecar: bad key" } },
           { status: 401 },
         );
+      }
+
+      if (url.pathname === "/__sunflower/egress") {
+        if (req.method === "GET") {
+          return Response.json({
+            proxy:
+              stickyOpenCodeEgress === undefined || stickyOpenCodeEgress === false
+                ? null
+                : stickyOpenCodeEgress,
+          });
+        }
+        if (req.method !== "POST") {
+          return new Response("method not allowed", { status: 405 });
+        }
+        let body: { proxy?: unknown };
+        try {
+          body = (await req.json()) as { proxy?: unknown };
+        } catch {
+          return Response.json(
+            { error: { type: "bad_request", message: "body is not JSON" } },
+            { status: 400 },
+          );
+        }
+        const raw = body.proxy;
+        let next: string | false | "auto";
+        if (raw === false || raw === null || raw === "") next = false;
+        else if (typeof raw === "string") next = raw.trim() || false;
+        else {
+          return Response.json(
+            {
+              error: {
+                type: "bad_request",
+                message: "proxy must be false | null | URL | \"auto\"",
+              },
+            },
+            { status: 400 },
+          );
+        }
+        const applied = await setStickyOpenCodeEgress(
+          next === false ? false : next,
+        );
+        return Response.json({
+          proxy: applied === false ? null : applied,
+        });
       }
 
       if (req.method === "GET" && url.pathname.endsWith("/models")) {
@@ -498,7 +684,7 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
             },
             body: JSON.stringify(kiloBody),
             // @ts-expect-error Bun 支持 proxy 选项，Node 类型里没有
-            proxy: upstreamProxy === false ? false : upstreamProxy,
+            proxy: await resolveKiloEgressProxy(),
           });
         } else {
           const upstreamBody = buildUpstreamBody(body);
@@ -528,7 +714,7 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
               headers,
               body: JSON.stringify(upstreamBody),
               // @ts-expect-error Bun 支持 proxy 选项，Node 类型里没有
-              proxy: upstreamProxy === false ? false : upstreamProxy,
+              proxy: await resolveEgressProxy(),
             },
           );
         }
@@ -623,7 +809,8 @@ if (import.meta.main) {
       key: handle.key,
       runtime: `bun ${Bun.version}`,
       upstream: UPSTREAM,
-      proxy: resolveUpstreamProxy() || null,
+      proxy: (await resolveEgressProxy()) || null,
+      kiloProxy: (await resolveKiloEgressProxy()) || null,
       auth: OPENCODE_PUBLIC_BEARER,
     }),
   );

@@ -407,8 +407,21 @@ export function enrichFromModelsDev(
           maxTokens: positiveInt((local.limit as Record<string, unknown> | undefined)?.output),
         }
       : agreedLimit(rows);
-    const contextWindow = model.contextWindow ?? limit?.contextWindow;
-    const maxTokens = model.maxTokens ?? limit?.maxTokens;
+    // When listing and catalog disagree, keep the tighter window / output cap.
+    // An inflated catalog ceiling (256k route published as 1M) delays soft
+    // compact until the provider already rejects the request.
+    const listedWindow = model.contextWindow;
+    const catalogWindow = limit?.contextWindow;
+    const contextWindow =
+      listedWindow !== undefined && catalogWindow !== undefined
+        ? Math.min(listedWindow, catalogWindow)
+        : (listedWindow ?? catalogWindow);
+    const listedMax = model.maxTokens;
+    const catalogMax = limit?.maxTokens;
+    const maxTokens =
+      listedMax !== undefined && catalogMax !== undefined
+        ? Math.min(listedMax, catalogMax)
+        : (listedMax ?? catalogMax);
     const reasoning =
       model.reasoning
       ?? (options.effortWire === false

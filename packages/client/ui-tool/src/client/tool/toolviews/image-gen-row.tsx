@@ -30,7 +30,7 @@ function promptSummary(argsRaw: string): string | undefined {
 
 /** image_generate row: Image generation chrome + gallery when attachments exist. */
 export function ImageGenRow({
-  toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, t,
+  toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, mediaRenderSlot, t,
 }: ImageGenRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const image = imageGenCardModel(block)
@@ -39,6 +39,8 @@ export function ImageGenRow({
   const summary = model.state === 'error' && model.errorSummary
     ? model.errorSummary
     : (prompt ?? model.summary)
+  // Prefer tree mediaRenderSlot — keyed registration cannot own tool.call.images.
+  const mediaSlot = mediaRenderSlot ?? renderSlot
   return (
     <ToolRow
       t={t}
@@ -52,7 +54,7 @@ export function ImageGenRow({
       output={image === null ? model.output : null}
       errorSummary={model.errorSummary}
       image={image}
-      renderSlot={renderSlot}
+      renderSlot={mediaSlot}
       loadImage={loadImage}
       state={model.state}
       filePath={model.filePath}

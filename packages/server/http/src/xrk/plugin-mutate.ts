@@ -223,6 +223,8 @@ export async function runPluginMutate(options: {
   readonly env?: NodeJS.ProcessEnv;
   /** Forwarded as `xrkh plugin add --registry` (npm pack mirror). */
   readonly registry?: string;
+  /** Forwarded as `xrkh plugin add --proxy` (npm pack only; no process env). */
+  readonly proxy?: string;
   /** Optional live stdout/stderr chunks (Settings TerminalBlock). */
   readonly onChunk?: (chunk: PluginMutateChunk) => void;
 }): Promise<PluginMutateResult> {
@@ -232,10 +234,11 @@ export async function runPluginMutate(options: {
   }
   const sub = options.action === "add" ? "add" : "remove";
   const registry = options.registry?.trim();
-  const args: string[] =
-    sub === "add" && registry
-      ? ["plugin", "add", "--registry", registry, spec]
-      : ["plugin", sub, spec];
+  const proxy = options.proxy?.trim();
+  const args: string[] = ["plugin", sub];
+  if (sub === "add" && registry) args.push("--registry", registry);
+  if (sub === "add" && proxy) args.push("--proxy", proxy);
+  args.push(spec);
   const env = {
     ...(options.env ?? process.env),
     XRK_PLUGINS_DIR: path.resolve(options.pluginsDir),

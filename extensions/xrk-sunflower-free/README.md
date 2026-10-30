@@ -25,6 +25,12 @@
 
 探测形状对齐 OFM：`ping` + `max_tokens: 16` + 流式首包。不能用就不进列表。
 
+OpenCode **出口级联**（不挡 Host 听口；听口后 warmup / Settings 保存会 await）：
+
+1. 先直连探一轮；有可用模型 → 粘住直连。
+2. 直连 0 可用且 Settings `openCodeProxy` 允许 → 再试候选代理（显式 URL，或留空/`auto` 时探测本机 7897 等）。
+3. `openCodeProxy=off` → 只直连。
+
 ## 结构
 
 | 文件 | 作用 |
@@ -33,6 +39,8 @@
 | `free-models.mjs` | OpenCode 候选 |
 | `kilo.mjs` | Kilo listing |
 | `probe.mjs` | OFM 形 ping |
+| `probe-cascade.mjs` | 直连 → 代理级联 + sidecar 粘性出口 |
+| `probe-cache.mjs` | 按出口缓存探测结论 |
 | `sidecar.ts` | Bun：OpenCode（`public`）+ Kilo 分流 |
 | `fingerprint.ts` | OpenCode 请求形状 |
 

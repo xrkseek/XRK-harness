@@ -70,6 +70,7 @@ function tabbable(root: HTMLElement): HTMLElement[] {
  */
 export function Modal({
   open, onClose, title, closeLabel = 'Close', description, children, footer, className, contentClassName, headless = false,
+  layout = 'default',
 }: {
   open: boolean
   onClose: () => void
@@ -81,6 +82,11 @@ export function Modal({
   className?: string
   contentClassName?: string
   headless?: boolean
+  /**
+   * Phone layout. `default` = full-viewport sheet (Settings-style).
+   * `inset` = bottom card that sizes to content (short confirms).
+   */
+  layout?: 'default' | 'inset'
 }) {
   // Captured in the effect body, not read from the ref in the cleanup: by the
   // time cleanup runs the dialog is already unmounted and the ref is null.
@@ -173,7 +179,12 @@ export function Modal({
   if (phase === 'closed') return null
 
   return createPortal((
-    <div className={css.root} role="presentation" data-state={phase}>
+    <div
+      className={css.root}
+      role="presentation"
+      data-state={phase}
+      data-layout={layout === 'inset' ? 'inset' : undefined}
+    >
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div
         ref={dialogRef}

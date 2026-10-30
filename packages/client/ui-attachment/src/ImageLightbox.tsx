@@ -27,18 +27,42 @@ function focusStops(root: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Best-effort browser download for a same-origin or blob image URL.
- * Cross-origin hosts that omit CORS still get an anchor with `download` set;
- * the browser may open a new tab instead of saving — that is acceptable.
+ * Trigger a browser download from a blob/object URL (or data: URL).
+ * Mobile Safari often ignores `download` on plain remote hrefs — blob works.
  */
-function downloadImage(src: string, filename: string): void {
+function triggerDownload(href: string, filename: string): void {
   const anchor = document.createElement('a')
-  anchor.href = src
+  anchor.href = href
   anchor.download = filename
   anchor.rel = 'noopener'
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
+}
+
+/**
+ * Download an image on any browser: prefer fetch→blob (same-origin attachment
+ * URLs and CORS-open remotes), fall back to a direct `download` anchor.
+ */
+async function downloadImage(src: string, filename: string): Promise<void> {
+  if (src.startsWith('blob:') || src.startsWith('data:')) {
+    triggerDownload(src, filename)
+    return
+  }
+  try {
+    const res = await fetch(src)
+    if (!res.ok) throw new Error(`download HTTP ${res.status}`)
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    try {
+      triggerDownload(objectUrl, filename)
+    } finally {
+      // Revoke after the click has been processed (mobile needs a beat).
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    }
+  } catch {
+    triggerDownload(src, filename)
+  }
 }
 
 /** Derive a safe download basename from the image alt text. */
@@ -110,11 +134,7 @@ export function ImageLightbox({ src, alt, labels, onClose }: {
   const onDownload = (): void => {
     if (saving) return
     setSaving(true)
-    try {
-      downloadImage(src, downloadName(alt))
-    } finally {
-      setSaving(false)
-    }
+    void downloadImage(src, downloadName(alt)).finally(() => setSaving(false))
   }
 
   return createPortal(

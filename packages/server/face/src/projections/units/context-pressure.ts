@@ -9,11 +9,15 @@ import { asOptNonNegInt, asOptPositiveInt } from "../parse-int.js";
 
 /**
  * Approximate context occupancy (DSH contextPressure; ContextMeter).
- * Provider pressure from {@link inputPressureTokens} (prefer `totalTokens`, else
- * `input + cacheRead`; never cacheWrite); capacity from `request/header.config.contextWindow`;
+ * Provider pressure from {@link inputPressureTokens} (prefer `totalTokens` /
+ * Codex `tokens_in_context_window`, else `input + cacheRead`; never cacheWrite);
+ * capacity from `request/header.config.contextWindow`;
  * projectedTokens = pressure + (surface − sampledSurface) after stamp-before-append
- * (same formula as core-session {@link projectedInputPressureTokens}, which soft
- * budget also reads so the meter and auto-compact share one occupancy signal).
+ * (same formula as core-session {@link projectedInputPressureTokens}).
+ *
+ * Compaction must **not** drop `pressureTokens`: surface fold already shrinks
+ * via `shadowedTokenCount`. Wiping the sample made soft-budget blind to the
+ * provider until the next usage event (DSH keeps the sample across replace).
  */
 export interface ContextPressureProjection {
   readonly pressureTokens?: number;
@@ -35,7 +39,8 @@ export function createContextPressureProjectionUnit(): ProjectionDefinition<
 > {
   return {
     key: "contextPressure",
-    stateVersion: 4,
+    // v5: keep provider pressure across compaction (DSH); surface delta shrinks projected.
+    stateVersion: 5,
     init: () => ({ surfaceTokens: 0 }),
     apply(state, event: SessionEvent): ContextPressureState {
       let next: ContextPressureState = state;
@@ -51,19 +56,6 @@ export function createContextPressureProjectionUnit(): ProjectionDefinition<
                 })()
               : { ...next, contextWindow: window };
         }
-      }
-
-      // Window swap drops the stale provider sample (same as projectedInputPressureTokens).
-      if (
-        event.type === "context/compaction" &&
-        event.shadowedTokenCount !== undefined
-      ) {
-        const {
-          pressureTokens: _p,
-          sampledSurfaceTokens: _s,
-          ...rest
-        } = next;
-        next = rest;
       }
 
       // Stamp usage against surface BEFORE this event joins (DSH order).

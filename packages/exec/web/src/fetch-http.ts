@@ -175,7 +175,11 @@ function decodeBody(
   };
 }
 
-async function resolveFetchFn(
+/**
+ * Attach an undici ProxyAgent when `proxy` is set; otherwise return `base`.
+ * Shared by `web_fetch` and keyed/keyless `web_search` providers.
+ */
+export async function resolveFetchFn(
   base: FetchFn,
   proxy: string | undefined,
 ): Promise<{ readonly fetch: FetchFn; readonly close?: () => void }> {

@@ -32,8 +32,10 @@ const ToolCall = memo(function ToolCall({
     cwd,
     home,
     ...(loadImage === undefined ? {} : { loadImage }),
+    // Keyed image/video rows need the tree's media holes (sole owner on chat.node).
+    mediaRenderSlot: renderSlot,
     inspect: () => { inspectCall(callId) },
-  }), [callId, toolName, block, openFile, cwd, home, loadImage, inspectCall])
+  }), [callId, toolName, block, openFile, cwd, home, loadImage, renderSlot, inspectCall])
   // DSH: final AutoReviewDeniedError always uses GenericToolCard — skip keyed
   // toolviews (bash/read/…) so the localized denial identity is not replaced.
   const autoReviewDenied = useMemo(

@@ -75,7 +75,7 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 
 | 变量 | 含义 | 默认 / 备注 |
 |------|------|-------------|
-| `XRK_HOST` | 绑定地址 | 常用 `127.0.0.1`；CLI 拒绝 `0.0.0.0` |
+| `XRK_HOST` | 绑定地址 | 常用 `127.0.0.1`；允许 `0.0.0.0`（非回环武装访问 PIN）。公网暴露**不保证**安全——PIN / `XRK_API_KEY` 仅为闸，宜反代 + TLS |
 | `XRK_PORT` | 端口 | 常用 `8787`；测例可用 `0` |
 | `XRK_API_KEY` | Face/HTTP 鉴权 | 空 = **开发免鉴权**；产品壳同源回环可无头 |
 | `XRK_CORS_ORIGIN` | CORS | 默认 `*` |
@@ -236,7 +236,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_SECURITY_GUIDANCE_BLOCK` | `1` 时写路径内容 pattern 命中则 **拒绝** 写入（默认仅在 tool result 追加提示） |
 | `XRK_SECURITY_GUIDANCE_DISABLE` | `1` 关闭写路径安全提示 / 敏感路径地板（hardline argv 仍生效） |
 
-无 Tavily/Brave 密钥时：`web_search` 默认 **parallel-free**，失败回退 DuckDuckGo。无 LSP 命令时：`lsp` 仍可能登记，**execute 诚实失败**。
+无 Tavily/Brave 密钥时：`web_search` 默认 **parallel-free**，失败回退 DuckDuckGo（DeepSeek Search 需在 Settings 钉选，不进 Auto）。无 LSP 命令时：`lsp` 仍可能登记，**execute 诚实失败**。
 
 ## Plugins 设置（端到端）
 
@@ -258,7 +258,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `agent-loop` | `llmRetryMaxRetries` | 步内 provider 重试上限（默认 8；`0` 关闭） |
 | `agent-loop` | `toolOrder` | 工具线序（Plugins 卡；恰好一个 `' '` rest）；留空 = 字典序 |
 | `agent-loop` | `compactionStrategy` | 超限策略（软压 **与** overflow）：`prune-summary`（默认）· `prune-only` · `summary-only` · `off`；软上限见下方 Models |
-| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；留空 = 不主动软压。从「获取模型」采纳且列表带了 `contextWindow` 时：窗口 ≥100k → `max(100k, 75%)`（千位取整，上限 300k）；窗口 &lt;100k → 仅 75%；&lt;8k 不写。再拉取只补空白软预算，手填不覆盖 |
+| Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `softBudgetMaxTokens`（可选 keep/buffer） | 按模型的主动压缩软预算；与 `contextWindow` 正交；**留空 = `floor(窗 × 90%)` 仍主动压**（Codex，窗 &lt;8k 不推导）。从「获取模型」采纳且列表带了窗：同样按 90% 填空白软预算；再拉取只补空白，手填不覆盖。有提供方圆环时有效软上限再与窗的 90% 取更紧 |
 | `agent-loop` | `toolResultMaxInlineBytes` | 工具正文 spill 上限（默认 **64_000**；`0` 同时关闭 pipeline bound 与 loop spill；全文只写 `~/.xrk/spill/tool-outputs/`） |
 | `agent-loop` | `maxConcurrentModelSessions` | 同一供应商/模型路由上**进行中**会话上限（默认 **5**；主会话与子代理同等计数；blank / 闲置历史不计） |
 | Models（`llm-deepseek` / `llm-pi-ai` 模型行） | `maxConcurrentSessions`（可选） | 覆盖该模型的进行中会话上限；省略 → `agent-loop.maxConcurrentModelSessions` |
@@ -278,7 +278,7 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `auto-review` | `enabled` · `classifierUrl`（token 走 Credentials） | **下次工具调用 / classify**；三档 **启发式 · HTTP · 会话 LLM**；会话 `/permission auto` = **无沙箱 + 每调用评审**；`/auto-review` 与 HTTP 面板同源；`XRK_AUTO_REVIEW_CLASSIFIER_URL` 可 CI 旁路（Plugins → 高级）。Host `createAutoReviewToolPre`：`resolveDenyAction` 管评审员 **deny 裁决**（默认 ask→审批）；`onClassifierError: 'ask' \| 'deny'` 管 **技术失败**（默认 **ask**；`deny`=fail-closed `AUTO_REVIEW_DENIED`） |
 | `memory-embed` | `url` · `collection`（token 走 Credentials） | **下次 embedding.search**；`XRK_MEMORY_EMBED_URL` 可 CI 旁路（Plugins → 高级） |
 
-Tavily / Brave 密钥：Plugins → Web search 卡或 Settings → Credentials（同一槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`）。
+Tavily / Brave / DeepSeek Search 密钥：Plugins → Web search 卡或 Settings → Credentials（槽 `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` / `XRK_DEEPSEEK_SEARCH_API_KEY`；DeepSeek 也可复用对话密钥，且须钉选提供方 DeepSeek 才会用）。
 
 ## 社区插件 Host（可选 env）
 
@@ -396,7 +396,7 @@ Path jail: `exec-fs` `resolveWithinRoot` ([security-checklist.md](./security-che
 
 | Variable | Meaning | Default / Notes |
 |------|------|-------------|
-| `XRK_HOST` | Bind address | Typically `127.0.0.1`; CLI rejects `0.0.0.0` |
+| `XRK_HOST` | Bind address | Typically `127.0.0.1`; `0.0.0.0` allowed (non-loopback arms access PIN). **No security guarantee** on the public internet — PIN / `XRK_API_KEY` are gates only; prefer reverse proxy + TLS |
 | `XRK_PORT` | Port | Typically `8787`; tests may use `0` |
 | `XRK_API_KEY` | Face/HTTP auth | Empty = **dev unauthenticated**; same-origin product-shell loopback may omit the header |
 | `XRK_CORS_ORIGIN` | CORS | Default `*` |
@@ -557,7 +557,7 @@ Behavior notes:
 | `XRK_SECURITY_GUIDANCE_BLOCK` | When `1`, matching write-path content patterns **refuse** the write (default: append advisory to the tool result) |
 | `XRK_SECURITY_GUIDANCE_DISABLE` | When `1`, disable write-path guidance / sensitive-path floor (hardline argv still applies) |
 
-Without Tavily/Brave keys: `web_search` defaults to **parallel-free**, then falls back to DuckDuckGo. Without an LSP command: `lsp` may still register and **execute fails honestly**.
+Without Tavily/Brave keys: `web_search` defaults to **parallel-free**, then falls back to DuckDuckGo (DeepSeek Search is pin-only, not Auto). Without an LSP command: `lsp` may still register and **execute fails honestly**.
 
 ## Plugins settings (end-to-end)
 
@@ -579,7 +579,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `agent-loop` | `llmRetryMaxRetries` | In-step provider retry cap (default 8; `0` disables) |
 | `agent-loop` | `toolOrder` | Tool line order (Plugins card; exactly one `' '` rest); blank = lexicographic |
 | `agent-loop` | `compactionStrategy` | Over-budget strategy (soft budget **and** overflow): `prune-summary` (default) · `prune-only` · `summary-only` · `off`; soft ceiling is per model (below) |
-| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; omit = no proactive soft compact. Adopting a fetched model that discloses `contextWindow`: window ≥100k → `max(100k, 75%)` (stepped to 1k, cap 300k); window &lt;100k → 75% only; under 8k left blank. A later fetch only fills a blank soft budget; hand-tuned values stay |
+| Models (`llm-deepseek` / `llm-pi-ai` model rows) | `softBudgetMaxTokens` (optional keep/buffer) | Per-model proactive soft compact budget; orthogonal to `contextWindow`; **blank = `floor(window × 90%)` and still proactive** (Codex; window &lt;8k does not derive). **Fetch models** fills blank soft the same 90% way; later fetch only fills blanks; hand-tuned values stay. With a provider ring, effective soft is also `min`’d to 90% of the window |
 | `agent-loop` | `toolResultMaxInlineBytes` | Tool-result spill ceiling (default **64_000**; `0` disables both pipeline bound and loop spill; one full body under `~/.xrk/spill/tool-outputs/`) |
 | `agent-loop` | `maxConcurrentModelSessions` | Running sessions on one provider/model route (default **5**; parent + subagent count equally; blank / idle history do not count) |
 | Models (`llm-deepseek` / `llm-pi-ai` model rows) | `maxConcurrentSessions` (optional) | Override the live-session ceiling for that model; omit → `agent-loop.maxConcurrentModelSessions` |
@@ -599,7 +599,7 @@ Settings → Plugins mutates these runtime namespaces:
 | `auto-review` | `enabled` · `classifierUrl` (token via Credentials) | **Live** on next tool call / classify; tiers **heuristic · HTTP · session LLM**; session `/permission auto` = **no sandbox + per-call review**; `/auto-review` + HTTP panel share enable; `XRK_AUTO_REVIEW_CLASSIFIER_URL` may CI-bypass (Plugins → Advanced). Host `createAutoReviewToolPre`: `resolveDenyAction` covers reviewer **deny verdicts** (default ask→approval); `onClassifierError: 'ask' \| 'deny'` covers **technical failures** (default **ask**; `deny` = fail-closed `AUTO_REVIEW_DENIED`) |
 | `memory-embed` | `url` · `collection` (token via Credentials) | **Live** on next embedding.search; `XRK_MEMORY_EMBED_URL` may CI-bypass (Plugins → Advanced) |
 
-Tavily / Brave keys: Plugins → Web search card or Settings → Credentials (same slots `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY`).
+Tavily / Brave / DeepSeek Search keys: Plugins → Web search card or Settings → Credentials (slots `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` / `XRK_DEEPSEEK_SEARCH_API_KEY`; DeepSeek may reuse the chat key and is used only when the provider is pinned to DeepSeek).
 
 ## Community plugin Host (optional env)
 

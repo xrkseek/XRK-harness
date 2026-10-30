@@ -94,8 +94,12 @@ export function ModelSelect(
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
   const [search, setSearch] = useState('')
-  // Virtual row while the search input keeps focus (PopupSelectView pattern).
-  const [highlight, setHighlight] = useState(0)
+  // Virtual keyboard/hover cue while search keeps focus. `null` until the
+  // user arrows or hovers — opening must not paint the first row as hovered.
+  const [highlight, setHighlight] = useState<number | null>(null)
+  // Ignore CSS/pointer hover until the cursor moves after open (mouse may
+  // already sit where the first row mounts — sticky :hover without a move).
+  const [pointerArmed, setPointerArmed] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
@@ -187,9 +191,11 @@ export function ModelSelect(
   const scrollHighlightRef = useRef(false)
 
   useEffect(() => {
-    // Reset the virtual highlight when the filtered set or pane changes.
+    // Clear the virtual highlight when the filtered set or pane changes —
+    // never default to index 0 (that reads as a stuck hover on open).
     scrollHighlightRef.current = false
-    setHighlight(0)
+    setHighlight(null)
+    setPointerArmed(false)
   }, [search, pane, open])
 
   useEffect(() => {
@@ -341,11 +347,16 @@ export function ModelSelect(
         if (len === 0) return
         const step = event.key === 'ArrowDown' ? 1 : -1
         scrollHighlightRef.current = true
-        setHighlight(index => (index + step + len) % len)
+        setHighlight((index) => {
+          // First arrow from a cold open lands on an end, not a wrap from 0.
+          if (index === null) return step > 0 ? 0 : len - 1
+          return (index + step + len) % len
+        })
         return
       }
       if (event.key === 'Enter') {
         event.preventDefault()
+        if (highlight === null) return
         const pick = flatModels[highlight]
         if (pick !== undefined && !busy) {
           choose({ provider: pick.groupId, model: pick.model.id })
@@ -523,7 +534,11 @@ export function ModelSelect(
               )}
               {filteredGroups.length > 0
                 ? (
-                  <div className={clsx(css.groups, 'scrollable')}>
+                  <div
+                    className={clsx(css.groups, 'scrollable')}
+                    data-pointer-armed={pointerArmed || undefined}
+                    onMouseMove={() => { if (!pointerArmed) setPointerArmed(true) }}
+                  >
                     {filteredGroups.map((group) => {
                       const headingId = `${id}-${group.id}`
                       return (
@@ -532,9 +547,11 @@ export function ModelSelect(
                           {group.models.map((model) => {
                             const selected = state.current?.provider === group.id && state.current.model === model.id
                             const flatIndex = flatIndexByKey.get(`${group.id}\0${model.id}`) ?? -1
-                            // Virtual highlight only while the search field is mounted
-                            // (catalog large enough); otherwise focus-visible carries the cue.
-                            const active = modelCount > 5 && flatIndex === highlight
+                            // Virtual highlight only after arrow/hover while search
+                            // is mounted; cold open stays unpainted (no fake hover).
+                            const active = modelCount > 5
+                              && highlight !== null
+                              && flatIndex === highlight
                             return (
                               <button
                                 ref={itemRef()}
@@ -547,7 +564,10 @@ export function ModelSelect(
                                 key={model.id}
                                 title={model.name}
                                 disabled={busy}
-                                onMouseEnter={() => { if (flatIndex >= 0) setHighlight(flatIndex) }}
+                                onMouseEnter={() => {
+                                  if (!pointerArmed || flatIndex < 0) return
+                                  setHighlight(flatIndex)
+                                }}
                                 onClick={() => { choose({ provider: group.id, model: model.id }) }}
                               >
                                 <span className={css.optionCopy}>

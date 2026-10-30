@@ -8,11 +8,13 @@ import {
   estimateMessagesTokens,
   estimateRequestTokens,
   estimateTokens,
+  deriveAutoCompactMaxTokens,
   parseCompactionStrategy,
   prepareCompactionPayload,
   priceRouteImageTokens,
   resolveCompactionStrategy,
   resolveSoftBudgetCeiling,
+  resolveSoftBudgetTriggerTokens,
   resolveSoftBudgetTokens,
   selectHeadRecent,
 } from "../src/index.js";
@@ -101,6 +103,39 @@ describe("compaction helpers", () => {
         bufferTokens: 0,
       })?.maxRequestTokens,
     ).toBe(50_000);
+    // Codex: blank soft + context window → floor(window × 0.9).
+    expect(
+      resolveSoftBudgetTokens({ contextWindow: 256_000 })?.maxRequestTokens,
+    ).toBe(230_400);
+    expect(resolveSoftBudgetTokens({ contextWindow: 7_999 })).toBeUndefined();
+  });
+
+  it("does not double-discount trigger when soft max is already window×0.9", () => {
+    const windowForce = deriveAutoCompactMaxTokens(256_000)!;
+    expect(windowForce).toBe(230_400);
+    // Blank / ring-forced soft: trigger at soft max (not soft×0.9).
+    expect(
+      resolveSoftBudgetTriggerTokens({
+        maxRequestTokens: windowForce,
+        triggerRatio: 0.9,
+        windowForceTokens: windowForce,
+      }),
+    ).toBe(230_400);
+    // User soft below the force line: still apply trigger percent.
+    expect(
+      resolveSoftBudgetTriggerTokens({
+        maxRequestTokens: 100_000,
+        triggerRatio: 0.9,
+        windowForceTokens: windowForce,
+      }),
+    ).toBe(90_000);
+    // No window: always apply ratio.
+    expect(
+      resolveSoftBudgetTriggerTokens({
+        maxRequestTokens: 100_000,
+        triggerRatio: 0.9,
+      }),
+    ).toBe(90_000);
   });
 
   it("counts assistant reasoning toward soft-budget message price", () => {

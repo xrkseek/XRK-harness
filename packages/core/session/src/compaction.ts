@@ -11,8 +11,12 @@ import type {
   SessionEvent,
 } from "@xrkseek/protocol";
 import { flattenText } from "@xrkseek/protocol";
-import { priceRouteImageTokens, type InputModality } from "./surface-estimate.js";
-import { estimateText } from "./surface-estimate.js";
+import {
+  estimateText,
+  estimateTextForSoftBudget,
+  priceRouteImageTokens,
+  type InputModality,
+} from "./surface-estimate.js";
 import {
   foldImageOffloadMarks,
   messageHasImageBlocks,
@@ -55,6 +59,33 @@ export const DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS = 3;
 export const SOFT_BUDGET_COMPACT_TRIGGER_RATIO = 0.9;
 
 /**
+ * Codex `auto_compact_token_limit` when omitted: 90% of the model context window.
+ * Soft budget blank → derive this (never “blank = no proactive compact”).
+ */
+export const AUTO_COMPACT_WINDOW_RATIO = 0.9;
+
+/** Minimum window that can seed a derived soft budget (same floor as catalog soft). */
+export const AUTO_COMPACT_MIN_CONTEXT_WINDOW = 8_000;
+
+/**
+ * Codex-style auto-compact ceiling from a route `contextWindow`.
+ * `floor(window × 0.9)`; undefined when the window is missing or too small.
+ */
+export function deriveAutoCompactMaxTokens(
+  contextWindow: number | undefined,
+): number | undefined {
+  if (
+    typeof contextWindow !== "number" ||
+    !Number.isFinite(contextWindow) ||
+    contextWindow < AUTO_COMPACT_MIN_CONTEXT_WINDOW
+  ) {
+    return undefined;
+  }
+  const n = Math.floor(contextWindow * AUTO_COMPACT_WINDOW_RATIO);
+  return n >= 1 ? n : undefined;
+}
+
+/**
  * Budget estimator for `selectHeadRecent` / overflow (`chars/4` via {@link estimateText}).
  */
 export function estimateTokens(text: string): number {
@@ -67,6 +98,8 @@ function messagePlainText(m: ChatMessage): string {
   return flattenText(m.content);
 }
 
+type TextEstimator = (text: string) => number;
+
 /**
  * Blocks that {@link flattenText} skips (images) or under-prices relative to the
  * outbound wire — soft budget must not miss them (漏压).
@@ -76,6 +109,7 @@ function messagePlainText(m: ChatMessage): string {
 function estimateOpaqueContentBlocks(
   content: MessageContent,
   inputModalities?: readonly InputModality[],
+  textEst: TextEstimator = estimateTokens,
 ): number {
   if (typeof content === "string") return 0;
   let n = 0;
@@ -103,29 +137,38 @@ function estimateOpaqueContentBlocks(
       continue;
     }
     if (block.type === "file") continue;
-    n += estimateTokens(JSON.stringify(block));
+    n += textEst(JSON.stringify(block));
   }
   return n;
 }
 
 export function estimateMessagesTokens(
   messages: readonly ChatMessage[],
-  options?: { readonly inputModalities?: readonly InputModality[] },
+  options?: {
+    readonly inputModalities?: readonly InputModality[];
+    /** Default {@link estimateTokens}; soft-budget uses denser CJK. */
+    readonly textEst?: TextEstimator;
+  },
 ): number {
+  const textEst = options?.textEst ?? estimateTokens;
   let n = 0;
   for (const m of messages) {
-    n += estimateTokens(messagePlainText(m));
+    n += textEst(messagePlainText(m));
     if (m.role === "assistant" && m.reasoning?.trim()) {
       // On the wire as reasoning_content; flattenText never sees it.
-      n += estimateTokens(m.reasoning);
+      n += textEst(m.reasoning);
     }
     if (m.role === "user" || m.role === "tool") {
-      n += estimateOpaqueContentBlocks(m.content, options?.inputModalities);
+      n += estimateOpaqueContentBlocks(
+        m.content,
+        options?.inputModalities,
+        textEst,
+      );
     }
     if (m.role === "assistant" && m.toolCalls) {
       for (const c of m.toolCalls) {
-        n += estimateTokens(c.name);
-        n += estimateTokens(JSON.stringify(c.arguments ?? {}));
+        n += textEst(c.name);
+        n += textEst(JSON.stringify(c.arguments ?? {}));
       }
     }
   }
@@ -147,11 +190,19 @@ export function estimateRequestTokens(input: {
   readonly system?: string;
   /** Active adapter modalities; text-only routes price images as placeholders. */
   readonly inputModalities?: readonly InputModality[];
+  /**
+   * `soft-budget`: CJK-dense text (no provider usage sample). Default fixed
+   * chars/4 for keep/recent selection and meter-adjacent callers.
+   */
+  readonly density?: "fixed" | "soft-budget";
 }): number {
+  const textEst =
+    input.density === "soft-budget" ? estimateTextForSoftBudget : estimateTokens;
   let n = estimateMessagesTokens(input.messages, {
     ...(input.inputModalities !== undefined
       ? { inputModalities: input.inputModalities }
       : {}),
+    textEst,
   });
   // Non-assemble callers may pass system only on the side; avoid double-count
   // when the same text is already any system message (leading or in-history
@@ -161,11 +212,11 @@ export function estimateRequestTokens(input: {
       (m) => m.role === "system" && messagePlainText(m) === input.system,
     );
     if (!alreadyCounted) {
-      n += estimateTokens(input.system);
+      n += textEst(input.system);
     }
   }
   if (input.tools?.length) {
-    n += estimateTokens(JSON.stringify(input.tools));
+    n += textEst(JSON.stringify(input.tools));
   }
   return n;
 }
@@ -185,6 +236,33 @@ export function resolveSoftBudgetCeiling(
   return max - buffer;
 }
 
+/**
+ * Soft-budget pre-trigger tokens (Face `softBudgetTriggerPercent` as a ratio).
+ *
+ * When the effective soft max already equals Codex `floor(window × 0.9)`
+ * (blank soft derived from the window, or ring-forced clamp to that line),
+ * do **not** multiply by `triggerRatio` again — that would compact near
+ * ~81% of the window while Codex's limit *is* the 90% line.
+ */
+export function resolveSoftBudgetTriggerTokens(input: {
+  readonly maxRequestTokens: number;
+  readonly triggerRatio: number;
+  readonly windowForceTokens?: number;
+}): number {
+  const max = Math.max(0, Math.floor(input.maxRequestTokens));
+  const atWindowForce =
+    input.windowForceTokens !== undefined &&
+    max === input.windowForceTokens;
+  const ratio = atWindowForce
+    ? 1
+    : Number.isFinite(input.triggerRatio) &&
+        input.triggerRatio > 0 &&
+        input.triggerRatio <= 1
+      ? input.triggerRatio
+      : SOFT_BUDGET_COMPACT_TRIGGER_RATIO;
+  return Math.max(1, Math.floor(max * ratio));
+}
+
 /** Soft-budget numbers resolved for one outbound step (SDK or model catalog). */
 export interface ResolvedSoftBudget {
   readonly maxRequestTokens: number;
@@ -195,6 +273,11 @@ export interface ResolvedSoftBudget {
 /**
  * Derive keep/buffer defaults from a soft-budget max (old Face 24k/4k @ 100k).
  * Explicit keep/buffer win when provided and valid.
+ *
+ * When catalog/SDK soft max is omitted, Codex posture: derive
+ * `floor(contextWindow × 0.9)` so blank never means “no proactive compact”.
+ * With a provider ring, callers should also `min` with
+ * {@link deriveAutoCompactMaxTokens} so a too-large soft cannot outrun the window.
  */
 export function resolveSoftBudgetTokens(input: {
   readonly softBudgetMaxTokens?: number;
@@ -204,6 +287,11 @@ export function resolveSoftBudgetTokens(input: {
   readonly maxRequestTokens?: number;
   readonly keepTokens?: number;
   readonly bufferTokens?: number;
+  /**
+   * Route capacity. Seeds soft max when softBudgetMax / maxRequestTokens are
+   * blank (Codex `auto_compact_token_limit` from context_window).
+   */
+  readonly contextWindow?: number;
 }): ResolvedSoftBudget | undefined {
   // SDK / tests may pass a small maxRequestTokens; catalog softBudget* stays ≥8k.
   const sdkMax = input.maxRequestTokens;
@@ -218,7 +306,8 @@ export function resolveSoftBudgetTokens(input: {
   ) {
     maxRaw = catalogMax;
   } else {
-    return undefined;
+    maxRaw = deriveAutoCompactMaxTokens(input.contextWindow);
+    if (maxRaw === undefined) return undefined;
   }
   const maxRequestTokens = Math.floor(maxRaw);
   // SDK keep/buffer (CompactionOptions) accept any non-negative; catalog soft*
@@ -563,8 +652,8 @@ export interface CompactionOptions {
    * - `prune-summary` (default): prune oversized tools, then LLM summary
    * - `prune-only`: model-free prune only; still fail-closed if over budget / overflow
    * - `summary-only`: skip prune pass; LLM summary only
-   * - `off`: disable soft-budget auto path and provider-overflow recovery
-   *   (manual `/compact` still works)
+   * - `off`: disable soft-budget auto path only; provider-overflow still recovers
+   *   once via prune→summary (manual `/compact` still works)
    */
   readonly strategy?: CompactionStrategy;
   /**

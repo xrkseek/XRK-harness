@@ -220,6 +220,7 @@ function resolveCredentialSlotForRef(
   if (ref === "XRK_API_KEY") return "host.apiKey";
   if (ref === "XRK_TAVILY_API_KEY") return "web.tavily";
   if (ref === "XRK_BRAVE_SEARCH_API_KEY") return "web.brave";
+  if (ref === "XRK_DEEPSEEK_SEARCH_API_KEY") return "web.deepseek";
   if (ref === "XRK_COMPUTER_USE_BACKGROUND") return "computer.background";
   if (ref === "XRK_VOICE_OPENAI_KEY") return "voice.openai";
   if (ref === "XRK_IMAGE_GEN_OPENAI_KEY") return "image.openai";
@@ -255,6 +256,7 @@ function credentialRefForSlot(
   if (slotId === "host.apiKey") return "XRK_API_KEY";
   if (slotId === "web.tavily") return "XRK_TAVILY_API_KEY";
   if (slotId === "web.brave") return "XRK_BRAVE_SEARCH_API_KEY";
+  if (slotId === "web.deepseek") return "XRK_DEEPSEEK_SEARCH_API_KEY";
   if (slotId === "computer.background") return "XRK_COMPUTER_USE_BACKGROUND";
   if (slotId === "voice.openai") return "XRK_VOICE_OPENAI_KEY";
   if (slotId === "image.openai") return "XRK_IMAGE_GEN_OPENAI_KEY";

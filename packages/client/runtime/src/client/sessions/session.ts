@@ -1,4 +1,6 @@
-// Sessions remain resident after creation so they continue consuming mux frames off-screen.
+// A Session instance consumes mux while its Client scope is live. Off-stage idle
+// scopes are reclaimed by SessionRuntime (DSH retain/release outcome); list rows
+// still update from manager-level frames without a resident window.
 
 import type { Context } from '@xrkseek/cordis'
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'

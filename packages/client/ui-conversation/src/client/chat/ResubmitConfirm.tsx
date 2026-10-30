@@ -39,10 +39,11 @@ export function ResubmitConfirm({
       open={open}
       onClose={() => { if (!busy) onChoice('cancel') }}
       title={title}
+      layout="inset"
       className={css.dialog ?? ''}
       contentClassName={css.body ?? ''}
       footer={(
-        <>
+        <div className={css.actions}>
           <Button
             variant="outline"
             className={css.action}
@@ -67,7 +68,7 @@ export function ResubmitConfirm({
           >
             {revertFilesLabel}
           </Button>
-        </>
+        </div>
       )}
     >
       <p className={css.description}>{description}</p>

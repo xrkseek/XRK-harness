@@ -52,6 +52,8 @@ export {
 
 export {
   COMPACTION_SUMMARY_TEMPLATE,
+  AUTO_COMPACT_MIN_CONTEXT_WINDOW,
+  AUTO_COMPACT_WINDOW_RATIO,
   COMPACT_RECENT_MAX_TOKENS,
   DEFAULT_COMPACTION_BUFFER_TOKENS,
   DEFAULT_COMPACTION_HEAD_TOKENS,
@@ -60,6 +62,7 @@ export {
   DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS,
   SOFT_BUDGET_COMPACT_TRIGGER_RATIO,
   buildCompactionPrompt,
+  deriveAutoCompactMaxTokens,
   deriveMessagesUnwindowed,
   estimateMessagesTokens,
   estimateRequestTokens,
@@ -68,6 +71,7 @@ export {
   formatCompactionForModel,
   prepareCompactionPayload,
   resolveSoftBudgetCeiling,
+  resolveSoftBudgetTriggerTokens,
   resolveSoftBudgetTokens,
   parseCompactionStrategy,
   resolveCompactionStrategy,
@@ -100,6 +104,8 @@ export {
   estimateAssistantSurface,
   estimateMessageContent,
   estimateSystemTokens,
+  estimateText,
+  estimateTextForSoftBudget,
   estimateToolsTokens,
   priceRouteImageTokens,
   type InputModality,

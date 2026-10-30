@@ -554,6 +554,10 @@ export function apply(ctx: Context): void {
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
+          // Privileged loopback/LAN + Host canOpenPath → OS open; otherwise
+          // in-app workbench only (SSH / Termux-headless claim / WAN Web).
+          const allowNativeOpen = ctx.connection.isLoopback
+            && ctx.connection.hostDescription.getSnapshot()?.canOpenPath === true
           return routeChatOpenFile(
             resolved,
             (p) => workspaces.openPath(p),
@@ -562,8 +566,11 @@ export function apply(ctx: Context): void {
               const face = ctx.get('betterSidebar') as {
                 openTab?(seed: { type: string; path?: string }): void
               } | undefined
-              face?.openTab?.({ type: 'editor', path: p })
+              if (face?.openTab === undefined) return false
+              face.openTab({ type: 'editor', path: p })
+              return true
             },
+            { allowNativeOpen },
           )
         },
         loadOlder: () => { void scoped.loadOlder() },
@@ -607,10 +614,24 @@ export function apply(ctx: Context): void {
           shell.focus()
         },
         regenerateAt: (seq, text) => {
-          void regenerateFromUserSeq(sessions, sessionId, seq, text).catch(() => undefined)
+          // Surface unexpected throws in the composer strip — do not swallow.
+          // Truncate failures are already reportError'd inside executeResubmit.
+          void regenerateFromUserSeq(sessions, sessionId, seq, text).catch((error: unknown) => {
+            sessions.binding(sessionId)?.session?.reportError('resubmit', {
+              code: 'internal',
+              message: error instanceof Error ? error.message : String(error),
+              details: {},
+            })
+          })
         },
         deleteAt: (seq) => {
-          void deleteFromSeq(sessions, sessionId, seq).catch(() => undefined)
+          void deleteFromSeq(sessions, sessionId, seq).catch((error: unknown) => {
+            sessions.binding(sessionId)?.session?.reportError('resubmit', {
+              code: 'internal',
+              message: error instanceof Error ? error.message : String(error),
+              details: {},
+            })
+          })
         },
         withdrawSteer: (itemId) => {
           void scoped.updateQueue(itemId, { kind: 'remove' }).catch(() => undefined)

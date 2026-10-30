@@ -154,13 +154,17 @@ export async function executeResubmitAfterChoice(
   // Face beforeSeq is exclusive; Face then drops the open turn whose
   // `turn/start` sits before this user row.
   const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)
-  // `truncate` reports business failures in its result rather than throwing, so
-  // ignoring the result used to re-prompt on top of an un-truncated log: the old
-  // turn stayed and the edited message was appended after it. Stop and surface
-  // the failure in the composer strip instead.
-  const cut = await sessions.truncate({ sessionId, beforeSeq })
-  if (!cut.ok) {
-    sessions.binding(sessionId)?.session?.reportError('resubmit', cut.error)
+  // ISessions.truncate is Promise<void>: success resolves, business/transport
+  // failures throw. Do not read `.ok` on the return (it is undefined → toast
+  // "Cannot read properties of undefined (reading 'ok')").
+  try {
+    await sessions.truncate({ sessionId, beforeSeq })
+  } catch (error: unknown) {
+    sessions.binding(sessionId)?.session?.reportError('resubmit', {
+      code: 'internal',
+      message: error instanceof Error ? error.message : String(error),
+      details: {},
+    })
     return
   }
   if (opts.text === undefined) return

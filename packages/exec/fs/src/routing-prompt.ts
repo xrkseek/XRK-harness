@@ -26,7 +26,7 @@ export function formatFsRoutingPrompt(available: ToolNameSet): string {
   }
   if (names.has("read_image")) {
     lines.push(
-      "- Images: `read_image` for workspace PNG/JPEG/WebP/GIF paths, or `sha256:…` / `attachment:sha256:…` ids from `image_generate` (not a disk hunt).",
+      "- Images: `read_image` for workspace PNG/JPEG/WebP/GIF paths, or `sha256:…` / `attachment:sha256:…` ids from `image_generate` (not a disk hunt). On a text-only model the tool returns the path / id plus guidance (OCR, ask the user, or switch to vision) — it does not error, and pixels stay out of the wire.",
     );
   }
   if (names.has("apply_edit") || names.has("write_file") || names.has("apply_patch")) {

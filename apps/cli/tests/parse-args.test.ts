@@ -103,8 +103,9 @@ describe("cli parseArgs", () => {
     expect(a.promptExplicit).toBe(true);
   });
 
-  it("rejects 0.0.0.0", () => {
-    expect(() => parseArgs(["serve", "--host", "0.0.0.0"])).toThrow(/127\.0\.0\.1/);
+  it("allows 0.0.0.0 (PIN / API key gate arms on non-loopback)", () => {
+    const a = parseArgs(["serve", "--host", "0.0.0.0"]);
+    expect(a.host).toBe("0.0.0.0");
   });
 
   it("parses --no-persist and --host", () => {

@@ -9,18 +9,18 @@
 
 | 入口 | 字段 |
 |------|------|
-| Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave 密钥（经 Credentials 落盘） |
+| Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave / DeepSeek 密钥（经 Credentials 落盘） |
 | Settings → Plugins → **Browser** | `mode`（`http` 快照 / `cdp`）· `cdpUrl`（Chrome DevTools 地址） |
-| Settings → Credentials | 同槽也可改 Tavily / Brave |
+| Settings → Credentials | 同槽也可改 Tavily / Brave / DeepSeek Search |
 
-Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 `createDefaultWebAccess({ search })`；Browser 合成 `browserProduct` 传入 `createBrowserSession({ product })`。均在 agent 重建后生效。非空 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` 为 CI 旁路。
+Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 `createDefaultWebAccess({ search })`；Browser 合成 `browserProduct` 传入 `createBrowserSession({ product })`。均在 agent 重建后生效。非空 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` 为 CI 旁路。DeepSeek Search 与对话共用 Bearer；Host 在缺 `web.deepseek` 时复用 `llm.deepseek` / `DEEPSEEK_API_KEY`。
 
 ## 缝
 
 | 层 | 内容 |
 |----|------|
 | Definition | `WebSearch` · `WebFetch` |
-| Provider | 匿名 HTTP fetch；有密钥用 Tavily/Brave，否则 **parallel-free → duckduckgo** |
+| Provider | 匿名 HTTP fetch；有密钥 Auto 用 Tavily / Brave；**钉选** DeepSeek 时走 Search API（`POST /v1/tools/search`）；否则 **parallel-free → duckduckgo** |
 | Consumer | `createWebTools(access)` — Face 卡走 `presentCall` / `presentResult`（`card: "web"`）；`createBrowserTools(session)` — 交互式会话 |
 
 ## Headless / CI（可选 env）
@@ -29,12 +29,13 @@ Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 
 |-----|------|
 | `XRK_TAVILY_API_KEY` | Tavily |
 | `XRK_BRAVE_SEARCH_API_KEY` | Brave |
+| `XRK_DEEPSEEK_SEARCH_API_KEY` | DeepSeek Search（缺省可回退 `DEEPSEEK_API_KEY`） |
 | `XRK_PARALLEL_FREE_MCP_URL` | 可选 Parallel URL |
-| `XRK_WEB_SEARCH_PROVIDER` | 钉死提供方（覆盖 Settings） |
+| `XRK_WEB_SEARCH_PROVIDER` | 钉死提供方（覆盖 Settings）：`tavily` · `brave` · `deepseek` · `parallel-free` · `duckduckgo` |
 | `XRK_WEB_SEARCH_REGION` | DuckDuckGo `kl` |
 | `XRK_WEB_FETCH_ALLOWLIST` | 可选：逗号分隔主机名（支持 `*.example.com`）。非空时 `web_fetch` 仅允许列出主机；空则开放（仍拦私网）。决策写入进程内审计环（`getOutboundAllowlistAuditLog`）；Host 注册 `setOutboundAllowlistAuditObserver`；`xrkh doctor` 显示审计尾。**非** MITM/SOCKS，Starlark execpolicy 后置 |
 
-默认无密钥也能搜（Parallel 免费 MCP；不行再 DDG HTML）。默认最多 **8** 条源。
+默认无密钥也能搜（Parallel 免费 MCP；不行再 DDG HTML）。默认最多 **8** 条源。`web_search` 与 `web_fetch` 均可选工具参数 `proxy`（如 `http://127.0.0.1:7897`）。
 
 ## Fetch
 
@@ -75,18 +76,18 @@ Host（harness/server）经 `createBrowserRuntimeRegistry` 按 **会话 id** 共
 
 | Entry | Fields |
 |------|------|
-| Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave secrets (persisted via Credentials) |
+| Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave / DeepSeek secrets (persisted via Credentials) |
 | Settings → Plugins → **Browser** | `mode` (`http` snapshot / `cdp`) · `cdpUrl` (Chrome DevTools URL) |
-| Settings → Credentials | Same slots may edit Tavily / Brave |
+| Settings → Credentials | Same slots may edit Tavily / Brave / DeepSeek Search |
 
-The Host synthesizes Web search into `webSearch` (`SearchAccessConfig`) for `createDefaultWebAccess({ search })`, and Browser into `browserProduct` for `createBrowserSession({ product })`. Both take effect after agent rebuild. Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is the CI bypass.
+The Host synthesizes Web search into `webSearch` (`SearchAccessConfig`) for `createDefaultWebAccess({ search })`, and Browser into `browserProduct` for `createBrowserSession({ product })`. Both take effect after agent rebuild. Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is the CI bypass. DeepSeek Search shares the chat Bearer; when `web.deepseek` is unset the Host reuses `llm.deepseek` / `DEEPSEEK_API_KEY`.
 
 ## Seams
 
 | Layer | Content |
 |----|------|
 | Definition | `WebSearch` · `WebFetch` |
-| Provider | Anonymous HTTP fetch; with keys use Tavily/Brave, else **parallel-free → duckduckgo** |
+| Provider | Anonymous HTTP fetch; Auto with keys uses Tavily / Brave; **pin** DeepSeek for Search API (`POST /v1/tools/search`); else **parallel-free → duckduckgo** |
 | Consumer | `createWebTools(access)` — Face cards via `presentCall` / `presentResult` (`card: "web"`); `createBrowserTools(session)` — interactive session |
 
 ## Headless / CI (optional env)
@@ -95,12 +96,13 @@ The Host synthesizes Web search into `webSearch` (`SearchAccessConfig`) for `cre
 |-----|------|
 | `XRK_TAVILY_API_KEY` | Tavily |
 | `XRK_BRAVE_SEARCH_API_KEY` | Brave |
+| `XRK_DEEPSEEK_SEARCH_API_KEY` | DeepSeek Search (falls back to `DEEPSEEK_API_KEY`) |
 | `XRK_PARALLEL_FREE_MCP_URL` | Optional Parallel URL |
-| `XRK_WEB_SEARCH_PROVIDER` | Pin provider (overrides Settings) |
+| `XRK_WEB_SEARCH_PROVIDER` | Pin provider (overrides Settings): `tavily` · `brave` · `deepseek` · `parallel-free` · `duckduckgo` |
 | `XRK_WEB_SEARCH_REGION` | DuckDuckGo `kl` |
 | `XRK_WEB_FETCH_ALLOWLIST` | Optional comma-separated hostnames (`*.example.com` ok). When set, `web_fetch` only allows listed hosts; empty stays open (private hosts still blocked). Decisions go to an in-process audit ring (`getOutboundAllowlistAuditLog`); Host registers `setOutboundAllowlistAuditObserver`; `xrkh doctor` shows the audit tail. **not** MITM/SOCKS — Starlark execpolicy deferred |
 
-Search works without keys by default (Parallel free MCP, then DDG HTML). Default max sources: **8**.
+Search works without keys by default (Parallel free MCP, then DDG HTML). Default max sources: **8**. Both `web_search` and `web_fetch` accept an optional `proxy` tool argument (e.g. `http://127.0.0.1:7897`).
 
 ## Fetch
 

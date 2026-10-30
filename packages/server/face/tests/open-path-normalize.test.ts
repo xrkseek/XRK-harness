@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   installSpawnDetachedForTests,
   isAbsoluteUrl,
+  isTermuxEnv,
   normalizeOpenPath,
+  openNativePath,
   revealNativePath,
   windowsExplorerPath,
 } from "../src/host-open-path.js";
@@ -94,5 +96,41 @@ describe("revealNativePath win32", () => {
         args: ["/c", "start", "", windowsExplorerPath(dir)],
       },
     ]);
+  });
+});
+
+describe("Termux / Linux open scenario", () => {
+  afterEach(() => {
+    installSpawnDetachedForTests(undefined);
+  });
+
+  it("detects Termux via TERMUX_VERSION or PREFIX", () => {
+    expect(isTermuxEnv({ TERMUX_VERSION: "0.118.0" })).toBe(true);
+    expect(isTermuxEnv({ PREFIX: "/data/data/com.termux/files/usr" })).toBe(
+      true,
+    );
+    expect(isTermuxEnv({ DISPLAY: ":0" })).toBe(false);
+  });
+
+  it("opens via termux-open on Termux Linux", async () => {
+    const calls: { command: string; args: readonly string[] }[] = [];
+    installSpawnDetachedForTests(async (command, args) => {
+      calls.push({ command, args });
+    });
+    await openNativePath("/data/data/com.termux/files/home/a.txt", "linux", {
+      TERMUX_VERSION: "0.118.0",
+    });
+    expect(calls).toEqual([
+      { command: "termux-open", args: ["/data/data/com.termux/files/home/a.txt"] },
+    ]);
+  });
+
+  it("opens via xdg-open on GUI Linux", async () => {
+    const calls: { command: string; args: readonly string[] }[] = [];
+    installSpawnDetachedForTests(async (command, args) => {
+      calls.push({ command, args });
+    });
+    await openNativePath("/home/u/a.txt", "linux", { DISPLAY: ":0" });
+    expect(calls).toEqual([{ command: "xdg-open", args: ["/home/u/a.txt"] }]);
   });
 });

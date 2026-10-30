@@ -27,7 +27,8 @@ import { OverviewCanvasPanel } from './OverviewCanvasPanel.tsx'
 import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import { BossStatusSheet } from './BossStatusSheet.tsx'
 import { PresenceBall, useBossMood, usePresenceEnabled, useSeatTitles } from './PresenceBall.tsx'
-import { delegateSeatCaption } from './seat-caption.ts'
+import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
+import { childDelegateSeatCaption, delegateSeatCaption } from './seat-caption.ts'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -1791,6 +1792,10 @@ export function PreviewTabs({
   const panelId = useId()
   const parentId = useSessions((s) => s.byId[sessionId]?.parentId)
   const sessionOrigin = useSessions((s) => s.byId[sessionId]?.origin)
+  const sideline = useSessions((s) => {
+    const line = s.byId[sessionId]?.sideline?.trim()
+    return line && line.length > 0 ? line : undefined
+  })
   const mountPaint = takeOverviewMountPaint(sessionId, parentId)
   const [tab, setTab] = useState<PreviewTabId>(() => mountPaint?.tab ?? 'status')
   // Stale-while-revalidate: paint last Face load for this Session immediately;
@@ -1890,6 +1895,12 @@ export function PreviewTabs({
   const bossSeatLabel = leftSeatLiveBossLook
     ? delegateSeatCaption(seatTitles.boss, bossMood.bossNickname || undefined)
     : delegateSeatCaption(seatTitles.boss, status?.delegate?.parentLabel)
+  // Identity agent-home / tool children → 干员; project home → 经理; 向阳 → name.
+  const childSeatLabel = childDelegateSeatCaption(
+    seatTitles,
+    status?.delegate?.childSeat,
+    status?.delegate?.childLabel,
+  )
   // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
   const bossPresence = officeBossSeat
     ? {
@@ -2396,7 +2407,7 @@ export function PreviewTabs({
               data-collapsed={presenceRailCompact ? '' : undefined}
               data-pending={!status?.companionBall ? '' : undefined}
               role="group"
-              aria-label={`${bossSeatLabel} ${t('preview.status.presenceDelegate')} ${delegateSeatCaption(seatTitles.manager, status?.delegate?.childLabel)}`}
+              aria-label={`${bossSeatLabel} ${t('preview.status.presenceDelegate')} ${childSeatLabel}`}
             >
               <PresenceBall
                 sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
@@ -2445,13 +2456,10 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={sessionId}
                 {...(status?.presence ? { presence: status.presence } : {})}
-                {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
+                memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
                 pairSeat
                 seat="to"
-                roleLabel={delegateSeatCaption(
-                  seatTitles.manager,
-                  status?.delegate?.childLabel,
-                )}
+                roleLabel={childSeatLabel}
                 turnActive={ownTurnActive}
                 runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
                 runningSubs={ownSubs}
@@ -2466,6 +2474,7 @@ export function PreviewTabs({
                 )}
                 compact={presenceRailCompact}
                 engineActive={Boolean(overviewOpen && presenceEngineReady && status)}
+                {...(sideline ? { captionHint: sideline } : {})}
                 t={t as (key: string, params?: Record<string, string>) => string}
                 loadingLabel={t('preview.status.presenceLoading')}
                 errorLabel={t('preview.status.presenceError')}
@@ -2501,7 +2510,7 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={sessionId}
                 {...(status?.presence ? { presence: status.presence } : {})}
-                {...(status?.companionBall ? { memberLook: status.companionBall } : {})}
+                memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
                 turnActive={ownTurnActive}
                 runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
                 runningSubs={ownSubs}
@@ -2516,6 +2525,7 @@ export function PreviewTabs({
                 )}
                 compact={presenceRailCompact}
                 engineActive={overviewOpen && presenceEngineReady}
+                {...(sideline ? { captionHint: sideline } : {})}
                 t={t as (key: string, params?: Record<string, string>) => string}
                 loadingLabel={t('preview.status.presenceLoading')}
                 errorLabel={t('preview.status.presenceError')}

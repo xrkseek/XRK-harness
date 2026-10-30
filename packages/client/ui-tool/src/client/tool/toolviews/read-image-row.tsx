@@ -23,10 +23,12 @@ type ReadImageRowProps = ToolCallViewProps
  * Running / refusal / cancelled calls fall back to text body (no image card).
  */
 export function ReadImageRow({
-  toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, t,
+  toolName, block, cwd, home, openFile, inspect, loadImage, renderSlot, mediaRenderSlot, t,
 }: ReadImageRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const image = imageCardModel(block, cwd, home)
+  // Prefer tree mediaRenderSlot — keyed registration cannot own tool.call.images.
+  const mediaSlot = mediaRenderSlot ?? renderSlot
   return (
     <ToolRow
       t={t}
@@ -40,7 +42,7 @@ export function ReadImageRow({
       output={image === null ? model.output : null}
       errorSummary={model.errorSummary}
       image={image}
-      renderSlot={renderSlot}
+      renderSlot={mediaSlot}
       loadImage={loadImage}
       state={model.state}
       filePath={model.filePath}

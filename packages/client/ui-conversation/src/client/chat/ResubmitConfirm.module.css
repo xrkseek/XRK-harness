@@ -13,6 +13,32 @@
   line-height: 1.45;
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
 .action {
   min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .dialog {
+    max-width: none;
+  }
+
+  /* Three actions: stack so primary keep-files stays full-width and readable. */
+  .actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .action {
+    width: 100%;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
 }

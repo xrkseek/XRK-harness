@@ -37,12 +37,13 @@ export interface CommunitySyncModelOut {
 
 /**
  * Soft ceiling from context when the catalog omits one.
- * Floor 100k; otherwise 75% of the window (1k steps, cap 300k).
- * Windows under 100k stay at 75% (cannot raise the soft ceiling above the window).
+ * Codex: `floor(contextWindow × 0.9)` (same as runtime
+ * `deriveAutoCompactMaxTokens`). Blank soft never means “no proactive compact”.
  */
 export function defaultSoftBudgetMaxTokens(
   contextWindow: number | undefined,
 ): number | undefined {
+  // Keep Face free of a hard core-session import cycle; mirror the Codex 90% formula.
   if (
     typeof contextWindow !== "number" ||
     !Number.isFinite(contextWindow) ||
@@ -50,10 +51,8 @@ export function defaultSoftBudgetMaxTokens(
   ) {
     return undefined;
   }
-  const pct = Math.floor((contextWindow * 0.75) / 1_000) * 1_000;
-  const floored =
-    contextWindow >= 100_000 ? Math.max(100_000, pct) : Math.max(8_000, pct);
-  return Math.min(300_000, floored);
+  const n = Math.floor(contextWindow * 0.9);
+  return n >= 1 ? n : undefined;
 }
 
 function positiveInt(value: unknown): number | undefined {
@@ -199,9 +198,22 @@ export function mergeCommunityProviderModels(
 
   return incoming.map((m) => {
     const prev = prevById.get(m.id);
+    // Prefer the tighter window when both sides disclose one — a catalog that
+    // advertises 1M for a 256k route would otherwise let soft budget climb past
+    // the real provider limit before overflow recovery can run.
+    const incomingWindow = positiveInt(m.contextWindow);
+    const previousWindow = positiveInt(prev?.contextWindow);
     const contextWindow =
-      positiveInt(m.contextWindow) ?? positiveInt(prev?.contextWindow);
-    const maxTokens = positiveInt(m.maxTokens) ?? positiveInt(prev?.maxTokens);
+      incomingWindow !== undefined && previousWindow !== undefined
+        ? Math.min(incomingWindow, previousWindow)
+        : (incomingWindow ?? previousWindow);
+    // Same conservatism for max output when both sides publish a ceiling.
+    const incomingMax = positiveInt(m.maxTokens);
+    const previousMax = positiveInt(prev?.maxTokens);
+    const maxTokens =
+      incomingMax !== undefined && previousMax !== undefined
+        ? Math.min(incomingMax, previousMax)
+        : (incomingMax ?? previousMax);
     // User-edited soft budget wins over catalog / derived defaults.
     const softBudgetMaxTokens =
       positiveInt(prev?.softBudgetMaxTokens) ??

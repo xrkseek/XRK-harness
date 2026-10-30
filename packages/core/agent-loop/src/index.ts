@@ -1,5 +1,5 @@
 import { scheduler } from "node:timers/promises";
-import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, resolveSoftBudgetCeiling, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
+import { assertModelVisible, assertToolCallsSettled, assertAssistantToolCallAdjacency, deriveMessages, durableModelHistory, ensureDurableImageOffloads, estimateRequestTokens, estimateTokens, flushSession, priceCurrentSurfaceWindow, projectedInputPressureTokens, pruneOversizedToolResults, promotePendingSteers, repairOpenTurnEvents, settleDanglingTools, COMPACT_RECENT_MAX_TOKENS, DEFAULT_COMPACTION_KEEP_TOKENS, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_SOFT_BUDGET_COMPACT_ATTEMPTS, DEFAULT_SOFT_BUDGET_PEEL_ATTEMPTS, SOFT_BUDGET_COMPACT_TRIGGER_RATIO, deriveAutoCompactMaxTokens, resolveSoftBudgetCeiling, resolveSoftBudgetTriggerTokens, resolveSoftBudgetTokens, resolveCompactionStrategy, type CompactionOptions, type SessionStore, readSessionEvents } from "@xrkseek/core-session";
 import {
   assembleThreeLayers,
   isMetadataOnlyUserMessage,
@@ -971,11 +971,17 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
 
     // Soft budget + overflow share `compactionStrategy`: prune→summary by default;
     // prune-only / summary-only / off select which stages run before fail-closed.
-    // Ceiling: SDK CompactionOptions.maxRequestTokens, else Models catalog
-    // softBudget* on the active route (orthogonal to contextWindow).
+    // Ceiling: SDK max → catalog softBudget* → Codex derive floor(window×0.9).
+    // Blank soft never disables proactive compact when a window (or SDK max) exists.
     {
       const route =
         input.llm.ensureRoute?.() ?? input.llm.peekRoute?.();
+      const windowCap =
+        typeof route?.contextWindow === "number" &&
+        Number.isFinite(route.contextWindow) &&
+        route.contextWindow >= 8_000
+          ? Math.floor(route.contextWindow)
+          : undefined;
       let softBudget = resolveSoftBudgetTokens({
         ...(compaction?.maxRequestTokens !== undefined
           ? { maxRequestTokens: compaction.maxRequestTokens }
@@ -995,26 +1001,32 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         ...(route?.softBudgetBufferTokens !== undefined
           ? { softBudgetBufferTokens: route.softBudgetBufferTokens }
           : {}),
+        ...(windowCap !== undefined ? { contextWindow: windowCap } : {}),
       });
-      // Soft budget stays orthogonal to a *larger* context window (1M + 300k
-      // soft is valid). Cap only when soft/maxRequestTokens exceed the
-      // advertised window — otherwise pressure can climb past the provider
-      // limit and fail closed as a mysterious mid-step abort.
-      const windowCap =
-        typeof route?.contextWindow === "number" &&
-        Number.isFinite(route.contextWindow) &&
-        route.contextWindow >= 8_000
-          ? Math.floor(route.contextWindow)
+      // Cap soft to the advertised window, then Codex-clamp to 90% of window
+      // when a provider ring (usage sample) exists — user soft below that wins;
+      // a too-large soft / wrong 1M window cannot delay compact past window×0.9.
+      const windowForce =
+        windowCap !== undefined
+          ? deriveAutoCompactMaxTokens(windowCap)
           : undefined;
-      if (
-        softBudget !== undefined &&
-        windowCap !== undefined &&
-        softBudget.maxRequestTokens > windowCap
-      ) {
-        softBudget = {
-          ...softBudget,
-          maxRequestTokens: windowCap,
-        };
+      if (softBudget !== undefined && windowCap !== undefined) {
+        let maxRequestTokens = softBudget.maxRequestTokens;
+        if (maxRequestTokens > windowCap) maxRequestTokens = windowCap;
+        const hasRing =
+          projectedInputPressureTokens(
+            readSessionEvents(input.store, input.sessionId),
+          ) !== undefined;
+        if (
+          hasRing &&
+          windowForce !== undefined &&
+          maxRequestTokens > windowForce
+        ) {
+          maxRequestTokens = windowForce;
+        }
+        if (maxRequestTokens !== softBudget.maxRequestTokens) {
+          softBudget = { ...softBudget, maxRequestTokens };
+        }
       }
       if (
         compaction &&
@@ -1027,8 +1039,12 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             softBudget.maxRequestTokens,
             softBudget.bufferTokens,
           );
-          // After a successful window swap, remeasure with local estimate only —
-          // the prior provider sample is stale until the next usage stamp.
+          // Ring / Face keep provider pressure across compaction (surface
+          // shadow). Soft-budget still uses max(estimate, projected) to
+          // *enter* compact; after a successful swap in this step the sample
+          // is pre-window and can sit ≫ post-swap estimate (tokenizer gap) —
+          // remeasure with local only until the next usage or we fail-closed
+          // on an unshrinkable residual.
           let trustProjected = true;
           const measure = () => {
             // Align with toLlmRequest: file handles + text-only image placeholders.
@@ -1039,18 +1055,18 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             if (!llmAllowsImage(input.llm)) {
               messages = projectImagesForTextModel(messages);
             }
+            // Soft-budget density: CJK denser than chars/4 so no-usage (no
+            // ring) routes do not under-compact. Meter fold stays fixed /4.
             const estimate = estimateRequestTokens({
               messages,
               tools: req.tools,
+              density: "soft-budget",
               ...(req.system !== undefined ? { system: req.system } : {}),
               ...(input.llm.inputModalities !== undefined
                 ? { inputModalities: input.llm.inputModalities }
                 : {}),
             });
             if (!trustProjected) return estimate;
-            // Provider pressure (Context meter numerator) can run far above the
-            // local chars/4 estimate — soft budget must not trust the optimistic
-            // number alone or the UI hits 100% with no compact.
             const projected = projectedInputPressureTokens(
               readSessionEvents(input.store, input.sessionId),
             );
@@ -1059,8 +1075,9 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
               : Math.max(estimate, projected);
           };
           let used = measure();
-          // Codex auto-compacts near ~90% of the window; Face can override via
-          // agent-loop.softBudgetTriggerPercent (ratio on CompactionOptions).
+          // Face softBudgetTriggerPercent → ratio on CompactionOptions.
+          // When soft max already is Codex window×0.9, skip a second ×ratio
+          // (otherwise blank/force soft would compact near ~81% of the window).
           const triggerRatio =
             typeof compaction?.softBudgetTriggerRatio === "number" &&
             Number.isFinite(compaction.softBudgetTriggerRatio) &&
@@ -1068,10 +1085,13 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             compaction.softBudgetTriggerRatio <= 1
               ? compaction.softBudgetTriggerRatio
               : SOFT_BUDGET_COMPACT_TRIGGER_RATIO;
-          const softTrigger = Math.max(
-            1,
-            Math.floor(softBudget.maxRequestTokens * triggerRatio),
-          );
+          const softTrigger = resolveSoftBudgetTriggerTokens({
+            maxRequestTokens: softBudget.maxRequestTokens,
+            triggerRatio,
+            ...(windowForce !== undefined
+              ? { windowForceTokens: windowForce }
+              : {}),
+          });
           // Trigger can sit above the buffer ceiling (small windows, or
           // trigger percent 100). Still compact once usage is over either line.
           if (used > softTrigger || used > softCeiling) {
@@ -1123,9 +1143,11 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
                 });
                 if (!did.compacted) break;
                 compactAttempts += 1;
-                trustProjected = false;
                 // Compaction breaks the cached prefix → re-baseline system at head.
                 seriesBaselineSystem = undefined;
+                // Post-swap: provider sample is still the pre-window prompt;
+                // trust local estimate until the next usage stamp.
+                trustProjected = false;
                 req = await buildReq();
                 used = measure();
                 if (used <= softCeiling) break;
@@ -1252,11 +1274,12 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         isContextOverflowError(err) &&
         !overflowRecovered
       ) {
-        // Same strategy family as soft-budget: prune / summary / both / off.
-        const strategy = resolveCompactionStrategy(compaction);
-        if (strategy === "off") {
-          throw err;
-        }
+        // Soft-budget may be `off`, but a provider-confirmed full window must
+        // still recover once — otherwise a wrong/high contextWindow lets the
+        // soft path never fire and the turn dies as a mysterious mid-step abort.
+        const softStrategy = resolveCompactionStrategy(compaction);
+        const strategy =
+          softStrategy === "off" ? "prune-summary" : softStrategy;
         overflowRecovered = true;
         const allowPrune =
           strategy === "prune-summary" || strategy === "prune-only";

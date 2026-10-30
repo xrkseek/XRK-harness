@@ -36,6 +36,7 @@ import {
   formatSessionStatusText,
 } from "./session-status.js";
 import {
+  checkpointDiagnostic,
   formatCheckpointList,
   formatRestorePlan,
   formatRestoreResult,
@@ -675,7 +676,10 @@ export async function executeFaceCommand(
       if (args.length === 0) {
         return appendCommandPair(runtime, sessionId, parsed, {
           kind: "success",
-          text: formatCheckpointList(sessionRows),
+          text: formatCheckpointList(
+            sessionRows,
+            checkpointDiagnostic(runtime, sessionId, sessionRows),
+          ),
         });
       }
 
@@ -704,28 +708,51 @@ export async function executeFaceCommand(
       const token = args.join(" ").trim();
       const target = resolveRollbackTarget(store, sessionId, token);
       if (!target) {
+        const diagnostic = checkpointDiagnostic(runtime, sessionId, sessionRows);
         return appendCommandPair(runtime, sessionId, parsed, {
           kind: "error",
-          text: `Unknown checkpoint ${token}. Try /rollback to list.`,
+          text: [
+            `Unknown checkpoint ${token}. Try /rollback to list.`,
+            ...(diagnostic ? [`Diagnosis: ${diagnostic}`] : []),
+          ].join("\n"),
         });
       }
       const result = await store.restore(target.id, { prune });
       const eventCount = sessionEventCount(runtime.store, sessionId);
       const chatSeq = target.seq;
+      // `seq:N` resolves to the newest point at or before N — say so when the
+      // point is older, otherwise "restored seq 4" for a `seq:38` request
+      // reads like a bug.
+      const requestedSeq = /^seq:(-?\d+)$/iu.exec(token);
+      const seqNote =
+        requestedSeq !== null && Number(requestedSeq[1]) !== chatSeq
+          ? ` Nearest point is seq ${chatSeq} (at or before ${requestedSeq[1]}); no checkpoint was taken in between.`
+          : "";
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "success",
-        text: formatRestoreResult({
-          ...result,
-          chatSeq,
-          eventCount,
-          chatAhead: eventCount > chatSeq,
-          chatTruncated: false,
-        }),
+        text:
+          formatRestoreResult({
+            ...result,
+            chatSeq,
+            eventCount,
+            chatAhead: eventCount > chatSeq,
+            chatTruncated: false,
+          }) + seqNote,
       });
     } catch (err) {
+      const diagnostic = checkpointDiagnostic(
+        runtime,
+        sessionId,
+        workspaceCheckpointStoreForSession(runtime, sessionId)
+          .list()
+          .filter((r) => r.sessionId === sessionId),
+      );
       return appendCommandPair(runtime, sessionId, parsed, {
         kind: "error",
-        text: err instanceof Error ? err.message : String(err),
+        text: [
+          err instanceof Error ? err.message : String(err),
+          ...(diagnostic ? [`Diagnosis: ${diagnostic}`] : []),
+        ].join("\n"),
       });
     }
   }

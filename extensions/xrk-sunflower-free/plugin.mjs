@@ -17,7 +17,12 @@ import {
   openCodeCatalogEntry,
 } from "./free-models.mjs";
 import { fetchKiloFreeCatalog, KILO_BASE } from "./kilo.mjs";
-import { probeUsableModels } from "./probe.mjs";
+import { readLatestProbeCacheEntry } from "./probe-cache.mjs";
+import {
+  applyCachedEgress,
+  probeOpenCodeCascade,
+} from "./probe-cascade.mjs";
+import { probeUsableModels, sidecarHealthy } from "./probe.mjs";
 
 export const SUNFLOWER_BRAND_ID = "sunflower-free";
 export const SUNFLOWER_DISPLAY_NAME = "向日葵免费";
@@ -27,6 +32,7 @@ export const SUNFLOWER_MODELS = FREE_MODELS;
 export const SUNFLOWER_KEY_ENV = "XRK_SUNFLOWER_SIDECAR_KEY";
 
 export { KILO_BASE, fetchKiloFreeCatalog } from "./kilo.mjs";
+export { sidecarHealthy };
 
 /**
  * Locate Bun for the OpenCode sidecar.
@@ -151,19 +157,6 @@ export async function spawnSidecar(options = {}) {
   };
 }
 
-/** Loopback health only — no upstream chat. */
-export async function sidecarHealthy(handle, timeoutMs = 4000) {
-  try {
-    const health = await fetch(
-      `${String(handle.url).replace(/\/v1\/?$/, "")}/__sunflower/health`,
-      { signal: AbortSignal.timeout(timeoutMs) },
-    );
-    return health.ok;
-  } catch {
-    return false;
-  }
-}
-
 function emptyPlugin(why) {
   console.warn(`[sunflower-free] ${why}; 免费车道不进目录`);
   return {
@@ -235,21 +228,102 @@ export async function createPlugin(options = {}) {
     );
   }
 
+  /**
+   * OpenCode 探测级联（先直连，失败再用候选代理）。
+   * Host 听口优先：默认不在 createPlugin 里 await；听口后的 warmup /
+   * Settings 重挂可设 `awaitProbe` / `XRK_SUNFLOWER_AWAIT_PROBE=1`。
+   */
+  /** @type {Promise<void> | undefined} */
+  let backgroundProbe;
+
   if (wantOpenCode && handle) {
-    try {
-      openCodeIds = await (options.probeUsableModels ?? probeUsableModels)(
-        handle,
-        FREE_MODELS,
+    const probe = options.probeUsableModels ?? probeUsableModels;
+    const useCache =
+      probe === probeUsableModels && options.skipProbeCache !== true;
+    const awaitProbe =
+      options.awaitProbe === true ||
+      process.env.XRK_SUNFLOWER_AWAIT_PROBE === "1";
+
+    const runCascade = () =>
+      probeOpenCodeCascade(handle, FREE_MODELS, probe);
+
+    const latest = useCache ? readLatestProbeCacheEntry() : undefined;
+
+    if (awaitProbe) {
+      // Settings remount clears cache first → cold cascade here.
+      // Listen-after warmup: reuse fresh cache so restart does not burn quota.
+      if (latest && !latest.stale) {
+        openCodeIds = latest.usable;
+        await applyCachedEgress(handle, latest.egress).catch(() => {});
+        console.info(
+          `[sunflower-free] OpenCode verdict from cache (${Math.round((Date.now() - latest.at) / 1000)}s old, egress=${latest.egress}) — ${openCodeIds.length}/${FREE_MODELS.length} usable, awaitProbe skipped cascade`,
+        );
+      } else {
+        try {
+          const result = await runCascade();
+          openCodeIds = result.usable;
+        } catch (error) {
+          console.warn(
+            `[sunflower-free] OpenCode cascade failed (${error?.message ?? error}); omit OpenCode rows`,
+          );
+          openCodeIds = [];
+        }
+      }
+    } else if (latest && !latest.stale) {
+      openCodeIds = latest.usable;
+      await applyCachedEgress(handle, latest.egress).catch(() => {});
+      console.info(
+        `[sunflower-free] OpenCode verdict from cache (${Math.round((Date.now() - latest.at) / 1000)}s old, egress=${latest.egress}) — ${openCodeIds.length}/${FREE_MODELS.length} usable, 0 request`,
       );
-    } catch (error) {
-      console.warn(
-        `[sunflower-free] OpenCode probe failed (${error?.message ?? error}); omit OpenCode rows`,
+    } else if (latest) {
+      openCodeIds = latest.usable;
+      await applyCachedEgress(handle, latest.egress).catch(() => {});
+      console.info(
+        `[sunflower-free] OpenCode verdict is stale (${Math.round((Date.now() - latest.at) / 60_000)}min old, egress=${latest.egress}) — mounted ${openCodeIds.length} model(s) now, cascade in background`,
       );
+      backgroundProbe = (async () => {
+        try {
+          const next = await runCascade();
+          if (next.usable.length !== latest.usable.length) {
+            console.info(
+              `[sunflower-free] background cascade ${latest.usable.length} → ${next.usable.length} usable (egress=${next.egress}) — save Settings or remount to refresh catalog`,
+            );
+          }
+        } catch {
+          /* 留旧结论 */
+        }
+      })();
+    } else {
+      // 冷启动：不挡听口；听口后的 warmup 应带 awaitProbe。此处 background，
+      // 目录先只有 Kilo（若有），级联结束后下次启动 / remount 进 OpenCode。
+      console.info(
+        "[sunflower-free] OpenCode cold start — cascade in background (direct then proxy)",
+      );
+      backgroundProbe = (async () => {
+        try {
+          const next = await runCascade();
+          if (next.usable.length > 0) {
+            console.info(
+              `[sunflower-free] background cascade ready — ${next.usable.length} usable via ${next.egress}; remount / next boot applies catalog`,
+            );
+          }
+        } catch (error) {
+          console.warn(
+            `[sunflower-free] background cascade failed (${error?.message ?? error})`,
+          );
+        }
+      })();
       openCodeIds = [];
     }
   }
 
-  if (handle && openCodeIds.length === 0 && kiloModels.length === 0) {
+  // 后台还在校准时不能停 sidecar：探测还要用它，停了会白跑一轮。
+  if (
+    handle &&
+    openCodeIds.length === 0 &&
+    kiloModels.length === 0 &&
+    !backgroundProbe
+  ) {
     await handle.stop().catch(() => {});
     handle = undefined;
   }

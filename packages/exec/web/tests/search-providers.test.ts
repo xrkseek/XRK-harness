@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createBraveSearch,
   createCascadingSearch,
+  createDeepSeekSearch,
   createSearchFromEnv,
   createTavilySearch,
   resolveSearchProviderId,
@@ -31,8 +32,26 @@ describe("search provider selection", () => {
       resolveSearchProviderId({ XRK_WEB_SEARCH_PROVIDER: "parallel-free" }),
     ).toBe("parallel-free");
     expect(
+      resolveSearchProviderId({ DEEPSEEK_API_KEY: "sk-ds" }),
+    ).toBe("parallel-free");
+    expect(
+      resolveSearchProviderId({
+        XRK_WEB_SEARCH_PROVIDER: "deepseek",
+        XRK_DEEPSEEK_SEARCH_API_KEY: "sk-ds",
+      }),
+    ).toBe("deepseek");
+    expect(
+      resolveSearchProviderId({
+        XRK_WEB_SEARCH_PROVIDER: "auto",
+        DEEPSEEK_API_KEY: "sk-ds",
+      }),
+    ).toBe("parallel-free");
+    expect(
       searchUnavailableMessage({ XRK_WEB_SEARCH_PROVIDER: "exa" }),
     ).toMatch(/Unknown web search provider/);
+    expect(
+      searchUnavailableMessage({ XRK_WEB_SEARCH_PROVIDER: "deepseek" }),
+    ).toMatch(/DeepSeek/);
   });
 });
 
@@ -153,5 +172,63 @@ describe("Tavily / Brave HTTP", () => {
     await expect(
       search.search({ query: "q", maxResults: 1 }),
     ).rejects.toMatchObject({ code: "WEB_FETCH_TIMEOUT" });
+  });
+
+  it("maps DeepSeek Search results and clips query to 128 chars", async () => {
+    const long = "字".repeat(140);
+    const search = createDeepSeekSearch({
+      apiKey: "sk-test",
+      fetch: async (input, init) => {
+        expect(String(input)).toContain("/v1/tools/search");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer sk-test",
+        );
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        expect(String(body.query).length).toBe(128);
+        expect(body.count).toBe(3);
+        return Response.json({
+          results: [
+            {
+              title: "DeepSeek V4",
+              url: "https://example.com/ds",
+              snippet: "short",
+              summary: "long summary for the model",
+              date: "2026-10-17T00:00:00+00:00",
+            },
+          ],
+        });
+      },
+    });
+    const out = await search.search({ query: long, maxResults: 3 });
+    expect(out.sources).toEqual([
+      {
+        url: "https://example.com/ds",
+        title: "DeepSeek V4",
+        snippet: "long summary for the model",
+        publishedAt: "2026-10-17T00:00:00+00:00",
+      },
+    ]);
+  });
+
+  it("surfaces OpenAI-shaped DeepSeek error.message", async () => {
+    const search = createDeepSeekSearch({
+      apiKey: "sk",
+      fetch: async () =>
+        Response.json(
+          {
+            error: {
+              message: "'count' must be between 1 and 50",
+              type: "invalid_request_error",
+            },
+          },
+          { status: 400 },
+        ),
+    });
+    await expect(
+      search.search({ query: "q", maxResults: 1 }),
+    ).rejects.toMatchObject({
+      message: "'count' must be between 1 and 50",
+      code: "WEB_PROVIDER_ERROR",
+    });
   });
 });

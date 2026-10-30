@@ -80,6 +80,8 @@ export function addPlugin(
     readonly io?: PluginIo;
     /** npm registry URL for registry specs (`npm pack --registry`). */
     readonly registry?: string;
+    /** HTTP(S) proxy for this `npm pack` only (`--proxy` / `--https-proxy`). */
+    readonly proxy?: string;
   } = {},
 ): InventoryEntry {
   const io = options.io ?? defaultIo;
@@ -90,6 +92,7 @@ export function addPlugin(
 
   const unpacked = fetchPackage(spec, cwd, {
     ...(options.registry !== undefined ? { registry: options.registry } : {}),
+    ...(options.proxy !== undefined ? { proxy: options.proxy } : {}),
   });
   try {
     const classified = classifyPackage(unpacked.root, unpacked.pkg);

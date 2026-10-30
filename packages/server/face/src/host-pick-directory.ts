@@ -8,7 +8,8 @@ import type { FaceRpcResult } from "./types.js";
 
 /**
  * Whether Face may run the OS directory picker.
- * Same Desktop override as {@link canOpenNativePath}: `XRK_NATIVE_OPEN=1`.
+ * Same Desktop override / Linux GUI gate as {@link canOpenNativePath}.
+ * Termux has no zenity/kdialog FolderBrowser — keep pick off there.
  */
 export function canPickNativeDirectory(
   platform: NodeJS.Platform = process.platform,
@@ -17,7 +18,15 @@ export function canPickNativeDirectory(
   if (env.XRK_NATIVE_OPEN === "1" || env.XRK_NATIVE_OPEN === "true") {
     return true;
   }
-  return platform === "win32" || platform === "darwin" || platform === "linux";
+  if (platform === "win32" || platform === "darwin") return true;
+  if (platform === "linux") {
+    // Termux: no desktop folder dialog (use in-app browse).
+    if (env.TERMUX_VERSION || (typeof env.PREFIX === "string" && env.PREFIX.includes("com.termux"))) {
+      return false;
+    }
+    return Boolean(env.DISPLAY || env.WAYLAND_DISPLAY);
+  }
+  return false;
 }
 
 /** Testable command boundary; implementations should not invoke a shell. */

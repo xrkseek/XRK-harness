@@ -82,7 +82,7 @@ const DeepSeekCatalogModelSchema = Schema.object({
   description: Schema.string(),
   contextWindow: Schema.number().step(1).min(1),
   maxTokens: Schema.number().step(1).min(1),
-  /** Soft-budget ceiling; omit → no proactive compact for this model. */
+  /** Soft-budget ceiling; omit → floor(contextWindow × 90%) when window ≥8k. */
   softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
   /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
   softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
@@ -190,6 +190,27 @@ const AgentPresetsConfig = Schema.object({
   default: Schema.union([...HOST_CLI_PRESET_IDS]),
 });
 
+/**
+ * 向日葵免费车道的出口配置（与其它 LLM 提供方代理分开）。
+ *
+ * OpenCode 探测级联：**先直连**，0 可用后再试本字段给出的候选代理。
+ * 取值：留空 / `auto` = 直连失败后探测本机回环常见口；显式 URL = 直连失败后
+ * 用该代理；`off` = 只直连、永不试代理。保存后 Host 热重挂并重新级联探测。
+ * Kilo 车道另见 `kiloProxy`（默认直连）。
+ */
+const SunflowerFreeConfig = Schema.object({
+  // Cascade candidate only: probe tries direct first; this value is used when
+  // direct yields 0 usable models. empty/auto → loopback discover; off → never.
+  openCodeProxy: Schema.string()
+    .default("")
+    .description(
+      "OpenCode egress candidate (direct first). URL, auto, or off. Save re-probes.",
+    ),
+  kiloProxy: Schema.string()
+    .default("")
+    .description("Kilo lane proxy (default direct). URL, auto, or off."),
+});
+
 const BashConfig = Schema.object({
   timeoutMs: Schema.number().step(1).min(1),
   /** Per-stream capture cap (DSH bash-local default 64_000). */
@@ -270,6 +291,7 @@ const WebSearchConfig = Schema.object({
     "auto",
     "tavily",
     "brave",
+    "deepseek",
     "parallel-free",
     "duckduckgo",
   ]),
@@ -618,6 +640,14 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       // 出厂不写死某家 provider：留空后 `resolveSessionModelSelection` 取模型
       // 目录首项（目录只收「路由可用」的 provider），用户显式选过则以用户为准。
       base: {},
+      applies: "live",
+    },
+    {
+      // Host 若接线 `syncSunflowerFree`，保存后热重挂 sidecar + 重探（live）；
+      // 未接线时仍提示 restart。
+      ns: "sunflower-free",
+      schema: schemasteryJson(SunflowerFreeConfig) as FaceSchemaEnvelope,
+      base: { openCodeProxy: "", kiloProxy: "" },
       applies: "live",
     },
     {

@@ -108,10 +108,10 @@ describe('imageGenCardModel', () => {
       'attachmentId=sha256:abc',
       'use=Shown in chat. Re-inspect: read_image file_path=<attachmentId>. Not a disk path.',
     ].join('\n')))
-    expect(model?.label).toBe('1 image')
+    expect(model?.label).toBe('')
+    expect(model?.text).toBe('')
     expect(model?.images).toHaveLength(1)
     expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:abc')
-    expect(model?.text).not.toContain('image_base64=')
   })
 
   it('prefers durable image ContentBlocks over text parse', () => {
@@ -230,7 +230,7 @@ describe('imageGenCardModel', () => {
       subCalls: [],
     }
     const model = imageGenCardModel(running)
-    expect(model?.label).toBe('1 reference')
+    expect(model?.label).toBe('Reference')
     expect(model?.images).toHaveLength(1)
     expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:abcdef0123456789')
   })
@@ -269,7 +269,9 @@ describe('imageGenCardModel', () => {
       ],
     }
     const model = imageGenCardModel(block)
-    expect(model?.label).toBe('1 image · 1 reference')
+    // Results present → no "N image" chrome; ToolRow sections name result/reference.
+    expect(model?.label).toBe('')
+    expect(model?.text).toBe('')
     expect(model?.images.map((entry) => entry.attachment.attachmentId)).toEqual([
       'sha256:fedcba9876543210',
       'sha256:abcdef0123456789',

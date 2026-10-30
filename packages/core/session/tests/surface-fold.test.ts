@@ -106,7 +106,9 @@ describe("surface-fold / shadow-price", () => {
         shadowedTokenCount: shadowed,
       },
     ]);
-    // Provider sample is dropped on a shadowed window swap.
-    expect(afterCompact).toBeUndefined();
+    // DSH: keep provider sample; surface shadow shrinks projected occupancy.
+    expect(afterCompact).toBeDefined();
+    expect(afterCompact!).toBeLessThan(afterUser!);
+    expect(afterCompact!).toBeGreaterThan(0);
   });
 });

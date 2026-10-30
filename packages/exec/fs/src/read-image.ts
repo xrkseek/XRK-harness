@@ -75,11 +75,34 @@ export function formatImageReadOutput(
       `(${image.cropOffset.x}, ${image.cropOffset.y}); coordinates are relative ` +
       `to that crop origin — add the offset to map back to the full image`;
   }
-  return `<path>${displayPath}</path>
-<type>image</type>
-<content>
-${image.mediaType} image, ${image.width}x${image.height} px, ${image.bytes} bytes${scaled}${cropNote}
-</content>`;
+  // Explicit LF joins — template newlines follow the source file's EOL, and a
+  // CRLF checkout on Windows used to emit envelopes the client IMAGE_ENVELOPE
+  // gate rejected (expanded read_image fell back to IN/OUT text, no gallery).
+  return [
+    `<path>${displayPath}</path>`,
+    `<type>image</type>`,
+    `<content>`,
+    `${image.mediaType} image, ${image.width}x${image.height} px, ${image.bytes} bytes${scaled}${cropNote}`,
+    `</content>`,
+  ].join("\n");
+}
+
+/**
+ * Model-facing soft path when the live route is text-only: keep the durable
+ * path / attachmentId, guide OCR or a human, and never hard-fail the tool.
+ * Pixels still ride an adjacent image block for the chat gallery; assemble
+ * projects them to a short placeholder for text-only LLMs (no context blow-up).
+ */
+export function formatTextOnlyImageReadOutput(
+  displayPath: string,
+  image: ImageReadValue["image"],
+): string {
+  return [
+    formatImageReadOutput(displayPath, image),
+    `attachmentId=${image.attachmentId}`,
+    "note=Current model route is text-only; image pixels are not sent on the wire.",
+    "guidance=Do not invent pixel content. Ask the user what they see, switch to a vision-capable model, or use an OCR / vision tool or MCP if available. Re-inspect with read_image file_path=<attachmentId> after switching.",
+  ].join("\n");
 }
 
 export interface CreateReadImageToolOptions {
@@ -161,16 +184,10 @@ export function createReadImageTool(
         }
         region = parsed;
       }
-      // DSH-aligned: refuse before filesystem / attachment work when the live
-      // route cannot inspect the image result.
-      if (routeAllowsImage && !routeAllowsImage()) {
-        return {
-          content:
-            `cannot read "${filePath}" as an image: the current model route ` +
-            `does not declare image input; switch to an image-capable model to read images`,
-          isError: true,
-        };
-      }
+      // Text-only routes soft-degrade (path + OCR/human guidance) instead of
+      // hard-failing — UI still gets a durable image block; assemble projects
+      // pixels away so the model context stays text-sized.
+      const textOnlyRoute = routeAllowsImage !== undefined && !routeAllowsImage();
 
       const attachmentId = parseAttachmentFilePath(filePath);
       try {
@@ -263,9 +280,12 @@ export function createReadImageTool(
         };
         // Model + Face wire: text envelope beside a durable image block (DSH).
         // `meta.path` is presentation-only — the attachment lives only in content.
+        const text = textOnlyRoute
+          ? formatTextOnlyImageReadOutput(value.path, value.image)
+          : formatImageReadOutput(value.path, value.image);
         return {
           content: [
-            { type: "text" as const, text: formatImageReadOutput(value.path, value.image) },
+            { type: "text" as const, text },
             {
               type: "image" as const,
               attachment: {
@@ -287,6 +307,7 @@ export function createReadImageTool(
           meta: {
             path: value.path,
             ...(cropOffset !== undefined ? { cropOffset } : {}),
+            ...(textOnlyRoute ? { textOnlyRoute: true } : {}),
           },
         };
       } catch (err) {

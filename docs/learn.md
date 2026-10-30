@@ -93,7 +93,7 @@
 
 - **产品壳与内核落点**：产品壳 = `apps/web` + `packages/client`。品牌 `apps/web/public`；Hero 标语「向阳而生，驭光而行」。serve 托管 `apps/web/dist`（`web:build` + `client:bundle` + `web:assemble`）。裸 Vite `serve`/`dev` 在 config 钩子拒绝（指向 `xrkh web`，不先 `listen`）。Host `applyXrkProductBootPolicy` 去 Cordis UI/HMR。对接层 = `packages/server/face/src/wire/`；内核 = session · 工具瀑布 · compose。`apps/console` 为 Face 验证台（`?console=1`），非产品入口。Host 测：有完整 dist（index + boot + plugins，含 Face 立即层三件）才跑壳首屏，否则 skip。欢迎窗 / 侧栏 / 流式 / 工具卡 / 审批 / 提问 / inventory / Think / TodoDock / Access / Plan / plan-review / Session log 导出硬刷走 `pnpm test:web`（不进 `pnpm check`）。
 
-- **CLI**：主 bin **`xrkh`**（亦 `xrk-harness`）：`run | serve | web | plugin | doctor | dump-config`。`serve`/`web` 托管产品壳（按 CLI 包定位）；`--host`/`--port`/`--open`；拒绝 `0.0.0.0`。`run` 认 `XRK_LLM_PRESET`、位置参数、stdin/`-`、`--session-id` 续会话、`--json` NDJSON 事件。
+- **CLI**：主 bin **`xrkh`**（亦 `xrk-harness`）：`run | serve | web | plugin | doctor | dump-config`。`serve`/`web` 托管产品壳（按 CLI 包定位）；`--host`/`--port`/`--open`；允许 `--host 0.0.0.0`（非回环武装访问 PIN；公网暴露**不保证**安全，见 [security-checklist](./security-checklist.md)）。`run` 认 `XRK_LLM_PRESET`、位置参数、stdin/`-`、`--session-id` 续会话、`--json` NDJSON 事件。
 
 - **运行时**：Node ≥ 26。
 
@@ -196,7 +196,7 @@ Short digest of capabilities; details live in topic docs and [modules/](./module
 
 - **Product shell and kernel placement**: Product shell = `apps/web` + `packages/client`. Brand assets in `apps/web/public`; Hero line “向阳而生，驭光而行”. serve hosts `apps/web/dist` (`web:build` + `client:bundle` + `web:assemble`). Bare Vite `serve`/`dev` is rejected in config hooks (points to `xrkh web`, does not `listen` first). Host `applyXrkProductBootPolicy` strips Cordis UI/HMR. Integration layer = `packages/server/face/src/wire/`; kernel = session · tool waterfall · compose. `apps/console` is the Face verification console (`?console=1`), not the product entry. Host tests run the shell first paint only with a complete dist (index + boot + plugins, including the three Face immediate-layer packages); otherwise skip. Welcome / sidebar / streaming / tool cards / approval / questions / inventory / Think / TodoDock / Access / Plan / plan-review / Session log export hard-refresh via `pnpm test:web` (not part of `pnpm check`).
 
-- **CLI**: Primary bin **`xrkh`** (also `xrk-harness`): `run | serve | web | plugin | doctor | dump-config`. `serve`/`web` host the product shell (resolved from the CLI package); `--host`/`--port`/`--open`; rejects `0.0.0.0`. `run` accepts `XRK_LLM_PRESET`, positional args, stdin/`-`, `--session-id` resume, and `--json` NDJSON events.
+- **CLI**: Primary bin **`xrkh`** (also `xrk-harness`): `run | serve | web | plugin | doctor | dump-config`. `serve`/`web` host the product shell (resolved from the CLI package); `--host`/`--port`/`--open`; `--host 0.0.0.0` is allowed (non-loopback arms the access PIN; **no security guarantee** on the public internet — see [security-checklist](./security-checklist.md)). `run` accepts `XRK_LLM_PRESET`, positional args, stdin/`-`, `--session-id` resume, and `--json` NDJSON events.
 
 - **Runtime**: Node ≥ 26.
 

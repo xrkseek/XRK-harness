@@ -186,14 +186,40 @@ export function closedTurn(node: ChatNode): boolean {
     : false
 }
 
+/**
+ * Tools that stay as flat transcript rows — never join a process fold.
+ *
+ * Explore/search/bash fold into「Explored N files…」; deliverables and
+ * interactive surfaces must stay visible (present = 交付物; ask / todo /
+ * media gen / propose_skill are the same class of "don't hide behind 过程").
+ */
+export function isStandaloneTranscriptTool(name: string): boolean {
+  const key = name
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  return key === 'present'
+    || key === 'ask_user_question'
+    || key === 'ask_user'
+    || key === 'todo_write'
+    || key === 'image_generate'
+    || key === 'video_generate'
+    || key === 'propose_skill'
+}
+
 /** Rows a process group owns.
  *
  * A reply-bearing step stays outside the group: folding it would hide the
  * answer, which is the one row a completed Turn must keep. A reasoning-only
  * step joins the run, so a Turn that thought and called tools folds as one
- * block. */
+ * block. Standalone tools (present / ask / …) stay flat. */
 export function isProcessMember(node: ChatNode): boolean {
-  if (node.kind === 'tool-call') return true
+  if (node.kind === 'tool-call') {
+    const name = toolNameOf(node)
+    if (name !== undefined && isStandaloneTranscriptTool(name)) return false
+    return true
+  }
   return node.kind === 'assistant-step' && hasReasoning(node) && !hasReply(node)
 }
 

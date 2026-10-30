@@ -11,6 +11,7 @@ import type {
   WebSearchSource,
 } from "./types.js";
 import { WebError } from "./types.js";
+import { resolveFetchFn } from "./fetch-http.js";
 
 const SEARCH_TIMEOUT_MS = 30_000;
 const DDG_HTML_ENDPOINT = "https://html.duckduckgo.com/html";
@@ -158,14 +159,19 @@ export function createDuckDuckGoSearch(options: {
 
       let response: Response;
       try {
-        response = await fetchFn(url.toString(), {
-          method: "GET",
-          signal: combined,
-          headers: {
-            "User-Agent": DDG_USER_AGENT,
-            Accept: "text/html",
-          },
-        });
+        const resolved = await resolveFetchFn(fetchFn, request.proxy);
+        try {
+          response = await resolved.fetch(url.toString(), {
+            method: "GET",
+            signal: combined,
+            headers: {
+              "User-Agent": DDG_USER_AGENT,
+              Accept: "text/html",
+            },
+          });
+        } finally {
+          resolved.close?.();
+        }
       } catch (err) {
         translateAbort(err, signal, timed);
       }

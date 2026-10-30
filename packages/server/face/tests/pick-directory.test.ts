@@ -18,12 +18,16 @@ function fail(
 }
 
 describe("pickNativeDirectory", () => {
-  it("treats Win / macOS / Linux as desktop pickers", () => {
+  it("treats Win / macOS / GUI Linux as desktop pickers", () => {
     // Pass an explicit env so a Desktop Host shell (XRK_NATIVE_OPEN=1 in the
     // parent process) cannot flip the negative assertion.
     expect(canPickNativeDirectory("win32", {})).toBe(true);
     expect(canPickNativeDirectory("darwin", {})).toBe(true);
-    expect(canPickNativeDirectory("linux", {})).toBe(true);
+    expect(canPickNativeDirectory("linux", {})).toBe(false);
+    expect(canPickNativeDirectory("linux", { DISPLAY: ":0" })).toBe(true);
+    expect(canPickNativeDirectory("linux", { TERMUX_VERSION: "0.118.0" })).toBe(
+      false,
+    );
     expect(canPickNativeDirectory("freebsd", {})).toBe(false);
   });
 

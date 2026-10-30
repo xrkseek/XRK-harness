@@ -1089,3 +1089,23 @@
   }
 }
 
+/* Phone / narrow Settings: stack install + recommend so the Install tap target
+   stays full-width (one-hand reach; matches better-sidebar mobile drawer). */
+@media (max-width: 767px) {
+  .installRow,
+  .registryRow,
+  .recommendRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recommendButton,
+  .installRow button {
+    width: 100%;
+    min-height: 44px;
+    max-height: none;
+    height: auto;
+    padding: 10px 14px;
+  }
+}
+

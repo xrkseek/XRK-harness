@@ -1077,35 +1077,49 @@ describe("runTurn compaction / overflow", () => {
     ).toBe(true);
   });
 
-  it("strategy off skips overflow recovery", async () => {
+  it("strategy off still recovers provider overflow once", async () => {
     const store = createMemorySessionStore();
     const session = store.create();
     store.append(session.id, {
       type: "user/message",
       ts: 1,
       turnId: "old",
-      content: "seed",
+      content: "seed-" + "x".repeat(200),
     });
-    await expect(
-      runTurn({
-        sessionId: session.id,
-        userText: "continue",
-        store,
-        llm: {
-          id: "overflow-off",
-          async chat() {
+    let sawOverflow = false;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "overflow-off-recover",
+        async chat(req) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          const isSummarizer =
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary");
+          if (isSummarizer) {
+            return { content: "## Objective\n- recovered-off\n## Next\n1. go" };
+          }
+          if (!sawOverflow) {
+            sawOverflow = true;
             throw new ContextOverflowError("too long");
-          },
+          }
+          return { content: "ok-after-overflow" };
         },
-        tools: createToolRegistry(),
-        compaction: { keepTokens: 40, strategy: "off" },
-      }),
-    ).rejects.toBeInstanceOf(ContextOverflowError);
+      },
+      tools: createToolRegistry(),
+      compaction: { keepTokens: 40, strategy: "off" },
+    });
+    expect(result.assistantText).toBe("ok-after-overflow");
     expect(
       store
         .get(session.id)
-        .events.some((e) => e.type === "context/compaction"),
-    ).toBe(false);
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "overflow",
+        ),
+    ).toBe(true);
   });
 
   it("strategy prune-only overflow does not summarize", async () => {

@@ -250,20 +250,55 @@ describe('scope tree', () => {
   it('keeps the scope when the session merely stops running (frozen ≠ removed)', async () => {
     const b = bench()
     await feedList(b, [{ id: 's1', running: true }])
+    b.svc.open(sid('s1')) // staged — reclaim must not drop the current occupant
     const scoped = b.svc.scope(sid('s1'))
     await feedList(b, [{ id: 's1', running: false }])
     expect(b.svc.scope(sid('s1'))).toBe(scoped)
   })
 
+  it('reclaims an idle off-stage scope when the stage moves (DSH retain/release outcome)', async () => {
+    const b = bench()
+    const pruneStoreScope = vi.fn()
+    b.ctx.reflect.provide('slots', { pruneStoreScope })
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    b.svc.scope(sid('s2')) // address only — must not pin forever once stage leaves it
+    pruneStoreScope.mockClear()
+    b.svc.open(sid('s2'))
+    // scope()/binding() remint on demand; reclaim is observed via teardown, not a later scope() peek.
+    expect(pruneStoreScope).toHaveBeenCalledWith('s1')
+    expect(pruneStoreScope).not.toHaveBeenCalledWith('s2')
+    const history = () => b.api.calls.filter(c => c.method === 'session.history')
+    const n = history().length
+    b.svc.open(sid('s1'))
+    expect(history()).toHaveLength(n + 1)
+  })
+
+  it('keeps a running off-stage scope while reclaiming idle siblings', async () => {
+    const b = bench()
+    const pruneStoreScope = vi.fn()
+    b.ctx.reflect.provide('slots', { pruneStoreScope })
+    await feedList(b, [{ id: 's1', running: true }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    pruneStoreScope.mockClear()
+    b.svc.open(sid('s2'))
+    expect(pruneStoreScope).not.toHaveBeenCalledWith('s1')
+    expect(pruneStoreScope).not.toHaveBeenCalledWith('s2')
+  })
+
   it('cancels a deferred teardown when the id reappears in the list', async () => {
     const b = bench()
+    const pruneStoreScope = vi.fn()
+    b.ctx.reflect.provide('slots', { pruneStoreScope })
     await feedList(b, [{ id: 's1' }])
-    const scoped = b.svc.scope(sid('s1'))
     b.svc.open(sid('s1'))
     await feedList(b, []) // removed while staged → deferred
-    await feedList(b, [{ id: 's1' }, { id: 's2' }]) // reappears (current resurfaces, stage unchanged)
-    b.svc.open(sid('s2')) // stage moves; sweep must NOT tear down the re-listed s1
-    expect(b.svc.scope(sid('s1'))).toBe(scoped)
+    pruneStoreScope.mockClear()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }]) // reappears; still staged → deferred cancelled, no drop
+    expect(pruneStoreScope).not.toHaveBeenCalled()
+    // Stage moves: idle off-stage reclaim (not deferred sweep) drops s1.
+    b.svc.open(sid('s2'))
+    expect(pruneStoreScope).toHaveBeenCalledWith('s1')
   })
 })
 

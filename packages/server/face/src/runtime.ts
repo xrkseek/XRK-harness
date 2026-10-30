@@ -244,6 +244,8 @@ export interface CreateFaceRuntimeOptions {
     spec: string,
     options?: {
       readonly registry?: string;
+      /** npm pack proxy for this install only (`xrkh plugin add --proxy`). */
+      readonly proxy?: string;
       readonly onChunk?: (chunk: {
         readonly stream: "stdout" | "stderr";
         readonly text: string;

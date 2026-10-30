@@ -1,6 +1,7 @@
 // Present toolview: keyed hole for `present`. Reuses ToolRow chrome + the
 // shared write-family path summary from toolRowModel; adds a visible
-// delivering/delivered status suffix (DSH PresentRow collapsed state copy).
+// delivering/delivered status suffix. Deliverables stay expanded (IN/OUT
+// always visible) and stay outside the chat process fold.
 // Preparing uses streamed args / presentCall title via toolRowModel (no phase FSM).
 
 import type { Context } from '@xrkseek/cordis'
@@ -16,8 +17,8 @@ import { CONVERSATION_NS as NS } from '../../locale.ts'
 type PresentRowProps = ToolCallViewProps & PropsLocale<'conversation'>
 
 /**
- * Status label beside the path summary while collapsed (DSH PresentRow
- * "Delivering" / "Delivered"; failure/stop keep ToolRow's own suffix).
+ * Status label beside the path summary (DSH PresentRow "Delivering" /
+ * "Delivered"; failure/stop keep ToolRow's own suffix).
  */
 function presentSuffix(
   state: ReturnType<typeof toolRowModel>['state'],
@@ -30,6 +31,7 @@ function presentSuffix(
 
 /**
  * Present row: icon + Present · {paths} with delivering/delivered suffix.
+ * Always expanded — delivery paths must not hide behind a chevron.
  */
 export function PresentRow({ toolName, block, cwd, home, openFile, inspect, t }: PresentRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
@@ -49,6 +51,7 @@ export function PresentRow({ toolName, block, cwd, home, openFile, inspect, t }:
       filePath={model.filePath}
       onOpenFile={openFile}
       inspect={inspect}
+      forceExpanded
     />
   )
 }

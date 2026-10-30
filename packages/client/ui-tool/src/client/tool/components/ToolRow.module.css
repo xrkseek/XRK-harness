@@ -237,7 +237,6 @@
 .terminalBody,
 .diffBody,
 .readBody,
-.imageBody,
 .searchBody,
 .webBody {
   margin: 4px 0 4px 4px;
@@ -245,9 +244,14 @@
 
 /* Expanded image tools show the bitmap, not another cropped thumb: hand the
    attachment frame the fit mode through its own variable, so this wins over
-   that package's `cover` default regardless of stylesheet order. */
+   that package's `cover` default regardless of stylesheet order. Tighter
+   vertical rhythm than the IO cards — the gallery is the body. */
 .imageBody {
   --message-image-fit: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 4px 4px;
 }
 
 /* The recovery footer for a capped search: the result text (its `Full 閳?stored
@@ -262,24 +266,20 @@
 }
 
 .imageLabel {
-  margin-bottom: 4px;
   overflow-wrap: anywhere;
-  font: var(--dsw-font-sm-13);
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
 
 .imageSection {
-  margin: 8px 0 4px;
+  margin: 0;
   overflow-wrap: anywhere;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
 
-.imageSection:first-of-type {
-  margin-top: 0;
-}
-
 .imageMeta {
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--dsw-font-xs-13);
@@ -287,7 +287,7 @@
 }
 
 .mediaFallback {
-  margin: 4px 0;
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--dsw-font-sm-13);

@@ -18,15 +18,18 @@ export const WEB_SEARCH_NS = 'web-search'
 /** Credential refs Face emits on `credentials/updated` (envVar of the slot). */
 export const WEB_SEARCH_TAVILY_REF = 'XRK_TAVILY_API_KEY'
 export const WEB_SEARCH_BRAVE_REF = 'XRK_BRAVE_SEARCH_API_KEY'
+export const WEB_SEARCH_DEEPSEEK_REF = 'XRK_DEEPSEEK_SEARCH_API_KEY'
 
 const TAVILY_FIELD = 'tavilyApiKey'
 const BRAVE_FIELD = 'braveApiKey'
+const DEEPSEEK_FIELD = 'deepseekApiKey'
 
 /** Provider ids the card may stage. */
 export type WebSearchProviderId =
   | 'auto'
   | 'tavily'
   | 'brave'
+  | 'deepseek'
   | 'parallel-free'
   | 'duckduckgo'
 
@@ -48,10 +51,13 @@ export interface WebSearchCardState extends CardShell {
   readonly region: CardFieldState
   readonly tavilyApiKey: CardFieldState
   readonly braveApiKey: CardFieldState
+  readonly deepseekApiKey: CardFieldState
   readonly tavilyConfigured: boolean
   readonly tavilyWritable: boolean
   readonly braveConfigured: boolean
   readonly braveWritable: boolean
+  readonly deepseekConfigured: boolean
+  readonly deepseekWritable: boolean
 }
 
 /** The registration-side face the web-search card's slot entry injects. */
@@ -65,6 +71,7 @@ const PROVIDERS: readonly WebSearchProviderId[] = [
   'auto',
   'tavily',
   'brave',
+  'deepseek',
   'parallel-free',
   'duckduckgo',
 ]
@@ -81,12 +88,13 @@ function providerField(): CardFieldSpec {
   }
 }
 
-/** Bridges the `web-search` scope and Tavily/Brave credentials onto the card. */
+/** Bridges the `web-search` scope and Tavily/Brave/DeepSeek credentials onto the card. */
 export class WebSearchCardController {
   private readonly form: CardForm<WebSearchSettings>
   private readonly store: SnapshotStore<WebSearchCardState>
   private tavily: CredentialState = { configured: false, writable: true }
   private brave: CredentialState = { configured: false, writable: true }
+  private deepseek: CredentialState = { configured: false, writable: true }
 
   /**
    * @param scope - the bound settings scope for the `web-search` namespace.
@@ -102,6 +110,7 @@ export class WebSearchCardController {
       [
         { field: TAVILY_FIELD, write: (text) => this.writeKey(WEB_SEARCH_TAVILY_REF, text) },
         { field: BRAVE_FIELD, write: (text) => this.writeKey(WEB_SEARCH_BRAVE_REF, text) },
+        { field: DEEPSEEK_FIELD, write: (text) => this.writeKey(WEB_SEARCH_DEEPSEEK_REF, text) },
       ],
     )
     this.store = this.form.bind(() => this.projection())
@@ -115,19 +124,22 @@ export class WebSearchCardController {
       region: this.form.field('region'),
       tavilyApiKey: this.form.field(TAVILY_FIELD),
       braveApiKey: this.form.field(BRAVE_FIELD),
+      deepseekApiKey: this.form.field(DEEPSEEK_FIELD),
       tavilyConfigured: this.tavily.configured,
       tavilyWritable: this.tavily.writable,
       braveConfigured: this.brave.configured,
       braveWritable: this.brave.writable,
+      deepseekConfigured: this.deepseek.configured,
+      deepseekWritable: this.deepseek.writable,
     }
   }
 
-  /** Ask the credentials domain about Tavily + Brave slots. */
+  /** Ask the credentials domain about Tavily / Brave / DeepSeek slots. */
   private async readCredentials(): Promise<void> {
     let response: Awaited<ReturnType<IApiClient['credentials']['describe']>>
     try {
       response = await this.api.credentials.describe({
-        refs: [WEB_SEARCH_TAVILY_REF, WEB_SEARCH_BRAVE_REF],
+        refs: [WEB_SEARCH_TAVILY_REF, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_DEEPSEEK_REF],
       })
     } catch {
       return
@@ -142,16 +154,23 @@ export class WebSearchCardController {
       configured: map[WEB_SEARCH_BRAVE_REF]?.configured ?? false,
       writable: map[WEB_SEARCH_BRAVE_REF]?.writable ?? true,
     }
+    const nextDeepseek: CredentialState = {
+      configured: map[WEB_SEARCH_DEEPSEEK_REF]?.configured ?? false,
+      writable: map[WEB_SEARCH_DEEPSEEK_REF]?.writable ?? true,
+    }
     if (
       nextTavily.configured === this.tavily.configured
       && nextTavily.writable === this.tavily.writable
       && nextBrave.configured === this.brave.configured
       && nextBrave.writable === this.brave.writable
+      && nextDeepseek.configured === this.deepseek.configured
+      && nextDeepseek.writable === this.deepseek.writable
     ) {
       return
     }
     this.tavily = nextTavily
     this.brave = nextBrave
+    this.deepseek = nextDeepseek
     this.store.set(this.projection())
   }
 
@@ -160,7 +179,11 @@ export class WebSearchCardController {
    * @param ref - envVar / slot ref from `credentials/updated`.
    */
   refreshCredential(ref: string): void {
-    if (ref !== WEB_SEARCH_TAVILY_REF && ref !== WEB_SEARCH_BRAVE_REF) return
+    if (
+      ref !== WEB_SEARCH_TAVILY_REF
+      && ref !== WEB_SEARCH_BRAVE_REF
+      && ref !== WEB_SEARCH_DEEPSEEK_REF
+    ) return
     void this.readCredentials()
   }
 
@@ -178,6 +201,7 @@ export class WebSearchCardController {
     await this.readCredentials()
     if (ref === WEB_SEARCH_TAVILY_REF) return this.tavily.configured
     if (ref === WEB_SEARCH_BRAVE_REF) return this.brave.configured
+    if (ref === WEB_SEARCH_DEEPSEEK_REF) return this.deepseek.configured
     return false
   }
 }

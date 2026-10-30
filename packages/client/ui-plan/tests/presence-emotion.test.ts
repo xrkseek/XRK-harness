@@ -11,6 +11,7 @@ import {
   PRESENCE_TOOL_TTL_MS,
   derivePresenceEmotion,
   playPresenceAccent,
+  resolvePresenceTipLine,
   sessionBallPersona,
 } from '../src/client/PresenceBall.tsx'
 
@@ -369,5 +370,43 @@ describe('playPresenceAccent', () => {
     )
     expect(ball.burst).toHaveBeenCalled()
     expect(ball.bounce).toHaveBeenCalled()
+  })
+})
+
+describe('resolvePresenceTipLine', () => {
+  it('prefers sideline most idle phases and flashes status every fourth', () => {
+    expect(resolvePresenceTipLine({
+      tip: '待机中',
+      tipKey: 'standby',
+      captionHint: '写发行说明',
+      phase: 1,
+    })).toBe('写发行说明')
+    expect(resolvePresenceTipLine({
+      tip: '待机中',
+      tipKey: 'ambient',
+      captionHint: '写发行说明',
+      phase: 4,
+    })).toBe('待机中')
+  })
+
+  it('keeps busy status tips over sideline', () => {
+    expect(resolvePresenceTipLine({
+      tip: '回合进行中',
+      tipKey: 'turn',
+      captionHint: '写发行说明',
+      phase: 1,
+    })).toBe('回合进行中')
+  })
+
+  it('falls back when only one side is set', () => {
+    expect(resolvePresenceTipLine({
+      captionHint: '写发行说明',
+      phase: 0,
+    })).toBe('写发行说明')
+    expect(resolvePresenceTipLine({
+      tip: '待机中',
+      tipKey: 'standby',
+      phase: 0,
+    })).toBe('待机中')
   })
 })

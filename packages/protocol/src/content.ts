@@ -377,7 +377,15 @@ export function textOnlyImageText(ref: ImageAttachmentRef): string {
     "sha256:".length,
     "sha256:".length + 8,
   );
-  return `[image omitted because this model accepts text only; attachment sha256:${digest}]`;
+  const name =
+    ref.name !== undefined && ref.name.trim().length > 0
+      ? ` name=${JSON.stringify(ref.name.trim())}`
+      : "";
+  return (
+    `[image omitted because this model accepts text only; attachment sha256:${digest}${name}; ` +
+    `${ref.width}x${ref.height}. Ask the user, switch to a vision model, or use OCR / vision tools; ` +
+    `re-inspect with read_image file_path=${ref.attachmentId}]`
+  );
 }
 
 /**

@@ -387,6 +387,7 @@ describe("session status snapshot", () => {
       parentSessionId: parent,
       childLabel: "untitled",
       parentLabel: "老板",
+      childSeat: "agent",
     });
     // Root parent's look on the child Overview is Boss (ui-presence), not undefined.
     expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toEqual(
@@ -410,6 +411,7 @@ describe("session status snapshot", () => {
     expect(parentSnap.delegate).toEqual({
       parentSessionId: parent,
       childLabel: "向日葵",
+      childSeat: "sunflower",
     });
   });
 
@@ -450,6 +452,7 @@ describe("session status snapshot", () => {
       parentSessionId: home,
       childLabel: "发版员",
       parentLabel: "老板",
+      childSeat: "agent",
     });
     const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
     expect(leafSnap.parentCompanionBall).toEqual({ shape: "wedge", color: "sage" });
@@ -463,6 +466,7 @@ describe("session status snapshot", () => {
       parentSessionId: mid,
       childLabel: "调研员",
       parentLabel: "发版员",
+      childSeat: "agent",
     });
     expect(formatSessionStatusText(leafSnap)).toContain("delegate: 发版员 → 调研员");
   });

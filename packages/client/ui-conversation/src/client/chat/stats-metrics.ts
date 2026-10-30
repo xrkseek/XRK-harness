@@ -123,21 +123,78 @@ export interface ContextOccupancy {
   percent: number
   usedTokens: number
   contextWindow: number
+  /**
+   * True when the numerator is heuristic breakdown (no provider usage yet).
+   * Soft compact still uses denser local estimate; ring is approximate only.
+   */
+  approximate: boolean
+}
+
+export interface ContextBreakdownParts {
+  readonly systemTokens: number
+  readonly toolsTokens: number
+  readonly messageTokens: number
 }
 
 /**
- * Approximate context occupancy for the ContextMeter ring.
- * @param pressure - the session's context-pressure projection value.
- * @returns occupancy with its numerator and denominator, or null until both values are known.
+ * Meter panel rows reconciled to the ring numerator.
+ *
+ * System / tools stay heuristic (they match the timeline). Conversation
+ * messages absorb `usedTokens − system − tools` so the three rows sum to the
+ * provider ring (Codex / DSH: soft compact reads that ring, not chars/4 alone).
+ * `residualTokens` is how far the raw message heuristic sat under that fill
+ * (positive = undercount — the photo gap); negative means the heuristic was
+ * already above the ring residual.
+ */
+export function contextBreakdownForMeter(
+  breakdown: ContextBreakdownParts,
+  usedTokens: number,
+): ContextBreakdownParts & { readonly residualTokens: number } {
+  const { systemTokens, toolsTokens, messageTokens } = breakdown
+  const fixed = systemTokens + toolsTokens
+  if (!(usedTokens >= fixed) || !Number.isFinite(usedTokens)) {
+    return { systemTokens, toolsTokens, messageTokens, residualTokens: 0 }
+  }
+  const messagesForRing = Math.max(0, Math.floor(usedTokens - fixed))
+  return {
+    systemTokens,
+    toolsTokens,
+    messageTokens: messagesForRing,
+    residualTokens: messagesForRing - messageTokens,
+  }
+}
+
+/**
+ * Context occupancy for the ContextMeter ring.
+ *
+ * Prefers provider projected/pressure (upstream). When the route has a
+ * `contextWindow` but the provider never reported usage (no ring sample),
+ * falls back to heuristic breakdown so custom / silent-usage models still
+ * show an approximate ring — soft compact does not wait for usage either.
  */
 export function contextOccupancy(
   pressure: ContextPressureProjection | undefined,
+  breakdown?: ContextBreakdownParts,
 ): ContextOccupancy | null {
+  const contextWindow = pressure?.contextWindow
+  if (contextWindow === undefined) return null
   const usedTokens = pressure?.projectedTokens ?? pressure?.pressureTokens
-  if (usedTokens === undefined || pressure?.contextWindow === undefined) return null
+  if (usedTokens !== undefined) {
+    return {
+      percent: Math.min(100, Math.round(usedTokens / contextWindow * 100)),
+      usedTokens,
+      contextWindow,
+      approximate: false,
+    }
+  }
+  if (breakdown === undefined) return null
+  const heuristic =
+    breakdown.systemTokens + breakdown.toolsTokens + breakdown.messageTokens
+  if (heuristic <= 0) return null
   return {
-    percent: Math.min(100, Math.round(usedTokens / pressure.contextWindow * 100)),
-    usedTokens,
-    contextWindow: pressure.contextWindow,
+    percent: Math.min(100, Math.round(heuristic / contextWindow * 100)),
+    usedTokens: heuristic,
+    contextWindow,
+    approximate: true,
   }
 }

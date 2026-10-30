@@ -53,7 +53,10 @@ export {
   WorkspaceRuntime,
 } from './workspaces/service.ts'
 export { formatAttachmentSummary, isAttachmentAddress, normalizeAttachmentId, resolveWorkspacePath } from './workspaces/path.ts'
-export { routeWorkspaceOpenFile } from './workspaces/open-file-route.ts'
+export {
+  routeWorkspaceOpenFile,
+  type RouteWorkspaceOpenFileOptions,
+} from './workspaces/open-file-route.ts'
 // Contract only: the scope implementation and its Host transport belong to
 // dsh-client-ui-settings (see that package's settings-scope.ts).
 export type {

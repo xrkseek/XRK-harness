@@ -227,4 +227,45 @@
     padding-left: max(20px, env(safe-area-inset-left, 0px));
     padding-right: max(20px, env(safe-area-inset-right, 0px));
   }
+
+  /* Short confirms (regenerate / delete): bottom card, not a thunderous
+     full-screen sheet with a lonely paragraph and three squeezed buttons. */
+  .root[data-layout='inset'] {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .root[data-layout='inset'] .dialog {
+    width: 100%;
+    height: auto;
+    max-height: min(85dvh, 100%);
+    border-radius: 20px;
+    border: 1px solid var(--dsw-alias-border-inverted);
+    padding-top: 0;
+    padding-bottom: 16px;
+  }
+
+  .root[data-layout='inset'] .content {
+    flex: 0 1 auto;
+    overflow: visible;
+  }
+
+  .root[data-layout='inset'] .body {
+    flex: 0 1 auto;
+    margin-top: 8px;
+    overflow: visible;
+  }
+
+  .root[data-layout='inset'] .header {
+    padding: 18px 14px 8px 20px;
+  }
+
+  .root[data-layout='inset'] .footer {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: 8px;
+    padding-top: 8px;
+  }
 }

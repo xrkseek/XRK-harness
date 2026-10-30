@@ -28,12 +28,19 @@ describe("host.openPath + skill.list", () => {
     installSpawnDetachedForTests(undefined);
   });
 
-  it("treats Win / macOS / Linux as desktop openers", () => {
+  it("treats Win / macOS / GUI Linux / Termux as openers", () => {
     // Pass an explicit env so a Desktop Host shell (XRK_NATIVE_OPEN=1 in the
     // parent process) cannot flip the negative assertion.
     expect(canOpenNativePath("win32", {})).toBe(true);
     expect(canOpenNativePath("darwin", {})).toBe(true);
-    expect(canOpenNativePath("linux", {})).toBe(true);
+    expect(canOpenNativePath("linux", {})).toBe(false);
+    expect(canOpenNativePath("linux", { DISPLAY: ":0" })).toBe(true);
+    expect(canOpenNativePath("linux", { WAYLAND_DISPLAY: "wayland-0" })).toBe(
+      true,
+    );
+    expect(canOpenNativePath("linux", { TERMUX_VERSION: "0.118.0" })).toBe(
+      true,
+    );
     expect(canOpenNativePath("freebsd", {})).toBe(false);
   });
 

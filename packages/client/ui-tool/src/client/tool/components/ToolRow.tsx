@@ -38,10 +38,8 @@ type ToolImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) & {
   peek?: (attachment: ImageAttachmentRef) => string | undefined
 }
 
-/** Long-edge cap requested from the image gallery for an expanded Tool card:
- * larger than a chat bubble's preview, because the card exists to show what
- * the call actually produced (the click-through lightbox holds the original). */
-const TOOL_IMAGE_MAX_EDGE = 520
+/** Long-edge cap for an expanded Tool image card (lightbox keeps the original). */
+const TOOL_IMAGE_MAX_EDGE = 280
 
 export interface ToolRowProps {
   /** The render site's conversation locale seat (terminal/code body copy). */
@@ -81,6 +79,11 @@ export interface ToolRowProps {
   filePath?: string | undefined
   onOpenFile?: ((path: string) => void) | undefined
   inspect?: (() => void) | undefined
+  /**
+   * Keep the row expanded whenever it has body/output/card material.
+   * Used by deliverable rows (`present`) that must not hide IN/OUT.
+   */
+  forceExpanded?: boolean | undefined
 }
 
 function leadingFor(state: ToolRowState, icon: ReactNode): ReactNode {
@@ -159,6 +162,7 @@ export function ToolRow({
   filePath,
   onOpenFile,
   inspect,
+  forceExpanded = false,
 }: ToolRowProps) {
   const [expanded, toggleExpand] = useToolExpandState()
   const terminalBody = terminal ?? null
@@ -173,7 +177,9 @@ export function ToolRow({
   const outputText = output ?? null
   const card = terminalBody ?? diffBody ?? readBody ?? imageBody ?? filesBody ?? searchBody ?? webBody
   const expandable = body !== null || outputText !== null || card !== null
-  const open = expanded && expandable
+  // Deliverable rows stay open; Settings default / manual toggle still apply
+  // to explore tools.
+  const open = expandable && (forceExpanded || expanded)
   const status = stateStatus(state, t)
   const failureLine = state === 'error' ? errorSummary ?? null : null
   const summaryText = failureLine ?? summary
@@ -205,10 +211,10 @@ export function ToolRow({
         icon={leadingFor(state, icon)}
         title={title}
         open={open}
-        expandable={expandable}
-        expandOnRowClick
+        expandable={expandable && !forceExpanded}
+        expandOnRowClick={!forceExpanded}
         keepContentWhenOpen
-        onToggle={toggleExpand}
+        onToggle={forceExpanded ? () => {} : toggleExpand}
         collapsedContent={(
           (thumbAttachment !== undefined && loadImage !== undefined) || summaryText !== ''
         ) ? (
@@ -258,7 +264,9 @@ export function ToolRow({
                 : imageBody !== null
                   ? (
                     <div className={css.imageBody} data-tool-media="image">
-                      <div className={css.imageLabel}>{imageBody.label}</div>
+                      {imageBody.label !== ''
+                        ? <div className={css.imageLabel}>{imageBody.label}</div>
+                        : null}
                       {(() => {
                         const results = imageBody.images.filter((entry) => entry.role !== 'reference')
                         const references = imageBody.images.filter((entry) => entry.role === 'reference')
@@ -298,7 +306,9 @@ export function ToolRow({
                   : filesBody !== null
                     ? (
                       <div className={css.imageBody} data-tool-media="file">
-                        <div className={css.imageLabel}>{filesBody.label}</div>
+                        {filesBody.label !== ''
+                          ? <div className={css.imageLabel}>{filesBody.label}</div>
+                          : null}
                         {renderSlot !== undefined
                           ? renderSlot('tool.call.files', {
                             files: filesBody.files,

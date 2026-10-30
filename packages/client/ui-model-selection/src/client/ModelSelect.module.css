@@ -88,7 +88,8 @@
   z-index: 20;
   display: flex;
   flex-direction: column;
-  width: min(240px, calc(100vw - 32px));
+  /* Match Menu / PopupSelect card budget — 240px crushed long model names. */
+  width: min(280px, calc(100vw - 32px));
   max-height: min(360px, calc(100vh - 96px));
   overflow: hidden;
   padding: 4px;
@@ -210,6 +211,10 @@
 }
 
 .groups {
+  /* Fill the capped `.menu` so long catalogs scroll here — without flex:1 the
+     list grows past max-height and `.menu { overflow: hidden }` clips it
+     (reads as a squashed / 压缩 list with no scrollbar). */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   /* The grouped model list scrolls under a capped popover; contain keeps an
@@ -254,6 +259,12 @@
 .optionActive {
   outline: none;
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Large catalog: suppress sticky :hover until the list sees a pointer move
+   (cursor may already sit where the first row mounts). */
+.groups:not([data-pointer-armed]) .option:hover:not(:disabled) {
+  background: transparent;
 }
 
 /* Selection marker is the trailing check, not a fill 閳?matches the Menu

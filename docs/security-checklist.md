@@ -46,13 +46,24 @@
 | 多租户鉴权 / RBAC | 单 key |
 | 供应链 SBOM / 签名发布 | 见 publishing 路线 |
 
+## 公网绑定（免责）
+
+CLI **允许** `--host 0.0.0.0` / 非回环地址。非回环启动会武装 **访问 PIN**（日志打印），并可配 `XRK_API_KEY`。二者只是闸门，**不是**完整安全产品：
+
+- **不保证**面对公网扫描、撞库、中间人、工具逃逸等威胁的安全。
+- 生产暴露宜：**反代 + TLS**、自管防火墙 / 安全组、非空 `XRK_API_KEY`、收紧 `XRK_CORS_ORIGIN`；勿把访问 PIN 当唯一防护。
+- Desktop 壳仍仅回环（见 [ADR-0008](./adr/0008-desktop-shell-private-host.md)）；本条针对 `xrkh serve` / `web` Host。
+
+细节：[getting-started.md](./getting-started.md) · [configuration.md](./configuration.md)。
+
 ## 开发建议
 
 1. 生产环境 **必须** 设置非空 `XRK_API_KEY`，并收紧 CORS。  
 2. **勿**把 `{workspace}/.xrk/.credentials.yaml` 提交进 git。  
 3. harness preset 默认挂 sandbox；minimal 无 shell——按威胁模型选型。  
 4. 新增危险工具：先 guard / sandbox，再注册。  
-5. 变更安全相关行为 → 更新本页 + 加锁测。
+5. 变更安全相关行为 → 更新本页 + 加锁测。  
+6. 公网听：见上文「公网绑定（免责）」——PIN / API key **不**等于已加固。
 
 相关：[http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)
 
@@ -106,12 +117,23 @@ Lists only controls **already implemented in this repository**; unfinished items
 | Multi-tenant auth / RBAC | Single key |
 | Supply-chain SBOM / signed release | See publishing roadmap |
 
+## Public bind (disclaimer)
+
+CLI **allows** `--host 0.0.0.0` / non-loopback addresses. Non-loopback listen arms the **access PIN** (printed in logs) and may use `XRK_API_KEY`. Those are gates only — **not** a full security product:
+
+- **No guarantee** against open-internet scanning, credential stuffing, MITM, tool escape, and similar threats.
+- Prefer for production exposure: **reverse proxy + TLS**, your own firewall / security group, a non-empty `XRK_API_KEY`, and a tight `XRK_CORS_ORIGIN`; do not treat the access PIN as the only control.
+- The Desktop shell remains loopback-only (see [ADR-0008](./adr/0008-desktop-shell-private-host.md)); this section applies to `xrkh serve` / `web` Host.
+
+Details: [getting-started.md](./getting-started.md) · [configuration.md](./configuration.md).
+
 ## Guidance
 
 1. Production **must** set a non-empty `XRK_API_KEY` and tighten CORS.  
 2. **Do not** commit `{workspace}/.xrk/.credentials.yaml`.  
 3. harness preset mounts sandbox by default; minimal has no shell — choose by threat model.  
 4. New dangerous tools: add guard / sandbox first, then register.  
-5. Security behavior changes → update this page and add lock tests.
+5. Security behavior changes → update this page and add lock tests.  
+6. Public listen: see “Public bind (disclaimer)” above — PIN / API key ≠ hardened deployment.
 
 Related: [http-api.md](./http-api.md) · [tool-pipeline.md](./tool-pipeline.md) · [policy.md](./policy.md) · [modules/mcp.md](./modules/mcp.md) · [status.md](./status.md)

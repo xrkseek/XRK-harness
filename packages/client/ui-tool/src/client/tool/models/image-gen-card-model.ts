@@ -144,34 +144,16 @@ function textFromContent(content: readonly { type: string; text?: string }[]): s
     .join('\n')
 }
 
-function galleryLabel(resultCount: number, referenceCount: number): string {
-  const resultPart = resultCount === 0
-    ? null
-    : resultCount === 1 ? '1 image' : `${resultCount} images`
-  const refPart = referenceCount === 0
-    ? null
-    : referenceCount === 1 ? '1 reference' : `${referenceCount} references`
-  if (resultPart !== null && refPart !== null) return `${resultPart} · ${refPart}`
-  return resultPart ?? refPart ?? 'images'
+/** Refs-only chrome while i2i is still running (results omit any count label). */
+function referenceOnlyLabel(referenceCount: number): string {
+  return referenceCount === 1 ? 'Reference' : `${referenceCount} references`
 }
 
-function resultImagesFromBlock(block: Extract<ToolCallBlock, { kind: string }>): {
-  images: ImageAttachmentRef[]
-  text: string
-} {
+function resultImagesFromBlock(block: Extract<ToolCallBlock, { kind: string }>): ImageAttachmentRef[] {
   const contentRefs = refsFromContent(block.content)
-  if (contentRefs.length > 0) {
-    const text = textFromContent(block.content)
-    const displayText = text
-      ? parseImageGenResultText(text).displayText
-      : (contentRefs.length === 1 ? '1 image' : `${contentRefs.length} images`)
-    return { images: contentRefs, text: displayText }
-  }
+  if (contentRefs.length > 0) return contentRefs
   const parsed = parseImageGenResultText(textFromContent(block.content))
-  return {
-    images: parsed.images.map((img) => stubRef(img)),
-    text: parsed.displayText,
-  }
+  return parsed.images.map((img) => stubRef(img))
 }
 
 /**
@@ -192,13 +174,7 @@ export function imageGenCardModel(block: ToolCallBlock): ImageCardModel | null {
     name: `reference_${attachmentId.slice(-8)}.png`,
   }))
 
-  let resultImages: ImageAttachmentRef[] = []
-  let resultText = ''
-  if ('kind' in block) {
-    const settled = resultImagesFromBlock(block)
-    resultImages = settled.images
-    resultText = settled.text
-  }
+  const resultImages = 'kind' in block ? resultImagesFromBlock(block) : []
 
   if (resultImages.length === 0 && referenceImages.length === 0) return null
 
@@ -208,9 +184,13 @@ export function imageGenCardModel(block: ToolCallBlock): ImageCardModel | null {
     ...resultImages.map((attachment) => ({ attachment, role: 'result' as const })),
     ...referenceImages.map((attachment) => ({ attachment, role: 'reference' as const })),
   ]
+  // Gallery is the card. Skip "N images" chrome and the model envelope dump —
+  // Inspect / the wire still carry provider= / attachmentId= for the agent.
   return {
-    label: galleryLabel(resultImages.length, referenceImages.length),
+    label: resultImages.length === 0
+      ? referenceOnlyLabel(referenceImages.length)
+      : '',
     images,
-    text: resultText,
+    text: '',
   }
 }

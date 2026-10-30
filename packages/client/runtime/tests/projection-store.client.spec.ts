@@ -67,6 +67,26 @@ describe('ProjectionValueStore semantics', () => {
     expect(store.get('other')).toBeUndefined()
   })
 
+  it('clear lets a shorter post-truncate baseline reseed', () => {
+    const store = new ProjectionValueStore()
+    store.seed({
+      asOfSeq: 50,
+      values: { 'test/marks': { marks: ['pre-cut-3-rounds'] } },
+    })
+    // Without clear, asOfSeq 10 loses to 50 — the delete→next-轮次 bug.
+    store.seed({
+      asOfSeq: 10,
+      values: { 'test/marks': { marks: ['stale-lost'] } },
+    })
+    expect(store.get('test/marks')).toEqual({ marks: ['pre-cut-3-rounds'] })
+    store.clear()
+    store.seed({
+      asOfSeq: 10,
+      values: { 'test/marks': { marks: ['post-cut-1-round'] } },
+    })
+    expect(store.get('test/marks')).toEqual({ marks: ['post-cut-1-round'] })
+  })
+
   it('notifies the key face on change (batched) and not on dropped applications', async () => {
     const store = new ProjectionValueStore()
     let keyTicks = 0

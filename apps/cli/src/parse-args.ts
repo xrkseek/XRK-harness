@@ -64,13 +64,14 @@ function parsePatch(raw: string | undefined): Record<string, unknown> {
   throw new Error("--patch must be a JSON object");
 }
 
+/**
+ * Host bind check. Non-loopback (`0.0.0.0` / LAN / public) is allowed: Host
+ * arms the mobile-access PIN gate (and `XRK_API_KEY` elevates) for WAN/foreign
+ * LAN. Kept as a named hook so serve / parse stay consistent if we add more
+ * bind rules later.
+ */
 export function assertSafeHost(host: string): void {
-  const h = host.trim().toLowerCase();
-  if (h === "0.0.0.0" || h === "::" || h === "[::]") {
-    throw new Error(
-      `--host ${host} is not supported: it would expose the product shell and tool execution to the network; use 127.0.0.1`,
-    );
-  }
+  void host;
 }
 
 function parsePort(raw: string | undefined): number {
@@ -391,7 +392,7 @@ Options:
   --session-id <id>   Resume a persisted session (unknown id fails)
   --json              NDJSON session events on stdout (run); final text omitted
   --workspace <path>  User workspace (default: cwd)
-  --host <addr>       Bind host (default: 127.0.0.1; not 0.0.0.0)
+  --host <addr>       Bind host (default: 127.0.0.1; 0.0.0.0 OK — PIN/API gate)
                         · tui: Host to attach (default 127.0.0.1)
   --port <n>          Bind port (default: 8787; 0 = OS pick)
                         · tui: Host port to attach (default 8787)

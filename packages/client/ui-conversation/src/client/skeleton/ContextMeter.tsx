@@ -1,8 +1,8 @@
 /** Composer context-occupancy meter: a ring beside the send button fed by the
  * `contextPressure` projection, with a click-open panel of the heuristic
  * `contextBreakdown` composition (system prompt, tools, conversation).
- * Renders nothing until a provider reports both pressure and a route
- * capacity. */
+ * Needs a route `contextWindow`. Prefers provider pressure; without usage,
+ * falls back to breakdown sum (approximate ring for silent-usage providers). */
 
 import { useEffect, useRef, useState } from 'react'
 import type { UseProjection } from '@xrkseek/client-runtime/client'
@@ -10,7 +10,7 @@ import type { UseProjection } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-token-meter/client'
 import { Tooltip } from '@xrkseek/client-ui-primitives'
 import type { ComposerBarProps } from '../contract/slots.ts'
-import { contextOccupancy } from '../chat/StatsLine.tsx'
+import { contextBreakdownForMeter, contextOccupancy } from '../chat/StatsLine.tsx'
 import { formatTokens } from '../chat/token-format.ts'
 import css from './ContextMeter.module.css'
 
@@ -43,7 +43,18 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
   const breakdown = useProjection('contextBreakdown')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLSpanElement | null>(null)
-  const context = contextOccupancy(pressure)
+  // Provider pressure preferred; else heuristic rows when window is known
+  // (providers that never emit usage still get an approximate ring).
+  const context = contextOccupancy(
+    pressure,
+    breakdown === undefined
+      ? undefined
+      : {
+        systemTokens: breakdown.systemTokens,
+        toolsTokens: breakdown.toolsTokens,
+        messageTokens: breakdown.messageTokens,
+      },
+  )
   const available = context !== null
 
   // A model switch can temporarily remove capacity while this component stays
@@ -77,17 +88,26 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     .split(READING_SLOT)
     .map(part => part.trim())
 
-  // The bar's overall length stays the provider-exact percent; the heuristic
-  // breakdown only proportions its colored parts. A zero-width part is dropped
-  // instead of rendered: `.segment`'s min-width keeps a hairline part visible,
-  // which at 0% occupancy would draw a filled bar over an empty context.
-  const breakdownTotal = breakdown === undefined
+  // Ring length = provider percent. Rows reconcile so system+tools+messages
+  // sum to usedTokens (messages absorb the provider residual — the common
+  // undercount vs chars/4). Bar proportions follow that reconciled split.
+  const reconciled = breakdown === undefined
+    ? undefined
+    : contextBreakdownForMeter(breakdown, context.usedTokens)
+  const breakdownTotal = reconciled === undefined
     ? 0
-    : breakdown.systemTokens + breakdown.toolsTokens + breakdown.messageTokens
-  const parts = breakdown === undefined || breakdownTotal === 0
+    : reconciled.systemTokens + reconciled.toolsTokens + reconciled.messageTokens
+  const parts = reconciled === undefined || breakdownTotal === 0
     ? [{ key: 'total', color: undefined, width: percent }]
-    : ROWS.map(row => ({ key: row.key, color: row.color, width: percent * breakdown[row.key] / breakdownTotal }))
+    : ROWS.map(row => ({
+      key: row.key,
+      color: row.color,
+      width: percent * reconciled[row.key] / breakdownTotal,
+    }))
   const segments = parts.filter(part => part.width > 0)
+  const showResidualNote = !context.approximate
+    && reconciled !== undefined
+    && Math.abs(reconciled.residualTokens) > Math.max(2_000, context.usedTokens * 0.08)
 
   return (
     <span ref={rootRef} className={css.root}>
@@ -135,18 +155,38 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
               />
             ))}
           </div>
-          {breakdown !== undefined && (
-            <dl className={css.rows}>
-              {ROWS.map(row => (
-                <div key={row.key} className={css.row}>
-                  <dt>
-                    <span className={`${css.swatch} ${row.color}`} aria-hidden />
-                    {t(row.label)}
-                  </dt>
-                  <dd>{`~${formatTokens(breakdown[row.key], t)}`}</dd>
-                </div>
-              ))}
-            </dl>
+          {reconciled !== undefined && (
+            <>
+              <dl className={css.rows}>
+                {ROWS.map(row => (
+                  <div key={row.key} className={css.row}>
+                    <dt>
+                      <span className={`${css.swatch} ${row.color}`} aria-hidden />
+                      {t(row.label)}
+                    </dt>
+                    <dd>{`~${formatTokens(reconciled[row.key], t)}`}</dd>
+                  </div>
+                ))}
+              </dl>
+              {/* Soft/auto compact + overflow read the ring (provider pressure),
+                  not the tools row. Residual note when messages were filled up. */}
+              {context.approximate
+                ? (
+                  <p className={css.note}>{t('context.approximateNote')}</p>
+                )
+                : showResidualNote
+                  ? (
+                    <p className={css.note}>
+                      {t('context.breakdownNote', {
+                        messages: formatTokens(reconciled!.messageTokens, t),
+                        used: formatTokens(context.usedTokens, t),
+                      })}
+                    </p>
+                  )
+                  : (
+                    <p className={css.note}>{t('context.compactHint')}</p>
+                  )}
+            </>
           )}
         </div>
       )}

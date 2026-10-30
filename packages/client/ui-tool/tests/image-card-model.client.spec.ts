@@ -114,6 +114,44 @@ describe('imageCardModel', () => {
     expect(model?.label).toBe('sha256:614b7f…ac16')
     expect(model?.images[0]?.role).toBe('result')
   })
+
+  it('builds a gallery when the envelope used CRLF (Windows Host)', () => {
+    const crlfEnvelope = envelope.replace(/\n/g, '\r\n')
+    const model = imageCardModel(settled({
+      content: [
+        { type: 'text' as const, text: crlfEnvelope },
+        imageContent[1]!,
+      ],
+    }))
+    expect(model?.images).toHaveLength(1)
+    expect(model?.images[0]?.attachment.attachmentId).toBe('sha256:abc')
+  })
+
+  it('accepts float wire dimensions on the image block', () => {
+    const model = imageCardModel(settled({
+      content: [
+        { type: 'text' as const, text: envelope },
+        {
+          type: 'image' as const,
+          attachment: {
+            attachmentId: 'sha256:abc' as never,
+            mediaType: 'image/png' as const,
+            bytes: 42.0,
+            width: 10.0,
+            height: 10.0,
+          },
+        },
+      ],
+    }))
+    expect(model?.images[0]?.attachment).toMatchObject({ bytes: 42, width: 10, height: 10 })
+  })
+
+  it('builds a gallery from image blocks alone (no envelope text)', () => {
+    const model = imageCardModel(settled({
+      content: [imageContent[1]!],
+    }))
+    expect(model?.images).toHaveLength(1)
+  })
 })
 
 describe('toolRowModel read_image title', () => {

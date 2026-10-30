@@ -149,4 +149,25 @@ maybe("workspace snapshots against real git", () => {
     expect(readFileSync(path.join(ws, "keep.txt"), "utf8")).toBe("hi\n");
   });
 
+  it("keeps non-ASCII paths literal instead of C-style quotes", async () => {
+    // `git clean -nd` escapes non-ASCII by default (`"\344\270\255…"`), which
+    // is what a Chinese Windows / Japanese macOS / Linux workspace hits on
+    // every restore preview. `core.quotepath=false` makes `extra` / `removed`
+    // real paths.
+    const ws = makeWorkspace();
+    writeFileSync(path.join(ws, "a.txt"), "one\n", "utf8");
+    const store = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit });
+    const record = await store.snapshot({ sessionId: "s", seq: 1 });
+
+    const cjk = "中文 空格#1.txt";
+    writeFileSync(path.join(ws, cjk), "x\n", "utf8");
+
+    const plan = await store.planRestore(record.id);
+    expect(plan.extra).toContain(cjk);
+
+    const pruned = await store.restore(record.id, { prune: true });
+    expect(pruned.removed).toContain(cjk);
+    expect(existsSync(path.join(ws, cjk))).toBe(false);
+  });
+
 });

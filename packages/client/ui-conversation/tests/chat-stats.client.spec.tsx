@@ -342,9 +342,9 @@ describe('StatsLine', () => {
 
   it('computes context occupancy only when both a numerator and capacity are known', () => {
     expect(contextOccupancy({ pressureTokens: 32_000, projectedTokens: 6_000, contextWindow: 128_000 }))
-      .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000 })
+      .toEqual({ percent: 5, usedTokens: 6_000, contextWindow: 128_000, approximate: false })
     expect(contextOccupancy({ pressureTokens: 32_000, contextWindow: 128_000 }))
-      .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000 })
+      .toEqual({ percent: 25, usedTokens: 32_000, contextWindow: 128_000, approximate: false })
     expect(contextOccupancy({ pressureTokens: 32_000 })).toBeNull()
     expect(contextOccupancy({ contextWindow: 128_000 })).toBeNull()
     expect(contextOccupancy(undefined)).toBeNull()

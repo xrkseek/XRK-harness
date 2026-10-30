@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 import { readJsonFile, writeJsonFileAtomic } from "./json-file.js";
@@ -17,6 +23,49 @@ import {
 
 const INDEX_VERSION = 1;
 const ID_LENGTH = 12;
+
+/**
+ * Serializes work on one shadow repo **inside this process**.
+ *
+ * Every write command (`init` / `add` / `commit`) takes the shadow repo's
+ * `index.lock`; two overlapping snapshots in the same Host (Host drain
+ * `beforeTools`, a manual `session.checkpoint.snapshot`, two sessions sharing
+ * one cwd) used to race for it and lose one point to
+ * `fatal: Unable to create '…/index.lock': File exists`. The store is cached
+ * per workspace, but nothing stopped concurrent method calls on it.
+ */
+const shadowGates = new Map<string, Promise<unknown>>();
+
+async function withShadowGate<T>(
+  key: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const prev = shadowGates.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = prev.then(() => gate);
+  shadowGates.set(key, tail);
+  await prev.catch(() => undefined);
+  try {
+    return await run();
+  } finally {
+    release();
+    if (shadowGates.get(key) === tail) shadowGates.delete(key);
+  }
+}
+
+/** `git` uses this phrasing when another process holds the lock file. */
+const LOCK_CONTENTION =
+  /(Unable to create '[^']*\.lock'|Unable to create [^\s]*\.lock|cannot lock ref|index\.lock)/iu;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+}
 
 /**
  * Hard deadline for a single snapshot git command. A hung git process (a
@@ -169,6 +218,10 @@ export class WorkspaceCheckpointStore {
   /** Work-tree-relative shadow path, when the shadow lives in the workspace. */
   private readonly shadowRelPath: string | undefined;
   private records: WorkspaceCheckpointRecord[];
+  /** Ids this instance intentionally dropped (`prune`), so a merge cannot resurrect them. */
+  private readonly tombstones = new Set<string>();
+  /** `mtimeMs:size` of the index file when {@link records} was last synced. */
+  private indexSignature: string | undefined;
   private repoReady = false;
 
   constructor(options: WorkspaceCheckpointStoreOptions) {
@@ -192,6 +245,7 @@ export class WorkspaceCheckpointStore {
     this.timeoutMs = options.timeoutMs ?? readTimeoutMs();
     this.now = options.now ?? (() => Date.now());
     this.records = this.loadIndex();
+    this.indexSignature = this.indexStat();
   }
 
   /**
@@ -199,6 +253,12 @@ export class WorkspaceCheckpointStore {
    *
    * - `core.excludesFile` keeps the shadow dir out of staging and `clean`.
    * - `core.autocrlf=false` stops a Windows checkout rewriting line endings.
+   * - `core.quotepath=false` keeps non-ASCII paths literal. `clean -nd` /
+   *   `ls-files` feed `extra` / `removed` straight into the UI; the default
+   *   C-style escaping (`"\344\270\255\346\226\207"`) is unreadable and can
+   *   never match a real path.
+   * - `core.longpaths=true` lets Windows restore files below a deep
+   *   `node_modules`/monorepo path instead of failing at MAX_PATH.
    * - A synthetic commit identity + `commit.gpgsign=false` make shadow commits
    *   independent of the operator's git config, so snapshotting works on a
    *   machine with no `user.name` / `user.email` and never tries to sign.
@@ -223,6 +283,10 @@ export class WorkspaceCheckpointStore {
       "-c",
       "core.filemode=false",
       "-c",
+      "core.quotepath=false",
+      "-c",
+      "core.longpaths=true",
+      "-c",
       "commit.gpgsign=false",
       "-c",
       `user.name=${CHECKPOINT_AUTHOR_NAME}`,
@@ -243,31 +307,43 @@ export class WorkspaceCheckpointStore {
     errorCode: WorkspaceCheckpointErrorCode,
     what: string,
     budgetMs: number = this.timeoutMs,
+    retries = 0,
   ): Promise<GitResult> {
-    const result = await this.exec(args, budgetMs);
-    if (result.timedOut) {
-      throw new WorkspaceCheckpointError(
-        "timed-out",
-        `git ${what} exceeded its ${budgetMs}ms budget; snapshot skipped (workspace unchanged)`,
-      );
+    let last: GitResult | undefined;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const result = await this.exec(args, budgetMs);
+      if (result.timedOut) {
+        throw new WorkspaceCheckpointError(
+          "timed-out",
+          `git ${what} exceeded its ${budgetMs}ms budget; snapshot skipped (workspace unchanged)`,
+        );
+      }
+      if (result.code === -1) {
+        throw new WorkspaceCheckpointError(
+          "git-unavailable",
+          `git ${what} could not start: ${
+            result.stderr.trim() || "git was not found on PATH"
+          }`,
+        );
+      }
+      if (result.code === 0) return result;
+      last = result;
+      // Another process (a second Host on the same XRK home, or a leftover
+      // `git gc`) held the lock. One short retry wins the common case without
+      // waiting on a long repack; the budget is the same either way.
+      const text = `${result.stderr}\n${result.stdout}`;
+      if (attempt < retries && LOCK_CONTENTION.test(text)) {
+        await sleep(150 + attempt * 100);
+        continue;
+      }
+      break;
     }
-    if (result.code === -1) {
-      throw new WorkspaceCheckpointError(
-        "git-unavailable",
-        `git ${what} could not start: ${
-          result.stderr.trim() || "git was not found on PATH"
-        }`,
-      );
-    }
-    if (result.code !== 0) {
-      throw new WorkspaceCheckpointError(
-        errorCode,
-        `git ${what} failed (exit ${result.code}): ${
-          result.stderr.trim() || result.stdout.trim()
-        }`,
-      );
-    }
-    return result;
+    throw new WorkspaceCheckpointError(
+      errorCode,
+      `git ${what} failed (exit ${last?.code ?? -1}): ${
+        last?.stderr.trim() || last?.stdout.trim() || "no output"
+      }`,
+    );
   }
 
   /**
@@ -346,63 +422,77 @@ export class WorkspaceCheckpointStore {
         "snapshot: seq must be a finite number",
       );
     }
-    // Whole-operation budget: each git command gets the remaining time, so a
-    // slow start cannot leak into an unbounded tail (5 commands × full
-    // per-command timeout would otherwise stall the turn queue for minutes).
-    const deadline = this.now() + this.timeoutMs;
-    const remaining = (): number =>
-      Math.max(1, deadline - this.now());
-    await this.ensureRepo(remaining());
-    await this.execOk(["add", "-A"], "snapshot-failed", "add -A", remaining());
-    const label = input.label?.trim();
-    const message = [
-      `xrk checkpoint session=${sessionId} seq=${input.seq}`,
-      ...(label ? [`label=${label}`] : []),
-    ].join(" ");
-    await this.execOk(
-      ["commit", "--quiet", "--allow-empty", "-m", message],
-      "snapshot-failed",
-      "commit",
-      remaining(),
-    );
-    const rev = await this.execOk(
-      ["rev-parse", "HEAD"],
-      "snapshot-failed",
-      "rev-parse HEAD",
-      remaining(),
-    );
-    const id = rev.stdout.trim();
-    if (!id) {
-      throw new WorkspaceCheckpointError(
+    return withShadowGate(this.shadowDir, async () => {
+      // Pick up points another Host process recorded, so this write merges
+      // instead of overwriting them.
+      this.refreshIndex();
+      // Whole-operation budget: each git command gets the remaining time, so a
+      // slow start cannot leak into an unbounded tail (5 commands × full
+      // per-command timeout would otherwise stall the turn queue for minutes).
+      const deadline = this.now() + this.timeoutMs;
+      const remaining = (): number =>
+        Math.max(1, deadline - this.now());
+      await this.ensureRepo(remaining());
+      await this.execOk(
+        ["add", "-A"],
         "snapshot-failed",
-        "git rev-parse HEAD returned no commit id",
+        "add -A",
+        remaining(),
+        1,
       );
-    }
-    const files = await this.execOk(
-      ["ls-files"],
-      "snapshot-failed",
-      "ls-files",
-      remaining(),
-    );
-    const record: WorkspaceCheckpointRecord = {
-      id,
-      sessionId,
-      seq: input.seq,
-      createdAt: this.now(),
-      ...(label ? { label } : {}),
-      fileCount: splitLines(files.stdout).length,
-    };
-    this.records.push(record);
-    this.saveIndex();
-    return record;
+      const label = input.label?.trim();
+      const message = [
+        `xrk checkpoint session=${sessionId} seq=${input.seq}`,
+        ...(label ? [`label=${label}`] : []),
+      ].join(" ");
+      await this.execOk(
+        ["commit", "--quiet", "--allow-empty", "-m", message],
+        "snapshot-failed",
+        "commit",
+        remaining(),
+        1,
+      );
+      const rev = await this.execOk(
+        ["rev-parse", "HEAD"],
+        "snapshot-failed",
+        "rev-parse HEAD",
+        remaining(),
+      );
+      const id = rev.stdout.trim();
+      if (!id) {
+        throw new WorkspaceCheckpointError(
+          "snapshot-failed",
+          "git rev-parse HEAD returned no commit id",
+        );
+      }
+      const files = await this.execOk(
+        ["ls-files"],
+        "snapshot-failed",
+        "ls-files",
+        remaining(),
+      );
+      const record: WorkspaceCheckpointRecord = {
+        id,
+        sessionId,
+        seq: input.seq,
+        createdAt: this.now(),
+        ...(label ? { label } : {}),
+        fileCount: splitLines(files.stdout).length,
+      };
+      this.records.push(record);
+      this.saveIndex();
+      return record;
+    });
   }
 
   /** Chronological (oldest first) records, newest last. */
   list(): readonly WorkspaceCheckpointRecord[] {
+    this.refreshIndex();
     return [...this.records];
   }
 
   get(id: string): WorkspaceCheckpointRecord {
+    this.refreshIndex();
     const needle = id.trim();
     const found = this.records.find((record) => record.id === needle);
     if (!found) {
@@ -422,9 +512,16 @@ export class WorkspaceCheckpointStore {
 
   /** What a restore would restore and which files it would leave behind. */
   async planRestore(id: string): Promise<RestorePlan> {
-    this.get(id);
-    await this.requireRepo();
-    const target = id.trim();
+    return withShadowGate(this.shadowDir, async () => {
+      this.refreshIndex();
+      this.get(id);
+      await this.requireRepo();
+      return this.planRestoreLocked(id.trim());
+    });
+  }
+
+  /** {@link planRestore} body; the caller already holds the shadow gate. */
+  private async planRestoreLocked(target: string): Promise<RestorePlan> {
     const tree = await this.execOk(
       ["ls-tree", "-r", "--name-only", target],
       "restore-failed",
@@ -442,25 +539,30 @@ export class WorkspaceCheckpointStore {
    * about survive unless `prune` is set.
    */
   async restore(id: string, options: RestoreOptions = {}): Promise<RestoreResult> {
-    this.get(id);
-    await this.requireRepo();
-    const target = id.trim();
-    const plan = await this.planRestore(target);
-    await this.execOk(
-      ["checkout", "--force", target, "--", "."],
-      "restore-failed",
-      `checkout ${target}`,
-    );
-    let removed: string[] = [];
-    if (options.prune) {
-      const clean = await this.execOk(["clean", "-fd"], "restore-failed", "clean -fd");
-      removed = parseCleanOutput(clean.stdout, "Removing ");
-    }
-    return {
-      ...plan,
-      restored: plan.fileCount,
-      removed,
-    };
+    return withShadowGate(this.shadowDir, async () => {
+      this.refreshIndex();
+      this.get(id);
+      await this.requireRepo();
+      const target = id.trim();
+      const plan = await this.planRestoreLocked(target);
+      await this.execOk(
+        ["checkout", "--force", target, "--", "."],
+        "restore-failed",
+        `checkout ${target}`,
+        this.timeoutMs,
+        1,
+      );
+      let removed: string[] = [];
+      if (options.prune) {
+        const clean = await this.execOk(["clean", "-fd"], "restore-failed", "clean -fd");
+        removed = parseCleanOutput(clean.stdout, "Removing ");
+      }
+      return {
+        ...plan,
+        restored: plan.fileCount,
+        removed,
+      };
+    });
   }
 
   /**
@@ -475,9 +577,11 @@ export class WorkspaceCheckpointStore {
         `prune: keep must be a non-negative integer (got ${String(keep)})`,
       );
     }
+    this.refreshIndex();
     const drop = Math.max(0, this.records.length - keep);
     if (drop === 0) return [];
     const removed = this.records.splice(0, drop).map((record) => record.id);
+    for (const id of removed) this.tombstones.add(id);
     this.saveIndex();
     return removed;
   }
@@ -501,6 +605,11 @@ export class WorkspaceCheckpointStore {
    * @returns true when the loose-object count actually went down.
    */
   async reclaim(budgetMs = 10 * 60_000): Promise<boolean> {
+    // Packing while a snapshot holds the repo is the very lock fight
+    // `maintenance.auto=false` exists to avoid. Skip this idle moment and let
+    // the next startup try again instead of queueing behind (or blocking) a
+    // turn's snapshot.
+    if (shadowGates.has(this.shadowDir)) return false;
     const before = await this.looseObjectCount();
     const result = await this.exec(["gc", "--auto", "--quiet"], budgetMs);
     if (result.timedOut || result.code !== 0) return false;
@@ -522,10 +631,47 @@ export class WorkspaceCheckpointStore {
     return records.filter(isCheckpointRecord);
   }
 
+  /** Cheap change detector for the shared index file (`mtime:size`). */
+  private indexStat(): string | undefined {
+    try {
+      const s = statSync(this.indexFile);
+      return `${s.mtimeMs}:${s.size}`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Re-read `index.json` when another process changed it.
+   *
+   * The index is shared by every Host on the same XRK home (desktop app +
+   * `xrkh web` + a remote/HTTP Host). A store cached at session start used to
+   * keep its constructor-time snapshot forever, so a point recorded by the
+   * other process was invisible: `/rollback seq:N` answered "Unknown
+   * checkpoint" for a snapshot that exists on disk.
+   */
+  private refreshIndex(): void {
+    const signature = this.indexStat();
+    if (signature === undefined) return;
+    if (signature === this.indexSignature) return;
+    this.records = this.loadIndex();
+    this.indexSignature = signature;
+  }
+
   private saveIndex(): void {
+    // Merge rows the other process wrote since our last read: a blind
+    // whole-file write drops every point recorded elsewhere. Tombstones keep
+    // an intentional `prune` from being resurrected by this merge.
+    const known = new Set(this.records.map((record) => record.id));
+    for (const row of this.loadIndex()) {
+      if (known.has(row.id) || this.tombstones.has(row.id)) continue;
+      this.records.push(row);
+      known.add(row.id);
+    }
     writeJsonFileAtomic(this.indexFile, {
       version: INDEX_VERSION,
       records: this.records,
     } satisfies PersistedIndex);
+    this.indexSignature = this.indexStat();
   }
 }

@@ -126,6 +126,10 @@ describe("WorkspaceCheckpointStore.snapshot", () => {
     // those balloon the pack files and hold the locks that a concurrent
     // snapshot `add`/`commit` blocks on.
     expect(calls[0]).toContain("maintenance.auto=false");
+    // Parsed output must survive non-ASCII paths and Windows MAX_PATH:
+    // `clean -nd` / `ls-files` feed `extra` / `removed` straight to the UI.
+    expect(calls[0]).toContain("core.quotepath=false");
+    expect(calls[0]).toContain("core.longpaths=true");
     // Shadow commits must not depend on the operator's git identity/config.
     expect(calls[0]).toContain("commit.gpgsign=false");
     expect(calls[0]).toContain("user.email=checkpoint@xrk.invalid");
@@ -459,5 +463,78 @@ describe("WorkspaceCheckpointStore index loading", () => {
       runGit: fakeGit(() => ({})).run,
     });
     expect(c.shadowDir).toBe(path.resolve(outside));
+  });
+});
+
+describe("WorkspaceCheckpointStore concurrency", () => {
+  /** Distinct sha per rev-parse, and a small delay so overlap is visible. */
+  function slowGit(): { run: GitRunner; peak: () => number } {
+    let active = 0;
+    let max = 0;
+    let revs = 0;
+    const run: GitRunner = async (args) => {
+      active += 1;
+      max = Math.max(max, active);
+      await new Promise((resolve) => setTimeout(resolve, 3));
+      active -= 1;
+      switch (subcommandOf(args)) {
+        case "rev-parse":
+          revs += 1;
+          return { code: 0, stdout: `sha-${revs}\n`, stderr: "" };
+        case "ls-files":
+          return { code: 0, stdout: "a.txt\n", stderr: "" };
+        default:
+          return { code: 0, stdout: "", stderr: "" };
+      }
+    };
+    return { run, peak: () => max };
+  }
+
+  it("serializes overlapping snapshots on one shadow repo", async () => {
+    // Two Host paths snapshot the same cwd concurrently (drain `beforeTools`
+    // and a manual snapshot, or two sessions sharing one workspace). Both used
+    // to take the shadow repo's index.lock and one lost its point to
+    // `fatal: Unable to create index.lock`.
+    const ws = workspace();
+    const git = slowGit();
+    const store = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit: git.run });
+    await Promise.all([
+      store.snapshot({ sessionId: "a", seq: 1 }),
+      store.snapshot({ sessionId: "b", seq: 2 }),
+    ]);
+    expect(git.peak()).toBe(1);
+    expect(store.list().map((r) => r.sessionId)).toEqual(["a", "b"]);
+  });
+
+  it("re-reads points another Host process appended", async () => {
+    const ws = workspace();
+    const git = slowGit();
+    const first = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit: git.run });
+    await first.snapshot({ sessionId: "s1", seq: 1 });
+
+    // A store cached before the write (session start) must still see it: the
+    // desktop app and `xrkh web` share one XRK home.
+    const second = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit: git.run });
+    await second.snapshot({ sessionId: "s2", seq: 2 });
+    expect(first.list().map((r) => r.sessionId)).toEqual(["s1", "s2"]);
+  });
+
+  it("keeps a row written by another process mid-snapshot", async () => {
+    const ws = workspace();
+    const git = slowGit();
+    const store = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit: git.run });
+    const pending = store.snapshot({ sessionId: "mine", seq: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 12));
+    // Another process wins the race and writes its own record before we save.
+    writeJsonFileAtomic(checkpointIndexPath(workspaceCheckpointDir(ws)), {
+      version: 1,
+      records: [
+        { id: "external-sha", sessionId: "other", seq: 9, createdAt: 1, fileCount: 0 },
+      ],
+    });
+    await pending;
+    // Blind whole-file writes dropped it; the save now merges.
+    expect(store.list().map((r) => r.id)).toContain("external-sha");
+    expect(store.list()).toHaveLength(2);
   });
 });

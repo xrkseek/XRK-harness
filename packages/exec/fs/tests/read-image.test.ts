@@ -19,7 +19,7 @@ describe("formatImageReadOutput", () => {
     expect(text).toContain("downscaled from 1024x512 px");
   });
 
-  it("matches the image-card envelope recognition shape", () => {
+  it("matches the image-card envelope recognition shape (LF only)", () => {
     const text = formatImageReadOutput("a.png", {
       attachmentId: "sha256:x",
       mediaType: "image/png",
@@ -27,6 +27,7 @@ describe("formatImageReadOutput", () => {
       width: 1,
       height: 1,
     });
+    expect(text).not.toContain("\r");
     expect(text).toMatch(
       /^<path>[^\n]*<\/path>\n<type>image<\/type>\n<content>\n[\s\S]*\n<\/content>$/u,
     );
@@ -88,20 +89,35 @@ function mockAttachments(
 }
 
 describe("createReadImageTool region", () => {
-  it("refuses before filesystem I/O when the live route is text-only", async () => {
-    const stat = vi.fn(async () => ({ isFile: true }));
+  it("soft-degrades on text-only routes: path + guidance, durable image, not isError", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const saveImage = vi.fn(async () => ({
+      attachmentId: "sha256:textonly",
+      mediaType: "image/png" as const,
+      bytes: png.byteLength,
+      width: 8,
+      height: 8,
+      name: "a.png",
+    }));
     const tool = createReadImageTool({
       fs: {
-        stat,
-        readBytes: async () => new Uint8Array([1, 2, 3]),
+        stat: async () => ({ isFile: true }),
+        readBytes: async () => png,
       },
-      attachments: mockAttachments(),
+      attachments: mockAttachments({ saveImage }),
       routeAllowsImage: () => false,
     });
     const result = await tool.execute({ file_path: "a.png" });
-    expect(result.isError).toBe(true);
-    expect(String(result.content)).toContain("does not declare image input");
-    expect(stat).not.toHaveBeenCalled();
+    expect(result.isError).toBeFalsy();
+    expect(saveImage).toHaveBeenCalled();
+    const content = result.content as readonly { type: string; text?: string }[];
+    expect(Array.isArray(content)).toBe(true);
+    const text = content.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toContain("<path>a.png</path>");
+    expect(text).toContain("text-only");
+    expect(text).toMatch(/OCR|vision/i);
+    expect(content.some((b) => b.type === "image")).toBe(true);
+    expect((result.meta as { textOnlyRoute?: boolean } | undefined)?.textOnlyRoute).toBe(true);
   });
 
   it("refuses region when the store has no cropImageRegion", async () => {

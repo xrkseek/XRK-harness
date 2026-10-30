@@ -742,6 +742,32 @@ export function presenceDisplay(
   return tip ? { name, tip } : { name }
 }
 
+/** Idle ambient tips that may yield the caption line to a session 支线. */
+const IDLE_PRESENCE_TIP_KEYS = new Set<PresenceAutoTip>([
+  'sleep',
+  'standby',
+  'ambient',
+])
+
+/**
+ * Prefer session 支线 most of the time; flash the presence status tip on every
+ * 4th ambient phase. Busy / sticky tips always win over the sideline.
+ */
+export function resolvePresenceTipLine(input: {
+  readonly tip?: string
+  readonly tipKey?: PresenceAutoTip
+  readonly captionHint?: string
+  readonly phase: number
+}): string | undefined {
+  const hint = input.captionHint?.trim()
+  const tip = input.tip?.trim()
+  if (!hint) return tip || undefined
+  if (!tip) return hint
+  if (input.tipKey && !IDLE_PRESENCE_TIP_KEYS.has(input.tipKey)) return tip
+  // 3/4 sideline · 1/4 status while idle (phase ticks every PHASE_MS).
+  return input.phase % 4 === 0 ? tip : hint
+}
+
 export const PresenceBall = memo(function PresenceBall({
   sessionId,
   presence,
@@ -826,8 +852,8 @@ export const PresenceBall = memo(function PresenceBall({
   /** Caption under the ball (委派方 / 被委派方 · name). */
   readonly roleLabel?: string
   /**
-   * Secondary tip when presence tips are empty (e.g. session sideline on the
-   * phone header chip). Does not invent a sticky presence beat.
+   * Session 支线 caption. While idle, shown most of the time and yields to the
+   * ambient status tip every fourth phase; busy tips still win.
    */
   readonly captionHint?: string
   /**
@@ -844,11 +870,16 @@ export const PresenceBall = memo(function PresenceBall({
   const persona = sessionBallPersona(sessionId ?? 'default')
   const look = usePresenceLook()
   const dark = useChromeDark()
-  const shape: PresenceShape = memberLook && isPresenceShape(memberLook.shape)
-    ? memberLook.shape
+  // When `memberLook` is set (including pending fallback), never blend in
+  // Settings 老板装扮 — invalid fields fall back to defaults, not ui-presence.
+  const shape: PresenceShape = memberLook
+    ? (isPresenceShape(memberLook.shape) ? memberLook.shape : DEFAULT_PRESENCE_SHAPE)
     : look.shape
-  const paint: PresencePaint = memberLook && isPresenceColor(memberLook.color)
-    ? resolvePresencePaint(memberLook.color, dark)
+  const paint: PresencePaint = memberLook
+    ? resolvePresencePaint(
+      isPresenceColor(memberLook.color) ? memberLook.color : DEFAULT_PRESENCE_COLOR,
+      dark,
+    )
     : resolvePresencePaint(look.color, dark)
   const split = splitLegacyKit(memberLook?.kit)
   const engineHat = memberLook
@@ -919,7 +950,12 @@ export const PresenceBall = memo(function PresenceBall({
     ...(local ? { local } : {}),
   })
   const display = presenceDisplay(emotion, t)
-  const tipLine = display.tip ?? captionHint
+  const tipLine = resolvePresenceTipLine({
+    ...(display.tip !== undefined ? { tip: display.tip } : {}),
+    ...(emotion.tipKey !== undefined ? { tipKey: emotion.tipKey } : {}),
+    ...(captionHint !== undefined ? { captionHint } : {}),
+    phase,
+  })
   const resting = emotion.tipKey === 'sleep' || emotion.tipKey === 'standby'
   // Stream isolation budget: lite only for real work. Idle ambient / sleep keep full FX.
   const perfLite = workBusy

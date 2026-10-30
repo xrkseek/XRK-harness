@@ -168,6 +168,17 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Context menu autofocuses the first row; kill the browser's bright focus
+ * ring (shows as a white edge under 撤销 on dark menus) and mirror hover. */
+.item:focus {
+  outline: none;
+}
+
+.item:focus-visible:not(:disabled) {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .denseList .item {
   min-height: 34px;
   padding-block: 5px;

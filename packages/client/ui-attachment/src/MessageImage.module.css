@@ -1,7 +1,7 @@
 .gallery {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
   max-width: 100%;
 }
 
@@ -26,9 +26,17 @@
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
-  border-radius: 16px;
+  border-radius: 10px;
   background: var(--dsw-alias-interactive-bg-hover);
   cursor: zoom-in;
+}
+
+/* While bytes load, skip the heavy hover fill — a solid 280px box reads as a
+   mysterious gap above the eventual bitmap. */
+.frame:has(.loading) {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--dsw-alias-border-l1);
 }
 
 .frame[data-variant='tile'] {
@@ -41,11 +49,11 @@
 /* Expanded Tool card: a multi-image gallery still tiles, but at inspect size
    (the lightbox keeps the original for the full-size look). */
 .frame[data-variant='tile'][data-large] {
-  width: 148px;
-  height: 148px;
-  min-width: 148px;
-  min-height: 148px;
-  border-radius: 12px;
+  width: 96px;
+  height: 96px;
+  min-width: 96px;
+  min-height: 96px;
+  border-radius: 8px;
 }
 
 .frame img {

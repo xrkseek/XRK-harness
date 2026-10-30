@@ -22,6 +22,12 @@ export interface WebSearchSource {
 export interface WebSearchRequest {
   readonly query: string;
   readonly maxResults: number;
+  /**
+   * Optional HTTP(S) proxy URL (e.g. `http://127.0.0.1:7897`).
+   * When omitted, process `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` apply if
+   * the Host installed undici's EnvHttpProxyAgent.
+   */
+  readonly proxy?: string;
 }
 
 export interface WebSearchResult {

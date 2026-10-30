@@ -40,8 +40,18 @@ function positiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
-/** The envelope `formatImageReadOutput` writes, matched by shape. */
-const IMAGE_ENVELOPE = /^<path>[^\n]*<\/path>\n<type>image<\/type>\n<content>\n[\s\S]*\n<\/content>$/u
+/** Coerce wire numbers that arrived as floats (e.g. JSON with 1254.0). */
+function asPositiveInt(value: unknown): number | undefined {
+  if (positiveInteger(value)) return value
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.round(value)
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const n = Number(value)
+    return n > 0 ? n : undefined
+  }
+  return undefined
+}
 
 const IMAGE_MEDIA_TYPES: ReadonlySet<ImageMediaType> = new Set([
   'image/png', 'image/jpeg', 'image/webp', 'image/gif',
@@ -72,43 +82,47 @@ function parseCallArgs(block: ToolCallBlock): { name: string; args: Record<strin
   return { name, args: value as Record<string, unknown> }
 }
 
+/**
+ * Collect valid image refs; skip malformed parts instead of failing the whole
+ * content path (mirrors image_generate — one bad block must not erase a gallery).
+ */
 function imageReferences(content: readonly unknown[]): ImageAttachmentRef[] | null {
   const refs: ImageAttachmentRef[] = []
   for (const part of content) {
     if (typeof part !== 'object' || part === null) continue
     const { type, attachment } = part as { type?: unknown; attachment?: unknown }
     if (type !== 'image') continue
-    if (typeof attachment !== 'object' || attachment === null || Array.isArray(attachment)) return null
+    if (typeof attachment !== 'object' || attachment === null || Array.isArray(attachment)) {
+      continue
+    }
     const {
       attachmentId, mediaType, bytes, width, height, name, originalDimensions,
     } = attachment as Record<string, unknown>
-    if (typeof attachmentId !== 'string' || attachmentId === '') return null
-    if (typeof mediaType !== 'string' || !isImageMediaType(mediaType)) return null
-    if (!positiveInteger(bytes) || !positiveInteger(width) || !positiveInteger(height)) return null
-    if (name !== undefined && typeof name !== 'string') return null
+    if (typeof attachmentId !== 'string' || attachmentId === '') continue
+    if (typeof mediaType !== 'string' || !isImageMediaType(mediaType)) continue
+    const b = asPositiveInt(bytes)
+    const w = asPositiveInt(width)
+    const h = asPositiveInt(height)
+    if (b === undefined || w === undefined || h === undefined) continue
+    if (name !== undefined && typeof name !== 'string') continue
     // originalDimensions is protocol-only; gallery refs only need intrinsic size.
     if (originalDimensions !== undefined) {
-      if (typeof originalDimensions !== 'object' || originalDimensions === null || Array.isArray(originalDimensions)) return null
+      if (typeof originalDimensions !== 'object' || originalDimensions === null || Array.isArray(originalDimensions)) {
+        continue
+      }
       const { width: inputWidth, height: inputHeight } = originalDimensions as Record<string, unknown>
-      if (!positiveInteger(inputWidth) || !positiveInteger(inputHeight)) return null
+      if (asPositiveInt(inputWidth) === undefined || asPositiveInt(inputHeight) === undefined) continue
     }
     refs.push({
       attachmentId: attachmentId as ImageAttachmentRef['attachmentId'],
       mediaType,
-      bytes,
-      width,
-      height,
+      bytes: b,
+      width: w,
+      height: h,
       ...name === undefined ? {} : { name },
     })
   }
   return refs.length > 0 ? refs : null
-}
-
-/** Settled read_image results carry the model envelope; the UI never shows it. */
-function hasImageEnvelope(content: readonly { type: string; text?: string }[]): boolean {
-  return content.some(part => (
-    part.type === 'text' && typeof part.text === 'string' && IMAGE_ENVELOPE.test(part.text)
-  ))
 }
 
 function fullyRendered(content: readonly unknown[]): boolean {
@@ -126,7 +140,7 @@ function displayImagePath(path: string, sessionCwd?: string, home?: string): str
 
 /**
  * Derive a settled image card after validating the call head, persisted
- * metadata (or its argument fallback), and the model-facing image envelope.
+ * metadata (or its argument fallback), and durable image content blocks.
  * @param home - host account home; leftover POSIX home paths display as `~`.
  */
 export function imageCardModel(
@@ -141,9 +155,11 @@ export function imageCardModel(
   if (typeof filePath !== 'string' || filePath.trim() === '') return null
   const path = imageMeta(block.meta)?.path ?? filePath
   if (!fullyRendered(block.content)) return null
+  // Durable image blocks are the gallery signal. Do not gate on the model
+  // envelope text: Windows Host builds used to emit `\r\n` envelopes that
+  // failed an LF-only regex and fell back to IN/OUT with no preview.
   const refs = imageReferences(block.content)
   if (refs === null) return null
-  if (!hasImageEnvelope(block.content)) return null
   return {
     label: displayImagePath(path, sessionCwd, home),
     images: refs.map(ref => ({ attachment: ref, role: 'result' as const })),

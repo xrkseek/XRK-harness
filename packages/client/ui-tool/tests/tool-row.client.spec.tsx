@@ -545,7 +545,7 @@ describe('ToolRow media cards', () => {
     // The card asks for a real picture, not the message bubble's 240px preview.
     expect(renderSlot).toHaveBeenCalledWith(
       'tool.call.images',
-      expect.objectContaining({ maxEdge: 520, align: 'start' }),
+      expect.objectContaining({ maxEdge: 280, align: 'start' }),
     )
   })
 

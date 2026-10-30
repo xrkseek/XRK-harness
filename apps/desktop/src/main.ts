@@ -475,11 +475,15 @@ function syncDesktopCliCommand(enabled?: boolean): { linked: boolean; binDir: st
 }
 
 function registerDesktopShellIpc(): void {
-  try {
-    syncDesktopCliCommand();
-  } catch (error) {
-    console.error(error);
-  }
+  // PATH / registry sync uses spawnSync — defer so Host bring-up and first
+  // paint are not blocked by Windows User PATH queries (DSH listen-first).
+  setImmediate(() => {
+    try {
+      syncDesktopCliCommand();
+    } catch (error) {
+      console.error(error);
+    }
+  });
   registerDesktopIpcHandlers(ipcMain, {
     getLocale: () => app.getLocale(),
     getAppVersion: () => app.getVersion(),

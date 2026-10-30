@@ -33,6 +33,7 @@ import dialogCss from './stat-dialog.module.css'
 export {
   billedInputTokens,
   cacheHitPercent,
+  contextBreakdownForMeter,
   contextOccupancy,
   deriveStats,
   formatDuration,

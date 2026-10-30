@@ -429,6 +429,12 @@ export interface SessionStatusSnapshot {
     readonly parentSessionId: string;
     readonly childLabel: string;
     readonly parentLabel?: string;
+    /**
+     * Which Settings seat title the UI prefixes onto `childLabel`.
+     * Project home → manager; identity agent-home / tool children → agent;
+     * 向阳 → sunflower (name only, no 经理/干员 prefix).
+     */
+    readonly childSeat: "manager" | "agent" | "sunflower";
   };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
@@ -1424,9 +1430,19 @@ export function buildSessionStatusSnapshotUncached(
     parentCompanionBall = parentDelegated
       ? companionBallForMember(runtime, parentDelegated, dressing.stickers)
       : bossBall;
+    // Tool-delegated children are 干员 seats — never paint them as 经理.
+    const childMemberId =
+      typeof childLink.memberId === "string" ? childLink.memberId.trim() : "";
+    const childSeat =
+      childMemberId === MANAGER_MEMBER_ID
+        ? "manager"
+        : childMemberId === SUNFLOWER_MEMBER_ID
+          ? "sunflower"
+          : "agent";
     delegate = {
       parentSessionId: childLink.parentSessionId,
       childLabel: childLink.label,
+      childSeat,
       ...(parentDelegated?.label
         ? { parentLabel: parentDelegated.label }
         : { parentLabel: seatTitles.boss }),
@@ -1442,15 +1458,24 @@ export function buildSessionStatusSnapshotUncached(
       dressing.stickers,
     );
     parentCompanionBall = bossBall;
-    // Nickname-only when set — UI prefixes the seat title (same as project 经理).
+    // Nickname-only when set — UI prefixes the seat title for that childSeat.
     const identityNick = identityMember?.nickname?.trim();
     const identityFormal =
       identity.memberId === MANAGER_MEMBER_ID
         ? seatTitles.manager
-        : identityMember?.name?.trim() || identity.memberId;
+        : identity.memberId === SUNFLOWER_MEMBER_ID
+          ? identityMember?.name?.trim() || "向日葵"
+          : identityMember?.name?.trim() || identity.memberId;
+    const childSeat =
+      identity.memberId === MANAGER_MEMBER_ID
+        ? "manager"
+        : identity.memberId === SUNFLOWER_MEMBER_ID
+          ? "sunflower"
+          : "agent";
     delegate = {
       parentSessionId: sessionId,
       childLabel: identityNick || identityFormal,
+      childSeat,
     };
   } else if (workspaceId === XIANGYANG_WORKSPACE_ID) {
     companionBall = sunflowerBall;
@@ -1458,6 +1483,7 @@ export function buildSessionStatusSnapshotUncached(
     delegate = {
       parentSessionId: sessionId,
       childLabel: sunflowerMember?.name?.trim() || "向日葵",
+      childSeat: "sunflower",
     };
   } else {
     companionBall = managerBall;
@@ -1470,6 +1496,7 @@ export function buildSessionStatusSnapshotUncached(
     delegate = {
       parentSessionId: sessionId,
       childLabel: managerNick || seatTitles.manager,
+      childSeat: "manager",
     };
   }
   const homeId =

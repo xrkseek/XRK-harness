@@ -156,9 +156,7 @@ export class ConversationController extends Service implements IConversation {
   private trimImageUrlCache(keepSessionId: SessionId): void {
     const MAX_ENTRIES = 96
     if (this.imageUrls.size <= MAX_ENTRIES) return
-    for (const [key, entry] of this.imageUrls) {
-      if (this.imageUrls.size <= MAX_ENTRIES - 16) break
-      if (entry.sessionId === keepSessionId) continue
+    const revoke = (key: string, entry: ImageUrlEntry): void => {
       this.imageUrls.delete(key)
       void entry.pending.then((url) => {
         if (!this.createdImageUrls.delete(url)) return
@@ -166,6 +164,18 @@ export class ConversationController extends Service implements IConversation {
       }, () => {
         // Failed loads own no object URL.
       })
+    }
+    // Prefer foreign sessions first so the focused transcript keeps its thumbs.
+    for (const [key, entry] of this.imageUrls) {
+      if (this.imageUrls.size <= MAX_ENTRIES - 16) return
+      if (entry.sessionId === keepSessionId) continue
+      revoke(key, entry)
+    }
+    // Same-session overflow (many read_image / generate thumbs): drop oldest
+    // Map insertion order — never reuse another attachment's blob URL.
+    for (const [key, entry] of this.imageUrls) {
+      if (this.imageUrls.size <= MAX_ENTRIES - 16) return
+      revoke(key, entry)
     }
   }
 

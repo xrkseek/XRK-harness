@@ -95,7 +95,7 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 |------|----------------|-------------------|
 | Host 鉴权 | `XRK_API_KEY` **留空** → `/api/*` 免鉴权 | 设非空 `XRK_API_KEY` |
 | CORS | 默认 `*` 可接受 | 设 `XRK_CORS_ORIGIN` 为实际前端源 |
-| 绑定 | `127.0.0.1:8787` | 反向代理 + TLS；CLI 拒绝 `0.0.0.0` |
+| 绑定 | `127.0.0.1:8787` | 可 `--host 0.0.0.0` 公网听；非回环启动会武装 **访问 PIN**（日志打印）；**不保证**面对公网的安全（宜反代 + TLS + 自管防火墙；PIN / `XRK_API_KEY` 只是闸，不是完整安全产品） |
 | LLM 密钥 | **设置 → 凭据**（或 `.xrk/.credentials.yaml`）；env 仅旁路 | 同上，密钥**仅运行时**；不入库 |
 | Session | `~/.xrk/sessions/sessions.db` | 备份用户主目录；`XRK_HOME` 可改 |
 | 源码仓 | `.xrk/` gitignored | 部署机单独 workspace，不带开发机 `.xrk` |
@@ -261,7 +261,7 @@ Legacy full Cordis scaffold + browser HMR soak: `apps/web/tests/hmr-live.e2e.ts`
 |-----------|---------------------|--------------------------|
 | Host auth | Leave `XRK_API_KEY` **empty** → `/api/*` unauthenticated | **Must** set a non-empty `XRK_API_KEY` |
 | CORS | Default `*` is acceptable | Set `XRK_CORS_ORIGIN` to the real frontend origin |
-| Bind | `127.0.0.1:8787` | Reverse proxy + TLS; CLI rejects `0.0.0.0` |
+| Bind | `127.0.0.1:8787` | `--host 0.0.0.0` is allowed; non-loopback listen arms the **access PIN** (printed in logs). **No security guarantee** on the open internet — prefer reverse proxy + TLS + your own firewall; PIN / `XRK_API_KEY` are gates, not a full security product |
 | LLM keys | **Settings → Credentials** (or `.xrk/.credentials.yaml`); env is a bypass only | Same; keys are **runtime-only**; never commit |
 | Session | `~/.xrk/sessions/sessions.db` | Back up the user home; `XRK_HOME` may override |
 | Source tree | `.xrk/` gitignored | Separate deploy workspace; do not ship a developer `.xrk` |

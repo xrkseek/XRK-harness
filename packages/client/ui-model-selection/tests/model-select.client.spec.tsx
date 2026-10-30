@@ -254,6 +254,38 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
   })
 
+  it('does not paint the first model as hovered on a cold open', () => {
+    const directory = createSnapshotStore(state({
+      groups: [{
+        id: 'openai',
+        name: 'OpenAI',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o' },
+          { id: 'gpt-4o-mini', name: 'GPT-4o mini' },
+          { id: 'o3', name: 'o3' },
+          { id: 'o4-mini', name: 'o4 mini' },
+          { id: 'gpt-4.1', name: 'GPT-4.1' },
+          { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini' },
+        ],
+      }],
+      current: { provider: 'openai', model: 'gpt-4o' },
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    for (const row of screen.getAllByRole('menuitemradio')) {
+      expect(row.getAttribute('aria-selected')).toBe('false')
+      expect(row.getAttribute('data-model-highlight')).toBeNull()
+    }
+  })
+
   it('keeps search focus while ↑↓ move a virtual highlight and Enter selects it', async () => {
     const select = vi.fn().mockResolvedValue(true)
     const directory = createSnapshotStore(state({
@@ -287,10 +319,12 @@ describe('ModelSelect reasoning effort', () => {
     fireEvent.change(search, { target: { value: 'mini' } })
     expect(search.parentElement?.querySelector('mark')?.textContent).toBe('mini')
     expect(document.activeElement).toBe(search)
-    // First filtered row is active; ArrowDown advances while search keeps focus.
-    expect(screen.getByRole('menuitemradio', { name: /GPT-4o mini/ }).getAttribute('aria-selected')).toBe('true')
+    // Cold open: no row looks hovered. First ArrowDown lands on the first cell.
+    expect(screen.getByRole('menuitemradio', { name: /GPT-4o mini/ }).getAttribute('aria-selected')).toBe('false')
     fireEvent.keyDown(search, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(search)
+    expect(screen.getByRole('menuitemradio', { name: /GPT-4o mini/ }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
     expect(screen.getByRole('menuitemradio', { name: /o4 mini/ }).getAttribute('aria-selected')).toBe('true')
     fireEvent.keyDown(search, { key: 'Enter' })
     await waitFor(() => {

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-// Edit-resubmit execution: the truncate result is a value, not a throw. A
-// failed cut must stop before the re-prompt (otherwise the old turn and the
-// edited message both survive) and must surface in the composer strip.
+// Edit-resubmit execution: ISessions.truncate is Promise<void> (throws on
+// failure). A failed cut must stop before the re-prompt and surface in the
+// composer strip — never read `.ok` on the void return.
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ISessions } from '@xrkseek/client-runtime/client'
@@ -27,11 +27,11 @@ function makeSessions(opts: {
       : { ok: true as const, value: { matched: opts.rollback !== 'unmatched' } },
   )
   const cancel = vi.fn(async () => ({ ok: true as const, value: { accepted: true as const } }))
-  const truncate = vi.fn(async () =>
-    opts.truncateOk !== false
-      ? { ok: true as const, value: { sessionId: SID, eventCount: 3 } }
-      : { ok: false as const, error: { code: 'truncate-failed' as const, message: 'cut failed' } },
-  )
+  const truncate = vi.fn(async () => {
+    if (opts.truncateOk === false) {
+      throw new Error('session truncate failed: truncate-failed: cut failed')
+    }
+  })
   const session = {
     prompt,
     reportError,
@@ -69,10 +69,25 @@ describe('executeResubmitAfterChoice', () => {
 
     expect(s.truncate).toHaveBeenCalledWith({ sessionId: SID, beforeSeq: 4 })
     expect(s.prompt).not.toHaveBeenCalled()
-    expect(s.reportError).toHaveBeenCalledWith('resubmit', {
-      code: 'truncate-failed',
-      message: 'cut failed',
-    })
+    expect(s.reportError).toHaveBeenCalledWith(
+      'resubmit',
+      expect.objectContaining({
+        code: 'internal',
+        message: expect.stringContaining('cut failed'),
+      }),
+    )
+  })
+
+  it('does not crash when truncate resolves void (no .ok)', async () => {
+    const s = makeSessions()
+    await expect(
+      executeResubmitAfterChoice(s.sessions, SID, {
+        seq: 5,
+        choice: 'keep-files',
+        text: 'edited',
+      }),
+    ).resolves.toBeUndefined()
+    expect(s.prompt).toHaveBeenCalledTimes(1)
   })
 
   it('re-prompts after a successful cut', async () => {

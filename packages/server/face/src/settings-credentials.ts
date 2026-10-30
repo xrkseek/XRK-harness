@@ -293,6 +293,11 @@ export function listCredentialSlots(
       envVar: "XRK_BRAVE_SEARCH_API_KEY",
     },
     {
+      id: "web.deepseek",
+      label: "DeepSeek Search API key",
+      envVar: "XRK_DEEPSEEK_SEARCH_API_KEY",
+    },
+    {
       id: "computer.background",
       label: "Computer-use background helper",
       envVar: "XRK_COMPUTER_USE_BACKGROUND",
@@ -1210,6 +1215,20 @@ function mcpMutateRejected(ops: readonly FaceSettingsPathOp[]): string | undefin
   return undefined;
 }
 
+/**
+ * Whether an llm-* mutate should rebuild Host adapters / Agents.
+ * `providerOrder` only reorders the Models catalog — no adapter remount.
+ */
+function llmMutateNeedsAdapterRefresh(
+  ops: readonly FaceSettingsPathOp[],
+): boolean {
+  if (ops.length === 0) return false;
+  return ops.some((op) => {
+    const head = op.path[0];
+    return head !== "providerOrder";
+  });
+}
+
 /** Face `settings.describe` — namespaces[] for welcome / forms. */
 export async function settingsDescribeFace(
   runtime: FaceRuntime,
@@ -1469,7 +1488,23 @@ export async function settingsMutateFace(
       result.view.value,
     );
   }
-  if (ns === "llm-deepseek" || ns === "llm-pi-ai") {
+  // Catalog order (`providerOrder`) is Settings-only: clients refresh via
+  // `settings/document-updated`. Remounting every Agent on reorder made the
+  // whole shell flash. Adapter rebuild stays on real provider/model/key edits.
+  if (
+    (ns === "llm-deepseek" || ns === "llm-pi-ai") &&
+    llmMutateNeedsAdapterRefresh(ops)
+  ) {
+    publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
+  }
+  if (ns === "sunflower-free" && runtime.syncSunflowerFree) {
+    try {
+      await runtime.syncSunflowerFree();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[face] sunflower-free remount failed: ${message}`);
+    }
+    // Sidecar URL / model list may have changed — refresh adapters & catalog.
     publishRemoteEvent(runtime.bus, "llm/adapters-updated", []);
   }
   return { ok: true, value: result.view };

@@ -9,7 +9,9 @@ import { createMemorySessionStore } from "@xrkseek/core-session";
 import type { GitResult } from "@xrkseek/checkpoint";
 import { dispatchFaceMethod } from "../src/dispatch.js";
 import {
+  clearSnapshotHealth,
   clearWorkspaceCheckpointStores,
+  snapshotSessionWorkspace,
   setWorkspaceCheckpointGitRunner,
 } from "../src/workspace-checkpoint.js";
 import {
@@ -70,6 +72,7 @@ describe("session.checkpoint + /rollback", () => {
     vi.unstubAllEnvs();
     setWorkspaceCheckpointGitRunner(undefined);
     clearWorkspaceCheckpointStores();
+    clearSnapshotHealth();
     for (const d of dirs.splice(0)) {
       try {
         rmSync(d, { recursive: true, force: true });
@@ -259,5 +262,43 @@ describe("session.checkpoint + /rollback", () => {
     };
     expect(value.result.kind).toBe("success");
     expect(value.result.text).toMatch(/Restored workspace from/i);
+  });
+
+  it("diagnoses an empty /rollback instead of only 'Unknown checkpoint'", async () => {
+    const ws = mkdtempSync(path.join(tmpdir(), "xrk-ckpt-diag-"));
+    dirs.push(ws);
+    // A Host without git: every pre-turn snapshot is skipped. The old answer
+    // was a bare "Unknown checkpoint seq:38", which reads like a missing
+    // point rather than a broken prerequisite.
+    setWorkspaceCheckpointGitRunner(async () => ({
+      code: -1,
+      stdout: "",
+      stderr: "spawn git ENOENT",
+    }));
+
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      workspaceRoot: ws,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    await snapshotSessionWorkspace(runtime, sessionId, { budgetMs: 2_000 });
+
+    const exec = await dispatchFaceMethod(runtime, "commands/execute", "e", {
+      args: { agentId: sessionId, line: "/rollback seq:38" },
+    });
+    expect(exec.result.ok).toBe(true);
+    if (!exec.result.ok) return;
+    const value = exec.result.value as {
+      result: { kind: string; text?: string };
+    };
+    expect(value.result.kind).toBe("error");
+    expect(value.result.text).toMatch(/Unknown checkpoint seq:38/);
+    expect(value.result.text).toMatch(/Diagnosis: No snapshot was recorded/);
+    expect(value.result.text).toMatch(/git-unavailable/);
   });
 });

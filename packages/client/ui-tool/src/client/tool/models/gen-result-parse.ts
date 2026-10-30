@@ -9,6 +9,8 @@ export interface ParsedImageGenImage {
   readonly attachmentId: string
   readonly mime?: string
   readonly bytes?: number
+  readonly width?: number
+  readonly height?: number
   readonly url?: string
   readonly revisedPrompt?: string
 }
@@ -86,6 +88,8 @@ export function parseImageGenResultText(text: string): ParsedImageGenResult {
     attachmentId?: string
     mime?: string
     bytes?: number
+    width?: number
+    height?: number
     url?: string
     revisedPrompt?: string
   } = {}
@@ -98,6 +102,8 @@ export function parseImageGenResultText(text: string): ParsedImageGenResult {
         attachmentId: current.attachmentId,
         ...(current.mime ? { mime: current.mime } : {}),
         ...(current.bytes !== undefined ? { bytes: current.bytes } : {}),
+        ...(current.width !== undefined ? { width: current.width } : {}),
+        ...(current.height !== undefined ? { height: current.height } : {}),
         ...(current.url ? { url: current.url } : {}),
         ...(current.revisedPrompt ? { revisedPrompt: current.revisedPrompt } : {}),
       })
@@ -130,6 +136,15 @@ export function parseImageGenResultText(text: string): ParsedImageGenResult {
         current.bytes = Number(kv.value)
         continue
       }
+      // Host may pack `size=1254x1254` on the mime/bytes line (or alone).
+      if (kv.key === 'size') {
+        const m = /^(\d+)x(\d+)$/i.exec(kv.value)
+        if (m) {
+          current.width = Number(m[1])
+          current.height = Number(m[2])
+        }
+        continue
+      }
       if (kv.key === 'url' && kv.value) {
         current.url = kv.value
         continue
@@ -137,6 +152,14 @@ export function parseImageGenResultText(text: string): ParsedImageGenResult {
       if (kv.key === 'revised_prompt' && kv.value) {
         current.revisedPrompt = kv.value
         continue
+      }
+    }
+    // formatImageGenImageLines packs a bare `1254x1254` token after bytes=.
+    if (current.width === undefined) {
+      const dim = /(?:^|\s)(\d+)x(\d+)(?:\s|$)/.exec(line)
+      if (dim) {
+        current.width = Number(dim[1])
+        current.height = Number(dim[2])
       }
     }
     if (pairs.length > 0) {

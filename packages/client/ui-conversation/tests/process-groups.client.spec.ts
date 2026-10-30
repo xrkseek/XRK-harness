@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatConversationViewNode } from '@xrkseek/client-runtime/client'
 import type { ChatNode } from '../src/client/contract/chat-nodes.ts'
-import { closedTurn, flowEntries, isProcessMember, turnOf } from '../src/client/conversation-nodes/process-groups.ts'
+import {
+  closedTurn,
+  flowEntries,
+  isProcessMember,
+  isStandaloneTranscriptTool,
+  turnOf,
+} from '../src/client/conversation-nodes/process-groups.ts'
 
 type Block = { readonly kind: 'text' | 'reasoning'; readonly text: string }
 
@@ -40,6 +46,30 @@ function entriesOf(
 }
 
 const tool = (key: string, options: Parameters<typeof stub>[2] = {}) => stub(key, 'tool-call', options)
+/** Tool-call stub with a projected root name (process-group membership uses it). */
+function namedTool(
+  key: string,
+  name: string,
+  options: Parameters<typeof stub>[2] = {},
+): ChatNode {
+  const node = tool(key, options)
+  ;(node as { data: unknown }).data = {
+    root: {
+      kind: 'tool-result',
+      seq: 1,
+      time: 0,
+      callId: key,
+      call: { name, argsRaw: '{}' },
+      callTime: null,
+      content: [],
+      isError: false,
+      callView: null,
+      resultView: null,
+      subCalls: [],
+    },
+  }
+  return node
+}
 const reasoningStep = (key: string, options: Parameters<typeof stub>[2] = {}) =>
   stub(key, 'assistant-step', { ...options, blocks: [{ kind: 'reasoning', text: 'thinking' }] })
 const replyStep = (key: string, options: Parameters<typeof stub>[2] = {}) =>
@@ -200,6 +230,30 @@ describe('node predicates', () => {
     expect(isProcessMember(reasoningStep('r'))).toBe(true)
     expect(isProcessMember(replyStep('a'))).toBe(false)
     expect(isProcessMember(tool('t'))).toBe(true)
+  })
+
+  it('keeps deliverable and interactive tools out of the process fold', () => {
+    expect(isStandaloneTranscriptTool('present')).toBe(true)
+    expect(isStandaloneTranscriptTool('Present')).toBe(true)
+    expect(isStandaloneTranscriptTool('ask_user_question')).toBe(true)
+    expect(isStandaloneTranscriptTool('todo_write')).toBe(true)
+    expect(isStandaloneTranscriptTool('image_generate')).toBe(true)
+    expect(isStandaloneTranscriptTool('video_generate')).toBe(true)
+    expect(isStandaloneTranscriptTool('propose_skill')).toBe(true)
+    expect(isStandaloneTranscriptTool('bash')).toBe(false)
+    expect(isProcessMember(namedTool('p', 'present'))).toBe(false)
+    expect(isProcessMember(namedTool('a', 'ask_user_question'))).toBe(false)
+    expect(isProcessMember(namedTool('b', 'bash'))).toBe(true)
+  })
+
+  it('flushes the process run around a present row so 交付物 stays flat', () => {
+    const entries = entriesOf([
+      namedTool('t1', 'bash'),
+      namedTool('p1', 'present'),
+      namedTool('t2', 'grep'),
+    ])
+    expect(entries.map(entry => entry.kind)).toEqual(['group', 'node', 'group'])
+    expect(entries[1]).toEqual({ kind: 'node', key: 'p1' })
   })
 
   it('never groups when the work-details mode asks for none', () => {

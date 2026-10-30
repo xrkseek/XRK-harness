@@ -6,6 +6,7 @@ import type {
   WebSearchSource,
 } from "./types.js";
 import { WebError } from "./types.js";
+import { resolveFetchFn } from "./fetch-http.js";
 import { createDuckDuckGoSearch } from "./search-duckduckgo.js";
 import { createParallelFreeSearch } from "./search-parallel-free.js";
 
@@ -17,11 +18,28 @@ export const KEYLESS_FALLBACKS = ["parallel-free", "duckduckgo"] as const;
 export type SearchProviderId =
   | "tavily"
   | "brave"
+  | "deepseek"
   | "parallel-free"
   | "duckduckgo";
 
 const TAVILY_URL = "https://api.tavily.com/search";
 const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
+/** DeepSeek Search API — https://api-docs.deepseek.com/guides/search/ */
+const DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search";
+const DEEPSEEK_QUERY_MAX_CHARS = 128;
+
+async function withProxiedFetch<T>(
+  base: FetchFn,
+  proxy: string | undefined,
+  run: (fetch: FetchFn) => Promise<T>,
+): Promise<T> {
+  const resolved = await resolveFetchFn(base, proxy);
+  try {
+    return await run(resolved.fetch);
+  } finally {
+    resolved.close?.();
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -83,8 +101,10 @@ async function readJson(
     );
   }
   if (!response.ok) {
+    const nested = asRecord(record.error);
     const message =
       asString(record.error) ??
+      (nested ? asString(nested.message) : undefined) ??
       asString(record.message) ??
       `${label} answered HTTP ${response.status}`;
     throw new WebError(message, "WEB_PROVIDER_ERROR");
@@ -132,17 +152,19 @@ export function createTavilySearch(options: {
       const { timed, combined } = combineSignals(signal, timeoutMs);
       let response: Response;
       try {
-        response = await fetchFn(TAVILY_URL, {
-          method: "POST",
-          signal: combined,
-          headers: { "content-type": "application/json", accept: "application/json" },
-          body: JSON.stringify({
-            api_key: options.apiKey,
-            query: request.query,
-            max_results: request.maxResults,
-            include_answer: true,
+        response = await withProxiedFetch(fetchFn, request.proxy, (fetch) =>
+          fetch(TAVILY_URL, {
+            method: "POST",
+            signal: combined,
+            headers: { "content-type": "application/json", accept: "application/json" },
+            body: JSON.stringify({
+              api_key: options.apiKey,
+              query: request.query,
+              max_results: request.maxResults,
+              include_answer: true,
+            }),
           }),
-        });
+        );
       } catch (err) {
         translateAbort(err, signal, timed);
       }
@@ -183,14 +205,16 @@ export function createBraveSearch(options: {
       const url = `${BRAVE_URL}?q=${encodeURIComponent(request.query)}&count=${count}`;
       let response: Response;
       try {
-        response = await fetchFn(url, {
-          method: "GET",
-          signal: combined,
-          headers: {
-            accept: "application/json",
-            "x-subscription-token": options.apiKey,
-          },
-        });
+        response = await withProxiedFetch(fetchFn, request.proxy, (fetch) =>
+          fetch(url, {
+            method: "GET",
+            signal: combined,
+            headers: {
+              accept: "application/json",
+              "x-subscription-token": options.apiKey,
+            },
+          }),
+        );
       } catch (err) {
         translateAbort(err, signal, timed);
       }
@@ -207,6 +231,88 @@ export function createBraveSearch(options: {
   };
 }
 
+function clipDeepSeekQuery(query: string): string {
+  const chars = [...query.trim()];
+  if (chars.length <= DEEPSEEK_QUERY_MAX_CHARS) return chars.join("");
+  return chars.slice(0, DEEPSEEK_QUERY_MAX_CHARS).join("");
+}
+
+function projectDeepSeekSource(
+  raw: Record<string, unknown>,
+): WebSearchSource | undefined {
+  const url = asString(raw.url);
+  if (!url) return undefined;
+  const title = asString(raw.title);
+  // Prefer model-oriented summary over short snippet / optional full content.
+  const snippet =
+    asString(raw.summary) ?? asString(raw.snippet) ?? asString(raw.content);
+  const publishedAt = asString(raw.date);
+  return {
+    url,
+    ...(title ? { title } : {}),
+    ...(snippet ? { snippet } : {}),
+    ...(publishedAt ? { publishedAt } : {}),
+  };
+}
+
+/**
+ * DeepSeek Search API (`POST /v1/tools/search`). Same Bearer key as chat API.
+ * @see https://api-docs.deepseek.com/guides/search/
+ */
+export function createDeepSeekSearch(options: {
+  readonly apiKey: string;
+  readonly fetch?: FetchFn;
+  readonly timeoutMs?: number;
+  /** Override Search endpoint (default api.deepseek.com). */
+  readonly endpoint?: string;
+}): WebSearch {
+  const fetchFn = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? SEARCH_TIMEOUT_MS;
+  const endpoint = options.endpoint?.trim() || DEEPSEEK_SEARCH_URL;
+  return {
+    async search(request: WebSearchRequest, signal?: AbortSignal) {
+      if (signal?.aborted) {
+        throw new WebError("web search aborted", "WEB_ABORTED");
+      }
+      const query = clipDeepSeekQuery(request.query);
+      if (!query) {
+        throw new WebError("query is required", "WEB_PROVIDER_ERROR");
+      }
+      const { timed, combined } = combineSignals(signal, timeoutMs);
+      const count = Math.min(Math.max(request.maxResults, 1), 50);
+      let response: Response;
+      try {
+        response = await withProxiedFetch(fetchFn, request.proxy, (fetch) =>
+          fetch(endpoint, {
+            method: "POST",
+            signal: combined,
+            headers: {
+              "content-type": "application/json",
+              accept: "application/json",
+              authorization: `Bearer ${options.apiKey}`,
+            },
+            body: JSON.stringify({
+              query,
+              count,
+              need_content: false,
+            }),
+          }),
+        );
+      } catch (err) {
+        translateAbort(err, signal, timed);
+      }
+      const body = await readJson(response, "DeepSeek Search");
+      const rows = Array.isArray(body.results) ? body.results : [];
+      const sources = rows
+        .map((row) => asRecord(row))
+        .filter((row): row is Record<string, unknown> => row !== undefined)
+        .map(projectDeepSeekSource)
+        .filter((s): s is WebSearchSource => s !== undefined);
+      return capSearchResult({ sources, truncated: false }, request.maxResults);
+    },
+  };
+}
+
 /** Structured search preference (Face Settings / Host), not an env bag. */
 export type SearchAccessConfig = {
   /** `auto` / omit → keyed cascade; else pin one provider id. */
@@ -214,6 +320,8 @@ export type SearchAccessConfig = {
   readonly region?: string;
   readonly tavilyApiKey?: string;
   readonly braveApiKey?: string;
+  /** DeepSeek Search / chat API key (Bearer). */
+  readonly deepseekApiKey?: string;
   readonly parallelFreeMcpUrl?: string;
 };
 
@@ -221,6 +329,8 @@ export type SearchAccessConfig = {
 export function searchConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): SearchAccessConfig {
+  const deepseek =
+    env.XRK_DEEPSEEK_SEARCH_API_KEY?.trim() || env.DEEPSEEK_API_KEY?.trim();
   return {
     ...(env.XRK_WEB_SEARCH_PROVIDER?.trim()
       ? { provider: env.XRK_WEB_SEARCH_PROVIDER.trim() }
@@ -234,6 +344,7 @@ export function searchConfigFromEnv(
     ...(env.XRK_BRAVE_SEARCH_API_KEY?.trim()
       ? { braveApiKey: env.XRK_BRAVE_SEARCH_API_KEY.trim() }
       : {}),
+    ...(deepseek ? { deepseekApiKey: deepseek } : {}),
     ...(env.XRK_PARALLEL_FREE_MCP_URL?.trim()
       ? { parallelFreeMcpUrl: env.XRK_PARALLEL_FREE_MCP_URL.trim() }
       : {}),
@@ -250,16 +361,20 @@ export function searchUnavailableMessage(
     pin !== "auto" &&
     pin !== "tavily" &&
     pin !== "brave" &&
+    pin !== "deepseek" &&
     pin !== "parallel-free" &&
     pin !== "duckduckgo"
   ) {
-    return `Error: Unknown web search provider "${pin}". Use tavily, brave, parallel-free, or duckduckgo.`;
+    return `Error: Unknown web search provider "${pin}". Use tavily, brave, deepseek, parallel-free, or duckduckgo.`;
   }
   if (pin === "tavily" && !cfg.tavilyApiKey?.trim()) {
     return "Error: Web search is not configured. Add a Tavily key under Credentials.";
   }
   if (pin === "brave" && !cfg.braveApiKey?.trim()) {
     return "Error: Web search is not configured. Add a Brave Search key under Credentials.";
+  }
+  if (pin === "deepseek" && !cfg.deepseekApiKey?.trim()) {
+    return "Error: Web search is not configured. Add a DeepSeek API key under Credentials (same key as chat).";
   }
   return "Error: Web search is not configured.";
 }
@@ -271,6 +386,8 @@ function normalizeSearchConfig(
     "XRK_WEB_SEARCH_PROVIDER" in value ||
     "XRK_TAVILY_API_KEY" in value ||
     "XRK_BRAVE_SEARCH_API_KEY" in value ||
+    "XRK_DEEPSEEK_SEARCH_API_KEY" in value ||
+    "DEEPSEEK_API_KEY" in value ||
     "XRK_WEB_SEARCH_REGION" in value ||
     "XRK_PARALLEL_FREE_MCP_URL" in value
   ) {
@@ -280,8 +397,8 @@ function normalizeSearchConfig(
 }
 
 /**
- * Prefer keyed providers when present; otherwise parallel-free (AGT).
- * Unknown pinned provider → `undefined` (caller shows unavailable).
+ * Prefer keyed Tavily / Brave when present; otherwise parallel-free (AGT).
+ * DeepSeek is pin-only (never Auto). Unknown pinned provider → `undefined`.
  */
 export function resolveSearchProviderId(
   config: SearchAccessConfig | NodeJS.ProcessEnv,
@@ -290,8 +407,10 @@ export function resolveSearchProviderId(
   const pin = cfg.provider?.trim().toLowerCase();
   const tavily = Boolean(cfg.tavilyApiKey?.trim());
   const brave = Boolean(cfg.braveApiKey?.trim());
+  const deepseek = Boolean(cfg.deepseekApiKey?.trim());
   if (pin === "tavily") return tavily ? "tavily" : undefined;
   if (pin === "brave") return brave ? "brave" : undefined;
+  if (pin === "deepseek") return deepseek ? "deepseek" : undefined;
   if (pin === "parallel-free") return "parallel-free";
   if (pin === "duckduckgo") return "duckduckgo";
   if (pin && pin !== "auto") return undefined;
@@ -317,6 +436,14 @@ function createProvider(
     const key = config.braveApiKey?.trim();
     if (!key) return undefined;
     return createBraveSearch({
+      apiKey: key,
+      ...(fetch ? { fetch } : {}),
+    });
+  }
+  if (id === "deepseek") {
+    const key = config.deepseekApiKey?.trim();
+    if (!key) return undefined;
+    return createDeepSeekSearch({
       apiKey: key,
       ...(fetch ? { fetch } : {}),
     });

@@ -225,6 +225,8 @@ export interface SessionStatusView {
     readonly parentSessionId: string
     readonly childLabel: string
     readonly parentLabel?: string
+    /** Which Settings seat title prefixes `childLabel` (缺省按经理，兼容旧 Host). */
+    readonly childSeat?: 'manager' | 'agent' | 'sunflower'
   }
   readonly timeline: {
     readonly total: number
@@ -977,11 +979,16 @@ export function parseSessionStatus(body: unknown): SessionStatusView | null {
     const parentSessionId = str((delegateRaw as { parentSessionId?: unknown }).parentSessionId)
     const childLabel = str((delegateRaw as { childLabel?: unknown }).childLabel)
     const parentLabel = str((delegateRaw as { parentLabel?: unknown }).parentLabel)
+    const childSeatRaw = str((delegateRaw as { childSeat?: unknown }).childSeat)
+    const childSeat = childSeatRaw === 'manager' || childSeatRaw === 'agent' || childSeatRaw === 'sunflower'
+      ? childSeatRaw
+      : undefined
     if (parentSessionId && childLabel) {
       delegate = {
         parentSessionId,
         childLabel,
         ...(parentLabel ? { parentLabel } : {}),
+        ...(childSeat ? { childSeat } : {}),
       }
     }
   }

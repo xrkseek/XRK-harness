@@ -2,7 +2,7 @@
  * host.openPath / reveal — open or select a filesystem path in the OS shell.
  * Also opens absolute URLs (http(s), custom schemes) in the registered handler.
  * Win folders: `cmd /c start` (ShellExecute). Win files: explorer /select.
- * macOS: open. Linux: xdg-open.
+ * macOS: open. Linux desktop: xdg-open. Termux: termux-open.
  */
 
 import { access, constants, stat } from "node:fs/promises";
@@ -11,9 +11,19 @@ import { dirname } from "node:path";
 import { fullyQualified } from "./host-directory.js";
 import type { FaceRpcResult } from "./types.js";
 
+/** Termux (Android) — has `termux-open`, not a desktop `xdg-open` session. */
+export function isTermuxEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.TERMUX_VERSION !== undefined && env.TERMUX_VERSION !== "") return true;
+  const prefix = env.PREFIX;
+  return typeof prefix === "string" && prefix.includes("com.termux");
+}
+
 /**
  * Whether Face may advertise `canOpenPath` / run `host.openPath`.
  * Desktop Host sets `XRK_NATIVE_OPEN=1` so the bit stays true without a second opener.
+ *
+ * Linux is scenario-gated: GUI session (`DISPLAY` / `WAYLAND_DISPLAY`), Termux,
+ * or the Desktop override — bare headless / CI Linux must not claim OS open.
  */
 export function canOpenNativePath(
   platform: NodeJS.Platform = process.platform,
@@ -22,7 +32,13 @@ export function canOpenNativePath(
   if (env.XRK_NATIVE_OPEN === "1" || env.XRK_NATIVE_OPEN === "true") {
     return true;
   }
-  return platform === "win32" || platform === "darwin" || platform === "linux";
+  if (platform === "win32" || platform === "darwin") return true;
+  if (platform === "linux") {
+    if (isTermuxEnv(env)) return true;
+    if (env.DISPLAY || env.WAYLAND_DISPLAY) return true;
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -118,9 +134,22 @@ export function windowsExplorerPath(target: string): string {
   return normalizeOpenPath(target).replace(/\//g, "\\");
 }
 
+async function openLinuxPath(
+  path: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  // Termux first: Android intents via termux-open (xdg-open is usually absent).
+  if (isTermuxEnv(env)) {
+    await spawnDetached("termux-open", [path]);
+    return;
+  }
+  await spawnDetached("xdg-open", [path]);
+}
+
 export async function openNativePath(
   target: string,
   platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const raw = target.trim();
   // URLs keep forward slashes; Windows path mangling would break the scheme.
@@ -135,7 +164,7 @@ export async function openNativePath(
       await spawnDetached("open", [raw]);
       return;
     }
-    await spawnDetached("xdg-open", [raw]);
+    await openLinuxPath(raw, env);
     return;
   }
   const path =
@@ -156,7 +185,7 @@ export async function openNativePath(
     await spawnDetached("open", [path]);
     return;
   }
-  await spawnDetached("xdg-open", [path]);
+  await openLinuxPath(path, env);
 }
 
 /**
@@ -165,6 +194,7 @@ export async function openNativePath(
 export async function revealNativePath(
   target: string,
   platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   if (platform === "win32") {
     const path = windowsExplorerPath(target);
@@ -173,7 +203,7 @@ export async function revealNativePath(
     // Explorer on a folder looks like a no-op). Open the folder instead.
     try {
       if ((await stat(path)).isDirectory()) {
-        await openNativePath(path, platform);
+        await openNativePath(path, platform, env);
         return;
       }
     } catch {
@@ -195,6 +225,17 @@ export async function revealNativePath(
   const path = normalizeOpenPath(target);
   if (platform === "darwin") {
     await spawnDetached("open", ["-R", path]);
+    return;
+  }
+  // Termux has no "reveal in folder" — open the path (or its parent) via intent.
+  if (isTermuxEnv(env)) {
+    let revealTarget = path;
+    try {
+      if (!(await stat(path)).isDirectory()) revealTarget = dirname(path);
+    } catch {
+      revealTarget = dirname(path);
+    }
+    await openLinuxPath(revealTarget, env);
     return;
   }
   let st;

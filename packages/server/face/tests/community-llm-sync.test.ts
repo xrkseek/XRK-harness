@@ -16,7 +16,7 @@ describe("mergeCommunityProviderModels", () => {
       id: "wb-flash",
       name: "Flash",
       contextWindow: 128_000,
-      softBudgetMaxTokens: 100_000,
+      softBudgetMaxTokens: 115_200,
     });
   });
 
@@ -44,10 +44,23 @@ describe("mergeCommunityProviderModels", () => {
     expect(merged[0]).toEqual({
       id: "wb-flash",
       name: "Flash v2",
-      contextWindow: 200_000,
+      // Tighter of incoming 200k vs previous 128k — never inflate the window.
+      contextWindow: 128_000,
       maxTokens: 32_000,
       softBudgetMaxTokens: 50_000,
       inputModalities: ["text"],
+    });
+  });
+
+  it("prefers the tighter contextWindow when catalog overstates (256k vs 1M)", () => {
+    const merged = mergeCommunityProviderModels(
+      [{ id: "proxy-chat", contextWindow: 1_000_000 }],
+      [{ id: "proxy-chat", contextWindow: 256_000, softBudgetMaxTokens: 192_000 }],
+    );
+    expect(merged[0]).toMatchObject({
+      id: "proxy-chat",
+      contextWindow: 256_000,
+      softBudgetMaxTokens: 192_000,
     });
   });
 
@@ -115,14 +128,14 @@ describe("mergeCommunityProviderModels", () => {
 
   it("omits a default when context is below the 8k floor", () => {
     expect(defaultSoftBudgetMaxTokens(4_000)).toBeUndefined();
-    expect(defaultSoftBudgetMaxTokens(8_000)).toBe(8_000);
+    expect(defaultSoftBudgetMaxTokens(8_000)).toBe(7_200);
   });
 
-  it("floors soft budget at 100k once the window is large enough", () => {
-    expect(defaultSoftBudgetMaxTokens(65_536)).toBe(49_000);
-    expect(defaultSoftBudgetMaxTokens(128_000)).toBe(100_000);
-    expect(defaultSoftBudgetMaxTokens(200_000)).toBe(150_000);
-    expect(defaultSoftBudgetMaxTokens(1_000_000)).toBe(300_000);
+  it("derives Codex 90% of the context window (no 300k soft cap)", () => {
+    expect(defaultSoftBudgetMaxTokens(65_536)).toBe(58_982);
+    expect(defaultSoftBudgetMaxTokens(128_000)).toBe(115_200);
+    expect(defaultSoftBudgetMaxTokens(200_000)).toBe(180_000);
+    expect(defaultSoftBudgetMaxTokens(1_000_000)).toBe(900_000);
   });
 
   it("detects community loopback baseURL collisions (WB vs OFM)", () => {

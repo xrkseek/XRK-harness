@@ -834,4 +834,6 @@ export {
   setWorkspaceCheckpointGitRunner,
   findCheckpointAtOrBefore,
   resolveRollbackTarget,
+  checkpointDiagnostic,
+  clearSnapshotHealth,
 } from "./workspace-checkpoint.js";

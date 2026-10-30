@@ -42,6 +42,23 @@ describe("createWebTools", () => {
     expect(out.content).toMatch(/Tavily|Credentials|XRK_TAVILY/i);
   });
 
+  it("forwards optional proxy on web_search to the provider", async () => {
+    let seenProxy: string | undefined;
+    const tools = createWebTools({
+      search: {
+        async search(request) {
+          seenProxy = request.proxy;
+          return { sources: [{ url: "https://example.com/" }], truncated: false };
+        },
+      },
+    });
+    await tools[0]!.execute({
+      query: "q",
+      proxy: "http://127.0.0.1:7897",
+    });
+    expect(seenProxy).toBe("http://127.0.0.1:7897");
+  });
+
   it("search execute writes format text + replay meta", async () => {
     const tools = createWebTools({
       search: {

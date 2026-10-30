@@ -37,7 +37,7 @@ function argsSummary(argsRaw: string): string | undefined {
 
 /** video_generate row: status-aware summary and media file card when settled. */
 export function VideoGenRow({
-  toolName, block, cwd, home, openFile, inspect, renderSlot, t,
+  toolName, block, cwd, home, openFile, inspect, renderSlot, mediaRenderSlot, t,
 }: VideoGenRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const parsed = videoGenResultModel(block)
@@ -47,6 +47,8 @@ export function VideoGenRow({
   const summary = model.state === 'error' && model.errorSummary
     ? model.errorSummary
     : (parsed?.statusSummary ?? fromArgs ?? model.summary)
+  // Prefer tree mediaRenderSlot — keyed registration cannot own tool.call.files.
+  const mediaSlot = mediaRenderSlot ?? renderSlot
   return (
     <ToolRow
       t={t}
@@ -60,7 +62,7 @@ export function VideoGenRow({
       output={files === null ? (parsed?.displayText ?? model.output) : null}
       errorSummary={model.errorSummary}
       files={files}
-      renderSlot={renderSlot}
+      renderSlot={mediaSlot}
       state={model.state}
       filePath={model.filePath}
       onOpenFile={openFile}

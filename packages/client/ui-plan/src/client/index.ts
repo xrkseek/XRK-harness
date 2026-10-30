@@ -237,8 +237,10 @@ export function apply(ctx: ClientContext): void {
       openChangedFile: async (path: string) => {
         const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
         const resolved = resolveWorkspacePath(cwd, path)
-        // Same contract as chat openFile: wake xrkh-better-sidebar when present,
-        // else (and always after wake) Host openPath / OS.
+        // Same contract as chat openFile: wake xrkh-better-sidebar when present;
+        // OS open only on privileged surface + Host canOpenPath.
+        const allowNativeOpen = connection.isLoopback
+          && connection.hostDescription.getSnapshot()?.canOpenPath === true
         await routeWorkspaceOpenFile(
           resolved,
           async (p) => {
@@ -252,8 +254,11 @@ export function apply(ctx: ClientContext): void {
             const face = ctx.get('betterSidebar') as {
               openTab?(seed: { type: string; path?: string }): void
             } | undefined
-            face?.openTab?.({ type: 'editor', path: p })
+            if (face?.openTab === undefined) return false
+            face.openTab({ type: 'editor', path: p })
+            return true
           },
+          { allowNativeOpen },
         )
       },
       listCanvases: async (signal: AbortSignal) => {

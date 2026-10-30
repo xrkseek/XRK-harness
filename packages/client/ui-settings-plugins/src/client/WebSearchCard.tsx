@@ -40,6 +40,7 @@ export function WebSearchCard(props: WebSearchCardProps) {
           { value: 'auto', label: t('webSearchProviderAuto') },
           { value: 'tavily', label: t('webSearchProviderTavily') },
           { value: 'brave', label: t('webSearchProviderBrave') },
+          { value: 'deepseek', label: t('webSearchProviderDeepseek') },
           { value: 'parallel-free', label: t('webSearchProviderParallel') },
           { value: 'duckduckgo', label: t('webSearchProviderDuckduckgo') },
         ]}
@@ -64,6 +65,16 @@ export function WebSearchCard(props: WebSearchCardProps) {
         configured={state.braveConfigured}
         stateLabel={state.braveConfigured ? t('webSearchKeySet') : t('webSearchKeyUnset')}
         onEdit={(text) => { props.edit('braveApiKey', text) }}
+      />
+      <SecretField
+        id="plugin-config-web-search-deepseek"
+        label={t('webSearchDeepseekKey')}
+        hint={t('webSearchDeepseekKeyHint')}
+        disabled={!state.deepseekWritable}
+        text={state.deepseekApiKey.text}
+        configured={state.deepseekConfigured}
+        stateLabel={state.deepseekConfigured ? t('webSearchKeySet') : t('webSearchKeyUnset')}
+        onEdit={(text) => { props.edit('deepseekApiKey', text) }}
       />
       <ValueField
         id="plugin-config-web-search-region"

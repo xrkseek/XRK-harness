@@ -58,7 +58,7 @@ createAgent({ compaction: {} }).compactNow() // Face `/compact`: idle · reason 
 | 窗口 | `deriveMessages` 读时 fold |
 | 默认 | loop **opt-in**；session preset 常用 `compaction: {}` |
 
-未传 `compaction`（或 `false`）时，loop **不做** overflow 恢复。preset `{}`：开一次 overflow 重试；无模型软预算且无 SDK `maxRequestTokens` 则不主动按预算 compact。`/compact` 走 `compactNow`，不依赖 overflow 开关。
+未传 `compaction`（或 `false`）时，loop **不做** overflow 恢复。preset `{}`：开一次 overflow 重试；无显式软预算时若路由有 `contextWindow`（≥8k）仍按 `floor(窗 × 90%)` 主动压（Codex）；无窗且无 SDK `maxRequestTokens` 才不主动按预算 compact。`/compact` 走 `compactNow`，不依赖 overflow 开关。
 
 ### Harness 默认软压缩与 tool-result prune
 
@@ -72,14 +72,14 @@ compaction: {
 }
 ```
 
-| `strategy` | 软压超预算 **与** Provider overflow 恢复 |
+| `strategy` | 软压超预算（Provider overflow **另见下**） |
 |------------|------------------------------------------|
 | `prune-summary`（默认） | 先 model-free prune，再 LLM 摘要（可重试） |
 | `prune-only` | 只 prune；仍超 / 仍溢出则 fail-closed（不调摘要） |
 | `summary-only` | 跳过 prune，直接 LLM 摘要 |
-| `off` | 关闭软压自动路径 **与** overflow 自动恢复（`/compact` 仍可用） |
+| `off` | 关闭软压自动路径；**上游上下文溢出仍会**按 prune→summary 恢复一次（`/compact` 仍可用） |
 
-`minimal` 仍 `{}`（仅 overflow，无主动软压；默认 `prune-summary`）。软压触发时按上表选阶段。Provider overflow：同一策略族，一轮恢复；剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
+`minimal` 仍 `{}`（仅 overflow，无主动软压；默认 `prune-summary`）。软压触发时按上表选阶段。Provider overflow：软压选 `off` 时仍强制一轮 prune→summary；其它策略与软压同族。剪枝用 Unicode **码点**（`thresholdChars=8192` · `head=4096` · `tail=1024`）；日志保留原文，`deriveMessages` 按 callId 取最新表面。
 
 
 ### Face `/compact`
@@ -88,10 +88,10 @@ compaction: {
 
 ## Overflow 一次恢复
 
-溢出恢复与软压共用 **`compactionStrategy`**，**一轮**恢复：
+溢出恢复 **一轮**。软压策略为 `off` 时此处仍走 prune→summary；其它策略保留各自的 prune/summary 阶段：
 
 1. Provider 抛 `ContextOverflowError`
-2. `off` → 原样抛出（不做自动恢复）
+2. 软压 `off` → 仍按 prune→summary 恢复一次（**不**立刻原样抛出）
 3. 允许 prune 时：对超大 `tool/result` 做 model-free prune → 重建请求再 chat（仅当确有剪枝）
 4. 仍溢出且允许 summary → `runCompaction({ reason: "overflow" })` 摘要换窗（摘要 LLM 与步内主调用共用 `llmRetry`；可重试失败写 `llm/retry`）→ 再 chat **恰好一次**
 5. `prune-only` 且仍溢出 / 无可剪 → **保留原始** `ContextOverflowError`
@@ -115,11 +115,15 @@ Standing plan（`todos` 投影）与换窗正交：`/compact` / `context/compact
 
 ## Soft budget（模型 `softBudgetMaxTokens`）
 
-产品路径：Settings → **Models** → 模型行 `softBudgetMaxTokens`（可选 `softBudgetKeepTokens` / `softBudgetBufferTokens`）。与 `contextWindow`（meter 分母 / 路由容量）**正交**——例如 1M 窗 + 300k 软压。未填软预算 → 不主动软压（仅 overflow + `/compact`）。从「获取模型」新采纳、且列表披露了 `contextWindow` 的行：窗口 ≥100k → `max(100k, 75%)`（千位取整，上限 300k）；&lt;100k → 仅 75%；&lt;8k 不写。再拉取只补空白软预算，手填值不动。keep/buffer 未填时由 `resolveSoftBudgetTokens` 按软上限比例推导（贴近旧 24k/4k@100k）。
+产品路径：Settings → **Models** → 模型行 `softBudgetMaxTokens`（可选 `softBudgetKeepTokens` / `softBudgetBufferTokens`）。与 `contextWindow`（meter 分母 / 路由容量）配合（Codex）：**留空软预算 = `floor(contextWindow × 90%)` 仍主动压**，不是「留空不压」。用户软预算更严（例如窗 256k、软 100k）时听用户；有提供方圆环时再把有效软上限 `min` 到窗的 90%，避免窗填错/软填过大撑到溢出才压。从「获取模型」新采纳且披露了窗：同样按 90% 填空白软预算；手填值不动。keep/buffer 未填时由 `resolveSoftBudgetTokens` 按软上限比例推导（贴近旧 24k/4k@100k）。策略 `off` 仍关软压路径（溢出恢复与 `/compact` 照旧）。
 
 SDK 仍可在 `compaction.maxRequestTokens` 等字段显式覆盖。**Settings → Plugins → Agent 循环**另有：`compactionStrategy` · `softBudgetTriggerPercent`（默认 **90**，相对 softMax 预触发）· `compactRecentMaxTokens`（默认 **20000**，换窗 `recent` 上限）· `softBudgetPeelAttempts`（默认 **3**，标准 2 次摘要后 keep 减半再压）。
 
-估价 = **max(本地 `estimateRequestTokens`，提供方 `projectedInputPressureTokens`)**（消息面 + 站立 tool schemas；含 assistant `reasoning` 与非文本块，并按出站前 `projectFilesToText` 计价；提供方压力与 Context meter 分子同公式）。天花板 = `resolveSoftBudgetCeiling(softMax, buffer)`（buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）。达到 `softBudgetTriggerPercent` 时开始 prune/摘要；超天花板时按策略压到不超过天花板（`prune-summary` 先 prune，再最多 **2 + peel** 次 `runCompaction({ reason: "auto" })`，peel 阶段 keep 减半）；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
+估价（进压缩前）= **max(本地 `estimateRequestTokens({ density: "soft-budget" })`，提供方 `projectedInputPressureTokens`)**。有 usage 时投影即上游占用；无 usage 时靠 CJK 更密的本地估价（ASCII 仍 chars/4）。**同一步内换窗成功后**软压改信本地估价，直到下一次 usage（提供方样本仍是换窗前的 prompt，shadow 缩不掉 tokenizer 差额时否则会误杀）。圆环投影仍**保留**压力样本 + `shadowedTokenCount` 缩 surface（对齐 DSH 展示）。
+
+**圆环 vs 分项 vs 时间线**：圆环分子优先提供方 usage（**与上游一致的唯一路径**）。无 usage：有 `contextWindow` 时圆环回退本地分项（面板注明近似）。有提供方分子时**对话消息**补成 `圆环 − 系统 − 工具`；软上限再与窗的 90% 取更紧（Codex）。时间线本地重算**不驱动**软压。`/compact` = `manual`；软预算 / 窗推导 = `auto`；溢出 = `overflow`（`off` 仍强制一轮）。压完若窗/软明显不合理，请到 Settings → Models 核对上下文窗口与软预算。
+
+天花板 = `resolveSoftBudgetCeiling(softMax, buffer)`（buffer ≥ max 时忽略 buffer，避免非正 ceiling 误杀）。达到 `softBudgetTriggerPercent`（相对 softMax）时开始 prune/摘要；若 softMax 已是窗的 90%（留空推导或圆环强制线），不再二次乘该百分比，以免压到约 81% 窗。超天花板时按策略压到不超过天花板（`prune-summary` 先 prune，再最多 **2 + peel** 次 `runCompaction({ reason: "auto" })`，peel 阶段 keep 减半）；**仍超则 fail-closed**（抛 `ContextOverflowError`，不再出站）。  
 工具正文在进日志前按 spill 策略截断：超 **64KiB**（Face `agent-loop.toolResultMaxInlineBytes` 可调；`0` 关闭）全文只写一份到 `~/.xrk/spill/tool-outputs/`，模型只见 head/tail + 路径；`bash.maxOutputBytes` 默认同为 64KiB。spill / 策略在 **Settings → Plugins**；软上限在 **Models**。`minimal` 预设默认仅 overflow（无主动软压）。
 
 ## Token 估算
@@ -195,7 +199,7 @@ createAgent({ compaction: {} }).compactNow() // Face `/compact`: idle · reason 
 | Window | `deriveMessages` fold at read time |
 | Default | loop **opt-in**; session presets often use `compaction: {}` |
 
-Without `compaction` (or with `false`), the loop does **not** recover from overflow. Preset `{}` enables one overflow retry; without a model soft budget and without SDK `maxRequestTokens` there is no proactive budget compact. `/compact` uses `compactNow` and does not depend on the overflow switch.
+Without `compaction` (or with `false`), the loop does **not** recover from overflow. Preset `{}` enables one overflow retry; with no explicit soft budget, a route `contextWindow` (≥8k) still seeds proactive compact at `floor(window × 90%)` (Codex); only missing both a window and SDK `maxRequestTokens` skips budget compact. `/compact` uses `compactNow` and does not depend on the overflow switch.
 
 ### Soft compact & tool-result prune (Harness defaults)
 
@@ -209,14 +213,14 @@ compaction: {
 }
 ```
 
-| `strategy` | Soft budget **and** provider overflow recovery |
+| `strategy` | Soft budget (provider overflow **below**) |
 |------------|------------------------------------------------|
 | `prune-summary` (default) | Model-free prune, then LLM summary (retryable) |
 | `prune-only` | Prune only; still over / still overflowing → fail-closed (no summary) |
 | `summary-only` | Skip prune; LLM summary only |
-| `off` | Disable soft-budget auto path **and** overflow auto-recovery (`/compact` still works) |
+| `off` | Disable soft-budget auto path; **provider context overflow still** recovers once via prune→summary (`/compact` still works) |
 
-`minimal` stays `{}` (overflow only; no proactive soft pressure; default `prune-summary`). Soft pressure and provider overflow share the table above (one recovery pass). Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`); the log keeps originals; `deriveMessages` takes the latest surface per callId.
+`minimal` stays `{}` (overflow only; no proactive soft pressure; default `prune-summary`). Soft pressure uses the table above; provider overflow always gets one prune→summary pass even when soft strategy is `off`. Thresholds use Unicode **code points** (`thresholdChars=8192` · `head=4096` · `tail=1024`); the log keeps originals; `deriveMessages` takes the latest surface per callId.
 
 ### Face `/compact`
 
@@ -224,10 +228,10 @@ No arguments. Busy / summarize failure → error; nothing compactable → succes
 
 ## One-shot overflow recovery
 
-Overflow recovery shares **`compactionStrategy`** with soft budget — **one** recovery pass:
+Overflow recovery is **one** recovery pass. Soft strategy `off` still uses prune→summary here; other soft strategies keep their prune/summary stages:
 
 1. Provider throws `ContextOverflowError`
-2. `off` → rethrow as-is (no auto recovery)
+2. Soft `off` → recover with prune→summary once (does **not** rethrow immediately)
 3. When prune is allowed: model-free prune oversized `tool/result` → rebuild request and chat again (only when something was pruned)
 4. Still overflowing and summary allowed → `runCompaction({ reason: "overflow" })` to summarize/window (summarizer LLM shares step `llmRetry`; retriable failures append `llm/retry`) → chat **exactly once** more
 5. `prune-only` still overflowing / nothing to prune → **keep the original** `ContextOverflowError`
@@ -251,11 +255,15 @@ Standing plan (`todos` projection) is orthogonal to windowing: `/compact` / `con
 
 ## Soft budget (model `softBudgetMaxTokens`)
 
-Product path: Settings → **Models** → per-model `softBudgetMaxTokens` (optional `softBudgetKeepTokens` / `softBudgetBufferTokens`). Orthogonal to `contextWindow` (meter denominator / route capacity) — e.g. 1M window + 300k soft budget. Omit soft budget → no proactive compact (overflow + `/compact` only). A model newly adopted from **Fetch models**, when the listing discloses `contextWindow`: window ≥100k → `max(100k, 75%)` (stepped to 1k, cap 300k); &lt;100k → 75% only; under 8k stay blank. A later fetch only fills a blank soft budget; hand-tuned values stay. When keep/buffer are omitted, `resolveSoftBudgetTokens` derives them from the soft max (near the old 24k/4k @ 100k ratios).
+Product path: Settings → **Models** → per-model `softBudgetMaxTokens` (optional `softBudgetKeepTokens` / `softBudgetBufferTokens`). Codex posture with `contextWindow`: **blank soft budget = `floor(contextWindow × 90%)` and still proactive** — blank does not disable compact. A stricter user soft (e.g. 100k soft vs 256k window) wins; with a provider ring the effective soft is also `min`’d to 90% of the window so a wrong/huge soft cannot delay compact until overflow. **Fetch models** fills blank soft the same 90% way; hand-tuned values stay. Omitted keep/buffer still derive from soft max (~24k/4k @ 100k). Strategy `off` still disables the soft path (overflow + `/compact` unchanged).
 
 SDK callers may still override via `compaction.maxRequestTokens` etc. **Settings → Plugins → Agent loop** also exposes: `compactionStrategy` · `softBudgetTriggerPercent` (default **90**, pre-trigger vs softMax) · `compactRecentMaxTokens` (default **20000**, post-compact `recent` cap) · `softBudgetPeelAttempts` (default **3**, keep-halving after the standard two summaries).
 
-Price = **max(local `estimateRequestTokens`, provider `projectedInputPressureTokens`)** (messages + standing tool schemas; includes assistant `reasoning` and non-text blocks, priced after outbound `projectFilesToText`; provider pressure uses the same formula as the Context meter numerator). Ceiling = `resolveSoftBudgetCeiling(softMax, buffer)` (buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn). Auto-compact starts at `softBudgetTriggerPercent`; over ceiling, stages follow strategy (`prune-summary` prunes then up to **2 + peel** `runCompaction({ reason: "auto" })`, peeling halves keep); **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
+Price (before compact) = **max(local `estimateRequestTokens({ density: "soft-budget" })`, provider `projectedInputPressureTokens`)**. With usage, projection *is* upstream occupancy; without usage, denser CJK local pricing (ASCII still chars/4). **After a successful swap in the same step**, soft-budget trusts local estimate until the next usage (the provider sample is still the pre-window prompt; otherwise an unshrinkable tokenizer gap fail-closes). The ring projection still **keeps** the pressure sample and shrinks via `shadowedTokenCount` (DSH display).
+
+**Ring vs rows vs timeline**: ring numerator prefers provider usage (**only path that matches upstream**). No usage: with `contextWindow`, ring falls back to heuristic rows (panel marks approximate). With a provider numerator, **messages** fill `ring − system − tools`; effective soft is also `min`’d to 90% of the window (Codex). Timeline does **not** drive soft-budget. `/compact` → `manual`; soft / window-derive → `auto`; overflow → `overflow` (`off` still one forced pass). After compact, check Settings → Models if the window or soft budget looks wrong.
+
+Ceiling = `resolveSoftBudgetCeiling(softMax, buffer)` (buffer ≥ max is ignored so a non-positive ceiling cannot fail-closed every turn). Auto-compact starts at `softBudgetTriggerPercent` of softMax; when softMax is already 90% of the window (blank-derived or ring force), that percent is **not** applied again (avoids ~81% of window). Over ceiling, stages follow strategy (`prune-summary` prunes then up to **2 + peel** `runCompaction({ reason: "auto" })`, peeling halves keep); **still over → fail-closed** (`ContextOverflowError`, no outbound call).  
 Tool bodies are bounded **before** they enter the log (one spill policy): over **64KiB** (Face `agent-loop.toolResultMaxInlineBytes`; `0` disables) writes the full body once under `~/.xrk/spill/tool-outputs/` with a head/tail preview + path; `bash.maxOutputBytes` defaults to 64KiB too. Spill / strategy under **Settings → Plugins**; soft ceiling under **Models**. The `minimal` preset stays overflow-only.
 
 ## Token estimates

@@ -224,6 +224,13 @@
   white-space: nowrap;
 }
 
+.compactionHint {
+  margin: 0 0 0 22px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .compactionBody {
   padding: 4px 0 4px 22px;
   color: var(--dsw-alias-label-tertiary);

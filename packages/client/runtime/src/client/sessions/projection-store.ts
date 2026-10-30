@@ -176,6 +176,21 @@ export class ProjectionValueStore {
     }
   }
 
+  /**
+   * Drop every row so the next history seed is authoritative.
+   *
+   * In-place `session.truncate` shrinks the durable log: Host rebuilds
+   * `turnOutline` / `sessionStats` at a *lower* asOfSeq. Higher-seq-wins
+   * would otherwise keep the pre-cut ladder forever, so the next send still
+   * paints 第 N+1 轮 after the user deleted back to an earlier message.
+   */
+  clear(): void {
+    if (this.rows.size === 0) return
+    const keys = [...this.rows.keys()]
+    this.rows.clear()
+    for (const key of keys) this.changed(key)
+  }
+
   private changed(key: string): void {
     this.valuesCache = undefined
     this.channels.get(key)?.notifier.markDirty()

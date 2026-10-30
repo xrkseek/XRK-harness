@@ -51,8 +51,11 @@ import {
   chainPublicHandlers,
   ensureDshCompatHostPlugin,
   ensureSunflowerFreePlugin,
+  remountSunflowerFreePlugin,
+  applySunflowerFreeEgressSettings,
   DSH_COMPAT_HOST_PLUGIN_ID,
   SUNFLOWER_FREE_PLUGIN_ID,
+  SUNFLOWER_FREE_BRAND_ID,
   createLiveHostPluginsPublicHandler,
   createHttpServer,
   createXrkPluginPublicHandler,
@@ -805,7 +808,6 @@ export function createHostManager(): HostManager {
       // every extension ESM graph (Cursor-like first paint).
       const deferManagedPlugins =
         String(process.env.XRK_SURFACE ?? "").trim() === "desktop";
-
       // Built-ins loaded outside pluginsDir (dsh-compat Host fiber + sunflower
       // free LLM). Without preserveIds, Desktop's deferred reconcile unregisters
       // them → dispose clears XRK_SUNFLOWER_SIDECAR_KEY while the brand stays.
@@ -2434,6 +2436,9 @@ export function createHostManager(): HostManager {
             ...(options?.registry?.trim()
               ? { registry: options.registry.trim() }
               : {}),
+            ...(options?.proxy?.trim()
+              ? { proxy: options.proxy.trim() }
+              : {}),
             ...(options?.onChunk !== undefined
               ? { onChunk: options.onChunk }
               : {}),
@@ -2484,6 +2489,34 @@ export function createHostManager(): HostManager {
               },
             }
           : {}),
+        // Settings → 向日葵免费 egress: remount sidecar + re-probe without Host restart.
+        // Serialized so overlapping Saves cannot dispose/load the same plugin twice.
+        // Reads `faceBox.runtime` (assigned after createFaceRuntime returns).
+        syncSunflowerFree: (() => {
+          let chain: Promise<unknown> = Promise.resolve();
+          return () => {
+            const run = async () => {
+              const rt = faceBox.runtime;
+              if (!rt) {
+                return { loaded: false, unloaded: false };
+              }
+              registry.unregisterBrand(SUNFLOWER_FREE_BRAND_ID);
+              const result = await remountSunflowerFreePlugin(loader, rt);
+              refreshFacePlugins();
+              await invalidateAgents();
+              log?.info(
+                `sunflower-free remount loaded=${result.loaded} unloaded=${result.unloaded}`,
+              );
+              return result;
+            };
+            const next = chain.then(run, run);
+            chain = next.then(
+              () => undefined,
+              () => undefined,
+            );
+            return next;
+          };
+        })(),
         ...(config.runtime.webDist
           ? { webPlugins: faceWebPlugins }
           : {}),
@@ -2739,6 +2772,12 @@ export function createHostManager(): HostManager {
             : "";
         const tavily = faceRuntime.credentials.peek("web.tavily");
         const brave = faceRuntime.credentials.peek("web.brave");
+        // Dedicated web.deepseek, else chat llm.deepseek / env (same Bearer key).
+        const deepseek =
+          faceRuntime.credentials.peek("web.deepseek") ??
+          faceRuntime.credentials.peek("llm.deepseek") ??
+          process.env.XRK_DEEPSEEK_SEARCH_API_KEY?.trim() ??
+          process.env.DEEPSEEK_API_KEY?.trim();
         const webSearch: import("@xrkseek/exec-web").SearchAccessConfig = {
           ...(provider && provider !== "auto" ? { provider } : {}),
           ...(region ? { region } : {}),
@@ -2754,6 +2793,7 @@ export function createHostManager(): HostManager {
                   brave ?? process.env.XRK_BRAVE_SEARCH_API_KEY?.trim() ?? "",
               }
             : {}),
+          ...(deepseek ? { deepseekApiKey: deepseek } : {}),
         };
         const injectMaxCharsRaw = injectNs.injectMaxChars;
         const injectMaxChars =
@@ -3167,10 +3207,11 @@ export function createHostManager(): HostManager {
             if (changed) void invalidateAgents();
             return;
           }
+          // llm-deepseek / llm-pi-ai: Face publishes `llm/adapters-updated` only
+          // when adapter-affecting fields change (not providerOrder). Catalog
+          // order refreshes via document-updated alone — do not remount Agents.
           if (
             ns === "agent-default-model" ||
-            ns === "llm-deepseek" ||
-            ns === "llm-pi-ai" ||
             ns === "agent-loop" ||
             ns === "bash" ||
             ns === "web-search" ||
@@ -3270,8 +3311,11 @@ export function createHostManager(): HostManager {
       await ensureDshCompatHostPlugin(loader);
       // 向日葵免费车道：随产品内置的 LLM 插件。车道不可达时插件返回空
       // `llmBrands`，该 provider 不会进入 registry/catalog，启动不受影响。
-      await ensureSunflowerFreePlugin(loader);
-      refreshFacePlugins();
+      // 出口代理来自 Settings → 向日葵免费（空 = 直连），loader 无参加载
+      // 插件，所以先桥接到 env 再 load。
+      // createPlugin may spawn Bun + fetch Kilo — never await on the spawn
+      // critical path (DSH listen-first); see runOptionalWarmupAfterListen.
+      applySunflowerFreeEgressSettings(faceRuntime);
 
       const hostWireCtx = {
         pluginsDir: resolvedPluginsDir,
@@ -3455,7 +3499,8 @@ export function createHostManager(): HostManager {
       };
       hostWireRef.ctx = hostWireCtx;
 
-      await prewarmDshCompatAdapters(hostWireCtx);
+      // Upgrade/public routes lazy-ensure the registry on first hit; prewarm
+      // only avoids a cold first request — scheduled in runOptionalWarmupAfterListen.
       syncCordisHostApplied();
 
       const http = createHttpServer({
@@ -3646,14 +3691,30 @@ export function createHostManager(): HostManager {
       } else {
         log?.info("http stack ready (listen disabled — pipe / fetch transport)");
       }
+      const runOptionalWarmupAfterListen = async (): Promise<void> => {
+        // Defense in depth: if preserveIds ever drops sunflower, re-ensure
+        // so SIDECAR_KEY / sidecar stay alive for the free lane.
+        // After listen: await direct→proxy cascade (does not block HTTP bind).
+        const prevAwait = process.env.XRK_SUNFLOWER_AWAIT_PROBE;
+        process.env.XRK_SUNFLOWER_AWAIT_PROBE = "1";
+        try {
+          await ensureSunflowerFreePlugin(loader);
+        } finally {
+          if (prevAwait === undefined) {
+            delete process.env.XRK_SUNFLOWER_AWAIT_PROBE;
+          } else {
+            process.env.XRK_SUNFLOWER_AWAIT_PROBE = prevAwait;
+          }
+        }
+        refreshFacePlugins();
+        rebuildPolicyEngine();
+        await prewarmDshCompatAdapters(hostWireCtx);
+        syncCordisHostApplied();
+      };
       if (deferManagedPlugins) {
         void loadManagedPlugins()
           .then(async () => {
-            // Defense in depth: if preserveIds ever drops sunflower, re-ensure
-            // so SIDECAR_KEY / sidecar stay alive for the free lane.
-            await ensureSunflowerFreePlugin(loader);
-            refreshFacePlugins();
-            rebuildPolicyEngine();
+            await runOptionalWarmupAfterListen();
             log?.info(
               `desktop process plugins ready (${String(loadedPluginIds.length)})`,
             );
@@ -3661,6 +3722,15 @@ export function createHostManager(): HostManager {
           .catch((err: unknown) => {
             const message = err instanceof Error ? err.message : String(err);
             log?.warn(`desktop process-plugin reconcile failed: ${message}`);
+          });
+      } else {
+        void runOptionalWarmupAfterListen()
+          .then(() => {
+            log?.info("optional boot warmup ready (sunflower · dsh-compat)");
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            log?.warn(`optional boot warmup failed: ${message}`);
           });
       }
       {

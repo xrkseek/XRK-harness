@@ -12,7 +12,14 @@ import { NoPendingAdmitError, SessionBusyError, SessionSafetyLimitError, type Se
 import { tryServeWebStatic, type WebStaticOptions } from "./static.js";
 export {
   ensureSunflowerFreePlugin,
+  remountSunflowerFreePlugin,
+  applySunflowerFreeEgressSettings,
+  clearSunflowerFreeProbeCache,
   SUNFLOWER_FREE_PLUGIN_ID,
+  SUNFLOWER_FREE_BRAND_ID,
+  SUNFLOWER_FREE_SETTINGS_NS,
+  type RemountSunflowerFreeResult,
+  type SunflowerFreeSettingsSource,
 } from "./sunflower-free/ensure.js";
 export {
   createDshCompatPublicHandler,

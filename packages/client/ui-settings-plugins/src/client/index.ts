@@ -83,7 +83,13 @@ import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
 import { VOICE_NS, VoiceCardController, VOICE_OPENAI_REF } from './voice-card-controller.ts'
-import { WEB_SEARCH_NS, WebSearchCardController, WEB_SEARCH_BRAVE_REF, WEB_SEARCH_TAVILY_REF } from './web-search-card-controller.ts'
+import {
+  WEB_SEARCH_NS,
+  WebSearchCardController,
+  WEB_SEARCH_BRAVE_REF,
+  WEB_SEARCH_DEEPSEEK_REF,
+  WEB_SEARCH_TAVILY_REF,
+} from './web-search-card-controller.ts'
 import { WORKSPACE_INJECT_NS, WorkspaceInjectCardController } from './workspace-inject-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { fetchSessionSkills, fetchSessionTools, fetchSkillContent } from './catalog-fetch.ts'
@@ -130,6 +136,7 @@ export {
   WEB_SEARCH_NS,
   WEB_SEARCH_TAVILY_REF,
   WEB_SEARCH_BRAVE_REF,
+  WEB_SEARCH_DEEPSEEK_REF,
 } from './web-search-card-controller.ts'
 export { WORKSPACE_INJECT_NS } from './workspace-inject-card-controller.ts'
 export { SANDBOX_NS } from './sandbox-card-controller.ts'
@@ -254,7 +261,11 @@ export function apply(ctx: ClientContext): void {
   // Keys may be written from Credentials (or Models); settings ns does not move.
   ctx.effect(
     () => ctx.remote.$on('credentials/updated', (ref: string) => {
-      if (ref === WEB_SEARCH_TAVILY_REF || ref === WEB_SEARCH_BRAVE_REF) {
+      if (
+        ref === WEB_SEARCH_TAVILY_REF
+        || ref === WEB_SEARCH_BRAVE_REF
+        || ref === WEB_SEARCH_DEEPSEEK_REF
+      ) {
         webSearch.refreshCredential(ref)
       }
       if (ref === COMPUTER_USE_BACKGROUND_REF) {

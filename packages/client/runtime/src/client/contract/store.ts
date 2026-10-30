@@ -133,6 +133,9 @@ function serializePersistedState(state: unknown): string {
  * Writes are debounced and skip identical payloads so composer draft mirrors
  * do not pay a synchronous disk write on every keystroke (Vercel
  * js-cache-storage / client-localstorage-schema habits).
+ *
+ * Per-session key growth is bounded by SessionRuntime reclaim (drops idle
+ * off-stage scopes → pruneStoreScope → clearPersisted), not a second LRU here.
  */
 function attachPersistence<T>(api: StoreApi<T>, name: string): void {
   // Non-browser runs (node e2e booting the client tree) have no localStorage:

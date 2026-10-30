@@ -48,6 +48,9 @@ export const CompactionItem = memo(function CompactionItem({
     })
     : fallbackSummary
       ?? (expandable ? t('message.compaction.expand') : t('message.compaction.unavailable'))
+  // Auto markers (no command title) nudge Settings when soft/window look wrong
+  // after proactive compact; manual `/compact` keeps the row quiet.
+  const showSettingsHint = title === undefined
   return (
     <div className={css.compactionRow}>
       <button
@@ -72,6 +75,9 @@ export const CompactionItem = memo(function CompactionItem({
         <span className={css.compactionSep} aria-hidden />
         <span className={css.compactionSummary}>{summary}</span>
       </button>
+      {showSettingsHint
+        ? <p className={css.compactionHint}>{t('message.compaction.settingsHint')}</p>
+        : null}
       {open && node.summary !== null
         && <div className={css.compactionBody}><MarkdownText text={node.summary} /></div>}
     </div>

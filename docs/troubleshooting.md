@@ -19,7 +19,8 @@
 | 症状 | 处理 |
 |------|------|
 | `serve` 无产品壳 / `GET /` 404 | 发行包应有 `product-web/`。源码：`pnpm web:build && pnpm client:bundle && pnpm web:assemble`。`XRK_WEB_DIST` 指错则报错 |
-| 绑定失败 / 拒绝 `0.0.0.0` | CLI 故意拒绝全网卡；用 `127.0.0.1` 或本机局域网地址 |
+| 绑定 `0.0.0.0` / 公网听 | 允许；非回环会武装访问 PIN。**不保证**公网安全——须反代 + TLS + 自管防火墙；见 [getting-started](./getting-started.md) · [security-checklist](./security-checklist.md) |
+| 绑定失败 / `EADDRINUSE` | 端口占用：`xrkh restart` 或换 `--port`；`EADDRNOTAVAIL` 多因绑了本机没有的公网 IP——改绑 `0.0.0.0` 或本机网卡地址 |
 | `/api/*` 401 | 设置了 `XRK_API_KEY` 但请求未带 Bearer / `x-api-key` |
 | session busy `409` | 同 session 已有 turn 在飞；等结束或换 sessionId |
 | 无 LLM 回复 / 适配器错 | `minimal` 用 replay；真模型检查 **Settings → Models / Credentials**（或 `.xrk/.credentials.yaml` / brand `apiKeyEnv`；[configuration.md](./configuration.md)） |
@@ -64,7 +65,7 @@
 |------|------|
 | 工具表只有 fs、没有 `web_search` | 会话徽章是 **Minimal**（或 **Shell**）时没有联网工具。改选 **Frugal** / **Harness**（或新建对应会话）。Host `--preset server` 与 harness 工具相同。见 [profiles.md](./profiles.md) |
 | Agent 改不了 `~/.xrk` / Settings | 正常：harness home 不在会话 workspace 内。改设置用产品 Settings；要让 Agent 改某目录，把该目录加成工作区 |
-| `web_search` 执行失败 | Settings → Plugins → Web search 钉了无效提供方，或钉了 Tavily/Brave 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo |
+| `web_search` 执行失败 | Settings → Plugins → Web search 钉了无效提供方，或钉了 Tavily/Brave/DeepSeek 却无密钥；默认无 key 走 parallel-free，失败回退 DuckDuckGo；可传 `proxy` |
 | `lsp` 失败 | 无 `XRK_LSP_COMMAND` |
 | `terminal_open` 失败 | 无可用 `node-pty` native |
 | 要交互式浏览器（`browser_*`） | `browser_open` / `browser_snapshot` / `browser_act`（HTTP 会话）；SPA/JS 渲染仍受限 |
@@ -135,7 +136,8 @@ Diagnose by symptom. If it still fails, check whether [status.md](./status.md) m
 | Symptom | Remedy |
 |------|------|
 | `serve` has no product shell / `GET /` 404 | Release packages should include `product-web/`. From source: `pnpm web:build && pnpm client:bundle && pnpm web:assemble`. A wrong `XRK_WEB_DIST` errors |
-| Bind failure / rejects `0.0.0.0` | CLI intentionally rejects all-interfaces bind; use `127.0.0.1` or a LAN address |
+| Bind `0.0.0.0` / public listen | Allowed; non-loopback arms the access PIN. **No security guarantee** on the open internet — use reverse proxy + TLS + your firewall; see [getting-started](./getting-started.md) · [security-checklist](./security-checklist.md) |
+| Bind failure / `EADDRINUSE` | Port in use: `xrkh restart` or change `--port`; `EADDRNOTAVAIL` often means binding a public IP the box does not own — use `0.0.0.0` or a local NIC address |
 | `/api/*` 401 | `XRK_API_KEY` is set but the request lacks Bearer / `x-api-key` |
 | session busy `409` | Another turn is in flight on the same session; wait or use another sessionId |
 | No LLM reply / adapter error | Use replay for `minimal`; for live models check **Settings → Models / Credentials** (or `.xrk/.credentials.yaml` / brand `apiKeyEnv`; [configuration.md](./configuration.md)) |
@@ -180,7 +182,7 @@ See: [modules/mcp.md](./modules/mcp.md) · [policy.md](./policy.md).
 |------|------|
 | Tool table is fs-only, no `web_search` | A **Minimal** (or **Shell**) session badge has no web tools. Switch to **Frugal** / **Harness** (or create such a session). Host `--preset server` shares the harness tool surface. See [profiles.md](./profiles.md) |
 | Agent cannot edit `~/.xrk` / Settings | Expected: harness home is outside the session workspace. Change settings in the product Settings UI; to let the Agent edit a directory, add that directory as a workspace |
-| `web_search` execute fails | Settings → Plugins → Web search pinned an invalid provider, or Tavily/Brave without keys; default without keys is parallel-free, then DuckDuckGo fallback |
+| `web_search` execute fails | Settings → Plugins → Web search pinned an invalid provider, or Tavily/Brave/DeepSeek without keys; default without keys is parallel-free, then DuckDuckGo fallback; optional `proxy` arg |
 | `lsp` fails | Missing `XRK_LSP_COMMAND` |
 | `terminal_open` fails | No usable `node-pty` native |
 | Need interactive browser (`browser_*`) | `browser_open` / `browser_snapshot` / `browser_act` (HTTP session); SPA/JS-rendered pages still limited |

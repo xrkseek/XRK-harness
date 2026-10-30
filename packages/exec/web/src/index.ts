@@ -47,12 +47,14 @@ export {
   LOCAL_FETCH_PROVIDER_ID,
   classifyContentType,
   createHttpFetchProvider,
+  resolveFetchFn,
   type HttpFetchLimits,
 } from "./fetch-http.js";
 export {
   capSearchResult,
   createBraveSearch,
   createCascadingSearch,
+  createDeepSeekSearch,
   createSearchFromConfig,
   createSearchFromEnv,
   createTavilySearch,

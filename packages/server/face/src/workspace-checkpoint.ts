@@ -21,6 +21,46 @@ import { resolveSessionCwd } from "./session-cwd.js";
 const stores = new Map<string, WorkspaceCheckpointStore>();
 
 /**
+ * Why the last Host pre-turn snapshot produced no point, per workspace.
+ *
+ * {@link snapshotSessionWorkspace} is best-effort by design (a turn must never
+ * wait on git), but "best effort" used to mean "silent": a Host without git, a
+ * snapshot that blew its budget and a workspace the store could not write all
+ * surfaced to the user as `Unknown checkpoint seq:38` — the one answer that
+ * explains nothing. Keep the failure around so `/rollback` can say what
+ * actually happened.
+ */
+interface SnapshotFailure {
+  readonly at: number;
+  readonly code: string;
+  readonly message: string;
+}
+
+const snapshotFailures = new Map<string, SnapshotFailure>();
+const snapshotSuccessAt = new Map<string, number>();
+/** Per-workspace in-flight snapshot (coalesce, never queue a third). */
+const snapshotsInFlight = new Map<string, Promise<unknown>>();
+
+/** Test seam: forget recorded snapshot health. */
+export function clearSnapshotHealth(): void {
+  snapshotFailures.clear();
+  snapshotSuccessAt.clear();
+  snapshotsInFlight.clear();
+}
+
+function noteSnapshotFailure(
+  workspaceDir: string,
+  code: string,
+  message: string,
+): void {
+  snapshotFailures.set(workspaceDir, { at: Date.now(), code, message });
+}
+
+function noteSnapshotSuccess(workspaceDir: string): void {
+  snapshotSuccessAt.set(workspaceDir, Date.now());
+}
+
+/**
  * Upper bound for one `snapshotSessionWorkspace` call. The store's per-command
  * timeout should win first; this races the whole call so a runner that never
  * settles (or a hung fs call) still degrades to "no checkpoint" instead of
@@ -147,23 +187,51 @@ export async function snapshotSessionWorkspace(
     readonly budgetMs?: number;
   },
 ): Promise<WorkspaceCheckpointRecord | undefined> {
-  if (process.env.XRK_CHECKPOINTS === "0") return undefined;
+  if (process.env.XRK_CHECKPOINTS === "0") {
+    return undefined;
+  }
   if (!runtime.store.has(sessionId)) return undefined;
-  const seq =
-    opts?.seq ??
-    readSessionEvents(runtime.store, sessionId).length;
+  const workspaceDir = resolveSessionCwd(runtime, sessionId);
+  // Coalesce: if the previous point for this workspace is still running (a
+  // slow `add -A` outlives its budget), skip instead of stacking snapshots.
+  // The running one still records its point when it finishes.
+  if (snapshotsInFlight.has(workspaceDir)) return undefined;
+  const seq = opts?.seq ?? readSessionEvents(runtime.store, sessionId).length;
   const store = workspaceCheckpointStoreForSession(runtime, sessionId);
   const budgetMs =
     opts?.budgetMs !== undefined && opts.budgetMs > 0
       ? opts.budgetMs
       : SNAPSHOT_TIMEOUT_MS;
-  try {
-    const record = await Promise.race([
-      store.snapshot({
+  const work = (async (): Promise<WorkspaceCheckpointRecord> => {
+    try {
+      const record = await store.snapshot({
         sessionId,
         seq,
         ...(opts?.label ? { label: opts.label } : { label: "pre-turn" }),
-      }),
+      });
+      noteSnapshotSuccess(workspaceDir);
+      return record;
+    } catch (err) {
+      noteSnapshotFailure(
+        workspaceDir,
+        err instanceof WorkspaceCheckpointError
+          ? err.code
+          : "snapshot-failed",
+        err instanceof Error ? err.message : String(err),
+      );
+      throw err;
+    }
+  })();
+  let tracked!: Promise<WorkspaceCheckpointRecord>;
+  tracked = work.finally(() => {
+    if (snapshotsInFlight.get(workspaceDir) === tracked) {
+      snapshotsInFlight.delete(workspaceDir);
+    }
+  });
+  snapshotsInFlight.set(workspaceDir, tracked);
+  try {
+    const record = await Promise.race([
+      tracked,
       timeoutAfter(budgetMs).then(() => {
         throw new WorkspaceCheckpointError(
           "timed-out",
@@ -172,9 +240,51 @@ export async function snapshotSessionWorkspace(
       }),
     ]);
     return record;
+  } catch (err) {
+    // The budget expired but the git work did not: let it finish in the
+    // background so the point still lands (the next turn can rewind to it).
+    // Only the *return value* is skipped, never the snapshot.
+    if (err instanceof WorkspaceCheckpointError && err.code === "timed-out") {
+      noteSnapshotFailure(workspaceDir, "timed-out", err.message);
+      void tracked.catch(() => undefined);
+    }
+    return undefined;
+  }
+}
+
+/**
+ * One-line reason `/rollback` has nothing to restore to, or `undefined` when
+ * the workspace has recorded points and no recent failure.
+ *
+ * Callers pass the already-loaded rows so the message can distinguish
+ * "no point at or before this seq" from "this Host never took a point".
+ */
+export function checkpointDiagnostic(
+  runtime: FaceRuntime,
+  sessionId: string,
+  rows: readonly WorkspaceCheckpointRecord[],
+): string | undefined {
+  if (process.env.XRK_CHECKPOINTS === "0") {
+    return "Workspace checkpoints are disabled on this Host (XRK_CHECKPOINTS=0), so Restore has nothing to revert to.";
+  }
+  let workspaceDir: string;
+  try {
+    workspaceDir = resolveSessionCwd(runtime, sessionId);
   } catch {
     return undefined;
   }
+  const failure = snapshotFailures.get(workspaceDir);
+  const okAt = snapshotSuccessAt.get(workspaceDir) ?? 0;
+  if (rows.length > 0) {
+    if (failure !== undefined && failure.at > okAt) {
+      return `Latest snapshot attempt for ${workspaceDir} failed (${failure.code}): ${failure.message}`;
+    }
+    return undefined;
+  }
+  if (failure !== undefined && failure.at > okAt) {
+    return `No snapshot was recorded for ${workspaceDir}: ${failure.code} — ${failure.message}`;
+  }
+  return `No workspace snapshot has completed for ${workspaceDir} on this Host yet. Restore needs \`git\` on PATH and a writable ${workspaceDir}; set XRK_CHECKPOINTS=0 to turn snapshots off explicitly.`;
 }
 
 /**
@@ -229,9 +339,13 @@ export function resolveRollbackTarget(
 
 export function formatCheckpointList(
   rows: readonly WorkspaceCheckpointRecord[],
+  diagnostic?: string,
 ): string {
   if (rows.length === 0) {
-    return "No workspace checkpoints for this session yet. Host snapshots before each turn when git is available (set XRK_CHECKPOINTS=0 to disable).";
+    return [
+      "No workspace checkpoints for this session yet. Host snapshots before each turn when git is available (set XRK_CHECKPOINTS=0 to disable).",
+      ...(diagnostic ? [`Diagnosis: ${diagnostic}`] : []),
+    ].join("\n");
   }
   const lines = rows.map((r, i) => {
     const label = r.label ? ` ${r.label}` : "";
@@ -241,6 +355,7 @@ export function formatCheckpointList(
     "Workspace checkpoints (shadow git; does not rewrite chat — use Branch / session.fork for lineage):",
     ...lines,
     "Restore: /rollback <n|id> · preview: /rollback plan <n|id> · prune extras: /rollback <n|id> --prune",
+    ...(diagnostic ? [`Note: ${diagnostic}`] : []),
   ].join("\n");
 }
 

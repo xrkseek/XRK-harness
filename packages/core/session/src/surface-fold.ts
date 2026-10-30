@@ -93,15 +93,11 @@ export function projectedInputPressureTokens(
   let surfaceTokens = 0;
   let sampledSurfaceTokens: number | undefined;
   for (const event of events) {
-    // Window swap invalidates the prior provider sample (stale pressure would
-    // keep soft-budget / meter at the pre-compact peak after a successful swap).
-    if (
-      event.type === "context/compaction" &&
-      event.shadowedTokenCount !== undefined
-    ) {
-      pressureTokens = undefined;
-      sampledSurfaceTokens = undefined;
-    }
+    // DSH posture: keep the last provider sample across compaction. The surface
+    // fold applies `shadowedTokenCount` as a signed shrink, so
+    //   projected = pressure + (surface − sampled)
+    // drops with the window. Clearing pressure here forced soft-budget onto
+    // chars/4 alone (often ~tools-sized) while the provider still saw 100k+.
     const usage = usageFromSessionEvent(event);
     if (usage !== undefined) {
       pressureTokens = inputPressureTokens(usage);

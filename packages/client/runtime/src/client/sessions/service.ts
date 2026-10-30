@@ -13,6 +13,13 @@
  * state can widen to a multi-pane list later). A session leaving the list
  * tears its scope down immediately unless it is the staged one, whose scope
  * survives frozen (read-only view) until the stage moves on.
+ *
+ * Off-stage idle scopes are reclaimed (DSH SessionReference retain/release
+ * outcome without the full retain API): only the staged session, running /
+ * draft-pinned / pending-interaction rows, and deferred removals keep a live
+ * scope + mux consumer. Reclaim tears down the same way as list-removal
+ * (fiber, instance, scoped persist) so switching many sessions cannot pin
+ * every window and localStorage draft forever.
  */
 import type { Context, Fiber } from '@xrkseek/cordis'
 import type {
@@ -644,7 +651,12 @@ export class SessionRuntime implements ISessions {
       )
     }
     const session = this.binding(opts.sessionId)?.session
-    if (session !== undefined) await session.resync()
+    if (session !== undefined) {
+      // Face rebuilt projections at the shorter asOfSeq; clear so seed wins
+      // (higher-seq-wins would keep pre-cut turnOutline / sessionStats).
+      session.projections.clear()
+      await session.resync()
+    }
   }
 
   /**
@@ -747,6 +759,7 @@ export class SessionRuntime implements ISessions {
       void record.session.open()
       void this.manager.refreshSubagents(current)
     }
+    this.reclaimOffStageScopes()
   }
 
   /**
@@ -868,6 +881,7 @@ export class SessionRuntime implements ISessions {
       ids, byId, current, phase, subagentsByParent, jobsBySession, bandBySession, currentAddress,
     })
     this.pruneScopes()
+    this.reclaimOffStageScopes()
   }
 
   /** Tear down scope + instance for no-longer-eligible sessions off stage; the staged one defers until the stage moves. */
@@ -885,6 +899,34 @@ export class SessionRuntime implements ISessions {
       }
       this.scopes.delete(id)
       this.deferredRemovals.delete(id)
+      this.dropScope(id, record)
+    }
+  }
+
+  /**
+   * Drop idle off-stage scopes so switching many listed sessions cannot pin
+   * every event window + mux consumer forever (DSH: release when retain count
+   * hits zero). Composer-draft rows stay pinned via {@link SessionSummary.hasDraft}.
+   */
+  private reclaimOffStageScopes(): void {
+    if (this.list.getSnapshot().phase === 'pending') return
+    const { byId, current } = this.list.getSnapshot()
+    const pinned = new Set<SessionId>()
+    if (this.watched !== undefined) pinned.add(this.watched)
+    if (current !== undefined) pinned.add(current)
+    for (const id of this.deferredRemovals) pinned.add(id)
+    for (const [id, summary] of Object.entries(byId)) {
+      if (
+        summary.running
+        || summary.hasDraft === true
+        || summary.pendingInteraction !== undefined
+      ) {
+        pinned.add(id as SessionId)
+      }
+    }
+    for (const [id, record] of [...this.scopes]) {
+      if (pinned.has(id)) continue
+      this.scopes.delete(id)
       this.dropScope(id, record)
     }
   }
