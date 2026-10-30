@@ -192,9 +192,17 @@ describe("host directory (DSH browse shapes)", () => {
     const open = await dispatchFaceMethod(runtime, "host.openPath", "ho1", {
       path: root,
     });
-    expect(open.result.ok).toBe(true);
-    if (open.result.ok) {
-      expect(open.result.value).toEqual({ opened: true });
+    // Headless Linux CI has no DISPLAY → canOpenNativePath false → not-implemented.
+    if (canOpenNativePath()) {
+      expect(open.result.ok).toBe(true);
+      if (open.result.ok) {
+        expect(open.result.value).toEqual({ opened: true });
+      }
+    } else {
+      expect(open.result.ok).toBe(false);
+      if (!open.result.ok) {
+        expect(open.result.error.code).toBe("not-implemented");
+      }
     }
   });
 
