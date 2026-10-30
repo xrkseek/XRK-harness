@@ -222,8 +222,9 @@ export async function snapshotSessionWorkspace(
       throw err;
     }
   })();
-  let tracked!: Promise<WorkspaceCheckpointRecord>;
-  tracked = work.finally(() => {
+  // `const` is fine: the finally callback runs after assignment, and needs
+  // the same Promise identity stored in `snapshotsInFlight`.
+  const tracked = work.finally(() => {
     if (snapshotsInFlight.get(workspaceDir) === tracked) {
       snapshotsInFlight.delete(workspaceDir);
     }
