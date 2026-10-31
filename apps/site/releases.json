@@ -6,10 +6,10 @@
     {
       "target": "win-x64",
       "available": true,
-      "version": "0.7.0",
-      "filename": "xrk-harness-0.7.0-win-x64.exe",
+      "version": "0.7.1",
+      "filename": "xrk-harness-0.7.1-win-x64.exe",
       "feed": "/api/harness/desktop/win-x64/nightly.yml",
-      "download": "/api/harness/desktop/bin/win-x64/xrk-harness-0.7.0-win-x64.exe"
+      "download": "/api/harness/desktop/bin/win-x64/xrk-harness-0.7.1-win-x64.exe"
     },
     {
       "target": "mac-arm64",
