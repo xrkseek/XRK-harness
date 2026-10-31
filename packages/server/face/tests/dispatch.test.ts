@@ -225,7 +225,7 @@ describe("face dispatch", () => {
     ).members.map((member) => member.name);
     expect(names).toEqual([
       "经理",
-      "xrkseek",
+      "向日葵",
       "调研员",
       "施工员",
       "审稿员",

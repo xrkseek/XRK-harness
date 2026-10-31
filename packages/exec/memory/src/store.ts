@@ -71,6 +71,13 @@ export interface CuratedMemoryStore {
   frozenPrompt(target: CuratedMemoryTarget): string;
   /** Both frozen blocks, joined. Does not re-read disk. */
   frozenSystemBlock(): string;
+  /**
+   * Same rendering as {@link frozenSystemBlock} but re-reads the backing store
+   * on every call, so another session's write shows up. Optional: async
+   * providers (http) cannot answer synchronously and fall back to the frozen
+   * snapshot.
+   */
+  liveSystemBlock?(): string;
   /** Live entries (re-read; for Phase1 consolidate / tooling). */
   listEntries(target: CuratedMemoryTarget): MaybeAsync<readonly string[]>;
   add(
@@ -492,6 +499,16 @@ export function createCuratedMemoryStore(
     },
     frozenSystemBlock() {
       return [snapshot.memory, snapshot.user].filter((block) => block.trim()).join("\n\n");
+    },
+    liveSystemBlock() {
+      const blocks = (["memory", "user"] as const).map((target) => {
+        const { raw, ok } = readRaw(fileFor(dir, target));
+        // Transient read error → keep this turn's frozen half rather than
+        // letting a failed read look like "memory is empty".
+        if (!ok) return snapshot[target];
+        return renderBlock(target, dedupe(parseEntries(raw)));
+      });
+      return blocks.filter((block) => block.trim()).join("\n\n");
     },
     listEntries(target) {
       const { raw, ok } = readRaw(fileFor(dir, target));

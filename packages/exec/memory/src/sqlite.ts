@@ -133,8 +133,10 @@ export function createSqliteMemoryProvider(
   const frozenMemory = list("memory");
   const frozenUser = list("user");
 
-  const frozenPrompt = (target: CuratedMemoryTarget): string => {
-    const entries = target === "user" ? frozenUser : frozenMemory;
+  const renderPrompt = (
+    target: CuratedMemoryTarget,
+    entries: readonly string[],
+  ): string => {
     if (entries.length === 0) return "";
     const header =
       target === "user"
@@ -142,6 +144,9 @@ export function createSqliteMemoryProvider(
         : "MEMORY (durable facts across sessions — not a todo list or unfinished-work queue)";
     return `${header}\n${joinEntries(entries)}`;
   };
+
+  const frozenPrompt = (target: CuratedMemoryTarget): string =>
+    renderPrompt(target, target === "user" ? frozenUser : frozenMemory);
 
   const applyOps = (
     target: CuratedMemoryTarget,
@@ -199,6 +204,20 @@ export function createSqliteMemoryProvider(
       return [frozenPrompt("memory"), frozenPrompt("user")]
         .filter(Boolean)
         .join("\n\n");
+    },
+    liveSystemBlock() {
+      // `list` is a synchronous SELECT — re-read instead of serving the
+      // construct-time frozenMemory / frozenUser snapshot.
+      const fresh = (target: CuratedMemoryTarget): string => {
+        const entries = list(target);
+        if (entries.length === 0) return "";
+        const header =
+          target === "user"
+            ? "USER PROFILE (who the user is)"
+            : "MEMORY (durable facts across sessions — not a todo list or unfinished-work queue)";
+        return `${header}\n${joinEntries(entries)}`;
+      };
+      return [fresh("memory"), fresh("user")].filter(Boolean).join("\n\n");
     },
     listEntries(target) {
       return list(target);

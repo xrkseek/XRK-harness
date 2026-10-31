@@ -66,6 +66,12 @@ export {
   type RunCuratedMemoryConsolidateInput,
 } from "./consolidate-pipeline.js";
 export {
+  CURATED_MEMORY_FRAGMENT_ID,
+  createCuratedMemoryLiveGate,
+  curatedMemoryBodyFingerprint,
+  formatCuratedMemoryLiveBody,
+} from "./live-fragment.js";
+export {
   extractReusableNotes,
   writeReusableNotesAfterTurn,
   consolidateCuratedMemoryPhase1,

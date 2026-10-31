@@ -13,7 +13,7 @@ import {
   playPresenceAccent,
   resolvePresenceTipLine,
   sessionBallPersona,
-} from '../src/client/PresenceBall.tsx'
+} from '../src/client/presence-emotion.ts'
 
 describe('derivePresenceEmotion', () => {
   it('prefers fresh sticky tool presence', () => {

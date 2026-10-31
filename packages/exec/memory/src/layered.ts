@@ -110,6 +110,16 @@ export function createLayeredCuratedMemoryStore(
       }
       return parts.join("\n\n");
     },
+    liveSystemBlock() {
+      const parts: string[] = [];
+      for (const layer of layers) {
+        const live = layer.store.liveSystemBlock;
+        const body = (live ? live.call(layer.store) : layer.store.frozenSystemBlock()).trim();
+        if (!body) continue;
+        parts.push(`### ${SCOPE_HEADERS[layer.scope]}\n${body}`);
+      }
+      return parts.join("\n\n");
+    },
     listEntries(target) {
       return primary.listEntries(target);
     },

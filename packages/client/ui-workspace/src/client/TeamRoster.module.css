@@ -322,17 +322,22 @@
 }
 
 .subhead {
-  margin: 12px 0 6px;
+  /* Same top/bottom for every rail band (席位 / 全局 / 工作区). */
+  margin: 14px 0 8px;
   font-size: 11px;
   line-height: 14px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.heading + .subhead {
+  margin-top: 8px;
 }
 
 .ballField {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 /* 老板 · 经理 · 向日葵 share one compact seats row. */
@@ -341,7 +346,7 @@
   flex-wrap: nowrap;
   align-items: flex-start;
   gap: 4px 6px;
-  margin-bottom: 6px;
+  margin: 0;
   min-width: 0;
   width: 100%;
 }
@@ -366,7 +371,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: 8px;
+  margin: 0;
   min-width: 0;
 }
 
@@ -704,9 +709,11 @@
 }
 
 .section {
+  /* Rhythm via child margins only — flex gap + margin stacked and made
+     「席位」→「全局」 look looser than title→balls. */
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
 .field {
