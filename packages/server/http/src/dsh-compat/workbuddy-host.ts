@@ -150,12 +150,14 @@ export async function tryApplyWorkBuddyHost(
   const session = createCommunityCordisHostSession({
     logPrefix: "dsh-workbuddy-connect",
     packageName,
-    xrkHome: wire.xrkHome,
+    ...(wire.xrkHome ? { xrkHome: wire.xrkHome } : {}),
   });
   const { root, http, logger, disposers } = session;
 
   const bridge = createCommunityLoopbackLlmBridge({
-    syncCommunityLlmProvider: wire.syncCommunityLlmProvider,
+    ...(wire.syncCommunityLlmProvider
+      ? { syncCommunityLlmProvider: wire.syncCommunityLlmProvider }
+      : {}),
     displayName: (providerId) =>
       providerId === "workbuddy-ai" ? "WorkBuddy AI" : "WorkBuddy",
     defaultApiKey: (providerId) => `xrk-workbuddy-${providerId}`,

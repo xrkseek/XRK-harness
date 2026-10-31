@@ -96,16 +96,15 @@ export async function readCommunityJsonViaHttp(
       url: pathname,
       headers: { host: "127.0.0.1" },
     } as IncomingMessage;
+    const resState = { statusCode: 200, headersSent: false };
     const res = {
-      statusCode: 200,
-      headersSent: false,
       writeHead(statusCode: number) {
-        this.statusCode = statusCode;
-        this.headersSent = true;
-        return this;
+        resState.statusCode = statusCode;
+        resState.headersSent = true;
+        return res;
       },
       setHeader() {
-        return this;
+        return res;
       },
       write(chunk: unknown) {
         if (chunk !== undefined && chunk !== null) {
@@ -121,17 +120,17 @@ export async function readCommunityJsonViaHttp(
             Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)),
           );
         }
-        this.headersSent = true;
-        if (this.statusCode !== 200) {
+        resState.headersSent = true;
+        if (resState.statusCode !== 200) {
           finish(undefined);
-          return this;
+          return res;
         }
         try {
           finish(JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown);
         } catch {
           finish(undefined);
         }
-        return this;
+        return res;
       },
     } as unknown as ServerResponse;
     void Promise.resolve(row.handle(req, res, pathname))
@@ -221,7 +220,7 @@ export function createCommunityLoopbackLlmBridge(options: {
   const logPrefix = options.logPrefix ?? "community-llm";
   const scheduler = createCommunityLlmSyncScheduler({
     isDisposed: () => hostDisposed,
-    onBatchError: options.onBatchError,
+    ...(options.onBatchError ? { onBatchError: options.onBatchError } : {}),
   });
 
   const provideLlm = (root: Context): void => {

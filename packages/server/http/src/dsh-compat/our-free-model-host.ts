@@ -133,7 +133,7 @@ export async function tryApplyOurFreeModelHost(
   const session = createCommunityCordisHostSession({
     logPrefix: OFM_PACKAGE,
     packageName,
-    xrkHome: wire.xrkHome,
+    ...(wire.xrkHome ? { xrkHome: wire.xrkHome } : {}),
   });
   const { root, http, logger, dshHome, disposers } = session;
   process.env.DSH_HOME = dshHome;
@@ -142,12 +142,14 @@ export async function tryApplyOurFreeModelHost(
   /** Survives brief settings.json rewrites while forward rebinds (port:0 window). */
   let lastForward: CommunityLoopbackEndpoint = {};
   const bridge = createCommunityLoopbackLlmBridge({
-    syncCommunityLlmProvider: wire.syncCommunityLlmProvider,
+    ...(wire.syncCommunityLlmProvider
+      ? { syncCommunityLlmProvider: wire.syncCommunityLlmProvider }
+      : {}),
     displayName: (id) => DISPLAY_NAMES[id] ?? id,
     defaultApiKey: (id) => `xrk-${id}`,
     logPrefix: OFM_PACKAGE,
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
-    async resolveEndpoint() {
+    async resolveEndpoint(): Promise<CommunityLoopbackEndpoint> {
       const fromDisk = forwardEndpointFromHome(dshHome);
       const fromLive =
         fromDisk.baseUrl || lastForward.baseUrl
@@ -156,25 +158,24 @@ export async function tryApplyOurFreeModelHost(
               http,
               `${OFM_API_PREFIX}/summary`,
             );
-      const merged: CommunityLoopbackEndpoint = {
-        baseUrl:
-          fromDisk.baseUrl ?? fromLive.baseUrl ?? lastForward.baseUrl,
-        apiKey:
-          fromDisk.apiKey ?? fromLive.apiKey ?? lastForward.apiKey,
-      };
-      if (merged.baseUrl) {
+      const baseUrl =
+        fromDisk.baseUrl ?? fromLive.baseUrl ?? lastForward.baseUrl;
+      const apiKey =
+        fromDisk.apiKey ?? fromLive.apiKey ?? lastForward.apiKey;
+      if (baseUrl) {
         lastForward = {
-          baseUrl: merged.baseUrl,
-          ...(merged.apiKey
-            ? { apiKey: merged.apiKey }
+          baseUrl,
+          ...(apiKey
+            ? { apiKey }
             : lastForward.apiKey
               ? { apiKey: lastForward.apiKey }
               : {}),
         };
       }
+      const resolvedKey = apiKey ?? lastForward.apiKey;
       return {
-        baseUrl: merged.baseUrl,
-        apiKey: merged.apiKey ?? lastForward.apiKey,
+        ...(baseUrl ? { baseUrl } : {}),
+        ...(resolvedKey ? { apiKey: resolvedKey } : {}),
       };
     },
   });
