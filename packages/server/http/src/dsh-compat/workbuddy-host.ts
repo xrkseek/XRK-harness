@@ -39,13 +39,14 @@ import {
   gateLiveHostRpc,
   registerLiveHostApply,
 } from "./live-host-apply.js";
+import { isPluginPackageFamily } from "./plugin-package-id.js";
 
 const WORKBUDDY_PACKAGE = "dsh-workbuddy-connect";
 /** Plugin env that skips Windows registry discovery for the international app. */
 const WORKBUDDY_AI_ELECTRON_BIN = "WORKBUDDY_AI_ELECTRON_BIN";
 
 export function isWorkBuddyConnectPackage(packageName: string): boolean {
-  return packageName.trim() === WORKBUDDY_PACKAGE;
+  return isPluginPackageFamily(packageName, WORKBUDDY_PACKAGE);
 }
 
 export function hasWorkBuddyHostLib(pkgRoot: string): boolean {

@@ -46,8 +46,9 @@ function userPromptText(content: readonly unknown[]): string {
  * Turn-local feature tail + message actions.
  * Completed-turn footers stay mounted across later turns — hiding them while
  * `session.running` made every prior turn lose copy / feedback / usage as soon
- * as the next round started. Branch/restore/regenerate still use
- * `hasLaterChatNode` / `branchUnavailable` so mid-history forks stay gated.
+ * as the next round started. Restore/regenerate stay tip-gated via
+ * `hasLaterChatNode` / `branchUnavailable`; branch is a turn-cut fork and stays
+ * available on any closed turn (Host anchors on the first `turn/end` at/after seq).
  *
  * Assembler only materializes visible tails after turn/end. Host `running` on
  * a still-latest closed tip suppresses the footer once (wait_agent / subagent

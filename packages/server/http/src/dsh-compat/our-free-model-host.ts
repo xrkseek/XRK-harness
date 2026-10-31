@@ -39,6 +39,7 @@ import {
   gateLiveHostRpc,
   registerLiveHostApply,
 } from "./live-host-apply.js";
+import { isPluginPackageFamily } from "./plugin-package-id.js";
 
 const OFM_PACKAGE = "dsh-our-free-model";
 const OFM_DATA_DIR = "our-free-model";
@@ -52,7 +53,7 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 export function isOurFreeModelPackage(packageName: string): boolean {
-  return packageName.trim() === OFM_PACKAGE;
+  return isPluginPackageFamily(packageName, OFM_PACKAGE);
 }
 
 /**

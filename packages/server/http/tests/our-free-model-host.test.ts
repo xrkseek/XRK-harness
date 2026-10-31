@@ -37,7 +37,9 @@ describe("our-free-model-host", () => {
 
   it("detects package name and staged entry", () => {
     expect(isOurFreeModelPackage("dsh-our-free-model")).toBe(true);
+    expect(isOurFreeModelPackage("@anyone/dsh-our-free-model")).toBe(true);
     expect(isOurFreeModelPackage("other")).toBe(false);
+    expect(isOurFreeModelPackage("@anyone/dsh-other")).toBe(false);
     const root = mkdtempSync(path.join(tmpdir(), "ofm-entry-"));
     temps.push(root);
     expect(hasOurFreeModelEntry(root)).toBe(false);
@@ -329,6 +331,22 @@ describe("our-free-model-host", () => {
           expect(json.result).toEqual({
             ok: true,
             value: { method: "provider.status" },
+          });
+          // POST-only route must claim GET (405) — not fall through incomplete.
+          const getRes = await fetch(
+            `http://127.0.0.1:${addr.port}/api/channel-pack`,
+            { method: "GET" },
+          );
+          expect(getRes.status).toBe(405);
+          const getBody = (await getRes.json()) as {
+            ok: boolean;
+            error: string;
+            allow: string[];
+          };
+          expect(getBody).toEqual({
+            ok: false,
+            error: "method not allowed",
+            allow: ["POST"],
           });
           resolve();
         } catch (err) {

@@ -3,6 +3,7 @@ import {
   shouldHonestHttpCatchall,
   handleHonestHttpCatchall,
 } from "../src/dsh-compat/honest-http-catchall.js";
+import { incompleteCommunityApiBody } from "../src/dsh-compat/incomplete-api-shapes.js";
 import { createServer } from "node:http";
 
 describe("honest-http-catchall", () => {
@@ -16,7 +17,16 @@ describe("honest-http-catchall", () => {
     expect(shouldHonestHttpCatchall("/some-plugin/foo")).toBe(true);
   });
 
-  it("responds to GET with honest JSON", async () => {
+  it("path-shaped incomplete bodies include arrays Settings panels filter", () => {
+    const summary = incompleteCommunityApiBody("/api/our-free-model/summary");
+    expect(Array.isArray(summary?.catalog)).toBe(true);
+    expect(summary?.settings).toEqual(
+      expect.objectContaining({ enabled: true }),
+    );
+    expect(incompleteCommunityApiBody("/api/pet/state")).toBeUndefined();
+  });
+
+  it("responds to GET with incomplete envelope (not fake ready)", async () => {
     const server = createServer((req, res) => {
       void handleHonestHttpCatchall(req, res, "/residual/pkg/status").then(
         (claimed) => {
@@ -35,10 +45,46 @@ describe("honest-http-catchall", () => {
         const res = await fetch(
           `http://127.0.0.1:${port}/residual/pkg/status`,
         );
-        const body = (await res.json()) as { ok: boolean; status: string };
+        const body = (await res.json()) as {
+          ok: boolean;
+          status: string;
+        };
         expect(res.status).toBe(200);
-        expect(body.ok).toBe(true);
-        expect(body.status).toBe("ready");
+        expect(body.ok).toBe(false);
+        expect(body.status).toBe("incomplete");
+        server.close(() => resolve());
+      });
+    });
+  });
+
+  it("OFM summary path-shape returns catalog array before generic envelope", async () => {
+    const server = createServer((req, res) => {
+      void handleHonestHttpCatchall(
+        req,
+        res,
+        "/api/our-free-model/summary",
+      ).then((claimed) => {
+        if (!claimed) {
+          res.writeHead(404);
+          res.end("no");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, async () => {
+        const addr = server.address();
+        const port =
+          typeof addr === "object" && addr ? addr.port : 0;
+        const res = await fetch(
+          `http://127.0.0.1:${port}/api/our-free-model/summary`,
+        );
+        const body = (await res.json()) as {
+          catalog: unknown[];
+          incomplete?: string[];
+        };
+        expect(res.status).toBe(200);
+        expect(Array.isArray(body.catalog)).toBe(true);
+        expect(body.incomplete).toContain("dsh-host");
         server.close(() => resolve());
       });
     });

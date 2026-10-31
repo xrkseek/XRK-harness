@@ -9,6 +9,7 @@ import type {
   ClientModuleSystemOptions, ClientPluginHandoff, XrkWindow,
 } from './manifest.ts'
 import { remapDshClientRequire } from './dsh-require-remap.ts'
+import { isSamePluginPackage, unscopedPackageName } from './package-id.ts'
 
 /** Default bundle-load hook: same-origin external classic script. */
 const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
@@ -70,6 +71,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private readonly materializing = new Set<string>()
   private readonly graphRows = new Map<string, BootModuleRow>()
   private readonly loadBundle: (url: string) => Promise<void>
+  /**
+   * Graph row id whose classic script is executing. DSH keeps registration id
+   * === row id; XRK additionally accepts the same plugin family under a bare /
+   * scoped rename (community republish) and dual-keys the factory.
+   */
+  private executingId = ''
 
   /**
    * Build the module system over the parsed boot rows.
@@ -88,12 +95,91 @@ export class ClientModuleSystem implements ClientModuleLoader {
     if (win.__ModuleLoader__ !== undefined) throw new Error('client-modules: window.__ModuleLoader__ already installed (double boot?)')
     win.__ModuleLoader__ = {
       load: (handoff: ClientPluginHandoff): void => {
-        // Registration is keyed by the handoff id; a duplicate means a bundle
-        // executed twice without an invalidate — always a bug, always loud.
-        if (this.factories.has(handoff.id)) throw new Error(`client-modules: duplicate factory registration for "${handoff.id}" (bundle executed twice without invalidate?)`)
-        this.factories.set(handoff.id, handoff.factory)
+        this.acceptHandoff(handoff)
       },
     }
+  }
+
+  /** Store one factory; duplicate registration for the same key is always loud. */
+  private putFactory(id: string, factory: ClientPluginHandoff['factory']): void {
+    if (this.factories.has(id)) {
+      throw new Error(`client-modules: duplicate factory registration for "${id}" (bundle executed twice without invalidate?)`)
+    }
+    this.factories.set(id, factory)
+  }
+
+  /**
+   * Accept a ModuleLoader handoff. Exact id match is the DSH contract; XRK also
+   * dual-keys every boot-graph id in the same plugin family (bare ↔
+   * `@scope/bare`) so community republishes work.
+   *
+   * Boot prefetches many classic `async` scripts in parallel, so a single
+   * `executingId` can point at a sibling row when this handoff runs. Never
+   * reject a stamp that matches a known graph family — that race used to
+   * throw "mis-stamped" and surface as "loaded without registering".
+   */
+  private acceptHandoff(handoff: ClientPluginHandoff): void {
+    const stamped = handoff.id
+    const expected = this.executingId
+    const matchesGraphFamily = [...this.graphRows.keys()].some((rowId) =>
+      isSamePluginPackage(rowId, stamped),
+    )
+    if (
+      expected !== ''
+      && stamped !== expected
+      && !isSamePluginPackage(stamped, expected)
+      && !matchesGraphFamily
+    ) {
+      throw new Error(
+        `client-modules: bundle registered "${stamped}" while arriving for "${expected}" (mis-stamped bundle id)`,
+      )
+    }
+    // Exact stamp twice is always loud (bundle executed twice without invalidate).
+    this.putFactory(stamped, handoff.factory)
+    this.dualKeyFamily(stamped, handoff.factory)
+    if (
+      expected !== ''
+      && expected !== stamped
+      && isSamePluginPackage(stamped, expected)
+      && !this.factories.has(expected)
+    ) {
+      this.putFactory(expected, handoff.factory)
+    }
+  }
+
+  /** Mirror one factory onto every boot-graph id in the same plugin family. */
+  private dualKeyFamily(
+    stamped: string,
+    factory: ClientPluginHandoff['factory'],
+  ): void {
+    for (const rowId of this.graphRows.keys()) {
+      if (rowId === stamped) continue
+      if (!isSamePluginPackage(rowId, stamped)) continue
+      if (this.factories.has(rowId)) continue
+      this.putFactory(rowId, factory)
+    }
+  }
+
+  /**
+   * After script load, ensure the graph-row id has a factory — exact stamp,
+   * bare↔scoped dual-key, or any already-registered same-family key.
+   */
+  private hasFactoryFor(id: string): boolean {
+    if (this.factories.has(id)) return true
+    const bare = unscopedPackageName(id)
+    if (bare !== id && this.factories.has(bare)) {
+      const factory = this.factories.get(bare)
+      /* v8 ignore next -- guarded by has(bare) above. */
+      if (factory === undefined) return false
+      this.factories.set(id, factory)
+      return true
+    }
+    for (const [key, factory] of this.factories) {
+      if (!isSamePluginPackage(key, id)) continue
+      this.factories.set(id, factory)
+      return true
+    }
+    return false
   }
 
   /** Load one graph row so its factory is registered (idempotent per in-flight arrival). */
@@ -101,12 +187,20 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const { id, url } = row
     const pending = this.pendingArrival.get(id)
     if (pending !== undefined) return pending
-    if (this.factories.has(id)) return Promise.resolve()
-    const task = this.loadBundle(url).then(() => {
-      if (!this.factories.has(id)) {
+    if (this.hasFactoryFor(id)) return Promise.resolve()
+    const task = (async () => {
+      // Track the intended row for diagnostics / late dual-key; parallel
+      // arrivals may overwrite this — acceptHandoff must not rely on it alone.
+      this.executingId = id
+      try {
+        await this.loadBundle(url)
+      } finally {
+        if (this.executingId === id) this.executingId = ''
+      }
+      if (!this.hasFactoryFor(id)) {
         throw new Error(`client-modules: bundle ${url} loaded without registering "${id}" via __ModuleLoader__.load`)
       }
-    }).finally(() => { this.pendingArrival.delete(id) })
+    })().finally(() => { this.pendingArrival.delete(id) })
     this.pendingArrival.set(id, task)
     return task
   }
@@ -210,7 +304,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const existing = this.loadCache.get(specifier)
     if (existing !== undefined) return existing.exports
     const id = this.graphIdFor(specifier)
-    if (!this.factories.has(id)) {
+    if (!this.hasFactoryFor(id)) {
       const row = this.graphRows.get(id)
       if (row === undefined) {
         throw new Error(
@@ -238,6 +332,11 @@ export class ClientModuleSystem implements ClientModuleLoader {
   invalidate(id: string): void {
     this.factories.delete(id)
     this.loadCache.delete(id)
+    const bare = unscopedPackageName(id)
+    if (bare !== id) {
+      this.factories.delete(bare)
+      this.loadCache.delete(bare)
+    }
   }
 
   adopt(row: BootModuleRow): void {

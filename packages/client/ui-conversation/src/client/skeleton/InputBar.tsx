@@ -192,7 +192,8 @@ export const InputBar = memo(function InputBar({
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   // Phone: when the soft keyboard opens, keep the composer card in the
-  // visual viewport (hero is centered; sticky seat uses --xrk-keyboard-inset).
+  // visual viewport (hero is centered; sticky seat uses --xrk-keyboard-inset)
+  // and re-pin the conversation scrollport so the tip clears the lifted seat.
   useEffect(() => {
     const card = cardRef.current
     if (card === null) return
@@ -200,7 +201,14 @@ export const InputBar = memo(function InputBar({
       if (typeof matchMedia === 'function' && !matchMedia('(max-width: 767px)').matches) return
       const seat = card.closest('[data-composer-seat]')
       const target = seat instanceof HTMLElement ? seat : card
+      const scrollport = card.closest('[data-conversation-scroll]')
       const reveal = (): void => {
+        if (scrollport instanceof HTMLElement) {
+          const floor = scrollport.scrollHeight - scrollport.clientHeight
+          if (floor - scrollport.scrollTop <= 48) {
+            scrollport.scrollTop = scrollport.scrollHeight
+          }
+        }
         target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
       }
       reveal()

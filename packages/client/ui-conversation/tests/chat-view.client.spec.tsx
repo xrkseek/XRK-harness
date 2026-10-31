@@ -516,7 +516,7 @@ describe('ChatView', () => {
     expect(view.queryByText('later')).toBeNull()
     const pendingBubble = view.getByText('interrupt now').closest('[data-pending-steering]')
     expect(pendingBubble).not.toBeNull()
-    expect(within(pendingBubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(pendingBubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     fireEvent.click(within(pendingBubble as HTMLElement).getByRole('button', { name: '复制' }))
     expect(writeText).toHaveBeenCalledWith('interrupt now')
     expect(within(pendingBubble as HTMLElement).queryByRole('button', { name: '在新对话中分支' })).toBeNull()
@@ -546,7 +546,7 @@ describe('ChatView', () => {
     // step-boundary promote that opened the next model request is a user send.
     const durableWhileRunning = view.getByText('interrupt now').closest('[data-pending-steering]')
     expect(durableWhileRunning).not.toBeNull()
-    expect(within(durableWhileRunning as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(durableWhileRunning as HTMLElement).getByRole('status').textContent).toBe('插队中')
     // Only the durable steering bubble: the turn is still running, so its
     // assistant narration owns no footer yet, and a steering bubble never
     // carries a branch action.
@@ -733,7 +733,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
   })
 
   it('does not badge the first user of a new session while inject is waiting', () => {
@@ -744,10 +744,10 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
   })
 
-  it('does not flash 发送中 on a new-round send over a settled previous turn', () => {
+  it('does not flash 插队中 on a new-round send over a settled previous turn', () => {
     const previousUser = { ...user(1, '上一轮'), turn: 1 }
     const h = makeHarness({
       nodes: [previousUser, assistant(2, '答完了', 1), user(5, '下一轮')],
@@ -758,7 +758,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('上一轮').closest('[data-pending-steering]')).toBeNull()
     expect(view.getByText('下一轮').closest('[data-pending-steering]')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
   })
 
   it('does not badge a new-round local echo over settled history', () => {
@@ -780,7 +780,7 @@ describe('ChatView', () => {
     const echo = view.getByText('下一轮').closest('[data-submission-echo]') as HTMLElement | null
     expect(echo).not.toBeNull()
     expect(echo!.getAttribute('data-pending-steering')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
   })
 
   it('peels a same-clock Ctrl+Enter follow-up below waiting', () => {
@@ -795,7 +795,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('喵喵').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('在干嘛'))
@@ -816,7 +816,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('你好').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('在干嘛'))
@@ -850,7 +850,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('111').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('在干嘛'))
@@ -872,7 +872,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const bubble = view.getByText('马上就好...').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('马上就好...'))
@@ -898,7 +898,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const bubble = view.getByText('检查底层谬误，删去冗余嵌套无意义代码').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('检查底层谬误，删去冗余嵌套无意义代码'))
@@ -940,7 +940,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('哈哈').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('在干嘛'))
@@ -966,7 +966,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('哈哈').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     expect(within(bubble as HTMLElement).getByRole('button', { name: '撤回插队' })).toBeTruthy()
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
@@ -985,7 +985,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('哈哈').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
     expect(waiting!.compareDocumentPosition(view.getByText('在干嘛'))
@@ -1011,7 +1011,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('五五').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     expect(within(bubble as HTMLElement).getByRole('button', { name: '撤回插队' })).toBeTruthy()
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
@@ -1037,7 +1037,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const echo = view.getByText('打断一下').closest('[data-submission-echo]')
     expect(echo).not.toBeNull()
-    expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('插队中')
   })
 
   it('badges Host-pending 你好 as 插队中 even when the opener clock is before turn/start', () => {
@@ -1058,7 +1058,7 @@ describe('ChatView', () => {
     expect(view.getByText('在干嘛').closest('[data-pending-steering]')).toBeNull()
     const bubble = view.getByText('你好').closest('[data-pending-steering]')
     expect(bubble).not.toBeNull()
-    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(bubble as HTMLElement).getByRole('status').textContent).toBe('插队中')
     expect(within(bubble as HTMLElement).getByRole('button', { name: '撤回插队' })).toBeTruthy()
     const waiting = view.getAllByRole('status').find(el => !bubble!.contains(el))
     expect(waiting).toBeDefined()
@@ -1077,7 +1077,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('工具还在跑').closest('[data-pending-steering]')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
   })
 
   it('keeps 插队中 on a local steer while Host is running and tools are live', () => {
@@ -1097,7 +1097,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const echo = view.getByText('工具还在跑').closest('[data-submission-echo]')
     expect(echo).not.toBeNull()
-    expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('发送中')
+    expect(within(echo as HTMLElement).getByRole('status').textContent).toBe('插队中')
   })
 
   it('paints yielded steers as idle user bubbles and stacks consecutive sends', () => {
@@ -1122,7 +1122,7 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
-    expect(view.queryByRole('status', { name: '发送中' })).toBeNull()
+    expect(view.queryByRole('status', { name: '插队中' })).toBeNull()
     const row = view.getByText('第一句').closest('[class*="userRow"]') as HTMLElement
     expect(within(row).getByText('第二句')).toBeTruthy()
   })
@@ -1560,7 +1560,7 @@ describe('ChatView', () => {
     expect(h.forkAt.mock.calls).toEqual([[2]])
   })
 
-  it('disables fork when the indexed Turn has a later steering Node', () => {
+  it('keeps fork enabled when the indexed Turn has a later steering Node', () => {
     const base = chatSnapshotFixture({
       nodes: [user(1, 'question'), assistant(2, 'answer')],
       turnEnds: new Map([[1, 4]]),
@@ -1576,13 +1576,14 @@ describe('ChatView', () => {
     }
     const h = makeHarness({ chat })
     const view = render(<h.ChatView {...h.props} />)
+    // Turn-cut fork: later same-turn nodes do not gate branch (only restore/regenerate).
     const branch = view.getByRole('button', { name: '在新对话中分支' })
-    expect(branch.getAttribute('aria-disabled')).toBe('true')
+    expect(branch.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(branch)
-    expect(h.forkAt).not.toHaveBeenCalled()
+    expect(h.forkAt.mock.calls).toEqual([[2]])
   })
 
-  it('keeps final content actions but disables branch when Tool and interrupted Think follow it', () => {
+  it('keeps final content actions and fork when Tool and interrupted Think follow it', () => {
     const interruptedThink: AssistantMessageNode = {
       kind: 'assistant', seq: 4.1, time: 4_100, turn: 1, step: 2,
       blocks: [{ kind: 'reasoning', text: 'bad path' }], interrupted: true,
@@ -1595,9 +1596,9 @@ describe('ChatView', () => {
     expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(2)
     const buttons = view.getAllByRole('button', { name: '在新对话中分支' })
     expect(buttons).toHaveLength(1)
-    expect(buttons[0]!.getAttribute('aria-disabled')).toBe('true')
+    expect(buttons[0]!.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(buttons[0]!)
-    expect(h.forkAt).not.toHaveBeenCalled()
+    expect(h.forkAt.mock.calls).toEqual([[2]])
   })
 
   it('renders assistant Markdown across history, streaming, final, and interrupted states while user text stays literal', () => {

@@ -212,7 +212,10 @@ describe('SettingsRoot trigger', () => {
   it('opens Models from a #/models deep link', () => {
     window.location.hash = '#/models'
     mount()
-    expect(screen.getByRole('dialog')).toBeTruthy()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeTruthy()
+    // DSH / deep-whale skins gate Settings chrome on this attr.
+    expect(dialog.getAttribute('data-shortcut-modal')).toBe('settings')
     expect(screen.getByRole('button', { name: 'Models', current: true })).toBeTruthy()
     window.location.hash = ''
   })

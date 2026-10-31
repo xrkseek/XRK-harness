@@ -18,8 +18,10 @@ export interface DshHttpCapability {
 
 /** Standard DSH HTTP surfaces — mounted once for the whole compat host. */
 export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
-  { prefix: "/api/wallet/", provider: "xrk-wallet" },
-  { prefix: "/wallet/api/", provider: "xrk-wallet" },
+  // No trailing slash: exact `/api/wallet` + `/wallet/api` must reach the
+  // handler (GET → snapshot), not the honest catch-all.
+  { prefix: "/api/wallet", provider: "xrk-wallet" },
+  { prefix: "/wallet/api", provider: "xrk-wallet" },
   { prefix: "/api/memento/", provider: "xrk-memento" },
   { prefix: "/modlens", provider: "xrk-modlens" },
   { prefix: "/niulai-kws", provider: "xrk-niulai-kws" },
@@ -36,6 +38,7 @@ export const DSH_HTTP_CAPABILITIES: readonly DshHttpCapability[] = [
   { prefix: "/dream-skin/", provider: "xrk-dream-skin" },
   { prefix: "/api/undo", provider: "xrk-undo" },
   { prefix: "/wallpaper-engine", provider: "xrk-wallpaper" },
+  { prefix: "/dsh-wallpaper-bg", provider: "xrk-wallpaper-bg" },
   { prefix: "/dsh-skin-market", provider: "xrk-skin-market" },
   { prefix: "/api/dsh/skins", provider: "xrk-dsh-skins" },
   { prefix: "/api/skin-manager", provider: "xrk-dsh-skins" },

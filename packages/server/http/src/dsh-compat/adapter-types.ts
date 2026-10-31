@@ -12,6 +12,7 @@ import type {
 import type { TokenLedgerOptions } from "./tokenledger.js";
 import type { HarnessConnectorOptions } from "./harness-connector.js";
 import type { WalletOptions } from "./wallet.js";
+import type { CommunityLiveMeter } from "./community-live-state.js";
 import type { XrkPluginServicesOptions } from "../xrk/plugin-services.js";
 
 export interface DshAdapterMeta {
@@ -69,6 +70,13 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
   TokenLedgerOptions &
   HarnessConnectorOptions &
   Pick<WalletOptions, "walletPort" | "face" | "xrkHome"> & {
+    /**
+     * Face session meter for community pets (whale-girl context / workstate).
+     * Wired by Host; absent → community-root keeps stub zeros for those fields.
+     */
+    readonly resolveCommunityLiveMeter?: () =>
+      | CommunityLiveMeter
+      | Promise<CommunityLiveMeter>;
     readonly workspaceRoot?: string;
     /**
      * Honor X-Forwarded-Host for mobile-access WAN/LAN gate class

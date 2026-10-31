@@ -27,7 +27,11 @@ import { establishProductHomeSeeds } from "../user-skill-seeds.js";
 import { createCliLogger, resolveLogLevel, type CliLogger } from "../log.js";
 import { clearHostLock, writeHostLock } from "../host-lock.js";
 import { forceFreeXrkPort } from "../port.js";
-import { listPlugins, resolvePluginsDir } from "../plugin/index.js";
+import {
+  listPlugins,
+  reconcilePluginsDir,
+  resolvePluginsDir,
+} from "../plugin/index.js";
 import { reportCliStartupFailure } from "../startup-diagnostics.js";
 
 function openProductUrl(url: string, log: CliLogger): void {
@@ -180,6 +184,12 @@ async function runServeInner(
     config.runtime.pluginsDir?.trim() ||
     (existsSync(resolvePluginsDir()) ? resolvePluginsDir() : undefined);
   if (pluginsDir) {
+    // Heal bare↔scoped ModuleLoader stamps left by older installs, prune
+    // orphan staging, refresh web/boot.json before the shell boots plugins.
+    reconcilePluginsDir(pluginsDir, {
+      log: (line) => log.info(line),
+      warn: (line) => log.warn(line),
+    });
     const inventory = listPlugins({ pluginsDir });
     const processIds = health.plugins ?? [];
     log.info(

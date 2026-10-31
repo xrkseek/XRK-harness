@@ -7,8 +7,13 @@
  * occupant, its navigation, and the chrome — lives in ui-settings-general,
  * because a shell dependency on ui-sidebar would close a reference cycle
  * through ui-layout and ui-theme. Export discipline: packages/client/AGENTS.md.
+ *
+ * Also provides `ctx.configForms` — a thin DSH alias over settingsScope so
+ * community theme clients (endfield et al.) that prefer configForms still
+ * persist without a Cordis Config / configEditor embed.
  */
 import type { ClientContext } from '@xrkseek/client-runtime/client'
+import { ConfigFormsService } from './config-forms.ts'
 import { SettingsScopeBinder } from './settings-scope.ts'
 import { SettingsNavBinder } from './settings-nav.ts'
 
@@ -17,6 +22,12 @@ export type {
   SettingsPluginsTabOwnerProps, SettingsSectionOwnerProps, SettingsTriggerOwnerProps,
 } from './contract/slots.ts'
 export { SettingsScopeController, SettingsScopeBinder } from './settings-scope.ts'
+export {
+  ConfigFormsService,
+  type ConfigFormHandle,
+  type ConfigFormsDescribeFace,
+  type ConfigFormsServiceApi,
+} from './config-forms.ts'
 export {
   openSettingsSection, bindSettingsOpenSection, SettingsNavBinder,
 } from './settings-nav.ts'
@@ -28,7 +39,8 @@ export {
 export const inject = []
 
 /**
- * Provide the settings-namespace scope service and the openSection binder.
+ * Provide the settings-namespace scope service, the DSH configForms alias,
+ * and the openSection binder.
  *
  * Constructing the service in this plugin's fiber keeps its traced methods
  * bound to each consuming plugin's context.
@@ -36,5 +48,6 @@ export const inject = []
  */
 export function apply(ctx: ClientContext): void {
   new SettingsScopeBinder(ctx)
+  new ConfigFormsService(ctx)
   new SettingsNavBinder(ctx)
 }

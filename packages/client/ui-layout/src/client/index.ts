@@ -32,6 +32,28 @@ export {
   clearLayoutInsetsDom,
   layoutInsetsEqual,
 } from './layout-insets.ts'
+export {
+  DESKTOP_CHROME_HEIGHT_PX,
+  DSH_DOM_ATTR_ALIASES,
+  DSH_FONT_SIZE_CSS,
+  DSH_FRAME_CSS,
+  DSH_THEME_SOURCE_ATTR,
+  DSH_WINDOWS_TITLEBAR_ATTR,
+  XRK_DESKTOP_CHROME_CSS,
+  applyDesktopChromeDomAliases,
+  applyDshFontSizeAliases,
+  applyDshThemeSourceAttr,
+  clearDesktopChromeDomAliases,
+  clearDshThemeSourceAttr,
+} from './dsh-style-aliases.ts'
+export {
+  DESKTOP_CHROME_HEIGHT_PX,
+  DSH_FRAME_CSS,
+  DSH_WINDOWS_TITLEBAR_ATTR,
+  XRK_DESKTOP_CHROME_CSS,
+  applyDesktopChromeDomAliases,
+  clearDesktopChromeDomAliases,
+} from './dsh-style-aliases.ts'
 
 declare module '@xrkseek/cordis' {
   interface Context {

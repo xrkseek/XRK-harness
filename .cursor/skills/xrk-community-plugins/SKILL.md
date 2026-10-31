@@ -60,7 +60,8 @@ user-invocable: false
 
 ## 常见陷阱
 
-- 按**包名**堆适配器 — Harness 按**路径与 RPC 形状**接线。  
+- 按**包名**堆适配器 — Harness 按**路径与 RPC 形状**接线。根 Cordis `index.js` 按磁盘布局装包（`stageRootCordisHost`）；缺 Host 半用 `package.json` main/exports/`dsh.bundle.patch` 检测再 reconcile 补。Catch-all 默认 `incomplete`；Settings 硬依赖数组时在 `incomplete-api-shapes` 加 **URL 前缀**（不是 npm name）。  
+
 - 对上游第三方仓提 PR — **禁止**（产品身份规则；ADR-0002）。  
 - 把 maintainer `.cursor` 笔记当社区包规格。  
 - **Client 半部装完「没反应」**：列表会标 `needsRestart`；Desktop 热刷新只重载渲染页，**不会**重挂 `webPlugins` — 首次装 client 包要整应用 / Host 重启。  

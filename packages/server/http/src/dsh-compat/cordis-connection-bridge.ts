@@ -48,7 +48,22 @@ export function pushCordisWebServerRoute(
     match,
     handle: async (req, res, pathname) => {
       const method = (req.method ?? "GET").toUpperCase();
-      if (methods?.length && !methods.includes(method)) return false;
+      if (methods?.length && !methods.includes(method)) {
+        // Path claimed — do not fall through to honest "incomplete".
+        res.writeHead(405, {
+          allow: methods.join(", "),
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            error: "method not allowed",
+            allow: methods,
+          }),
+        );
+        return true;
+      }
       const result = await route.handler(req, res, pathname);
       return result === undefined ? true : Boolean(result);
     },
@@ -134,7 +149,23 @@ export function createCordisConnectionBridge(
           match,
           handle: async (req, res, pathname) => {
             const method = (req.method ?? "GET").toUpperCase();
-            if (methods?.length && !methods.includes(method)) return false;
+            if (methods?.length && !methods.includes(method)) {
+              // Exact path is owned by this Fetch route (e.g. channel-pack
+              // POST-only). Returning false let GET hit incomplete catch-all.
+              res.writeHead(405, {
+                allow: methods.join(", "),
+                "content-type": "application/json; charset=utf-8",
+                "cache-control": "no-store",
+              });
+              res.end(
+                JSON.stringify({
+                  ok: false,
+                  error: "method not allowed",
+                  allow: methods,
+                }),
+              );
+              return true;
+            }
             const request = await incomingToFetchRequest(req, pathname);
             const response = await route.fetch(request);
             await writeFetchResponse(res, response);

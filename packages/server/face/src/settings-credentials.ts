@@ -882,6 +882,14 @@ export class FaceSettingsNamespaces {
     return slot;
   }
 
+  /**
+   * Every namespace id currently held (product + community dynamic, e.g.
+   * `theme-endfield` after a Cordis-compat Config mutate).
+   */
+  ids(): readonly string[] {
+    return [...this.map.keys()];
+  }
+
   view(
     ns: string,
     base?: Record<string, unknown>,
@@ -1308,6 +1316,18 @@ export async function settingsDescribeFace(
         FACE_EMPTY_OBJECT_SCHEMA,
         "live",
       ),
+    );
+  }
+  // Community Cordis Config / theme namespaces already hydrated or mutated.
+  const listed = new Set(namespaces.map((row) => row.ns));
+  for (const ns of runtime.settingsNamespaces.ids()) {
+    if (listed.has(ns)) continue;
+    if (ns === "mcp") continue;
+    const slot = runtime.settingsNamespaces.ensure(ns);
+    // Skip empty never-touched slots from ensure()-only probes.
+    if (Object.keys(slot.user).length === 0 && slot.revision === 0) continue;
+    namespaces.push(
+      runtime.settingsNamespaces.view(ns, {}, FACE_EMPTY_OBJECT_SCHEMA, "live"),
     );
   }
   return {

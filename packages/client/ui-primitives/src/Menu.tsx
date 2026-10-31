@@ -379,6 +379,9 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       className={clsx(css.list, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
       style={listStyle}
       role="menu"
+      // DSH MenuSurface stamped `data-menu-material="translucent"` — glass /
+      // wallpaper float rules key off it.
+      data-menu-material="translucent"
       // React portals bubble synthetic events through the REACT tree: without
       // this stop, an item click re-fires the anchor row's own onClick
       // (open/toggle) after onSelect.

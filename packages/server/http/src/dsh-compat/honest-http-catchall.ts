@@ -1,9 +1,14 @@
 /**
  * Generic GET catch-all — unlisted community HTTP still returns JSON (no blank SPA).
  * Registered last; POST returns false for RPC / settings fallback.
+ *
+ * Never claim `status: "ready"` here: that fooled Settings panels into treating
+ * the envelope as domain data (e.g. OFM `data.catalog.filter`). Real adapters
+ * and Cordis host halves register earlier and win.
  */
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { incompleteCommunityApiBody } from "./incomplete-api-shapes.js";
 import { sendJson } from "./underlying/http-json.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 
@@ -49,17 +54,22 @@ export async function handleHonestHttpCatchall(
     res.end();
     return true;
   }
+  const shaped = incompleteCommunityApiBody(pathname);
+  if (shaped) {
+    sendJson(res, 200, tag(shaped, ["dsh-host"]));
+    return true;
+  }
   sendJson(
     res,
     200,
     tag(
       {
-        ok: true,
-        status: "ready",
+        ok: false,
+        status: "incomplete",
         path: pathname,
         adapter: DSH_COMPAT_ADAPTER,
         writable: false,
-        note: "XRK honest HTTP catch-all for uncovered community client paths.",
+        note: "XRK honest HTTP catch-all — no Cordis / dsh-compat handler claimed this path.",
       },
       ["dsh-host"],
     ),

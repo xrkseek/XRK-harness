@@ -168,6 +168,13 @@ export function resolveDefaultAgentPreset(runtime: FaceRuntime): string {
   return "minimal";
 }
 
+/** Product Face namespaces that own settings.yaml sections (exclude mcp SoT). */
+const PRODUCT_YAML_NS = new Set(
+  FACE_PRODUCT_SETTINGS_NAMESPACES.map((spec) => spec.ns).filter(
+    (ns) => ns !== "mcp",
+  ),
+);
+
 export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
   const doc = loadYamlFile(settingsYamlPath(runtime), "settings");
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
@@ -185,6 +192,16 @@ export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
     slot.schema = schemaEnvelopeOf(spec);
     slot.applies = spec.applies;
     slot.user = structuredClone(section);
+  }
+  // Community theme / Cordis Config namespaces (theme-endfield, …) persist as
+  // sibling yaml keys. Hydrate any non-product object section so configForms
+  // survives restart without embedding Cordis configEditor.
+  for (const [key, raw] of Object.entries(doc)) {
+    if (PRODUCT_YAML_NS.has(key) || key === "mcp") continue;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const slot = runtime.settingsNamespaces.ensure(key);
+    slot.user = structuredClone(raw as Record<string, unknown>);
+    slot.applies = "live";
   }
   applyUiFromSettings(runtime);
   loadCredentialsFile(runtime);
@@ -339,6 +356,24 @@ export async function persistSettingsDocument(
       delete previous[spec.ns];
     } else {
       previous[spec.ns] = structuredClone(slot.user);
+    }
+  }
+  // Persist community dynamic namespaces (theme Config / plugin prefs) that
+  // Face `ensure`d via settings.mutate — same durable path as DSH settings.yaml.
+  const skipCommunityYaml = new Set([
+    ...PRODUCT_YAML_NS,
+    "mcp",
+    "ui",
+    "host",
+    "process-channels",
+  ]);
+  for (const ns of namespaces.ids()) {
+    if (skipCommunityYaml.has(ns)) continue;
+    const slot = namespaces.ensure(ns);
+    if (Object.keys(slot.user).length === 0) {
+      delete previous[ns];
+    } else {
+      previous[ns] = structuredClone(slot.user);
     }
   }
   await writeFile(file, yaml.dump(previous, { lineWidth: 120 }), "utf8");

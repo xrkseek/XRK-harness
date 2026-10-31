@@ -22,6 +22,9 @@ describe("audit-community-client", () => {
       "capability",
     );
     expect(classifyCommunityHttpPath("/api/wallet/snapshot")).toBe("capability");
+    // Exact roots (no trailing segment) must still classify as capability.
+    expect(classifyCommunityHttpPath("/api/wallet")).toBe("capability");
+    expect(classifyCommunityHttpPath("/wallet/api")).toBe("capability");
   });
 
   it("classifies Host-native /sidebar/* as host-sidebar (not missing)", () => {

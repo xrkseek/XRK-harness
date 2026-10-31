@@ -7,16 +7,27 @@
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--dsw-alias-bg-base);
-  /* Collapse/expand animates the tracks on the deepsuite sider curve
-     (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
+}
+
+/* Only a discrete collapse/expand toggle eases the tracks (TSX holds
+   data-animating across the toggle). Steady-state viewport updates stay
+   instant so the centre does not rubber-band while the window resizes.
+   Community skins (orca) also select [data-animating] for right-panel slides. */
+.frame[data-animating] {
   transition: grid-template-columns
     var(--ds-transition-duration-slow, 380ms)
     var(--ds-ease-in-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-/* Frameless Desktop: thin titlebar above the whole shell (all columns). */
+/* Frameless Desktop: thin titlebar above the whole shell (all columns).
+   Mirror DSH `--dsh-windows-titlebar-height` / frame clearance names so
+   community layout.css that still reads those vars resolves on the frame. */
 .frame[data-desktop-chrome] {
   --xrk-desktop-chrome-height: 36px;
+  --dsh-windows-titlebar-height: var(--xrk-desktop-chrome-height);
+  --dsh-frame-top-clearance: var(--xrk-desktop-chrome-height);
+  --dsh-frame-chrome-top: var(--xrk-desktop-chrome-height);
+  --dsh-windows-content-radius: 16px;
   padding-top: var(--xrk-desktop-chrome-height);
   box-sizing: border-box;
 }
@@ -28,9 +39,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .frame {
+  .frame[data-animating] {
     transition: none;
   }
+}
+
+/* DSH shell.leading seat geometry (maid selects [data-shell-leading]). */
+.leadingSeat {
+  position: absolute;
+  top: 11px;
+  left: 88px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.frame[data-desktop-chrome] .leadingSeat {
+  top: calc(var(--xrk-desktop-chrome-height, 36px) + 11px);
 }
 
 .sidebarCol {
@@ -276,7 +302,10 @@
    toggle is hard to find beside long titles / tab overflow). */
 .phoneChrome {
   position: absolute;
-  top: max(6px, env(safe-area-inset-top, 0px));
+  /* Match ConversationRoot phone .header pad-top (max 8 / safe-area) so
+     menu|ball|概况 share one band with the title row — Via / Edge cover
+     insets used to push chrome alone and land on the tabs. */
+  top: max(8px, env(safe-area-inset-top, 0px));
   left: max(6px, env(safe-area-inset-left, 0px));
   z-index: 24;
   display: inline-flex;

@@ -402,13 +402,22 @@ export class SettingsScopeBinder extends Service {
    */
   bind<T>(spec: SettingsScopeSpec<T>): SettingsScope<T> {
     const ctx = this.ctx
-    const connection = ctx.get('connection') as ConnectionHandle
-    const persistence = connection.isLoopback ? 'host' : 'memory'
+    const connection = ctx.get('connection') as ConnectionHandle | undefined
+    // Missing connection (early boot / bare test ctx / theme configForms probe):
+    // stay process-local rather than throw — community themes acquire forms
+    // before every inject settles.
+    const persistence = connection?.isLoopback === true ? 'host' : 'memory'
+    const api = (connection?.api ?? {
+      settings: {
+        describe: async () => ({ namespaces: [] }),
+        mutate: async () => ({ ok: false }),
+      },
+    }) as SettingsFace
     let entry = this.byNamespace.get(spec.namespace)
     if (entry === undefined) {
       entry = {
         controller: new SettingsScopeController<unknown>(
-          connection.api,
+          api,
           spec as SettingsScopeSpec<unknown>,
           persistence,
         ),
@@ -424,10 +433,13 @@ export class SettingsScopeBinder extends Service {
         if (namespace !== undefined && namespace !== spec.namespace) return
         void controller.load()
       }
-      const disposers = [
-        (ctx.get('remote') as Context['remote']).$on('settings/document-updated', refresh),
+      const remote = ctx.get('remote') as Context['remote'] | undefined
+      const disposers: Array<() => void> = [
         ctx.on('connection/reset', () => { refresh() }),
       ]
+      if (remote !== undefined && typeof remote.$on === 'function') {
+        disposers.push(remote.$on('settings/document-updated', refresh))
+      }
       void controller.load()
       return async () => {
         for (const dispose of disposers) dispose()

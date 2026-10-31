@@ -203,6 +203,7 @@ describe("plugin add/remove/list", () => {
     mkdirSync(path.join(dir, "src"), { recursive: true });
     mkdirSync(path.join(dir, "adapter"), { recursive: true });
     mkdirSync(path.join(dir, "vendor", "channel-pack"), { recursive: true });
+    mkdirSync(path.join(dir, "vendor", "magpie"), { recursive: true });
     writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify(
@@ -227,6 +228,10 @@ describe("plugin add/remove/list", () => {
       path.join(dir, "vendor", "channel-pack", "pack.js"),
       "export default {};\n",
     );
+    writeFileSync(
+      path.join(dir, "vendor", "magpie", "engine.json"),
+      "{}\n",
+    );
 
     addPlugin(dir, {
       env,
@@ -246,6 +251,227 @@ describe("plugin add/remove/list", () => {
     expect(existsSync(path.join(staged, "adapter", "kernel.js"))).toBe(true);
     expect(
       existsSync(path.join(staged, "vendor", "channel-pack", "pack.js")),
+    ).toBe(true);
+    expect(existsSync(path.join(staged, "vendor", "magpie", "engine.json"))).toBe(
+      true,
+    );
+  });
+
+  it("reconcile restages OFM Cordis host when only client.js was left on disk", () => {
+    const home = tempDir("xrk-plug-ofm-heal-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "ofm-heal-src");
+    mkdirSync(path.join(dir, "src"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@ebony-vinyl/dsh-our-free-model",
+          version: "2.7.4",
+          main: "./index.js",
+          exports: { ".": "./index.js", "./client": "./client.js" },
+          dsh: { client: { inject: [], platform: "web", immediately: true } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(dir, "client.js"),
+      `window.__ModuleLoader__.load({ id: "dsh-our-free-model", factory: () => ({}) });\n`,
+    );
+    writeFileSync(path.join(dir, "index.js"), "export function apply() {}\n");
+    writeFileSync(path.join(dir, "src", "store.js"), "export const ok = true;\n");
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@ebony-vinyl",
+      "dsh-our-free-model",
+    );
+    rmSync(path.join(staged, "index.js"), { force: true });
+    rmSync(path.join(staged, "src"), { recursive: true, force: true });
+    expect(existsSync(path.join(staged, "index.js"))).toBe(false);
+
+    // Point inventory source at the local fixture so restage needs no registry.
+    const invPath = path.join(pluginsDir, ".xrk-plugins.json");
+    const inv = JSON.parse(readFileSync(invPath, "utf8")) as {
+      rev: number;
+      packages: Record<string, { source: string; name: string; version: string; kind: string; installedAt: string }>;
+    };
+    inv.packages["@ebony-vinyl/dsh-our-free-model"] = {
+      ...inv.packages["@ebony-vinyl/dsh-our-free-model"]!,
+      source: dir,
+    };
+    writeFileSync(invPath, `${JSON.stringify(inv, null, 2)}\n`);
+
+    const logs: string[] = [];
+    reconcilePluginsDir(pluginsDir, {
+      log: (l) => logs.push(l),
+      warn: () => {},
+    });
+    expect(existsSync(path.join(staged, "index.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "src", "store.js"))).toBe(true);
+    expect(
+      logs.some((l) =>
+        l.includes("restaged Cordis host half for @ebony-vinyl/dsh-our-free-model"),
+      ),
+    ).toBe(true);
+  });
+
+  it("stages a scoped OFM family under the scoped path and aligns ModuleLoader id", () => {
+    const home = tempDir("xrk-plug-ofm-scoped-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "ofm-scoped-fixture");
+    mkdirSync(path.join(dir, "src"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@publisher/dsh-our-free-model",
+          version: "2.7.4",
+          dsh: { client: { inject: [], platform: "web", immediately: true } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(dir, "client.js"),
+      `window.__ModuleLoader__.load({ id: "dsh-our-free-model", factory: () => ({ apply() {} }) });\n`,
+    );
+    writeFileSync(path.join(dir, "index.js"), "export function apply() {}\n");
+    writeFileSync(path.join(dir, "src", "store.js"), "export const ok = true;\n");
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@publisher",
+      "dsh-our-free-model",
+    );
+    expect(existsSync(path.join(staged, "client.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "index.js"))).toBe(true);
+    expect(existsSync(path.join(staged, "src", "store.js"))).toBe(true);
+    expect(readFileSync(path.join(staged, "client.js"), "utf8")).toContain(
+      'id: "@publisher/dsh-our-free-model"',
+    );
+  });
+
+  it("aligns ModuleLoader id for any scoped community client republish", () => {
+    const home = tempDir("xrk-plug-align-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "align-fixture");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@acme/dsh-widget",
+          version: "1.0.0",
+          dsh: { client: { inject: [], platform: "web", immediately: true } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(dir, "client.js"),
+      `window.__ModuleLoader__.load({ id: 'dsh-widget', factory: () => ({ apply() {} }) });\n`,
+    );
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@acme",
+      "dsh-widget",
+      "client.js",
+    );
+    expect(readFileSync(staged, "utf8")).toContain("id: '@acme/dsh-widget'");
+  });
+
+  it("aligns multiline ModuleLoader stamps and heals via reconcile", () => {
+    const home = tempDir("xrk-plug-align-ml-");
+    const env = { XRK_HOME: home };
+    const pluginsDir = resolvePluginsDir(env);
+    const dir = path.join(home, "ofm-ml-fixture");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@ebony-vinyl/dsh-our-free-model",
+          version: "2.7.4",
+          dsh: { client: { inject: [], platform: "web", immediately: true } },
+        },
+        null,
+        2,
+      ),
+    );
+    const multilineBare = [
+      "window.__ModuleLoader__.load({",
+      "  id: 'dsh-our-free-model',",
+      "  factory: require => ({ apply() {} }),",
+      "})",
+      "",
+    ].join("\n");
+    writeFileSync(path.join(dir, "client.js"), multilineBare, "utf8");
+
+    addPlugin(dir, {
+      env,
+      pluginsDir,
+      io: { log: () => {}, warn: () => {} },
+    });
+
+    const staged = path.join(
+      pluginsDir,
+      "web",
+      "plugins",
+      "@ebony-vinyl",
+      "dsh-our-free-model",
+      "client.js",
+    );
+    expect(readFileSync(staged, "utf8")).toContain(
+      "id: '@ebony-vinyl/dsh-our-free-model'",
+    );
+
+    // Simulate a pre-align / non-install copy left on disk.
+    writeFileSync(staged, multilineBare, "utf8");
+    const logs: string[] = [];
+    reconcilePluginsDir(pluginsDir, {
+      log: (l) => logs.push(l),
+      warn: () => {},
+    });
+    expect(readFileSync(staged, "utf8")).toContain(
+      "id: '@ebony-vinyl/dsh-our-free-model'",
+    );
+    expect(
+      logs.some((l) =>
+        l.includes("aligned ModuleLoader id for @ebony-vinyl/dsh-our-free-model"),
+      ),
     ).toBe(true);
   });
 
@@ -320,7 +546,7 @@ describe("plugin add/remove/list", () => {
     expect(body.http[0]!.prefix).toBe("/sidebar/");
   });
 
-  it("stages kws/assets/static/skins dirs and skin.json next to client.js", () => {
+  it("stages kws/assets/static/skins/sounds dirs and skin.json next to client.js", () => {
     const home = tempDir("xrk-plug-kws-");
     const env = { XRK_HOME: home };
     const pluginsDir = resolvePluginsDir(env);
@@ -329,6 +555,7 @@ describe("plugin add/remove/list", () => {
     mkdirSync(path.join(dir, "kws"), { recursive: true });
     mkdirSync(path.join(dir, "assets"), { recursive: true });
     mkdirSync(path.join(dir, "skins", "demo"), { recursive: true });
+    mkdirSync(path.join(dir, "sounds"), { recursive: true });
     writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify(
@@ -344,6 +571,7 @@ describe("plugin add/remove/list", () => {
     writeFileSync(path.join(dir, "lib", "client.js"), "export {};\n");
     writeFileSync(path.join(dir, "kws", "engine.wasm"), "wasm");
     writeFileSync(path.join(dir, "assets", "pet.png"), "png");
+    writeFileSync(path.join(dir, "sounds", "boot.wav"), "wav");
     writeFileSync(
       path.join(dir, "skins", "demo", "skin.json"),
       JSON.stringify({ id: "demo", name: "Demo" }),
@@ -363,6 +591,7 @@ describe("plugin add/remove/list", () => {
     expect(existsSync(path.join(dest, "client.js"))).toBe(true);
     expect(existsSync(path.join(dest, "kws", "engine.wasm"))).toBe(true);
     expect(existsSync(path.join(dest, "assets", "pet.png"))).toBe(true);
+    expect(existsSync(path.join(dest, "sounds", "boot.wav"))).toBe(true);
     expect(existsSync(path.join(dest, "skin.json"))).toBe(true);
     expect(existsSync(path.join(dest, "skins", "demo", "skin.json"))).toBe(
       true,

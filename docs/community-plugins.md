@@ -2,7 +2,8 @@
 
 > **读者**：集成者 · 贡献者（安装社区 client、对照 Host 已实现能力与待补特性）
 
-产品壳可加载社区 `client.js`。Host 侧由内置适配器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，落盘与会话走 `~/.xrk`。实现笔记：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · 发现：[plugin-loader.md](./plugin-loader.md)。
+产品壳可加载社区 `client.js`。Host 侧由内置适配器 `extensions/dsh-compat` 与 `@xrkseek/server-http/dsh-compat` 按 **路径与 RPC 形状**接线，落盘与会话走 `~/.xrk`。实现笔记：[dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · 发包边界：[PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · 发现：[plugin-loader.md](./plugin-loader.md)。  
+**逐表面兼容矩阵**（对标 DSH 适配 CC mods 的写法）：[community-plugin-compat.md](./community-plugin-compat.md)。
 
 ## 怎么安装与使用
 
@@ -15,6 +16,8 @@ xrkh restart
 ```
 
 示例包名：`dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` 等（完整清单见下「已适配社区包清单」）。CLI 装完用 **`xrkh restart`**；Settings 装完进程半部会热 reconcile，client 半部按列表 `needsRestart` 硬刷新。
+
+**Scoped 再发行**：社区包常以裸名 `dsh-*` 写入 `__ModuleLoader__.load({ id })`，又以 `@scope/dsh-*` 发 npm。安装时 CLI 会把 stamp 对齐到安装名；运行时 ModuleLoader 对同一插件族（裸名 ↔ `@scope/裸名`）双登记。Host 具名适配（如 OFM / WorkBuddy）按**裸名族**识别，不钉死某个 publisher scope。
 
 3. 日常开关、更新、删除与配置优先 **设置 → Plugins**（插件列表 + 各插件配置卡）；Host/CI 无头场景再用 env / 落盘文件。
 4. 免补 `xrk.host.json`：loader 用能力表 + `client.js` 扫描 + 约定 infer（见 [plugin-loader.md](./plugin-loader.md)）。作者也可声明 `xrk.host.json` 或提供 `host.mjs`。
@@ -109,7 +112,7 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `@ychris12138/dsh-usage-stats` | full | `/api/usage-stats` |
 | `@anionex/dsh-turn-rewind` | full | `/turn-rewind` |
 | `dsh-auto-review` | full | `/auto-review` |
-| `dsh-whale-girl` | full | community-root · `shell.overlay` |
+| `dsh-whale-girl` | full | community-root · `api/state`：cost-meter + drain 活跃会话 projection（不对全库 fold）· `shell.overlay` |
 | `@xmanrui/dsh-im` | full | `/api/im` · IM RPC |
 | `dshmarket` | full | `/dsh-market` · install/update/uninstall → `xrkh plugin add`/`remove` |
 | `@linxin666/dsh-client-ui-market` | full | Settings · market HTTP |
@@ -117,7 +120,8 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision Host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | partial | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame`（占位帧 + progress=100；无 ffmpeg 场景渲染） |
+| `dsh-plugin-wallpaper-engine` | partial | 自定义上传 + settings + picker 形 inventory · media/preview；Steam/WebWallGL/ffmpeg/Now Playing 诚实降级 — 细表 [compat](./community-plugin-compat.md#dsh-plugin-wallpaper-engineelysia395dsh-wallpaper-engine) |
+| `dsh-wallpaper-bg` | full（内置） | `/dsh-wallpaper-bg`：builtin webp · health · `/we` 列表（无本机 WE API） |
 | `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }`（session DocStore 可 push）；`balance` · `backfill`；缺 `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC：documents CRUD · archive/forget · snapshot/capacity/placement · view-settings；缺 panellist / `main` |
 | `@linxin666/dsh-client-ui-task-board` | full | `/api/task-board` schemaVersion=3 · `/action` CRUD 持久化 · `/parse` |
@@ -138,7 +142,7 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` 同形离线状态 · `ui-mode` 持久化 · `/ask/state`；进程 start/stop 仍 deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` 团队目录持久化 |
 | `dsh-workbuddy-connect` | full | web/Desktop：stage `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face；共享 `connection`（admit/fetch）· `credentials` 落盘；装后需重启 Host |
-| `dsh-our-free-model` | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials`（`describe`/`unset`）· `profileContext`（EAC）· `attachments`（vision）· forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
+| `dsh-our-free-model`（含任意 `@scope/dsh-our-free-model` 再发行） | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials`（`describe`/`unset`）· `profileContext`（EAC）· `attachments`（vision）· forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` 持久化；`raw-search` 无钥 `ddg` 走 DuckDuckGo HTML；带 key 引擎仍 deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings；PTY 需 WS |
@@ -172,8 +176,10 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body 装饰 |
 | `open-sea-skin` | client | body 装饰 |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |
+| `dsh-theme-endfield` · `dsh-skin` · `dsh-qq2006` · `dsh-gui-customization` · `dsh-xiaoyao-skins` · `freestyle-dsh-theme` 等市场 Theme | full～degraded | 通用底层：`--dsw-*`（含 elevation / shimmer / turn-trigger）· DOM 双戳 · `configForms`→settingsScope（偏好写入 `settings.yaml`）· stage `sounds/`/`assets/`；细表 [compat](./community-plugin-compat.md)「主题 / 外观族」 |
+| `dsh-deepcel` | degraded | 令牌/DOM 可用；表格化结构重映射不保证 |
 
-装皮肤包后若立绘 404：确认 staged `assets/` · `skin.json`，并重启 Host。Desktop 上非 `/assets/*` 的扩展名路径（如 preview 图）在磁盘未命中时会回落 Host Fetch，避免皮肤资源被静态 404 吃掉。
+装皮肤包后若立绘 404：确认 staged `assets/` · `skin.json`，并重启 Host。Desktop 上非 `/assets/*` 的扩展名路径（如 preview 图）在磁盘未命中时会回落 Host Fetch，避免皮肤资源被静态 404 吃掉。主题音效目录 stage 为 `sounds/`。
 
 ## 侧栏插件契约（Host 原生，client 只挂 UI）
 
@@ -285,7 +291,8 @@ node scripts/dsh-community-mirror.mjs --search=skin
 
 > **Audience**: Integrators · Contributors (install community clients; compare implemented Host surfaces and planned work)
 
-The product shell may load community `client.js`. The Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, with persistence under `~/.xrk`. Implementation notes: [dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · Package boundary: [PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · Discover: [plugin-loader.md](./plugin-loader.md).
+The product shell may load community `client.js`. The Host side is wired by the built-in adapter `extensions/dsh-compat` and `@xrkseek/server-http/dsh-compat` according to **path and RPC shape**, with persistence under `~/.xrk`. Implementation notes: [dsh-compat/README.md](../packages/server/http/src/dsh-compat/README.md) · Package boundary: [PACKAGE.md](../packages/server/http/src/dsh-compat/PACKAGE.md) · Discover: [plugin-loader.md](./plugin-loader.md).  
+**Per-surface compatibility matrix** (same grain as DSH’s Claude Code mods page): [community-plugin-compat.md](./community-plugin-compat.md).
 
 ## Install and use
 
@@ -298,6 +305,8 @@ xrkh restart
 ```
 
 Example package names: `dsh-wallet` · `@liustack/modsearch` · `xrkh-better-sidebar` · `@smalltailqwq/dsh-client-ui-skin-maid-atelier` (full inventory under **Adapted community packages** below). After CLI install use **`xrkh restart`**; Settings install live-reconciles the process half — hard-refresh the client half when the list shows `needsRestart`.
+
+**Scoped republish**: community clients often stamp `__ModuleLoader__.load({ id })` with the bare `dsh-*` name while publishing as `@scope/dsh-*`. Install and `xrkh serve` reconcile align the stamp to the install name; at runtime ModuleLoader dual-registers by boot-graph family (bare ↔ `@scope/bare`) so parallel plugin prefetch cannot drop a bare stamp under a sibling arrival. Named Host adapters (OFM / WorkBuddy, …) match by **bare family**, not a hard-coded publisher scope.
 
 3. Prefer **Settings → Plugins** (plugin list + each plugin’s config card) for install / update / disable / delete and day-to-day toggles; use env / on-disk files for Host/CI headless runs.
 4. `xrk.host.json` is optional: the loader uses the capability table + `client.js` scan + convention infer ([plugin-loader.md](./plugin-loader.md)). Authors may still declare `xrk.host.json` or ship `host.mjs`.
@@ -392,7 +401,7 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `@ychris12138/dsh-usage-stats` | full | `/api/usage-stats` |
 | `@anionex/dsh-turn-rewind` | full | `/turn-rewind` |
 | `dsh-auto-review` | full | `/auto-review` |
-| `dsh-whale-girl` | full | community-root · `shell.overlay` |
+| `dsh-whale-girl` | full | community-root · `api/state`: cost-meter + drain-active projection (no full-store fold) · `shell.overlay` |
 | `@xmanrui/dsh-im` | full | `/api/im` · IM RPC |
 | `dshmarket` | full | `/dsh-market` · install/update/uninstall → `xrkh plugin add`/`remove` |
 | `@linxin666/dsh-client-ui-market` | full | Settings · market HTTP |
@@ -400,7 +409,8 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-chat-import` | full | `/api-import/*` |
 | `dsh-vision-router` | full | `/vision-router-settings` · Vision host |
 | `dsh-pocket` | full | `/dsh-pocket` |
-| `dsh-plugin-wallpaper-engine` | partial | `/wallpaper-engine/*` · `/scene-anim` · `/scene-frame` (placeholder frame + progress=100; no ffmpeg scene render) |
+| `dsh-plugin-wallpaper-engine` | partial | custom upload + settings + picker-shaped inventory · media/preview; Steam/WebWallGL/ffmpeg/Now Playing honestly degraded — detail [compat](./community-plugin-compat.md) |
+| `dsh-wallpaper-bg` | full (builtins) | `/dsh-wallpaper-bg`: builtin webp · health · `/we` list (no local WE API) |
 | `dsh-context` | partial | `/api/dsh-context/detail` → `{ ok, value }` (session DocStore push); `balance` · `backfill`; missing `sidebar.right.pane.*` |
 | `dsh-mnemon` | host-ok | Mnemon RPC: documents CRUD · archive/forget · snapshot/capacity/placement · view-settings; missing panellist / `main` |
 | `@linxin666/dsh-client-ui-task-board` | full | `/api/task-board` schemaVersion=3 · `/action` CRUD persisted · `/parse` |
@@ -421,7 +431,7 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` same offline shape · `ui-mode` persist · `/ask/state`; process start/stop still deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` team catalog persisted |
 | `dsh-workbuddy-connect` | full | web/Desktop: staged `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face; shared `connection` (admit/fetch) · persisted `credentials`; restart Host after install |
-| `dsh-our-free-model` | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` (`describe`/`unset`) · `profileContext` (EAC) · `attachments` (vision) · forward on by default · Face sync; `distribution: managed`; restart Host after install |
+| `dsh-our-free-model` (any `@scope/dsh-our-free-model` republish) | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` (`describe`/`unset`) · `profileContext` (EAC) · `attachments` (vision) · forward on by default · Face sync; `distribution: managed`; restart Host after install |
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` persist; keyless `ddg` `raw-search` via DuckDuckGo HTML; keyed engines still deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings; PTY needs WS |
@@ -455,8 +465,10 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-client-ui-aqua` | client | Settings `aqua` · body décor |
 | `open-sea-skin` | client | body décor |
 | `dsh-client-liang-intensity-skin` | client | `conversation.input.right` |
+| Marketplace Theme cards (`dsh-theme-endfield`, `dsh-skin`, `dsh-qq2006`, …) | full–degraded | Shared underlay: `--dsw-*` (elevation / shimmer / turn-trigger), DOM dual-stamps, `configForms`→settingsScope (prefs in `settings.yaml`), staged `sounds/`/`assets/` — see [compat](./community-plugin-compat.md) |
+| `dsh-deepcel` | degraded | Tokens/DOM ok; spreadsheet structural remap not guaranteed |
 
-If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, then restart Host. On Desktop, extensioned paths outside packaged `/assets/*` (e.g. preview images) fall through to Host Fetch on disk miss so community skin rasters are not swallowed by a static 404.
+If skin artwork 404s after install: confirm staged `assets/` · `skin.json`, then restart Host. On Desktop, extensioned paths outside packaged `/assets/*` (e.g. preview images) fall through to Host Fetch on disk miss so community skin rasters are not swallowed by a static 404. Theme audio stages under `sounds/`.
 
 ## Sidebar plugin contract (Host owns; client UI only)
 

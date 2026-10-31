@@ -65,6 +65,40 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.0',
+    date: '2026-10-31',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '0.7.x 正式线首发，接管 @latest：上下文工程重排 · 大会话读写 · 席位 / 向日葵命名 · DeepSeek 搜索。',
+        en: 'Opens the 0.7.x formal line and takes @latest: context engineering · large-session I/O · seat / sunflower naming · DeepSeek search.',
+      },
+      {
+        zh: '交付物不进过程折叠；软预算对齐 Codex；公网绑定带 PIN；产品 plan 模式退役。',
+        en: 'Deliverables stay flat of process fold; Codex-aligned soft budget; public bind with PIN; product plan mode retired.',
+      },
+      {
+        zh: '概况正式名（昵称）；Default Model 软刷新；插话轮次标；向日葵免费卡 · 策展记忆 live。',
+        en: 'Overview formal（nick）; Default Model soft refresh; steer round marks; Sunflower-free card · curated-memory live.',
+      },
+      {
+        zh: '聊天键盘焦点环 · 插队中术语 · 轮次轨去 height 动画；turn-cut 分支不因同轮后续节点禁用。',
+        en: 'Chat focus rings · steer badge wording · no turn-rail height animation; turn-cut branch stays on with later same-turn nodes.',
+      },
+      {
+        zh: '社区 OFM / channel-pack 登录 RPC · ModuleLoader 双注册 · Cordis Host staging；鲸女 live meter · wallet 根路径。',
+        en: 'Community OFM / channel-pack login RPC · ModuleLoader dual-register · Cordis Host staging; whale live meter · wallet roots.',
+      },
+      {
+        zh: 'npm @xrkseek/harness-cli@0.7.0 接管 @latest。完整清单见 docs/releases/v0.7.0.md。',
+        en: 'npm @xrkseek/harness-cli@0.7.0 now owns @latest. Full list in docs/releases/v0.7.0.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.0-rc.3',
     date: '2026-10-30',
     title: {

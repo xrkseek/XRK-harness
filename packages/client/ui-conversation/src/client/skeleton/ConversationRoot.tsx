@@ -478,13 +478,27 @@ export function ConversationRoot({
   // on the fallback alone would leave Question/Approval panels at the content
   // end off-screen when the user is not pinned to the floor.
   const composerSeat = (
-    <div ref={seatResizeRef} className={css.composerSeat} data-composer-seat="">
+    <div
+      ref={seatResizeRef}
+      className={css.composerSeat}
+      data-composer-seat=""
+      data-conversation-region="composer"
+    >
       {composer}
     </div>
   )
 
   return (
-    <div ref={rootResizeRef} className={css.root} data-phase={phase}>
+    <div
+      ref={rootResizeRef}
+      className={css.root}
+      data-phase={phase}
+      // DSH conversation body used `data-content-phase` on an inner host;
+      // community glass CSS still selects it — dual-stamp on the root.
+      data-content-phase={phase}
+      data-conversation-content=""
+      data-conversation-session={sessionId}
+    >
       {renderSlot('conversation.session.header', {})}
       <div className={css.body}>
         <div className={css.scrollBody} data-conversation-scroll="">

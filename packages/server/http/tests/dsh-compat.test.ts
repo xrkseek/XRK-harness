@@ -2124,6 +2124,45 @@ process.exit(0);
     });
   });
 
+  it("whale-girl api/state prefers Host meter (no wallet fan-out)", async () => {
+    const handler = compatHandler({
+      resolveCommunityLiveMeter: () => ({
+        balance: 14.39,
+        currency: "CNY",
+        todayUsage: 1.2,
+        contextTokens: 110_948,
+        contextLimit: 600_000,
+        subagentRunning: 2,
+        workState: "thinking",
+        workStateSince: Date.now(),
+      }),
+    });
+    await withPublicHandler(handler, async (base) => {
+      const nested = await fetch(`${base}/dsh-whale-girl/api/state`);
+      const body = (await nested.json()) as {
+        balance: number | null;
+        currency: string;
+        contextTokens: number;
+        contextPct: number;
+        todayUsage: number;
+        sysInfo: { memTotal: number };
+      };
+      expect(nested.status).toBe(200);
+      expect(body.balance).toBe(14.39);
+      expect(body.currency).toBe("CNY");
+      expect(body.contextTokens).toBe(110_948);
+      expect(body.contextPct).toBeGreaterThan(0);
+      expect(body.todayUsage).toBe(1.2);
+      expect(body.sysInfo.memTotal).toBeGreaterThan(0);
+
+      const work = await (
+        await fetch(`${base}/dsh-whale-girl/api/workstate`)
+      ).json() as { state: string; since: number };
+      expect(work.state).toBe("thinking");
+      expect(typeof work.since).toBe("number");
+    });
+  });
+
   it("serves tongflow studio misc paths", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "xrk-tongflow-misc-"));
     temps.push(root);
@@ -2268,9 +2307,13 @@ process.exit(0);
       expect(catalog.ok).toBe(true);
       expect(catalog.desktopIcon.enabled).toBe(false);
       expect(catalog.skins.some((s) => s.id === "maid-atelier")).toBe(true);
-      expect(
-        catalog.skins.find((s) => s.id === "maid-atelier")?.bodyAttr,
-      ).toBe("data-dsh-maid-atelier");
+      const maid = catalog.skins.find((s) => s.id === "maid-atelier") as
+        | { id: string; bodyAttr: string; order: number }
+        | undefined;
+      expect(maid?.bodyAttr).toBe("data-dsh-maid-atelier");
+      // deep-whale SkinCatalogEntry.order — always a finite number (default 0)
+      expect(typeof maid?.order).toBe("number");
+      expect(Number.isFinite(maid?.order)).toBe(true);
 
       const switched = await fetch(`${base}/api/dsh/skins`, {
         method: "POST",
@@ -2403,7 +2446,7 @@ process.exit(0);
     });
   });
 
-  it("honest GET catch-all returns JSON for uncovered community paths", async () => {
+  it("honest GET catch-all returns incomplete JSON for uncovered community paths", async () => {
     const handler = compatHandler();
     await withPublicHandler(handler, async (base) => {
       const res = await fetch(`${base}/some-future-plugin/api/status`);
@@ -2414,8 +2457,8 @@ process.exit(0);
         incomplete?: string[];
       };
       expect(res.status).toBe(200);
-      expect(body.ok).toBe(true);
-      expect(body.status).toBe("ready");
+      expect(body.ok).toBe(false);
+      expect(body.status).toBe("incomplete");
       expect(body.adapter).toBe("xrk-dsh-compat");
       expect(body.incomplete).toContain("dsh-host");
     });
@@ -2458,6 +2501,17 @@ process.exit(0);
         await fetch(`${base}/wallet/api/balance`)
       ).json()) as { incomplete?: string[] };
       expect(bal.incomplete).toContain("wallet-host");
+      // Exact roots must not fall through to honest incomplete catch-all.
+      const root = (await (
+        await fetch(`${base}/api/wallet`)
+      ).json()) as { ok?: boolean; status?: string; incomplete?: string[] };
+      expect(root.status).not.toBe("incomplete");
+      expect(root.ok).toBe(true);
+      const aliasRoot = (await (
+        await fetch(`${base}/wallet/api`)
+      ).json()) as { ok?: boolean; status?: string };
+      expect(aliasRoot.status).not.toBe("incomplete");
+      expect(aliasRoot.ok).toBe(true);
 
       // mnemon — settings RPC scope snapshot (no Cordis host)
       const mn = await fetch(`${base}/dsh-mnemon-settings/get`, {

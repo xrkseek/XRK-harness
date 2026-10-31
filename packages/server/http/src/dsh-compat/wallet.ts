@@ -20,6 +20,7 @@ function resolvePort(options: WalletOptions): XrkWalletPort {
 }
 
 function normalizeWalletPath(pathname: string): string {
+  if (pathname === "/wallet/api") return "/api/wallet";
   if (pathname.startsWith("/wallet/api/")) {
     return `/api/wallet/${pathname.slice("/wallet/api/".length)}`;
   }

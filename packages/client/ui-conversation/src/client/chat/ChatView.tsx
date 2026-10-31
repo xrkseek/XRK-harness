@@ -66,6 +66,20 @@ function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
 }
 
+/**
+ * Overlay soft-keyboard band (mirrors ui-layout visual-viewport-keyboard;
+ * value import across plugins is forbidden — keep the pure math local).
+ */
+function keyboardInsetPx(
+  innerHeight: number,
+  visualHeight: number,
+  visualOffsetTop: number,
+): number {
+  const covered = innerHeight - visualHeight - visualOffsetTop
+  if (!Number.isFinite(covered) || covered <= 0) return 0
+  return Math.round(covered)
+}
+
 /** Smallest host turn cited by the turn-outline projection, if it is an array. */
 function outlineEarliestTurn(outline: unknown): number | null {
   if (!Array.isArray(outline)) return null
@@ -1138,6 +1152,51 @@ export function ChatView({
     if (composer !== null) observer.observe(composer)
     return () => { observer.disconnect() }
   }, [])
+
+  // Overlay soft keyboard: sticky seat lifts by --xrk-keyboard-inset and the
+  // transcript gains matching pad. While the reader is on the floor, re-pin
+  // every visualViewport frame so the tip rides up with the keys (Via / Edge
+  // packaged WebViews) instead of sitting under the composer.
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (vv === null || vv === undefined) return
+    let prevInset = keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop)
+    let raf = 0
+    const sync = (): void => {
+      raf = 0
+      const inset = keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop)
+      const delta = inset - prevInset
+      prevInset = inset
+      if (delta === 0) return
+      const local = listRef.current
+      if (local === null) return
+      const el = scrollerOf(local)
+      const floor = Math.max(0, el.scrollHeight - el.clientHeight)
+      const nearFloor = floor - el.scrollTop <= FOLLOW_THRESHOLD + Math.max(0, delta) + 1
+      if (!atBottomRef.current && !nearFloor) return
+      el.scrollTop = el.scrollHeight
+      observedTopRef.current = el.scrollTop
+      lastScrollHeightRef.current = el.scrollHeight
+      if (!atBottomRef.current) {
+        atBottomRef.current = true
+        setAtBottom(true)
+      }
+      chatScroll.save(null)
+    }
+    const schedule = (): void => {
+      if (raf !== 0) return
+      raf = window.requestAnimationFrame(sync)
+    }
+    vv.addEventListener('resize', schedule)
+    vv.addEventListener('scroll', schedule)
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (raf !== 0) window.cancelAnimationFrame(raf)
+      vv.removeEventListener('resize', schedule)
+      vv.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [chatScroll])
 
   // A failed/empty page leaves the head unchanged. Once the request leaves
   // its busy state there is no future prepend for the saved anchor to own.

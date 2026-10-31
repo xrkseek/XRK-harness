@@ -171,6 +171,7 @@ import { createCostMeterUsageBridge } from "./cost-meter-bridge.js";
 import { createHarnessConnectorBridgeFromFace } from "./harness-connector-bridge.js";
 import { createAutoReviewBridgeFromHost } from "./auto-review-bridge.js";
 import { createWalletFaceBridgeFromFace } from "./wallet-bridge.js";
+import { createCommunityLiveMeterFromFace } from "./community-live-bridge.js";
 import { createSidebarFaceBridgeFromFace } from "./sidebar-face-bridge.js";
 import {
   mcpDraftsToSpecs,
@@ -3489,6 +3490,8 @@ export function createHostManager(): HostManager {
           xrkHome: resolveXrkHome(),
           face: createWalletFaceBridgeFromFace(faceRuntime),
         }),
+        resolveCommunityLiveMeter:
+          createCommunityLiveMeterFromFace(faceRuntime),
         sidebarFace: createSidebarFaceBridgeFromFace(faceRuntime, {
           ...(sharedShell ? { shell: sharedShell } : {}),
         }),

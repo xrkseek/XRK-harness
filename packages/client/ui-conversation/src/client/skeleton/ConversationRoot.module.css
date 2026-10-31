@@ -562,9 +562,14 @@
   }
 
   .header {
-    /* Right edge only — left inset is owned by phoneChrome so titleRow
-       padding can sit flush against menu|ball|概况 without a mystery gap. */
-    padding: 8px max(10px, env(safe-area-inset-right, 0px)) 0 0;
+    /* Left inset is owned by phoneChrome (titleRow pad). Top must match
+       AppFrame .phoneChrome (`top: max(8px, safe-area)`) — Via / Edge
+       packaged WebViews have no browser chrome, so viewport-fit=cover
+       makes safe-area-inset-top non-zero; without this pad the floating
+       menu|ball|概况 sit on the tabs row. Mobile Safari/Chrome tabs often
+       keep inset 0 (layout already below the URL bar) so this is a no-op. */
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      max(10px, env(safe-area-inset-right, 0px)) 0 0;
   }
 
   /* Phone AppFrame owns the Status entry — hide the faint header twin. */
@@ -593,6 +598,27 @@
 
   :global(html[data-xrk-keyboard]) .root[data-phase='hero'] .composerHero {
     padding-bottom: 8px;
+  }
+
+  /* Overlay keyboard (Via / Edge packaged WebView): sticky seat lifts by
+     --xrk-keyboard-inset and would cover the tip. Pad the transcript
+     (first child) by the same band so the last bubbles clear the seat;
+     ChatView re-pins scrollTop while following. */
+  :global(html[data-xrk-keyboard]) .root[data-phase='active'] .scrollBody > :first-child {
+    padding-bottom: var(--xrk-keyboard-inset, 0px);
+  }
+
+  :global(html[data-xrk-keyboard]) .root[data-phase='active'] .scrollBody {
+    scroll-padding-bottom: calc(
+      var(--dsh-composer-height, 152px) + var(--xrk-keyboard-inset, 0px)
+    );
+    /* Browser scroll-anchoring fights the floor re-pin as the pad grows. */
+    overflow-anchor: none;
+  }
+
+  /* Settling keeps the composer seat — same keyboard clear as active. */
+  :global(html[data-xrk-keyboard]) .root[data-phase='settling'] .scrollBody > :first-child {
+    padding-bottom: var(--xrk-keyboard-inset, 0px);
   }
 
   /* Bottom safe-area lives on InputBar only — avoid stacking with composerSeat. */

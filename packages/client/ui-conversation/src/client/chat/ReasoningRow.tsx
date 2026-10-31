@@ -124,7 +124,14 @@ export function ReasoningRow({
   }
 
   return (
-    <div className={css.root} data-variant="think" data-state={running ? 'running' : 'ok'}>
+    <div
+      className={css.root}
+      data-variant="think"
+      data-state={running ? 'running' : 'ok'}
+      // DSH TurnTriggerNodeView stamped `data-turn-trigger` — wallpaper /
+      // thinking-glass CSS still selects it.
+      data-turn-trigger=""
+    >
       {running && <span className={a11yCss.visuallyHidden}>{t('row.running')}</span>}
       <DisclosureRow
         rowClassName={css.row}

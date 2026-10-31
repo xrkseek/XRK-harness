@@ -61,7 +61,9 @@ body {
    Kernel stamp is synchronous (boot.tsx + AppRoot layout effect) so FABs
    never flash above the HARNESS gate. */
 html[data-xrk-booting] [data-dsh-panel-host],
-html[data-xrk-booting] [data-dsh-toggle-cluster] {
+html[data-xrk-booting] [data-dsh-toggle-cluster],
+html[data-dsh-booting] [data-dsh-panel-host],
+html[data-dsh-booting] [data-dsh-toggle-cluster] {
   visibility: hidden !important;
   pointer-events: none !important;
   opacity: 0 !important;

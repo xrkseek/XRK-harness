@@ -24,6 +24,10 @@ import {
 } from "./mnemon.js";
 import { handleDreamSkinHttp } from "./dream-skin.js";
 import { handleWallpaperHttp, isWallpaperHttpPath } from "./wallpaper.js";
+import {
+  handleWallpaperBgHttp,
+  isWallpaperBgPath,
+} from "./wallpaper-bg.js";
 import { handleSkinMarketHttp } from "./skin-market.js";
 import { handleSkinAssetsHttp, isSkinAssetsPath } from "./skin-assets.js";
 import { handleDshSkinsHttp, isDshSkinsHttpPath } from "./dsh-skins.js";
@@ -216,6 +220,18 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
         match: isWallpaperHttpPath,
         handle: (req, res, pathname) =>
           handleWallpaperHttp(req, res, pathname, ctx),
+      },
+    ],
+  }),
+
+  "xrk-wallpaper-bg": (ctx) => ({
+    http: [
+      {
+        match: isWallpaperBgPath,
+        handle: (req, res, pathname) =>
+          handleWallpaperBgHttp(req, res, pathname, {
+            ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
+          }),
       },
     ],
   }),
@@ -777,6 +793,10 @@ export const XRK_HOST_PROVIDERS: Record<string, HostProviderFn> = {
           handleCommunityRootHttp(req, res, pathname, {
             ...(ctx.pluginsDir ? { pluginsDir: ctx.pluginsDir } : {}),
             ...(ctx.xrkHome ? { xrkHome: ctx.xrkHome } : {}),
+            ...(ctx.walletPort ? { walletPort: ctx.walletPort } : {}),
+            ...(ctx.resolveCommunityLiveMeter
+              ? { resolveLiveMeter: ctx.resolveCommunityLiveMeter }
+              : {}),
           }),
       },
     ],

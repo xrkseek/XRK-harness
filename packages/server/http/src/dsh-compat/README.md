@@ -7,13 +7,16 @@
 
 This directory is the XRK **first-party** Host-side community adapter (`@xrkseek/server-http` → `src/dsh-compat/`; subpath `@xrkseek/server-http/dsh-compat`). It serves same-origin HTTP/RPC expected by community `client.js` and does **not** embed a third-party Host kernel.
 
-发包检查单 / Extraction checklist：[PACKAGE.md](./PACKAGE.md)。集成者 / Integrators：[docs/community-plugins.md](../../../../docs/community-plugins.md)。
+发包检查单 / Extraction checklist：[PACKAGE.md](./PACKAGE.md)。集成者 / Integrators：[docs/community-plugins.md](../../../../docs/community-plugins.md)。  
+**逐表面兼容矩阵**（对标 DSH 适配 CC mods）/ **Per-surface matrix** (CC-mods grain)：[docs/community-plugin-compat.md](../../../../docs/community-plugin-compat.md)（含 **DOM/CSS 双戳** · `ui-layout/dsh-style-aliases`）。
 
 **侧栏不在此目录。** `/sidebar/*` 由 Host 原生 `createSidebarPublicHandler`（`../sidebar/` · 子路径 `@xrkseek/server-http/sidebar`）挂载；本包仅 **re-export** 类型与工厂供旧 import，**不**经 dsh-compat 能力表。`underlying/doc-store` 等 primitive 可被侧栏复用，但侧栏不是兼容特性。
 
 **Sidebar is not owned here.** Host mounts `/sidebar/*` via native `createSidebarPublicHandler` (`../sidebar/`, subpath `@xrkseek/server-http/sidebar`). This package only re-exports types/factories for legacy imports — **not** via the dsh-compat capability table. Shared primitives under `underlying/` may be reused by sidebar; sidebar is not a compat feature.
 
-**原则 / Principles**：通用底层 + 薄装配 + 具名 bridge；按路径/RPC 形状扩展；不为单个 npm 包 fork adapter。矩阵真源 / Matrix source：`dsh-compat-matrix.ts`。
+**原则 / Principles**：通用底层 + 薄装配 + 具名 bridge；按路径/RPC 形状扩展；不为单个 npm 包 fork adapter。插件身份用 `plugin-package-id`（裸名族 / scoped 再发行），具名 Host 适配按族匹配而非钉死 publisher。矩阵真源 / Matrix source：`dsh-compat-matrix.ts`。
+
+**Principles**: shared primitives + thin composition + named bridges; extend by path/RPC shape; do not fork the adapter per npm package. Plugin identity uses `plugin-package-id` (bare family / scoped republish); named Host adapters match by family, not a hard-coded publisher. Matrix source: `dsh-compat-matrix.ts`.
 
 ## 装配顺序 / Composition Order
 
@@ -77,6 +80,8 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | `cordis-credentials-bridge.ts` | 社区 host 凭据落盘：`resolve`/`set`/`describe`/`unset`（`~/.xrk/community-credentials/<pkg>/`） |
 | `cordis-attachments-bridge.ts` | OFM / channel-pack 图片座：本地 `{XRK_HOME}/attachments/v1` · sync `imageHostPath` · `readImage`/`saveImage`/`readImageRequest` |
 | `community-llm-host-sync.ts` | Face sync 公共：可用 loopback URL · catalog peek/`fallback` · fingerprint · settled 调度 · resolveModel enrichment |
+| `wallpaper.ts` | `dsh-plugin-wallpaper-engine`：settings · 上传 inventory · media/preview；Steam/ffmpeg/scene 诚实降级（见 community-plugin-compat） |
+| `dsh-skins.ts` · `skin-discover.ts` | deep-whale `/api/dsh/skins` 目录（含 `order`）· 切换偏好 · skin-assets |
 
 ## 社区 client 契约形状 / Community Client Contract Shapes
 

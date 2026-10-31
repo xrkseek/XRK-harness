@@ -184,6 +184,11 @@
   cursor: pointer;
 }
 
+.older button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
 .older button:disabled {
   cursor: default;
   opacity: 0.6;
@@ -209,8 +214,12 @@
   /* Clears the sticky composer stack (docks + input card + stats): the live
      height rides --dsh-composer-height (ConversationRoot's seat observer) so
      the control follows a growing textarea; the fallback covers the first
-     paint before the observer fires. */
-  bottom: calc(var(--dsh-composer-height, 152px) + 16px);
+     paint before the observer fires. Overlay keyboards also lift the seat. */
+  bottom: calc(
+    var(--dsh-composer-height, 152px)
+    + var(--xrk-keyboard-inset, 0px)
+    + 16px
+  );
 }
 
 .toBottom {
@@ -232,6 +241,13 @@
 
 .toBottom:hover {
   background: var(--dsw-alias-button-floating-hover);
+}
+
+.toBottom:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--dsw-shadow-lv2),
+    0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
 }
 
 /* Host open-path refusal: same dialog family as the workspace folder error. */

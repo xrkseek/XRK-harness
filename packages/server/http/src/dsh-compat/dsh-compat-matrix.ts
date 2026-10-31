@@ -41,7 +41,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     id: "community-root",
     coverage: "full",
     genericModule: "community-root-http.ts",
-    note: "Single-segment community slugs e.g. /whale-girl",
+    note: "Single-segment slugs; whale api/state ← cost-meter + drain-active projection (not full-store fold)",
   },
   {
     id: "plugin-assets",

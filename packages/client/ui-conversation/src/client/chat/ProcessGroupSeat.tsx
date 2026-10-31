@@ -19,6 +19,7 @@ import { DisclosureRow, IconChecklistOutlineRegular } from '@xrkseek/client-ui-p
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { FlowEntry, ProcessGroupSummary } from '../conversation-nodes/process-groups.ts'
 import {
+  classifyProcessTool,
   countProcessActivity,
   formatProcessActivity,
 } from '../conversation-nodes/process-activity.ts'
@@ -34,6 +35,39 @@ type GroupEntry = Extract<FlowEntry, { kind: 'group' }>
 
 /** How many distinct tool names the open-run detail keeps before `+N`. */
 const TOOL_NAME_CAP = 3
+
+/**
+ * Map XRK tool buckets onto DSH `data-process-activity` vocabulary so
+ * community CSS / icons that key on ChatGroupSeat kinds still resolve.
+ */
+function dshProcessActivity(
+  live: boolean,
+  summary: ProcessGroupSummary,
+): string {
+  if (live) {
+    if (summary.runningTool !== undefined) {
+      return mapBucketToDsh(classifyProcessTool(summary.runningTool))
+    }
+    return 'thinking'
+  }
+  const first = summary.toolCallNames[0]
+  if (first !== undefined) return mapBucketToDsh(classifyProcessTool(first))
+  if (summary.reasoning > 0) return 'thinking'
+  return 'thinking'
+}
+
+function mapBucketToDsh(
+  bucket: ReturnType<typeof classifyProcessTool>,
+): string {
+  switch (bucket) {
+    case 'files': return 'read'
+    case 'searches': return 'search'
+    case 'commands': return 'commands'
+    case 'edits': return 'edit'
+    case 'web': return 'search'
+    default: return 'code'
+  }
+}
 
 type GroupProps = {
   readonly entry: GroupEntry
@@ -156,14 +190,20 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     ? css.processGroupFoldedTitle
     : undefined
 
+  const processActivity = dshProcessActivity(live, entry.summary)
+
   return (
     <div
       ref={rootRef}
       className={css.flowItem}
       data-process-group={entry.key}
       data-process-turn={entry.turn}
+      // DSH TurnProcessNodeView — community glass CSS targets this attr.
+      data-turn-process={entry.turn}
       data-folded={folded || undefined}
       data-process-running={live || undefined}
+      // DSH ChatGroupSeat header activity kind (community icon / CSS keys).
+      data-process-activity={processActivity}
     >
       <DisclosureRow
         icon={<IconChecklistOutlineRegular />}

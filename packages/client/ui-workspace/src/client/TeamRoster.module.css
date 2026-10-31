@@ -340,12 +340,13 @@
   margin: 0;
 }
 
-/* 老板 · 经理 · 向日葵 share one compact seats row. */
+/* 老板 · 经理 · 向日葵 — same 72px / gap rhythm as .ballField (全局), left-aligned. */
 .ballFieldSeats {
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
-  gap: 4px 6px;
+  justify-content: flex-start;
+  gap: 10px;
   margin: 0;
   min-width: 0;
   width: 100%;
@@ -353,18 +354,11 @@
 
 .ballFieldSeats .ballCard,
 .ballFieldSeats .ballCardOn {
-  flex: 1 1 0;
-  width: auto;
+  flex: none;
+  width: 72px;
   min-width: 0;
-  max-width: 88px;
-  padding: 6px 2px;
-  gap: 4px;
+  max-width: none;
   overflow: hidden;
-}
-
-.ballFieldSeats .ballName {
-  font-size: 11px;
-  line-height: 14px;
 }
 
 .ballFieldList {

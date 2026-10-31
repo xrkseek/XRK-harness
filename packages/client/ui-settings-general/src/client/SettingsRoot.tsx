@@ -171,6 +171,9 @@ function SettingsPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        // DSH / deep-whale skins gate Settings chrome on this attr
+        // (`[role=dialog][data-shortcut-modal=settings]`).
+        data-shortcut-modal="settings"
       >
         {!homeMode ? (
           <nav className={css.nav} aria-labelledby={titleId}>

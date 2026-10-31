@@ -59,8 +59,7 @@
   cursor: pointer;
   pointer-events: auto;
   transform: translate(-100%, -50%);
-  /* Side rail only — keep short; transcript folds must not animate height. */
-  transition: height var(--ds-motion-fast) var(--ds-ease-out);
+  /* Height lands instantly — same rule as process folds (no layout transition). */
 }
 
 /* The frame's inner scroller: no visible scrollbar, no scroll chaining into

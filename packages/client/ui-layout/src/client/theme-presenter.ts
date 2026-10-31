@@ -9,12 +9,18 @@
  * so foreign attributes, metadata, and inline styles survive.
  */
 import type { ThemeSnapshot } from '@xrkseek/client-ui-theme/client'
+import {
+  applyDshFontSizeAliases,
+  applyDshThemeSourceAttr,
+  clearDshThemeSourceAttr,
+  DSH_FONT_SIZE_CSS,
+} from './dsh-style-aliases.ts'
 
 /** Body attribute selecting the dark base palette in the token stylesheets. */
 export const DARK_ATTRIBUTE = 'data-ds-dark-theme'
 
 /** Body variable carrying the user's content font size in px. */
-export const CONTENT_FONT_SIZE_VARIABLE = '--dsh-content-font-size'
+export const CONTENT_FONT_SIZE_VARIABLE = DSH_FONT_SIZE_CSS.content
 
 /** Applies theme snapshots to the document; one instance per plugin fiber. */
 export class ThemePresenter {
@@ -32,19 +38,21 @@ export class ThemePresenter {
   /**
    * Project a snapshot onto the document: set root `color-scheme` and the body
    * palette attribute from `active.colorScheme` (never the id — `system` is
-   * resolved upstream), publish the content font-size axis, then replace the
-   * previously applied token variables with `active.tokens`. Browser
-   * theme-color metadata follows the computed body background after those
-   * writes, so the rendered palette remains the color authority.
+   * resolved upstream), publish the content font-size axis (+ DSH code/terminal
+   * aliases), stamp `html[data-ds-theme-source]`, then replace the previously
+   * applied token variables with `active.tokens`. Browser theme-color metadata
+   * follows the computed body background after those writes, so the rendered
+   * palette remains the color authority.
    * @param snapshot - resolved theme snapshot from ctx.theme.
    */
   apply(snapshot: ThemeSnapshot): void {
     const scheme = snapshot.active.colorScheme
     document.documentElement.style.colorScheme = scheme
+    applyDshThemeSourceAttr(snapshot.preference, scheme)
     const body = document.body
     if (scheme === 'dark') body.setAttribute(DARK_ATTRIBUTE, '')
     else body.removeAttribute(DARK_ATTRIBUTE)
-    body.style.setProperty(CONTENT_FONT_SIZE_VARIABLE, `${snapshot.fontSize}px`)
+    applyDshFontSizeAliases(snapshot.fontSize)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     for (const [name, value] of Object.entries(snapshot.active.tokens)) {
@@ -64,5 +72,7 @@ export class ThemePresenter {
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     this.themeColorMeta.remove()
+    // Theme-source is cheap to clear; remount re-stamps on next apply.
+    clearDshThemeSourceAttr()
   }
 }

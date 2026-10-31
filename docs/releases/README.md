@@ -4,14 +4,14 @@
 
 版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x` · `0.5.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**本版**：`0.6.x` 线当前版本 **v0.6.23**（补丁文稿；接管 npm `@latest`）。**`0.6.x` 是预览线（MINOR 偶数），在 v0.6.23 收官，接续 `0.7.x` 正式线**；正式线过程号 [v0.7.0-rc.3](./v0.7.0-rc.3.md)（npm `@rc`，不接管 `@latest`；相对 [rc.2](./v0.7.0-rc.2.md)）。上一补丁 [v0.6.22](./v0.6.22.md)、收口号 [v0.6.0](./v0.6.0.md) 与同线过程号 [v0.6.0-rc.1](./v0.6.0-rc.1.md) · [v0.6.0-rc.2](./v0.6.0-rc.2.md) 保留留档。上一正式线 **v0.5.31** 退为上一版。`0.4.x` 预览线已于 **v0.4.12** 收口。
+**本版**：`0.7.x` 正式线首发 **v0.7.0**（接管 npm `@latest`）。并入过程号 [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md)。上一预览线收官 [v0.6.23](./v0.6.23.md)；收口号 [v0.6.0](./v0.6.0.md) 与过程号留档。上一正式线 **v0.5.31** 退为更早档。`0.4.x` 预览线已于 **v0.4.12** 收口。
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.6.23](./v0.6.23.md)                 | `0.6.x` 补丁：**子代理并发 single-flight · 工作树租约自愈 / 重放合回** |
-| **下一正式线过程号** | [v0.7.0-rc.3](./v0.7.0-rc.3.md)       | `0.7.x` 第三 rc：**席位正式名（昵称）· 向日葵经理席 · Default Model 软刷新 · 插话轮次**（`@rc`；相对 [rc.2](./v0.7.0-rc.2.md)） |
+| **当前（@latest）** | [v0.7.0](./v0.7.0.md)                   | `0.7.x` 正式线首发：**上下文工程 · 大会话 · 席位/向日葵 · DeepSeek 搜索 · 社区 OFM/Host** |
+| **过程号（@rc）**   | [v0.7.0-rc.3](./v0.7.0-rc.3.md)         | 第三 rc（已被 0.7.0 并入；`@rc` 可仍指向此号或随策略更新） |
 | **过程号（前）** | [v0.7.0-rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) | 第二 / 首 rc：DeepSeek 搜索 · present 不进过程 · 大会话 / 席位知识面 |
-| **本线收官（最后补丁）** | [v0.6.23](./v0.6.23.md)            | `0.6.x` 预览线在此收官，接续 `0.7.x` 正式线 |
+| **上一预览收官** | [v0.6.23](./v0.6.23.md)            | `0.6.x` 预览线终点；已被 0.7.0 接 `@latest` |
 | **上一补丁**        | [v0.6.22](./v0.6.22.md)                 | `0.6.x` 补丁：**过程折叠对齐 Cursor · 活动摘要 / 四档收起时机** |
 | **上一补丁（前）**  | [v0.6.21](./v0.6.21.md)                 | `0.6.x` 补丁：**过程折叠收口 · 贴底即时折 / 停扫光 / 图片 peek** |
 | **本线收口号**      | [v0.6.0](./v0.6.0.md)                   | `0.6.x` 收口：**归档减负 · 向阳/IM 编排 · 插件页重组 · 站立披露 · 分层记忆 · 多工作区 cwd 狱 · 搜索同路径闸** |
@@ -24,7 +24,7 @@
 | **过程号（文稿）**  | [rc.1](./v0.4.0-rc.1.md)…[rc.4](./v0.4.0-rc.4.md) | 已并入；npm 已撤                                           |
 | **上一轮预览（文稿）** | [v0.2.7](./v0.2.7.md)                | npm 已撤；GitHub 对照留档                                            |
 
-对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.22](./v0.6.22.md) → 现 **v0.6.23：0.6 预览线终点**（文稿；发包后 `@latest`），此后接 `0.7.x` 正式线；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
+对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → 现 **v0.7.0：0.7 正式线首发**（`@latest`）；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -32,13 +32,13 @@
 
 | 用途           | 命令                                                            |
 | -------------- | --------------------------------------------------------------- |
-| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.6.23，发包后）后 `xrkh web` |
-| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.6.23` 后 `xrkh web`            |
-| 上一补丁       | `npm i -g @xrkseek/harness-cli@0.6.22` 后 `xrkh web`             |
-| 本线收口号     | `npm i -g @xrkseek/harness-cli@0.6.0` 后 `xrkh web`             |
-| 下一正式线 rc  | `npm i -g @xrkseek/harness-cli@rc`（= v0.7.0-rc.3，发包后）后 `xrkh web` |
+| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.7.0，发包后）后 `xrkh web` |
+| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.7.0` 后 `xrkh web`              |
+| 上一预览收官   | `npm i -g @xrkseek/harness-cli@0.6.23` 后 `xrkh web`             |
+| 过程号（@rc）  | `npm i -g @xrkseek/harness-cli@rc`（= v0.7.0-rc.3，若仍挂 rc）后 `xrkh web` |
+| 本线收口号（0.6） | `npm i -g @xrkseek/harness-cli@0.6.0` 后 `xrkh web`           |
 | 历史预览过程号 | `npm i -g @xrkseek/harness-cli@0.6.0-rc.2` 后 `xrkh web` |
-| 回退上一正式线 | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`             |
+| 回退钉         | `npm i -g @xrkseek/harness-cli@0.3.11` 后 `xrkh web`             |
 
 规格索引：[docs/README.md](../README.md)。
 
@@ -50,14 +50,14 @@
 
 Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x` · `0.5.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**Current**: the `0.6.x` line is on **v0.6.23** (patch notes; owns npm `@latest`). **`0.6.x` is a preview line (even MINOR) and ends at v0.6.23; the `0.7.x` formal line follows** via process number [v0.7.0-rc.3](./v0.7.0-rc.3.md) (npm `@rc`, does not take `@latest`; relative to [rc.2](./v0.7.0-rc.2.md)). The previous patch [v0.6.22](./v0.6.22.md), the closing number [v0.6.0](./v0.6.0.md) and its process numbers [v0.6.0-rc.1](./v0.6.0-rc.1.md) / [v0.6.0-rc.2](./v0.6.0-rc.2.md) stay archived. The prior formal line **v0.5.31** is now previous. The `0.4.x` preview line closed at **v0.4.12**.
+**Current**: **v0.7.0** opens the `0.7.x` formal line and owns npm `@latest`. Process numbers [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) are folded in. The previous preview line closed at [v0.6.23](./v0.6.23.md); closing number [v0.6.0](./v0.6.0.md) and its process numbers stay archived. Prior formal line **v0.5.31** is older. The `0.4.x` preview line closed at **v0.4.12**.
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.6.23](./v0.6.23.md) | `0.6.x` patch: **subagent single-flight · worktree lease heal / replay merge** |
-| **Next formal process number** | [v0.7.0-rc.3](./v0.7.0-rc.3.md) | `0.7.x` third rc: **seat formal（nick） · sunflower manager seat · Default Model soft refresh · steer rounds** (`@rc`; relative to [rc.2](./v0.7.0-rc.2.md)) |
+| **Current (@latest)** | [v0.7.0](./v0.7.0.md) | `0.7.x` formal open: **context engineering · large-session · seat/sunflower · DeepSeek search · community OFM/Host** |
+| **Process number (@rc)** | [v0.7.0-rc.3](./v0.7.0-rc.3.md) | Third rc (folded into 0.7.0; `@rc` may still point here) |
 | **Prior process number** | [v0.7.0-rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) | Second / first rc: DeepSeek search · present stays flat · large-session / seat knowledge |
-| **Line close-out (last patch)** | [v0.6.23](./v0.6.23.md) | the `0.6.x` preview line ends here; the `0.7.x` formal line follows |
+| **Prior preview close** | [v0.6.23](./v0.6.23.md) | End of `0.6.x` preview; `@latest` moved to 0.7.0 |
 | **Previous patch** | [v0.6.22](./v0.6.22.md) | `0.6.x` patch: **process fold matches Cursor · activity line / four-point fold timing** |
 | **Patch before that** | [v0.6.21](./v0.6.21.md) | `0.6.x` patch: **process-fold close-out · instant floor fold / stop shimmer / image peek** |
 | **Line closing number** | [v0.6.0](./v0.6.0.md) | `0.6.x` close: **archive offload · Xiangyang/IM orchestration · Plugins reshape · standing disclosure · layered memory · per-workspace cwd jail · search shares the path gate** |
@@ -67,7 +67,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 | **Prior preview close** | [v0.4.12](./v0.4.12.md) | `0.4.x` close: Mux drop-over-budget without kill · 5-miss heartbeat |
 | **Rollback pin** | [v0.3.11](./v0.3.11.md) | `MINOR=3`; npm rollback pin (`@0.3.11`) |
 
-Trail: preview close [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.22](./v0.6.22.md) → current **v0.6.23: end of the 0.6 preview line** (notes; `@latest` after publish), with the `0.7.x` formal line to follow; rollback pin **0.3.11**. Older `docs/releases/v*` stay readable.
+Trail: preview close [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → current **v0.7.0: opens the 0.7 formal line** (`@latest`); rollback pin **0.3.11**. Older `docs/releases/v*` stay readable.
 
 Install and publish: [publishing.md](../publishing.md).
 
@@ -75,12 +75,12 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use | Command |
 | --- | ------- |
-| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest` (= v0.6.23 after publish) then `xrkh web` |
-| Exact pin | `npm i -g @xrkseek/harness-cli@0.6.23` then `xrkh web` |
-| Previous patch | `npm i -g @xrkseek/harness-cli@0.6.22` then `xrkh web` |
-| Line closing number | `npm i -g @xrkseek/harness-cli@0.6.0` then `xrkh web` |
-| Next formal rc | `npm i -g @xrkseek/harness-cli@rc` (= v0.7.0-rc.3 after publish) then `xrkh web` |
+| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest` (= v0.7.0 after publish) then `xrkh web` |
+| Exact pin | `npm i -g @xrkseek/harness-cli@0.7.0` then `xrkh web` |
+| Prior preview close | `npm i -g @xrkseek/harness-cli@0.6.23` then `xrkh web` |
+| Process number (@rc) | `npm i -g @xrkseek/harness-cli@rc` (= v0.7.0-rc.3 if still on rc) then `xrkh web` |
+| 0.6 line closing number | `npm i -g @xrkseek/harness-cli@0.6.0` then `xrkh web` |
 | Historical preview process number | `npm i -g @xrkseek/harness-cli@0.6.0-rc.2` then `xrkh web` |
-| Rollback prior formal line | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web` |
+| Rollback pin | `npm i -g @xrkseek/harness-cli@0.3.11` then `xrkh web` |
 
 Spec index: [docs/README.md](../README.md).

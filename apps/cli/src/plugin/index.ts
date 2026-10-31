@@ -9,6 +9,8 @@ import { classifyPackage } from "./classify.js";
 import { fetchPackage } from "./fetch-pack.js";
 import {
   installClientBundle,
+  realignStagedClientModuleLoaderIds,
+  restageIncompleteCommunityHosts,
   removeClientBundle,
 } from "./install-client.js";
 import {
@@ -179,6 +181,15 @@ export function reconcilePluginsDir(
   const removed = reconcileClientStaging(pluginsDir);
   for (const id of removed) {
     io.log(`xrkh: pruned orphan client staging ${id}`);
+  }
+  const aligned = realignStagedClientModuleLoaderIds(pluginsDir);
+  for (const id of aligned) {
+    io.log(`xrkh: aligned ModuleLoader id for ${id}`);
+  }
+  // Only runs npm pack when package.json declares root index.js but file missing.
+  const hostHealed = restageIncompleteCommunityHosts(pluginsDir);
+  for (const id of hostHealed) {
+    io.log(`xrkh: restaged Cordis host half for ${id}`);
   }
   reconcileBoot(pluginsDir);
 }

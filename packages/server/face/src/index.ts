@@ -832,6 +832,7 @@ export {
   costMeterAggregateUsage,
   costMeterDisplayExchangeRate,
   costMeterGetState,
+  costMeterGetTopSessions,
   costMeterLedgerPath,
   costMeterRefreshBalance,
   costMeterSessionTotals,

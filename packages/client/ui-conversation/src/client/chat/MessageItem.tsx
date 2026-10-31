@@ -411,7 +411,7 @@ function UserStyleBubble({
           </div>
         )}
         {showBubble && bodies.map((body, index) => (
-          <div key={index} className={css.bubble}>
+          <div key={index} className={css.bubble} data-message-bubble="">
             {projectUserText(body, index === 0 ? referenceLabels : [])}
             {index === bodies.length - 1
               ? rest.map((block, i) => (

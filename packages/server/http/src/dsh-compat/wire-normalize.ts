@@ -38,6 +38,9 @@ export function normalizeDshCompatWireCtx(
     ...(listUsageProviders ? { listUsageProviders } : {}),
     ...(onJobAccepted ? { onJobAccepted } : {}),
     ...(ctx.walletPort ? { walletPort: ctx.walletPort } : {}),
+    ...(ctx.resolveCommunityLiveMeter
+      ? { resolveCommunityLiveMeter: ctx.resolveCommunityLiveMeter }
+      : {}),
     ...(ctx.face ? { face: ctx.face } : {}),
     ...(ctx.sidebarFace ? { sidebarFace: ctx.sidebarFace } : {}),
     ...(ctx.policy ? { policy: ctx.policy } : {}),

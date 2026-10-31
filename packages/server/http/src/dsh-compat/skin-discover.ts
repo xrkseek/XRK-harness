@@ -43,6 +43,8 @@ export interface DiscoveredSkin {
   readonly wiringId?: string;
   readonly dshCompatibility?: string;
   readonly accent?: string;
+  /** Catalog sort key — deep-whale / SkinCatalogEntry require a number. */
+  readonly order: number;
   readonly dir: string;
   readonly manifest: Record<string, unknown>;
   /** skin-center v2 manifests carry `contributes`. */
@@ -110,6 +112,11 @@ function parseSkinJson(
   const wiringId = asString(wiring?.id);
   const dshCompatibility = asString(raw.dshCompatibility);
   const accent = asString(raw.accent);
+  const orderRaw = raw.order;
+  const order =
+    typeof orderRaw === "number" && Number.isFinite(orderRaw)
+      ? orderRaw
+      : 0;
 
   return {
     id,
@@ -123,6 +130,7 @@ function parseSkinJson(
     ...(wiringId ? { wiringId } : {}),
     ...(dshCompatibility ? { dshCompatibility } : {}),
     ...(accent ? { accent } : {}),
+    order,
     dir,
     manifest: raw,
     ...(channel ? { channel } : {}),

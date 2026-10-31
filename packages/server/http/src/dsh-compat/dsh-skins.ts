@@ -69,6 +69,8 @@ function managerCatalog(options: DshSkinsOptions) {
       package: skin.packageName,
       bodyAttr: skin.bodyAttr ?? `data-dsh-skin-${skin.id}`,
       wiringId: skin.wiringId ?? `ui-skin-${skin.id}`,
+      // deep-whale SkinCatalogEntry.order — required for stable UI sort.
+      order: skin.order,
     };
     if (skin.nameEn) row.nameEn = skin.nameEn;
     if (skin.tagline) row.tagline = skin.tagline;

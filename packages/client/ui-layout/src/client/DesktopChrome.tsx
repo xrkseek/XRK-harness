@@ -70,6 +70,7 @@ export function DesktopChrome({ t }: DesktopChromeProps): ReactNode {
       {darwin ? <div className={css.trafficPad} aria-hidden /> : null}
       <div
         className={css.drag}
+        data-window-drag=""
         onDoubleClick={() => { void bridge.toggleMaximize() }}
       />
       <div className={css.actions}>

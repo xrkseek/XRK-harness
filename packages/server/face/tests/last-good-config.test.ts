@@ -167,6 +167,39 @@ describe("last-good config (settings.yaml / host-settings)", () => {
     expect(dump).toContain("from-yaml");
   });
 
+  it("persists and hydrates community theme namespaces alongside product ones", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-theme-ns-"));
+    const file = path.join(dir, "settings.yaml");
+    await writeFile(file, "locale:\n  preference: en\n", "utf8");
+    const rt = runtime(dir);
+    hydrateFaceSettingsDocument(rt);
+
+    const mut = await dispatchFaceMethod(rt, "settings.mutate", "m-theme", {
+      ns: "theme-endfield",
+      ops: [{ op: "set", path: ["accent"], value: "amber" }],
+    });
+    expect(mut.result.ok).toBe(true);
+    const onDisk = await readFile(file, "utf8");
+    expect(onDisk).toMatch(/theme-endfield:/);
+    expect(onDisk).toMatch(/accent:\s*amber/);
+
+    const rt2 = runtime(dir);
+    hydrateFaceSettingsDocument(rt2);
+    expect(rt2.settingsNamespaces.ensure("theme-endfield").user.accent).toBe(
+      "amber",
+    );
+    const described = await dispatchFaceMethod(rt2, "settings.describe", "d1", {});
+    expect(described.result.ok).toBe(true);
+    if (described.result.ok) {
+      const value = described.result.value as {
+        namespaces: readonly { ns: string }[];
+      };
+      expect(value.namespaces.some((row) => row.ns === "theme-endfield")).toBe(
+        true,
+      );
+    }
+  });
+
   it("persistHostSettings refuses to overwrite unparsable host-settings.json", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-host-persist-refuse-"));
     const file = path.join(dir, "host-settings.json");

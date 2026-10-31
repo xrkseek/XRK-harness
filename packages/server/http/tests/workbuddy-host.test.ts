@@ -57,6 +57,9 @@ describe("workbuddy-host", () => {
 
   it("detects package name and staged lib", () => {
     expect(isWorkBuddyConnectPackage("dsh-workbuddy-connect")).toBe(true);
+    expect(isWorkBuddyConnectPackage("@anyone/dsh-workbuddy-connect")).toBe(
+      true,
+    );
     expect(isWorkBuddyConnectPackage("other")).toBe(false);
     const root = mkdtempSync(path.join(tmpdir(), "wb-lib-"));
     temps.push(root);

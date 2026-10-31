@@ -82,7 +82,7 @@ function TimePill({ stats, t, dialog }: {
   // stays a plain reading instead of a button opening an empty dialog.
   if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && stats.decodeMs <= 0) {
     return (
-      <span className={css.anchor}>
+      <span className={css.anchor} data-composer-stat="activity">
         <span className={css.pill}>
           <IconGaugeOutlineRegular />
           {label}
@@ -91,7 +91,7 @@ function TimePill({ stats, t, dialog }: {
     )
   }
   return (
-    <span ref={rootRef} className={css.anchor}>
+    <span ref={rootRef} className={css.anchor} data-composer-stat="activity">
       <button
         type="button"
         className={css.pill}
@@ -164,7 +164,7 @@ function UsagePill({ usage, t, dialog }: {
   const cacheHit = cacheHitPercent(usage)
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
   return (
-    <span ref={rootRef} className={css.anchor}>
+    <span ref={rootRef} className={css.anchor} data-composer-stat="usage">
       <button
         type="button"
         className={css.pill}

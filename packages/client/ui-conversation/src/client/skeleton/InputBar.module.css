@@ -431,6 +431,14 @@
     padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
   }
 
+  /* Soft keyboard replaces the home-indicator — drop safe-area bottom so the
+     sticky seat + --xrk-keyboard-inset do not float a dead gap above the keys
+     (Via / Edge packaged WebViews). Must win over the rules above. */
+  :global(html[data-xrk-keyboard]) .root,
+  :global(html[data-xrk-keyboard]) .root:has([data-composer-stats]) {
+    padding-bottom: 4px;
+  }
+
   .card {
     gap: 8px;
     padding-top: 8px;

@@ -124,6 +124,10 @@ export {
   shouldHonestHttpCatchall,
 } from "./honest-http-catchall.js";
 export {
+  incompleteCommunityApiBody,
+  INCOMPLETE_COMMUNITY_API_SHAPES,
+} from "./incomplete-api-shapes.js";
+export {
   inferDshCommunityHostManifest,
   isDshCommunityClientPackage,
 } from "./dsh-community-infer.js";
@@ -172,6 +176,11 @@ export {
   isOurFreeModelPackage,
   hasOurFreeModelEntry,
 } from "./our-free-model-host.js";
+export {
+  unscopedPackageName,
+  isSamePluginPackage,
+  isPluginPackageFamily,
+} from "./plugin-package-id.js";
 export { ensureHostModuleRemap } from "./host-module-remap.js";
 export { remapHostModuleId } from "./host-module-remap-ids.js";
 export {
@@ -208,6 +217,18 @@ export {
   type WalletFaceBridge,
   type XrkWalletPort,
 } from "./wallet.js";
+export {
+  WHALE_DEFAULT_CONTEXT_LIMIT,
+  computeContextPct,
+  isWhaleGirlSlug,
+  type CommunityLiveMeter,
+  type CommunityLiveStateOptions,
+} from "./community-live-state.js";
+export {
+  handleCommunityRootHttp,
+  isCommunityRootPath,
+  type CommunityRootOptions,
+} from "./community-root-http.js";
 export type {
   SidebarFaceBridge,
   SidebarSubagentLiveActivity,

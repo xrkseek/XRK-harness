@@ -282,6 +282,86 @@ describe('failure modes', () => {
     await expect(b.loader.import('a', '', {})).rejects.toThrow('without registering "a"')
   })
 
+  it('accepts a bare ModuleLoader stamp for a scoped boot-graph family', async () => {
+    const scoped = '@publisher/dsh-sample-plugin'
+    const fetched: string[] = []
+    const loader = new ClientModuleSystem({
+      modules: [row(scoped)],
+      staticModules: {},
+      loadBundle: async (url) => {
+        fetched.push(url)
+        win.__ModuleLoader__?.load({
+          id: 'dsh-sample-plugin',
+          factory: () => ({ apply() { return 'ok' } }),
+        })
+      },
+    })
+    const exports = await loader.import(scoped, '', {}) as { apply: () => string }
+    expect(fetched).toEqual([`/plugins/${scoped}/client.js?rev=0`])
+    expect(exports.apply()).toBe('ok')
+    loader.invalidate(scoped)
+    await expect(loader.import(scoped, '', {})).resolves.toBeTruthy()
+    expect(fetched).toHaveLength(2)
+  })
+
+  it('registers a bare stamp even when a sibling async arrival owns executingId', async () => {
+    const scoped = '@ebony-vinyl/dsh-our-free-model'
+    const sibling = 'dsh-whale-girl'
+    let releaseSibling!: () => void
+    const siblingGate = new Promise<void>((resolve) => {
+      releaseSibling = resolve
+    })
+    let whaleClaimed!: () => void
+    const whaleClaimedP = new Promise<void>((resolve) => {
+      whaleClaimed = resolve
+    })
+    const loader = new ClientModuleSystem({
+      modules: [row(scoped), row(sibling)],
+      staticModules: {},
+      loadBundle: async (url) => {
+        if (url.includes(sibling)) {
+          // executingId is already sibling; hold the arrival open.
+          whaleClaimed()
+          await siblingGate
+          win.__ModuleLoader__?.load({
+            id: sibling,
+            factory: () => ({ kind: 'whale' }),
+          })
+          return
+        }
+        // Classic async cross-talk: OFM script runs while whale still "executing".
+        win.__ModuleLoader__?.load({
+          id: 'dsh-our-free-model',
+          factory: () => ({ kind: 'ofm' }),
+        })
+      },
+    })
+    const whalePrefetch = loader.prefetch(sibling)
+    await whaleClaimedP
+    const ofm = await loader.import(scoped, '', {}) as { kind: string }
+    expect(ofm.kind).toBe('ofm')
+    releaseSibling()
+    await whalePrefetch
+    const whale = await loader.import(sibling, '', {}) as { kind: string }
+    expect(whale.kind).toBe('whale')
+  })
+
+  it('rejects an unrelated ModuleLoader stamp while a graph row is arriving', async () => {
+    const loader = new ClientModuleSystem({
+      modules: [row('wanted')],
+      staticModules: {},
+      loadBundle: async () => {
+        expect(() => {
+          win.__ModuleLoader__?.load({
+            id: 'other-plugin',
+            factory: () => ({}),
+          })
+        }).toThrow('mis-stamped bundle id')
+      },
+    })
+    await expect(loader.import('wanted', '', {})).rejects.toThrow('without registering "wanted"')
+  })
+
   it('an unknown import specifier is loud', async () => {
     const b = bench([])
     await expect(b.loader.import('nope', '', {})).rejects.toThrow('cannot resolve "nope"')

@@ -80,6 +80,9 @@ describe('ThemePresenter', () => {
     const presenter = new ThemePresenter()
     presenter.apply(snapshot('light'))
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('14px')
+    // DSH community CSS also reads code/terminal axes — mirrored today.
+    expect(document.body.style.getPropertyValue('--dsh-code-font-size')).toBe('14px')
+    expect(document.documentElement.getAttribute('data-ds-theme-source')).toBe('light')
     presenter.apply(snapshot('light', {}, 17))
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('17px')
   })

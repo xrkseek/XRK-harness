@@ -119,7 +119,13 @@ function ApprovalFlow({ pending, command, localized, t }: {
           {command !== undefined && <div className={css.command}>{command}</div>}
         </div>
         <div className={css.actionRow}>
-          <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
+          <Button
+            variant="outline"
+            className={css.reject}
+            disabled={answered}
+            data-cordis-decline=""
+            onClick={() => { answer('rejected') }}
+          >
             {t('approval.reject')}
           </Button>
           {pathOverreach && (
@@ -127,7 +133,12 @@ function ApprovalFlow({ pending, command, localized, t }: {
               {t('approval.whitelist')}
             </Button>
           )}
-          <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-once') }}>
+          <Button
+            variant="primary"
+            disabled={answered}
+            data-cordis-approve=""
+            onClick={() => { answer('allowed-once') }}
+          >
             {t('approval.allowOnce')}
           </Button>
         </div>

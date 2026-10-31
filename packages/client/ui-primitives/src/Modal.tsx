@@ -71,6 +71,7 @@ function tabbable(root: HTMLElement): HTMLElement[] {
 export function Modal({
   open, onClose, title, closeLabel = 'Close', description, children, footer, className, contentClassName, headless = false,
   layout = 'default',
+  shortcutModal,
 }: {
   open: boolean
   onClose: () => void
@@ -87,6 +88,11 @@ export function Modal({
    * `inset` = bottom card that sizes to content (short confirms).
    */
   layout?: 'default' | 'inset'
+  /**
+   * DSH dialog name for community CSS (`[data-shortcut-modal='settings']` /
+   * `shortcuts`). Optional — only stamp when the caller owns a known gate.
+   */
+  shortcutModal?: string
 }) {
   // Captured in the effect body, not read from the ref in the cleanup: by the
   // time cleanup runs the dialog is already unmounted and the ref is null.
@@ -192,6 +198,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        data-shortcut-modal={shortcutModal}
         /* Programmatic-only stop: reachable by the trap, absent from Tab order
            until the dialog holds nothing else focusable. */
         tabIndex={-1}

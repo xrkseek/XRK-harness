@@ -71,32 +71,35 @@ export function DisclosureRow({
 
   return (
     <div className={clsx(css.root, className)} data-open={open || undefined}>
-      <div
-        className={clsx(css.row, rowClassName)}
-        data-disclosure-row
-        data-expandable={rowExpands || undefined}
-        role={rowExpands ? 'button' : undefined}
-        tabIndex={rowExpands ? 0 : undefined}
-        aria-expanded={rowExpands ? open : undefined}
-        onClick={rowExpands ? onToggle : undefined}
-        onKeyDown={rowExpands ? toggleFromKeyboard : undefined}
-      >
-        {expandable && !rowExpands ? (
-          <button
-            type="button"
-            className={clsx(css.leading, leadingClassName)}
-            aria-expanded={open}
-            onClick={toggleFromLeading}
-          >
-            {leading}
-          </button>
-        ) : (
-          <span className={clsx(css.leading, leadingClassName)}>
-            {leading}
-          </span>
-        )}
-        <span className={clsx(css.title, titleClassName)}>{title}</span>
-        {(keepContentWhenOpen || !open) && collapsedContent}
+      {/* DSH wraps the row in [data-disclosure-header]; maid/orca select it. */}
+      <div className={css.header} data-disclosure-header="">
+        <div
+          className={clsx(css.row, rowClassName)}
+          data-disclosure-row
+          data-expandable={rowExpands || undefined}
+          role={rowExpands ? 'button' : undefined}
+          tabIndex={rowExpands ? 0 : undefined}
+          aria-expanded={rowExpands ? open : undefined}
+          onClick={rowExpands ? onToggle : undefined}
+          onKeyDown={rowExpands ? toggleFromKeyboard : undefined}
+        >
+          {expandable && !rowExpands ? (
+            <button
+              type="button"
+              className={clsx(css.leading, leadingClassName)}
+              aria-expanded={open}
+              onClick={toggleFromLeading}
+            >
+              {leading}
+            </button>
+          ) : (
+            <span className={clsx(css.leading, leadingClassName)}>
+              {leading}
+            </span>
+          )}
+          <span className={clsx(css.title, titleClassName)}>{title}</span>
+          {(keepContentWhenOpen || !open) && collapsedContent}
+        </div>
       </div>
       {open && children}
     </div>

@@ -73,6 +73,11 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
 /* Unavailable stays focusable and hoverable so Tooltip can explain why. */
 .action[data-unavailable] {
   cursor: default;

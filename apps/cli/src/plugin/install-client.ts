@@ -19,11 +19,17 @@ import {
 } from "node:fs";
 import path from "node:path";
 import type { ClassifiedPackage } from "./classify.js";
-import { clientInstallDir } from "./inventory.js";
+import { fetchPackage } from "./fetch-pack.js";
+import { clientInstallDir, readInventory } from "./inventory.js";
+import {
+  isPluginPackageFamily,
+  isSamePluginPackage,
+  unscopedPackageName,
+} from "./package-id.js";
 
 const CLIENT_CHUNK_RE = /^client-(.+)\.js$/;
 
-/** Extra package dirs community clients fetch over Host HTTP (e.g. niulai KWS · skin artwork). */
+/** Extra package dirs community clients fetch over Host HTTP (e.g. niulai KWS · skin artwork · theme audio). */
 const EXTRA_ASSET_DIRS = [
   "kws",
   "assets",
@@ -31,6 +37,7 @@ const EXTRA_ASSET_DIRS = [
   "preview",
   "locale",
   "skins",
+  "sounds",
 ] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -90,44 +97,141 @@ function stageWorkBuddyHostLib(
   destDir: string,
   packageName: string,
 ): void {
-  if (packageName.trim() !== "dsh-workbuddy-connect") return;
+  if (!isPluginPackageFamily(packageName, "dsh-workbuddy-connect")) return;
   const libSrc = path.join(root, "lib");
   if (!existsSync(libSrc)) return;
   cpSync(libSrc, path.join(destDir, "lib"), { recursive: true });
 }
 
 /**
- * Our Free Model Cordis host half is package-root `index.js` + `src/` /
- * `adapter/` / channel-pack vendor. Stage those so Host can apply.
+ * Trees commonly required beside package-root Cordis `index.js` (OFM and
+ * similar community hosts). Only copy what exists — no package-name list.
  */
-function stageOurFreeModelHost(
-  root: string,
+const ROOT_CORDIS_HOST_DIRS = ["src", "adapter", "vendor", "locale"] as const;
+const ROOT_CORDIS_HOST_FILES = ["cordis.patch.yml", "icon.svg"] as const;
+
+function packageEntryPointsAtRootIndex(pkg: Record<string, unknown>): boolean {
+  const main =
+    typeof pkg.main === "string" ? pkg.main.trim().replace(/^\.\//, "") : "";
+  if (main === "index.js") return true;
+  const exportsField = asRecord(pkg.exports);
+  if (exportsField) {
+    const root = exportsField["."];
+    if (typeof root === "string") {
+      if (root.trim().replace(/^\.\//, "") === "index.js") return true;
+    } else {
+      const rootRec = asRecord(root);
+      for (const key of ["default", "import", "require"] as const) {
+        const value = rootRec?.[key];
+        if (
+          typeof value === "string" &&
+          value.trim().replace(/^\.\//, "") === "index.js"
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  // Cordis bundle patch implies a package-root apply entry (community layout).
+  if (asRecord(asRecord(pkg.dsh)?.bundle)?.patch !== undefined) return true;
+  if (asRecord(asRecord(pkg.xrk)?.bundle)?.patch !== undefined) return true;
+  return false;
+}
+
+/**
+ * True when staged `package.json` declares a Cordis apply entry at package-root
+ * `index.js` (main / exports["."]), so a missing file is an incomplete install.
+ */
+export function packageDeclaresRootCordisIndex(
   destDir: string,
-  packageName: string,
-): void {
-  if (packageName.trim() !== "dsh-our-free-model") return;
+): boolean {
+  const pkgPath = path.join(destDir, "package.json");
+  if (!existsSync(pkgPath)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as unknown;
+    return packageEntryPointsAtRootIndex(asRecord(pkg) ?? {});
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stage package-root Cordis host half when `index.js` is present in the
+ * unpacked package. Used by OFM and any community client that ships the same
+ * layout — not gated on a publisher / bare family id.
+ */
+export function stageRootCordisHost(root: string, destDir: string): boolean {
   const indexJs = path.join(root, "index.js");
-  if (!existsSync(indexJs)) return;
+  if (!existsSync(indexJs)) return false;
   copyFileSync(indexJs, path.join(destDir, "index.js"));
-  for (const rel of ["src", "adapter", "locale"] as const) {
+  for (const rel of ROOT_CORDIS_HOST_DIRS) {
     const src = path.join(root, rel);
     if (!existsSync(src)) continue;
     cpSync(src, path.join(destDir, rel), { recursive: true });
   }
-  for (const rel of [
-    "cordis.patch.yml",
-    "icon.svg",
-    "vendor/channel-pack/pack.js",
-    "vendor/channel-pack/qoder-auth-wasm.wasm",
-    "vendor/channel-pack/NOTICE.md",
-    "vendor/channel-pack/LICENSE",
-  ] as const) {
+  for (const rel of ROOT_CORDIS_HOST_FILES) {
     const src = path.join(root, rel);
     if (!existsSync(src)) continue;
-    const dest = path.join(destDir, rel);
-    mkdirSync(path.dirname(dest), { recursive: true });
-    copyFileSync(src, dest);
+    copyFileSync(src, path.join(destDir, rel));
   }
+  return true;
+}
+
+/** @deprecated Prefer {@link stageRootCordisHost}; kept for call-site clarity in OFM tests. */
+export function stageOurFreeModelHost(
+  root: string,
+  destDir: string,
+  _packageName?: string,
+): boolean {
+  return stageRootCordisHost(root, destDir);
+}
+
+/**
+ * Client half on disk, package.json says root `index.js` is the apply entry,
+ * but that file was never staged (common after older installs / client-only copy).
+ */
+export function isRootCordisHostIncomplete(destDir: string): boolean {
+  if (!existsSync(path.join(destDir, "client.js"))) return false;
+  if (!packageDeclaresRootCordisIndex(destDir)) return false;
+  return !existsSync(path.join(destDir, "index.js"));
+}
+
+/**
+ * Re-fetch inventory sources only for incomplete root-Cordis hosts.
+ * Cheap when healthy (stat + package.json parse); npm pack only on heal.
+ */
+export function restageIncompleteCommunityHosts(
+  pluginsDir: string,
+): readonly string[] {
+  const inv = readInventory(pluginsDir);
+  const healed: string[] = [];
+  for (const [name, entry] of Object.entries(inv.packages)) {
+    if (entry.kind !== "client" && entry.kind !== "both") continue;
+    const destDir = clientInstallDir(pluginsDir, name);
+    if (!isRootCordisHostIncomplete(destDir)) continue;
+    const spec =
+      entry.source.trim() ||
+      (entry.version ? `${name}@${entry.version}` : name);
+    let unpacked: ReturnType<typeof fetchPackage> | undefined;
+    try {
+      unpacked = fetchPackage(spec);
+      if (stageRootCordisHost(unpacked.root, destDir)) {
+        healed.push(name);
+      }
+    } catch {
+      /* leave incomplete; path-shaped catch-all / restart after a good add */
+    } finally {
+      unpacked?.cleanup();
+    }
+  }
+  return healed;
+}
+
+/** @deprecated Prefer {@link restageIncompleteCommunityHosts}. */
+export function restageIncompleteOurFreeModelHosts(
+  pluginsDir: string,
+): readonly string[] {
+  return restageIncompleteCommunityHosts(pluginsDir);
 }
 
 /**
@@ -154,6 +258,71 @@ export function patchWorkBuddyClientProbeNull(clientJsPath: string): boolean {
   if (next === src) return false;
   writeFileSync(clientJsPath, next, "utf8");
   return true;
+}
+
+/**
+ * Align `__ModuleLoader__.load({ id })` with the install / boot-graph package
+ * name when they only differ by npm scope (DSH bare stamp vs `@scope/bare`
+ * republish). Leaves unrelated stamps untouched.
+ */
+export function alignClientModuleLoaderId(
+  clientJsPath: string,
+  packageName: string,
+): boolean {
+  if (!existsSync(clientJsPath)) return false;
+  const pkg = packageName.trim();
+  if (!pkg) return false;
+  const src = readFileSync(clientJsPath, "utf8");
+  // Multiline OFM-style: `load({\n  id: 'bare',\n  factory: …`
+  const match = /__ModuleLoader__\.load\(\s*\{\s*id\s*:\s*(['"])([^'"]+)\1/.exec(
+    src,
+  );
+  if (!match) return false;
+  const stamped = match[2]!;
+  if (stamped === pkg) return false;
+  if (!isSamePluginPackage(stamped, pkg)) return false;
+  // Same unscoped family — rewrite the stamped id to the install name.
+  if (unscopedPackageName(stamped) !== unscopedPackageName(pkg)) return false;
+  const quote = match[1]!;
+  const from = match[0]!;
+  const to = from.replace(
+    `id: ${quote}${stamped}${quote}`,
+    `id: ${quote}${pkg}${quote}`,
+  );
+  if (to === from) return false;
+  writeFileSync(clientJsPath, src.replace(from, to), "utf8");
+  return true;
+}
+
+/**
+ * Re-run ModuleLoader id alignment on every staged client half.
+ * Heals installs that predate align, or were copied without going through
+ * {@link installClientBundle}.
+ */
+export function realignStagedClientModuleLoaderIds(
+  pluginsDir: string,
+): readonly string[] {
+  const pluginsRoot = path.join(pluginsDir, "web", "plugins");
+  if (!existsSync(pluginsRoot)) return [];
+  const aligned: string[] = [];
+  for (const entry of readdirSync(pluginsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith("@")) {
+      const scopePath = path.join(pluginsRoot, entry.name);
+      for (const pkg of readdirSync(scopePath, { withFileTypes: true })) {
+        if (!pkg.isDirectory()) continue;
+        const id = `${entry.name}/${pkg.name}`;
+        const clientJs = path.join(scopePath, pkg.name, "client.js");
+        if (alignClientModuleLoaderId(clientJs, id)) aligned.push(id);
+      }
+      continue;
+    }
+    const clientJs = path.join(pluginsRoot, entry.name, "client.js");
+    if (alignClientModuleLoaderId(clientJs, entry.name)) {
+      aligned.push(entry.name);
+    }
+  }
+  return aligned;
 }
 
 function stageLazyChunks(root: string, destDir: string): void {
@@ -193,9 +362,12 @@ export function installClientBundle(
   const destDir = clientInstallDir(pluginsDir, classified.name);
   rmSync(destDir, { recursive: true, force: true });
   mkdirSync(destDir, { recursive: true });
-  copyFileSync(classified.clientJs, path.join(destDir, "client.js"));
-  if (classified.name.trim() === "dsh-workbuddy-connect") {
-    patchWorkBuddyClientProbeNull(path.join(destDir, "client.js"));
+  const clientJsDest = path.join(destDir, "client.js");
+  copyFileSync(classified.clientJs, clientJsDest);
+  // Every community client: bare ModuleLoader stamp ↔ scoped install name.
+  alignClientModuleLoaderId(clientJsDest, classified.name);
+  if (isPluginPackageFamily(classified.name, "dsh-workbuddy-connect")) {
+    patchWorkBuddyClientProbeNull(clientJsDest);
   }
   const license = path.join(classified.root, "LICENSE");
   if (existsSync(license)) {
@@ -205,7 +377,8 @@ export function installClientBundle(
   stageExtraAssetDirs(classified.root, destDir);
   stageHostModule(classified.root, destDir);
   stageWorkBuddyHostLib(classified.root, destDir, classified.name);
-  stageOurFreeModelHost(classified.root, destDir, classified.name);
+  // Any client that ships package-root Cordis `index.js` (OFM and peers).
+  stageRootCordisHost(classified.root, destDir);
   const pkgJson = path.join(classified.root, "package.json");
   if (existsSync(pkgJson)) {
     copyFileSync(pkgJson, path.join(destDir, "package.json"));

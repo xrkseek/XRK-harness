@@ -8,6 +8,14 @@
   contain: style;
 }
 
+/* DSH wraps the row in [data-disclosure-header]; community skins (maid) select
+   that ancestor for think/tool/workflow chrome. Keep a thin flex wrapper. */
+.header {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .row {
   position: relative;
   overflow: hidden;
@@ -19,6 +27,19 @@
 
 .row[data-expandable] {
   cursor: pointer;
+}
+
+/* Keyboard path: same ring as InputBar / chat chrome (ux audit F1). */
+.row[data-expandable]:focus-visible {
+  outline: none;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
+}
+
+button.leading:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent);
 }
 
 .leading {
@@ -54,11 +75,13 @@ button.leading {
   transition: opacity var(--ds-motion-instant) var(--ds-ease-out);
 }
 
-.row:hover .iconIdle {
+.row:hover .iconIdle,
+.row:focus-within .iconIdle {
   opacity: 0;
 }
 
-.row:hover .chevronHover {
+.row:hover .chevronHover,
+.row:focus-within .chevronHover {
   opacity: 1;
 }
 

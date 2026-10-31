@@ -115,6 +115,7 @@ export function ShortcutsPanel({
       }}
       title={title}
       closeLabel={closeLabel}
+      shortcutModal="shortcuts"
       {...(description !== undefined ? { description } : {})}
       {...(css.content !== undefined ? { contentClassName: css.content } : {})}
       {...(footer !== undefined ? { footer } : {})}

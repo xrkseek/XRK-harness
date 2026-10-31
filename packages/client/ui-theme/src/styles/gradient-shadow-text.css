@@ -7,8 +7,29 @@ body {
   --dsw-shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
   --dsw-shadow-lv3:
     0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08);
+  /* Elevation: 0.5px hairline stroke in box-shadow + two soft layers (DSH).
+     Stroke color is rebindable; derived --dsw-elevation-* redeclared per element. */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l4);
   /* blur filter */
   --dsw-mask-blur: blur(2px);
+  /* Translucent menu material — community themes rebind --dsw-menu-surface-fill. */
+  --dsw-menu-backdrop-filter: blur(40px) saturate(150%);
+}
+
+body[data-ds-dark-theme] [data-menu-material] {
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+}
+
+/* Per-element elevation so rebinding --dsw-elevation-stroke-color takes effect. */
+body,
+body * {
+  --dsw-elevation-stroke: 0 0 0 0.5px var(--dsw-elevation-stroke-color);
+  --dsw-elevation-panel:
+    var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.03), 0 0 16px 0 rgba(0, 0, 0, 0.02);
+  --dsw-elevation-prominent:
+    var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
+  --dsw-elevation-soft:
+    var(--dsw-elevation-stroke), 0 4px 16px 0 rgba(0, 0, 0, 0.03), 0 0 24px 0 rgba(0, 0, 0, 0.03);
 }
 
 body[data-ds-dark-theme] {

@@ -119,7 +119,14 @@ export function AppRoot(props: AppRootProps) {
       {settled ? props.renderApp() : null}
       {showSplash
         ? (
-          <div className={css.boot} role="status" aria-live="polite" aria-busy={!loud || undefined}>
+          <div
+            className={css.boot}
+            role="status"
+            aria-live="polite"
+            aria-busy={!loud || undefined}
+            // DSH boot handoff looks for `[data-dsh-boot]` / spinner.
+            data-dsh-boot=""
+          >
             <BootWindowChrome lang={lang} />
             <div className={css.ambient} aria-hidden />
             <div className={css.card}>
@@ -127,7 +134,7 @@ export function AppRoot(props: AppRootProps) {
               {!loud
                 ? (
                   <>
-                    <div className={css.spinnerWrap} aria-hidden>
+                    <div className={css.spinnerWrap} aria-hidden data-dsh-boot-spinner="">
                       <div className={css.spinnerRing} />
                       <div className={css.spinnerCore} />
                     </div>

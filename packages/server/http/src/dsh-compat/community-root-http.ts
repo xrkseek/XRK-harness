@@ -16,6 +16,12 @@ import {
   readPluginSurface,
 } from "./underlying/plugin-surface-store.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
+import {
+  enrichWhaleGirlState,
+  isWhaleGirlSlug,
+  whaleWorkStatePayload,
+  type CommunityLiveStateOptions,
+} from "./community-live-state.js";
 
 const RESERVED_ROOT = new Set([
   "api",
@@ -34,6 +40,7 @@ const RESERVED_ROOT = new Set([
   "tongflow",
   "mobile-access",
   "wallpaper-engine",
+  "dsh-wallpaper-bg",
   "dream-skin",
   "dsh-market",
   "dsh-skin-market",
@@ -54,7 +61,7 @@ const RESERVED_ROOT = new Set([
   "whatsapp",
 ]);
 
-export interface CommunityRootOptions {
+export interface CommunityRootOptions extends CommunityLiveStateOptions {
   readonly pluginsDir?: string;
   readonly xrkHome?: string;
 }
@@ -249,27 +256,47 @@ export async function handleCommunityRootHttp(
         surface = patchPluginSurface(xrkHome, plugin, "state", patch, "merge");
       }
     }
-    sendJson(
-      res,
-      200,
-      tag({
-        ok: true,
-        balance:
-          typeof surface.state.balance === "number" ? surface.state.balance : 0,
-        provider: surface.state.provider ?? null,
-        model: surface.state.model ?? null,
-        status:
-          typeof surface.state.status === "string"
-            ? surface.state.status
-            : "ready",
-        ...surface.state,
+
+    // Whale workstate is a thin { state, since } — not the full state blob.
+    if (tail === "api/workstate" && isWhaleGirlSlug(plugin)) {
+      const meter = options.resolveLiveMeter
+        ? await options.resolveLiveMeter()
+        : undefined;
+      sendJson(res, 200, whaleWorkStatePayload(meter));
+      return true;
+    }
+
+    let stateBody: Record<string, unknown> = {
+      ok: true,
+      balance:
+        typeof surface.state.balance === "number" ? surface.state.balance : 0,
+      provider: surface.state.provider ?? null,
+      model: surface.state.model ?? null,
+      status:
+        typeof surface.state.status === "string"
+          ? surface.state.status
+          : "ready",
+      ...surface.state,
+      plugin,
+      path: pathname,
+      adapter: DSH_COMPAT_ADAPTER,
+      writable: true,
+      revision: surface.revision,
+    };
+    if (isWhaleGirlSlug(plugin) && !isMutatingMethod(method)) {
+      const live = await enrichWhaleGirlState(surface.state, options);
+      stateBody = {
+        ...stateBody,
+        ...live,
         plugin,
         path: pathname,
         adapter: DSH_COMPAT_ADAPTER,
         writable: true,
         revision: surface.revision,
-      }),
-    );
+        ok: true,
+      };
+    }
+    sendJson(res, 200, tag(stateBody));
     return true;
   }
 

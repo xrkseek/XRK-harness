@@ -151,7 +151,7 @@ describe('durableSteerPending', () => {
     )).toBe(false)
   })
 
-  it('keeps a steer that is still 发送中 in the trailing cluster', () => {
+  it('keeps a steer that is still 插队中 in the trailing cluster', () => {
     expect(durableSteerPending(
       'steering', stillSending, 84, true, [6, 84], true, 1,
     )).toBe(true)

@@ -58,6 +58,10 @@ import {
 } from './subagent-cycle.ts'
 import type { createLayoutStore } from './stores.ts'
 import { DesktopChrome, hasDesktopChrome } from './DesktopChrome.tsx'
+import {
+  applyDesktopChromeDomAliases,
+  clearDesktopChromeDomAliases,
+} from './dsh-style-aliases.ts'
 import css from './AppFrame.module.css'
 
 /** Presence-only HTML `inert` (React 18 warns on boolean `inert={true}`). */
@@ -100,6 +104,8 @@ function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
     <div
       className={css.centerCol}
       data-pane="conversation"
+      // gui-customization / older skins also select data-panel-conversation.
+      data-panel-conversation=""
       role="main"
       {...htmlInert(props.inert === true)}
     >
@@ -115,11 +121,20 @@ function CenterColumn(props: { children?: ReactNode; inert?: boolean }) {
  * users — so the collapsed subtree is `inert` (same contract the phone drawer
  * uses on the conversation column).
  */
-function DetailsColumn(props: { children?: ReactNode; inert?: boolean }) {
+function DetailsColumn(props: {
+  children?: ReactNode
+  inert?: boolean
+  /** Open = not collapsed; dual-stamps DSH right-panel anchors for glass CSS. */
+  open?: boolean
+}) {
   return (
     <div
       className={css.detailsCol}
       role="complementary"
+      // Community wallpaper / glass CSS still targets DSH right-panel anchors.
+      data-sidebar-right-panel=""
+      data-sidebar-right-open={props.open || undefined}
+      data-rightbar-col=""
       {...htmlInert(props.inert === true)}
     >
       {props.children}
@@ -529,6 +544,39 @@ export function AppFrame({
   // Track-level transitions pause for the whole gesture: eased tracks would
   // detach the column edge from the pointer (AppFrame.module.css).
   const [dragging, setDragging] = useState(false)
+  // Track easing is scoped to a discrete open/close toggle: data-animating
+  // goes up when sidebar/details collapse flips and comes down at transition
+  // end (timeout fallback). Steady-state viewport updates stay instant, and
+  // so does a toggle arriving with a viewport change (responsive auto-collapse
+  // mid-resize). Community skins (orca) also select [data-animating].
+  const [animating, setAnimating] = useState(0)
+  const trackToggle = `${sidebarCollapsed}:${detailsCollapsed}`
+  const previousToggle = useRef(trackToggle)
+  const previousViewport = useRef(viewport)
+  useLayoutEffect(() => {
+    const viewportChanged = previousViewport.current !== viewport
+    previousViewport.current = viewport
+    if (previousToggle.current === trackToggle) return
+    previousToggle.current = trackToggle
+    if (viewportChanged) return
+    setAnimating(token => token + 1)
+  }, [trackToggle, viewport])
+  useEffect(() => {
+    if (animating === 0) return
+    const frame = frameRef.current
+    /* v8 ignore next -- the ref is always attached by effect time. */
+    if (frame === null) return
+    const settle = () => { setAnimating(0) }
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.target === frame && event.propertyName === 'grid-template-columns') settle()
+    }
+    frame.addEventListener('transitionend', onTransitionEnd)
+    const timer = setTimeout(settle, 600)
+    return () => {
+      frame.removeEventListener('transitionend', onTransitionEnd)
+      clearTimeout(timer)
+    }
+  }, [animating])
   const onDragEnd = useCallback(() => { setDragging(false) }, [])
   const onSidebarStart = useCallback(() => { sidebarBase.current = colsRef.current.sidebar; setDragging(true) }, [])
   const onDetailsStart = useCallback(() => { detailsBase.current = colsRef.current.details; setDragging(true) }, [])
@@ -603,14 +651,12 @@ export function AppFrame({
   }, [actions])
 
   const desktopChrome = hasDesktopChrome()
-  // Publish chrome height on <html> so floating workbenches (better-sidebar)
-  // can align without reading frame-scoped CSS variables.
+  // Publish chrome height on <html> (+ DSH aliases) so floating workbenches
+  // and community layout.css / glass rules align without frame-scoped vars.
   useEffect(() => {
-    if (!desktopChrome) return
-    const root = document.documentElement
-    root.style.setProperty('--xrk-desktop-chrome-height', '36px')
+    applyDesktopChromeDomAliases(desktopChrome)
     return () => {
-      root.style.removeProperty('--xrk-desktop-chrome-height')
+      clearDesktopChromeDomAliases()
     }
   }, [desktopChrome])
 
@@ -638,7 +684,10 @@ export function AppFrame({
       }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={detailsCollapsed || undefined}
+      // DSH rightbar collapse gate — community glass CSS still reads it.
+      data-rightbar-collapsed={detailsCollapsed || undefined}
       data-dragging={dragging || undefined}
+      data-animating={animating > 0 || undefined}
       data-phone={phone || undefined}
       data-drawer-swiping={drawerShift !== 0 || undefined}
       data-desktop-chrome={desktopChrome || undefined}
@@ -668,11 +717,19 @@ export function AppFrame({
       <>
         {/* Phone drawer: inert the conversation so taps do not leak under the sheet. */}
         <CenterColumn inert={drawerOpen}>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn inert={detailsCollapsed}>{renderSlot('details', {})}</DetailsColumn>
+        <DetailsColumn inert={detailsCollapsed} open={!detailsCollapsed}>
+          {renderSlot('details', {})}
+        </DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
+      {/* DSH shell.leading seat — maid CSS targets [data-shell-leading] when
+          the sidebar is collapsed (traffic-light / chrome clearance). Empty
+          until a Host occupant registers; still stamp the anchor. */}
+      {!phone && sidebarCollapsed ? (
+        <div className={css.leadingSeat} data-shell-leading="" />
+      ) : null}
       <ShortcutsPanel
         open={shortcutsOpen}
         onClose={() => {

@@ -112,6 +112,9 @@ describe('ProcessGroupSeat', () => {
     const view = renderSeat(group(false, { running: true, runningTool: 'bash' }))
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    // DSH ChatGroupSeat activity vocabulary for community CSS.
+    expect(view.container.querySelector('[data-process-activity]')?.getAttribute('data-process-activity'))
+      .toBe('commands')
   })
 
   it('folds an open Turn once every tool has settled (answer may still stream)', async () => {
