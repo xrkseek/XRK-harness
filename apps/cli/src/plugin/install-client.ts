@@ -284,7 +284,7 @@ export function alignClientModuleLoaderId(
   // Same unscoped family — rewrite the stamped id to the install name.
   if (unscopedPackageName(stamped) !== unscopedPackageName(pkg)) return false;
   const quote = match[1]!;
-  const from = match[0]!;
+  const from = match[0];
   const to = from.replace(
     `id: ${quote}${stamped}${quote}`,
     `id: ${quote}${pkg}${quote}`,

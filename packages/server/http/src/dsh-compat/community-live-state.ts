@@ -152,13 +152,13 @@ export async function enrichWhaleGirlState(
       : typeof surfaceState.currency === "string" && surfaceState.currency.trim()
         ? surfaceState.currency
         : "CNY";
-  let todayUsage =
+  const todayUsage =
     typeof meter?.todayUsage === "number"
       ? meter.todayUsage
       : typeof surfaceState.todayUsage === "number"
         ? surfaceState.todayUsage
         : 0;
-  let lastTurnCost =
+  const lastTurnCost =
     typeof meter?.lastTurnCost === "number"
       ? meter.lastTurnCost
       : typeof surfaceState.lastTurnCost === "number"
