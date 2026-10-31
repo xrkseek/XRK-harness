@@ -155,6 +155,10 @@ export type PluginsSettingsLocaleKey =
   | 'sshRemotePort' | 'sshRemotePortHint'
   | 'sshRemoteKeyPath' | 'sshRemoteKeyPathHint'
   | 'sshRemoteRestartHint'
+  | 'sunflowerFreeTitle' | 'sunflowerFreeDescription'
+  | 'sunflowerFreeOpenCodeProxy' | 'sunflowerFreeOpenCodeProxyHint'
+  | 'sunflowerFreeKiloProxy' | 'sunflowerFreeKiloProxyHint'
+  | 'sunflowerFreeLiveHint'
   | 'autoReviewTitle' | 'autoReviewDescription'
   | 'autoReviewEnabled' | 'autoReviewEnabledHint'
   | 'autoReviewEnabledOn' | 'autoReviewEnabledOff'
@@ -184,7 +188,7 @@ export type PluginsSettingsLocaleKey =
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
   title: 'Plugins',
-  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, video analyze, curated memory, external agents, sandbox, computer use, cron, telemetry, workspace inject, auto-review, memory-embed, and Host / channel mirrors.',
+  intro: 'Configure Host plugins: MCP, Shell, agent loop, web search, browser, voice, image/video gen, video analyze, curated memory, sunflower free lane, external agents, sandbox, computer use, cron, telemetry, workspace inject, auto-review, memory-embed, and Host / channel mirrors.',
   tabs: 'Plugin views',
   configurableTab: 'Plugin configuration',
   toolsTab: 'Runtime',
@@ -285,9 +289,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopTitle: 'Agent loop',
   agentLoopDescription: 'How the agent dispatches tool calls, budgets context, spills large tool results, and caps subagent depth/concurrency.',
   agentLoopMaxParallel: 'Parallel tool calls',
-  agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
+  agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step. Default 5.',
   agentLoopMaxSteps: 'Max steps per turn',
-  agentLoopMaxStepsHint: 'Upper bound on LLM steps (including tool rounds) within one user turn. Default 32.',
+  agentLoopMaxStepsHint: 'Upper bound on LLM steps (including tool rounds) within one user turn. Default 200.',
   agentLoopAutoContinue: 'Auto-continue on max tokens',
   agentLoopAutoContinueHint: 'When a model stops at its output token cap mid-turn, resume it automatically with a user message 「继续」 instead of ending truncated. On by default.',
   agentLoopAutoContinueOn: 'On',
@@ -596,6 +600,17 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteKeyPath: 'Identity file',
   sshRemoteKeyPathHint: 'Optional local path to an OpenSSH private key (not the key material).',
   sshRemoteRestartHint: 'Requires a Host restart to take effect (SSH world is built at spawn).',
+  sunflowerFreeTitle: 'Sunflower free',
+  sunflowerFreeDescription:
+    'Egress for the built-in free LLM lane (OpenCode anonymous pool + Kilo free listing). Separate from other provider HTTP proxies.',
+  sunflowerFreeOpenCodeProxy: 'OpenCode proxy',
+  sunflowerFreeOpenCodeProxyHint:
+    'Cascade after direct fails: empty or auto = probe loopback (e.g. 7897); URL = that proxy; off = direct only.',
+  sunflowerFreeKiloProxy: 'Kilo proxy',
+  sunflowerFreeKiloProxyHint:
+    'Kilo lane only (default direct). Same values: empty/auto, URL, or off.',
+  sunflowerFreeLiveHint:
+    'Save remounts the free lane and re-probes (live; no Host restart). Models → Sunflower free opens the same namespace.',
   autoReviewTitle: 'Auto-review classifier',
   autoReviewDescription:
     'Tool pre-review on the pipeline (not a chat context-fragment). Session permission Auto = no sandbox + per-call review. Classifier tiers: heuristic (default) · http (URL below / XRK_AUTO_REVIEW_CLASSIFIER_URL) · session-llm (Host current model when URL empty). Each call → allow / deny / ask→approval.',
@@ -660,7 +675,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
 export const ja = {
   nav: 'プラグイン',
   title: 'プラグイン',
-  intro: 'Host プラグインを設定: MCP、Shell、エージェントループ、Web 検索、ブラウザ、音声、画像／動画生成、動画解析、キュレーションメモリ、外部エージェント、サンドボックス、コンピュータ操作、cron、テレメトリ、ワークスペース inject、自動レビュー、memory-embed、Host／チャネルミラー。',
+  intro: 'Host プラグインを設定: MCP、Shell、エージェントループ、Web 検索、ブラウザ、音声、画像／動画生成、動画解析、キュレーションメモリ、向日葵無料レーン、外部エージェント、サンドボックス、コンピュータ操作、cron、テレメトリ、ワークスペース inject、自動レビュー、memory-embed、Host／チャネルミラー。',
   tabs: 'プラグインビュー',
   configurableTab: 'プラグイン設定',
   toolsTab: 'ランタイム',
@@ -761,9 +776,9 @@ export const ja = {
   agentLoopTitle: 'エージェントループ',
   agentLoopDescription: 'エージェントのツール呼び出し、コンテキスト予算、大きなツール結果の spill、サブエージェントの深さ／並列上限の制御方法。',
   agentLoopMaxParallel: '並列ツール呼び出し',
-  agentLoopMaxParallelHint: '1 ステップ内で同時に動く並列安全な呼び出しの上限。',
+  agentLoopMaxParallelHint: '1 ステップ内で同時に動く並列安全な呼び出しの上限。デフォルト 5。',
   agentLoopMaxSteps: 'ターンあたりの最大ステップ数',
-  agentLoopMaxStepsHint: '1 ユーザーターン内の LLM ステップ上限（ツールラウンド含む）。デフォルト 32。',
+  agentLoopMaxStepsHint: '1 ユーザーターン内の LLM ステップ上限（ツールラウンド含む）。デフォルト 200。',
   agentLoopAutoContinue: '最大トークン到達時に自動継続',
   agentLoopAutoContinueHint: 'モデルがターン途中で出力トークン上限に達したとき、切り詰めて終わらせず、ユーザーメッセージ「继续」で自動再開します。デフォルトでオン。',
   agentLoopAutoContinueOn: 'オン',
@@ -1070,6 +1085,17 @@ export const ja = {
   sshRemoteKeyPath: 'Identity ファイル',
   sshRemoteKeyPathHint: 'OpenSSH 秘密鍵への任意ローカルパス（鍵本体ではない）。',
   sshRemoteRestartHint: '反映には Host の再起動が必要です（SSH 環境は起動時に構築されます）。',
+  sunflowerFreeTitle: '向日葵無料',
+  sunflowerFreeDescription:
+    '内蔵無料 LLM レーン（OpenCode 匿名プール + Kilo 無料一覧）の出口。他プロバイダの HTTP プロキシとは別です。',
+  sunflowerFreeOpenCodeProxy: 'OpenCode プロキシ',
+  sunflowerFreeOpenCodeProxyHint:
+    '直連失敗後の候補: 空/auto = ループバック検出（例 7897）；URL = そのプロキシ；off = 直連のみ。',
+  sunflowerFreeKiloProxy: 'Kilo プロキシ',
+  sunflowerFreeKiloProxyHint:
+    'Kilo レーンのみ（既定は直連）。同じ値: 空/auto、URL、または off。',
+  sunflowerFreeLiveHint:
+    '保存で無料レーンを再マウントし再プローブします（ライブ、Host 再起動不要）。モデル → 向日葵無料も同じ名前空間です。',
   autoReviewTitle: '自動レビュー分類器',
   autoReviewDescription: 'パイプライン上のツール事前レビュー（チャットのコンテキスト断片ではありません）。セッション権限 Auto = サンドボックスなし＋呼び出しごとレビュー。分類器の段階: heuristic（デフォルト）· http（下の URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· session-llm（URL が空のとき Host の現在モデル）。各呼び出し → allow / deny / ask→承認。',
   autoReviewEnabled: '自動レビューを有効化',
@@ -1133,7 +1159,7 @@ export const ja = {
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
   title: '插件',
-  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、图像/视频生成、视频理解、策展记忆、外部 Agent、沙箱、Computer use、Cron、会话遥测、工作区 inject、自动审查、向量记忆，以及 Host / 通道只读镜像。',
+  intro: '配置 Host 插件：MCP、终端、Agent 循环、联网搜索、Browser、Voice、图像/视频生成、视频理解、策展记忆、向日葵免费车道、外部 Agent、沙箱、Computer use、Cron、会话遥测、工作区 inject、自动审查、向量记忆，以及 Host / 通道只读镜像。',
   tabs: '插件视图',
   configurableTab: '插件配置',
   toolsTab: '运行时',
@@ -1234,9 +1260,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopTitle: 'Agent 循环',
   agentLoopDescription: '工具派发、软上下文预算、过大工具结果 spill，以及子代理深度/并发上限。',
   agentLoopMaxParallel: '并行工具调用数',
-  agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
+  agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。默认 5。',
   agentLoopMaxSteps: '每轮最大步数',
-  agentLoopMaxStepsHint: '单次用户 turn 内 LLM 步数上限（含工具回合）。默认 32。',
+  agentLoopMaxStepsHint: '单次用户 turn 内 LLM 步数上限（含工具回合）。默认 200。',
   agentLoopAutoContinue: '达输出上限时自动续写',
   agentLoopAutoContinueHint: '模型在 turn 中途撞上输出 token 上限时，自动以用户消息「继续」续写而不是截断收尾。默认开启。',
   agentLoopAutoContinueOn: '开',
@@ -1545,6 +1571,17 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteKeyPath: '私钥路径',
   sshRemoteKeyPathHint: '可选本机私钥文件路径（不是密钥内容）。',
   sshRemoteRestartHint: '需重启 Host 后生效（SSH 世界在进程启动时构建）。',
+  sunflowerFreeTitle: '向日葵免费',
+  sunflowerFreeDescription:
+    '内置免费 LLM 车道（OpenCode 匿名池 + Kilo 免费列表）的出口代理。与其它提供方的 HTTP 代理分开。',
+  sunflowerFreeOpenCodeProxy: 'OpenCode 代理',
+  sunflowerFreeOpenCodeProxyHint:
+    '直连失败后的候选：留空/auto = 探测本机回环（如 7897）；URL = 用该代理；off = 只直连。',
+  sunflowerFreeKiloProxy: 'Kilo 代理',
+  sunflowerFreeKiloProxyHint:
+    '仅 Kilo 车道（默认直连）。取值同左：留空/auto、URL 或 off。',
+  sunflowerFreeLiveHint:
+    '保存后热重挂免费车道并重新探测（无需重启 Host）。设置 → 模型 → 向日葵免费打开的是同一命名空间。',
   autoReviewTitle: '自动审查（Auto-review）',
   autoReviewDescription:
     '工具管线预审（不是聊天 context-fragment）。会话权限 Auto = 无沙箱 + 每次调用评审。分类器三档：启发式（默认）· http（下方 URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· 会话 LLM（URL 空且 Host 有当前模型）。每次调用 → 放行 / 拒绝 / 询问→审批。',

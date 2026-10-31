@@ -66,12 +66,9 @@ export async function unbindAgentHomeForMember(
   runtime: FaceRuntime,
   memberId: string,
 ): Promise<void> {
+  // Keep identity after unbind: unbound rows still report memberId on
+  // session.list so 干员「未分组」can claim them (project orphans have none).
   const unbound = runtime.workspaces.unbindAgentHome(memberId);
-  // Same lane rule as workspace.delete: forget identity; leave sessions
-  // unbound for 干员「未分组」(do not archive).
-  for (const sid of unbound.movedSessionIds) {
-    runtime.sessionIdentities.forget(sid);
-  }
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   if (unbound.workspaceId) {
     runtime.bus.publishHost({

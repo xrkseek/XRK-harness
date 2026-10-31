@@ -130,6 +130,50 @@
   text-decoration-color: currentColor;
 }
 
+/* Multi-file present header: every path is its own openable link. */
+.fileLinks {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow: hidden;
+}
+
+.fileLinkSep {
+  flex: none;
+  margin: 0 6px;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-quaternary);
+}
+
+.fileLinkItem {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--dsw-alias-label-quaternary);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.fileLinkItem:hover {
+  color: var(--dsw-alias-label-primary);
+  text-decoration-color: currentColor;
+}
+
 /* Error row's collapsed summary: the failure's first line in the error color. */
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);

@@ -163,17 +163,23 @@ describe('pushed invalidations', () => {
     b.ctx.emit('connection/reset')
   })
 
-  it('refreshes a loaded page and skips an idle one', () => {
-    const loads: number[] = []
+  it('refreshes a loaded page softly and skips an idle one', () => {
+    const loads: { soft?: boolean }[] = []
     const controller = {
       store: { getSnapshot: () => ({ status: 'ready' }) },
-      load: () => { loads.push(1); return Promise.resolve() },
+      load: (opts?: { soft?: boolean }) => {
+        loads.push(opts ?? {})
+        return Promise.resolve()
+      },
     }
     refreshIfLoaded(controller as unknown as import('../src/client/store.ts').ModelsSettingsStore)
-    expect(loads).toHaveLength(1)
+    expect(loads).toEqual([{ soft: true }])
     const idle = {
       store: { getSnapshot: () => ({ status: 'idle' }) },
-      load: () => { loads.push(2); return Promise.resolve() },
+      load: (opts?: { soft?: boolean }) => {
+        loads.push(opts ?? {})
+        return Promise.resolve()
+      },
     }
     refreshIfLoaded(idle as unknown as import('../src/client/store.ts').ModelsSettingsStore)
     expect(loads).toHaveLength(1)

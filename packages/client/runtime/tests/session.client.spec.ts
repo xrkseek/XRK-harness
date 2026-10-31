@@ -1040,6 +1040,55 @@ describe('remaining branches', () => {
   })
 })
 
+describe('applyTruncateCut', () => {
+  it('trims the open window in place without flipping openState to loading', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse([
+      ...plainTurn(1, 0, 'a', 'b'),
+      ...plainTurn(7, 1, 'c', 'd'),
+    ])
+    await session.open()
+    expect(session.getSnapshot().nodes).toHaveLength(4)
+    expect(session.applyTruncateCut(6)).toBe(true)
+    const snapshot = session.getSnapshot()
+    expect(snapshot.openState).toBe('open')
+    expect(snapshot.nodes.map(n => n.seq)).toEqual([2, 4])
+    expect(api.callsOf('session.history')).toHaveLength(1)
+  })
+
+  it('returns false when the kept prefix is not in the loaded window', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse(plainTurn(20, 2, 'late', 'page'), true)
+    await session.open()
+    expect(session.applyTruncateCut(10)).toBe(false)
+    expect(session.getSnapshot().openState).toBe('open')
+    expect(session.getSnapshot().nodes).toHaveLength(2)
+  })
+
+  it('reseals projections from a post-cut history baseline without emptying the chat', async () => {
+    const { api, session } = makeSession()
+    api.onHistory = () => histResponse([
+      ...plainTurn(1, 0, 'a', 'b'),
+      ...plainTurn(7, 1, 'c', 'd'),
+    ])
+    await session.open()
+    session.projections.seed({
+      asOfSeq: 12,
+      values: { title: 'before-cut' },
+    })
+    expect(session.applyTruncateCut(6)).toBe(true)
+    api.onHistory = () => Promise.resolve(ok({
+      events: entries(plainTurn(1, 0, 'a', 'b')) as never[],
+      hasMore: false,
+      projections: { asOfSeq: 6, values: { title: 'after-cut' } },
+    }))
+    await session.resealProjectionsAfterTruncate()
+    expect(session.projections.get('title')).toBe('after-cut')
+    expect(session.getSnapshot().openState).toBe('open')
+    expect(session.getSnapshot().nodes.map(n => n.seq)).toEqual([2, 4])
+  })
+})
+
 describe('resync', () => {
   it('rebuilds the window and clears pending; cold instances no-op', async () => {
     const { api, session } = makeSession()

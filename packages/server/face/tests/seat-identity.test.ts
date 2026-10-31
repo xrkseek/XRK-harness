@@ -99,8 +99,11 @@ describe("seat-identity", () => {
     expect(text).toContain("titles: 老板 / 经理 / 干员");
   });
 
-  it("xiangyang session: you=向日葵, nickname locked", async () => {
+  it("xiangyang session: you=向日葵（xrkseek）, nickname locked", async () => {
     const runtime = createBareFaceRuntime();
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     const created = await sessionCreate(runtime, "xy1", {
       workspaceId: XIANGYANG_WORKSPACE_ID,
     });
@@ -108,7 +111,7 @@ describe("seat-identity", () => {
     if (!created.ok) return;
     const sessionId = String((created.value as { sessionId: string }).sessionId);
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 向日葵 (xiangyang)");
+    expect(text).toContain("you: 向日葵（xrkseek） (xiangyang)");
     expect(text).toContain("nickname: locked");
     expect(runtime.agentRoster.get("global", SUNFLOWER_MEMBER_ID)?.name).toBe(
       "向日葵",
@@ -157,10 +160,18 @@ describe("seat-identity", () => {
       label: "helper",
       memberId: member!.id,
     });
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     const childText = formatSeatIdentity(runtime, childId);
-    expect(childText).toContain("you: 施工员自定义（小工） (subagent)");
-    expect(childText).toContain("parent: 施工员自定义（小工）");
-    expect(childText).toMatch(/human_face=/);
+    expect(childText).toContain(
+      "you: 施工员自定义（小工） (subagent · parent_surface=identity)",
+    );
+    expect(childText).toContain("report: 施工员自定义（小工）");
+    expect(childText).toMatch(/human_face: 老板 \(/);
+    expect(childText).toContain("channels: UI→[老板]");
+    expect(childText).toContain("parent_tool→[施工员自定义（小工）]");
+    expect(childText).not.toMatch(/speaker: 老板/);
 
     const frags = createSeatIdentityFragmentProvider(runtime).produce({
       sessionId: homeId,
@@ -168,6 +179,96 @@ describe("seat-identity", () => {
     expect(frags).toHaveLength(1);
     expect(frags[0]!.text).toContain("<seat_identity>");
     expect(frags[0]!.priority).toBe(8.1);
+  });
+
+  it("project→child: report is 经理, channels distinguish 老板 UI vs parent tool", async () => {
+    const runtime = createBareFaceRuntime();
+    const root = path.join(runtime.productDir!, "proj-child");
+    mkdirSync(root, { recursive: true });
+    const { workspace } = runtime.workspaces.create(root);
+    const parentCreated = await sessionCreate(runtime, "p-mgr", {
+      workspaceId: workspace.workspaceId,
+    });
+    expect(parentCreated.ok).toBe(true);
+    if (!parentCreated.ok) return;
+    const parentId = String(
+      (parentCreated.value as { sessionId: string }).sessionId,
+    );
+    const childCreated = await sessionCreate(runtime, "c-agent", {
+      workspaceId: workspace.workspaceId,
+    });
+    expect(childCreated.ok).toBe(true);
+    if (!childCreated.ok) return;
+    const childId = String(
+      (childCreated.value as { sessionId: string }).sessionId,
+    );
+    runtime.agentRoster.patchCatalogMeta(MANAGER_MEMBER_ID, {
+      nickname: "阿经",
+    });
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
+      bossNickname: "阿凯",
+    });
+    runtime.subagents.attach({
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "one-shot",
+      label: "施工员",
+    });
+    const text = formatSeatIdentity(runtime, childId);
+    expect(text).toContain("report: 经理（阿经）");
+    expect(text).toContain("parent_surface=manager");
+    expect(text).toContain("human_face: 老板（阿凯）");
+    expect(text).toContain("channels: UI→[老板（阿凯）]");
+    expect(text).toContain("parent_tool→[经理（阿经）]");
+    expect(text).not.toMatch(/speaker: 老板/);
+  });
+
+  it("child seat_identity uses custom titleBoss/Manager labels", async () => {
+    const runtime = createBareFaceRuntime();
+    const root = path.join(runtime.productDir!, "proj-custom-child");
+    mkdirSync(root, { recursive: true });
+    const { workspace } = runtime.workspaces.create(root);
+    const parentCreated = await sessionCreate(runtime, "p-custom-c", {
+      workspaceId: workspace.workspaceId,
+    });
+    expect(parentCreated.ok).toBe(true);
+    if (!parentCreated.ok) return;
+    const parentId = String(
+      (parentCreated.value as { sessionId: string }).sessionId,
+    );
+    const childCreated = await sessionCreate(runtime, "c-custom", {
+      workspaceId: workspace.workspaceId,
+    });
+    expect(childCreated.ok).toBe(true);
+    if (!childCreated.ok) return;
+    const childId = String(
+      (childCreated.value as { sessionId: string }).sessionId,
+    );
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
+      titleScheme: "office",
+      titleBoss: "主公",
+      titleManager: "军师",
+      titleAgent: "先锋",
+      bossNickname: "阿凯",
+    });
+    runtime.subagents.attach({
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "one-shot",
+      label: "先锋甲",
+    });
+    const text = formatSeatIdentity(runtime, childId);
+    expect(text).toContain("report: 军师");
+    expect(text).toContain("human_face: 主公（阿凯）");
+    expect(text).toContain("channels: UI→[主公（阿凯）]");
+    expect(text).toContain("parent_tool→[军师]");
+    expect(text).toContain("titles: 主公 / 军师 / 先锋");
   });
 
   it("rejects sunflower nickname patch", () => {
@@ -179,3 +280,4 @@ describe("seat-identity", () => {
     ).toBeUndefined();
   });
 });
+

@@ -6,6 +6,7 @@
  * reacts like a companion, not a static LED.
  */
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { bindSeatChannelBossLabel } from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_ENABLED,
@@ -49,6 +50,12 @@ export function bindPresenceSettingsRuntime(runtime: PresenceSettingsRuntime): v
   presenceLookCache = undefined
   bossMoodCache = undefined
   seatTitlesCache = undefined
+  // Subagent send echoes stitch `[老板（nick）]` before Host admit returns.
+  bindSeatChannelBossLabel(() => {
+    const titles = runtime.getSeatTitles(presenceUiLocale)
+    const nick = runtime.getBossNickname().trim()
+    return nick ? `${titles.boss}（${nick}）` : titles.boss
+  })
 }
 
 /** Live write face for Overview Boss status sheet (same Host scope as Settings). */

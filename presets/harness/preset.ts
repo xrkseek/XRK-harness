@@ -2041,9 +2041,7 @@ export function createHarnessComposition(
         ...(options.toolResultMaxInlineBytes !== undefined
           ? { toolResultMaxInlineBytes: options.toolResultMaxInlineBytes }
           : {}),
-        ...(options.maxParallelToolCalls !== undefined
-          ? { maxParallelToolCalls: options.maxParallelToolCalls }
-          : {}),
+        maxParallelToolCalls: options.maxParallelToolCalls ?? 5,
         ...(options.toolSettle !== undefined
           ? { toolSettle: options.toolSettle }
           : {}),
@@ -2055,7 +2053,7 @@ export function createHarnessComposition(
                   : { maxRetries: Math.floor(options.llmRetryMaxRetries) },
             }
           : {}),
-        maxSteps: options.maxSteps ?? 32,
+        maxSteps: options.maxSteps ?? 200,
         ...(options.autoContinueOnMaxTokens !== undefined
           ? { autoContinueOnMaxTokens: options.autoContinueOnMaxTokens }
           : {}),

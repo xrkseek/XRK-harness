@@ -104,6 +104,36 @@ function optionsFromCatalog(
   return rows
 }
 
+function sameDefaultModelOptions(
+  left: readonly DefaultModelOption[],
+  right: readonly DefaultModelOption[],
+): boolean {
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i++) {
+    const a = left[i]
+    const b = right[i]
+    if (a === undefined || b === undefined) return false
+    if (a.value !== b.value || a.label !== b.label) return false
+  }
+  return true
+}
+
+/**
+ * Soft reload after `providerOrder` only reorders the same routes — keep the
+ * prior `<option>` list so the native select does not remount / flash away.
+ */
+function sameDefaultModelOptionSet(
+  left: readonly DefaultModelOption[],
+  right: readonly DefaultModelOption[],
+): boolean {
+  if (left.length !== right.length) return false
+  const rightByValue = new Map(right.map((row) => [row.value, row.label]))
+  for (const row of left) {
+    if (rightByValue.get(row.value) !== row.label) return false
+  }
+  return true
+}
+
 /** One provider row the page renders. */
 export interface ProviderRow {
   /** The directory entry (route id, display name, settings address, live state). */
@@ -216,11 +246,19 @@ export class ModelsSettingsStore {
    * Refresh the whole page snapshot: directory, namespaces, and catalog in
    * parallel, then one batched credential describe over every referenced ref.
    * A failure keeps the last good rows and surfaces the error.
+   * @param opts.soft - when true and the page is already ready, keep `status`
+   *   as ready so the default-model select does not unmount (reorder / mutate
+   *   echoes used to flash it away via a loading gate).
    * @returns nothing; the snapshot carries the outcome.
    */
-  async load(): Promise<void> {
+  async load(opts: { readonly soft?: boolean } = {}): Promise<void> {
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'loading'; s.error = null })
+    const soft = opts.soft === true && this.store.getSnapshot().status === 'ready'
+    if (!soft) {
+      this.store.update((s) => { s.status = 'loading'; s.error = null })
+    } else {
+      this.store.update((s) => { s.error = null })
+    }
     let providers: ConfigurableProviderView[]
     let writable: boolean
     let views: SettingsNamespaceView[]
@@ -242,7 +280,8 @@ export class ModelsSettingsStore {
     } catch (error) {
       if (generation !== this.generation) return
       this.store.update((s) => {
-        s.status = 'error'
+        // Soft reload keeps the prior ready paint; only cold loads flip to error.
+        if (!soft) s.status = 'error'
         s.error = error instanceof Error ? error.message : String(error)
       })
       return
@@ -285,6 +324,7 @@ export class ModelsSettingsStore {
       }
     }
     if (generation !== this.generation) return
+    const nextOptions = optionsFromCatalog(catalogGroups, defaultModel)
     this.store.update((s) => {
       s.status = 'ready'
       s.error = null
@@ -297,10 +337,25 @@ export class ModelsSettingsStore {
           : {},
       }))
       s.namespaces = namespaces
-      s.defaultModel = defaultModel
-      s.defaultModelOverridden = defaultModelOverridden
-      s.defaultModelRevision = defaultNs?.revision ?? 0
-      s.defaultModelOptions = optionsFromCatalog(catalogGroups, defaultModel)
+      // Soft reloads must not churn the default-model select when the
+      // selection is unchanged — rewriting options remounts <option> nodes
+      // and native controls flash (provider reorder used to do this every drop).
+      // Order-only catalog churn (providerOrder) keeps the prior option list.
+      const sameSelection = soft
+        && s.defaultModel?.provider === defaultModel?.provider
+        && s.defaultModel?.model === defaultModel?.model
+        && s.defaultModelOverridden === defaultModelOverridden
+        && s.defaultModelRevision === (defaultNs?.revision ?? 0)
+        && (
+          sameDefaultModelOptions(s.defaultModelOptions, nextOptions)
+          || sameDefaultModelOptionSet(s.defaultModelOptions, nextOptions)
+        )
+      if (!sameSelection) {
+        s.defaultModel = defaultModel
+        s.defaultModelOverridden = defaultModelOverridden
+        s.defaultModelRevision = defaultNs?.revision ?? 0
+        s.defaultModelOptions = nextOptions
+      }
     })
   }
 
@@ -324,7 +379,7 @@ export class ModelsSettingsStore {
     } catch (error) {
       return messageOf(error)
     }
-    await this.load()
+    await this.load({ soft: true })
     return undefined
   }
 
@@ -348,13 +403,15 @@ export class ModelsSettingsStore {
     } catch (error) {
       return messageOf(error)
     }
-    await this.load()
+    await this.load({ soft: true })
     return undefined
   }
 
   /**
    * Persist Settings → Models row order (`llm-pi-ai.providerOrder`) after a
-   * long-press reorder. Optimistic local splice; reloads on failure.
+   * long-press reorder. Optimistic local splice only — a post-success soft
+   * reload used to re-fetch `llm.models` and rewrite default-model `<option>`
+   * order, which makes the native select flash even when status stayed ready.
    * @param providerId - moved provider route id.
    * @param beforeProviderId - insert-before anchor; omit to append.
    * @returns failure text, or undefined on success.
@@ -376,8 +433,13 @@ export class ModelsSettingsStore {
       return row === undefined ? [] : [row]
     })
     const rest = snap.rows.filter(row => !row.configured)
+    const optimisticRows = [...nextConfigured, ...rest]
+    // One notify for the optimistic splice — a second namespaces-only update
+    // after mutate used to re-render the whole Models page (default-model
+    // <select> rebuilds options and flashes) even when defaultModel* was
+    // untouched.
     this.store.update((s) => {
-      s.rows = [...nextConfigured, ...rest]
+      s.rows = optimisticRows
     })
 
     const piAi = snap.namespaces.get(LLM_PI_AI_NS)
@@ -388,14 +450,21 @@ export class ModelsSettingsStore {
         ops: [{ op: 'set', path: ['providerOrder'], value: nextIds }],
       })
       if (!response.result.ok) {
-        await this.load()
+        await this.load({ soft: true })
         return response.result.error.message
       }
+      // Patch only the mutated namespace revision; leave defaultModel* alone.
+      // Build the next Map from the plain snapshot — drafting Map#set needs
+      // Immer MapSet, which this store does not enable.
+      const nextNamespaces = new Map(this.store.getSnapshot().namespaces)
+      nextNamespaces.set(LLM_PI_AI_NS, response.result.value)
+      this.store.update((s) => {
+        s.namespaces = nextNamespaces
+      })
     } catch (error) {
-      await this.load()
+      await this.load({ soft: true })
       return messageOf(error)
     }
-    await this.load()
     return undefined
   }
 }

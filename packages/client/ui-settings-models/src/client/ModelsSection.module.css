@@ -261,7 +261,8 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* Default model: same chrome as provider row cards + plugin ChoiceField. */
+/* Default model: same chrome as provider row cards + plugin ChoiceField.
+   contain keeps row-list reorder paint from shifting this card's box. */
 .defaultModel {
   display: flex;
   flex-direction: column;
@@ -269,6 +270,7 @@
   padding: 12px 14px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
+  contain: layout style;
 }
 
 .defaultModelHead {

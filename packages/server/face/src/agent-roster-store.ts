@@ -148,8 +148,17 @@ export type ListedRosterMember = AgentRosterMember & {
 /** Workspace office lead — costume editable; playbook stays catalog-owned. */
 export const MANAGER_MEMBER_ID = "mem_seed_manager";
 
-/** Xiangyang author seat — display 向日葵; nickname locked. */
+/** Xiangyang author seat (经理席对位) — formal 向日葵; locked nick `xrkseek`. */
 export const SUNFLOWER_MEMBER_ID = "mem_seed_xrkseek";
+
+/**
+ * Locked English call-name for 向日葵 (product id). Not user-editable.
+ * Prefer {@link sunflowerLockedNickname} / locale formal for chrome paint.
+ */
+export const SUNFLOWER_NICKNAME = "xrkseek";
+
+/** @deprecated Alias of {@link SUNFLOWER_NICKNAME} (was misused as formal display). */
+export const SUNFLOWER_FORMAL_NAME = SUNFLOWER_NICKNAME;
 
 const CATALOG_SEED_MEMBER_IDS = new Set([
   MANAGER_MEMBER_ID,
@@ -667,6 +676,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
     },
     {
       id: SUNFLOWER_MEMBER_ID,
+      // Disk formal (zh). Live chrome localizes via catalog-seed-labels.
       name: "向日葵",
       role: "lead",
       appearance: { shape: "petal", color: "butter", kitHat: "visor" },
@@ -678,7 +688,7 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "Xiangyang author seat — takes top-seat dispatch, steers product and agents.",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are 向日葵 (xrkseek author seat on Xiangyang; nickname locked). " +
+        " You are 向日葵 (locked nick xrkseek; Xiangyang author / mid-tier seat). " +
         "Dispatch coding peers; stay out of ws_default implementation. Multi-step → todo_write. " +
         "Ask only when the deliverable changes — one blocker.",
     },

@@ -37,6 +37,7 @@ import { startDesktopMain } from "./desktop-bootstrap.js";
 import {
   desktopSplashBackgroundColor,
   resolveDesktopColorScheme,
+  resolveDesktopShellLocaleTag,
   resolveDesktopThemePreference,
   type DesktopColorScheme,
 } from "./boot-appearance.js";
@@ -97,9 +98,25 @@ const DESKTOP_APP_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+/** Harness home for pre-Host Settings peeks (theme + locale). */
+function desktopHarnessHome(): string {
+  return resolveDesktopHarnessHome({
+    isPackaged: app.isPackaged,
+    desktopAppRoot: DESKTOP_APP_ROOT,
+  });
+}
+
+/**
+ * Shell locale tag: product Settings `locale.preference` wins over OS so
+ * splash hints / menus / IPC match Language in Settings before Host is up.
+ */
+function desktopShellLocaleTag(): string {
+  return resolveDesktopShellLocaleTag(desktopHarnessHome(), app.getLocale());
+}
+
 /** Product window / dialog title — owned by `locale.ts` dictionaries. */
 function desktopWindowTitle(): string {
-  return resolveDesktopLocale(app.getLocale()).messages.windowTitle;
+  return resolveDesktopLocale(desktopShellLocaleTag()).messages.windowTitle;
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -111,12 +128,8 @@ protocol.registerSchemesAsPrivileged([
 
 /** Resolve splash floor from durable Settings (Host not up yet). */
 function resolveBootColorScheme(): DesktopColorScheme {
-  const xrkHome = resolveDesktopHarnessHome({
-    isPackaged: app.isPackaged,
-    desktopAppRoot: DESKTOP_APP_ROOT,
-  });
   return resolveDesktopColorScheme(
-    resolveDesktopThemePreference(xrkHome),
+    resolveDesktopThemePreference(desktopHarnessHome()),
     nativeTheme.shouldUseDarkColors,
   );
 }
@@ -485,7 +498,7 @@ function registerDesktopShellIpc(): void {
     }
   });
   registerDesktopIpcHandlers(ipcMain, {
-    getLocale: () => app.getLocale(),
+    getLocale: () => desktopShellLocaleTag(),
     getAppVersion: () => app.getVersion(),
     getUpdateState: () => updateCoordinator?.state ?? { phase: "idle" },
     checkUpdates: async () => {
@@ -521,7 +534,7 @@ function registerDesktopShellIpc(): void {
 
   installDesktopApplicationMenu({
     menu: Menu,
-    getLocale: () => app.getLocale(),
+    getLocale: () => desktopShellLocaleTag(),
     onCheckUpdates: () => {
       if (updateCoordinator === undefined) return;
       const active = updateCoordinator;
@@ -532,7 +545,7 @@ function registerDesktopShellIpc(): void {
           activeSchedule !== undefined
             ? activeSchedule.check(true, true)
             : active.check(true),
-        locale: resolveDesktopLocale(app.getLocale()),
+        locale: resolveDesktopLocale(desktopShellLocaleTag()),
         dialog,
         parentWindow: focusedOrPrimaryWindow(),
       }).catch((error: unknown) => {

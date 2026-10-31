@@ -183,6 +183,8 @@ declare module '@xrkseek/xrk-typert-protocol' {
         registry?: string,
         /** Correlates live `plugin-inventory/install-log` chunks. */
         requestId?: string,
+        /** Optional HTTP(S) proxy for this `npm pack` only (`xrkh plugin add --proxy`). */
+        proxy?: string,
       ) => Promise<RemoteResult<{
         spec: string
         installed: true

@@ -14,6 +14,13 @@ export const CSRF_COOKIE = "dsh_ma_csrf";
 export const CSRF_HEADER = "x-dsh-mobile-csrf";
 export const LAN_PIN_COOKIE = "dsh_ma_lan";
 export const WAN_PIN_COOKIE = "dsh_ma_wan";
+/**
+ * Non-HttpOnly twin of the LAN/WAN PIN cookies. The SPA cannot read HttpOnly
+ * PIN digests; this marker lets `sessionStorage.xrk.operatorAccess` elevate on
+ * cookie-return visits so Settings → Plugins cards stay Host-backed.
+ * Keep in sync with client `OPERATOR_UI_COOKIE` (`@xrkseek/client-connection`).
+ */
+export const OPERATOR_UI_COOKIE = "xrk_operator_ui";
 
 const DEVICE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -227,6 +234,9 @@ export function setMobileSessionCookies(
   tls = false,
 ): void {
   const now = Date.now();
+  const sessionMaxAgeSeconds = Math.floor(
+    (tokens.sessionExpiresAt - now) / 1000,
+  );
   res.setHeader("set-cookie", [
     cookie(DEVICE_COOKIE, tokens.deviceToken, {
       path: "/mobile-access/auth/renew",
@@ -236,14 +246,21 @@ export function setMobileSessionCookies(
     }),
     cookie(SESSION_COOKIE, tokens.sessionToken, {
       path: "/",
-      maxAgeSeconds: Math.floor((tokens.sessionExpiresAt - now) / 1000),
+      maxAgeSeconds: sessionMaxAgeSeconds,
       httpOnly: true,
       tls,
     }),
     cookie(CSRF_COOKIE, tokens.csrfToken, {
       path: "/",
-      maxAgeSeconds: Math.floor((tokens.sessionExpiresAt - now) / 1000),
+      maxAgeSeconds: sessionMaxAgeSeconds,
       httpOnly: true,
+      tls,
+    }),
+    // Same SPA elevation marker as PIN (cookie-return / pair without re-run).
+    cookie(OPERATOR_UI_COOKIE, "1", {
+      path: "/",
+      maxAgeSeconds: sessionMaxAgeSeconds,
+      httpOnly: false,
       tls,
     }),
   ]);
@@ -312,11 +329,20 @@ export function setAccessPinCookie(
   tls = false,
 ): void {
   const value = accessPinCookieDigest(pin, instanceId);
+  const maxAgeSeconds = Math.floor(ACCESS_PIN_TTL_MS / 1000);
   res.setHeader("set-cookie", [
     cookie(cookieName, value, {
       path: "/",
-      maxAgeSeconds: Math.floor(ACCESS_PIN_TTL_MS / 1000),
+      maxAgeSeconds,
       httpOnly: true,
+      tls,
+    }),
+    // Readable by the SPA so WAN/LAN cookie-return visits elevate without
+    // re-running the PIN page script (which alone used to set sessionStorage).
+    cookie(OPERATOR_UI_COOKIE, "1", {
+      path: "/",
+      maxAgeSeconds,
+      httpOnly: false,
       tls,
     }),
   ]);
@@ -380,6 +406,7 @@ export const PAIR_PAGE_JS = `(() => {
       status.textContent = '配对失败（链接可能已过期）'
       return
     }
+    try { sessionStorage.setItem('xrk.operatorAccess', '1') } catch {}
     location.replace('/')
   })
 })()
@@ -407,6 +434,7 @@ export const LOGIN_PAGE_JS = `(() => {
     body: '{}',
   }).then((response) => {
     if (response.ok) {
+      try { sessionStorage.setItem('xrk.operatorAccess', '1') } catch {}
       const next = new URLSearchParams(location.search).get('return') || '/'
       location.replace(next)
       return
@@ -610,14 +638,32 @@ form {
 }
 `.replace(/\n/g, "");
 
-const GATE_THEME_BOOT = `(function(){
-  var dark = typeof matchMedia !== "undefined"
+/** Appearance preference for gate pages — matches Face `ui-theme.preference`. */
+export type GateThemePreference = "light" | "dark" | "system";
+
+/**
+ * Stamp `data-theme` from durable Settings (same resolve as product
+ * `injectBootTheme`), not OS-only `prefers-color-scheme`.
+ */
+export function gateThemeBootScript(
+  preference: GateThemePreference = "system",
+): string {
+  return `(function(){
+  var preference = ${JSON.stringify(preference)};
+  var systemDark = preference === "system"
+    && typeof matchMedia !== "undefined"
     && matchMedia("(prefers-color-scheme: dark)").matches;
+  var dark = preference === "dark" || systemDark;
   document.documentElement.dataset.theme = dark ? "dark" : "light";
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 })();`;
+}
 
-function pinPageHtml(mode: "lan" | "wan", title: string): string {
+function pinPageHtml(
+  mode: "lan" | "wan",
+  title: string,
+  preference: GateThemePreference = "system",
+): string {
   const kind = mode === "wan" ? "远程" : "局域网";
   return `<!doctype html>
 <html lang="zh-CN">
@@ -630,7 +676,7 @@ function pinPageHtml(mode: "lan" | "wan", title: string): string {
 <title>${title} · XRK Harness</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>${GATE_SHELL_CSS}</style>
-<script>${GATE_THEME_BOOT}</script>
+<script>${gateThemeBootScript(preference)}</script>
 </head>
 <body>
 <main class="gate">
@@ -663,6 +709,18 @@ function pinPageHtml(mode: "lan" | "wan", title: string): string {
 <script src="/mobile-access/${mode}-pin.js" defer></script>
 </body>
 </html>`;
+}
+
+/** Build a LAN/WAN PIN gate document with the active appearance preference. */
+export function buildPinPageHtml(
+  mode: "lan" | "wan",
+  preference: GateThemePreference = "system",
+): string {
+  return pinPageHtml(
+    mode,
+    mode === "wan" ? "远程访问" : "局域网访问",
+    preference,
+  );
 }
 
 function pinPageJs(mode: "lan" | "wan"): string {
@@ -735,7 +793,8 @@ function pinPageJs(mode: "lan" | "wan"): string {
 `;
 }
 
-export const LAN_PIN_PAGE_HTML = pinPageHtml("lan", "局域网访问");
-export const WAN_PIN_PAGE_HTML = pinPageHtml("wan", "远程访问");
+/** Default PIN HTML (`system` → OS scheme). Prefer {@link buildPinPageHtml}. */
+export const LAN_PIN_PAGE_HTML = buildPinPageHtml("lan", "system");
+export const WAN_PIN_PAGE_HTML = buildPinPageHtml("wan", "system");
 export const LAN_PIN_PAGE_JS = pinPageJs("lan");
 export const WAN_PIN_PAGE_JS = pinPageJs("wan");

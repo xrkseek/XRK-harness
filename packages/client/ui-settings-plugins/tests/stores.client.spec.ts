@@ -8,6 +8,10 @@ import { stubSettingsScope, type StubSettingsScope } from '@xrkseek/client-test-
 import { CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
+import {
+  SunflowerFreeCardController,
+  type SunflowerFreeSettings,
+} from '../src/client/sunflower-free-card-controller.ts'
 import { McpCardController, type McpSettings } from '../src/client/mcp-card-controller.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 
@@ -262,6 +266,43 @@ describe('CardForm', () => {
     host.publish({ status: 'unavailable' })
 
     expect(subject.shell()).toMatchObject({ available: false, writable: false })
+  })
+})
+
+describe('SunflowerFreeCardController', () => {
+  it('projects egress fields and saves them in one write pass', async () => {
+    const host = stubSettingsScope<SunflowerFreeSettings>()
+    acceptWrites(host)
+    const controller = new SunflowerFreeCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { openCodeProxy: 'auto', kiloProxy: '' },
+      base: { openCodeProxy: '', kiloProxy: '' },
+      user: { openCodeProxy: 'auto' },
+    })
+    const face = controller.inject()
+
+    expect(face.hooks.sunflowerFreeCard.getSnapshot()).toMatchObject({
+      available: true,
+      writable: true,
+      dirty: false,
+      openCodeProxy: { text: 'auto', overridden: true },
+      kiloProxy: { text: '', overridden: false },
+    })
+
+    face.edit('openCodeProxy', 'http://127.0.0.1:7897')
+    face.edit('kiloProxy', 'off')
+    expect(face.hooks.sunflowerFreeCard.getSnapshot().dirty).toBe(true)
+
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
+
+    expect(host.set.mock.calls).toEqual([
+      ['openCodeProxy', 'http://127.0.0.1:7897'],
+      ['kiloProxy', 'off'],
+    ])
+    expect(face.hooks.sunflowerFreeCard.getSnapshot().dirty).toBe(false)
   })
 })
 

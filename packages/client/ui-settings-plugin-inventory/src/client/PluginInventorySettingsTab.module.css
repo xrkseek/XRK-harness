@@ -92,6 +92,20 @@
   min-width: 0;
 }
 
+.proxyInput {
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 16rem;
+  flex: 1 1 16rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
 .registryCustomField input {
   box-sizing: border-box;
   width: 100%;

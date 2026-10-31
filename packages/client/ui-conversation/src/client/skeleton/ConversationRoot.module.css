@@ -604,6 +604,10 @@
     touch-action: manipulation;
   }
 
+  .crumbSeg:last-child {
+    max-width: min(160px, 42vw);
+  }
+
   .headerUtilities {
     /* Title-row presence chip (ball + 状态 / 支线); left chrome is menu|概况 only. */
     max-width: min(140px, 40vw);
@@ -622,7 +626,10 @@
   .tabs {
     gap: 8px;
     margin-top: 2px;
-    padding-left: 0;
+    /* Optical align 「对」 with the 16px hamburger glyph inside .phoneMenu
+       (chrome left 6 + (36−16)/2 = 16). Bare glyphs at chrome's outer 6px
+       read as flush against the screen even though the chip itself is fine. */
+    padding-left: max(16px, calc(env(safe-area-inset-left, 0px) + 10px));
     overflow-x: auto;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
@@ -650,10 +657,6 @@
   /* Settled: menu | ball | 概况 → 6+36+4+36+4+36 = 122, +4 air. */
   :global(html[data-xrk-layout-status]) .titleRow {
     padding-left: max(126px, calc(env(safe-area-inset-left, 0px) + 122px));
-  }
-
-  .crumbSeg:last-child {
-    max-width: min(160px, 42vw);
   }
 
   .headerActions {

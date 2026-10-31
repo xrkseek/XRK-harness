@@ -82,6 +82,22 @@ export type {
 } from '@xrkseek/client-connection/client'
 // Runtime owns the snapshot store; web-react only binds it to React.
 export { createSnapshotStore, defineStore, shallowEqual } from './contract/store.ts'
+export {
+  clearTeamRosterLive,
+  patchTeamRosterLive,
+  readTeamRosterLive,
+  subscribeTeamRosterLive,
+  teamRosterLiveRevision,
+} from './team-roster-live.ts'
+export type {
+  TeamRosterLiveLook,
+  TeamRosterLivePatch,
+} from './team-roster-live.ts'
+export {
+  bindSeatChannelBossLabel,
+  formatSeatChannelEchoPrefix,
+  withSeatChannelEchoPrefix,
+} from './seat-channel-echo.ts'
 export type {
   EngineStoreHandle, EngineStoreInstance, ObservableSnapshot, SnapshotStore,
 } from './contract/store.ts'

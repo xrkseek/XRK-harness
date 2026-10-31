@@ -92,6 +92,59 @@ describe('tool-call-model', () => {
     expect(m.title).toBe('Pwsh')
   })
 
+  it('surfaces apply_patch paths from the patch text, ignoring junk path args', () => {
+    const patch = [
+      '*** Begin Patch',
+      '*** Update File: hwgen/students/卢杰_rec.py',
+      '@@',
+      '-a',
+      '+b',
+      '*** End Patch',
+    ].join('\n')
+    const junkPath = toolRowModel('apply_patch', running({
+      name: 'apply_patch',
+      argsRaw: JSON.stringify({ path: 'x', patch }),
+    }))
+    expect(junkPath.title).toBe('Edit')
+    expect(junkPath.summary).toBe('hwgen/students/卢杰_rec.py')
+    expect(junkPath.filePath).toBe('hwgen/students/卢杰_rec.py')
+    expect(junkPath.fileLinks).toEqual([
+      { path: 'hwgen/students/卢杰_rec.py', label: 'hwgen/students/卢杰_rec.py' },
+    ])
+
+    const many = toolRowModel('apply_patch', running({
+      name: 'apply_patch',
+      argsRaw: JSON.stringify({
+        patch: [
+          '*** Begin Patch',
+          '*** Add File: a.ts',
+          '+1',
+          '*** Update File: b.ts',
+          '@@',
+          '-x',
+          '+y',
+          '*** End Patch',
+        ].join('\n'),
+      }),
+    }))
+    expect(many.summary).toBe('a.ts · b.ts')
+    expect(many.fileLinks).toEqual([
+      { path: 'a.ts', label: 'a.ts' },
+      { path: 'b.ts', label: 'b.ts' },
+    ])
+
+    // Settled: fall back to result lines when args omit markers (truncated).
+    const fromResult = toolRowModel('apply_patch', result({
+      call: {
+        name: 'apply_patch',
+        argsRaw: JSON.stringify({ path: 'x', patch: '*** Begin Patch\n' }),
+      },
+      content: [{ type: 'text', text: 'applied 1 hunk(s)\nupdate hwgen/students/卢杰_rec.py' }],
+    }))
+    expect(fromResult.summary).toBe('hwgen/students/卢杰_rec.py')
+    expect(fromResult.filePath).toBe('hwgen/students/卢杰_rec.py')
+  })
+
   it('names present and surfaces deliverable paths while running', () => {
     expect(classifyTool('present')).toBe('write')
     const one = toolRowModel('present', running({
@@ -102,14 +155,20 @@ describe('tool-call-model', () => {
     expect(one.state).toBe('running')
     expect(one.summary).toBe('out/report.md')
     expect(one.filePath).toBe('out/report.md')
+    expect(one.fileLinks).toEqual([{ path: 'out/report.md', label: 'out/report.md' }])
     expect(one.body).toBeNull()
 
     const many = toolRowModel('present', running({
       name: 'present',
       argsRaw: '{"files":[{"path":"a.ts"},{"path":"b.ts"},{"path":"c.ts"}]}',
     }))
-    expect(many.summary).toBe('a.ts +2')
+    expect(many.summary).toBe('a.ts · b.ts · c.ts')
     expect(many.filePath).toBe('a.ts')
+    expect(many.fileLinks).toEqual([
+      { path: 'a.ts', label: 'a.ts' },
+      { path: 'b.ts', label: 'b.ts' },
+      { path: 'c.ts', label: 'c.ts' },
+    ])
     expect(many.body).toBe('a.ts\nb.ts\nc.ts')
 
     // Truncated args: fall back to Host presentCall locations on callView.
@@ -376,6 +435,33 @@ describe('ToolRow', () => {
     fireEvent.click(row)
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText(/"a": 1/)).toBeTruthy()
+  })
+
+  it('renders every present deliverable as its own openable header link', () => {
+    const open = vi.fn()
+    const view = render(
+      <ToolRow
+        {...rowProps}
+        variant="write"
+        title="Present"
+        summary="a.ts · b.ts"
+        body={'a.ts\nb.ts'}
+        filePath="a.ts"
+        fileLinks={[
+          { path: 'a.ts', label: 'a.ts' },
+          { path: 'b.ts', label: 'b.ts' },
+        ]}
+        onOpenFile={open}
+        forceExpanded
+      />,
+    )
+    fireEvent.click(view.getByText('a.ts'))
+    expect(open).toHaveBeenCalledWith('a.ts')
+    fireEvent.click(view.getByText('b.ts'))
+    expect(open).toHaveBeenCalledWith('b.ts')
+    expect(open).toHaveBeenCalledTimes(2)
+    // Both links stay underlined controls — no collapsed "+1" remainder.
+    expect(view.container.querySelectorAll('[class*="fileLinkItem"]')).toHaveLength(2)
   })
 
   it('a file path without onOpenFile renders a plain summary on an expandable row', () => {

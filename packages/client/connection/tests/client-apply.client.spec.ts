@@ -9,6 +9,10 @@ import type { RpcMessage } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
 import { WebApiClient } from '../src/client/web-api-client.ts'
+import {
+  OPERATOR_ACCESS_STORAGE_KEY,
+  OPERATOR_UI_COOKIE,
+} from '../src/loopback-hostname.ts'
 
 type Win = { location?: { hostname: string; search: string; origin?: string; protocol?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
@@ -53,6 +57,12 @@ afterEach(() => {
   sockets.length = 0
   if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket
   else globalThis.WebSocket = originalWebSocket
+  try {
+    sessionStorage.removeItem(OPERATOR_ACCESS_STORAGE_KEY)
+  } catch {
+    /* jsdom may lack storage */
+  }
+  vi.unstubAllGlobals()
 })
 
 async function mount(): Promise<ConnectionHandle> {
@@ -95,6 +105,30 @@ describe('connection client apply', () => {
     }
     expect((await mount()).isLoopback).toBe(true)
     delete (globalThis as { __XRK_TRANSPORT__?: unknown }).__XRK_TRANSPORT__
+  })
+
+  it('elevates remote pages from Host xrk_operator_ui cookie on boot', async () => {
+    ;(globalThis as Win).location = {
+      hostname: 'example.com',
+      search: '',
+      protocol: 'https:',
+    }
+    vi.stubGlobal('document', {
+      cookie: `${OPERATOR_UI_COOKIE}=1`,
+    })
+    const handle = await mount()
+    expect(handle.isLoopback).toBe(true)
+    expect(handle.isLocalHost).toBe(false)
+    expect(handle.accessPlane).toBe('operator-pin')
+    expect(sessionStorage.getItem(OPERATOR_ACCESS_STORAGE_KEY)).toBe('1')
+  })
+
+  it('keeps loopback on the local plane without PIN markers', async () => {
+    ;(globalThis as Win).location = { hostname: '127.0.0.1', search: '' }
+    const handle = await mount()
+    expect(handle.isLocalHost).toBe(true)
+    expect(handle.accessPlane).toBe('local')
+    expect(handle.isLoopback).toBe(true)
   })
 
   it('start() hands out one loop, rejects a second consumer, and stop() aborts the streams', async () => {

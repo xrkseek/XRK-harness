@@ -673,6 +673,83 @@ export class Session implements SessionFace {
     await this.open()
   }
 
+  /**
+   * Apply an in-place Host truncate to the local window without flipping
+   * `openState` to loading (regenerate / edit-resubmit must not empty-flash).
+   *
+   * Face wire seq is 1-based (`index + 1`); kept length is `eventCount`, so
+   * rows with `seq <= eventCount` stay. Returns false when the kept prefix
+   * is not in the loaded window (caller falls back to {@link resync}).
+   */
+  applyTruncateCut(eventCount: number): boolean {
+    if (this.openState !== 'open') return false
+    const kept = Math.max(0, Math.floor(eventCount))
+    const first = this.events[0]
+    // Entire loaded window sits after the cut — need a full rebuild to paint
+    // the kept prefix that lives only in older history.
+    if (first !== undefined && first.seq > kept) return false
+
+    let cutIndex = this.events.length
+    for (let i = 0; i < this.events.length; i++) {
+      if (this.events[i]!.seq > kept) {
+        cutIndex = i
+        break
+      }
+    }
+
+    this.deferredStreamAppends = this.deferredStreamAppends.filter(item => item.event.seq <= kept)
+    this.liveBuffer = this.liveBuffer.filter(item => item.event.seq <= kept)
+    if (this.subscribedLastSeq !== null && this.subscribedLastSeq > kept) {
+      this.subscribedLastSeq = kept
+    }
+
+    if (cutIndex === this.events.length) {
+      this.notifier.markDirty()
+      return true
+    }
+
+    const keptEvents = this.events.slice(0, cutIndex)
+    const keptViews = this.views.slice(0, cutIndex)
+    this.events = keptEvents
+    this.views = keptViews
+    this.baseSeq = keptEvents[0]?.seq ?? 0
+    this.conversation.replaceWindow(
+      keptEvents.map((event, i) => ({ event, view: keptViews[i] })),
+      this.hasMore,
+    )
+    this.notifier.markDirty()
+    return true
+  }
+
+  /**
+   * Reseal projection rows from a post-truncate Host baseline without
+   * replacing the chat window (companion to {@link applyTruncateCut}).
+   * Prefer the baseline returned by `session.truncate`; fall back to a
+   * one-row history pull only when the Host omitted it.
+   */
+  async resealProjectionsAfterTruncate(
+    baseline?: { asOfSeq: number; values: Record<string, unknown> },
+  ): Promise<void> {
+    try {
+      if (baseline !== undefined) {
+        this.projections.reseal(baseline)
+        this.notifier.markDirty()
+        return
+      }
+      const { result } = await this.history({ maxMessages: 1 })
+      if (!result.ok) return
+      if (result.value.projections !== undefined) {
+        this.projections.reseal(result.value.projections)
+      } else {
+        const last = this.windowTailSeq()
+        if (last !== null) this.projections.truncate(last)
+      }
+      this.notifier.markDirty()
+    } catch {
+      // Best-effort; next open/resync repairs projections.
+    }
+  }
+
   // ---- Subscription API (useSyncExternalStore direct wiring) ----
 
   /**

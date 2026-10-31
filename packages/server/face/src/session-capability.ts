@@ -139,7 +139,10 @@ function formatDelegatedCapability(
     ...briefcase,
     ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
     ...(link.label.trim() ? [`label: ${link.label.trim()}`] : []),
-    `brief: ${nestBrief} FINAL→parent (only visible result; include hard failures). ask→parent (card on parent session). siblings→thread_message. catalog=truth. no self-spawn unless tasked.`,
+    `brief: ${nestBrief} FINAL→parent (only visible result; include hard failures). ask→parent (card on parent session). siblings→thread_message. catalog=truth.` +
+      (roleDeniedTools(link.role).includes("subagent")
+        ? " no nested subagent (role floor)."
+        : " nested subagent ok when parallel helps."),
     `omitted: ${omittedChildTools(link.role)}`,
     ...childGapLines(runtime, sessionId),
   ];

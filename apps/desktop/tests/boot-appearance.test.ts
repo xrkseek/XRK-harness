@@ -6,9 +6,13 @@ import {
   DESKTOP_SPLASH_BG_DARK,
   DESKTOP_SPLASH_BG_LIGHT,
   desktopSplashBackgroundColor,
+  readLocalePreferenceFromHostSettingsJson,
+  readLocalePreferenceFromSettingsYaml,
   readThemePreferenceFromHostSettingsJson,
   readThemePreferenceFromSettingsYaml,
   resolveDesktopColorScheme,
+  resolveDesktopLocalePreference,
+  resolveDesktopShellLocaleTag,
   resolveDesktopThemePreference,
 } from "../src/boot-appearance.js";
 
@@ -72,5 +76,44 @@ describe("desktop boot appearance", () => {
     expect(resolveDesktopColorScheme("system", false)).toBe("light");
     expect(desktopSplashBackgroundColor("dark")).toBe(DESKTOP_SPLASH_BG_DARK);
     expect(desktopSplashBackgroundColor("light")).toBe(DESKTOP_SPLASH_BG_LIGHT);
+  });
+
+  it("parses locale.preference from settings.yaml", () => {
+    expect(
+      readLocalePreferenceFromSettingsYaml(
+        "ui-theme:\n  preference: dark\nlocale:\n  preference: en\n",
+      ),
+    ).toBe("en");
+    expect(
+      readLocalePreferenceFromSettingsYaml("locale:\n  preference: zh\n"),
+    ).toBe("zh");
+    expect(
+      readLocalePreferenceFromSettingsYaml("locale:\n  preference: ja\n"),
+    ).toBe("ja");
+    expect(
+      readLocalePreferenceFromSettingsYaml("locale:\n  other: 1\n"),
+    ).toBeUndefined();
+  });
+
+  it("parses ui.locale from host-settings.json", () => {
+    expect(
+      readLocalePreferenceFromHostSettingsJson(
+        JSON.stringify({ ui: { theme: "dark", locale: "ja" } }),
+      ),
+    ).toBe("ja");
+    expect(readLocalePreferenceFromHostSettingsJson("{")).toBeUndefined();
+  });
+
+  it("resolves shell locale tag (product Settings wins over OS)", () => {
+    const home = mkdtempSync(join(tmpdir(), "xrk-boot-locale-"));
+    expect(resolveDesktopLocalePreference(home)).toBeUndefined();
+    expect(resolveDesktopShellLocaleTag(home, "en-US")).toBe("en-US");
+    writeFileSync(
+      join(home, "settings.yaml"),
+      "locale:\n  preference: zh\n",
+      "utf8",
+    );
+    expect(resolveDesktopLocalePreference(home)).toBe("zh");
+    expect(resolveDesktopShellLocaleTag(home, "en-US")).toBe("zh");
   });
 });

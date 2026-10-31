@@ -45,19 +45,27 @@ export function hostOnly(hostHeader: string | undefined): string {
 /**
  * Authority used for gate classification.
  * Default: only `Host` (ignores attacker-controlled X-Forwarded-Host).
- * When `trustProxy` is true, prefer the first X-Forwarded-Host hop.
+ * When `trustProxy` is true, X-Forwarded-Host may *raise* class to WAN
+ * (loopback listen behind a public reverse proxy → need PIN). It must never
+ * *lower* a public/LAN `Host` to loopback — forged `X-Forwarded-Host: 127.0.0.1`
+ * would otherwise skip the PIN plane.
  */
 export function effectiveRequestHost(
   req: IncomingMessage,
   trustProxy = false,
 ): string {
-  if (trustProxy) {
-    const forwarded = req.headers["x-forwarded-host"];
-    if (typeof forwarded === "string" && forwarded.trim()) {
-      return hostOnly(forwarded.split(",")[0]!.trim());
-    }
-  }
-  return hostOnly(req.headers.host);
+  const host = hostOnly(req.headers.host);
+  if (!trustProxy) return host;
+  const forwarded = req.headers["x-forwarded-host"];
+  if (typeof forwarded !== "string" || !forwarded.trim()) return host;
+  const fwd = hostOnly(forwarded.split(",")[0]!.trim());
+  if (!fwd) return host;
+  const hostClass = classifyRequestHost(host);
+  const fwdClass = classifyRequestHost(fwd);
+  // Proxy WAN hop: local listen Host + public XFH → classify as public (PIN).
+  if (hostClass !== "wan" && fwdClass === "wan") return fwd;
+  // Keep the real Host when XFH claims loopback/LAN against a public Host.
+  return host;
 }
 
 export function classifyRequestHost(host: string): RequestHostClass {

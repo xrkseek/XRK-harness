@@ -30,7 +30,12 @@ function trustProxyEnabled(options: MobileAccessOptions): boolean {
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
-function credentialsFromRequest(
+/**
+ * Real operator credentials for the PIN plane (HttpOnly digests / device
+ * session). The non-HttpOnly `xrk_operator_ui` SPA marker is intentionally
+ * ignored here — forging it must never unlock Host Face / settings / keys.
+ */
+export function credentialsFromRequest(
   req: IncomingMessage,
   options: MobileAccessOptions,
 ): {
@@ -57,6 +62,35 @@ function credentialsFromRequest(
       snapshot.wanToken,
       snapshot.instanceId,
     ),
+  };
+}
+
+/** True when the request carries a verified PIN cookie or paired device session. */
+export function requestHasOperatorPin(
+  req: IncomingMessage,
+  options: MobileAccessOptions,
+): boolean {
+  const { hasDeviceSession, hasLanPin, hasWanPin } = credentialsFromRequest(
+    req,
+    options,
+  );
+  return hasDeviceSession || hasLanPin || hasWanPin;
+}
+
+/**
+ * Fetch-Request elevator for Cordis `installOperatorPinElevator` /
+ * `isOperatorElevated`. Verifies HttpOnly PIN / device session only —
+ * `xrk_operator_ui` is never read.
+ */
+export function createOperatorPinFetchElevator(
+  options: MobileAccessOptions,
+): (request: Request) => boolean {
+  return (request) => {
+    const cookie = request.headers.get("cookie") ?? undefined;
+    return requestHasOperatorPin(
+      { headers: { cookie } } as IncomingMessage,
+      options,
+    );
   };
 }
 

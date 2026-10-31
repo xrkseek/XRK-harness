@@ -1,4 +1,8 @@
 import type { SessionEvent } from "@xrkseek/protocol";
+import {
+  flattenText,
+  isHumanUserMessageSource,
+} from "@xrkseek/protocol";
 import type { FaceProjectionRegistry } from "./registry.js";
 import {
   DEFAULT_FALLBACK_MAX_WORDS,
@@ -85,5 +89,26 @@ export class FaceTitleController {
       source: { kind: "fallback" },
       messageSeqs: [messageSeq],
     });
+  }
+
+  /**
+   * Repair path for loaded sessions that never got a `session/title` (hydrate
+   * skips live fallback; compaction can leave the opener off-transcript while
+   * the log still holds the first human prompt). Scans once; no-op when titled.
+   */
+  ensureFallbackFromLog(sessionId: string): void {
+    const events = this.getEvents(sessionId);
+    if (events.some((e) => e.type === "session/title")) return;
+    const snap = this.projections.snapshot(sessionId);
+    if (snap.values.title) return;
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i]!;
+      if (event.type !== "user/message") continue;
+      if (!isHumanUserMessageSource(event.source)) continue;
+      const text = flattenText(event.content);
+      if (text.trim() === "") continue;
+      this.maybeFallbackFromUserMessage(sessionId, i + 1, text);
+      return;
+    }
   }
 }

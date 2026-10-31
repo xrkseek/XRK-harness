@@ -55,6 +55,7 @@ const ARTWORK: Partial<Record<PluginsSettingsLocaleKey, Artwork>> = {
   hostTitle: IconGlobeOutlineRegular,
   channelsTitle: IconQueueOutlineRegular,
   sshRemoteTitle: IconLinkOutlineRegular,
+  sunflowerFreeTitle: IconSparkleRegular,
 }
 
 /**

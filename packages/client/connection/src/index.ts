@@ -9,7 +9,10 @@ import { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
 import { assertTrustedAuthority, isTrustedApiRequest } from './api-request-trust.ts'
 import { isPrivateLanHostname } from './loopback-hostname.ts'
-import { apiKeyElevatesRequest } from './operator-elevation.ts'
+import {
+  apiKeyElevatesRequest,
+  operatorPinElevatesRequest,
+} from './operator-elevation.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { rejectWebSocketUpgrade, WebSocketDownlinks } from './websocket-downlink.ts'
 
@@ -22,6 +25,11 @@ export type {
   HostConnectionRpc,
 } from './rpc.ts'
 export { HostConnectionService } from './rpc-host.ts'
+export {
+  apiKeyElevatesRequest,
+  installOperatorPinElevator,
+  operatorPinElevatesRequest,
+} from './operator-elevation.ts'
 
 export { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
 
@@ -145,18 +153,28 @@ const PRIVILEGED_METHODS = new Set([
 ])
 
 /**
- * Privileged plane: loopback always; bind LAN IPs in `privilegedHosts` with
- * same-origin markers; optional Host-injected operator elevation (PIN / key);
- * else `XRK_API_KEY` on the request. DNS `trustedHosts` alone never qualifies.
+ * Privileged Cordis methods (settings / credentials / native open).
+ * Planes (never conflate):
+ * 1. **local** — loopback Host header (desktop / 127)
+ * 2. **operator** — `isOperatorElevated` config and/or `installOperatorPinElevator`
+ *    (HttpOnly PIN / device session only — never `xrk_operator_ui`)
+ * 3. **API key** — `XRK_API_KEY` Bearer / x-api-key
+ * 4. **bind LAN** — `privilegedHosts` same-origin to the listen IP
+ * DNS `trustedHosts` alone never elevates.
  */
 function isPrivilegedApiRequest(
   request: Request,
   privilegedHosts: readonly string[],
   isOperatorElevated?: (request: Request) => boolean,
 ): boolean {
+  // 1. Local loopback plane (127 / ::1 / localhost) — no PIN.
   if (isTrustedApiRequest(request, [])) return true
+  // 2. PIN / device-session plane (config inject and/or Host-installed elevator).
   if (isOperatorElevated?.(request) === true) return true
+  if (operatorPinElevatesRequest(request)) return true
+  // 3. Automation API key.
   if (apiKeyElevatesRequest(request)) return true
+  // 4. Intentional private-LAN bind (同源 IP).
   if (privilegedHosts.length === 0) return false
   const host = request.headers.get('host')
   if (!host) return false

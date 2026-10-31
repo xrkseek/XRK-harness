@@ -13,7 +13,10 @@ import type { Context } from '@xrkseek/cordis'
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
 import type { ISessions, SessionFace, SessionId } from '@xrkseek/client-runtime/client'
-import { createSnapshotStore } from '@xrkseek/client-runtime/client'
+import {
+  createSnapshotStore,
+  withSeatChannelEchoPrefix,
+} from '@xrkseek/client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
 import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
 import type {
@@ -262,19 +265,17 @@ export class ConversationController extends Service implements IConversation {
       }))
       return [...content, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
     }
-    if (session.getSnapshot().subagent !== null) {
-      const parts = await serializeParts()
-      if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
-      const result = await session.prompt(parts, mode, signal)
-      if (!result.ok) return { kind: 'error' }
-      this.releaseDraftImages(attachments)
-      return { kind: 'success' }
-    }
     // Echo previews must not share the draft object URL. Admission success
     // revokes the composer draft immediately (so the rail can drop it), but a
     // steer/queue bubble stays mounted until the durable node lands — revoking
     // the URL the echo still paints produces a broken-image tile (alt falls
     // back to `image.png`) for the whole 「插队中」 window.
+    //
+    // Subagent path used to skip beginSubmission (blank until Host admit) —
+    // stitch the Face seat prefix onto the echo so `[老板（nick）] 接着` paints
+    // on the same keydown as the send (Host still prefixes the durable log).
+    const isSubagent = session.getSnapshot().subagent !== null
+    const echoText = isSubagent ? withSeatChannelEchoPrefix(text) : text
     const echoPreviewUrls: string[] = []
     const pendingAttachments = attachments.map((attachment) => {
       if (attachment.kind === 'image') {
@@ -310,7 +311,7 @@ export class ConversationController extends Service implements IConversation {
     }
     const submission = session.beginSubmission({
       mode,
-      text,
+      text: echoText,
       attachments: pendingAttachments,
       onRetire: (retirement) => {
         if (retirement.reason === 'failed') {

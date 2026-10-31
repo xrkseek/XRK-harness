@@ -204,7 +204,9 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly tools?: { readonly mode: 'allow' | 'deny'; readonly names: readonly string[] } | null
     readonly kind?: 'thin' | 'advanced'
     readonly ready?: boolean
-  }) => Promise<{ readonly id: string; readonly homeWorkspaceId?: string }>
+    /** Explicit 「添加干员工作区」 only — roster edits must not mint a home. */
+    readonly mintHome?: boolean
+  }) => Promise<AgentTeamMemberRow & { readonly homeWorkspaceId?: string }>
   removeTeamMember?: (sessionId: SessionId, memberId: string, scope?: 'global' | 'workspace') => Promise<void>
   captureTeamMember?: (sessionId: SessionId) => Promise<void>
   /** @deprecated Dispatch UI removed — spawn via tools / subagent. */

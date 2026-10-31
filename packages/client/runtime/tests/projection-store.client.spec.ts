@@ -87,6 +87,23 @@ describe('ProjectionValueStore semantics', () => {
     expect(store.get('test/marks')).toEqual({ marks: ['post-cut-1-round'] })
   })
 
+  it('reseal force-replaces at a shorter asOfSeq without a clear gap', () => {
+    const store = new ProjectionValueStore()
+    store.seed({
+      asOfSeq: 50,
+      values: {
+        'test/marks': { marks: ['pre-cut-3-rounds'] },
+        'test/extra': { marks: ['drop-me'] },
+      },
+    })
+    store.reseal({
+      asOfSeq: 10,
+      values: { 'test/marks': { marks: ['post-cut-1-round'] } },
+    })
+    expect(store.get('test/marks')).toEqual({ marks: ['post-cut-1-round'] })
+    expect(store.get('test/extra')).toBeUndefined()
+  })
+
   it('notifies the key face on change (batched) and not on dropped applications', async () => {
     const store = new ProjectionValueStore()
     let keyTicks = 0
@@ -216,6 +233,8 @@ describe('manager frame routing', () => {
     expect(baseline).toEqual({ 'test/marks': { marks: ['baseline'] } })
     expect(manager.getListSnapshot().items[0]?.projectionValues).toBe(baseline)
 
+    // Non-title keys land in the store without rebuilding the sidebar (streaming
+    // pressure/timeline must not dirty the list). Title push rebuilds the row.
     manager.handleMuxEnvelope({
       rpcId: 'p2' as never,
       payload: {
@@ -224,9 +243,21 @@ describe('manager frame routing', () => {
       } as never,
     })
     await Promise.resolve()
-    expect(manager.getListSnapshot().items[0]?.projectionValues)
-      .toEqual({ 'test/marks': { marks: ['live'] } })
-    expect(manager.getListSnapshot().items[0]?.projectionValues).not.toBe(baseline)
+    expect(manager.getListSnapshot().items[0]?.projectionValues).toBe(baseline)
+    manager.handleMuxEnvelope({
+      rpcId: 'p3' as never,
+      payload: {
+        type: 'session/projection', sessionId: sid('s1'), key: 'title',
+        value: 'Named', seq: 4,
+      } as never,
+    })
+    await Promise.resolve()
+    const next = manager.getListSnapshot().items[0]?.projectionValues
+    expect(next).toEqual({
+      'test/marks': { marks: ['live'] },
+      title: 'Named',
+    })
+    expect(next).not.toBe(baseline)
   })
 
   it('drops the projection store with the removed session', async () => {

@@ -98,9 +98,12 @@ describe("rootUserAuthorizationBlock", () => {
     expect(denied).not.toContain("web_fetch");
   });
 
-  it("denies delegation for worker but keeps write tools", () => {
+  it("worker keeps nested subagent + write tools; still denies ralph/team_graph", () => {
     const denied = roleDeniedTools("worker");
-    expect(denied).toContain("subagent");
+    // Product: 干员→干员 nesting (agent-home and L1 tool children).
+    expect(denied).not.toContain("subagent");
+    expect(denied).toContain("ralph");
+    expect(denied).toContain("team_graph");
     expect(denied).not.toContain("apply_patch");
     expect(denied).not.toContain("bash");
   });

@@ -76,6 +76,11 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
      */
     readonly trustProxy?: boolean;
     /**
+     * Face `ui-theme.preference` for PIN gate first-paint (Host wires live).
+     * Absent → peek `settings.yaml` under `xrkHome`, else `system`.
+     */
+    readonly getThemePreference?: () => "light" | "dark" | "system";
+    /**
      * Face `auto-review` product + Credentials token for the HTTP classifier.
      * Called per classify/status so Settings saves apply without Host restart.
      */

@@ -264,6 +264,11 @@ export interface SessionSummary {
   /** Per-session 支线: current work, not a 轮次. */
   sideline?: string
   /**
+   * Roster member this session is bound to (agent-home / identity seat).
+   * Survives home delete so unbound rows can stay on the Agents 未分组 lane.
+   */
+  memberId?: string
+  /**
    * Client-local: the blank New Session still holds an unsent composer draft.
    * Never produced by Face list; the manager sets it from Session.setDraft so
    * the sidebar can keep the row visible after navigation away.
@@ -453,7 +458,12 @@ export interface SessionsApi {
    * as fork). Does not create a child session.
    */
   truncate(request: RpcRequest<{ sessionId: SessionId; atSeq?: number; beforeSeq?: number }>):
-  Promise<RpcResponse<{ sessionId: SessionId; eventCount: number }>>
+  Promise<RpcResponse<{
+    sessionId: SessionId
+    eventCount: number
+    /** Post-cut projection baseline (same shape as history tail); avoids a reseal history pull. */
+    projections?: SessionProjectionsBlock
+  }>>
 
   /**
    * Sends text and temporary image bytes to an ordinary session Agent after durable host admission.

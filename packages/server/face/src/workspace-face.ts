@@ -697,8 +697,6 @@ export async function workspaceDeleteFace(
       },
     };
   }
-  const prior = runtime.workspaces.get(workspaceId);
-  const agentHomeDelete = prior?.kind === "agent-home";
   const result = runtime.workspaces.delete(workspaceId);
   if (!result.ok) {
     if (result.reason.startsWith("unknown")) {
@@ -720,14 +718,9 @@ export async function workspaceDeleteFace(
       },
     };
   }
-  // Agent-home delete: drop identity (home is gone) but keep session logs
-  // unbound so they surface under 干员「未分组」(project pane has
-  // includeUngrouped=false — orphans never mix into the project tree).
-  if (agentHomeDelete) {
-    for (const sid of result.movedSessionIds) {
-      runtime.sessionIdentities.forget(sid);
-    }
-  }
+  // Agent-home delete keeps session identity so session.list still carries
+  // memberId — client routes those unbound rows to 干员「未分组」; project
+  // orphans (no memberId) stay under 工作区「未分组」.
   await persistWorkspaceDoc(runtime, runtime.workspaces);
   runtime.bus.publishHost({
     type: "host/workspace-removed",

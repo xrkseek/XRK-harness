@@ -591,6 +591,38 @@ describe('ChatView', () => {
     expect(view.container.querySelectorAll('[data-pending-steering]')).toHaveLength(1)
   })
 
+  it('labels mid-turn human rows as 插话 and keeps the opener as 第 N 轮', () => {
+    const h = makeHarness({
+      nodes: [
+        userOnTurn(1, '开场', 1),
+        assistant(2, 'working', 1),
+        // Claim lost → kind stayed `user`, but it is not the rail opener.
+        userOnTurn(4, '改方向', 1),
+        {
+          kind: 'steering',
+          messageId: 'steer-ok' as never,
+          seq: 5, time: 5_000, turn: 1,
+          content: [{ type: 'text' as const, text: '再补一句' }],
+          source: { kind: 'user', rpcId: 'req-steer-ok' as RpcId },
+        },
+        // Auto-continue must not spam another 「第 1 轮」.
+        {
+          ...userOnTurn(6, '继续', 1),
+          source: { kind: 'auto-continue', round: 1 },
+        },
+      ],
+      turnTimings: new Map([[1, { startTime: 1_000 }]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const flowOf = (text: string) => view.getByText(text).closest('[data-chat-flow-kind]')
+    // Scope to the flow row — the turn rail also paints 「第 1 轮」.
+    expect(flowOf('开场')?.textContent).toMatch(/第 1 轮(?! 插话)/)
+    expect(flowOf('改方向')?.textContent).toContain('第 1 轮 插话')
+    expect(flowOf('再补一句')?.textContent).toContain('第 1 轮 插话')
+    // 「继续」 keeps the bubble but adds no round mark of its own.
+    expect(flowOf('继续')?.textContent ?? '').not.toMatch(/第 \d+ 轮/)
+  })
+
   it('renders a transcript submission echo and hands off by rpcId in the same render', () => {
     const requestId = 'req-local-transcript' as RpcId
     const pending = {

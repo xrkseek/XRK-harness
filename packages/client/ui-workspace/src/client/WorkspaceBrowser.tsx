@@ -27,7 +27,7 @@ import {
 } from '@xrkseek/client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY,
+  AGENT_UNGROUPED_ORDER_KEY, deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY,
   type ArchiveViewMode, type SessionListFacts, type SessionNode, type SessionOrderBy,
 } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
@@ -334,15 +334,21 @@ type SessionTreeProps = Pick<
   /** Host account home; POSIX Workspace hover paths may display as `~`. */
   home?: string | undefined
   /**
-   * When false, omit the 未分组 bucket. Project pane keeps this false —
-   * orphans live under 干员工作区 only.
+   * When false, omit the 未分组 bucket. Both panes enable it and partition
+   * orphans via {@link excludeFromUngrouped} (project vs memberId / agent-home).
    */
   includeUngrouped?: boolean
   /**
-   * Sessions owned by the other pane (e.g. project workspace membership when
-   * deriving the 干员 tree). Must not appear as 未分组 orphans.
+   * Sessions that belong on the other pane (grouped there, or unbound with the
+   * other lane's memberId / membership). Must not appear as 未分组 orphans here.
    */
   excludeFromUngrouped?: ReadonlySet<SessionId>
+  /**
+   * Order-account key for this pane's 未分组 bucket. Project keeps
+   * {@link UNGROUPED_KEY}; 干员 must use a distinct key so the two trees do
+   * not fight over `sessionOrderByAccount` (infinite sync loop).
+   */
+  ungroupedOrderKey?: string
   /** When false, omit the empty-tree copy (干员 pane uses its own empty banner). */
   showEmpty?: boolean
 }
@@ -359,6 +365,7 @@ function SessionTree({
   home, t,
   includeUngrouped = true,
   excludeFromUngrouped,
+  ungroupedOrderKey = UNGROUPED_KEY,
   showEmpty = true,
 }: SessionTreeProps) {
   const list = useSessionListFacts(useSessions)
@@ -420,7 +427,7 @@ function SessionTree({
         sessionIds: workspace.sessionIds.filter(id => list.byId[id] !== undefined),
       })),
       ...(includeUngrouped
-        ? [{ key: UNGROUPED_KEY, sessionIds: ungroupedSessionIds }]
+        ? [{ key: ungroupedOrderKey, sessionIds: ungroupedSessionIds }]
         : []),
     ]
     for (const { key, sessionIds } of accounts) {
@@ -438,7 +445,7 @@ function SessionTree({
         syncSessionOrderAccount(key, next.order.map(id => id as string), next.updatedAt)
       }
     }
-  }, [includeUngrouped, list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedSessionIds, workspaces])
+  }, [includeUngrouped, list, phase, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, ungroupedOrderKey, ungroupedSessionIds, workspaces])
   const orderedWorkspaces = useMemo(() => {
     return workspaces.map((workspace) => {
       const stored = sessionOrderByAccount[workspace.workspaceId as string]
@@ -447,14 +454,14 @@ function SessionTree({
     })
   }, [sessionOrderByAccount, workspaces])
   const orderedUngroupedSessionIds = useMemo(
-    () => reconciledSessionOrder(ungroupedSessionIds, sessionOrderByAccount[UNGROUPED_KEY]),
-    [sessionOrderByAccount, ungroupedSessionIds],
+    () => reconciledSessionOrder(ungroupedSessionIds, sessionOrderByAccount[ungroupedOrderKey]),
+    [sessionOrderByAccount, ungroupedOrderKey, ungroupedSessionIds],
   )
   const groups = useMemo(() => {
     const derived = deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
       expandedGroups,
-      ...(includeUngrouped && sessionOrderByAccount[UNGROUPED_KEY] !== undefined
-        ? { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }
+      ...(includeUngrouped && sessionOrderByAccount[ungroupedOrderKey] !== undefined
+        ? { ungroupedOrder: sessionOrderByAccount[ungroupedOrderKey] }
         : {}),
       ...(excludeFromUngrouped !== undefined
         ? { excludeFromUngrouped }
@@ -466,7 +473,7 @@ function SessionTree({
   }, [
     list, orderedWorkspaces, archivedSessionIds, archiveMode, pinnedSessionIds,
     pinnedWorkspaceIds, expandedGroups, sessionOrderByAccount, includeUngrouped,
-    excludeFromUngrouped,
+    excludeFromUngrouped, ungroupedOrderKey,
   ])
   /**
    * Relative-time clock for the rows: one read per derivation change instead of
@@ -490,6 +497,11 @@ function SessionTree({
       ? group.sessions.length
       : group.sessions.findIndex(session => session.id === anchor)
     if (sourceIndex !== -1 && (anchorIndex === sourceIndex || anchorIndex === sourceIndex + 1)) return
+    // deriveGroups still labels the bucket UNGROUPED_KEY; this pane may store
+    // order under ungroupedOrderKey (干员 lane).
+    const orderAccountKey = activeDrag.accountKey === UNGROUPED_KEY
+      ? ungroupedOrderKey
+      : activeDrag.accountKey
     const accountSessionIds = activeDrag.accountKey === UNGROUPED_KEY
       ? orderedUngroupedSessionIds
       : orderedWorkspaces.find(workspace => workspace.workspaceId === activeDrag.accountKey)?.sessionIds
@@ -497,7 +509,7 @@ function SessionTree({
     const nextOrder = accountSessionIds.filter(id => id !== activeDrag.sessionId)
     const insertAt = anchor === undefined ? nextOrder.length : nextOrder.indexOf(anchor)
     nextOrder.splice(insertAt === -1 ? nextOrder.length : insertAt, 0, activeDrag.sessionId)
-    setSessionOrder(activeDrag.accountKey, nextOrder.map(id => id as string))
+    setSessionOrder(orderAccountKey, nextOrder.map(id => id as string))
     if (orderBy === 'updated' || activeDrag.accountKey === UNGROUPED_KEY) return
     insertSessionBefore(activeDrag.accountKey as WorkspaceId, activeDrag.sessionId, anchor).catch((reason: unknown) => {
       console.warn('session reorder rejected:', reason)
@@ -1061,12 +1073,38 @@ export function WorkspaceBrowser({
     }
     return ids
   }, [projectWorkspaces])
+  const sessionListFacts = useSessionListFacts(useSessions)
+  /** Roster-bound sessions (incl. unbound after agent-home delete) → 干员「未分组」. */
+  const agentIdentitySessionIds = useMemo(() => {
+    const ids = new Set<SessionId>()
+    for (const id of sessionListFacts.ids) {
+      const memberId = sessionListFacts.byId[id]?.memberId
+      if (typeof memberId === 'string' && memberId.trim() !== '') ids.add(id)
+    }
+    return ids
+  }, [sessionListFacts])
+  /** Project pane must not claim agent-home / identity orphans. */
+  const projectExcludeFromUngrouped = useMemo(() => {
+    const ids = new Set<SessionId>(agentSessionIds)
+    for (const id of agentIdentitySessionIds) ids.add(id)
+    return ids
+  }, [agentSessionIds, agentIdentitySessionIds])
+  /** Agent pane must not claim project-grouped or project-orphan (no memberId) rows. */
+  const agentExcludeFromUngrouped = useMemo(() => {
+    const ids = new Set<SessionId>(projectSessionIds)
+    for (const id of sessionListFacts.ids) {
+      const memberId = sessionListFacts.byId[id]?.memberId
+      if (typeof memberId !== 'string' || memberId.trim() === '') ids.add(id)
+    }
+    return ids
+  }, [projectSessionIds, sessionListFacts])
   const splitColumnRef = useRef<HTMLDivElement>(null)
   const splitDragRef = useRef<{ startY: number; startRatio: number } | null>(null)
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
       UNGROUPED_KEY,
+      AGENT_UNGROUPED_ORDER_KEY,
       FLAT_SESSION_ORDER_KEY,
       ...workspaces.map(workspace => workspace.workspaceId as string),
     ])
@@ -1481,7 +1519,8 @@ export function WorkspaceBrowser({
           onRenameRequest={onWorkspaceRenameRequest}
           onDeleteRequest={onWorkspaceDeleteRequest}
           onWorkspacePinToggle={onWorkspacePinToggle}
-          includeUngrouped={false}
+          includeUngrouped
+          excludeFromUngrouped={projectExcludeFromUngrouped}
         />
       ))
 
@@ -1528,7 +1567,8 @@ export function WorkspaceBrowser({
             onDeleteRequest={onWorkspaceDeleteRequest}
             onWorkspacePinToggle={onWorkspacePinToggle}
             includeUngrouped
-            excludeFromUngrouped={projectSessionIds}
+            excludeFromUngrouped={agentExcludeFromUngrouped}
+            ungroupedOrderKey={AGENT_UNGROUPED_ORDER_KEY}
             showEmpty={false}
           />
         </>
@@ -1853,6 +1893,7 @@ export function WorkspaceBrowser({
         onClose={closeRename}
         closeLabel={t('close')}
         title={t('rename.workspace.title')}
+        layout="inset"
         footer={(
           <>
             <Button variant="outline" disabled={renaming} onClick={closeRename}>{t('cancel')}</Button>
@@ -1888,6 +1929,7 @@ export function WorkspaceBrowser({
         onClose={closeSessionRename}
         closeLabel={t('close')}
         title={t('rename.session.title')}
+        layout="inset"
         footer={(
           <>
             <Button variant="outline" disabled={sessionRenaming} onClick={closeSessionRename}>{t('cancel')}</Button>
@@ -1919,6 +1961,7 @@ export function WorkspaceBrowser({
         onClose={closeDelete}
         closeLabel={t('close')}
         title={t('delete.workspace')}
+        layout="inset"
         {...deleteTarget === null
           ? {}
           : {
@@ -1949,6 +1992,7 @@ export function WorkspaceBrowser({
         onClose={closeArchive}
         closeLabel={t('close')}
         title={t('archive.active.title')}
+        layout="inset"
         {...archiveTarget === null
           ? {}
           : { description: t('archive.active.desc') }}

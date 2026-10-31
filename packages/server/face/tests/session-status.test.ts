@@ -386,12 +386,13 @@ describe("session status snapshot", () => {
     expect(buildSessionStatusSnapshot(runtime, untitled).delegate).toEqual({
       parentSessionId: parent,
       childLabel: "untitled",
-      parentLabel: "老板",
+      parentLabel: "向日葵（xrkseek）",
+      parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
     });
-    // Root parent's look on the child Overview is Boss (ui-presence), not undefined.
+    // Xiangyang-spawned child: left seat is 向日葵（xrkseek）, not 老板.
     expect(buildSessionStatusSnapshot(runtime, untitled).parentCompanionBall).toEqual(
-      parentSnap.parentCompanionBall,
+      parentSnap.companionBall,
     );
     runtime.presence.set(parent, {
       emotionId: "31",
@@ -407,11 +408,12 @@ describe("session status snapshot", () => {
       emotionId: "16",
       source: "tool",
     });
-    // Bare create lands on Xiangyang → Boss → 向日葵 (not project 经理).
+    // Bare create lands on Xiangyang → Boss → 经理 · 向日葵（xrkseek）.
     expect(parentSnap.delegate).toEqual({
       parentSessionId: parent,
-      childLabel: "向日葵",
-      childSeat: "sunflower",
+      childLabel: "向日葵（xrkseek）",
+      childSeat: "manager",
+      childMemberId: "mem_seed_xrkseek",
     });
   });
 
@@ -443,15 +445,16 @@ describe("session status snapshot", () => {
       appearance: { shape: "squircle", color: "sky", kit: "cap" },
     });
     const midSnap = buildSessionStatusSnapshot(runtime, mid);
-    // Mid's parent is the project root → left seat is Boss.
+    // Mid's parent is Xiangyang → left seat is 向日葵（xrkseek）.
     expect(midSnap.parentCompanionBall).toEqual(
-      buildSessionStatusSnapshot(runtime, home).parentCompanionBall,
+      buildSessionStatusSnapshot(runtime, home).companionBall,
     );
     expect(midSnap.companionBall).toEqual({ shape: "wedge", color: "sage" });
     expect(midSnap.delegate).toEqual({
       parentSessionId: home,
       childLabel: "发版员",
-      parentLabel: "老板",
+      parentLabel: "向日葵（xrkseek）",
+      parentMemberId: "mem_seed_xrkseek",
       childSeat: "agent",
     });
     const leafSnap = buildSessionStatusSnapshot(runtime, leaf);
@@ -467,6 +470,7 @@ describe("session status snapshot", () => {
       childLabel: "调研员",
       parentLabel: "发版员",
       childSeat: "agent",
+      childMemberId: "mem_seed_researcher",
     });
     expect(formatSessionStatusText(leafSnap)).toContain("delegate: 发版员 → 调研员");
   });

@@ -6,7 +6,11 @@ import type { ReactNode } from 'react'
 import {
   Button, IconFolderCloseRegular, Modal,
 } from '@xrkseek/client-ui-primitives'
-import type { SessionId, WorkspaceId } from '@xrkseek/client-runtime/client'
+import {
+  patchTeamRosterLive,
+  type SessionId,
+  type WorkspaceId,
+} from '@xrkseek/client-runtime/client'
 import type {
   AgentTeamMemberRow, DirectoryFlowOwnerProps, WorkspaceBrowserProps,
 } from './contract/slots.ts'
@@ -714,9 +718,24 @@ export function TeamRoster({
       }
       setMembers((prev) => {
         const index = prev.findIndex((row) => row.id === saved.id)
-        if (index < 0) return [...prev, saved]
+        const prior = index < 0 ? undefined : prev[index]
+        // Merge: wire must keep appearance; never replace a full seat with a
+        // stub `{ id }` (that painted the cream white ball after a live save).
+        const merged: AgentTeamMemberRow = {
+          ...(prior ?? {
+            id: saved.id,
+            name: '',
+            playbook: '',
+            role: 'default',
+            updatedAt: Date.now(),
+          }),
+          ...saved,
+          appearance: saved.appearance ?? prior?.appearance,
+          nickname: saved.nickname !== undefined ? saved.nickname : prior?.nickname,
+        }
+        if (index < 0) return [...prev, merged]
         const next = prev.slice()
-        next[index] = saved
+        next[index] = merged
         return next
       })
       if (selectedId !== saved.id) setSelectedId(saved.id)
@@ -727,6 +746,53 @@ export function TeamRoster({
 
   const scheduleLivePersist = (patch: LiveLookPatch = {}) => {
     if (selectedId === null || bossSelected || isDraftMemberId(selectedId)) return
+    const id = selectedId
+    const lookTouched = patch.shape !== undefined
+      || patch.color !== undefined
+      || patch.kitHat !== undefined
+      || patch.kitGlasses !== undefined
+      || patch.kitHeld !== undefined
+    const nextAppearance = {
+      shape: patch.shape ?? shape,
+      color: patch.color ?? color,
+      kitHat: patch.kitHat ?? kitHat,
+      kitGlasses: patch.kitGlasses ?? kitGlasses,
+      kitHeld: patch.kitHeld ?? kitHeld,
+    }
+    const nextNick = patch.nickname !== undefined ? patch.nickname : nickname
+    // Optimistic seat paint before the upsert round-trip returns.
+    if (lookTouched || patch.nickname !== undefined) {
+      setMembers((prev) => prev.map((row) => {
+        if (row.id !== id) return row
+        return {
+          ...row,
+          appearance: {
+            shape: nextAppearance.shape,
+            color: nextAppearance.color,
+            kitHat: nextAppearance.kitHat,
+            kitGlasses: nextAppearance.kitGlasses,
+            kitHeld: nextAppearance.kitHeld,
+            ...(row.appearance?.kit ? { kit: row.appearance.kit } : {}),
+            ...(row.appearance?.face ? { face: row.appearance.face } : {}),
+            ...(row.appearance?.overlayHat ? { overlayHat: row.appearance.overlayHat } : {}),
+            ...(row.appearance?.overlayGlasses ? { overlayGlasses: row.appearance.overlayGlasses } : {}),
+            ...(row.appearance?.overlayHeld ? { overlayHeld: row.appearance.overlayHeld } : {}),
+          },
+          ...(patch.nickname !== undefined
+            ? { nickname: patch.nickname.trim() || undefined }
+            : {}),
+        }
+      }))
+    }
+    // Nick only when this persist touched it — look-only must not push
+    // nickname:null (that cleared Face formal（nick） on Overview).
+    patchTeamRosterLive(id, {
+      name: name.trim() || null,
+      ...(patch.nickname !== undefined
+        ? { nickname: nextNick.trim() || null }
+        : {}),
+      ...(lookTouched ? { appearance: nextAppearance } : {}),
+    })
     if (liveTimer.current !== undefined) window.clearTimeout(liveTimer.current)
     liveTimer.current = window.setTimeout(() => {
       liveTimer.current = undefined

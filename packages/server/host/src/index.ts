@@ -3295,7 +3295,10 @@ export function createHostManager(): HostManager {
         if (!expected) return false;
         return timingSafeStringEqual(requestHostApiKey(r), expected);
       };
-      // Loopback / bind LAN free; WAN + foreign LAN need PIN *or* Host API key.
+      // Two planes — never merge:
+      // · local: loopback / ownLanHosts (127 · Desktop bind) — free, no PIN
+      // · PIN: HttpOnly wan/lan digests or paired device session (Face checkAuth)
+      // `xrk_operator_ui` is SPA UX only and is never consulted here.
       // Browser after PIN must not also need XRK_API_KEY (shell omits Authorization).
       const mobileAccessGate = (r: IncomingMessage) =>
         pinAccessGate(r) || apiKeyElevates(r);
@@ -3324,6 +3327,13 @@ export function createHostManager(): HostManager {
         defaultCwd: faceRuntime.workspaceRoot,
         resolveSessionCwd: (sessionId: string) =>
           resolveSessionCwd(faceRuntime, sessionId),
+        // PIN gate HTML follows Settings Appearance (Face live → yaml fallback).
+        getThemePreference: (): "light" | "dark" | "system" => {
+          const theme = faceRuntime.uiSettings.theme;
+          return theme === "light" || theme === "dark" || theme === "system"
+            ? theme
+            : "system";
+        },
         resolveAutoReviewClassifierProduct: () => {
           const ns = faceRuntime.settingsNamespaces.view("auto-review")
             .value as Record<string, unknown>;

@@ -93,15 +93,25 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.reload(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.reload', result)
   }
-  const install: PluginInventorySettingsTabInjected['install'] = async (spec, registry, requestId) => {
+  const install: PluginInventorySettingsTabInjected['install'] = async (
+    spec,
+    registry,
+    requestId,
+    proxy,
+  ) => {
     const reg = registry !== undefined && registry.trim().length > 0 ? registry.trim() : undefined
-    const result = await ctx.remote.pluginInventory.install(spec, reg, requestId)
+    const prox = proxy !== undefined && proxy.trim().length > 0 ? proxy.trim() : undefined
+    const result = await ctx.remote.pluginInventory.install(spec, reg, requestId, prox)
     if (!result.ok) {
       const details = result.error.details as {
         command?: unknown
         output?: unknown
         exitCode?: unknown
       } | undefined
+      const commandParts = ['xrkh plugin add']
+      if (reg) commandParts.push('--registry', reg)
+      if (prox) commandParts.push('--proxy', prox)
+      commandParts.push(spec)
       const log =
         details !== undefined &&
         typeof details.command === 'string' &&
@@ -113,9 +123,7 @@ export function apply(ctx: ClientContext): void {
             exitCode: details.exitCode,
           }
           : {
-            command: reg
-              ? `xrkh plugin add --registry ${reg} ${spec}`
-              : `xrkh plugin add ${spec}`,
+            command: commandParts.join(' '),
             output: result.error.message,
             exitCode: 1,
           }

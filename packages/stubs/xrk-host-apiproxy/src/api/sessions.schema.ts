@@ -73,6 +73,7 @@ export const sessionSummarySchema = z.object({
   mainline: z.string().optional(),
   mainlineId: z.string().optional(),
   sideline: z.string().optional(),
+  memberId: z.string().optional(),
   projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),
 }) as unknown as z.ZodType<Wire<SessionSummary>>
 
@@ -226,10 +227,11 @@ export const sessionTruncateRequestSchema = z.object({
   beforeSeq: z.number().int().nonnegative().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.truncate'>>>
 
-/** session.truncate response value. */
+/** session.truncate response value (optional projections = post-cut reseal baseline). */
 export const sessionTruncateValueSchema = z.object({
   sessionId: sessionIdSchema,
   eventCount: z.number().int().nonnegative(),
+  projections: z.lazy(() => sessionProjectionsBlockSchema).optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.truncate'>>>
 
 /** session.history request payload (beforeSeq/maxMessages page backwards from the window tail). */

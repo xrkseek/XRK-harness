@@ -12,7 +12,7 @@ import { makeTranslate } from '@xrkseek/client-test-runtime'
 import { zh as commonZh } from '@xrkseek/client-locale/src/locales/zh.ts'
 import type { WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
-import { UNGROUPED_KEY } from '../src/client/tree.ts'
+import { AGENT_UNGROUPED_ORDER_KEY, UNGROUPED_KEY } from '../src/client/tree.ts'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -138,8 +138,14 @@ describe('WorkspaceBrowser', () => {
     rerender(b, { useWorkspaces: hook(workspaceState([])) })
     await waitFor(() => {
       expect(b.store.getSnapshot().groupExpansion).toEqual({})
-      expect(b.store.getSnapshot().sessionOrderByAccount).toEqual({ [UNGROUPED_KEY]: [] })
-      expect(b.store.getSnapshot().sessionUpdatedAtByAccount).toEqual({ [UNGROUPED_KEY]: {} })
+      expect(b.store.getSnapshot().sessionOrderByAccount).toEqual({
+        [UNGROUPED_KEY]: [],
+        [AGENT_UNGROUPED_ORDER_KEY]: [],
+      })
+      expect(b.store.getSnapshot().sessionUpdatedAtByAccount).toEqual({
+        [UNGROUPED_KEY]: {},
+        [AGENT_UNGROUPED_ORDER_KEY]: {},
+      })
     })
   })
 
@@ -1123,7 +1129,7 @@ describe('WorkspaceBrowser', () => {
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
-    expect(dialog.textContent).toContain('其会话会进入下方干员工作区的「未分组」')
+    expect(dialog.textContent).toContain('其会话会进入本栏「未分组」')
 
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '删除工作区' })
     fireEvent.click(confirm)
@@ -1290,7 +1296,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByRole('button', { name: '保存' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '以此为基底新建' }))
     expect(screen.getByRole('button', { name: '工作区', pressed: true })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '保存' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '添加干员' })).toBeTruthy()
     const name = screen.getByRole('textbox', { name: '名称' }) as HTMLInputElement
     expect(name.value).toBe('施工员')
     expect(name.disabled).toBe(false)

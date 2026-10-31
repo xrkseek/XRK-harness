@@ -5,8 +5,18 @@ import { createServer, request as httpRequest } from "node:http";
 import { describe, expect, it } from "vitest";
 import { startLocalProxyGateway } from "../src/dsh-compat/mobile-access-local-gateway.js";
 import {
+  accessPinCookieDigest,
+  buildPinPageHtml,
+  gateThemeBootScript,
+  WAN_PIN_COOKIE,
+} from "../src/dsh-compat/mobile-access-auth.js";
+import { createOperatorPinFetchElevator } from "../src/dsh-compat/mobile-access-gate.js";
+import {
+  armAccessGateForListen,
   injectMobileAccessShellIntoHtml,
+  readGateThemePreferenceFromSettingsYaml,
   readMobileAccessState,
+  resolveGateThemePreference,
 } from "../src/dsh-compat/mobile-access.js";
 import { createDshCompatPublicHandler } from "../src/index.js";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -108,6 +118,35 @@ describe("mobile-access-local-gateway", () => {
   });
 });
 
+describe("createOperatorPinFetchElevator", () => {
+  it("accepts only HttpOnly PIN digests, never the SPA UI marker", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-pin-elev-"));
+    temps.push(home);
+    const options = { xrkHome: home };
+    const armed = armAccessGateForListen(options, "10.0.0.2", 8099);
+    expect(armed.armed).toBe(true);
+    const state = readMobileAccessState(options);
+    const elev = createOperatorPinFetchElevator(options);
+
+    expect(
+      elev(
+        new Request("http://example.com/api/x", {
+          headers: { cookie: "xrk_operator_ui=1" },
+        }),
+      ),
+    ).toBe(false);
+
+    const digest = accessPinCookieDigest(state.wanToken, state.instanceId);
+    expect(
+      elev(
+        new Request("http://example.com/api/x", {
+          headers: { cookie: `${WAN_PIN_COOKIE}=${digest}` },
+        }),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("mobile-access wan pin cookie", () => {
   it("unlocks gated requests after wan-pin auth", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xrk-wan-pin-"));
@@ -169,6 +208,17 @@ describe("mobile-access wan pin cookie", () => {
     const setCookie = pinRes.headers.getSetCookie?.() ?? [];
     const cookieHeader = setCookie.map((c) => c.split(";")[0]).join("; ");
     expect(cookieHeader).toContain("dsh_ma_wan=");
+    expect(cookieHeader).toContain("xrk_operator_ui=1");
+
+    // SPA UX marker alone must never unlock Host (keys / settings / control).
+    const forgedUi = await fetch(`${base}/api/mobile-access/control`, {
+      headers: {
+        "x-forwarded-host": "demo.r6.cpolar.cn",
+        Accept: "application/json",
+        cookie: "xrk_operator_ui=1",
+      },
+    });
+    expect(forgedUi.status).toBe(401);
 
     const unlocked = await fetch(`${base}/api/mobile-access/control`, {
       headers: {
@@ -189,5 +239,44 @@ describe("injectMobileAccessShellIntoHtml", () => {
     const once = injectMobileAccessShellIntoHtml(html);
     expect(once).toContain('href="/mobile-access/custom.css"');
     expect(injectMobileAccessShellIntoHtml(once)).toBe(once);
+  });
+});
+
+describe("PIN gate theme preference", () => {
+  it("stamps durable Settings preference into the boot script", () => {
+    expect(gateThemeBootScript("dark")).toContain('preference = "dark"');
+    expect(gateThemeBootScript("light")).toContain('preference = "light"');
+    expect(buildPinPageHtml("wan", "dark")).toContain('preference = "dark"');
+    expect(buildPinPageHtml("lan", "light")).toContain('preference = "light"');
+  });
+
+  it("parses ui-theme.preference from settings.yaml", () => {
+    expect(
+      readGateThemePreferenceFromSettingsYaml(
+        "locale:\n  preference: zh\nui-theme:\n  preference: dark\n",
+      ),
+    ).toBe("dark");
+    expect(
+      readGateThemePreferenceFromSettingsYaml("ui-theme:\n  fontSize: 13\n"),
+    ).toBeUndefined();
+  });
+
+  it("resolves Face callback over yaml over system", () => {
+    expect(
+      resolveGateThemePreference({
+        getThemePreference: () => "light",
+        xrkHome: "/missing",
+      }),
+    ).toBe("light");
+
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-gate-theme-"));
+    temps.push(home);
+    writeFileSync(
+      path.join(home, "settings.yaml"),
+      "ui-theme:\n  preference: dark\n",
+      "utf8",
+    );
+    expect(resolveGateThemePreference({ xrkHome: home })).toBe("dark");
+    expect(resolveGateThemePreference({})).toBe("system");
   });
 });

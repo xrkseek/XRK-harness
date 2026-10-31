@@ -321,6 +321,8 @@ describe('ModelsSection', () => {
     // A user who can already reach some provider is not in the first-run
     // posture, so nothing on the page opens itself.
     expect(needsSetup(row(undefined), true)).toBe(false)
+    // Keyless brands (sunflower-free egress) never open a credential setup card.
+    expect(needsSetup({ ...row(undefined), apiKeyEnv: undefined }, false)).toBe(false)
   })
 
   it('derives conventional credential references from route ids', () => {

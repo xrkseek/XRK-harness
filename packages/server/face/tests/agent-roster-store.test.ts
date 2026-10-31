@@ -45,7 +45,7 @@ describe("FaceAgentRosterStore", () => {
     const names = store.list(GLOBAL_ROSTER_ID).map((row) => row.name);
     expect(names).toEqual([
       "经理",
-      "向日葵",
+      "xrkseek",
       "调研员",
       "施工员",
       "审稿员",
@@ -184,7 +184,7 @@ describe("FaceAgentRosterStore", () => {
       "the researcher",
     );
     expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_manager")?.name).toBe("经理");
-    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_xrkseek")?.name).toBe("向日葵");
+    expect(store.get(GLOBAL_ROSTER_ID, "mem_seed_xrkseek")?.name).toBe("xrkseek");
   });
 
   it("lists workspace members from every roster file for the Team panel", () => {

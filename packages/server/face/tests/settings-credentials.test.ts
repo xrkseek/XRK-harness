@@ -1702,4 +1702,51 @@ describe("Face credentials U2", () => {
       provider: "xyt",
     });
   });
+
+  it("Codex softBudget (not multiple of 1000) does not block creating another provider", async () => {
+    // Regression: rc.2 wrote floor(window×0.9)=235929 into a catalog row; schema
+    // step(1000) then failed every llm-pi-ai mutate (Create Provider) citing
+    // $.providers.stt.models[0].softBudgetMaxTokens.
+    const rt = runtime({ bootstrapApiKey: "" });
+    const seed = await dispatchFaceMethod(rt, "settings.mutate", "sb-seed", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "stt"],
+          value: {
+            api: "openai-chat",
+            baseURL: "https://stt.example/v1",
+            models: [
+              {
+                id: "stt-large",
+                contextWindow: 262_144,
+                softBudgetMaxTokens: 235_929,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(seed.result.ok).toBe(true);
+    if (!seed.result.ok) expect.fail(seed.result.error.message);
+
+    const create = await dispatchFaceMethod(rt, "settings.mutate", "sb-create", {
+      ns: "llm-pi-ai",
+      ops: [
+        {
+          op: "set",
+          path: ["providers", "sangtang"],
+          value: {
+            api: "openai-chat",
+            baseURL: "https://token.sensenova.cn/v1",
+            displayName: "santang",
+            models: [{ id: "sensenova-6.8-flash-lite" }],
+          },
+        },
+      ],
+    });
+    expect(create.result.ok).toBe(true);
+    if (!create.result.ok) expect.fail(create.result.error.message);
+  });
 });

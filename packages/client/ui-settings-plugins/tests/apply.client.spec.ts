@@ -243,6 +243,7 @@ describe('ui-settings-plugins apply', () => {
         'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
         'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
         'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
+        'sunflower-free',
         'a2a-inbound', 'external-agent', 'cron',
         'auto-review', 'memory-embed', 'host', 'process-channels',
       ])
@@ -264,6 +265,7 @@ describe('ui-settings-plugins apply', () => {
           'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
           'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
           'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
+          'sunflower-free',
           'a2a-inbound', 'external-agent', 'cron',
           'auto-review', 'memory-embed', 'host', 'process-channels',
         ])

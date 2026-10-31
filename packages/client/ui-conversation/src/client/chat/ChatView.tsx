@@ -49,6 +49,7 @@ import {
 import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems, slideTurnRailWindow, type TurnRailItem } from './turn-rail-items.ts'
 import { formatRunDuration } from './message-chrome.ts'
+import { openerKeysFromRail, userRoundLabelKind } from './round-label.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
@@ -532,6 +533,7 @@ export function ChatView({
     for (const item of railItems) map.set(item.turn, item.round)
     return map
   }, [railItems])
+  const openerKeyByTurn = useMemo(() => openerKeysFromRail(railItems), [railItems])
   const inbox = useSession(s => s.queue)
   // Stable during token deltas — seats observe node content themselves.
   const runningCallCount = useSession(s => s.runningCalls.length)
@@ -1250,6 +1252,7 @@ export function ChatView({
     selectedCallId,
     cwd,
     roundByTurn,
+    openerKeyByTurn,
     openFile: requestOpenFile,
     inspectCall,
     forkAt,
@@ -1265,7 +1268,7 @@ export function ChatView({
     renderSlot,
     t,
   }), [
-    useSession, selectedCallId, cwd, roundByTurn, requestOpenFile, inspectCall,
+    useSession, selectedCallId, cwd, roundByTurn, openerKeyByTurn, requestOpenFile, inspectCall,
     forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage,
     renderMessageImages, renderMessageFiles, fileMentions, renderSlot, t,
   ])
@@ -1318,12 +1321,18 @@ export function ChatView({
       seenSendRpc.add(rpc)
       const hostTurn = hostTurnOf(node)
       const round = hostTurn === undefined ? nextSendRound : (roundByTurn.get(hostTurn) ?? nextSendRound)
+      const source = node.data.source
+      const sourceKind = source !== null && typeof source === 'object' && 'kind' in source
+        ? String((source as { kind: unknown }).kind)
+        : undefined
+      const roundLabel = userRoundLabelKind(nodeKey, hostTurn, openerKeyByTurn, sourceKind) ?? 'turn'
       columnRows.push(
         <UserSendFlow
           key={`rpc:${rpc}`}
           flowKey={`rpc:${rpc}`}
           nodeKey={nodeKey}
           round={round}
+          roundLabel={roundLabel}
           {...nodeSeat}
         />,
       )

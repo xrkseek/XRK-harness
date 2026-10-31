@@ -262,10 +262,23 @@
     padding: 18px 14px 8px 20px;
   }
 
+  .root[data-layout='inset'] .description {
+    padding-top: 4px;
+  }
+
   .root[data-layout='inset'] .footer {
     flex-wrap: wrap;
     justify-content: stretch;
     gap: 8px;
     padding-top: 8px;
+  }
+
+  /* Direct footer actions (delete / rename): full-width touch targets.
+     Nested rows (ResubmitConfirm `.actions`) keep their own stack rules. */
+  .root[data-layout='inset'] .footer > :global(button) {
+    flex: 1 1 calc(50% - 4px);
+    min-width: min(100%, 140px);
+    min-height: 44px;
+    touch-action: manipulation;
   }
 }

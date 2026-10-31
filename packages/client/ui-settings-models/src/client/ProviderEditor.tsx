@@ -38,7 +38,7 @@ import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /** Per-adapter-family curated field sets (unknown namespaces get the hint alone). */
-type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
+type EditorLayout = 'deepseek' | 'pi-ai' | 'sunflower-free' | 'unknown'
 
 /** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
 const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
@@ -125,6 +125,7 @@ export function pathOps(
 function layoutOf(ns: string): EditorLayout {
   if (ns === 'llm-deepseek') return 'deepseek'
   if (ns === 'llm-pi-ai') return 'pi-ai'
+  if (ns === 'sunflower-free') return 'sunflower-free'
   return 'unknown'
 }
 
@@ -172,6 +173,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   )
 
   useEffect(() => {
+    if (layout === 'sunflower-free') {
+      setKeyState(undefined)
+      return
+    }
     let stale = false
     setKeyState(undefined)
     // The key state is a placeholder hint, not a precondition for editing:
@@ -186,7 +191,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       () => undefined,
     )
     return () => { stale = true }
-  }, [api.credentials, keyRef])
+  }, [api.credentials, keyRef, layout])
 
   const stringAt = (source: unknown, key: string): string | undefined => {
     const value = getPath(source, [key])
@@ -203,8 +208,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  const modelFailure = validateDeepSeekModels(getPath(draft, ['models']))
-  const keyFailure = apiKeyFailure(keyDraft)
+  // Free-lane egress has no model catalog on this card.
+  const modelFailure = layout === 'sunflower-free'
+    ? undefined
+    : validateDeepSeekModels(getPath(draft, ['models']))
+  const keyFailure = layout === 'sunflower-free' ? undefined : apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
   // as "no key supplied" rather than as a key — that is how a card whose
@@ -240,7 +248,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // string, so a bad key would otherwise report "Saved" (audit B-3). Empty
     // field keeps the stored key and skips the probe. Only auth-shaped probe
     // failures block the write — offline / non-listable protocols still save.
-    if (keyValue.length > 0) {
+    if (layout !== 'sunflower-free' && keyValue.length > 0) {
       const probed = await api.llm.discoverModels({
         settingsNs: ns,
         provider: props.provider,
@@ -258,7 +266,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
       ? setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
-    if (props.credentialOnly !== true) {
+    if (props.credentialOnly !== true && layout !== 'sunflower-free') {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
@@ -294,7 +302,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setExpectedRevision(response.result.value.revision)
       setDraft(next)
     }
-    if (keyValue.length > 0) {
+    if (layout !== 'sunflower-free' && keyValue.length > 0) {
       const stored = await api.credentials.set({ ref: keyRef, value: keyValue })
       if (!stored.result.ok) return stored.result.error.message
     }
@@ -341,6 +349,42 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const pinned = getPath(namespace.base, [...settingsPath, 'models'])
     return pinned ?? nodeAtPath(root, [...settingsPath, 'models'])?.meta.default
   }
+
+  /** Free-lane egress: OpenCode cascade candidate + Kilo proxy (no API key). */
+  const sunflowerFields = (): ReactNode => (
+    <>
+      <div className={styles['field']}>
+        <span className={styles['fieldLabel']}>{t('sunflowerOpenCodeProxy')}</span>
+        <input
+          className={styles['input']}
+          type="text"
+          value={stringAt(draft, 'openCodeProxy') ?? ''}
+          placeholder={t('sunflowerOpenCodeProxyPlaceholder')}
+          aria-label={t('sunflowerOpenCodeProxy')}
+          disabled={disabled}
+          onChange={(event) => {
+            setField('openCodeProxy', event.target.value === '' ? undefined : event.target.value)
+          }}
+        />
+        <p className={styles['advancedHint']}>{t('sunflowerOpenCodeProxyHint')}</p>
+      </div>
+      <div className={styles['field']}>
+        <span className={styles['fieldLabel']}>{t('sunflowerKiloProxy')}</span>
+        <input
+          className={styles['input']}
+          type="text"
+          value={stringAt(draft, 'kiloProxy') ?? ''}
+          placeholder={t('sunflowerKiloProxyPlaceholder')}
+          aria-label={t('sunflowerKiloProxy')}
+          disabled={disabled}
+          onChange={(event) => {
+            setField('kiloProxy', event.target.value === '' ? undefined : event.target.value)
+          }}
+        />
+        <p className={styles['advancedHint']}>{t('sunflowerKiloProxyHint')}</p>
+      </div>
+    </>
+  )
 
   /**
    * The curated fields of one known adapter family. The family arrives
@@ -512,7 +556,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         )}
       {layout === 'unknown'
         ? <p className={styles['advancedHint']}>{`${t('advancedHint')} (${namespace.ns})`}</p>
-        : curatedFields(layout)}
+        : layout === 'sunflower-free'
+          ? sunflowerFields()
+          : curatedFields(layout)}
       {failure !== undefined ? <p className={styles['error']} role="alert">{failure}</p> : null}
       {props.credentialOnly === true || modelFailure === undefined
         ? null

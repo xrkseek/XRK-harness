@@ -28,7 +28,18 @@ import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import { BossStatusSheet } from './BossStatusSheet.tsx'
 import { PresenceBall, useBossMood, usePresenceEnabled, useSeatTitles } from './PresenceBall.tsx'
 import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
-import { childDelegateSeatCaption, delegateSeatCaption } from './seat-caption.ts'
+import {
+  readTeamRosterLive,
+  subscribeTeamRosterLive,
+  teamRosterLiveRevision,
+  type TeamRosterLiveLook,
+} from '@xrkseek/client-runtime/client'
+import {
+  childDelegateSeatCaption,
+  memberDisplayLabel,
+  parentDelegateSeatCaption,
+  withLiveNickname,
+} from './seat-caption.ts'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -1883,24 +1894,85 @@ export function PreviewTabs({
   const delegatedOverview =
     sessionOrigin === 'subagent' ||
     (Boolean(status?.companionBall) && Boolean(status?.delegate))
-  /** Workspace office pair: left seat is the human operator (Boss), not a parent AI. */
+  /** Workspace office pair: left seat is the human operator, not a parent AI. */
   const officeBossSeat = Boolean(
     status?.delegate?.parentSessionId === sessionId && status?.parentCompanionBall,
   )
-  // Child Overview left seat is also Boss when Face labels the parent with the seat title
-  // (no mid AI). Those seats must use live Settings look — same as office home.
+  // Office home → live Settings boss look; tool child → Face parentCompanionBall.
   const leftSeatLiveBossLook = officeBossSeat
-    || status?.delegate?.parentLabel === seatTitles.boss
-  // Office Boss label uses Settings nickname when set; AI-parent seats keep Face labels.
-  const bossSeatLabel = leftSeatLiveBossLook
-    ? delegateSeatCaption(seatTitles.boss, bossMood.bossNickname || undefined)
-    : delegateSeatCaption(seatTitles.boss, status?.delegate?.parentLabel)
+  // Team roster nick/look patches — wake Overview before Face status poll.
+  const rosterLiveRev = useSyncExternalStore(
+    subscribeTeamRosterLive,
+    teamRosterLiveRevision,
+    () => 0,
+  )
+  const childMemberId = status?.delegate?.childMemberId
+    ?? (status?.delegate?.childSeat === 'manager' ? 'mem_seed_manager' : undefined)
+  const parentMemberId = status?.delegate?.parentMemberId
+    ?? (officeBossSeat ? undefined : 'mem_seed_manager')
+  const liveChild = childMemberId ? readTeamRosterLive(childMemberId) : undefined
+  const liveParent = parentMemberId ? readTeamRosterLive(parentMemberId) : undefined
+  // Office: Settings boss title + nick. Child: Face parentLabel, with live nick overlay.
+  const bossSeatLabel = officeBossSeat
+    ? parentDelegateSeatCaption(seatTitles.boss, {
+        officeBossSeat: true,
+        bossNickname: bossMood.bossNickname || undefined,
+        managerTitle: seatTitles.manager,
+      })
+    : withLiveNickname(
+      parentMemberId === 'mem_seed_manager'
+        ? seatTitles.manager
+        : seatTitles.agent,
+      status?.delegate?.parentLabel ?? seatTitles.manager,
+      liveParent?.nickname,
+    )
   // Identity agent-home / tool children → 干员; project home → 经理; 向阳 → name.
+  const childSeat = status?.delegate?.childSeat
+  // Live nick overlay → Face childLabel (Host formal（nick）). Name-only live
+  // patches must not clear a Face nick (look edits used to push nickname:null).
+  const childLabelLive = (() => {
+    if (liveChild?.nickname !== undefined) {
+      const faceFormal = status?.delegate?.childLabel
+        ?.replace(/[（(][^）)]*[）)]\s*$/u, '')
+        .trim()
+      const composed = memberDisplayLabel(
+        liveChild.name?.trim() || faceFormal,
+        liveChild.nickname,
+      )
+      if (composed) return composed
+    }
+    return status?.delegate?.childLabel
+  })()
   const childSeatLabel = childDelegateSeatCaption(
     seatTitles,
-    status?.delegate?.childSeat,
-    status?.delegate?.childLabel,
+    childSeat,
+    childLabelLive,
   )
+  const mergeLiveLook = <T extends object>(
+    base: T,
+    look: TeamRosterLiveLook | undefined,
+  ): T => {
+    if (!look) return base
+    return {
+      ...base,
+      ...(look.shape ? { shape: look.shape } : {}),
+      ...(look.color ? { color: look.color } : {}),
+      ...(look.kit ? { kit: look.kit } : {}),
+      ...(look.kitHat ? { kitHat: look.kitHat } : {}),
+      ...(look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
+      ...(look.kitHeld ? { kitHeld: look.kitHeld } : {}),
+      ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
+      ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
+      ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
+    }
+  }
+  const childMemberLook = mergeLiveLook(
+    status?.companionBall ?? PENDING_MEMBER_LOOK,
+    liveChild?.appearance,
+  )
+  const parentMemberLook = status?.parentCompanionBall && !leftSeatLiveBossLook
+    ? mergeLiveLook(status.parentCompanionBall, liveParent?.appearance)
+    : status?.parentCompanionBall
   // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
   const bossPresence = officeBossSeat
     ? {
@@ -2081,7 +2153,7 @@ export function PreviewTabs({
 
   useEffect(() => {
     setStatusTick((n) => n + 1)
-  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy, homeCatalogRev])
+  }, [catalogRev, jobsRev, agentPresetRev, parentRunning, childRunning, jobsBusy, homeCatalogRev, rosterLiveRev])
 
   // Soft-poll session.status so presence / delivery / fleet flip without a
   // membership bump (presence_set is sticky outside the turn latch). Presence
@@ -2413,8 +2485,8 @@ export function PreviewTabs({
                 sessionId={status?.delegate?.parentSessionId ?? `${sessionId}:from`}
                 // Boss look is live Settings `ui-presence` (same as mood on office home) —
                 // do not freeze Face `parentCompanionBall` or Team edits wait on Status poll.
-                {...(status?.parentCompanionBall && !leftSeatLiveBossLook
-                  ? { memberLook: status.parentCompanionBall }
+                {...(parentMemberLook && !leftSeatLiveBossLook
+                  ? { memberLook: parentMemberLook }
                   : {})}
                 {...(bossPresence ? { presence: bossPresence } : {})}
                 pairSeat
@@ -2456,7 +2528,7 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={sessionId}
                 {...(status?.presence ? { presence: status.presence } : {})}
-                memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
+                memberLook={childMemberLook}
                 pairSeat
                 seat="to"
                 roleLabel={childSeatLabel}
@@ -2510,7 +2582,7 @@ export function PreviewTabs({
               <PresenceBall
                 sessionId={sessionId}
                 {...(status?.presence ? { presence: status.presence } : {})}
-                memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
+                memberLook={childMemberLook}
                 turnActive={ownTurnActive}
                 runningJobs={status?.jobs.filter((j) => j.status === 'running').length ?? 0}
                 runningSubs={ownSubs}

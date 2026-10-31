@@ -9,6 +9,10 @@ import {
 import { resolveSessionModelSelection } from "../model-catalog.js";
 import { describeChildOutcome } from "../adapt/subagent-notice.js";
 import { readSessionEvents } from "@xrkseek/core-session";
+import {
+  maybePrefixDelegatedChildText,
+  type SeatChannel,
+} from "../seat-channel.js";
 
 function parentAvailable(runtime: Parameters<FaceHandler>[0], parentSessionId: string): boolean {
   return runtime.store.has(parentSessionId);
@@ -185,10 +189,11 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   const delivery =
     deliveryRaw === "queue" || deliveryRaw === "steer" ? deliveryRaw : "steer"
   const preview = contentPartsToText(p.content);
+  // tool-/orch- rpc = parent seat channel; UUID = human UI through this RPC.
   const mirrorHuman = !isInternalFaceRpc(rpcId);
+  const seatChannel: SeatChannel = mirrorHuman ? "human_face" : "parent";
   if (runtime.externalAgents.has(childSessionId)) {
-    const message = preview;
-    if (!message) {
+    if (!preview) {
       return {
         ok: false,
         error: {
@@ -197,6 +202,12 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
         },
       };
     }
+    const message = maybePrefixDelegatedChildText(
+      runtime,
+      childSessionId,
+      preview,
+      seatChannel,
+    );
     try {
       if (delivery === "queue" && runtime.externalAgents.isBusy(childSessionId)) {
         return {
@@ -213,7 +224,8 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
       });
       runtime.agentTeamTasks.markResumed(childSessionId);
       if (mirrorHuman) {
-        runtime.notifyOwnedSubagentUserPrompt(childSessionId, message);
+        // External workers have no local prompt/promoted — mirror once sent.
+        runtime.armOwnedSubagentUserPromptMirror(childSessionId, preview, null);
       }
       return { ok: true, value: { messageId: rpcId } };
     } catch (err) {
@@ -231,6 +243,7 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     sessionId: childSessionId,
     mode: delivery,
     content: p.content,
+    seatChannel,
     ...(typeof p.clientTimeZone === "string"
       ? { clientTimeZone: p.clientTimeZone }
       : {}),
@@ -244,7 +257,12 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   if (!prompted.ok) return prompted;
   runtime.agentTeamTasks.markResumed(childSessionId);
   if (mirrorHuman && preview) {
-    runtime.notifyOwnedSubagentUserPrompt(childSessionId, preview);
+    // Defer parent mirror until this admit is prompt/promoted (enters a step).
+    // Queued follow-ups must not appear on the manager while still waiting.
+    const admitId = runtime.rpcAdmitMap.get(rpcId);
+    if (admitId) {
+      runtime.armOwnedSubagentUserPromptMirror(childSessionId, preview, admitId);
+    }
   }
   const messageId = runtime.rpcAdmitMap.get(rpcId) ?? rpcId;
   return { ok: true, value: { messageId } };

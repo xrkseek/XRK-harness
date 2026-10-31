@@ -664,7 +664,11 @@ export class SessionManager {
    */
   async truncate(
     opts: { sessionId: SessionId; atSeq?: number; beforeSeq?: number },
-  ): Promise<RpcResult<{ sessionId: SessionId; eventCount: number }>> {
+  ): Promise<RpcResult<{
+    sessionId: SessionId
+    eventCount: number
+    projections?: { asOfSeq: number; values: Record<string, unknown> }
+  }>> {
     try {
       const { result } = await this.api.sessions.truncate({
         sessionId: opts.sessionId,
@@ -1296,7 +1300,7 @@ export class SessionManager {
         && prev.parentSessionId === entry.parentSessionId && prev.cwd === entry.cwd
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
         && prev.mainline === entry.mainline && prev.mainlineId === entry.mainlineId
-        && prev.sideline === entry.sideline
+        && prev.sideline === entry.sideline && prev.memberId === entry.memberId
         && prev.pendingInteraction === entry.pendingInteraction
         && prev.projectionValues === entry.projectionValues
         && prev.completed === entry.completed && prev.hasDraft === entry.hasDraft

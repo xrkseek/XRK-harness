@@ -1,7 +1,11 @@
 /**
- * Browser-safe, zero-dependency loopback / LAN classification shared by the
- * `/api` Host fence and the package's `ctx.connection` state. The predicate
- * stays package-internal; client plugins consume the derived state through Cordis.
+ * Browser-safe privilege helpers. Two Host planes stay distinct:
+ *
+ * - **local** — loopback / Desktop (`ownsHost` · `xrk-app:`) / private LAN IP.
+ *   No PIN; same machine or intentional bind. Never granted by cookies.
+ * - **operator-pin** — after Host set HttpOnly PIN / device session; SPA sees
+ *   `xrk_operator_ui` + `sessionStorage` as a *UX hint only*. Forging those
+ *   markers does not authenticate Host Face / Cordis privileged methods.
  */
 
 /**
@@ -34,8 +38,18 @@ export function isPrivateLanHostname(hostname: string): boolean {
   return false
 }
 
-/** sessionStorage key set by the WAN/LAN PIN page after a successful unlock. */
+/** sessionStorage key written by gate pages / SPA after operator unlock. */
 export const OPERATOR_ACCESS_STORAGE_KEY = 'xrk.operatorAccess'
+
+/**
+ * Non-HttpOnly twin of Host PIN / device-session cookies (server
+ * `OPERATOR_UI_COOKIE`). Cookie-return visits never re-run gate page scripts,
+ * so the SPA elevates UX from this marker on boot. Not a Host credential.
+ */
+export const OPERATOR_UI_COOKIE = 'xrk_operator_ui'
+
+/** Client access plane — local Host vs PIN-elevated remote vs locked remote. */
+export type ClientAccessPlane = 'local' | 'operator-pin' | 'remote'
 
 function hasOperatorAccessFlag(): boolean {
   try {
@@ -46,13 +60,48 @@ function hasOperatorAccessFlag(): boolean {
   }
 }
 
+function cookieHasOperatorUiMarker(cookieSource: string | undefined): boolean {
+  return (cookieSource ?? '')
+    .split(';')
+    .some((part) => part.trim() === `${OPERATOR_UI_COOKIE}=1`)
+}
+
 /**
- * Whether the page may use Host-local capabilities (settings / credentials UI,
- * `canOpenPath` gates, mid-turn Boss 插话). Desktop: `__XRK_TRANSPORT__.ownsHost`
- * or `xrk-app:`; else loopback, private LAN IP (same-origin page from an
- * intentional LAN bind), PIN-elevated operator, or non-browser.
+ * Elevate the operator sessionStorage UX flag (PIN / pair / renew / SPA sync).
+ * Never demotes. Does not authenticate the Host — Face still requires HttpOnly PIN.
+ * @returns whether the flag is set after the call.
  */
-export function isPrivilegedClientSurface(options: {
+export function elevateOperatorAccess(): boolean {
+  try {
+    if (typeof sessionStorage === 'undefined') return false
+    sessionStorage.setItem(OPERATOR_ACCESS_STORAGE_KEY, '1')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Copy Host `xrk_operator_ui` into sessionStorage when present (UX only).
+ * Elevate-only: a missing cookie must not wipe a flag set by the PIN/login script.
+ * @param cookieSource - `document.cookie`, or an explicit string in tests.
+ * @returns whether the UI cookie was present.
+ */
+export function syncOperatorAccessFromUiCookie(
+  cookieSource: string | undefined = typeof document !== 'undefined'
+    ? document.cookie
+    : undefined,
+): boolean {
+  if (!cookieHasOperatorUiMarker(cookieSource)) return false
+  elevateOperatorAccess()
+  return true
+}
+
+/**
+ * Geometry / Desktop only — never PIN cookies or sessionStorage.
+ * 127 · Desktop ownsHost · xrk-app · private LAN IP · non-browser.
+ */
+export function isLocalHostSurface(options: {
   readonly ownsHost?: boolean
   readonly pageLocation?: { readonly hostname: string; readonly protocol?: string }
 }): boolean {
@@ -62,5 +111,43 @@ export function isPrivilegedClientSurface(options: {
   if (isLoopbackHostname(page.hostname)) return true
   if (isPrivateLanHostname(page.hostname)) return true
   if (page.protocol === 'xrk-app:') return true
+  return false
+}
+
+/**
+ * Whether Settings / native-open UX may use Host-backed scopes.
+ * local plane OR operator-pin UX marker (after real Host PIN set the UI cookie).
+ */
+export function isPrivilegedClientSurface(options: {
+  readonly ownsHost?: boolean
+  readonly pageLocation?: { readonly hostname: string; readonly protocol?: string }
+}): boolean {
+  if (isLocalHostSurface(options)) return true
   return hasOperatorAccessFlag()
+}
+
+/**
+ * Resolve the client access plane (sync UI cookie first for PIN returns).
+ */
+export function resolveClientAccessPlane(options: {
+  readonly ownsHost?: boolean
+  readonly pageLocation?: { readonly hostname: string; readonly protocol?: string }
+  readonly cookieSource?: string
+}): ClientAccessPlane {
+  if (isLocalHostSurface(options)) return 'local'
+  syncOperatorAccessFromUiCookie(options.cookieSource)
+  if (hasOperatorAccessFlag()) return 'operator-pin'
+  return 'remote'
+}
+
+/**
+ * Boot-time privilege resolve for SettingsScope bind: sync UI cookie, then
+ * evaluate. Prefer over a one-shot {@link isPrivilegedClientSurface}.
+ */
+export function resolvePrivilegedClientSurface(options: {
+  readonly ownsHost?: boolean
+  readonly pageLocation?: { readonly hostname: string; readonly protocol?: string }
+  readonly cookieSource?: string
+}): boolean {
+  return resolveClientAccessPlane(options) !== 'remote'
 }

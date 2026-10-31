@@ -6,7 +6,7 @@
  * that owns `settings.plugin.item`. Shipped cards: MCP, shell (`bash`),
  * agent-loop, workspace-inject, web-search, session-telemetry, sandbox,
  * computer-use, browser, voice, image-gen, video-gen, video-analyze,
- * curated-memory, a2a-inbound, external-agent, cron, auto-review,
+ * curated-memory, sunflower-free, a2a-inbound, external-agent, cron, auto-review,
  * memory-embed, Host runtime, process & IM channels.
  * Session header also registers `conversation.view` tools (运行时) and skills
  * (注入). General 「远程」: ssh-remote (restart).
@@ -43,6 +43,7 @@ import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
 import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { SshRemoteCard } from './SshRemoteCard.tsx'
+import { SunflowerFreeCard } from './SunflowerFreeCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
@@ -79,6 +80,7 @@ import {
 import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
+import { SUNFLOWER_FREE_NS, SunflowerFreeCardController } from './sunflower-free-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
@@ -121,6 +123,10 @@ export type { InfoRow } from './info-card-model.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
 export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-controller.ts'
 export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
+export type {
+  SunflowerFreeCardFace,
+  SunflowerFreeCardState,
+} from './sunflower-free-card-controller.ts'
 export type { AutoReviewCardFace, AutoReviewCardState } from './auto-review-card-controller.ts'
 export type { MemoryEmbedCardFace, MemoryEmbedCardState } from './memory-embed-card-controller.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
@@ -181,6 +187,9 @@ export function apply(ctx: ClientContext): void {
   )
   const sshRemote = new SshRemoteCardController(
     ctx.settingsScope.bind({ namespace: SSH_REMOTE_NS }),
+  )
+  const sunflowerFree = new SunflowerFreeCardController(
+    ctx.settingsScope.bind({ namespace: SUNFLOWER_FREE_NS }),
   )
   const sandbox = new SandboxCardController(
     ctx.settingsScope.bind({ namespace: SANDBOX_NS }),
@@ -454,6 +463,7 @@ export function apply(ctx: ClientContext): void {
   pluginCard(VIDEO_GEN_NS, () => videoGen.inject(), VideoGenCard)
   pluginCard(VIDEO_ANALYZE_NS, () => videoAnalyze.inject(), VideoAnalyzeCard)
   pluginCard(CURATED_MEMORY_NS, () => curatedMemory.inject(), CuratedMemoryCard)
+  pluginCard(SUNFLOWER_FREE_NS, () => sunflowerFree.inject(), SunflowerFreeCard)
   pluginCard(A2A_INBOUND_NS, () => a2aInbound.inject(), A2aInboundCard)
   pluginCard(EXTERNAL_AGENT_NS, () => externalAgent.inject(), ExternalAgentCard)
   pluginCard(CRON_NS, () => cron.inject(), CronCard)

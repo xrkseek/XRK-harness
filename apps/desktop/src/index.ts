@@ -320,11 +320,16 @@ export {
   DESKTOP_SPLASH_BG_DARK,
   DESKTOP_SPLASH_BG_LIGHT,
   desktopSplashBackgroundColor,
+  readLocalePreferenceFromHostSettingsJson,
+  readLocalePreferenceFromSettingsYaml,
   readThemePreferenceFromHostSettingsJson,
   readThemePreferenceFromSettingsYaml,
   resolveDesktopColorScheme,
+  resolveDesktopLocalePreference,
+  resolveDesktopShellLocaleTag,
   resolveDesktopThemePreference,
   type DesktopColorScheme,
+  type DesktopLocalePreference,
   type DesktopThemePreference,
 } from "./boot-appearance.js";
 export {

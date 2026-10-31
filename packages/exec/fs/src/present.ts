@@ -187,15 +187,51 @@ export function presentEditResult(
   return { card: "diff", title: call.title, diffs: call.diffs };
 }
 
+/** Codex patch file markers for callView.locations (partial streams OK). */
+const PATCH_FILE_MARKERS = [
+  "*** Add File: ",
+  "*** Delete File: ",
+  "*** Update File: ",
+  "*** Move to: ",
+] as const;
+
+function locationsFromPatchText(patch: string): { path: string }[] {
+  const out: { path: string }[] = [];
+  for (const line of patch.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    for (const marker of PATCH_FILE_MARKERS) {
+      if (!trimmed.startsWith(marker)) continue;
+      const path = trimmed.slice(marker.length).trim();
+      if (path) out.push({ path });
+      break;
+    }
+  }
+  return out;
+}
+
+/** Paths from apply_patch settle text (`update path` / `add` / `delete`). */
+function locationsFromPatchResult(content: string): { path: string }[] {
+  const out: { path: string }[] = [];
+  for (const line of content.split(/\r?\n/)) {
+    const m = /^(?:add|update|delete)\s+(.+)$/i.exec(line.trim());
+    if (!m?.[1]) continue;
+    const path = m[1].trim();
+    if (path) out.push({ path });
+  }
+  return out;
+}
+
 /** Multi-file Codex patch — call view shows patch size, not full body. */
 export function presentPatchCall(args: unknown): GenericCallView | undefined {
   const patch = strArg(asArgs(args), "patch");
   if (!patch) return undefined;
   const lines = patch.split(/\r?\n/).length;
+  const locations = locationsFromPatchText(patch);
   return {
     card: "generic",
     title: `Apply patch (${lines} lines)`,
     kind: "edit",
+    ...(locations.length > 0 ? { locations } : {}),
   };
 }
 
@@ -204,7 +240,7 @@ export function presentPatchCall(args: unknown): GenericCallView | undefined {
  * `meta.code` or content) so the shell can show a failed-patch card.
  */
 export function presentPatchResult(
-  _args: unknown,
+  args: unknown,
   result: PresentableToolResult,
 ): GenericCallView | undefined {
   if (result.isError) {
@@ -226,14 +262,26 @@ export function presentPatchResult(
       rawInput: detail,
     };
   }
-  const title =
+  const content =
     typeof result.content === "string" && result.content.trim()
-      ? result.content.trim().split(/\r?\n/)[0]!
-      : "Apply patch";
+      ? result.content.trim()
+      : "";
+  const title = content
+    ? content.split(/\r?\n/)[0]!
+    : "Apply patch";
+  const fromResult = content ? locationsFromPatchResult(content) : [];
+  const patch = strArg(asArgs(args), "patch");
+  const locations =
+    fromResult.length > 0
+      ? fromResult
+      : patch
+        ? locationsFromPatchText(patch)
+        : [];
   return {
     card: "generic",
     title,
     kind: "edit",
+    ...(locations.length > 0 ? { locations } : {}),
   };
 }
 

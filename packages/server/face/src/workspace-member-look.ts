@@ -48,10 +48,14 @@ export function withBoundMemberLook(
  */
 export function publishWorkspaceChanged(
   runtime: FaceRuntime,
-  row: FaceWorkspaceView,
+  row: FaceWorkspaceView | Omit<FaceWorkspaceView, "sessionIds">,
 ): void {
+  // findAgentHomeByMember returns the stored row without sessionIds; clients
+  // only need look/title refresh here — empty list is fine for that event.
+  const workspace: FaceWorkspaceView =
+    "sessionIds" in row ? row : { ...row, sessionIds: [] };
   runtime.bus.publishHost({
     type: "host/workspace-changed",
-    workspace: withBoundMemberLook(runtime, row),
+    workspace: withBoundMemberLook(runtime, workspace),
   });
 }

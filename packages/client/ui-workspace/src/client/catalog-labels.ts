@@ -55,6 +55,11 @@ export function catalogMemberName(
   seatTitles?: SeatTitles,
 ): string {
   if (id === 'mem_seed_manager' && seatTitles) return seatTitles.manager
+  // Tile / editor name = locale formal only; locked nick `xrkseek` is the
+  // nickname field (Face list overlays it). Full chrome is formal（nick）.
+  if (id === 'mem_seed_xrkseek') {
+    return t('team.catalog.sunflower')
+  }
   const key = CATALOG_NAME_KEYS[id]
   return key !== undefined ? t(key) : storedName
 }

@@ -45,9 +45,17 @@ import {
   parseRosterScope,
   type ListedRosterMember,
 } from "../agent-roster-store.js";
+import {
+  catalogSeedFormalName,
+  sunflowerLockedNickname,
+} from "../catalog-seed-labels.js";
 import { liveMemberPlaybook } from "../agent-roster-tools.js";
 import { captureSessionPlaybook } from "../capture-member-playbook.js";
 import { resolveSessionCwd } from "../session-cwd.js";
+import {
+  readSeatTitles,
+  readUiLocalePreference,
+} from "../seat-titles.js";
 import { permissionSelectFromEvents } from "../permissions.js";
 import { effectiveSessionAgentPreset } from "../session-agent-preset.js";
 import { rosterScopeVisibility } from "../session-tool-copy.js";
@@ -60,8 +68,12 @@ import { asRecord, remoteArgs, type FaceHandler } from "./types.js";
 import { sessionCreate, sessionPrompt } from "./session.js";
 import {
   mintAgentHomeForMember,
+  syncAgentHomePlaybook,
+  agentHomeDir,
   unbindAgentHomeForMember,
 } from "../agent-home.js";
+import { publishWorkspaceChanged } from "../workspace-member-look.js";
+import { resolveHarnessHome } from "../settings-document.js";
 
 function sessionIdOf(payload: unknown): string {
   const args = remoteArgs(payload);
@@ -161,13 +173,26 @@ function listMemberForClient(
   runtime: Parameters<FaceHandler>[0],
   canvasId: string,
   row: ListedRosterMember,
+  locale: ReturnType<typeof readUiLocalePreference>,
+  seatTitles: ReturnType<typeof readSeatTitles>,
 ) {
   // Advanced: surface disk playbook.md (and heal roster) so TeamRoster stays hot.
   const playbook = liveMemberPlaybook(runtime, canvasId, row);
-  const live =
+  let live =
     playbook === row.playbook
       ? row
       : { ...row, playbook };
+  // Catalog seeds: locale formal name (+ locked sunflower nick for chrome).
+  const formal = catalogSeedFormalName(live.id, locale, seatTitles);
+  if (formal) {
+    live = {
+      ...live,
+      name: formal,
+      ...(live.id === SUNFLOWER_MEMBER_ID
+        ? { nickname: sunflowerLockedNickname(locale) }
+        : {}),
+    };
+  }
   if (live.kind !== "advanced" || live.ready) return live;
   const rosterWs = live.scope === "global" ? GLOBAL_ROSTER_ID : canvasId;
   return {
@@ -185,6 +210,12 @@ export const teamList: FaceHandler = async (runtime, _rpcId, payload) => {
   const missing = requireSession(runtime, sessionId);
   if (missing) return missing;
   const workspaceId = canvasWorkspaceIdForSession(runtime, sessionId);
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const locale = readUiLocalePreference(localeUser);
+  const seatTitles = readSeatTitles(presenceUser, locale);
   return {
     ok: true,
     value: {
@@ -198,6 +229,8 @@ export const teamList: FaceHandler = async (runtime, _rpcId, payload) => {
               ? row.workspaceId
               : workspaceId,
             row,
+            locale,
+            seatTitles,
           ),
         ),
     },
@@ -251,7 +284,7 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
       },
     };
   }
-  // Catalog: mint 干员 home; patch costume (经理) / nickname (all but 向日葵).
+  // Catalog: patch costume (经理) / nickname (all but 向日葵). Never mint home.
   // Seed playbook stays frozen.
   if (rawId && isCatalogSeedMemberId(rawId)) {
     let listed = runtime.agentRoster
@@ -292,13 +325,30 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
             };
       }
     }
-    const home = await mintAgentHomeForMember(runtime, listed, canvasId);
+    // Catalog costume / nick edits must not mint 干员工作区 — only explicit
+    // 「添加干员工作区」(mintHome) or import/capture does.
+    const existingHome = runtime.workspaces.findAgentHomeByMember(rawId);
+    if (existingHome && wantAppearance) {
+      publishWorkspaceChanged(runtime, existingHome);
+    }
+    const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+      .value as Record<string, unknown>;
+    const localeUser = runtime.settingsNamespaces.view("locale")
+      .value as Record<string, unknown>;
+    const locale = readUiLocalePreference(localeUser);
+    const seatTitles = readSeatTitles(presenceUser, locale);
     return {
       ok: true,
       value: {
         workspaceId: "global",
-        member: listMemberForClient(runtime, canvasId, listed),
-        homeWorkspaceId: home.workspaceId,
+        member: listMemberForClient(
+          runtime,
+          canvasId,
+          listed,
+          locale,
+          seatTitles,
+        ),
+        ...(existingHome ? { homeWorkspaceId: existingHome.workspaceId } : {}),
       },
     };
   }
@@ -345,14 +395,54 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: "name and playbook required" },
     };
   }
-  // Explicit user add / edit — mint 干员 home (not catalog seed sync).
-  const home = await mintAgentHomeForMember(runtime, member, canvasId);
+  // Mint only when UI explicitly asks (`mintHome` from 添加干员工作区).
+  // Roster create / nick / look edits stay on the project lane — spawning a
+  // tool child in a coding workspace must not invent a 干员工作区 row.
+  const mintHome = args.mintHome === true;
+  const existingHome = runtime.workspaces.findAgentHomeByMember(member.id);
+  if (mintHome) {
+    const home = await mintAgentHomeForMember(runtime, member, canvasId);
+    return {
+      ok: true,
+      value: {
+        workspaceId: scope === "global" ? "global" : canvasId,
+        member,
+        homeWorkspaceId: home.workspaceId,
+      },
+    };
+  }
+  const listed: ListedRosterMember = {
+    ...member,
+    scope,
+    ...(isCatalogSeedMemberId(member.id) ? { catalog: true as const } : {}),
+    ...(scope === "workspace" ? { workspaceId: canvasId } : {}),
+  };
+  if (existingHome) {
+    const abs = agentHomeDir(
+      member.id,
+      runtime.agentRoster.home ?? resolveHarnessHome(runtime),
+    );
+    syncAgentHomePlaybook(abs, liveMemberPlaybook(runtime, canvasId, listed));
+    if (hasAppearance) publishWorkspaceChanged(runtime, existingHome);
+  }
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const locale = readUiLocalePreference(localeUser);
+  const seatTitles = readSeatTitles(presenceUser, locale);
   return {
     ok: true,
     value: {
       workspaceId: scope === "global" ? "global" : canvasId,
-      member,
-      homeWorkspaceId: home.workspaceId,
+      member: listMemberForClient(
+        runtime,
+        canvasId,
+        listed,
+        locale,
+        seatTitles,
+      ),
+      ...(existingHome ? { homeWorkspaceId: existingHome.workspaceId } : {}),
     },
   };
 };

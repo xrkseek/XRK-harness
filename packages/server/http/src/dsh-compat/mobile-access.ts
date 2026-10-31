@@ -3,14 +3,16 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { networkInterfaces } from "node:os";
 import { sendJson } from "./underlying/http-json.js";
 import { createXrkDocStore } from "./underlying/doc-store.js";
 import { httpMethod, isMutatingMethod, parseJsonBody } from "./underlying/http-kit.js";
 import {
+  buildPinPageHtml,
   DEVICE_COOKIE,
   LAN_PIN_COOKIE,
-  LAN_PIN_PAGE_HTML,
   LAN_PIN_PAGE_JS,
   LOGIN_PAGE_HTML,
   LOGIN_PAGE_JS,
@@ -26,8 +28,8 @@ import {
   setAccessPinCookie,
   setMobileSessionCookies,
   WAN_PIN_COOKIE,
-  WAN_PIN_PAGE_HTML,
   WAN_PIN_PAGE_JS,
+  type GateThemePreference,
   type MobileAuthState,
   type MobileStoredDevice,
   type MobileStoredSession,
@@ -75,6 +77,47 @@ export interface MobileAccessOptions {
   readonly ownLanHosts?: readonly string[];
   /** When true (or XRK_TRUST_PROXY), honor X-Forwarded-Host for gate class. */
   readonly trustProxy?: boolean;
+  /**
+   * Live Face `ui-theme.preference` when Host has Face up. Absent → peek
+   * `settings.yaml` under {@link xrkHome}, else `system`.
+   */
+  readonly getThemePreference?: () => GateThemePreference;
+}
+
+/**
+ * Best-effort parse of `ui-theme.preference` (parity with Desktop splash /
+ * `injectBootTheme`) without pulling js-yaml into the HTTP leaf.
+ */
+export function readGateThemePreferenceFromSettingsYaml(
+  text: string,
+): GateThemePreference | undefined {
+  const block = /(?:^|\n)ui-theme:\s*\n((?:[ \t]+[^\n]*\n?)*)/u.exec(text);
+  if (block === null) return undefined;
+  const pref = /(?:^|\n)[ \t]+preference:\s*(dark|light|system)\b/u.exec(
+    block[1] ?? "",
+  );
+  if (pref === null) return undefined;
+  return pref[1] as GateThemePreference;
+}
+
+/** Resolve PIN gate appearance: Face callback → settings.yaml → system. */
+export function resolveGateThemePreference(
+  options: MobileAccessOptions,
+): GateThemePreference {
+  const live = options.getThemePreference?.();
+  if (live === "dark" || live === "light" || live === "system") return live;
+  const home = options.xrkHome?.trim();
+  if (!home) return "system";
+  const yamlPath = join(home, "settings.yaml");
+  if (!existsSync(yamlPath)) return "system";
+  try {
+    return (
+      readGateThemePreferenceFromSettingsYaml(readFileSync(yamlPath, "utf8")) ??
+      "system"
+    );
+  } catch {
+    return "system";
+  }
 }
 
 interface MobileState extends MobileAuthState {
@@ -496,7 +539,11 @@ export async function handleMobileAccessHttp(
     return true;
   }
   if (pathname === "/mobile-access/lan-pin" && (method === "GET" || method === "HEAD")) {
-    sendHtml(res, LAN_PIN_PAGE_HTML, "text/html");
+    sendHtml(
+      res,
+      buildPinPageHtml("lan", resolveGateThemePreference(options)),
+      "text/html",
+    );
     return true;
   }
   if (pathname === "/mobile-access/lan-pin.js" && (method === "GET" || method === "HEAD")) {
@@ -504,7 +551,11 @@ export async function handleMobileAccessHttp(
     return true;
   }
   if (pathname === "/mobile-access/wan-pin" && (method === "GET" || method === "HEAD")) {
-    sendHtml(res, WAN_PIN_PAGE_HTML, "text/html");
+    sendHtml(
+      res,
+      buildPinPageHtml("wan", resolveGateThemePreference(options)),
+      "text/html",
+    );
     return true;
   }
   if (pathname === "/mobile-access/wan-pin.js" && (method === "GET" || method === "HEAD")) {

@@ -112,7 +112,8 @@ describe("agent-home + identity session", () => {
     expect(deleted.ok).toBe(true);
     expect(runtime.workspaces.get(home.workspaceId)).toBeUndefined();
     expect(runtime.workspaces.workspaceIdOf(sessionId)).toBeUndefined();
-    expect(runtime.sessionIdentities.get(sessionId)).toBeUndefined();
+    // Keep identity so session.list memberId routes the orphan to 干员「未分组」.
+    expect(runtime.sessionIdentities.get(sessionId)?.memberId).toBe(member!.id);
     const listed = runtime.workspaces.list(runtime.store.list());
     expect(listed.archivedSessionIds).not.toContain(sessionId);
     // Unbound → 干员「未分组」; still absent from every workspace row.
@@ -145,7 +146,7 @@ describe("agent-home + identity session", () => {
     );
     await unbindAgentHomeForMember(runtime, member!.id);
     expect(runtime.workspaces.get(home.workspaceId)).toBeUndefined();
-    expect(runtime.sessionIdentities.get(sessionId)).toBeUndefined();
+    expect(runtime.sessionIdentities.get(sessionId)?.memberId).toBe(member!.id);
     expect(runtime.workspaces.workspaceIdOf(sessionId)).toBeUndefined();
     expect(
       runtime.workspaces.list(runtime.store.list()).archivedSessionIds,

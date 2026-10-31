@@ -49,6 +49,7 @@ export function PresentRow({ toolName, block, cwd, home, openFile, inspect, t }:
       errorSummary={model.errorSummary}
       state={model.state}
       filePath={model.filePath}
+      fileLinks={model.fileLinks}
       onOpenFile={openFile}
       inspect={inspect}
       forceExpanded

@@ -43,6 +43,7 @@ export function RiskConfirmation({
       open={open}
       onClose={onCancel}
       title={title}
+      layout="inset"
       className={css.confirmation ?? ''}
       contentClassName={css.confirmationContent ?? ''}
       footer={(

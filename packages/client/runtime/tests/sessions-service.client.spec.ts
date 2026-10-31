@@ -737,6 +737,46 @@ describe('fork', () => {
   })
 })
 
+describe('truncate local cut', () => {
+  it('trims an open session without a full resync empty-flash', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const session = b.svc.binding(sid('s1'))!.session
+    const turnA = [
+      { seq: 1, time: 1, type: 'turn/start', data: { turn: 0 } },
+      { seq: 2, time: 2, type: 'user/message', surfaceOp: 'append', data: { content: [{ type: 'text', text: 'a' }], source: { kind: 'user' } } },
+      { seq: 3, time: 3, type: 'turn/end', data: { turn: 0, reason: { kind: 'completed' } } },
+    ]
+    const turnB = [
+      { seq: 4, time: 4, type: 'turn/start', data: { turn: 1 } },
+      { seq: 5, time: 5, type: 'user/message', surfaceOp: 'append', data: { content: [{ type: 'text', text: 'b' }], source: { kind: 'user' } } },
+      { seq: 6, time: 6, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+    ]
+    b.api.onHistory = () => Promise.resolve(ok({
+      events: [...turnA, ...turnB].map(event => ({ event })) as never[],
+      hasMore: false,
+      projections: { asOfSeq: 6, values: { title: 'both' } },
+    }))
+    await session.open()
+    expect(session.getSnapshot().openState).toBe('open')
+    const historyBefore = b.api.callsOf('session.history').length
+
+    b.api.onTruncate = () => Promise.resolve(ok({
+      sessionId: sid('s1'),
+      eventCount: 3,
+      projections: { asOfSeq: 3, values: { title: 'kept' } },
+    }))
+
+    await b.svc.truncate({ sessionId: sid('s1'), beforeSeq: 3 })
+    expect(session.getSnapshot().openState).toBe('open')
+    expect(session.projections.get('title')).toBe('kept')
+    expect(b.api.callsOf('session.truncate')).toHaveLength(1)
+    // Truncate response carries the reseal baseline — no follow-up history pull.
+    expect(b.api.callsOf('session.history').length).toBe(historyBefore)
+  })
+})
+
 describe('scope lifecycle rides the list mirror (entity parity: no client-side pre-birth)', () => {
   it('a session-added frame births the row (blank) and makes the scope resolvable; removal prunes it', async () => {
     const b = bench()
@@ -837,12 +877,18 @@ describe('blank mirror', () => {
 })
 
 describe('coverage tails (branch duals)', () => {
-  it('displayTitleOf falls back to the id for empty and separator-only cwd', async () => {
+  it('displayTitleOf falls back to the id when untitled (never cwd basename)', async () => {
     const b = bench()
-    await feedList(b, [{ id: 'no-base', cwd: '///' }, { id: 'empty-cwd', cwd: '' }])
+    await feedList(b, [
+      { id: 'no-base', cwd: '///' },
+      { id: 'empty-cwd', cwd: '' },
+      { id: 'named-cwd', cwd: '/home/u/function' },
+    ])
     const { byId } = b.svc.list.getSnapshot()
     expect(byId[sid('no-base')]?.displayTitle).toBe('no-base')
     expect(byId[sid('empty-cwd')]?.displayTitle).toBe('empty-cwd')
+    // Untitled under a workspace folder must not mirror the group label.
+    expect(byId[sid('named-cwd')]?.displayTitle).toBe('named-cwd')
     expect(byId[sid('no-base')]?.title).toBeUndefined()
   })
 

@@ -26,15 +26,35 @@ describe("mobile-gate-kit", () => {
     expect(hostOnly("[::1]:8099")).toBe("::1");
   });
 
-  it("ignores X-Forwarded-Host unless trustProxy", () => {
-    const req = {
+  it("ignores X-Forwarded-Host unless trustProxy; never lets XFH downgrade to loopback", () => {
+    const lanWithForgedLoopback = {
       headers: {
         host: "10.79.1.2:8787",
         "x-forwarded-host": "127.0.0.1",
       },
     } as import("node:http").IncomingMessage;
-    expect(effectiveRequestHost(req)).toBe("10.79.1.2");
-    expect(effectiveRequestHost(req, true)).toBe("127.0.0.1");
+    expect(effectiveRequestHost(lanWithForgedLoopback)).toBe("10.79.1.2");
+    // Forged loopback XFH must not skip the PIN plane on a LAN/public Host.
+    expect(effectiveRequestHost(lanWithForgedLoopback, true)).toBe("10.79.1.2");
+
+    const wanWithForgedLoopback = {
+      headers: {
+        host: "demo.r6.cpolar.cn",
+        "x-forwarded-host": "127.0.0.1",
+      },
+    } as import("node:http").IncomingMessage;
+    expect(effectiveRequestHost(wanWithForgedLoopback, true)).toBe(
+      "demo.r6.cpolar.cn",
+    );
+
+    // Reverse-proxy WAN: loopback listen + public XFH → classify as WAN (need PIN).
+    const proxyWan = {
+      headers: {
+        host: "127.0.0.1:8787",
+        "x-forwarded-host": "demo.r6.cpolar.cn",
+      },
+    } as import("node:http").IncomingMessage;
+    expect(effectiveRequestHost(proxyWan, true)).toBe("demo.r6.cpolar.cn");
   });
 
   it("exempts health and mobile-access surfaces", () => {

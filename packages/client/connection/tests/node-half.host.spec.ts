@@ -187,6 +187,16 @@ describe('connection node half', () => {
       expect(denied.state.status).toBe(403)
       expect(denied.state.body).toBe('forbidden')
     }
+    // SPA UX marker alone must not unlock credentials / settings.
+    const uiOnly = fakeResponse()
+    await routes[0]!.handler(
+      fakeRequest(
+        { host: 'harness.example', cookie: 'xrk_operator_ui=1' },
+        `${API_PATH}/credentials.describe`,
+      ),
+      uiOnly.response,
+    )
+    expect(uiOnly.state.status).toBe(403)
     const read = fakeResponse()
     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
     expect(read.state.status).not.toBe(403)

@@ -160,6 +160,44 @@ describe("FaceTitleController", () => {
     titles.rename(session.id, "  My Session  ");
     expect(registry.snapshot(session.id).values.title).toBe("My Session");
   });
+
+  it("ensureFallbackFromLog backfills when hydrate skipped live title", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const registry = createFaceProjectionRegistry({
+      getEvents: (id) => store.get(id).events,
+    });
+    installDefaultFaceProjections(registry);
+
+    const titles = new FaceTitleController({
+      append: (id, ev) => {
+        const frozen = store.append(id, ev);
+        const seq = store.get(id).events.length;
+        registry.drive(id, frozen, seq);
+        return frozen;
+      },
+      getEvents: (id) => store.get(id).events,
+      projections: registry,
+    });
+
+    // Log has a human opener but no session/title (replay path skipped fallback).
+    const msg = store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t",
+      content: "第一轮开场还在日志里",
+      source: { kind: "user" },
+    });
+    registry.drive(session.id, msg, 1);
+    expect(registry.snapshot(session.id).values.title).toBeNull();
+
+    titles.ensureFallbackFromLog(session.id);
+    expect(registry.snapshot(session.id).values.title).toMatch(/第一轮开场/);
+    // Idempotent — second call does not append another title.
+    const before = store.get(session.id).events.length;
+    titles.ensureFallbackFromLog(session.id);
+    expect(store.get(session.id).events.length).toBe(before);
+  });
 });
 
 describe("createFaceRuntime projection wire", () => {

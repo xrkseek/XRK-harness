@@ -201,6 +201,7 @@ export function AddAgentPanel({
       playbook: selected.playbook,
       role: selected.role,
       scope: selected.scope === 'global' ? 'global' : 'workspace',
+      mintHome: true,
       ...(selected.brief ? { brief: selected.brief } : {}),
       ...(selected.inject === 'subagent' || selected.inject === 'minimal'
         ? { inject: selected.inject }

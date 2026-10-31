@@ -65,6 +65,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.0-rc.3',
+    date: '2026-10-30',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '席位底层：内置干员多语正式名；向日葵正式名 + 昵称 xrkseek；概况 经理 · 向日葵（xrkseek）。',
+        en: 'Seat foundation: locale catalog formals; sunflower formal + nick xrkseek; Overview 经理 · 向日葵（xrkseek）.',
+      },
+      {
+        zh: '概况 / 干员团队：正式名（昵称）；席位卡短签不溢出；改昵称即时上球，改装扮不清昵称。',
+        en: 'Overview / Team: formal（nick）; seat tiles short + contained; nick live, look-only keeps nick.',
+      },
+      {
+        zh: '模型设置拖动提供方顺序后 Default Model 卡不再消失（软刷新）。',
+        en: 'Models: provider reorder no longer unmounts Default Model (soft refresh).',
+      },
+      {
+        zh: '对话「第 N 轮 插话」；后台子代理父会话镜像延到 prompt/promoted；席位信道前缀。',
+        en: 'Chat steer round marks; background-subagent parent mirror waits for prompt/promoted; seat-channel prefixes.',
+      },
+      {
+        zh: '向日葵免费卡 · 策展记忆 live · 移动端 PIN / 特权连接面。完整清单见 docs/releases/v0.7.0-rc.3.md。',
+        en: 'Sunflower-free card · curated-memory live · mobile PIN / privileged plane. Full list in docs/releases/v0.7.0-rc.3.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.0-rc.2',
     date: '2026-10-30',
     title: {

@@ -246,10 +246,13 @@ export async function runPluginCliMutateUi(
 export type RunPluginInstallUiOptions = {
   readonly spec: string;
   readonly registry?: string;
+  /** Optional HTTP(S) proxy for this pack only (`xrkh plugin add --proxy`). */
+  readonly proxy?: string;
   readonly install: (
     spec: string,
     registry?: string,
     requestId?: string,
+    proxy?: string,
   ) => Promise<PluginInstallLog>;
   readonly subscribeInstallLog?: (
     requestId: string,
@@ -258,20 +261,38 @@ export type RunPluginInstallUiOptions = {
   readonly fallbackError?: string;
 };
 
+/** Build the settled CLI command line shown in the install log. */
+export function formatPluginAddCommand(options: {
+  readonly spec: string;
+  readonly registry?: string;
+  readonly proxy?: string;
+}): string {
+  const parts = ["xrkh plugin add"];
+  const registry = options.registry?.trim();
+  const proxy = options.proxy?.trim();
+  if (registry) parts.push("--registry", registry);
+  if (proxy) parts.push("--proxy", proxy);
+  parts.push(options.spec.trim());
+  return parts.join(" ");
+}
+
 /** Install wrapper over {@link runPluginCliMutateUi}. */
 export async function runPluginInstallUi(
   options: RunPluginInstallUiOptions,
 ): Promise<void> {
   const spec = options.spec.trim();
   if (!spec) return;
-  const command = options.registry
-    ? `xrkh plugin add --registry ${options.registry} ${spec}`
-    : `xrkh plugin add ${spec}`;
+  const command = formatPluginAddCommand({
+    spec,
+    ...(options.registry !== undefined ? { registry: options.registry } : {}),
+    ...(options.proxy !== undefined ? { proxy: options.proxy } : {}),
+  });
   await runPluginCliMutateUi({
     kind: "install",
     spec,
     command,
-    run: (requestId) => options.install(spec, options.registry, requestId),
+    run: (requestId) =>
+      options.install(spec, options.registry, requestId, options.proxy),
     ...(options.subscribeInstallLog !== undefined
       ? { subscribeInstallLog: options.subscribeInstallLog }
       : {}),

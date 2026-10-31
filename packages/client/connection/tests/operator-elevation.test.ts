@@ -1,8 +1,12 @@
 /**
- * Privileged-method elevation via XRK_API_KEY (Bearer / x-api-key).
+ * Privileged-method elevation via XRK_API_KEY (Bearer / x-api-key) and PIN elevator.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { apiKeyElevatesRequest } from "../src/operator-elevation.ts";
+import {
+  apiKeyElevatesRequest,
+  installOperatorPinElevator,
+  operatorPinElevatesRequest,
+} from "../src/operator-elevation.ts";
 
 describe("apiKeyElevatesRequest", () => {
   const previous = process.env.XRK_API_KEY;
@@ -10,6 +14,7 @@ describe("apiKeyElevatesRequest", () => {
   afterEach(() => {
     if (previous === undefined) delete process.env.XRK_API_KEY;
     else process.env.XRK_API_KEY = previous;
+    installOperatorPinElevator(undefined);
   });
 
   it("rejects when XRK_API_KEY is unset", () => {
@@ -50,5 +55,40 @@ describe("apiKeyElevatesRequest", () => {
         }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("installOperatorPinElevator", () => {
+  afterEach(() => {
+    installOperatorPinElevator(undefined);
+  });
+
+  it("stays false until a Host PIN elevator is installed", () => {
+    const request = new Request("http://harness.example/api/settings.describe", {
+      headers: { cookie: "xrk_operator_ui=1" },
+    });
+    expect(operatorPinElevatesRequest(request)).toBe(false);
+  });
+
+  it("never treats the SPA UI cookie as Host elevation by itself", () => {
+    installOperatorPinElevator((req) => {
+      // Product Host must verify HttpOnly digests; UI marker is ignored.
+      const cookie = req.headers.get("cookie") ?? "";
+      return cookie.includes("dsh_ma_wan=");
+    });
+    expect(
+      operatorPinElevatesRequest(
+        new Request("http://harness.example/api/x", {
+          headers: { cookie: "xrk_operator_ui=1" },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      operatorPinElevatesRequest(
+        new Request("http://harness.example/api/x", {
+          headers: { cookie: "dsh_ma_wan=deadbeef; xrk_operator_ui=1" },
+        }),
+      ),
+    ).toBe(true);
   });
 });

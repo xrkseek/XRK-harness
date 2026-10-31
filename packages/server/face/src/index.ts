@@ -178,10 +178,20 @@ export {
   formatRosterCatalog,
   catalogMemberWriteProblem,
   displayMemberName,
+  SUNFLOWER_FORMAL_NAME,
+  SUNFLOWER_NICKNAME,
   type AgentRosterMember,
   type ListedRosterMember,
   type MemberToolPolicy,
 } from "./agent-roster-store.js";
+export {
+  catalogSeedDisplayLabel,
+  catalogSeedFormalName,
+  isCatalogSeedLabelId,
+  sunflowerDisplayLabel,
+  sunflowerFormalName,
+  sunflowerLockedNickname,
+} from "./catalog-seed-labels.js";
 export {
   bindCanvasTools,
   canvasWorkspaceIdForSession,
@@ -227,8 +237,19 @@ export {
 export {
   createSeatIdentityFragmentProvider,
   formatSeatIdentity,
+  resolveChildParentSeat,
   formatNamedSeat,
+  bossSeatLabelFromRuntime,
 } from "./seat-identity.js";
+export {
+  formatSeatChannelPrefix,
+  maybePrefixDelegatedChildContent,
+  maybePrefixDelegatedChildText,
+  parseSeatChannel,
+  resolveSeatChannelLabel,
+  withSeatChannelPrefix,
+  type SeatChannel,
+} from "./seat-channel.js";
 export {
   DEFAULT_SEAT_TITLE_SCHEME,
   SEAT_TITLE_SCHEMES,

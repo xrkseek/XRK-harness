@@ -124,6 +124,12 @@ export const en = {
   resetDefaultModel: 'Restore composition default',
   defaultModelSaveFailed: 'Could not save the default model',
   reorderHint: 'Press and hold a provider, then drag to reorder the list.',
+  sunflowerOpenCodeProxy: 'OpenCode proxy',
+  sunflowerOpenCodeProxyPlaceholder: 'auto · http://127.0.0.1:7897 · off',
+  sunflowerOpenCodeProxyHint: 'After direct fails: empty/auto probes loopback; URL uses that proxy; off stays direct.',
+  sunflowerKiloProxy: 'Kilo proxy',
+  sunflowerKiloProxyPlaceholder: 'Empty = direct · URL · off',
+  sunflowerKiloProxyHint: 'Kilo lane only (default direct). Same values as OpenCode proxy.',
 }
 
 /** Japanese dictionary, checked complete against the zh key set. */
@@ -245,6 +251,12 @@ export const ja = {
   resetDefaultModel: 'コンポジションのデフォルトに戻す',
   defaultModelSaveFailed: 'デフォルトモデルを保存できませんでした',
   reorderHint: 'プロバイダを長押ししてドラッグし、一覧の順序を変更します。',
+  sunflowerOpenCodeProxy: 'OpenCode プロキシ',
+  sunflowerOpenCodeProxyPlaceholder: 'auto · http://127.0.0.1:7897 · off',
+  sunflowerOpenCodeProxyHint: '直連失敗後: 空/auto はループバック検出、URL はそのプロキシ、off は直連のみ。',
+  sunflowerKiloProxy: 'Kilo プロキシ',
+  sunflowerKiloProxyPlaceholder: '空 = 直連 · URL · off',
+  sunflowerKiloProxyHint: 'Kilo レーンのみ（既定は直連）。値は OpenCode プロキシと同じ。',
   welcomeTitle: WELCOME_NOTICE_COPY.ja.title,
   welcomeBody: WELCOME_NOTICE_COPY.ja.body,
   welcomeContinue: WELCOME_NOTICE_COPY.ja.continueLabel,
@@ -377,4 +389,10 @@ export const zh: { [Key in keyof typeof en]: string } = {
   resetDefaultModel: '恢复组合默认',
   defaultModelSaveFailed: '无法保存默认模型',
   reorderHint: '长按提供方后拖动，可调整列表顺序。',
+  sunflowerOpenCodeProxy: 'OpenCode 代理',
+  sunflowerOpenCodeProxyPlaceholder: 'auto · http://127.0.0.1:7897 · off',
+  sunflowerOpenCodeProxyHint: '直连失败后：留空/auto 探测本机回环；URL 用该代理；off 只直连。',
+  sunflowerKiloProxy: 'Kilo 代理',
+  sunflowerKiloProxyPlaceholder: '空=直连 · URL · off',
+  sunflowerKiloProxyHint: '仅 Kilo 车道（默认直连）。取值与 OpenCode 代理相同。',
 }

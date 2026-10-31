@@ -22,9 +22,18 @@ STAGE = Path(
         "apps/desktop/.desktop-build/targets/win-x64/upload-stage-0.7.0-rc.1",
     )
 )
+# Local-only secret file (gitignored); avoids putting the password on the argv.
+_PASSWORD_FILE = Path(__file__).resolve().parents[1] / (
+    ".agents/skills/xrk-desktop-update-feed/.agt-password"
+)
+if not PASSWORD and _PASSWORD_FILE.is_file():
+    PASSWORD = _PASSWORD_FILE.read_text(encoding="utf-8").strip()
 
 if not PASSWORD:
-    print("XRK_AGT_SSH_PASSWORD missing", file=sys.stderr)
+    print(
+        "XRK_AGT_SSH_PASSWORD missing (or .agents/skills/xrk-desktop-update-feed/.agt-password)",
+        file=sys.stderr,
+    )
     sys.exit(2)
 
 bin_dir = STAGE / "desktop" / "bin" / "win-x64"

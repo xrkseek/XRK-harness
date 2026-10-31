@@ -4,6 +4,9 @@ import { JsonBlock } from '@xrkseek/client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { PendingSubmissionBubble, userMessageHasReaderSurface } from './MessageItem.tsx'
+import {
+  roundLabelLocaleKey, userRoundLabelKind, type RoundLabelKind,
+} from './round-label.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
@@ -13,6 +16,8 @@ interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly t: ChatViewSlotProps['t']
   /** Whole-log 轮次 by Host turn; opener paints 「第 N 轮」, 插话 paints 「第 N 轮 插话」. */
   readonly roundByTurn: ReadonlyMap<number, number>
+  /** Loaded opener node key per Host turn — non-openers share the round as 插话. */
+  readonly openerKeyByTurn: ReadonlyMap<number, string>
 }
 
 type RoutedChatNodeOwner = {
@@ -21,7 +26,7 @@ type RoutedChatNodeOwner = {
 
 /** Subscribe and dispatch one stable Context key without observing sibling Nodes. */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, selectedCallId, cwd, roundByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
+  nodeKey, selectedCallId, cwd, roundByTurn, openerKeyByTurn, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
   steer, loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: ChatNodeSeatProps) {
   const node = useSession(snapshot => snapshot.chat.nodes.get(nodeKey))
@@ -73,10 +78,17 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   // bringing the grace back (git history: use-post-stream-live.ts).
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
   const round = hostTurn === undefined ? undefined : roundByTurn.get(hostTurn)
-  const roundLabelKey = routedNode.kind === 'steering'
-    ? 'chat.turnNavigation.steer'
+  const sourceKind = routedNode.data !== null && typeof routedNode.data === 'object'
+    && 'source' in routedNode.data
+    && routedNode.data.source !== null
+    && typeof routedNode.data.source === 'object'
+    && 'kind' in routedNode.data.source
+    ? String((routedNode.data.source as { kind: unknown }).kind)
+    : undefined
+  const labelKind: RoundLabelKind | null = routedNode.kind === 'steering'
+    ? 'steer'
     : routedNode.kind === 'user'
-      ? 'chat.turnNavigation.turn'
+      ? userRoundLabelKind(routedNode.key, hostTurn, openerKeyByTurn, sourceKind)
       : null
   return (
     <div
@@ -87,8 +99,8 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       data-chat-turn={turn}
       data-chat-round={round}
     >
-      {roundLabelKey !== null && round !== undefined ? (
-        <div className={css.roundLabel}>{t(roundLabelKey, { turn: round })}</div>
+      {labelKind !== null && round !== undefined ? (
+        <div className={css.roundLabel}>{t(roundLabelLocaleKey(labelKind), { turn: round })}</div>
       ) : null}
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,
@@ -111,14 +123,16 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
  * when the log write replaces the echo.
  */
 export const UserSendFlow = memo(function UserSendFlow({
-  flowKey, nodeKey, submission, round, onWithdraw,
+  flowKey, nodeKey, submission, round, roundLabel = 'turn', onWithdraw,
   selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
   loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
-}: Omit<ChatNodeSeatProps, 'nodeKey' | 'roundByTurn'> & {
+}: Omit<ChatNodeSeatProps, 'nodeKey' | 'roundByTurn' | 'openerKeyByTurn'> & {
   readonly flowKey: string
   readonly nodeKey?: string
   readonly submission?: PendingSubmission
   readonly round: number
+  /** Echo defaults to opener wording; durable mid-turn handoff passes `steer`. */
+  readonly roundLabel?: RoundLabelKind
   readonly onWithdraw?: () => void
 }) {
   const node = useSession(snapshot => (
@@ -150,7 +164,7 @@ export const UserSendFlow = memo(function UserSendFlow({
       data-chat-round={round}
       data-send-flow={flowKey}
     >
-      <div className={css.roundLabel}>{t('chat.turnNavigation.turn', { turn: round })}</div>
+      <div className={css.roundLabel}>{t(roundLabelLocaleKey(roundLabel), { turn: round })}</div>
       {routedOwner !== null && routed !== undefined ? renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routed.kind,
         hookContext: nodeKey ?? flowKey,

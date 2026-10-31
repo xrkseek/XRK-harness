@@ -18,6 +18,7 @@ import {
   parseMemberToolPolicy,
   parseRosterScope,
   rosterPublicFields,
+  type AgentRosterMember,
   type ListedRosterMember,
   type MemberInject,
   type MemberToolPolicy,
@@ -187,9 +188,11 @@ function adoptLiveAdvancedPlaybook(
 export function liveMemberPlaybook(
   runtime: FaceRuntime,
   canvasId: string,
-  row: ListedRosterMember,
+  row: AgentRosterMember | ListedRosterMember,
 ): string {
-  return adoptLiveAdvancedPlaybook(runtime, canvasId, row).playbook;
+  const listed: ListedRosterMember =
+    "scope" in row ? row : { ...row, scope: "workspace" };
+  return adoptLiveAdvancedPlaybook(runtime, canvasId, listed).playbook;
 }
 
 function enrichListedMember(

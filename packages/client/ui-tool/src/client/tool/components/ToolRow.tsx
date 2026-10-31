@@ -9,7 +9,7 @@
 // Expand state is component-local view state; initial open follows Settings
 // `ui-conversation.toolsDefaultExpanded` (ToolDefaultExpandedContext).
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   CodeBlock, DiffBlock, DisclosureRow, InspectAction, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
@@ -23,7 +23,7 @@ import type { ImageCardModel } from '../models/image-card-model.ts'
 import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-model.ts'
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import { terminalBlockLabels, type TerminalCardModel } from '../models/terminal-card-model.ts'
-import type { ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
+import type { ToolFileLink, ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
 import { useToolExpandState } from '../tool-default-expanded.ts'
 import css from './ToolRow.module.css'
 
@@ -77,6 +77,11 @@ export interface ToolRowProps {
   web?: WebBlockProps | null | undefined
   state: ToolRowState
   filePath?: string | undefined
+  /**
+   * Multi-file openable links (present deliverables). When set with
+   * `onOpenFile`, each path renders as its own underlined control.
+   */
+  fileLinks?: readonly ToolFileLink[] | undefined
   onOpenFile?: ((path: string) => void) | undefined
   inspect?: (() => void) | undefined
   /**
@@ -160,6 +165,7 @@ export function ToolRow({
   web,
   state,
   filePath,
+  fileLinks,
   onOpenFile,
   inspect,
   forceExpanded = false,
@@ -184,7 +190,10 @@ export function ToolRow({
   const failureLine = state === 'error' ? errorSummary ?? null : null
   const summaryText = failureLine ?? summary
   const suffix = failureLine === null ? summarySuffix ?? null : null
-  const fileLink = filePath !== undefined && onOpenFile !== undefined && failureLine === null
+  const multiLinks = fileLinks !== undefined && fileLinks.length > 0
+    && onOpenFile !== undefined && failureLine === null
+  const fileLink = !multiLinks
+    && filePath !== undefined && onOpenFile !== undefined && failureLine === null
   // Peek while running too — i2i rows carry reference thumbs before the result lands.
   const thumbAttachment = !open
     && (state === 'ok' || state === 'running')
@@ -196,10 +205,15 @@ export function ToolRow({
     event.stopPropagation()
     if (filePath !== undefined) onOpenFile?.(filePath)
   }
+  const openLinkedFile = (path: string) => (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    onOpenFile?.(path)
+  }
   const fileLinkKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
   }
   const cardBody = variant === 'code' ? null : body
+  const showSummarySlot = multiLinks || summaryText !== ''
   return (
     <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
@@ -216,16 +230,32 @@ export function ToolRow({
         keepContentWhenOpen
         onToggle={forceExpanded ? () => {} : toggleExpand}
         collapsedContent={(
-          (thumbAttachment !== undefined && loadImage !== undefined) || summaryText !== ''
+          (thumbAttachment !== undefined && loadImage !== undefined) || showSummarySlot
         ) ? (
           <>
             {thumbAttachment !== undefined && loadImage !== undefined
               ? <CollapsedThumb attachment={thumbAttachment} loadImage={loadImage} />
               : null}
-            {summaryText !== '' && (
+            {showSummarySlot && (
               <>
                 <span className={css.sep} aria-hidden />
-                {fileLink ? (
+                {multiLinks ? (
+                  <span className={css.fileLinks}>
+                    {fileLinks!.map((link, i) => (
+                      <Fragment key={`${link.path}\0${String(i)}`}>
+                        {i > 0 ? <span className={css.fileLinkSep} aria-hidden>·</span> : null}
+                        <button
+                          type="button"
+                          className={css.fileLinkItem}
+                          onClick={openLinkedFile(link.path)}
+                          onKeyDown={fileLinkKeyDown}
+                        >
+                          {link.label}
+                        </button>
+                      </Fragment>
+                    ))}
+                  </span>
+                ) : fileLink ? (
                   <button
                     type="button"
                     className={css.fileLink}

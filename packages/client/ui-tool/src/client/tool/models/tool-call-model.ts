@@ -113,6 +113,14 @@ export interface AutoReviewDenial {
   reason: string | null
 }
 
+/** Openable path + display label for a multi-file header link (present). */
+export interface ToolFileLink {
+  /** Workspace / absolute path passed to `onOpenFile`. */
+  path: string
+  /** Abbreviated label shown in the row header. */
+  label: string
+}
+
 /** Everything ToolRow needs, derived once from the frozen slice. */
 export interface ToolRowModel {
   variant: ToolRowVariant
@@ -124,6 +132,11 @@ export interface ToolRowModel {
    * relative values against the session cwd before opening.
    */
   filePath: string | undefined
+  /**
+   * Every deliverable path as its own openable link (present multi-file).
+   * When set, ToolRow prefers these over a single `filePath` + summary link.
+   */
+  fileLinks?: readonly ToolFileLink[] | undefined
   /**
    * Expanded-body input text (pretty args); null = no input section.
    *
@@ -329,11 +342,56 @@ function callViewPaths(block: ToolCallBlock): string[] {
   return paths
 }
 
-/** One path, or first path plus a remainder count (PresentRow-style). */
+/** All deliverable paths joined for plain-summary / a11y fallback. */
 function formatPresentSummary(paths: readonly string[]): string | undefined {
   if (paths.length === 0) return undefined
-  if (paths.length === 1) return paths[0]
-  return `${paths[0]} +${String(paths.length - 1)}`
+  return paths.join(' · ')
+}
+
+/** Codex patch file markers (Add/Delete/Update/Move). Ignore spurious args.path. */
+const PATCH_FILE_MARKERS = [
+  '*** Add File: ',
+  '*** Delete File: ',
+  '*** Update File: ',
+  '*** Move to: ',
+] as const
+
+/** Paths declared in apply_patch `patch` text (works on partial streams). */
+function pathsFromPatchText(patch: string): string[] {
+  const out: string[] = []
+  for (const line of patch.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    for (const marker of PATCH_FILE_MARKERS) {
+      if (!trimmed.startsWith(marker)) continue
+      const path = trimmed.slice(marker.length).trim()
+      if (path !== '') out.push(path)
+      break
+    }
+  }
+  return out
+}
+
+/** Paths from apply_patch args.patch, or a closed `patch` field mid-stream. */
+function applyPatchArgsPaths(parsed: unknown, argsRaw: string): string[] {
+  if (typeof parsed === 'object' && parsed !== null) {
+    const patch = (parsed as { patch?: unknown }).patch
+    if (typeof patch === 'string' && patch !== '') return pathsFromPatchText(patch)
+  }
+  const partial = readPartialStringFields(argsRaw, ['patch'])
+  if (partial !== undefined && partial !== '') return pathsFromPatchText(partial)
+  return []
+}
+
+/** Paths from settled apply_patch result lines (`update path` / `add` / `delete`). */
+function applyPatchResultPaths(text: string): string[] {
+  const out: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^(?:add|update|delete)\s+(.+)$/i.exec(line.trim())
+    if (m?.[1] === undefined) continue
+    const path = m[1].trim()
+    if (path !== '') out.push(path)
+  }
+  return out
 }
 
 function deriveBody(variant: ToolRowVariant, argsRaw: string, parsed: unknown): string | null {
@@ -384,13 +442,65 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
       ?? (argsRaw === '' ? '' : displayPathSummary(firstLine(argsRaw), cwd, home))
     const output = done ? (resultText(block) || null) : null
     const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
+    const fileLinks = resolved.length > 0
+      ? resolved.map((path, i) => ({ path, label: displayPaths[i]! }))
+      : undefined
     return {
       variant,
       title,
       summary: base,
       filePath: resolved[0],
+      fileLinks,
       // Multi-file: path list as the expand body; single-file uses the path link.
       body: displayPaths.length > 1 ? displayPaths.join('\n') : null,
+      output,
+      errorSummary,
+      autoReviewDenial: deriveAutoReviewDenial(block),
+      state,
+    }
+  }
+
+  // apply_patch: schema is `{ patch }` only. Models sometimes also send a junk
+  // `path` (e.g. "x"); never use SUMMARY_KEYS / deriveFilePath for that — take
+  // paths from patch markers, then callView.locations, then result lines.
+  if (toolName === 'apply_patch') {
+    const output = done ? (resultText(block) || null) : null
+    const fromPatch = applyPatchArgsPaths(args, argsRaw)
+    const fromView = callViewPaths(block)
+    const fromResult = output !== null ? applyPatchResultPaths(output) : []
+    const resolved = fromPatch.length > 0
+      ? fromPatch
+      : fromView.length > 0
+        ? fromView
+        : fromResult
+    const displayPaths = resolved.map(path => displayPathSummary(path, cwd, home))
+    const pathSummary = formatPresentSummary(displayPaths)
+    const preparingTitle = (() => {
+      const view = block.callView
+      if (view === null || typeof view !== 'object') return ''
+      const viewTitle = (view as { title?: unknown }).title
+      return typeof viewTitle === 'string' && viewTitle.trim() !== '' ? viewTitle.trim() : ''
+    })()
+    const base = pathSummary
+      ?? (argsRaw === '' ? preparingTitle : '')
+    const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
+    const fileLinks = resolved.length > 0
+      ? resolved.map((path, i) => ({ path, label: displayPaths[i]! }))
+      : undefined
+    const readBody = onceValue(() => (
+      displayPaths.length > 1
+        ? displayPaths.join('\n')
+        : deriveBody(variant, argsRaw, args)
+    ))
+    return {
+      variant,
+      title,
+      summary: base,
+      filePath: resolved[0],
+      fileLinks,
+      get body(): string | null {
+        return readBody()
+      },
       output,
       errorSummary,
       autoReviewDenial: deriveAutoReviewDenial(block),

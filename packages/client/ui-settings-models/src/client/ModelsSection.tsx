@@ -12,7 +12,7 @@
  * re-renders from pushed invalidations or the post-apply reload.
  */
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { IApiClient } from '@xrkseek/xrk-api-remotes/client'
 import { Button, IconPlusOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
@@ -140,6 +140,8 @@ export async function removeProviderProfile(
 export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   if (anyUsable) return false
   if (row.entry.settingsPath.length > 0) return false
+  // Keyless brands (e.g. sunflower-free egress) have no credential setup card.
+  if (row.apiKeyEnv === undefined) return false
   return row.credential?.configured !== true
 }
 
@@ -186,6 +188,99 @@ export function ModelsSection(props: ModelsSectionProps): ReactNode {
   return <Loaded injected={{ controller, useSnapshot, api, t }} />
 }
 
+/**
+ * Default-model card with its own uSES selectors + memo so provider-row
+ * reorder / long-press drag in the parent does not rebuild the native
+ * `<select>` (that flash is what users read as the card "jittering").
+ */
+const DefaultModelCard = memo(function DefaultModelCard({
+  controller,
+  useSnapshot,
+  t,
+}: {
+  controller: ModelsSettingsStore
+  useSnapshot: SnapshotSelectorHook<ModelsSettingsState>
+  t: (key: keyof typeof en) => string
+}): ReactNode {
+  const status = useSnapshot((s) => s.status)
+  const writable = useSnapshot((s) => s.writable)
+  const defaultModel = useSnapshot((s) => s.defaultModel)
+  const defaultModelOverridden = useSnapshot((s) => s.defaultModelOverridden)
+  const defaultModelOptions = useSnapshot((s) => s.defaultModelOptions)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  // Keep the card while a soft background refresh is in flight; only hide
+  // when there is nothing to select (hard load / empty catalog).
+  if (defaultModelOptions.length === 0) return null
+  if (status !== 'ready' && status !== 'loading') return null
+
+  return (
+    <div className={styles['defaultModel']}>
+      <div className={styles['defaultModelHead']}>
+        <label className={styles['defaultModelLabel']} htmlFor="models-default-model">
+          {t('defaultModel')}
+        </label>
+        {defaultModelOverridden && writable
+          ? (
+            <button
+              type="button"
+              className={styles['linkButton']}
+              disabled={busy}
+              onClick={() => {
+                setBusy(true)
+                setError(undefined)
+                void controller.resetDefaultModel()
+                  .then((failure) => {
+                    if (failure !== undefined) setError(failure)
+                  })
+                  .finally(() => { setBusy(false) })
+              }}
+            >
+              {t('resetDefaultModel')}
+            </button>
+          )
+          : null}
+      </div>
+      <select
+        id="models-default-model"
+        className={`${styles['input']} ${styles['selectInput']} ${styles['defaultModelSelect']}`}
+        aria-label={t('defaultModel')}
+        disabled={!writable || busy || defaultModelOptions.length === 0}
+        value={defaultModel === null
+          ? ''
+          : defaultModelRoute(defaultModel.provider, defaultModel.model)}
+        onChange={(event) => {
+          const next = parseDefaultModelRoute(event.target.value)
+          if (next === undefined) return
+          setBusy(true)
+          setError(undefined)
+          void controller.setDefaultModel(next)
+            .then((failure) => {
+              if (failure !== undefined) setError(failure)
+            })
+            .finally(() => { setBusy(false) })
+        }}
+      >
+        {defaultModel === null
+          ? <option value="" disabled>{t('defaultModel')}</option>
+          : null}
+        {defaultModelOptions.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <p className={styles['defaultModelHint']}>{t('defaultModelHint')}</p>
+      {error === undefined
+        ? null
+        : (
+          <p role="alert" className={styles['error']}>
+            {`${t('defaultModelSaveFailed')}: ${error}`}
+          </p>
+        )}
+    </div>
+  )
+})
+
 function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const { controller, api, t } = injected
   const state = injected.useSnapshot(snapshot => snapshot)
@@ -197,8 +292,6 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
   const [declaring, setDeclaring] = useState(false)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
-  const [defaultModelBusy, setDefaultModelBusy] = useState(false)
-  const [defaultModelError, setDefaultModelError] = useState<string | undefined>(undefined)
   const [providerDrag, setProviderDrag] = useState<{
     providerId: string
     over: { id: string; half: ProviderDropHalf } | null
@@ -319,72 +412,11 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
             {providerCopy(t('savedProvider'), savedIdentity)}
           </p>
         )}
-      {state.status === 'ready' && state.defaultModelOptions.length > 0
-        ? (
-          <div className={styles['defaultModel']}>
-            <div className={styles['defaultModelHead']}>
-              <label className={styles['defaultModelLabel']} htmlFor="models-default-model">
-                {t('defaultModel')}
-              </label>
-              {state.defaultModelOverridden && state.writable
-                ? (
-                  <button
-                    type="button"
-                    className={styles['linkButton']}
-                    disabled={defaultModelBusy}
-                    onClick={() => {
-                      setDefaultModelBusy(true)
-                      setDefaultModelError(undefined)
-                      void controller.resetDefaultModel()
-                        .then((failure) => {
-                          if (failure !== undefined) setDefaultModelError(failure)
-                        })
-                        .finally(() => { setDefaultModelBusy(false) })
-                    }}
-                  >
-                    {t('resetDefaultModel')}
-                  </button>
-                )
-                : null}
-            </div>
-            <select
-              id="models-default-model"
-              className={`${styles['input']} ${styles['selectInput']} ${styles['defaultModelSelect']}`}
-              aria-label={t('defaultModel')}
-              disabled={!state.writable || defaultModelBusy || state.defaultModelOptions.length === 0}
-              value={state.defaultModel === null
-                ? ''
-                : defaultModelRoute(state.defaultModel.provider, state.defaultModel.model)}
-              onChange={(event) => {
-                const next = parseDefaultModelRoute(event.target.value)
-                if (next === undefined) return
-                setDefaultModelBusy(true)
-                setDefaultModelError(undefined)
-                void controller.setDefaultModel(next)
-                  .then((failure) => {
-                    if (failure !== undefined) setDefaultModelError(failure)
-                  })
-                  .finally(() => { setDefaultModelBusy(false) })
-              }}
-            >
-              {state.defaultModel === null
-                ? <option value="" disabled>{t('defaultModel')}</option>
-                : null}
-              {state.defaultModelOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <p className={styles['defaultModelHint']}>{t('defaultModelHint')}</p>
-            {defaultModelError === undefined
-              ? null
-              : (
-                <p role="alert" className={styles['error']}>
-                  {`${t('defaultModelSaveFailed')}: ${defaultModelError}`}
-                </p>
-              )}
-          </div>
-        )
-        : null}
+      <DefaultModelCard
+        controller={controller}
+        useSnapshot={injected.useSnapshot}
+        t={t}
+      />
       <ul className={styles['rows']}>
         {configured.map((row) => {
           const target = targetOf(row)

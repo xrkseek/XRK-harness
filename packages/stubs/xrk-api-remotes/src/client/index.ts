@@ -59,7 +59,7 @@ const FACE_REMOTES: FaceRemoteSpec = {
     remove: ['entryId'],
     update: ['entryId', 'requestId'],
     reload: ['entryId'],
-    install: ['spec', 'registry', 'requestId'],
+    install: ['spec', 'registry', 'requestId', 'proxy'],
     open: ['entryId'],
   },
   messageFeedback: {

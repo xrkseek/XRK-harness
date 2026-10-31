@@ -186,6 +186,17 @@ export const llmProviders: FaceHandler = async (runtime) => {
         declared: false,
       };
     }
+    // Built-in free lane: egress lives on Face `sunflower-free` (not llm-pi-ai).
+    if (b.id === "sunflower-free") {
+      return {
+        provider: b.id,
+        displayName: b.displayName,
+        settingsNs: "sunflower-free",
+        settingsPath: [] as string[],
+        active: routeServed(runtime, b.id),
+        declared: false,
+      };
+    }
     return {
       provider: b.id,
       displayName: b.displayName,

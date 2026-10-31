@@ -9,7 +9,11 @@ import { ConnectionController, type ConnectionConfig, type ConnectionPhase, type
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc } from './rpc.ts'
-import { isPrivilegedClientSurface } from '../loopback-hostname.ts'
+import {
+  isLocalHostSurface,
+  resolveClientAccessPlane,
+  type ClientAccessPlane,
+} from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
@@ -41,6 +45,7 @@ export {
 // Connection loop types are public through ConnectionHandle.start; the
 // controller remains package-internal.
 export type { ConnectionConfig, ConnectionPhase, ConnectionSinks, ConnectionState }
+export type { ClientAccessPlane } from '../loopback-hostname.ts'
 export type { ReleaseMismatch, ReleaseMismatchKind } from '../release-mismatch.ts'
 export type { ClientConnectionRpc } from '../rpc.ts'
 
@@ -111,10 +116,19 @@ export interface ConnectionHandle {
   /** Shared api client (fixture or real, decided at boot from the page URL). */
   readonly api: IApiClient
   /**
-   * Privileged surface: loopback hostname, Desktop `__XRK_TRANSPORT__.ownsHost`,
-   * `xrk-app:` page, or non-browser context.
+   * Privileged UX surface (Settings host persistence, native open gates):
+   * **local** (127 / Desktop / LAN IP) or **operator-pin** UX marker after Host
+   * PIN. Re-read on each access. Not a Host credential — Face still requires
+   * HttpOnly PIN / session on the wire.
    */
   readonly isLoopback: boolean
+  /**
+   * Local Host plane only (127 / Desktop / private LAN / xrk-app). Never true
+   * from PIN UI cookies alone — keep PIN remote separate from desktop/loopback.
+   */
+  readonly isLocalHost: boolean
+  /** Resolved client access plane (`local` · `operator-pin` · `remote`). */
+  readonly accessPlane: ClientAccessPlane
   /** Generation-scoped Host facts, including native path-open capability. */
   readonly hostDescription: HostDescriptionSource
   /** Coarse reconnect/connected state for product chrome. */
@@ -188,12 +202,25 @@ export function apply(ctx: Context): void {
       }
     }
   }
+  const privilegeOptions = {
+    ownsHost: transport?.ownsHost === true,
+    ...(pageLocation === undefined ? {} : { pageLocation }),
+  }
+  // Sync PIN UX marker before SettingsScopeBinder reads isLoopback
+  // (bind freezes host vs memory persistence). Local plane needs no sync.
+  resolveClientAccessPlane(privilegeOptions)
   const handle: ConnectionHandle = {
     api,
-    isLoopback: isPrivilegedClientSurface({
-      ownsHost: transport?.ownsHost === true,
-      ...(pageLocation === undefined ? {} : { pageLocation }),
-    }),
+    // Live getters share one resolve path (local · operator-pin · remote).
+    get accessPlane() {
+      return resolveClientAccessPlane(privilegeOptions)
+    },
+    get isLoopback() {
+      return resolveClientAccessPlane(privilegeOptions) !== 'remote'
+    },
+    get isLocalHost() {
+      return isLocalHostSurface(privilegeOptions)
+    },
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

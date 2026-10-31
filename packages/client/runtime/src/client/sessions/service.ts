@@ -64,6 +64,8 @@ export interface SessionSummary {
   mainlineId?: string
   /** Per-session 支线 caption (current work). */
   sideline?: string
+  /** Roster member bind; unbound agent-home rows keep this for Agents 未分组. */
+  memberId?: string
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent' | 'fork'
@@ -190,20 +192,19 @@ export function workspaceTitleOf(cwd: string): string {
 
 /**
  * Display title: 主线 when bound, else durable title (first user message),
- * then project directory basename, then the raw id.
+ * then the raw id. Do **not** fall back to the cwd basename — that duplicates
+ * the workspace group label (e.g. every untitled row under `function` also
+ * reads as `function`) when the opener was compacted away before a title
+ * event landed.
  */
 function displayTitleOf(
   title: string | undefined,
-  cwd: string | undefined,
+  _cwd: string | undefined,
   id: SessionId,
   mainline?: string,
 ): string {
   if (mainline !== undefined && mainline !== '') return mainline
-  if (title !== undefined) return title
-  if (cwd !== undefined && cwd !== '') {
-    const base = workspaceTitleOf(cwd)
-    if (base !== '') return base
-  }
+  if (title !== undefined && title !== '') return title
   return id
 }
 
@@ -633,7 +634,9 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
-   * Truncate this session's durable log in place, then resync the local window.
+   * Truncate this session's durable log in place, then trim the local window.
+   * Prefer a local cut (no empty-chat flash); fall back to full resync when
+   * the kept prefix is not loaded.
    */
   async truncate(opts: {
     sessionId: SessionId
@@ -651,12 +654,15 @@ export class SessionRuntime implements ISessions {
       )
     }
     const session = this.binding(opts.sessionId)?.session
-    if (session !== undefined) {
-      // Face rebuilt projections at the shorter asOfSeq; clear so seed wins
-      // (higher-seq-wins would keep pre-cut turnOutline / sessionStats).
-      session.projections.clear()
-      await session.resync()
+    if (session === undefined) return
+    // Local tail cut keeps the prefix painted; reseal from the truncate
+    // response when present (no second history round trip).
+    if (session.applyTruncateCut(result.value.eventCount)) {
+      await session.resealProjectionsAfterTruncate(result.value.projections)
+      return
     }
+    session.projections.clear()
+    await session.resync()
   }
 
   /**
@@ -827,6 +833,7 @@ export class SessionRuntime implements ISessions {
         ...(entry.mainline !== undefined ? { mainline: entry.mainline } : {}),
         ...(entry.mainlineId !== undefined ? { mainlineId: entry.mainlineId } : {}),
         ...(entry.sideline !== undefined ? { sideline: entry.sideline } : {}),
+        ...(entry.memberId !== undefined ? { memberId: entry.memberId } : {}),
       }
     }
     if (current !== undefined && currentAddress !== undefined) {

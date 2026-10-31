@@ -606,6 +606,115 @@ describe("Face session.truncate", () => {
     ).toBe(false);
   });
 
+  it("keeps prior 轮次 after mid-session edit-resubmit truncate", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      agentPreset: "minimal",
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const appendTurnWithStep = (turn: number, prompt: string): number => {
+      const turnId = `t${turn}`;
+      const base = turn * 100;
+      store.append(sessionId, { type: "turn/start", ts: base, turnId });
+      store.append(sessionId, {
+        type: "user/message",
+        ts: base + 1,
+        turnId,
+        content: prompt,
+      });
+      const userSeq = store.get(sessionId).events.length;
+      store.append(sessionId, {
+        type: "step/start",
+        ts: base + 2,
+        turnId,
+        stepId: `s${turn}`,
+      });
+      store.append(sessionId, {
+        type: "assistant/message",
+        ts: base + 3,
+        turnId,
+        stepId: `s${turn}`,
+        content: `reply ${turn}`,
+      });
+      store.append(sessionId, {
+        type: "step/end",
+        ts: base + 4,
+        turnId,
+        stepId: `s${turn}`,
+      });
+      store.append(sessionId, {
+        type: "turn/end",
+        ts: base + 5,
+        turnId,
+        reason: { kind: "completed" },
+      });
+      return userSeq;
+    };
+
+    appendTurnWithStep(1, "first");
+    const secondUserSeq = appendTurnWithStep(2, "edit me");
+    appendTurnWithStep(3, "drop me");
+    const all = store.get(sessionId).events;
+    for (let i = 0; i < all.length; i++) {
+      runtime.projections.drive(sessionId, all[i]!, i + 1);
+    }
+    runtime.wireIds.primeFromLog(sessionId, all);
+    expect(runtime.wireIds.turn(sessionId, "t2")).toBe(2);
+
+    const beforeOutline = runtime.projections.snapshot(sessionId).values
+      .turnOutline as readonly { round: number; prompt: string }[];
+    expect(beforeOutline.map((row) => row.round)).toEqual([1, 2, 3]);
+
+    // Edit-resubmit turn-2 opener: exclusive beforeSeq = userSeq - 1.
+    const cut = await dispatchFaceMethod(runtime, "session.truncate", "t-mid", {
+      sessionId,
+      beforeSeq: secondUserSeq - 1,
+    });
+    expect(cut.result.ok).toBe(true);
+    if (!cut.result.ok) return;
+
+    const after = runtime.projections.snapshot(sessionId).values;
+    const outline = after.turnOutline as readonly {
+      round: number;
+      turn: number;
+      prompt: string;
+    }[];
+    const stats = after.sessionStats as { turns: number; steps: number };
+    expect(outline.map((row) => row.prompt)).toEqual(["first"]);
+    expect(outline.map((row) => row.round)).toEqual([1]);
+    expect(stats.turns).toBe(1);
+    expect(stats.steps).toBe(1);
+    // Next live turn must continue as 第 2 轮, not restart at 1.
+    expect(runtime.wireIds.turn(sessionId, "t-resubmit")).toBe(2);
+
+    const hist = await dispatchFaceMethod(runtime, "session.history", "h-mid", {
+      sessionId,
+      maxMessages: 1,
+    });
+    expect(hist.result.ok).toBe(true);
+    if (!hist.result.ok) return;
+    const histOutline = (
+      hist.result.value as {
+        projections?: { values?: { turnOutline?: unknown } };
+      }
+    ).projections?.values?.turnOutline as
+      | readonly { round: number; prompt: string }[]
+      | undefined;
+    expect(histOutline?.map((row) => row.round)).toEqual([1]);
+    expect(histOutline?.[0]?.prompt).toBe("first");
+  });
+
   it("resets wire turn numbers so edit-resubmit of the first opener is 第 1 轮 again", async () => {
     const store = createMemorySessionStore();
     const runtime = createFaceRuntime({

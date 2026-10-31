@@ -324,16 +324,33 @@ describe('insertProviderBefore / providerReorderAnchor', () => {
 })
 
 describe('ModelsSettingsStore.reorderProviders', () => {
-  it('writes llm-pi-ai.providerOrder and keeps optimistic order until reload', async () => {
+  it('writes llm-pi-ai.providerOrder and keeps optimistic order without a soft reload', async () => {
     const mutates: unknown[] = []
+    let describeCount = 0
     const { face } = api({
       mutate: (payload) => {
         mutates.push(payload)
-        return Promise.resolve(ok({}))
+        return Promise.resolve(ok({
+          ns: 'llm-pi-ai',
+          revision: 1,
+          base: {},
+          user: { providerOrder: ['openai', 'deepseek-official'] },
+          value: { providerOrder: ['openai', 'deepseek-official'] },
+          schema: {},
+          applies: 'live' as const,
+          secrets: [],
+        }))
       },
     })
+    const describe = face.settings.describe.bind(face.settings)
+    face.settings.describe = (payload) => {
+      describeCount += 1
+      return describe(payload)
+    }
     const store = new ModelsSettingsStore(face)
     await store.load()
+    const loadDescribes = describeCount
+    const optionsBefore = store.store.getSnapshot().defaultModelOptions
     const before = store.store.getSnapshot().rows
       .filter(row => row.configured)
       .map(row => row.entry.provider)
@@ -346,6 +363,13 @@ describe('ModelsSettingsStore.reorderProviders', () => {
       expectedRevision: 0,
       ops: [{ op: 'set', path: ['providerOrder'], value: ['openai', 'deepseek-official'] }],
     })
+    const after = store.store.getSnapshot().rows
+      .filter(row => row.configured)
+      .map(row => row.entry.provider)
+    expect(after).toEqual(['openai', 'deepseek-official'])
+    // Success path must not soft-reload (that rewrote default-model options).
+    expect(describeCount).toBe(loadDescribes)
+    expect(store.store.getSnapshot().defaultModelOptions).toBe(optionsBefore)
   })
 })
 

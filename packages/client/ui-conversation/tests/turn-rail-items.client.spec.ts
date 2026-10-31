@@ -73,6 +73,42 @@ describe('mergeTurnRailItems', () => {
     expect(mergeTurnRailItems(loaded, outline, [1, 2])[0]?.round).toBe(1)
   })
 
+  it('keeps outline 轮次 after truncate when navigation is briefly empty', () => {
+    // Edit-resubmit local cut can leave turn/start in the window before the
+    // navigation index republishes openers. Skipping every in-window outline
+    // row then made nextSendRound fall back to 1.
+    const outline = [
+      { turn: 1, seq: 1, round: 1, prompt: 'first', response: 'a' },
+      { turn: 2, seq: 10, round: 2, prompt: 'kept', response: 'b' },
+    ]
+    const items = mergeTurnRailItems([], outline, [1, 2])
+    expect(items.map(item => item.round)).toEqual([1, 2])
+    expect(items.every(item => item.anchor.kind === 'unloaded')).toBe(true)
+  })
+
+  it('keeps prior Face round when only the resubmitted turn is loaded', () => {
+    // Mid-session edit-resubmit: outline still has 第 1 轮; navigation may
+    // briefly hold only the new Host turn 2. Must not re-index that turn to 1.
+    const loaded: readonly TurnNavigationItem[] = [
+      { turn: 2, anchorKey: 'u2', prompt: 'edited', response: '' },
+    ]
+    const outline = [
+      { turn: 1, seq: 1, round: 1, prompt: 'first', response: 'a' },
+    ]
+    const items = mergeTurnRailItems(loaded, outline, [1, 2])
+    expect(items.map(item => ({ turn: item.turn, round: item.round }))).toEqual([
+      { turn: 1, round: 1 },
+      { turn: 2, round: 2 },
+    ])
+  })
+
+  it('uses Host wire turn as 轮次 when outline is absent', () => {
+    const loaded: readonly TurnNavigationItem[] = [
+      { turn: 2, anchorKey: 'u2', prompt: 'edited', response: '' },
+    ]
+    expect(mergeTurnRailItems(loaded, [], [2]).map(item => item.round)).toEqual([2])
+  })
+
   it('keeps an outline 轮次 when the tail window only has leftover events of that Host turn', () => {
     const loaded: readonly TurnNavigationItem[] = [
       { turn: 4, anchorKey: 'u4', prompt: 'four', response: 'r4' },

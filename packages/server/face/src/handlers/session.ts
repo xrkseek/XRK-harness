@@ -57,6 +57,10 @@ import {
   sessionImageStartIndex,
   type PromptWirePart,
 } from "../durable-prompt.js";
+import {
+  maybePrefixDelegatedChildContent,
+  parseSeatChannel,
+} from "../seat-channel.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
@@ -457,7 +461,7 @@ export const sessionList: FaceHandler = async (runtime) => {
     throwIfListCancelled(slice.signal);
     const hints = runtime.store.listHints?.(sessionId);
     const loaded = runtime.store.isLoaded?.(sessionId) ?? true;
-    const snap =
+    let snap =
       hints !== undefined && !loaded
         ? (() => {
             const identity = listProjectionIdentityFromHints(hints);
@@ -477,6 +481,17 @@ export const sessionList: FaceHandler = async (runtime) => {
         : runtime.projections.snapshot(sessionId, {
             keys: [...sessionListProjectionKeys(runtime.projections)],
           });
+    // Loaded + untitled: backfill from the first human prompt still in the
+    // log (hydrate skips live fallback; compacted openers still leave text).
+    if (
+      loaded
+      && !(typeof snap?.values.title === "string" && snap.values.title !== "")
+    ) {
+      runtime.titles.ensureFallbackFromLog(sessionId);
+      snap = runtime.projections.snapshot(sessionId, {
+        keys: [...sessionListProjectionKeys(runtime.projections)],
+      });
+    }
     const meta = snap?.values.sessionListMetadata;
     const blank =
       meta?.blank ??
@@ -510,6 +525,7 @@ export const sessionList: FaceHandler = async (runtime) => {
           : wsId === IM_WORKSPACE_ID
             ? { origin: "im" as const }
             : undefined;
+    const identityMemberId = runtime.sessionIdentities.get(sessionId)?.memberId?.trim();
     items.push({
       sessionId,
       updatedAt,
@@ -523,6 +539,8 @@ export const sessionList: FaceHandler = async (runtime) => {
       title: snap?.values.title ?? null,
       ...(thread ? { mainline: thread.title, mainlineId: thread.id } : {}),
       ...(sideline ? { sideline } : {}),
+      // Survives agent-home delete so sidebar 未分组 can stay on the 干员 lane.
+      ...(identityMemberId ? { memberId: identityMemberId } : {}),
       ...(snap ? { projections: snapshotWireBlock(snap) } : {}),
     });
     await maybeYieldListWork(slice);
@@ -951,6 +969,16 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     }
     admitContent = text;
   }
+
+  // Tool-delegated child: tag author with live Settings seat titles
+  // (human_face vs parent). `subagent.prompt` sets seatChannel=parent for
+  // internal tool-/orch- rpcs.
+  admitContent = maybePrefixDelegatedChildContent(
+    runtime,
+    sessionId,
+    admitContent,
+    parseSeatChannel(p.seatChannel),
+  );
 
   runtime.watchSession(sessionId);
 
@@ -1520,6 +1548,16 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
   // Edit-resubmit / checkpoint truncateChat: wire + projections must match the kept prefix.
   const n = resetFaceStateAfterLogCut(runtime, sessionId);
 
+  // Ship the post-cut projection baseline with truncate so the client can
+  // reseal without a follow-up session.history round trip (regenerate /
+  // edit-resubmit latency on phone + LAN).
+  const historyKeys = sessionHistoryTailProjectionKeys();
+  const snap = runtime.projections.snapshot(sessionId, {
+    keys: [...historyKeys],
+  });
+  const projections =
+    Object.keys(snap.values).length > 0 ? snapshotWireBlock(snap) : undefined;
+
   return {
     ok: true,
     value: {
@@ -1527,6 +1565,7 @@ export const sessionTruncate: FaceHandler = async (runtime, _rpcId, payload) => 
       eventCount: n,
       ...(cut.atSeq !== undefined ? { atSeq: cut.atSeq } : {}),
       ...(cut.beforeSeq !== undefined ? { beforeSeq: cut.beforeSeq } : {}),
+      ...(projections !== undefined ? { projections } : {}),
     },
   };
 };

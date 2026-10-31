@@ -9,8 +9,14 @@ import {
   type WorkspaceId, type WorkspaceView,
 } from '@xrkseek/client-runtime/client'
 
-/** Group key for Sessions outside every Workspace. */
+/** Group key for Sessions outside every Workspace (display + project order account). */
 export const UNGROUPED_KEY = ''
+
+/**
+ * Order-account key for 干员「未分组」. Distinct from {@link UNGROUPED_KEY} so
+ * the project and agent SessionTrees do not fight over one order map.
+ */
+export const AGENT_UNGROUPED_ORDER_KEY = 'agent-ungrouped'
 
 /**
  * The list facts every derivation in this module reads. Deliberately narrower

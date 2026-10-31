@@ -214,6 +214,9 @@ describe("face dispatch", () => {
     expect(row?.mainline).toBe("发版");
     expect(row?.mainlineId).toBe(threadId);
 
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
     const team = await dispatchFaceMethod(runtime, "team/list", "tm1", { sessionId });
     expect(team.result.ok).toBe(true);
     if (!team.result.ok) throw new Error("team fail");
@@ -222,7 +225,7 @@ describe("face dispatch", () => {
     ).members.map((member) => member.name);
     expect(names).toEqual([
       "经理",
-      "向日葵",
+      "xrkseek",
       "调研员",
       "施工员",
       "审稿员",

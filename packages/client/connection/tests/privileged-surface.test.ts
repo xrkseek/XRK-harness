@@ -2,10 +2,16 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  elevateOperatorAccess,
+  isLocalHostSurface,
   isLoopbackHostname,
   isPrivateLanHostname,
   isPrivilegedClientSurface,
   OPERATOR_ACCESS_STORAGE_KEY,
+  OPERATOR_UI_COOKIE,
+  resolveClientAccessPlane,
+  resolvePrivilegedClientSurface,
+  syncOperatorAccessFromUiCookie,
 } from "../src/loopback-hostname.ts";
 
 describe("isLoopbackHostname", () => {
@@ -100,5 +106,102 @@ describe("isPrivilegedClientSurface", () => {
         pageLocation: { hostname: "example.com", protocol: "https:" },
       }),
     ).toBe(true);
+  });
+});
+
+describe("operator UI cookie sync", () => {
+  afterEach(() => {
+    try {
+      sessionStorage.removeItem(OPERATOR_ACCESS_STORAGE_KEY);
+    } catch {
+      /* jsdom may lack storage */
+    }
+  });
+
+  it("elevates from xrk_operator_ui without clearing an existing flag", () => {
+    try {
+      elevateOperatorAccess();
+    } catch {
+      return;
+    }
+    expect(syncOperatorAccessFromUiCookie("")).toBe(false);
+    expect(sessionStorage.getItem(OPERATOR_ACCESS_STORAGE_KEY)).toBe("1");
+
+    sessionStorage.removeItem(OPERATOR_ACCESS_STORAGE_KEY);
+    expect(
+      syncOperatorAccessFromUiCookie(`${OPERATOR_UI_COOKIE}=1; other=x`),
+    ).toBe(true);
+    expect(sessionStorage.getItem(OPERATOR_ACCESS_STORAGE_KEY)).toBe("1");
+  });
+
+  it("resolvePrivilegedClientSurface syncs cookie then evaluates", () => {
+    try {
+      sessionStorage.removeItem(OPERATOR_ACCESS_STORAGE_KEY);
+    } catch {
+      return;
+    }
+    expect(
+      resolvePrivilegedClientSurface({
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+        cookieSource: "",
+      }),
+    ).toBe(false);
+    expect(
+      resolvePrivilegedClientSurface({
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+        cookieSource: `${OPERATOR_UI_COOKIE}=1`,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("local vs operator-pin planes", () => {
+  afterEach(() => {
+    try {
+      sessionStorage.removeItem(OPERATOR_ACCESS_STORAGE_KEY);
+    } catch {
+      /* jsdom may lack storage */
+    }
+  });
+
+  it("keeps loopback/Desktop local even when PIN marker is absent", () => {
+    expect(
+      isLocalHostSurface({
+        pageLocation: { hostname: "127.0.0.1", protocol: "http:" },
+      }),
+    ).toBe(true);
+    expect(
+      resolveClientAccessPlane({
+        pageLocation: { hostname: "127.0.0.1", protocol: "http:" },
+        cookieSource: "",
+      }),
+    ).toBe("local");
+    expect(
+      resolveClientAccessPlane({
+        ownsHost: true,
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+        cookieSource: "",
+      }),
+    ).toBe("local");
+  });
+
+  it("marks public hosts as operator-pin only after UX elevation, else remote", () => {
+    expect(
+      isLocalHostSurface({
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+      }),
+    ).toBe(false);
+    expect(
+      resolveClientAccessPlane({
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+        cookieSource: "",
+      }),
+    ).toBe("remote");
+    expect(
+      resolveClientAccessPlane({
+        pageLocation: { hostname: "example.com", protocol: "https:" },
+        cookieSource: `${OPERATOR_UI_COOKIE}=1`,
+      }),
+    ).toBe("operator-pin");
   });
 });

@@ -131,7 +131,6 @@ export async function executeResubmitAfterChoice(
   },
 ): Promise<void> {
   const source = sessions.binding(sessionId)?.session
-  const sourceLive = editResubmitSourceIsLive(source?.getSnapshot())
   if (opts.choice === 'revert-files' && source !== undefined) {
     // `/rollback` finds the checkpoint by the PRE-truncate seq, so it has to run
     // first. If it fails, stop here: continuing would cut the conversation while
@@ -146,11 +145,8 @@ export async function executeResubmitAfterChoice(
       return
     }
   }
-  // Stop a live turn before the cut so an interrupted turn/end cannot land
-  // after truncate (Face also cancels when active).
-  if (sourceLive && source !== undefined) {
-    await source.cancel().catch(() => undefined)
-  }
+  // Face session.truncate cancels an active drain itself — skip a separate
+  // cancel RPC so regenerate / edit-resubmit is one round trip + prompt.
   // Face beforeSeq is exclusive; Face then drops the open turn whose
   // `turn/start` sits before this user row.
   const beforeSeq = Math.max(0, Math.floor(opts.seq) - 1)

@@ -20,6 +20,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-s
 import type { PluginInventoryLocaleKey } from './locales.ts'
 import {
   clearPluginInstallSettledUi,
+  formatPluginAddCommand,
   getPluginInstallUiSnapshot,
   markPluginClientRefreshHint,
   runPluginCliMutateUi,
@@ -37,6 +38,7 @@ export type InstallRegistryChoice = 'default' | 'npm' | 'npmmirror' | 'custom'
 
 const REGISTRY_STORAGE_KEY = 'xrk.pluginInstall.registry'
 const REGISTRY_CUSTOM_STORAGE_KEY = 'xrk.pluginInstall.registryCustom'
+const PROXY_STORAGE_KEY = 'xrk.pluginInstall.proxy'
 
 const REGISTRY_URLS = {
   npm: 'https://registry.npmjs.org/',
@@ -70,8 +72,14 @@ export interface PluginInventorySettingsTabInjected {
    * Install by CLI-compatible spec (`name`, `name@version`, path, `github:…`).
    * Optional `registry` → `xrkh plugin add --registry`.
    * Optional `requestId` correlates live `plugin-inventory/install-log` chunks.
+   * Optional `proxy` → `xrkh plugin add --proxy` (this pack only).
    */
-  install: (spec: string, registry?: string, requestId?: string) => Promise<PluginInstallLog>
+  install: (
+    spec: string,
+    registry?: string,
+    requestId?: string,
+    proxy?: string,
+  ) => Promise<PluginInstallLog>
   /**
    * Subscribe to live install stdout/stderr for one requestId.
    * Absent in tests that only exercise settled logs.
@@ -102,6 +110,24 @@ function persistRegistry(choice: InstallRegistryChoice, custom: string): void {
   try {
     globalThis.localStorage?.setItem(REGISTRY_STORAGE_KEY, choice)
     globalThis.localStorage?.setItem(REGISTRY_CUSTOM_STORAGE_KEY, custom)
+  } catch {
+    /* private mode / no storage */
+  }
+}
+
+function readStoredProxy(): string {
+  try {
+    return globalThis.localStorage?.getItem(PROXY_STORAGE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function persistProxy(proxy: string): void {
+  try {
+    const trimmed = proxy.trim()
+    if (trimmed.length === 0) globalThis.localStorage?.removeItem(PROXY_STORAGE_KEY)
+    else globalThis.localStorage?.setItem(PROXY_STORAGE_KEY, trimmed)
   } catch {
     /* private mode / no storage */
   }
@@ -324,6 +350,7 @@ export function PluginInventorySettingsTab({
   const storedRegistry = useMemo(() => readStoredRegistry(), [])
   const [registryChoice, setRegistryChoice] = useState<InstallRegistryChoice>(storedRegistry.choice)
   const [registryCustom, setRegistryCustom] = useState(storedRegistry.custom)
+  const [installProxy, setInstallProxy] = useState(() => readStoredProxy())
 
   const installExamples = [
     {
@@ -481,10 +508,13 @@ export function PluginInventorySettingsTab({
       return
     }
     const registry = resolveInstallRegistry(registryChoice, registryCustom)
+    const proxy = installProxy.trim()
     persistRegistry(registryChoice, registryCustom)
+    persistProxy(proxy)
     await runPluginInstallUi({
       spec,
       ...(registry !== undefined ? { registry } : {}),
+      ...(proxy.length > 0 ? { proxy } : {}),
       install,
       ...(subscribeInstallLog !== undefined ? { subscribeInstallLog } : {}),
       fallbackError: t('actionFailed'),
@@ -496,10 +526,13 @@ export function PluginInventorySettingsTab({
     setInstallSpec(spec)
     clearPluginInstallSettledUi()
     const registry = resolveInstallRegistry(registryChoice, registryCustom)
+    const proxy = installProxy.trim()
     persistRegistry(registryChoice, registryCustom)
+    persistProxy(proxy)
     await runPluginInstallUi({
       spec,
       ...(registry !== undefined ? { registry } : {}),
+      ...(proxy.length > 0 ? { proxy } : {}),
       install,
       ...(subscribeInstallLog !== undefined ? { subscribeInstallLog } : {}),
       fallbackError: t('actionFailed'),
@@ -606,6 +639,27 @@ export function PluginInventorySettingsTab({
               )
               : null}
           </div>
+          <div className={css.registryRow}>
+            <label className={css.registryField}>
+              <span className={css.registryLabel}>{t('installProxyLabel')}</span>
+              <input
+                className={css.proxyInput}
+                type="url"
+                value={installProxy}
+                placeholder={t('installProxyPlaceholder')}
+                aria-label={t('installProxyLabel')}
+                disabled={installBusy}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => {
+                  const next = event.currentTarget.value
+                  setInstallProxy(next)
+                  persistProxy(next)
+                }}
+              />
+            </label>
+          </div>
+          <p className={css.installHint}>{t('installProxyHint')}</p>
           <p className={css.installHint}>{t('installHint')}</p>
           {pendingRecommended.map((item) => (
             <div
@@ -696,9 +750,15 @@ export function PluginInventorySettingsTab({
                 <TerminalBlock
                   command={
                     installLog?.command
-                    ?? (activeSpec
-                      ? `xrkh plugin add ${activeSpec}`
-                      : `xrkh plugin add ${installSpec.trim()}`)
+                    ?? formatPluginAddCommand({
+                      spec: activeSpec || installSpec.trim(),
+                      ...(resolveInstallRegistry(registryChoice, registryCustom) !== undefined
+                        ? { registry: resolveInstallRegistry(registryChoice, registryCustom) }
+                        : {}),
+                      ...(installProxy.trim().length > 0
+                        ? { proxy: installProxy.trim() }
+                        : {}),
+                    })
                   }
                   output={installLog?.output ?? ''}
                   exitCode={installBusy ? undefined : installLog?.exitCode}

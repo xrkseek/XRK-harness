@@ -17,7 +17,9 @@ import type {} from '@xrkseek/xrk-api-remotes/client'
 import type {} from '@xrkseek/client-locale/client'
 // Type-only: pulls the settings shell's SlotMap merge (`settings.section`).
 import type {} from '@xrkseek/client-ui-settings/client'
-import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
+import type {
+  AgentTeamMemberRow, WorkspaceBrowserInjected, WorkspacePickerInjected,
+} from './contract/slots.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
@@ -157,18 +159,35 @@ export function apply(ctx: ClientContext): void {
       return result.value.members
     },
     upsertTeamMember: async (sessionId, input) => {
-      const result = await ctx.remote.team.upsert({ sessionId, ...input })
+      const { mintHome, ...rest } = input
+      const result = await ctx.remote.team.upsert({
+        sessionId,
+        ...rest,
+        ...(mintHome === true ? { mintHome: true } : {}),
+      })
       if (!result.ok) throw new Error(result.error.message)
-      const member = result.value.member
-      const id = member && typeof member === 'object'
-        ? String((member as { id?: unknown }).id ?? '')
-        : ''
+      const raw = result.value.member
+      if (!raw || typeof raw !== 'object') {
+        throw new Error('team.upsert missing member')
+      }
+      const row = raw as Record<string, unknown>
+      const id = typeof row.id === 'string' ? row.id.trim() : ''
       if (!id) throw new Error('team.upsert missing member id')
       const homeWorkspaceId = typeof result.value.homeWorkspaceId === 'string'
         ? result.value.homeWorkspaceId
         : undefined
-      await ctx.workspaces.refresh()
-      return { id, ...(homeWorkspaceId ? { homeWorkspaceId } : {}) }
+      // Only refresh workspace list when a home was minted / already bound —
+      // nick/look edits otherwise churn the sidebar for no reason.
+      if (homeWorkspaceId || mintHome === true) {
+        await ctx.workspaces.refresh()
+      }
+      // Return the Face member row (incl. appearance) so 干员团队 seats can
+      // hot-update; `{ id }` alone used to wipe look → cream white ball.
+      return {
+        ...(raw as AgentTeamMemberRow),
+        id,
+        ...(homeWorkspaceId ? { homeWorkspaceId } : {}),
+      }
     },
     removeTeamMember: async (sessionId, id, scope) => {
       const result = await ctx.remote.team.remove({

@@ -128,6 +128,16 @@ describe("fs presenters (DSH tool-fs / tool-fs-search)", () => {
       kind: "edit",
     });
     expect(
+      presentPatchCall({
+        patch: "*** Begin Patch\n*** Update File: a.ts\n@@\n-x\n+y\n*** End Patch\n",
+      }),
+    ).toEqual({
+      card: "generic",
+      title: "Apply patch (7 lines)",
+      kind: "edit",
+      locations: [{ path: "a.ts" }],
+    });
+    expect(
       presentPatchResult(
         { patch: "x" },
         { content: "applied 1 hunk(s)\nupdate a.ts" },
@@ -136,6 +146,7 @@ describe("fs presenters (DSH tool-fs / tool-fs-search)", () => {
       card: "generic",
       title: "applied 1 hunk(s)",
       kind: "edit",
+      locations: [{ path: "a.ts" }],
     });
     expect(
       presentPatchResult(

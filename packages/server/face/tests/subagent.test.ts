@@ -143,11 +143,24 @@ describe("Face subagent", () => {
       requestId: "client-echo-steer",
     });
     expect(steered.result.ok).toBe(true);
-    // Parent mirror is fire-and-forget via resolveAgent().then — flush microtasks.
-    await Promise.resolve();
-    await Promise.resolve();
     expect(childAdmits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
-    expect(childAdmits[1]?.content).toBe("插话");
+    // Human UI seat channel prefixes the durable child admit.
+    expect(String(childAdmits[1]?.content)).toContain("插话");
+    // Parent mirror waits for prompt/promoted (enters a step) — not mere admit.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(parentAdmits).toEqual([]);
+    const admitIds = [...runtime.admitRpcMap.keys()];
+    expect(admitIds.length).toBe(2);
+    for (const admitId of admitIds) {
+      store.append(childId, {
+        type: "prompt/promoted",
+        ts: Date.now(),
+        admitId,
+      });
+    }
+    await Promise.resolve();
+    await Promise.resolve();
     expect(parentAdmits.map((a) => a.delivery)).toEqual(["steer", "steer"]);
     expect(String(parentAdmits[0]?.content)).toContain("User message to background subagent");
     expect(String(parentAdmits[0]?.content)).toContain("go");

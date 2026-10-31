@@ -82,11 +82,15 @@ const DeepSeekCatalogModelSchema = Schema.object({
   description: Schema.string(),
   contextWindow: Schema.number().step(1).min(1),
   maxTokens: Schema.number().step(1).min(1),
-  /** Soft-budget ceiling; omit → floor(contextWindow × 90%) when window ≥8k. */
-  softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
+  /**
+   * Soft-budget ceiling; omit → floor(contextWindow × 90%) when window ≥8k.
+   * step(1) — Codex 90% yields values like 235929 / 58982; step(1000) blocked
+   * every Models mutate (e.g. create provider) once any catalog row stored one.
+   */
+  softBudgetMaxTokens: Schema.number().step(1).min(1),
   /** Optional overrides; absent → `resolveSoftBudgetTokens` derives them. */
-  softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
-  softBudgetBufferTokens: Schema.number().step(500).min(0),
+  softBudgetKeepTokens: Schema.number().step(1).min(1),
+  softBudgetBufferTokens: Schema.number().step(1).min(0),
   /** Live sessions on this route; omit → agent-loop.maxConcurrentModelSessions. */
   maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
   // Empty = unset (UI treats as text); do not use .min(1) — legacy rows
@@ -137,9 +141,10 @@ const PiAiProvider = Schema.object({
       name: Schema.string(),
       contextWindow: Schema.number().step(1).min(1),
       maxTokens: Schema.number().step(1).min(1),
-      softBudgetMaxTokens: Schema.number().step(1_000).min(8_000),
-      softBudgetKeepTokens: Schema.number().step(1_000).min(2_000),
-      softBudgetBufferTokens: Schema.number().step(500).min(0),
+      // Same as DeepSeek catalog: allow Codex 90% integers (not multiples of 1000).
+      softBudgetMaxTokens: Schema.number().step(1).min(1),
+      softBudgetKeepTokens: Schema.number().step(1).min(1),
+      softBudgetBufferTokens: Schema.number().step(1).min(0),
       maxConcurrentSessions: Schema.number().step(1).min(1).max(64),
       // Same modality toggle the Models → Capacities row edits (DeepSeek catalog too).
       inputModalities: Schema.array(Schema.union(["text", "image"])),
@@ -223,9 +228,10 @@ const BashConfig = Schema.object({
 });
 
 const AgentLoopConfig = Schema.object({
-  maxParallelToolCalls: Schema.number().step(1).min(1),
-  /** Max LLM steps per user turn (tool rounds). Harness/server default 32. */
-  maxSteps: Schema.number().step(1).min(1).default(32),
+  /** Cap parallel tool settles in one step. Product default 5. */
+  maxParallelToolCalls: Schema.number().step(1).min(1).default(5),
+  /** Max LLM steps per user turn (tool rounds). Harness/server default 200. */
+  maxSteps: Schema.number().step(1).min(1).default(200),
   /**
    * Resume automatically when a model stops at its output token cap.
    * Product default on: a truncated mid-task reply should keep going without
@@ -684,7 +690,8 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "agent-loop",
       schema: schemasteryJson(AgentLoopConfig) as FaceSchemaEnvelope,
       base: {
-        maxSteps: 32,
+        maxParallelToolCalls: 5,
+        maxSteps: 200,
         autoContinueOnMaxTokens: true,
         autoContinueMaxRounds: 10,
         toolSettle: "parallel",

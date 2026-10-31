@@ -31,11 +31,22 @@ import type {
 import type { AgentTeamTask } from "./agent-team-tasks.js";
 import {
   appearanceLookWire,
+  displayMemberName,
   MANAGER_MEMBER_ID,
   SUNFLOWER_MEMBER_ID,
 } from "./agent-roster-store.js";
+import {
+  catalogSeedDisplayLabel,
+  sunflowerDisplayLabel,
+} from "./catalog-seed-labels.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
-import { readSeatTitles, readUiLocalePreference } from "./seat-titles.js";
+import {
+  readSeatTitles,
+  readUiLocalePreference,
+  type SeatTitleLocale,
+  type SeatTitles,
+} from "./seat-titles.js";
+import { resolveChildParentSeat } from "./seat-identity.js";
 import {
   dressingFromPresence,
   type PresenceSticker,
@@ -435,6 +446,10 @@ export interface SessionStatusSnapshot {
      * 向阳 → sunflower (name only, no 经理/干员 prefix).
      */
     readonly childSeat: "manager" | "agent" | "sunflower";
+    /** Roster id for Overview live nick/look (optional; old Hosts omit). */
+    readonly childMemberId?: string;
+    /** Roster id of the 委派方 when it is a Team seat (optional). */
+    readonly parentMemberId?: string;
   };
   readonly timeline: SessionStatusTimeline;
   /** Prune → summary stage fold + live busy phase. */
@@ -976,6 +991,100 @@ function bossBallFromPresence(
   );
 }
 
+type RosterMemberRow = NonNullable<
+  ReturnType<FaceRuntime["agentRoster"]["get"]>
+>;
+
+function rosterMemberById(
+  runtime: FaceRuntime,
+  memberId: string,
+): RosterMemberRow | undefined {
+  const id = memberId.trim();
+  if (!id) return undefined;
+  const home = runtime.agentRoster.findHome(id);
+  return home ? runtime.agentRoster.get(home.rosterWorkspaceId, id) : undefined;
+}
+
+function childSeatForMemberId(
+  memberId: string,
+): "manager" | "agent" | "sunflower" {
+  // 向日葵 = Xiangyang 经理席对位 — paint with Settings manager title.
+  if (
+    memberId === MANAGER_MEMBER_ID
+    || memberId === SUNFLOWER_MEMBER_ID
+  ) {
+    return "manager";
+  }
+  return "agent";
+}
+
+/** Catalog seed → locale formal（nick）; else live roster formal（nick）. */
+function paintRosterMemberLabel(
+  memberId: string,
+  member: RosterMemberRow | undefined,
+  uiLocale: SeatTitleLocale,
+  seatTitles: SeatTitles,
+  fallbackName: string,
+): string {
+  return (
+    catalogSeedDisplayLabel(memberId, uiLocale, {
+      seatTitles,
+      ...(member?.nickname ? { nickname: member.nickname } : {}),
+    })
+    ?? (member
+      ? displayMemberName(member.name.trim() || fallbackName, member.nickname)
+      : fallbackName)
+  );
+}
+
+/**
+ * Overview dual-ball child caption. Prefer spawn `memberId`; older events omit
+ * it and we match the frozen spawn label to the Team panel roster name once.
+ */
+function resolveDelegatedChildPaint(
+  runtime: FaceRuntime,
+  sessionId: string,
+  childLink: { memberId?: string; label: string },
+  uiLocale: SeatTitleLocale,
+  seatTitles: SeatTitles,
+): {
+  childLabel: string;
+  childMemberId: string;
+  childSeat: "manager" | "agent" | "sunflower";
+} {
+  const linkedId =
+    typeof childLink.memberId === "string" ? childLink.memberId.trim() : "";
+  let member = linkedId ? rosterMemberById(runtime, linkedId) : undefined;
+  let memberId = linkedId;
+  if (!member) {
+    const spawnLabel = childLink.label?.trim() ?? "";
+    if (spawnLabel && spawnLabel !== "untitled") {
+      const canvas =
+        runtime.workspaces.workspaceIdOf(sessionId)
+        ?? runtime.workspaces.defaultId();
+      const hit = runtime.agentRoster
+        .listForTeamPanel(canvas)
+        .find((row) => row.name.trim() === spawnLabel);
+      if (hit) {
+        member = hit;
+        memberId = hit.id;
+      }
+    }
+  }
+  const id = memberId || member?.id || "";
+  return {
+    childLabel: paintRosterMemberLabel(
+      id,
+      member,
+      uiLocale,
+      seatTitles,
+      childLink.label,
+    ),
+    childMemberId: id,
+    childSeat: childSeatForMemberId(id),
+  };
+}
+
 /**
  * Live roster look when `memberId` is set (open subagents / identity sessions
  * follow Team edits). Falls back to the frozen spawn snapshot otherwise.
@@ -989,10 +1098,7 @@ function companionBallForMember(
   const memberId = typeof link.memberId === "string" ? link.memberId.trim() : "";
   let look = link.appearance;
   if (memberId) {
-    const home = runtime.agentRoster.findHome(memberId);
-    const member = home
-      ? runtime.agentRoster.get(home.rosterWorkspaceId, memberId)
-      : undefined;
+    const member = rosterMemberById(runtime, memberId);
     if (member?.appearance) look = member.appearance;
   }
   // Link present but no look yet → default blob/cream (blocks Settings kit leak).
@@ -1391,10 +1497,8 @@ export function buildSessionStatusSnapshotUncached(
     .value as Record<string, unknown>;
   const localeUser = runtime.settingsNamespaces.view("locale")
     .value as Record<string, unknown>;
-  const seatTitles = readSeatTitles(
-    presenceUser,
-    readUiLocalePreference(localeUser),
-  );
+  const uiLocale = readUiLocalePreference(localeUser);
+  const seatTitles = readSeatTitles(presenceUser, uiLocale);
   const dressing = dressingFromPresence(presenceUser);
   const bossBall = bossBallFromPresence(presenceUser, dressing.stickers);
   const identity = !childLink
@@ -1409,10 +1513,6 @@ export function buildSessionStatusSnapshotUncached(
     { memberId: MANAGER_MEMBER_ID },
     dressing.stickers,
   );
-  const sunflowerHome = runtime.agentRoster.findHome(SUNFLOWER_MEMBER_ID);
-  const sunflowerMember = sunflowerHome
-    ? runtime.agentRoster.get(sunflowerHome.rosterWorkspaceId, SUNFLOWER_MEMBER_ID)
-    : undefined;
   const sunflowerBall = companionBallForMember(
     runtime,
     { memberId: SUNFLOWER_MEMBER_ID },
@@ -1421,82 +1521,100 @@ export function buildSessionStatusSnapshotUncached(
   const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
   // Project sessions: Overview is always Boss → 经理 (委派 UI), not a single
   // Settings ball. Xiangyang uses Boss → 向日葵. Identity agent-homes are the
-  // same Boss → 干员 pair. Tool children: own look + Boss (or mid-parent).
+  // same Boss → 干员 pair. Tool children: own look + immediate parent
+  // (经理 / 向日葵 / mid), never paint the human 老板 as the left seat.
   let companionBall: SessionStatusSnapshot["companionBall"];
   let parentCompanionBall: SessionStatusSnapshot["companionBall"];
   let delegate: SessionStatusSnapshot["delegate"];
   if (childLink) {
     companionBall = companionBallForMember(runtime, childLink, dressing.stickers);
-    parentCompanionBall = parentDelegated
-      ? companionBallForMember(runtime, parentDelegated, dressing.stickers)
-      : bossBall;
-    // Tool-delegated children are 干员 seats — never paint them as 经理.
-    const childMemberId =
-      typeof childLink.memberId === "string" ? childLink.memberId.trim() : "";
-    const childSeat =
-      childMemberId === MANAGER_MEMBER_ID
-        ? "manager"
-        : childMemberId === SUNFLOWER_MEMBER_ID
-          ? "sunflower"
-          : "agent";
+    const parentSeat = resolveChildParentSeat(
+      runtime,
+      childLink.parentSessionId,
+      seatTitles,
+      uiLocale,
+    );
+    if (parentDelegated) {
+      parentCompanionBall = companionBallForMember(
+        runtime,
+        parentDelegated,
+        dressing.stickers,
+      );
+    } else if (parentSeat.memberId) {
+      parentCompanionBall = companionBallForMember(
+        runtime,
+        { memberId: parentSeat.memberId },
+        dressing.stickers,
+      );
+    } else {
+      parentCompanionBall = managerBall;
+    }
+    const parentLabel =
+      parentDelegated?.label?.trim() || parentSeat.label;
+    const childPaint = resolveDelegatedChildPaint(
+      runtime,
+      sessionId,
+      childLink,
+      uiLocale,
+      seatTitles,
+    );
     delegate = {
       parentSessionId: childLink.parentSessionId,
-      childLabel: childLink.label,
-      childSeat,
-      ...(parentDelegated?.label
-        ? { parentLabel: parentDelegated.label }
-        : { parentLabel: seatTitles.boss }),
+      childLabel: childPaint.childLabel,
+      childSeat: childPaint.childSeat,
+      parentLabel,
+      ...(childPaint.childMemberId
+        ? { childMemberId: childPaint.childMemberId }
+        : {}),
+      ...(parentSeat.memberId ? { parentMemberId: parentSeat.memberId } : {}),
     };
   } else if (identity) {
-    const identityHome = runtime.agentRoster.findHome(identity.memberId);
-    const identityMember = identityHome
-      ? runtime.agentRoster.get(identityHome.rosterWorkspaceId, identity.memberId)
-      : undefined;
     companionBall = companionBallForMember(
       runtime,
       { memberId: identity.memberId },
       dressing.stickers,
     );
     parentCompanionBall = bossBall;
-    // Nickname-only when set — UI prefixes the seat title for that childSeat.
-    const identityNick = identityMember?.nickname?.trim();
-    const identityFormal =
-      identity.memberId === MANAGER_MEMBER_ID
-        ? seatTitles.manager
-        : identity.memberId === SUNFLOWER_MEMBER_ID
-          ? identityMember?.name?.trim() || "向日葵"
-          : identityMember?.name?.trim() || identity.memberId;
-    const childSeat =
-      identity.memberId === MANAGER_MEMBER_ID
-        ? "manager"
-        : identity.memberId === SUNFLOWER_MEMBER_ID
-          ? "sunflower"
-          : "agent";
+    const identityMember = rosterMemberById(runtime, identity.memberId);
     delegate = {
       parentSessionId: sessionId,
-      childLabel: identityNick || identityFormal,
-      childSeat,
+      childLabel: paintRosterMemberLabel(
+        identity.memberId,
+        identityMember,
+        uiLocale,
+        seatTitles,
+        identity.memberId,
+      ),
+      childSeat: childSeatForMemberId(identity.memberId),
+      childMemberId: identity.memberId,
     };
   } else if (workspaceId === XIANGYANG_WORKSPACE_ID) {
     companionBall = sunflowerBall;
     parentCompanionBall = bossBall;
+    // 经理 · 向日葵（xrkseek） — mid-tier seat, not a bare name-only ball.
     delegate = {
       parentSessionId: sessionId,
-      childLabel: sunflowerMember?.name?.trim() || "向日葵",
-      childSeat: "sunflower",
+      childLabel: sunflowerDisplayLabel(uiLocale),
+      childSeat: "manager",
+      childMemberId: SUNFLOWER_MEMBER_ID,
     };
   } else {
     companionBall = managerBall;
     parentCompanionBall = bossBall;
     // Boss seat = human operator mood from Settings `ui-presence` (not AI presence_set).
     // Omit parentLabel — UI role already shows titles.boss; echoing made「老板 · 老板」.
-    // childLabel = nickname only when set (UI prefixes titles.manager). Sending
-    // `经理（老王）` here made the Overview show「经理 · 经理（老王）」.
-    const managerNick = managerMember?.nickname?.trim();
+    // childLabel = `经理` or `经理（老王）` — UI detects role prefix and keeps as-is.
     delegate = {
       parentSessionId: sessionId,
-      childLabel: managerNick || seatTitles.manager,
+      childLabel: paintRosterMemberLabel(
+        MANAGER_MEMBER_ID,
+        managerMember,
+        uiLocale,
+        seatTitles,
+        seatTitles.manager,
+      ),
       childSeat: "manager",
+      childMemberId: MANAGER_MEMBER_ID,
     };
   }
   const homeId =

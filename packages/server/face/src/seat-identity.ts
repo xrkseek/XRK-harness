@@ -10,8 +10,12 @@ import {
   SUNFLOWER_MEMBER_ID,
 } from "./agent-roster-store.js";
 import {
+  catalogSeedDisplayLabel,
+} from "./catalog-seed-labels.js";
+import {
   readSeatTitles,
   readUiLocalePreference,
+  type SeatTitleLocale,
   type SeatTitles,
 } from "./seat-titles.js";
 import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
@@ -51,28 +55,119 @@ function bossSeatLabel(
   return formatNamedSeat(titles.boss, nickname);
 }
 
+/** Boss formal（nickname） from live Settings — used by seat-channel prefixes. */
+export function bossSeatLabelFromRuntime(
+  runtime: FaceRuntime,
+  titles?: SeatTitles,
+): string {
+  const presenceUser = runtime.settingsNamespaces.view("ui-presence")
+    .value as Record<string, unknown>;
+  const localeUser = runtime.settingsNamespaces.view("locale")
+    .value as Record<string, unknown>;
+  const seatTitles =
+    titles
+    ?? readSeatTitles(presenceUser, readUiLocalePreference(localeUser));
+  return bossSeatLabel(seatTitles, readBossNickname(presenceUser));
+}
+
+function resolveRosterMember(
+  runtime: FaceRuntime,
+  memberId: string,
+) {
+  const id = memberId.trim();
+  if (!id) return undefined;
+  const home = runtime.agentRoster.findHome(id);
+  return home ? runtime.agentRoster.get(home.rosterWorkspaceId, id) : undefined;
+}
+
 function resolveMemberSeat(
   runtime: FaceRuntime,
   memberId: string,
   titles: SeatTitles,
+  locale: SeatTitleLocale = "zh",
 ): { readonly id: string; readonly label: string } {
-  const home = runtime.agentRoster.findHome(memberId);
-  const member = home
-    ? runtime.agentRoster.get(home.rosterWorkspaceId, memberId)
-    : undefined;
-  const formal =
-    memberId === MANAGER_MEMBER_ID
-      ? titles.manager
-      : member?.name?.trim() || memberId;
-  const nick =
-    memberId === SUNFLOWER_MEMBER_ID
-      ? undefined
-      : clipNickname(member?.nickname);
-  return { id: memberId, label: formatNamedSeat(formal, nick) };
+  const member = resolveRosterMember(runtime, memberId);
+  const nick = clipNickname(member?.nickname);
+  const fromCatalog = catalogSeedDisplayLabel(memberId, locale, {
+    seatTitles: titles,
+    ...(nick ? { nickname: nick } : {}),
+  });
+  if (fromCatalog) return { id: memberId, label: fromCatalog };
+  return {
+    id: memberId,
+    label: formatNamedSeat(member?.name?.trim() || memberId, nick),
+  };
 }
 
-function managerSeat(runtime: FaceRuntime, titles: SeatTitles): string {
-  return resolveMemberSeat(runtime, MANAGER_MEMBER_ID, titles).label;
+function managerSeat(
+  runtime: FaceRuntime,
+  titles: SeatTitles,
+  locale: SeatTitleLocale,
+): string {
+  return resolveMemberSeat(runtime, MANAGER_MEMBER_ID, titles, locale).label;
+}
+
+/**
+ * Immediate parent seat of a tool-delegated child.
+ * Project coding parent → 经理; Xiangyang → 向日葵; nested → mid parent;
+ * agent-home → that member. Never the human 老板 (they sit on human_face).
+ */
+export function resolveChildParentSeat(
+  runtime: FaceRuntime,
+  parentSessionId: string,
+  titles: SeatTitles,
+  locale: SeatTitleLocale = "zh",
+): {
+  readonly label: string;
+  readonly memberId?: string;
+  readonly surface: "nested" | "identity" | "xiangyang" | "manager";
+} {
+  const parentLink = runtime.subagents.getByChild(parentSessionId);
+  if (parentLink && parentLink.mode !== "fork") {
+    const memberId =
+      typeof parentLink.memberId === "string" ? parentLink.memberId.trim() : "";
+    const label = memberId
+      ? resolveMemberSeat(runtime, memberId, titles, locale).label
+      : parentLink.label.trim() || titles.agent;
+    return {
+      label,
+      ...(memberId ? { memberId } : {}),
+      surface: "nested",
+    };
+  }
+  const parentIdentity = runtime.sessionIdentities.get(parentSessionId);
+  if (parentIdentity) {
+    const seat = resolveMemberSeat(
+      runtime,
+      parentIdentity.memberId,
+      titles,
+      locale,
+    );
+    return {
+      label: seat.label,
+      memberId: seat.id,
+      surface: "identity",
+    };
+  }
+  const parentWs = runtime.workspaces.workspaceIdOf(parentSessionId);
+  if (parentWs === XIANGYANG_WORKSPACE_ID) {
+    const seat = resolveMemberSeat(
+      runtime,
+      SUNFLOWER_MEMBER_ID,
+      titles,
+      locale,
+    );
+    return {
+      label: seat.label,
+      memberId: SUNFLOWER_MEMBER_ID,
+      surface: "xiangyang",
+    };
+  }
+  return {
+    label: managerSeat(runtime, titles, locale),
+    memberId: MANAGER_MEMBER_ID,
+    surface: "manager",
+  };
 }
 
 /**
@@ -87,10 +182,8 @@ export function formatSeatIdentity(
     .value as Record<string, unknown>;
   const localeUser = runtime.settingsNamespaces.view("locale")
     .value as Record<string, unknown>;
-  const titles = readSeatTitles(
-    presenceUser,
-    readUiLocalePreference(localeUser),
-  );
+  const locale = readUiLocalePreference(localeUser);
+  const titles = readSeatTitles(presenceUser, locale);
   const bossNick = readBossNickname(presenceUser);
   const boss = bossSeatLabel(titles, bossNick);
   const titlesLine = `titles: ${titles.boss} / ${titles.manager} / ${titles.agent}`;
@@ -98,32 +191,36 @@ export function formatSeatIdentity(
 
   if (childLink && childLink.mode !== "fork") {
     const you = childLink.memberId
-      ? resolveMemberSeat(runtime, childLink.memberId, titles).label
+      ? resolveMemberSeat(runtime, childLink.memberId, titles, locale).label
       : childLink.label.trim() || titles.agent;
-    const parentId = childLink.parentSessionId;
-    const parentIdentity = runtime.sessionIdentities.get(parentId);
-    const parentWs = runtime.workspaces.workspaceIdOf(parentId);
-    let parent: string;
-    if (parentIdentity) {
-      parent = resolveMemberSeat(runtime, parentIdentity.memberId, titles).label;
-    } else if (parentWs === XIANGYANG_WORKSPACE_ID) {
-      parent = resolveMemberSeat(runtime, SUNFLOWER_MEMBER_ID, titles).label;
-    } else {
-      parent = managerSeat(runtime, titles);
-    }
+    const parentSeat = resolveChildParentSeat(
+      runtime,
+      childLink.parentSessionId,
+      titles,
+      locale,
+    );
+    const parent = parentSeat.label;
     const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
+    // Channel markers use live Settings titles (titleBoss/Manager/Agent or scheme),
+    // never hardcoded 老板/经理. UI → [titles.boss…]; parent tool → [report seat].
     return [
-      `you: ${you} (subagent)`,
-      `speaker: ${boss} (human_face=${humanFace})`,
-      `parent: ${parent}`,
-      `report: FINAL→parent; ask→parent (card on parent session — ${titles.manager} when parent is ${titles.manager})`,
+      `you: ${you} (subagent · parent_surface=${parentSeat.surface})`,
+      `report: ${parent}`,
+      `human_face: ${boss} (${humanFace})`,
+      `channels: UI→[${boss}] …; parent_tool→[${parent}] …`,
+      `ask: card on parent (${parent}); escalate to human_face via parent ask_user`,
       titlesLine,
     ].join("\n");
   }
 
   const identity = runtime.sessionIdentities.get(sessionId);
   if (identity) {
-    const you = resolveMemberSeat(runtime, identity.memberId, titles).label;
+    const you = resolveMemberSeat(
+      runtime,
+      identity.memberId,
+      titles,
+      locale,
+    ).label;
     return [
       `you: ${you} (agent-home)`,
       `speaker: ${boss}`,
@@ -136,7 +233,12 @@ export function formatSeatIdentity(
 
   const ws = runtime.workspaces.workspaceIdOf(sessionId);
   if (ws === XIANGYANG_WORKSPACE_ID) {
-    const you = resolveMemberSeat(runtime, SUNFLOWER_MEMBER_ID, titles).label;
+    const you = resolveMemberSeat(
+      runtime,
+      SUNFLOWER_MEMBER_ID,
+      titles,
+      locale,
+    ).label;
     return [
       `you: ${you} (xiangyang)`,
       `speaker: ${boss}`,
@@ -147,7 +249,7 @@ export function formatSeatIdentity(
   }
 
   return [
-    `you: ${managerSeat(runtime, titles)} (project)`,
+    `you: ${managerSeat(runtime, titles, locale)} (project)`,
     `speaker: ${boss}`,
     `report: ${titles.boss}`,
     titlesLine,

@@ -96,7 +96,18 @@ export function mergeTurnRailItems(
     if (entry.prompt === '' && !loadedByTurn.has(entry.turn)) continue
     prompted += 1
     const round = entry.round ?? prompted
-    if (startInWindow.has(entry.turn) && !loadedByTurn.has(entry.turn)) continue
+    // Skip outline-only marks whose turn/start is already in the window but
+    // that have no loaded user opener (插话 / leftover body). Face-published
+    // `round` means a real 轮次 on the whole-log ladder — keep it. Dropping
+    // those after edit-resubmit truncate (prior opener briefly missing from
+    // navigation while turn/start stays) made the new Host turn paint 第 1 轮.
+    if (
+      entry.round === undefined
+      && startInWindow.has(entry.turn)
+      && !loadedByTurn.has(entry.turn)
+    ) {
+      continue
+    }
     byTurn.set(entry.turn, {
       turn: entry.turn,
       prompt: entry.prompt,
@@ -112,7 +123,9 @@ export function mergeTurnRailItems(
       prompt: item.prompt !== '' ? item.prompt : preview?.prompt ?? '',
       response: item.response !== '' ? item.response : preview?.response ?? '',
       anchor: { kind: 'loaded', key: item.anchorKey },
-      round: preview?.round ?? prompted + 1,
+      // Prefer Face outline round; else Host wire turn (post-truncate remaps
+      // from 1 and matches 轮次). Never re-index to the loaded-window order.
+      round: preview?.round ?? item.turn,
     })
     if (preview === undefined) prompted += 1
   }

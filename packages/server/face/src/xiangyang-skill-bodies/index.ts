@@ -16,7 +16,7 @@ export interface XiangyangSkillSeed {
 }
 
 /** Bump when seed semantics change in a way operators should notice in logs. */
-export const XIANGYANG_SKILLS_REVISION = 5;
+export const XIANGYANG_SKILLS_REVISION = 6;
 
 export const XIANGYANG_SKILL_SEEDS: readonly XiangyangSkillSeed[] = [
   { id: demand.ID, body: demand.BODY },

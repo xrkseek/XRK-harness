@@ -314,8 +314,10 @@ export {
 export {
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
+  createOperatorPinFetchElevator,
+  requestHasOperatorPin,
   tryHandleMobileAccessGate,
-};
+} from "./mobile-access-gate.js";
 export {
   armAccessGateForListen,
   injectMobileAccessShellIntoHtml,

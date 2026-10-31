@@ -178,7 +178,7 @@ const THEMES = [
   { theme: "catalog-truth", re: /[Cc]atalog = truth|[Cc]atalog=truth/ },
   { theme: "boss-speaker", re: /speaker: 老板|titles\.boss|Serve \*\*老板\*\*/ },
   { theme: "seat-manager", re: /you: 经理|titles\.manager/ },
-  { theme: "seat-sunflower", re: /you: 向日葵|You are 向日葵/ },
+  { theme: "seat-sunflower", re: /you: 向日葵（xrkseek）|You are 向日葵|xrkseek/ },
 ] as const;
 
 function writeAudit(hits: readonly ThemeHit[], packs: readonly string[]): void {

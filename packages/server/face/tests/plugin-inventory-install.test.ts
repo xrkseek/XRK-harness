@@ -51,6 +51,45 @@ describe("pluginInventory/install", () => {
     });
   });
 
+  it("forwards proxy to updateUserPlugin and command log", async () => {
+    const updateUserPlugin = vi.fn(async () => ({
+      ok: true as const,
+      stdout: "ok\n",
+      stderr: "",
+    }));
+    const syncManagedProcessPlugins = vi.fn(async () => undefined);
+    const result = await pluginInventoryInstall(
+      {
+        productDir: "/tmp/unused",
+        plugins: [],
+        webPlugins: [],
+        updateUserPlugin,
+        syncManagedProcessPlugins,
+        hostPublic: { pluginsDir: "/tmp/unused-plugins" },
+        bus: { publishHost: vi.fn() },
+      } as never,
+      "rpc-proxy",
+      {
+        args: {
+          spec: "xrkh-better-sidebar",
+          proxy: "http://127.0.0.1:7897",
+        },
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(updateUserPlugin).toHaveBeenCalledWith(
+      "xrkh-better-sidebar",
+      expect.objectContaining({
+        proxy: "http://127.0.0.1:7897",
+        onChunk: expect.any(Function),
+      }),
+    );
+    if (!result.ok) return;
+    expect(result.value.command).toBe(
+      "xrkh plugin add --proxy http://127.0.0.1:7897 xrkh-better-sidebar",
+    );
+  });
+
   it("forwards registry to updateUserPlugin and command log", async () => {
     const updateUserPlugin = vi.fn(async () => ({
       ok: true as const,

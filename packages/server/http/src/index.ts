@@ -56,6 +56,8 @@ export {
   armAccessGateForListen,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
+  createOperatorPinFetchElevator,
+  requestHasOperatorPin,
   injectMobileAccessShellIntoHtml,
   mapSessionCostToDsh,
   imChatKey,

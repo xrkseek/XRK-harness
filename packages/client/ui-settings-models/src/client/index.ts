@@ -41,11 +41,14 @@ export type { ModelsSettingsState, ProviderRow } from './store.ts'
 /**
  * Refetch the page snapshot only after its first load: an unopened Models
  * page must not fetch on background invalidations.
+ * Soft when already ready — a hard load flips `status` to loading and the
+ * default-model card unmounts (providerOrder document-updated after reorder).
  * @param controller - the page store.
  */
 export function refreshIfLoaded(controller: ModelsSettingsStore): void {
-  if (controller.store.getSnapshot().status === 'idle') return
-  void controller.load()
+  const status = controller.store.getSnapshot().status
+  if (status === 'idle') return
+  void controller.load({ soft: status === 'ready' })
 }
 
 /**

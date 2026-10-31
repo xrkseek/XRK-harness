@@ -445,10 +445,25 @@ export interface FaceRuntime {
     reason: "user" | "parent" | "takeover",
   ): void;
   /**
-   * Mirror a human prompt into a continuable child onto the parent transcript
-   * so the orchestrator session can see what the user told the worker.
+   * Arm a parent-inbox mirror for a human follow-up into a continuable child.
+   * Keyed by the child's `admitId` so only that admit's `prompt/promoted`
+   * delivers it (queued text stays off the manager). External workers pass
+   * `admitId: null` to deliver immediately. Tool-/orch- prompts skip this.
    */
-  notifyOwnedSubagentUserPrompt(childSessionId: string, preview: string): void;
+  armOwnedSubagentUserPromptMirror(
+    childSessionId: string,
+    preview: string,
+    admitId: string | null,
+  ): void;
+  /**
+   * Deliver the mirror armed for `admitId` (from `prompt/promoted`). No-op
+   * when that admit was not a human follow-up.
+   */
+  flushOwnedSubagentUserPromptMirror(admitId: string): void;
+  /**
+   * Drop a pending mirror without notifying the parent (`prompt/withdrawn`).
+   */
+  dropOwnedSubagentUserPromptMirror(admitId: string): void;
   /** Shared shell registry for session-scoped job kill / background RPC. */
   readonly shell?: ShellService;
 }

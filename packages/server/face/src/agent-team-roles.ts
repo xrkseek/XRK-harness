@@ -59,9 +59,11 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
     id: "worker",
     reminder:
       "ROLE: worker. Execute the assigned task precisely. Prefer concrete edits and evidence over planning. Ask only when blocked. " +
-      "You are not the only agent editing this codebase: stay inside the scope you were given and never revert another agent's or the user's changes.",
-    // A worker implements; spawning more subagents is the lead's job.
-    deniedTools: ["subagent", "ralph", "team_graph"],
+      "You are not the only agent editing this codebase: stay inside the scope you were given and never revert another agent's or the user's changes. " +
+      "Nested subagent is allowed when parallel slices help; FINAL still reports to your parent (干员→干员).",
+    // Keep write/shell; allow nested `subagent` (agent-home + L1 children).
+    // `ralph` / `team_graph` stay lead/orchestrator-facing.
+    deniedTools: ["ralph", "team_graph"],
   },
   researcher: {
     id: "researcher",
@@ -205,7 +207,7 @@ export function roleCapsHint(role: AgentTeamSpawnRole | undefined): string {
     case "reviewer":
       return "read-fs";
     case "worker":
-      return "edit,shell,read-fs";
+      return "edit,shell,read-fs,subagent";
     case "lead":
       return "orchestrate";
     default:

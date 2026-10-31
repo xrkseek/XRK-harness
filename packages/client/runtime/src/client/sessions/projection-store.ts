@@ -191,6 +191,26 @@ export class ProjectionValueStore {
     for (const key of keys) this.changed(key)
   }
 
+  /**
+   * Force-replace every row from a post-truncate baseline in one pass.
+   *
+   * Unlike {@link seed}, a shorter `asOfSeq` wins here: Host rebuilt values
+   * at the cut. Surviving keys never flash through `undefined` (clear+seed).
+   */
+  reseal(baseline: ProjectionsBaseline): void {
+    const values = baseline.values as Record<string, unknown>
+    const next = new Set(Object.keys(values))
+    for (const key of next) {
+      this.rows.set(key, { value: values[key], seq: baseline.asOfSeq })
+      this.changed(key)
+    }
+    for (const key of [...this.rows.keys()]) {
+      if (next.has(key)) continue
+      this.rows.delete(key)
+      this.changed(key)
+    }
+  }
+
   private changed(key: string): void {
     this.valuesCache = undefined
     this.channels.get(key)?.notifier.markDirty()

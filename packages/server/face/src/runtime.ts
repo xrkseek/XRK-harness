@@ -868,20 +868,40 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   /**
-   * Mirror a human follow-up on a continuable child into the parent's inbox.
-   * Visibility only for tool-originated prompts is skipped by the caller.
+   * Human follow-ups awaiting parent-inbox mirror, keyed by child admitId.
+   * Armed at `subagent.prompt`; flushed on that admit's `prompt/promoted`.
    */
-  const notifyOwnedSubagentUserPrompt = (
+  const pendingParentUserPromptMirrors = new Map<
+    string,
+    { readonly childSessionId: string; readonly preview: string }
+  >();
+
+  const deliverParentUserPromptMirror = (
     childSessionId: string,
     preview: string,
   ): void => {
     const link = subagents.getByChild(childSessionId);
     if (!link || link.mode !== "continuable") return;
     const parentId = link.parentSessionId;
+    // Prefer live roster nick in the notice label (spawn-time label is formal).
+    const memberId =
+      typeof link.memberId === "string" ? link.memberId.trim() : "";
+    let noticeLink = link;
+    if (memberId) {
+      const home = agentRoster.findHome(memberId);
+      const member = home
+        ? agentRoster.get(home.rosterWorkspaceId, memberId)
+        : undefined;
+      const nick = member?.nickname?.trim();
+      const formal = member?.name?.trim() || link.label;
+      if (nick) {
+        noticeLink = { ...link, label: `${formal}（${nick}）` };
+      }
+    }
     void resolveAgent(parentId)
       .then((parent) => {
         const receipt = parent.admit(
-          formatSubagentUserPromptNotice(link, preview),
+          formatSubagentUserPromptNotice(noticeLink, preview),
           { delivery: "steer" },
         );
         noticeAdmitIds.add(receipt.admitId);
@@ -890,6 +910,37 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         options.drain.wake(parentId);
       })
       .catch(() => undefined);
+  };
+
+  const armOwnedSubagentUserPromptMirror = (
+    childSessionId: string,
+    preview: string,
+    admitId: string | null,
+  ): void => {
+    const body = preview.trim();
+    if (!body) return;
+    const link = subagents.getByChild(childSessionId);
+    if (!link || link.mode !== "continuable") return;
+    // External workers: no local promote — deliver now.
+    if (admitId === null) {
+      deliverParentUserPromptMirror(childSessionId, body);
+      return;
+    }
+    pendingParentUserPromptMirrors.set(admitId, {
+      childSessionId,
+      preview: body,
+    });
+  };
+
+  const dropOwnedSubagentUserPromptMirror = (admitId: string): void => {
+    pendingParentUserPromptMirrors.delete(admitId);
+  };
+
+  const flushOwnedSubagentUserPromptMirror = (admitId: string): void => {
+    const pending = pendingParentUserPromptMirrors.get(admitId);
+    if (pending === undefined) return;
+    pendingParentUserPromptMirrors.delete(admitId);
+    deliverParentUserPromptMirror(pending.childSessionId, pending.preview);
   };
 
   const getTool = (sessionId: string, name: string) => {
@@ -1307,6 +1358,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
       } else {
         spentWakes.delete(id);
       }
+      // Human child follow-up → parent mirror only once this admit enters a step.
+      flushOwnedSubagentUserPromptMirror(frozen.admitId);
+    }
+    if (frozen.type === "prompt/withdrawn") {
+      dropOwnedSubagentUserPromptMirror(frozen.admitId);
     }
     if (
       frozen.type === "prompt/admitted" ||
@@ -1315,23 +1371,27 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     ) {
       runtimeBox.current?.publishQueue(id);
     }
-    if (frozen.type === "turn/end") {
-      const reasonKind =
-        frozen.reason &&
-        typeof frozen.reason === "object" &&
-        typeof (frozen.reason as { kind?: unknown }).kind === "string"
-          ? (frozen.reason as { kind: string }).kind
-          : undefined;
-      runtimeBox.current?.goals.onTurnEnd(id, reasonKind);
+    if (
+      (frozen.type === "turn/end" || frozen.type === "session/title")
+      && !replayingLog
+    ) {
+      if (frozen.type === "turn/end") {
+        const reasonKind =
+          frozen.reason &&
+          typeof frozen.reason === "object" &&
+          typeof (frozen.reason as { kind?: unknown }).kind === "string"
+            ? (frozen.reason as { kind: string }).kind
+            : undefined;
+        runtimeBox.current?.goals.onTurnEnd(id, reasonKind);
+      }
       // DSH durability point: list-tier title/blank must survive a crash
-      // before the next open/history page. Skip log replay (prime path).
-      if (!replayingLog) {
-        try {
-          rememberListProjections(id);
-        } catch {
-          // Same posture as LRU eviction: never fail the append; cold list
-          // falls back to listHints until a later remember succeeds.
-        }
+      // before the next open/history page. Title backfill / rename also
+      // checkpoint here so cold list does not keep showing untitled.
+      try {
+        rememberListProjections(id);
+      } catch {
+        // Same posture as LRU eviction: never fail the append; cold list
+        // falls back to listHints until a later remember succeeds.
       }
     }
     return frozen;
@@ -1568,7 +1628,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     },
     suppressOwnedSubagentCompletion,
     notifyOwnedSubagentStopped,
-    notifyOwnedSubagentUserPrompt,
+    armOwnedSubagentUserPromptMirror,
+    flushOwnedSubagentUserPromptMirror,
+    dropOwnedSubagentUserPromptMirror,
     ...(options.defaultAgentPreset
       ? { defaultAgentPreset: options.defaultAgentPreset }
       : {}),

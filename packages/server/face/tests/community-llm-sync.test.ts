@@ -136,6 +136,8 @@ describe("mergeCommunityProviderModels", () => {
     expect(defaultSoftBudgetMaxTokens(128_000)).toBe(115_200);
     expect(defaultSoftBudgetMaxTokens(200_000)).toBe(180_000);
     expect(defaultSoftBudgetMaxTokens(1_000_000)).toBe(900_000);
+    // 256Ki window → 235929 — must stay legal under Models schema (not step 1000).
+    expect(defaultSoftBudgetMaxTokens(262_144)).toBe(235_929);
   });
 
   it("detects community loopback baseURL collisions (WB vs OFM)", () => {

@@ -30,6 +30,8 @@ export interface SessionListEntry {
   mainline?: string
   mainlineId?: string
   sideline?: string
+  /** Roster member bind; keeps unbound agent-home rows on the Agents 未分组 lane. */
+  memberId?: string
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
   /** User interaction currently blocking this session, derived from live mux frames. */
