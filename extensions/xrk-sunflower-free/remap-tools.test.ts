@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  buildUpstreamBody,
   remapDownstreamCompletionJson,
   remapDownstreamToolCall,
 } from "./sidecar.ts";
@@ -42,6 +43,27 @@ describe("remapDownstreamToolCall", () => {
       function: { name: "read_file", arguments: "{}" },
     };
     expect(remapDownstreamToolCall(input)).toEqual(input);
+  });
+});
+
+describe("buildUpstreamBody", () => {
+  test("strips tool_choice none (v2 FreeTierError)", () => {
+    const out = buildUpstreamBody({
+      model: "glm-5.3-flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      tool_choice: "none",
+      tools: [],
+    });
+    expect(out.tool_choice).toBeUndefined();
+  });
+
+  test("appends placeholder note for injected read/shell", () => {
+    const out = buildUpstreamBody({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    const system = (out.messages as { role: string; content: string }[])[0];
+    expect(system.role).toBe("system");
+    expect(system.content).toContain("placeholders that do nothing");
   });
 });
 

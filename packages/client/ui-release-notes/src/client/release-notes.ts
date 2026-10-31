@@ -93,6 +93,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Community OFM / channel-pack login RPC · ModuleLoader dual-register · Cordis Host staging; whale live meter · wallet roots.',
       },
       {
+        zh: '向日葵免费 OpenCode 车道对齐 OFM `/inference/v1` 与 v2 请求头。',
+        en: 'Sunflower-free OpenCode lane aligned to OFM `/inference/v1` and v2 headers.',
+      },
+      {
         zh: 'npm @xrkseek/harness-cli@0.7.0 接管 @latest。完整清单见 docs/releases/v0.7.0.md。',
         en: 'npm @xrkseek/harness-cli@0.7.0 now owns @latest. Full list in docs/releases/v0.7.0.md.',
       },

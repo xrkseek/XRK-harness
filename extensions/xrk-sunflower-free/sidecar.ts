@@ -256,12 +256,24 @@ export function buildUpstreamBody(body: ChatBody): ChatBody {
     return name !== "read" && name !== "shell";
   });
 
-  return {
+  // OFM: injected gate tools are real defs; tell the model not to call them
+  // so it prefers Host tools (read_file / bash) instead.
+  const withPlaceholderNote = `${system}\n\nDo not call the \`read\` or \`shell\` tools; they are placeholders that do nothing. Use the other tools you have been given instead.`;
+
+  const next: ChatBody = {
     ...body,
-    messages: [{ role: "system", content: system }, ...rest],
+    messages: [{ role: "system", content: withPlaceholderNote }, ...rest],
     tools: [...kept, FINGERPRINT.readTool, FINGERPRINT.shellTool],
     stream: true,
   };
+  // OFM / v2 gate: `tool_choice: "none"` → 403 FreeTierError.
+  if (
+    next.tool_choice === "none" ||
+    (isRecord(next.tool_choice) && next.tool_choice.type === "none")
+  ) {
+    delete next.tool_choice;
+  }
+  return next;
 }
 
 /** 上游只认这些头；其余（含任何 `x-opencode-request`）一律不透传。 */
@@ -696,6 +708,8 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
             "x-opencode-session-id": sid,
             "x-session-affinity": sid,
             "x-session-id": sid,
+            // OFM v2 fingerprint: official CLI always sends this.
+            "x-opencode-project": "global",
             accept:
               body.stream === false
                 ? "application/json"
@@ -706,9 +720,12 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
             const value = req.headers.get(name);
             if (value !== null) headers[name] = value;
           }
-          // Bun.fetch：`proxy` 为 URL 走本地代理；`false` 强制绕过环境代理直连。
+          // Same path as OFM free-lane (`/inference/v1/...`). The older
+          // `/inference/openai/v1/...` surface 404s on models and is not the
+          // live chat endpoint. Bun.fetch: `proxy` URL → local proxy; `false`
+          // forces direct (bypass env proxy).
           upstream = await doFetch(
-            `${UPSTREAM}/inference/openai/v1/chat/completions`,
+            `${UPSTREAM}/inference/v1/chat/completions`,
             {
               method: "POST",
               headers,
@@ -754,10 +771,8 @@ export function startSidecar(options: SidecarOptions = {}): SidecarHandle {
       const text = await upstream.text();
       if (!viaKilo) {
         const verdict = classifyLane(upstream.status, retryAfter, text);
-        if (verdict.kind === "lane-refused") {
-          // 车道被拒不是这个模型的错，丢掉 session 让下次换新的。
-          pool.forget(sessionKey);
-        }
+        // OFM: never rotate session ids on retries / FreeUsageLimit / shape
+        // 403 — minting a fresh id burns quota and does not clear an IP bucket.
         const out = new Headers({
           "content-type": "application/json",
           "x-sunflower-verdict": verdict.kind,
