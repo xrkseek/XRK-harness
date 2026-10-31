@@ -115,7 +115,7 @@ export type {
 export {
   EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS, toAssistantBlock, toAssistantBlocks,
 } from './sessions/conversation.ts'
-export { emptyAssistantBlock } from './sessions/partial.ts'
+export { emptyAssistantBlock, toolCallBlockIndex } from './sessions/partial.ts'
 export { isTokenDelta, isDecodableSample, MIN_DECODE_SAMPLE_MS } from './sessions/assistant-timing.ts'
 export { contextForm, contextProvenance, sessionRecallLabels } from './sessions/context-provenance.ts'
 export { displayFailureMessage } from './sessions/failure-display.ts'

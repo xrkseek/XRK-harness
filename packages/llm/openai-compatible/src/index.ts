@@ -154,6 +154,13 @@ type WireMessage =
 
 const REASONING_INDEX = 0;
 const TEXT_INDEX = 1;
+/**
+ * Vendor `tool_calls[].index` starts at 0. The client partial packs reasoning
+ * at 0 and visible text at 1 in the same block array — emitting tool deltas on
+ * 0/1 clobbers Think / answer mid-stream (empty expand, missing tool chrome).
+ * Park tools at 2+ so the three lanes never share a slot.
+ */
+const TOOL_CALL_INDEX_BASE = 2;
 
 function buildEndpoint(baseUrl: string, path: string): string {
   const base = baseUrl.replace(/\/+$/, "");
@@ -739,7 +746,7 @@ async function* streamSse(
         if (idPiece || namePiece || argsPiece) {
           yield {
             type: "tool-call-delta" as const,
-            index: idx,
+            index: TOOL_CALL_INDEX_BASE + idx,
             id,
             ...(nonEmptyString(cur.name) ? { name: cur.name } : {}),
             argumentsDelta: argsPiece,

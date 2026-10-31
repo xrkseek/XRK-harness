@@ -500,6 +500,58 @@ describe("openai-compatible adapter", () => {
     });
   });
 
+  it("emits tool-call-delta at index ≥2 so vendor 0 does not clobber reasoning", async () => {
+    const payload = [
+      JSON.stringify({
+        choices: [{ delta: { reasoning_content: "plan" } }],
+      }),
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_w",
+                  function: {
+                    name: "web_fetch",
+                    arguments: '{"url":"https://example.com"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      JSON.stringify({
+        choices: [{ finish_reason: "tool_calls", delta: {} }],
+      }),
+    ]
+      .map((row) => `data: ${row}\n\n`)
+      .join("");
+    const llm = createOpenAiCompatibleAdapter({
+      baseUrl: "https://api.example.com/v1",
+      model: "m",
+      fetch: (async () =>
+        new Response(`${payload}data: [DONE]\n\n`, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })) as unknown as typeof fetch,
+    });
+    const events: { type: string; index?: number }[] = [];
+    for await (const ev of llm.stream!({
+      messages: [{ role: "user", content: "hi" }],
+    })) {
+      events.push(ev);
+    }
+    expect(events.some((e) => e.type === "reasoning-delta" && e.index === 0)).toBe(
+      true,
+    );
+    const tools = events.filter((e) => e.type === "tool-call-delta");
+    expect(tools.length).toBeGreaterThanOrEqual(1);
+    expect(tools.every((e) => (e.index ?? -1) >= 2)).toBe(true);
+  });
+
   it("keeps streamed tool identity when a later delta sends blank id/name", async () => {
     // Repro: early deltas carry id+name; later fragments send blank identity.
     // "" must not wipe identity (DSH llm-deepseek acceptIdentity).

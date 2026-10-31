@@ -5,6 +5,7 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import {
   emptyAssistantBlock, isAppendSurfaceEvent, isTokenDelta, toAssistantBlock, toAssistantBlocks,
+  toolCallBlockIndex,
 } from '@xrkseek/client-runtime/client'
 import type {} from '@xrkseek/xrk-llm-retry/types'
 import type { AssistantChatData } from '../contract/chat-nodes.ts'
@@ -96,13 +97,15 @@ function updateChunk(state: AssistantState, match: ConversationMatch): Assistant
       break
     }
     case 'tool-call-delta': {
-      const previous = blocks[chunk.index]
+      const callId = String(chunk.id)
+      const slot = toolCallBlockIndex(blocks, chunk.index, callId)
+      const previous = blocks[slot]
       const base = previous?.kind === 'tool-call'
         ? previous
         : { kind: 'tool-call' as const, callId: '', name: '', argsRaw: '' }
-      blocks[chunk.index] = {
+      blocks[slot] = {
         kind: 'tool-call',
-        callId: base.callId || String(chunk.id),
+        callId: base.callId || callId,
         name: chunk.name ?? base.name,
         argsRaw: base.argsRaw + chunk.argumentsDelta,
       }

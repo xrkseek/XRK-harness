@@ -19,6 +19,34 @@ export function isVisibleAssistantChunk(type: string): boolean {
     || type === 'block-end'
 }
 
+/**
+ * Slot for a tool-call-delta that must not overwrite reasoning (0) / text (1).
+ *
+ * OpenAI-compatible vendors emit `tool_calls[].index` from 0; adapters may
+ * already offset to 2+, but packed history and other adapters still land on
+ * 0/1. Reuse the callId's existing tool slot when present; otherwise park at
+ * ≥2 so Think / answer stay intact for expand.
+ */
+export function toolCallBlockIndex(
+  blocks: readonly (AssistantBlock | undefined)[],
+  wireIndex: number,
+  callId: string,
+): number {
+  const id = callId.trim()
+  if (id !== '') {
+    const byId = blocks.findIndex(
+      (block) => block?.kind === 'tool-call' && block.callId === id,
+    )
+    if (byId >= 0) return byId
+  }
+  const occupant = blocks[wireIndex]
+  // Empty or already a tool lane: same vendor index continues that call
+  // (identity pinning still prefers the first non-empty callId).
+  if (occupant === undefined || occupant.kind === 'tool-call') return wireIndex
+  // reasoning / text / other — never clobber Think or the answer mid-stream.
+  return Math.max(2, blocks.length)
+}
+
 /** assistant/chunk accumulator: folds StreamChunks into AssistantBlock[] with block-level immutability. */
 export class PartialAccumulator {
   // Sparse on purpose: block-start may arrive out of order, leaving holes until compaction.
@@ -65,11 +93,13 @@ export class PartialAccumulator {
         return true
       }
       case 'tool-call-delta': {
-        const prev = this.blocks[chunk.index]
+        const callId = String(chunk.id)
+        const slot = toolCallBlockIndex(this.blocks, chunk.index, callId)
+        const prev = this.blocks[slot]
         const base = prev?.kind === 'tool-call' ? prev : { kind: 'tool-call' as const, callId: '', name: '', argsRaw: '' }
-        this.blocks[chunk.index] = {
+        this.blocks[slot] = {
           kind: 'tool-call',
-          callId: base.callId || String(chunk.id),
+          callId: base.callId || callId,
           name: chunk.name ?? base.name,
           argsRaw: base.argsRaw + chunk.argumentsDelta,
         }

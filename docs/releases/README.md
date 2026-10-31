@@ -8,7 +8,7 @@
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.7.1](./v0.7.1.md)                   | `0.7.x` 补丁：**向日葵对齐 OFM · 菜单不透明 · Settings 兜底不崩** |
+| **当前（@latest）** | [v0.7.1](./v0.7.1.md)                   | `0.7.x` 补丁：**思考/工具 chrome · 向日葵对齐 OFM · 菜单不透明 · Settings 兜底不崩** |
 | **上一补丁**        | [v0.7.0](./v0.7.0.md)                   | `0.7.x` 正式线首发：**上下文工程 · 大会话 · 席位/向日葵 · DeepSeek 搜索 · 社区 OFM/Host** |
 | **过程号（@rc）**   | [v0.7.0-rc.3](./v0.7.0-rc.3.md)         | 第三 rc（已被 0.7.0 并入；`@rc` 可仍指向此号或随策略更新） |
 | **过程号（前）** | [v0.7.0-rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) | 第二 / 首 rc：DeepSeek 搜索 · present 不进过程 · 大会话 / 席位知识面 |
@@ -55,7 +55,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.7.1](./v0.7.1.md) | `0.7.x` patch: **Sunflower↔OFM · opaque menus · Settings crash guard** |
+| **Current (@latest)** | [v0.7.1](./v0.7.1.md) | `0.7.x` patch: **think/tool chrome · Sunflower↔OFM · opaque menus · Settings crash guard** |
 | **Previous patch** | [v0.7.0](./v0.7.0.md) | `0.7.x` formal open: **context engineering · large-session · seat/sunflower · DeepSeek search · community OFM/Host** |
 | **Process number (@rc)** | [v0.7.0-rc.3](./v0.7.0-rc.3.md) | Third rc (folded into 0.7.0; `@rc` may still point here) |
 | **Prior process number** | [v0.7.0-rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) | Second / first rc: DeepSeek search · present stays flat · large-session / seat knowledge |

@@ -73,6 +73,10 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     },
     changes: [
       {
+        zh: '修复过程区：思考展开不再空行；联网工具恢复折叠 ToolRow chrome。',
+        en: 'Process chrome: thinking expand shows text again; web tools restore collapsed ToolRow chrome.',
+      },
+      {
         zh: '向日葵免费对齐 OFM：OpenCode 要 Bun；Kilo 直连不绑 Bun；指纹 UA 2.0.26。',
         en: 'Sunflower free aligned with OFM: OpenCode needs Bun; Kilo is direct without Bun; fingerprint UA 2.0.26.',
       },

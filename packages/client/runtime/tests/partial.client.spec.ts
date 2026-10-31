@@ -56,6 +56,25 @@ describe('PartialAccumulator', () => {
     ])
   })
 
+  it('parks tool-call-delta off the reasoning/text lanes instead of clobbering Think', () => {
+    const acc = new PartialAccumulator(1, 0)
+    acc.push(chunk({ type: 'reasoning-delta', index: 0, text: '先想清楚' }))
+    acc.push(chunk({ type: 'text-delta', index: 1, text: '开口' }))
+    // Vendor tool_calls[].index is 0 — must not wipe reasoning.
+    acc.push(chunk({
+      type: 'tool-call-delta', index: 0, id: 'call_web', name: 'web_fetch', argumentsDelta: '{"url"',
+    }))
+    acc.push(chunk({
+      type: 'tool-call-delta', index: 1, id: 'call_web2', name: 'web_fetch', argumentsDelta: '{"url":"b"',
+    }))
+    expect(acc.toPartial().blocks).toEqual([
+      { kind: 'reasoning', text: '先想清楚' },
+      { kind: 'text', text: '开口' },
+      { kind: 'tool-call', callId: 'call_web', name: 'web_fetch', argsRaw: '{"url"' },
+      { kind: 'tool-call', callId: 'call_web2', name: 'web_fetch', argsRaw: '{"url":"b"' },
+    ])
+  })
+
   it('replaces the accumulated block wholesale on block-end', () => {
     const acc = new PartialAccumulator(1, 0)
     acc.push(chunk({ type: 'text-delta', index: 0, text: '中间态' }))

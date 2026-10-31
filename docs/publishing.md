@@ -72,7 +72,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 | **过程号（历史）**  | **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.1** 接管 `@latest`。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.1** 接管 `@latest`（含过程区思考/工具 chrome 热修）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
@@ -158,7 +158,7 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 | **Process numbers (past)**| **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.1** owns `@latest`. GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.1** owns `@latest` (includes process think/tool chrome hotfix). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 

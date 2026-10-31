@@ -9,10 +9,14 @@
 }
 
 /* DSH wraps the row in [data-disclosure-header]; community skins (maid) select
-   that ancestor for think/tool/workflow chrome. Keep a thin flex wrapper. */
+   that ancestor for think/tool/workflow chrome. Keep a thin flex wrapper.
+   Must span the full root width: a shrink-to-fit flex item + ToolRow/Think
+   `container-type: inline-size` collapses the header to 0px (0.7.0 formal
+   dual-stamp regression — web cards showed with no Fetch/Think chrome). */
 .header {
   display: flex;
   align-items: center;
+  width: 100%;
   min-width: 0;
 }
 
@@ -21,6 +25,8 @@
   overflow: hidden;
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  width: 100%;
   height: 24px;
   min-width: 0;
 }
