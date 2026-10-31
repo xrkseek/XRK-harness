@@ -11,8 +11,7 @@ export const CURATED_MEMORY_FRAGMENT_ID = "additional_context.curated_memory";
 export function formatCuratedMemoryLiveBody(store: CuratedMemoryStore): string {
   // Live read when the provider can answer synchronously; async providers
   // (http) keep the construct-time snapshot rather than blocking a turn.
-  const live = store.liveSystemBlock;
-  const block = (live ? live.call(store) : store.frozenSystemBlock()).trim();
+  const block = (store.liveSystemBlock?.() ?? store.frozenSystemBlock()).trim();
   if (!block) return "";
   return `LIVE curated memory (prefer over older memory text):\n${block}`;
 }

@@ -113,8 +113,9 @@ export function createLayeredCuratedMemoryStore(
     liveSystemBlock() {
       const parts: string[] = [];
       for (const layer of layers) {
-        const live = layer.store.liveSystemBlock;
-        const body = (live ? live.call(layer.store) : layer.store.frozenSystemBlock()).trim();
+        const body = (
+          layer.store.liveSystemBlock?.() ?? layer.store.frozenSystemBlock()
+        ).trim();
         if (!body) continue;
         parts.push(`### ${SCOPE_HEADERS[layer.scope]}\n${body}`);
       }
