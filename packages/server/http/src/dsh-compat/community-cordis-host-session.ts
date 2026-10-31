@@ -13,10 +13,7 @@ import {
   type CordisHttpRow,
 } from "./cordis-connection-bridge.js";
 import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
-import type {
-  CordisHttpHandler,
-  CordisRpcHandler,
-} from "./cordis-registry.js";
+import type { CordisRpcHandler } from "./cordis-registry.js";
 import {
   gateLiveHostHttp,
   gateLiveHostRpc,
