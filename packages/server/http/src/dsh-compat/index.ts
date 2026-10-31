@@ -9,11 +9,7 @@ import {
   bootDshCompatServices,
   shutdownDshCompatServices,
 } from "./dsh-compat-boot.js";
-import {
-  createMobileAccessGateChecker,
-  createMobileAccessGateHandler,
-  tryHandleMobileAccessGate,
-} from "./mobile-access-gate.js";
+import { tryHandleMobileAccessGate } from "./mobile-access-gate.js";
 
 export type DshCompatOptions = DshCompatWireOptions;
 
