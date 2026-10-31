@@ -143,14 +143,15 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_LLM_BASE_URL` | 可选 baseUrl（`custom` 等常需） |
 | brand `apiKeyEnv` | 如 `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY` · `OPENAI_API_KEY`（见 presets 表；**不是**统一的 `XRK_LLM_API_KEY`） |
 | `XRK_SUNFLOWER_BUN` | 可选；向日葵免费 OpenCode sidecar 用的 Bun 绝对路径 |
+| `XRK_SUNFLOWER_FREE_ROOT` | 可选；覆盖内置 `xrk-sunflower-free` 插件目录（绝对路径） |
 
 ### 向日葵免费（OpenCode + Kilo）
 
-内置插件 `xrk-sunflower-free`（模型目录里的 **向日葵免费**）：
+内置插件 `xrk-sunflower-free`（模型目录里的 **向日葵免费**）。**Desktop** 与 **全局 CLI**（`@xrkseek/harness-cli`）均随包带 `extensions/xrk-sunflower-free`；Host 启动时 `ensureSunflowerFreePlugin` 从安装位发现。可选覆盖：`XRK_SUNFLOWER_FREE_ROOT`（插件目录绝对路径）。
 
 | 车道 | Bun |
 |------|-----|
-| OpenCode（`sunflower-free`） | **需要**本机 Bun（产品不随包；官方安装 → `~/.bun/bin`，或 `XRK_SUNFLOWER_BUN`）。无 Bun 则静默省略 |
+| OpenCode（`sunflower-free`） | **需要**本机 Bun（产品不随包 Bun 二进制；官方安装 → `~/.bun/bin`，或 `XRK_SUNFLOWER_BUN`）。无 Bun 则静默省略 OpenCode，**Kilo 仍可** |
 | Kilo（`sunflower-kilo`，仅 Kilo 时并入 `sunflower-free`） | **不需要**；Host 直连 `api.kilo.ai` |
 
 落点与探测细节见 [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md)。
@@ -464,14 +465,15 @@ Preset selection: [profiles.md](./profiles.md).
 | `XRK_LLM_BASE_URL` | Optional baseUrl (often required for `custom`) |
 | brand `apiKeyEnv` | e.g. `OPENROUTER_API_KEY` · `DEEPSEEK_API_KEY` · `OPENAI_API_KEY` (see presets table; **not** a unified `XRK_LLM_API_KEY`) |
 | `XRK_SUNFLOWER_BUN` | Optional absolute path to Bun for the sunflower-free OpenCode sidecar |
+| `XRK_SUNFLOWER_FREE_ROOT` | Optional absolute path overriding the bundled `xrk-sunflower-free` plugin directory |
 
 ### Sunflower free (OpenCode + Kilo)
 
-Built-in plugin `xrk-sunflower-free` (**向日葵免费** in the model catalog):
+Built-in plugin `xrk-sunflower-free` (**向日葵免费** in the model catalog). **Desktop** and **global CLI** (`@xrkseek/harness-cli`) both ship `extensions/xrk-sunflower-free`; Host boots via `ensureSunflowerFreePlugin` from the install tree. Optional override: `XRK_SUNFLOWER_FREE_ROOT`.
 
 | Lane | Bun |
 |------|-----|
-| OpenCode (`sunflower-free`) | **Requires** local Bun (not shipped; official installer → `~/.bun/bin`, or `XRK_SUNFLOWER_BUN`). Absent → omitted silently |
+| OpenCode (`sunflower-free`) | **Requires** local Bun (Bun binary is not shipped; official installer → `~/.bun/bin`, or `XRK_SUNFLOWER_BUN`). Absent → OpenCode omitted silently; **Kilo still loads** |
 | Kilo (`sunflower-kilo`; merges into `sunflower-free` when Kilo-only) | **Not required**; Host → `api.kilo.ai` direct |
 
 Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md).

@@ -107,6 +107,21 @@ export {
   type CommunityLlmSyncer,
 } from "./community-llm-host-sync.js";
 export {
+  createCommunityCordisHostSession,
+  type CommunityCordisHostLogger,
+  type CommunityCordisHostSession,
+} from "./community-cordis-host-session.js";
+export {
+  communityLoopbackEndpointFromBits,
+  communityLoopbackEndpointFromForwardSettings,
+  communityLoopbackEndpointFromSummaryHttp,
+  createCommunityLoopbackLlmBridge,
+  readCommunityJsonViaHttp,
+  type CommunityLoopbackAdapter,
+  type CommunityLoopbackEndpoint,
+  type CommunityLoopbackLlmBridge,
+} from "./community-loopback-llm-bridge.js";
+export {
   baselineHttpRoutes,
   baselineRpcRoutes,
   listDshHttpCapabilityPrefixes,

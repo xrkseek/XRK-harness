@@ -4,41 +4,20 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { Context } from "@xrkseek/cordis";
 import type {
   DshAdapterContribution,
   DshCompatWireOptions,
 } from "./adapter-types.js";
+import { createCommunityCordisHostSession } from "./community-cordis-host-session.js";
 import {
-  createCordisConnectionBridge,
-  pushCordisWebServerRoute,
-} from "./cordis-connection-bridge.js";
-import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
+  createCommunityLoopbackLlmBridge,
+  type CommunityLoopbackAdapter,
+} from "./community-loopback-llm-bridge.js";
 import {
-  asCommunityLlmModelRows,
-  baseUrlFromCommunityModels,
-  communityLlmSyncFingerprint,
-  createCommunityLlmSyncScheduler,
-  dropStaleCommunityLlmFingerprints,
-  enrichCommunityModelsWithResolve,
-  isUsableCommunityLoopbackBaseUrl,
   listModelsForCommunitySync,
-  type CommunityLlmSyncCatalog,
 } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
-import type {
-  CordisHttpHandler,
-  CordisRpcHandler,
-} from "./cordis-registry.js";
-import { resolveCompatHome } from "./underlying/json-store.js";
-import type { XrkWebServerRoute } from "./xrk-host-apply.js";
-import {
-  gateLiveHostHttp,
-  gateLiveHostRpc,
-  registerLiveHostApply,
-} from "./live-host-apply.js";
 import { isPluginPackageFamily } from "./plugin-package-id.js";
 
 const WORKBUDDY_PACKAGE = "dsh-workbuddy-connect";
@@ -82,15 +61,7 @@ export function ensureWorkBuddyAiElectronBin(
   return electronPath;
 }
 
-interface WorkBuddyApplyModule {
-  apply?: (ctx: Context, config?: Record<string, unknown>) => void;
-  Config?: unknown;
-}
-
-type WorkBuddySyncAdapter = {
-  listModels?: (provider: string) => Promise<readonly unknown[]>;
-  catalog?: CommunityLlmSyncCatalog;
-};
+type WorkBuddySyncAdapter = CommunityLoopbackAdapter;
 
 /**
  * Snapshot models for Face sync (WorkBuddy catalog peek + fallback roster).
@@ -176,259 +147,45 @@ export async function tryApplyWorkBuddyHost(
     );
   }
 
-  const http: Array<{
-    match: (pathname: string) => boolean;
-    handle: CordisHttpHandler;
-  }> = [];
-  const rpc: Record<string, CordisRpcHandler> = {};
-  const disposers: Array<() => void | Promise<void>> = [];
-
-  const root = new Context();
-  const logger = {
-    info: (...args: unknown[]) => console.info("[dsh-workbuddy-connect]", ...args),
-    warn: (...args: unknown[]) => console.warn("[dsh-workbuddy-connect]", ...args),
-    error: (...args: unknown[]) => console.error("[dsh-workbuddy-connect]", ...args),
-  };
-
-  // WorkBuddy uses Cordis ctx.logger.*; default exporter only buffers — mirror to console.
-  root.logger.exporter({
-    colors: false,
-    export(message) {
-      const line = `[dsh-workbuddy-connect] ${message.type} ${message.name}: ${message.args.map(String).join(" ")}`;
-      if (message.type === "error") console.error(line);
-      else if (message.type === "warn") console.warn(line);
-      else console.info(line);
-    },
+  const session = createCommunityCordisHostSession({
+    logPrefix: "dsh-workbuddy-connect",
+    packageName,
+    xrkHome: wire.xrkHome,
   });
+  const { root, http, logger, disposers } = session;
 
-  let hostDisposed = false;
-  /** Per-provider last good loopback baseUrl (shim port can briefly vanish). */
-  const lastBaseUrlByProvider = new Map<string, string>();
-  /** Live adapters for status enrichment (signed-in + empty models). */
-  const adaptersByProvider = new Map<string, WorkBuddySyncAdapter>();
-  const syncScheduler = createCommunityLlmSyncScheduler({
-    isDisposed: () => hostDisposed,
+  const bridge = createCommunityLoopbackLlmBridge({
+    syncCommunityLlmProvider: wire.syncCommunityLlmProvider,
+    displayName: (providerId) =>
+      providerId === "workbuddy-ai" ? "WorkBuddy AI" : "WorkBuddy",
+    defaultApiKey: (providerId) => `xrk-workbuddy-${providerId}`,
+    logPrefix: "dsh-workbuddy-connect",
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
   });
+  const adaptersByProvider = bridge.adaptersByProvider;
+  bridge.provideLlm(root);
 
-  // WorkBuddy emits this community event; Cordis Events map has no ambient key here.
-  (root as { on: (event: string, listener: () => void) => unknown }).on(
-    "llm/adapters-updated",
-    () => {
-      void syncScheduler.runAll();
-    },
+  session.provideHostSurfaces();
+  session.trackEffectsAndFibers();
+
+  const ok = await session.applyEntry(
+    path.join(pkgRoot, "lib", "index.js"),
+    {},
+    () => bridge.dispose(),
   );
+  if (!ok) return undefined;
 
-  root.provide("llm", {
-    registerAdapter(
-      providers: string[],
-      adapter: WorkBuddySyncAdapter & {
-        resolveModel?: (provider: string, model: string) => Promise<unknown>;
-        resolveApiKey?: () => Promise<string | undefined>;
-      },
-    ) {
-      const ids = providers.map((p) => p.trim()).filter(Boolean);
-      for (const id of ids) adaptersByProvider.set(id, adapter);
-      let disposed = false;
-      const sync = async (): Promise<boolean> => {
-        if (disposed || hostDisposed || !wire.syncCommunityLlmProvider) {
-          return false;
-        }
-        if (ids.length === 0) return true;
-        let allOk = true;
-        for (const providerId of ids) {
-          try {
-            const lastBaseUrl = lastBaseUrlByProvider.get(providerId);
-            const listed = await listModelsForSync(adapter, providerId, {
-              ...(lastBaseUrl !== undefined ? { lastBaseUrl } : {}),
-            });
-            const models = await enrichCommunityModelsWithResolve(
-              adapter,
-              providerId,
-              asCommunityLlmModelRows(listed),
-            );
-            const baseUrl =
-              baseUrlFromCommunityModels(listed) ??
-              lastBaseUrlByProvider.get(providerId);
-            if (
-              !isUsableCommunityLoopbackBaseUrl(baseUrl) ||
-              models.length === 0
-            ) {
-              allOk = false;
-              logger.warn(
-                `syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
-              );
-              continue;
-            }
-            const fingerprint = communityLlmSyncFingerprint(
-              providerId,
-              baseUrl,
-              models,
-            );
-            dropStaleCommunityLlmFingerprints(
-              syncScheduler.fingerprints,
-              providerId,
-              baseUrl,
-            );
-            if (syncScheduler.fingerprints.has(fingerprint)) {
-              continue;
-            }
-            const apiKey =
-              (await adapter.resolveApiKey?.())?.trim() ||
-              `xrk-workbuddy-${providerId}`;
-            await wire.syncCommunityLlmProvider({
-              providerId,
-              displayName:
-                providerId === "workbuddy-ai" ? "WorkBuddy AI" : "WorkBuddy",
-              baseUrl,
-              apiKey,
-              models,
-            });
-            lastBaseUrlByProvider.set(providerId, baseUrl);
-            syncScheduler.fingerprints.add(fingerprint);
-            logger.info(
-              `syncCommunityLlmProvider ok ${providerId} models=${models.length} baseUrl=${baseUrl}`,
-            );
-          } catch (error) {
-            allOk = false;
-            logger.warn(
-              `syncCommunityLlmProvider failed for ${providerId}`,
-              error,
-            );
-          }
-        }
-        return allOk;
-      };
-      syncScheduler.addSyncer(sync);
-      void syncScheduler.runAll();
-      const release = (): void => {
-        disposed = true;
-        for (const id of ids) {
-          if (adaptersByProvider.get(id) === adapter) {
-            adaptersByProvider.delete(id);
-          }
-        }
-        syncScheduler.markUnsettled();
-      };
-      return Object.assign(release, {
-        replace(next: string[]) {
-          for (const id of ids) {
-            if (adaptersByProvider.get(id) === adapter) {
-              adaptersByProvider.delete(id);
-            }
-          }
-          ids.splice(0, ids.length, ...next.map((p) => p.trim()).filter(Boolean));
-          for (const id of ids) adaptersByProvider.set(id, adapter);
-          syncScheduler.fingerprints.clear();
-          syncScheduler.markUnsettled();
-          void syncScheduler.runAll();
-        },
-      });
-    },
-  });
-
-  root.provide("webServer", {
-    register(route: XrkWebServerRoute) {
-      pushCordisWebServerRoute(http, route);
-      return () => undefined;
-    },
-    registerUpgrade() {
-      /* WorkBuddy status/probe are HTTP unary */
-    },
-    tapIndex() {
-      return () => undefined;
-    },
-  });
-
-  root.provide("rpc", {
-    register(channel: string, handler: CordisRpcHandler) {
-      const key = channel.endsWith("/") ? channel.slice(0, -1) : channel;
-      rpc[key] = handler;
-    },
-  });
-
-  let httpSealed = false;
-  root.provide(
-    "connection",
-    createCordisConnectionBridge({
-      http,
-      isSealed: () => httpSealed,
-      onLateMiss: (p) =>
-        logger.warn(
-          `late connection.fetch register missed active registry for ${p}`,
-        ),
-    }),
-  );
-
-  root.provide(
-    "credentials",
-    createCordisCredentialsBridge(resolveCompatHome(wire.xrkHome), packageName),
-  );
-
-  // WorkBuddy registers status/probe via ctx.inject(["settings"], …);
-  // without installSection it only warns and skips — keep a no-op stub.
-  root.provide("settings", {
-    installSection(
-      _ctx: unknown,
-      _ns: string,
-      _section: unknown,
-      _config: unknown,
-      _hooks?: unknown,
-    ) {
-      return () => undefined;
-    },
-    async update(_ns: string, _patch: unknown) {
-      return undefined;
-    },
-  });
-
-  // Patch effect onto context for cleanup registration from apply().
-  const originalEffect = root.effect.bind(root);
-  root.effect = ((fn: Parameters<typeof root.effect>[0], label?: string) => {
-    const owned = originalEffect(fn, label);
-    disposers.push(() => {
-      void owned();
-    });
-    return owned;
-  }) as typeof root.effect;
-
-  // Cordis inject(["webServer"], …) schedules apply on a microtask; await
-  // those fibers so webServer.register has run before we return http[].
-  type AwaitableFiber = { await: () => Promise<unknown> };
-  const childFibers: AwaitableFiber[] = [];
-  const registryPlugin = root.registry.plugin.bind(root.registry);
-  root.registry.plugin = ((plugin, config?, getOuterStack?) => {
-    const fiber = registryPlugin(plugin, config, getOuterStack);
-    childFibers.push(fiber);
-    return fiber;
-  }) as typeof root.registry.plugin;
-
-  try {
-    const entry = pathToFileURL(path.join(pkgRoot, "lib", "index.js")).href;
-    const mod = (await import(/* @vite-ignore */ entry)) as WorkBuddyApplyModule;
-    if (typeof mod.apply !== "function") return undefined;
-    mod.apply(root, {});
-    await Promise.all(childFibers.map((fiber) => fiber.await()));
-  } catch (error) {
-    logger.error("host apply failed", error);
-    hostDisposed = true;
-    for (const d of disposers.reverse()) await d();
-    return undefined;
-  }
-
-  httpSealed = true;
+  session.sealHttp();
 
   // Identity/catalog hydrate is async inside WorkBuddy; first registerAdapter
   // sync often skips. Retries cover boot-with-saved-credentials without waiting
   // solely on llm/adapters-updated delivery.
-  syncScheduler.scheduleRetries();
+  bridge.scheduler.scheduleRetries();
   disposers.push(() => {
-    hostDisposed = true;
+    bridge.dispose();
   });
 
   // Until every variant has synced Face, status polls (post-login) re-nudge.
-  // Do not stop after the first variant succeeds — CN/AI register separately,
-  // and a settled AI fingerprint used to silence CN's stale baseURL forever.
   // Also fill signed-in + empty `models` from catalog fallback (visibility gate).
   for (const row of http) {
     const inner = row.handle;
@@ -514,28 +271,15 @@ export async function tryApplyWorkBuddyHost(
       };
 
       const handled = await inner(req, proxy as never, pathname);
-      if (
-        handled &&
-        !syncScheduler.settled()
-      ) {
-        void syncScheduler.runAll();
+      if (handled && !bridge.scheduler.settled()) {
+        void bridge.scheduler.runAll();
       }
       return handled;
     };
   }
 
-  await registerLiveHostApply(packageName, async () => {
-    hostDisposed = true;
-    for (const d of disposers.reverse()) await d();
-    try {
-      await root.fiber.dispose();
-    } catch {
-      /* Cordis root may already be torn down */
-    }
-  });
-
-  const gatedHttp = gateLiveHostHttp(packageName, http);
-  const gatedRpc = gateLiveHostRpc(packageName, rpc);
+  const { http: gatedHttp, rpc: gatedRpc } =
+    await session.finishLive(packageName);
 
   return {
     meta: {

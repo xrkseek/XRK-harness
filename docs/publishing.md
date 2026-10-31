@@ -65,20 +65,20 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.7.1** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
+| **当前（@latest）** | **0.7.2** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
 | **过程号（@rc）**   | **0.7.0-rc.3** | 第三 rc（已并入 0.7.0）；`npm i -g @xrkseek/harness-cli@rc` 仍可指向此号 |
 | **上一预览收官**    | **0.6.23** | `0.6.x` 预览线终点，仍可精确安装 |
 | **本线收口号（0.6）** | **0.6.0** | `0.6.x` 预览线收口并曾首次接管 `@latest` |
 | **过程号（历史）**  | **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.1** 接管 `@latest`（含过程区思考/工具 chrome 热修）。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.2** 接管 `@latest`（CLI 随包向日葵 · loopback Cordis 统一桥）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.7.1**（当前 `@latest`）、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.7.2**（当前 `@latest`）、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -151,19 +151,19 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.7.1** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
+| **Current (@latest)**     | **0.7.2** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
 | **Process number (@rc)**  | **0.7.0-rc.3** | Third rc (folded into 0.7.0); `npm i -g @xrkseek/harness-cli@rc` may still point here |
 | **Prior preview close**   | **0.6.23** | End of `0.6.x` preview; still installable by exact pin |
 | **0.6 line closing number** | **0.6.0** | `0.6.x` preview closed here and first took `@latest` |
 | **Process numbers (past)**| **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.1** owns `@latest` (includes process think/tool chrome hotfix). GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.2** owns `@latest` (CLI ships Sunflower · shared loopback Cordis bridge). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.7.1** (current `@latest`), **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.7.2** (current `@latest`), **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

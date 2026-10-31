@@ -287,15 +287,15 @@ if (!existsSync(path.join(STAGE, "seeds", "skills", "xrk-capability-attach", "SK
 
 // 内置 LLM 车道：只拷插件（不随包 Bun；用户自装）。CLI 从安装位向上找
 // `extensions/<id>`；桌面 afterPack 同理拷到 resources/host/extensions。
-const SUNFLOWER_SRC = path.join(ROOT, "extensions", "xrk-sunflower-free");
-if (existsSync(path.join(SUNFLOWER_SRC, "xrk.plugin.json"))) {
-  const sunflowerDest = path.join(STAGE, "extensions", "xrk-sunflower-free");
-  copyDirSync(SUNFLOWER_SRC, sunflowerDest);
-  // Never ship a maintainer-local `pnpm vendor:bun` binary.
-  rmSync(path.join(sunflowerDest, "vendor"), { recursive: true, force: true });
-} else {
-  console.warn("stage: extensions/xrk-sunflower-free missing");
+run("node", [path.join(ROOT, "scripts", "sync-cli-bundled-extensions.mjs")], ROOT);
+const SUNFLOWER_SRC = path.join(ROOT, "apps", "cli", "extensions", "xrk-sunflower-free");
+if (!existsSync(path.join(SUNFLOWER_SRC, "xrk.plugin.json"))) {
+  console.error("stage: apps/cli/extensions/xrk-sunflower-free missing after sync");
+  process.exit(1);
 }
+const sunflowerDest = path.join(STAGE, "extensions", "xrk-sunflower-free");
+copyDirSync(SUNFLOWER_SRC, sunflowerDest);
+rmSync(path.join(sunflowerDest, "vendor"), { recursive: true, force: true });
 
 const stagedPkgPath = path.join(STAGE, "package.json");
 const staged = JSON.parse(readFileSync(stagedPkgPath, "utf8").replace(/^\uFEFF/, ""));

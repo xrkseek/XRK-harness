@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.2',
+    date: '2026-10-31',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '全局 CLI 随包向日葵免费（extensions/xrk-sunflower-free）；无 Bun 仍可走 Kilo。',
+        en: 'Global CLI ships Sunflower free (extensions/xrk-sunflower-free); Kilo works without Bun.',
+      },
+      {
+        zh: 'OFM / WorkBuddy 共用 loopback→Face 桥与 Cordis host 底座；OFM 认 actualPort 而非 port:0。',
+        en: 'OFM / WorkBuddy share loopback→Face bridge and Cordis host session; OFM uses actualPort, not port:0.',
+      },
+      {
+        zh: '回合等待文案在不支持 background-clip:text 时仍可见。完整清单见 docs/releases/v0.7.2.md。',
+        en: 'Turn waiting label stays visible without background-clip:text. Full list in docs/releases/v0.7.2.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.1',
     date: '2026-10-31',
     title: {

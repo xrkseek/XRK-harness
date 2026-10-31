@@ -4,41 +4,20 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { Context } from "@xrkseek/cordis";
 import type {
   DshAdapterContribution,
   DshCompatWireOptions,
 } from "./adapter-types.js";
-import {
-  createCordisConnectionBridge,
-  pushCordisWebServerRoute,
-} from "./cordis-connection-bridge.js";
 import { createCordisAttachmentsBridge } from "./cordis-attachments-bridge.js";
-import { createCordisCredentialsBridge } from "./cordis-credentials-bridge.js";
+import { createCommunityCordisHostSession } from "./community-cordis-host-session.js";
 import {
-  asCommunityLlmModelRows,
-  baseUrlFromCommunityModels,
-  communityLlmSyncFingerprint,
-  createCommunityLlmSyncScheduler,
-  dropStaleCommunityLlmFingerprints,
-  enrichCommunityModelsWithResolve,
-  isUsableCommunityLoopbackBaseUrl,
-  listModelsForCommunitySync,
-} from "./community-llm-host-sync.js";
+  communityLoopbackEndpointFromBits,
+  communityLoopbackEndpointFromSummaryHttp,
+  createCommunityLoopbackLlmBridge,
+  type CommunityLoopbackEndpoint,
+} from "./community-loopback-llm-bridge.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
-import type {
-  CordisHttpHandler,
-  CordisRpcHandler,
-} from "./cordis-registry.js";
-import { resolveCompatHome } from "./underlying/json-store.js";
-import type { XrkWebServerRoute } from "./xrk-host-apply.js";
-import {
-  gateLiveHostHttp,
-  gateLiveHostRpc,
-  registerLiveHostApply,
-} from "./live-host-apply.js";
 import { isPluginPackageFamily } from "./plugin-package-id.js";
 
 const OFM_PACKAGE = "dsh-our-free-model";
@@ -70,15 +49,12 @@ export function hasOurFreeModelEntry(pkgRoot: string): boolean {
   return existsSync(path.join(pkgRoot, "index.js"));
 }
 
-interface OfmApplyModule {
-  apply?: (ctx: Context, config?: Record<string, unknown>) => void;
-}
-
-/** OFM listModels has no baseUrl; Face sync uses the OpenAI forward listener. */
-function forwardEndpointFromHome(dshHome: string): {
-  baseUrl?: string;
-  apiKey?: string;
-} {
+/**
+ * OFM listModels has no baseUrl; Face sync uses the OpenAI forward listener.
+ * Disk `forward.port` is the *requested* bind (often 0 = ephemeral); the OS
+ * port lives in live `/summary` as `forward.actualPort`.
+ */
+function forwardEndpointFromHome(dshHome: string): CommunityLoopbackEndpoint {
   const file = path.join(dshHome, OFM_DATA_DIR, "settings.json");
   if (!existsSync(file)) return {};
   try {
@@ -86,28 +62,11 @@ function forwardEndpointFromHome(dshHome: string): {
       forward?: { port?: unknown; host?: unknown; enabled?: unknown };
       forwardKey?: unknown;
     };
-    const port = Number(raw.forward?.port);
-    if (!Number.isFinite(port) || port < 1) return {};
-    const host =
-      typeof raw.forward?.host === "string" && raw.forward.host.trim()
-        ? raw.forward.host.trim()
-        : "127.0.0.1";
-    const key =
-      typeof raw.forwardKey === "string" && raw.forwardKey.trim()
-        ? raw.forwardKey.trim()
-        : undefined;
-    const baseUrl = `http://${host}:${Math.trunc(port)}/v1`.replace(
-      /\/+$/,
-      "",
-    );
-    // port:0 (pre-listen seed) is not a usable Face loopback.
-    if (Math.trunc(port) < 1 || !isUsableCommunityLoopbackBaseUrl(baseUrl)) {
-      return key ? { apiKey: key } : {};
-    }
-    return {
-      baseUrl,
-      ...(key ? { apiKey: key } : {}),
-    };
+    return communityLoopbackEndpointFromBits({
+      host: raw.forward?.host,
+      port: raw.forward?.port,
+      apiKey: raw.forwardKey,
+    });
   } catch {
     return {};
   }
@@ -171,315 +130,83 @@ export async function tryApplyOurFreeModelHost(
 
   ensureHostModuleRemap();
 
-  const dshHome = resolveCompatHome(wire.xrkHome);
+  const session = createCommunityCordisHostSession({
+    logPrefix: OFM_PACKAGE,
+    packageName,
+    xrkHome: wire.xrkHome,
+  });
+  const { root, http, logger, dshHome, disposers } = session;
   process.env.DSH_HOME = dshHome;
   ensureForwardSeed(dshHome);
 
-  const http: Array<{
-    match: (pathname: string) => boolean;
-    handle: CordisHttpHandler;
-  }> = [];
-  const rpc: Record<string, CordisRpcHandler> = {};
-  const disposers: Array<() => void | Promise<void>> = [];
-  /**
-   * After fiber await we seal: further connection.fetch.register must late-bind
-   * onto the live Cordis registry (OFM mounts channel-pack via void import().then).
-   */
-  let httpSealed = false;
-
-  const root = new Context();
-  const logger = {
-    info: (...args: unknown[]) => console.info(`[${OFM_PACKAGE}]`, ...args),
-    warn: (...args: unknown[]) => console.warn(`[${OFM_PACKAGE}]`, ...args),
-    error: (...args: unknown[]) => console.error(`[${OFM_PACKAGE}]`, ...args),
-  };
-
-  root.logger.exporter({
-    colors: false,
-    export(message) {
-      const line = `[${OFM_PACKAGE}] ${message.type} ${message.name}: ${message.args.map(String).join(" ")}`;
-      if (message.type === "error") console.error(line);
-      else if (message.type === "warn") console.warn(line);
-      else console.info(line);
-    },
-  });
-
-  let hostDisposed = false;
   /** Survives brief settings.json rewrites while forward rebinds (port:0 window). */
-  let lastForward: { baseUrl?: string; apiKey?: string } = {};
-  const syncScheduler = createCommunityLlmSyncScheduler({
-    isDisposed: () => hostDisposed,
+  let lastForward: CommunityLoopbackEndpoint = {};
+  const bridge = createCommunityLoopbackLlmBridge({
+    syncCommunityLlmProvider: wire.syncCommunityLlmProvider,
+    displayName: (id) => DISPLAY_NAMES[id] ?? id,
+    defaultApiKey: (id) => `xrk-${id}`,
+    logPrefix: OFM_PACKAGE,
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
-  });
-
-  (root as { on: (event: string, listener: () => void) => unknown }).on(
-    "llm/adapters-updated",
-    () => {
-      void syncScheduler.runAll();
-    },
-  );
-
-  root.provide("llm", {
-    registerAdapter(
-      providers: string[],
-      adapter: {
-        listModels?: (provider: string) => Promise<readonly unknown[]>;
-        resolveModel?: (provider: string, model: string) => Promise<unknown>;
-        resolveApiKey?: () => Promise<string | undefined>;
-      },
-    ) {
-      const ids = providers.map((p) => p.trim()).filter(Boolean);
-      let disposed = false;
-      const sync = async (): Promise<boolean> => {
-        if (disposed || hostDisposed || !wire.syncCommunityLlmProvider) {
-          return false;
-        }
-        if (ids.length === 0) return true;
-        let allOk = true;
-        const fromDisk = forwardEndpointFromHome(dshHome);
-        if (fromDisk.baseUrl) {
-          lastForward = {
-            baseUrl: fromDisk.baseUrl,
-            ...(fromDisk.apiKey
-              ? { apiKey: fromDisk.apiKey }
-              : lastForward.apiKey
-                ? { apiKey: lastForward.apiKey }
-                : {}),
-          };
-        }
-        const forward = {
-          baseUrl: fromDisk.baseUrl ?? lastForward.baseUrl,
-          apiKey: fromDisk.apiKey ?? lastForward.apiKey,
+    async resolveEndpoint() {
+      const fromDisk = forwardEndpointFromHome(dshHome);
+      const fromLive =
+        fromDisk.baseUrl || lastForward.baseUrl
+          ? {}
+          : await communityLoopbackEndpointFromSummaryHttp(
+              http,
+              `${OFM_API_PREFIX}/summary`,
+            );
+      const merged: CommunityLoopbackEndpoint = {
+        baseUrl:
+          fromDisk.baseUrl ?? fromLive.baseUrl ?? lastForward.baseUrl,
+        apiKey:
+          fromDisk.apiKey ?? fromLive.apiKey ?? lastForward.apiKey,
+      };
+      if (merged.baseUrl) {
+        lastForward = {
+          baseUrl: merged.baseUrl,
+          ...(merged.apiKey
+            ? { apiKey: merged.apiKey }
+            : lastForward.apiKey
+              ? { apiKey: lastForward.apiKey }
+              : {}),
         };
-        for (const providerId of ids) {
-          try {
-            const listed = await listModelsForCommunitySync(
-              adapter,
-              providerId,
-              {
-                ...(forward.baseUrl !== undefined
-                  ? { lastBaseUrl: forward.baseUrl }
-                  : {}),
-              },
-            );
-            const models = await enrichCommunityModelsWithResolve(
-              adapter,
-              providerId,
-              asCommunityLlmModelRows(listed),
-            );
-            const baseUrlCandidate =
-              baseUrlFromCommunityModels(listed) ??
-              forward.baseUrl ??
-              undefined;
-            const baseUrl = isUsableCommunityLoopbackBaseUrl(baseUrlCandidate)
-              ? baseUrlCandidate.trim().replace(/\/+$/, "")
-              : undefined;
-            if (!baseUrl || models.length === 0) {
-              allOk = false;
-              logger.warn(
-                `syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
-              );
-              continue;
-            }
-            const fingerprint = communityLlmSyncFingerprint(
-              providerId,
-              baseUrl,
-              models,
-            );
-            dropStaleCommunityLlmFingerprints(
-              syncScheduler.fingerprints,
-              providerId,
-              baseUrl,
-            );
-            if (syncScheduler.fingerprints.has(fingerprint)) {
-              continue;
-            }
-            const apiKey =
-              (await adapter.resolveApiKey?.())?.trim() ||
-              forward.apiKey ||
-              `xrk-${providerId}`;
-            await wire.syncCommunityLlmProvider({
-              providerId,
-              displayName: DISPLAY_NAMES[providerId] ?? providerId,
-              baseUrl,
-              apiKey,
-              models,
-            });
-            lastForward = { baseUrl, apiKey };
-            syncScheduler.fingerprints.add(fingerprint);
-            logger.info(
-              `syncCommunityLlmProvider ok ${providerId} models=${models.length} baseUrl=${baseUrl}`,
-            );
-          } catch (error) {
-            allOk = false;
-            logger.warn(
-              `syncCommunityLlmProvider failed for ${providerId}`,
-              error,
-            );
-          }
-        }
-        return allOk;
+      }
+      return {
+        baseUrl: merged.baseUrl,
+        apiKey: merged.apiKey ?? lastForward.apiKey,
       };
-      syncScheduler.addSyncer(sync);
-      void syncScheduler.runAll();
-      const release = (): void => {
-        disposed = true;
-        syncScheduler.markUnsettled();
-      };
-      return Object.assign(release, {
-        replace(next: string[]) {
-          ids.splice(
-            0,
-            ids.length,
-            ...next.map((p) => p.trim()).filter(Boolean),
-          );
-          syncScheduler.fingerprints.clear();
-          syncScheduler.markUnsettled();
-          void syncScheduler.runAll();
-        },
-      });
-    },
-    registerConfigurableProviders() {
-      /* Face Settings cards are separate; no-op stub */
-    },
-    registerModelDiscovery() {
-      /* optional DSH probe button */
     },
   });
+  bridge.provideLlm(root);
 
-  root.provide("webServer", {
-    register(route: XrkWebServerRoute) {
-      pushCordisWebServerRoute(http, route);
-      return () => undefined;
-    },
-    registerUpgrade() {
-      /* OFM events are SSE over HTTP unary register */
-    },
-    tapIndex() {
-      return () => undefined;
-    },
+  session.provideHostSurfaces({
+    settingsConfigure: true,
+    profileContext: { name: ofmProfileName(), home: dshHome },
+    attachments: createCordisAttachmentsBridge(dshHome),
+    commands: true,
   });
+  session.trackEffectsAndFibers();
 
-  root.provide("rpc", {
-    register(channel: string, handler: CordisRpcHandler) {
-      const key = channel.endsWith("/") ? channel.slice(0, -1) : channel;
-      rpc[key] = handler;
-    },
-  });
-
-  root.provide(
-    "connection",
-    createCordisConnectionBridge({
-      http,
-      isSealed: () => httpSealed,
-      onLateMiss: (p) =>
-        logger.warn(
-          `late connection.fetch register missed active registry for ${p}`,
-        ),
-    }),
+  const ok = await session.applyEntry(
+    path.join(pkgRoot, "index.js"),
+    { distribution: "managed" },
+    () => bridge.dispose(),
   );
-
-  root.provide("settings", {
-    installSection() {
-      return () => undefined;
-    },
-    async update() {
-      return undefined;
-    },
-    // Channel-pack calls configure({ auto: false }) when present. No `register`:
-    // OFM then persists channel state to `{DSH_HOME}/channel-pack/state.json`.
-    configure() {
-      return () => undefined;
-    },
-  });
-
-  // Channel-pack injects credentials + commands; persist OAuth JSON under xrkHome.
-  root.provide(
-    "credentials",
-    createCordisCredentialsBridge(dshHome, packageName),
-  );
-  // OFM sealed EAC gate + chan-relay home: `ctx.get('profileContext').name|home`.
-  // `web` matches OFM vault detectSealedHost (web / web-desktop); home = compat data root.
-  root.provide("profileContext", {
-    name: ofmProfileName(),
-    home: dshHome,
-  });
-  // Free-lane imageResolver stats imageHostPath; channel-pack inlines readImage.
-  root.provide("attachments", createCordisAttachmentsBridge(dshHome));
-  root.provide("commands", {
-    register() {
-      return () => undefined;
-    },
-  });
-
-  const originalEffect = root.effect.bind(root);
-  root.effect = ((fn: Parameters<typeof root.effect>[0], label?: string) => {
-    const owned = originalEffect(fn, label);
-    disposers.push(() => {
-      void owned();
-    });
-    return owned;
-  }) as typeof root.effect;
-
-  type AwaitableFiber = { await: () => Promise<unknown> };
-  const childFibers: AwaitableFiber[] = [];
-  const registryPlugin = root.registry.plugin.bind(root.registry);
-  root.registry.plugin = ((plugin, config?, getOuterStack?) => {
-    const fiber = registryPlugin(plugin, config, getOuterStack);
-    childFibers.push(fiber);
-    return fiber;
-  }) as typeof root.registry.plugin;
-
-  try {
-    const entry = pathToFileURL(path.join(pkgRoot, "index.js")).href;
-    const mod = (await import(/* @vite-ignore */ entry)) as OfmApplyModule;
-    if (typeof mod.apply !== "function") return undefined;
-    // managed: stand down self-updater / hot-reload writing into staged plugins.
-    mod.apply(root, { distribution: "managed" });
-    await Promise.all(childFibers.map((fiber) => fiber.await()));
-  } catch (error) {
-    logger.error("host apply failed", error);
-    hostDisposed = true;
-    for (const d of disposers.reverse()) await d();
-    return undefined;
-  }
+  if (!ok) return undefined;
 
   // Seal before return so async pack.apply → connection.fetch.register late-binds.
-  httpSealed = true;
-  syncScheduler.scheduleRetries();
+  session.sealHttp();
+  bridge.scheduler.scheduleRetries();
   disposers.push(() => {
-    hostDisposed = true;
+    bridge.dispose();
   });
 
   // Until main + region providers have synced Face, status GETs re-nudge.
-  for (const row of http) {
-    const inner = row.handle;
-    row.handle = async (req, res, pathname) => {
-      const handled = await inner(req, res, pathname);
-      if (
-        handled &&
-        !syncScheduler.settled() &&
-        pathname.startsWith(OFM_API_PREFIX) &&
-        (req.method ?? "GET").toUpperCase() === "GET"
-      ) {
-        void syncScheduler.runAll();
-      }
-      return handled;
-    };
-  }
+  bridge.nudgeHttpOnGet(http, { prefixes: [OFM_API_PREFIX] });
 
-  await registerLiveHostApply(packageName, async () => {
-    hostDisposed = true;
-    for (const d of disposers.reverse()) await d();
-    try {
-      await root.fiber.dispose();
-    } catch {
-      /* Cordis root may already be torn down */
-    }
-  });
-
-  const gatedHttp = gateLiveHostHttp(packageName, http);
-  const gatedRpc = gateLiveHostRpc(packageName, rpc);
+  const { http: gatedHttp, rpc: gatedRpc } =
+    await session.finishLive(packageName);
 
   const httpPrefixes = [OFM_API_PREFIX];
   if (gatedHttp.some((row) => row.match(OFM_CHANNEL_PACK_PREFIX))) {

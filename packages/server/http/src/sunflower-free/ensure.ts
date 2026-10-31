@@ -7,9 +7,10 @@
  * brand simply never reaches the registry and the provider stays out of the
  * catalog — no boot failure either way.
  *
- * Distribution note: this resolves against a source tree / packaged desktop
- * tree that ships `extensions/`. The npm CLI tarball does not include that
- * directory yet, so on a bare CLI install this is a no-op (returns false).
+ * Distribution: CLI release stage copies the plugin to
+ * `@xrkseek/harness-cli/extensions/xrk-sunflower-free`. Desktop afterPack
+ * places the same tree under `resources/host/extensions/`. Discovery walks
+ * from the CLI entry, this module, and cwd until that layout appears.
  *
  * Live remount (Settings save): apply egress env → drop probe cache → unload
  * plugin (dispose sidecar) → load again → caller rewires LLM brands. Probe
@@ -19,6 +20,7 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PluginLoader } from "@xrkseek/server-loader";
 
 export const SUNFLOWER_FREE_PLUGIN_ID = "xrk-sunflower-free";
@@ -91,11 +93,16 @@ export function clearSunflowerFreeProbeCache(
 const RELATIVE_ROOT = path.join("extensions", SUNFLOWER_FREE_PLUGIN_ID);
 
 /** Walk up from `from` until a directory containing the plugin manifest shows up. */
-function findPluginRoot(from: string): string | undefined {
+export function findSunflowerFreePluginRoot(from: string): string | undefined {
   let dir = path.resolve(from);
   for (;;) {
     const candidate = path.join(dir, RELATIVE_ROOT);
     if (existsSync(path.join(candidate, "xrk.plugin.json"))) return candidate;
+    // Packaged CLI: extensions next to package root while we started in dist/.
+    const nested = path.join(dir, "..", RELATIVE_ROOT);
+    if (existsSync(path.join(nested, "xrk.plugin.json"))) {
+      return path.resolve(nested);
+    }
     const parent = path.dirname(dir);
     if (parent === dir) return undefined;
     dir = parent;
@@ -106,22 +113,33 @@ function findPluginRoot(from: string): string | undefined {
  * Roots worth walking up from, most specific first:
  *   1. explicit `XRK_SUNFLOWER_FREE_ROOT`
  *   2. the running CLI entry (`…/node_modules/@xrkseek/harness-cli/dist/bin.js`)
- *      — a global npm install is never launched from its own package dir
- *   3. the process cwd (desktop Host is spawned with cwd = `resources/host`)
+ *   3. this module (nested under harness-cli or monorepo packages/server/http)
+ *   4. process cwd (desktop Host is spawned with cwd = `resources/host`)
  */
 function pluginRootCandidates(cwd: string): string[] {
-  const out = [];
+  const out: string[] = [];
   const argv1 = process.argv[1]?.trim();
   if (argv1) out.push(path.dirname(path.resolve(argv1)));
+  try {
+    out.push(path.dirname(fileURLToPath(import.meta.url)));
+  } catch {
+    /* non-ESM host */
+  }
   out.push(cwd);
   return out;
 }
 
-function resolvePluginRoot(cwd: string): string | undefined {
+export function resolveSunflowerFreePluginRoot(
+  cwd: string = process.cwd(),
+): string | undefined {
   const explicitRoot = process.env.XRK_SUNFLOWER_FREE_ROOT?.trim();
-  if (explicitRoot) return explicitRoot;
+  if (explicitRoot) {
+    return existsSync(path.join(explicitRoot, "xrk.plugin.json"))
+      ? explicitRoot
+      : undefined;
+  }
   for (const start of pluginRootCandidates(cwd)) {
-    const root = findPluginRoot(start);
+    const root = findSunflowerFreePluginRoot(start);
     if (root) return root;
   }
   return undefined;
@@ -129,8 +147,8 @@ function resolvePluginRoot(cwd: string): string | undefined {
 
 /**
  * Load the bundled sunflower-free provider plugin when its directory is
- * reachable from `cwd` (or an ancestor). Returns whether the plugin ended up
- * registered; a load error is swallowed because the lane is optional.
+ * reachable. Returns whether the plugin ended up registered; a load error is
+ * swallowed because the lane is optional.
  */
 export async function ensureSunflowerFreePlugin(
   loader: PluginLoader,
@@ -138,7 +156,7 @@ export async function ensureSunflowerFreePlugin(
 ): Promise<boolean> {
   if (loader.list().some((p) => p.id === SUNFLOWER_FREE_PLUGIN_ID)) return true;
 
-  const root = resolvePluginRoot(options.cwd ?? process.cwd());
+  const root = resolveSunflowerFreePluginRoot(options.cwd ?? process.cwd());
   if (!root || !existsSync(path.join(root, "xrk.plugin.json"))) return false;
 
   let hits;

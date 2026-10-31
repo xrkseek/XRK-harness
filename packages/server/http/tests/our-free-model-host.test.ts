@@ -142,6 +142,96 @@ describe("our-free-model-host", () => {
     );
   });
 
+  it("Face-syncs via /summary actualPort when settings keep ephemeral port:0", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "ofm-ephemeral-"));
+    const xrkHome = mkdtempSync(path.join(tmpdir(), "ofm-home-ephemeral-"));
+    temps.push(pkgRoot, xrkHome);
+    const { createServer } = await import("node:http");
+    const forwardServer = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    const boundPort = await new Promise<number>((resolve, reject) => {
+      forwardServer.once("error", reject);
+      forwardServer.listen(0, "127.0.0.1", () => {
+        const addr = forwardServer.address();
+        if (!addr || typeof addr === "string") reject(new Error("no-port"));
+        else resolve(addr.port);
+      });
+    });
+    writeFileSync(
+      path.join(pkgRoot, "index.js"),
+      `export function apply(ctx) {
+  const port = ${boundPort};
+  ctx.llm.registerAdapter(["our-free-model"], {
+    async listModels() {
+      return [{ id: "muse-spark", name: "Muse Spark", contextWindow: 128000 }];
+    },
+  });
+  ctx.webServer.register({
+    kind: "prefix",
+    path: "/api/our-free-model",
+    methods: ["GET"],
+    handler: async (req, res) => {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      if (!url.pathname.endsWith("/summary")) {
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "missing" }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        settings: {
+          forward: {
+            enabled: true,
+            host: "127.0.0.1",
+            port: 0,
+            running: true,
+            actualPort: port,
+          },
+          forwardKey: "ofm-ephemeral-key",
+        },
+      }));
+    },
+  });
+}
+`,
+    );
+    mkdirSync(path.join(xrkHome, "our-free-model"), { recursive: true });
+    writeFileSync(
+      path.join(xrkHome, "our-free-model", "settings.json"),
+      JSON.stringify({
+        version: 1,
+        enabled: true,
+        forward: { enabled: true, host: "127.0.0.1", port: 0 },
+        forwardKey: "ofm-ephemeral-key",
+      }),
+    );
+
+    const syncCommunityLlmProvider = vi.fn(async () => undefined);
+    try {
+      await tryApplyOurFreeModelHost(pkgRoot, "dsh-our-free-model", {
+        syncCommunityLlmProvider,
+        xrkHome,
+      });
+      await vi.waitFor(() => {
+        expect(syncCommunityLlmProvider).toHaveBeenCalled();
+      });
+      expect(syncCommunityLlmProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerId: "our-free-model",
+          baseUrl: `http://127.0.0.1:${boundPort}/v1`,
+          apiKey: "ofm-ephemeral-key",
+          models: [
+            expect.objectContaining({ id: "muse-spark", name: "Muse Spark" }),
+          ],
+        }),
+      );
+    } finally {
+      await new Promise<void>((resolve) => forwardServer.close(() => resolve()));
+    }
+  });
+
   it("keeps Face sync baseUrl when forward settings briefly lose the port", async () => {
     const pkgRoot = mkdtempSync(path.join(tmpdir(), "ofm-cache-"));
     const xrkHome = mkdtempSync(path.join(tmpdir(), "ofm-home-cache-"));

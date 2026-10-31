@@ -1,0 +1,8 @@
+{
+  "name": "@xrkseek/xrk-sunflower-free",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Sunflower Free — built-in free LLM lane (Bun sidecar egress).",
+  "main": "./plugin.mjs"
+}

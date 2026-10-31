@@ -98,8 +98,9 @@
 /* Selection still sets data-selected for details linkage; no outline —
    tool rows match Think chrome (no selected ring). */
 
-/* Turn activity keeps the former loader's one-line footprint. A pale
-   brand-blue band sweeps from left to right; reduced-motion keeps it static. */
+/* Turn activity: pale brand-blue sweep. Base fill is solid so a failed
+   `background-clip: text` cannot leave an empty waiting label; clip engines
+   upgrade to the shimmer. Same contract as process live titles. */
 .turnStatus {
   align-self: flex-start;
   flex: none;
@@ -108,21 +109,27 @@
   height: 26px;
   font: var(--dsw-font-s-strong-14);
   white-space: nowrap;
-  background: linear-gradient(
-    90deg,
-    var(--dsw-static-deepseek-500) 0%,
-    var(--dsw-static-deepseek-500) 40%,
-    var(--dsw-static-deepseek-200) 50%,
-    var(--dsw-static-deepseek-500) 60%,
-    var(--dsw-static-deepseek-500) 100%
-  );
-  background-position: 100% 0;
-  background-size: 250% 100%;
-  background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: dsh-turn-status-shimmer 1.8s linear infinite;
+  color: var(--dsw-static-deepseek-500);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .turnStatus {
+    background: linear-gradient(
+      90deg,
+      var(--dsw-static-deepseek-500) 0%,
+      var(--dsw-static-deepseek-500) 40%,
+      var(--dsw-static-deepseek-200) 50%,
+      var(--dsw-static-deepseek-500) 60%,
+      var(--dsw-static-deepseek-500) 100%
+    );
+    background-position: 100% 0;
+    background-size: 250% 100%;
+    background-clip: text;
+    color: transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: dsh-turn-status-shimmer 1.8s linear infinite;
+  }
 }
 
 .turnStatusClock {
@@ -151,9 +158,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .turnStatus {
-    background-position: 0 0;
-    background-size: 100% 100%;
     animation: none;
+    background: none;
+    color: var(--dsw-static-deepseek-500);
+    -webkit-text-fill-color: var(--dsw-static-deepseek-500);
   }
 }
 
@@ -307,21 +315,28 @@
   line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: linear-gradient(
-    90deg,
-    var(--dsw-static-deepseek-500) 0%,
-    var(--dsw-static-deepseek-500) 40%,
-    var(--dsw-static-deepseek-200) 50%,
-    var(--dsw-static-deepseek-500) 60%,
-    var(--dsw-static-deepseek-500) 100%
-  );
-  background-position: 100% 0;
-  background-size: 250% 100%;
-  background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: dsh-turn-status-shimmer 1.8s linear infinite;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .processGroupSummaryLive,
+  :global([data-process-group]) .processGroupTitleLive {
+    background: linear-gradient(
+      90deg,
+      var(--dsw-static-deepseek-500) 0%,
+      var(--dsw-static-deepseek-500) 40%,
+      var(--dsw-static-deepseek-200) 50%,
+      var(--dsw-static-deepseek-500) 60%,
+      var(--dsw-static-deepseek-500) 100%
+    );
+    background-position: 100% 0;
+    background-size: 250% 100%;
+    background-clip: text;
+    color: transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: dsh-turn-status-shimmer 1.8s linear infinite;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

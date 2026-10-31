@@ -141,8 +141,10 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `dsh-mcp-connector` | full | `POST /mcp-connector/api` 连接目录可 upsert/list |
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` 同形离线状态 · `ui-mode` 持久化 · `/ask/state`；进程 start/stop 仍 deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` 团队目录持久化 |
-| `dsh-workbuddy-connect` | full | web/Desktop：stage `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face；共享 `connection`（admit/fetch）· `credentials` 落盘；装后需重启 Host |
-| `dsh-our-free-model`（含任意 `@scope/dsh-our-free-model` 再发行） | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials`（`describe`/`unset`）· `profileContext`（EAC）· `attachments`（vision）· forward 默认开 · Face sync；`distribution: managed`；装后需重启 Host |
+| `dsh-workbuddy-connect` | full | web/Desktop：stage `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · 统一 `createCommunityLoopbackLlmBridge` → Face；共享 `connection`（admit/fetch）· `credentials` 落盘；装后需重启 Host |
+| `dsh-our-free-model`（含任意 `@scope/dsh-our-free-model` 再发行） | full | web/Desktop：stage `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack`（`connection.fetch`）· trust fence `connection.admit` · channel-pack `credentials`（`describe`/`unset`）· `profileContext`（EAC）· `attachments`（vision）· forward 默认开 · 同桥 Face sync（含 ephemeral `actualPort`）；`distribution: managed`；装后需重启 Host。Magpie 工作台仅 win32 |
+
+**Loopback OpenAI → Face 同族**（Cordis `registerAdapter` + 本机 `/v1`）：OFM · WorkBuddy Connect · 对照仓如 `workbuddy-to-dsh`。Host 只走共享桥，不为每个 npm 名抄一套 sync。产品内置向日葵免费见 [configuration.md](./configuration.md)「向日葵免费」（非社区包）。
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` 持久化；`raw-search` 无钥 `ddg` 走 DuckDuckGo HTML；带 key 引擎仍 deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings；PTY 需 WS |
@@ -430,8 +432,10 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `dsh-mcp-connector` | full | `POST /mcp-connector/api` connection catalog upsert/list |
 | `dsh-code-server-app` | partial | `/code-server/*` · `/api/code-server/*` same offline shape · `ui-mode` persist · `/ask/state`; process start/stop still deferred |
 | `@nanmicoder/dsh-agent-teams` | full | `/plugins/dsh-agent-teams/state|plan|halt` team catalog persisted |
-| `dsh-workbuddy-connect` | full | web/Desktop: staged `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · `syncCommunityLlmProvider` → Face; shared `connection` (admit/fetch) · persisted `credentials`; restart Host after install |
-| `dsh-our-free-model` (any `@scope/dsh-our-free-model` republish) | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` (`describe`/`unset`) · `profileContext` (EAC) · `attachments` (vision) · forward on by default · Face sync; `distribution: managed`; restart Host after install |
+| `dsh-workbuddy-connect` | full | web/Desktop: staged `lib/` Cordis apply · `/plugins/dsh-workbuddy-connect/status|probe|update` · loopback shim · shared `createCommunityLoopbackLlmBridge` → Face; shared `connection` (admit/fetch) · persisted `credentials`; restart Host after install |
+| `dsh-our-free-model` (any `@scope/dsh-our-free-model` republish) | full | web/Desktop: staged `index.js`+`src/` Cordis apply · `/api/our-free-model` · `/api/channel-pack` (`connection.fetch`) · trust fence `connection.admit` · channel-pack `credentials` (`describe`/`unset`) · `profileContext` (EAC) · `attachments` (vision) · forward on by default · same bridge Face sync (incl. ephemeral `actualPort`); `distribution: managed`; restart Host after install. Magpie workbench is win32-only |
+
+**Loopback OpenAI → Face family** (Cordis `registerAdapter` + local `/v1`): OFM · WorkBuddy Connect · peers such as `workbuddy-to-dsh`. Host uses the shared bridge only — no per-npm sync copy. Built-in sunflower-free: [configuration.md](./configuration.md) (not a community package).
 | `dsh-token-usage-stats` | full | `/token-usage-stats` HTML · `/api/token-usage-stats` JSON |
 | `dsh-free-search` | partial | `/api/dsh-free-search-settings/{describe,mutate,…}` ns `web-search-free` persist; keyless `ddg` `raw-search` via DuckDuckGo HTML; keyed engines still deferred |
 | `dsh-server-deck` | partial | `/server-deck/api/hosts` CRUD · import-ssh-config · metrics/settings; PTY needs WS |

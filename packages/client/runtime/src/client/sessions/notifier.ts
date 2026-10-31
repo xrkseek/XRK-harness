@@ -34,6 +34,8 @@
 // drains whatever a suspended clock left pending. Without it the re-entrancy
 // guard swallows every later markFrameDirty and a streaming reply stops painting
 // until reload. It adds no latency to the normal path.
+// Structural events already flush on a microtask (and drain coalesced tokens),
+// so a same-window timer watchdog would only duplicate that path.
 
 /**
  * A frame callback older than this is treated as LOST rather than late (window
