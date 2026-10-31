@@ -79,7 +79,7 @@ apps/cli/product-web/
 !/extensions/dsh-compat/**
 !/extensions/xrk-sunflower-free/
 !/extensions/xrk-sunflower-free/**
-# 随包分发的 Bun 二进制不入库（pnpm vendor:bun 生成，只在打包产物里）
+# 本机可选 `pnpm vendor:bun` 产物（产品包不随带）
 /extensions/xrk-sunflower-free/vendor/
 
 session-agent-presets.json

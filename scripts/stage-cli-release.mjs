@@ -285,34 +285,16 @@ if (!existsSync(path.join(STAGE, "seeds", "skills", "xrk-capability-attach", "SK
   process.exit(1);
 }
 
-// 内置 LLM 车道：插件目录 + 随包分发的 Bun（`pnpm vendor:bun` 生成）。
-// 放 STAGE/extensions 是因为 CLI 从自身安装位置向上找 `extensions/<id>`；
-// 桌面包同理由 afterPack 拷到 resources/host/extensions。
+// 内置 LLM 车道：只拷插件（不随包 Bun；用户自装）。CLI 从安装位向上找
+// `extensions/<id>`；桌面 afterPack 同理拷到 resources/host/extensions。
 const SUNFLOWER_SRC = path.join(ROOT, "extensions", "xrk-sunflower-free");
 if (existsSync(path.join(SUNFLOWER_SRC, "xrk.plugin.json"))) {
-  copyDirSync(SUNFLOWER_SRC, path.join(STAGE, "extensions", "xrk-sunflower-free"));
-  const bunExe = path.join(STAGE, "extensions", "xrk-sunflower-free", "vendor",
-    process.platform === "win32" ? "bun.exe" : "bun");
-  if (!existsSync(bunExe)) {
-    const line =
-      "stage: bundled Bun missing — Windows users need `pnpm vendor:bun`; " +
-      "macOS/Linux install Bun locally (extensions/xrk-sunflower-free/README.md).";
-    if (
-      process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1" ||
-      process.platform === "win32"
-    ) {
-      console.error(line);
-      process.exit(1);
-    }
-    console.warn(line);
-  }
+  const sunflowerDest = path.join(STAGE, "extensions", "xrk-sunflower-free");
+  copyDirSync(SUNFLOWER_SRC, sunflowerDest);
+  // Never ship a maintainer-local `pnpm vendor:bun` binary.
+  rmSync(path.join(sunflowerDest, "vendor"), { recursive: true, force: true });
 } else {
-  const line = "stage: extensions/xrk-sunflower-free missing";
-  if (process.env.XRK_REQUIRE_SUNFLOWER_BUN === "1") {
-    console.error(line);
-    process.exit(1);
-  }
-  console.warn(line);
+  console.warn("stage: extensions/xrk-sunflower-free missing");
 }
 
 const stagedPkgPath = path.join(STAGE, "package.json");

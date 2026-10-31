@@ -1,10 +1,9 @@
 /**
- * 向日葵免费 — `kind: "llm"` 入口。
+ * 向日葵免费 — `kind: "llm"` 入口（对齐 OFM 双车道）。
  *
- * 一条 brand：`sunflower-free`。
- *   OpenCode：OFM 形轻量 ping，仅 `available` 进目录（额度用尽本机不显示）；
- *   Kilo：`isFree` listing（不探单模）；
- *   上游恒 `public`，不读用户密钥。
+ *   OpenCode（`sunflower-free`）：仅 Bun sidecar + 探针 `available`；无 Bun 静默省略。
+ *   Kilo（`sunflower-kilo`）：listing `isFree`，Host→api.kilo.ai 直连，**不绑 Bun**。
+ *   OpenCode 上游恒 `Bearer public`；Kilo 无密钥。
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -25,7 +24,10 @@ import {
 import { probeUsableModels, sidecarHealthy } from "./probe.mjs";
 
 export const SUNFLOWER_BRAND_ID = "sunflower-free";
+/** Kilo keyless pool — OFM: Node fetch only, never requires Bun. */
+export const SUNFLOWER_KILO_BRAND_ID = "sunflower-kilo";
 export const SUNFLOWER_DISPLAY_NAME = "向日葵免费";
+export const SUNFLOWER_KILO_DISPLAY_NAME = "向日葵免费 · Kilo";
 export const SUNFLOWER_DEFAULT_MODEL = DEFAULT_FREE_MODEL;
 export const SUNFLOWER_MODELS = FREE_MODELS;
 /** Sidecar ↔ Host 一次性 key（进程内，不落盘）。 */
@@ -36,8 +38,8 @@ export { sidecarHealthy };
 
 /**
  * Locate Bun for the OpenCode sidecar.
- * Order: `XRK_SUNFLOWER_BUN` → plugin `vendor/` → `~/.bun/bin` → PATH (`which`/`where`).
- * Windows Desktop ships `vendor/bun.exe`; macOS/Linux expect a normal Bun install.
+ * Order: `XRK_SUNFLOWER_BUN` → optional plugin `vendor/` → `~/.bun/bin` → PATH.
+ * Product installs never ship Bun; missing → omit OpenCode (no warn).
  */
 export function resolveBunBinary(env = process.env, here = import.meta.dirname) {
   const explicit = env.XRK_SUNFLOWER_BUN?.trim();
@@ -167,14 +169,19 @@ function emptyPlugin(why) {
   };
 }
 
-function pickDefaultModel(openCodeIds, kiloModels, catalogModels) {
+function pickDefaultSelection(openCodeIds, kiloModels, kiloBrandId) {
   if (openCodeIds.includes(SUNFLOWER_DEFAULT_MODEL)) {
-    return SUNFLOWER_DEFAULT_MODEL;
+    return { provider: SUNFLOWER_BRAND_ID, model: SUNFLOWER_DEFAULT_MODEL };
   }
-  if (openCodeIds[0]) return openCodeIds[0];
-  const kiloPrefer =
+  if (openCodeIds[0]) {
+    return { provider: SUNFLOWER_BRAND_ID, model: openCodeIds[0] };
+  }
+  const kiloId =
     kiloModels.find((m) => m.id === "kilo-auto/free")?.id ?? kiloModels[0]?.id;
-  return kiloPrefer ?? catalogModels[0].id;
+  if (kiloId) {
+    return { provider: kiloBrandId, model: kiloId };
+  }
+  return undefined;
 }
 
 /**
@@ -195,7 +202,7 @@ export async function createPlugin(options = {}) {
       ? []
       : await kiloFetch(options.kilo ?? {}).catch(() => []);
 
-  // No Bun → skip OpenCode; Kilo stays on the keyless gateway (no apiKeyEnv).
+  // OFM: Bun only for OpenCode inference. Kilo never spawns / needs Bun.
   const override = options.sidecar?.bunBinary;
   const bunBinary =
     typeof override === "string" && override.trim()
@@ -210,22 +217,18 @@ export async function createPlugin(options = {}) {
   /** @type {string[]} */
   let openCodeIds = [];
 
-  if (bunBinary && (wantOpenCode || kiloModels.length > 0)) {
+  if (bunBinary && wantOpenCode) {
     handle = await spawnSidecar({
       ...options.sidecar,
       bunBinary,
-      kiloModelIds: kiloModels.map((m) => m.id),
-      kiloBase: KILO_BASE,
+      // OpenCode-only sidecar — Kilo stays Host → api.kilo.ai (OFM egress.js).
+      kiloModelIds: [],
     });
     if (handle && !(await sidecarHealthy(handle))) {
-      console.warn("[sunflower-free] sidecar unhealthy — Kilo direct if listed");
+      console.warn("[sunflower-free] OpenCode sidecar unhealthy — omit OpenCode");
       await handle.stop().catch(() => {});
       handle = undefined;
     }
-  } else if (!bunBinary && wantOpenCode) {
-    console.warn(
-      "[sunflower-free] Bun not found — OpenCode omitted; install Bun or set XRK_SUNFLOWER_BUN (see extensions/xrk-sunflower-free/README.md)",
-    );
   }
 
   /**
@@ -317,67 +320,78 @@ export async function createPlugin(options = {}) {
     }
   }
 
-  // 后台还在校准时不能停 sidecar：探测还要用它，停了会白跑一轮。
-  if (
-    handle &&
-    openCodeIds.length === 0 &&
-    kiloModels.length === 0 &&
-    !backgroundProbe
-  ) {
+  // 后台还在校准时不能停 sidecar：探测还要用它。
+  if (handle && openCodeIds.length === 0 && !backgroundProbe) {
     await handle.stop().catch(() => {});
     handle = undefined;
   }
 
-  const catalogModels = [
-    ...openCodeIds.map((id) => openCodeCatalogEntry(id)),
-    ...kiloModels,
-  ];
-  if (catalogModels.length === 0) {
+  /** @type {object[]} */
+  const llmBrands = [];
+
+  if (handle && openCodeIds.length > 0) {
+    const openCodeModels = openCodeIds.map((id) => openCodeCatalogEntry(id));
+    llmBrands.push({
+      id: SUNFLOWER_BRAND_ID,
+      displayName: SUNFLOWER_DISPLAY_NAME,
+      protocol: "openai-chat",
+      baseUrl: handle.url,
+      path: "/chat/completions",
+      authMode: "bearer",
+      apiKeyEnv: SUNFLOWER_KEY_ENV,
+      defaultModel: openCodeModels[0].id,
+      models: openCodeModels,
+      autoCatalog: true,
+      notes: "向日葵免费 · OpenCode（Bun sidecar，对齐 OFM）。",
+    });
+  }
+
+  const kiloBrandId =
+    llmBrands.length === 0 ? SUNFLOWER_BRAND_ID : SUNFLOWER_KILO_BRAND_ID;
+  if (kiloModels.length > 0) {
+    // Kilo-only: keep brand id `sunflower-free` so saved Settings still resolve.
+    // Both lanes: second brand `sunflower-kilo` (OFM: no Bun).
+    const kiloOnly = kiloBrandId === SUNFLOWER_BRAND_ID;
+    llmBrands.push({
+      id: kiloBrandId,
+      displayName: kiloOnly
+        ? SUNFLOWER_DISPLAY_NAME
+        : SUNFLOWER_KILO_DISPLAY_NAME,
+      protocol: "openai-chat",
+      baseUrl: KILO_BASE,
+      path: "/chat/completions",
+      defaultModel: kiloModels[0].id,
+      models: kiloModels,
+      autoCatalog: true,
+      notes: "向日葵免费 · Kilo（Host 直连，不绑 Bun）。",
+    });
+  }
+
+  if (llmBrands.length === 0) {
     if (handle) await handle.stop().catch(() => {});
     return emptyPlugin("no usable free lanes on this Host");
   }
 
-  const defaultModel = pickDefaultModel(openCodeIds, kiloModels, catalogModels);
-  /** @type {object} */
-  const brand = handle
-    ? {
-        id: SUNFLOWER_BRAND_ID,
-        displayName: SUNFLOWER_DISPLAY_NAME,
-        protocol: "openai-chat",
-        baseUrl: handle.url,
-        path: "/chat/completions",
-        authMode: "bearer",
-        apiKeyEnv: SUNFLOWER_KEY_ENV,
-        defaultModel,
-        models: catalogModels,
-        autoCatalog: true,
-        notes: "向日葵免费：OpenCode + Kilo（sidecar）。",
-      }
-    : {
-        id: SUNFLOWER_BRAND_ID,
-        displayName: SUNFLOWER_DISPLAY_NAME,
-        protocol: "openai-chat",
-        baseUrl: KILO_BASE,
-        path: "/chat/completions",
-        defaultModel,
-        models: catalogModels,
-        autoCatalog: true,
-        notes: "向日葵免费：仅 Kilo 直连（本机无 Bun）。",
-      };
+  const defaultSelection = pickDefaultSelection(
+    openCodeIds,
+    kiloModels,
+    kiloBrandId,
+  );
 
   if (handle) process.env[SUNFLOWER_KEY_ENV] = handle.key;
   else delete process.env[SUNFLOWER_KEY_ENV];
 
   console.info(
     `[sunflower-free] catalog opencode=${openCodeIds.length} kilo=${kiloModels.length}` +
-      (handle ? " via=sidecar" : " via=kilo-direct"),
+      (handle ? " oc=sidecar" : " oc=off") +
+      (kiloModels.length > 0 ? " kilo=direct" : ""),
   );
 
   return {
     id: "xrk-sunflower-free",
     kind: "llm",
-    llmBrands: [brand],
-    defaultSelection: { provider: SUNFLOWER_BRAND_ID, model: defaultModel },
+    llmBrands,
+    ...(defaultSelection ? { defaultSelection } : {}),
     async dispose() {
       delete process.env[SUNFLOWER_KEY_ENV];
       if (handle) await handle.stop().catch(() => {});

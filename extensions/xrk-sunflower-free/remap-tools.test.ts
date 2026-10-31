@@ -57,13 +57,38 @@ describe("buildUpstreamBody", () => {
     expect(out.tool_choice).toBeUndefined();
   });
 
-  test("appends placeholder note for injected read/shell", () => {
+  test("appends env + placeholder note (OFM; no OC persona)", () => {
     const out = buildUpstreamBody({
       messages: [{ role: "user", content: "hi" }],
     });
     const system = (out.messages as { role: string; content: string }[])[0];
     expect(system.role).toBe("system");
+    expect(system.content).toContain("<env>");
     expect(system.content).toContain("placeholders that do nothing");
+    expect(system.content).not.toContain("You are an AI agent running in OpenCode");
+  });
+
+  test("aliases working_directory → workspace_directory", () => {
+    const out = buildUpstreamBody({
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "working_directory",
+            description: "cd",
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      ],
+    });
+    const tools = out.tools as { function?: { name?: string } }[];
+    expect(tools.some((t) => t.function?.name === "workspace_directory")).toBe(
+      true,
+    );
+    expect(tools.some((t) => t.function?.name === "working_directory")).toBe(
+      false,
+    );
   });
 });
 

@@ -23,6 +23,10 @@ describe("honest-http-catchall", () => {
     expect(summary?.settings).toEqual(
       expect.objectContaining({ enabled: true }),
     );
+    const stats = incompleteCommunityApiBody("/api/our-free-model/stats");
+    expect(Array.isArray(stats?.days)).toBe(true);
+    expect(Array.isArray(stats?.models)).toBe(true);
+    expect(Array.isArray(stats?.samples)).toBe(true);
     expect(incompleteCommunityApiBody("/api/pet/state")).toBeUndefined();
   });
 
@@ -84,6 +88,43 @@ describe("honest-http-catchall", () => {
         };
         expect(res.status).toBe(200);
         expect(Array.isArray(body.catalog)).toBe(true);
+        expect(body.incomplete).toContain("dsh-host");
+        server.close(() => resolve());
+      });
+    });
+  });
+
+  it("OFM stats path-shape returns days/models/samples arrays", async () => {
+    const server = createServer((req, res) => {
+      void handleHonestHttpCatchall(
+        req,
+        res,
+        "/api/our-free-model/stats",
+      ).then((claimed) => {
+        if (!claimed) {
+          res.writeHead(404);
+          res.end("no");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, async () => {
+        const addr = server.address();
+        const port =
+          typeof addr === "object" && addr ? addr.port : 0;
+        const res = await fetch(
+          `http://127.0.0.1:${port}/api/our-free-model/stats`,
+        );
+        const body = (await res.json()) as {
+          days: unknown[];
+          models: unknown[];
+          samples: unknown[];
+          incomplete?: string[];
+        };
+        expect(res.status).toBe(200);
+        expect(Array.isArray(body.days)).toBe(true);
+        expect(Array.isArray(body.models)).toBe(true);
+        expect(Array.isArray(body.samples)).toBe(true);
         expect(body.incomplete).toContain("dsh-host");
         server.close(() => resolve());
       });

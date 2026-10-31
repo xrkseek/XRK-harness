@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Stage the *current platform* Bun next to sunflower-free (gitignored ~110 MB).
- * Windows Desktop packaging requires this; macOS/Linux users install Bun
- * themselves (see extensions/xrk-sunflower-free/README.md).
+ * Optional local staging of Bun next to sunflower-free (gitignored ~110 MB).
+ * Product Desktop/CLI packages do **not** run this — users install Bun themselves.
+ * Keep for maintainer probing without a system Bun on PATH.
  *
  *   pnpm vendor:bun
  *   pnpm vendor:bun -- --force

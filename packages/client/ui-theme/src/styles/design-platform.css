@@ -269,10 +269,10 @@ body {
   --dsw-specific-bubble: var(--dsw-static-deepseek-50);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-00);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-50);
-  /* Community themes (qq2006 / dsh-skin / endfield) rebind --dsw-menu-surface-fill;
-     keep --dsw-specific-menu as an alias so Host chrome and plugins share one knob. */
-  --dsw-menu-surface-fill: rgba(248, 249, 250, 0.58);
-  --dsw-alias-menu-group-header-fill: rgba(248, 249, 250, 0.94);
+  /* Default Host menus are opaque. Community themes may rebind
+     --dsw-menu-surface-fill to a translucent wash + backdrop blur. */
+  --dsw-menu-surface-fill: var(--dsw-alias-bg-layer-3);
+  --dsw-alias-menu-group-header-fill: var(--dsw-alias-bg-layer-3);
   --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-60);
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-50);
@@ -397,8 +397,8 @@ body[data-ds-dark-theme] {
   --dsw-specific-bubble: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-900);
-  --dsw-menu-surface-fill: rgba(67, 69, 74, 0.45);
-  --dsw-alias-menu-group-header-fill: rgba(67, 69, 74, 0.94);
+  --dsw-menu-surface-fill: var(--dsw-alias-bg-layer-3);
+  --dsw-alias-menu-group-header-fill: var(--dsw-alias-bg-layer-3);
   --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-800);
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-900);

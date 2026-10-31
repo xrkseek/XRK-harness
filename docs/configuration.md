@@ -148,12 +148,12 @@ Preset 选型：[profiles.md](./profiles.md)。
 
 内置插件 `xrk-sunflower-free`（模型目录里的 **向日葵免费**）：
 
-| 平台 | Bun |
+| 车道 | Bun |
 |------|-----|
-| Windows Desktop | 安装包自带；空机也可开 OpenCode 池 |
-| macOS / Linux | **不随包**。本机安装 Bun 后即可（官方安装脚本默认 `~/.bun/bin`，或 Homebrew / 其它方式进 `PATH`）。也可设 `XRK_SUNFLOWER_BUN` |
+| OpenCode（`sunflower-free`） | **需要**本机 Bun（产品不随包；官方安装 → `~/.bun/bin`，或 `XRK_SUNFLOWER_BUN`）。无 Bun 则静默省略 |
+| Kilo（`sunflower-kilo`，仅 Kilo 时并入 `sunflower-free`） | **不需要**；Host 直连 `api.kilo.ai` |
 
-无 Bun 时：OpenCode 行不出现；**Kilo 免费池仍可用**（直连，无需填密钥）。落点与探测细节见 [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md)。
+落点与探测细节见 [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md)。
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md)。
 
@@ -469,12 +469,12 @@ Preset selection: [profiles.md](./profiles.md).
 
 Built-in plugin `xrk-sunflower-free` (**向日葵免费** in the model catalog):
 
-| Platform | Bun |
+| Lane | Bun |
 |------|-----|
-| Windows Desktop | Shipped in the installer; OpenCode pool works on empty machines |
-| macOS / Linux | **Not bundled**. Install Bun locally (official installer → `~/.bun/bin`, or Homebrew / anything on `PATH`). Or set `XRK_SUNFLOWER_BUN` |
+| OpenCode (`sunflower-free`) | **Requires** local Bun (not shipped; official installer → `~/.bun/bin`, or `XRK_SUNFLOWER_BUN`). Absent → omitted silently |
+| Kilo (`sunflower-kilo`; merges into `sunflower-free` when Kilo-only) | **Not required**; Host → `api.kilo.ai` direct |
 
-Without Bun: OpenCode rows are omitted; the **Kilo free pool still works** (direct, no API key). Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md).
+Details: [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md).
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md).
 

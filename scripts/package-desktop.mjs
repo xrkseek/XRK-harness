@@ -309,21 +309,6 @@ function ensureProduceArtifacts() {
   );
   if ((stubs.status ?? 1) !== 0) process.exit(stubs.status ?? 1);
 
-  // Windows Desktop ships Bun for OpenCode; other platforms only warn (Kilo direct).
-  process.stdout.write("package-desktop: vendor:bun…\n");
-  const vendorBun = spawnSync("pnpm", ["vendor:bun"], {
-    cwd: ROOT,
-    stdio: "inherit",
-    shell: true,
-  });
-  if ((vendorBun.status ?? 1) !== 0) {
-    if (process.platform === "win32") process.exit(vendorBun.status ?? 1);
-    process.stderr.write(
-      "package-desktop: vendor:bun failed — macOS/Linux builds continue; " +
-        "users install Bun locally for OpenCode (see extensions/xrk-sunflower-free/README.md)\n",
-    );
-  }
-
   // Always refresh host-bundle so workspace Face/pipe fixes are not skipped by a
   // stale deploy tree from an earlier package run.
   process.stdout.write("package-desktop: prepare-host-bundle…\n");

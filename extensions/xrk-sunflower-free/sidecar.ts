@@ -5,24 +5,19 @@
  * 允许列表内；Node 的栈会被归进共享配额池，返回 429。Host 是 Node，
  * 所以这条车道的 egress 交给一个 Bun 子进程。
  *
- * 这个进程做四件事（缺一即拒绝）：
- *   1. 以车道要求的 system 文本打底，把调用方的 persona 追加在后面；
- *   2. 注入 `read` + `shell` 两个必需的工具定义（形状须逐字）；
- *   3. 按会话铸造并复用会话标识（配额按 session 计）；
- *   4. 上游出口：默认直连。插件探测级联（先直连，失败再用 Settings
- *      `openCodeProxy` / `auto` 发现的本机代理）通过 `POST /__sunflower/egress`
- *      写入粘性出口；聊天与探针共用赢家，避免探到代理、对话仍直连。
+ * OpenCode-only（Kilo 由 Host 直连 api.kilo.ai，对齐 OFM egress.js）。
+ *   1. OFM 指纹：官方 `read`/`shell` + `<env>` + placeholder（不抄 OC persona）；
+ *   2. 铸造并复用 session id（配额按 session）；
+ *   3. 粘性出口：探测级联经 `POST /__sunflower/egress` 写入，聊天与探针共用。
  *
  * 只监听 127.0.0.1，并带每次启动生成的一次性 key：不做开放代理。
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createConnection } from "node:net";
-import { FINGERPRINT } from "./fingerprint.js";
+import { CLIENT_UA, FINGERPRINT } from "./fingerprint.js";
 
 const UPSTREAM = "https://opencode.ai";
 const PATH_PREFIX = "/v1";
-/** 车道要求的客户端标识：整串匹配，不能拼接额外信息。 */
-const CLIENT_UA = "opencode/latest/2.2.0/cli";
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 export interface SidecarOptions {
@@ -123,6 +118,18 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const DOWNSTREAM_TOOL_NAMES: Readonly<Record<string, string>> = {
   read: "read_file",
   shell: "bash",
+  // OFM FREE_LANE_TOOL_ALIASES inverse (b3d4b5a): wire aliases → Host names.
+  workspace_directory: "working_directory",
+  conversation_delegate: "subagent_fork",
+};
+
+/**
+ * OFM `FREE_LANE_TOOL_ALIASES` — these Host names alone (or with certain
+ * companions) returned 429 on the free lane; keep schemas, rename on the wire.
+ */
+const UPSTREAM_TOOL_ALIASES: Readonly<Record<string, string>> = {
+  working_directory: "workspace_directory",
+  subagent_fork: "conversation_delegate",
 };
 
 function toolDefName(tool: unknown): string | undefined {
@@ -224,49 +231,89 @@ export function remapDownstreamSseStream(
 }
 
 /**
- * 把 Host 发来的请求补成车道要求的形状。
+ * OFM `applyFingerprint` + `ensureFreeLaneEnvironment` (chat wire).
  *
- * 实测（2026-10-29）：system 打底后可以追加调用方自己的段落；多轮对话、
- * `tool_calls`、`role: tool` 都放行。整段替换 system 会被拒。
- * tools：保留 Host 真工具，并追加 OpenCode 门禁要求的 `read`+`shell` 逐字定义；
- * 少一个门禁工具会 429。回程再把 `read`/`shell` 映射成 Host 的 `read_file`/`bash`。
+ * - Keep caller system / tools (no copied OC persona — docs/oc-free-transport.md).
+ * - Inject official `read`/`shell` defs; append placeholder note when injected.
+ * - Append `<env>` cwd/platform unless caller already has one.
+ * - Strip `tool_choice: none` (v2 → 403).
+ * Downstream remaps `read`/`shell` → Host `read_file`/`bash`.
  */
 export function buildUpstreamBody(body: ChatBody): ChatBody {
   const rawMessages = Array.isArray(body.messages) ? body.messages : [];
-  const systemParts: string[] = [];
-  const rest: unknown[] = [];
-  for (const message of rawMessages) {
-    if (isRecord(message) && message.role === "system") {
-      const content = message.content;
-      if (typeof content === "string" && content.trim()) systemParts.push(content.trim());
-      continue;
-    }
-    rest.push(message);
-  }
-
-  const persona = systemParts.join("\n\n");
-  const system =
-    persona.length > 0
-      ? `${FINGERPRINT.system}\n\n<!-- xrkh persona (appended, upstream allows a suffix) -->\n${persona}`
-      : FINGERPRINT.system;
+  const messages = rawMessages.map((m) =>
+    isRecord(m) ? { ...m } : m,
+  ) as unknown[];
 
   const hostTools = Array.isArray(body.tools) ? body.tools : [];
-  const kept = hostTools.filter((tool) => {
+  const aliasNotes: string[] = [];
+  const kept: unknown[] = [];
+  for (const tool of hostTools) {
     const name = toolDefName(tool);
-    return name !== "read" && name !== "shell";
-  });
+    if (name === "read" || name === "shell") continue;
+    const alias = name ? UPSTREAM_TOOL_ALIASES[name] : undefined;
+    if (alias && isRecord(tool)) {
+      aliasNotes.push(`use \`${alias}\` for \`${name}\``);
+      if (isRecord(tool.function) && typeof tool.function.name === "string") {
+        kept.push({
+          ...tool,
+          function: { ...tool.function, name: alias },
+        });
+      } else {
+        kept.push({ ...tool, name: alias });
+      }
+      continue;
+    }
+    kept.push(tool);
+  }
+  // Always inject OFM gate defs (Host `read`/`shell` names were filtered above).
+  const tools = [...kept, FINGERPRINT.readTool, FINGERPRINT.shellTool];
 
-  // OFM: injected gate tools are real defs; tell the model not to call them
-  // so it prefers Host tools (read_file / bash) instead.
-  const withPlaceholderNote = `${system}\n\nDo not call the \`read\` or \`shell\` tools; they are placeholders that do nothing. Use the other tools you have been given instead.`;
+  const existingSystem = messages
+    .filter(
+      (m) =>
+        isRecord(m) &&
+        (m.role === "system" || m.role === "developer") &&
+        typeof m.content === "string",
+    )
+    .map((m) => String((m as { content: string }).content))
+    .join("\n");
+
+  const extras: string[] = [];
+  if (!/<env>[\s\S]*?<\/env>/i.test(existingSystem)) {
+    const cwd = process.cwd().replace(/[\r\n<>]/g, " ");
+    const platform = String(process.platform).replace(/[\r\n<>]/g, " ");
+    extras.push(
+      `Here is some useful information about the environment you are running in:\n<env>\n  Working directory: ${cwd}\n  Platform: ${platform}\n</env>`,
+    );
+  }
+  extras.push(FINGERPRINT.placeholderNote);
+  if (aliasNotes.length > 0) {
+    extras.push(
+      `Tool name mapping for this request: ${aliasNotes.join("; ")}. These tools retain their original behavior and parameters.`,
+    );
+  }
+
+  if (extras.length > 0) {
+    const note = extras.join("\n\n");
+    const first = messages[0];
+    if (
+      isRecord(first) &&
+      first.role === "system" &&
+      typeof first.content === "string"
+    ) {
+      messages[0] = { ...first, content: `${first.content}\n\n${note}` };
+    } else {
+      messages.unshift({ role: "system", content: note });
+    }
+  }
 
   const next: ChatBody = {
     ...body,
-    messages: [{ role: "system", content: withPlaceholderNote }, ...rest],
-    tools: [...kept, FINGERPRINT.readTool, FINGERPRINT.shellTool],
+    messages,
+    tools,
     stream: true,
   };
-  // OFM / v2 gate: `tool_choice: "none"` → 403 FreeTierError.
   if (
     next.tool_choice === "none" ||
     (isRecord(next.tool_choice) && next.tool_choice.type === "none")

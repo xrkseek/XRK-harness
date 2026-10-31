@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.1',
+    date: '2026-10-31',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '向日葵免费对齐 OFM：OpenCode 要 Bun；Kilo 直连不绑 Bun；指纹 UA 2.0.26。',
+        en: 'Sunflower free aligned with OFM: OpenCode needs Bun; Kilo is direct without Bun; fingerprint UA 2.0.26.',
+      },
+      {
+        zh: '默认菜单卡片恢复不透明；社区 Settings 无真实 Host API 时不再因缺数组崩页（兜底≠插件可用）。',
+        en: 'Default menu cards opaque again; community Settings no longer crash on missing arrays when no real Host API (stub ≠ usable plugin).',
+      },
+      {
+        zh: 'Desktop / CLI 不再随包 Bun。完整清单见 docs/releases/v0.7.1.md。',
+        en: 'Desktop / CLI no longer ship Bun. Full list in docs/releases/v0.7.1.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.0',
     date: '2026-10-31',
     title: {

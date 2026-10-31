@@ -195,8 +195,8 @@ export function createElectronBuilderConfig(
             "Settings plugin install/update/remove needs XRK_HARNESS_BIN",
         );
       }
-      // 内置 LLM 车道：插件目录 + 随包分发的 Bun。Host 以 cwd=resources/host
-      // 启动，`ensureSunflowerFreePlugin` 从 cwd 向上找 `extensions/<id>`。
+      // 内置 LLM 车道：只拷插件。OpenCode 需要本机 Bun（用户自装）；无 Bun 时
+      // 静默跳过 OpenCode，Kilo 仍可直连。Host cwd=resources/host。
       const sunflowerSrc = join(
         APP_ROOT,
         "..",
@@ -208,16 +208,8 @@ export function createElectronBuilderConfig(
         const sunflowerDest = join(hostDest, "extensions", "xrk-sunflower-free");
         rmSync(sunflowerDest, { recursive: true, force: true });
         cpSync(sunflowerSrc, sunflowerDest, { recursive: true });
-        const bunName = process.platform === "win32" ? "bun.exe" : "bun";
-        if (!existsSync(join(sunflowerDest, "vendor", bunName))) {
-          // Windows ships Bun so OpenCode works on empty machines. Other
-          // platforms document a local Bun install — Kilo still works without it.
-          const msg =
-            `xrk desktop afterPack: no ${bunName} under sunflower vendor ` +
-            "(run `pnpm vendor:bun`). See extensions/xrk-sunflower-free/README.md.";
-          if (process.platform === "win32") throw new Error(msg);
-          console.warn(msg);
-        }
+        // Never ship a maintainer-local `pnpm vendor:bun` binary.
+        rmSync(join(sunflowerDest, "vendor"), { recursive: true, force: true });
       }
       if (!updateUrl) return;
       const yml = [
