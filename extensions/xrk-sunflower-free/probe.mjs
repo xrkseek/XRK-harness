@@ -4,9 +4,9 @@
  * Shape: `ping` + `max_tokens: 16` + stream; one session per model;
  * fan-out concurrency 2 (wide burst → 429 on the same quota window).
  *
- * Product rule (stricter than OFM picker): only `available` enters the Host
- * catalog. `throttled` (FreeUsageLimit) / `unavailable` / `unknown` → omit.
- * Kilo stays listing-only (no chat probe).
+ * Product rule: one `available` → fuzzy-mount the full candidate roster
+ * (OFM-shaped asymmetry). Zero available → omit OpenCode. Lane `throttled`
+ * short-circuits remaining pings. Kilo stays listing-only (no chat probe).
  *
  * 判据（每次踩坑换来的）：
  *   - **2xx 不算可用**。上游限流/软拒绝会包在 200 里：空 body、只有一帧
@@ -131,8 +131,13 @@ export async function probeOneModel(handle, model, timeoutMs = 45000) {
 }
 
 /**
- * Probe OpenCode candidates; return only ids that answered `available`.
- * Logs omit reasons so Host boot shows why a row disappeared.
+ * Probe OpenCode candidates; return catalog ids for this Host.
+ *
+ * **Fuzzy mount (OFM-shaped asymmetry):** one honest `available` proves the
+ * egress can reach the free lane → mount the full candidate roster. A stale
+ * row costs one failed turn; vanishing half the picker on a flaky ping costs
+ * a remount cycle the user cannot see. Zero `available` → empty OpenCode
+ * catalog (Kilo listing is independent).
  *
  * 见到 `throttled` 就整体短路：这条车道的配额是**共享桶**（`sidecar.ts`
  * 的 lane-refused 注释 + 实测：换 session 一样 429，5 个模型同时死），
@@ -140,8 +145,7 @@ export async function probeOneModel(handle, model, timeoutMs = 45000) {
  *
  * 串行 + 单模型重试一次：并发 2 会让同一出口 IP 突发两个请求，实测因此
  * 出现过 `ECONNRESET` 被误判成「模型不可用」。串行的代价是时间，所以
- * 外层还有 `budgetMs` 硬顶——超预算的模型一律按 unknown 处理（omit，
- * 宁可这一轮少挂一个，也不假阳性）。
+ * 外层还有 `budgetMs` 硬顶——超预算的模型一律按 unknown 处理。
  *
  * @returns {Promise<string[]>}
  */
@@ -154,7 +158,7 @@ export async function probeUsableModels(
 ) {
   if (!(await sidecarHealthy(handle))) return [];
   /** @type {string[]} */
-  const usable = [];
+  const probedAvailable = [];
   const queue = [...candidates];
   let laneRefused = false;
   const deadline = Date.now() + budgetMs;
@@ -163,7 +167,7 @@ export async function probeUsableModels(
     while (queue.length > 0 && !laneRefused) {
       if (Date.now() > deadline) {
         console.warn(
-          `[sunflower-free] probe budget ${budgetMs}ms exhausted — ${queue.length} model(s) left untested (omit)`,
+          `[sunflower-free] probe budget ${budgetMs}ms exhausted — ${queue.length} model(s) left untested`,
         );
         return;
       }
@@ -176,7 +180,7 @@ export async function probeUsableModels(
         state = await probeOneModel(handle, model, timeoutMs);
       }
       if (state === "available") {
-        usable.push(model);
+        probedAvailable.push(model);
         continue;
       }
       if (state === "throttled") {
@@ -190,11 +194,17 @@ export async function probeUsableModels(
         state === "unavailable"
           ? "upstream will not route"
           : "no clear verdict (2xx without a finished, content-bearing stream)";
-      console.warn(`[sunflower-free] ${model}: ${why} (omit on this Host)`);
+      console.warn(`[sunflower-free] ${model}: ${why}`);
     }
   };
 
   const n = Math.max(1, Math.min(concurrency, candidates.length || 1));
   await Promise.all(Array.from({ length: n }, worker));
-  return usable;
+  if (probedAvailable.length === 0) return [];
+  if (probedAvailable.length < candidates.length) {
+    console.info(
+      `[sunflower-free] fuzzy catalog — ${probedAvailable.length}/${candidates.length} probed available; mounting full roster`,
+    );
+  }
+  return [...candidates];
 }

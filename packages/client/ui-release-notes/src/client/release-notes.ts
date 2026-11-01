@@ -65,6 +65,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.4',
+    date: '2026-11-01',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'OFM channel-pack 路由可展开模型；社区 RPC 错误信封不再误触 Zod invalid_union。',
+        en: 'OFM channel-pack router expands models; community RPC error envelopes no longer trip Zod invalid_union.',
+      },
+      {
+        zh: 'Host 启动后立刻刷新 Face 插件清单（dsh-compat-host 不再等向日葵 warmup）。',
+        en: 'Host refreshes Face plugin inventory immediately (dsh-compat-host no longer waits on sunflower warmup).',
+      },
+      {
+        zh: '向日葵免费：模糊挂满目录 + Face 思考档位。',
+        en: 'Sunflower free: fuzzy full catalog + Face thinking efforts.',
+      },
+      {
+        zh: '完整清单见 docs/releases/v0.7.4.md。',
+        en: 'Full list in docs/releases/v0.7.4.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.3',
     date: '2026-11-01',
     title: {

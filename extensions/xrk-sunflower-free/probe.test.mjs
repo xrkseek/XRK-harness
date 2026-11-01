@@ -13,7 +13,8 @@
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { probeOneModel } from "./probe.mjs";
+import { FREE_MODELS } from "./free-models.mjs";
+import { probeOneModel, probeUsableModels } from "./probe.mjs";
 
 /** @type {import("node:http").Server} */
 let server;
@@ -136,6 +137,11 @@ function respond(model, res) {
 
 before(async () => {
   server = createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/__sunflower/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
     let raw = "";
     req.on("data", (chunk) => {
       raw += chunk;
@@ -196,3 +202,43 @@ test("HTTP 404 → unavailable", () => expectVerdict("http-404", "unavailable"))
 
 test("HTTP 500 无关键词 → unknown", () =>
   expectVerdict("http-500-plain", "unknown"));
+
+test("fuzzy：至少一个 available → 挂满候选名册", async () => {
+  const usable = await probeUsableModels(
+    handle(),
+    ["content-then-finish", "http-404", "delta-only-eof"],
+    5000,
+    1,
+    30_000,
+  );
+  assert.deepEqual(usable, [
+    "content-then-finish",
+    "http-404",
+    "delta-only-eof",
+  ]);
+});
+
+test("fuzzy：零 available → 空目录", async () => {
+  const usable = await probeUsableModels(
+    handle(),
+    ["http-404", "delta-only-eof"],
+    5000,
+    1,
+    30_000,
+  );
+  assert.deepEqual(usable, []);
+});
+
+test("FREE_MODELS 容量表含思考档位（DeepSeek / GLM）", async () => {
+  const { openCodeCatalogEntry } = await import("./free-models.mjs");
+  const deepseek = openCodeCatalogEntry("deepseek-v4.1-flash-free");
+  assert.ok(deepseek.reasoning?.efforts?.some((e) => e.id === "off"));
+  assert.equal(deepseek.reasoning?.defaultEffort, "high");
+  const glm = openCodeCatalogEntry("glm-5.3-flash-free");
+  assert.deepEqual(
+    glm.reasoning?.efforts?.map((e) => e.id),
+    ["low", "high", "max"],
+  );
+  assert.equal(openCodeCatalogEntry("big-pickle").reasoning, undefined);
+  assert.ok(FREE_MODELS.includes("deepseek-v4.1-flash-free"));
+});

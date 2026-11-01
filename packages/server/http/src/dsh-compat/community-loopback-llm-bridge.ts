@@ -271,6 +271,32 @@ export function createCommunityLoopbackLlmBridge(options: {
       emitAdaptersUpdated() {
         kickRunAll(true);
       },
+      /**
+       * Channel-pack RPC (`model.list` / OpenAI gateway catalog) reads the
+       * Cordis llm seat — not only Face sync. Delegate to registered adapters.
+       */
+      async listModels(provider: string) {
+        const id = provider.trim();
+        const adapter = adaptersByProvider.get(id);
+        if (!adapter?.listModels) return [];
+        return [...((await adapter.listModels(id)) ?? [])];
+      },
+      listProviders() {
+        return [...adaptersByProvider.keys()].map((id) => ({ id }));
+      },
+      async resolveModel(provider: string, model: string) {
+        const id = provider.trim();
+        const adapter = adaptersByProvider.get(id);
+        if (!adapter?.resolveModel) return undefined;
+        return adapter.resolveModel(id, model);
+      },
+      /** Alias used by channel-pack gateway effort views. */
+      async resolveModelInfo(provider: string, model: string) {
+        const id = provider.trim();
+        const adapter = adaptersByProvider.get(id);
+        if (!adapter?.resolveModel) return undefined;
+        return adapter.resolveModel(id, model);
+      },
       registerAdapter(
         providers: string[],
         adapter: CommunityLoopbackAdapter,

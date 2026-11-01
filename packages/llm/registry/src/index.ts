@@ -2,6 +2,7 @@ export type {
   AuthMode,
   BrandEntry,
   BrandModelEntry,
+  BrandModelReasoning,
   BrandModelSpec,
   FactoryKind,
   ProtocolId,

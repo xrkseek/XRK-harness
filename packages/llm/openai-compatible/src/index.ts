@@ -534,13 +534,13 @@ async function buildBody(
  * Wire spelling of a chosen thinking level for OpenAI-compatible gateways.
  *
  * Levels travel as the model's own vocabulary (gateways publish `max`, `xhigh`
- * and friends, and pass them through), except `off`, which OpenAI-compatible
- * APIs spell `none`.
+ * and friends, and pass them through), except Off rungs (`off` / OFM
+ * `disabled`), which OpenAI-compatible APIs spell `none`.
  */
 export function wireReasoningEffort(effort: string | undefined): string | undefined {
   const trimmed = effort?.trim().toLowerCase();
   if (trimmed === undefined || trimmed.length === 0) return undefined;
-  return trimmed === "off" ? "none" : trimmed;
+  return trimmed === "off" || trimmed === "disabled" ? "none" : trimmed;
 }
 
 /** Map OpenAI `{ error: { message, type } }` (HTTP body or SSE frame) to LlmError. */

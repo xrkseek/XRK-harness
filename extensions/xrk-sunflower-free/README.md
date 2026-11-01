@@ -4,7 +4,7 @@
 
 | Brand | 来源 | Bun | 目录 |
 | --- | --- | --- | --- |
-| `sunflower-free` | OpenCode 匿名池 | **需要**（sidecar） | 仅探针 `available`；额度用尽不显示 |
+| `sunflower-free` | OpenCode 匿名池 | **需要**（sidecar） | 至少一个 `available` → 挂满候选；全不可用则省略 |
 | `sunflower-kilo`（仅 Kilo 时并入 `sunflower-free`） | Kilo `isFree` listing | **不需要** | Host → `api.kilo.ai` 直连 |
 
 无 Bun：OpenCode 静默省略；Kilo 仍进目录（OFM：`egressFetch` 仅对 `opencode.ai/inference/*` 走 Bun）。

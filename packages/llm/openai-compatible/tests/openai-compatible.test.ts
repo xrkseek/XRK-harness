@@ -1016,9 +1016,14 @@ describe("deepseek thinking wire", () => {
       messages: [{ role: "user", content: "hi" }],
       reasoningEffort: "off",
     });
+    await llm.chat({
+      messages: [{ role: "user", content: "hi" }],
+      reasoningEffort: "disabled",
+    });
     await llm.chat({ messages: [{ role: "user", content: "hi" }] });
     expect(bodies[0]?.reasoning_effort).toBe("none");
-    expect(bodies[1]?.reasoning_effort).toBeUndefined();
+    expect(bodies[1]?.reasoning_effort).toBe("none");
+    expect(bodies[2]?.reasoning_effort).toBeUndefined();
   });
 
   it("rejects unknown effort", async () => {

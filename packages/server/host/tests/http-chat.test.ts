@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
+import { mkdir, symlink } from "node:fs/promises";
 import { createMinimalComposition } from "@xrkseek/preset-minimal";
 import { createReplayAdapter } from "@xrkseek/llm-replay";
 import { loadHostConfig } from "@xrkseek/server-config";
@@ -256,15 +257,25 @@ describe("host http chat", () => {
 
   it("loads pluginsDir and wires tools into agent registry", async () => {
     await withIsolatedXrkHome(async (xrkHome) => {
-    const extRoot = path.resolve(
+    // Temp plugins root with only example-tools — full extensions/ pulls
+    // sunflower Bun + OpenCode probe and blows the default 5s budget.
+    // Junction keeps seed files out of the committed extensions/ tree.
+    const exampleTools = path.resolve(
       import.meta.dirname,
-      "../../../../extensions",
+      "../../../../extensions/example-tools",
+    );
+    const pluginsRoot = path.join(xrkHome, "plugins-dir");
+    await mkdir(pluginsRoot, { recursive: true });
+    await symlink(
+      exampleTools,
+      path.join(pluginsRoot, "example-tools"),
+      "junction",
     );
     const manager = createHostManager();
     const config = loadHostConfig({
       env: isolatedHostEnv(xrkHome, {
         XRK_API_KEY: "",
-        XRK_PLUGINS_DIR: extRoot,
+        XRK_PLUGINS_DIR: pluginsRoot,
       }),
       patch: { workspaceRoot: process.cwd() },
     });

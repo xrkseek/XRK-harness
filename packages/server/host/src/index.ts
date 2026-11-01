@@ -3313,6 +3313,10 @@ export function createHostManager(): HostManager {
       };
 
       await ensureDshCompatHostPlugin(loader);
+      // Face inventory reads `facePlugins`, not the loader directly. Refresh
+      // now so `dsh-compat-host` is visible before the post-listen sunflower
+      // warmup finishes (product-shell / Settings must not race that await).
+      refreshFacePlugins();
       // 向日葵免费车道：随产品内置的 LLM 插件。车道不可达时插件返回空
       // `llmBrands`，该 provider 不会进入 registry/catalog，启动不受影响。
       // 出口代理来自 Settings → 向日葵免费（空 = 直连），loader 无参加载

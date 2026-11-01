@@ -1,7 +1,11 @@
 import { access, realpath, stat } from "node:fs/promises";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@xrkseek/core-tools";
-import type { BrandEntry, ProtocolId } from "@xrkseek/llm-registry";
+import type {
+  BrandEntry,
+  BrandModelReasoning,
+  ProtocolId,
+} from "@xrkseek/llm-registry";
 import type {
   RegisteredPlugin,
   PluginPromptSection,
@@ -126,12 +130,78 @@ function asBrandEntry(value: unknown, label: string): BrandEntry {
           .filter((m): m is "text" | "image" => m === "text" || m === "image");
         if (inputModalities.length === 0) inputModalities = undefined;
       }
+      let reasoning: BrandModelReasoning | undefined;
+      if (entry.reasoning !== undefined) {
+        if (
+          !entry.reasoning ||
+          typeof entry.reasoning !== "object" ||
+          Array.isArray(entry.reasoning)
+        ) {
+          throw new Error(
+            `${label}: brand.models[${i}].reasoning must be an object`,
+          );
+        }
+        const raw = entry.reasoning as Record<string, unknown>;
+        if (!Array.isArray(raw.efforts) || raw.efforts.length === 0) {
+          throw new Error(
+            `${label}: brand.models[${i}].reasoning.efforts must be a non-empty array`,
+          );
+        }
+        const efforts: {
+          id: string;
+          name: string;
+          description?: string;
+        }[] = [];
+        for (let j = 0; j < raw.efforts.length; j += 1) {
+          const item = raw.efforts[j];
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            throw new Error(
+              `${label}: brand.models[${i}].reasoning.efforts[${j}] must be an object`,
+            );
+          }
+          const effort = item as Record<string, unknown>;
+          if (typeof effort.id !== "string" || !effort.id.trim()) {
+            throw new Error(
+              `${label}: brand.models[${i}].reasoning.efforts[${j}].id must be a non-empty string`,
+            );
+          }
+          const effortId = effort.id.trim();
+          const effortName =
+            typeof effort.name === "string" && effort.name.trim()
+              ? effort.name.trim()
+              : effortId;
+          const effortDescription =
+            typeof effort.description === "string" && effort.description.trim()
+              ? effort.description.trim()
+              : undefined;
+          efforts.push({
+            id: effortId,
+            name: effortName,
+            ...(effortDescription !== undefined
+              ? { description: effortDescription }
+              : {}),
+          });
+        }
+        const defaultRaw =
+          typeof raw.defaultEffort === "string"
+            ? raw.defaultEffort.trim()
+            : "";
+        const defaultEffort =
+          defaultRaw && efforts.some((effort) => effort.id === defaultRaw)
+            ? defaultRaw
+            : undefined;
+        reasoning = {
+          efforts,
+          ...(defaultEffort !== undefined ? { defaultEffort } : {}),
+        };
+      }
       parsed.push({
         id: entry.id.trim(),
         ...(name ? { name } : {}),
         ...(description ? { description } : {}),
         ...(contextWindow !== undefined ? { contextWindow } : {}),
         ...(inputModalities ? { inputModalities } : {}),
+        ...(reasoning !== undefined ? { reasoning } : {}),
       });
     }
     models = parsed.length > 0 ? parsed : undefined;

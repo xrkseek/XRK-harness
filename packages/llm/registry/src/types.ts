@@ -14,6 +14,16 @@ export type FactoryKind =
   | "responses"
   | "gemini";
 
+/** Selectable thinking levels for one brand catalog row (Face ModelSelect). */
+export interface BrandModelReasoning {
+  readonly efforts: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly description?: string;
+  }[];
+  readonly defaultEffort?: string;
+}
+
 /** One catalog row a brand may advertise (id required; rest optional). */
 export interface BrandModelEntry {
   readonly id: string;
@@ -23,6 +33,11 @@ export interface BrandModelEntry {
   readonly contextWindow?: number;
   /** Declared intake modalities; omit → Face leaves unset (adapter default). */
   readonly inputModalities?: readonly ("text" | "image")[];
+  /**
+   * Thinking intensity menu (OFM free-lane / community). When set, Face shows
+   * ModelSelect levels and openai-compat routes send `reasoning_effort`.
+   */
+  readonly reasoning?: BrandModelReasoning;
 }
 
 /** Brand catalog model: bare id string or a richer entry. */
@@ -30,6 +45,44 @@ export type BrandModelSpec = string | BrandModelEntry;
 
 export function brandModelId(spec: BrandModelSpec): string {
   return typeof spec === "string" ? spec.trim() : spec.id.trim();
+}
+
+function asBrandModelReasoning(
+  raw: BrandModelReasoning | undefined,
+): BrandModelReasoning | undefined {
+  if (!raw || !Array.isArray(raw.efforts) || raw.efforts.length === 0) {
+    return undefined;
+  }
+  const efforts: BrandModelReasoning["efforts"][number][] = [];
+  for (const item of raw.efforts) {
+    if (!item || typeof item !== "object") continue;
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    if (!id) continue;
+    const name =
+      typeof item.name === "string" && item.name.trim()
+        ? item.name.trim()
+        : id;
+    const description =
+      typeof item.description === "string" && item.description.trim()
+        ? item.description.trim()
+        : undefined;
+    efforts.push({
+      id,
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+  if (efforts.length === 0) return undefined;
+  const defaultRaw =
+    typeof raw.defaultEffort === "string" ? raw.defaultEffort.trim() : "";
+  const defaultEffort =
+    defaultRaw && efforts.some((effort) => effort.id === defaultRaw)
+      ? defaultRaw
+      : undefined;
+  return {
+    efforts,
+    ...(defaultEffort !== undefined ? { defaultEffort } : {}),
+  };
 }
 
 export function asBrandModelEntry(spec: BrandModelSpec): BrandModelEntry {
@@ -40,6 +93,7 @@ export function asBrandModelEntry(spec: BrandModelSpec): BrandModelEntry {
     spec.contextWindow > 0
       ? Math.floor(spec.contextWindow)
       : undefined;
+  const reasoning = asBrandModelReasoning(spec.reasoning);
   return {
     id: spec.id.trim(),
     ...(spec.name?.trim() ? { name: spec.name.trim() } : {}),
@@ -48,6 +102,7 @@ export function asBrandModelEntry(spec: BrandModelSpec): BrandModelEntry {
     ...(spec.inputModalities && spec.inputModalities.length > 0
       ? { inputModalities: [...spec.inputModalities] }
       : {}),
+    ...(reasoning !== undefined ? { reasoning } : {}),
   };
 }
 
@@ -64,7 +119,7 @@ export interface BrandEntry {
    * Optional catalog rows for `autoCatalog` brands. When set (and non-empty),
    * Face lists these instead of a single `defaultModel`. Omit to keep the
    * one-model fallback. Entries may be plain ids or
-   * `{ id, name?, contextWindow?, inputModalities? }`.
+   * `{ id, name?, contextWindow?, inputModalities?, reasoning? }`.
    */
   readonly models?: readonly BrandModelSpec[];
   readonly notes?: string;

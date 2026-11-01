@@ -163,3 +163,50 @@ describe("createCommunityLoopbackLlmBridge shouldSyncProvider", () => {
     bridge.dispose();
   });
 });
+
+describe("createCommunityLoopbackLlmBridge Cordis catalog (channel-pack)", () => {
+  it("exposes listModels / listProviders for registered adapters", async () => {
+    let llm: {
+      listModels: (provider: string) => Promise<unknown[]>;
+      listProviders: () => { id: string }[];
+      resolveModel: (provider: string, model: string) => Promise<unknown>;
+      registerAdapter: (
+        providers: string[],
+        adapter: {
+          listModels: (provider: string) => Promise<unknown[]>;
+          resolveModel?: (provider: string, model: string) => Promise<unknown>;
+        },
+      ) => unknown;
+    } | undefined;
+    const bridge = createCommunityLoopbackLlmBridge({
+      shouldSyncProvider: () => false,
+      displayName: (id) => id,
+    });
+    const root = {
+      on: vi.fn(),
+      provide(_key: string, value: typeof llm) {
+        llm = value;
+      },
+    };
+    bridge.provideLlm(root as never);
+    expect(llm).toBeDefined();
+    llm!.registerAdapter(["qodercn"], {
+      async listModels() {
+        return [{ id: "gmodel", name: "GLM-5.3" }];
+      },
+      async resolveModel(_provider, model) {
+        return { id: model, reasoning: { efforts: ["high"] } };
+      },
+    });
+    expect(llm!.listProviders()).toEqual([{ id: "qodercn" }]);
+    expect(await llm!.listModels("qodercn")).toEqual([
+      { id: "gmodel", name: "GLM-5.3" },
+    ]);
+    expect(await llm!.listModels("missing")).toEqual([]);
+    expect(await llm!.resolveModel("qodercn", "gmodel")).toEqual({
+      id: "gmodel",
+      reasoning: { efforts: ["high"] },
+    });
+    bridge.dispose();
+  });
+});

@@ -305,6 +305,7 @@ function brandModelsAsFace(brand: BrandEntry): FaceModelEntry[] {
       ...(entry.inputModalities
         ? { inputModalities: entry.inputModalities }
         : {}),
+      ...(entry.reasoning !== undefined ? { reasoning: entry.reasoning } : {}),
     }));
   }
   if (brand.defaultModel) {

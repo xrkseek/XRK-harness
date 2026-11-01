@@ -118,6 +118,23 @@ export function rpcResultSchema<T>(value: z.ZodType<T>): z.ZodUnion<readonly [z.
 // The wide value slot is optional: a void business result serializes with no
 // `value` field at all. Each endpoint's own second parse still requires its
 // declared value, so absence never passes for a method that returns data.
+//
+// Wire `error` is also wide: community handlers (OFM channel-pack) return
+// `{ code, message }` without Face `details`, or codes outside RpcErrorCode
+// (`gateway/bad-request`). Strict `rpcErrorSchema` belongs to Face second parse.
+
+/** Envelope-level RpcResult: value + error both wide (community + Face carriers). */
+const wireRpcResultSchema = z.union([
+  z.object({ ok: z.literal(true), value: z.unknown().optional() }),
+  z.object({
+    ok: z.literal(false),
+    error: z.object({
+      code: z.string(),
+      message: z.string().optional(),
+      details: z.unknown().optional(),
+    }).passthrough(),
+  }),
+])
 
 /** ClientRequest full form (payload stays wide — the business layer runs the second parse). */
 export const clientRequestSchema = z.object({
@@ -127,11 +144,11 @@ export const clientRequestSchema = z.object({
   payload: z.unknown(),
 }) as unknown as z.ZodType<ClientRequest>
 
-/** ServerResponse full form (result.value stays wide). */
+/** ServerResponse full form (result.value / result.error stay wide). */
 export const serverResponseSchema = z.object({
   type: z.literal('server-response'),
   rpcId: rpcIdSchema,
-  result: rpcResultSchema(z.unknown().optional()),
+  result: wireRpcResultSchema,
 }) as unknown as z.ZodType<ServerResponse>
 
 /** ServerRequest full form (payload stays wide). */
@@ -142,11 +159,11 @@ export const serverRequestSchema = z.object({
   payload: z.unknown(),
 }) as unknown as z.ZodType<ServerRequest>
 
-/** ClientResponse full form (result.value stays wide). */
+/** ClientResponse full form (result.value / result.error stay wide). */
 export const clientResponseSchema = z.object({
   type: z.literal('client-response'),
   rpcId: rpcIdSchema,
-  result: rpcResultSchema(z.unknown().optional()),
+  result: wireRpcResultSchema,
 }) as unknown as z.ZodType<ClientResponse>
 
 /** Wire full-form union (discriminated by type). */
