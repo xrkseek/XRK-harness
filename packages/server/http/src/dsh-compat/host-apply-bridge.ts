@@ -91,23 +91,28 @@ export async function composeApplyBridgeContributions(
   return out;
 }
 
-/** On-demand `host.mjs` apply for Cordis panel `runHostHalf` / inventory enable. */
-export async function applyHostPackageByName(
+/**
+ * Live Cordis / host.mjs apply with skip vs fail distinction.
+ * Market / Settings use this so `restartRequired` is only set on real failure.
+ */
+export type HostPackageLiveApplyStatus = "skipped" | "applied" | "failed";
+
+export async function liveApplyHostPackageByName(
   ctx: DshCompatWireOptions,
   packageName: string,
-): Promise<boolean> {
+): Promise<HostPackageLiveApplyStatus> {
   const name = packageName.trim();
-  if (!name || !ctx.pluginsDir) return false;
+  if (!name || !ctx.pluginsDir) return "skipped";
   const inventory = readXrkPluginInventory(ctx);
   const disabled = readDisabledPluginIdsAt(inventory.pluginsDir);
   const index = readManagedPackageIndexAt(inventory.pluginsDir);
-  if (isPluginSoftDisabledAt(name, disabled, index)) return false;
+  if (isPluginSoftDisabledAt(name, disabled, index)) return "skipped";
   const pkg = inventory.packages.find((row) => row.name === name);
-  if (!pkg) return false;
+  if (!pkg) return "skipped";
   const root = clientPluginRoot(inventory.pluginsDir, pkg.name);
-  if (!existsSync(root) || !hasStagedHostEntry(root, name)) return false;
+  if (!existsSync(root) || !hasStagedHostEntry(root, name)) return "skipped";
   const manifest = resolvePluginHostManifest(root, pkg.name);
-  if (manifest && manifestUsesXrkModule(manifest)) return false;
+  if (manifest && manifestUsesXrkModule(manifest)) return "skipped";
   // Drop prior live half so re-enable / reload does not stack Cordis roots.
   await stopHostPackage(name);
   const contribution = await tryApplyStagedHost(root, pkg.name, ctx);
@@ -118,7 +123,7 @@ export async function applyHostPackageByName(
     Boolean(contribution),
     contribution,
   );
-  if (!fiberFallback.ok) return false;
+  if (!fiberFallback.ok) return "failed";
   if (contribution) {
     recordAppliedHostContribution(contribution);
     await appendDshCompatContribution(ctx, contribution);
@@ -133,7 +138,18 @@ export async function applyHostPackageByName(
       await appendDshCompatContribution(ctx, proxy);
     }
   }
-  return true;
+  // In-process apply returned no contribution and fiber did not start —
+  // treat as failed so market/Settings do not claim a live half.
+  if (!contribution && !fiberFallback.fiber) return "failed";
+  return "applied";
+}
+
+/** On-demand `host.mjs` apply for Cordis panel `runHostHalf` / inventory enable. */
+export async function applyHostPackageByName(
+  ctx: DshCompatWireOptions,
+  packageName: string,
+): Promise<boolean> {
+  return (await liveApplyHostPackageByName(ctx, packageName)) === "applied";
 }
 
 /**

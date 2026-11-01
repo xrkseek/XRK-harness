@@ -46,7 +46,10 @@ async function sleep(ms: number): Promise<void> {
 }
 
 describe("bash foreground yield semantics", () => {
-  it("settles inside the yield with legacy markers", async () => {
+  // Yield budget equals the prior default testTimeout — under a full suite the
+  // second invoke can land past 5s wall time even when the job settled inside
+  // the yield. Give the case headroom without changing yield semantics.
+  it("settles inside the yield with legacy markers", { timeout: 15_000 }, async () => {
     const shell = makeShell();
     try {
       const bash = bashTool(shell, 5_000);

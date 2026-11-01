@@ -1,7 +1,8 @@
 /**
  * 向日葵免费 — `kind: "llm"` 入口（对齐 OFM 双车道）。
  *
- *   OpenCode（`sunflower-free`）：仅 Bun sidecar + 探针 `available`；无 Bun 静默省略。
+ *   OpenCode（`sunflower-free`）：Bun sidecar；探针至少 1 个 `available` 则模糊挂满
+ *   `FREE_MODELS`（含 OFM 形 thinking 档位）；无 Bun 静默省略。
  *   Kilo（`sunflower-kilo`）：listing `isFree`，Host→api.kilo.ai 直连，**不绑 Bun**。
  *   OpenCode 上游恒 `Bearer public`；Kilo 无密钥。
  */

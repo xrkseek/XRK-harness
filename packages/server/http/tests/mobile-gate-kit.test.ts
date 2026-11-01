@@ -55,6 +55,16 @@ describe("mobile-gate-kit", () => {
       },
     } as import("node:http").IncomingMessage;
     expect(effectiveRequestHost(proxyWan, true)).toBe("demo.r6.cpolar.cn");
+
+    // Desktop LAN share proxy: Host rewritten to loopback + LAN XFH → raise to LAN.
+    const proxyLan = {
+      headers: {
+        host: "127.0.0.1:49677",
+        "x-forwarded-host": "10.205.40.186:8787",
+      },
+    } as import("node:http").IncomingMessage;
+    expect(effectiveRequestHost(proxyLan, true)).toBe("10.205.40.186");
+    expect(effectiveRequestHost(proxyLan, false)).toBe("127.0.0.1");
   });
 
   it("exempts health and mobile-access surfaces", () => {
@@ -165,6 +175,50 @@ describe("mobile-gate-kit", () => {
         hasDeviceSession: false,
         hasLanPin: false,
         hasWanPin: false,
+      }).allowed,
+    ).toBe(true);
+  });
+
+  it("Desktop share gate: off closes remote; on PIN even for 127 unless shell mark", () => {
+    const creds = {
+      hasDeviceSession: false,
+      hasLanPin: false,
+      hasWanPin: false,
+    };
+    const off = {
+      running: false,
+      lanAuthEnabled: true,
+      lanToken: "1",
+      wanToken: "2",
+      instanceId: "x",
+      desktopShareGate: true as const,
+    };
+    expect(evaluateMobileGate("/", "192.168.1.8", off, creds)).toEqual({
+      mode: "none",
+      allowed: false,
+      closed: true,
+    });
+    expect(evaluateMobileGate("/", "demo.cpolar.cn", off, creds).closed).toBe(
+      true,
+    );
+    expect(evaluateMobileGate("/", "127.0.0.1", off, creds).allowed).toBe(true);
+
+    const on = { ...off, running: true, ownLanHosts: ["192.168.1.8"] };
+    expect(evaluateMobileGate("/", "192.168.1.8", on, creds).allowed).toBe(
+      false,
+    );
+    // Tunnel / share hop with Host=127 still needs PIN (no shell mark).
+    expect(evaluateMobileGate("/", "127.0.0.1", on, creds).allowed).toBe(false);
+    expect(
+      evaluateMobileGate("/", "127.0.0.1", {
+        ...on,
+        desktopShellTrusted: true,
+      }, creds).allowed,
+    ).toBe(true);
+    expect(
+      evaluateMobileGate("/", "demo.cpolar.cn", on, {
+        ...creds,
+        hasWanPin: true,
       }).allowed,
     ).toBe(true);
   });

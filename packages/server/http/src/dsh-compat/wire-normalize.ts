@@ -50,5 +50,18 @@ export function normalizeDshCompatWireCtx(
     ...(ctx.syncCommunityLlmProvider
       ? { syncCommunityLlmProvider: ctx.syncCommunityLlmProvider }
       : {}),
+    ...(ctx.trustProxy === true ? { trustProxy: true as const } : {}),
+    ...(ctx.lanShareEnabled === true
+      ? { lanShareEnabled: true as const }
+      : {}),
+    ...(ctx.resolveLoopbackOrigin
+      ? { resolveLoopbackOrigin: ctx.resolveLoopbackOrigin }
+      : {}),
+    ...(ctx.ownLanHosts && ctx.ownLanHosts.length > 0
+      ? { ownLanHosts: ctx.ownLanHosts }
+      : {}),
+    ...(ctx.getThemePreference
+      ? { getThemePreference: ctx.getThemePreference }
+      : {}),
   };
 }

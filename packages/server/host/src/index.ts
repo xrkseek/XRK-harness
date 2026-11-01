@@ -84,6 +84,8 @@ import {
   armAccessGateForListen,
   createMobileAccessGateChecker,
   createMobileAccessGateHandler,
+  disposeDesktopLanShare,
+  resetDesktopLanShareOnBoot,
   loadSidebarPrefs,
   createAutoReviewToolPre,
   isAutoReviewEnabled,
@@ -3272,10 +3274,28 @@ export function createHostManager(): HostManager {
         }
         return [] as string[];
       })();
+      // Desktop: Settings may start a LAN share gateway in front of loopback.
+      // CLI / ordinary web leave lanShareEnabled unset (no Settings card either).
+      const isDesktopSurface =
+        String(process.env.XRK_SURFACE ?? "").trim() === "desktop";
+      const loopbackOriginBox = { current: "" };
       const mobileAccessOptions = {
         xrkHome: resolveXrkHome(),
         ...(ownLanHosts.length > 0 ? { ownLanHosts } : {}),
+        ...(isDesktopSurface
+          ? {
+              lanShareEnabled: true as const,
+              // Tunnel sidecars (樱花 / frp / cpolar) often leave Host as
+              // 127.0.0.1 and set X-Forwarded-Host to the public name — honor
+              // that raise so share-on visitors still hit the PIN plane.
+              trustProxy: true as const,
+              resolveLoopbackOrigin: () => loopbackOriginBox.current,
+            }
+          : {}),
       };
+      if (isDesktopSurface) {
+        resetDesktopLanShareOnBoot(mobileAccessOptions);
+      }
       const pinAccessGate = createMobileAccessGateChecker(mobileAccessOptions);
       const pinAccessHandler = createMobileAccessGateHandler(mobileAccessOptions);
 
@@ -3332,6 +3352,16 @@ export function createHostManager(): HostManager {
         defaultCwd: faceRuntime.workspaceRoot,
         resolveSessionCwd: (sessionId: string) =>
           resolveSessionCwd(faceRuntime, sessionId),
+        // Desktop share + PIN gate options must survive dsh-compat wire normalize
+        // so `/api/mobile-access/control` starts the 0.0.0.0 gateway (not a fake URL).
+        ...(ownLanHosts.length > 0 ? { ownLanHosts } : {}),
+        ...(isDesktopSurface
+          ? {
+              lanShareEnabled: true as const,
+              trustProxy: true as const,
+              resolveLoopbackOrigin: () => loopbackOriginBox.current,
+            }
+          : {}),
         // PIN gate HTML follows Settings Appearance (Face live → yaml fallback).
         getThemePreference: (): "light" | "dark" | "system" => {
           const theme = faceRuntime.uiSettings.theme;
@@ -3681,6 +3711,7 @@ export function createHostManager(): HostManager {
               setImToolPorts(undefined);
               face.close();
               unregisterPermissionAuto();
+              void disposeDesktopLanShare();
               shutdownDshCompatServices();
             },
           };
@@ -3693,6 +3724,8 @@ export function createHostManager(): HostManager {
         : { host: config.runtime.host, port: 0 };
       process.env.XRK_SERVE_HOST = String(addr.host);
       process.env.XRK_SERVE_PORT = String(addr.port);
+      // Share gateway always proxies to loopback Face (Desktop Host ADR).
+      loopbackOriginBox.current = `http://127.0.0.1:${String(addr.port)}`;
       if (shouldListen) {
         log?.info(`listening ${config.runtime.host}:${addr.port}`);
         const armed = armAccessGateForListen(

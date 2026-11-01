@@ -17,9 +17,13 @@ import { resetLiveHostApply } from "./live-host-apply.js";
 import { normalizeDshCompatWireCtx } from "./wire-normalize.js";
 
 function installKey(ctx: DshCompatWireOptions): string {
-  return [ctx.pluginsDir ?? "", ctx.xrkHome ?? "", ctx.workspaceRoot ?? ""].join(
-    "|",
-  );
+  return [
+    ctx.pluginsDir ?? "",
+    ctx.xrkHome ?? "",
+    ctx.workspaceRoot ?? "",
+    // Desktop share options close over compose-time ctx — rebuild when armed.
+    ctx.lanShareEnabled === true ? "share1" : "share0",
+  ].join("|");
 }
 
 let bootKey: string | undefined;

@@ -65,6 +65,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.5',
+    date: '2026-11-01',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Desktop 临时分享：本机 / 局域网双地址、PIN、跳过主机专用网卡；关分享即停。',
+        en: 'Desktop temporary share: loopback + LAN URLs, PIN, skip host-only NICs; stops when toggled off.',
+      },
+      {
+        zh: '社区插件 Market / Settings 安装·更新后热加载 Host 半；仅失败才需重启。',
+        en: 'Community Market / Settings install·update live-applies the Host half; restart only on failure.',
+      },
+      {
+        zh: '完整清单见 docs/releases/v0.7.5.md。',
+        en: 'Full list in docs/releases/v0.7.5.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.4',
     date: '2026-11-01',
     title: {

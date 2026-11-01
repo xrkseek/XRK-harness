@@ -34,11 +34,12 @@ description: >-
 |---|---|
 | 发包链副作用 + 终态判据（push 必须先于 release、devDeps 双触发、E409/E403、SDK 先于 CLI） | `.agents/skills/xrk-release-chain/SKILL.md` |
 | PowerShell / Windows 环境坑（管道毁文件、vitest filter、BOM、GBK） | `.agents/skills/xrk-ps-shell-pitfalls/SKILL.md` |
-| 桌面未签名测包 + electron-updater 测试源 + AGT 上传顺序 | `.agents/skills/xrk-desktop-update-feed/SKILL.md`（机相关落点在同目录 `local.md`，gitignore） |
+| 本机产物落点 · ≤5 版 · subst 仅 X: · 测试隔离 home | rule/skill `xrk-local-artifacts` · `.agents/skills/xrk-desktop-update-feed` · `docs/publishing.md` · `pnpm prune:local` |
 | GitHub API / npm 网络探测（直连 vs Clash 7897、大上传判流量） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
 | **参考仓差距取证**（codex / DSH 有什么我们没有、哪些是假差距、清单会不会过期） | `.agents/skills/xrk-reference-gap-audit/SKILL.md`（本轮结论在其 `reference/`） |
 | 仓结构与插件开发 | `.agents/skills/xrk-harness-architecture/` · `xrk-harness-monorepo/` |
 | 办事流程总表 | `.agents/AGENTS.md`「办事流程」段 |
+| 手机 APP 前：事件链 / OFM Cordis 热加载审计（闸门表） | `.agents/context/mobile-ofm-audit.md` |
 | Face 投影层（init 不可共享常量、编号对齐 wire map、stateVersion） | `.agents/context/face-projections.md` |
 | 向日葵免费（Bun 按平台 vendor；无 Bun 则跳过 OpenCode、Kilo 直连） | `.agents/context/sunflower-free-lane.md` |
 | 子代理（角色工具面 `child_gap` · 并发限流 · 何时委派 · 输出 12k spill） | `.agents/context/subagents.md` |

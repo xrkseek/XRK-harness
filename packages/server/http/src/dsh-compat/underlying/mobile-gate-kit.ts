@@ -8,6 +8,15 @@ import { sendJson } from "./http-json.js";
 export type RequestHostClass = "loopback" | "lan" | "wan";
 export type MobileGateMode = "none" | "lan" | "wan";
 
+/**
+ * Electron Host Fetch stamps this so Desktop shell stays PIN-free while
+ * temporary share is on. The LAN share proxy must strip it from clients.
+ */
+export const DESKTOP_SHELL_MARK_HEADER = "x-xrk-desktop-shell";
+
+/** Set by the Desktop LAN share reverse proxy on every upstream hop. */
+export const DESKTOP_SHARE_PROXY_HEADER = "x-xrk-desktop-share";
+
 export interface MobileGateSnapshot {
   readonly running: boolean;
   readonly lanAuthEnabled: boolean;
@@ -16,12 +25,26 @@ export interface MobileGateSnapshot {
   readonly instanceId: string;
   /** Bind / listen private IPv4 literals that stay PIN-free (同源 IP). */
   readonly ownLanHosts?: readonly string[];
+  /**
+   * Desktop temporary share: Host stays on loopback; when share is off,
+   * non-loopback callers are closed (not open). When on, they need PIN
+   * unless {@link desktopShellTrusted} (Electron shell Fetch).
+   * CLI / ordinary web leave this unset (legacy: off ⇒ gate idle).
+   */
+  readonly desktopShareGate?: boolean;
+  /**
+   * Request carries {@link DESKTOP_SHELL_MARK_HEADER} from Electron Host Fetch.
+   * Only meaningful with {@link desktopShareGate}.
+   */
+  readonly desktopShellTrusted?: boolean;
 }
 
 export interface MobileGateDecision {
   readonly mode: MobileGateMode;
   readonly allowed: boolean;
   readonly pinPath?: string;
+  /** Share off on Desktop — refuse remote without offering a PIN form. */
+  readonly closed?: boolean;
 }
 
 export interface MobileGateCredentials {
@@ -42,13 +65,20 @@ export function hostOnly(hostHeader: string | undefined): string {
   return raw.split(":")[0] ?? raw;
 }
 
+/** Exposure rank: loopback < lan < wan. Used only to *raise* via XFH. */
+function hostClassRank(hostClass: RequestHostClass): number {
+  if (hostClass === "loopback") return 0;
+  if (hostClass === "lan") return 1;
+  return 2;
+}
+
 /**
  * Authority used for gate classification.
  * Default: only `Host` (ignores attacker-controlled X-Forwarded-Host).
- * When `trustProxy` is true, X-Forwarded-Host may *raise* class to WAN
- * (loopback listen behind a public reverse proxy → need PIN). It must never
- * *lower* a public/LAN `Host` to loopback — forged `X-Forwarded-Host: 127.0.0.1`
- * would otherwise skip the PIN plane.
+ * When `trustProxy` is true, X-Forwarded-Host may *raise* class
+ * (loopback Host behind LAN share or public reverse proxy → need PIN).
+ * It must never *lower* a public/LAN `Host` to loopback — forged
+ * `X-Forwarded-Host: 127.0.0.1` would otherwise skip the PIN plane.
  */
 export function effectiveRequestHost(
   req: IncomingMessage,
@@ -62,9 +92,9 @@ export function effectiveRequestHost(
   if (!fwd) return host;
   const hostClass = classifyRequestHost(host);
   const fwdClass = classifyRequestHost(fwd);
-  // Proxy WAN hop: local listen Host + public XFH → classify as public (PIN).
-  if (hostClass !== "wan" && fwdClass === "wan") return fwd;
-  // Keep the real Host when XFH claims loopback/LAN against a public Host.
+  // Share proxy rewrites Host to loopback and sets XFH to the phone / tunnel
+  // authority — raise so LAN and WAN visitors both hit the PIN plane.
+  if (hostClassRank(fwdClass) > hostClassRank(hostClass)) return fwd;
   return host;
 }
 
@@ -108,7 +138,9 @@ function pinAllowed(
 }
 
 /**
- * Loopback free; bind LAN IP (ownLanHosts) free; other LAN / WAN → PIN.
+ * CLI / ordinary web: loopback free; own LAN free; other LAN/WAN → PIN.
+ * Desktop (`desktopShareGate`): share off closes remote; share on requires
+ * PIN for every hop except Electron shell mark (Host may still be 127).
  */
 export function evaluateMobileGate(
   pathname: string,
@@ -116,13 +148,45 @@ export function evaluateMobileGate(
   snapshot: MobileGateSnapshot,
   credentials: MobileGateCredentials,
 ): MobileGateDecision {
-  if (isMobileGateExemptPath(pathname) || !snapshot.running) {
+  if (isMobileGateExemptPath(pathname)) {
     return { mode: "none", allowed: true };
   }
   const hostClass = classifyRequestHost(host);
+
+  // Desktop: share off closes LAN/WAN. Shell / plain loopback stay up.
+  if (snapshot.desktopShareGate === true && !snapshot.running) {
+    if (hostClass === "loopback" || snapshot.desktopShellTrusted === true) {
+      return { mode: "none", allowed: true };
+    }
+    return { mode: "none", allowed: false, closed: true };
+  }
+
+  // Desktop share ON: only Electron shell Fetch is PIN-free (phone / tunnel / 127).
+  if (
+    snapshot.desktopShareGate === true &&
+    snapshot.running === true &&
+    snapshot.desktopShellTrusted === true
+  ) {
+    return { mode: "none", allowed: true };
+  }
+  if (snapshot.desktopShareGate === true && snapshot.running === true) {
+    const allowed = pinAllowed(credentials, snapshot, true);
+    return {
+      mode: "wan",
+      allowed,
+      pinPath: "/mobile-access/wan-pin",
+    };
+  }
+
+  // CLI / web (no desktopShareGate): classic loopback free.
   if (hostClass === "loopback") {
     return { mode: "none", allowed: true };
   }
+
+  if (!snapshot.running) {
+    return { mode: "none", allowed: true };
+  }
+
   const own = ownLanSet(snapshot);
   if (hostClass === "lan" && own.has(hostOnly(host))) {
     return { mode: "none", allowed: true };
@@ -130,7 +194,6 @@ export function evaluateMobileGate(
   if (hostClass === "lan" && snapshot.lanAuthEnabled === false) {
     return { mode: "none", allowed: true };
   }
-  // Non-own private Host or public Host → shared WAN PIN surface.
   const allowed = pinAllowed(credentials, snapshot, true);
   return {
     mode: "wan",
@@ -155,6 +218,18 @@ export function applyMobileGateDecision(
   decision: MobileGateDecision,
 ): boolean {
   if (decision.allowed) return false;
+  if (decision.closed === true) {
+    if (wantsHtml(req)) {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      res.end("Remote access is off. Enable temporary share in Desktop Settings.");
+      return true;
+    }
+    sendJson(res, 403, {
+      error: "desktop_share_disabled",
+      mode: "none",
+    });
+    return true;
+  }
   const returnTo = encodeURIComponent(
     (req.url ?? "/").startsWith("/") ? (req.url ?? "/") : `/${req.url ?? ""}`,
   );

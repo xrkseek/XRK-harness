@@ -26,6 +26,7 @@ import { GeneralSection } from './GeneralSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { CliCommandRow } from './CliCommandRow.tsx'
+import { DesktopShareRow } from './DesktopShareRow.tsx'
 import { SidebarAgentPushRows } from './SidebarAgentPushRows.tsx'
 import type { SidebarAgentPushInjected } from './SidebarAgentPushRows.tsx'
 import { SidebarAgentPushStore } from './sidebar-agent-push-store.ts'
@@ -222,4 +223,12 @@ export function apply(ctx: ClientContext): void {
     order: 36,
     locale: NS,
   }, CliCommandRow))
+
+  // After SSH remote card (~30): share is the other “reach this Host” control.
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'desktop-share',
+    order: 32,
+    locale: NS,
+  }, DesktopShareRow))
 }

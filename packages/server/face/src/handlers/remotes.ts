@@ -31,6 +31,20 @@ function reloadIdsForEntry(entry: {
   return ids;
 }
 
+/** Apply Cordis / host.mjs halves once per unique package name (best-effort). */
+async function applyCordisHostHalves(
+  runtime: Parameters<FaceHandler>[0],
+  names: readonly string[],
+): Promise<void> {
+  const seen = new Set<string>();
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    await runtime.cordisHostBridge?.applyHostHalf?.(name);
+  }
+}
+
 /** Best-effort package name from a CLI install spec (`name`, `name@ver`, `@scope/name@ver`). */
 function packageNameFromInstallSpec(spec: string): string | undefined {
   const trimmed = spec.trim();
@@ -173,11 +187,13 @@ export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, pa
   // process-plugin loader — soft-disable must dispose / re-apply them here.
   const hostNames = reloadIdsForEntry(before ?? { entryId });
   if (enabled) {
-    for (const name of hostNames) {
-      await runtime.cordisHostBridge?.applyHostHalf?.(name);
-    }
+    await applyCordisHostHalves(runtime, hostNames);
   } else {
-    for (const name of hostNames) {
+    const seen = new Set<string>();
+    for (const raw of hostNames) {
+      const name = raw.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
       await runtime.cordisHostBridge?.stopHostHalf?.(name);
     }
   }
@@ -302,9 +318,12 @@ export const pluginInventoryUpdate: FaceHandler = async (runtime, rpcId, payload
     entry.moduleName,
   );
   reconcileManagedClientBoot(runtime);
+  const reloadIds = reloadIdsForEntry(entry);
   await runtime.syncManagedProcessPlugins?.({
-    reloadIds: reloadIdsForEntry(entry),
+    reloadIds,
   });
+  // Cordis / host.mjs half (OFM, WB, …) — same path as inventory reload.
+  await applyCordisHostHalves(runtime, reloadIds);
   return {
     ok: true,
     value: { entryId, updated: true as const, ...log },
@@ -345,10 +364,14 @@ export const pluginInventoryReload: FaceHandler = async (runtime, _rpcId, payloa
     reloadIds,
   });
   // Remount staged Cordis / host.mjs half when present (no-op if none).
-  for (const name of reloadIds) {
+  const seen = new Set<string>();
+  for (const raw of reloadIds) {
+    const name = raw.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
     await runtime.cordisHostBridge?.stopHostHalf?.(name);
-    await runtime.cordisHostBridge?.applyHostHalf?.(name);
   }
+  await applyCordisHostHalves(runtime, reloadIds);
   return { ok: true, value: { entryId, reloaded: true as const } };
 };
 
@@ -411,9 +434,12 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
     };
   }
   reconcileManagedClientBoot(runtime);
+  const reloadIds = reloadIdsForInstallSpec(runtime, spec);
   await runtime.syncManagedProcessPlugins?.({
-    reloadIds: reloadIdsForInstallSpec(runtime, spec),
+    reloadIds,
   });
+  // Disk mutate alone leaves Cordis host half cold — apply when staged.
+  await applyCordisHostHalves(runtime, reloadIds);
   return {
     ok: true,
     value: { spec, installed: true as const, ...log },

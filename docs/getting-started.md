@@ -122,8 +122,18 @@ node apps/cli/dist/bin.js run --preset minimal --prompt "ping"
 | MCP / 搜索 / 终端 / Agent 循环 / 工作区注入 | **设置 → 插件 → 插件配置** |
 | 默认权限档 | **设置 → 权限**（live：仍停在旧默认的会话会跟推）；会话内 Access 芯片或 `/permission` |
 | 软预算 · spill · bash 输出上限 | 插件配置 → **Agent 循环** / **终端** |
+| Desktop 临时分享（局域网 / 内网穿透） | **设置 → 通用 → 临时分享**（仅 Desktop；见下） |
 
 环境变量留给 Host 监听、鉴权、CI；日常调参走 Web 设置即可。细节：[configuration.md](./configuration.md)。
+
+### Desktop 临时分享
+
+Desktop Host **只听回环**（ADR-0008）。需要手机同 Wi‑Fi 访问，或把樱花 / frp / cpolar 指到本机时：
+
+1. **设置 → 通用 → 临时分享** 打开开关（进程内有效；关开关或退出应用即停）。
+2. 记下界面上的 **本机地址**、**局域网地址** 与 **访问 PIN**（本机地址端口就是分享口，不一定是 8787）。
+3. 同网手机用 **局域网地址** 打开（须为真实 Wi‑Fi / 以太网 IP；勿用 `192.168.56.x` 等虚拟网卡）。穿透工具把本地端口指到 **本机地址**。开启后，手机 / 穿透 / 直连 `127.0.0.1`（非 Desktop 壳）都要 PIN；仅 Desktop 应用内窗口免 PIN。CLI 无此闸。
+4. 穿透请保留公网 `Host` 或带上 `X-Forwarded-Host`，否则闸可能把请求当成回环。PIN / 分享口**不是**完整公网安全产品——仍建议隧道侧自管鉴权与 TLS。
 
 ## MCP（可选）
 
@@ -288,8 +298,18 @@ After starting `web`:
 | MCP / search / shell / agent loop / workspace inject | **Settings → Plugins → Plugin configuration** |
 | Default permission preset | **Settings → Permissions** (live: sessions still on the prior default follow); in-session Access chip or `/permission` |
 | Soft budget · spill · bash output cap | Plugin configuration → **Agent loop** / **Shell** |
+| Desktop temporary share (LAN / tunnel) | **Settings → General → Temporary share** (Desktop only; see below) |
 
 Environment variables are for Host listen/auth and CI — not day-to-day tuning. Details: [configuration.md](./configuration.md).
+
+### Desktop temporary share
+
+Desktop Host **listens on loopback only** (ADR-0008). To reach it from a phone on the same Wi‑Fi, or to aim Sakura / frp / cpolar at this machine:
+
+1. Turn on **Settings → General → Temporary share** (process-scoped; off or quitting the app stops it).
+2. Note the **local address**, **LAN address**, and **access PIN** (the local address port is the share port — not always 8787).
+3. Open the **LAN address** on a same-network phone (real Wi‑Fi / Ethernet IP; skip host-only ranges like `192.168.56.x`). Point tunnel local ports at the **local address**. With share on, phones / tunnels / plain `127.0.0.1` need the PIN; only the in-app Desktop window is exempt. CLI has no such gate.
+4. Keep the public `Host` or send `X-Forwarded-Host` through the tunnel, or the gate may treat the hop as loopback. PIN / share ports are **not** a full internet security product — still manage auth and TLS on the tunnel side.
 
 ## MCP (optional)
 

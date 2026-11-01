@@ -13,19 +13,21 @@ describe("pluginInventory/install", () => {
     expect(result.error.code).toBe("invalid-payload");
   });
 
-  it("calls updateUserPlugin then syncs process plugins", async () => {
+  it("calls updateUserPlugin then syncs process plugins and Cordis host half", async () => {
     const updateUserPlugin = vi.fn(async () => ({
       ok: true as const,
       stdout: "Progress: done\n",
       stderr: "",
     }));
     const syncManagedProcessPlugins = vi.fn(async () => undefined);
+    const applyHostHalf = vi.fn(async () => ({ ok: true as const }));
     const runtime = {
       productDir: "/tmp/unused",
       plugins: [],
       webPlugins: [],
       updateUserPlugin,
       syncManagedProcessPlugins,
+      cordisHostBridge: { applyHostHalf },
       hostPublic: { pluginsDir: "/tmp/unused-plugins" },
       bus: { publishHost: vi.fn() },
     };
@@ -41,6 +43,7 @@ describe("pluginInventory/install", () => {
     expect(syncManagedProcessPlugins).toHaveBeenCalledWith({
       reloadIds: expect.arrayContaining(["xrkh-better-sidebar"]),
     });
+    expect(applyHostHalf).toHaveBeenCalledWith("xrkh-better-sidebar");
     if (!result.ok) return;
     expect(result.value).toEqual({
       spec: "xrkh-better-sidebar@0.18.9",

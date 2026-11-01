@@ -10,6 +10,10 @@ import {
 } from "node:http";
 import type { Socket } from "node:net";
 import { URL } from "node:url";
+import {
+  DESKTOP_SHARE_PROXY_HEADER,
+  DESKTOP_SHELL_MARK_HEADER,
+} from "./underlying/mobile-gate-kit.js";
 
 export interface LocalMobileGateway {
   readonly address: () => { host: string; port: number; origin?: string };
@@ -46,6 +50,9 @@ function buildProxyHeaders(
     ...req.headers,
     host: upstream.host,
   };
+  // Never let a phone / tunnel forge the Electron shell mark through the share.
+  delete headers[DESKTOP_SHELL_MARK_HEADER];
+  headers[DESKTOP_SHARE_PROXY_HEADER] = "1";
   const clientHost =
     publicOrigin !== undefined
       ? (() => {
@@ -136,10 +143,16 @@ function forwardUpgrade(
 export async function startLocalProxyGateway(options: {
   readonly upstreamUrl: string;
   readonly listenPort?: number;
+  /**
+   * Bind address. Default `127.0.0.1` (tunnel sidecar). Desktop LAN share
+   * uses `0.0.0.0` so phones on Wi‑Fi can reach the proxy.
+   */
+  readonly listenHost?: string;
   readonly publicOrigin?: string;
 }): Promise<LocalMobileGateway> {
   const upstream = new URL(options.upstreamUrl);
   let listenPort = options.listenPort ?? 0;
+  const listenHost = (options.listenHost ?? "127.0.0.1").trim() || "127.0.0.1";
   const publicOrigin = options.publicOrigin;
 
   const proxy = (clientReq: IncomingMessage, clientRes: ServerResponse) => {
@@ -179,7 +192,7 @@ export async function startLocalProxyGateway(options: {
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(listenPort, "127.0.0.1", () => {
+    server.listen(listenPort, listenHost, () => {
       server.off("error", reject);
       resolve();
     });
@@ -193,7 +206,7 @@ export async function startLocalProxyGateway(options: {
 
   return {
     address: () => ({
-      host: "127.0.0.1",
+      host: listenHost,
       port: listenPort,
       ...(publicOrigin ? { origin: publicOrigin } : {}),
     }),

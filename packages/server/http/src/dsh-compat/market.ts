@@ -19,6 +19,11 @@ import {
   type XrkPluginServicesOptions,
 } from "../xrk/plugin-services.js";
 import { runPluginMutate } from "../xrk/plugin-mutate.js";
+import type { DshCompatWireOptions } from "./adapter-types.js";
+import {
+  liveApplyHostPackageByName,
+  stopHostPackage,
+} from "./host-apply-bridge.js";
 import { DSH_COMPAT_ADAPTER, tag } from "./meta.js";
 import { parseJsonBody } from "./underlying/http-kit.js";
 
@@ -216,12 +221,56 @@ function isRemoveAction(action: string, pathname: string): boolean {
   );
 }
 
+/** Bare package id from a CLI-like market spec (`name`, `name@ver`, `@scope/name@ver`). */
+function packageNameFromMarketSpec(spec: string): string | undefined {
+  const trimmed = spec.trim();
+  if (!trimmed) return undefined;
+  if (
+    trimmed.startsWith("github:") ||
+    trimmed.startsWith("file:") ||
+    trimmed.startsWith("link:") ||
+    trimmed.startsWith(".") ||
+    path.isAbsolute(trimmed)
+  ) {
+    return undefined;
+  }
+  if (trimmed.startsWith("@")) {
+    const m = trimmed.match(/^(@[^/]+\/[^@]+)(?:@|$)/);
+    return m?.[1];
+  }
+  const at = trimmed.indexOf("@");
+  return at === -1 ? trimmed : trimmed.slice(0, at);
+}
+
+/** Resolve which inventory package names a market mutate touched. */
+function marketMutatePackageNames(
+  spec: string,
+  beforeNames: ReadonlySet<string>,
+  afterNames: ReadonlySet<string>,
+  remove: boolean,
+): string[] {
+  const out = new Set<string>();
+  const bare = packageNameFromMarketSpec(spec);
+  if (bare) out.add(bare);
+  if (remove) {
+    for (const name of beforeNames) {
+      if (!afterNames.has(name)) out.add(name);
+    }
+  } else {
+    for (const name of afterNames) {
+      if (!beforeNames.has(name)) out.add(name);
+    }
+  }
+  return [...out];
+}
+
 export async function handleDshMarketHttp(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   options: XrkPluginServicesOptions,
 ): Promise<void> {
+  const wire = options as DshCompatWireOptions;
   const method = (req.method ?? "GET").toUpperCase();
 
   if (pathname === "/dsh-market/registry" && method === "GET") {
@@ -396,6 +445,9 @@ export async function handleDshMarketHttp(
       const mutateAction = remove ? "remove" : "add";
       let mutate: Awaited<ReturnType<typeof runPluginMutate>> | undefined;
       let skippedReason: string | undefined;
+      const beforeNames = new Set(
+        readXrkPluginInventory({ ...options, pluginsDir }).present,
+      );
       if (!spec) {
         skippedReason = "missing plugin spec (name / url / package)";
       } else if (!pluginsDir) {
@@ -413,6 +465,31 @@ export async function handleDshMarketHttp(
       const inv = readXrkPluginInventory({ ...options, pluginsDir });
       const accepted = mutate?.ok === true;
       const attempted = mutate !== undefined;
+      let restartRequired = false;
+      if (accepted && spec) {
+        // Prefer the mutate target dir: inventory may resolve pluginsDir even
+        // when the request ctx omitted it — liveApply skips without pluginsDir.
+        const applyCtx: DshCompatWireOptions = {
+          ...wire,
+          ...(pluginsDir ? { pluginsDir } : {}),
+        };
+        const names = marketMutatePackageNames(
+          spec,
+          beforeNames,
+          new Set(inv.present),
+          remove,
+        );
+        if (remove) {
+          for (const name of names) {
+            await stopHostPackage(name);
+          }
+        } else {
+          for (const name of names) {
+            const status = await liveApplyHostPackageByName(applyCtx, name);
+            if (status === "failed") restartRequired = true;
+          }
+        }
+      }
       sendJson(res, 200, {
         ok: accepted,
         accepted,
@@ -427,7 +504,7 @@ export async function handleDshMarketHttp(
         via: "/xrk/plugins/inventory",
         installed: inv.present,
         ...(accepted
-          ? { mutated: true, restartRequired: true }
+          ? { mutated: true, restartRequired }
           : {
               cli: spec
                 ? `xrkh plugin ${mutateAction} ${spec}`
@@ -442,7 +519,7 @@ export async function handleDshMarketHttp(
                   }
                 : {
                     note:
-                      "xrkh plugin mutate failed; see error/stderr. Restart Host after a successful install.",
+                      "xrkh plugin mutate failed; see error/stderr. Live Cordis apply runs after a successful install when a host half is staged.",
                   }),
             }),
       });

@@ -39,6 +39,14 @@ import {
   type RemoteProviderId,
 } from "./mobile-access-remote-runtime.js";
 import { qrSvgForText } from "./pocket-qrcode.js";
+import {
+  isHostOnlyLanIPv4,
+  lanShareGatewayAddress,
+  listLanIPv4Addresses,
+  pickPreferredLanIPv4,
+  startLanShareGateway,
+  stopLanShareGateway,
+} from "./mobile-access-lan-share.js";
 
 /**
  * Product-shell mobile seam for `/mobile-access/custom.css`.
@@ -82,6 +90,18 @@ export interface MobileAccessOptions {
    * `settings.yaml` under {@link xrkHome}, else `system`.
    */
   readonly getThemePreference?: () => GateThemePreference;
+  /**
+   * Desktop-only: Settings「局域网访问」may start a `0.0.0.0` share gateway.
+   * CLI / ordinary `xrkh web` leave this unset.
+   */
+  readonly lanShareEnabled?: boolean;
+  /**
+   * Loopback Face origin for the share gateway upstream
+   * (e.g. `http://127.0.0.1:43129`). Required when {@link lanShareEnabled}.
+   */
+  readonly resolveLoopbackOrigin?: () => string;
+  /** Optional preferred LAN IPv4 for the phone URL (multi-NIC). */
+  readonly resolveLanShareIp?: () => string | undefined;
 }
 
 /**
@@ -350,14 +370,8 @@ function mintToken(): string {
 }
 
 function firstLanIPv4(): string | undefined {
-  const nets = networkInterfaces();
-  for (const entries of Object.values(nets)) {
-    if (!entries) continue;
-    for (const net of entries) {
-      if (net.family === "IPv4" && !net.internal) return net.address;
-    }
-  }
-  return undefined;
+  // Prefer real Wi‑Fi / Ethernet; skip VirtualBox host-only (192.168.56.x).
+  return pickPreferredLanIPv4(listLanIPv4Addresses());
 }
 
 function requestOrigin(req: IncomingMessage): string {
@@ -436,12 +450,83 @@ async function prepareRemoteRuntime(
   return { runtime, state: withId };
 }
 
-function lanPayload(state: MobileState): Record<string, unknown> {
+function lanPayload(
+  state: MobileState,
+  options?: MobileAccessOptions,
+): Record<string, unknown> {
+  const desktopLanShare = options?.lanShareEnabled === true;
+  const shareAddr = desktopLanShare ? lanShareGatewayAddress() : undefined;
+  const loopback = options?.resolveLoopbackOrigin?.()?.trim() ?? "";
+  const origin =
+    state.running && state.origin ? state.origin : undefined;
+  const sharePort =
+    state.running && shareAddr ? shareAddr.port : undefined;
+  const localOrigin =
+    sharePort !== undefined
+      ? `http://127.0.0.1:${String(sharePort)}`
+      : undefined;
+  const qrSvg =
+    origin !== undefined
+      ? (() => {
+          try {
+            return qrSvgForText(origin, "share");
+          } catch {
+            return "";
+          }
+        })()
+      : "";
   return {
     running: state.running,
-    ...(state.running && state.origin ? { origin: state.origin } : {}),
+    desktopLanShare,
+    ...(origin ? { origin } : {}),
+    ...(localOrigin ? { localOrigin } : {}),
+    // Desktop share uses the WAN PIN plane for both Wi‑Fi and tunnel visitors.
+    ...(state.running && state.wanToken ? { pin: state.wanToken } : {}),
+    ...(state.running && state.lanToken ? { lanPin: state.lanToken } : {}),
+    ...(state.running && state.wanToken ? { wanPin: state.wanToken } : {}),
+    ...(qrSvg ? { qrSvg } : {}),
+    ...(desktopLanShare
+      ? {
+          lanHosts: listLanIPv4Addresses(),
+          ...(state.lanIpOverride ? { lanIp: state.lanIpOverride } : {}),
+          ...(sharePort !== undefined ? { sharePort } : {}),
+          ...(loopback ? { hostLoopbackOrigin: loopback } : {}),
+        }
+      : {}),
     extensions: { loaded: 0, failed: 0 },
   };
+}
+
+/**
+ * Desktop boot: clear persisted "running" so LAN share stays process-scoped
+ * (toggle off when Desktop quits; do not auto-reopen a dead gateway).
+ */
+export function resetDesktopLanShareOnBoot(
+  options: MobileAccessOptions,
+): void {
+  if (options.lanShareEnabled !== true) return;
+  void stopLanShareGateway();
+  const state = loadState(options);
+  // Drop host-only overrides (VirtualBox 192.168.56.x) so the next share
+  // pick can prefer a real Wi‑Fi address.
+  const dropHostOnly =
+    state.lanIpOverride.trim() !== "" &&
+    isHostOnlyLanIPv4(state.lanIpOverride.trim());
+  if (!state.running && !state.origin && !dropHostOnly) return;
+  saveState(options, {
+    ...state,
+    running: false,
+    origin: "",
+    pairingToken: "",
+    pairingExpiresAt: 0,
+    appKey: "",
+    ...(dropHostOnly ? { lanIpOverride: "" } : {}),
+  });
+}
+
+/** Host dispose — drop the share listen socket. */
+export async function disposeDesktopLanShare(): Promise<void> {
+  await stopLanShareGateway();
 }
 
 function openLanPairing(
@@ -485,23 +570,100 @@ async function setRunning(
   req: IncomingMessage,
   res: ServerResponse,
   running: boolean,
+  body?: Record<string, unknown>,
 ): Promise<void> {
   let state = ensureInstanceId(loadState(options));
-  state = { ...state, running };
   if (!state.csrf) state.csrf = mintToken();
-  if (running) {
-    state.origin = requestLanOrigin(req);
-    if (!state.lanToken) state.lanToken = mint8DigitPin();
-    if (!state.wanToken) state.wanToken = mint8DigitPin();
-  } else {
-    state.origin = "";
-    state.pairingToken = "";
-    state.pairingExpiresAt = 0;
-    state.appKey = "";
+
+  if (!running) {
+    await stopLanShareGateway();
+    state = {
+      ...state,
+      running: false,
+      origin: "",
+      pairingToken: "",
+      pairingExpiresAt: 0,
+      appKey: "",
+    };
+    saveState(options, state);
+    setCsrfCookie(res, state.csrf);
+    sendJson(res, 200, lanPayload(state, options));
+    return;
   }
+
+  // Desktop LAN share: real 0.0.0.0 gateway in front of loopback Host.
+  if (options.lanShareEnabled === true) {
+    const upstream = options.resolveLoopbackOrigin?.()?.trim() ?? "";
+    if (!upstream) {
+      sendJson(res, 503, {
+        ok: false,
+        error: "lan_share_host_not_ready",
+        desktopLanShare: true,
+      });
+      return;
+    }
+    try {
+      const fromBody =
+        typeof body?.lanIp === "string" ? body.lanIp.trim() : "";
+      const fromHook = options.resolveLanShareIp?.()?.trim() ?? "";
+      // Do not reuse a stale host-only override (e.g. VirtualBox 192.168.56.x)
+      // when a real Wi‑Fi address is available.
+      const hosts = listLanIPv4Addresses();
+      const preferred = pickPreferredLanIPv4(hosts);
+      const fromStateRaw = state.lanIpOverride.trim();
+      const fromState =
+        fromStateRaw &&
+        hosts.includes(fromStateRaw) &&
+        (!isHostOnlyLanIPv4(fromStateRaw) || preferred === undefined)
+          ? fromStateRaw
+          : "";
+      const lanIp = fromBody || fromHook || fromState || undefined;
+      const started = await startLanShareGateway({
+        upstreamOrigin: upstream,
+        ...(lanIp ? { lanIp } : {}),
+      });
+      // Fresh PIN every time share turns on (process-scoped temporary share).
+      const pin = mint8DigitPin();
+      state = {
+        ...state,
+        running: true,
+        origin: started.origin,
+        lanIpOverride: started.lanIp,
+        lanToken: pin,
+        wanToken: pin,
+      };
+      saveState(options, state);
+      setCsrfCookie(res, state.csrf);
+      sendJson(res, 200, {
+        ...lanPayload(state, options),
+        lanHosts: started.lanHosts,
+        lanIp: started.lanIp,
+        localOrigin: started.localOrigin,
+        sharePort: started.port,
+      });
+      return;
+    } catch (err) {
+      await stopLanShareGateway();
+      sendJson(res, 500, {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+        desktopLanShare: true,
+      });
+      return;
+    }
+  }
+
+  // Legacy / CLI / community: flip state only (no extra listen).
+  state = {
+    ...state,
+    running: true,
+    origin: requestLanOrigin(req),
+    lanToken: state.lanToken || mint8DigitPin(),
+    wanToken: state.wanToken || mint8DigitPin(),
+  };
   saveState(options, state);
   setCsrfCookie(res, state.csrf);
-  sendJson(res, 200, lanPayload(state));
+  sendJson(res, 200, lanPayload(state, options));
 }
 
 function sendHtml(res: ServerResponse, body: string, contentType: string): void {
@@ -752,7 +914,7 @@ export async function handleMobileAccessHttp(
       const origin = state.origin || requestLanOrigin(req);
       if (state.running && state.csrf) setCsrfCookie(res, state.csrf);
       sendJson(res, 200, {
-        ...lanPayload(state),
+        ...lanPayload(state, options),
         ...(state.running && origin ? { origin } : {}),
       });
       return true;
@@ -761,7 +923,7 @@ export async function handleMobileAccessHttp(
       const body = await parseJsonBody(req);
       const running =
         typeof body.running === "boolean" ? body.running : !state.running;
-      await setRunning(options, req, res, running);
+      await setRunning(options, req, res, running, body);
       return true;
     }
   }

@@ -56,6 +56,7 @@ describe("pluginInventory/update", () => {
 
     const updateUserPlugin = vi.fn(async () => ({ ok: true as const }));
     const syncManagedProcessPlugins = vi.fn(async () => undefined);
+    const applyHostHalf = vi.fn(async () => ({ ok: true as const }));
     const result = await pluginInventoryUpdate(
       {
         productDir: home,
@@ -63,6 +64,7 @@ describe("pluginInventory/update", () => {
         webPlugins: [],
         updateUserPlugin,
         syncManagedProcessPlugins,
+        cordisHostBridge: { applyHostHalf },
         hostPublic: { pluginsDir },
       } as never,
       "rpc-2",
@@ -76,5 +78,6 @@ describe("pluginInventory/update", () => {
     expect(syncManagedProcessPlugins).toHaveBeenCalledWith({
       reloadIds: expect.arrayContaining(["side-tools"]),
     });
+    expect(applyHostHalf).toHaveBeenCalledWith("side-tools");
   });
 });

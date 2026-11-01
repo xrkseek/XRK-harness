@@ -10,14 +10,27 @@ import {
   gateThemeBootScript,
   WAN_PIN_COOKIE,
 } from "../src/dsh-compat/mobile-access-auth.js";
-import { createOperatorPinFetchElevator } from "../src/dsh-compat/mobile-access-gate.js";
+import {
+  createMobileAccessGateHandler,
+  createOperatorPinFetchElevator,
+} from "../src/dsh-compat/mobile-access-gate.js";
 import {
   armAccessGateForListen,
+  disposeDesktopLanShare,
+  handleMobileAccessHttp,
   injectMobileAccessShellIntoHtml,
   readGateThemePreferenceFromSettingsYaml,
   readMobileAccessState,
+  resetDesktopLanShareOnBoot,
   resolveGateThemePreference,
 } from "../src/dsh-compat/mobile-access.js";
+import {
+  isHostOnlyLanIPv4,
+  pickPreferredLanIPv4,
+  startLanShareGateway,
+  stopLanShareGateway,
+} from "../src/dsh-compat/mobile-access-lan-share.js";
+import { DESKTOP_SHELL_MARK_HEADER } from "../src/dsh-compat/underlying/mobile-gate-kit.js";
 import { createDshCompatPublicHandler } from "../src/index.js";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,7 +38,9 @@ import path from "node:path";
 import { afterEach } from "vitest";
 
 const temps: string[] = [];
-afterEach(() => {
+afterEach(async () => {
+  await stopLanShareGateway();
+  await disposeDesktopLanShare();
   for (const d of temps.splice(0)) {
     rmSync(d, { recursive: true, force: true });
   }
@@ -230,6 +245,239 @@ describe("mobile-access wan pin cookie", () => {
     expect(unlocked.status).toBe(200);
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+});
+
+describe("desktop LAN share gateway", () => {
+  it("proxies loopback Host on 0.0.0.0 and control toggles with PIN payload", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-lan-share-"));
+    temps.push(home);
+    let hits = 0;
+    const upstream = createServer((_req, res) => {
+      hits += 1;
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("host-ok");
+    });
+    await new Promise<void>((resolve) =>
+      upstream.listen(0, "127.0.0.1", () => resolve()),
+    );
+    const upAddr = upstream.address();
+    if (!upAddr || typeof upAddr === "string") {
+      throw new Error("no upstream port");
+    }
+    const loopback = `http://127.0.0.1:${upAddr.port}`;
+    const options = {
+      xrkHome: home,
+      lanShareEnabled: true as const,
+      trustProxy: true as const,
+      resolveLoopbackOrigin: () => loopback,
+    };
+    resetDesktopLanShareOnBoot(options);
+
+    const pinGate = createMobileAccessGateHandler(options);
+    const server = createServer((req, res) => {
+      void (async () => {
+        const url = new URL(req.url ?? "/", "http://127.0.0.1");
+        if (await pinGate(req, res)) return;
+        if (await handleMobileAccessHttp(req, res, url.pathname, options)) {
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      })();
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", () => resolve()),
+    );
+    const addr = server.address();
+    if (!addr || typeof addr === "string") throw new Error("no control port");
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    // Node fetch rewrites Host from the URL — use httpRequest for LAN Host.
+    const offGate = await new Promise<{ status: number; body: string }>(
+      (resolve, reject) => {
+        const req = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: addr.port,
+            path: "/",
+            method: "GET",
+            headers: {
+              host: "192.168.9.9:18787",
+              accept: "application/json",
+            },
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on("data", (c) => chunks.push(c));
+            res.on("end", () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                body: Buffer.concat(chunks).toString("utf8"),
+              }),
+            );
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      },
+    );
+    expect(offGate.status).toBe(403);
+    expect(JSON.parse(offGate.body) as { error?: string }).toMatchObject({
+      error: "desktop_share_disabled",
+    });
+
+    // Settings toggle rides Electron Host Fetch (shell mark). Plain 127 is gated once share is on.
+    const shellHeaders = {
+      "content-type": "application/json",
+      [DESKTOP_SHELL_MARK_HEADER]: "1",
+    };
+    const on = await fetch(`${base}/api/mobile-access/control`, {
+      method: "POST",
+      headers: shellHeaders,
+      body: JSON.stringify({ running: true, lanIp: "127.0.0.1" }),
+    });
+    expect(on.status).toBe(200);
+    const onBody = (await on.json()) as {
+      running: boolean;
+      desktopLanShare?: boolean;
+      origin?: string;
+      localOrigin?: string;
+      pin?: string;
+      sharePort?: number;
+    };
+    expect(onBody.running).toBe(true);
+    expect(onBody.desktopLanShare).toBe(true);
+    expect(onBody.pin).toMatch(/^\d{8}$/);
+    expect(onBody.origin).toMatch(/^http:\/\//);
+    expect(typeof onBody.sharePort).toBe("number");
+    expect(onBody.localOrigin).toBe(
+      `http://127.0.0.1:${String(onBody.sharePort)}`,
+    );
+
+    const started = await startLanShareGateway({
+      upstreamOrigin: loopback,
+      listenPort: 0,
+      lanIp: "127.0.0.1",
+    });
+    expect(started.localOrigin).toBe(
+      `http://127.0.0.1:${String(started.port)}`,
+    );
+    const viaShare = await new Promise<string>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: "127.0.0.1",
+          port: started.port,
+          path: "/ping",
+          method: "GET",
+          headers: { host: `127.0.0.1:${started.port}` },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    expect(viaShare).toBe("host-ok");
+    expect(hits).toBeGreaterThan(0);
+
+    const needPinWan = await new Promise<{ status: number }>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: "127.0.0.1",
+          port: addr.port,
+          path: "/",
+          method: "GET",
+          headers: {
+            host: "127.0.0.1",
+            "x-forwarded-host": "demo.r6.cpolar.cn",
+            accept: "application/json",
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve({ status: res.statusCode ?? 0 });
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    expect(needPinWan.status).toBe(401);
+
+    // Share proxy rewrites Host→loopback and sets LAN XFH — must still require PIN.
+    const needPinLan = await new Promise<{ status: number }>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: "127.0.0.1",
+          port: addr.port,
+          path: "/",
+          method: "GET",
+          headers: {
+            host: "127.0.0.1",
+            "x-forwarded-host": "10.205.40.186:8787",
+            accept: "application/json",
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve({ status: res.statusCode ?? 0 });
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    expect(needPinLan.status).toBe(401);
+
+    // Share ON + Host=127 without shell mark → PIN (内穿 / curl 到本机分享口).
+    const needPinLoopback = await new Promise<{ status: number }>(
+      (resolve, reject) => {
+        const req = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: addr.port,
+            path: "/",
+            method: "GET",
+            headers: {
+              host: "127.0.0.1",
+              accept: "application/json",
+            },
+          },
+          (res) => {
+            res.resume();
+            resolve({ status: res.statusCode ?? 0 });
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      },
+    );
+    expect(needPinLoopback.status).toBe(401);
+
+    const off = await fetch(`${base}/api/mobile-access/control`, {
+      method: "POST",
+      headers: shellHeaders,
+      body: JSON.stringify({ running: false }),
+    });
+    expect(off.status).toBe(200);
+    expect((await off.json() as { running: boolean }).running).toBe(false);
+
+    await stopLanShareGateway();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+  });
+});
+
+describe("pickPreferredLanIPv4", () => {
+  it("skips VirtualBox host-only when a real Wi-Fi IP exists", () => {
+    expect(isHostOnlyLanIPv4("192.168.56.1")).toBe(true);
+    expect(isHostOnlyLanIPv4("192.168.1.8")).toBe(false);
+    expect(
+      pickPreferredLanIPv4(["192.168.56.1", "192.168.1.8"]),
+    ).toBe("192.168.1.8");
+    expect(pickPreferredLanIPv4(["192.168.56.1"])).toBe("192.168.56.1");
   });
 });
 

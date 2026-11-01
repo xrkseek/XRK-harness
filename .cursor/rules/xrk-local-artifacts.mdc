@@ -1,0 +1,42 @@
+---
+description: 本机产物落点、≤5 版备份、subst 仅 X:、测试不得写日用 ~/.xrk
+alwaysApply: true
+xrk-inject: false
+---
+
+# 本机产物与测试隔离
+
+教科书真源：[docs/publishing.md](../../docs/publishing.md)「本机产物」· [docs/testing.md](../../docs/testing.md) 约定 §10。  
+操作细则：`.agents/skills/xrk-desktop-update-feed` · 本仓 skill `xrk-local-artifacts`。
+
+## 固定落点
+
+| 用途 | 路径 |
+|------|------|
+| Desktop **当前**未签名包 | `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（覆盖写） |
+| Desktop 版本快照 / upload stage | 同级 `unsigned-artifacts-<ver>/` · `upload-stage-<ver>/` |
+| npm stage / tarball | `.release/harness` · `.release/harness-cli` · `.release/xrkseek-harness(-cli)-<ver>.tgz` |
+| 手测 exe | `.release/desktop/<ver>/` |
+| Desktop 开发 home | `apps/desktop/.desktop-build/development/home` |
+| CLI / Host 手工 smoke home | `%USERPROFILE%\.xrk-smoke`（`XRK_HOME`） |
+| vitest Host home | `mkdtemp` / `withIsolatedXrkHome`（测后删除） |
+
+## 硬禁止
+
+- 把安装包或 tarball **散落用户桌面根目录**
+- 在 `.release/` 堆积一次性 `.log` / `.py` / `.cjs` / 调试脚本
+- vitest 或验收写入正在使用的 **`~/.xrk`**
+- 在 **`C:\` 根**或用户家目录堆 `xrk-h-upload-*` / `.xrk-sandbox-*` 等临时目录（上传 stage 只进 `.desktop-build` / `.release`）
+- 为打包新建 **Y:/Z:** 等临时盘符并残留。NSIS 非 ASCII 路径时：**优先**复用已有 ASCII 结 `C:\xrk-h`（指向本仓）；否则临时 `subst X:` → 仓库根，结束（含失败）必须 `subst X: /d`
+- 版本快照超过 **5** 个还不跑 `pnpm prune:local`
+
+## 裁剪命令
+
+```bash
+pnpm prune:local              # 各系列保留最新 ≤5
+pnpm prune:local -- --junk    # 另清 .release 非规范文件
+pnpm clean:desktop            # 清当前工作槽；版本快照用 prune
+pnpm clean:test-temp          # 清 %TEMP%/xrk-*（vitest 残留）
+```
+
+打包 / `upload:desktop` / 发版收尾后执行 `pnpm prune:local`。门禁大跑后可 `pnpm clean:test-temp`。开跑前 `subst` 自检，结束后再查，不得残留。

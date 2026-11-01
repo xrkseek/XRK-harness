@@ -132,7 +132,7 @@ export const DSH_COMPAT_GENERIC_CAPABILITIES: readonly DshCompatCapabilityRow[] 
     id: "market-inventory",
     coverage: "bridge",
     genericModule: "market.ts → xrk/plugin-services",
-    note: "dsh-market install/update/uninstall → runPluginMutate; updates map empty; maintenance still CLI-deferred",
+    note: "dsh-market install/update → runPluginMutate + liveApplyHostPackageByName; uninstall stops host half; restartRequired only on apply fail; updates map empty; maintenance still CLI-deferred",
   },
   {
     id: "tokenledger-usage",

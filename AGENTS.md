@@ -74,7 +74,8 @@ xrk-inject: false
 | 门禁 | [docs/testing.md](./docs/testing.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) |
 | **Skill 索引** | [`.cursor/skills/SKILL_INDEX.md`](./.cursor/skills/SKILL_INDEX.md) |
 | 教科书 vs 笔记 | [docs/audiences.md](./docs/audiences.md) · [docs/README.md](./docs/README.md) · `.cursor/rules/xrk-product-identity.mdc` |
-| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md) · 发行说明 skill `xrk-release-notes` |
+| 交接 / 发版 | [docs/maintainer.md](./docs/maintainer.md) · [docs/publishing.md](./docs/publishing.md)「流水线顺序」· rule **`xrk-release-flow`** · skill `xrk-release-notes` · `xrk-release-chain` |
+| **本机产物 / 验收隔离** | [publishing](./docs/publishing.md)「本机产物」· [testing](./docs/testing.md) §10 · rule/skill **`xrk-local-artifacts`** · `pnpm prune:local` |
 
 全索引：[docs/README.md](./docs/README.md)。
 
@@ -134,6 +135,7 @@ compose        → 零或薄依赖（禁止 kernel → compose）
 | 密钥 | 不入库；`.xrk/.credentials.yaml` · `.xrk/settings.yaml` · `.env` 已 gitignore；仓内仅 `*.example` 模板 |
 | 文档诚实 | 未实现 → `status`「未做」；勿写成假 API / 路线清单当规格 |
 | 本机泄漏 | 绝对路径、固定代理端口 → Canvas，不进 `docs/` / README |
+| 本机产物 | Desktop/exe/tgz 只落固定目录；版本备份 **≤5**；`pnpm prune:local`；禁止污染日用 `~/.xrk`（rule **`xrk-local-artifacts`**） |
 
 产品身份细则：`.cursor/rules/xrk-product-identity.mdc`。
 

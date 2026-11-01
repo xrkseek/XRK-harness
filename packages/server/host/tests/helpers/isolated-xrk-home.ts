@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,6 +11,9 @@ import path from "node:path";
  * `XRK_SURFACE` is cleared for the same reason: the Desktop surface defers the
  * managed process-plugin reconcile until after HTTP listen, so a developer's
  * Desktop shell would otherwise hand spawn an empty `loadedPluginIds`.
+ *
+ * Temp home is removed after the callback so repeated Host tests do not
+ * accumulate under `%TEMP%/xrk-host-home-*`.
  */
 export async function withIsolatedXrkHome<T>(
   run: (xrkHome: string) => Promise<T>,
@@ -39,6 +42,7 @@ export async function withIsolatedXrkHome<T>(
     else process.env.XRK_CHECKPOINTS = prevCheckpoints;
     if (prevSurface === undefined) delete process.env.XRK_SURFACE;
     else process.env.XRK_SURFACE = prevSurface;
+    await rm(xrkHome, { recursive: true, force: true }).catch(() => {});
   }
 }
 

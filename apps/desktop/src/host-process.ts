@@ -342,9 +342,13 @@ export class DesktopHostProcess {
     const incoming = new URL(request.url);
     const pathWithQuery = `${incoming.pathname}${incoming.search}`;
     const target = new URL(pathWithQuery, ready.origin);
+    // Mark Electron Host Fetch so temporary share PIN does not lock the shell.
+    // Must match DESKTOP_SHELL_MARK_HEADER in server-http mobile-gate-kit.
+    const headers = new Headers(request.headers);
+    headers.set("x-xrk-desktop-shell", "1");
     const init: RequestInit = {
       method: request.method,
-      headers: request.headers,
+      headers,
       body: request.body,
       signal: request.signal,
     };

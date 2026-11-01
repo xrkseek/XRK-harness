@@ -175,8 +175,10 @@ export {
 export {
   composeApplyBridgeContributions,
   applyHostPackageByName,
+  liveApplyHostPackageByName,
   stopHostPackage,
   stopHostPackageFiber,
+  type HostPackageLiveApplyStatus,
 } from "./host-apply-bridge.js";
 export {
   tryApplyWorkBuddyHost,
@@ -354,9 +356,17 @@ export {
 } from "./mobile-access-gate.js";
 export {
   armAccessGateForListen,
+  disposeDesktopLanShare,
   injectMobileAccessShellIntoHtml,
+  resetDesktopLanShareOnBoot,
   XRK_MOBILE_SHELL_CSS,
 } from "./mobile-access.js";
+export {
+  listLanIPv4Addresses,
+  pickPreferredLanIPv4,
+  startLanShareGateway,
+  stopLanShareGateway,
+} from "./mobile-access-lan-share.js";
 
 /** Host startup: compose adapters once so upgrade routes exist before first HTTP. */
 export async function prewarmDshCompatAdapters(

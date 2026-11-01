@@ -741,6 +741,14 @@ select.input {
   background: var(--dsw-alias-bg-layer-1);
 }
 
+/* Phone Modal is a full-viewport sheet; a fixed 360px list left a blank band
+   under the candidates. Cap to the remaining sheet under chrome instead. */
+@media (max-width: 767px) {
+  .candidateList {
+    max-height: calc(100dvh - 14rem);
+  }
+}
+
 .candidate {
   min-width: 0;
   border-radius: 8px;

@@ -63,8 +63,13 @@ Vitest 别名把 `@xrkseek/*` 指到各包 **src**（见根 `vitest.config.ts`�
    **Cordis fiber**（`packages/server/http/tests/cordis-fiber-runner.test.ts`）：先 `pnpm exec tsc -b packages/server/http`，测试从 **dist** 导入 runner。  
    **遗留 HMR soak**（`apps/web/tests/hmr-live.e2e.ts`）：full Cordis scaffold；不进 `pnpm test:web`。产品路径用 `pnpm dev:web` + 硬刷新（[getting-started](./getting-started.md)）。  
 7. **Preset**：`@xrkseek/testkit` 的 `makeHarness` 或直接 `createMinimalComposition`。  
-8. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`。  
-9. **Node**：本地/CI 用系统 Node ≥26；让系统 Node ≥26 优先（IDE 自带旧 Node 会抢 PATH）。
+8. **Face 闲置 runtime**：共用 `tests/helpers/bare-runtime.ts`（自建 temp 须在测后删除）。  
+9. **Node**：本地/CI 用系统 Node ≥26；让系统 Node ≥26 优先（IDE 自带旧 Node 会抢 PATH）。  
+10. **产品 home 隔离**：**禁止** vitest / 手工验收写进正在使用的 `~/.xrk`。  
+    - 单元 / Host：`mkdtemp` 或 `withIsolatedXrkHome`（`XRK_HOME` 指向临时目录，结束后删除）。  
+    - CLI 手工 smoke：`XRK_HOME=%USERPROFILE%\.xrk-smoke`（或等价路径），会话库与插件目录全部落在该根下。  
+    - Desktop 未打包：`apps/desktop/.desktop-build/development/home`（已隔离）。打包安装验收另开测试用户或临时 `XRK_HOME`，勿碰日用家目录。  
+    - 门禁后若 `%TEMP%` 残留 `xrk-*`：`pnpm clean:test-temp`。
 
 Vitest：一律 `import { describe, expect, it } from "vitest"`（`globals: false`）。
 
@@ -143,8 +148,13 @@ Vitest aliases map `@xrkseek/*` to each package **src** (see root `vitest.config
    **Cordis fiber** (`packages/server/http/tests/cordis-fiber-runner.test.ts`): run `pnpm exec tsc -b packages/server/http` first; tests import the runner from **dist**.  
    **Legacy HMR soak** (`apps/web/tests/hmr-live.e2e.ts`): full Cordis scaffold; not in `pnpm test:web`. Product path: `pnpm dev:web` + hard refresh ([getting-started](./getting-started.md)).    
 7. **Preset**: `@xrkseek/testkit` `makeHarness` or direct `createMinimalComposition`.  
-8. **Face idle runtime**: shared `tests/helpers/bare-runtime.ts`.  
-9. **Node**: local/CI use system Node ≥26; do not let an IDE-bundled older Node win PATH.
+8. **Face idle runtime**: shared `tests/helpers/bare-runtime.ts` (temps it creates must be deleted after the test).  
+9. **Node**: local/CI use system Node ≥26; do not let an IDE-bundled older Node win PATH.  
+10. **Product home isolation**: vitest and manual acceptance **must not** write the live `~/.xrk`.  
+    - Unit / Host: `mkdtemp` or `withIsolatedXrkHome` (`XRK_HOME` → temp; delete afterward).  
+    - CLI smoke: `XRK_HOME=%USERPROFILE%\.xrk-smoke` (or equivalent); sessions and plugins stay under that root.  
+    - Unpackaged Desktop: `apps/desktop/.desktop-build/development/home`. Packaged install tests use a separate profile / temporary `XRK_HOME`, never the daily home.  
+    - After a large gate run, clear leftover `%TEMP%/xrk-*` with `pnpm clean:test-temp`.
 
 Vitest: always `import { describe, expect, it } from "vitest"` (`globals: false`).
 

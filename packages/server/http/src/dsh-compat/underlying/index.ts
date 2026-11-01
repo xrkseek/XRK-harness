@@ -37,6 +37,8 @@ export {
 export {
   applyMobileGateDecision,
   classifyRequestHost,
+  DESKTOP_SHARE_PROXY_HEADER,
+  DESKTOP_SHELL_MARK_HEADER,
   effectiveRequestHost,
   evaluateMobileGate,
   hostOnly,

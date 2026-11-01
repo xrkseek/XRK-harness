@@ -1137,21 +1137,35 @@ export function ChatView({
   // Growth near the floor re-pins via shouldFollowContentGrowth. Process-group
   // collapse is CSS-instant and does not animate mid-heights that lift the
   // seat — this observer still re-pins on dock growth.
+  // Also watch the scrollport box: phone `resizes-content` keyboards shrink
+  // clientHeight without scrollHeight growth (follow-growth growth=0 path),
+  // and some WebViews skip a useful visualViewport inset delta.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current
     if (column === null || local === null || typeof ResizeObserver === 'undefined') return
     const scrollport = scrollerOf(local)
     lastScrollHeightRef.current = scrollport.scrollHeight
+    let prevClientHeight = scrollport.clientHeight
     const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
     const observer = new ResizeObserver(() => {
+      const nextClient = scrollport.clientHeight
+      const shrunk = nextClient < prevClientHeight - 0.5
+      prevClientHeight = nextClient
+      if (shrunk && atBottomRef.current) {
+        scrollport.scrollTop = scrollport.scrollHeight
+        observedTopRef.current = scrollport.scrollTop
+        lastScrollHeightRef.current = scrollport.scrollHeight
+        chatScroll.save(null)
+      }
       followRef.current?.()
       activeTurnRef.current?.()
     })
     observer.observe(column)
+    observer.observe(scrollport)
     if (composer !== null) observer.observe(composer)
     return () => { observer.disconnect() }
-  }, [])
+  }, [chatScroll])
 
   // Overlay soft keyboard: sticky seat lifts by --xrk-keyboard-inset and the
   // transcript gains matching pad. While the reader is on the floor, re-pin

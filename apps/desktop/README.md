@@ -34,10 +34,11 @@
 | `.desktop-build/downloads/` | 跨目标共享的官方 Node 归档缓存（`pnpm clean:desktop` 默认保留） |
 | `.desktop-build/targets/<target>/runtime/` | 捆绑 Node + pnpm（`prepare:runtime`） |
 | `.desktop-build/targets/<target>/artifacts/` | 签名安装包 + `package-complete-*.json` |
-| `.desktop-build/targets/<target>/unsigned-artifacts/` | 未签名 NSIS（`-unsigned`；不嵌更新源） |
+| `.desktop-build/targets/<target>/unsigned-artifacts/` | **当前**未签名 NSIS（覆盖写；手测归档见 `.release/desktop/<ver>/`） |
+| `.desktop-build/targets/<target>/unsigned-artifacts-<ver>/` | 版本快照（本地 **≤5**；`pnpm prune:local`） |
 | `apps/desktop/build/icon.png` · `icon.ico` | 品牌图标（真源 `apps/web/public/logo-plate.png`；`pnpm --filter @xrkseek/harness-desktop prepare:icons`） |
 | `.desktop-build/upload-mirror/` · `upload-records/` | 本地更新频道镜像与上传记录（可 `clean:desktop`） |
-| `~/.xrk/profiles/desktop` | 保留 Desktop profile（打包安装后） |
+| `~/.xrk/profiles/desktop` | 打包安装后的日用 profile；开发壳用 `.desktop-build/development/home` |
 
 协议方案名：**`xrk-app`**。渲染：`sandbox` + `contextIsolation` + `nodeIntegration: false`；preload 仅类型化 API（locale · 更新；插件接线二期）。
 
@@ -135,7 +136,8 @@ The shell wraps the assembled XRK Web UI. The private Host (`@xrkseek/harness-de
 | `.desktop-build/downloads/` | Shared official Node archive cache (kept by default `pnpm clean:desktop`) |
 | `.desktop-build/targets/<target>/runtime/` | Bundled Node + pnpm (`prepare:runtime`) |
 | `.desktop-build/targets/<target>/artifacts/` | Signed installers + `package-complete-*.json` |
-| `.desktop-build/targets/<target>/unsigned-artifacts/` | Unsigned NSIS (`-unsigned`; no embedded update feed) |
+| `.desktop-build/targets/<target>/unsigned-artifacts/` | **Current** unsigned NSIS (overwrite; hand-test copies under `.release/desktop/<ver>/`) |
+| `.desktop-build/targets/<target>/unsigned-artifacts-<ver>/` | Version snapshots (local **≤5**; `pnpm prune:local`) |
 | `apps/desktop/build/icon.png` · `icon.ico` | Brand icons (source `apps/web/public/logo-plate.png`; `pnpm --filter @xrkseek/harness-desktop prepare:icons`) |
 | `.desktop-build/upload-mirror/` · `upload-records/` | Local update-channel mirror + upload records (cleared by `clean:desktop`) |
 | `~/.xrk/profiles/desktop` | Reserved Desktop profile (after packaged install) |

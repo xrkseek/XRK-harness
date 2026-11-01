@@ -84,6 +84,20 @@ export type DshCompatWireOptions = XrkPluginServicesOptions &
      */
     readonly trustProxy?: boolean;
     /**
+     * Desktop temporary share: Settings toggle starts a `0.0.0.0` gateway.
+     * Host sets this when `XRK_SURFACE=desktop`.
+     */
+    readonly lanShareEnabled?: boolean;
+    /**
+     * Loopback Face origin for the share reverse proxy
+     * (e.g. `http://127.0.0.1:43129`). Required when {@link lanShareEnabled}.
+     */
+    readonly resolveLoopbackOrigin?: () => string;
+    /**
+     * Bind / own LAN hosts treated as local by the mobile PIN gate.
+     */
+    readonly ownLanHosts?: readonly string[];
+    /**
      * Face `ui-theme.preference` for PIN gate first-paint (Host wires live).
      * Absent → peek `settings.yaml` under `xrkHome`, else `system`.
      */

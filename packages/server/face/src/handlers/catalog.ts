@@ -14,6 +14,7 @@ import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
   listDeclaredPiAiProviders,
   orderProvidersByPreference,
+  providerHasUsableCredential,
   readOutboundProxyPreference,
   readProviderApiKey,
   readProviderOrder,
@@ -177,11 +178,14 @@ export const agentPresetReadOnly: FaceHandler = async (_runtime, _rpcId, payload
 export const llmProviders: FaceHandler = async (runtime) => {
   const providers = runtime.registry.listBrands().map((b) => {
     if (b.id === "deepseek") {
+      // Keyless DeepSeek is not a shipped row — keep it in the add picker
+      // (`settingsPath` sentinel ⇒ configured:false) until a credential exists.
+      const hasKey = providerHasUsableCredential(runtime, b.id);
       return {
         provider: "deepseek-official",
         displayName: b.displayName,
         settingsNs: "llm-deepseek",
-        settingsPath: [] as string[],
+        settingsPath: hasKey ? ([] as string[]) : (["__pending"] as string[]),
         active: routeServed(runtime, b.id),
         declared: false,
       };

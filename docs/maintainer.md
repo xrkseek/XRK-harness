@@ -38,7 +38,8 @@ node apps/cli/dist/bin.js web --workspace .
 pnpm test:web              # 产品壳硬刷；不进 check
 ```
 
-发版：`pnpm release:stage` / `pnpm release` — 见 [publishing](./publishing.md)。
+发版：`pnpm release:stage` / `pnpm release` — 见 [publishing](./publishing.md)。  
+本机产物落点与 ≤5 版裁剪：`publishing`「本机产物」· `pnpm prune:local`。
 
 ## 改什么同步什么
 
@@ -138,7 +139,8 @@ node apps/cli/dist/bin.js web --workspace .
 pnpm test:web              # product-shell soaks; not in check
 ```
 
-Release: `pnpm release:stage` / `pnpm release` — [publishing](./publishing.md).
+Release: `pnpm release:stage` / `pnpm release` — [publishing](./publishing.md).  
+Local artifact layout and ≤5-version prune: `publishing` “Local artifacts” · `pnpm prune:local`.
 
 ## What to sync when changing
 

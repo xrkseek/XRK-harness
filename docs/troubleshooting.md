@@ -44,6 +44,9 @@
 | Vite 直接 `serve`/`dev` 被拒 | 产品入口是 `xrkh web`（亦 `xrk-harness web`）/ Host serve，不是裸 Vite |
 | `EADDRINUSE` / 端口占用 | 先 `xrkh restart`（只停本机 XRK Host）。若是其它程序占端口：自行结束该进程，或换 `--port`。 |
 | serve 终端几乎没输出 | 默认只打启动横幅；加 `--verbose` 或 `XRK_LOG=debug` 看 `/api` 与 MCP 挂载 |
+| Desktop 临时分享：手机打不开局域网地址 | 用界面上的「局域网地址」（勿用 `192.168.56.x` 等虚拟网卡）；同 Wi‑Fi；防火墙放行分享端口入站；关 VPN / 隔离 AP。穿透请用「本机地址」 |
+| Desktop 临时分享：穿透能连但不要 PIN / 直进 | 隧道须保留公网 Host 或发 `X-Forwarded-Host`；分享须为开。关分享时非回环应 403 |
+| Desktop 临时分享：开了仍 403 | 关着分享时故意拒远程。打开开关后再试；本机 Desktop 请继续用应用内窗口 |
 
 ## MCP
 
@@ -161,6 +164,9 @@ Diagnose by symptom. If it still fails, check whether [status.md](./status.md) m
 | Bare Vite `serve`/`dev` rejected | Product entry is `xrkh web` (also `xrk-harness web`) / Host serve, not bare Vite |
 | `EADDRINUSE` / port in use | Try `xrkh restart` first (stops only the local XRK Host). For other holders: stop that process yourself or change `--port`. `--force` also **refuses** to kill non-XRK processes |
 | Almost no serve terminal output | Default prints only the startup banner; use `--verbose` or `XRK_LOG=debug` for `/api` and MCP mount logs |
+| Desktop temporary share: phone cannot open LAN URL | Use the UI **LAN address** (not VirtualBox `192.168.56.x`); same Wi‑Fi; allow inbound share port; disable VPN / AP isolation. For tunnels use the **local address** |
+| Desktop temporary share: tunnel connects without PIN / open access | Tunnel must keep the public Host or send `X-Forwarded-Host`; share must be on. With share off, non-loopback should be 403 |
+| Desktop temporary share: still 403 when enabled | Remote is refused while share is off. Turn the switch on; keep using the in-app window for local Desktop |
 
 ## MCP
 

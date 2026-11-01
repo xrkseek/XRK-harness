@@ -21,12 +21,12 @@ describe("subagent model route", () => {
       (created.result.value as { sessionId: string }).sessionId,
     );
 
-    // The parent never pinned anything — the case that used to leave the child
-    // to re-resolve later and drift onto a different `agent-default-model`.
+    // The parent never pinned anything. With no routable catalog Face leaves
+    // the effective route empty (no DeepSeek hard-pick) and freezes that into
+    // the child so a later parent default cannot drift the child.
     expect(runtime.sessionModels.get(parent)).toBeUndefined();
     const childRoute = runtime.sessionModels.get(childId);
-    expect(childRoute?.provider).toBeTruthy();
-    expect(childRoute?.model).toBeTruthy();
+    expect(childRoute).toEqual({ provider: "", model: "" });
   });
 
   it("reports each child's effective route in the catalog and Status", async () => {

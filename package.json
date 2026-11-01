@@ -35,6 +35,8 @@
     "package:desktop": "node ./scripts/package-desktop.mjs",
     "upload:desktop": "node ./scripts/upload-desktop.mjs",
     "clean:desktop": "node ./scripts/clean-desktop-build.mjs",
+    "prune:local": "node ./scripts/prune-local-artifacts.mjs",
+    "clean:test-temp": "node ./scripts/clean-test-temp.mjs",
     "xrk": "node ./apps/cli/dist/bin.js",
     "serve": "node ./apps/cli/dist/bin.js serve",
     "release:stage": "node ./scripts/stage-cli-release.mjs",

@@ -78,11 +78,14 @@ if (([regex]::Matches($raw, [regex]::Escape($anchor))).Count -ne 1) { throw 'anc
 必要时 `git reset -- <path>` 清 index。改测试文件做调试注入（`console.log`）后**务必**
 `git diff <file>` 确认干净再提交，否则 DBG 会跟着 commit 进历史。
 
-### 8. 别在 subst 盘符路径上递归删除
+### 8. subst 仅 X:；别在 subst 路径上递归删除
 
-`Remove-Item -Recurse -Force 'X:\.release\stage-0.6.1'` 会被拦成
-`hardline: recursive force delete of drive root (PowerShell)`。路径改写成**工作区相对**
-（`.release\stage-0.6.1`）即可；`subst X: /d` 单独执行不受影响。
+打包需要 ASCII 路径时**只**挂 `X:` → 仓库根，结束必 `subst X: /d`（见 rule `xrk-local-artifacts`）。
+禁止为图方便再挂 Y:/Z: 后残留。
+
+`Remove-Item -Recurse -Force 'X:\.release\…'` 会被拦成
+`hardline: recursive force delete of drive root`。删文件用**工作区相对路径**；
+拆盘单独 `subst X: /d`。
 
 ### 9. workspace 包名解析
 

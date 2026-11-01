@@ -21,16 +21,17 @@ description: >-
 
 ## Procedure
 
+**标准流水线**（rule `xrk-release-flow`；不得颠倒）：
 
+1. bump + 发行说明 + `pnpm check` → **commit → `git push origin main`**
+2. **先打 tgz**：`pnpm release:stage` · `pnpm release:stage:sdk` → 立刻 `CI=true pnpm install --frozen-lockfile`
+3. **并行**：`pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`）**与** `pnpm release`（GH + npmjs）
+4. 桌面包好后 **先上 AGT**（exe+blockmap → yml）→ **再**改 `apps/site/releases.json` 并 push
+5. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
 
-**push 必须先于 `pnpm release`**。`gh release create` 在 tag 不存在时，是拿**远端默认分支的 HEAD**
-建 tag，不是你本地的工作区。本地没 push 的 commit 一个都进不去 —— 而 npm tarball 是从本地
-工作区打的，于是「GitHub tag 源码 ≠ npm 包内容」，两边对不上，还很难第一时间看出来。
+**push 必须先于 `pnpm release`**。`gh release create` 在 tag 不存在时拿**远端默认分支 HEAD**建 tag；本地未 push 的 commit 进不了 tag，npm tarball 却来自工作区 →「GitHub 源码 ≠ npm 包」。
 
-v0.5.11 实测：本地 ahead 8 个 commit 就直接 release，tag 落在 `4b9c445`（上一版代码），
-GitHub Release 发布成功、npm 包内容正确，只有源码 tag 是错的。
-
-收尾必查（一条命令定位）：
+收尾必查：
 
 ```
 git fetch origin --tags
@@ -38,8 +39,7 @@ git rev-parse HEAD; git rev-parse origin/main; git rev-list -n 1 v<ver>
 gh api repos/xrkseek/XRK-harness/git/ref/tags/v<ver> --jq '.object.sha'
 ```
 
-三个 sha 必须一致。已经发歪了就 `git push origin main` + `git tag -f v<ver>` +
-`git push --force origin v<ver>`（force 推 tag 属破坏性操作，**先问用户**）。
+三个 sha 必须一致。已发歪：`git push origin main` +（**先问用户**）`git tag -f` / `git push --force` tag。
 
 ### 1. 终态判据（成功 = 收尾，不轮询）
 
@@ -117,36 +117,24 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 
 改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。侧栏公告是第五处，发版同轮必写。
 
-### 6. 打包桌面包（release 之后，约 20 分钟）
+### 6. 打包桌面包（release 之后）
 
-本机无签名凭据，走 unsigned，只有 win-x64 可用：
+落点、`subst X:`、≤5 版备份、AGT 上传顺序：skill **`xrk-desktop-update-feed`** · `docs/publishing.md`「本机产物」。
 
 ```
 $env:XRK_DESKTOP_UNSIGNED='1'
+$env:XRK_DESKTOP_UNSIGNED_UPDATE='1'
 $env:XRK_DESKTOP_PACKAGE='1'
-pnpm package:desktop 2>&1 | Tee-Object -FilePath .release/desktop-package-<ver>.log
+$env:XRK_DESKTOP_TARGET='win-x64'
+$env:CSC_IDENTITY_AUTO_DISCOVERY='false'
+pnpm package:desktop
+pnpm prune:local
 ```
 
-- **不设 `XRK_DESKTOP_PACKAGE=1` 只写 `package-plan.json`，不产包**——最常见的「以为打包了」。
-- `XRK_DESKTOP_UNSIGNED=1` 只允许 win-x64（否则抛 `unsigned packaging is Windows-only`）；
-  正式目标 `win-x64 | mac-arm64 | mac-x64` 用 `XRK_DESKTOP_TARGET` 指定。
-- electron / electron-builder / electron-updater 是 optionalDependencies，装在
-  **`apps/desktop/node_modules`**，不是根。
-- **静默是正常的**：`build:desktop` → runtime `pnpm install`（~700 包）→ host bundle →
- electron-builder packaging → nsis 压 1.1 GB 的 win-unpacked。nsis 阶段 `7za` 吃 CPU、
- 日志和 `*.nsis.7z` 大小都不动。别用短 sleep 循环刷状态，用后台 job + `job_output(wait:true)`。
-- 产物 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/` 下
-  `xrk-harness-<ver>-win-x64-unsigned.exe`（~315 MB）+ `.exe.blockmap`；
-  **同名同版本直接覆盖**旧包，这是重打补丁包的预期结果。
-- 完成判据：日志尾 `package-desktop: wrote … package-complete-*.json`（测试源开启时）
-  或 `unsigned build — no update feed / package-complete`（未开 `UNSIGNED_UPDATE`），
-  前面还有 `smoke packaged Host loopback Face` 与 `restore workspace node_modules`，
-  且 `win-unpacked/resources/` 下 `host` / `web` / `runtime` 都是本轮时间。
-- **发新桌面版必须上 AGT 更新源**：顺序见 skill **`xrk-desktop-update-feed`**
-  （改名去 `unsigned` → **先传完整 exe/blockmap** → 再传 nightly/latest.yml → 核对 HEAD 大小）。
-  yml 必须写**明文 IP 绝对 URL**（`http://IP:6969/api/harness/desktop/bin/win-x64/…`）——
-  不是 HTTPS 域名、不是相对文件名，写错会 403 / checksum mismatch。
-  不要整目录盲传旧版；不要 `C:\xrk-h` junction。
+- 未设 `XRK_DESKTOP_PACKAGE=1` 只写 plan，不产包。
+- 当前产物只在 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（覆盖写）。
+- 手测 exe 进 `.release/desktop/<ver>/`，**不**放用户桌面根目录。
+- 发新桌面版必须上 AGT 测试源（先 exe+blockmap，再 yml）。
 
 ## Pitfalls
 

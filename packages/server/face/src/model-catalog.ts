@@ -522,8 +522,8 @@ export function resolveSessionModelSelection(
     }
   }
 
-  // 目录已按「路由可用」过滤过（凭证 / 车道 / profile 门禁）。默认取第一组
-  // 第一条，跟着产品目录走，而不是写死某一家 provider。
+  // Catalog is already filtered to routable routes. Prefer the first group’s
+  // first model (self-routed free lanes pin first) — never hard-pick DeepSeek.
   const catalogGroups = buildFaceModelCatalog(runtime).groups;
   const headGroup = catalogGroups[0];
   const headModel = headGroup?.models[0];
@@ -549,9 +549,9 @@ export function resolveSessionModelSelection(
     }
   }
 
-  const deepseek = deepseekModels(runtime)[0];
-  if (deepseek) return { provider: "deepseek", model: deepseek.id };
-  return { provider: "deepseek", model: "deepseek-flash" };
+  // No routable catalog and no saved default — leave unset (composer shows
+  // empty; do not hard-pick DeepSeek).
+  return { provider: "", model: "" };
 }
 
 /**

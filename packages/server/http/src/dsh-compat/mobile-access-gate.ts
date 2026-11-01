@@ -18,10 +18,17 @@ import {
 } from "./mobile-access.js";
 import {
   applyMobileGateDecision,
+  DESKTOP_SHELL_MARK_HEADER,
   effectiveRequestHost,
   evaluateMobileGate,
   type MobileGateDecision,
 } from "./underlying/mobile-gate-kit.js";
+
+function requestHasDesktopShellMark(req: IncomingMessage): boolean {
+  const raw = req.headers[DESKTOP_SHELL_MARK_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === "1" || value === "true";
+}
 
 function trustProxyEnabled(options: MobileAccessOptions): boolean {
   if (options.trustProxy === true) return true;
@@ -100,6 +107,7 @@ export function evaluateMobileAccessGate(
   options: MobileAccessOptions,
 ): MobileGateDecision {
   const { snapshot, ...credentials } = credentialsFromRequest(req, options);
+  const desktopShare = options.lanShareEnabled === true;
   return evaluateMobileGate(
     pathname,
     effectiveRequestHost(req, trustProxyEnabled(options)),
@@ -111,6 +119,10 @@ export function evaluateMobileAccessGate(
       instanceId: snapshot.instanceId,
       ...(options.ownLanHosts && options.ownLanHosts.length > 0
         ? { ownLanHosts: options.ownLanHosts }
+        : {}),
+      ...(desktopShare ? { desktopShareGate: true as const } : {}),
+      ...(desktopShare && requestHasDesktopShellMark(req)
+        ? { desktopShellTrusted: true as const }
         : {}),
     },
     credentials,

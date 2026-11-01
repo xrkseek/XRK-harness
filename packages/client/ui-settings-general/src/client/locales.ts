@@ -46,6 +46,20 @@ export const zh = {
   'cliCommand.description':
     '把本应用自带的 xrkh 放到用户 PATH 最前（~/.xrk/bin）。每次启动会改写这个命令，使终端、ACP 和子代理用到当前安装版本，而不是更早的 npm 全局包。关掉后只撤掉本应用写的命令。',
   'cliCommand.saveFailed': '未能更新命令行 xrkh',
+  'desktopShare.title': '临时分享',
+  'desktopShare.description':
+    '打开后起临时入口：本机/穿透用「本机地址」，手机用「局域网地址」。关闭或退出即停；访客要 PIN。',
+  'desktopShare.saveFailed': '未能切换临时分享',
+  'desktopShare.localUrl': '本机地址（穿透指这里）',
+  'desktopShare.localHint': '本机浏览器或樱花/frp 的本地端口填这个，不是写死的 8787。',
+  'desktopShare.lanUrl': '局域网地址（手机）',
+  'desktopShare.lanHint': '须与电脑同一 Wi‑Fi；勿用 192.168.56.x 这类虚拟网卡地址。',
+  'desktopShare.pin': '访问 PIN',
+  'desktopShare.copy': '复制',
+  'desktopShare.copied': '已复制',
+  'desktopShare.tunnelHint':
+    '穿透：本地端口指到 {localOrigin}（分享口 {sharePort}）；请保留公网 Host 或 X-Forwarded-Host。',
+  'desktopShare.firewallHint': '手机打不开时，请在防火墙放行该分享端口的入站。',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -97,6 +111,20 @@ export const en = {
   'cliCommand.description':
     'Put this app’s xrkh first on your user PATH (~/.xrk/bin). Each launch rewrites that command so terminals, ACP, and subagents use the current install instead of an older npm-global copy. Turning this off removes only the command this app wrote.',
   'cliCommand.saveFailed': 'Could not update command-line xrkh',
+  'desktopShare.title': 'Temporary share',
+  'desktopShare.description':
+    'Starts a temporary entry: use Local for this PC / tunnels, LAN for phones. Off or quit stops it; visitors need the PIN.',
+  'desktopShare.saveFailed': 'Could not toggle temporary share',
+  'desktopShare.localUrl': 'Local address (tunnels)',
+  'desktopShare.localHint': 'Point Sakura / frp at this URL — not a hard-coded 8787.',
+  'desktopShare.lanUrl': 'LAN address (phone)',
+  'desktopShare.lanHint': 'Same Wi‑Fi as this PC; skip VirtualBox 192.168.56.x host-only addresses.',
+  'desktopShare.pin': 'Access PIN',
+  'desktopShare.copy': 'Copy',
+  'desktopShare.copied': 'Copied',
+  'desktopShare.tunnelHint':
+    'Tunnel: point local port at {localOrigin} (share port {sharePort}); keep public Host or X-Forwarded-Host.',
+  'desktopShare.firewallHint': 'If the phone cannot connect, allow inbound traffic for the share port.',
 } satisfies Record<SettingsKey, string>
 
 /** Japanese dictionary, checked complete against the zh key set. */
@@ -141,6 +169,20 @@ export const ja = {
   'cliCommand.title': 'コマンドライン xrkh',
   'cliCommand.description': 'このアプリの xrkh をユーザー PATH（~/.xrk/bin）の先頭に置きます。起動のたびにそのコマンドを書き換えるため、ターミナル、ACP、サブエージェントは古い npm グローバル版ではなく現在のインストールを使います。オフにすると、このアプリが書いたコマンドだけが削除されます。',
   'cliCommand.saveFailed': 'コマンドライン xrkh を更新できませんでした',
+  'desktopShare.title': '一時共有',
+  'desktopShare.description':
+    '一時入口を開きます。本機/トンネルは「本機アドレス」、スマホは「LAN アドレス」。オフまたは終了で停止。訪問者は PIN が必要です。',
+  'desktopShare.saveFailed': '一時共有を切り替えられませんでした',
+  'desktopShare.localUrl': '本機アドレス（トンネル）',
+  'desktopShare.localHint': '桜花 / frp のローカル側はこの URL（固定 8787 ではありません）。',
+  'desktopShare.lanUrl': 'LAN アドレス（スマホ）',
+  'desktopShare.lanHint': 'PC と同じ Wi‑Fi を使ってください。192.168.56.x などのホスト専用 NIC は避けます。',
+  'desktopShare.pin': 'アクセス PIN',
+  'desktopShare.copy': 'コピー',
+  'desktopShare.copied': 'コピー済み',
+  'desktopShare.tunnelHint':
+    'トンネル：ローカル側を {localOrigin}（共有ポート {sharePort}）へ。公開 Host か X-Forwarded-Host を保ってください。',
+  'desktopShare.firewallHint': '接続できないときは、ファイアウォールで共有ポートの受信を許可してください。',
 } as const satisfies Record<SettingsKey, string>
 
 

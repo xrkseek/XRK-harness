@@ -103,6 +103,7 @@ XRK-Harness 为自研产品栈。设计吸收 Codex 与业界 agent harness 在�
 | Desktop 内置 harness-cli | Host 旁 `@xrkseek/harness-cli`；启动恒设 `XRK_HARNESS_BIN`（独占，不回落 PATH 全局 `xrkh`）；Settings 装/更/删插件 | **能跑**（需 Desktop 重建；缺 CLI 则 Host 起不来） |
 | Desktop host 事件下行 | `xrk-app://` unary + SSE mux/host（桥到回环 Host）；`host/session-*` · `host/remote-event` 实时到壳；**SSE 下行** `: keepalive` 15s，约 45s 无字节则 idle 重连 | **能跑**（见 [host-face](./host-face.md)「Web / Desktop 载波」） |
 | Desktop Face 载波 | Host listen **`127.0.0.1:<ephemeral>`**；产品页全程 `xrk-app://` + Host Fetch 桥；无 Face 分帧管道 | **能跑**（ADR-0008 / DSH；见 [host-face](./host-face.md)） |
+| Desktop 临时分享 | Settings 开关起 `0.0.0.0` 分享网关（优先 8787 / 18787，否则临时口）；界面分本机地址 / 局域网地址；跳过 `192.168.56.x` 等主机专用网卡；关分享拒非回环；开分享后局域网 / 穿透访客要 PIN（`trustProxy`）；进程内、退出即停；**不是**完整公网安全产品 | **能跑**（见 [getting-started](./getting-started.md)「Desktop 临时分享」· [troubleshooting](./troubleshooting.md)） |
 | GenUI 浏览器端 runtime bundle | `/dsh-genui/runtime.js`：DOM mount · custom elements · 可选 Host preview；库 CRUD / npm **能跑** | **能跑**（见 [community-plugins.md](./community-plugins.md)） |
 | Mnemon 真记忆引擎 | 文档 CRUD **能跑**；`search` / `graph` / `bodies` 走文档 keyword + `[[wiki]]` / `#tag` 图（不是向量库） | **能跑** |
 | 策展记忆 | `memory`：分层区 global/workspace/session/agent（Host 叠区；缺省 session，干员缺省 agent）；冻进系统提示（本会话写盘不刷新冻结）；工具 add/replace/remove/**list** + 可选 `scope`；触碰旁路 `.usage.json`；回合后启发式；会话结束 **leased Phase1** + 可选 **Phase2 LLM**；本会话即时「干预记忆」**未做**；与 Mnemon 分开 | **能跑**（见 [curated-memory](./curated-memory.md)；Settings → Plugins → 策展记忆） |
@@ -277,6 +278,7 @@ Product shell = `apps/web` + `packages/client`; `serve` uses assembled dist / CL
 | Desktop bundled harness-cli | `@xrkseek/harness-cli` beside Host; startup always sets exclusive `XRK_HARNESS_BIN` (no PATH fallback to global `xrkh`); Settings plugin install/update/remove | **Working** (rebuild Desktop; missing CLI fails Host start) |
 | Desktop host event downlink | `xrk-app://` unary + SSE mux/host (bridged to loopback Host); `host/session-*` · `host/remote-event` reach the shell live; **SSE downlink** `: keepalive` every 15s, ~45s with no bytes reconnects | **Working** (see [host-face](./host-face.md) “Web / Desktop carriers”) |
 | Desktop Face carrier | Host listens **`127.0.0.1:<ephemeral>`**; product page stays on `xrk-app://` + Host Fetch bridge; no Face framed pipes | **Working** (ADR-0008 / DSH; see [host-face](./host-face.md)) |
+| Desktop temporary share | Settings toggle starts a `0.0.0.0` share gateway (prefers 8787 / 18787, else ephemeral); UI shows local vs LAN URLs; skips host-only NICs like `192.168.56.x`; share off refuses non-loopback; share on requires PIN for LAN / tunnel visitors (`trustProxy`); process-scoped; **not** a full internet security product | **Working** (see [getting-started](./getting-started.md) “Desktop temporary share” · [troubleshooting](./troubleshooting.md)) |
 
 #### Underlying capability gaps
 

@@ -35,6 +35,16 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 
 `pnpm release` 会把 `NPM_CONFIG_OTP` / `NPM_OTP` 传给 `npm publish --otp`。发版脚本**不改写** workspace `package.json`（SDK 版本号除外，与 CLI 对齐）。
 
+## 流水线顺序
+
+1. bump · 发行说明 · `pnpm check` · **commit · push**
+2. **先** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
+3. **并行** `pnpm package:desktop`（需 `XRK_DESKTOP_PACKAGE=1`）与 `pnpm release`（GitHub + npmjs）
+4. 桌面包完成后 **先上 AGT 更新源**，**再**改 `apps/site/releases.json` 并 push
+5. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
+
+笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`。
+
 ## 命令
 
 ```bash
@@ -47,6 +57,25 @@ XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # 仅 npmjs
 node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正式 + 预览末号 0.2.7；去掉 preview tag）
 ```
 
+## 本机产物（gitignore）
+
+| 用途 | 路径 | 保留 |
+|------|------|------|
+| npm stage / tarball | `.release/harness` · `.release/harness-cli` · `.release/xrkseek-harness(-cli)-<ver>.tgz` | 每系列 **≤5** 个版本 |
+| Desktop 当前包 | `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/` | 覆盖写 |
+| Desktop 版本快照 / stage | 同级 `unsigned-artifacts-<ver>/` · `upload-stage-<ver>/` | **≤5** |
+| 手测 exe | `.release/desktop/<ver>/` | **≤5**；勿放用户桌面根目录 |
+| 开发壳 home | `apps/desktop/.desktop-build/development/home` | 与 `~/.xrk` 隔离 |
+
+```bash
+pnpm prune:local                 # 按上表裁到 ≤5
+pnpm prune:local -- --junk       # 另删 .release 一次性日志/脚本
+pnpm clean:desktop               # 清当前工作槽（不动版本快照）
+pnpm clean:test-temp             # 清 %TEMP%/xrk-*（vitest 残留）
+```
+
+Windows NSIS：仓库路径含非 ASCII 时，固定 `subst X:` → 仓库根，结束后 `subst X: /d`。细节见笔记 skill `xrk-desktop-update-feed`。
+
 ## 发版前核对
 
 - [ ] `apps/cli` 版本已 bump；`docs/releases/v…md` 已写
@@ -56,6 +85,7 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 - [ ] stage 日志含 `sharp platform packages`；`.release/harness-cli/node_modules/@img/sharp-linux-x64` 存在
 - [ ] `.release/harness/dist/index.js` 与 `xrkseek-harness-<ver>.tgz` 存在（未 `SKIP_SDK`）
 - [ ] 密钥未进产物 / git
+- [ ] Desktop 若本版要上测试源：产物在固定落点；`pnpm prune:local` 已跑
 
 ## 版本线
 
@@ -65,20 +95,20 @@ node scripts/npm-prune-withdrawn.mjs            # 撤中间版（保留当前正
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.7.4** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
+| **当前（@latest）** | **0.7.5** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
 | **过程号（@rc）**   | **0.7.0-rc.3** | 第三 rc（已并入 0.7.0）；`npm i -g @xrkseek/harness-cli@rc` 仍可指向此号 |
 | **上一预览收官**    | **0.6.23** | `0.6.x` 预览线终点，仍可精确安装 |
 | **本线收口号（0.6）** | **0.6.0** | `0.6.x` 预览线收口并曾首次接管 `@latest` |
 | **过程号（历史）**  | **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.4** 接管 `@latest`（OFM 路由展开 · 向日葵模糊目录）。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.5** 接管 `@latest`（Desktop 临时分享）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.7.4**（当前 `@latest`）、**v0.7.3**、**v0.7.2**、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.7.5**（当前 `@latest`）、**v0.7.4**、**v0.7.3**、**v0.7.2**、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -121,6 +151,16 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 
 `pnpm release` forwards `NPM_CONFIG_OTP` / `NPM_OTP` to `npm publish --otp`. The release script does **not** rewrite workspace `package.json` (except SDK version aligned to CLI).
 
+## Pipeline order
+
+1. bump · release notes · `pnpm check` · **commit · push**
+2. **First** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
+3. **In parallel** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`) and `pnpm release` (GitHub + npmjs)
+4. After the desktop build: **upload AGT feed first**, **then** update `apps/site/releases.json` and push
+5. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
+
+Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`.
+
 ## Commands
 
 ```bash
@@ -133,6 +173,25 @@ XRK_RELEASE_SKIP_GH_RELEASE=1 pnpm release      # npmjs only
 node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate versions (keep current formal + last preview 0.2.7; drop preview tag)
 ```
 
+## Local artifacts (gitignored)
+
+| Purpose | Path | Retention |
+|---------|------|-----------|
+| npm stage / tarball | `.release/harness` · `.release/harness-cli` · `.release/xrkseek-harness(-cli)-<ver>.tgz` | **≤5** versions per series |
+| Desktop current build | `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/` | overwrite |
+| Desktop version snapshots / stage | sibling `unsigned-artifacts-<ver>/` · `upload-stage-<ver>/` | **≤5** |
+| Hand-test exe | `.release/desktop/<ver>/` | **≤5**; do not drop on the user Desktop root |
+| Dev shell home | `apps/desktop/.desktop-build/development/home` | isolated from `~/.xrk` |
+
+```bash
+pnpm prune:local                 # enforce ≤5
+pnpm prune:local -- --junk       # also delete one-off .release logs/scripts
+pnpm clean:desktop               # clear current working slots (keeps version snapshots)
+pnpm clean:test-temp             # remove %TEMP%/xrk-* vitest leftovers
+```
+
+Windows NSIS: if the repo path is non-ASCII, use a fixed `subst X:` to the repo root and always `subst X: /d` afterward. See skill `xrk-desktop-update-feed`.
+
 ## Pre-release checklist
 
 - [ ] `apps/cli` version bumped; `docs/releases/v…md` written
@@ -142,6 +201,7 @@ node scripts/npm-prune-withdrawn.mjs            # deprecate intermediate version
 - [ ] stage log includes `sharp platform packages`; `.release/harness-cli/node_modules/@img/sharp-linux-x64` exists
 - [ ] `.release/harness/dist/index.js` and `xrkseek-harness-<ver>.tgz` exist (unless `SKIP_SDK`)
 - [ ] secrets not in artifacts / git
+- [ ] if this Desktop build ships to the test feed: artifacts under the fixed paths; `pnpm prune:local` run
 
 ## Version line
 
@@ -151,19 +211,19 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.7.4** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
+| **Current (@latest)**     | **0.7.5** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
 | **Process number (@rc)**  | **0.7.0-rc.3** | Third rc (folded into 0.7.0); `npm i -g @xrkseek/harness-cli@rc` may still point here |
 | **Prior preview close**   | **0.6.23** | End of `0.6.x` preview; still installable by exact pin |
 | **0.6 line closing number** | **0.6.0** | `0.6.x` preview closed here and first took `@latest` |
 | **Process numbers (past)**| **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.4** owns `@latest` (OFM router expand · Sunflower fuzzy catalog). GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.5** owns `@latest` (Desktop temporary share). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.7.4** (current `@latest`), **v0.7.3**, **v0.7.2**, **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.7.5** (current `@latest`), **v0.7.4**, **v0.7.3**, **v0.7.2**, **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

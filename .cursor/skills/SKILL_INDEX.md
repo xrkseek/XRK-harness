@@ -27,8 +27,10 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | Session / meter / compaction | `xrk-meter-session` |
 | **Desktop / Web 事件载波**（host SSE · MCP/子代理实时） | `xrk-desktop-events` · rule `xrk-desktop-events` · [host-face](../../docs/host-face.md) |
 | **Desktop 测包 / 自动更新源 / 发新版上 AGT** | 本仓 `.agents/skills/xrk-desktop-update-feed` · 发包链 `xrk-release-chain` |
+| **本机产物落点 · ≤5 版备份 · 测试隔离 home** | rule **`xrk-local-artifacts`** · skill **`xrk-local-artifacts`** · [publishing](../../docs/publishing.md) · [testing](../../docs/testing.md) |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
+| **发版流水线**（tgz → 并行桌面+npm → AGT → site → 清理） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` |
 | Node ≥26 / 门禁 | rule `xrk-node26` |
 | 文档身份 / 双语 | rule `xrk-product-identity` |
 
@@ -44,6 +46,8 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | `xrk-meter-session` | Meter / compaction / TokenUsage |
 | **`xrk-desktop-events`** | Web vs Desktop mux/host 载波；禁 stub host SSE |
 | **`xrk-desktop-update-feed`**（`.agents/skills`） | 未签名测包、AGT `data/harness-download`、N-1 装 / N 喂；发新版必上传 |
+| **`xrk-local-artifacts`** | 固定落点、`pnpm prune:local`、`subst` 仅 X:、`XRK_HOME` 隔离 |
+| rule `xrk-local-artifacts` | 同上红线（alwaysApply） |
 | rule `xrk-face-client-wire` | Face 发射字段与 apiproxy Zod 同批扩展；list 按行容错 |
 | rule `xrk-desktop-events` | Desktop 必须开 `xrk-app://stream` host SSE |
 | `xrk-docs-audience` | 教科书身份与双语 |

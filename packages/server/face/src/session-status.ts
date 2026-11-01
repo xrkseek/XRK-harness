@@ -1715,7 +1715,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
       : []),
     `plan: ${snap.plan} (/plan retired — outline → todo_write in-session; old logs still fold)`,
     `theme: ${snap.theme} (/theme light|dark|system)`,
-    `model: ${snap.model.provider}/${snap.model.model}`,
+    `model: ${snap.model.provider || "?"}/${snap.model.model || "?"}`,
     `cwd: ${snap.cwd}`,
     `events: ${snap.events}`,
   ];
@@ -1759,7 +1759,7 @@ export function formatSessionStatusText(snap: SessionStatusSnapshot): string {
   lines.push(
     `subagents: ${snap.subagents.live.length} delegated` +
       (runningSubs.length > 0 ? `, ${runningSubs.length} live` : "") +
-      ` · quota ${q.provider ?? "?"}/${q.model ?? "?"} sessions ${q.active}/${q.maxActive}` +
+      ` · quota ${q.provider || "?"}/${q.model || "?"} sessions ${q.active}/${q.maxActive}` +
       ` · slots_free ${q.slotsFree}` +
       (queuedSubs > 0 ? ` · child_inbox ${queuedSubs}` : "") +
       `; graph ${snap.subagents.graph.nodes.length} nodes / ${snap.subagents.graph.edges.length} edges`,
