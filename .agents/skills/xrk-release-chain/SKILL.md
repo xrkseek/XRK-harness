@@ -25,9 +25,12 @@ description: >-
 
 1. bump + 发行说明 + `pnpm check` → **commit → `git push origin main`**
 2. **先打 tgz**：`pnpm release:stage` · `pnpm release:stage:sdk` → 立刻 `CI=true pnpm install --frozen-lockfile`
-3. **并行**：`pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`）**与** `pnpm release`（GH + npmjs）
-4. 桌面包好后 **先上 AGT**（exe+blockmap → yml）→ **再**改 `apps/site/releases.json` 并 push
-5. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
+3. **`pnpm release`**（GH + npmjs）→ 再 `CI=true pnpm install --frozen-lockfile`
+4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；优先 `C:\xrk-h`）——**禁止与 stage/release 并行**
+5. 桌面包好后 **先上 AGT**（exe+blockmap → yml）→ **再**改 `apps/site/releases.json` 并 push
+6. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
+
+**禁止并行打包**（0.7.5 实测）：`package:desktop` 与 `pnpm release`/stage 同时跑时，stage 掏空根 `typescript`，且 Desktop `optionalDependencies.electron` 会被打进 `app.asar.unpacked`（嵌套一整份 Electron，exe 从 ~220MB 飙到 ~330MB）。`electron` / `electron-builder` 只许在 Desktop **devDependencies**；运行时只留 `electron-updater`。
 
 **push 必须先于 `pnpm release`**。`gh release create` 在 tag 不存在时拿**远端默认分支 HEAD**建 tag；本地未 push 的 commit 进不了 tag，npm tarball 却来自工作区 →「GitHub 源码 ≠ npm 包」。
 
@@ -117,7 +120,7 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 
 改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。侧栏公告是第五处，发版同轮必写。
 
-### 6. 打包桌面包（release 之后）
+### 6. 打包桌面包（必须在 release **之后** · 禁止并行）
 
 落点、`subst X:`、≤5 版备份、AGT 上传顺序：skill **`xrk-desktop-update-feed`** · `docs/publishing.md`「本机产物」。
 
@@ -131,10 +134,12 @@ pnpm package:desktop
 pnpm prune:local
 ```
 
+- **不要**与 `pnpm release` / stage 并行（见上「禁止并行打包」）。
 - 未设 `XRK_DESKTOP_PACKAGE=1` 只写 plan，不产包。
 - 当前产物只在 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（覆盖写）。
 - 手测 exe 进 `.release/desktop/<ver>/`，**不**放用户桌面根目录。
 - 发新桌面版必须上 AGT 测试源（先 exe+blockmap，再 yml）。
+- 打完后核对：`app.asar.unpacked` **不得**含完整 `electron/dist`；exe 应接近上一正式版（~220MB 量级，不是 ~330MB）。
 
 ## Pitfalls
 

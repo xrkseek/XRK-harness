@@ -41,14 +41,12 @@
     "clean:build": "node ../../scripts/clean-desktop-build.mjs"
   },
   "dependencies": {
-    "@xrkseek/server-config": "workspace:*"
-  },
-  "optionalDependencies": {
-    "electron": "^44.0.0",
-    "electron-builder": "^26.15.3",
+    "@xrkseek/server-config": "workspace:*",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "pnpm": "11.22.0",
     "typescript": "^5.7.2"
   }

@@ -137,11 +137,18 @@ export function createElectronBuilderConfig(
     // Prefer .ico on Windows (rcedit); PNG is the shared brand source / mac fallback.
     icon: packagesWindows ? iconIco : iconPng,
     asar: true,
+    // electron / electron-builder are pack-time only (devDependencies). Never
+    // nest another Electron runtime under app.asar.unpacked (0.7.5 bloat ~+110MB).
     files: [
       "dist/**/*",
       "package.json",
       "build/icon.png",
       "build/icon.ico",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**",
+      "!node_modules/@electron/**",
+      "!node_modules/app-builder-bin/**",
+      "!node_modules/app-builder-lib/**",
     ],
     extraResources: [
       {

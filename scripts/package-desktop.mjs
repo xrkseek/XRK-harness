@@ -230,7 +230,7 @@ if (checkOnly) {
       `\n` +
       `  installerShipped=${entry.installerShipped} (default entry remains ${entry.defaultEntry})\n` +
       `  upload: pnpm upload:desktop -- --check ${target.name}\n` +
-      `  optional deps: electron · electron-builder · electron-updater\n`,
+      `  deps: electron-updater · (dev) electron · electron-builder\n`,
   );
   process.exit(0);
 }

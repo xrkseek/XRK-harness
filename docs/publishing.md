@@ -39,9 +39,10 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 
 1. bump · 发行说明 · `pnpm check` · **commit · push**
 2. **先** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
-3. **并行** `pnpm package:desktop`（需 `XRK_DESKTOP_PACKAGE=1`）与 `pnpm release`（GitHub + npmjs）
-4. 桌面包完成后 **先上 AGT 更新源**，**再**改 `apps/site/releases.json` 并 push
-5. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
+3. **`pnpm release`**（GitHub + npmjs）→ 再装回根 `devDeps`
+4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；**禁止**与 stage/release 并行）
+5. 桌面包完成后 **先上 AGT 更新源**，**再**改 `apps/site/releases.json` 并 push
+6. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
 
 笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`。
 
@@ -155,9 +156,10 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 
 1. bump · release notes · `pnpm check` · **commit · push**
 2. **First** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
-3. **In parallel** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`) and `pnpm release` (GitHub + npmjs)
-4. After the desktop build: **upload AGT feed first**, **then** update `apps/site/releases.json` and push
-5. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
+3. **`pnpm release`** (GitHub + npmjs) → restore root `devDeps`
+4. **Then** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`; **never** parallel with stage/release)
+5. After the desktop build: **upload AGT feed first**, **then** update `apps/site/releases.json` and push
+6. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
 
 Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`.
 

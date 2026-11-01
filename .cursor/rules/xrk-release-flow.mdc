@@ -1,5 +1,5 @@
 ---
-description: 发版流水线顺序：先 tgz → 并行桌面+npm/GH → AGT → site → 清理
+description: 发版流水线顺序：tgz → release → 桌面 → AGT → site → 清理（禁止并行打包）
 alwaysApply: true
 xrk-inject: false
 ---
@@ -8,20 +8,21 @@ xrk-inject: false
 
 教科书：[docs/publishing.md](../../docs/publishing.md)。副作用与终态：`.agents/skills/xrk-release-chain`。桌面上传：`xrk-desktop-update-feed`。本机落点：`xrk-local-artifacts`。
 
-## 顺序（不得颠倒）
+## 顺序（不得颠倒 · 不得并行打包）
 
 1. **预备**：bump 版本（cli / desktop / sdk）· `docs/releases/vN.md` · 侧栏 `RELEASE_NOTES` · status/README 若能力变了 · `pnpm check` 绿 · **commit + `git push origin main`**（tag 必须落在已推送的 HEAD）。
 2. **打 tgz**：`pnpm release:stage` + `pnpm release:stage:sdk` → `.release/*.tgz`。结束后立刻 `CI=true pnpm install --frozen-lockfile`（stage 会掏空根 devDeps）。
-3. **并行**（tgz 已在盘上、devDeps 已装回）：
-   - **A** `XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）
-   - **B** `pnpm release`（GitHub Release + npmjs；用步骤 2 的 tgz，勿因「registry 慢」重打）
-4. **桌面包完成后 → 先上 AGT**：改名去 `unsigned` → **先 exe+blockmap、再 yml** → `HEAD` 长度对齐（skill `xrk-desktop-update-feed`）。
-5. **再同步仓内 site / worker**：改 `apps/site/releases.json`（及必要 Worker 文案）为 N → commit + push（CF 随推送同步）。
-6. **清理**：`pnpm prune:local -- --junk` · 必要时 `pnpm clean:test-temp` · `subst X: /d`。
+3. **`pnpm release`**（GitHub Release + npmjs；用步骤 2 的 tgz，勿因「registry 慢」重打）。结束后再 `CI=true pnpm install --frozen-lockfile`（release 内会再 stage 一次）。
+4. **桌面**（单独、在 release **之后**）：`XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）。判据 exe 体积应接近上一正式版（勿把 `electron` 打进 asar）。
+5. **先上 AGT**：改名去 `unsigned` → **先 exe+blockmap、再 yml** → `HEAD` 长度对齐（skill `xrk-desktop-update-feed`）。
+6. **再同步仓内 site / worker**：改 `apps/site/releases.json`（及必要 Worker 文案）为 N → commit + push（CF 随推送同步）。
+7. **清理**：`pnpm prune:local -- --junk` · 必要时 `pnpm clean:test-temp` · `subst X: /d`。
 
 ## 禁止
 
+- **`package:desktop` 与 `pnpm release` / stage 并行**（stage 掏空根 `typescript`；竞态还会把嵌套 Electron 打进 exe，体积暴涨）
 - 未 push 就 `pnpm release`（tag 会钉远端旧 HEAD）
 - 桌面未上 AGT 就改 `releases.json` 宣称已可下
 - 把 exe / upload-stage 堆到 `C:\` 根或用户桌面
 - 因 CDN 延迟对同一版本重跑 `npm publish`
+- 把 `electron` / `electron-builder` 放进 Desktop `dependencies` / `optionalDependencies`（只许 `devDependencies`；运行时自动更新用 `electron-updater`）

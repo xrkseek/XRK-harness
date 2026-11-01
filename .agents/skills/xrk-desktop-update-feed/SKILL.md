@@ -74,7 +74,9 @@ harness-download/
 
 版本 N 已写入 `apps/desktop/package.json`（与 cli/sdk、`docs/releases/vN.md` 对齐）。
 
-1. 按上节打包 → 判据通过。
+**禁止**与 `pnpm release` / `release:stage` 并行打包（会掏空根 `typescript`，且曾把嵌套 Electron 打进 exe）。完整流水线见 rule `xrk-release-flow`：先 release，再本包。
+
+1. 按上节打包 → 判据通过（exe 体积应接近上一正式版；`app.asar.unpacked` 不得含完整 `electron/dist`）。
 2. （可选）`XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → 本机 mirror。
 3. Stage 改名后的 exe/blockmap/yml → 推 AGT；yml 内 URL 用 `local.md` 的明文 origin。
 4. `HEAD` 长度对齐；`/releases` 与 `nightly.yml` 版本 = N。
