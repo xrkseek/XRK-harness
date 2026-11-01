@@ -189,6 +189,7 @@ export {
 export {
   tryApplyOurFreeModelHost,
   isOurFreeModelPackage,
+  isOurFreeModelFaceProvider,
   hasOurFreeModelEntry,
 } from "./our-free-model-host.js";
 export {

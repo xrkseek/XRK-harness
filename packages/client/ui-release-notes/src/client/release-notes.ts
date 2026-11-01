@@ -65,6 +65,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.3',
+    date: '2026-11-01',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'OFM 仅把 our-free-model / region 同步进 Face；channel-pack 不再拖垮状态轮询与网页。',
+        en: 'OFM Face-syncs only our-free-model / region; channel-pack adapters no longer stall status or the web UI.',
+      },
+      {
+        zh: '完整清单见 docs/releases/v0.7.3.md。',
+        en: 'Full list in docs/releases/v0.7.3.md.',
+      },
+    ],
+  },
+  {
     version: '0.7.2',
     date: '2026-10-31',
     title: {

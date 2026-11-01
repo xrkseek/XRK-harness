@@ -11,7 +11,7 @@ import type {
 import { createCordisAttachmentsBridge } from "./cordis-attachments-bridge.js";
 import { createCommunityCordisHostSession } from "./community-cordis-host-session.js";
 import {
-  communityLoopbackEndpointFromBits,
+  communityLoopbackEndpointFromForwardSettings,
   communityLoopbackEndpointFromSummaryHttp,
   createCommunityLoopbackLlmBridge,
   type CommunityLoopbackEndpoint,
@@ -26,10 +26,21 @@ const OFM_API_PREFIX = "/api/our-free-model";
 /** Channel-pack management RPC + captcha carrier (vendored pack registers here). */
 const OFM_CHANNEL_PACK_PREFIX = "/api/channel-pack";
 
+/** OFM FreeModelAdapter routes only — see dsh-our-free-model `ROUTE_MAIN` / `ROUTE_REGION`. */
+const OFM_FACE_PROVIDER_IDS = new Set([
+  "our-free-model",
+  "our-free-model-region",
+]);
+
 const DISPLAY_NAMES: Record<string, string> = {
   "our-free-model": "Our Free Model",
   "our-free-model-region": "Our Free Model · region-limited",
 };
+
+/** True for the two free-lane picker routes (not channel-pack product ids). */
+export function isOurFreeModelFaceProvider(providerId: string): boolean {
+  return OFM_FACE_PROVIDER_IDS.has(providerId.trim());
+}
 
 export function isOurFreeModelPackage(packageName: string): boolean {
   return isPluginPackageFamily(packageName, OFM_PACKAGE);
@@ -58,15 +69,10 @@ function forwardEndpointFromHome(dshHome: string): CommunityLoopbackEndpoint {
   const file = path.join(dshHome, OFM_DATA_DIR, "settings.json");
   if (!existsSync(file)) return {};
   try {
-    const raw = JSON.parse(readFileSync(file, "utf8")) as {
-      forward?: { port?: unknown; host?: unknown; enabled?: unknown };
-      forwardKey?: unknown;
-    };
-    return communityLoopbackEndpointFromBits({
-      host: raw.forward?.host,
-      port: raw.forward?.port,
-      apiKey: raw.forwardKey,
-    });
+    // Prefer actualPort over requested port:0 (same rules as live /summary).
+    return communityLoopbackEndpointFromForwardSettings(
+      JSON.parse(readFileSync(file, "utf8")) as unknown,
+    );
   } catch {
     return {};
   }
@@ -148,6 +154,8 @@ export async function tryApplyOurFreeModelHost(
     displayName: (id) => DISPLAY_NAMES[id] ?? id,
     defaultApiKey: (id) => `xrk-${id}`,
     logPrefix: OFM_PACKAGE,
+    // Channel-pack adapters share this Cordis llm; only free-lane routes → Face.
+    shouldSyncProvider: isOurFreeModelFaceProvider,
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
     async resolveEndpoint(): Promise<CommunityLoopbackEndpoint> {
       const fromDisk = forwardEndpointFromHome(dshHome);

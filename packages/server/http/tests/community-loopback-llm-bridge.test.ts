@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   communityLoopbackEndpointFromBits,
   communityLoopbackEndpointFromForwardSettings,
+  createCommunityLoopbackLlmBridge,
 } from "../src/dsh-compat/community-loopback-llm-bridge.js";
+import { isOurFreeModelFaceProvider } from "../src/dsh-compat/our-free-model-host.js";
 
 describe("communityLoopbackEndpointFromBits", () => {
   it("rejects port 0 but keeps apiKey", () => {
@@ -59,5 +61,57 @@ describe("communityLoopbackEndpointFromForwardSettings", () => {
         },
       }),
     ).toEqual({});
+  });
+});
+
+describe("createCommunityLoopbackLlmBridge shouldSyncProvider", () => {
+  it("Face-syncs only allowlisted providers; channel-pack ids settle without sync", async () => {
+    const synced: string[] = [];
+    const bridge = createCommunityLoopbackLlmBridge({
+      shouldSyncProvider: isOurFreeModelFaceProvider,
+      displayName: (id) => id,
+      resolveEndpoint: () => ({
+        baseUrl: "http://127.0.0.1:18899/v1",
+        apiKey: "k",
+      }),
+      async syncCommunityLlmProvider(args) {
+        synced.push(args.providerId);
+      },
+    });
+
+    const root = {
+      on: vi.fn(),
+      provide(_key: string, value: {
+        registerAdapter: (
+          providers: string[],
+          adapter: {
+            listModels: (provider: string) => Promise<unknown[]>;
+          },
+        ) => unknown;
+      }) {
+        // Free-lane routes (OFM index.js registerAdapter)
+        value.registerAdapter(["our-free-model", "our-free-model-region"], {
+          async listModels(provider) {
+            if (provider === "our-free-model") {
+              return [{ id: "m1", name: "M1" }];
+            }
+            return [];
+          },
+        });
+        // Channel-pack product ids share the same Cordis llm
+        value.registerAdapter(["gemini", "zcode"], {
+          async listModels() {
+            return [{ id: "g1", name: "G1" }];
+          },
+        });
+      },
+    };
+
+    bridge.provideLlm(root as never);
+    await vi.waitFor(() => {
+      expect(bridge.scheduler.settled()).toBe(true);
+    });
+    expect(synced).toEqual(["our-free-model"]);
+    bridge.dispose();
   });
 });

@@ -211,23 +211,56 @@ export function createCommunityLoopbackLlmBridge(options: {
   readonly resolveEndpoint?: () =>
     | CommunityLoopbackEndpoint
     | Promise<CommunityLoopbackEndpoint>;
+  /**
+   * Face-sync allowlist. OFM's Cordis root also hosts channel-pack adapters
+   * (gemini / zcode / …) that register on the same `ctx.llm` — those must not
+   * enter Face loopback sync. Omit to sync every registered provider (WorkBuddy).
+   */
+  readonly shouldSyncProvider?: (providerId: string) => boolean;
   readonly logPrefix?: string;
   readonly onBatchError?: (error: unknown) => void;
 }): CommunityLoopbackLlmBridge {
   let hostDisposed = false;
   const lastBaseUrlByProvider = new Map<string, string>();
   const adaptersByProvider = new Map<string, CommunityLoopbackAdapter>();
+  /** Throttle skip warnings so unsettled GET nudges cannot fill the event loop. */
+  const skipWarnAt = new Map<string, number>();
+  const SKIP_WARN_COOLDOWN_MS = 30_000;
+  /** Cooldown between GET-driven / adapters-updated sync flushes. */
+  const RUN_COOLDOWN_MS = 5_000;
+  let lastRunKickAt = 0;
   const logPrefix = options.logPrefix ?? "community-llm";
   const scheduler = createCommunityLlmSyncScheduler({
     isDisposed: () => hostDisposed,
     ...(options.onBatchError ? { onBatchError: options.onBatchError } : {}),
   });
 
+  const kickRunAll = (force = false): void => {
+    if (hostDisposed) return;
+    const now = Date.now();
+    if (!force && now - lastRunKickAt < RUN_COOLDOWN_MS) return;
+    lastRunKickAt = now;
+    void scheduler.runAll();
+  };
+
+  const warnSkip = (
+    providerId: string,
+    detail: string,
+  ): void => {
+    const now = Date.now();
+    const prev = skipWarnAt.get(providerId) ?? 0;
+    if (now - prev < SKIP_WARN_COOLDOWN_MS) return;
+    skipWarnAt.set(providerId, now);
+    console.warn(
+      `[${logPrefix}] syncCommunityLlmProvider skip ${providerId}: ${detail}`,
+    );
+  };
+
   const provideLlm = (root: Context): void => {
     (root as { on: (event: string, listener: () => void) => unknown }).on(
       "llm/adapters-updated",
       () => {
-        void scheduler.runAll();
+        kickRunAll();
       },
     );
 
@@ -238,15 +271,22 @@ export function createCommunityLoopbackLlmBridge(options: {
       ) {
         const ids = providers.map((p) => p.trim()).filter(Boolean);
         for (const id of ids) adaptersByProvider.set(id, adapter);
+        const syncIds = (): string[] =>
+          options.shouldSyncProvider
+            ? ids.filter((id) => options.shouldSyncProvider!(id))
+            : [...ids];
         let disposed = false;
         const sync = async (): Promise<boolean> => {
           if (disposed || hostDisposed || !options.syncCommunityLlmProvider) {
             return false;
           }
-          if (ids.length === 0) return true;
+          const faceIds = syncIds();
+          // Channel-pack (and peers) register on the same Cordis llm with no
+          // Face loopback duty — do not block settled / spam skip logs.
+          if (faceIds.length === 0) return true;
           let allOk = true;
           const endpoint = (await options.resolveEndpoint?.()) ?? {};
-          for (const providerId of ids) {
+          for (const providerId of faceIds) {
             try {
               const lastBaseUrl = lastBaseUrlByProvider.get(providerId);
               const hint =
@@ -266,6 +306,13 @@ export function createCommunityLoopbackLlmBridge(options: {
                 providerId,
                 asCommunityLlmModelRows(listed),
               );
+              // Empty catalog (e.g. region route with no gated models): nothing
+              // to publish; do not keep settled false.
+              if (models.length === 0) {
+                continue;
+              }
+              // OFM FreeModelAdapter listModels has no baseUrl on rows — Face
+              // uses the OpenAI forward listener (resolveEndpoint / actualPort).
               const baseUrlCandidate =
                 baseUrlFromCommunityModels(listed) ??
                 endpoint.baseUrl ??
@@ -273,10 +320,11 @@ export function createCommunityLoopbackLlmBridge(options: {
               const baseUrl = isUsableCommunityLoopbackBaseUrl(baseUrlCandidate)
                 ? baseUrlCandidate.trim().replace(/\/+$/, "")
                 : undefined;
-              if (!baseUrl || models.length === 0) {
+              if (!baseUrl) {
                 allOk = false;
-                console.warn(
-                  `[${logPrefix}] syncCommunityLlmProvider skip ${providerId}: baseUrl=${baseUrl ?? "none"} models=${models.length} listed=${listed.length}`,
+                warnSkip(
+                  providerId,
+                  `baseUrl=none models=${models.length} listed=${listed.length}`,
                 );
                 continue;
               }
@@ -307,6 +355,7 @@ export function createCommunityLoopbackLlmBridge(options: {
               });
               lastBaseUrlByProvider.set(providerId, baseUrl);
               scheduler.fingerprints.add(fingerprint);
+              skipWarnAt.delete(providerId);
               console.info(
                 `[${logPrefix}] syncCommunityLlmProvider ok ${providerId} models=${models.length} baseUrl=${baseUrl}`,
               );
@@ -321,7 +370,7 @@ export function createCommunityLoopbackLlmBridge(options: {
           return allOk;
         };
         scheduler.addSyncer(sync);
-        void scheduler.runAll();
+        kickRunAll(true);
         const release = (): void => {
           disposed = true;
           for (const id of ids) {
@@ -346,7 +395,7 @@ export function createCommunityLoopbackLlmBridge(options: {
             for (const id of ids) adaptersByProvider.set(id, adapter);
             scheduler.fingerprints.clear();
             scheduler.markUnsettled();
-            void scheduler.runAll();
+            kickRunAll(true);
           },
         });
       },
@@ -379,7 +428,7 @@ export function createCommunityLoopbackLlmBridge(options: {
             (pathTest?.(pathname) === true ||
               (prefixes?.some((p) => pathname.startsWith(p)) ?? false))
           ) {
-            void scheduler.runAll();
+            kickRunAll();
           }
           return handled;
         };

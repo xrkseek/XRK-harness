@@ -78,7 +78,7 @@ This directory is the XRK **first-party** Host-side community adapter (`@xrkseek
 | `community-cordis-host-session.ts` | 社区 host 半包共用 Cordis Context：webServer/rpc/connection/credentials/settings · fiber await · live dispose |
 | `community-loopback-llm-bridge.ts` | Cordis `registerAdapter` → Face `syncCommunityLlmProvider` 统一桥（指纹 · 重试 · GET nudge · ephemeral `actualPort` 解析） |
 | `workbuddy-host.ts` | `dsh-workbuddy-connect` stage `lib/`：共用 session + 统一桥（CN/AI settled 前 status nudge；signed-in 且 `models` 空时用 fallback 补全） |
-| `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：共用 session + forward seed · 统一桥 Face sync（`actualPort`）· `profileContext` · `attachments`；Magpie 工作台 win32-only |
+| `our-free-model-host.ts` | `dsh-our-free-model` stage `index.js`：共用 session + forward seed · Face sync **仅** `our-free-model` / `our-free-model-region`（channel-pack 同根注册不进 Face）· `actualPort` · `profileContext` · `attachments`；Magpie 工作台 win32-only |
 | `cordis-credentials-bridge.ts` | 社区 host 凭据落盘：`resolve`/`set`/`describe`/`unset`（`~/.xrk/community-credentials/<pkg>/`） |
 | `cordis-attachments-bridge.ts` | OFM / channel-pack 图片座：本地 `{XRK_HOME}/attachments/v1` · sync `imageHostPath` · `readImage`/`saveImage`/`readImageRequest` |
 | `community-llm-host-sync.ts` | Face sync 公共：可用 loopback URL · catalog peek/`fallback` · fingerprint · settled 调度 · resolveModel enrichment |

@@ -10,6 +10,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   hasOurFreeModelEntry,
+  isOurFreeModelFaceProvider,
   isOurFreeModelPackage,
   ofmProfileName,
   tryApplyOurFreeModelHost,
@@ -45,6 +46,14 @@ describe("our-free-model-host", () => {
     expect(hasOurFreeModelEntry(root)).toBe(false);
     writeFileSync(path.join(root, "index.js"), "export function apply() {}");
     expect(hasOurFreeModelEntry(root)).toBe(true);
+  });
+
+  it("Face-sync allowlist is only free-lane routes (not channel-pack ids)", () => {
+    expect(isOurFreeModelFaceProvider("our-free-model")).toBe(true);
+    expect(isOurFreeModelFaceProvider("our-free-model-region")).toBe(true);
+    expect(isOurFreeModelFaceProvider(" gemini ")).toBe(false);
+    expect(isOurFreeModelFaceProvider("zcode")).toBe(false);
+    expect(isOurFreeModelFaceProvider("trae")).toBe(false);
   });
 
   it("applies staged Cordis host half and syncs llm provider via forward", async () => {

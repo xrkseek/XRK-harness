@@ -189,6 +189,9 @@ export async function tryApplyWorkBuddyHost(
 
   // Until every variant has synced Face, status polls (post-login) re-nudge.
   // Also fill signed-in + empty `models` from catalog fallback (visibility gate).
+  // Cooldown avoids Termux log floods when CN/AI stay baseUrl-less.
+  let lastStatusNudgeAt = 0;
+  const STATUS_NUDGE_COOLDOWN_MS = 5_000;
   for (const row of http) {
     const inner = row.handle;
     row.handle = async (req, res, pathname) => {
@@ -274,7 +277,11 @@ export async function tryApplyWorkBuddyHost(
 
       const handled = await inner(req, proxy as never, pathname);
       if (handled && !bridge.scheduler.settled()) {
-        void bridge.scheduler.runAll();
+        const now = Date.now();
+        if (now - lastStatusNudgeAt >= STATUS_NUDGE_COOLDOWN_MS) {
+          lastStatusNudgeAt = now;
+          void bridge.scheduler.runAll();
+        }
       }
       return handled;
     };
