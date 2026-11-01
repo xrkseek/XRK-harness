@@ -191,6 +191,7 @@ export {
   isOurFreeModelPackage,
   isOurFreeModelFaceProvider,
   hasOurFreeModelEntry,
+  waitForOfmForwardThenSync,
 } from "./our-free-model-host.js";
 export {
   unscopedPackageName,

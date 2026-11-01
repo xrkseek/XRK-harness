@@ -114,4 +114,52 @@ describe("createCommunityLoopbackLlmBridge shouldSyncProvider", () => {
     expect(synced).toEqual(["our-free-model"]);
     bridge.dispose();
   });
+
+  it("waits for real apiKey when defaultApiKey is omitted (OFM forwardKey)", async () => {
+    let endpoint: { baseUrl?: string; apiKey?: string } = {
+      baseUrl: "http://127.0.0.1:18899/v1",
+    };
+    const synced: Array<{ apiKey: string }> = [];
+    const bridge = createCommunityLoopbackLlmBridge({
+      shouldSyncProvider: isOurFreeModelFaceProvider,
+      displayName: (id) => id,
+      resolveEndpoint: () => endpoint,
+      async syncCommunityLlmProvider(args) {
+        synced.push({ apiKey: args.apiKey });
+      },
+    });
+    const root = {
+      on: vi.fn(),
+      provide(
+        _key: string,
+        value: {
+          registerAdapter: (
+            providers: string[],
+            adapter: { listModels: () => Promise<unknown[]> },
+          ) => unknown;
+        },
+      ) {
+        value.registerAdapter(["our-free-model"], {
+          async listModels() {
+            return [{ id: "m1", name: "M1" }];
+          },
+        });
+      },
+    };
+    bridge.provideLlm(root as never);
+    await vi.waitFor(() => {
+      expect(bridge.scheduler.settled()).toBe(false);
+    });
+    expect(synced).toEqual([]);
+    endpoint = {
+      baseUrl: "http://127.0.0.1:18899/v1",
+      apiKey: "ofm-real-key",
+    };
+    bridge.requestSync(true);
+    await vi.waitFor(() => {
+      expect(bridge.scheduler.settled()).toBe(true);
+    });
+    expect(synced).toEqual([{ apiKey: "ofm-real-key" }]);
+    bridge.dispose();
+  });
 });

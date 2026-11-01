@@ -128,13 +128,22 @@ describe("community-llm-host-sync reasoning", () => {
       "workbuddy",
       "http://127.0.0.1:1/v1",
       models,
+      "k1",
     );
     const b = communityLlmSyncFingerprint(
       "workbuddy",
       "http://127.0.0.1:2/v1",
       models,
+      "k1",
+    );
+    const samePortNewKey = communityLlmSyncFingerprint(
+      "workbuddy",
+      "http://127.0.0.1:1/v1",
+      models,
+      "k2",
     );
     expect(a).not.toBe(b);
+    expect(a).not.toBe(samePortNewKey);
     const set = new Set([a]);
     dropStaleCommunityLlmFingerprints(set, "workbuddy", "http://127.0.0.1:2/v1");
     expect(set.size).toBe(0);

@@ -432,18 +432,19 @@ export function scheduleCommunityLlmSyncRetries(
   }
 }
 
-/** Face sync fingerprint (provider · loopback · model ids · effort menus). */
+/** Face sync fingerprint (provider · loopback · key · model ids · effort menus). */
 export function communityLlmSyncFingerprint(
   providerId: string,
   baseUrl: string,
   models: readonly CommunityLlmSyncModelRow[],
+  apiKey = "",
 ): string {
-  return `${providerId}|${baseUrl}|${models
+  return `${providerId}|${baseUrl}|${apiKey}|${models
     .map(
       (m) =>
         `${m.id}:${m.reasoning?.efforts.map((e) => e.id).join("/") ?? ""}`,
     )
-    .join(",")}|c2`;
+    .join(",")}|c3`;
 }
 
 /** Drop stale fingerprints for a provider when its loopback port moves. */

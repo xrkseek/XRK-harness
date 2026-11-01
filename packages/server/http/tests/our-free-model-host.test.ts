@@ -14,7 +14,9 @@ import {
   isOurFreeModelPackage,
   ofmProfileName,
   tryApplyOurFreeModelHost,
+  waitForOfmForwardThenSync,
 } from "../src/dsh-compat/our-free-model-host.js";
+import type { CordisHttpRow } from "../src/dsh-compat/cordis-connection-bridge.js";
 import { resetHostApplyRegistry } from "../src/dsh-compat/host-apply-registry.js";
 import { resetLiveHostApply } from "../src/dsh-compat/live-host-apply.js";
 
@@ -54,6 +56,42 @@ describe("our-free-model-host", () => {
     expect(isOurFreeModelFaceProvider(" gemini ")).toBe(false);
     expect(isOurFreeModelFaceProvider("zcode")).toBe(false);
     expect(isOurFreeModelFaceProvider("trae")).toBe(false);
+  });
+
+  it("waitForOfmForwardThenSync fires onReady when summary has actualPort+key", async () => {
+    const ready: string[] = [];
+    const http = [
+      {
+        match: (p: string) => p.startsWith("/api/our-free-model"),
+        async handle(_req, res) {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              settings: {
+                forward: {
+                  enabled: true,
+                  running: true,
+                  host: "127.0.0.1",
+                  port: 0,
+                  actualPort: 41234,
+                },
+                forwardKey: "boot-key",
+              },
+            }),
+          );
+          return true;
+        },
+      },
+    ] as CordisHttpRow[];
+    await waitForOfmForwardThenSync({
+      http,
+      attempts: 3,
+      intervalMs: 1,
+      onReady: (ep) => {
+        ready.push(`${ep.baseUrl}|${ep.apiKey}`);
+      },
+    });
+    expect(ready).toEqual(["http://127.0.0.1:41234/v1|boot-key"]);
   });
 
   it("applies staged Cordis host half and syncs llm provider via forward", async () => {

@@ -72,7 +72,7 @@ community client.js
 | 上下文浏览器 | Face **`contextTimeline`**（requests 分项 · usage 盖章 · events）/ **`contextHeaders`** · **`costUsage`** 计价 | — |
 | 移动访问 | 配对 · LAN/WAN PIN · 隧道 HTTP+WS | — |
 | **侧栏（`xrkh-better-sidebar`）** | Host 原生 `createSidebarPublicHandler`（见下节；非 dsh-compat 能力表）；含 `git.worktrees` · `changes.ops` · agent-opens/terminals 真推送 | prefs 默认关；**设置 → 通用** 可开 `agentOpenTools` / `agentTerminalTools`（写 `~/.xrk/sidebar/prefs.json`），开后模型可 `sidebar_open` / `terminal_create` |
-| **ModLens（`@liustack/modlens`）** | `GET/POST /modlens/config`（DSH engineSummary：`engines.*.hasKey` · `keyless` · `discovery`；密钥不进浏览器）· `GET /modlens/paste` → `{ takeover: true }`（关 `pasteToPath` 时 404）· 二进制 `POST /modlens/paste` → `{ path }`；Settings → Plugins 配置卡（`settings.plugin.item` 键 `modlens`） | — |
+| **ModLens（`@liustack/modlens`）** | `GET/POST /modlens/config`（DSH engineSummary：`engines.*.hasKey` · `keyless` · `discovery`；密钥不进浏览器）· `GET /modlens/paste` → `{ takeover: true }`（关 `pasteToPath` 时 404）· 二进制 `POST /modlens/paste` → `{ path }`；Settings → Plugins 配置卡（`settings.plugin.item` 键 `modlens`） | Cordis 视觉包装路由（选择器 `(modlens vision)`）· `modlens_read_image` 工具半包 |
 | **牛来桌宠（`dsh-niulai-pet`）** | client `createRoot` 挂 body；Settings 卡 `niulai-pet`；`GET /niulai-kws/*` 白名单伺服 staged `kws/`（装包拷贝资产目录） | 全量 host.mjs Cordis settings 节（桌宠本体不依赖） |
 | **皮肤** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`；装包拷贝 `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis profile 互斥启停区段（XRK 持久化偏好 + 重载；不改写第三方 patch YAML） |
 
@@ -100,7 +100,7 @@ Web 与 Desktop 共用 `xrkh plugin add` 装包 + Host `prewarm` / dsh-compat；
 | `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host 原生 `/sidebar/*` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
-| `@liustack/modlens` | full | `/modlens` · paste takeover · Settings `GET/POST /modlens/config`（DSH engineSummary） |
+| `@liustack/modlens` | partial | `/modlens` paste · config · Settings 卡已接；Cordis 视觉包装路由 / `modlens_read_image` 未做（选择器无 `(modlens vision)`） |
 | `@liustack/modsearch` | full | `/modsearch` |
 | `dsh-niulai-pet` | full | `/niulai-kws/*` · Settings `niulai-pet` |
 | `dsh-genui` | full | `/api/dsh-genui` · `/dsh-genui` · runtime |
@@ -363,7 +363,7 @@ Source of truth: `dsh-compat-matrix.ts`.
 | Context browser | Face **`contextTimeline`** (per-request items · usage stamps · events) / **`contextHeaders`** · **`costUsage`** pricing | — |
 | Mobile access | Pairing · LAN/WAN PIN · tunnel HTTP+WS | — |
 | **Sidebar (`xrkh-better-sidebar`)** | Host owns `/sidebar/*` (see below); includes `git.worktrees` · `changes.ops` · real agent-opens/terminals push | Prefs default off; **Settings → General** toggles `agentOpenTools` / `agentTerminalTools` (`~/.xrk/sidebar/prefs.json`); then model may `sidebar_open` / `terminal_create` |
-| **ModLens (`@liustack/modlens`)** | `GET/POST /modlens/config` (DSH engineSummary: `engines.*.hasKey` · `keyless` · `discovery`; secrets stay off the wire) · `GET /modlens/paste` → `{ takeover: true }` (404 when `pasteToPath` off) · binary `POST /modlens/paste` → `{ path }`; Settings → Plugins config card (`settings.plugin.item` key `modlens`) | — |
+| **ModLens (`@liustack/modlens`)** | `GET/POST /modlens/config` (DSH engineSummary: `engines.*.hasKey` · `keyless` · `discovery`; secrets stay off the wire) · `GET /modlens/paste` → `{ takeover: true }` (404 when `pasteToPath` off) · binary `POST /modlens/paste` → `{ path }`; Settings → Plugins config card (`settings.plugin.item` key `modlens`) | Cordis vision wrapper routes (picker `(modlens vision)`) · `modlens_read_image` tool half |
 | **Niulai pet (`dsh-niulai-pet`)** | client `createRoot` on `document.body`; Settings card `niulai-pet`; `GET /niulai-kws/*` allowlist serves staged `kws/` (install copies asset dirs) | Full Cordis host settings section (pet UI does not require it) |
 | **Skins** | `/skin-assets/<id>/<hash>` · `/api/dsh/skins` · `/api/skin-manager` · `/api/skin-center/v2|*` · `/dsh-skin-market` · `/dream-skin/api` · `/wallpaper-engine`; install stages `assets/` · `preview/` · `locale/` · `skins/` · `skin.json` | Cordis exclusive profile patch blocks (XRK stores preference + reload; does not rewrite third-party patch YAML) |
 
@@ -391,7 +391,7 @@ Web and Desktop share `xrkh plugin add` staging + Host `prewarm` / dsh-compat; D
 | `xrkh-better-sidebar` · `dsh-better-sidebar` | full | Host-native `/sidebar/*` |
 | `dsh-wallet` | full | `/api/wallet` · `/wallet/api` |
 | `dsh-memento` | full | `/api/memento` |
-| `@liustack/modlens` | full | `/modlens` · paste takeover · Settings `GET/POST /modlens/config` (DSH engineSummary) |
+| `@liustack/modlens` | partial | `/modlens` paste · config · Settings card wired; Cordis vision wrappers / `modlens_read_image` not done (no `(modlens vision)` in picker) |
 | `@liustack/modsearch` | full | `/modsearch` |
 | `dsh-niulai-pet` | full | `/niulai-kws/*` · Settings `niulai-pet` |
 | `dsh-genui` | full | `/api/dsh-genui` · `/dsh-genui` · runtime |

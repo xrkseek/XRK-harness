@@ -40,6 +40,8 @@ export type CommunityLoopbackLlmBridge = {
   /** Live adapters keyed by provider id (status enrichment). */
   readonly adaptersByProvider: Map<string, CommunityLoopbackAdapter>;
   provideLlm(root: Context): void;
+  /** Force a Face-sync flush (e.g. after OFM forward bind). */
+  requestSync(force?: boolean): void;
   /** Re-run Face sync on unsettled GET under any prefix (status / summary). */
   nudgeHttpOnGet(
     http: CordisHttpRow[],
@@ -265,6 +267,10 @@ export function createCommunityLoopbackLlmBridge(options: {
     );
 
     root.provide("llm", {
+      // OFM `emitTopology` calls this before `ctx.emit('llm/adapters-updated')`.
+      emitAdaptersUpdated() {
+        kickRunAll(true);
+      },
       registerAdapter(
         providers: string[],
         adapter: CommunityLoopbackAdapter,
@@ -306,11 +312,6 @@ export function createCommunityLoopbackLlmBridge(options: {
                 providerId,
                 asCommunityLlmModelRows(listed),
               );
-              // Empty catalog (e.g. region route with no gated models): nothing
-              // to publish; do not keep settled false.
-              if (models.length === 0) {
-                continue;
-              }
               // OFM FreeModelAdapter listModels has no baseUrl on rows — Face
               // uses the OpenAI forward listener (resolveEndpoint / actualPort).
               const baseUrlCandidate =
@@ -320,6 +321,44 @@ export function createCommunityLoopbackLlmBridge(options: {
               const baseUrl = isUsableCommunityLoopbackBaseUrl(baseUrlCandidate)
                 ? baseUrlCandidate.trim().replace(/\/+$/, "")
                 : undefined;
+              // Empty catalog: clear Face if we previously published this route
+              // (OFM region drops when membership empties); otherwise settle ok.
+              if (models.length === 0) {
+                if (lastBaseUrl && baseUrl) {
+                  const apiKeyClear =
+                    (await adapter.resolveApiKey?.())?.trim() ||
+                    endpoint.apiKey ||
+                    options.defaultApiKey?.(providerId);
+                  if (apiKeyClear) {
+                    const clearFp = communityLlmSyncFingerprint(
+                      providerId,
+                      baseUrl,
+                      [],
+                      apiKeyClear,
+                    );
+                    dropStaleCommunityLlmFingerprints(
+                      scheduler.fingerprints,
+                      providerId,
+                      baseUrl,
+                    );
+                    if (!scheduler.fingerprints.has(clearFp)) {
+                      await options.syncCommunityLlmProvider({
+                        providerId,
+                        displayName: options.displayName(providerId),
+                        baseUrl,
+                        apiKey: apiKeyClear,
+                        models: [],
+                      });
+                      scheduler.fingerprints.add(clearFp);
+                      console.info(
+                        `[${logPrefix}] syncCommunityLlmProvider clear ${providerId} baseUrl=${baseUrl}`,
+                      );
+                    }
+                  }
+                  lastBaseUrlByProvider.delete(providerId);
+                }
+                continue;
+              }
               if (!baseUrl) {
                 allOk = false;
                 warnSkip(
@@ -328,10 +367,26 @@ export function createCommunityLoopbackLlmBridge(options: {
                 );
                 continue;
               }
+              // Prefer real forwardKey / adapter key. Placeholder `xrk-*` only
+              // when host opts in via defaultApiKey (WorkBuddy); OFM omits it
+              // so boot waits for summary.forwardKey after syncForward.
+              const apiKey =
+                (await adapter.resolveApiKey?.())?.trim() ||
+                endpoint.apiKey ||
+                options.defaultApiKey?.(providerId);
+              if (!apiKey) {
+                allOk = false;
+                warnSkip(
+                  providerId,
+                  `apiKey=none models=${models.length} baseUrl=${baseUrl}`,
+                );
+                continue;
+              }
               const fingerprint = communityLlmSyncFingerprint(
                 providerId,
                 baseUrl,
                 models,
+                apiKey,
               );
               dropStaleCommunityLlmFingerprints(
                 scheduler.fingerprints,
@@ -341,11 +396,6 @@ export function createCommunityLoopbackLlmBridge(options: {
               if (scheduler.fingerprints.has(fingerprint)) {
                 continue;
               }
-              const apiKey =
-                (await adapter.resolveApiKey?.())?.trim() ||
-                endpoint.apiKey ||
-                options.defaultApiKey?.(providerId) ||
-                `xrk-${providerId}`;
               await options.syncCommunityLlmProvider({
                 providerId,
                 displayName: options.displayName(providerId),
@@ -413,6 +463,9 @@ export function createCommunityLoopbackLlmBridge(options: {
     lastBaseUrlByProvider,
     adaptersByProvider,
     provideLlm,
+    requestSync(force = false) {
+      kickRunAll(force);
+    },
     nudgeHttpOnGet(http, nudgeOptions) {
       const prefixes = nudgeOptions?.prefixes;
       const pathTest = nudgeOptions?.pathTest;

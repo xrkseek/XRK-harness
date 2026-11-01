@@ -16,6 +16,7 @@ import {
   createCommunityLoopbackLlmBridge,
   type CommunityLoopbackEndpoint,
 } from "./community-loopback-llm-bridge.js";
+import { isUsableCommunityLoopbackBaseUrl } from "./community-llm-host-sync.js";
 import { DSH_COMPAT_ADAPTER } from "./meta.js";
 import { ensureHostModuleRemap } from "./host-module-remap.js";
 import { isPluginPackageFamily } from "./plugin-package-id.js";
@@ -76,6 +77,43 @@ function forwardEndpointFromHome(dshHome: string): CommunityLoopbackEndpoint {
   } catch {
     return {};
   }
+}
+
+/**
+ * Poll OFM `/summary` until forward is listening (boot: syncForward after
+ * registerAdapter). Calls `onReady` once, or `onTimeout` after attempts.
+ */
+export async function waitForOfmForwardThenSync(options: {
+  readonly http: Parameters<typeof communityLoopbackEndpointFromSummaryHttp>[0];
+  readonly isDisposed?: () => boolean;
+  readonly onReady: (endpoint: CommunityLoopbackEndpoint) => void;
+  readonly onTimeout?: () => void;
+  /** Default: 40 × 250ms ≈ 10s (covers catalog+bind on slow Termux). */
+  readonly attempts?: number;
+  readonly intervalMs?: number;
+}): Promise<void> {
+  const attempts = options.attempts ?? 40;
+  const intervalMs = options.intervalMs ?? 250;
+  for (let i = 0; i < attempts; i++) {
+    if (options.isDisposed?.()) return;
+    const endpoint = await communityLoopbackEndpointFromSummaryHttp(
+      options.http,
+      `${OFM_API_PREFIX}/summary`,
+    );
+    if (
+      endpoint.baseUrl &&
+      isUsableCommunityLoopbackBaseUrl(endpoint.baseUrl) &&
+      endpoint.apiKey
+    ) {
+      options.onReady(endpoint);
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, intervalMs);
+      timer.unref?.();
+    });
+  }
+  if (!options.isDisposed?.()) options.onTimeout?.();
 }
 
 /** Ensure forward is on so Face can reach models over OpenAI-compatible HTTP. */
@@ -147,29 +185,31 @@ export async function tryApplyOurFreeModelHost(
 
   /** Survives brief settings.json rewrites while forward rebinds (port:0 window). */
   let lastForward: CommunityLoopbackEndpoint = {};
+  let hostDisposed = false;
   const bridge = createCommunityLoopbackLlmBridge({
     ...(wire.syncCommunityLlmProvider
       ? { syncCommunityLlmProvider: wire.syncCommunityLlmProvider }
       : {}),
     displayName: (id) => DISPLAY_NAMES[id] ?? id,
-    defaultApiKey: (id) => `xrk-${id}`,
+    // No defaultApiKey: wait for OFM forwardKey after syncForward (not xrk-*).
     logPrefix: OFM_PACKAGE,
     // Channel-pack adapters share this Cordis llm; only free-lane routes → Face.
     shouldSyncProvider: isOurFreeModelFaceProvider,
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
     async resolveEndpoint(): Promise<CommunityLoopbackEndpoint> {
       const fromDisk = forwardEndpointFromHome(dshHome);
-      const fromLive =
-        fromDisk.baseUrl || lastForward.baseUrl
-          ? {}
-          : await communityLoopbackEndpointFromSummaryHttp(
-              http,
-              `${OFM_API_PREFIX}/summary`,
-            );
+      // Always prefer live `/summary.actualPort` when disk still has port:0 —
+      // boot binds forward after first registerAdapter sync (OFM index.js).
+      const fromLive = fromDisk.baseUrl
+        ? {}
+        : await communityLoopbackEndpointFromSummaryHttp(
+            http,
+            `${OFM_API_PREFIX}/summary`,
+          );
       const baseUrl =
-        fromDisk.baseUrl ?? fromLive.baseUrl ?? lastForward.baseUrl;
+        fromLive.baseUrl ?? fromDisk.baseUrl ?? lastForward.baseUrl;
       const apiKey =
-        fromDisk.apiKey ?? fromLive.apiKey ?? lastForward.apiKey;
+        fromLive.apiKey ?? fromDisk.apiKey ?? lastForward.apiKey;
       if (baseUrl) {
         lastForward = {
           baseUrl,
@@ -207,7 +247,30 @@ export async function tryApplyOurFreeModelHost(
   // Seal before return so async pack.apply → connection.fetch.register late-binds.
   session.sealHttp();
   bridge.scheduler.scheduleRetries();
+  // OFM boot: registerAdapter fires before syncForward — poll until forward is up.
+  void waitForOfmForwardThenSync({
+    http,
+    isDisposed: () => hostDisposed,
+    onReady: (endpoint) => {
+      lastForward = {
+        ...(endpoint.baseUrl ? { baseUrl: endpoint.baseUrl } : lastForward),
+        ...(endpoint.apiKey
+          ? { apiKey: endpoint.apiKey }
+          : lastForward.apiKey
+            ? { apiKey: lastForward.apiKey }
+            : {}),
+      };
+      bridge.requestSync(true);
+    },
+    onTimeout: () => {
+      logger.warn(
+        "forward listener not ready after boot poll; Face sync keeps retrying",
+      );
+      bridge.requestSync(true);
+    },
+  });
   disposers.push(() => {
+    hostDisposed = true;
     bridge.dispose();
   });
 
