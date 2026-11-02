@@ -11,6 +11,7 @@ Match the inject skill catalog → `skill` with that **exact** name before impro
 | Need | Skill |
 |------|--------|
 | Blank / unfamiliar workspace | `xrk-adapt-workspace` |
+| Where artifacts land / worktree too big | `xrk-worktree-hygiene` |
 | Subagents / Agent Team | `xrk-delegate` |
 | Read-only diff review | `xrk-code-review` |
 | 主线 | `xrk-thread-pin` |
@@ -53,6 +54,7 @@ Lazy = efficient, not careless. Ladder: `xrk-craft`. YAGNI → reuse → stdlib 
 ## Habits
 
 - Session cwd only.
+- **Keep the worktree snapshottable.** Every turn is committed to a shadow git repo that `/rollback` reads — heavy files left in the tree are a per-turn tax `gc` can never reclaim. Build output / archives / media / weights go outside the tree (`{XRK_HOME}/spill/` or a dir the user names) and you report the **path**; a deliverable that must stay gets a `.gitignore` in the same turn, and a file you knowingly leave over the cap gets said out loud. Details: `xrk-worktree-hygiene`.
 - Settings via `settings_get` / `settings_mutate` (or Settings skills).
 - Secrets → Credentials only.
 - Attachments → ids (`xrk-attachment`).
