@@ -16,11 +16,22 @@ var SCRIPT_BASE = (function () {
   }
 })();
 
+/* Inherit the host rev so imported engine files cannot be served from a stale
+ * HTTP cache after a rings/ball change (the worker URL carries `?v=`). */
+var ASSET_REV = (function () {
+  try {
+    return new URL(self.location.href).searchParams.get('v') || '';
+  } catch (_e) {
+    return '';
+  }
+})();
+var VQS = ASSET_REV ? '?v=' + ASSET_REV : '';
+
 importScripts(
-  SCRIPT_BASE + 'rings.js',
-  SCRIPT_BASE + 'emotions.js',
-  SCRIPT_BASE + 'canvas-ball.js',
-  SCRIPT_BASE + 'engine.js',
+  SCRIPT_BASE + 'rings.js' + VQS,
+  SCRIPT_BASE + 'emotions.js' + VQS,
+  SCRIPT_BASE + 'canvas-ball.js' + VQS,
+  SCRIPT_BASE + 'engine.js' + VQS,
 );
 
 var engines = new Map();

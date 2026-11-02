@@ -100,6 +100,12 @@ const LINT_PATHS = [
 // checkouts have no prior local build, so emit before `tsc -b`.
 process.stdout.write("check: emit stub types…\n");
 runNode(path.join(ROOT, "scripts/emit-stub-types.mjs"), [], { quiet: true });
+
+// Shape/brand glyph tables are *generated* from the SVG engine (rings.js is the
+// single source). `--check` fails on drift, so editing a ring silhouette can
+// never ship a picker icon that no longer matches the ball it draws.
+runNode(path.join(ROOT, "scripts/gen-shape-glyphs.mjs"), ["--check"]);
+
 runNode(path.join(ROOT, "node_modules/typescript/bin/tsc"), [
   "-b",
   "--pretty",

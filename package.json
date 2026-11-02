@@ -24,6 +24,7 @@
     "web:build": "pnpm --filter @xrkseek/web-frontend run build",
     "web:assemble": "node ./scripts/assemble-web-dist.mjs",
     "client:types": "node ./scripts/emit-client-types.mjs",
+    "gen:glyphs": "node ./scripts/gen-shape-glyphs.mjs",
     "client:types:all": "node ./scripts/emit-client-types-all.mjs",
     "stub:types": "node ./scripts/emit-stub-types.mjs",
     "client:bundle": "node ./scripts/bundle-client-js.mjs",

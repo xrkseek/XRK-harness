@@ -11,11 +11,13 @@ import { describe, expect, it } from "vitest";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const BALL = path.join(ROOT, "apps/web/public/presence/emotion-ball");
 
+/** Sticker lenses are per-eye half-crops: 9-arg drawImage(src…) + 5-arg fallback. */
 interface Draw {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
+  readonly sx: number;
+  readonly sw: number;
+  readonly dx: number;
+  readonly dw: number;
+  readonly dh: number;
 }
 
 function loadCanvasBall(): {
@@ -76,18 +78,33 @@ describe("presence glasses sticker follows yaw", () => {
           beginPath: noop,
           moveTo: noop,
           lineTo: noop,
+          quadraticCurveTo: noop,
+          bezierCurveTo: noop,
+          arc: noop,
+          arcTo: noop,
+          rect: noop,
+          roundRect: noop,
           closePath: noop,
           fill: noop,
           stroke: noop,
           createRadialGradient: () => ({ addColorStop: noop }),
           drawImage(
             _img: unknown,
-            x: number,
-            y: number,
-            w: number,
-            h: number,
+            a: number,
+            b: number,
+            c: number,
+            d: number,
+            e?: number,
+            f?: number,
+            g?: number,
+            h?: number,
           ): void {
-            canvas.draws.push({ x, y, w, h });
+            /* 9-arg form crops one half of the sticker per eye. */
+            if (e !== undefined && g !== undefined && h !== undefined) {
+              canvas.draws.push({ sx: a, sw: c, dx: e, dw: g, dh: h });
+            } else {
+              canvas.draws.push({ sx: 0, sw: c, dx: a, dw: c, dh: d });
+            }
           },
         };
       }
@@ -110,15 +127,23 @@ describe("presence glasses sticker follows yaw", () => {
       });
 
       ball.applyPose(pose(0));
-      const front = canvas.draws.at(-1);
-      expect(front).toBeDefined();
-      expect(front!.w).toBeGreaterThan(40);
+      // 左片取贴图左半幅、右片取右半幅 —— 两片各自压在各自的眼睛上。
+      expect(canvas.draws).toHaveLength(2);
+      const leftLens = canvas.draws[0]!;
+      const rightLens = canvas.draws[1]!;
+      expect(leftLens.sx).toBe(0);
+      expect(rightLens.sx).toBe(48);
+      expect(leftLens.sw).toBe(48);
+      expect(rightLens.dx).toBeGreaterThan(leftLens.dx + 20);
+      expect(leftLens.dw).toBeGreaterThan(30);
 
       canvas.draws.length = 0;
       ball.applyPose(pose(Math.PI / 5));
-      const turned = canvas.draws.at(-1);
-      expect(turned).toBeDefined();
-      expect(turned!.w).toBeLessThan(front!.w);
+      expect(canvas.draws).toHaveLength(2);
+      // 转头时两片一起收窄并向中线靠拢，仍各自贴着眼睛。
+      expect(canvas.draws[0]!.dw).toBeLessThan(leftLens.dw);
+      expect(canvas.draws[1]!.dw).toBeLessThan(rightLens.dw);
+      expect(canvas.draws[1]!.dx).toBeGreaterThan(canvas.draws[0]!.dx);
 
       canvas.draws.length = 0;
       ball.applyPose(pose(Math.PI));
@@ -139,7 +164,14 @@ describe("presence glasses sticker follows yaw", () => {
     expect(ballSrc).toMatch(/viewBox:\s*'-15 -100 259 344'/);
     expect(canvasSrc).toMatch(/ORIGIN_Y = -100/);
     expect(canvasSrc).toMatch(/VIEW_H = 344/);
-    expect(cssSrc).toMatch(/\.mount\s*\{[^}]*top:\s*0;/s);
+    /* Size trim is a *shrink inside a fixed stage*: the bitmap box is 5/6 of
+     * the stage (83.3333% = 1/1.2) and centred, so the 120% end fills the stage
+     * exactly and the box itself never grows — hats cannot be sheared flat. */
+    expect(cssSrc).toMatch(/\.mount\s*\{[^}]*top:\s*50%;/s);
+    expect(cssSrc).toMatch(/\.mount\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\)/s);
+    expect(cssSrc).toMatch(
+      /\.mount\s*\{[^}]*width:\s*calc\(83\.3333%\s*\*\s*var\(--ball-size,\s*1\)\)/s,
+    );
     expect(cssSrc).toMatch(/\.mount\s*\{[^}]*overflow:\s*visible/s);
     expect(cssSrc).toMatch(/\.mount\s*\{[^}]*contain:\s*layout style/s);
     expect(cssSrc).not.toMatch(/\.mount\s*\{[^}]*contain:\s*strict/s);
@@ -169,6 +201,12 @@ describe("presence glasses sticker follows yaw", () => {
           stroke: (): void => { canvas.strokes += 1; },
           fillRect: noop,
           ellipse: noop,
+          quadraticCurveTo: noop,
+          bezierCurveTo: noop,
+          arc: noop,
+          arcTo: noop,
+          rect: noop,
+          roundRect: noop,
           createRadialGradient: () => ({ addColorStop: noop }),
           drawImage: noop,
         };
@@ -199,7 +237,10 @@ describe("presence glasses sticker follows yaw", () => {
       // Edge-on still has room (was cn<=0.08 hide); behind-head hides.
       const src = readFileSync(path.join(BALL, "canvas-ball.js"), "utf8");
       expect(src).toMatch(/cn <= -0\.12/);
-      expect(src).toMatch(/isHalo \? -28/);
+      // 帽子高度表与 SVG 版逐项同源：halo 浮空、其余压在脑门上。
+      expect(src).toMatch(/halo: -28/);
+      expect(src).toMatch(/crown: 1/);
+      expect(src).toMatch(/'flower-crown': 1/);
       expect(src).not.toMatch(/cn <= 0\.08/);
     } finally {
       g.HTMLCanvasElement = prev;

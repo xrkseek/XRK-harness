@@ -102,12 +102,20 @@
         for (var e = 0; e < headRing.length; e++) {
           var a = headRing[e], b = headRing[(e + 1) % headRing.length];
           var y0 = a[1], y1 = b[1];
-          if ((y0 <= y && y1 >= y) || (y1 <= y && y0 >= y)) {
-            var t = y1 === y0 ? 0 : (y - y0) / (y1 - y0);
-            var x = a[0] + (b[0] - a[0]) * t;
-            if (x < lo) lo = x;
-            if (x > hi) hi = x;
+          if (y < (y0 < y1 ? y0 : y1) || y > (y0 < y1 ? y1 : y0)) continue;
+          if (y0 === y1) {
+            /* Horizontal edge lying on this scan line: both ends are on it.
+             * Taking only a[0] (t=0) drops the right bound and drags the eyes
+             * sideways — very visible on low-vertex shapes like star. */
+            if (a[0] < lo) lo = a[0];
+            if (b[0] < lo) lo = b[0];
+            if (a[0] > hi) hi = a[0];
+            if (b[0] > hi) hi = b[0];
+            continue;
           }
+          var x = a[0] + (b[0] - a[0]) * ((y - y0) / (y1 - y0));
+          if (x < lo) lo = x;
+          if (x > hi) hi = x;
         }
         if (lo > hi) { lo = HEAD_C - 4; hi = HEAD_C + 4; }
         silRows.push([lo, hi]);
@@ -171,6 +179,8 @@
     var kitHat = opts.kitHat || split0.hat;
     var kitGlasses = opts.kitGlasses || split0.glasses;
     var kitHeld = opts.kitHeld || 'none';
+    /* 当前内置镜片形状：layoutSpecsLens 据此套 SPEC_SHAPE_TWEAK（贴纸不吃这份微调）。 */
+    var curSpecShape = 'round';
     /* 三槽贴图：与内置图形平级。贴图放进 hatG/specsG/heldG，因而天然继承
      * bodyG 的 translate/rotate/scale —— 呼吸、转头、情绪形变全部跟随身体。
      * 绝不要退回 DOM 层绝对定位，那只会钉死在 CSS 盒子上。 */
@@ -427,6 +437,11 @@
     var SPEC_BRIDGE = 10;
     var CAT_LENS = 'M-1,0 C-1,-0.82 -0.2,-1.02 0.12,-0.7 C0.82,-1.18 1.18,-0.18 1,0.12 C0.5,0.82 -0.55,0.68 -1,0 Z';
 
+    /* Aviator: flat brow, deep teardrop bottom. */
+    var AVIATOR_LENS = 'M-1,-0.68 L1,-0.68 C1,0.34 0.62,1 -0.01,1 C-0.64,1 -1,0.34 -1,-0.68 Z';
+    /* Cyber: chamfered rectangle; the glow line is added separately. */
+    var CYBER_LENS = 'M-0.84,-0.9 L0.84,-0.9 L1,0.08 L0.66,0.9 L-0.66,0.9 L-1,0.08 Z';
+
     function parseRgb(hex) {
       var h = String(hex || '#F3F0EA').replace('#', '');
       if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
@@ -435,15 +450,45 @@
       return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     }
 
-    function kitPalette(body) {
+    /** 体色 → [h(0..360), s(0..1), l(0..1)]，kitPalette 的相位来源。 */
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      var max = Math.max(r, g, b);
+      var min = Math.min(r, g, b);
+      var l = (max + min) / 2;
+      var d = max - min;
+      if (d < 1e-6) return [0, 0, l];
+      var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      var h;
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+      else if (max === g) h = ((b - r) / d + 2) * 60;
+      else h = ((r - g) / d + 4) * 60;
+      return [h, s, l];
+    }
+
+    /** 越界入 0..360，避免 hsl() 负相位被浏览器当无效值丢掉。 */
+    function hsl(h, s, l, a) {
+      var hue = ((h % 360) + 360) % 360;
+      var sat = Math.round(clamp(s, 0, 1) * 100);
+      var lig = Math.round(clamp(l, 0, 1) * 100);
+      return a === undefined
+        ? 'hsl(' + hue.toFixed(0) + ', ' + sat + '%, ' + lig + '%)'
+        : 'hsla(' + hue.toFixed(0) + ', ' + sat + '%, ' + lig + '%, ' + a + ')';
+    }
+
+    /**
+     * 装扮配色全部从体色的 HSL 相位推出来 —— 57 种体色都能自动得到协调的
+     * 描边 / 镜片 / 帽檐 / 帽体 / 装饰 / 蝴蝶结 / 光环，不必逐个手调。
+     * 深色球（相对亮度 < 0.32）同相位再怎么加亮都发闷，装饰件走固定亮色。
+     */
+    function kitPalette(body, hatKind) {
       var rgb = parseRgb(body);
       var L = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
-      var r = rgb[0], g = rgb[1], b = rgb[2];
-      var warm = r > g + 12 && r > b + 8;
-      var cool = b >= g && b > r + 8;
-      var green = g > r + 8 && g >= b;
+      var hs = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+      var h = hs[0], s = hs[1], l = hs[2];
+      var pal;
       if (L < 0.32) {
-        return {
+        pal = {
           frame: shade(body, 0.62),
           lens: 'rgba(255,255,255,0.16)',
           lensSun: shade(body, 0.1),
@@ -454,57 +499,32 @@
           knot: '#F0C8D4',
           halo: '#F0D78A',
         };
-      }
-      if (warm) {
-        return {
-          frame: '#4A241C',
-          lens: 'rgba(74,36,28,0.11)',
-          lensSun: 'rgba(42,22,16,0.56)',
-          brim: '#2A1814',
-          crown: shade(body, -0.42),
-          accent: shade(body, -0.28),
-          bow: '#D45A7A',
-          knot: '#C44868',
-          halo: '#E8B85A',
+      } else {
+        pal = {
+          /* 描边取同相位压深的低彩度，纯黑会压住低饱和体色 */
+          frame: hsl(h, s * 0.55, 0.16),
+          lens: hsl(h, s + 0.12, 0.62, 0.14),
+          lensSun: hsl(h, s + 0.16, 0.2, 0.58),
+          brim: hsl(h, s * 0.7, l * 0.34),
+          crown: hsl(h, s * 0.95, l * 0.6),
+          /* 装饰件错开相位：同相位只会把整套帽子糊成一坨 */
+          accent: hsl(h + 38, s + 0.22, l * 0.78),
+          bow: hsl(h - 28, s + 0.2, l * 0.92),
+          knot: hsl(h - 28, s + 0.24, l * 0.68),
+          halo: hsl(h + 46, 0.62, 0.72),
         };
       }
-      if (cool) {
-        return {
-          frame: '#1E3348',
-          lens: 'rgba(30,70,110,0.12)',
-          lensSun: 'rgba(16,36,56,0.58)',
-          brim: '#152838',
-          crown: shade(body, -0.4),
-          accent: shade(body, -0.22),
-          bow: '#6A90C8',
-          knot: '#3A5A8C',
-          halo: '#C8D8F0',
-        };
+      /* 缝线默认跟镜框走；帽款想单独上色就在 HAT_PALETTES 里给 seam。 */
+      pal.seam = pal.frame;
+      /* HAT_PALETTES 在 paintKit 段才赋值，早于它的 setBodyColor 初始化会拿到
+       * undefined —— 先判存在再取键，别让首帧抛错。 */
+      var hat = hatKind && HAT_PALETTES ? HAT_PALETTES[hatKind] : null;
+      if (hat) {
+        for (var key in hat) {
+          if (Object.prototype.hasOwnProperty.call(hat, key)) pal[key] = hat[key];
+        }
       }
-      if (green) {
-        return {
-          frame: '#243828',
-          lens: 'rgba(36,72,40,0.12)',
-          lensSun: 'rgba(18,40,22,0.55)',
-          brim: '#1A2A1C',
-          crown: shade(body, -0.4),
-          accent: shade(body, -0.22),
-          bow: '#E07090',
-          knot: '#C44868',
-          halo: '#D4E08A',
-        };
-      }
-      return {
-        frame: '#2A2A30',
-        lens: 'rgba(255,255,255,0.16)',
-        lensSun: 'rgba(28,28,32,0.52)',
-        brim: '#1A1A20',
-        crown: shade(body, -0.35),
-        accent: shade(body, -0.22),
-        bow: '#E07090',
-        knot: '#C44868',
-        halo: '#E8C46A',
-      };
+      return pal;
     }
 
     function setBodyColor(color) {
@@ -523,18 +543,109 @@
 
     /** Map kitGlasses id → lens shape. New built-in: add a branch + PRESENCE_GLASSES_KITS. */
     function specsShapeOf(kind) {
-      if (kind === 'specs-rect') return 'rect';
+      if (kind === 'specs-rect') return 'wayfarer';
       if (kind === 'specs-cat') return 'cat';
-      return 'round';
+      if (kind === 'specs-round-xl') return 'sport';
+      if (kind === 'specs-oval') return 'oval';
+      if (kind === 'specs-square') return 'square';
+      if (kind === 'specs-half') return 'half';
+      if (kind === 'specs-rimless') return 'rimless';
+      if (kind === 'specs-monocle') return 'monocle';
+      if (kind === 'specs-heart') return 'cyber';
+      if (kind === 'specs-shades') return 'shades';
+      if (kind === 'specs-sun') return 'aviator';
+      return 'round-metal';
     }
 
+    /** 镜片形状的几何微调：只改尺寸/描边，不动 lens-L/R 的锚定机制。 */
+    var SPEC_SHAPE_TWEAK = {
+      'round-metal': { rx: 1.04, ry: 1.04 },
+      wayfarer: { rx: 1.1, ry: 0.9, box: 1.8 },
+      cat: { rx: 1.12, ry: 1 },
+      aviator: { rx: 1.06, ry: 1.18 },
+      sport: { rx: 1.2, ry: 1.14, grow: 6 },
+      oval: { rx: 1.16, ry: 0.72 },
+      square: { rx: 1.02, ry: 0.98, box: 1.86 },
+      half: { rx: 1.06, ry: 1.02 },
+      rimless: { rx: 1.04, ry: 1.04 },
+      monocle: { rx: 1.1, ry: 1.1 },
+      cyber: { rx: 1.08, ry: 0.94, box: 1.8 },
+      /* 连体镜把两片各向内多推 5px，中央缝合成一片式 */
+      shades: { rx: 1, ry: 1, grow: 5, box: 1.52 },
+    };
+
     /* Negative lifts above silMinY (SVG y grows down). Caps sit on the crown;
-     * halo floats well clear so bounce/spin never looks welded into the head. */
-    var HAT_Y_OFF = { halo: -28, visor: 6, cap: 2, beanie: 0, bow: -4 };
+     * halo floats well clear so bounce/spin never looks welded into the head.
+     * 帽檐底边大致落在 silMinY + 6..10（帽体局部 y≈14 × fit），才是「扣在脑门上」。 */
+    var HAT_Y_OFF = {
+      halo: -28,
+      antenna: -2,
+      wizard: 0,
+      tophat: 0,
+      party: 1,
+      crown: 1,
+      cake: 1,
+      chef: 1,
+      bow: -4,
+      'flower-crown': 1,
+      'cat-ears': 1,
+      straw: 0,
+      beanie: 0,
+      headphones: 0,
+      cap: 2,
+      bucket: 1,
+      beret: -2,
+      /* 遮阳帽只是箍 + 前檐，内容整体压在 y≥2；正向偏移会把帽檐落到眼睛上，
+       * 所以给它负偏移，让箍贴住头顶、檐口停在眉骨上方。 */
+      visor: -4,
+    };
+    /* 造型宽窄不一：窄身款按 nominal 54 缩放后偏小，单独补偿到同一视觉体量。
+     * （帽子本体按 54 宽设计，这里只做整体放大，不改形状内部比例。） */
+    var HAT_SCALE = {
+      cake: 1.4,
+      party: 1.3,
+      antenna: 1.3,
+      crown: 1.25,
+      'flower-crown': 1.2,
+      chef: 1.2,
+      'cat-ears': 1.15,
+      tophat: 1.1,
+      wizard: 1.1,
+      headphones: 1.06,
+      bucket: 1.02,
+      beret: 1.06,
+    };
     var KIT_ROLE_FILL = {
       brim: 'brim', crown: 'crown', accent: 'accent', bow: 'bow', knot: 'knot',
     };
-    var KIT_ROLE_STROKE = { frame: 'frame', halo: 'halo', shine: 'halo' };
+    var KIT_ROLE_STROKE = { frame: 'frame', halo: 'halo', shine: 'halo', band: 'brim', seam: 'seam' };
+
+    /**
+     * 帽款固有色。旧逻辑所有帽子的 crown/brim/accent 都从球的体色派生，
+     * 于是 18 款帽子在同一颗球上长得一模一样（全是球色的暗调），
+     * 看起来像一顶土黄色帽子换了轮廓。每款按实物取色，球色只留作兜底
+     * （以及镜框/缝线这些确实该跟衣服协调的部件）。
+     */
+    var HAT_PALETTES = {
+      bow: { bow: '#F08AA6', knot: '#D96D8B', accent: '#F8C0CF' },
+      cap: { crown: '#33507A', brim: '#22395C', accent: '#EFE3C8', seam: '#8FA6C4' },
+      beanie: { crown: '#B8433A', brim: '#8F2F29', accent: '#F0D9B5', seam: '#E8A79E' },
+      bucket: { crown: '#7D8A63', brim: '#5F6B4A', accent: '#E7DCC0' },
+      beret: { crown: '#8E3446', brim: '#6B2434', accent: '#D98A98' },
+      visor: { brim: '#2B7E8E', accent: '#3FA3B4' },
+      halo: { halo: '#F2CE6B' },
+      crown: { crown: '#E8C050', brim: '#C08F22', accent: '#FFF3C0' },
+      tophat: { crown: '#24202A', brim: '#141118', accent: '#C9A227' },
+      chef: { crown: '#FBFAF7', brim: '#E6E2DA', accent: '#D8D0C4' },
+      party: { crown: '#7A5BC8', brim: '#5E42A0', accent: '#F2C14E' },
+      straw: { crown: '#D9BC73', brim: '#E4CB88', accent: '#B5462F' },
+      wizard: { crown: '#4B3A8C', brim: '#3D2E73', accent: '#F2C14E' },
+      'cat-ears': { crown: '#3B3B45', brim: '#26262E', accent: '#F4A0B4' },
+      headphones: { frame: '#5A5E6A', brim: '#1A1A20', accent: '#3A3A44' },
+      antenna: { frame: '#8A94A6', brim: '#5E6675', accent: '#E8C46A', crown: '#FBF0C8' },
+      'flower-crown': { crown: '#4E7A42', brim: '#3A5C31', accent: '#F2A0C0', knot: '#F2C14E' },
+      cake: { accent: '#F2A03C' },
+    };
 
     function clearKit() {
       while (hatG.firstChild) hatG.removeChild(hatG.firstChild);
@@ -544,16 +655,17 @@
 
     function paintKit() {
       if ((kitHat === 'none' && kitGlasses === 'none') || !curBodyColor) return;
-      var pal = kitPalette(curBodyColor);
-      var sun = kitGlasses === 'specs-sun';
+      var pal = kitPalette(curBodyColor, kitHat);
+      var sun = kitGlasses === 'specs-sun' || kitGlasses === 'specs-shades';
       var nodes = bodyG.querySelectorAll('[data-kit-role]');
       var i;
       for (i = 0; i < nodes.length; i++) {
         var node = nodes[i];
         var role = node.getAttribute('data-kit-role');
         if (role === 'lens') {
-          node.setAttribute('fill', sun ? pal.lensSun : pal.lens);
-          node.setAttribute('stroke', pal.frame);
+          var tint = node.getAttribute('data-tint') || '';
+          if (tint !== 'both') node.setAttribute('fill', sun ? pal.lensSun : pal.lens);
+          if (!tint) node.setAttribute('stroke', pal.frame);
           continue;
         }
         var fillKey = KIT_ROLE_FILL[role];
@@ -577,18 +689,19 @@
       specsG.appendChild(el(tag, right));
     }
 
-    function addSpecsFrame() {
+    function addSpecsFrame(frameW) {
+      var w = frameW || 3.4;
       specsG.appendChild(el('path', {
         'data-kit': 'bridge', 'data-kit-role': 'frame', fill: 'none',
-        stroke: '#2A2A30', 'stroke-width': '3.4', 'stroke-linecap': 'round',
+        stroke: '#2A2A30', 'stroke-width': String(w), 'stroke-linecap': 'round',
       }));
       specsG.appendChild(el('path', {
         'data-kit': 'temple-L', 'data-kit-role': 'frame', fill: 'none',
-        stroke: '#2A2A30', 'stroke-width': '3.1', 'stroke-linecap': 'round',
+        stroke: '#2A2A30', 'stroke-width': String(w * 0.92), 'stroke-linecap': 'round',
       }));
       specsG.appendChild(el('path', {
         'data-kit': 'temple-R', 'data-kit-role': 'frame', fill: 'none',
-        stroke: '#2A2A30', 'stroke-width': '3.1', 'stroke-linecap': 'round',
+        stroke: '#2A2A30', 'stroke-width': String(w * 0.92), 'stroke-linecap': 'round',
       }));
     }
 
@@ -627,26 +740,91 @@
         addSpecsSticker(image);
         return;
       }
-      var sw = '4.4';
       var fill = palLens();
-      if (shape === 'rect') {
+      curSpecShape = shape;
+      /* 12 副时髦框：每片都走 lens-L/R，layout 按该眼 slot 逐片摆放。
+       * path 的坐标是单位框 → stroke-width 也是单位（会被 scale 乘回去）；
+       * rect / ellipse 是像素属性，stroke-width 直接给像素。 */
+      var frameW = 3.2;
+      if (shape === 'wayfarer') {
         addLensPair('rect', {
-          fill: fill, stroke: '#2A2A30', 'stroke-width': sw, rx: '7', ry: '6', opacity: '0.94',
+          fill: fill, stroke: '#2A2A30', 'stroke-width': '4.6',
+          rx: '8', ry: '8', opacity: '0.95',
         });
+        frameW = 4.4;
       } else if (shape === 'cat') {
         addLensPair('path', {
-          d: CAT_LENS, fill: fill, stroke: '#2A2A30', 'stroke-width': '0.18', opacity: '0.94',
+          d: CAT_LENS, fill: fill, stroke: '#2A2A30', 'stroke-width': '0.2', opacity: '0.95',
         });
-      } else {
+        frameW = 3;
+      } else if (shape === 'aviator') {
+        addLensPair('path', {
+          d: AVIATOR_LENS, fill: fill, stroke: '#8A8F98', 'stroke-width': '0.16',
+          'data-tint': 'stroke', opacity: '0.95',
+        });
+        frameW = 2.6;
+      } else if (shape === 'half') {
+        /* 上半有框、下半只剩淡镜片：单位半环 path，按 ry 压出眉线弧度 */
+        addLensPair('path', {
+          d: 'M-1 0 A1 1 0 0 1 1 0 Z', fill: fill,
+          stroke: '#2A2A30', 'stroke-width': '0.16', opacity: '0.95',
+        });
+        frameW = 2.6;
+      } else if (shape === 'cyber') {
+        addLensPair('path', {
+          d: CYBER_LENS, fill: 'rgba(28,240,255,0.2)', stroke: '#5AE0FF',
+          'stroke-width': '0.2', 'data-tint': 'both', opacity: '0.96',
+        });
+        frameW = 3;
+      } else if (shape === 'rimless') {
+        /* 无框：镜片只留淡色，框全部交给鼻梁/镜腿 */
         addLensPair('ellipse', {
-          fill: fill, stroke: '#2A2A30', 'stroke-width': sw, opacity: '0.94',
+          fill: fill, stroke: 'none', 'stroke-width': '0', opacity: '0.9',
         });
+        frameW = 2.4;
+      } else if (shape === 'round-metal') {
+        /* 细金属丝圆框，靠细描边 + 圆桥出「复古」味 */
+        addLensPair('ellipse', {
+          fill: fill, stroke: '#5E646E', 'stroke-width': '2.2', opacity: '0.95',
+        });
+        frameW = 2.2;
+      } else if (shape === 'monocle') {
+        addLensPair('ellipse', {
+          fill: fill, stroke: '#C8A24A', 'stroke-width': '2.8',
+          'data-tint': 'stroke', opacity: '0.95',
+        });
+        var leftLens = specsG.querySelector('[data-kit="lens-L"]');
+        if (leftLens) leftLens.setAttribute('data-single', '1');
+        frameW = 2.6;
+      } else if (shape === 'sport') {
+        addLensPair('ellipse', {
+          fill: fill, stroke: '#2A2A30', 'stroke-width': '3', opacity: '0.95',
+        });
+        frameW = 3;
+      } else if (shape === 'shades') {
+        addLensPair('rect', {
+          fill: fill, stroke: '#1A1A1E', 'stroke-width': '3', rx: '5', ry: '5', opacity: '0.97',
+        });
+        frameW = 3;
+      } else if (shape === 'square') {
+        addLensPair('rect', {
+          fill: fill, stroke: '#2A2A30', 'stroke-width': '4.2', rx: '3', ry: '3', opacity: '0.95',
+        });
+        frameW = 3.8;
+      } else {
+        /* oval */
+        addLensPair('ellipse', {
+          fill: fill, stroke: '#2A2A30', 'stroke-width': '2.6', opacity: '0.95',
+        });
+        frameW = 2.6;
       }
-      addSpecsFrame();
+      addSpecsFrame(frameW);
     }
 
     function palLens() {
-      return kitGlasses === 'specs-sun' ? 'rgba(28,28,32,0.52)' : 'rgba(255,255,255,0.16)';
+      return kitGlasses === 'specs-sun' || kitGlasses === 'specs-shades'
+        ? 'rgba(28,28,32,0.52)'
+        : 'rgba(255,255,255,0.16)';
     }
 
     function fillHat(kind, image) {
@@ -661,18 +839,80 @@
         return;
       }
       if (kind === 'cap') {
-        hatG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '12', rx: '30', ry: '6' }));
-        hatG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M-21 11c0-17 9.5-28 21-28s21 11 21 28H-21z' }));
+        /* 真鸭舌：帽体是前半圆的硬顶，鸭舌朝前下方探出（正视图=向下垂的舌头），
+         * 舌尖留一道翻边高光，顶扣压在帽顶正中。 */
         hatG.appendChild(el('path', {
-          fill: 'rgba(255,255,255,0.2)',
-          d: 'M-8 2c2-8 7-12 8-12 2 0 5 3 7 10-5-2-10-2-15 2z',
+          'data-kit-role': 'crown',
+          d: 'M-20.5 8.4C-20.5-10.6-11.4-19.6 0-19.6S20.5-10.6 20.5 8.4'
+            + 'C13 5 7 3.4 0 3.4S-13 5-20.5 8.4Z',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'brim',
+          d: 'M-24.6 8.6C-19.4 16.4-10.8 20.6 0 20.6S19.4 16.4 24.6 8.6'
+            + 'C16.4 12.4 8.2 14.1 0 14.1S-16.4 12.4-24.6 8.6Z',
+        }));
+        hatG.appendChild(el('path', {
+          fill: 'rgba(255,255,255,0.32)',
+          d: 'M-19 10.8C-14.6 16.6-8 19.2 0 19.2',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'seam', fill: 'none', 'stroke-width': '1.1',
+          d: 'M-12.6 5.6C-10.4-4-5.6-9.6 0-9.6',
+        }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-19.2', r: '2.9' }));
+        return;
+      }
+      if (kind === 'bucket') {
+        /* 渔夫帽：桶身 + 帽带 + 一圈下垂的宽檐（檐比帽体宽一圈）。 */
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown',
+          d: 'M-18.4 3.6C-18.4-9.4-9.4-17.2 0-17.2S18.4-9.4 18.4 3.6Z',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'accent', x: '-18.4', y: '0.4', width: '36.8', height: '5.4', rx: '2.4',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'brim',
+          d: 'M-27.4 3.2C-25 12.6-14.6 18.2 0 18.2S25 12.6 27.4 3.2'
+            + 'C20.6 8.2 10.8 11.2 0 11.2S-20.6 8.2-27.4 3.2Z',
+        }));
+        hatG.appendChild(el('path', {
+          fill: 'rgba(255,255,255,0.26)',
+          d: 'M-24.6 6.4C-19 13.4-10 16.8 0 16.8',
         }));
         return;
       }
+      if (kind === 'beret') {
+        /* 贝雷帽：歪向一侧的软圆盘 + 揪揪 + 压深的帽箍。 */
+        hatG.appendChild(el('ellipse', {
+          'data-kit-role': 'crown', cx: '1', cy: '-3.8', rx: '23.4', ry: '12.8',
+          transform: 'rotate(-9 1 -3.8)',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'band', fill: 'none', 'stroke-width': '4.6', 'stroke-linecap': 'round',
+          d: 'M-20.4 2.2C-13 8.2 12.4 9.2 21.2 0.4',
+        }));
+        hatG.appendChild(el('path', {
+          fill: 'rgba(255,255,255,0.22)',
+          d: 'M-12-9.8C-6-13.8 6-14.6 13-10.8',
+        }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '13.2', cy: '-14.8', r: '3.2' }));
+        return;
+      }
       if (kind === 'beanie') {
-        hatG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M-22 14c0-18 10-30 22-30s22 12 22 30H-22z' }));
-        hatG.appendChild(el('rect', { 'data-kit-role': 'brim', x: '-24', y: '10', width: '48', height: '8', rx: '3' }));
-        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-14', r: '4.2' }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown',
+          d: 'M-20.6 11.4C-20.6-7.6-11.4-18.4 0-18.4S20.6-7.6 20.6 11.4Z',
+        }));
+        /* 翻边：宽过帽体的卷边，上面压罗纹 */
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '-22.6', y: '6.4', width: '45.2', height: '10.8', rx: '5.2',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'seam', fill: 'none', 'stroke-width': '1.1',
+          d: 'M-14.4 7.2v9.4M-7.2 6.8v10.2M0 6.6v10.6M7.2 6.8v10.2M14.4 7.2v9.4',
+        }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-19.8', r: '4.4' }));
         return;
       }
       if (kind === 'visor') {
@@ -689,6 +929,153 @@
           'data-kit-role': 'shine', cx: '-8', cy: '-2', rx: '11', ry: '3.2',
           fill: 'none', 'stroke-width': '1.5', opacity: '0.55',
         }));
+        return;
+      }
+      if (kind === 'crown') {
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown',
+          d: 'M-22 12 L-22-10 L-11 1 L0-15 L11 1 L22-10 L22 12 Z',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '-23', y: '8', width: '46', height: '7', rx: '2.4',
+        }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-15', r: '2.8' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '-22', cy: '-10', r: '2.4' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '22', cy: '-10', r: '2.4' }));
+        return;
+      }
+      if (kind === 'tophat') {
+        hatG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '10', rx: '28', ry: '5.6' }));
+        hatG.appendChild(el('rect', { 'data-kit-role': 'crown', x: '-16', y: '-32', width: '32', height: '42', rx: '3' }));
+        hatG.appendChild(el('rect', { 'data-kit-role': 'accent', x: '-16', y: '-1', width: '32', height: '7' }));
+        hatG.appendChild(el('rect', { x: '-5', y: '-27', width: '4', height: '20', rx: '2', fill: 'rgba(255,255,255,0.16)' }));
+        return;
+      }
+      if (kind === 'chef') {
+        hatG.appendChild(el('rect', { 'data-kit-role': 'brim', x: '-16', y: '2', width: '32', height: '12', rx: '3' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'crown', cx: '-13', cy: '-8', r: '10' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'crown', cx: '13', cy: '-8', r: '10' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'crown', cx: '0', cy: '-15', r: '12' }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'accent', x: '-16', y: '7', width: '32', height: '4', rx: '2',
+        }));
+        return;
+      }
+      if (kind === 'party') {
+        hatG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M0-32 L15 10 L-15 10 Z' }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'accent', d: 'M-7.6-11 L7.6-11 L9.4-4 L-9.4-4 Z',
+        }));
+        hatG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '10', rx: '15', ry: '3.4' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-33', r: '4' }));
+        return;
+      }
+      if (kind === 'straw') {
+        hatG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '8', rx: '32', ry: '7' }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown', d: 'M-18 8c0-14 8-22 18-22s18 8 18 22z',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'accent', x: '-18', y: '-1', width: '36', height: '5', rx: '1.6',
+        }));
+        return;
+      }
+      if (kind === 'wizard') {
+        hatG.appendChild(el('ellipse', { 'data-kit-role': 'brim', cx: '0', cy: '8', rx: '26', ry: '5.6' }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown',
+          d: 'M-13 8 C-10-8 -2-24 9-33 C4-21 8-7 13 8 Z',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'accent',
+          d: 'M1-17 l2.2 4.3 4.7 .7 -3.4 3.2 .8 4.7 -4.3-2.3 -4.3 2.3 .8-4.7 -3.4-3.2 4.7-.7z',
+        }));
+        return;
+      }
+      if (kind === 'cat-ears') {
+        hatG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M-23 8 L-18-17 L-4-3 Z' }));
+        hatG.appendChild(el('path', { 'data-kit-role': 'crown', d: 'M23 8 L18-17 L4-3 Z' }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '-21', y: '2', width: '42', height: '7', rx: '3',
+        }));
+        hatG.appendChild(el('path', { 'data-kit-role': 'accent', d: 'M-17.6-7 L-15.4-1 L-9.6-1 Z' }));
+        hatG.appendChild(el('path', { 'data-kit-role': 'accent', d: 'M17.6-7 L15.4-1 L9.6-1 Z' }));
+        return;
+      }
+      if (kind === 'headphones') {
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'frame', fill: 'none', 'stroke-width': '5',
+          'stroke-linecap': 'round', d: 'M-24 4 A25 25 0 0 1 24 4',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'accent', x: '-29', y: '-8', width: '11', height: '20', rx: '5',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'accent', x: '18', y: '-8', width: '11', height: '20', rx: '5',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '-27.4', y: '-5', width: '7.8', height: '14', rx: '3.6',
+        }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '19.6', y: '-5', width: '7.8', height: '14', rx: '3.6',
+        }));
+        return;
+      }
+      if (kind === 'antenna') {
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'frame', fill: 'none', 'stroke-width': '3',
+          'stroke-linecap': 'round', d: 'M0-2 L0-19',
+        }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'accent', cx: '0', cy: '-23', r: '5.6' }));
+        hatG.appendChild(el('circle', { 'data-kit-role': 'crown', cx: '-1.8', cy: '-25', r: '1.7', opacity: '0.7' }));
+        hatG.appendChild(el('rect', {
+          'data-kit-role': 'brim', x: '-8', y: '0', width: '16', height: '5', rx: '2.5',
+        }));
+        return;
+      }
+      if (kind === 'flower-crown') {
+        var wreath = [[-19, 3], [-10, -5], [0, -8], [10, -5], [19, 3]];
+        var w;
+        for (w = 0; w < wreath.length; w++) {
+          hatG.appendChild(el('circle', {
+            'data-kit-role': 'accent', cx: String(wreath[w][0]), cy: String(wreath[w][1]), r: '4.6',
+          }));
+        }
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'crown', fill: 'none', 'stroke-width': '2.6',
+          'stroke-linecap': 'round', d: 'M-22 6 Q0-10 22 6',
+        }));
+        for (w = 0; w < wreath.length; w++) {
+          hatG.appendChild(el('circle', {
+            'data-kit-role': 'knot', cx: String(wreath[w][0]), cy: String(wreath[w][1]), r: '1.7',
+          }));
+        }
+        return;
+      }
+      if (kind === 'cake') {
+        /* 生日蛋糕：白奶油体 + 底部波浪奶油 + 一根蜡烛（火苗走 accent）。 */
+        hatG.appendChild(el('rect', {
+          x: '-19', y: '-4', width: '38', height: '16', rx: '3.2',
+          fill: '#FBF6EC', stroke: 'rgba(120,96,70,0.18)', 'stroke-width': '1',
+        }));
+        hatG.appendChild(el('path', {
+          fill: '#FFFBF3',
+          d: 'M-19-2 c3 4.6 6.6-2.6 9.5 0 s6.6 4.6 9.5 0 s6.6-4.6 9.5 0 s6.6 4.6 9.5 0 v-4.5 h-38 z',
+        }));
+        hatG.appendChild(el('path', {
+          fill: '#FFFBF3',
+          d: 'M-19 10 c3 4.4 6.6-4.4 9.5 0 s6.6 4.4 9.5 0 s6.6-4.4 9.5 0 s6.6 4.4 9.5 0 v2.6 h-38 z',
+        }));
+        hatG.appendChild(el('rect', {
+          x: '-1.7', y: '-29', width: '3.4', height: '25', rx: '1.4', fill: '#F2E6D2',
+        }));
+        hatG.appendChild(el('path', {
+          'data-kit-role': 'accent',
+          d: 'M0-37 c4.6 5.4 5.6 8.4 0 11.4 c-5.6-3-4.6-6 0-11.4 z',
+        }));
+        hatG.appendChild(el('circle', { cx: '-11', cy: '4', r: '2.2', fill: '#E07090' }));
+        hatG.appendChild(el('circle', { cx: '0', cy: '6', r: '2.2', fill: '#E8C46A' }));
+        hatG.appendChild(el('circle', { cx: '11', cy: '4', r: '2.2', fill: '#7ABAA8' }));
       }
     }
 
@@ -710,6 +1097,34 @@
 
     function fillHeld(kind, image) {
       if (fillStickerImage(heldG, image, 52, 'sticker')) return;
+      /* 品牌徽章：字形表在 rings.js（EB_RINGS.BRANDS），这里只负责摆版。
+       * 圆角牌 + 白字形 + 一根短杆，远看是「举着的小牌子」。 */
+      var brands = (globalThis.EB_RINGS && globalThis.EB_RINGS.BRANDS) || {};
+      var badge = brands[kind];
+      if (badge) {
+        /* 30×30 的圆角牌：手持整体按 hw/42 缩放，牌面太小的话品牌字形只剩几个像素。 */
+        heldG.appendChild(el('path', {
+          d: 'M0 8v8', fill: 'none', stroke: badge.color,
+          'stroke-width': '3.4', 'stroke-linecap': 'round',
+        }));
+        heldG.appendChild(el('rect', {
+          x: '-15', y: '-21', width: '30', height: '30', rx: '8.4',
+          fill: badge.color, stroke: 'rgba(255,255,255,0.34)', 'stroke-width': '1.4',
+        }));
+        heldG.appendChild(el('path', {
+          d: badge.path, fill: badge.glyphColor || '#FFFFFF',
+          transform: 'translate(-12 -18) scale(1)',
+        }));
+        /* 双色品牌（XRK 的花瓣 + 金色水滴）：第二条 path 叠在同一坐标系上。
+         * 单色牌没有 accent，这里不产生任何额外节点。 */
+        if (badge.accent) {
+          heldG.appendChild(el('path', {
+            d: badge.accent, fill: badge.accentColor || badge.glyphColor || '#FFFFFF',
+            transform: 'translate(-12 -18) scale(1)',
+          }));
+        }
+        return;
+      }
       if (kind === 'flower') {
         heldG.appendChild(el('circle', { cx: '0', cy: '-8', r: '5.2', fill: '#F4A0B4' }));
         heldG.appendChild(el('circle', { cx: '-7.5', cy: '-3', r: '5.2', fill: '#E07090' }));
@@ -745,6 +1160,85 @@
           fill: '#E8C46A',
           d: 'M0-16 3.4-3.2 16-2 6.4 6.2 9.2 18 0 11.2-9.2 18-6.4 6.2-16-2-3.4-3.2Z',
         }));
+        return;
+      }
+      if (kind === 'book') {
+        heldG.appendChild(el('rect', { x: '-13', y: '-10', width: '26', height: '20', rx: '2.4', fill: '#B8506E' }));
+        heldG.appendChild(el('rect', { x: '-8.6', y: '-7', width: '18.6', height: '14', rx: '1.6', fill: '#FBF6EC' }));
+        heldG.appendChild(el('rect', { x: '-13', y: '-10', width: '5', height: '20', rx: '2.4', fill: '#8A2E48' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: '#C8B8A8', 'stroke-width': '1.1', d: 'M-5.5-3.6 h12 M-5.5 0 h12 M-5.5 3.6 h8',
+        }));
+        return;
+      }
+      if (kind === 'pencil') {
+        heldG.appendChild(el('path', { d: 'M-5-12 h10 v18 l-5 6 -5-6 z', fill: '#E8C46A' }));
+        heldG.appendChild(el('path', { d: 'M-5-12 h10 v-3.6 l-5-2.8 -5 2.8 z', fill: '#F2A0B4' }));
+        heldG.appendChild(el('path', { d: 'M-5 6 l5 6 5-6 z', fill: '#E8D8C8' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '12', r: '1.6', fill: '#3A3A42' }));
+        return;
+      }
+      if (kind === 'lamp') {
+        heldG.appendChild(el('rect', { x: '-4.6', y: '3', width: '9.2', height: '4', rx: '1.6', fill: '#9AA0A8' }));
+        heldG.appendChild(el('path', { d: 'M-7 11 h14 l-2.4 4 h-9.2 z', fill: '#7A8088' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '-4', r: '8.6', fill: '#F6E08A' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: '#E8C46A', 'stroke-width': '1.4',
+          d: 'M-2.6 0 l2.6-5 2.6 5',
+        }));
+        heldG.appendChild(el('circle', { cx: '-3', cy: '-7', r: '1.8', fill: 'rgba(255,255,255,0.7)' }));
+        return;
+      }
+      if (kind === 'umbrella') {
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: '#8A7058', 'stroke-width': '1.9',
+          'stroke-linecap': 'round', d: 'M0-13 v6',
+        }));
+        heldG.appendChild(el('path', { d: 'M-16-2 a16 11 0 0 1 32 0 z', fill: '#6A90C8' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: '#8A7058', 'stroke-width': '2',
+          'stroke-linecap': 'round', d: 'M0-2 v13 a3.4 3.4 0 0 0 6.8 0',
+        }));
+        return;
+      }
+      if (kind === 'icecream') {
+        heldG.appendChild(el('path', { d: 'M-8 1 L8 1 L0 18 z', fill: '#E8C46A' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: 'rgba(140,100,50,0.45)', 'stroke-width': '1',
+          d: 'M-5 5 l7 0 M-3.4 9 l4.8 0',
+        }));
+        heldG.appendChild(el('circle', { cx: '-4', cy: '-4', r: '6', fill: '#F4A0B4' }));
+        heldG.appendChild(el('circle', { cx: '4', cy: '-4', r: '6', fill: '#F6C8D4' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '-9.5', r: '5.6', fill: '#FFF3E0' }));
+        return;
+      }
+      if (kind === 'guitar') {
+        heldG.appendChild(el('rect', { x: '-2', y: '-18', width: '4', height: '12', rx: '1.4', fill: '#8A5A32' }));
+        heldG.appendChild(el('rect', { x: '-3.4', y: '-19', width: '6.8', height: '3', rx: '1.2', fill: '#6A4222' }));
+        heldG.appendChild(el('ellipse', { cx: '0', cy: '-2', rx: '7', ry: '6', fill: '#C4885A' }));
+        heldG.appendChild(el('ellipse', { cx: '0', cy: '7', rx: '9.2', ry: '7.6', fill: '#C4885A' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '4.6', r: '2.6', fill: '#3A2A20' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: 'rgba(250,240,225,0.7)', 'stroke-width': '0.8', d: 'M-1.2-10 v16 M1.2-10 v16',
+        }));
+        return;
+      }
+      if (kind === 'camera') {
+        heldG.appendChild(el('rect', { x: '-6', y: '-10.5', width: '12', height: '5', rx: '1.6', fill: '#4A4E56' }));
+        heldG.appendChild(el('rect', { x: '-14', y: '-6', width: '28', height: '17.5', rx: '3.4', fill: '#4A4E56' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '2.4', r: '6.6', fill: '#2A2E34' }));
+        heldG.appendChild(el('circle', { cx: '0', cy: '2.4', r: '3.4', fill: '#7AB8D8' }));
+        heldG.appendChild(el('circle', { cx: '9', cy: '-3', r: '1.7', fill: '#E8C46A' }));
+        return;
+      }
+      if (kind === 'balloon') {
+        heldG.appendChild(el('ellipse', { cx: '0', cy: '-5', rx: '9.4', ry: '10.4', fill: '#E07090' }));
+        heldG.appendChild(el('path', { d: 'M-2 5.2 h4 l-2 3 z', fill: '#C44868' }));
+        heldG.appendChild(el('path', {
+          fill: 'none', stroke: '#8A7058', 'stroke-width': '1.3',
+          'stroke-linecap': 'round', d: 'M0 8.2 c4 3-4 4.6 0 7.4',
+        }));
+        heldG.appendChild(el('ellipse', { cx: '-3', cy: '-9', rx: '2.6', ry: '3.4', fill: 'rgba(255,255,255,0.35)' }));
       }
     }
 
@@ -778,15 +1272,24 @@
 
     function layoutSpecsLens(node, slot, other, side) {
       if (!node || !slot) return;
-      if (!slot.on) {
+      if (!slot.on || node.getAttribute('data-single') === '1') {
         node.style.display = 'none';
         return;
       }
       node.style.display = '';
+      var isSticker = node.getAttribute('data-kit-role') === 'sticker';
       var sz = specSize(slot, other);
-      if (node.getAttribute('data-kit-role') === 'sticker') {
+      if (isSticker) {
         sz = { rx: sz.rx * STICKER_SPEC_BOOST, ry: sz.ry * STICKER_SPEC_BOOST };
       }
+      var tweak = isSticker ? null : SPEC_SHAPE_TWEAK[curSpecShape];
+      if (tweak) {
+        sz = {
+          rx: sz.rx * (tweak.rx || 1) + (tweak.grow || 0),
+          ry: sz.ry * (tweak.ry || 1),
+        };
+      }
+      var boxH = tweak && tweak.box ? tweak.box : 1.76;
       var tag = node.tagName.toLowerCase();
       if (tag === 'ellipse') {
         node.setAttribute('cx', r2(slot.x));
@@ -797,9 +1300,9 @@
       }
       if (tag === 'rect' || tag === 'image' || tag === 'svg') {
         node.setAttribute('x', r2(slot.x - sz.rx));
-        node.setAttribute('y', r2(slot.y - sz.ry * 0.88));
+        node.setAttribute('y', r2(slot.y - sz.ry * (boxH / 2)));
         node.setAttribute('width', r2(sz.rx * 2));
-        node.setAttribute('height', r2(sz.ry * 1.76));
+        node.setAttribute('height', r2(sz.ry * boxH));
         return;
       }
       var sx = side < 0 ? -sz.rx : sz.rx;
@@ -879,8 +1382,9 @@
         return;
       }
       hatG.style.display = '';
-      var yOff = hatImage ? -2
-        : (HAT_Y_OFF[kitHat] !== undefined ? HAT_Y_OFF[kitHat] : -2);
+      var yOff = hatImage
+        ? 2
+        : (HAT_Y_OFF[kitHat] !== undefined ? HAT_Y_OFF[kitHat] : 0);
       var y = silMinY + yOff;
       var sampleY = Math.min(silMaxY - 4, Math.max(silMinY + 6, y + 14));
       var band = silAt(sampleY);
@@ -891,7 +1395,11 @@
       var sx = isHalo
         ? (0.55 + 0.45 * cnAbs)
         : (0.45 + 0.55 * Math.max(cn, 0));
-      var fit = hw / (isHalo ? 48 : 54);
+      var boost = hatImage ? 1 : (HAT_SCALE[kitHat] || 1);
+      /* 帽子本体按 54 宽设计（glyph 占据 ±27）。旧式 `hw / 54` 把「帽宽 = 头
+       * 半宽」当成目标，实物只有头宽的四分之一，鸭舌/帽檐根本读不出来；
+       * 按整条弦宽 2·hw 归一化，帽子才真正扣在脑门上（光环按 72 宽同规格）。 */
+      var fit = (hw * 2) / 54 * boost;
       hatG.setAttribute('transform',
         'translate(' + r2(x) + ' ' + r2(y) + ') scale(' + r2(fit * sx) + ' ' + r2(fit) + ')' +
         (isHalo ? ' rotate(-8)' : ''));
