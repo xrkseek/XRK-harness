@@ -350,7 +350,12 @@ export function formatCheckpointList(
   }
   const lines = rows.map((r, i) => {
     const label = r.label ? ` ${r.label}` : "";
-    return `${i + 1}. ${r.id.slice(0, 12)}  seq=${r.seq}  files=${r.fileCount}${label}`;
+    // A point that skipped files is not a full point. Say so on the row, or
+    // the number alone reads as "everything up to here is covered".
+    const skipped = r.skippedOversized?.length
+      ? `  skipped>cap=${r.skippedOversized.length}`
+      : "";
+    return `${i + 1}. ${r.id.slice(0, 12)}  seq=${r.seq}  files=${r.fileCount}${skipped}${label}`;
   });
   return [
     "Workspace checkpoints (shadow git; does not rewrite chat — use Branch / session.fork for lineage):",
@@ -366,7 +371,10 @@ export function formatRestorePlan(plan: RestorePlan): string {
       ? "none"
       : plan.extra.slice(0, 20).join(", ") +
         (plan.extra.length > 20 ? ` (+${plan.extra.length - 20} more)` : "");
-  return `Checkpoint ${plan.id.slice(0, 12)}: ${plan.fileCount} files in snapshot; untracked extras (kept unless --prune): ${extra}`;
+  const base = `Checkpoint ${plan.id.slice(0, 12)}: ${plan.fileCount} files in snapshot; untracked extras (kept unless --prune): ${extra}`;
+  const skipped = plan.skippedOversized ?? [];
+  if (skipped.length === 0) return base;
+  return `${base}\nNot in this point — these exceeded the per-file byte cap and were never snapshotted, so a restore leaves their current content: ${skipped.join(", ")}${skipped.length >= 3 ? " (sample; more may exist)" : ""}`;
 }
 
 export function formatRestoreResult(
@@ -381,7 +389,12 @@ export function formatRestoreResult(
     result.removed.length === 0
       ? ""
       : ` Removed ${result.removed.length} extra path(s).`;
-  const base = `Restored workspace from ${result.id.slice(0, 12)} (${result.restored} paths).${removed}`;
+  const skipped = result.skippedOversized ?? [];
+  const skippedNote =
+    skipped.length === 0
+      ? ""
+      : ` Not rolled back (never snapshotted, over the byte cap): ${skipped.join(", ")}.`;
+  const base = `Restored workspace from ${result.id.slice(0, 12)} (${result.restored} paths).${removed}${skippedNote}`;
   if (result.chatTruncated) {
     return `${base} Chat truncated to checkpoint seq ${String(result.chatSeq ?? "?")} (${String(result.eventCount ?? "?")} events kept).`;
   }

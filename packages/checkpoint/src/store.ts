@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { rm as rmAsync } from "node:fs/promises";
 import path from "node:path";
 import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 import { readJsonFile, writeJsonFileAtomic } from "./json-file.js";
@@ -78,11 +81,127 @@ function sleep(ms: number): Promise<void> {
 export const DEFAULT_GIT_TIMEOUT_MS = 15_000;
 
 /**
+ * Exclusion-policy generation.
+ *
+ * Bump whenever the exclude set changes meaning (a new pattern class, a new
+ * cap). A shadow repo written under an older policy still holds the blobs the
+ * new policy would refuse, and those blobs are reachable from `HEAD` — `gc`
+ * can never drop them. The only way to reclaim is to discard the repo and
+ * start over, so {@link WorkspaceCheckpointStore.ensurePolicy} does exactly
+ * that once per bump.
+ *
+ * Costs the rollback list: `index.json` is set aside, not deleted, so the old
+ * points stay auditable while `/rollback` honestly reports them gone.
+ */
+const SNAPSHOT_POLICY_VERSION = 2;
+
+/**
+ * Files larger than this are not snapshotted.
+ *
+ * Modeled on codex's ghost commits (`DEFAULT_IGNORE_LARGE_UNTRACKED_FILES`,
+ * `git-utils/src/ghost_commits.rs:28-29`) which used 10 MiB; `baseline.rs:21`
+ * still calls it "the default file limit for automatic ghost snapshots". A
+ * checkpoint is derived data — a 60 MiB archive is not something a turn
+ * "undoes", it is something a script regenerates.
+ *
+ * Measured on the workspace that motivated this: capping at 10 MiB alone drops
+ * a 9.5 GiB tree to 5.7 GiB (-40%), because the bulk is many small artifacts
+ * rather than a few huge ones — the type gate below carries the rest.
+ */
+export const DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Directory names never worth snapshotting, matched as any path segment.
+ *
+ * The first twelve are codex's `ghost_commits.rs:30-48` list verbatim (its
+ * comment: "typically large dependency or build trees that are not useful for
+ * undo and can cause snapshots to grow without bound"). The tail adds this
+ * repo's own local-artifact conventions (`xrk-local-artifacts`).
+ */
+const EXCLUDED_DIR_SEGMENTS: readonly string[] = [
+  "node_modules",
+  ".venv",
+  "venv",
+  "env",
+  ".env",
+  "dist",
+  "build",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".cache",
+  ".tox",
+  "__pycache__",
+  ".release",
+  "coverage",
+  ".tmp",
+];
+
+/**
+ * Suffixes a turn does not "undo": archives, office blobs, media, compiled
+ * output. A model reads and edits text; it regenerates artifacts.
+ *
+ * This is the gate that actually matters. Measured on the workspace that
+ * motivated this (26,855 files / 9.50 GiB): the byte cap alone saves 40%,
+ * this alone saves 99.2% (8,846 text files / 0.07 GiB) while keeping every
+ * one of the 1,453 `.py` and 442 `.md` files the agent was editing. Both
+ * together: 6,783 files / 0.05 GiB = -99.5%.
+ *
+ * Deliberately NOT a "directory density" cap (codex drops any untracked dir
+ * with >=200 files). That rule is unusable here: a workspace with no
+ * `.gitignore` has no tracked files at all, so `hwgen/` (24,463 files, of
+ * which 1,453 are the agent's own sources) would be dropped wholesale and the
+ * snapshot would lose exactly what it exists to protect. Type is the honest
+ * discriminator; file count is not.
+ */
+const EXCLUDED_SUFFIXES: readonly string[] = [
+  // archives
+  ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".tgz",
+  // office / documents
+  ".pptx", ".ppt", ".docx", ".doc", ".xlsx", ".xls", ".pdf", ".caj",
+  // raster / vector
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff",
+  ".ico", ".psd", ".ai",
+  // media
+  ".mp4", ".mov", ".avi", ".mkv", ".flv", ".webm", ".mp3", ".wav",
+  ".flac", ".ogg", ".m4a",
+  // fonts
+  ".woff", ".woff2", ".ttf", ".otf", ".eot",
+  // built binaries / databases
+  ".exe", ".dll", ".so", ".dylib", ".bin", ".iso", ".dmg", ".msi",
+  ".sqlite", ".db", ".pyc", ".pyo", ".wasm",
+];
+
+/**
+ * How many over-cap paths a snapshot record keeps.
+ *
+ * The point is to let the UI/agent *say what it skipped* ("3 files over 10 MiB
+ * were not snapshotted") instead of silently producing an incomplete restore —
+ * codex learned the same lesson and prints the first three excluded entries
+ * plus the threshold. A short sample is enough to explain; the full list would
+ * bloat every record in `index.json`.
+ */
+const SKIPPED_SAMPLE_LIMIT = 3;
+
+/**
  * Synthetic commit identity for shadow commits. The store must not depend on
  * (or write to) the operator's git config.
  */
 export const CHECKPOINT_AUTHOR_NAME = "XRK Checkpoint";
 export const CHECKPOINT_AUTHOR_EMAIL = "checkpoint@xrk.invalid";
+
+/**
+ * Gitignore pattern matching exactly one work-tree-relative path.
+ *
+ * Anchored (`/`) so a build artifact named `out` at the root does not also
+ * swallow `src/out`; escaped because the byte cap feeds real filenames in and
+ * a model-written `a[1].bin` must not turn into a glob.
+ */
+function ignorePatternForPath(relativePath: string): string {
+  const escaped = relativePath
+    .replace(/([\\*?[])/g, "\\$1")
+    .replace(/^([#!])/, "\\$1");
+  return `/${escaped}`;
+}
 
 /** Stable, filesystem-safe id for one workspace path. */
 export function workspaceCheckpointId(workspaceDir: string): string {
@@ -140,6 +259,14 @@ export interface WorkspaceCheckpointStoreOptions {
    */
   readonly timeoutMs?: number;
   readonly now?: () => number;
+  /**
+   * Byte cap for one snapshotted file (default
+   * {@link DEFAULT_MAX_FILE_BYTES}). `0` disables the cap — every file the
+   * type/dir gates left in is snapshotted regardless of size.
+   *
+   * Overridable per workspace through `XRK_CHECKPOINT_MAX_FILE_BYTES`.
+   */
+  readonly maxFileBytes?: number;
 }
 
 interface PersistedIndex {
@@ -162,6 +289,20 @@ function readTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0
     ? Math.floor(parsed)
     : DEFAULT_GIT_TIMEOUT_MS;
+}
+
+/**
+ * Byte cap: explicit option wins, then `XRK_CHECKPOINT_MAX_FILE_BYTES`, then
+ * {@link DEFAULT_MAX_FILE_BYTES}. A non-numeric / negative value falls back to
+ * the default rather than silently disabling the cap (`0` is the explicit
+ * off switch).
+ */
+function readMaxFileBytes(explicit: number | undefined): number {
+  const raw = explicit ?? Number(process.env.XRK_CHECKPOINT_MAX_FILE_BYTES ?? "");
+  if (explicit === undefined && (Number.isNaN(raw) || raw < 0)) {
+    return DEFAULT_MAX_FILE_BYTES;
+  }
+  return Number.isFinite(raw) ? Math.floor(raw) : DEFAULT_MAX_FILE_BYTES;
 }
 
 /** Parse `git clean` output lines carrying a known prefix. */
@@ -215,6 +356,8 @@ export class WorkspaceCheckpointStore {
   private readonly runGit: GitRunner;
   private readonly timeoutMs: number;
   private readonly now: () => number;
+  /** Size gate for one file; `0` disables it. */
+  private readonly maxFileBytes: number;
   /** Work-tree-relative shadow path, when the shadow lives in the workspace. */
   private readonly shadowRelPath: string | undefined;
   private records: WorkspaceCheckpointRecord[];
@@ -244,6 +387,7 @@ export class WorkspaceCheckpointStore {
     this.runGit = options.runGit;
     this.timeoutMs = options.timeoutMs ?? readTimeoutMs();
     this.now = options.now ?? (() => Date.now());
+    this.maxFileBytes = readMaxFileBytes(options.maxFileBytes);
     this.records = this.loadIndex();
     this.indexSignature = this.indexStat();
   }
@@ -350,23 +494,24 @@ export class WorkspaceCheckpointStore {
    * (Re)write the git-level ignore file. Idempotent and cheap: patterns are
    * only rewritten when the content differs. Safety-critical — `clean -fd`
    * must never see the shadow repo as untracked.
+   *
+   * `extra` carries this turn's over-cap paths (see
+   * {@link oversizeUntracked}); they are re-derived every snapshot, so a file
+   * that shrinks under the cap is picked up again on the next turn instead of
+   * being ignored forever.
    */
-  private ensureExcludesFile(): void {
+  private ensureExcludesFile(extra: readonly string[] = []): void {
     mkdirSync(this.shadowDir, { recursive: true });
-    // Keep heavy / regenerable trees out of `add -A` — monorepo node_modules
-    // and dist dominate snapshot latency on product workspaces. Worktree
-    // `.gitignore` still applies; this file is an extra excludesFile.
-    const patterns: string[] = [
-      "node_modules/",
-      "**/node_modules/",
-      "dist/",
-      "**/dist/",
-      ".git/",
-      "**/.git/",
-      ".release/",
-      "coverage/",
-      "**/*.tsbuildinfo",
-    ];
+    // Worktree `.gitignore` still applies; this file is an extra excludesFile.
+    // Three tiers, cheapest gate first: the shadow repo's own path (safety),
+    // dependency/build trees (any segment), then artifact suffixes. A 9.5 GiB
+    // workspace drops to 50 MiB with the suffix gate alone.
+    const patterns: string[] = [".git/", "**/.git/", "**/*.tsbuildinfo"];
+    for (const segment of EXCLUDED_DIR_SEGMENTS) {
+      patterns.push(`${segment}/`, `**/${segment}/`);
+    }
+    for (const suffix of EXCLUDED_SUFFIXES) patterns.push(`*${suffix}`);
+    for (const relative of extra) patterns.push(ignorePatternForPath(relative));
     if (this.shadowRelPath) patterns.push(`${this.shadowRelPath}/`);
     const content = `${patterns.join("\n")}\n`;
     try {
@@ -379,9 +524,85 @@ export class WorkspaceCheckpointStore {
     }
   }
 
+  /**
+   * Untracked, non-ignored files above the byte cap.
+   *
+   * Only *untracked* files are measured, exactly like codex's
+   * `DEFAULT_IGNORE_LARGE_UNTRACKED_FILES`: a file already in the snapshot was
+   * accepted when it was added, and re-measuring every tracked path each turn
+   * is the very scan cost this gate exists to avoid. `--exclude-standard`
+   * means the type/dir gates already filtered the list, so this stats a
+   * handful of paths on a normal turn, not the whole tree.
+   */
+  private async oversizeUntracked(budgetMs: number): Promise<string[]> {
+    if (this.maxFileBytes <= 0) return [];
+    const listed = await this.exec(
+      ["ls-files", "-z", "--others", "--exclude-standard"],
+      budgetMs,
+    );
+    if (listed.code !== 0) return [];
+    const over: string[] = [];
+    for (const relative of listed.stdout.split("\0")) {
+      if (!relative) continue;
+      try {
+        // `lstat`, never `stat`: a symlink pointing at a 5 GiB image is a few
+        // bytes of text in the tree and must not be judged by its target.
+        const entry = lstatSync(path.join(this.workspaceDir, relative));
+        if (entry.isFile() && entry.size > this.maxFileBytes) over.push(relative);
+      } catch {
+        /* vanished between the listing and the stat */
+      }
+    }
+    return over;
+  }
+
+  /**
+   * Discard a shadow repo written under an older exclusion policy.
+   *
+   * The blobs the new policy refuses are still reachable from `HEAD`, so no
+   * amount of `gc` reclaims them — starting over is the only way down. The
+   * snapshot index is renamed aside rather than deleted: `/rollback` then says
+   * "unknown checkpoint" for the old points, which is true, while the file
+   * stays on disk for an operator who wants to look.
+   */
+  private async ensurePolicy(): Promise<void> {
+    const marker = path.join(this.shadowDir, "policy");
+    let current = "";
+    try {
+      current = readFileSync(marker, "utf8").trim();
+    } catch {
+      /* first run */
+    }
+    if (current === String(SNAPSHOT_POLICY_VERSION)) return;
+    const hadRepo = existsSync(path.join(this.gitDir, "HEAD"));
+    if (hadRepo) {
+      // Async: a multi-GiB removal must not block the Host event loop. Runs
+      // inside the snapshot gate, so no concurrent `add` can see a half-gone
+      // object store.
+      await rmAsync(this.gitDir, { recursive: true, force: true });
+      try {
+        if (existsSync(this.indexFile)) {
+          renameSync(this.indexFile, `${this.indexFile}.policy${current || "0"}.bak`);
+        }
+      } catch {
+        /* index is derived data; the shadow repo is already gone */
+      }
+      this.records = [];
+      this.indexSignature = undefined;
+      this.repoReady = false;
+    }
+    try {
+      mkdirSync(this.shadowDir, { recursive: true });
+      writeFileSync(marker, String(SNAPSHOT_POLICY_VERSION), "utf8");
+    } catch {
+      /* read-only workspace: the next turn retries */
+    }
+  }
+
   /** Create the shadow repo on first use; idempotent afterwards. */
   private async ensureRepo(budgetMs: number = this.timeoutMs): Promise<void> {
     if (this.repoReady) return;
+    await this.ensurePolicy();
     this.ensureExcludesFile();
     if (!existsSync(path.join(this.gitDir, "HEAD"))) {
       await this.execOk(
@@ -433,6 +654,12 @@ export class WorkspaceCheckpointStore {
       const remaining = (): number =>
         Math.max(1, deadline - this.now());
       await this.ensureRepo(remaining());
+      // Over-cap paths are re-derived each turn: a worktree file that shrank
+      // under the cap comes back into the snapshot instead of staying ignored
+      // forever. `--exclude-standard` has already applied the type/dir gates,
+      // so this only stats files the tree did not already refuse.
+      const oversized = await this.oversizeUntracked(remaining());
+      if (oversized.length > 0) this.ensureExcludesFile(oversized);
       await this.execOk(
         ["add", "-A"],
         "snapshot-failed",
@@ -478,6 +705,9 @@ export class WorkspaceCheckpointStore {
         createdAt: this.now(),
         ...(label ? { label } : {}),
         fileCount: splitLines(files.stdout).length,
+        ...(oversized.length > 0
+          ? { skippedOversized: oversized.slice(0, SKIPPED_SAMPLE_LIMIT) }
+          : {}),
       };
       this.records.push(record);
       this.saveIndex();
@@ -522,6 +752,7 @@ export class WorkspaceCheckpointStore {
 
   /** {@link planRestore} body; the caller already holds the shadow gate. */
   private async planRestoreLocked(target: string): Promise<RestorePlan> {
+    const record = this.get(target);
     const tree = await this.execOk(
       ["ls-tree", "-r", "--name-only", target],
       "restore-failed",
@@ -531,6 +762,9 @@ export class WorkspaceCheckpointStore {
       id: target,
       fileCount: splitLines(tree.stdout).length,
       extra: await this.extraFiles(),
+      ...(record.skippedOversized
+        ? { skippedOversized: record.skippedOversized }
+        : {}),
     };
   }
 

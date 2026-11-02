@@ -48,6 +48,15 @@ export interface WorkspaceCheckpointRecord {
   readonly label?: string;
   /** Tracked files captured at this point. */
   readonly fileCount: number;
+  /**
+   * Files present in the worktree but **not** in this point, because they
+   * exceeded the per-file byte cap (a short sample, not the full list).
+   *
+   * Present so a restore can be honest: those paths are untouched by
+   * `restore`, so their current content will not be rolled back. Absent when
+   * nothing was skipped.
+   */
+  readonly skippedOversized?: readonly string[];
 }
 
 export interface SnapshotInput {
@@ -71,6 +80,15 @@ export interface RestorePlan {
   readonly fileCount: number;
   /** Untracked, non-ignored files present now but absent from the snapshot. */
   readonly extra: readonly string[];
+  /**
+   * Files the recorded point never captured, because they exceeded the
+   * per-file byte cap (sample, see {@link WorkspaceCheckpointRecord}).
+   *
+   * `restore` does not touch them, so their current content survives the
+   * rollback. Present on the plan so the caller can say that out loud instead
+   * of implying a complete restore.
+   */
+  readonly skippedOversized?: readonly string[];
 }
 
 export interface RestoreResult extends RestorePlan {

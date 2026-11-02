@@ -12,6 +12,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceCheckpointStore,
+  checkpointIndexPath,
   createProcessGitRunner,
   shadowGitDir,
   workspaceCheckpointDir,
@@ -168,6 +169,87 @@ maybe("workspace snapshots against real git", () => {
     const pruned = await store.restore(record.id, { prune: true });
     expect(pruned.removed).toContain(cjk);
     expect(existsSync(path.join(ws, cjk))).toBe(false);
+  });
+
+  it("keeps artifacts out of the snapshot and records what the cap skipped", async () => {
+    // Why this test exists: the whole point of the gate is that a 9.5 GiB
+    // workspace stops being snapshotted file-by-file, and that the *user* can
+    // see what a rollback will not cover. Both halves are asserted here.
+    const ws = makeWorkspace();
+    const store = new WorkspaceCheckpointStore({
+      workspaceDir: ws,
+      runGit,
+      // 1 KiB instead of the real 10 MiB so the test stays fast; the gate is
+      // the same code path.
+      maxFileBytes: 1024,
+    });
+    writeFileSync(path.join(ws, "src.ts"), "export const a = 1;\n", "utf8");
+    writeFileSync(path.join(ws, "notes.md"), "# notes\n", "utf8");
+    // Suffix gate: an archive and a raster image never enter the shadow repo.
+    writeFileSync(path.join(ws, "bundle.zip"), Buffer.alloc(8, 7));
+    writeFileSync(path.join(ws, "pixel.png"), Buffer.alloc(8, 7));
+    // Byte cap: `.json` passes the suffix gate but is too big to snapshot.
+    writeFileSync(path.join(ws, "big.json"), "x".repeat(4096), "utf8");
+
+    const record = await store.snapshot({ sessionId: "s", seq: 1 });
+
+    expect(record.fileCount).toBe(2); // src.ts + notes.md only
+    expect(record.skippedOversized).toEqual(["big.json"]);
+
+    // Excluded, not deleted: the artifacts are still in the worktree.
+    for (const name of ["bundle.zip", "pixel.png", "big.json"]) {
+      expect(existsSync(path.join(ws, name))).toBe(true);
+    }
+
+    // The restore preview admits the gap instead of implying full coverage.
+    const plan = await store.planRestore(record.id);
+    expect(plan.fileCount).toBe(2);
+    expect(plan.skippedOversized).toEqual(["big.json"]);
+
+    // `--prune` must not eat what the excludes hid — they are not "extra".
+    const pruned = await store.restore(record.id, { prune: true });
+    expect(pruned.removed).toEqual([]);
+    for (const name of ["bundle.zip", "pixel.png", "big.json"]) {
+      expect(existsSync(path.join(ws, name))).toBe(true);
+    }
+  });
+
+  it("discards a shadow repo written under an older exclusion policy", async () => {
+    // A policy bump is the only way down: the refused blobs are reachable from
+    // HEAD, so `gc` never reclaims them. Rebuilding costs the old points, and
+    // this test pins that trade-off (repo gone, index set aside, new repo works).
+    const ws = makeWorkspace();
+    writeFileSync(path.join(ws, "a.txt"), "one\n", "utf8");
+    const store = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit });
+    const first = await store.snapshot({ sessionId: "s", seq: 1 });
+
+    const checkpointDir = workspaceCheckpointDir(ws);
+    const shadow = shadowGitDir(checkpointDir);
+    // The policy marker sits beside `git/`, not inside it.
+    const marker = path.join(checkpointDir, "policy");
+    const index = checkpointIndexPath(checkpointDir);
+    expect(readFileSync(marker, "utf8").trim()).toBe("2");
+    expect(existsSync(index)).toBe(true);
+
+    // Pretend a previous release wrote this repo.
+    writeFileSync(marker, "1", "utf8");
+    const reopened = new WorkspaceCheckpointStore({ workspaceDir: ws, runGit });
+    const second = await reopened.snapshot({ sessionId: "s", seq: 2 });
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.fileCount).toBe(1);
+    // The old commit is unreachable *and* absent — not merely pruned.
+    const oldCommit = spawnSync("git", [
+      "--git-dir",
+      shadow,
+      "cat-file",
+      "-e",
+      first.id,
+    ]);
+    expect(oldCommit.status).not.toBe(0);
+    // The point list is renamed aside rather than deleted.
+    expect(existsSync(`${index}.policy1.bak`)).toBe(true);
+    expect(readFileSync(marker, "utf8").trim()).toBe("2");
   });
 
 });
