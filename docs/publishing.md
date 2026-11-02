@@ -41,10 +41,10 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **先** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`**（GitHub + npmjs）→ 再装回根 `devDeps`
 4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；**禁止**与 stage/release 并行）
-5. 桌面包完成后 **先上 AGT 更新源**，**再**改 `apps/site/releases.json` 并 push
+5. 桌面包完成后 **先上 AGT 更新源**（yml 的 `url`/`path` 须为指向 `…/desktop/bin/win-x64/…` 的**绝对 URL**；先传 exe+blockmap、再传 yml），**再**改 `apps/site/releases.json` 并 push
 6. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
 
-笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`。
+笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`。
 
 ## 命令
 
@@ -96,20 +96,20 @@ Windows NSIS：仓库路径含非 ASCII 时，固定 `subst X:` → 仓库根，
 
 | 档                  | 版本       | 用途                                                           |
 | ------------------- | ---------- | -------------------------------------------------------------- |
-| **当前（@latest）** | **0.7.5** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
+| **当前（@latest）** | **0.7.6** | `0.7.x` 补丁；`npm i -g @xrkseek/harness-cli@latest` |
 | **过程号（@rc）**   | **0.7.0-rc.3** | 第三 rc（已并入 0.7.0）；`npm i -g @xrkseek/harness-cli@rc` 仍可指向此号 |
 | **上一预览收官**    | **0.6.23** | `0.6.x` 预览线终点，仍可精确安装 |
 | **本线收口号（0.6）** | **0.6.0** | `0.6.x` 预览线收口并曾首次接管 `@latest` |
 | **过程号（历史）**  | **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | 仅留档 |
 | **回退钉**          | **0.3.11** | npm 另留此号供回退                                           |
 
-`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.5** 接管 `@latest`（Desktop 临时分享）。GitHub Release 文稿可保留历史号。
+`0.6.x` 以 **0.6.0** 收口、**0.6.23** 收官；**0.7.0** 正式线首发；**0.7.6** 接管 `@latest`（表情球装扮扩建 + 现状回归修复）。GitHub Release 文稿可保留历史号。
 
 npm **不能**同号重发；改坏包就升修订号。清理用 `npm-prune-withdrawn.mjs`（先 unpublish，Granular token 失败则 deprecate）。deprecate 消息不得含空格 / 未配对引号；清除弃用须传真正的空字符串（脚本经 `npm-cli.js`）。
 
 预发布号（`-rc.N`）由 `release.mjs` 自动附 `--tag`；收口号与正式版无后缀 ⇒ 落 `@latest`。
 
-GitHub Release 公开页保留 **v0.7.5**（当前 `@latest`）、**v0.7.4**、**v0.7.3**、**v0.7.2**、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
+GitHub Release 公开页保留 **v0.7.6**（当前 `@latest`）、**v0.7.5**、**v0.7.4**、**v0.7.3**、**v0.7.2**、**v0.7.1**、**v0.7.0**、**v0.7.0-rc.3**（`@rc` 过程号）、**v0.6.23**（上一预览收官）与 **v0.3.11**（回退钉）；其余历史 Release 可不删。
 
 完整交接：[maintainer](./maintainer.md)。发行说明索引：[releases/](./releases/)。
 
@@ -158,10 +158,10 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **First** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`** (GitHub + npmjs) → restore root `devDeps`
 4. **Then** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`; **never** parallel with stage/release)
-5. After the desktop build: **upload AGT feed first**, **then** update `apps/site/releases.json` and push
+5. After the desktop build: **upload AGT feed first** (`url`/`path` in yml must be **absolute** URLs under `…/desktop/bin/win-x64/…`; exe+blockmap before yml), **then** update `apps/site/releases.json` and push
 6. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
 
-Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts`.
+Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`.
 
 ## Commands
 
@@ -213,19 +213,19 @@ Rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = fo
 
 | Line                      | Version    | Use                                                                          |
 | ------------------------- | ---------- | ---------------------------------------------------------------------------- |
-| **Current (@latest)**     | **0.7.5** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
+| **Current (@latest)**     | **0.7.6** | `0.7.x` patch; `npm i -g @xrkseek/harness-cli@latest` |
 | **Process number (@rc)**  | **0.7.0-rc.3** | Third rc (folded into 0.7.0); `npm i -g @xrkseek/harness-cli@rc` may still point here |
 | **Prior preview close**   | **0.6.23** | End of `0.6.x` preview; still installable by exact pin |
 | **0.6 line closing number** | **0.6.0** | `0.6.x` preview closed here and first took `@latest` |
 | **Process numbers (past)**| **0.7.0-rc.2** · **0.7.0-rc.1** · **0.6.0-rc.2** | Archive only |
 | **Rollback pin**          | **0.3.11** | Only other npm pin kept for rollback                                         |
 
-`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.5** owns `@latest` (Desktop temporary share). GitHub Release notes may retain historical tags.
+`0.6.x` took `@latest` at **0.6.0** and closed at **0.6.23**; **0.7.0** opened the formal line; **0.7.6** owns `@latest` (emotion-ball wardrobe expansion + regression fixes). GitHub Release notes may retain historical tags.
 
 npm **cannot** republish the same version; bump the patch if a bad pack ships. Clean with `npm-prune-withdrawn.mjs` (unpublish first; deprecate when Granular tokens block). Deprecation messages must not contain spaces / unbalanced quotes; clearing a deprecation requires a real empty string (script uses `npm-cli.js`).
 
 Prereleases (`-rc.N`) get an automatic `--tag` from `release.mjs`; suffix-free versions land on `@latest`.
 
-The GitHub Releases page keeps **v0.7.5** (current `@latest`), **v0.7.4**, **v0.7.3**, **v0.7.2**, **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
+The GitHub Releases page keeps **v0.7.6** (current `@latest`), **v0.7.5**, **v0.7.4**, **v0.7.3**, **v0.7.2**, **v0.7.1**, **v0.7.0**, **v0.7.0-rc.3** (`@rc` process number), **v0.6.23** (prior preview close), and **v0.3.11** (rollback pin); other historical Releases need not be deleted.
 
 Full handoff: [maintainer](./maintainer.md). Release notes index: [releases/](./releases/).

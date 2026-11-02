@@ -50,8 +50,12 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
       en: 'Thanks to everyone on the XRK-Harness team.',
     },
     {
-      zh: '感谢何润景、文具盒、刘雅婷、炫彩马桶、乔晨欣、张利民、徐航、王乐。',
-      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, and 王乐.',
+      zh: '感谢何润景、文具盒、刘雅婷、炫彩马桶、乔晨欣、张利民、徐航、王乐、焦雅、贺吉诚、寇瑞哲。',
+      en: 'Special thanks to 何润景, 文具盒, 刘雅婷, 炫彩马桶, 乔晨欣, 张利民, 徐航, 王乐, 焦雅, 贺吉诚, and 寇瑞哲.',
+    },
+    {
+      zh: '11.1 祝续航生日快乐！',
+      en: 'Nov 1 — happy birthday, 续航!',
     },
   ],
 }
@@ -64,6 +68,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  * sees no dot.
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  {
+    version: '0.7.6',
+    date: '2026-11-02',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '表情球装扮扩建：40 形状 · 28 配色 · 12 副眼镜 · 18 顶帽子 · 11 个品牌手持（新增 XRK-harness logo）。',
+        en: 'Emotion-ball wardrobe grows: 40 shapes · 28 colors · 12 glasses · 18 hats · 11 brand props (incl. the XRK-harness logo).',
+      },
+      {
+        zh: '球尺寸可在团队面板 0.8–1.2 微调（步进 0.02），团队面板 / 侧栏 / 预览三端同源。',
+        en: 'Ball size is adjustable 0.8–1.2 (step 0.02) from the team panel, one source across panel, rail, and preview.',
+      },
+      {
+        zh: '团队面板换装扮即时生效，不必刷新；换回内置装扮也不再残留上一枚贴纸。',
+        en: 'Dressing changes apply live in the team panel (no refresh), and switching back to built-ins no longer keeps the old sticker.',
+      },
+      {
+        zh: '检查点快照加三道闸（单文件 10 MiB / 产物后缀 / 目录名），跳过文件如实上报；Desktop 安装包不再塞进第二份 Electron。',
+        en: 'Checkpoint snapshots get three gates (10 MiB per file / artifact suffixes / directory names) and report skipped files; the Desktop installer no longer packs a second Electron.',
+      },
+      {
+        zh: '完整清单见 docs/releases/v0.7.6.md。',
+        en: 'Full list in docs/releases/v0.7.6.md.',
+      },
+    ],
+  },
   {
     version: '0.7.5',
     date: '2026-11-01',
