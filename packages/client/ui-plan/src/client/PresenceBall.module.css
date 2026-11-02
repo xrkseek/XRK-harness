@@ -73,13 +73,15 @@
 }
 
 .mount {
-  /* The bitmap is this box. A top inset leaves a dead band the canvas
-   * cannot paint, so the crown shears flat under the empty stage. */
+  /* The bitmap is this box, centred so a size trim grows evenly on all four
+   * sides. 100% of the stage is 1/1.2 of this box, which leaves exactly enough
+   * room for the 120% end of the trim — the box never grows, nothing is clipped. */
   position: absolute;
-  left: 7%;
-  right: 7%;
-  top: 0;
-  bottom: 2%;
+  left: 50%;
+  top: 50%;
+  width: calc(83.3333% * var(--ball-size, 1));
+  height: calc(83.3333% * var(--ball-size, 1));
+  transform: translate(-50%, -50%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -245,11 +247,14 @@
     color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
 }
 
+/* Compact stages keep the centred mount — only the bitmap's share shrinks so the
+ * glyph still fills the tiny box. Do NOT reintroduce `left/right/top/bottom`
+ * here: the base rule centres with `translate(-50%, -50%)`, so any extra offset
+ * shifts the box by half its own size and the clipped stage shows a corner of
+ * the ball (that is exactly how the Overview pair shipped a cropped blob). */
 .root[data-compact] .mount {
-  left: 4%;
-  right: 4%;
-  top: 6%;
-  bottom: 4%;
+  width: calc(92% * var(--ball-size, 1));
+  height: calc(92% * var(--ball-size, 1));
 }
 
 .root[data-compact] .meta {
@@ -326,10 +331,8 @@
 }
 
 .root[data-compact][data-density='header'] .mount {
-  left: 2%;
-  right: 2%;
-  top: 4%;
-  bottom: 2%;
+  width: calc(96% * var(--ball-size, 1));
+  height: calc(96% * var(--ball-size, 1));
 }
 
 .root[data-compact][data-density='header'] .meta {

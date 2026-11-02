@@ -18,6 +18,32 @@ export const PRESENCE_SHAPES = [
   'egg',
   'cloud',
   'shield',
+  'capsule',
+  'oval',
+  'tri',
+  'diamond',
+  'octagon',
+  'pentagon',
+  'cross',
+  'cushion',
+  'bean',
+  'peanut',
+  'leaf',
+  'arrow',
+  'bolt',
+  'cup',
+  'shield-tall',
+  'hex-soft',
+  'gear',
+  'star4',
+  'star6',
+  'heart-soft',
+  'cloud-puff',
+  'teardrop',
+  'quatrefoil',
+  'flower5',
+  'crescent',
+  'bowtie',
 ] as const
 
 /**
@@ -25,6 +51,7 @@ export const PRESENCE_SHAPES = [
  * for dark chrome — never pure `#fff` / `#000` (engine default cream is `#F3F0EA`).
  */
 export const PRESENCE_COLORS = [
+  /* ---- 基础 ---- */
   'cream',
   'mist',
   'peach',
@@ -39,12 +66,23 @@ export const PRESENCE_COLORS = [
   'cocoa',
   'honey',
   'ocean',
-  'grape',
-  'blush',
-  'sand',
-  'ink',
-  'ice',
-  'matcha',
+  /* ---- 金属 / 暗色 ---- */
+  'gold',
+  'silver',
+  'copper',
+  'midnight',
+  'frost',
+  'ember',
+  'twilight',
+  /* ---- 中性 / 大地 ---- */
+  'clay',
+  'linen',
+  'oat',
+  'stone',
+  'fog',
+  'ash',
+  /* ---- 玉 ---- */
+  'jade',
 ] as const
 
 export const PRESENCE_KITS = [
@@ -69,6 +107,22 @@ export const DEFAULT_PRESENCE_ENABLED = true
 
 export const PRESENCE_SHAPE_FIELD = 'shape'
 export const PRESENCE_COLOR_FIELD = 'color'
+/** Free-form `#rrggbb` body fill; empty = follow the named preset. */
+export const PRESENCE_BODY_COLOR_FIELD = 'bodyColor'
+/** Free-form `#rrggbb` eye fill; empty = follow the named preset. */
+export const PRESENCE_EYE_COLOR_FIELD = 'eyeColor'
+/**
+ * Ball size multiplier — a *trim*, not a zoom: 0.8–1.2 around the natural size.
+ *
+ * It scales the ball inside its fixed stage (`transform: scale()`), never the
+ * stage box itself. Growing the box moved every neighbour and made the control
+ * read as a layout switch instead of a size trim.
+ */
+export const PRESENCE_SIZE_FIELD = 'size'
+export const DEFAULT_PRESENCE_SIZE = 1
+export const PRESENCE_SIZE_MIN = 0.8
+export const PRESENCE_SIZE_MAX = 1.2
+export const PRESENCE_SIZE_STEP = 0.02
 export const PRESENCE_KIT_FIELD = 'kit'
 export const PRESENCE_OVERLAY_HAT_FIELD = 'overlayHat'
 export const PRESENCE_OVERLAY_GLASSES_FIELD = 'overlayGlasses'
@@ -297,9 +351,67 @@ export const PRESENCE_OVERLAY_MAX = 80_000
 export const PRESENCE_STICKERS_MAX = 24
 export const STICKER_PREFIX = 'sticker:'
 
-export const PRESENCE_HAT_KITS = ['none', 'bow', 'cap', 'beanie', 'visor', 'halo'] as const
-export const PRESENCE_GLASSES_KITS = ['none', 'specs', 'specs-rect', 'specs-cat', 'specs-sun'] as const
-export const PRESENCE_HELD_KITS = ['none', 'flower', 'tea', 'flag', 'spark'] as const
+export const PRESENCE_HAT_KITS = [
+  'none',
+  'bow',
+  'cap',
+  'beanie',
+  'bucket',
+  'beret',
+  'visor',
+  'halo',
+  'crown',
+  'tophat',
+  'chef',
+  'party',
+  'straw',
+  'wizard',
+  'cat-ears',
+  'headphones',
+  'antenna',
+  'flower-crown',
+  'cake',
+] as const
+export const PRESENCE_GLASSES_KITS = [
+  'none',
+  'specs',
+  'specs-rect',
+  'specs-cat',
+  'specs-sun',
+  'specs-round-xl',
+  'specs-oval',
+  'specs-square',
+  'specs-half',
+  'specs-rimless',
+  'specs-monocle',
+  'specs-heart',
+  'specs-shades',
+] as const
+export const PRESENCE_HELD_KITS = [
+  'none',
+  'flower',
+  'tea',
+  'flag',
+  'spark',
+  'book',
+  'pencil',
+  'lamp',
+  'umbrella',
+  'icecream',
+  'guitar',
+  'camera',
+  'balloon',
+  'brand-wechat',
+  'brand-qq',
+  'brand-douyin',
+  'brand-deepseek',
+  'brand-bilibili',
+  'brand-github',
+  'brand-xiaohongshu',
+  'brand-taobao',
+  'brand-weibo',
+  'brand-zhihu',
+] as const
 
 export type PresenceHatKit = (typeof PRESENCE_HAT_KITS)[number]
 export type PresenceGlassesKit = (typeof PRESENCE_GLASSES_KITS)[number]
@@ -388,29 +500,61 @@ export const PRESENCE_COLOR_PALETTES: Record<PresenceColor, PresenceColorModes> 
     light: { body: '#7EB8C8', eyes: '#1A1A1A' },
     dark: { body: '#4A8898', eyes: '#F0EEE8' },
   },
-  grape: {
-    light: { body: '#C4B0E0', eyes: '#1A1A1A' },
-    dark: { body: '#8A78B0', eyes: '#1A1A1A' },
+  clay: {
+    light: { body: '#D9B8A0', eyes: '#1A1A1A' },
+    dark: { body: '#A8805F', eyes: '#1A1A1A' },
   },
-  blush: {
-    light: { body: '#F0B8C4', eyes: '#1A1A1A' },
-    dark: { body: '#C88898', eyes: '#1A1A1A' },
+  linen: {
+    light: { body: '#EDE4D4', eyes: '#1A1A1A' },
+    dark: { body: '#C4B49C', eyes: '#1A1A1A' },
   },
-  sand: {
-    light: { body: '#E4D4B8', eyes: '#1A1A1A' },
-    dark: { body: '#B8A078', eyes: '#1A1A1A' },
+  oat: {
+    light: { body: '#E8DCC0', eyes: '#1A1A1A' },
+    dark: { body: '#BCAA88', eyes: '#1A1A1A' },
   },
-  ink: {
-    light: { body: '#3A3A42', eyes: '#F0EEE8' },
-    dark: { body: '#2A2A30', eyes: '#F0EEE8' },
+  stone: {
+    light: { body: '#CFCAC2', eyes: '#1A1A1A' },
+    dark: { body: '#8A857C', eyes: '#F0EEE8' },
   },
-  ice: {
-    light: { body: '#D8EEF2', eyes: '#1A1A1A' },
-    dark: { body: '#9AB8C0', eyes: '#1A1A1A' },
+  ash: {
+    light: { body: '#C6C4C0', eyes: '#1A1A1A' },
+    dark: { body: '#7A7A78', eyes: '#F0EEE8' },
   },
-  matcha: {
-    light: { body: '#B8D4A0', eyes: '#1A1A1A' },
-    dark: { body: '#7A9A68', eyes: '#1A1A1A' },
+  fog: {
+    light: { body: '#DCE2E0', eyes: '#1A1A1A' },
+    dark: { body: '#9AAAA6', eyes: '#1A1A1A' },
+  },
+  jade: {
+    light: { body: '#8FD2AE', eyes: '#1A1A1A' },
+    dark: { body: '#4E9470', eyes: '#F0EEE8' },
+  },
+  gold: {
+    light: { body: '#E8C86A', eyes: '#1A1A1A' },
+    dark: { body: '#B08E33', eyes: '#1A1A1A' },
+  },
+  silver: {
+    light: { body: '#D9DEE4', eyes: '#1A1A1A' },
+    dark: { body: '#9AA4AE', eyes: '#1A1A1A' },
+  },
+  copper: {
+    light: { body: '#D89A70', eyes: '#1A1A1A' },
+    dark: { body: '#A4663C', eyes: '#F0EEE8' },
+  },
+  midnight: {
+    light: { body: '#4E5A80', eyes: '#F0EEE8' },
+    dark: { body: '#333D5C', eyes: '#F0EEE8' },
+  },
+  frost: {
+    light: { body: '#E4F0F4', eyes: '#1A1A1A' },
+    dark: { body: '#ADC6CC', eyes: '#1A1A1A' },
+  },
+  ember: {
+    light: { body: '#E08A5E', eyes: '#1A1A1A' },
+    dark: { body: '#A85A34', eyes: '#F0EEE8' },
+  },
+  twilight: {
+    light: { body: '#9A8AC2', eyes: '#1A1A1A' },
+    dark: { body: '#6A5C92', eyes: '#F0EEE8' },
   },
 }
 
@@ -425,6 +569,9 @@ export interface PresenceSettings {
   enabled: boolean
   shape: PresenceShape
   color: PresenceColor
+  bodyColor: string
+  eyeColor: string
+  size: number
   kit: PresenceKit
   kitHat: string
   kitGlasses: string
@@ -448,6 +595,10 @@ export const PresenceSettingsSchema: z<PresenceSettings> = z.object({
   [PRESENCE_ENABLED_FIELD]: z.boolean().default(DEFAULT_PRESENCE_ENABLED),
   [PRESENCE_SHAPE_FIELD]: z.union([...PRESENCE_SHAPES]).default(DEFAULT_PRESENCE_SHAPE),
   [PRESENCE_COLOR_FIELD]: z.union([...PRESENCE_COLORS]).default(DEFAULT_PRESENCE_COLOR),
+  /* Empty = named preset; otherwise the operator's own `#rrggbb`. */
+  [PRESENCE_BODY_COLOR_FIELD]: z.string().pattern(/^#[0-9a-fA-F]{6}$/).default(''),
+  [PRESENCE_EYE_COLOR_FIELD]: z.string().pattern(/^#[0-9a-fA-F]{6}$/).default(''),
+  [PRESENCE_SIZE_FIELD]: z.number().default(DEFAULT_PRESENCE_SIZE),
   [PRESENCE_KIT_FIELD]: z.union([...PRESENCE_KITS]).default(DEFAULT_PRESENCE_KIT),
   [PRESENCE_KIT_HAT_FIELD]: z.string().default('none'),
   [PRESENCE_KIT_GLASSES_FIELD]: z.string().default('none'),
@@ -632,11 +783,46 @@ export function resolveStickerOverlay(pick: string, stickers: readonly PresenceS
   return stickers.find((row) => row.id === id)?.image ?? ''
 }
 
+/** Accept `#rrggbb` (also `#rgb` shorthand) from the colour inputs; else ''. */
+export function parseHexColor(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const value = raw.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toUpperCase()
+  if (/^#[0-9a-fA-F]{3}$/.test(value)) {
+    const [, r, g, b] = value
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase()
+  }
+  return ''
+}
+
+/**
+ * Clamp/round a ball-size multiplier onto the slider's step grid. Anything
+ * non-finite or out of range falls back to 1 so a stale or hand-edited value
+ * (the old 0.6–1.6 scale) can never blow up layout.
+ */
+export function parsePresenceSize(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
+  if (!Number.isFinite(n)) return DEFAULT_PRESENCE_SIZE
+  /* x50 = the 0.02 grid; dividing by the step pins float dust (1.19 -> 1.18). */
+  const stepped = Math.round(n * 50) / 50
+  if (stepped < PRESENCE_SIZE_MIN || stepped > PRESENCE_SIZE_MAX) return DEFAULT_PRESENCE_SIZE
+  /* Kill float dust (0.9800000000000001) before it reaches Host storage. */
+  return Math.round(stepped * 1000) / 1000
+}
+
 /** Pick body/eye paint for the active chrome scheme. */
 export function resolvePresencePaint(
   color: PresenceColor,
   dark: boolean,
+  bodyColor?: unknown,
+  eyeColor?: unknown,
 ): PresencePaint {
   const modes = PRESENCE_COLOR_PALETTES[color] ?? PRESENCE_COLOR_PALETTES[DEFAULT_PRESENCE_COLOR]
-  return dark ? modes.dark : modes.light
+  const preset = dark ? modes.dark : modes.light
+  const body = parseHexColor(bodyColor)
+  const eyes = parseHexColor(eyeColor)
+  return {
+    body: body || preset.body,
+    eyes: eyes || preset.eyes,
+  }
 }

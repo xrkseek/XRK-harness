@@ -102,6 +102,15 @@
   padding: 8px 12px 10px;
 }
 
+/* Details pane collapsed to width 0: the rail stays *mounted* on purpose (so
+ * expanding cannot insert a tall ball and shove Status), but it must never
+ * paint. Leaving it `visibility: visible` under a 0-wide `overflow: visible`
+ * aside leaked the delegate pair outside the pane, and the crushed grid sliced
+ * both stages into 1px strips — the "green blob / bracket" folded overview. */
+.presenceRail[aria-hidden='true'] {
+  visibility: hidden;
+}
+
 .delegatePair {
   display: grid;
   /* Stages top-aligned — align-items:end made the smaller 委派方 ball sink

@@ -6,6 +6,10 @@
 export type TeamRosterLiveLook = {
   readonly shape?: string
   readonly color?: string
+  readonly bodyColor?: string
+  readonly eyeColor?: string
+  /** Ball size trim 0.8–1.2 (absent = 1). */
+  readonly size?: number
   readonly kit?: string
   readonly kitHat?: string
   readonly kitGlasses?: string

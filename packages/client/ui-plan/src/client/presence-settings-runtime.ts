@@ -19,6 +19,8 @@ import {
   isPresenceKit,
   isPresenceShape,
   parseBossNickname,
+  parseHexColor,
+  parsePresenceSize,
   parseMoodId,
   parsePresenceOverlay,
   parseSeatTitle,
@@ -28,11 +30,15 @@ import {
   parseStickers,
   parseTitleScheme,
   PRESENCE_BOSS_NICKNAME_FIELD,
+  PRESENCE_BODY_COLOR_FIELD,
   PRESENCE_COLOR_FIELD,
   PRESENCE_ENABLED_FIELD,
+  PRESENCE_EYE_COLOR_FIELD,
   PRESENCE_GLASSES_KITS,
   PRESENCE_HAT_KITS,
   PRESENCE_HELD_KITS,
+  DEFAULT_PRESENCE_SIZE,
+  PRESENCE_SIZE_FIELD,
   PRESENCE_KIT_FIELD,
   PRESENCE_KIT_GLASSES_FIELD,
   PRESENCE_KIT_HAT_FIELD,
@@ -75,6 +81,10 @@ export class PresenceSettingsRuntime {
   private enabled = DEFAULT_PRESENCE_ENABLED
   private shape: PresenceShape = DEFAULT_PRESENCE_SHAPE
   private color: PresenceColor = DEFAULT_PRESENCE_COLOR
+  /** Empty = follow the named preset; otherwise the operator's own hex. */
+  private bodyColor = ''
+  private size = DEFAULT_PRESENCE_SIZE
+  private eyeColor = ''
   private kit: PresenceKit = DEFAULT_PRESENCE_KIT
   private kitHat = 'none'
   private kitGlasses = 'none'
@@ -120,6 +130,20 @@ export class PresenceSettingsRuntime {
 
   getColor(): PresenceColor {
     return this.color
+  }
+
+  /** Free-form body hex; '' means "follow the named preset". */
+  getSize(): number {
+    return this.size
+  }
+
+  getBodyColor(): string {
+    return this.bodyColor
+  }
+
+  /** Free-form eye hex; '' means "follow the named preset". */
+  getEyeColor(): string {
+    return this.eyeColor
   }
 
   getKit(): PresenceKit {
@@ -349,6 +373,36 @@ export class PresenceSettingsRuntime {
     this.publish()
   }
 
+  /** Custom body fill. `''` clears the override and falls back to the preset. */
+  setBodyColor(hex: string): void {
+    const next = parseHexColor(hex)
+    if (this.bodyColor === next) return
+    this.bodyColor = next
+    this.revision += 1
+    void this.host.set(PRESENCE_BODY_COLOR_FIELD, next)
+    this.publish()
+  }
+
+  /** Custom eye fill. `''` clears the override and falls back to the preset. */
+  setEyeColor(hex: string): void {
+    const next = parseHexColor(hex)
+    if (this.eyeColor === next) return
+    this.eyeColor = next
+    this.revision += 1
+    void this.host.set(PRESENCE_EYE_COLOR_FIELD, next)
+    this.publish()
+  }
+
+  /** Ball size multiplier (0.6–1.6). Invalid input falls back to 1. */
+  setSize(value: number): void {
+    const next = parsePresenceSize(value)
+    if (this.size === next) return
+    this.size = next
+    this.revision += 1
+    void this.host.set(PRESENCE_SIZE_FIELD, next)
+    this.publish()
+  }
+
   setKit(kit: PresenceKit): void {
     if (!isPresenceKit(kit)) return
     const split = splitLegacyKit(kit)
@@ -460,6 +514,9 @@ export class PresenceSettingsRuntime {
     const nextColor = isPresenceColor(section?.color)
       ? section.color
       : DEFAULT_PRESENCE_COLOR
+    const nextBodyColor = parseHexColor(section?.bodyColor)
+    const nextEyeColor = parseHexColor(section?.eyeColor)
+    const nextSize = parsePresenceSize(section?.size)
     const nextKit = isPresenceKit(section?.kit)
       ? section.kit
       : DEFAULT_PRESENCE_KIT
@@ -486,6 +543,9 @@ export class PresenceSettingsRuntime {
       this.enabled === nextEnabled
       && this.shape === nextShape
       && this.color === nextColor
+      && this.bodyColor === nextBodyColor
+      && this.eyeColor === nextEyeColor
+      && this.size === nextSize
       && this.kit === nextKit
       && this.kitHat === nextHat
       && this.kitGlasses === nextGlasses
@@ -507,6 +567,9 @@ export class PresenceSettingsRuntime {
     this.enabled = nextEnabled
     this.shape = nextShape
     this.color = nextColor
+    this.bodyColor = nextBodyColor
+    this.eyeColor = nextEyeColor
+    this.size = nextSize
     this.kit = nextKit
     this.kitHat = nextHat
     this.kitGlasses = nextGlasses

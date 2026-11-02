@@ -5,7 +5,14 @@
  * Session delivery / fleet edges drive bounce · spin · burst so the ball
  * reacts like a companion, not a static LED.
  */
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react'
 import { bindSeatChannelBossLabel } from '@xrkseek/client-runtime/client'
 import {
   DEFAULT_PRESENCE_COLOR,
@@ -13,12 +20,14 @@ import {
   DEFAULT_PRESENCE_MOOD_AT,
   DEFAULT_PRESENCE_MOOD_ID,
   DEFAULT_PRESENCE_SHAPE,
+  DEFAULT_PRESENCE_SIZE,
   DEFAULT_PRESENCE_STATUS_LINE,
   DEFAULT_PRESENCE_TITLE_SCHEME,
   DEFAULT_STATUS_PRESETS,
   isPresenceColor,
   isPresenceShape,
   resolvePresencePaint,
+  resolveStickerOverlay,
   resolveStatusPresetsForLocale,
   seatTitlesForScheme,
   splitLegacyKit,
@@ -26,6 +35,7 @@ import {
   type PresencePaint,
   type PresenceSeatTitles,
   type PresenceShape,
+  type PresenceSticker,
   type PresenceTitleSchemeId,
 } from '../presence-settings.ts'
 import { PresenceKitMark } from './PresenceKitMark.tsx'
@@ -106,6 +116,9 @@ interface PresenceLook {
   readonly enabled: boolean
   readonly shape: PresenceShape
   readonly color: PresenceColor
+  readonly bodyColor: string
+  readonly eyeColor: string
+  readonly size: number
   readonly engineHat: string
   readonly engineGlasses: string
   readonly engineHeld: string
@@ -118,6 +131,9 @@ const DEFAULT_PRESENCE_LOOK: PresenceLook = {
   enabled: DEFAULT_PRESENCE_ENABLED,
   shape: DEFAULT_PRESENCE_SHAPE,
   color: DEFAULT_PRESENCE_COLOR,
+  bodyColor: '',
+  eyeColor: '',
+  size: DEFAULT_PRESENCE_SIZE,
   engineHat: 'none',
   engineGlasses: 'none',
   engineHeld: 'none',
@@ -133,6 +149,9 @@ function readPresenceLook(): PresenceLook {
     enabled: runtime.getEnabled(),
     shape: runtime.getShape(),
     color: runtime.getColor(),
+    bodyColor: runtime.getBodyColor(),
+    eyeColor: runtime.getEyeColor(),
+    size: runtime.getSize(),
     engineHat: runtime.getEngineHat(),
     engineGlasses: runtime.getEngineGlasses(),
     engineHeld: runtime.getEngineHeld(),
@@ -146,6 +165,9 @@ function samePresenceLook(a: PresenceLook, b: PresenceLook): boolean {
   return a.enabled === b.enabled
     && a.shape === b.shape
     && a.color === b.color
+    && a.bodyColor === b.bodyColor
+    && a.eyeColor === b.eyeColor
+    && a.size === b.size
     && a.engineHat === b.engineHat
     && a.engineGlasses === b.engineGlasses
     && a.engineHeld === b.engineHeld
@@ -231,6 +253,48 @@ function usePresenceLook(): PresenceLook {
 /** Master switch from Settings → General; false hides header dock + Overview rail. */
 export function usePresenceEnabled(): boolean {
   return useSyncExternalStore(subscribePresenceSettings, presenceEnabledSnapshot, presenceEnabledServerSnapshot)
+}
+
+const EMPTY_STICKERS: readonly PresenceSticker[] = []
+
+function presenceStickerSnapshot(): readonly PresenceSticker[] {
+  return presenceSettingsRuntime?.getStickers() ?? EMPTY_STICKERS
+}
+
+function presenceStickerServerSnapshot(): readonly PresenceSticker[] {
+  return EMPTY_STICKERS
+}
+
+/**
+ * Sticker library shared with Settings `ui-presence`.
+ *
+ * A 干员 look stores the raw `sticker:<id>` pick; the Host resolves it to an
+ * image URL before serving the snapshot. The live (hot-update) path only carries
+ * the raw pick, so without this table a freshly picked custom glasses sticker
+ * stayed invisible until a full page reload — the ball simply had no image.
+ */
+function usePresenceStickers(): readonly PresenceSticker[] {
+  return useSyncExternalStore(
+    subscribePresenceSettings,
+    presenceStickerSnapshot,
+    presenceStickerServerSnapshot,
+  )
+}
+
+const NO_SLOT: { readonly engine: string; readonly overlay: string } = { engine: 'none', overlay: '' }
+
+/**
+ * One member dressing slot. A builtin id goes to the engine verbatim; a
+ * `sticker:<id>` pick (custom dressing) is swapped for its image here, because
+ * the engine only knows builtin ids.
+ */
+function memberSlot(
+  pick: string | undefined,
+  stickers: readonly PresenceSticker[],
+): { readonly engine: string; readonly overlay: string } {
+  if (!pick || pick === 'none') return NO_SLOT
+  const image = resolveStickerOverlay(pick, stickers)
+  return image ? { engine: 'none', overlay: image } : { engine: pick, overlay: '' }
 }
 
 export interface BossMoodSnapshot {
@@ -347,7 +411,7 @@ const SCRIPT_BASE = '/presence/emotion-ball'
 /** Worker host first; SVG stack loads via EmotionBall.loadLegacySvg when needed. */
 const SCRIPT_ORDER = ['presence-worker-host.js'] as const
 /** Bump when worker / canvas render path changes so cached scripts reload. */
-const PRESENCE_BALL_REV = '40'
+const PRESENCE_BALL_REV = '43'
 
 /** User click pulse — playful set, then hand back to auto. */
 const CLICK_IDS = ['10', '13', '03', '33', '14', '11', '19', '07'] as const
@@ -542,6 +606,7 @@ export const PresenceBall = memo(function PresenceBall({
   readonly memberLook?: {
     readonly shape: string
     readonly color: string
+    readonly size?: number
     readonly kit?: string
     readonly kitHat?: string
     readonly kitGlasses?: string
@@ -574,6 +639,9 @@ export const PresenceBall = memo(function PresenceBall({
 }) {
   const persona = sessionBallPersona(sessionId ?? 'default')
   const look = usePresenceLook()
+  /* Ball trim lives on the stage as a CSS var: the box stays put, only the
+   * engine mount scales. Compact (18px sidebar) glyphs and member balls keep 1×. */
+  const stageSize = compact ? 1 : (memberLook?.size ?? look.size)
   const dark = useChromeDark()
   // When `memberLook` is set (including pending fallback), never blend in
   // Settings 老板装扮 — invalid fields fall back to defaults, not ui-presence.
@@ -585,20 +653,20 @@ export const PresenceBall = memo(function PresenceBall({
       isPresenceColor(memberLook.color) ? memberLook.color : DEFAULT_PRESENCE_COLOR,
       dark,
     )
-    : resolvePresencePaint(look.color, dark)
+    : resolvePresencePaint(look.color, dark, look.bodyColor, look.eyeColor)
   const split = splitLegacyKit(memberLook?.kit)
-  const engineHat = memberLook
-    ? (memberLook.kitHat ?? split.hat)
-    : look.engineHat
-  const engineGlasses = memberLook
-    ? (memberLook.kitGlasses ?? split.glasses)
-    : look.engineGlasses
-  const engineHeld = memberLook
-    ? (memberLook.kitHeld ?? 'none')
-    : look.engineHeld
-  const overlayHat = memberLook ? (memberLook.overlayHat ?? '') : look.overlayHat
-  const overlayGlasses = memberLook ? (memberLook.overlayGlasses ?? '') : look.overlayGlasses
-  const overlayHeld = memberLook ? (memberLook.overlayHeld ?? '') : look.overlayHeld
+  const memberStickers = usePresenceStickers()
+  const memberHat = memberSlot(memberLook?.kitHat ?? split.hat, memberStickers)
+  const memberGlasses = memberSlot(memberLook?.kitGlasses ?? split.glasses, memberStickers)
+  const memberHeld = memberSlot(memberLook?.kitHeld, memberStickers)
+  const engineHat = memberLook ? memberHat.engine : look.engineHat
+  const engineGlasses = memberLook ? memberGlasses.engine : look.engineGlasses
+  const engineHeld = memberLook ? memberHeld.engine : look.engineHeld
+  const overlayHat = memberLook ? (memberHat.overlay || memberLook.overlayHat || '') : look.overlayHat
+  const overlayGlasses = memberLook
+    ? (memberGlasses.overlay || memberLook.overlayGlasses || '')
+    : look.overlayGlasses
+  const overlayHeld = memberLook ? (memberHeld.overlay || memberLook.overlayHeld || '') : look.overlayHeld
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const lastAccentRef = useRef<string>('')
@@ -894,6 +962,7 @@ export const PresenceBall = memo(function PresenceBall({
       data-density={compact ? density : undefined}
       data-pair={pairSeat ? '' : undefined}
       data-seat={seat}
+      style={stageSize === 1 ? undefined : ({ '--ball-size': String(stageSize) } as CSSProperties)}
     >
       <button
         type="button"

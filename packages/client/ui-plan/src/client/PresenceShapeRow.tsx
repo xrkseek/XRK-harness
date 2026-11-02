@@ -11,7 +11,11 @@ import type {} from '@xrkseek/client-ui-settings-plugins/client'
 import { IconSparkleRegular, Switch } from '@xrkseek/client-ui-primitives'
 import {
   PRESENCE_SEAT_TITLE_MAX,
+  PRESENCE_SIZE_MAX,
+  PRESENCE_SIZE_MIN,
+  PRESENCE_SIZE_STEP,
   PRESENCE_TITLE_SCHEMES,
+  PRESENCE_COLOR_PALETTES,
   resolveSeatTitles,
   seatTitlesForScheme,
   type PresenceColor,
@@ -31,6 +35,9 @@ export interface PresenceShapeRowInjected {
   setEnabled: (enabled: boolean) => void
   setShape: (shape: PresenceShape) => void
   setColor: (color: PresenceColor) => void
+  setBodyColor: (hex: string) => void
+  setEyeColor: (hex: string) => void
+  setSize: (size: number) => void
   setSlot: (slot: DressingSlot, pick: string) => void
   addSticker: (image: string, slot?: DressingSlot) => string | undefined
   removeSticker: (id: string) => void
@@ -50,6 +57,9 @@ export type PresenceShapeRowComponentProps =
 export function PresenceShapeRow({
   t,
   setEnabled,
+  setBodyColor,
+  setEyeColor,
+  setSize,
   addStatusPreset,
   removeStatusPreset,
   setTitleScheme,
@@ -57,6 +67,10 @@ export function PresenceShapeRow({
   useStore,
 }: PresenceShapeRowComponentProps) {
   const enabled = useStore((s) => s.enabled)
+  const color = useStore((s) => s.color)
+  const bodyColor = useStore((s) => s.bodyColor)
+  const eyeColor = useStore((s) => s.eyeColor)
+  const size = useStore((s) => s.size)
   const statusPresets = useStore((s) => s.statusPresets)
   const titleScheme = useStore((s) => s.titleScheme)
   const titleBoss = useStore((s) => s.titleBoss)
@@ -77,6 +91,10 @@ export function PresenceShapeRow({
   }
   const [presetDraft, setPresetDraft] = useState('')
   const [open, setOpen] = useState(enabled)
+  /* 预设色板取亮色档当基线；覆盖值存在时直接用它。 */
+  const presetPaint = (PRESENCE_COLOR_PALETTES[color] ?? PRESENCE_COLOR_PALETTES.cream).light
+  const bodyPaint = bodyColor || presetPaint.body
+  const eyePaint = eyeColor || presetPaint.eyes
   return (
     <li className={clsx(css.card, open && css.cardOpen)}>
       <div className={css.header}>
@@ -108,6 +126,61 @@ export function PresenceShapeRow({
       <div className={css.body}>
         <p className={css.liveBanner} role="note">{t('presenceLive.banner')}</p>
         <p className={css.hint}>{t('presenceDress.teamHint', { boss: liveTitles.boss })}</p>
+        {/* 自定义取色：空值 = 跟随预设色板（点预设色即清空覆盖）。 */}
+        <div className={css.subtitle}>{t('presenceCustom.title')}</div>
+        <p className={css.hint}>{t('presenceCustom.hint')}</p>
+        <div className={css.colorRow}>
+          <label className={css.colorPick}>
+            <input
+              type="color"
+              className={css.colorInput}
+              value={bodyPaint}
+              aria-label={t('presenceCustom.body')}
+              onChange={(e) => { setBodyColor(e.target.value) }}
+            />
+            <span className={css.colorSwatch} style={{ background: bodyPaint }} aria-hidden="true" />
+            <span className={css.colorLabel}>{t('presenceCustom.body')}</span>
+          </label>
+          <label className={css.colorPick}>
+            <input
+              type="color"
+              className={css.colorInput}
+              value={eyePaint}
+              aria-label={t('presenceCustom.eyes')}
+              onChange={(e) => { setEyeColor(e.target.value) }}
+            />
+            <span className={css.colorSwatch} style={{ background: eyePaint }} aria-hidden="true" />
+            <span className={css.colorLabel}>{t('presenceCustom.eyes')}</span>
+          </label>
+          {bodyColor || eyeColor ? (
+            <button
+              type="button"
+              className={css.colorReset}
+              onClick={() => {
+                setBodyColor('')
+                setEyeColor('')
+              }}
+            >
+              {t('presenceCustom.followPreset')}
+            </button>
+          ) : null}
+        </div>
+        {/* 表情球大小：舞台盒子固定，只缩里面的球（0.8–1.2 微调），
+            放大时才不会盖住隔壁卡片、也不会把邻居推开。 */}
+        <label className={css.sizeRow}>
+          <span className={css.colorLabel}>{t('presenceCustom.size')}</span>
+          <input
+            type="range"
+            className={css.sizeRange}
+            min={PRESENCE_SIZE_MIN}
+            max={PRESENCE_SIZE_MAX}
+            step={PRESENCE_SIZE_STEP}
+            value={size}
+            aria-label={t('presenceCustom.size')}
+            onChange={(e) => { setSize(Number(e.target.value)) }}
+          />
+          <span className={css.sizeValue}>{Math.round(size * 100)}%</span>
+        </label>
         <div className={css.subtitle}>{t('titleScheme.title')}</div>
         <p className={css.hint}>{t('titleScheme.hint')}</p>
         <div className={css.cubeRow} role="listbox" aria-label={t('titleScheme.title')}>

@@ -7,6 +7,7 @@ import {
   DEFAULT_PRESENCE_MOOD_AT,
   DEFAULT_PRESENCE_MOOD_ID,
   DEFAULT_PRESENCE_SHAPE,
+  DEFAULT_PRESENCE_SIZE,
   DEFAULT_PRESENCE_STATUS_LINE,
   DEFAULT_PRESENCE_TITLE_SCHEME,
   DEFAULT_STATUS_PRESETS,
@@ -21,6 +22,11 @@ export interface PresencePrefsRowState {
   enabled: boolean
   shape: PresenceShape
   color: PresenceColor
+  /** '' = follow the named preset (see PRESENCE_COLOR_PALETTES). */
+  bodyColor: string
+  eyeColor: string
+  /** Ball size multiplier (0.6–1.6, 1 = default). */
+  size: number
   kit: PresenceKit
   kitHat: string
   kitGlasses: string
@@ -46,6 +52,9 @@ type PresencePrefsRowActions = {
     enabled: boolean,
     shape: PresenceShape,
     color: PresenceColor,
+    bodyColor: string,
+    eyeColor: string,
+    size: number,
     kit: PresenceKit,
     kitHat: string,
     kitGlasses: string,
@@ -76,6 +85,9 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
       enabled: DEFAULT_PRESENCE_ENABLED,
       shape: DEFAULT_PRESENCE_SHAPE,
       color: DEFAULT_PRESENCE_COLOR,
+      bodyColor: '',
+      eyeColor: '',
+      size: DEFAULT_PRESENCE_SIZE,
       kit: DEFAULT_PRESENCE_KIT,
       kitHat: 'none',
       kitGlasses: 'none',
@@ -100,6 +112,9 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
         enabled,
         shape,
         color,
+        bodyColor,
+        eyeColor,
+        size,
         kit,
         kitHat,
         kitGlasses,
@@ -122,6 +137,9 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
         d.enabled = enabled
         d.shape = shape
         d.color = color
+        d.bodyColor = bodyColor
+        d.eyeColor = eyeColor
+        d.size = size
         d.kit = kit
         d.kitHat = kitHat
         d.kitGlasses = kitGlasses

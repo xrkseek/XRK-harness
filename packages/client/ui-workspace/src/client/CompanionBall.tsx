@@ -1,111 +1,56 @@
 /**
  * Compact EmotionBall mount for Agent Team — same engine as the session header.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react'
 import css from './CompanionBall.module.css'
-import { HELD_BUILTINS } from './dressing-library.ts'
+import { SHAPE_GLYPHS } from './shape-glyphs.ts'
+import { BRAND_BADGES } from './brand-badges.ts'
+import {
+  COMPANION_COLORS,
+  COMPANION_KITS,
+  COMPANION_SHAPES,
+  HELD_BUILTINS,
+  companionPaint,
+  isCompanionColor,
+  isCompanionKit,
+  isCompanionShape,
+  isHeldBuiltin,
+} from './dressing-library.ts'
+import type {
+  CompanionColor,
+  CompanionHeld,
+  CompanionKit,
+  CompanionShape,
+} from './dressing-library.ts'
+
+/* Re-export the look vocabulary so existing importers (TeamRoster,
+ * AddAgentPanel, rows) keep importing it from CompanionBall. */
+export {
+  COMPANION_COLORS,
+  COMPANION_KITS,
+  COMPANION_SHAPES,
+  companionPaint,
+  isCompanionColor,
+  isCompanionKit,
+  isCompanionShape,
+}
+export type { CompanionColor, CompanionHeld, CompanionKit, CompanionShape }
 
 const SCRIPT_BASE = '/presence/emotion-ball'
 const SCRIPT_ORDER = ['rings.js', 'emotions.js', 'ball.js', 'engine.js'] as const
 /** Bump when rings.js gains shapes so cached engine scripts reload. */
-const PRESENCE_BALL_REV = '40'
+const PRESENCE_BALL_REV = '43'
 
-export const COMPANION_SHAPES = [
-  'blob',
-  'wedge',
-  'gem',
-  'squircle',
-  'drop',
-  'pill',
-  'petal',
-  'loaf',
-  'heart',
-  'star',
-  'hex',
-  'egg',
-  'cloud',
-  'shield',
-] as const
+/** Free-form override guard — the picker yields exactly `#rrggbb`. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
 
-export const COMPANION_COLORS = [
-  'cream',
-  'mist',
-  'peach',
-  'sage',
-  'lilac',
-  'slate',
-  'coral',
-  'butter',
-  'mint',
-  'sky',
-  'rose',
-  'cocoa',
-  'honey',
-  'ocean',
-  'grape',
-  'blush',
-  'sand',
-  'ink',
-  'ice',
-  'matcha',
-] as const
-
-export const COMPANION_KITS = [
-  'none',
-  'bow',
-  'cap',
-  'beanie',
-  'visor',
-  'specs',
-  'specs-rect',
-  'specs-cat',
-  'specs-sun',
-  'halo',
-] as const
-
-export type CompanionShape = (typeof COMPANION_SHAPES)[number]
-export type CompanionColor = (typeof COMPANION_COLORS)[number]
-export type CompanionKit = (typeof COMPANION_KITS)[number]
-export type CompanionHeld = (typeof HELD_BUILTINS)[number]
-
-function isHeldBuiltin(value: string): value is Exclude<CompanionHeld, 'none'> {
-  return value !== 'none' && (HELD_BUILTINS as readonly string[]).includes(value)
-}
-
-const PALETTES: Record<CompanionColor, { light: { body: string; eyes: string }; dark: { body: string; eyes: string } }> = {
-  cream: { light: { body: '#F3F0EA', eyes: '#1A1A1A' }, dark: { body: '#E4E0D8', eyes: '#1A1A1A' } },
-  mist: { light: { body: '#D4E0EC', eyes: '#1A1A1A' }, dark: { body: '#9AABB8', eyes: '#1A1A1A' } },
-  peach: { light: { body: '#F0D8C8', eyes: '#1A1A1A' }, dark: { body: '#C4A090', eyes: '#1A1A1A' } },
-  sage: { light: { body: '#D4E5C8', eyes: '#1A1A1A' }, dark: { body: '#96B088', eyes: '#1A1A1A' } },
-  lilac: { light: { body: '#E5D4E8', eyes: '#1A1A1A' }, dark: { body: '#B098B8', eyes: '#1A1A1A' } },
-  slate: { light: { body: '#C8CDD4', eyes: '#1A1A1A' }, dark: { body: '#5A6068', eyes: '#F0EEE8' } },
-  coral: { light: { body: '#F0C8BC', eyes: '#1A1A1A' }, dark: { body: '#C48A7C', eyes: '#1A1A1A' } },
-  butter: { light: { body: '#F2E4B0', eyes: '#1A1A1A' }, dark: { body: '#C4B070', eyes: '#1A1A1A' } },
-  mint: { light: { body: '#C8E8DC', eyes: '#1A1A1A' }, dark: { body: '#7ABAA8', eyes: '#1A1A1A' } },
-  sky: { light: { body: '#C5DCF0', eyes: '#1A1A1A' }, dark: { body: '#7A9BB8', eyes: '#1A1A1A' } },
-  rose: { light: { body: '#E8C8D4', eyes: '#1A1A1A' }, dark: { body: '#B8889C', eyes: '#1A1A1A' } },
-  cocoa: { light: { body: '#C4A888', eyes: '#1A1A1A' }, dark: { body: '#8A7058', eyes: '#F0EEE8' } },
-  honey: { light: { body: '#E8C46A', eyes: '#1A1A1A' }, dark: { body: '#B89040', eyes: '#1A1A1A' } },
-  ocean: { light: { body: '#7EB8C8', eyes: '#1A1A1A' }, dark: { body: '#4A8898', eyes: '#F0EEE8' } },
-  grape: { light: { body: '#C4B0E0', eyes: '#1A1A1A' }, dark: { body: '#8A78B0', eyes: '#1A1A1A' } },
-  blush: { light: { body: '#F0B8C4', eyes: '#1A1A1A' }, dark: { body: '#C88898', eyes: '#1A1A1A' } },
-  sand: { light: { body: '#E4D4B8', eyes: '#1A1A1A' }, dark: { body: '#B8A078', eyes: '#1A1A1A' } },
-  ink: { light: { body: '#3A3A42', eyes: '#F0EEE8' }, dark: { body: '#2A2A30', eyes: '#F0EEE8' } },
-  ice: { light: { body: '#D8EEF2', eyes: '#1A1A1A' }, dark: { body: '#9AB8C0', eyes: '#1A1A1A' } },
-  matcha: { light: { body: '#B8D4A0', eyes: '#1A1A1A' }, dark: { body: '#7A9A68', eyes: '#1A1A1A' } },
-}
-
-function isCompanionShape(value: string): value is CompanionShape {
-  return COMPANION_SHAPES.some((id) => id === value)
-}
-
-function isCompanionColor(value: string): value is CompanionColor {
-  return COMPANION_COLORS.some((id) => id === value)
-}
-
-function isCompanionKit(value: string): value is CompanionKit {
-  return COMPANION_KITS.some((id) => id === value)
-}
 
 function useChromeDark(): boolean {
   return useSyncExternalStore(
@@ -194,66 +139,17 @@ function loadEmotionBallScripts(): Promise<void> {
   return scriptsPromise
 }
 
-export function companionPaint(color: string, dark: boolean): { body: string; eyes: string } {
-  const id = isCompanionColor(color) ? color : 'cream'
-  return dark ? PALETTES[id].dark : PALETTES[id].light
-}
 
-/** Compact silhouette for the shape picker (same ids as the engine). */
+/**
+ * Compact silhouette for the shape picker. The path comes straight from
+ * `shape-glyphs.ts`, which `scripts/gen-shape-glyphs.mjs` generates from the
+ * engine's own `rings.js` rings — never hand-draw a second outline here.
+ */
 export function CompanionShapeGlyph({ shape }: { readonly shape: string }) {
   const id = isCompanionShape(shape) ? shape : 'blob'
   return (
     <svg className={css.glyph} viewBox="0 0 36 36" aria-hidden>
-      {id === 'wedge' ? (
-        <path
-          fill="currentColor"
-          d="M18 5.5c1.2 0 2.3.6 3 1.6l10.2 15.8c1.4 2.2-.2 5.1-2.8 5.1H7.6c-2.6 0-4.2-2.9-2.8-5.1L15 7.1c.7-1 1.8-1.6 3-1.6z"
-        />
-      ) : id === 'gem' ? (
-        <path fill="currentColor" d="M18 4.5 31.5 18 18 31.5 4.5 18 18 4.5z" />
-      ) : id === 'squircle' ? (
-        <rect x="6" y="6" width="24" height="24" rx="8" fill="currentColor" />
-      ) : id === 'drop' ? (
-        <path
-          fill="currentColor"
-          d="M18 5 27.2 19.4a9.4 9.4 0 1 1-18.4 0Z"
-        />
-      ) : id === 'pill' ? (
-        <rect x="4" y="11" width="28" height="14" rx="7" fill="currentColor" />
-      ) : id === 'petal' ? (
-        <path
-          fill="currentColor"
-          d="M18 5c2.4 4.8 4.2 8 6.8 9.3C27.4 15.6 30 16 31 18c-1 2-3.6 2.4-6.2 3.7C22.2 23 20.4 26.2 18 31c-2.4-4.8-4.2-8-6.8-9.3C8.6 20.4 6 20 5 18c1-2 3.6-2.4 6.2-3.7C13.8 13 15.6 9.8 18 5z"
-        />
-      ) : id === 'loaf' ? (
-        <path
-          fill="currentColor"
-          d="M6.5 16.5c0-5.2 5.2-9.5 11.5-9.5s11.5 4.3 11.5 9.5v7.2c0 2.3-2.3 4.2-5.2 4.2H11.7c-2.9 0-5.2-1.9-5.2-4.2z"
-        />
-      ) : id === 'heart' ? (
-        <path
-          fill="currentColor"
-          d="M18 30.5 8.2 20.4C4.4 16.6 4.6 10.6 8.8 8.2c2.8-1.6 6.4-.8 8.2 1.8 1.8-2.6 5.4-3.4 8.2-1.8 4.2 2.4 4.4 8.4.6 12.2z"
-        />
-      ) : id === 'star' ? (
-        <path
-          fill="currentColor"
-          d="M18 5.5 21.4 14l8.8.8-6.7 5.8 2.1 8.6L18 24.4l-7.6 4.8 2.1-8.6-6.7-5.8 8.8-.8z"
-        />
-      ) : id === 'hex' ? (
-        <path fill="currentColor" d="M18 5.5 29 12v12L18 30.5 7 24V12z" />
-      ) : id === 'egg' ? (
-        <ellipse cx="18" cy="19" rx="10" ry="13" fill="currentColor" />
-      ) : id === 'cloud' ? (
-        <path
-          fill="currentColor"
-          d="M12 24h14a6 6 0 0 0 1-12 8 8 0 0 0-15.2-2A6.5 6.5 0 0 0 12 24z"
-        />
-      ) : id === 'shield' ? (
-        <path fill="currentColor" d="M18 5.5 28 9.5v9.2c0 6.2-4.2 10.4-10 12.8-5.8-2.4-10-6.6-10-12.8V9.5z" />
-      ) : (
-        <circle cx="18" cy="18" r="13.5" fill="currentColor" />
-      )}
+      <path fill="currentColor" d={SHAPE_GLYPHS[id] ?? SHAPE_GLYPHS.blob} />
     </svg>
   )
 }
@@ -267,6 +163,25 @@ export function CompanionKitMark({
   readonly className?: string
 }) {
   const markClass = className ?? css.kit
+  /* 品牌手持：牌面就是引擎渲染的那张（rings.js BRANDS → brand-badges.ts）。 */
+  const badge = BRAND_BADGES[kit]
+  if (badge) {
+    const glyph = badge.glyphColor ?? '#FFFFFF'
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="4" y="4" width="28" height="28" rx="8" fill={badge.color} />
+        <path fill={glyph} d={badge.path} transform="translate(4 4) scale(1.1667)" />
+        {/* Two-tone brands (XRK's gold drop) stack a second path on the same grid. */}
+        {badge.accent ? (
+          <path
+            fill={badge.accentColor ?? glyph}
+            d={badge.accent}
+            transform="translate(4 4) scale(1.1667)"
+          />
+        ) : null}
+      </svg>
+    )
+  }
   if (kit === 'bow') {
     return (
       <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
@@ -291,6 +206,24 @@ export function CompanionKitMark({
         <path fill="#3A5A8C" d="M9 22c0-8 4-14 9-14s9 6 9 14H9z" />
         <rect x="8" y="20" width="20" height="4" rx="1.4" fill="#2A446C" />
         <circle cx="18" cy="9.5" r="1.8" fill="#C44868" />
+      </svg>
+    )
+  }
+  if (kit === 'bucket') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#3A5A8C" d="M11 18c0-6 3-10 7-10s7 4 7 10z" />
+        <rect x="11" y="16.4" width="14" height="3" fill="#C44868" />
+        <path fill="#2A446C" d="M5 18c1.4 5 6.6 8 13 8s11.6-3 13-8c-4.4 3-8.6 4.4-13 4.4S9.4 21 5 18z" />
+      </svg>
+    )
+  }
+  if (kit === 'beret') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="18.6" cy="17" rx="13" ry="7.4" fill="#3A5A8C" transform="rotate(-9 18.6 17)" />
+        <path d="M7.4 19.4c4.4 3.6 17.6 4.2 22.4-1.4" fill="none" stroke="#2A446C" strokeWidth="3.4" strokeLinecap="round" />
+        <circle cx="26.4" cy="10.6" r="2.6" fill="#C44868" />
       </svg>
     )
   }
@@ -382,6 +315,266 @@ export function CompanionKitMark({
       </svg>
     )
   }
+  /* ---- 帽子：crown / tophat / chef / party / straw / wizard / cat-ears /
+   * headphones / antenna / flower-crown / cake ---- */
+  if (kit === 'crown') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#3A5A8C" d="M8 24V12l5.5 5L18 10l4.5 7L28 12v12z" />
+        <rect x="7.6" y="22" width="20.8" height="3.4" rx="1.2" fill="#2A446C" />
+        <circle cx="18" cy="10" r="1.3" fill="#C44868" />
+      </svg>
+    )
+  }
+  if (kit === 'tophat') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="18" cy="25" rx="12.5" ry="2.6" fill="#2A446C" />
+        <rect x="11" y="8" width="14" height="17" rx="1.6" fill="#3A5A8C" />
+        <rect x="11" y="20.4" width="14" height="3" fill="#C44868" />
+      </svg>
+    )
+  }
+  if (kit === 'chef') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <circle cx="12.5" cy="15" r="4.4" fill="#F2EDE4" />
+        <circle cx="23.5" cy="15" r="4.4" fill="#F2EDE4" />
+        <circle cx="18" cy="11.6" r="5.2" fill="#FBF7F0" />
+        <rect x="11" y="19" width="14" height="6" rx="1.4" fill="#E4DCCE" />
+      </svg>
+    )
+  }
+  if (kit === 'party') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#3A5A8C" d="M18 7 26 26H10z" />
+        <path fill="#C44868" d="M14.6 17h6.8l1 3.4h-8.8z" />
+        <circle cx="18" cy="7" r="2" fill="#E8C46A" />
+      </svg>
+    )
+  }
+  if (kit === 'straw') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="18" cy="22" rx="14" ry="3.4" fill="#2A446C" />
+        <path fill="#3A5A8C" d="M10 22c0-6 3.6-10 8-10s8 4 8 10z" />
+        <rect x="10" y="18.6" width="16" height="2.2" fill="#C44868" />
+      </svg>
+    )
+  }
+  if (kit === 'wizard') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="18" cy="25" rx="11" ry="2.6" fill="#2A446C" />
+        <path fill="#3A5A8C" d="M12 25c1.6-7 5-14 11-18-2 5 0 12 2 18z" />
+        <path fill="#E8C46A" d="M19.6 12.6 20.8 15l2.4.3-1.8 1.6.5 2.4-2.2-1.2-2.2 1.2.5-2.4-1.8-1.6 2.4-.3z" />
+      </svg>
+    )
+  }
+  if (kit === 'cat-ears') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#3A5A8C" d="M7 24 9.5 9 17 20z" />
+        <path fill="#3A5A8C" d="M29 24 26.5 9 19 20z" />
+        <rect x="9" y="20" width="18" height="4" rx="1.6" fill="#2A446C" />
+        <path fill="#C44868" d="M10.6 14 11.8 20h3z" />
+        <path fill="#C44868" d="M25.4 14 24.2 20h-3z" />
+      </svg>
+    )
+  }
+  if (kit === 'headphones') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M9 22a9 9 0 0 1 18 0" fill="none" stroke="#2A2A30" strokeWidth="2.6" strokeLinecap="round" />
+        <rect x="6.6" y="17" width="4.6" height="9" rx="2.2" fill="#3A5A8C" />
+        <rect x="24.8" y="17" width="4.6" height="9" rx="2.2" fill="#3A5A8C" />
+      </svg>
+    )
+  }
+  if (kit === 'antenna') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M18 24V13" fill="none" stroke="#2A2A30" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="18" cy="10" r="3.2" fill="#C44868" />
+        <rect x="12" y="23" width="12" height="3.4" rx="1.6" fill="#3A5A8C" />
+      </svg>
+    )
+  }
+  if (kit === 'flower-crown') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M6 24q12-12 24 0" fill="none" stroke="#3A5A8C" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="9.5" cy="21.5" r="2.8" fill="#F4A0B4" />
+        <circle cx="18" cy="15" r="2.8" fill="#F4A0B4" />
+        <circle cx="26.5" cy="21.5" r="2.8" fill="#F4A0B4" />
+        <circle cx="9.5" cy="21.5" r="1" fill="#E8C46A" />
+        <circle cx="18" cy="15" r="1" fill="#E8C46A" />
+        <circle cx="26.5" cy="21.5" r="1" fill="#E8C46A" />
+      </svg>
+    )
+  }
+  if (kit === 'cake') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="8" y="18" width="20" height="9" rx="1.6" fill="#FBF6EC" stroke="rgba(120,96,70,0.28)" />
+        <path fill="#FFFBF3" d="M8 19c1.6 2.6 3.4-1.4 5 0s3.4 2.6 5 0 3.4-2.6 5 0 3.4 2.6 5 0v-2.4H8z" />
+        <rect x="17.2" y="9" width="1.8" height="8" rx=".8" fill="#F2E6D2" />
+        <path fill="#C44868" d="M18 4.6c2.6 3 3.2 4.6 0 6.2-3.2-1.6-2.6-3.2 0-6.2z" />
+      </svg>
+    )
+  }
+  /* ---- 眼镜新增：round-xl / oval / square / half / rimless / monocle /
+   * heart / shades ---- */
+  if (kit === 'specs-round-xl') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <circle cx="12.5" cy="18" r="6.2" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.7" />
+        <circle cx="23.5" cy="18" r="6.2" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.7" />
+        <path d="M18.7 18h-.4" stroke="#2A2A30" strokeWidth="1.7" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-oval') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="12.5" cy="18" rx="6" ry="3.6" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.3" />
+        <ellipse cx="23.5" cy="18" rx="6" ry="3.6" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.3" />
+        <path d="M18.5 18h-1" stroke="#2A2A30" strokeWidth="1.3" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-square') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="6.5" y="14" width="10" height="8" rx="1.2" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.7" />
+        <rect x="19.5" y="14" width="10" height="8" rx="1.2" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.7" />
+        <path d="M16.5 18h3" stroke="#2A2A30" strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-half') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M6.5 18a5.5 5.5 0 0 1 11 0z" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.6" />
+        <path d="M18.5 18a5.5 5.5 0 0 1 11 0z" fill="rgba(255,255,255,0.14)" stroke="#2A2A30" strokeWidth="1.6" />
+        <path d="M17.5 18h1" stroke="#2A2A30" strokeWidth="1.6" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-rimless') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="12.5" cy="18" rx="5.6" ry="4.4" fill="rgba(200,220,240,0.22)" />
+        <ellipse cx="23.5" cy="18" rx="5.6" ry="4.4" fill="rgba(200,220,240,0.22)" />
+        <path d="M18.1 18h-.2M6.9 17l-2 1.4M29.1 17l2 1.4" fill="none" stroke="#2A2A30" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-monocle') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <circle cx="20" cy="16" r="6" fill="rgba(255,255,255,0.16)" stroke="#2A2A30" strokeWidth="1.8" />
+        <path d="M24.4 20.6c2.6 2 1.6 5-1.4 6.6" fill="none" stroke="#C8A24A" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-heart') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path d="M12.6 21.4c-3.2-2-3-6.6 0-6.6 1 0 1.4.7 1.4 1.2 0-.5.4-1.2 1.4-1.2 3 0 3.2 4.6 0 6.6-1 .6-1.8.6-2.8 0z" fill="rgba(255,255,255,0.16)" stroke="#2A2A30" strokeWidth="1.3" />
+        <path d="M23.4 21.4c-3.2-2-3-6.6 0-6.6 1 0 1.4.7 1.4 1.2 0-.5.4-1.2 1.4-1.2 3 0 3.2 4.6 0 6.6-1 .6-1.8.6-2.8 0z" fill="rgba(255,255,255,0.16)" stroke="#2A2A30" strokeWidth="1.3" />
+      </svg>
+    )
+  }
+  if (kit === 'specs-shades') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="5.6" y="14.6" width="24.8" height="1.8" rx=".9" fill="#2A2A30" />
+        <path d="M6.4 16.6h23.2l-1.4 3.4c-.6 1.4-2 2.2-3.4 2.2h-3.2c-1.6 0-3-.9-3.6-2.4-.4-1-1.6-1-2 0-.6 1.5-2 2.4-3.6 2.4h-3.2c-1.4 0-2.8-.8-3.4-2.2z" fill="rgba(40,44,52,0.82)" />
+      </svg>
+    )
+  }
+  /* ---- 手持新增：book / pencil / lamp / umbrella / icecream / guitar /
+   * camera / balloon ---- */
+  if (kit === 'book') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="8" y="10" width="20" height="16" rx="1.6" fill="#B8506E" />
+        <rect x="11.6" y="13" width="14" height="10" rx="1" fill="#FBF6EC" />
+        <rect x="8" y="10" width="3.6" height="16" rx="1.6" fill="#8A2E48" />
+      </svg>
+    )
+  }
+  if (kit === 'pencil') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#E8C46A" d="M15 9h6v15l-3 5-3-5z" />
+        <path fill="#F2A0B4" d="M15 9h6v-2.6l-3-2-3 2z" />
+        <path fill="#E8D8C8" d="M15 24l3 5 3-5z" />
+      </svg>
+    )
+  }
+  if (kit === 'lamp') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <circle cx="18" cy="15" r="6.4" fill="#F6E08A" />
+        <path d="M15.6 18.4l2.4-4 2.4 4" fill="none" stroke="#E8C46A" strokeWidth="1.2" strokeLinecap="round" />
+        <rect x="14.4" y="21.4" width="7.2" height="3" rx="1.2" fill="#9AA0A8" />
+        <path fill="#7A8088" d="M13 26h10l-1.6 2.6h-6.8z" />
+      </svg>
+    )
+  }
+  if (kit === 'umbrella') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#6A90C8" d="M6 19a12 8 0 0 1 24 0z" />
+        <path d="M18 19v8a3 3 0 0 0 6 0" fill="none" stroke="#8A7058" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M18 8v3" fill="none" stroke="#8A7058" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (kit === 'icecream') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <path fill="#E8C46A" d="M12.5 18h11l-5.5 11z" />
+        <circle cx="15" cy="15" r="4.2" fill="#F4A0B4" />
+        <circle cx="21" cy="15" r="4.2" fill="#F6C8D4" />
+        <circle cx="18" cy="10.4" r="4" fill="#FFF3E0" />
+      </svg>
+    )
+  }
+  if (kit === 'guitar') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="16" y="6" width="3.4" height="9" rx="1.2" fill="#8A5A32" />
+        <ellipse cx="17.7" cy="19" rx="5.4" ry="4.4" fill="#C4885A" />
+        <ellipse cx="17.7" cy="25.6" rx="7" ry="5.4" fill="#C4885A" />
+        <circle cx="17.7" cy="23.4" r="2" fill="#3A2A20" />
+      </svg>
+    )
+  }
+  if (kit === 'camera') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <rect x="12" y="9.6" width="8" height="3.4" rx="1" fill="#4A4E56" />
+        <rect x="7" y="12.4" width="22" height="13" rx="2.2" fill="#4A4E56" />
+        <circle cx="18" cy="19" r="5" fill="#2A2E34" />
+        <circle cx="18" cy="19" r="2.4" fill="#7AB8D8" />
+        <circle cx="25" cy="15.6" r="1.2" fill="#E8C46A" />
+      </svg>
+    )
+  }
+  if (kit === 'balloon') {
+    return (
+      <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
+        <ellipse cx="18" cy="15" rx="7" ry="8.4" fill="#E07090" />
+        <path fill="#C44868" d="M16.6 23.4h2.8L18 25.6z" />
+        <path d="M18 25.6c3 2.4-3 3.6 0 6" fill="none" stroke="#8A7058" strokeWidth="1.1" strokeLinecap="round" />
+        <ellipse cx="15.4" cy="11.8" rx="1.8" ry="2.4" fill="rgba(255,255,255,0.4)" />
+      </svg>
+    )
+  }
   return (
     <svg className={markClass} viewBox="0 0 36 36" aria-hidden>
       <circle cx="18" cy="18" r="9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" />
@@ -403,9 +596,18 @@ export function CompanionBall({
   empty,
   compact,
   emotion = '02',
+  bodyColor,
+  eyeColor,
+  size,
 }: {
   readonly shape: string
   readonly color: string
+  /** `#rrggbb` override for the body; empty/absent follows `color`'s palette. */
+  readonly bodyColor?: string
+  /** `#rrggbb` override for the eyes; empty/absent follows `color`'s palette. */
+  readonly eyeColor?: string
+  /** Ball trim 0.8–1.2 (1 = default). Scales the ball inside a fixed stage. */
+  readonly size?: number
   readonly kit?: string
   readonly kitHat?: string
   readonly kitGlasses?: string
@@ -422,6 +624,8 @@ export function CompanionBall({
 }) {
   const dark = useChromeDark()
   const paint = companionPaint(color, dark)
+  const bodyPaint = HEX_COLOR.test(bodyColor ?? '') ? (bodyColor as string) : paint.body
+  const eyePaint = HEX_COLOR.test(eyeColor ?? '') ? (eyeColor as string) : paint.eyes
   const resolvedShape = isCompanionShape(shape) ? shape : 'blob'
   const resolvedHat = kitHat && isCompanionKit(kitHat) ? kitHat : (kit && !kit.startsWith('specs') && isCompanionKit(kit) ? kit : 'none')
   const resolvedGlasses = kitGlasses && isCompanionKit(kitGlasses)
@@ -431,6 +635,11 @@ export function CompanionBall({
   const mountRef = useRef<HTMLDivElement | null>(null)
   const ballRef = useRef<EmotionBallHandle | null>(null)
   const [ready, setReady] = useState(false)
+  /* The engine draws at 100% of the stage; the stage keeps its box and the ball
+   * is scaled inside it (see `.mount`), so a trim never reflows its neighbours. */
+  const ballSize = typeof size === 'number' && Number.isFinite(size)
+    ? Math.min(1.2, Math.max(0.8, Math.round(size * 50) / 50))
+    : 1
 
   // Remount for body geometry only; dressing uses setDressing below.
   const mount = useCallback(() => {
@@ -447,8 +656,8 @@ export function CompanionBall({
           lite: true,
           eyeScale: 1.15,
           shape: resolvedShape,
-          color: paint.body,
-          eyeColor: paint.eyes,
+          color: bodyPaint,
+          eyeColor: eyePaint,
           kitHat: resolvedHat,
           kitGlasses: resolvedGlasses,
           kitHeld: heldBuiltin ?? 'none',
@@ -470,7 +679,7 @@ export function CompanionBall({
     }
     // Initial dressing is baked into create(); later kit/overlay swaps go through setDressing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empty, emotion, paint.body, paint.eyes, resolvedShape])
+  }, [empty, emotion, bodyPaint, eyePaint, resolvedShape])
 
   useEffect(() => mount(), [mount])
 
@@ -487,6 +696,7 @@ export function CompanionBall({
   return (
     <span
       className={css.stage}
+      style={ballSize === 1 ? undefined : ({ '--ball-size': String(ballSize) } as CSSProperties)}
       data-empty={empty ? '' : undefined}
       data-compact={compact ? '' : undefined}
     >

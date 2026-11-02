@@ -49,9 +49,76 @@ export function parseOverlayImage(raw: unknown): string | undefined {
 
 export const STICKER_PREFIX = "sticker:";
 export const PRESENCE_STICKERS_MAX = 24;
-export const HAT_BUILTINS = ["none", "bow", "cap", "beanie", "visor", "halo"] as const;
-export const GLASSES_BUILTINS = ["none", "specs", "specs-rect", "specs-cat", "specs-sun"] as const;
-export const HELD_BUILTINS = ["none", "flower", "tea", "flag", "spark"] as const;
+/* Keep in lockstep with `packages/client/ui-workspace/src/client/dressing-library.ts`.
+ *
+ * This is the Host-side gate for the **boss seat** only: `ui-presence` settings →
+ * `dressingFromPresence` → `parseSlotPick`, which rewrites an unknown id to
+ * `undefined` and then to `none`. A list that lags the client therefore looks
+ * exactly like "选完装扮又弹回空的" while roster members (经理 / 干员) keep theirs —
+ * those store `kitHat` / `kitGlasses` / `kitHeld` as free strings with no
+ * enumeration at all. Never hand-trim these arrays. */
+export const HAT_BUILTINS = [
+  "none",
+  "bow",
+  "cap",
+  "beanie",
+  "bucket",
+  "beret",
+  "visor",
+  "halo",
+  "crown",
+  "tophat",
+  "chef",
+  "party",
+  "straw",
+  "wizard",
+  "cat-ears",
+  "headphones",
+  "antenna",
+  "flower-crown",
+  "cake",
+] as const;
+export const GLASSES_BUILTINS = [
+  "none",
+  "specs",
+  "specs-rect",
+  "specs-cat",
+  "specs-sun",
+  "specs-round-xl",
+  "specs-oval",
+  "specs-square",
+  "specs-half",
+  "specs-rimless",
+  "specs-monocle",
+  "specs-heart",
+  "specs-shades",
+] as const;
+export const HELD_BUILTINS = [
+  "none",
+  "flower",
+  "tea",
+  "flag",
+  "spark",
+  "book",
+  "pencil",
+  "lamp",
+  "umbrella",
+  "icecream",
+  "guitar",
+  "camera",
+  "balloon",
+  "brand-wechat",
+  "brand-qq",
+  "brand-douyin",
+  "brand-deepseek",
+  "brand-bilibili",
+  "brand-github",
+  "brand-xiaohongshu",
+  "brand-taobao",
+  "brand-weibo",
+  "brand-zhihu",
+  "brand-xrk",
+] as const;
 
 export type DressingSlot = "hat" | "glasses" | "held";
 

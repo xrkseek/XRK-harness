@@ -2,7 +2,12 @@
 import { useSyncExternalStore } from 'react'
 import type { SettingsScope } from '@xrkseek/client-runtime/client'
 import {
+  COMPANION_COLORS,
+  COMPANION_SHAPES,
   encodeStickers,
+  GLASSES_BUILTINS,
+  HAT_BUILTINS,
+  HELD_BUILTINS,
   parseSlotPick,
   parseStickers,
   PRESENCE_NS,
@@ -27,6 +32,11 @@ type PresenceNs = {
   /** Boss seat look — edited in 干员团队, not Plugins. */
   readonly shape?: string
   readonly color?: string
+  /** Free-form `#rrggbb` body/eye overrides; empty = follow the preset color. */
+  readonly bodyColor?: string
+  readonly eyeColor?: string
+  /** Ball size trim 0.8–1.2 (1 = default). */
+  readonly size?: number
   readonly kit?: string
   readonly kitHat?: string
   readonly kitGlasses?: string
@@ -43,6 +53,11 @@ type PresenceNs = {
 export type BossLook = {
   readonly shape: string
   readonly color: string
+  /** `#rrggbb` override, or '' to follow `color`'s palette entry. */
+  readonly bodyColor: string
+  readonly eyeColor: string
+  /** Ball trim: 1 = the CSS default, 0.8–1.2 allowed. */
+  readonly size: number
   readonly kitHat: string
   readonly kitGlasses: string
   readonly kitHeld: string
@@ -54,23 +69,44 @@ const DEFAULT_BOSS_NICKNAME = ''
 const DEFAULT_BOSS_LOOK: BossLook = {
   shape: 'blob',
   color: 'cream',
+  bodyColor: '',
+  eyeColor: '',
+  size: 1,
   kitHat: 'none',
   kitGlasses: 'none',
   kitHeld: 'none',
 }
 
-const SHAPE_IDS = new Set([
-  'blob', 'wedge', 'gem', 'squircle', 'drop', 'pill', 'petal', 'loaf',
-  'heart', 'star', 'hex', 'egg', 'cloud', 'shield',
-])
-const COLOR_IDS = new Set([
-  'cream', 'mist', 'peach', 'sage', 'lilac', 'slate', 'coral', 'butter',
-  'mint', 'sky', 'rose', 'cocoa', 'honey', 'ocean', 'grape', 'blush',
-  'sand', 'ink', 'ice', 'matcha',
-])
-const HAT_IDS = new Set(['none', 'bow', 'cap', 'beanie', 'visor', 'halo'])
-const GLASSES_IDS = new Set(['none', 'specs', 'specs-rect', 'specs-cat', 'specs-sun'])
-const HELD_IDS = new Set(['none', 'flower', 'tea', 'flag', 'spark'])
+/* Derived from the one library — never hand-copy these lists again. A stale
+ * copy silently filters freshly picked ids back to `none`/`cream`. */
+const SHAPE_IDS: ReadonlySet<string> = new Set(COMPANION_SHAPES)
+const COLOR_IDS: ReadonlySet<string> = new Set(COMPANION_COLORS)
+const HAT_IDS: ReadonlySet<string> = new Set(HAT_BUILTINS)
+const GLASSES_IDS: ReadonlySet<string> = new Set(GLASSES_BUILTINS)
+const HELD_IDS: ReadonlySet<string> = new Set(HELD_BUILTINS)
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+const BALL_SIZE_MIN = 0.8
+const BALL_SIZE_MAX = 1.2
+const BALL_SIZE_STEP = 0.02
+
+/** 0.8–1.2 trim in 0.02 steps; anything else (or absent) means 1. */
+function parseBallSize(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : NaN
+  if (!Number.isFinite(n)) return 1
+  /* x50 = the 0.02 grid; dividing by the step pins float dust (1.19 -> 1.18). */
+  const stepped = Math.round(n * 50) / 50
+  if (stepped < BALL_SIZE_MIN || stepped > BALL_SIZE_MAX) return 1
+  return Math.round(stepped * 1000) / 1000
+}
+
+/** `#rrggbb` or '' — never a whitelist: any hex the OS picker yields is valid. */
+function parseHexColor(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const value = raw.trim()
+  return HEX_COLOR.test(value) ? value.toLowerCase() : ''
+}
 
 function slotOrSticker(raw: unknown, builtins: ReadonlySet<string>): string {
   if (typeof raw !== 'string') return 'none'
@@ -95,6 +131,9 @@ function readBossLook(): BossLook {
   const color = typeof value?.color === 'string' && COLOR_IDS.has(value.color)
     ? value.color
     : DEFAULT_BOSS_LOOK.color
+  const bodyColor = parseHexColor(value?.bodyColor)
+  const eyeColor = parseHexColor(value?.eyeColor)
+  const size = parseBallSize(value?.size)
   const legacy = typeof value?.kit === 'string' ? value.kit : undefined
   // Prefer split slots; fall back to legacy single kit string when slots empty.
   let kitHat = slotOrSticker(value?.kitHat, HAT_IDS)
@@ -114,13 +153,16 @@ function readBossLook(): BossLook {
     cached
     && cached.shape === shape
     && cached.color === color
+    && cached.bodyColor === bodyColor
+    && cached.eyeColor === eyeColor
+    && cached.size === size
     && cached.kitHat === kitHat
     && cached.kitGlasses === kitGlasses
     && cached.kitHeld === kitHeld
   ) {
     return cached
   }
-  const next: BossLook = { shape, color, kitHat, kitGlasses, kitHeld }
+  const next: BossLook = { shape, color, bodyColor, eyeColor, size, kitHat, kitGlasses, kitHeld }
   bossLookCache = next
   return next
 }
@@ -280,7 +322,7 @@ export function useBossLook(): BossLook {
 
 /** Persist one Boss look field into Host `ui-presence` (live, no Save). */
 export function setBossLookField(
-  field: 'shape' | 'color' | 'kitHat' | 'kitGlasses' | 'kitHeld',
+  field: 'shape' | 'color' | 'bodyColor' | 'eyeColor' | 'kitHat' | 'kitGlasses' | 'kitHeld',
   next: string,
 ): void {
   if (!host) return
@@ -295,6 +337,11 @@ export function setBossLookField(
     void host.set('color', value)
     return
   }
+  // Free-form hex (empty = follow preset): no whitelist, only shape validation.
+  if (field === 'bodyColor' || field === 'eyeColor') {
+    void host.set(field, parseHexColor(value))
+    return
+  }
   if (field === 'kitHat') {
     void host.set('kitHat', slotOrSticker(value, HAT_IDS))
     return
@@ -304,6 +351,14 @@ export function setBossLookField(
     return
   }
   void host.set('kitHeld', slotOrSticker(value, HELD_IDS))
+}
+
+/** Persist the Boss ball size (0.8–1.2). Out-of-range input is ignored. */
+export function setBossSize(size: number): void {
+  if (!host) return
+  const next = parseBallSize(size)
+  if (readBossLook().size === next) return
+  void host.set('size', next)
 }
 
 /** Live Boss nick from Host `ui-presence` (Overview ball caption). */
@@ -323,4 +378,12 @@ export function setBossNickname(nickname: string): void {
   void host.set('bossNickname', next)
 }
 
-export { BOSS_NICKNAME_MAX, PRESENCE_NS, stickerIdFromPick, stickerRef }
+export {
+  BALL_SIZE_MAX,
+  BALL_SIZE_MIN,
+  BALL_SIZE_STEP,
+  BOSS_NICKNAME_MAX,
+  PRESENCE_NS,
+  stickerIdFromPick,
+  stickerRef,
+}

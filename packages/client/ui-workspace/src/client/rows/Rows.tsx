@@ -150,6 +150,7 @@ function sameCompanionLook(
   if (a === b) return true
   if (!a || !b) return false
   return a.shape === b.shape && a.color === b.color
+    && a.size === b.size
     && a.kit === b.kit && a.kitHat === b.kitHat && a.kitGlasses === b.kitGlasses
     && a.kitHeld === b.kitHeld && a.overlayHat === b.overlayHat
     && a.overlayGlasses === b.overlayGlasses && a.overlayHeld === b.overlayHeld
@@ -331,6 +332,7 @@ export const ProjectRowItem = memo(function ProjectRowItem(
               compact
               shape={companionLook.shape}
               color={companionLook.color}
+              {...(companionLook.size !== undefined ? { size: companionLook.size } : {})}
               {...(companionLook.kit ? { kit: companionLook.kit } : {})}
               {...(companionLook.kitHat ? { kitHat: companionLook.kitHat } : {})}
               {...(companionLook.kitGlasses ? { kitGlasses: companionLook.kitGlasses } : {})}

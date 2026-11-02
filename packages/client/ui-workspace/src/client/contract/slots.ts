@@ -189,6 +189,8 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
     readonly appearance?: {
       readonly shape?: string
       readonly color?: string
+      readonly bodyColor?: string
+      readonly eyeColor?: string
       readonly kit?: string
       readonly kitHat?: string
       readonly kitGlasses?: string
@@ -248,6 +250,8 @@ export type AgentTeamMemberRow = {
   readonly appearance?: {
     readonly shape: string
     readonly color: string
+    readonly bodyColor?: string
+    readonly eyeColor?: string
     readonly kit?: string
     readonly kitHat?: string
     readonly kitGlasses?: string

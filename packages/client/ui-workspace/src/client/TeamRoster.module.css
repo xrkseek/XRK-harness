@@ -610,6 +610,70 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* ---- 自定义身体色 / 眼睛色（干员团队，两处装扮区共用） ---- */
+.customRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.customField {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.customLabel {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.customSwatch {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.customSwatch::-webkit-color-swatch-wrapper { padding: 2px; }
+
+.customSwatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.customSwatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.followPreset {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  background: transparent;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.followPreset:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+
+.followPreset:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .overlayRow {
   display: flex;
   align-items: stretch;
@@ -883,6 +947,54 @@
   }
 }
 
+/* Desktop dressing picker: 2× the phone size (28 → 52/56 px). Phone (≤ 640px)
+ * keeps the compact glyphs — the drawer is already tight. Rows wrap, so the
+ * wider tiles must never force horizontal scroll. */
+@media (min-width: 641px) {
+  .picks {
+    gap: 10px;
+  }
+
+  .pick,
+  .pickOn,
+  .swatch,
+  .swatchOn {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+  }
+
+  .kitGlyph {
+    width: 32px;
+    height: 32px;
+  }
+
+  .overlayCube,
+  .overlayCubeOn,
+  .overlayAdd {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+  }
+
+  .overlayThumb {
+    width: 32px;
+    height: 32px;
+  }
+
+  .overlayEmpty {
+    font-size: 24px;
+  }
+
+  .customSwatch {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .customSwatch::-webkit-color-swatch { border-radius: 8px; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .ballCard,
   .ballCardOn,
@@ -894,3 +1006,25 @@
   }
 }
 
+/* 表情球大小滑杆：和取色行同一容器，占满余宽。 */
+.sizeRow {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.sizeRange {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.sizeValue {
+  flex: 0 0 auto;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}

@@ -190,6 +190,7 @@ export interface SessionStatusView {
   readonly companionBall?: {
     readonly shape: string
     readonly color: string
+    readonly size?: number
     readonly kit?: string
     readonly kitHat?: string
     readonly kitGlasses?: string
@@ -201,6 +202,7 @@ export interface SessionStatusView {
   readonly parentCompanionBall?: {
     readonly shape: string
     readonly color: string
+    readonly size?: number
     readonly kit?: string
     readonly kitHat?: string
     readonly kitGlasses?: string
@@ -336,9 +338,12 @@ function parsePresenceLook(raw: unknown): SessionStatusView['companionBall'] {
   const overlayHat = str((raw as { overlayHat?: unknown }).overlayHat)
   const overlayGlasses = str((raw as { overlayGlasses?: unknown }).overlayGlasses)
   const overlayHeld = str((raw as { overlayHeld?: unknown }).overlayHeld)
+  const rawSize = (raw as { size?: unknown }).size
+  const size = typeof rawSize === 'number' && Number.isFinite(rawSize) ? rawSize : undefined
   return {
     shape,
     color,
+    ...(size !== undefined && size !== 1 ? { size } : {}),
     ...(kit ? { kit } : {}),
     ...(kitHat ? { kitHat } : {}),
     ...(kitGlasses ? { kitGlasses } : {}),

@@ -44,6 +44,9 @@ function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSti
   return {
     shape: member.appearance?.shape ?? 'blob',
     color: member.appearance?.color ?? 'cream',
+    bodyColor: member.appearance?.bodyColor ?? '',
+    eyeColor: member.appearance?.eyeColor ?? '',
+    size: member.appearance?.size ?? 1,
     engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
     engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
     engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
@@ -93,6 +96,9 @@ function MemberTile({
           <CompanionBall
             shape={look.shape}
             color={look.color}
+            bodyColor={look.bodyColor}
+            eyeColor={look.eyeColor}
+            size={look.size}
             kitHat={look.engineHat}
             kitGlasses={look.engineGlasses}
             kitHeld={look.engineHeld}
@@ -104,7 +110,7 @@ function MemberTile({
         : (
           <span
             className={css.initial}
-            style={{ background: companionPaint(look.color, false).body }}
+            style={{ background: look.bodyColor || companionPaint(look.color, false).body }}
             aria-hidden
           >
             {displayName.trim().slice(0, 1) || '?'}

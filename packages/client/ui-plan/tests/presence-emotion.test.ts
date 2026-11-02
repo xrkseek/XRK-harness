@@ -234,7 +234,10 @@ describe('sessionBallPersona', () => {
 })
 
 describe('PRESENCE_SHAPES', () => {
-  it('includes extra silhouettes beyond blob/wedge/gem', () => {
+  /* The picker ships 40 silhouettes: the 14 originals plus 26 added so a seat
+   * can look distinct without a sticker. The engine and the rail both draw
+   * from this one list, so a silent add/remove here is a rendering regression. */
+  it('ships the 40-silhouette catalog', () => {
     expect(PRESENCE_SHAPES).toEqual([
       'blob',
       'wedge',
@@ -250,7 +253,34 @@ describe('PRESENCE_SHAPES', () => {
       'egg',
       'cloud',
       'shield',
+      'capsule',
+      'oval',
+      'tri',
+      'diamond',
+      'octagon',
+      'pentagon',
+      'cross',
+      'cushion',
+      'bean',
+      'peanut',
+      'leaf',
+      'arrow',
+      'bolt',
+      'cup',
+      'shield-tall',
+      'hex-soft',
+      'gear',
+      'star4',
+      'star6',
+      'heart-soft',
+      'cloud-puff',
+      'teardrop',
+      'quatrefoil',
+      'flower5',
+      'crescent',
+      'bowtie',
     ])
+    expect(new Set(PRESENCE_SHAPES).size).toBe(PRESENCE_SHAPES.length)
   })
 })
 
@@ -314,7 +344,11 @@ describe('resolvePresencePaint', () => {
     expect(resolvePresencePaint('coral', false).body.toUpperCase()).toBe('#F0C8BC')
     expect(resolvePresencePaint('cocoa', true).eyes.toUpperCase()).toBe('#F0EEE8')
     expect(resolvePresencePaint('honey', false).body.toUpperCase()).toBe('#E8C46A')
-    expect(resolvePresencePaint('ink', false).eyes.toUpperCase()).toBe('#F0EEE8')
+    /* Deep balls keep light eyes in **both** chrome schemes — `midnight` is the
+     * palette that replaced the retired `ink`, and a dark-on-dark eye here is
+     * invisible, not stylish. */
+    expect(resolvePresencePaint('midnight', false).eyes.toUpperCase()).toBe('#F0EEE8')
+    expect(resolvePresencePaint('midnight', true).eyes.toUpperCase()).toBe('#F0EEE8')
   })
 })
 

@@ -504,3 +504,140 @@
   width: 100%;
   cursor: pointer;
 }
+
+/* ---- 自定义取色：色块当触发器，原生 input 藏在下面 ---- */
+.colorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.colorPick {
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 128px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.colorPick:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.colorPick:focus-within {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+
+.colorInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.colorSwatch {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 50%;
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+
+.colorLabel {
+  white-space: nowrap;
+}
+
+.colorReset {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: underline;
+}
+
+.colorReset:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 表情球大小：滑杆 + 百分比；缩放舞台盒子，放大不盖住邻居。 */
+.sizeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+
+.sizeRange {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.sizeValue {
+  flex: 0 0 auto;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- Desktop: dressing tiles 2× (phone stays at the 767px block above) ---- */
+@media (min-width: 768px) {
+  .glyph {
+    width: 56px;
+    height: 56px;
+  }
+
+  .swatch {
+    width: 52px;
+    height: 52px;
+  }
+
+  .swatchEye {
+    width: 7px;
+    height: 10px;
+  }
+
+  .overlayCube {
+    width: 88px;
+    min-height: 88px;
+  }
+
+  .overlayAdd {
+    width: 56px;
+    min-height: 56px;
+  }
+
+  .overlayPreview {
+    width: 56px;
+    height: 56px;
+  }
+
+  .overlayEmpty {
+    font-size: 24px;
+  }
+
+  .colorSwatch {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+  }
+}

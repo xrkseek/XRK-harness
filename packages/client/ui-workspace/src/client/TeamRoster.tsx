@@ -26,10 +26,14 @@ import {
 } from './CompanionBall.tsx'
 import {
   addDressingSticker,
+  BALL_SIZE_MAX,
+  BALL_SIZE_MIN,
+  BALL_SIZE_STEP,
   BOSS_NICKNAME_MAX,
   removeDressingSticker,
   setBossLookField,
   setBossNickname,
+  setBossSize,
   useBossLook,
   useBossNickname,
   useDressingStickers,
@@ -68,6 +72,9 @@ const FILE_TOOLS = 'bash,read,grep,glob'
 function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSticker[]): {
   shape: string
   color: string
+  bodyColor: string
+  eyeColor: string
+  size: number
   kitHat: string
   kitGlasses: string
   kitHeld: string
@@ -91,6 +98,9 @@ function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSti
   return {
     shape: member.appearance?.shape ?? 'blob',
     color: member.appearance?.color ?? 'cream',
+    bodyColor: member.appearance?.bodyColor ?? '',
+    eyeColor: member.appearance?.eyeColor ?? '',
+    size: member.appearance?.size ?? 1,
     kitHat,
     kitGlasses,
     kitHeld,
@@ -101,6 +111,95 @@ function appearanceOf(member: AgentTeamMemberRow, stickers: readonly DressingSti
     ...(glassesImg ? { overlayGlasses: glassesImg } : {}),
     ...(heldImg ? { overlayHeld: heldImg } : {}),
   }
+}
+
+/**
+ * Body / eye hex overrides for one companion. Empty string = follow the preset
+ * palette entirely; the swatch then previews that preset colour.
+ */
+function CustomColorRow({
+  bodyColor,
+  eyeColor,
+  fallbackBody,
+  fallbackEyes,
+  disabled,
+  bodyLabel,
+  eyeLabel,
+  resetLabel,
+  size,
+  sizeLabel,
+  onBody,
+  onEyes,
+  onSize,
+  onReset,
+}: {
+  readonly bodyColor: string
+  readonly eyeColor: string
+  readonly fallbackBody: string
+  readonly fallbackEyes: string
+  readonly disabled?: boolean
+  readonly bodyLabel: string
+  readonly eyeLabel: string
+  readonly resetLabel: string
+  /** Ball size trim 0.8–1.2. */
+  readonly size: number
+  readonly sizeLabel: string
+  readonly onBody: (hex: string) => void
+  readonly onEyes: (hex: string) => void
+  readonly onSize: (size: number) => void
+  readonly onReset: () => void
+}) {
+  const overridden = Boolean(bodyColor || eyeColor)
+  return (
+    <div className={css.customRow} role="group" aria-label={resetLabel}>
+      <label className={css.customField}>
+        <span className={css.customLabel}>{bodyLabel}</span>
+        <input
+          className={css.customSwatch}
+          type="color"
+          value={bodyColor || fallbackBody}
+          disabled={disabled}
+          aria-label={bodyLabel}
+          onChange={(e) => { onBody(e.target.value) }}
+        />
+      </label>
+      <label className={css.customField}>
+        <span className={css.customLabel}>{eyeLabel}</span>
+        <input
+          className={css.customSwatch}
+          type="color"
+          value={eyeColor || fallbackEyes}
+          disabled={disabled}
+          aria-label={eyeLabel}
+          onChange={(e) => { onEyes(e.target.value) }}
+        />
+      </label>
+      <button
+        type="button"
+        className={css.followPreset}
+        disabled={disabled || !overridden}
+        onClick={onReset}
+      >
+        {resetLabel}
+      </button>
+      {/* 表情球大小：舞台盒子固定，只缩里面的球（见 CompanionBall）。 */}
+      <label className={css.sizeRow}>
+        <span className={css.customLabel}>{sizeLabel}</span>
+        <input
+          type="range"
+          className={css.sizeRange}
+          min={BALL_SIZE_MIN}
+          max={BALL_SIZE_MAX}
+          step={BALL_SIZE_STEP}
+          value={size}
+          disabled={disabled}
+          aria-label={sizeLabel}
+          onChange={(e) => { onSize(Number(e.target.value)) }}
+        />
+        <span className={css.sizeValue}>{Math.round(size * 100)}%</span>
+      </label>
+    </div>
+  )
 }
 
 function splitToolNames(raw: string): string[] {
@@ -118,7 +217,7 @@ function MemberGlyph({
     return (
       <span
         className={css.listSwatch}
-        style={{ background: companionPaint(look.color, false).body }}
+        style={{ background: look.bodyColor || companionPaint(look.color, false).body }}
         aria-hidden
       />
     )
@@ -127,6 +226,9 @@ function MemberGlyph({
     <CompanionBall
       shape={look.shape}
       color={look.color}
+      bodyColor={look.bodyColor}
+      eyeColor={look.eyeColor}
+      size={look.size}
       kitHat={look.engineHat}
       kitGlasses={look.engineGlasses}
       kitHeld={look.engineHeld}
@@ -250,6 +352,9 @@ function BossSeatBall({
   look: {
     shape: string
     color: string
+    bodyColor?: string
+    eyeColor?: string
+    size?: number
     engineHat: string
     engineGlasses: string
     engineHeld: string
@@ -275,6 +380,9 @@ function BossSeatBall({
         <MemberGlyph presenceOn={false} look={{
           shape: look.shape,
           color: look.color,
+          bodyColor: look.bodyColor ?? '',
+          eyeColor: look.eyeColor ?? '',
+          size: look.size ?? 1,
           kitHat: look.engineHat,
           kitGlasses: look.engineGlasses,
           kitHeld: look.engineHeld,
@@ -309,6 +417,11 @@ function BossSeatBall({
         <CompanionBall
           shape={look.shape}
           color={look.color}
+          /* Custom hex overrides must reach the engine too — the rail paint was
+           * already fixed, but this branch still fell back to the preset. */
+          bodyColor={look.bodyColor ?? ''}
+          eyeColor={look.eyeColor ?? ''}
+          size={look.size ?? 1}
           kitHat={look.engineHat}
           kitGlasses={look.engineGlasses}
           kitHeld={look.engineHeld}
@@ -430,6 +543,9 @@ export function TeamRoster({
   const [role, setRole] = useState<SpawnRole>('worker')
   const [shape, setShape] = useState<string>('blob')
   const [color, setColor] = useState<string>('cream')
+  const [bodyColor, setBodyColor] = useState('')
+  const [eyeColor, setEyeColor] = useState('')
+  const [size, setSize] = useState(1)
   const [kitHat, setKitHat] = useState('none')
   const [kitGlasses, setKitGlasses] = useState('none')
   const [kitHeld, setKitHeld] = useState('none')
@@ -463,6 +579,12 @@ export function TeamRoster({
     return {
       shape: bossLook.shape,
       color: bossLook.color,
+      size: bossLook.size,
+      /* Custom hex overrides live beside the preset id: dropping them here made
+       * the boss seat paint the palette default (white body, black eyes) while
+       * the rail/preview showed the real custom colour. */
+      bodyColor: bossLook.bodyColor,
+      eyeColor: bossLook.eyeColor,
       engineHat: resolveEnginePick(kitHat, HAT_BUILTINS),
       engineGlasses: resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
       engineHeld: resolveEnginePick(kitHeld, HELD_BUILTINS),
@@ -540,7 +662,15 @@ export function TeamRoster({
   const loadMember = (member: AgentTeamMemberRow | undefined) => {
     const look = member
       ? appearanceOf(member, stickers)
-      : { shape: 'blob', color: 'cream', kitHat: 'none', kitGlasses: 'none', kitHeld: 'none' }
+      : {
+          shape: 'blob',
+          color: 'cream',
+          bodyColor: '',
+          eyeColor: '',
+          kitHat: 'none',
+          kitGlasses: 'none',
+          kitHeld: 'none',
+        }
     // Catalog seeds keep Chinese Host names; the editor shows locale labels.
     setName(member ? catalogMemberName(member.id, member.name, t, seatTitles) : '')
     setNickname(member?.nickname ?? '')
@@ -548,6 +678,9 @@ export function TeamRoster({
     setRole((ROLES.includes(member?.role as SpawnRole) ? member?.role : 'worker') as SpawnRole)
     setShape(look.shape)
     setColor(look.color)
+    setBodyColor(look.bodyColor)
+    setEyeColor(look.eyeColor)
+    setSize(look.size)
     setKitHat(look.kitHat)
     setKitGlasses(look.kitGlasses)
     setKitHeld(look.kitHeld)
@@ -652,6 +785,9 @@ export function TeamRoster({
   type LiveLookPatch = {
     readonly shape?: string
     readonly color?: string
+    readonly bodyColor?: string
+    readonly eyeColor?: string
+    readonly size?: number
     readonly kitHat?: string
     readonly kitGlasses?: string
     readonly kitHeld?: string
@@ -665,6 +801,9 @@ export function TeamRoster({
     if (catalogSeed && !managerSelected && !selected) return
     const nextShape = patch.shape ?? shape
     const nextColor = patch.color ?? color
+    const nextBody = patch.bodyColor ?? bodyColor
+    const nextEye = patch.eyeColor ?? eyeColor
+    const nextSize = patch.size ?? size
     const nextHat = patch.kitHat ?? kitHat
     const nextGlasses = patch.kitGlasses ?? kitGlasses
     const nextHeld = patch.kitHeld ?? kitHeld
@@ -679,6 +818,9 @@ export function TeamRoster({
     const appearance = {
       shape: nextShape,
       color: nextColor,
+      bodyColor: nextBody,
+      eyeColor: nextEye,
+      size: nextSize,
       kit: resolveEnginePick(nextHat, HAT_BUILTINS) !== 'none'
         ? resolveEnginePick(nextHat, HAT_BUILTINS)
         : resolveEnginePick(nextGlasses, GLASSES_BUILTINS),
@@ -749,15 +891,31 @@ export function TeamRoster({
     const id = selectedId
     const lookTouched = patch.shape !== undefined
       || patch.color !== undefined
+      || patch.bodyColor !== undefined
+      || patch.eyeColor !== undefined
+      || patch.size !== undefined
       || patch.kitHat !== undefined
       || patch.kitGlasses !== undefined
       || patch.kitHeld !== undefined
+    const nextKitHat = patch.kitHat ?? kitHat
+    const nextKitGlasses = patch.kitGlasses ?? kitGlasses
+    const nextKitHeld = patch.kitHeld ?? kitHeld
     const nextAppearance = {
       shape: patch.shape ?? shape,
       color: patch.color ?? color,
-      kitHat: patch.kitHat ?? kitHat,
-      kitGlasses: patch.kitGlasses ?? kitGlasses,
-      kitHeld: patch.kitHeld ?? kitHeld,
+      bodyColor: patch.bodyColor ?? bodyColor,
+      eyeColor: patch.eyeColor ?? eyeColor,
+      size: patch.size ?? size,
+      kitHat: nextKitHat,
+      kitGlasses: nextKitGlasses,
+      kitHeld: nextKitHeld,
+      /* Overlay is the *resolved image* of the pick, so it has to be recomputed
+       * with it. Carrying the previous image forward while the pick changed is
+       * how a member ended up wearing a builtin hat plus the sticker picked
+       * before it. Empty string clears it; the Host drops empties. */
+      overlayHat: resolveStickerOverlay(nextKitHat, stickers),
+      overlayGlasses: resolveStickerOverlay(nextKitGlasses, stickers),
+      overlayHeld: resolveStickerOverlay(nextKitHeld, stickers),
     }
     const nextNick = patch.nickname !== undefined ? patch.nickname : nickname
     // Optimistic seat paint before the upsert round-trip returns.
@@ -767,16 +925,9 @@ export function TeamRoster({
         return {
           ...row,
           appearance: {
-            shape: nextAppearance.shape,
-            color: nextAppearance.color,
-            kitHat: nextAppearance.kitHat,
-            kitGlasses: nextAppearance.kitGlasses,
-            kitHeld: nextAppearance.kitHeld,
+            ...nextAppearance,
             ...(row.appearance?.kit ? { kit: row.appearance.kit } : {}),
             ...(row.appearance?.face ? { face: row.appearance.face } : {}),
-            ...(row.appearance?.overlayHat ? { overlayHat: row.appearance.overlayHat } : {}),
-            ...(row.appearance?.overlayGlasses ? { overlayGlasses: row.appearance.overlayGlasses } : {}),
-            ...(row.appearance?.overlayHeld ? { overlayHeld: row.appearance.overlayHeld } : {}),
           },
           ...(patch.nickname !== undefined
             ? { nickname: patch.nickname.trim() || undefined }
@@ -1114,6 +1265,9 @@ export function TeamRoster({
                         <CompanionBall
                           shape={bossLook.shape}
                           color={bossLook.color}
+                          bodyColor={bossLook.bodyColor}
+                          eyeColor={bossLook.eyeColor}
+                          size={bossLook.size}
                           kitHat={resolveEnginePick(bossLook.kitHat, HAT_BUILTINS)}
                           kitGlasses={resolveEnginePick(bossLook.kitGlasses, GLASSES_BUILTINS)}
                           kitHeld={resolveEnginePick(bossLook.kitHeld, HELD_BUILTINS)}
@@ -1150,6 +1304,25 @@ export function TeamRoster({
                             />
                           ))}
                         </div>
+                        <CustomColorRow
+                          bodyColor={bossLook.bodyColor}
+                          eyeColor={bossLook.eyeColor}
+                          fallbackBody={companionPaint(bossLook.color, false).body}
+                          fallbackEyes={companionPaint(bossLook.color, false).eyes}
+                          disabled={busy}
+                          bodyLabel={t('presenceCustom.body' as WorkspaceKey)}
+                          eyeLabel={t('presenceCustom.eyes' as WorkspaceKey)}
+                          resetLabel={t('presenceCustom.followPreset' as WorkspaceKey)}
+                          onBody={(hex) => { setBossLookField('bodyColor', hex) }}
+                          onEyes={(hex) => { setBossLookField('eyeColor', hex) }}
+                          size={bossLook.size}
+                          sizeLabel={t('presenceCustom.size' as WorkspaceKey)}
+                          onSize={(next) => { setBossSize(next) }}
+                          onReset={() => {
+                            setBossLookField('bodyColor', '')
+                            setBossLookField('eyeColor', '')
+                          }}
+                        />
                         <p className={css.faceHint}>{t('team.overlayHint')}</p>
                         {([
                           ['hat', bossLook.kitHat, 'kitHat', HAT_BUILTINS],
@@ -1447,6 +1620,9 @@ export function TeamRoster({
                     <CompanionBall
                       shape={shape}
                       color={color}
+                      bodyColor={bodyColor}
+                      eyeColor={eyeColor}
+                      size={size}
                       kitHat={resolveEnginePick(kitHat, HAT_BUILTINS)}
                       kitGlasses={resolveEnginePick(kitGlasses, GLASSES_BUILTINS)}
                       kitHeld={resolveEnginePick(kitHeld, HELD_BUILTINS)}
@@ -1489,6 +1665,35 @@ export function TeamRoster({
                         />
                       ))}
                     </div>
+                    <CustomColorRow
+                      bodyColor={bodyColor}
+                      eyeColor={eyeColor}
+                      fallbackBody={companionPaint(color, false).body}
+                      fallbackEyes={companionPaint(color, false).eyes}
+                      disabled={busy}
+                      bodyLabel={t('presenceCustom.body' as WorkspaceKey)}
+                      eyeLabel={t('presenceCustom.eyes' as WorkspaceKey)}
+                      resetLabel={t('presenceCustom.followPreset' as WorkspaceKey)}
+                      onBody={(hex) => {
+                        setBodyColor(hex)
+                        scheduleLivePersist({ bodyColor: hex })
+                      }}
+                      onEyes={(hex) => {
+                        setEyeColor(hex)
+                        scheduleLivePersist({ eyeColor: hex })
+                      }}
+                      size={size}
+                      sizeLabel={t('presenceCustom.size' as WorkspaceKey)}
+                      onSize={(next) => {
+                        setSize(next)
+                        scheduleLivePersist({ size: next })
+                      }}
+                      onReset={() => {
+                        setBodyColor('')
+                        setEyeColor('')
+                        scheduleLivePersist({ bodyColor: '', eyeColor: '' })
+                      }}
+                    />
                     <p className={css.faceHint}>{t('team.overlayHint')}</p>
                     {([
                       ['hat', kitHat, setKitHat, HAT_BUILTINS, 'kitHat'] as const,

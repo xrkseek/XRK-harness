@@ -391,6 +391,7 @@ export interface SessionStatusSnapshot {
   readonly companionBall?: {
     readonly shape: string;
     readonly color: string;
+    readonly size?: number;
     readonly kit?: string;
     readonly kitHat?: string;
     readonly kitGlasses?: string;
@@ -403,6 +404,7 @@ export interface SessionStatusSnapshot {
   readonly parentCompanionBall?: {
     readonly shape: string;
     readonly color: string;
+    readonly size?: number;
     readonly kit?: string;
     readonly kitHat?: string;
     readonly kitGlasses?: string;
@@ -946,6 +948,7 @@ type CompanionAppearanceLink = {
   readonly appearance?: {
     readonly shape: string;
     readonly color: string;
+    readonly size?: number;
     readonly kit?: string;
     readonly kitHat?: string;
     readonly kitGlasses?: string;
@@ -980,6 +983,7 @@ function bossBallFromPresence(
     {
       shape: shape as never,
       color: color as never,
+      ...(typeof user.size === "number" ? { size: user.size } : {}),
       kitHat: dressing.kitHat,
       kitGlasses: dressing.kitGlasses,
       kitHeld: dressing.kitHeld,
@@ -1107,6 +1111,7 @@ function companionBallForMember(
   return appearanceLookWire({
     shape: shape as never,
     color: color as never,
+    ...(typeof look?.size === "number" ? { size: look.size } : {}),
     ...(typeof look?.kit === "string" && look.kit ? { kit: look.kit as never } : {}),
     ...(typeof look?.kitHat === "string" && look.kitHat ? { kitHat: look.kitHat } : {}),
     ...(typeof look?.kitGlasses === "string" && look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),

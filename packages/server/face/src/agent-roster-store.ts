@@ -49,8 +49,41 @@ export const MEMBER_SHAPES = [
   "egg",
   "cloud",
   "shield",
+  "capsule",
+  "oval",
+  "tri",
+  "diamond",
+  "octagon",
+  "pentagon",
+  "cross",
+  "cushion",
+  "bean",
+  "peanut",
+  "leaf",
+  "arrow",
+  "bolt",
+  "cup",
+  "shield-tall",
+  "hex-soft",
+  "gear",
+  "star4",
+  "star6",
+  "heart-soft",
+  "cloud-puff",
+  "teardrop",
+  "quatrefoil",
+  "flower5",
+  "crescent",
+  "bowtie",
 ] as const;
+/* Keep in lockstep with the client palette
+ * (`packages/client/ui-workspace/src/client/dressing-library.ts` → COMPANION_COLORS)
+ * and `presence-settings.ts` → PRESENCE_COLORS. This array gates **writes**:
+ * `validateSettingsNamespace` rejects a color it does not know, so a 20-entry
+ * list silently refused 37 of the shipped swatches and the ball fell back to
+ * cream. */
 export const MEMBER_COLORS = [
+  /* ---- 基础 ---- */
   "cream",
   "mist",
   "peach",
@@ -65,24 +98,81 @@ export const MEMBER_COLORS = [
   "cocoa",
   "honey",
   "ocean",
-  "grape",
-  "blush",
-  "sand",
-  "ink",
-  "ice",
-  "matcha",
+  /* ---- 金属 / 暗色 ---- */
+  "gold",
+  "silver",
+  "copper",
+  "midnight",
+  "frost",
+  "ember",
+  "twilight",
+  /* ---- 中性 / 大地 ---- */
+  "clay",
+  "linen",
+  "oat",
+  "stone",
+  "fog",
+  "ash",
+  /* ---- 玉 ---- */
+  "jade",
 ] as const;
+/* Legacy single-slot kit. New writes use kitHat / kitGlasses / kitHeld (free
+ * strings); this list only has to keep old imports from being rejected, so it
+ * carries every newer id too. */
 export const MEMBER_KITS = [
   "none",
   "bow",
   "cap",
   "beanie",
+  "bucket",
+  "beret",
   "visor",
+  "halo",
+  "crown",
+  "tophat",
+  "chef",
+  "party",
+  "straw",
+  "wizard",
+  "cat-ears",
+  "headphones",
+  "antenna",
+  "flower-crown",
+  "cake",
   "specs",
   "specs-rect",
   "specs-cat",
   "specs-sun",
-  "halo",
+  "specs-round-xl",
+  "specs-oval",
+  "specs-square",
+  "specs-half",
+  "specs-rimless",
+  "specs-monocle",
+  "specs-heart",
+  "specs-shades",
+  "flower",
+  "tea",
+  "flag",
+  "spark",
+  "book",
+  "pencil",
+  "lamp",
+  "umbrella",
+  "icecream",
+  "guitar",
+  "camera",
+  "balloon",
+  "brand-wechat",
+  "brand-qq",
+  "brand-douyin",
+  "brand-deepseek",
+  "brand-bilibili",
+  "brand-github",
+  "brand-xiaohongshu",
+  "brand-taobao",
+  "brand-weibo",
+  "brand-zhihu",
 ] as const;
 
 export type MemberShape = (typeof MEMBER_SHAPES)[number];
@@ -96,6 +186,11 @@ export type MemberKind = "thin" | "advanced";
 export interface MemberAppearance {
   readonly shape: MemberShape;
   readonly color: MemberColor;
+  /** Free-form `#rrggbb` overrides; absent = follow `color`'s palette entry. */
+  readonly bodyColor?: string;
+  readonly eyeColor?: string;
+  /** Ball size trim 0.8–1.2; absent = 1 (the stage keeps its box, the ball scales). */
+  readonly size?: number;
   /** Optional overlay kit (`none` omitted). PNG overlays are separate. */
   readonly kit?: Exclude<MemberKit, "none">;
   /** @deprecated Use `overlayHat`. Still read as the hat layer. */
@@ -352,6 +447,29 @@ function isMemberKit(value: unknown): value is MemberKit {
   return MEMBER_KITS.includes(value as MemberKit);
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Ball size trim: 0.8–1.2 in 0.02 steps; anything else is dropped (absent = 1).
+ *
+ * Sized as a trim because it scales the ball inside a fixed stage — the old
+ * 0.6–1.6 range only made sense while the stage box itself grew.
+ */
+export function parseMemberBallSize(raw: unknown): number | undefined {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : NaN;
+  if (!Number.isFinite(n)) return undefined;
+  const stepped = Math.round(n * 50) / 50;
+  const rounded = Math.round(stepped * 1000) / 1000;
+  return rounded >= 0.8 && rounded <= 1.2 ? rounded : undefined;
+}
+
+/** Free-form `#rrggbb` or undefined — colours are not enumerated. */
+function parseHexColor(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const value = raw.trim();
+  return HEX_COLOR.test(value) ? value.toLowerCase() : undefined;
+}
+
 /** Transparent PNG/JPEG/WebP/GIF/SVG data URL used as a kit overlay (hat / glasses / held). */
 export function parseOverlayImage(raw: unknown): string | undefined {
   const parsed = parsePresenceOverlayImage(raw);
@@ -381,6 +499,9 @@ export function parseMemberAppearance(
       : {};
   const shape = isMemberShape(base.shape) ? base.shape : fallback.shape;
   const color = isMemberColor(base.color) ? base.color : fallback.color;
+  const bodyColor = parseHexColor(base.bodyColor ?? fallback.bodyColor);
+  const eyeColor = parseHexColor(base.eyeColor ?? fallback.eyeColor);
+  const size = parseMemberBallSize(base.size) ?? fallback.size;
   const kitRaw = Object.prototype.hasOwnProperty.call(base, "kit")
     ? base.kit
     : fallback.kit;
@@ -401,6 +522,9 @@ export function parseMemberAppearance(
   return {
     shape,
     color,
+    ...(bodyColor ? { bodyColor } : {}),
+    ...(eyeColor ? { eyeColor } : {}),
+    ...(size !== undefined && size !== 1 ? { size } : {}),
     ...(kit ? { kit } : {}),
     ...(kitHat && kitHat !== "none" ? { kitHat } : {}),
     ...(kitGlasses && kitGlasses !== "none" ? { kitGlasses } : {}),
@@ -417,6 +541,9 @@ export function appearanceLookWire(
 ): {
   readonly shape: string;
   readonly color: string;
+  readonly bodyColor?: string;
+  readonly eyeColor?: string;
+  readonly size?: number;
   readonly kit?: string;
   readonly kitHat?: string;
   readonly kitGlasses?: string;
@@ -446,6 +573,9 @@ export function appearanceLookWire(
   return {
     shape: look.shape,
     color: look.color,
+    ...(look.bodyColor ? { bodyColor: look.bodyColor } : {}),
+    ...(look.eyeColor ? { eyeColor: look.eyeColor } : {}),
+    ...(look.size !== undefined && look.size !== 1 ? { size: look.size } : {}),
     ...(kit ? { kit } : {}),
     ...(engineHat !== "none" ? { kitHat: engineHat } : {}),
     ...(engineGlasses !== "none" ? { kitGlasses: engineGlasses } : {}),

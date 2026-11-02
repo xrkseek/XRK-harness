@@ -1,8 +1,12 @@
 .stage {
+  /* 舞台盒子固定，倍率只缩里面的球（.mount）。大小是微调 ——
+     盒子跟着变会把隔壁卡片推开，手感像布局开关而不是尺寸。 */
+  --ball-base: 40px;
+  --ball-size: 1;
   box-sizing: border-box;
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: var(--ball-base);
+  height: var(--ball-base);
   display: block;
   overflow: visible;
   border-radius: 10px;
@@ -17,8 +21,8 @@
 
 /* Sidebar workspace row glyph (replaces folder icon on agent-home). */
 .stage[data-compact] {
-  width: 18px;
-  height: 18px;
+  --ball-base: 18px;
+  --ball-size: 1;
   border-radius: 5px;
   background: transparent;
 }
@@ -33,6 +37,8 @@
 .mount {
   position: absolute;
   inset: 4%;
+  transform: scale(var(--ball-size));
+  transform-origin: center;
   pointer-events: none;
   opacity: 0;
 }

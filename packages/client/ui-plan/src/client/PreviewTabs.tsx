@@ -78,6 +78,31 @@ const PRESENCE_COLLAPSED_KEY = 'xrk.overview.presenceCollapsed'
 /** Matches AppFrame `PHONE_MAX` (768 exclusive) — glanceable ball needs room. */
 const PHONE_VIEWPORT_MQ = '(max-width: 767px)'
 
+/**
+ * Overlay a live Team edit on top of a Host status snapshot.
+ *
+ * Module-level on purpose: it runs on every Overview repaint and `PresenceBall`
+ * is `memo`'d, so building a fresh object inline in the component body defeated
+ * that memo on every status poll (the ball re-rendered even when nothing it
+ * read had changed). Callers wrap the result in `useMemo`.
+ */
+function mergeLiveLook<T extends object>(base: T, look: TeamRosterLiveLook | undefined): T {
+  if (!look) return base
+  return {
+    ...base,
+    ...(look.shape ? { shape: look.shape } : {}),
+    ...(look.color ? { color: look.color } : {}),
+    ...(typeof look.size === 'number' ? { size: look.size } : {}),
+    ...(look.kit ? { kit: look.kit } : {}),
+    ...(look.kitHat ? { kitHat: look.kitHat } : {}),
+    ...(look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
+    ...(look.kitHeld ? { kitHeld: look.kitHeld } : {}),
+    ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
+    ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
+    ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
+  }
+}
+
 function readPresenceCollapsed(): boolean {
   try {
     return globalThis.localStorage?.getItem(PRESENCE_COLLAPSED_KEY) === '1'
@@ -1948,31 +1973,20 @@ export function PreviewTabs({
     childSeat,
     childLabelLive,
   )
-  const mergeLiveLook = <T extends object>(
-    base: T,
-    look: TeamRosterLiveLook | undefined,
-  ): T => {
-    if (!look) return base
-    return {
-      ...base,
-      ...(look.shape ? { shape: look.shape } : {}),
-      ...(look.color ? { color: look.color } : {}),
-      ...(look.kit ? { kit: look.kit } : {}),
-      ...(look.kitHat ? { kitHat: look.kitHat } : {}),
-      ...(look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
-      ...(look.kitHeld ? { kitHeld: look.kitHeld } : {}),
-      ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
-      ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
-      ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
-    }
-  }
-  const childMemberLook = mergeLiveLook(
-    status?.companionBall ?? PENDING_MEMBER_LOOK,
-    liveChild?.appearance,
+  const snapshotChildLook = status?.companionBall
+  const snapshotParentLook = status?.parentCompanionBall
+  const liveChildLook = liveChild?.appearance
+  const liveParentLook = liveParent?.appearance
+  const childMemberLook = useMemo(
+    () => mergeLiveLook(snapshotChildLook ?? PENDING_MEMBER_LOOK, liveChildLook),
+    [snapshotChildLook, liveChildLook],
   )
-  const parentMemberLook = status?.parentCompanionBall && !leftSeatLiveBossLook
-    ? mergeLiveLook(status.parentCompanionBall, liveParent?.appearance)
-    : status?.parentCompanionBall
+  const parentMemberLook = useMemo(
+    () => (snapshotParentLook && !leftSeatLiveBossLook
+      ? mergeLiveLook(snapshotParentLook, liveParentLook)
+      : snapshotParentLook),
+    [snapshotParentLook, liveParentLook, leftSeatLiveBossLook],
+  )
   // Boss seat: Settings mood only (`pinned` — no TTL / idle / turn overwrite).
   const bossPresence = officeBossSeat
     ? {
