@@ -329,27 +329,19 @@ export class Session implements SessionFace {
           },
         }
       } else {
-        if (content.some(part => part.type === 'image' || part.type === 'file')) {
-          result = {
-            ok: false,
-            error: {
-              code: 'attachment-error',
-              message: 'Attachment input is unavailable for subagent continuations.',
-              details: { reason: 'SUBAGENT_ATTACHMENT_UNSUPPORTED' },
-            },
-          }
-        } else {
-          const routed = (await this.api.subagents.prompt({
-            ...this.address,
-            content: content.flatMap(part => part.type === 'text'
-              ? [{ type: 'text' as const, text: part.text }]
-              : []),
-            delivery: mode,
-            clientTimeZone: resolvedClientTimeZone(),
-            ...(requestId === undefined ? {} : { requestId }),
-          }, signal)).result
-          result = routed.ok ? { ok: true, value: { accepted: true } } : routed
-        }
+        // Continuable children accept the same browser prompt wire as a normal
+        // session: Face routes `subagent.prompt` content through `sessionPrompt`,
+        // which runs durable AttachmentStore admission (text + image/file bytes).
+        // The old pre-flight `SUBAGENT_ATTACHMENT_UNSUPPORTED` gate dropped image
+        // and file parts and is gone.
+        const routed = (await this.api.subagents.prompt({
+          ...this.address,
+          content,
+          delivery: mode,
+          clientTimeZone: resolvedClientTimeZone(),
+          ...(requestId === undefined ? {} : { requestId }),
+        }, signal)).result
+        result = routed.ok ? { ok: true, value: { accepted: true } } : routed
       }
     } catch (error) {
       result = transportError(error)

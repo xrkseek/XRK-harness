@@ -7,10 +7,14 @@
    .trigger, no chevron (mirrors PermissionSelect .orchChip). */
 .lockedChip {
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 4px;
   min-width: 0;
   max-width: 220px;
+  /* The label child ellipsizes; the chip itself must clip too, or a long
+     pinned route bleeds past the box and shoves the Access chip aside. */
+  overflow: hidden;
   height: 28px;
   padding: 0 10px 0 8px;
   border-radius: 24px;
@@ -121,6 +125,13 @@
     /* Share the ~360 toolbar with attach + access + send — don't shove wrap. */
     max-width: min(148px, 38vw);
     touch-action: manipulation;
+  }
+
+  /* A locked (subagent) seat keeps the same budget as the live trigger: on a
+     360px phone the 220px desktop cap left no room for the Access chip. */
+  .lockedChip {
+    max-width: min(148px, 38vw);
+    height: 40px;
   }
 
   .menu {

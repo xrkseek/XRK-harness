@@ -41,6 +41,12 @@ export interface LiveOutcome {
     | 'blocked'
     | 'none'
   readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+  /**
+   * Provider error code (`QUOTA`, `RATE_LIMIT`, …) — only for `kind: 'error'`.
+   * Without it the board prints a bare "error" and the human cannot tell a
+   * quota wall from a crash (the parent agent already gets the code).
+   */
+  readonly code?: string
 }
 
 export interface SubagentLiveRow {
@@ -65,8 +71,8 @@ export interface SubagentGraphBoardProps {
   readonly emptyLabel: string
   readonly runningLabel: string
   readonly idleLabel: string
-  /** Localized captions for abnormal terminal kinds (no English dumps). */
-  readonly outcomeLabel?: (kind: LiveOutcome['kind']) => string
+/** Localized captions for abnormal terminal kinds (no English dumps). */
+  readonly outcomeLabel?: (kind: LiveOutcome['kind'], code?: string) => string
   /** Localized role chip when a node carries `role`. */
   readonly roleLabel?: (role: string) => string
   /** Open a child session when a non-root node is activated. */
@@ -89,10 +95,11 @@ function outcomeOf(
 }
 
 /** Fallback English only when the host forgot to pass `outcomeLabel`. */
-function defaultOutcomeLabel(kind: LiveOutcome['kind']): string {
+function defaultOutcomeLabel(kind: LiveOutcome['kind'], code?: string): string {
+  const suffix = code?.trim() ? ` (${code.trim()})` : ''
   switch (kind) {
     case 'aborted': return 'aborted'
-    case 'error': return 'error'
+    case 'error': return `error${suffix}`
     case 'interrupted': return 'interrupted'
     case 'max-tokens': return 'max tokens'
     case 'blocked': return 'blocked'
@@ -377,7 +384,7 @@ export function SubagentGraphBoard({
             // An abnormal terminal verdict must not print "done" under an
             // error dot — the second line would contradict the first.
             : (outcome !== undefined && outcome.kind !== 'completed' && outcome.kind !== 'none'
-              ? outcomeLabel(outcome.kind)
+              ? outcomeLabel(outcome.kind, outcome.code)
               : idleLabel)
           const clickable = onOpenNode !== undefined && node.id !== sessionId
           return (
@@ -388,9 +395,10 @@ export function SubagentGraphBoard({
                 clickable ? css.nodeClickable : '',
               ].filter(Boolean).join(' ')}
               style={{ left: pos.x, top: pos.y, width: NODE_W, height: NODE_H }}
-              data-activity={node.activity ?? 'inactive'}
-              data-outcome={outcome?.kind ?? ''}
-              data-depth={pos.depth}
+          data-activity={node.activity ?? 'inactive'}
+          data-outcome={outcome?.kind ?? ''}
+          data-outcome-code={outcome?.code ?? ''}
+          data-depth={pos.depth}
               data-model={node.model}
               // The node box is a fixed 40px with two lines already, so the
               // route rides the tooltip and the data attribute rather than

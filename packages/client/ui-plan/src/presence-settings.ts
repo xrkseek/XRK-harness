@@ -411,6 +411,7 @@ export const PRESENCE_HELD_KITS = [
   'brand-taobao',
   'brand-weibo',
   'brand-zhihu',
+  'brand-xrk',
 ] as const
 
 export type PresenceHatKit = (typeof PRESENCE_HAT_KITS)[number]

@@ -3,8 +3,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  BOOT_FAILURE_LIST_LIMIT,
   BOOT_HOST_TIP_INTERVAL_MS,
   bootConnectionHint,
+  bootFailureRows,
   bootFailedTitle,
   bootHostPhaseHint,
   bootPluginHint,
@@ -116,5 +118,27 @@ describe('bootConnectionHint', () => {
   it('never says Starting Host after Fetch is attached', () => {
     expect(bootConnectionHint('handshake:host', { hostAttached: true })).toBe('Knocking on Face…')
     expect(bootConnectionHint('handshake:host', { hostAttached: true, lang: 'zh' })).toBe('正在敲 Face 的门…')
+  })
+})
+
+describe('bootFailureRows', () => {
+  it('renders ids verbatim while under the cap', () => {
+    expect(bootFailureRows([])).toEqual({ ids: [], overflow: undefined })
+    expect(bootFailureRows(['@xrkseek/client-ui-layout', 'bad'])).toEqual({
+      ids: ['@xrkseek/client-ui-layout', 'bad'],
+      overflow: undefined,
+    })
+    // No cause, no advice — the splash names who and stops there.
+    expect(bootFailureRows(['bad']).overflow).toBeUndefined()
+  })
+
+  it('caps the roster and folds the tail into one count line', () => {
+    const ids = Array.from({ length: 14 }, (_, i) => `id-${String(i)}`)
+    const en = bootFailureRows(ids)
+    expect(en.ids).toHaveLength(BOOT_FAILURE_LIST_LIMIT)
+    expect(en.ids[0]).toBe('id-0')
+    expect(en.overflow).toBe('…and 2 more')
+    expect(bootFailureRows(ids, 'zh').overflow).toBe('还有 2 个')
+    expect(bootFailureRows(ids, 'ja').overflow).toBe('ほか 2 件')
   })
 })

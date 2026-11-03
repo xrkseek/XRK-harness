@@ -11,28 +11,37 @@
  * AppWebEntry.run(), module face first, then plugin face: parse
  * `window.__XRK_BOOT__` into the two-view BootManifest (wire boundary)
  * → build the module system over the module-view rows → render the loading
- * page → start every graph-row script fetch in parallel with mounting the
+ * page → start the `immediately`-tier script fetches while mounting the
  * vendored cordis Loader (`internal` contract injection BEFORE any entry exists —
  * the bare-import fallback in tree.import must never run in a browser) →
- * await only the `immediately` factories, THEN adopt the modules entry and create one
+ * await those factories, THEN adopt the modules entry and create one
  * loader entry per plugin-view row plus the shell-own app-shell assembly
- * entry → loader.await() + a full fiber sweep (all ACTIVE, else fail
- * listing who/what/which service) → wait for Desktop Host Fetch (when
- * present; started in parallel with plugin fetch so one splash covers Host +
- * plugins), connection handshake phases, and the first session-list ready →
- * flip the settled signal so AppRoot's HARNESS splash switches to the real UI
- * in one pass (no empty shell flash). Progressive splash hints track that
- * chain (Host ∥ plugins → Face streams → sessions) on a single dual-ring.
+ * entry → loader.await() inside the activation budget + a full fiber sweep
+ * (all ACTIVE, else fail naming the inactive entry ids) → wait for Desktop
+ * Host Fetch (when present; started in parallel with plugin fetch so one
+ * splash covers Host + plugins), connection handshake phases, and the first
+ * session-list ready → flip the settled signal so AppRoot's HARNESS splash
+ * switches to the real UI in one pass (no empty shell flash). Progressive
+ * splash hints track that chain (Host ∥ plugins → Face streams → sessions) on
+ * a single dual-ring.
  *
  * Entry creation waits for the whole immediately tier: materialization runs
  * synchronous cross-package require edges (e.g. locale → runtime/client) that
  * fiber inject waiting cannot protect — a bundle's factory must be
- * registered before any dependent entry materializes. Non-immediate rows
- * still prefetch in the same wave so large later bundles (conversation)
- * download while those factories register. Per-row prefetch
- * failures still resolve silently (the create-side import reloads and
- * owns the loud failure), so the barrier never turns one bad bundle into a
- * boot-wide fail-fast.
+ * registered before any dependent entry materializes. Rows outside that tier
+ * are not prefetched: entry creation imports every one of them in the same
+ * tick, so the loader still starts them together — but the first request wave
+ * carries ~8 critical bundles instead of a 40-request burst, which is what a
+ * weak network actually has to chew through before the splash can lift.
+ * Per-row prefetch failures still resolve silently (the create-side import
+ * reloads and owns the loud failure), so the barrier never turns one bad
+ * bundle into a boot-wide fail-fast.
+ *
+ * The activation stage runs under a stall window ({@link BOOT_ACTIVATION_STALL_MS}):
+ * `create()` awaits each fiber's settle and the tree quiesce has no deadline of
+ * its own, so one apply that never resolves would hold the splash forever. When
+ * the stage stops moving, the sweep names the still-inactive entry ids on the
+ * failure page instead of aborting with one anonymous message.
  *
  * Composition lives in the host graph; the shell makes zero composition
  * decisions (the app-shell assembly is itself a graph entry, the only
@@ -61,6 +70,7 @@ import {
   type BootLang,
 } from './boot-hints.ts'
 import { clearBooting, stampBooting } from './boot-stamp.ts'
+import { watchStall, type StallWatch } from './boot-stall.ts'
 import { STATE_LABELS, createLoaderStatusStore, createSignal } from './loader-status.ts'
 import './base.css'
 
@@ -91,6 +101,18 @@ type DesktopHostTransport = {
   subscribeHostReady?: (listener: () => void) => () => void
   requestHostRebring?: () => void | Promise<void>
 }
+
+/**
+ * How long the plugin-activation stage may go without progress before the boot
+ * gives up waiting on it. Deliberately a stall window, not a wall-clock budget
+ * over the whole stage: `create()` awaits each bundle's import, so a wall clock
+ * would declare a merely-slow link (32 bundles still arriving) dead. Every
+ * projected entry transition and every settled creation re-arms it, so only a
+ * stage that genuinely stopped moving — an apply that never resolves — trips
+ * it. Tripping does not abort with a generic error: the sweep below turns the
+ * still-inactive entries into ids the failure page names.
+ */
+const BOOT_ACTIVATION_STALL_MS = 8_000
 
 /** Wait until `done` is true, re-checking on every source notification. */
 function waitUntilReady(
@@ -125,6 +147,24 @@ export type BootSeams = Pick<ClientModuleSystemOptions, 'loadBundle'>
 const MODULES_ID = '@xrkseek/client-modules'
 
 /**
+ * Boot abort carrying the entry ids that never activated. The failure page
+ * renders exactly these ids; the message keeps the per-entry detail for the
+ * console only (devtools diagnosis, never splash copy).
+ */
+class BootActivationError extends Error {
+  readonly ids: readonly string[]
+
+  constructor(ids: readonly string[], details: readonly string[]) {
+    super(
+      `web boot: ${String(ids.length)} entr${ids.length === 1 ? 'y' : 'ies'} did not activate`
+      + (details.length === 0 ? '' : `\n${details.join('\n')}`),
+    )
+    this.name = 'BootActivationError'
+    this.ids = ids
+  }
+}
+
+/**
  * The web shell kernel: mounts the loading page into a DOM element and runs
  * the two-stage boot over the host graph. Fields hold only what must exist
  * before cordis does — the parsed manifest, the module system, and the
@@ -136,6 +176,16 @@ export class AppWebEntry {
   private readonly status = createLoaderStatusStore()
   private readonly settled = createSignal(false)
   private readonly error = createSignal<string | undefined>(undefined)
+  /**
+   * Entry ids that never reached ACTIVE (activation sweep). Separate from
+   * {@link error} so the failure page can list who — the one-line report has
+   * no room for a roster, and a roster is the only thing that locates the bug.
+   */
+  private readonly failures = createSignal<readonly string[]>([])
+  /** Entry creations still running; > 0 means a bundle may still be on the wire. */
+  private creatingEntries = 0
+  /** Live stall window of the activation stage (undefined outside it). */
+  private stall: StallWatch | undefined
   private readonly hint = createSignal(bootPluginHint({}, resolveBootLang()))
   private readonly bootLang = createSignal<BootLang>(resolveBootLang())
   /** Splash retry control while Desktop Host gate is parked on failure. */
@@ -201,6 +251,7 @@ export class AppWebEntry {
         settled={this.settled}
         status={this.status}
         error={this.error}
+        failures={this.failures}
         hint={this.hint}
         lang={this.bootLang}
         onRetryHost={this.onRetryHost}
@@ -216,10 +267,10 @@ export class AppWebEntry {
     // Desktop Host gate starts with the splash so cold Host spawn and plugin
     // prefetch share one dual-ring (no static-HTML remount seam).
     const hostReady = this.beginDesktopHostGate()
-    // All graph rows start fetching now; runPluginBoot only awaits the
-    // immediately-tier factories before creating entries (see module comment:
-    // cross-package synchronous require edges need those factories
-    // registered before any materialization).
+    // The immediately tier starts fetching now; runPluginBoot awaits those
+    // factories before creating entries (see module comment: cross-package
+    // synchronous require edges need them registered before any
+    // materialization). Every other row is fetched on demand by the loader.
     const prefetching = this.prefetchImmediateTier()
     this.ctx = new Context()
     try {
@@ -232,7 +283,14 @@ export class AppWebEntry {
     } catch (reason) {
       // Stay on the loading page; surface the sweep report (fail loud).
       console.error(reason)
-      this.error.set(reason instanceof Error ? reason.message : String(reason))
+      const ids = reason instanceof BootActivationError ? reason.ids : []
+      this.failures.set(ids)
+      // Activation failures render as one row per id (the message carries the
+      // same ids plus service detail — console only). Everything else (Host /
+      // connection) keeps its single line.
+      this.error.set(ids.length > 0
+        ? undefined
+        : reason instanceof Error ? reason.message : String(reason))
     } finally {
       this.abandonDesktopHostGate()
     }
@@ -493,9 +551,14 @@ export class AppWebEntry {
   }
 
   /**
-   * Prefetch every graph-row script. Await only the immediately tier
-   * (factory registration); the rest overlap that wait on the network.
-   * Failures defer to the import path.
+   * Prefetch the `immediately` tier only — the one whose factories must exist
+   * before any entry materializes. Every other row is fetched by the loader on
+   * demand (entry creation imports all of them in the same tick), so leaving
+   * them out of the boot wave costs no concurrency: it just stops ~30 unrelated
+   * bundles from queueing ahead of the critical ones on a slow link. One
+   * `Promise.all` over the whole tier — a second serial wave only delays rows
+   * the synchronous require edges need just as early. Failures defer to the
+   * import path.
    */
   private async prefetchImmediateTier(): Promise<void> {
     const prefetch = (row: BootPluginRow) =>
@@ -503,13 +566,7 @@ export class AppWebEntry {
         // Import reloads and reports this loudly per entry; swallowing
         // here keeps one failing prefetch from masking the others.
       })
-    for (const row of this.manifest.plugins) void prefetch(row)
-    const immediate = this.manifest.plugins.filter((row) => row.immediately)
-    /** @xrkseek/* platform rows first — community DSH bundles remap onto these ids. */
-    const platform = immediate.filter((row) => row.id.startsWith('@xrkseek/'))
-    const community = immediate.filter((row) => !row.id.startsWith('@xrkseek/'))
-    await Promise.all(platform.map(prefetch))
-    await Promise.all(community.map(prefetch))
+    await Promise.all(this.manifest.plugins.filter((row) => row.immediately).map(prefetch))
   }
 
   /** Plugin face: mount the Loader, inject the `internal` contract, adopt modules, create the graph entries, settle, sweep. */
@@ -528,6 +585,7 @@ export class AppWebEntry {
     ctx.on('internal/status', (fiber) => {
       const entry = fiber.entry
       if (entry === undefined || entry.fiber === undefined) return
+      this.stall?.notify()
       this.status.set(entry.options.name, STATE_LABELS[entry.fiber.state])
       this.refreshPluginHint()
     })
@@ -549,48 +607,101 @@ export class AppWebEntry {
     // kernel: it is shell-own code (host graph rows are all plugin bundles),
     // and mounting the assembly is not a composition decision — it rides the
     // same entry lifecycle so the sweep and status cover it uniformly.
-    await Promise.all(rows.map(async (name) => {
-      this.status.set(name, 'loading')
-      this.refreshPluginHint()
-      const id = await loader.create({ name })
-      // A failed import leaves the entry fiberless (Entry._init logs and
-      // returns); project it as failed — no fiber means no status event.
-      if (loader.resolve(id).fiber === undefined) {
-        this.status.set(name, 'failed')
+    // Activation stage: entry creation, then tree quiesce, under the stall
+    // window. `create()` awaits the bundle import AND that entry's fiber
+    // settle, so a plugin whose apply never resolves hangs here — not in
+    // `loader.await()` — which is why the window covers both.
+    await this.awaitActivation((async () => {
+      this.creatingEntries = rows.length
+      await Promise.all(rows.map(async (name) => {
+        this.status.set(name, 'loading')
         this.refreshPluginHint()
-      }
-    }))
-
-    await loader.await()
+        try {
+          const id = await loader.create({ name })
+          // A failed import leaves the entry fiberless (Entry._init logs and
+          // returns); project it as failed — no fiber means no status event.
+          if (loader.resolve(id).fiber === undefined) {
+            this.status.set(name, 'failed')
+            this.refreshPluginHint()
+          }
+        } finally {
+          // Anything settling counts as progress: a slow link must never trip
+          // the stall window (see awaitActivation).
+          this.creatingEntries -= 1
+          this.stall?.notify()
+        }
+      }))
+      await loader.await()
+    })())
     this.assertEntriesActive()
   }
 
   /**
-   * Sweep every loader entry after the tree quiesced: an entry without a
+   * Await the activation stage while it keeps moving, up to
+   * {@link BOOT_ACTIVATION_STALL_MS} of silence. Neither non-success outcome
+   * aborts boot from here: a fiber failure rejects the stage (a bare aggregate
+   * that names no entry), and a stuck apply never resolves at all. Both hand
+   * over to the sweep, which knows which entries are short of ACTIVE.
+   * @param stage - entry creation + tree quiesce.
+   */
+  private async awaitActivation(stage: Promise<void>): Promise<void> {
+    const stall = watchStall(BOOT_ACTIVATION_STALL_MS, () => this.importInFlight())
+    this.stall = stall
+    try {
+      await Promise.race([
+        // A rejected stage is the sweep's business (it knows the ids); keep the
+        // loader's own detail in devtools. Attaching the handler here also
+        // keeps an abandoned stage from going unhandled.
+        stage.catch((reason: unknown) => { console.error(reason) }),
+        stall.stalled,
+      ])
+    } finally {
+      stall.dispose()
+      this.stall = undefined
+    }
+  }
+
+  /**
+   * True while some entry is still waiting on its bundle. A fiberless entry
+   * whose creation has not settled is an import in flight; the import-failure
+   * projection (`failed`) is the fiberless-but-done exception.
+   */
+  private importInFlight(): boolean {
+    if (this.creatingEntries === 0) return false
+    const status = this.status.getSnapshot()
+    for (const entry of this.ctx.loader.entries()) {
+      if (entry.fiber === undefined && status[entry.options.name] !== 'failed') return true
+    }
+    return false
+  }
+
+  /**
+   * Sweep every loader entry after the activation wait: an entry without a
    * fiber failed its import; a fiber not ACTIVE is FAILED (apply threw) or
-   * PENDING (a required service never arrived — cordis inject waiting has no
-   * timeout, so this sweep is the fail-loud compensation).
+   * PENDING (a required service never arrived). Fails loud with the ids only —
+   * per-entry detail rides the thrown message (console), never the splash.
    */
   private assertEntriesActive(): void {
     const ctx = this.ctx
-    const failures: string[] = []
+    const ids: string[] = []
+    const details: string[] = []
     for (const entry of ctx.loader.entries()) {
       const name = entry.options.name
       if (entry.fiber === undefined) {
-        failures.push(`${name}: import failed (see console for the import error)`)
+        ids.push(name)
+        details.push(`${name}: import failed (see console for the import error)`)
         continue
       }
       const state = STATE_LABELS[entry.fiber.state]
       if (state === 'active') continue
+      ids.push(name)
       if (state === 'pending') {
         const missing = Object.keys(entry.fiber.inject).filter(service => ctx.get(service) === undefined)
-        failures.push(`${name}: pending (waiting for service${missing.length === 1 ? '' : 's'}: ${missing.join(', ') || 'unknown'})`)
+        details.push(`${name}: pending (waiting for service${missing.length === 1 ? '' : 's'}: ${missing.join(', ') || 'unknown'})`)
       } else {
-        failures.push(`${name}: ${state}`)
+        details.push(`${name}: ${state}`)
       }
     }
-    if (failures.length > 0) {
-      throw new Error(`web boot: ${String(failures.length)} entr${failures.length === 1 ? 'y' : 'ies'} did not activate\n${failures.join('\n')}`)
-    }
+    if (ids.length > 0) throw new BootActivationError(ids, details)
   }
 }

@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { AttachmentId } from '@xrkseek/xrk-attachment'
 import type { MessageImagesProps } from '@xrkseek/client-ui-conversation/client'
 import { ImageGallery, MessageImage } from '../src/MessageImage.tsx'
@@ -195,6 +195,130 @@ describe('MessageImage', () => {
   })
 })
 
+/** Minimal IntersectionObserver double: the lane has no layout, so the test
+ * fires the intersection itself and proves the gate is what defers the load. */
+class FakeIntersectionObserver {
+  static readonly built: FakeIntersectionObserver[] = []
+  readonly targets = new Set<Element>()
+  constructor(readonly callback: IntersectionObserverCallback) { FakeIntersectionObserver.built.push(this) }
+  observe(target: Element): void { this.targets.add(target) }
+  unobserve(target: Element): void { this.targets.delete(target) }
+  disconnect(): void { this.targets.clear() }
+  takeRecords(): IntersectionObserverEntry[] { return [] }
+  fire(): boolean {
+    const target = [...this.targets][0]
+    if (target === undefined) return false
+    this.callback([{ isIntersecting: true, target } as unknown as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+    return true
+  }
+}
+
+describe('MessageImage viewport gate', () => {
+  afterEach(() => { FakeIntersectionObserver.built.length = 0 })
+
+  it('issues no attachment request until the frame reaches the viewport', async () => {
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
+    try {
+      const load = vi.fn().mockResolvedValue('blob:late-image')
+      const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
+      const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })
+      // The frame keeps its exact single-image geometry while it waits, so a
+      // long scrollback never jumps when the pictures arrive.
+      expect(frame.getAttribute('style')).toContain('width: 240px')
+      expect(frame.getAttribute('style')).toContain('height: 120px')
+      expect(view.getByText('图片加载中…')).toBeTruthy()
+      expect(load).not.toHaveBeenCalled()
+      expect(view.queryByAltText('history.png')).toBeNull()
+      const observer = FakeIntersectionObserver.built.at(-1)
+      expect(observer).toBeDefined()
+      await act(async () => { observer?.fire() })
+      await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
+      expect(load).toHaveBeenCalledWith(attachment)
+      // First intersection is permanent: the frame leaves the observer.
+      expect(observer?.targets.size).toBe(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('MessageImage downscaling', () => {
+  const originals = {
+    create: URL.createObjectURL,
+    revoke: URL.revokeObjectURL,
+    getContext: HTMLCanvasElement.prototype.getContext,
+    toBlob: HTMLCanvasElement.prototype.toBlob,
+  }
+  afterEach(() => {
+    Object.assign(URL, { createObjectURL: originals.create, revokeObjectURL: originals.revoke })
+    HTMLCanvasElement.prototype.getContext = originals.getContext
+    HTMLCanvasElement.prototype.toBlob = originals.toBlob
+    vi.unstubAllGlobals()
+  })
+
+  it('paints the shrunk bitmap and revokes its object URL on unmount', async () => {
+    const close = vi.fn()
+    const bitmap = { width: 4000, height: 2000, close }
+    const createImageBitmap = vi.fn(async () => bitmap)
+    vi.stubGlobal('createImageBitmap', createImageBitmap)
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => blob }) as unknown as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectURL = vi.fn(() => 'blob:shrunk')
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const drawImage = vi.fn()
+    const context = { drawImage, imageSmoothingEnabled: false, imageSmoothingQuality: 'low' }
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => context) as unknown as typeof HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.toBlob = ((callback: BlobCallback) => {
+      callback(new Blob([new Uint8Array([9])], { type: 'image/webp' }))
+    }) as typeof HTMLCanvasElement.prototype.toBlob
+    const load = vi.fn().mockResolvedValue('blob:original')
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
+    await waitFor(() => { expect(view.getByAltText('history.png').getAttribute('src')).toBe('blob:shrunk') })
+    expect(fetchMock).toHaveBeenCalledWith('blob:original')
+    expect(createImageBitmap).toHaveBeenCalledWith(blob)
+    // 4000×2000 capped to a 480px long edge, drawn in one filtered pass.
+    expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 480, 240)
+    expect(context.imageSmoothingQuality).toBe('high')
+    // The full-resolution raster is released as soon as the copy exists.
+    expect(close).toHaveBeenCalled()
+    view.unmount()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:shrunk')
+  })
+
+  it('leaves a raster that already fits alone instead of upscaling it', async () => {
+    const close = vi.fn()
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 100, height: 60, close })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob([new Uint8Array([1])], { type: 'image/png' }),
+    }) as unknown as Response))
+    const createObjectURL = vi.fn(() => 'blob:upscaled')
+    Object.assign(URL, { createObjectURL })
+    const load = vi.fn().mockResolvedValue('blob:original')
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
+    await waitFor(() => { expect(view.getByAltText('history.png').getAttribute('src')).toBe('blob:original') })
+    // A 100px icon must keep its own naturalWidth: the frame's promotion
+    // would otherwise grow it to 240px of blur.
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalled()
+  })
+
+  it('keeps the original URL when the engine cannot shrink it', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('no options support') }))
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob([new Uint8Array([1])], { type: 'image/png' }),
+    }) as unknown as Response))
+    const load = vi.fn().mockResolvedValue('blob:original')
+    const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
+    await waitFor(() => { expect(view.getByAltText('history.png').getAttribute('src')).toBe('blob:original') })
+    // A blank thumbnail is never the failure mode.
+    expect(view.queryByText('图片加载失败，点击重试')).toBeNull()
+  })
+})
+
 describe('ImageGallery', () => {
   it('renders nothing without images and an aligned wrapping group with them', async () => {
     const load = vi.fn().mockResolvedValue('blob:gallery')
@@ -205,6 +329,18 @@ describe('ImageGallery', () => {
     )
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
     await waitFor(() => { expect(view.getAllByAltText('history.png')).toHaveLength(2) })
+  })
+
+  it('mounts only the first dozen tiles and expands the rest on demand', () => {
+    const load = vi.fn(() => new Promise<string>(() => {}))
+    const many = Array.from({ length: 20 }, () => ({ attachment }))
+    const view = render(<ImageGallery images={many} load={load} align="start" labels={labels} />)
+    expect(view.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(12)
+    // Twenty mounted frames would be twenty decoders; one cell holds the rest.
+    const more = view.getByRole('button', { name: '+8' })
+    fireEvent.click(more)
+    expect(view.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(20)
+    expect(view.queryByRole('button', { name: '+8' })).toBeNull()
   })
 
   it('renders a lone image large and several images as square tiles', () => {

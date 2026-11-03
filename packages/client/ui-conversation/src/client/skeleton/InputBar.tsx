@@ -51,14 +51,37 @@ import {
 } from '../drop-path-intake.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
+import { VoiceInputButton } from './VoiceInputButton.tsx'
 import css from './InputBar.module.css'
 
 export type InputBarProps = ComposerBarProps
 
+/**
+ * Stand-in for a surface that binds no dictation hook (tests, hostless
+ * previews). Reading off is exactly the Host default, so the seat stays out of
+ * the row instead of the component crashing on an absent selector.
+ */
+const ABSENT_DICTATION = <S,>(_selector: (state: boolean) => S): S => false as S
+
+/**
+ * Whether this device never gets the dictation seat.
+ *
+ * A phone already owns voice input in the OS keyboard, and a thumb-sized mic
+ * crowds the trailing row — so the Host's ASR switch governs desktops only.
+ * Read per render (not cached) so a test can stub `matchMedia`; the pointer
+ * class itself never changes while the page is open.
+ */
+function coarsePointerDevice(): boolean {
+  if (typeof matchMedia !== 'function') return false
+  return matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches
+}
+
 export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages, retryFile,
   toggleCommandMenu, stop, command, bindCommandComposerFocus, t,
+  transcribeVoice, openVoiceSettings,
   renderSlot, useBusyEnter, useNotices, useLexicon, useMenuLauncher, useFileUploads,
+  useDictation,
   useProjection, useConnectionState, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessLocked = false, accessory, overlay, leftItems, rightItems, footer,
@@ -66,6 +89,14 @@ export const InputBar = memo(function InputBar({
   const input = useInput(s => s)
   const notice = useNotices(s => s)
   const busyEnter = useBusyEnter(s => s)
+  // Host-owned opt-in (`asr.enabled`, default off): the seat stays out of the
+  // row until the ASR card turns it on, and appears live when it does.
+  // A surface that binds no hook reads as off — the hook identity is resolved
+  // once per render so the call order never depends on props arriving.
+  const dictationHook = useDictation ?? ABSENT_DICTATION
+  const dictation = dictationHook(s => s)
+  // Phones never show the mic, whatever the Host switch says.
+  const showDictation = dictation && !coarsePointerDevice()
   void useLexicon // hook seat stays bound by the inject compartment; text-ref decoration rides the shell's editor transforms
   const fileUploads = useFileUploads(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
@@ -224,7 +255,7 @@ export const InputBar = memo(function InputBar({
   const permissions = useProjection('permissions')
 
   // A continuable child without its live parent cannot accept human input,
-  // but its independent Stop below stays available while it runs.
+  // but its Stop still rides the primary while the draft is empty.
   const oneShot = subagent?.address.mode === 'one-shot'
   const continuable = subagent?.address.mode === 'continuable'
   const parentOffline = continuable && !subagent.parentAvailable
@@ -251,7 +282,7 @@ export const InputBar = memo(function InputBar({
   // Steer / busy-Enter follow Host `running`. After cancel the primary is
   // Send; do not advertise steer chords the Host will reject as steer-unavailable.
   // Continuable children share busy-Enter Queue/Steer and whole-queue flush;
-  // one-shot stays Queue-only. One-shot still gets a side Stop while running
+  // one-shot stays Queue-only. A one-shot child's Stop also rides the primary
   // (cannot message/steer, but can cancel a hung tool).
   const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
   const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && deliveryBusy && steeringAvailable
@@ -530,13 +561,13 @@ export const InputBar = memo(function InputBar({
   // button (no pending upload) over a non-empty draft that is neither a
   // claimed command nor a `/` line headed for adjudication — so it never
   // describes a delivery the click cannot or does not perform; every other
-  // state keeps plain Send. Any
-  // addressed child keeps Send primary and exposes Stop independently —
-  // including a one-shot child, which otherwise offers no way out while it
-  // hangs in a tool (it cannot accept messages, but it can be cancelled, and
-  // the host cascades that cancel to the child's own children).
-  const primaryStops = agentActive && subagent === null && (empty || blocked !== undefined)
-  const interruptible = agentActive && subagent !== null
+  // state keeps plain Send.
+  //
+  // An addressed child keeps the same single-button face: its Stop rides the
+  // primary while the draft is empty, exactly like a top-level session. The
+  // separate square Stop that used to sit beside it is gone — one composer,
+  // one primary action (and the voice button takes that freed seat).
+  const primaryStops = agentActive && (empty || blocked !== undefined)
   const primarySubmitMode = resolveSubmitMode(busyEnter, deliveryBusy, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops
@@ -750,22 +781,16 @@ export const InputBar = memo(function InputBar({
             {rightItems}
             {renderSlot('conversation.input.model', { locked: modelSeatLocked })}
             <ContextMeter useProjection={useProjection} t={t} />
-            {interruptible && (
-              <Tooltip label={t('input.stop')} side="top">
-                <button
-                  type="button"
-                  className={css.primary}
-                  aria-label={t('input.stop')}
-                  disabled={stop === undefined}
-                  onMouseDown={keepFocus}
-                  onClick={stop}
-                >
-                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-                    <rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor" />
-                  </svg>
-                </button>
-              </Tooltip>
-            )}
+            {showDictation ? (
+              <VoiceInputButton
+                locked={modelSeatLocked}
+                transcribeVoice={transcribeVoice}
+                openVoiceSettings={openVoiceSettings}
+                paste={text => { keyboard?.paste(text) }}
+                keepFocus={keepFocus}
+                t={t}
+              />
+            ) : null}
             <Tooltip label={primaryHint} side="top">
               <button
                 type="button"

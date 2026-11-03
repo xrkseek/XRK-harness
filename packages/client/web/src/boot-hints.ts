@@ -33,6 +33,7 @@ type BootHintKey =
   | 'backoff'
   | 'halted'
   | 'failedTitle'
+  | 'failedOverflow'
   | 'hostFailedTitle'
   | 'retry'
 
@@ -46,6 +47,7 @@ const EN: Record<BootHintKey, string> = {
   backoff: 'Taking a breath, then retry…',
   halted: 'Host stopped — tap reconnect in the footer, or retry here…',
   failedTitle: 'Failed to load plugins',
+  failedOverflow: '…and {count} more',
   hostFailedTitle: 'Host failed to start',
   retry: 'Retry Host',
 }
@@ -60,6 +62,7 @@ const ZH: Record<BootHintKey, string> = {
   backoff: '歇一口气，马上再试…',
   halted: 'Host 已停 — 点底栏重连，或在此重试…',
   failedTitle: '插件加载失败',
+  failedOverflow: '还有 {count} 个',
   hostFailedTitle: 'Host 未能启动',
   retry: '重试 Host',
 }
@@ -74,6 +77,7 @@ const JA: Record<BootHintKey, string> = {
   backoff: '一息ついてから再試行…',
   halted: 'Host が停止しました — フッターで再接続するか、ここで再試行…',
   failedTitle: 'プラグインの読み込みに失敗しました',
+  failedOverflow: 'ほか {count} 件',
   hostFailedTitle: 'Host を起動できませんでした',
   retry: 'Host を再試行',
 }
@@ -289,6 +293,31 @@ export function bootSessionsHint(lang: BootLang = 'en'): string {
 /** Fail-loud title on the splash (AppRoot). */
 export function bootFailedTitle(lang: BootLang = 'en'): string {
   return dict(lang).failedTitle
+}
+
+/** Failure-page id rows before the remainder folds into one overflow line. */
+export const BOOT_FAILURE_LIST_LIMIT = 12
+
+/**
+ * Failure-page entry ids, capped: the splash names who failed and stops there
+ * (no synthesized cause, no advice). The tail folds into one count line so a
+ * 40-entry graph cannot push the title off a phone screen.
+ * @param ids - inactive entry ids, in loader order (already deduped).
+ * @param lang - splash language.
+ * @returns the rows to render plus the overflow line, if any.
+ */
+export function bootFailureRows(
+  ids: readonly string[],
+  lang: BootLang = 'en',
+): { readonly ids: readonly string[]; readonly overflow: string | undefined } {
+  const shown = ids.slice(0, BOOT_FAILURE_LIST_LIMIT)
+  const hidden = ids.length - shown.length
+  return {
+    ids: shown,
+    overflow: hidden > 0
+      ? fill(dict(lang).failedOverflow, { count: String(hidden) })
+      : undefined,
+  }
 }
 
 /** Splash title when Desktop Host bring-up failed (retryable). */

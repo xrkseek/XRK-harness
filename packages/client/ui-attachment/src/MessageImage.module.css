@@ -96,3 +96,31 @@
   overflow: hidden;
   border-radius: 16px;
 }
+
+/* Overflow cell of a long gallery: same silhouette as a tile, so the grid
+   stays even and the reveal is a click rather than forty decoders. */
+.more {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  padding: 0;
+  border: 1px dashed var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.more[data-large] {
+  width: 96px;
+  height: 96px;
+  min-width: 96px;
+  min-height: 96px;
+  border-radius: 8px;
+}

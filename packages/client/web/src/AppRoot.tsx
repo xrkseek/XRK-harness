@@ -5,8 +5,8 @@
  * system whose failure it reports; the status/signal stores are kernel-own,
  * shell self-sufficiency rule); the real UI is produced by the
  * app-shell entry once every entry is active. A failed boot keeps the
- * loading page, lists the per-entry fiber states and the sweep report (fail
- * loud, no partial UI).
+ * loading page and names the inactive entry ids (one row each, capped) plus
+ * any one-line Host/connection report — fail loud, no partial UI.
  *
  * Product readiness (Host Fetch + connection + session list) is folded into
  * `settled` by the boot kernel — this page stays up so the empty shell never
@@ -21,6 +21,7 @@
 import { useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import {
+  bootFailureRows,
   bootFailedTitle,
   bootHostFailedTitle,
   bootPluginHint,
@@ -34,6 +35,9 @@ import { clearBooting, stampBooting } from './boot-stamp.ts'
 import type { KernelSignal, LoaderStatus } from './loader-status.ts'
 import css from './AppRoot.module.css'
 
+/** Stable empty id list: the optional failures signal must not allocate per read. */
+const NO_FAILURES: readonly string[] = []
+
 /** AppRoot props: settled signal, fiber-state projection feed, boot failure report, deferred real-UI factory. */
 export interface AppRootProps {
   /** True once plugins + Host/session list are ready; the boot closure flips it. */
@@ -42,6 +46,11 @@ export interface AppRootProps {
   status: KernelSignal<LoaderStatus>
   /** Boot failure report (the settle rejection message); undefined while loading or after success. */
   error: KernelSignal<string | undefined>
+  /**
+   * Entry ids that never reached ACTIVE (activation sweep). Rendered as the
+   * failure roster; the one-line {@link AppRootProps.error} has no room for it.
+   */
+  failures?: KernelSignal<readonly string[]>
   /**
    * Progressive boot hint under the spinner. Defaults to a lang-aware
    * "Loading plugins…" (locale plugins may still be activating).
@@ -63,6 +72,10 @@ export function AppRoot(props: AppRootProps) {
   const settled = useSyncExternalStore(props.settled.subscribe, props.settled.getSnapshot)
   const status = useSyncExternalStore(props.status.subscribe, props.status.getSnapshot)
   const error = useSyncExternalStore(props.error.subscribe, props.error.getSnapshot)
+  const failures = useSyncExternalStore(
+    props.failures?.subscribe ?? (() => () => {}),
+    () => props.failures?.getSnapshot() ?? NO_FAILURES,
+  )
   const lang = useSyncExternalStore(
     props.lang?.subscribe ?? (() => () => {}),
     () => props.lang?.getSnapshot() ?? resolveBootLang(),
@@ -75,8 +88,10 @@ export function AppRoot(props: AppRootProps) {
     props.onRetryHost?.subscribe ?? (() => () => {}),
     () => props.onRetryHost?.getSnapshot(),
   )
-  const failed = Object.entries(status).filter(([, s]) => s === 'failed')
-  const loud = error !== undefined || failed.length > 0
+  const failed = Object.entries(status).filter(([, s]) => s === 'failed').map(([id]) => id)
+  // Ids only, deduped: a boot failure names who, it does not retell the cause.
+  const report = bootFailureRows([...new Set([...failed, ...failures])], lang)
+  const loud = error !== undefined || report.ids.length > 0
   const hostRetryable = retryHost !== undefined
   /** Splash stays until product UI has painted under it. */
   const [revealed, setRevealed] = useState(false)
@@ -147,7 +162,10 @@ export function AppRoot(props: AppRootProps) {
                     <div className={css.failedTitle}>
                       {hostRetryable ? bootHostFailedTitle(lang) : bootFailedTitle(lang)}
                     </div>
-                    {failed.map(([id]) => <div key={id} className={css.failedItem}>{id}</div>)}
+                    {report.ids.map((id) => <div key={id} className={css.failedItem}>{id}</div>)}
+                    {report.overflow !== undefined && (
+                      <div className={css.failedItem}>{report.overflow}</div>
+                    )}
                     {error !== undefined && <div className={css.failedItem}>{error}</div>}
                     {hostRetryable
                       ? (

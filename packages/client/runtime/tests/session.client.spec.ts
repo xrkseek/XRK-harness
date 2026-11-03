@@ -580,6 +580,33 @@ describe('prompt and cancel errors', () => {
     ])
   })
 
+  it('passes image/file parts through subagent.prompt instead of dropping them', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, api, fakeRemote(), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    await session.open()
+    const prompted = await session.prompt([
+      { type: 'text', text: '看这张图' },
+      { type: 'image', mediaType: 'image/png', data: 'aGVsbG8=' },
+      { type: 'file', data: 'ZmlsZQ==', name: 'note.txt', mediaType: 'text/plain' },
+    ], 'queue')
+    // The pre-0.7 client rejected these with load-bearing reason codes; Face now
+    // runs the same durable admission as session.prompt, so content rides as-is.
+    expect(prompted).toEqual({ ok: true, value: { accepted: true } })
+    expect(api.callsOf('subagent.prompt')).toMatchObject([{
+      parentSessionId: PARENT, childSessionId: SID, mode: 'continuable',
+      content: [
+        { type: 'text', text: '看这张图' },
+        { type: 'image', mediaType: 'image/png', data: 'aGVsbG8=' },
+        { type: 'file', data: 'ZmlsZQ==', name: 'note.txt', mediaType: 'text/plain' },
+      ],
+      delivery: 'queue',
+    }])
+    expect(session.getSnapshot().promptError).toBeNull()
+  })
+
   it('passes beginSubmission requestId through subagent.prompt', async () => {
     const api = new FakeApiClient()
     const session = new Session(SID, api, fakeRemote(), {

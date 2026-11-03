@@ -39,7 +39,10 @@ import { shouldFollowContentGrowth } from './follow-growth.ts'
 import { ChatNodeSeat, UserSendFlow } from './ChatNodeSeat.tsx'
 import { ProcessGroupSeat } from './ProcessGroupSeat.tsx'
 import { flowEntries } from '../conversation-nodes/process-groups.ts'
-import { presentationPolicyFor } from '../conversation-nodes/presentation-policy.ts'
+import {
+  presentationPolicyFor,
+  processGroupDeferred,
+} from '../conversation-nodes/presentation-policy.ts'
 import { ResubmitConfirm } from './ResubmitConfirm.tsx'
 import {
   completeResubmitConfirm,
@@ -1362,6 +1365,13 @@ export function ChatView({
   const handleFoldSettled = useCallback((): void => { onScrollRef.current() }, [])
   const columnRows: ReactNode[] = []
   const seenSendRpc = new Set<string>()
+  // DSH `collapseTiming: 'next-input'` reads the next send off the pending
+  // tail: a `transcript` echo is the reader's new Turn starting, while a
+  // `steering` echo joins the Turn that is already running. Only the former
+  // releases a deferred fold (same split DSH makes on `placement`).
+  const nextSendPending = pendingInputs.some(
+    input => input.kind === 'echo' && input.submission.placement === 'transcript',
+  )
   // Process runs fold here rather than in the projection: the committed row
   // order already is the projection's output, so grouping is a pure read, and
   // fold state lives in the seat instead of the snapshot.
@@ -1378,6 +1388,12 @@ export function ChatView({
           nodeSeat={nodeSeat}
           t={t}
           foldWhen={policy.foldWhen}
+          // A run from the newest Turn keeps its rows until the reader sends;
+          // every older Turn is free to fold on completion as before.
+          deferCollapse={processGroupDeferred(policy.collapseTiming, {
+            newestTurn: entry.turn === latestTurn,
+            nextInputPending: nextSendPending,
+          })}
           idleSettled={!sessionRunning && !entry.summary.running}
           detailTitles={policy.detailTitles}
           liveProcessDetail={policy.liveProcessDetail}

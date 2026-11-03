@@ -167,6 +167,21 @@ describe('conversation slot inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('the composer bar builds without a Face voice Remote (welcome first frame)', async () => {
+    const b = await bench()
+    // bench provides `remote` but NOT `remote.voice`. Reading the namespace as
+    // a property (`ctx.remote.voice`) is an inject-checked access: it threw
+    // "cannot get property \"remote.voice\" without inject" inside the inject
+    // factory and took the whole composer.bar slot (welcome page included)
+    // down with it. The factory must degrade to "no dictation seat".
+    expect(b.composerApi(undefined).transcribeVoice).toBeUndefined()
+    expect(b.composerApi(ROOT).transcribeVoice).toBeUndefined()
+    // The bar stayed registered: a throw in this factory is what the slot
+    // boundary turns into "conversation.composer.bar failed to render".
+    expect(b.runtime.slots.entries('conversation.composer.bar')).toHaveLength(1)
+    await b.runtime.dispose()
+  })
+
   it('the provide-channel input face submits through the machine sink: trim, transactional clear, failure retains the draft', async () => {
     const b = await bench()
     const { injected } = b.conversationApi(ROOT)

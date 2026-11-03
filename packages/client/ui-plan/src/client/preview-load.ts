@@ -49,6 +49,8 @@ export interface SessionStatusView {
           | 'blocked'
           | 'none'
         readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+        /** Provider error code (`QUOTA` …) — only for `error`. */
+        readonly code?: string
         readonly quietMs?: number
       }
       readonly mode: string
@@ -78,6 +80,8 @@ export interface SessionStatusView {
             | 'blocked'
             | 'none'
           readonly cause?: 'user' | 'parent' | 'disposed' | 'hook' | 'legacy'
+          /** Provider error code (`QUOTA` …) — only for `error`. */
+          readonly code?: string
           readonly quietMs?: number
         }
       }[]
@@ -379,11 +383,20 @@ function parseLiveOutcome(
       >['cause'])
       : undefined
   const quietMs = num((raw as { quietMs?: unknown }).quietMs)
+  // Ride the provider code through so the board can say "额度用尽" instead of
+  // a bare "error". Bounded like the Face side (`errorCodeOf`) — this parser
+  // is the last gate before the UI, and it must not pass junk through.
+  const codeRaw = str((raw as { code?: unknown }).code)?.trim()
+  const code =
+    kind === 'error' && codeRaw !== undefined && codeRaw.length > 0 && codeRaw.length <= 64
+      ? codeRaw
+      : undefined
   return {
     kind: kind as NonNullable<
       SessionStatusView['subagents']['live'][number]['outcome']
     >['kind'],
     ...(cause ? { cause } : {}),
+    ...(code !== undefined ? { code } : {}),
     ...(quietMs !== undefined ? { quietMs } : {}),
   }
 }

@@ -2,7 +2,7 @@
 import type { Context } from '@xrkseek/cordis'
 import { resolveSlotLabel, type BoundActions } from '@xrkseek/client-ui-slots'
 import {
-  resolveWorkspacePath, type ISessions, type SessionId,
+  createSnapshotStore, resolveWorkspacePath, type ISessions, type SessionId,
 } from '@xrkseek/client-runtime/client'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
@@ -12,6 +12,8 @@ import type {} from '@xrkseek/client-ui-settings/client'
 import type {} from '@xrkseek/client-locale/client'
 // Type-only: pulls ctx.layout — inject waits until ui-layout declares `conversation`.
 import type {} from '@xrkseek/client-ui-layout/client'
+// Type-only: the ctx.remote Context merge (voice.transcribe rides it).
+import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ViewTab } from './contract/views.ts'
 import type {
   ApprovalComposerInjected, ApprovalWait, ChatNodeTurnDataInjected, ChatScrollPosition, ChatViewInjected, ComposerBarInjected,
@@ -196,6 +198,22 @@ export function apply(ctx: Context): void {
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
   )
+
+  // Dictation is opt-in and Host-owned (`asr.enabled`, default off), so one
+  // switch governs every device pointed at this Host. An absent or unreadable
+  // section reads as off: a mic that cannot work yet must not be the control a
+  // new composer leads with. The subscription shares the scope's plugin
+  // lifetime, so it needs no release hook.
+  const asrPreference = ctx.settingsScope.bind<{ enabled?: boolean }>({
+    namespace: 'asr',
+  })
+  const readDictation = (): boolean =>
+    asrPreference.getSnapshot().value?.enabled === true
+  const dictation = createSnapshotStore(readDictation())
+  asrPreference.subscribe(() => {
+    const next = readDictation()
+    if (dictation.getSnapshot() !== next) dictation.set(next)
+  })
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -424,10 +442,13 @@ export function apply(ctx: Context): void {
           stop: undefined,
           command: undefined,
           bindCommandComposerFocus: undefined,
+          transcribeVoice: undefined,
+          openVoiceSettings: undefined,
           hooks: {
             busyEnter: submissionPolicy.busyEnter,
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
+            dictation,
             menuLauncher: ABSENT_MENU_LAUNCHER,
             fileUploads: ABSENT_FILE_UPLOADS,
           },
@@ -439,8 +460,58 @@ export function apply(ctx: Context): void {
       const commandUi = ctx.get('commandUi') as
         | { bindComposerFocus(id: typeof sessionId, focus: () => void): () => void }
         | undefined
+      // The Settings shell owns the Voice card; this seat only points at it.
+      const settingsNav = ctx.get('settingsNav') as
+        | { openSection(id: string): void }
+        | undefined
       return {
         keyboard: shell,
+        // Composer dictation rides the Face `voice.transcribe` Remote: the Host
+        // alone holds the Provider credential, and the failure text is the
+        // Host's own reason (ASR off, backend missing, upstream 4xx).
+        // No voice Remote at all (older Host / test double): no button at all —
+        // the composer must not offer a microphone it cannot drive.
+        transcribeVoice: async (audio: string, mimeType: string) => {
+          // Resolved per call, never captured, and never off `ctx`.
+          //
+          // Reading: `ctx.remote.voice` is inject-checked and throws on a fiber
+          // that never declared it; `ctx.get('remote.voice')` asks the
+          // container for a service nobody provides (`$bindFace` provides it on
+          // a child fiber); `ctx.get('remote').voice` is a traceable proxy that
+          // forwards `voice` straight back to `ctx['remote.voice']`, the same
+          // throw. The namespace is a plain own property on the gateway
+          // instance and that proxy defines no `getOwnPropertyDescriptor` trap,
+          // so the descriptor read never reaches `ctx`.
+          //
+          // Per call: `$bindFace` mounts the namespace after the `remote`
+          // service this fiber waited for, so a value read at apply time is
+          // undefined on every cold boot and the first press would do nothing.
+          // A missing namespace now answers `voice-unavailable`, which the
+          // button already turns into the actionable Settings trip.
+          const gateway = ctx.get('remote') as object | undefined
+          const voice = gateway === undefined
+            ? undefined
+            : Object.getOwnPropertyDescriptor(gateway, 'voice')?.value as typeof ctx.remote.voice | undefined
+          if (voice === undefined) {
+            throw Object.assign(
+              new Error('this Host exposes no voice interface'),
+              { code: 'voice-unavailable' },
+            )
+          }
+          const result = await voice.transcribe({ audio, mimeType })
+          if (!result.ok) {
+            // Keep the Host's code on the Error: the button separates
+            // 「nothing is configured」 (an actionable Settings trip) from
+            // 「the backend broke」 (retry in place).
+            throw Object.assign(new Error(result.error.message), {
+              code: result.error.code,
+            })
+          }
+          return result.value.text
+        },
+        openVoiceSettings: settingsNav === undefined
+          ? undefined
+          : () => { settingsNav.openSection('plugins') },
         bindCommandComposerFocus: commandUi === undefined
           ? undefined
           : (focus) => commandUi.bindComposerFocus(sessionId, focus),
@@ -494,6 +565,7 @@ export function apply(ctx: Context): void {
           busyEnter: submissionPolicy.busyEnter,
           notices: shell.notices,
           lexicon: shell.lexicon,
+          dictation,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
           fileUploads: conversation.fileUploads,
         },

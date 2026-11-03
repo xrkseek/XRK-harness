@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // InputBar behavior over the machine wiring: Enter-send semantics (IME guard,
 // Shift newline, busy Enter policy, Ctrl/Meta steering, repeat suppression), running
-// semantics (input stays free; continuable children keep Send beside Stop), the machine pending lock,
+// semantics (input stays free; one primary that is Stop on an empty draft and
+// the busy Send once a draft exists, for top-level and child sessions alike), the machine pending lock,
 // decoration backdrop, error banners, status strips, and the focus-keeping mousedown.
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import {
   bindComposerHost, bindSnapshotSelector, composerHintOf, flushComposer, makeTranslate,
 } from '@xrkseek/client-test-runtime'
@@ -29,6 +30,13 @@ import {
 } from '../src/client/chat/pending-input-chrome.ts'
 
 afterEach(cleanup)
+
+// jsdom has no capture stack; the seat's own gate would hide every button and
+// the ASR-switch cases would pass vacuously.
+vi.mock('@xrkseek/exec-voice/capture', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xrkseek/exec-voice/capture')>()
+  return { ...actual, dictationAvailable: () => true, startVoiceCapture: vi.fn() }
+})
 
 // jsdom implements no Range geometry at all — `Range.prototype.getBoundingClientRect`
 // is absent — and the composer measures the caret with one when it restores the
@@ -108,6 +116,8 @@ interface BenchOptions {
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
+  /** The Host ASR switch (`asr.enabled`) as the composer reads it. */
+  dictation?: boolean
 }
 
 /** One pending queue row (the runtime snapshot shape, as the dock tests build it). */
@@ -225,6 +235,10 @@ function bench(over?: BenchOptions) {
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
     useFileUploads: bindSnapshotSelector(createSnapshotStore<Record<string, never>>({})),
+    ...(over?.dictation === undefined
+      ? {}
+      : { useDictation: bindSnapshotSelector(createSnapshotStore(over.dictation)) }),
+    ...(over?.dictation === true ? { transcribeVoice: async () => 'spoken' } : {}),
     retryFile: vi.fn(),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
@@ -249,7 +263,10 @@ function bench(over?: BenchOptions) {
   const textarea = bindComposerHost(view.container.querySelector('[data-composer-input]')!, shell)
   const agentActive = over?.running === true
   const sendableDraft = (over?.draft?.trim() ?? '') !== '' || (over?.attachments?.length ?? 0) > 0
-  const primaryStops = agentActive && over?.subagent === undefined && !sendableDraft
+  // Mirrors `InputBar`'s rule for this bench (which never passes an owner
+  // `blocked`): an active agent leaves Stop on the primary while the draft is
+  // empty, and hands the seat to the busy Send as soon as one exists.
+  const primaryStops = agentActive && !sendableDraft
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true
     || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
@@ -267,9 +284,15 @@ function bench(over?: BenchOptions) {
   const button = view.container.querySelector<HTMLButtonElement>(
     `button[aria-label="${primaryLabel}"]`,
   )!
-  const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
+  // One composer owns one primary action: while it stops, the primary itself
+  // carries `t('input.stop')`. The separate square Stop seat beside it is gone
+  // (the voice button took that seat), so a second Stop-labelled button is a
+  // design regression — specs probe this list instead.
+  const stopButtons = [...view.container.querySelectorAll<HTMLButtonElement>(
+    'button[aria-label="停止生成"]',
+  )]
   return {
-    view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage, slotCalls,
+    view, textarea, button, stopButtons, props, sink, shell, wiring: shell, session, stop, removeImage, slotCalls,
     menuLauncher, busyEnter,
     steerQueue: over?.steerQueue,
   }
@@ -1008,8 +1031,8 @@ describe('running and lock semantics', () => {
     expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], 'queue', expect.any(AbortSignal))
   })
 
-  it('running continuable subagent keeps Send beside an independent Stop', () => {
-    const { button, interruptButton, textarea, sink, stop } = bench({
+  it('running continuable subagent gives the draft the busy Send and keeps no second Stop', () => {
+    const { button, stopButtons, textarea, sink, stop } = bench({
       running: true,
       draft: '后续消息',
       subagent: {
@@ -1022,16 +1045,41 @@ describe('running and lock semantics', () => {
       },
     })
     expect(button.getAttribute('aria-label')).toBe('排队（本轮后）')
-    expect(interruptButton).not.toBeNull()
+    // One composer, one primary action: a draft takes the seat, so the Stop is
+    // simply unreachable until that draft clears — never a second square seat.
+    expect(stopButtons).toHaveLength(0)
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal))
-    fireEvent.click(interruptButton!)
+    expect(stop).not.toHaveBeenCalled()
+  })
+
+  it('clearing the draft hands the continuable child primary back to Stop', () => {
+    const { shell, stopButtons, view, stop } = bench({
+      running: true,
+      draft: '后续消息',
+      subagent: {
+        address: {
+          parentSessionId: 'parent' as SessionId,
+          childSessionId: SID,
+          mode: 'continuable',
+        },
+        parentAvailable: true,
+      },
+    })
+    expect(stopButtons).toHaveLength(0)
+    act(() => { shell.setDraft('') })
+    const primaryAtStop = view.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="停止生成"]',
+    )
+    expect(primaryAtStop).not.toBeNull()
+    expect(primaryAtStop!.disabled).toBe(false)
+    fireEvent.click(primaryAtStop!)
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('parent-offline running continuable locks Send but keeps independent Stop usable', () => {
-    const { button, interruptButton, textarea, stop, view } = bench({
+  it('parent-offline running continuable locks Send and keeps Stop on the primary', () => {
+    const { stopButtons, textarea, stop, view } = bench({
       running: true,
       draft: '',
       subagent: {
@@ -1046,17 +1094,18 @@ describe('running and lock semantics', () => {
     expect(textarea.getAttribute('aria-disabled')).toBe('true')
     expect(textarea.getAttribute('data-placeholder')).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
     expect((view.getByLabelText('命令') as HTMLButtonElement).disabled).toBe(true)
-    expect(button.getAttribute('aria-label')).toBe('发送消息')
-    expect(button.disabled).toBe(true)
-    expect(interruptButton?.disabled).toBe(false)
-    fireEvent.click(interruptButton!)
+    // Locked input, live Stop: the only control the lock leaves usable is the
+    // primary itself, which turns into Stop for exactly this reason.
+    expect(stopButtons).toHaveLength(1)
+    expect(stopButtons[0]!.disabled).toBe(false)
+    fireEvent.click(stopButtons[0]!)
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('running one-shot subagent keeps Send primary and exposes independent Stop', () => {
-    const { button, interruptButton, stop } = bench({
+  it('running one-shot subagent keeps the single primary as Stop', () => {
+    const { textarea, stopButtons, stop } = bench({
       running: true,
-      draft: '可停止',
+      draft: '',
       subagent: {
         address: {
           parentSessionId: 'parent' as SessionId,
@@ -1066,12 +1115,11 @@ describe('running and lock semantics', () => {
         parentAvailable: true,
       },
     })
-    // One-shot cannot accept further messages as primary Send (locked read-only
-    // messaging elsewhere), but while it hangs in a tool the independent Stop
-    // is the only way out — same interrupt chrome as continuable.
-    expect(button.getAttribute('aria-label')).toBe('发送消息')
-    expect(interruptButton).not.toBeNull()
-    fireEvent.click(interruptButton!)
+    // One-shot is a view-only transcript (no message, no steer), but a turn
+    // hung in a tool still has to be cancellable — through the same primary.
+    expect(textarea.getAttribute('aria-disabled')).toBe('true')
+    expect(stopButtons).toHaveLength(1)
+    fireEvent.click(stopButtons[0]!)
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
@@ -1094,7 +1142,7 @@ describe('running and lock semantics', () => {
   })
 
   it('after Stop, draining tools do not keep busy-Enter labels', () => {
-    const { button, interruptButton } = bench({
+    const { button, stopButtons } = bench({
       running: false,
       draft: 'follow-up',
       runningCalls: [{
@@ -1109,7 +1157,7 @@ describe('running and lock semantics', () => {
         turnTimings: new Map([[1, { startTime: 1_000 }]]),
       }),
     })
-    expect(interruptButton).toBeNull()
+    expect(stopButtons).toHaveLength(0)
     expect(button.getAttribute('aria-label')).toBe('发送消息')
   })
 
@@ -1866,9 +1914,15 @@ describe('command launcher chrome and control seats', () => {
 
     expect(command).toHaveBeenCalledOnce()
     expect(command).toHaveBeenCalledWith('/permission danger-full-access')
-    expect(view.queryByRole('dialog')).toBeNull()
+    // Optimistic pick: the trigger advertises the admitted mode while the
+    // command is in flight (this bench never republishes the projection).
     expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('完全访问')
+    // `Modal` keeps a closed dialog mounted for its exit animation, so the
+    // closed fact lands one frame after the click, not inside it.
+    await waitFor(() => { expect(view.queryByRole('dialog')).toBeNull() })
     await act(async () => {})
+    // Admission settled: the pick clears and the trigger is usable again.
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('cancels a Full access selection without changing permission and resets acknowledgement', () => {
@@ -1964,5 +2018,39 @@ describe('command launcher chrome and control seats', () => {
     const liveTrigger = live.view.getByLabelText(/^访问模式/)
     expect(liveTrigger.tagName).toBe('BUTTON')
     expect((liveTrigger as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+describe('dictation seat', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia')
+  })
+
+  it('stays out of the row while the Host ASR switch is off', () => {
+    const { view } = bench({ dictation: false })
+    expect(view.queryByRole('button', { name: /语音/ })).toBeNull()
+  })
+
+  it('appears on a fine pointer when ASR is on', () => {
+    const { view } = bench({ dictation: true })
+    expect(view.getByRole('button', { name: /语音/ })).toBeTruthy()
+  })
+
+  it('never appears on a coarse-pointer device, ASR or not', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+    const { view } = bench({ dictation: true })
+    expect(view.queryByRole('button', { name: /语音/ })).toBeNull()
   })
 })

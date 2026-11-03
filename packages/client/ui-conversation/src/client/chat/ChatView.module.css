@@ -267,7 +267,9 @@
    Fold state is owned by `useFoldDriver` (measure → compensate → settle).
    The body uses `hidden="until-found"` so height drops in one frame —
    never animate grid-template-rows (mid heights lift the sticky composer).
-   Members stay mounted so `data-chat-anchor-key` order survives the fold.
+   Folded rows unmount: the snapshot owns their data, and the paging probe
+   skipped `[hidden]` subtrees already, so no anchor identity is lost while
+   the DOM and heap stop carrying every hidden tool row of a long Turn.
    Header chrome comes from shared `DisclosureRow`; separator + summary
    match ReasoningRow / ToolRow so "过程" never sits flush against detail. */
 .processGroupSep {

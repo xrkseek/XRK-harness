@@ -7,10 +7,13 @@
  * DSH also splits a per-member action surface (`ChatGroupSeat`); an XRK group
  * only folds, so one header over the rows is the whole surface.
  *
- * Members stay mounted while folded. The body uses `hidden="until-found"`
- * (DSH searchable-hidden) so layout drops in one frame — grid-row collapse
- * painted mid-heights that lifted the sticky composer. Header chrome stays
- * outside the hidden body; paging probes skip `[hidden]` subtrees like DSH.
+ * A folded run mounts none of its members. `hidden="until-found"` (DSH
+ * searchable-hidden) alone drops layout in one frame but keeps every row in
+ * the DOM and in memory — and the phone OOM killer does not care that the
+ * browser skips painting them. The snapshot owns the row data, so opening the
+ * run mounts the rows again without re-fetching anything. Header chrome stays
+ * outside the body either way, and the paging probe skipped `[hidden]`
+ * subtrees already, so no anchor identity is lost.
  */
 
 import { memo } from 'react'
@@ -35,6 +38,24 @@ type GroupEntry = Extract<FlowEntry, { kind: 'group' }>
 
 /** How many distinct tool names the open-run detail keeps before `+N`. */
 const TOOL_NAME_CAP = 3
+
+/**
+ * Whether a folded run should leave the DOM entirely.
+ *
+ * A pointer-coarse device is where a long transcript actually runs out of
+ * memory; dropping the folded rows there is what keeps the tab alive. A
+ * desktop keeps them mounted, because `hidden="until-found"` is exactly what
+ * lets Ctrl+F find folded work and the browser reveal it — unmounting on a
+ * desktop would trade a search feature for memory it does not need.
+ *
+ * Read per render (not cached) so a test can stub `matchMedia`; the pointer
+ * class itself never changes while the page is open, so this is one cheap
+ * media query per render of a seat that already re-renders on every burst.
+ */
+function foldedRowsLeaveDom(): boolean {
+  if (typeof matchMedia !== 'function') return false
+  return matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches
+}
 
 /**
  * Map XRK tool buckets onto DSH `data-process-activity` vocabulary so
@@ -80,6 +101,13 @@ type GroupProps = {
    * preference and does not veto folding.
    */
   readonly foldWhen: ProcessFoldWhen
+  /**
+   * Hold a settled run open until the reader sends the next input
+   * (`collapseTiming: 'next-input'`). The owner derives it per run; the seat
+   * only gates the settle it hands the fold driver, so measure / compensate
+   * stay exactly as they are — a deferred run simply has not latched yet.
+   */
+  readonly deferCollapse?: boolean | undefined
   /**
    * Session is idle and this run has no in-flight tools. Used when Host has
    * cleared `running` but the Turn Location has not closed yet (lost turn/end).
@@ -157,14 +185,28 @@ function formatToolNames(names: readonly string[]): string | undefined {
 
 /** Rows hidden behind one header inside a Turn's process run. */
 export const ProcessGroupSeat = memo(function ProcessGroupSeat({
-  entry, nodeSeat, t, foldWhen, idleSettled = false,
+  entry, nodeSeat, t, foldWhen, deferCollapse = false, idleSettled = false,
   detailTitles, liveProcessDetail, writeScroll, onFoldSettled,
 }: GroupProps) {
   // Timing comes from the work-details mode (immediate / process / turn / never).
   const settled = processGroupSettled(foldWhen, entry, idleSettled)
+  // Deferred collapse is "not settled yet" as far as the latch is concerned:
+  // the run keeps its height until the next input arrives, then folds through
+  // the ordinary path (above-reader compensation included).
   const { rootRef, folded, toggle } = useFoldDriver({
-    closed: settled,
+    closed: settled && !deferCollapse,
     foldAllowed: foldWhen !== 'never',
+    // Mode split (the reader's own words: 本来就该折叠，新的工具卡片出现不要
+    // 导致折叠打开).
+    //
+    // `process` (standard) folds each settled burst, so the next burst used to
+    // rip the whole run open and re-settle it — one Turn with several bursts
+    // flashed folded → open → folded. With this, a settled fold stays shut and
+    // the header reports the tool that just started.
+    // `immediate` folds from birth; re-opening it would contradict the mode.
+    // `turn` (detailed) never latches before the Turn closes, so there is
+    // nothing to keep; `never` (verbose) cannot fold at all.
+    keepFoldedOnBurst: foldWhen === 'process' || foldWhen === 'immediate',
     writeScroll,
     onSettled: onFoldSettled,
   })
@@ -191,6 +233,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     : undefined
 
   const processActivity = dshProcessActivity(live, entry.summary)
+  const dropFoldedMembers = folded && foldedRowsLeaveDom()
 
   return (
     <div
@@ -200,6 +243,9 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
       data-process-turn={entry.turn}
       // DSH TurnProcessNodeView — community glass CSS targets this attr.
       data-turn-process={entry.turn}
+      // The header is the only row left when a folded run drops its members,
+      // so the reading line must still resolve to this Turn for the rail.
+      data-chat-turn={entry.turn}
       data-folded={folded || undefined}
       data-process-running={live || undefined}
       // DSH ChatGroupSeat header activity kind (community icon / CSS keys).
@@ -230,9 +276,11 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
         className={css.processGroupBody}
         data-folded={folded || undefined}
         data-process-group-body=""
-        // DSH searchable-hidden: sync on the ref callback so expand never
-        // paints a frame still carrying until-found (React 18 has no string
-        // `hidden` prop).
+        // Keep `hidden="until-found"` as well as the unmount below: the frame
+        // that flips `folded` must drop height before its members disappear,
+        // and `until-found` is what the fold measurement was tuned against.
+        // `content-visibility: hidden` also keeps Ctrl+F able to reveal the
+        // run for the one frame before React commits the empty body.
         ref={(el) => {
           if (el === null) return
           if (folded) el.setAttribute('hidden', 'until-found')
@@ -240,7 +288,10 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
         }}
       >
         <div className={css.processGroupInner}>
-          {entry.members.map(member => (
+          {/* On a touch device the folded rows are gone, not merely unpainted:
+              a 20-Turn transcript kept thousands of hidden tool rows alive for
+              nothing. On a desktop they stay, so Ctrl+F can still reveal them. */}
+          {dropFoldedMembers ? null : entry.members.map(member => (
             <ChatNodeSeat key={member.key} nodeKey={member.key} {...nodeSeat} />
           ))}
         </div>
@@ -249,6 +300,7 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   )
 }, (previous: GroupProps, next: GroupProps) => (
   previous.foldWhen === next.foldWhen
+  && previous.deferCollapse === next.deferCollapse
   && previous.idleSettled === next.idleSettled
   && previous.detailTitles === next.detailTitles
   && previous.liveProcessDetail === next.liveProcessDetail

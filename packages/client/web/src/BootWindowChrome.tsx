@@ -42,7 +42,16 @@ const LABELS = {
     restore: '还原',
     close: '关闭',
   },
-} as const
+  // Every BootLang needs a row: `LABELS[lang]` with a missing key is an
+  // undefined deref once the splash resolves ja (Desktop shell locale).
+  ja: {
+    reload: '再読み込み',
+    minimize: '最小化',
+    maximize: '最大化',
+    restore: '元に戻す',
+    close: '閉じる',
+  },
+} as const satisfies Record<BootLang, Record<'reload' | 'minimize' | 'maximize' | 'restore' | 'close', string>>
 
 /** Splash-time titlebar controls (Desktop only). */
 export function BootWindowChrome({ lang }: { readonly lang: BootLang }): ReactNode {

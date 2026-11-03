@@ -425,6 +425,38 @@
   cursor: default;
 }
 
+/* A take in flight: the mic seat swaps to a stop square and its fill turns
+   red, so "recording now" reads at a glance beside the blue send circle.
+   Animates box-shadow, never transform — `.primary` spends that on its seat. */
+.primary.recording {
+  background: var(--dsw-alias-button-danger-fill, #d93f3f);
+  color: #fff;
+  animation: voicePulse 1.4s ease-in-out infinite;
+}
+
+/* Nothing is configured yet: the seat drops the blue send fill and becomes an
+   outline, so it reads as 「this needs a step first」 rather than as another
+   send button. Placed after the hover rule so it wins at equal specificity. */
+.primary.needsSetup {
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2);
+}
+
+.primary.needsSetup:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-1));
+  color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary));
+}
+
+.primary.recording:hover:not(:disabled) {
+  background: var(--dsw-alias-button-danger-fill, #d93f3f);
+}
+
+@keyframes voicePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 63, 63, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(217, 63, 63, 0); }
+}
+
 @media (max-width: 767px) {
   /* Sticky seat already eats the short viewport — tighten card + stats stack. */
   .root:has([data-composer-stats]) {
@@ -487,7 +519,9 @@
   }
 
   .trailing {
-    flex: 0 0 auto;
+    /* Let the model chip give up width first (it ellipsizes); the send circle
+       is `flex: none`, so only the label shrinks. */
+    flex: 0 1 auto;
     margin-left: 0;
     gap: 6px;
   }

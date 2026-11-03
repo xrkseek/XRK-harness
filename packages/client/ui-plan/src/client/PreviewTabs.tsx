@@ -28,11 +28,11 @@ import { SubagentGraphBoard } from './SubagentGraphBoard.tsx'
 import { BossStatusSheet } from './BossStatusSheet.tsx'
 import { PresenceBall, useBossMood, usePresenceEnabled, useSeatTitles } from './PresenceBall.tsx'
 import { PENDING_MEMBER_LOOK } from './pending-member-look.ts'
+import { mergeTeamRosterLiveLook } from './team-live-look.ts'
 import {
   readTeamRosterLive,
   subscribeTeamRosterLive,
   teamRosterLiveRevision,
-  type TeamRosterLiveLook,
 } from '@xrkseek/client-runtime/client'
 import {
   childDelegateSeatCaption,
@@ -77,31 +77,6 @@ const PRESENCE_COLLAPSED_KEY = 'xrk.overview.presenceCollapsed'
 
 /** Matches AppFrame `PHONE_MAX` (768 exclusive) — glanceable ball needs room. */
 const PHONE_VIEWPORT_MQ = '(max-width: 767px)'
-
-/**
- * Overlay a live Team edit on top of a Host status snapshot.
- *
- * Module-level on purpose: it runs on every Overview repaint and `PresenceBall`
- * is `memo`'d, so building a fresh object inline in the component body defeated
- * that memo on every status poll (the ball re-rendered even when nothing it
- * read had changed). Callers wrap the result in `useMemo`.
- */
-function mergeLiveLook<T extends object>(base: T, look: TeamRosterLiveLook | undefined): T {
-  if (!look) return base
-  return {
-    ...base,
-    ...(look.shape ? { shape: look.shape } : {}),
-    ...(look.color ? { color: look.color } : {}),
-    ...(typeof look.size === 'number' ? { size: look.size } : {}),
-    ...(look.kit ? { kit: look.kit } : {}),
-    ...(look.kitHat ? { kitHat: look.kitHat } : {}),
-    ...(look.kitGlasses ? { kitGlasses: look.kitGlasses } : {}),
-    ...(look.kitHeld ? { kitHeld: look.kitHeld } : {}),
-    ...(look.overlayHat ? { overlayHat: look.overlayHat } : {}),
-    ...(look.overlayGlasses ? { overlayGlasses: look.overlayGlasses } : {}),
-    ...(look.overlayHeld ? { overlayHeld: look.overlayHeld } : {}),
-  }
-}
 
 function readPresenceCollapsed(): boolean {
   try {
@@ -287,15 +262,25 @@ function teamTaskStatusRank(status: string): number {
 
 type PlanTranslate = TranslateNS<'plan'>
 
-/** Localized subagent terminal verdict — never dump raw enums into zh UI. */
+/**
+ * Localized subagent terminal verdict — never dump raw enums into zh UI.
+ *
+ * `code` (provider error code) rides along when known: "出错 · 额度用尽" beats a
+ * bare "出错", which reads the same for a quota wall and a crash.
+ */
 function subagentOutcomeLabel(
   t: PlanTranslate,
   kind: string | undefined,
+  code?: string,
 ): string | undefined {
   if (!kind || kind === 'completed' || kind === 'none') return undefined
   const key = `preview.status.subagentOutcome.${kind}` as PlanKey
-  const label = t(key)
-  return label === key ? kind : label
+  const base = t(key) === key ? kind : t(key)
+  const trimmed = code?.trim()
+  if (!trimmed) return base
+  const codeKey = `preview.status.subagentCode.${trimmed}` as PlanKey
+  const localized = t(codeKey)
+  return `${base} · ${localized === codeKey ? trimmed : localized}`
 }
 
 function subagentModeLabel(t: PlanTranslate, mode: string): string {
@@ -1008,10 +993,10 @@ function StatusPanel({
                 emptyLabel={t('preview.status.subagentsEmpty')}
                 runningLabel={t('preview.status.subagentRunning')}
                 idleLabel={t('preview.status.subagentIdle')}
-                outcomeLabel={(kind) => {
+                outcomeLabel={(kind, code) => {
                   if (kind === 'completed') return t('preview.status.subagentIdle')
                   if (kind === 'none') return t('preview.status.subagentOutcome.none')
-                  return subagentOutcomeLabel(t, kind) ?? kind
+                  return subagentOutcomeLabel(t, kind, code) ?? kind
                 }}
                 roleLabel={(role) => subagentRoleLabel(t, role)}
                 {...(openTeamChild
@@ -1038,7 +1023,7 @@ function StatusPanel({
                     <h4 className={css.subsectionLabel}>{t('preview.status.subagentLive')}</h4>
                     <ul className={css.itemList}>
                       {status.subagents.live.map((s) => {
-                        const outcomeText = subagentOutcomeLabel(t, s.outcome?.kind)
+                        const outcomeText = subagentOutcomeLabel(t, s.outcome?.kind, s.outcome?.code)
                         const activityText = s.activity === 'running'
                           ? t('preview.status.subagentRunning')
                           : (outcomeText ?? t('preview.status.subagentIdle'))
@@ -1978,12 +1963,12 @@ export function PreviewTabs({
   const liveChildLook = liveChild?.appearance
   const liveParentLook = liveParent?.appearance
   const childMemberLook = useMemo(
-    () => mergeLiveLook(snapshotChildLook ?? PENDING_MEMBER_LOOK, liveChildLook),
+    () => mergeTeamRosterLiveLook(snapshotChildLook ?? PENDING_MEMBER_LOOK, liveChildLook),
     [snapshotChildLook, liveChildLook],
   )
   const parentMemberLook = useMemo(
     () => (snapshotParentLook && !leftSeatLiveBossLook
-      ? mergeLiveLook(snapshotParentLook, liveParentLook)
+      ? mergeTeamRosterLiveLook(snapshotParentLook, liveParentLook)
       : snapshotParentLook),
     [snapshotParentLook, liveParentLook, leftSeatLiveBossLook],
   )

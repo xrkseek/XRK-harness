@@ -113,7 +113,7 @@ describe('executeResubmitAfterChoice', () => {
     expect(s.prompt).not.toHaveBeenCalled()
   })
 
-  it('rolls the workspace back before cutting, and cancels a live turn', async () => {
+  it('rolls the workspace back before cutting, and lets the cut stop the live turn', async () => {
     const s = makeSessions({ live: true })
 
     await executeResubmitAfterChoice(s.sessions, SID, {
@@ -123,12 +123,15 @@ describe('executeResubmitAfterChoice', () => {
     })
 
     expect(s.command).toHaveBeenCalledWith('/rollback seq:7')
-    expect(s.cancel).toHaveBeenCalledTimes(1)
-    // rollback → cancel → truncate ordering matters: the rollback needs the
+    // Face `session.truncate` cancels an active drain itself (it drops the open
+    // turn whose `turn/start` sits before the cut), so a separate cancel RPC
+    // would only add a round trip the re-prompt then races.
+    expect(s.cancel).not.toHaveBeenCalled()
+    expect(s.prompt).toHaveBeenCalledTimes(1)
+    // rollback → truncate ordering matters: the rollback needs the
     // pre-cut seq to address its checkpoint.
     const order = [
       s.command.mock.invocationCallOrder[0]!,
-      s.cancel.mock.invocationCallOrder[0]!,
       s.truncate.mock.invocationCallOrder[0]!,
     ]
     expect(order).toEqual([...order].sort((a, b) => a - b))

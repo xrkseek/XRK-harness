@@ -206,6 +206,34 @@ describe("preview tab envelopes", () => {
     });
   });
 
+  it("keeps the provider error code (and drops junk) so the board can name a quota wall", () => {
+    const withCode = (code: unknown) => ({
+      ...sampleStatus,
+      subagents: {
+        ...sampleStatus.subagents,
+        live: [
+          {
+            id: "c1",
+            activity: "inactive" as const,
+            mode: "continuable",
+            label: "metered",
+            outcome: { kind: "error" as const, code, quietMs: 5 },
+          },
+        ],
+      },
+    });
+
+    const parsed = parseSessionStatus({ result: { ok: true, value: withCode("QUOTA") } });
+    expect(parsed?.subagents.live[0]?.outcome?.code).toBe("QUOTA");
+
+    // This parser is the last gate before the UI: a non-string code must not
+    // reach the label (it would render "[object Object]").
+    const junk = parseSessionStatus({
+      result: { ok: true, value: withCode({ nested: true }) },
+    });
+    expect(junk?.subagents.live[0]?.outcome?.code).toBeUndefined();
+  });
+
   it("parses teamTasks externalResume · worktreeId for Status actions", () => {
     const withTeam = {
       ...sampleStatus,

@@ -20,6 +20,35 @@ const useSession = ((selector: (state: unknown) => unknown) => selector({
 
 const seat = { useSession } as never
 
+/** One row per member that survives the node lookup, so mount/unmount is
+ *  observable — the default empty store renders no member DOM at all. */
+const mountedRows = new Map<string, unknown>([
+  ['a1', {
+    kind: 'tool-call', key: 'a1',
+    location: { kind: 'turn', turn: { turn: 1, status: 'open' } },
+    data: { root: { name: 'bash' } },
+  }],
+  ['a2', {
+    kind: 'tool-call', key: 'a2',
+    location: { kind: 'turn', turn: { turn: 1, status: 'open' } },
+    data: { root: { name: 'Read' } },
+  }],
+  ['a3', {
+    kind: 'tool-call', key: 'a3',
+    location: { kind: 'turn', turn: { turn: 1, status: 'open' } },
+    data: { root: { name: 'bash' } },
+  }],
+])
+
+/** Same seat, but every member resolves to a row that paints an anchor. */
+const seatWithRows = {
+  useSession: (selector: (state: unknown) => unknown) => selector({ chat: { nodes: mountedRows } }),
+  renderSlot: () => null,
+  t,
+  roundByTurn: new Map(),
+  openerKeyByTurn: new Map(),
+} as never
+
 function group(closed: boolean, overrides: Partial<Extract<FlowEntry, { kind: 'group' }>['summary']> = {}): FlowEntry & { kind: 'group' } {
   return {
     kind: 'group',
@@ -63,6 +92,7 @@ function renderSeat(
   entry: FlowEntry & { kind: 'group' },
   overrides: Partial<{
     foldWhen: ProcessFoldWhen
+    deferCollapse: boolean
     idleSettled: boolean
     detailTitles: boolean
     liveProcessDetail: boolean
@@ -72,6 +102,7 @@ function renderSeat(
 ) {
   const props = {
     foldWhen: 'process' as ProcessFoldWhen,
+    deferCollapse: false,
     idleSettled: false,
     detailTitles: true,
     liveProcessDetail: true,
@@ -127,7 +158,10 @@ describe('ProcessGroupSeat', () => {
     expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('re-opens when a new tool burst starts on the same Turn', async () => {
+  it('keeps the settled fold when a new tool burst starts on the same Turn', async () => {
+    // A settled run folded. The next tool of the SAME Turn joins that fold
+    // instead of ripping it open — a Turn with several bursts otherwise
+    // flashed folded → open → folded for every burst.
     const view = renderSeat(group(false, { running: false }))
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
@@ -142,10 +176,82 @@ describe('ProcessGroupSeat', () => {
         liveProcessDetail
       />,
     )
+    // The fold stays shut and the header reports what just started.
+    await vi.waitFor(() => {
+      expect(summary(view.container)?.textContent).toBe('bash')
+    })
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    const groupRoot = view.container.querySelector('[data-process-group]')
+    expect(groupRoot?.hasAttribute('data-process-running')).toBe(true)
+    // Community CSS / icons key on this vocabulary.
+    expect(groupRoot?.getAttribute('data-process-activity')).toBe('commands')
+  })
+
+  it('a reader-opened run stays open through a new tool burst', async () => {
+    // The reader's own disclosure outranks the auto-latch: new work must not
+    // fold away the rows he is currently reading.
+    const view = renderSeat(group(false, { running: false }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    fireEvent.click(toggle(view.container)!)
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
     })
-    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(false, { running: true, runningTool: 'bash', toolNames: ['bash', 'Read'] })}
+        nodeSeat={seat}
+        t={t}
+        foldWhen="process"
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(summary(view.container)?.textContent).toContain('bash')
+    })
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+  })
+
+  it('unmounts folded members on a touch device, so a phone keeps no hidden rows', async () => {
+    // `hidden="until-found"` alone leaves every row in the DOM and in memory —
+    // the phone OOM killer does not care that the browser skips painting them.
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({ matches: query === '(pointer: coarse)' })) as never
+    try {
+      const view = render(
+        <ProcessGroupSeat entry={group(false, { running: false })} nodeSeat={seatWithRows}
+          t={t} foldWhen="process" detailTitles liveProcessDetail />,
+      )
+      await vi.waitFor(() => {
+        expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+      })
+      expect(view.container.querySelectorAll('[data-chat-anchor-key]').length).toBe(0)
+      fireEvent.click(toggle(view.container)!)
+      await vi.waitFor(() => {
+        expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+      })
+      // Opening re-mounts from the snapshot; nothing is re-fetched, nothing lost.
+      expect(view.container.querySelectorAll('[data-chat-anchor-key]').length).toBe(3)
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(window, 'matchMedia')
+      else window.matchMedia = original
+    }
+  })
+
+  it('keeps folded members mounted on a desktop so Ctrl+F still finds them', async () => {
+    // jsdom has no matchMedia, which is the desktop path: `hidden="until-found"`
+    // stays, and the browser's own find-in-page can reveal a folded run.
+    const view = render(
+      <ProcessGroupSeat entry={group(false, { running: false })} nodeSeat={seatWithRows}
+        t={t} foldWhen="process" detailTitles liveProcessDetail />,
+    )
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(view.container.querySelectorAll('[data-chat-anchor-key]').length).toBe(3)
   })
 
   it('keeps a thinking-only open Turn flat until close or idle', () => {
@@ -402,6 +508,29 @@ describe('ProcessGroupSeat', () => {
       expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
     })
     expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+  })
+
+  it('holds a settled run open until the next input when collapse is deferred', async () => {
+    // `collapseTiming: 'next-input'`: turn/end alone must not hide the rows the
+    // reader is still looking at; the next send releases the fold.
+    const view = renderSeat(group(true), { deferCollapse: true })
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(false)
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(true)}
+        nodeSeat={seat}
+        t={t}
+        foldWhen="process"
+        deferCollapse={false}
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(toggle(view.container)?.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('folds an open Turn once the session is idle and every tool has settled', async () => {

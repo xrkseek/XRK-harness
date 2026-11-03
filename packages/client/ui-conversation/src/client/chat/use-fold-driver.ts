@@ -41,6 +41,17 @@ export interface FoldDriverOptions {
    * The work-details mode decides (`verbose` never folds).
    */
   readonly foldAllowed: boolean
+  /**
+   * Whether a new tool burst keeps the settled fold instead of re-opening the
+   * whole run.
+   *
+   * `foldWhen: 'process'` folds each burst as it settles. Without this option
+   * the next burst clears the latch and the run re-expands, so a single Turn
+   * with several bursts flashes folded → open → folded every time. With it the
+   * run stays folded and the header names the tool in flight (the seat already
+   * renders that) — new work joins the fold, it does not rip it open.
+   */
+  readonly keepFoldedOnBurst?: boolean
   /** Writes `scrollTop` through the owner of the observed-top ledger. */
   readonly writeScroll?: ((scrollport: HTMLElement, top: number) => void) | undefined
   /** Called after a fold or unfold has landed in the DOM. */
@@ -68,6 +79,7 @@ export interface FoldDriver {
 export function useFoldDriver({
   closed,
   foldAllowed,
+  keepFoldedOnBurst = false,
   writeScroll,
   onSettled,
 }: FoldDriverOptions): FoldDriver {
@@ -134,17 +146,20 @@ export function useFoldDriver({
   // Do not latch `'open'` when folding is disallowed: that permanently blocks
   // a later mode flip (verbose → standard) from ever folding a settled run.
   //
-  // When `closed` flips back to false (a new tool burst), drop the auto-latch.
+  // When `closed` flips back to false (a new tool burst), the default is to
+  // drop the auto-latch so the reader sees the fresh rows. `keepFoldedOnBurst`
+  // keeps it: a settled run that already folded has nothing to gain from
+  // re-expanding, and the header already reports the tool in flight.
   // Always go through foldAbove: it no-ops compensation when the run is in
   // view, and avoids a second getBoundingClientRect before the measure.
   useLayoutEffect(() => {
     if (!closed) {
-      if (latched === 'closed') setLatched(null)
+      if (latched === 'closed' && !keepFoldedOnBurst) setLatched(null)
       return
     }
     if (!foldAllowed || latched === 'closed') return
     foldAbove(() => setLatched('closed'))
-  }, [closed, foldAllowed, latched, foldAbove])
+  }, [closed, foldAllowed, keepFoldedOnBurst, latched, foldAbove])
 
   const toggle = useCallback((): void => {
     if (folded) setPinned(false)

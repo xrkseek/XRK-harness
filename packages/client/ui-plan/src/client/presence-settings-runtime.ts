@@ -1,6 +1,11 @@
 /**
  * Live presence prefs: Host `ui-presence` scope + subscribers
- * (PresenceBall remounts when shape / color changes).
+ * (PresenceBall remounts when the look changes).
+ *
+ * Read side: the whole companion look. Write side: only what the Plugins card
+ * owns — the master switch, seat titles, and status tip presets. Appearance is
+ * written by 干员团队 through its own scope (`dressing-scope.ts`), so there is
+ * exactly one UI per field and no second copy of the same control here.
  */
 import type { SettingsScope } from '@xrkseek/client-runtime/client'
 import {
@@ -30,28 +35,17 @@ import {
   parseStickers,
   parseTitleScheme,
   PRESENCE_BOSS_NICKNAME_FIELD,
-  PRESENCE_BODY_COLOR_FIELD,
-  PRESENCE_COLOR_FIELD,
   PRESENCE_ENABLED_FIELD,
-  PRESENCE_EYE_COLOR_FIELD,
   PRESENCE_GLASSES_KITS,
   PRESENCE_HAT_KITS,
   PRESENCE_HELD_KITS,
   DEFAULT_PRESENCE_SIZE,
-  PRESENCE_SIZE_FIELD,
-  PRESENCE_KIT_FIELD,
-  PRESENCE_KIT_GLASSES_FIELD,
-  PRESENCE_KIT_HAT_FIELD,
-  PRESENCE_KIT_HELD_FIELD,
   PRESENCE_MOOD_AT_FIELD,
   PRESENCE_MOOD_ID_FIELD,
-  PRESENCE_SHAPE_FIELD,
   PRESENCE_STATUS_LINE_FIELD,
   PRESENCE_STATUS_LINE_MAX,
   PRESENCE_STATUS_PRESETS_FIELD,
   PRESENCE_STATUS_PRESETS_MAX,
-  PRESENCE_STICKERS_FIELD,
-  PRESENCE_STICKERS_MAX,
   PRESENCE_TITLE_AGENT_FIELD,
   PRESENCE_TITLE_BOSS_FIELD,
   PRESENCE_TITLE_MANAGER_FIELD,
@@ -59,10 +53,8 @@ import {
   resolveEnginePick,
   resolveSeatTitles,
   resolveStickerOverlay,
-  seatTitlesForScheme,
   splitLegacyKit,
   stickerIdFromPick,
-  stickerRef,
   type PresenceColor,
   type PresenceKit,
   type PresenceSeatTitles,
@@ -74,7 +66,6 @@ import {
 } from '../presence-settings.ts'
 
 export type PresencePrefsListener = () => void
-export type DressingSlot = 'hat' | 'glasses' | 'held'
 
 /** Owns persisted companion look and notifies browser listeners. */
 export class PresenceSettingsRuntime {
@@ -132,11 +123,12 @@ export class PresenceSettingsRuntime {
     return this.color
   }
 
-  /** Free-form body hex; '' means "follow the named preset". */
+  /** Ball size multiplier; ''-style fallback does not apply (1 = default). */
   getSize(): number {
     return this.size
   }
 
+  /** Free-form body hex; '' means "follow the named preset". */
   getBodyColor(): string {
     return this.bodyColor
   }
@@ -355,148 +347,11 @@ export class PresenceSettingsRuntime {
     this.setStatusPresets(this.statusPresets.filter((row) => row !== target))
   }
 
-  setShape(shape: PresenceShape): void {
-    if (!isPresenceShape(shape)) return
-    if (this.shape === shape) return
-    this.shape = shape
-    this.revision += 1
-    void this.host.set(PRESENCE_SHAPE_FIELD, shape)
-    this.publish()
-  }
-
-  setColor(color: PresenceColor): void {
-    if (!isPresenceColor(color)) return
-    if (this.color === color) return
-    this.color = color
-    this.revision += 1
-    void this.host.set(PRESENCE_COLOR_FIELD, color)
-    this.publish()
-  }
-
-  /** Custom body fill. `''` clears the override and falls back to the preset. */
-  setBodyColor(hex: string): void {
-    const next = parseHexColor(hex)
-    if (this.bodyColor === next) return
-    this.bodyColor = next
-    this.revision += 1
-    void this.host.set(PRESENCE_BODY_COLOR_FIELD, next)
-    this.publish()
-  }
-
-  /** Custom eye fill. `''` clears the override and falls back to the preset. */
-  setEyeColor(hex: string): void {
-    const next = parseHexColor(hex)
-    if (this.eyeColor === next) return
-    this.eyeColor = next
-    this.revision += 1
-    void this.host.set(PRESENCE_EYE_COLOR_FIELD, next)
-    this.publish()
-  }
-
-  /** Ball size multiplier (0.6–1.6). Invalid input falls back to 1. */
-  setSize(value: number): void {
-    const next = parsePresenceSize(value)
-    if (this.size === next) return
-    this.size = next
-    this.revision += 1
-    void this.host.set(PRESENCE_SIZE_FIELD, next)
-    this.publish()
-  }
-
-  setKit(kit: PresenceKit): void {
-    if (!isPresenceKit(kit)) return
-    const split = splitLegacyKit(kit)
-    this.kit = kit
-    this.kitHat = split.hat
-    this.kitGlasses = split.glasses
-    this.revision += 1
-    void this.host.patch([
-      { op: 'set', path: [PRESENCE_KIT_FIELD], value: kit },
-      { op: 'set', path: [PRESENCE_KIT_HAT_FIELD], value: split.hat },
-      { op: 'set', path: [PRESENCE_KIT_GLASSES_FIELD], value: split.glasses },
-    ])
-    this.publish()
-  }
-
-  setSlot(slot: DressingSlot, pick: string): void {
-    const builtins = slot === 'hat'
-      ? PRESENCE_HAT_KITS
-      : slot === 'glasses'
-        ? PRESENCE_GLASSES_KITS
-        : PRESENCE_HELD_KITS
-    const next = parseSlotPick(pick, builtins)
-    if (next === undefined) return
-    if (slot === 'hat') {
-      if (this.kitHat === next) return
-      this.kitHat = next
-      void this.host.set(PRESENCE_KIT_HAT_FIELD, next)
-    } else if (slot === 'glasses') {
-      if (this.kitGlasses === next) return
-      this.kitGlasses = next
-      void this.host.set(PRESENCE_KIT_GLASSES_FIELD, next)
-    } else {
-      if (this.kitHeld === next) return
-      this.kitHeld = next
-      void this.host.set(PRESENCE_KIT_HELD_FIELD, next)
-    }
-    this.revision += 1
-    this.publish()
-  }
-
-  addSticker(image: string, slot?: DressingSlot): string | undefined {
-    const parsed = parsePresenceOverlay(image)
-    if (!parsed) return undefined
-    if (this.stickers.length >= PRESENCE_STICKERS_MAX) return undefined
-    const id = `stk_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
-    this.stickers = [...this.stickers, { id, image: parsed, slot: slot ?? 'hat' }]
-    this.revision += 1
-    void this.host.set(PRESENCE_STICKERS_FIELD, encodeStickers(this.stickers))
-    if (slot) this.setSlot(slot, stickerRef(id))
-    else this.publish()
-    return id
-  }
-
-  removeSticker(id: string): void {
-    if (!this.stickers.some((row) => row.id === id)) return
-    this.stickers = this.stickers.filter((row) => row.id !== id)
-    const ref = stickerRef(id)
-    const ops: Array<
-      | { op: 'set'; path: string[]; value: unknown }
-      | { op: 'unset'; path: string[] }
-    > = [
-      { op: 'set', path: [PRESENCE_STICKERS_FIELD], value: encodeStickers(this.stickers) },
-    ]
-    if (this.kitHat === ref) {
-      this.kitHat = 'none'
-      ops.push({ op: 'set', path: [PRESENCE_KIT_HAT_FIELD], value: 'none' })
-    }
-    if (this.kitGlasses === ref) {
-      this.kitGlasses = 'none'
-      ops.push({ op: 'set', path: [PRESENCE_KIT_GLASSES_FIELD], value: 'none' })
-    }
-    if (this.kitHeld === ref) {
-      this.kitHeld = 'none'
-      ops.push({ op: 'set', path: [PRESENCE_KIT_HELD_FIELD], value: 'none' })
-    }
-    this.revision += 1
-    void this.host.patch(ops)
-    this.publish()
-  }
-
-  setOverlayHat(value: string): void {
-    const id = this.addSticker(value, 'hat')
-    if (id === undefined && value.trim() === '') this.setSlot('hat', 'none')
-  }
-
-  setOverlayGlasses(value: string): void {
-    const id = this.addSticker(value, 'glasses')
-    if (id === undefined && value.trim() === '') this.setSlot('glasses', 'none')
-  }
-
-  setOverlayHeld(value: string): void {
-    const id = this.addSticker(value, 'held')
-    if (id === undefined && value.trim() === '') this.setSlot('held', 'none')
-  }
+  // The look itself (shape / preset color / custom colors / size / kit /
+  // stickers) is written by 干员团队 through its own Host scope — see
+  // `ui-workspace/src/client/dressing-scope.ts`. This runtime is the read side
+  // for the ball plus the write side for what the Plugins card owns, so no
+  // duplicate appearance setters live here.
 
   subscribe(listener: PresencePrefsListener): () => void {
     this.listeners.add(listener)

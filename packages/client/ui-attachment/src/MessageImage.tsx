@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import { downscaleImageUrl, MESSAGE_IMAGE_BITMAP_EDGE } from './downscale-image.ts'
 import { ImageLightbox } from './ImageLightbox.tsx'
 import type { ImageLightboxLabels } from './ImageLightbox.tsx'
 import css from './MessageImage.module.css'
@@ -12,6 +13,91 @@ export type ImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) 
 
 /** Long-edge cap of a lone preview inside a message bubble (DeepSeek Chat rule). */
 export const MESSAGE_IMAGE_MAX_EDGE = 240
+
+/** Frames a gallery mounts at once. A tool result can carry dozens of images,
+ * and every mounted frame owns a loader round-trip plus a decoder; the rest
+ * stay behind the overflow cell until the reader asks for them. */
+export const GALLERY_MOUNT_LIMIT = 12
+
+/** Viewport pre-roll: a picture starts fetching one flick before it is seen. */
+const VIEWPORT_MARGIN = '200px'
+
+const noop = (): void => {}
+
+/**
+ * One document-wide observer for every message frame. A chat list mounts
+ * hundreds of frames, and one observer per frame would be a browser cost with
+ * no gain. An element leaves the observer permanently after its first
+ * intersection: scrolling back to an already-admitted picture must not
+ * re-fetch it.
+ */
+class FrameViewport {
+  private observer: IntersectionObserver | undefined
+  private readonly activators = new Map<Element, () => void>()
+
+  observe(element: Element, activate: () => void): () => void {
+    if (typeof IntersectionObserver === 'undefined') {
+      activate()
+      return noop
+    }
+    this.observer ??= new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const current = this.activators.get(entry.target)
+        /* v8 ignore next -- the observer reports only elements still registered with it. */
+        if (current === undefined) continue
+        this.activators.delete(entry.target)
+        this.observer?.unobserve(entry.target)
+        current()
+      }
+      this.releaseEmptyObserver()
+    }, { rootMargin: VIEWPORT_MARGIN })
+    this.activators.set(element, activate)
+    this.observer.observe(element)
+    return () => {
+      this.activators.delete(element)
+      this.observer?.unobserve(element)
+      this.releaseEmptyObserver()
+    }
+  }
+
+  private releaseEmptyObserver(): void {
+    if (this.activators.size > 0) return
+    this.observer?.disconnect()
+    this.observer = undefined
+  }
+}
+
+const frameViewport = new FrameViewport()
+
+/**
+ * Gate an element's costly work (attachment fetch, raster decode) on it
+ * reaching the viewport. The initial state is `true` when
+ * `IntersectionObserver` is missing, so browsers without it — and the jsdom
+ * lane — keep painting on the first frame instead of waiting for a callback
+ * that never comes.
+ * @param target - the frame element whose visibility is tracked.
+ * @returns whether the element has been at least one flick from the viewport.
+ */
+function useViewportReached(target: RefObject<Element | null>): boolean {
+  const [reached, setReached] = useState(() => typeof IntersectionObserver === 'undefined')
+  const activate = useCallback(() => { setReached(true) }, [])
+  useEffect(() => {
+    if (reached) return
+    const element = target.current
+    /* v8 ignore next -- React attaches the host ref before running effects. */
+    if (element === null) return
+    return frameViewport.observe(element, activate)
+  }, [activate, reached, target])
+  return reached
+}
+
+/** Object URL of a shrunk bitmap, tagged with the source it was derived from:
+ * a replaced picture must never paint the previous one for a frame. */
+interface ShrunkImage {
+  readonly source: string
+  readonly url: string
+}
 
 /** One gallery entry: a durable admitted reference, or a submission echo's local preview. */
 export type MessageImageSpec =
@@ -41,6 +127,9 @@ export interface MessageImageLabels {
   loading: string
   /** Retry-control label shown when the load fails. */
   loadFailed: string
+  /** Overflow cell of a gallery past its mount limit; receives the hidden count.
+   * Optional: a caller without copy for it still gets the neutral `+N` cell. */
+  more?: (count: number) => string
   /** Lightbox strings forwarded to the opened preview. */
   lightbox: ImageLightboxLabels
 }
@@ -95,6 +184,8 @@ function PreviewFallback({ src, alt, onPromote }: {
     <img
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       className={css.previewFallback}
       onLoad={(event) => {
         const image = event.currentTarget
@@ -111,6 +202,12 @@ function PreviewFallback({ src, alt, onPromote }: {
  * preview. A lone image renders at its `singleFit` size; an image among
  * several renders as a fixed 64px square tile. The preview arm displays its
  * local URL directly — no loader round-trip, no failure/retry surface.
+ *
+ * Nothing is fetched until the frame is one flick from the viewport, and what
+ * is painted is a 480px re-encode rather than the original raster: a phone
+ * photo decodes to tens of megabytes, and a scrollback full of them is the
+ * mobile OOM this component exists to avoid. The lightbox still opens the
+ * original bytes.
  *
  * @param props.image - the durable reference to load, or the local preview to display.
  * @param props.load - session-authorized URL loader for the durable arm.
@@ -131,6 +228,10 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
 }) {
   const preview = 'preview' in image ? image.preview : undefined
   const attachment = 'attachment' in image ? image.attachment : undefined
+  const frameRef = useRef<HTMLButtonElement | null>(null)
+  // The visibility gate: the durable loader is not called (no readAttachment
+  // round-trip, no full-resolution bytes) until the frame is near the viewport.
+  const reached = useViewportReached(frameRef)
   const [loaded, setLoaded] = useState<string | null>(() =>
     attachment === undefined ? null : (load.peek?.(attachment) ?? null))
   const [error, setError] = useState(false)
@@ -151,6 +252,9 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
   // Once the loaded bitmap is larger, fit the preview to that bitmap (still
   // capped by singleFit) so a tool expand is not stuck on the thumb size.
   const [decoded, setDecoded] = useState<{ readonly width: number; readonly height: number } | null>(null)
+  /** Downscaled bitmap painted in place of the original raster; `null` until
+   * the re-encode lands (or forever, on an engine that cannot do it). */
+  const [shrunk, setShrunk] = useState<ShrunkImage | null>(null)
   const promoteDecoded = useCallback((width: number, height: number) => {
     if (!(width > 0) || !(height > 0)) return
     setDecoded(current => (
@@ -173,7 +277,9 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
   )
 
   useEffect(() => {
-    if (attachment === undefined) return
+    // Offscreen frames issue no attachment request at all; the effect re-runs
+    // with `reached` and only then asks the session-authorized loader.
+    if (attachment === undefined || !reached) return
     let live = true
     const loader = loadRef.current
     setError(false)
@@ -183,9 +289,40 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
     setLoaded(loader.peek?.(attachment) ?? null)
     void loader(attachment).then((url) => { if (live) setLoaded(url) }).catch(() => { if (live) setError(true) })
     return () => { live = false }
-  }, [attachment, attempt])
+  }, [attachment, attempt, reached])
 
   const src = preview?.url ?? loaded
+  // Best-effort re-encode. The effect owns the object URL it creates: a
+  // superseded source, a replaced picture, and unmount all revoke it, and a
+  // source without a shrunk twin (old engine, cross-origin, encode failure)
+  // just keeps painting the original.
+  useEffect(() => {
+    if (src === null || !reached) return
+    let live = true
+    let created: string | null = null
+    // Never below the 2×-box floor, and never below this frame's own box — an
+    // expanded Tool card shows 520px and must not upscale a 480px bitmap.
+    const cap = Math.max(MESSAGE_IMAGE_BITMAP_EDGE, maxEdge ?? MESSAGE_IMAGE_MAX_EDGE)
+    void downscaleImageUrl(src, cap).then((url) => {
+      if (url === undefined) return
+      if (!live) {
+        URL.revokeObjectURL(url)
+        return
+      }
+      created = url
+      setShrunk({ source: src, url })
+    }, noop)
+    return () => {
+      live = false
+      if (created === null) return
+      URL.revokeObjectURL(created)
+      setShrunk((current) => (current !== null && current.url === created ? null : current))
+    }
+  }, [maxEdge, reached, src])
+
+  // A shrunk bitmap belongs to exactly one source; anything else would paint
+  // the previous picture for a frame after a retry or an attachment swap.
+  const displaySrc = shrunk !== null && shrunk.source === src ? shrunk.url : src
   const label = ('label' in image ? image.label : undefined)
     ?? preview?.name ?? attachment?.name ?? labels.image
   // The frame style is the single place that must never let the raster's
@@ -203,9 +340,13 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
     setNatural(current => (current?.width === width && current?.height === height ? current : { width, height }))
   }, [])
   if (error) return <button type="button" className={css.error} data-variant={variant} onClick={request}>{labels.loadFailed}</button>
+  // Offscreen frames keep their geometry but decode nothing: the placeholder
+  // occupies the same box, so the list never jumps when the picture arrives.
+  const shown = reached ? displaySrc : null
   return (
     <>
       <button
+        ref={frameRef}
         type="button"
         className={css.frame}
         data-variant={variant}
@@ -218,18 +359,20 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
           if (src !== null) setOpen(true)
         }}
       >
-        {src === null
+        {shown === null
           ? <span className={css.loading}>{labels.loading}</span>
           : previewUnknown
             ? <PreviewFallback
-              src={src}
+              src={shown}
               alt={label}
               onPromote={promote}
             />
             : (
               <img
-                src={src}
+                src={shown}
                 alt={label}
+                loading="lazy"
+                decoding="async"
                 style={fit === undefined ? undefined : { objectPosition: fit.objectPosition }}
                 onLoad={(event) => {
                   promoteDecoded(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
@@ -245,7 +388,9 @@ export function MessageImage({ image, load, variant, labels, maxEdge, large = fa
 /** Wrapping image group shared by user and assistant history: a lone image
  * renders large unless its owner requests compact tiles; several always tile.
  * `maxEdge` raises the lone-image box (and the tile grid) for an expanded Tool
- * card, where the picture is the point rather than a chat attachment echo. */
+ * card, where the picture is the point rather than a chat attachment echo.
+ * Past `GALLERY_MOUNT_LIMIT` entries the rest wait behind one overflow cell:
+ * a tool result with forty screenshots must not mount forty frames at once. */
 export function ImageGallery({ images, load, align, compact = false, maxEdge, labels }: {
   images: readonly MessageImageSpec[]
   load: ImageLoader
@@ -254,12 +399,18 @@ export function ImageGallery({ images, load, align, compact = false, maxEdge, la
   maxEdge?: number | undefined
   labels: MessageImageLabels
 }) {
+  const [expanded, setExpanded] = useState(false)
   if (images.length === 0) return null
   const variant = compact || images.length > 1 ? 'tile' : 'single'
   const large = maxEdge !== undefined && maxEdge > MESSAGE_IMAGE_MAX_EDGE
+  const shown = expanded || images.length <= GALLERY_MOUNT_LIMIT
+    ? images
+    : images.slice(0, GALLERY_MOUNT_LIMIT)
+  const hidden = images.length - shown.length
+  const more = labels.more?.(hidden) ?? `+${hidden}`
   return (
     <div className={css.gallery} data-align={align}>
-      {images.map((image, index) => (
+      {shown.map((image, index) => (
         <MessageImage
           key={`${'attachment' in image ? image.attachment.attachmentId : image.preview.url}:${index}`}
           image={image}
@@ -270,6 +421,18 @@ export function ImageGallery({ images, load, align, compact = false, maxEdge, la
           labels={labels}
         />
       ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          className={css.more}
+          {...(large ? { 'data-large': '' } : {})}
+          title={more}
+          aria-label={more}
+          onClick={() => { setExpanded(true) }}
+        >
+          {`+${hidden}`}
+        </button>
+      )}
     </div>
   )
 }

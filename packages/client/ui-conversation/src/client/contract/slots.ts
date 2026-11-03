@@ -708,11 +708,43 @@ export interface ComposerBarInjected {
    */
   bindCommandComposerFocus: ((focus: () => void) => () => void) | undefined
   /**
+   * Host composer dictation: post one recorded clip (base64, 16 kHz mono PCM
+   * WAV unless the mime type says otherwise) and resolve its transcript.
+   *
+   * Absent only when there is no session. A Host with no voice Product
+   * configured keeps the seat visible and rejects the first press with the
+   * Host's own reason, so the button never silently disappears on a device
+   * where the user just has not switched dictation on yet.
+   *
+   * Rejections carry the Host's `code` on the Error: `voice-unavailable`
+   * means nothing is configured (mode off / no key / local engine not
+   * prepared) and the button offers a Settings trip instead of a dead end;
+   * any other code is a backend failure to retry in place.
+   */
+  transcribeVoice: ((audio: string, mimeType: string) => Promise<string>) | undefined
+  /**
+   * Open the Settings surface that configures dictation (the Voice card).
+   * Absent when the Settings shell is not mounted, in which case the button
+   * only reports the Host's reason and cannot send the user anywhere.
+   */
+  openVoiceSettings: (() => void) | undefined
+  /**
    * Registrant hooks compartment: the renderer binds these to
    * useNotices/useLexicon/useFileUploads (static absent sources without a session — hook
    * order stays constant).
    */
   hooks: {
+    /**
+     * Whether the composer shows its dictation seat. Host-owned
+     * (`asr.enabled`, off by default) so one switch governs every device
+     * pointed at this Host, and a mic that cannot work yet is not the first
+     * control a new composer leads with.
+     *
+     * Optional because "no hook bound" and "switched off" mean the same thing
+     * here: a hostless surface (tests, previews) reads as off rather than
+     * crashing on an absent selector.
+     */
+    dictation?: ObservableSnapshot<boolean>
     /**
      * Live busy-state submission preference: the delivery mode plain Enter
      * and the primary Send button use while the addressed agent is busy.
@@ -743,7 +775,9 @@ export interface InputControlOwnerProps {
 export type ComposerBarProps =
   PropsRuntime<'conversation.composer.bar'>
   & PropsRenderSlots<
-    'conversation.input.attachments' | 'conversation.input.plan' | 'conversation.input.model'
+    | 'conversation.input.attachments'
+    | 'conversation.input.plan'
+    | 'conversation.input.model'
   >
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>

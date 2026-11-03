@@ -110,25 +110,11 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.title {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 22px;
-  color: var(--dsw-alias-label-primary);
-}
-
 .hint {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
-}
-
-.overlayError {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-danger-text, var(--dsw-alias-status-danger, #c00));
 }
 
 .cubeRow {
@@ -166,13 +152,6 @@
 .selected {
   background: var(--dsw-alias-bg-module-platform);
   border-color: var(--dsw-static-neutral-bluish-400);
-}
-
-.glyph {
-  width: 36px;
-  height: 36px;
-  display: block;
-  color: var(--dsw-alias-label-primary);
 }
 
 .schemeName {
@@ -245,55 +224,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.colorCube {
-  box-sizing: border-box;
-  flex: 1 1 100px;
-  min-width: 88px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 16px 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 16px;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-}
-
-.colorCube:hover:not(.selected) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.colorCube.selected {
-  background: var(--dsw-alias-bg-module-platform);
-  border-color: var(--dsw-static-neutral-bluish-400);
-}
-
-.swatch {
-  box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
-}
-
-.swatchEye {
-  width: 5px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
 @media (max-width: 767px) {
   .cubeRow {
     /* Phone: 2-up so scheme trio (老板 · 经理 · 干员) stays one line. */
@@ -301,109 +231,13 @@
     gap: 6px;
   }
 
-  .shapeCube,
-  .colorCube {
-    flex: unset;
+  .shapeCube {
     width: 100%;
     min-width: 0;
     min-height: 72px;
     padding: 12px 6px;
     touch-action: manipulation;
   }
-}
-
-.overlayCube {
-  box-sizing: border-box;
-  position: relative;
-  flex: 0 0 auto;
-  width: 72px;
-  min-height: 72px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 6px;
-  border-radius: 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.overlayAdd {
-  width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border-style: dashed;
-  background: transparent;
-}
-
-.overlayCube.selected {
-  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l2));
-}
-
-.overlayPreview {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(
-      ellipse 70% 60% at 50% 45%,
-      color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent),
-      transparent 70%
-    ),
-    color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
-}
-
-.overlayThumb {
-  width: 100%;
-  height: 100%;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-}
-
-.overlayEmpty {
-  font-size: 18px;
-  line-height: 1;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.overlayLabel {
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.overlayHint {
-  font-size: 11px;
-  line-height: 14px;
-  color: var(--dsw-alias-label-tertiary);
-  text-align: center;
-}
-
-.overlayFile {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.overlayClear {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 1;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
 }
 
 .presetEditRow {
@@ -476,168 +310,4 @@
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
-}
-
-.slot {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.slotHead {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.slotLabel {
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-primary);
-}
-
-.stickerHit {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  width: 100%;
-  cursor: pointer;
-}
-
-/* ---- 自定义取色：色块当触发器，原生 input 藏在下面 ---- */
-.colorRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0 4px;
-}
-
-.colorPick {
-  box-sizing: border-box;
-  position: relative;
-  flex: 1 1 128px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary);
-}
-
-.colorPick:hover {
-  border-color: var(--dsw-alias-border-l3);
-}
-
-.colorPick:focus-within {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: 1px;
-}
-
-.colorInput {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.colorSwatch {
-  box-sizing: border-box;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  border-radius: 50%;
-  border: 1px solid var(--dsw-alias-border-l3);
-}
-
-.colorLabel {
-  white-space: nowrap;
-}
-
-.colorReset {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0 2px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--dsw-alias-label-secondary);
-  text-decoration: underline;
-}
-
-.colorReset:hover {
-  color: var(--dsw-alias-label-primary);
-}
-
-/* 表情球大小：滑杆 + 百分比；缩放舞台盒子，放大不盖住邻居。 */
-.sizeRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0 4px;
-}
-
-.sizeRange {
-  flex: 1 1 auto;
-  min-width: 0;
-  accent-color: var(--dsw-alias-brand-primary);
-}
-
-.sizeValue {
-  flex: 0 0 auto;
-  min-width: 42px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* ---- Desktop: dressing tiles 2× (phone stays at the 767px block above) ---- */
-@media (min-width: 768px) {
-  .glyph {
-    width: 56px;
-    height: 56px;
-  }
-
-  .swatch {
-    width: 52px;
-    height: 52px;
-  }
-
-  .swatchEye {
-    width: 7px;
-    height: 10px;
-  }
-
-  .overlayCube {
-    width: 88px;
-    min-height: 88px;
-  }
-
-  .overlayAdd {
-    width: 56px;
-    min-height: 56px;
-  }
-
-  .overlayPreview {
-    width: 56px;
-    height: 56px;
-  }
-
-  .overlayEmpty {
-    font-size: 24px;
-  }
-
-  .colorSwatch {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
-  }
 }

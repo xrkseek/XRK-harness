@@ -14,6 +14,10 @@
  *
  * `immediate` remains on the axis for seats that latch while tools still run
  * (tests / future modes); no product mode selects it today.
+ *
+ * `next-input` collapse timing stays on the axis for the same reason: every
+ * product mode folds on completion, but the renderer honours a policy that
+ * holds the just-finished run open until the reader sends again.
  */
 
 import type { TranscriptViewMode } from '../../submission-settings.ts'
@@ -42,6 +46,19 @@ export type ProcessFoldWhen =
   /** Never auto-fold. */
   | 'never'
 
+/**
+ * When a settled run is allowed to fold, on the reader's clock.
+ *
+ * The `foldWhen` axis says *what* counts as settled; this says whether the
+ * settled run is allowed to disappear yet. DSH splits the two for the same
+ * reason: "the Turn ended" and "the reader has moved on" are different events.
+ */
+export type CollapseTiming =
+  /** Fold the moment the run settles (every product mode today). */
+  | 'completion'
+  /** Keep the just-finished run open until the reader sends the next input. */
+  | 'next-input'
+
 /** Presentation capabilities selected by one work-details mode. */
 export interface ChatPresentationPolicy {
   /** Preference identity for diagnostics and stable policy objects. */
@@ -55,6 +72,13 @@ export interface ChatPresentationPolicy {
   readonly foldCompletedTurns: boolean
   /** When a grouped run latches closed. */
   readonly foldWhen: ProcessFoldWhen
+  /**
+   * Whether a settled run folds at once, or waits for the reader's next input.
+   *
+   * Resolved per run by {@link processGroupDeferred}; only `next-input`
+   * defers, and only for the newest Turn with nothing new in flight.
+   */
+  readonly collapseTiming: CollapseTiming
   /** Where a group may appear at all. */
   readonly stepGrouping: StepGrouping
   /**
@@ -73,6 +97,7 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   standard: {
     mode: 'standard',
     foldWhen: 'process',
+    collapseTiming: 'completion',
     foldCompletedTurns: true,
     stepGrouping: 'collapsed',
     detailTitles: true,
@@ -81,6 +106,7 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   detailed: {
     mode: 'detailed',
     foldWhen: 'turn',
+    collapseTiming: 'completion',
     foldCompletedTurns: true,
     // Live Turn stays grouped so the fold animation has a run to collapse when
     // the Turn ends — history-only grouping left detailed looking like "never
@@ -92,6 +118,7 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   verbose: {
     mode: 'verbose',
     foldWhen: 'never',
+    collapseTiming: 'completion',
     foldCompletedTurns: false,
     stepGrouping: 'none',
     detailTitles: true,
@@ -132,4 +159,29 @@ export function processGroupSettled(
     case 'never':
       return false
   }
+}
+
+/**
+ * Whether a settled run must keep its rows visible until the reader sends.
+ *
+ * DSH `collapseTiming: 'next-input'`: the run the reader just watched stays
+ * open through the end of the Turn, and folds when the next input arrives —
+ * a send either replaces the Turn (a newer Turn exists) or is already in
+ * flight (its transcript echo is pending). Both facts are monotone for one
+ * run, so a fold once taken is never undone by this predicate.
+ * @param collapseTiming - mode's collapse timing.
+ * @param run - whether this run is the newest Turn, and whether a next send is in flight.
+ * @returns true while the run should stay open past settlement.
+ */
+export function processGroupDeferred(
+  collapseTiming: CollapseTiming,
+  run: {
+    /** The run belongs to the newest Turn — no later Turn has started. */
+    readonly newestTurn: boolean
+    /** The reader has already sent the next input; its echo has not landed yet. */
+    readonly nextInputPending: boolean
+  },
+): boolean {
+  if (collapseTiming !== 'next-input') return false
+  return run.newestTurn && !run.nextInputPending
 }

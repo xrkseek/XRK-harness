@@ -7,12 +7,18 @@
  * (menu | ball | 概况). Tap bounces like desktop — Overview opens only from
  * the gauge. Title-row chip stays for desktop.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import type {} from '@xrkseek/client-ui-conversation/client'
 import { PresenceBall, usePresenceEnabled } from './PresenceBall.tsx'
 import { useOverviewOpen } from './overview-open.ts'
+import {
+  readTeamRosterLive,
+  subscribeTeamRosterLive,
+  teamRosterLiveRevision,
+} from '@xrkseek/client-runtime/client'
+import { companionChildMemberId, mergeTeamRosterLiveLook } from './team-live-look.ts'
 import {
   PRESENCE_DOCK_ENTER_MS,
   PRESENCE_DOCK_EXIT_MS,
@@ -156,6 +162,27 @@ export function PresenceDock({
     () => EMPTY_PRESENCE_SESSION_CUES,
   )
 
+  /* The header ball (and, on phones, the only ball outside Overview) used to
+   * read `status.companionBall` straight — so a Team edit here waited for the
+   * next Face poll (5s idle) while the Overview pair updated instantly. */
+  const rosterLiveRev = useSyncExternalStore(
+    subscribeTeamRosterLive,
+    teamRosterLiveRevision,
+    () => 0,
+  )
+  const liveChildLook = (() => {
+    const id = companionChildMemberId(status?.delegate)
+    return id ? readTeamRosterLive(id)?.appearance : undefined
+  })()
+  const memberLook = useMemo(
+    () => mergeTeamRosterLiveLook(
+      status?.companionBall ?? PENDING_MEMBER_LOOK,
+      liveChildLook,
+    ),
+    // `rosterLiveRev` is the wake-up signal: the live map itself is not reactive.
+    [status?.companionBall, liveChildLook, rosterLiveRev],
+  )
+
   useEffect(() => {
     if (animTimer.current !== undefined) {
       window.clearTimeout(animTimer.current)
@@ -270,7 +297,7 @@ export function PresenceDock({
             <PresenceBall
               sessionId={sessionId}
               {...(status?.presence ? { presence: status.presence } : {})}
-              memberLook={status?.companionBall ?? PENDING_MEMBER_LOOK}
+              memberLook={memberLook}
               turnActive={
                 (status?.delivery.turnActive ?? false)
                 || parentRunning

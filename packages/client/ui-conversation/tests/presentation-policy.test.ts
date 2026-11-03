@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   presentationPolicyFor,
+  processGroupDeferred,
   processGroupSettled,
 } from '../src/client/conversation-nodes/presentation-policy.ts'
 import { TRANSCRIPT_VIEW_MODES } from '../src/submission-settings.ts'
@@ -40,6 +41,14 @@ describe('presentationPolicyFor', () => {
     expect(presentationPolicyFor('verbose').liveProcessDetail).toBe(false)
   })
 
+  it('folds on completion in every product mode', () => {
+    // `next-input` exists on the axis but nothing selects it yet — the shipped
+    // modes must keep folding the moment the run settles.
+    expect(presentationPolicyFor('standard').collapseTiming).toBe('completion')
+    expect(presentationPolicyFor('detailed').collapseTiming).toBe('completion')
+    expect(presentationPolicyFor('verbose').collapseTiming).toBe('completion')
+  })
+
   it('returns one stable object per mode', () => {
     for (const mode of TRANSCRIPT_VIEW_MODES) {
       expect(presentationPolicyFor(mode)).toBe(presentationPolicyFor(mode))
@@ -71,5 +80,30 @@ describe('processGroupSettled', () => {
 
   it('never settles under verbose', () => {
     expect(processGroupSettled('never', closedSettled, true)).toBe(false)
+  })
+})
+
+describe('processGroupDeferred', () => {
+  const newestTurn = { newestTurn: true, nextInputPending: false }
+
+  it('collapses a settled run at completion when timing is completion', () => {
+    expect(processGroupDeferred('completion', newestTurn)).toBe(false)
+    expect(processGroupDeferred('completion', { newestTurn: false, nextInputPending: false })).toBe(false)
+  })
+
+  it('holds the newest Turn open until the reader sends again', () => {
+    // `next-input`: the run the reader just watched stays readable after
+    // turn/end — folding waits for the next submission.
+    expect(processGroupDeferred('next-input', newestTurn)).toBe(true)
+  })
+
+  it('releases the fold once a newer Turn starts', () => {
+    expect(processGroupDeferred('next-input', { newestTurn: false, nextInputPending: false })).toBe(false)
+  })
+
+  it('releases the fold while the next send is still in flight', () => {
+    // The transcript echo is the reader's next input: fold now, so the new
+    // Turn opens over a quiet transcript instead of the previous run.
+    expect(processGroupDeferred('next-input', { newestTurn: true, nextInputPending: true })).toBe(false)
   })
 })

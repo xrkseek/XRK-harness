@@ -109,6 +109,32 @@ describe('AppRoot', () => {
     expect(queryByTestId('real-ui')).toBeNull()
   })
 
+  it('lists activation-sweep ids one per row and folds the tail into an overflow line', () => {
+    const settled = createSignal(false)
+    const error = createSignal<string | undefined>(undefined)
+    const status = createLoaderStatusStore()
+    const failures = createSignal<readonly string[]>([])
+    const { getByText, queryByText, queryByTestId } = render(
+      <AppRoot
+        settled={settled}
+        status={status}
+        error={error}
+        failures={failures}
+        lang={en}
+        renderApp={() => <div data-testid="real-ui" />}
+      />,
+    )
+    // A roster longer than the cap: the tail must not push the title off-screen.
+    const ids = Array.from({ length: 14 }, (_, i) => `@xrkseek/plugin-${String(i)}`)
+    act(() => { failures.set(ids) })
+    expect(getByText('Failed to load plugins')).toBeTruthy()
+    expect(getByText('@xrkseek/plugin-0')).toBeTruthy()
+    expect(getByText('@xrkseek/plugin-11')).toBeTruthy()
+    expect(queryByText('@xrkseek/plugin-12')).toBeNull()
+    expect(getByText('…and 2 more')).toBeTruthy()
+    expect(queryByTestId('real-ui')).toBeNull()
+  })
+
   it('renders Chinese fail copy when lang is zh', () => {
     const settled = createSignal(false)
     const error = createSignal<string | undefined>(undefined)

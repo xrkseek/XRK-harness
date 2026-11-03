@@ -94,6 +94,57 @@ describe('SubagentGraphBoard', () => {
     expect(html).toContain('data-state="error"')
   })
 
+  it('names the provider error code instead of a bare "error"', () => {
+    const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
+      sessionId: 'parent',
+      rootLabel: 'Session',
+      nodes: [
+        { id: 'parent', label: 'Session', depth: 0 },
+        { id: 'child-a', label: 'metered', depth: 1, activity: 'inactive' },
+      ],
+      edges: [{ from: 'parent', to: 'child-a', kind: 'delegates' }],
+      live: [
+        {
+          id: 'child-a',
+          label: 'metered',
+          activity: 'inactive',
+          mode: 'continuable',
+          outcome: { kind: 'error', code: 'QUOTA' },
+        },
+      ],
+      emptyLabel: 'empty',
+      runningLabel: 'running',
+      idleLabel: 'done',
+    }))
+    // The human must be able to tell a quota wall from a crash; the parent
+    // agent already gets the code, only the board used to drop it.
+    expect(html).toContain('data-outcome-code="QUOTA"')
+    expect(html).toContain('error (QUOTA)')
+  })
+
+  it('renders no empty code suffix when the error carries none', () => {
+    const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
+      sessionId: 'parent',
+      rootLabel: 'Session',
+      nodes: [{ id: 'child-a', label: 'plain', depth: 1, activity: 'inactive' }],
+      edges: [],
+      live: [
+        {
+          id: 'child-a',
+          label: 'plain',
+          activity: 'inactive',
+          mode: 'continuable',
+          outcome: { kind: 'error' },
+        },
+      ],
+      emptyLabel: 'empty',
+      runningLabel: 'running',
+      idleLabel: 'done',
+    }))
+    expect(html).toContain('data-outcome="error"')
+    expect(html).not.toContain('error ()')
+  })
+
   it('joins live activity onto existing graph nodes', () => {
     const html = renderToStaticMarkup(createElement(SubagentGraphBoard, {
       sessionId: 'parent',

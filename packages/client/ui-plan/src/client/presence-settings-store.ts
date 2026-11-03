@@ -1,43 +1,23 @@
-/** Settings General row store for presence shape + color pickers. */
+/**
+ * Plugins-home presence card store.
+ *
+ * Only what the card renders lives here: master switch, seat titles, and tip
+ * presets. The companion look (shape / preset color / custom colors / size /
+ * kit) is edited in 干员团队 and read straight from `PresenceSettingsRuntime`
+ * by the ball, so mirroring it into this store would just create a second,
+ * staler copy of the truth.
+ */
 import { defineStore, type EngineStoreHandle } from '@xrkseek/client-runtime/client'
 import {
-  DEFAULT_PRESENCE_COLOR,
   DEFAULT_PRESENCE_ENABLED,
-  DEFAULT_PRESENCE_KIT,
-  DEFAULT_PRESENCE_MOOD_AT,
-  DEFAULT_PRESENCE_MOOD_ID,
-  DEFAULT_PRESENCE_SHAPE,
-  DEFAULT_PRESENCE_SIZE,
-  DEFAULT_PRESENCE_STATUS_LINE,
   DEFAULT_PRESENCE_TITLE_SCHEME,
   DEFAULT_STATUS_PRESETS,
-  type PresenceColor,
-  type PresenceKit,
-  type PresenceShape,
-  type PresenceSticker,
   type PresenceTitleSchemeId,
 } from '../presence-settings.ts'
 
-export interface PresencePrefsRowState {
+/** One Host→card projection; object arg so fields cannot silently misalign. */
+export interface PresencePrefsSnapshot {
   enabled: boolean
-  shape: PresenceShape
-  color: PresenceColor
-  /** '' = follow the named preset (see PRESENCE_COLOR_PALETTES). */
-  bodyColor: string
-  eyeColor: string
-  /** Ball size multiplier (0.6–1.6, 1 = default). */
-  size: number
-  kit: PresenceKit
-  kitHat: string
-  kitGlasses: string
-  kitHeld: string
-  overlayHat: string
-  overlayGlasses: string
-  overlayHeld: string
-  stickers: readonly PresenceSticker[]
-  moodId: string
-  statusLine: string
-  moodAt: number
   statusPresets: readonly string[]
   titleScheme: PresenceTitleSchemeId
   titleBoss: string
@@ -46,36 +26,13 @@ export interface PresencePrefsRowState {
   revision: number
 }
 
+export type PresencePrefsRowState = PresencePrefsSnapshot
+
 type PresencePrefsRowActions = {
-  sync: (
-    draft: PresencePrefsRowState,
-    enabled: boolean,
-    shape: PresenceShape,
-    color: PresenceColor,
-    bodyColor: string,
-    eyeColor: string,
-    size: number,
-    kit: PresenceKit,
-    kitHat: string,
-    kitGlasses: string,
-    kitHeld: string,
-    overlayHat: string,
-    overlayGlasses: string,
-    overlayHeld: string,
-    stickers: readonly PresenceSticker[],
-    moodId: string,
-    statusLine: string,
-    moodAt: number,
-    statusPresets: readonly string[],
-    titleScheme: PresenceTitleSchemeId,
-    titleBoss: string,
-    titleManager: string,
-    titleAgent: string,
-    revision: number,
-  ) => void
+  sync: (draft: PresencePrefsRowState, next: PresencePrefsSnapshot) => void
 }
 
-/** Declares the presence prefs row state and write surface. */
+/** Declares the presence card row state and write surface. */
 export function createPresencePrefsRowStore(): EngineStoreHandle<
   PresencePrefsRowState,
   PresencePrefsRowActions
@@ -83,22 +40,6 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
   return defineStore({
     init: (): PresencePrefsRowState => ({
       enabled: DEFAULT_PRESENCE_ENABLED,
-      shape: DEFAULT_PRESENCE_SHAPE,
-      color: DEFAULT_PRESENCE_COLOR,
-      bodyColor: '',
-      eyeColor: '',
-      size: DEFAULT_PRESENCE_SIZE,
-      kit: DEFAULT_PRESENCE_KIT,
-      kitHat: 'none',
-      kitGlasses: 'none',
-      kitHeld: 'none',
-      overlayHat: '',
-      overlayGlasses: '',
-      overlayHeld: '',
-      stickers: [],
-      moodId: DEFAULT_PRESENCE_MOOD_ID,
-      statusLine: DEFAULT_PRESENCE_STATUS_LINE,
-      moodAt: DEFAULT_PRESENCE_MOOD_AT,
       statusPresets: [...DEFAULT_STATUS_PRESETS],
       titleScheme: DEFAULT_PRESENCE_TITLE_SCHEME,
       titleBoss: '',
@@ -107,56 +48,17 @@ export function createPresencePrefsRowStore(): EngineStoreHandle<
       revision: -1,
     }),
     actions: {
-      sync: (
-        d,
-        enabled,
-        shape,
-        color,
-        bodyColor,
-        eyeColor,
-        size,
-        kit,
-        kitHat,
-        kitGlasses,
-        kitHeld,
-        overlayHat,
-        overlayGlasses,
-        overlayHeld,
-        stickers,
-        moodId,
-        statusLine,
-        moodAt,
-        statusPresets,
-        titleScheme,
-        titleBoss,
-        titleManager,
-        titleAgent,
-        revision,
-      ) => {
-        if (revision <= d.revision) return
-        d.enabled = enabled
-        d.shape = shape
-        d.color = color
-        d.bodyColor = bodyColor
-        d.eyeColor = eyeColor
-        d.size = size
-        d.kit = kit
-        d.kitHat = kitHat
-        d.kitGlasses = kitGlasses
-        d.kitHeld = kitHeld
-        d.overlayHat = overlayHat
-        d.overlayGlasses = overlayGlasses
-        d.overlayHeld = overlayHeld
-        d.stickers = stickers
-        d.moodId = moodId
-        d.statusLine = statusLine
-        d.moodAt = moodAt
-        d.statusPresets = statusPresets
-        d.titleScheme = titleScheme
-        d.titleBoss = titleBoss
-        d.titleManager = titleManager
-        d.titleAgent = titleAgent
-        d.revision = revision
+      sync: (d, next) => {
+        // Host revisions only ever grow; a stale projection must not rewind
+        // a newer one (the card and the ball subscribe to the same runtime).
+        if (next.revision <= d.revision) return
+        d.enabled = next.enabled
+        d.statusPresets = next.statusPresets
+        d.titleScheme = next.titleScheme
+        d.titleBoss = next.titleBoss
+        d.titleManager = next.titleManager
+        d.titleAgent = next.titleAgent
+        d.revision = next.revision
       },
     },
   })

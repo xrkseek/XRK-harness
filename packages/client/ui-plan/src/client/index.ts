@@ -97,35 +97,18 @@ export function apply(ctx: ClientContext): void {
     const locale = ctx.locale.getSnapshot().active
     const uiLocale = locale === 'en' || locale === 'ja' ? locale : 'zh'
     bindPresenceUiLocale(uiLocale)
-    const statusPresets = resolveStatusPresetsForLocale(
-      presenceSettings.getStatusPresets(),
-      uiLocale,
-    )
-    presencePrefsBound?.sync(
-      presenceSettings.getEnabled(),
-      presenceSettings.getShape(),
-      presenceSettings.getColor(),
-      presenceSettings.getBodyColor(),
-      presenceSettings.getEyeColor(),
-      presenceSettings.getSize(),
-      presenceSettings.getKit(),
-      presenceSettings.getKitHat(),
-      presenceSettings.getKitGlasses(),
-      presenceSettings.getKitHeld(),
-      presenceSettings.getOverlayHat(),
-      presenceSettings.getOverlayGlasses(),
-      presenceSettings.getOverlayHeld(),
-      presenceSettings.getStickers(),
-      presenceSettings.getMoodId(),
-      presenceSettings.getStatusLine(),
-      presenceSettings.getMoodAt(),
-      statusPresets,
-      presenceSettings.getTitleScheme(),
-      presenceSettings.getTitleBoss(),
-      presenceSettings.getTitleManager(),
-      presenceSettings.getTitleAgent(),
-      presenceSettings.getRevision(),
-    )
+    presencePrefsBound?.sync({
+      enabled: presenceSettings.getEnabled(),
+      statusPresets: resolveStatusPresetsForLocale(
+        presenceSettings.getStatusPresets(),
+        uiLocale,
+      ),
+      titleScheme: presenceSettings.getTitleScheme(),
+      titleBoss: presenceSettings.getTitleBoss(),
+      titleManager: presenceSettings.getTitleManager(),
+      titleAgent: presenceSettings.getTitleAgent(),
+      revision: presenceSettings.getRevision(),
+    })
   }
   presenceSettings.subscribe(() => { syncPresencePrefs() })
   ctx.locale.subscribe(() => { syncPresencePrefs() })
@@ -136,14 +119,6 @@ export function apply(ctx: ClientContext): void {
     syncPresencePrefs()
     return {
       setEnabled: (enabled) => { presenceSettings.setEnabled(enabled) },
-      setShape: (shape) => { presenceSettings.setShape(shape) },
-      setColor: (color) => { presenceSettings.setColor(color) },
-      setBodyColor: (hex) => { presenceSettings.setBodyColor(hex) },
-      setEyeColor: (hex) => { presenceSettings.setEyeColor(hex) },
-      setSize: (size) => { presenceSettings.setSize(size) },
-      setSlot: (slot, pick) => { presenceSettings.setSlot(slot, pick) },
-      addSticker: (image, slot) => presenceSettings.addSticker(image, slot),
-      removeSticker: (id) => { presenceSettings.removeSticker(id) },
       addStatusPreset: (tip) => presenceSettings.addStatusPreset(tip),
       removeStatusPreset: (tip) => { presenceSettings.removeStatusPreset(tip) },
       setTitleScheme: (scheme) => { presenceSettings.setTitleScheme(scheme) },
