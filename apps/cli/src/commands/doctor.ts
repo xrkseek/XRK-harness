@@ -362,7 +362,11 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
     });
   }
 
-  const voice = describeVoiceAccess(process.env);
+  const asrPrefs = peekSettingsYamlSection(xrkHome, "asr");
+  const voice = describeVoiceAccess(process.env, {
+    direction: "asr",
+    ...(typeof asrPrefs?.engine === "string" ? { engine: asrPrefs.engine } : {}),
+  });
   checks.push({
     name: "voice",
     // Missing key with openai/env enabled is a real misconfig; off is fine.

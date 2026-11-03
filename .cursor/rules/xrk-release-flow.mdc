@@ -6,23 +6,28 @@ xrk-inject: false
 
 # 发版流水线
 
-教科书：[docs/publishing.md](../../docs/publishing.md)。副作用与终态：`.agents/skills/xrk-release-chain`。桌面上传：`xrk-desktop-update-feed`。本机落点：`xrk-local-artifacts`。
+教科书：[docs/publishing.md](../../docs/publishing.md)。  
+副作用与终态：`.agents/skills/xrk-release-chain`。  
+桌面打包 / AGT 上传：`.agents/skills/xrk-desktop-update-feed`。  
+本机落点：rule/skill `xrk-local-artifacts`。  
+GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`。
 
 ## 顺序（不得颠倒 · 不得并行打包）
 
-1. **预备**：bump 版本（cli / desktop / sdk）· `docs/releases/vN.md` · 侧栏 `RELEASE_NOTES` · status/README 若能力变了 · `pnpm check` 绿 · **commit + `git push origin main`**（tag 必须落在已推送的 HEAD）。
-2. **打 tgz**：`pnpm release:stage` + `pnpm release:stage:sdk` → `.release/*.tgz`。结束后立刻 `CI=true pnpm install --frozen-lockfile`（stage 会掏空根 devDeps）。
-3. **`pnpm release`**（GitHub Release + npmjs；用步骤 2 的 tgz，勿因「registry 慢」重打）。结束后再 `CI=true pnpm install --frozen-lockfile`（release 内会再 stage 一次）。
-4. **桌面**（单独、在 release **之后**）：`XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）。判据 exe 体积应接近上一正式版（勿把 `electron` 打进 asar）。
-5. **先上 AGT**：改名去 `unsigned` → **先 exe+blockmap、再 yml** → `HEAD` 长度对齐（skill `xrk-desktop-update-feed`）。
-6. **再同步仓内 site / worker**：改 `apps/site/releases.json`（及必要 Worker 文案）为 N → commit + push（CF 随推送同步）。
-7. **清理**：`pnpm prune:local -- --junk` · 必要时 `pnpm clean:test-temp` · `subst X: /d`。
+1. **预备**：bump（cli / desktop / sdk）· `docs/releases/vN.md` · 侧栏 `RELEASE_NOTES` · 必要时 status/README · `pnpm check` 绿 · **commit + `git push origin main`**
+2. **打 tgz**：`pnpm release:stage` + `pnpm release:stage:sdk` → 立刻 `CI=true pnpm install --frozen-lockfile`
+3. **`pnpm release`**（GitHub Release + npmjs；用步骤 2 的 tgz）→ 再 `CI=true pnpm install --frozen-lockfile`
+4. **桌面**（仅在 release **之后**）：`XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）
+5. **先上 AGT**：改名去 `unsigned` · yml **绝对 URL** 指 `…/desktop/bin/win-x64/…` · **先 exe+blockmap、再 yml** · `HEAD` 对齐（细节见 `xrk-desktop-update-feed`）
+6. **再**改 `apps/site/releases.json` 为 N → commit + push
+7. **清理**：`pnpm prune:local -- --junk` · 必要时 `pnpm clean:test-temp` · `subst X: /d`
 
 ## 禁止
 
-- **`package:desktop` 与 `pnpm release` / stage 并行**（stage 掏空根 `typescript`；竞态还会把嵌套 Electron 打进 exe，体积暴涨）
-- 未 push 就 `pnpm release`（tag 会钉远端旧 HEAD）
-- 桌面未上 AGT 就改 `releases.json` 宣称已可下
-- 把 exe / upload-stage 堆到 `C:\` 根或用户桌面
+- **`package:desktop` 与 `pnpm release` / `release:stage` 并行**
+- 未 push 就 `pnpm release`
+- 桌面未上 AGT 就改 `releases.json` 宣称可下
+- yml 里写**相对**文件名（会解析到 `/desktop/win-x64/` → 404；必须绝对路径进 `/desktop/bin/win-x64/`）
+- `electron` / `electron-builder` 进 Desktop `dependencies` / `optionalDependencies`（只许 `devDependencies`；运行时用 `electron-updater`）
 - 因 CDN 延迟对同一版本重跑 `npm publish`
-- 把 `electron` / `electron-builder` 放进 Desktop `dependencies` / `optionalDependencies`（只许 `devDependencies`；运行时自动更新用 `electron-updater`）
+- 把 exe / upload-stage 堆到 `C:\` 根或用户桌面

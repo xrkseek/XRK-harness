@@ -26,6 +26,7 @@ Desktop 打包 / AGT 上传步骤：`.agents/skills/xrk-desktop-update-feed`。
 | 版本目录快照 | `unsigned-artifacts-<ver>/` · `upload-stage-<ver>/` | ≤5 |
 | npm | `.release/xrkseek-harness(-cli)-<ver>.tgz` · `harness/` · `harness-cli/` | tgz ≤5；stage 树仅当前 |
 | 手测 exe | `.release/desktop/<ver>/` | ≤5 |
+| 给朋友 | 用户桌面一份 `xrk-harness-<ver>-win-x64.exe` | Desktop 公开发版后拷；见 `xrk-desktop-update-feed` |
 | 开发壳 | `.desktop-build/development/home` | ≠ `~/.xrk` |
 | CLI smoke | `XRK_HOME=%USERPROFILE%\.xrk-smoke` | 独立会话库 |
 | vitest | `mkdtemp` / `withIsolatedXrkHome` | 结束后删除 |
@@ -34,7 +35,7 @@ Desktop 打包 / AGT 上传步骤：`.agents/skills/xrk-desktop-update-feed`。
 
 1. 打包前：优先 `C:\xrk-h`（已有结则直接用）。`subst` 应为空；不得在 `C:\` 建 `xrk-h-upload-*`。
 2. 打包 / 上传：按 `xrk-desktop-update-feed`。
-3. 手测 exe：复制到 `.release/desktop/<ver>/`，**不**放用户桌面。
+3. 手测 exe → `.release/desktop/<ver>/`；另按主人要求拷一份到桌面（仅公开桌面安装包，其它 tarball 仍禁散落桌面）。
 4. 收尾：`pnpm prune:local`；若 `.release` 有杂文件再加 `--junk`。
 5. 若用了 `subst X:`：结束后 `subst X: /d`，再查 `subst` 无输出。
 

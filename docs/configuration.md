@@ -154,6 +154,8 @@ Preset 选型：[profiles.md](./profiles.md)。
 | OpenCode（`sunflower-free`） | **需要**本机 Bun（产品不随包 Bun 二进制；官方安装 → `~/.bun/bin`，或 `XRK_SUNFLOWER_BUN`）。无 Bun 则静默省略 OpenCode，**Kilo 仍可** |
 | Kilo（`sunflower-kilo`，仅 Kilo 时并入 `sunflower-free`） | **不需要**；Host 直连 `api.kilo.ai` |
 
+用户面配置入口只有一个：**设置 → 模型 → 向日葵免费**（`sunflower-free` 命名空间的 `openCodeProxy` / `kiloProxy`）。插件面板不再重复挂一张同命名空间的卡。
+
 落点与探测细节见 [extensions/xrk-sunflower-free/README.md](../extensions/xrk-sunflower-free/README.md)。
 
 [llm-provider-registry.md](./llm-provider-registry.md) · [llm-openai-compatible.md](./llm-openai-compatible.md) · [llm-deepseek.md](./llm-deepseek.md)。
@@ -470,6 +472,8 @@ Preset selection: [profiles.md](./profiles.md).
 ### Sunflower free (OpenCode + Kilo)
 
 Built-in plugin `xrk-sunflower-free` (**向日葵免费** in the model catalog). **Desktop** and **global CLI** (`@xrkseek/harness-cli`) both ship `extensions/xrk-sunflower-free`; Host boots via `ensureSunflowerFreePlugin` from the install tree. Optional override: `XRK_SUNFLOWER_FREE_ROOT`.
+
+The only user-facing configuration entry is **Settings → Models → Sunflower free** (`openCodeProxy` / `kiloProxy` in the `sunflower-free` namespace). The Plugins page no longer mirrors a second card over the same namespace.
 
 | Lane | Bun |
 |------|-----|

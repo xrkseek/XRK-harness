@@ -1,11 +1,10 @@
 ---
 name: xrk-release-chain
 description: >-
-  XRK-harness 发包链的既有副作用与终态判据：root devDeps 被 stage 清掉、
-  大 tarball 上传不能用分离进程、E409/E403 处理、文档中英成对四处一起改。
-  还含整条流水线顺序与「push 必须先于 release，否则 tag 落在旧 HEAD」这个坑。
-  跑 release、npm publish、发 GitHub release、委派发版或修发布文档时使用。
-  桌面包打完要上 AGT 更新源时叠 skill `xrk-desktop-update-feed`。
+  XRK-harness 发包链副作用与终态判据：root devDeps 被 stage 清掉、
+  大 tarball 不能用分离进程、E409/E403、文档中英成对、push 必须先于 release。
+  流水线顺序真源是 rule xrk-release-flow；桌面/AGT 真源是 xrk-desktop-update-feed；
+  网络选路真源是 xrk-github-npm-net。跑 release / npm publish / gh release 时使用。
 ---
 
 # XRK-harness 发包链（副作用清单）
@@ -27,10 +26,10 @@ description: >-
 2. **先打 tgz**：`pnpm release:stage` · `pnpm release:stage:sdk` → 立刻 `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`**（GH + npmjs）→ 再 `CI=true pnpm install --frozen-lockfile`
 4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；优先 `C:\xrk-h`）——**禁止与 stage/release 并行**
-5. 桌面包好后 **先上 AGT**（exe+blockmap → yml）→ **再**改 `apps/site/releases.json` 并 push
+5. 桌面包好后 **先上 AGT**（yml **绝对** `…/desktop/bin/win-x64/…`；先 exe+blockmap 再 yml；`HEAD` size 对齐）→ **再**改 `apps/site/releases.json` 并 push
 6. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
 
-**禁止并行打包**（0.7.5 实测）：`package:desktop` 与 `pnpm release`/stage 同时跑时，stage 掏空根 `typescript`，且 Desktop `optionalDependencies.electron` 会被打进 `app.asar.unpacked`（嵌套一整份 Electron，exe 从 ~220MB 飙到 ~330MB）。`electron` / `electron-builder` 只许在 Desktop **devDependencies**；运行时只留 `electron-updater`。
+**禁止并行打包**（0.7.5）：与 stage/release 并行会掏空根 `typescript`，且曾把 `electron` 打进 asar → exe ~330MB。Desktop 里 `electron`/`electron-builder` 只许 **devDependencies**；运行时只留 `electron-updater`。细节见 `xrk-desktop-update-feed`。
 
 **push 必须先于 `pnpm release`**。`gh release create` 在 tag 不存在时拿**远端默认分支 HEAD**建 tag；本地未 push 的 commit 进不了 tag，npm tarball 却来自工作区 →「GitHub 源码 ≠ npm 包」。
 
@@ -120,39 +119,24 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 
 改版本号**四处一起改**——v0.4.1 那次英文半表漏改、仍停在 v0.4.0，隔一版才发现。侧栏公告是第五处，发版同轮必写。
 
-### 6. 打包桌面包（必须在 release **之后** · 禁止并行）
+### 6. 打包桌面 + 上 AGT（必须在 release **之后**）
 
-落点、`subst X:`、≤5 版备份、AGT 上传顺序：skill **`xrk-desktop-update-feed`** · `docs/publishing.md`「本机产物」。
+**真源**：skill **`xrk-desktop-update-feed`**（打包命令、volume 判据、stage 改名、**yml 绝对 bin URL**、上传顺序、核对清单）。  
+本 skill 只强调：
 
-```
-$env:XRK_DESKTOP_UNSIGNED='1'
-$env:XRK_DESKTOP_UNSIGNED_UPDATE='1'
-$env:XRK_DESKTOP_PACKAGE='1'
-$env:XRK_DESKTOP_TARGET='win-x64'
-$env:CSC_IDENTITY_AUTO_DISCOVERY='false'
-pnpm package:desktop
-pnpm prune:local
-```
-
-- **不要**与 `pnpm release` / stage 并行（见上「禁止并行打包」）。
-- 未设 `XRK_DESKTOP_PACKAGE=1` 只写 plan，不产包。
-- 当前产物只在 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（覆盖写）。
-- 手测 exe 进 `.release/desktop/<ver>/`，**不**放用户桌面根目录。
-- 发新桌面版必须上 AGT 测试源（先 exe+blockmap，再 yml）。
-- 打完后核对：`app.asar.unpacked` **不得**含完整 `electron/dist`；exe 应接近上一正式版（~220MB 量级，不是 ~330MB）。
+- **禁止**与 stage / `pnpm release` 并行
+- release 后先 `CI=true pnpm install --frozen-lockfile` 再 `package:desktop`
+- 桌面未上 AGT 前不要改 `apps/site/releases.json`
 
 ## Pitfalls
 
 - **PowerShell 把 git 的 stderr 进度行当错误**：`git push` 成功时输出
   `4b9c445..03281ea7 main -> main` 走的是 stderr，`$LASTEXITCODE` 可能也是 1。
   判成功要看**结果行**，不要看 exit code / 红色报错。
-- **`gh` / GitHub API 的代理**：这台机子直连和 Clash 7897 常都能通，但**先各探一次**
-  （`gh api user --jq .login`）再决定走哪条；`registry.npmjs.org` 直连可达，别给 npm 强塞代理。
-  **绝不设 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 环境变量**（会破坏用户正常生产生活）。
-  要走代理只落在单命令参数上：`curl.exe -x http://127.0.0.1:7897 <url>`、
-  `npm publish --proxy … --https-proxy …`、`git -c http.proxy=… -c https.proxy=… push`。
-  探活只用 `curl.exe`——Node `https.get` 不读代理**参数**，会给你「直连不通」的假阴性。
-  直连 200 也不等于能用（2026-10 撞过 TLS 拦 / `ECONNRESET`），大包别赌直连。
+- **GitHub / npm 选路**：真源 skill **`xrk-github-npm-net`**——每次动手前直连与 `127.0.0.1:7897` **各探一次**，哪条通走哪条；失败立刻换另一条。
+  **绝不设** `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`。单命令可用
+  `curl.exe -x …`、`npm_config_https_proxy=…`（或 `npm … --https-proxy …`）、`git -c http.proxy=…`。
+  探活用 `curl.exe`（Node `https.get` 不认代理参数会假阴性）。
 - 发布产物不一致：GitHub asset 前缀 `<dir>/` vs npm tarball `package/`——字节与
   清单都不同，各自用对应清单核对。
 - `npm_config_fetch_timeout` 保持默认 300s（曾设 60s 把大包上传掐死，日志
@@ -225,22 +209,6 @@ pnpm prune:local
   `git checkout -- pnpm-workspace.yaml` 后 `CI=true pnpm install --frozen-lockfile` 仍 exit 0 且不会重写。
   **这条是有条件的、不是每轮必现**——v0.6.5 整轮 `git diff pnpm-workspace.yaml` 全程为空。
   别把它当每次都要处理的固定仪式，但收尾 `git status` 时看到就还原。
-- **`upload:desktop` 产出的 mirror 文件名仍带 `-unsigned`**，且 yml 的 `url`/`path` 也指向
-  `…-unsigned.exe`。上 AGT 前必须**复制改名去 `unsigned`** 并手写 `nightly.yml` / `latest.yml`
-  （`version`/`files[0].url`/`path`/`sha512`/`size`/`releaseDate`，LF 行尾、url 用明文 IP 绝对路径），
-  再**先传 `desktop/bin` 后传 `desktop/win-x64`**（yml 最后，避免更新端拿到 yml 却 404 到 exe）。
-  收尾核对三处：本地 exe sha512 == yml sha512 == 远端 `Content-Length` == `package-complete` 的 size。
-- **yml 的 sha512 要自己算，别只核长度**：本地制品一直留在
-  `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（历代版本都在，v0.6.5 实测在位），
-  所以**不必拉回 345 MB**，直接对本地 exe 算再与 yml 比对即可：
-
-  ```powershell
-  $hex = (Get-FileHash $exe -Algorithm SHA512).Hash
-  $b = [byte[]]::new(64); for ($i=0;$i -lt 64;$i++){ $b[$i]=[Convert]::ToByte($hex.Substring($i*2,2),16) }
-  [Convert]::ToBase64String($b)     # ← 与 yml 的 sha512 字段逐字比对
-  ```
-
-  `Get-FileHash` 给的是 hex，electron-updater 的 yml 要的是 **base64**，别直接比字符串。
-  v0.6.5 由父会话补算：本地 == yml，`MATCH = True`。
-- **`unsigned-artifacts/` 不会自动清理旧版**：里头堆着 0.5.20 起每个版本的 exe + blockmap（每个约
-  330 MB）。本轮只新增自己的两个文件，别顺手删——那是历史包的唯一留存地。
+- **上 AGT 的改名 / 绝对 URL yml / 先 bin 后 yml**：真源 **`xrk-desktop-update-feed`**。
+  相对文件名会解析到 `…/desktop/win-x64/<exe>` → 404（0.7.5 客户端报错形态）。
+- **`unsigned-artifacts/` 靠 `pnpm prune:local` 裁到 ≤5**，别手删唯一留存的历史包。

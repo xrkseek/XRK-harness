@@ -481,6 +481,9 @@ export class TestSessions implements ISessions {
       phase: 'pending',
       subagentsByParent: {},
       jobsBySession: {},
+      // Every per-session frame catalog starts empty; a composer dock that
+      // reads `bandBySession[sessionId]` would crash on a seed without it.
+      bandBySession: {},
       currentAddress: undefined,
     } as unknown as SessionListState)
     this.channel = new SessionProvideChannel({

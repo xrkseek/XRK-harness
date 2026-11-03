@@ -30,7 +30,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **本机产物落点 · ≤5 版备份 · 测试隔离 home** | rule **`xrk-local-artifacts`** · skill **`xrk-local-artifacts`** · [publishing](../../docs/publishing.md) · [testing](../../docs/testing.md) |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
-| **发版流水线**（tgz → 并行桌面+npm → AGT → site → 清理） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` |
+| **发版流水线**（预备 → tgz → release → **再**桌面 → AGT → site → 清理；**禁止并行打包**） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` · `xrk-desktop-update-feed` |
 | Node ≥26 / 门禁 | rule `xrk-node26` |
 | 文档身份 / 双语 | rule `xrk-product-identity` |
 

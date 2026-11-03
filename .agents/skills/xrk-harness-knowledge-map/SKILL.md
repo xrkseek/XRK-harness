@@ -32,10 +32,12 @@ description: >-
 
 | 主题 | 读 |
 |---|---|
-| 发包链副作用 + 终态判据（push 必须先于 release、devDeps 双触发、E409/E403、SDK 先于 CLI） | `.agents/skills/xrk-release-chain/SKILL.md` |
+| 发版**顺序**（tgz → release → 桌面 → AGT → site；**禁止并行打包**） | rule `xrk-release-flow` · `docs/publishing.md`「流水线顺序」 |
+| 发包链副作用 + 终态判据（push 先于 release、devDeps 掏空、E409/E403、shasum） | `.agents/skills/xrk-release-chain/SKILL.md` |
+| Desktop 打包 · upload-stage · **yml 绝对 bin URL** · AGT 上传核对 | `.agents/skills/xrk-desktop-update-feed/SKILL.md` |
+| 本机产物落点 · ≤5 版 · subst 仅 X: · 测试隔离 home | rule/skill `xrk-local-artifacts` · `docs/publishing.md` · `pnpm prune:local` |
+| GitHub API / npm 网络探测（直连 vs Clash 7897、**先探再选**、大上传判流量） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
 | PowerShell / Windows 环境坑（管道毁文件、vitest filter、BOM、GBK） | `.agents/skills/xrk-ps-shell-pitfalls/SKILL.md` |
-| 本机产物落点 · ≤5 版 · subst 仅 X: · 测试隔离 home | rule/skill `xrk-local-artifacts` · `.agents/skills/xrk-desktop-update-feed` · `docs/publishing.md` · `pnpm prune:local` |
-| GitHub API / npm 网络探测（直连 vs Clash 7897、大上传判流量） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
 | **参考仓差距取证**（codex / DSH 有什么我们没有、哪些是假差距、清单会不会过期） | `.agents/skills/xrk-reference-gap-audit/SKILL.md`（本轮结论在其 `reference/`） |
 | 仓结构与插件开发 | `.agents/skills/xrk-harness-architecture/` · `xrk-harness-monorepo/` |
 | 办事流程总表 | `.agents/AGENTS.md`「办事流程」段 |

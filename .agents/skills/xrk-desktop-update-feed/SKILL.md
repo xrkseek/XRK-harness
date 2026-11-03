@@ -1,36 +1,47 @@
 ---
 name: xrk-desktop-update-feed
 description: >-
-  Desktop 未签名打包、固定本机落点、≤5 版本地备份、electron-updater 测试源、
-  AGT harness-download 上传顺序。package:desktop / upload:desktop / 测自动更新时使用。
+  Desktop 未签名打包、upload-stage 改名、electron-updater / AGT harness-download
+  上传与核对。package:desktop、上测试更新源、测自动更新时使用。
+  整条发版顺序见 rule xrk-release-flow；npm/GH 副作用见 xrk-release-chain。
 ---
 
-# Desktop 打包与测试更新源
+# Desktop 打包与 AGT 更新源
 
-机相关 origin / VPS / SSH：同目录 **`local.md`**（gitignore）。缺则只认 env `XRK_DESKTOP_UPDATE_TEST_ORIGIN`。
+## 职责边界（勿与其它文打架）
 
-## 本机落点（唯一约定）
+| 载体 | 只管 |
+|------|------|
+| rule `xrk-release-flow` | 整条发版**顺序**与硬禁 |
+| skill `xrk-release-chain` | npm / GH / stage 掏空根 deps 等**副作用** |
+| **本 skill** | Desktop **怎么打**、**怎么 stage**、**怎么上 AGT**、**怎么核** |
+| rule/skill `xrk-local-artifacts` | 落点 / ≤5 / subst |
+| skill `xrk-github-npm-net` | 直连 vs `127.0.0.1:7897` 选路（**先探再选**） |
+
+机相关 origin / SSH：同目录 **`local.md`**（gitignore）。缺则 env `XRK_DESKTOP_UPDATE_TEST_ORIGIN`。
+
+## 何时打包
+
+- 整条发版：必须在 **`pnpm release` 成功且已装回根 `devDeps` 之后**（rule `xrk-release-flow`）。
+- **禁止**与 `pnpm release` / `release:stage` / `release:stage:sdk` **并行**。
+
+## 本机落点
 
 | 用途 | 路径 |
 |------|------|
 | 当前未签名产物（覆盖写） | `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/` |
-| 版本快照（≤5） | 同级 `unsigned-artifacts-<ver>/`（仅 EBUSY 或显式归档时） |
-| 上传 stage（≤5） | `…/targets/win-x64/upload-stage-<ver>/` 或 `.desktop-build/upload-stage-<ver>/` |
-| npm stage / tgz（≤5） | `.release/xrkseek-harness(-cli)-<ver>.tgz` · `.release/harness` · `.release/harness-cli` |
-| 手测 exe 归档（≤5） | `.release/desktop/<ver>/xrk-harness-<ver>-win-x64.exe` |
-| 开发壳隔离 home | `apps/desktop/.desktop-build/development/home`（≠ `~/.xrk`） |
+| 版本快照（≤5） | 同级 `unsigned-artifacts-<ver>/` |
+| 上传 stage（≤5） | 同级 `upload-stage-<ver>/` |
+| 手测 exe（≤5） | `.release/desktop/<ver>/` |
+| **给朋友的副本** | 用户**桌面**根目录一份 `xrk-harness-<ver>-win-x64.exe`（主人明确要求；其它安装包仍禁散落桌面） |
 
-**禁止**：把安装包散落用户桌面根目录；在 `.release/` 堆一次性脚本/日志；新建随机 `subst` 盘符且不拆除。
-
-裁剪：`pnpm prune:local`（默认 `--keep 5`）；一次性垃圾加 `--junk`。当前工作槽：`pnpm clean:desktop`。
+裁剪：`pnpm prune:local`（`--junk` 清 `.release` 杂文件）。
 
 ## Windows 路径（NSIS）
 
-NSIS 不能向含非 ASCII 的路径写 exe。
-
-1. **优先**：本机已有 ASCII 结 **`C:\xrk-h`** → 本仓时，在该路径跑打包（`cd /d C:\xrk-h`）。**不要**在 `C:\` 再造 `xrk-h-upload-*`。
-2. **仅当没有结时**：`subst X: <仓库根>`，cwd=`X:\`，打包结束后 **`subst X: /d`**（失败也拆）。字母固定 **`X:`**；禁止改用 Y/Z 后残留。
-3. 开跑前 `subst` 自检；结束后再查，不得残留。上传 stage / 手测 exe 只进 `.desktop-build` 与 `.release`（见 rule `xrk-local-artifacts`）。
+1. **优先**已有 ASCII 结 **`C:\xrk-h`** → 本仓：`cd /d C:\xrk-h` 再打包。
+2. 没有结时才 `subst X: <仓库根>`，结束（含失败）**必须** `subst X: /d`。
+3. 禁止在 `C:\` 造 `xrk-h-upload-*`；禁止残留 Y:/Z:。
 
 ```text
 XRK_DESKTOP_PACKAGE=1
@@ -41,24 +52,27 @@ CSC_IDENTITY_AUTO_DISCOVERY=false
 pnpm package:desktop
 ```
 
-未设 `XRK_DESKTOP_PACKAGE=1` 只写 plan。判据：`package-complete-*.json` + exe 体积正常。
+未设 `XRK_DESKTOP_PACKAGE=1` 只写 plan。  
+产物：`xrk-harness-<ver>-win-x64-unsigned.exe` + `.blockmap` + `nightly.yml`。
 
-Cursor 锁 `app.asar`（`EBUSY`）时：`XRK_DESKTOP_UNSIGNED_ARTIFACTS_DIR=unsigned-artifacts-<ver>`，打完 `pnpm prune:local`。
+### 体积判据（0.7.5）
 
-产物文件名：`xrk-harness-<ver>-win-x64-unsigned.exe` + `.blockmap` + `nightly.yml`。
+- `electron` / `electron-builder` **只在** Desktop `devDependencies`；运行时依赖仅 `electron-updater`。
+- 打完后 `app.asar.unpacked` **不得**含完整 `electron/dist`（曾嵌套一整份 Electron → exe ~330MB）。
+- 正常 exe 约 **190–230MB** 量级（对照上一正式版）。
 
-## 公开更新源
+## 公开更新源布局
 
-Origin：`local.md` 或 `XRK_DESKTOP_UPDATE_TEST_ORIGIN`（无尾斜杠）。
+Origin 例（见 `local.md`）：`http://<host>:6969/api/harness`（**无尾斜杠**；**要带端口**）。
 
-| 用途 | 路径 |
-|------|------|
+| 用途 | URL 后缀 |
+|------|----------|
 | 目录 | `GET /releases` |
-| 安装包 | `GET /download/win-x64` |
-| YAML | `GET /desktop/win-x64/nightly.yml`（另有 `latest.yml`） |
+| YAML | `GET /desktop/win-x64/nightly.yml`（及 `latest.yml`） |
 | 字节 | `GET /desktop/bin/win-x64/<file>` |
+| 下载入口 | `GET /download/win-x64` |
 
-服务器数据根：`…/data/harness-download/`（AGT `harness-download-Core`，`:6969`）。
+盘上：
 
 ```text
 harness-download/
@@ -68,38 +82,86 @@ harness-download/
   desktop/bin/win-x64/*.blockmap
 ```
 
-公开文件名**不带** `unsigned`。上传：**先完整 exe+blockmap，再 yml**。半截包必须删后再传。
+## Stage 改名（上 AGT 前）
 
-## 发新版顺序
+`upload-stage-<ver>/`：
 
-版本 N 已写入 `apps/desktop/package.json`（与 cli/sdk、`docs/releases/vN.md` 对齐）。
+```text
+desktop/bin/win-x64/xrk-harness-<ver>-win-x64.exe          # 去掉 unsigned
+desktop/bin/win-x64/xrk-harness-<ver>-win-x64.exe.blockmap
+desktop/win-x64/nightly.yml
+desktop/win-x64/latest.yml                                 # 与 nightly 同内容
+```
 
-**禁止**与 `pnpm release` / `release:stage` 并行打包（会掏空根 `typescript`，且曾把嵌套 Electron 打进 exe）。完整流水线见 rule `xrk-release-flow`：先 release，再本包。
+### yml 硬规则（0.7.5 踩过）
 
-1. 按上节打包 → 判据通过（exe 体积应接近上一正式版；`app.asar.unpacked` 不得含完整 `electron/dist`）。
-2. （可选）`XRK_DESKTOP_UNSIGNED=1 pnpm upload:desktop -- win-x64` → 本机 mirror。
-3. Stage 改名后的 exe/blockmap/yml → 推 AGT；yml 内 URL 用 `local.md` 的明文 origin。
-4. `HEAD` 长度对齐；`/releases` 与 `nightly.yml` 版本 = N。
-5. 更新 `apps/site/releases.json` win-x64 字段后 push（CF 同步）。
-6. 手测副本只进 `.release/desktop/<ver>/`，然后 `pnpm prune:local`。
-7. **禁止**把测更新用的 N-1 包 upload 到源。
+electron-builder 写出的 `nightly.yml` 常是**相对**文件名。相对 URL 会相对 **feed 目录**  
+`…/desktop/win-x64/` 解析 → 去找 `…/desktop/win-x64/<exe>` → **404**。
+
+**必须**把 `url` / `path` 写成 **绝对 URL**，且指向 **bin**：
+
+```yaml
+version: <ver>
+files:
+  - url: http://<host>:6969/api/harness/desktop/bin/win-x64/xrk-harness-<ver>-win-x64.exe
+    sha512: <base64>
+    size: <bytes>
+path: http://<host>:6969/api/harness/desktop/bin/win-x64/xrk-harness-<ver>-win-x64.exe
+sha512: <base64>
+releaseDate: '…'
+```
+
+- 公开名**不带** `unsigned`
+- `sha512` 为 **base64**（`Get-FileHash` 是 hex，要换算）
+- 仓内 `desktop-upload-plan` 也会把 mirror yml 改成绝对 URL；手写 stage 时同样遵守
+
+## 上传
+
+助手脚本：`scripts/_upload-desktop-agt.py`（读 `local.md` 侧 `.agt-password` 或 `XRK_AGT_SSH_PASSWORD`）。
+
+顺序（不可颠倒）：
+
+1. 完整 **exe + blockmap** → `desktop/bin/win-x64/`
+2. 再传 **nightly.yml + latest.yml** → `desktop/win-x64/`
+
+半截包必须删后再传。SSH 不通时先探（见 `xrk-github-npm-net`）；**不要**设全局 `HTTPS_PROXY`。
+
+## 核对清单
+
+```text
+1. GET  …/desktop/win-x64/nightly.yml     → version = N，url 为绝对 bin 路径
+2. HEAD …/desktop/bin/win-x64/<exe>       → Content-Length == 本地 exe == yml size
+3. SFTP/stat 远端 exe size == 本地（防半截上传；releases.bytes 只反映 yml，不可替代）
+4. GET  …/releases                        → win-x64.version = N，available=true
+5. （可选）本机算 sha512 base64 == yml
+```
+
+错误示例（已踩）：
+
+- 客户端 `Cannot download 'http://…/desktop/win-x64/xrk-harness-….exe' 404`  
+  → yml **相对**路径（解析到 feed 目录，不是 `bin/`）
+- `HEAD`/`stat` size ≪ 本地（如 ~60MB vs ~193MB）  
+  → **半截上传**；必须重传完整 exe 后再传 yml
+
+## 发新版（桌面段）
+
+1. 打包 + 体积判据通过  
+2. Stage 改名 + **绝对 URL yml**  
+3. 上 AGT（exe+blockmap → yml）+ 核对清单  
+4. **然后**改 `apps/site/releases.json` 并 push  
+5. 手测副本 → `.release/desktop/<ver>/`；**再复制一份** `xrk-harness-<ver>-win-x64.exe` 到用户桌面（方便转发朋友）  
+6. `pnpm prune:local`  
+7. **禁止**把测更新用的 N-1 包 upload 到源  
 
 ## 测自动更新（N-1 → N）
 
-1. 源上已是 N。
-2. 临时把 `package.json` 改成 N-1 → 打包 → **不 upload**。
-3. 装 N-1 → 验证预下载与「安装并重启」仅 `ready` 可点 → 升到 N。
-4. 改回 N；`pnpm prune:local`。
-
-## 壳内更新 UX
-
-`DesktopUpdateCoordinator`：`available` 即预下载 → `ready` 才可「安装并重启」→ `quitAndInstall`。改 UX 须升壳版本再打包上传。
-
-## 本机 env
-
-`apps/desktop/.env.windows`（gitignore）：`XRK_DESKTOP_UNSIGNED*` · `XRK_DESKTOP_AUTO_UPDATE_ENV=test` · `XRK_DESKTOP_UPDATE_TEST_ORIGIN` · upload dummy 桶密钥。
+1. 源上已是 N  
+2. 临时包 N-1 → **不 upload**  
+3. 装 N-1 → 预下载 → 仅 `ready` 可「安装并重启」→ 升到 N  
+4. 改回 N；`pnpm prune:local`
 
 ## 相关
 
-教科书：[docs/publishing.md](../../../docs/publishing.md)「本机产物」。  
-红线 rule / skill：`.cursor` **`xrk-local-artifacts`**。发包链：`xrk-release-chain`。门禁 / 隔离 home：[docs/testing.md](../../../docs/testing.md) §10。
+教科书：[docs/publishing.md](../../../docs/publishing.md)。  
+rule：`xrk-release-flow` · `xrk-local-artifacts`。  
+skill：`xrk-release-chain` · `xrk-github-npm-net`。

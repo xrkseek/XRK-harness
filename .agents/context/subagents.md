@@ -29,6 +29,17 @@
 只读源码 + 搜网 + 回一段结论 → `researcher` 才对。
 **取证类（要 git、要落盘）默认别派 `researcher`。**
 
+## 子会话路由（模型 / 强度 / 额度耗尽）
+
+- **默认跟随父会话当时的完整路由**（provider/model/effort，由 `predictChildModelSelection` 在 `session.create` 复制）。传 `model` 即只换模型、provider 沿用父；只传 `reasoning_effort` 也合法。
+- **子会话内部改不了**：模型位是只读 chip（`ui-model-selection/ModelSelect.tsx:246`），权限归父会话。
+- **父会话三条路**：`set_agent_model`（只换不派活）· `followup_task` / `send_message` 带 `model`（先 pin 再投递，**pin 失败消息不发**）· `list_models`（可路由对 + effort + 槽位占用）。
+- **热切换**：`createSessionRoutingLlm.getSelection` 每次模型请求重读 `runtime.sessionModels` → 换路由对**下一次请求**生效，不重启 turn。
+- **QUOTA 通知**：`turn/end.reason.error.code` 一直存在，过去被 `describeChildOutcome` 丢掉。现在 `ChildOutcome.code` 透传：`Outcome: ended with error (QUOTA)` + `Route: p/m · effort x` + "Do not send another prompt down it"；`RATE_LIMIT` 则明确「等或重发，别换模型」。
+- **校验闸**：只能换自己的 child · 目录内 model 名（有目录却拼错 → `model-unavailable` + candidates；无目录的自定义网关放行）· effort 必须在模型声明档位（`effort-unsupported`）· 每路由并发槽（`model-session-cap`，按 `(provider, model)` 实时统计 drain-active）。
+- **外部 runtime**（acp / app-server / claude-code）模型由那个 CLI 自选，带 model 参数会明确拒绝，不假装生效。
+- **坑**：仓库放在中文路径（`Desktop\主仓库\`）时，host 集成测试 `import extensions/dsh-compat/host.mjs` 会因 Vite 解析 URL 编码路径失败（`Failed to load url ...%E4%B8%BB%E4%BB%93%E5%BA%93...`），单跑也红、与代码无关；face / core 包不受影响。
+
 ## 并发与限流
 
 免费路由（`free/kilo-auto/free`）**极易 429**。曾有三个并发调研员各自卡在

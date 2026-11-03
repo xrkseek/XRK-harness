@@ -69,6 +69,16 @@ const PURE_UTIL_INLINE = /^@xrkseek\/secrets\/redact$/
  */
 const LEAF_PURE_INLINE = /^@xrkseek\/client-runtime\/src\/client\/sessions\/lineage-hop\.ts$/
 
+/**
+ * State-free browser capture shared by the composer mic and the Settings Voice
+ * card: `startVoiceCapture` plus the pure WAV/PCM16/base64 encoders. It holds
+ * no singleton and no module-level state, so two inlined copies cannot
+ * desync — which is why it may be inlined where the rest of
+ * `@xrkseek/exec-voice` may not: that package's Node entry wires the Host
+ * runtime (assets, sherpa probing) and must never reach a browser bundle.
+ */
+const BROWSER_CAPTURE_INLINE = /^@xrkseek\/exec-voice\/capture$/
+
 /** Generated descriptor/codec contribution with no shared runtime identity. */
 const GENERATED_REMOTE = /^@xrkseek\/xrk-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 
@@ -149,9 +159,26 @@ function pureUtilSourcePath(source: string): string | null {
   }
 }
 
-/** Workspace sources for client bundles (context contracts + inline-safe stubs + pure util leaves). */
+/**
+ * Resolve the shared browser capture leaf to workspace source. The file imports
+ * nothing, so inlining it never drags the Host half into a client bundle nor
+ * depends on `dist/` having been emitted first.
+ */
+function browserCaptureSourcePath(source: string): string | null {
+  return BROWSER_CAPTURE_INLINE.test(source)
+    ? resolvePath(REPOSITORY_ROOT, 'packages/exec/voice/src/browser/wav-capture.ts')
+    : null
+}
+
+/**
+ * Workspace sources for client bundles: context contracts, inline-safe stubs,
+ * pure util leaves, and the shared browser capture.
+ */
 function workspaceClientSourcePath(source: string): string | null {
-  return contextSourcePath(source) ?? inlineSafeStubSourcePath(source) ?? pureUtilSourcePath(source)
+  return contextSourcePath(source)
+    ?? inlineSafeStubSourcePath(source)
+    ?? pureUtilSourcePath(source)
+    ?? browserCaptureSourcePath(source)
 }
 
 /**

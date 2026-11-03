@@ -794,19 +794,40 @@ export function TeamRoster({
     readonly nickname?: string
   }
 
+  /**
+   * One place that turns picker state + a pending patch into the wire
+   * appearance. The resolved sticker overlays must travel **with** the pick:
+   * the Host only keeps the previous image when a key is absent, so dropping
+   * them here made a builtin hat wear the sticker picked before it again after
+   * the next refresh (the optimistic paint looked right, the save did not).
+   */
+  const buildAppearance = (patch: LiveLookPatch) => {
+    const nextHat = patch.kitHat ?? kitHat
+    const nextGlasses = patch.kitGlasses ?? kitGlasses
+    const nextHeld = patch.kitHeld ?? kitHeld
+    return {
+      shape: patch.shape ?? shape,
+      color: patch.color ?? color,
+      bodyColor: patch.bodyColor ?? bodyColor,
+      eyeColor: patch.eyeColor ?? eyeColor,
+      size: patch.size ?? size,
+      kit: resolveEnginePick(nextHat, HAT_BUILTINS) !== 'none'
+        ? resolveEnginePick(nextHat, HAT_BUILTINS)
+        : resolveEnginePick(nextGlasses, GLASSES_BUILTINS),
+      kitHat: nextHat,
+      kitGlasses: nextGlasses,
+      kitHeld: nextHeld,
+      overlayHat: resolveStickerOverlay(nextHat, stickers),
+      overlayGlasses: resolveStickerOverlay(nextGlasses, stickers),
+      overlayHeld: resolveStickerOverlay(nextHeld, stickers),
+    }
+  }
+
   /** Quiet upsert — no busy spinner / full reload (matches 老板席 hot path). */
   const flushLivePersist = async (patch: LiveLookPatch = {}) => {
     if (sessionId === undefined || selectedId === null || bossSelected) return
     if (isDraftMemberId(selectedId)) return
     if (catalogSeed && !managerSelected && !selected) return
-    const nextShape = patch.shape ?? shape
-    const nextColor = patch.color ?? color
-    const nextBody = patch.bodyColor ?? bodyColor
-    const nextEye = patch.eyeColor ?? eyeColor
-    const nextSize = patch.size ?? size
-    const nextHat = patch.kitHat ?? kitHat
-    const nextGlasses = patch.kitGlasses ?? kitGlasses
-    const nextHeld = patch.kitHeld ?? kitHeld
     const nextNick = patch.nickname ?? nickname
     const names = splitToolNames(toolsNames)
     const tools =
@@ -815,19 +836,7 @@ export function TeamRoster({
         : names.length > 0
           ? { mode: toolsMode, names }
           : null
-    const appearance = {
-      shape: nextShape,
-      color: nextColor,
-      bodyColor: nextBody,
-      eyeColor: nextEye,
-      size: nextSize,
-      kit: resolveEnginePick(nextHat, HAT_BUILTINS) !== 'none'
-        ? resolveEnginePick(nextHat, HAT_BUILTINS)
-        : resolveEnginePick(nextGlasses, GLASSES_BUILTINS),
-      kitHat: nextHat,
-      kitGlasses: nextGlasses,
-      kitHeld: nextHeld,
-    }
+    const appearance = buildAppearance(patch)
     try {
       setError(null)
       let saved: AgentTeamMemberRow
@@ -897,26 +906,7 @@ export function TeamRoster({
       || patch.kitHat !== undefined
       || patch.kitGlasses !== undefined
       || patch.kitHeld !== undefined
-    const nextKitHat = patch.kitHat ?? kitHat
-    const nextKitGlasses = patch.kitGlasses ?? kitGlasses
-    const nextKitHeld = patch.kitHeld ?? kitHeld
-    const nextAppearance = {
-      shape: patch.shape ?? shape,
-      color: patch.color ?? color,
-      bodyColor: patch.bodyColor ?? bodyColor,
-      eyeColor: patch.eyeColor ?? eyeColor,
-      size: patch.size ?? size,
-      kitHat: nextKitHat,
-      kitGlasses: nextKitGlasses,
-      kitHeld: nextKitHeld,
-      /* Overlay is the *resolved image* of the pick, so it has to be recomputed
-       * with it. Carrying the previous image forward while the pick changed is
-       * how a member ended up wearing a builtin hat plus the sticker picked
-       * before it. Empty string clears it; the Host drops empties. */
-      overlayHat: resolveStickerOverlay(nextKitHat, stickers),
-      overlayGlasses: resolveStickerOverlay(nextKitGlasses, stickers),
-      overlayHeld: resolveStickerOverlay(nextKitHeld, stickers),
-    }
+    const nextAppearance = buildAppearance(patch)
     const nextNick = patch.nickname !== undefined ? patch.nickname : nickname
     // Optimistic seat paint before the upsert round-trip returns.
     if (lookTouched || patch.nickname !== undefined) {
@@ -968,16 +958,7 @@ export function TeamRoster({
           : names.length > 0
             ? { mode: toolsMode, names }
             : null
-      const appearance = {
-        shape,
-        color,
-        kit: resolveEnginePick(kitHat, HAT_BUILTINS) !== 'none'
-          ? resolveEnginePick(kitHat, HAT_BUILTINS)
-          : resolveEnginePick(kitGlasses, GLASSES_BUILTINS),
-        kitHat,
-        kitGlasses,
-        kitHeld,
-      }
+      const appearance = buildAppearance({})
       if (name.trim() === '' || playbook.trim() === '') return
       const saved = await upsertTeamMember(sessionId, {
         name: name.trim(),

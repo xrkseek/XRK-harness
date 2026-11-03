@@ -23,7 +23,7 @@ xrk-inject: false
 
 ## 硬禁止
 
-- 把安装包或 tarball **散落用户桌面根目录**
+- 把安装包或 tarball **散落用户桌面根目录**（例外：主人要求的「给朋友」单份 `xrk-harness-<ver>-win-x64.exe`，见 `xrk-desktop-update-feed`）
 - 在 `.release/` 堆积一次性 `.log` / `.py` / `.cjs` / 调试脚本
 - vitest 或验收写入正在使用的 **`~/.xrk`**
 - 在 **`C:\` 根**或用户家目录堆 `xrk-h-upload-*` / `.xrk-sandbox-*` 等临时目录（上传 stage 只进 `.desktop-build` / `.release`）

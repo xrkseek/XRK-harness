@@ -1,9 +1,9 @@
 ---
 name: xrk-github-npm-net
 description: >-
-  GitHub/npm 网络探测：api.github.com 直连 vs 代理（Clash 7897）哪条通会变，调 GitHub
-  API 前先各探一次；registry.npmjs.org 与 release asset 下载一直直连可达；npm 大上传
-  面板看不到属正常，用网卡计数器判真实流量。gh/npm 超时、EOF、10060 时使用。
+  GitHub/npm 网络探测：api.github.com 与 registry.npmjs.org 直连 vs 代理（Clash 7897）
+  哪条通会变——动手前各探一次，失败立刻换另一条；禁止设全局 HTTPS_PROXY。
+  npm 大上传面板看不到属正常，用网卡计数器判真实流量。gh/npm 超时、EOF、10060 时使用。
 ---
 
 # GitHub / npm 网络探测
