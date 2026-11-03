@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.7',
+    date: '2026-11-03',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '语音 ASR/TTS 产品化：本地 SenseVoice 资产下载与就绪检测、ASR/TTS 设置卡片、对话内麦克风按钮与系统 TTS。',
+        en: 'Voice ASR/TTS productization: local SenseVoice asset download and readiness, ASR/TTS settings cards, in-composer mic button and system TTS.',
+      },
+      {
+        zh: '子代理路由可固定与追踪：subagent-route-pin 与模型目录守卫。',
+        en: 'Pinnable, traceable subagent model routing: subagent-route-pin and model-catalog guard.',
+      },
+      {
+        zh: '启动卡住检测与图片自动降采样：boot-stall、downscale-image。',
+        en: 'Boot-stall detection and automatic image downscaling: boot-stall, downscale-image.',
+      },
+      {
+        zh: 'Our Free Model 路由与凭据同步更稳；装扮/对话/附件一批体验修正。',
+        en: 'Steadier Our Free Model routing and credential sync; dressing/conversation/attachment polish.',
+      },
+    ],
+  },
+  {
     version: '0.7.6',
     date: '2026-11-02',
     title: {
