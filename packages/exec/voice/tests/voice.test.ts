@@ -3,15 +3,18 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  createDefaultVoiceAccess,
+  createSystemVoiceProvider,
   createMemoryVoiceProvider,
   createOpenAiVoiceProvider,
   createSenseVoiceLocalProvider,
   createSpeakTool,
+  createVoiceAccess,
   createVoiceTools,
   describeVoiceAccess,
   inspectSenseVoiceAssets,
+  listSystemVoices,
   minimalWavBytes,
+  voicePromptText,
 } from "../src/index.js";
 
 describe("exec-voice", () => {
@@ -43,21 +46,52 @@ describe("exec-voice", () => {
     expect(out.content).toMatch(/XRK_VOICE/);
   });
 
-  it("describeVoiceAccess shares facts with tool errors", () => {
-    expect(describeVoiceAccess({}).kind).toBe("off");
-    expect(describeVoiceAccess({}).ready).toBe(false);
+  it("surface binds exactly one switch's half", () => {
+    // `tts.enabled` owns text_to_speech; `asr.enabled` owns the listen half.
+    // Neither switch may drag the other switch's tool into the surface.
     expect(
-      describeVoiceAccess({}, { mode: "openai" }).kind,
+      createVoiceTools({ env: {}, surface: "speak" }).map((tool) => tool.name),
+    ).toEqual(["text_to_speech"]);
+    expect(
+      createVoiceTools({ env: {}, surface: "listen" }).map((tool) => tool.name),
+    ).toEqual(["voice_transcribe", "voice_session"]);
+  });
+
+  it("prompt blocks name only the tools that are bound", () => {
+    expect(voicePromptText(() => false)).toBe("");
+    const speakOnly = voicePromptText((name) => name === "text_to_speech");
+    expect(speakOnly).toContain("text_to_speech");
+    expect(speakOnly).not.toContain("voice_transcribe");
+    const listenOnly = voicePromptText((name) => name === "voice_transcribe");
+    expect(listenOnly).toContain("voice_transcribe");
+    expect(listenOnly).not.toContain("text_to_speech");
+  });
+
+  it("describeVoiceAccess shares facts with tool errors", () => {
+    expect(describeVoiceAccess({}, { direction: "asr" }).kind).toBe("off");
+    expect(describeVoiceAccess({}, { direction: "asr" }).ready).toBe(false);
+    expect(
+      describeVoiceAccess({}, { direction: "asr", engine: "openai" }).kind,
     ).toBe("openai-missing-key");
     expect(
       describeVoiceAccess(
         { XRK_VOICE_OPENAI_KEY: "sk" },
-        { mode: "openai" },
+        { direction: "asr", engine: "openai" },
       ).kind,
     ).toBe("openai-ready");
-    expect(describeVoiceAccess({ XRK_VOICE: "memory" }).kind).toBe("memory");
-    expect(describeVoiceAccess({ XRK_VOICE: "local" }).kind).toBe("local");
-    expect(describeVoiceAccess({}, { mode: "local" }).kind).toBe("local");
+    expect(
+      describeVoiceAccess({ XRK_VOICE: "memory" }, { direction: "asr" }).kind,
+    ).toBe("memory");
+    expect(
+      describeVoiceAccess({ XRK_VOICE: "local" }, { direction: "asr" }).kind,
+    ).toBe("local");
+    expect(
+      describeVoiceAccess({}, { direction: "asr", engine: "local" }).kind,
+    ).toBe("local");
+    // The same `local` id means OS voices on the TTS side.
+    expect(
+      describeVoiceAccess({}, { direction: "tts", engine: "local" }).kind,
+    ).toBe("system");
   });
 
   it("SenseVoice local inspect + honest STT without assets/sherpa", async () => {
@@ -83,23 +117,85 @@ describe("exec-voice", () => {
       // Assets ready; CI typically lacks sherpa-onnx-node (or empty WAV fails PCM).
       await expect(
         voice.transcribe({ bytes: minimalWavBytes() }),
-      ).rejects.toThrow(/sherpa-onnx-node|WAV|no PCM|SenseVoice/i);
+      ).rejects.toThrow(/sherpa-onnx-node|WAV|no PCM|SenseVoice|Please check your config/i);
       expect(voice.liveStatus().available).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("createDefaultVoiceAccess resolves local SenseVoice", () => {
+  it("createVoiceAccess resolves local SenseVoice for ASR", () => {
     expect(
-      createDefaultVoiceAccess({ env: { XRK_VOICE: "local" } }).service,
-    ).toBeTruthy();
-    expect(
-      createDefaultVoiceAccess({
-        env: {},
-        product: { mode: "local" },
+      createVoiceAccess({
+        direction: "asr",
+        env: { XRK_VOICE: "local" },
       }).service,
     ).toBeTruthy();
+    expect(
+      createVoiceAccess({
+        direction: "asr",
+        engine: "local",
+        env: {},
+      }).service,
+    ).toBeTruthy();
+  });
+
+  it("system TTS renders through the platform command", async () => {
+    const calls: { file: string; args: readonly string[] }[] = [];
+    const provider = createSystemVoiceProvider({
+      platform: "linux",
+      defaultVoice: "en",
+      run: async (file, args) => {
+        calls.push({ file, args });
+        const out = args[args.indexOf("-w") + 1]!;
+        writeFileSync(out, minimalWavBytes());
+        return "";
+      },
+    });
+    const spoken = await provider.synthesize({ text: "你好" });
+    expect(spoken.delivery).toBe("system");
+    expect(spoken.mimeType).toBe("audio/wav");
+    expect(spoken.bytes.byteLength).toBeGreaterThan(0);
+    expect(calls[0]?.file).toBe("espeak-ng");
+    expect(calls[0]?.args).toContain("-v");
+    expect(provider.liveStatus().available).toBe(false);
+  });
+
+  it("listSystemVoices parses each backend's output", async () => {
+    expect(
+      await listSystemVoices({
+        platform: "darwin",
+        run: async () => "Alex                en_US    # Most people recognize me by my voice.\n",
+      }),
+    ).toEqual([{ id: "Alex", label: "Alex (en_US)" }]);
+    expect(
+      await listSystemVoices({
+        platform: "linux",
+        run: async () =>
+          "Pty Language Age/Gender VoiceName          File          Other Languages\n" +
+          " 5  en             --/--  english            en            (en)\n",
+      }),
+    ).toEqual([{ id: "english", label: "english (en)" }]);
+    // A failed probe is an empty list, not an error.
+    expect(
+      await listSystemVoices({
+        platform: "darwin",
+        run: async () => {
+          throw new Error("boom");
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("createVoiceAccess resolves local TTS to the OS-voice Provider", () => {
+    const access = createVoiceAccess({
+      direction: "tts",
+      engine: "local",
+      voice: "en",
+      env: {},
+    });
+    expect(access.engine).toBe("local");
+    expect(access.service).toBeTruthy();
   });
 
   it("createSpeakTool is text_to_speech only", async () => {
@@ -137,34 +233,45 @@ describe("exec-voice", () => {
     expect(created.content).toMatch(/sessionId=voice_mem_/);
   });
 
-  it("createDefaultVoiceAccess resolves memory and openai", async () => {
-    expect(createDefaultVoiceAccess({ env: {} }).service).toBeUndefined();
+  it("createVoiceAccess resolves memory and openai", async () => {
     expect(
-      createDefaultVoiceAccess({ env: { XRK_VOICE: "memory" } }).service,
+      createVoiceAccess({ direction: "asr", engine: "local", env: {} }).service,
     ).toBeTruthy();
     expect(
-      createDefaultVoiceAccess({
+      createVoiceAccess({
+        direction: "asr",
+        engine: "local",
+        env: { XRK_VOICE: "memory" },
+      }).service,
+    ).toBeTruthy();
+    expect(
+      createVoiceAccess({
+        direction: "asr",
+        engine: "openai",
         env: { XRK_VOICE: "1" },
       }).service,
     ).toBeUndefined();
 
     expect(
-      createDefaultVoiceAccess({
+      createVoiceAccess({
+        direction: "asr",
+        engine: "openai",
         env: {},
-        product: { mode: "openai" },
       }).service,
     ).toBeUndefined();
     expect(
-      createDefaultVoiceAccess({
+      createVoiceAccess({
+        direction: "asr",
+        engine: "openai",
         env: { XRK_VOICE_OPENAI_KEY: "sk-product" },
-        product: { mode: "openai" },
       }).service,
     ).toBeTruthy();
-    // Env CI bypass wins over product off.
+    // Env CI bypass wins over the Settings engine.
     expect(
-      createDefaultVoiceAccess({
+      createVoiceAccess({
+        direction: "asr",
+        engine: "openai",
         env: { XRK_VOICE: "memory" },
-        product: { mode: "off" },
       }).service,
     ).toBeTruthy();
 
@@ -198,7 +305,9 @@ describe("exec-voice", () => {
     expect(live.clientSecret).toBe("ek_test");
     expect(calls.some((u) => u.includes("audio/speech"))).toBe(true);
 
-    const access = createDefaultVoiceAccess({
+    const access = createVoiceAccess({
+      direction: "tts",
+      engine: "openai",
       env: {
         XRK_VOICE: "1",
         OPENAI_API_KEY: "sk-x",

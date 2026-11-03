@@ -36,6 +36,16 @@ export {
 } from "./dictation.js";
 export { encodeBase64, micCapabilities, releaseStream } from "./env.js";
 export {
+  dictationAvailable,
+  encodeWav,
+  MAX_RECORDING_MS,
+  startVoiceCapture,
+  toBase64,
+  toPcm16,
+  type CapturedClip,
+  type VoiceCapture,
+} from "./wav-capture.js";
+export {
   startVoiceSession,
   type StartVoiceSessionOptions,
   type VoiceSessionHandle,

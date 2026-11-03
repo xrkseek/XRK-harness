@@ -12,6 +12,11 @@
       "types": "./dist/browser/index.d.ts",
       "import": "./dist/browser/index.js",
       "default": "./dist/browser/index.js"
+    },
+    "./capture": {
+      "types": "./dist/browser/wav-capture.d.ts",
+      "import": "./dist/browser/wav-capture.js",
+      "default": "./dist/browser/wav-capture.js"
     }
   },
   "files": [

@@ -1,16 +1,22 @@
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
-import { VOICE_PROMPT_TEXT } from "./format.js";
 import { voiceUnavailableMessage } from "./readiness.js";
 import {
   VoiceError,
   isVoiceError,
+  type VoiceDirection,
   type VoiceService,
 } from "./types.js";
 
-export { VOICE_PROMPT_TEXT };
+export {
+  VOICE_ASR_PROMPT_TEXT,
+  VOICE_PROMPT_TEXT,
+  VOICE_TTS_PROMPT_TEXT,
+  voicePromptText,
+} from "./format.js";
 export {
   describeVoiceAccess,
   voiceUnavailableMessage,
+  type VoiceAccessFacts,
   type VoiceAccessDescription,
   type VoiceAccessKind,
 } from "./readiness.js";
@@ -18,12 +24,16 @@ export {
 export interface CreateVoiceToolsOptions {
   readonly service?: VoiceService;
   readonly env?: NodeJS.ProcessEnv;
-  readonly product?: { readonly mode?: string };
+  /** Which half these tools serve; decides the honest-failure copy. */
+  readonly direction?: VoiceDirection;
+  /** Settings engine id this surface was built with. */
+  readonly engine?: string;
   /**
-   * When `"speak"`, register only `text_to_speech` (Settings speakTools on
-   * every tool surface). Default registers TTS + STT + live session.
+   * Which half to register. `speak` is only `text_to_speech` (Settings
+   * `tts.enabled`); `listen` is transcription + live session (Settings
+   * `asr.enabled`); default registers all three.
    */
-  readonly surface?: "all" | "speak";
+  readonly surface?: "all" | "speak" | "listen";
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -56,10 +66,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 export function createVoiceTools(
   options: CreateVoiceToolsOptions = {},
 ): ToolDefinition[] {
-  const missing = voiceUnavailableMessage(
-    options.env ?? process.env,
-    options.product,
-  );
+  const missing = voiceUnavailableMessage(options.env ?? process.env, {
+    direction: options.direction ?? "asr",
+    ...(options.engine === undefined ? {} : { engine: options.engine }),
+  });
   const service = options.service;
 
   const tts: ToolDefinition<{
@@ -275,16 +285,18 @@ export function createVoiceTools(
     },
   };
 
+  if (options.surface === "speak") return [tts];
+  if (options.surface === "listen") return [stt, live];
   return [tts, stt, live];
 }
 
 /**
- * Only `text_to_speech` — for Settings `voice.speakTools` binding onto every
- * tool surface (Minimal / IM / Frugal) without voice_transcribe / voice_session.
+ * Only `text_to_speech` — for Settings `tts.enabled` binding onto every tool
+ * surface (Minimal / IM / Frugal) without voice_transcribe / voice_session.
  */
 export function createSpeakTool(
   options: CreateVoiceToolsOptions = {},
 ): ToolDefinition {
-  const [tts] = createVoiceTools(options);
+  const [tts] = createVoiceTools({ ...options, surface: "speak" });
   return tts!;
 }

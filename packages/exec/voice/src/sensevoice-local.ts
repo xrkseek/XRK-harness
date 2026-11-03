@@ -97,7 +97,14 @@ export function inspectSenseVoiceAssets(
   const dataRoot = senseVoiceDataRoot(env, options.dataRoot);
   const paths = resolveAssetPaths(dataRoot, options.precision ?? "int8");
   const missing: string[] = [];
-  if (!existsSync(paths.model)) missing.push(path.basename(paths.model));
+  if (!existsSync(paths.model)) {
+    // Name the file the card will actually fetch (`model.int8.onnx`), not the
+    // fp32 fallback the loader resolved to when neither weight exists — a list
+    // that says `model.onnx` next to a button that downloads `model.int8.onnx`
+    // reads like the download is not what the card is waiting for.
+    const name = path.basename(paths.model);
+    missing.push(name === "model.onnx" ? "model.int8.onnx" : name);
+  }
   if (!existsSync(paths.tokens)) missing.push("tokens.txt");
   if (!existsSync(paths.vad)) missing.push("silero_vad.onnx");
   return { ready: missing.length === 0, dataRoot, missing, paths };
@@ -137,6 +144,75 @@ function tryLoadSherpa():
           : "sherpa-onnx-node is not installed",
     };
   }
+}
+
+/**
+ * Host-side readiness probe for the Settings card: platform, native binding,
+ * assets. It never loads a model — a probe that allocated 228 MB to answer
+ * "is it installed?" would cost more than the question.
+ */
+export interface SenseVoiceEngineProbe {
+  /** This platform can run the native binding at all. */
+  readonly supported: boolean
+  readonly platform: string
+  /** `sherpa-onnx-node` resolved and exported an OfflineRecognizer. */
+  readonly engine: boolean
+  readonly reason?: string
+}
+
+/** Platforms the published sherpa-onnx-node build ships binaries for. */
+/**
+ * Platforms `sherpa-onnx-node@2` ships a prebuilt binding for (checked against
+ * its `optionalDependencies`: win-x64/ia32/arm64, linux-x64/arm64,
+ * darwin-x64/arm64). Kept as an explicit list rather than a guess from
+ * `process.platform`: a 32-bit Linux or an Android user would otherwise be
+ * invited to install a package that cannot load.
+ */
+export const SENSEVOICE_PLATFORMS: readonly string[] = [
+  'darwin-arm64',
+  'darwin-x64',
+  'linux-arm64',
+  'linux-x64',
+  'win32-arm64',
+  'win32-x64',
+]
+
+/**
+ * Termux reports `linux` but links Bionic libc, so the glibc build cannot load
+ * there. Naming it here keeps the card from inviting an Android user to press
+ * a button that is guaranteed to fail.
+ */
+function isTermux(env: NodeJS.ProcessEnv): boolean {
+  return /com\.termux/i.test(String(env.PREFIX ?? ''))
+}
+
+/** Resolve platform support + the optional binding, without touching weights. */
+export function probeSenseVoiceEngine(
+  env: NodeJS.ProcessEnv = process.env,
+): SenseVoiceEngineProbe {
+  const platform = `${process.platform}-${process.arch}`
+  if (isTermux(env)) {
+    return {
+      supported: false,
+      platform,
+      engine: false,
+      reason:
+        'Termux (Android) links Bionic libc and the published sherpa-onnx-node ' +
+        'build is glibc-only.',
+    }
+  }
+  if (!SENSEVOICE_PLATFORMS.includes(platform)) {
+    return {
+      supported: false,
+      platform,
+      engine: false,
+      reason: `Local speech has no build for ${platform}.`,
+    }
+  }
+  const sherpa = tryLoadSherpa()
+  return sherpa.ok
+    ? { supported: true, platform, engine: true }
+    : { supported: true, platform, engine: false, reason: sherpa.reason }
 }
 
 function wavPcm16Mono(bytes: Uint8Array): Float32Array {
@@ -197,7 +273,11 @@ export function createSenseVoiceLocalProvider(
           "VOICE_UNAVAILABLE",
         );
       }
-      const language = String(req.language ?? "auto").trim() || "auto";
+      // Chinese-first, not `auto`. SenseVoice's auto-detect answered a short
+      // noisy mandarin take with Korean `그.` — a language guess the user never
+      // asked for and cannot correct from the composer. `auto` stays available
+      // for callers that explicitly pass it.
+      const language = String(req.language ?? "zh").trim() || "zh";
       if (
         !(LANGS as readonly string[]).includes(language) &&
         language !== "auto"
@@ -237,7 +317,10 @@ export function createSenseVoiceLocalProvider(
         recognizer.decode(stream);
         const text = String(recognizer.getResult(stream).text ?? "").trim();
         return {
-          text: text || "[no-speech]",
+          // An empty decode is 「nothing heard」, not a transcript. Returning a
+          // sentinel here made the card print `[no-speech]` — truncated by the
+          // trial box to a bare `[` — which reads like a corrupted result.
+          text,
           provider: "sensevoice-local",
           delivery: "local",
           noSpeech: !text,

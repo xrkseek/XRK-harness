@@ -125,6 +125,17 @@ const FACE_REMOTES: FaceRemoteSpec = {
     export: 'args',
     importPack: 'args',
   },
+  // Voice: composer dictation (ASR) + Settings card's local-engine lifecycle.
+  // Without this binding `ctx.remote.voice` is undefined and the composer
+  // microphone both crashes and hides the SenseVoice download entry.
+  voice: {
+    transcribe: 'args',
+    inspect: 'args',
+    prepare: 'args',
+    prepareStatus: 'args',
+    prepareCancel: 'args',
+    voices: 'args',
+  },
 }
 
 /** Required service: the Face Client Remote contribution mount. */

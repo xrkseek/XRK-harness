@@ -114,6 +114,57 @@ export interface PluginInventorySnapshot {
   readonly agentPresets?: readonly AgentPresetPluginGroup[]
 }
 
+/** Whether this Host's platform can run the local speech engine at all. */
+export interface VoiceLocalEngine {
+  readonly supported: boolean
+  /** `${process.platform}-${process.arch}` of the Host. */
+  readonly platform: string
+  /** The optional native binding resolved and exported a recognizer. */
+  readonly engine: boolean
+  /** Why it cannot run, in the Host's own words (shown verbatim). */
+  readonly reason?: string
+}
+
+/** One local-engine preparation task's live state. */
+export interface VoicePrepareState {
+  readonly phase: 'idle' | 'preparing' | 'ready' | 'failed'
+  /** Asset id in flight; null when idle or ready. */
+  readonly current: string | null
+  readonly bytesDone: number
+  readonly bytesTotal: number
+  readonly speedBps: number
+  readonly origin: string | null
+  readonly failure: {
+    readonly code: string
+    readonly message: string
+    readonly origin?: string
+  } | null
+}
+
+/** Local STT readiness as the Settings card sees it. */
+export interface VoiceLocalInspect {
+  /** Where the weights must live. */
+  readonly dataRoot: string
+  /** Weights on disk AND a binding that can run them. */
+  readonly ready: boolean
+  readonly assets: {
+    readonly ready: boolean
+    /** Basenames still absent (empty when ready). */
+    readonly missing: readonly string[]
+    readonly totalBytes: number
+  }
+  readonly engine: VoiceLocalEngine
+  readonly prepare: VoicePrepareState
+}
+
+/** One OS voice the local TTS engine can speak with. */
+export interface VoiceSystemVoice {
+  /** Value a card writes into `tts.voice`. */
+  readonly id: string
+  /** Human label, usually `Name (locale)`. */
+  readonly label: string
+}
+
 declare module '@xrkseek/xrk-typert-protocol' {
   interface TypertRemoteNamespaceMap {
     /** Face-bound slash-command Remote (see api-remotes `$bindFace`). */
@@ -152,6 +203,51 @@ declare module '@xrkseek/xrk-typert-protocol' {
       respondApproval: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       setWorkingDirectory: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
       rolloutTrace: (args: Record<string, unknown>) => Promise<RemoteResult<unknown>>
+    }
+    /**
+     * Face composer dictation Remote. The clip arrives base64 (16 kHz mono
+     * PCM WAV unless `mimeType` says otherwise) and the Host owns the
+     * Provider credential, so a browser never holds an API key. Settings
+     * `asr.enabled` gates it exactly like the speak tool: off fails
+     * with `voice-unavailable` rather than recording into a void.
+     */
+    voice: {
+      transcribe: (args: {
+        /** Recorded clip as base64, no `data:` prefix. */
+        audio: string
+        mimeType?: string
+        /** BCP-47 / ISO hint; a backend may ignore it. */
+        language?: string
+        filename?: string
+        /**
+         * Settings probe (`Try a sentence`). Bypasses the `asr.enabled` gate so
+         * an engine can be verified before the switch is saved.
+         */
+        probe?: boolean
+      }) => Promise<RemoteResult<{
+        text: string
+        provider: string
+        delivery: string
+        /** True when the backend heard nothing usable (silence / noise). */
+        noSpeech?: boolean
+      }>>
+      /** Local-engine readiness for Settings → Plugins → Voice. */
+      inspect: () => Promise<RemoteResult<VoiceLocalInspect>>
+      /**
+       * Start (or join) the one-press download. Answers immediately with the
+       * task snapshot — the transfer outlives the call, so poll `prepareStatus`.
+       */
+      prepare: () => Promise<RemoteResult<VoicePrepareState>>
+      /** Poll target while a transfer runs. */
+      prepareStatus: () => Promise<RemoteResult<VoicePrepareState>>
+      /** Abort and settle the task as cancelled. */
+      prepareCancel: () => Promise<RemoteResult<VoicePrepareState>>
+      /**
+       * OS voices the local TTS engine can speak with. Best-effort: a platform
+       * with no enumerable list answers `[]` and the card falls back to a
+       * free-text voice field.
+       */
+      voices: () => Promise<RemoteResult<{ readonly voices: readonly VoiceSystemVoice[] }>>
     }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>

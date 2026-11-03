@@ -17,6 +17,7 @@ import {
   IconGlobeOutlineRegular,
   IconGoalOutlineRegular,
   IconLinkOutlineRegular,
+  IconMicrophoneOutlineRegular,
   IconPersonalizationOutlineRegular,
   IconPlayOutlineRegular,
   IconQueueOutlineRegular,
@@ -42,7 +43,8 @@ const ARTWORK: Partial<Record<PluginsSettingsLocaleKey, Artwork>> = {
   sandboxTitle: IconSettingsOutlineRegular,
   computerUseTitle: IconGoalOutlineRegular,
   browserTitle: IconBrowseOutlineRegular,
-  voiceTitle: IconBellOutlineRegular,
+  asrTitle: IconMicrophoneOutlineRegular,
+  ttsTitle: IconBellOutlineRegular,
   imageGenTitle: IconSparkleRegular,
   videoGenTitle: IconPlayOutlineRegular,
   videoAnalyzeTitle: IconBrowseOutlineRegular,
@@ -55,7 +57,6 @@ const ARTWORK: Partial<Record<PluginsSettingsLocaleKey, Artwork>> = {
   hostTitle: IconGlobeOutlineRegular,
   channelsTitle: IconQueueOutlineRegular,
   sshRemoteTitle: IconLinkOutlineRegular,
-  sunflowerFreeTitle: IconSparkleRegular,
 }
 
 /**

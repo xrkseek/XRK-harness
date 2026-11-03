@@ -5,8 +5,8 @@
  * The section declares `settings.plugins.tab` with a single `configurable` tab
  * that owns `settings.plugin.item`. Shipped cards: MCP, shell (`bash`),
  * agent-loop, workspace-inject, web-search, session-telemetry, sandbox,
- * computer-use, browser, voice, image-gen, video-gen, video-analyze,
- * curated-memory, sunflower-free, a2a-inbound, external-agent, cron, auto-review,
+ * computer-use, browser, ASR, TTS, image-gen, video-gen, video-analyze,
+ * curated-memory, a2a-inbound, external-agent, cron, auto-review,
  * memory-embed, Host runtime, process & IM channels.
  * Session header also registers `conversation.view` tools (运行时) and skills
  * (注入). General 「远程」: ssh-remote (restart).
@@ -43,11 +43,11 @@ import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
 import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { SshRemoteCard } from './SshRemoteCard.tsx'
-import { SunflowerFreeCard } from './SunflowerFreeCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
-import { VoiceCard } from './VoiceCard.tsx'
+import { AsrCard } from './AsrCard.tsx'
+import { TtsCard } from './TtsCard.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
 import { WorkspaceInjectCard } from './WorkspaceInjectCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
@@ -80,11 +80,11 @@ import {
 import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
-import { SUNFLOWER_FREE_NS, SunflowerFreeCardController } from './sunflower-free-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
-import { VOICE_NS, VoiceCardController, VOICE_OPENAI_REF } from './voice-card-controller.ts'
+import { ASR_NS, AsrCardController, VOICE_OPENAI_REF, type VoiceRemote } from './asr-card-controller.ts'
+import { TTS_NS, TtsCardController } from './tts-card-controller.ts'
 import {
   WEB_SEARCH_NS,
   WebSearchCardController,
@@ -123,16 +123,13 @@ export type { InfoRow } from './info-card-model.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
 export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-controller.ts'
 export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
-export type {
-  SunflowerFreeCardFace,
-  SunflowerFreeCardState,
-} from './sunflower-free-card-controller.ts'
 export type { AutoReviewCardFace, AutoReviewCardState } from './auto-review-card-controller.ts'
 export type { MemoryEmbedCardFace, MemoryEmbedCardState } from './memory-embed-card-controller.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
 export type { VideoGenCardFace, VideoGenCardState } from './video-gen-card-controller.ts'
 export type { VideoAnalyzeCardFace, VideoAnalyzeCardState } from './video-analyze-card-controller.ts'
-export type { VoiceCardFace, VoiceCardState } from './voice-card-controller.ts'
+export type { AsrCardFace, AsrCardState, VoiceLocalState } from './asr-card-controller.ts'
+export type { TtsCardFace, TtsCardState } from './tts-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type {
   WorkspaceInjectCardFace,
@@ -151,7 +148,8 @@ export { COMPUTER_USE_NS, COMPUTER_USE_BACKGROUND_REF } from './computer-use-car
 export { CRON_NS } from './cron-card-controller.ts'
 export { CURATED_MEMORY_NS } from './curated-memory-card-controller.ts'
 export { A2A_INBOUND_NS } from './a2a-inbound-card-controller.ts'
-export { VOICE_NS, VOICE_OPENAI_REF } from './voice-card-controller.ts'
+export { ASR_NS, VOICE_OPENAI_REF } from './asr-card-controller.ts'
+export { TTS_NS } from './tts-card-controller.ts'
 export { IMAGE_GEN_NS, IMAGE_GEN_OPENAI_REF, IMAGE_GEN_FAL_REF, IMAGE_GEN_XAI_REF } from './image-gen-card-controller.ts'
 export { HOST_NS } from './host-info-card-controller.ts'
 export { PROCESS_CHANNELS_NS } from './process-channels-card-controller.ts'
@@ -188,9 +186,6 @@ export function apply(ctx: ClientContext): void {
   const sshRemote = new SshRemoteCardController(
     ctx.settingsScope.bind({ namespace: SSH_REMOTE_NS }),
   )
-  const sunflowerFree = new SunflowerFreeCardController(
-    ctx.settingsScope.bind({ namespace: SUNFLOWER_FREE_NS }),
-  )
   const sandbox = new SandboxCardController(
     ctx.settingsScope.bind({ namespace: SANDBOX_NS }),
   )
@@ -213,9 +208,35 @@ export function apply(ctx: ClientContext): void {
   const browser = new BrowserCardController(
     ctx.settingsScope.bind({ namespace: BROWSER_NS }),
   )
-  const voice = new VoiceCardController(
-    ctx.settingsScope.bind({ namespace: VOICE_NS }),
+  // Voice is resolved per use, never captured — for two independent reasons.
+  //
+  // Reading it: `ctx.remote.voice` is inject-checked (a fiber that never
+  // declared `remote.voice` throws), `ctx.get('remote.voice')` asks the
+  // container for a service `$bindFace` provides on a child fiber, and
+  // `ctx.get('remote').voice` is a traceable proxy that forwards the property
+  // straight back to the inject-checked read. The namespace is a plain own
+  // property on the gateway and that proxy defines no
+  // `getOwnPropertyDescriptor` trap, so the descriptor read is the one that
+  // never reaches `ctx`.
+  //
+  // When: `remote` (the gateway service this fiber waited for) exists before
+  // `$bindFace` mounts its namespaces, so a value read here is `undefined` on
+  // a cold boot. The cards re-resolve when they open.
+  const readVoiceRemote = (): VoiceRemote | undefined => {
+    const gateway = ctx.get('remote') as object | undefined
+    return gateway === undefined
+      ? undefined
+      : Object.getOwnPropertyDescriptor(gateway, 'voice')?.value as VoiceRemote | undefined
+  }
+  const asr = new AsrCardController(
+    ctx.settingsScope.bind({ namespace: ASR_NS }),
     api,
+    readVoiceRemote,
+  )
+  const tts = new TtsCardController(
+    ctx.settingsScope.bind({ namespace: TTS_NS }),
+    api,
+    readVoiceRemote,
   )
   const imageGen = new ImageGenCardController(
     ctx.settingsScope.bind({ namespace: IMAGE_GEN_NS }),
@@ -255,6 +276,10 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => {
     configurable.dispose()
   }, 'ui-settings-plugins: tab directory')
+  ctx.effect(() => () => {
+    asr.dispose()
+    tts.dispose()
+  }, 'ui-settings-plugins: voice prepare polling')
   ctx.effect(
     () => ctx.remote.$on('settings/document-updated', () => {
       void configurable.load()
@@ -280,7 +305,10 @@ export function apply(ctx: ClientContext): void {
       if (ref === COMPUTER_USE_BACKGROUND_REF) {
         computerUse.refreshCredential(ref)
       }
-      if (ref === VOICE_OPENAI_REF) voice.refreshCredential(ref)
+      if (ref === VOICE_OPENAI_REF) {
+        asr.refreshCredential(ref)
+        tts.refreshCredential(ref)
+      }
       if (ref === IMAGE_GEN_OPENAI_REF || ref === IMAGE_GEN_FAL_REF || ref === IMAGE_GEN_XAI_REF) {
         imageGen.refreshCredential(ref)
       }
@@ -458,12 +486,12 @@ export function apply(ctx: ClientContext): void {
   pluginCard(SANDBOX_NS, () => sandbox.inject(), SandboxCard)
   pluginCard(COMPUTER_USE_NS, () => computerUse.inject(), ComputerUseCard)
   pluginCard(BROWSER_NS, () => browser.inject(), BrowserCard)
-  pluginCard(VOICE_NS, () => voice.inject(), VoiceCard)
+  pluginCard(ASR_NS, () => asr.inject(), AsrCard)
+  pluginCard(TTS_NS, () => tts.inject(), TtsCard)
   pluginCard(IMAGE_GEN_NS, () => imageGen.inject(), ImageGenCard)
   pluginCard(VIDEO_GEN_NS, () => videoGen.inject(), VideoGenCard)
   pluginCard(VIDEO_ANALYZE_NS, () => videoAnalyze.inject(), VideoAnalyzeCard)
   pluginCard(CURATED_MEMORY_NS, () => curatedMemory.inject(), CuratedMemoryCard)
-  pluginCard(SUNFLOWER_FREE_NS, () => sunflowerFree.inject(), SunflowerFreeCard)
   pluginCard(A2A_INBOUND_NS, () => a2aInbound.inject(), A2aInboundCard)
   pluginCard(EXTERNAL_AGENT_NS, () => externalAgent.inject(), ExternalAgentCard)
   pluginCard(CRON_NS, () => cron.inject(), CronCard)

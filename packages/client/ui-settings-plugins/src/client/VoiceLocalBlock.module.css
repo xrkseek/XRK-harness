@@ -1,0 +1,176 @@
+/* Local engine block inside the Voice card.
+   No border and no shadow on purpose: it sits INSIDE a card that already
+   declares elevation, and a second frame reads as a nested card. The module
+   surface alone groups it. */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.dotReady {
+  background: var(--dsw-alias-label-success, #2ea043);
+  /* One authored entrance. The settled state carries no halo. */
+  animation: settle 420ms ease-out 1;
+}
+
+.dotBusy {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.intro {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fileRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary));
+}
+
+.fileName {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11px;
+}
+
+.fileState {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.progressTrack {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dsw-alias-button-info-fill);
+  /* The bar glides between samples instead of snapping. */
+  transition: width 220ms ease-out;
+}
+
+.progressMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.action {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-1));
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary {
+  border-color: transparent;
+  background: var(--dsw-alias-button-info-fill);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover, var(--dsw-alias-button-info-fill));
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-error);
+  word-break: break-word;
+}
+
+.quote {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.path {
+  margin: 0;
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-all;
+}
+
+@keyframes settle {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

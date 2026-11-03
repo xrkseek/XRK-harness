@@ -3,12 +3,13 @@
 Voice Host seam: TTS · dictation (STT) · realtime voice session broker.
 
 - **Definition**: `VoiceService` (`synthesize` · `transcribe` · `createLiveSession` · `liveStatus`)
-- **Provider**: `createMemoryVoiceProvider` · `createOpenAiVoiceProvider` · `createSenseVoiceLocalProvider` · Host-injected
+- **Provider**: `createMemoryVoiceProvider` · `createOpenAiVoiceProvider` · `createSenseVoiceLocalProvider` · `createSystemVoiceProvider` · Host-injected
+- **Registry**: `createVoiceAccess({ direction, engine, … })` — one row per engine in `engines.ts`; adding a Provider does not touch the Host mount, the Face handler or the cards.
 - **Consumer**: `createVoiceTools` → `text_to_speech` · `voice_transcribe` · `voice_session`
 
-Mic/speaker and WebRTC stay on the client. Tools stay registered when no Provider is configured; execute fails honestly (`describeVoiceAccess` / `voiceUnavailableMessage` share the same copy with Settings and `xrkh doctor`).
+Mic/speaker and WebRTC stay on the client. Tools are bound by the switch that owns them (`asr.enabled` → transcription + live session, `tts.enabled` → `text_to_speech`); when a switch is on without a usable credential the tool stays bound and execute fails honestly (`describeVoiceAccess` / `voiceUnavailableMessage` share the same copy with Settings and `xrkh doctor`).
 
-Product path: Settings → Plugins → Voice (`mode` off/openai + Credentials key). Env: `XRK_VOICE=memory` | `XRK_VOICE=1` + `OPENAI_API_KEY` / `XRK_VOICE_OPENAI_KEY`. Wake word is not shipped.
+Product path: Settings → Plugins → **ASR** (`engine: local` SenseVoice / `openai`) and **TTS** (`engine: local` OS voices / `openai`), sharing Credentials `XRK_VOICE_OPENAI_KEY`. Env: `XRK_VOICE=memory` | `local` | `system` | `1` + `OPENAI_API_KEY` / `XRK_VOICE_OPENAI_KEY`. Wake word is not shipped.
 
 ## Browser mic transport
 

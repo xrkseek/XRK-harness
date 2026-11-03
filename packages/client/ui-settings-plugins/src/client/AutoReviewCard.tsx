@@ -3,7 +3,6 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SecretField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
-import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { AutoReviewCardFace } from './auto-review-card-controller.ts'
 import type {} from './slot-contract.ts'
 import css from './McpCard.module.css'
@@ -19,14 +18,12 @@ export function AutoReviewCard(props: AutoReviewCardProps) {
   const { t } = props
   const state = props.useAutoReviewCard(snapshot => snapshot)
   const disabled = !state.writable
-  const enabled = state.enabled.text === 'true'
   return (
     <PluginCard
       t={t}
       titleKey="autoReviewTitle"
       descriptionKey="autoReviewDescription"
       state={state}
-      masterSwitch={booleanMasterSwitch(enabled, (value) => { props.edit('enabled', value) })}
       onSave={props.save}
       onDiscard={props.discard}
     >

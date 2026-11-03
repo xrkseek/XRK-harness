@@ -1,13 +1,17 @@
-import { createMemoryVoiceProvider } from "./memory.js";
-import { createOpenAiVoiceProvider } from "./openai-http.js";
-import { createSenseVoiceLocalProvider } from "./sensevoice-local.js";
-import type { VoiceService } from "./types.js";
-import { voiceUnavailableMessage } from "./readiness.js";
+/**
+ * Voice Host seam: engine registry + Provider contracts + tools.
+ *
+ * One entry point builds a Provider — {@link createVoiceAccess} — and the Host,
+ * the Face handler and the cards all go through it. Adding a Provider is one
+ * row in `engines.ts` plus the settings enum; nothing else grows an engine
+ * branch.
+ */
 
 export {
   VoiceError,
   isVoiceError,
   type VoiceDelivery,
+  type VoiceDirection,
   type VoiceErrorCode,
   type VoiceLiveCreateRequest,
   type VoiceLiveCreateResult,
@@ -18,7 +22,31 @@ export {
   type VoiceTranscribeRequest,
   type VoiceTranscribeResult,
 } from "./types.js";
-export { VOICE_PROMPT_TEXT } from "./format.js";
+export { resolveEngineId } from "./engine-ids.js";
+export {
+  createVoiceAccess,
+  listVoiceEngines,
+  type VoiceAccess,
+  type VoiceAccessRequest,
+  type VoiceEngineContext,
+  type VoiceEngineSpec,
+} from "./engines.js";
+export {
+  createVoiceTools,
+  createSpeakTool,
+  describeVoiceAccess,
+  voiceUnavailableMessage,
+  type CreateVoiceToolsOptions,
+  type VoiceAccessDescription,
+  type VoiceAccessFacts,
+  type VoiceAccessKind,
+} from "./tools.js";
+export {
+  VOICE_ASR_PROMPT_TEXT,
+  VOICE_PROMPT_TEXT,
+  VOICE_TTS_PROMPT_TEXT,
+  voicePromptText,
+} from "./format.js";
 export {
   createMemoryVoiceProvider,
   minimalWavBytes,
@@ -31,106 +59,41 @@ export {
 export {
   createSenseVoiceLocalProvider,
   inspectSenseVoiceAssets,
+  probeSenseVoiceEngine,
   senseVoiceDataRoot,
+  SENSEVOICE_PLATFORMS,
+  type SenseVoiceEngineProbe,
   type SenseVoiceInspectResult,
   type SenseVoiceLocalOptions,
 } from "./sensevoice-local.js";
 export {
-  createVoiceTools,
-  createSpeakTool,
-  describeVoiceAccess,
-  voiceUnavailableMessage,
-  type CreateVoiceToolsOptions,
-  type VoiceAccessDescription,
-  type VoiceAccessKind,
-} from "./tools.js";
-
-/** Face `voice` product modes (Settings SoT). `memory` stays env-only. */
-export type VoiceProductMode = "off" | "openai" | "local";
-
-/** Face `voice` product shape. */
-export interface VoiceProductConfig {
-  readonly mode: VoiceProductMode;
-  /** Optional OpenAI-compatible base URL. */
-  readonly baseUrl?: string;
-}
-
-export interface DefaultVoiceAccessOptions {
-  readonly env?: NodeJS.ProcessEnv;
-  /**
-   * Face Settings product. Used when `XRK_VOICE` is unset
-   * (env remains the CI bypass).
-   */
-  readonly product?: VoiceProductConfig;
-  readonly service?: VoiceService;
-  readonly fetchImpl?: typeof fetch;
-}
-
-export interface DefaultVoiceAccess {
-  readonly service?: VoiceService;
-  readonly unavailableMessage: string;
-}
-
-function resolveApiKey(env: NodeJS.ProcessEnv): string | undefined {
-  const a = String(env.XRK_VOICE_OPENAI_KEY ?? "").trim();
-  if (a) return a;
-  const b = String(env.OPENAI_API_KEY ?? "").trim();
-  return b || undefined;
-}
+  createSystemVoiceProvider,
+  listSystemVoices,
+  type SystemVoice,
+  type SystemVoiceOptions,
+} from "./system-tts.js";
+export {
+  SENSEVOICE_ASSETS,
+  SENSEVOICE_ORIGINS,
+  SENSEVOICE_TOTAL_BYTES,
+  type SenseVoiceAsset,
+} from "./sensevoice-assets.js";
+export {
+  SenseVoicePreparer,
+  senseVoicePreparer,
+  type SenseVoicePrepareErrorCode,
+  type SenseVoicePrepareFailure,
+  type SenseVoicePreparePhase,
+  type SenseVoicePreparerOptions,
+  type SenseVoicePrepareState,
+} from "./sensevoice-runtime.js";
 
 /**
- * Resolve a voice Provider.
- * - Injected `service` wins.
- * - Non-empty `XRK_VOICE` is CI bypass over Face `product`.
- * - Product / env: `off` · `openai` (`1`) · `memory` (env-only).
- * - Else no service; tools stay registered and fail honestly.
+ * Host-side snapshot of the ASR product carried with agent settings.
+ * Shape only — `createVoiceAccess` reads the live Settings namespace instead.
  */
-export function createDefaultVoiceAccess(
-  options: DefaultVoiceAccessOptions = {},
-): DefaultVoiceAccess {
-  const env = options.env ?? process.env;
-  const unavailableMessage = voiceUnavailableMessage(env, options.product);
-  if (options.service) {
-    return { service: options.service, unavailableMessage };
-  }
-  const envRaw = String(env.XRK_VOICE ?? "").trim();
-  const productMode = options.product?.mode;
-  const flag =
-    envRaw !== ""
-      ? envRaw.toLowerCase()
-      : productMode === "openai"
-        ? "1"
-        : productMode === "local"
-          ? "local"
-          : "";
-  if (flag === "memory") {
-    return {
-      service: createMemoryVoiceProvider(),
-      unavailableMessage,
-    };
-  }
-  if (flag === "local" || flag === "sensevoice") {
-    return {
-      service: createSenseVoiceLocalProvider({ env }),
-      unavailableMessage,
-    };
-  }
-  if (flag === "1" || flag === "openai") {
-    const apiKey = resolveApiKey(env);
-    if (!apiKey) {
-      return { unavailableMessage };
-    }
-    const baseUrl =
-      options.product?.baseUrl?.trim() ||
-      String(env.XRK_VOICE_BASE_URL ?? "").trim();
-    return {
-      service: createOpenAiVoiceProvider({
-        apiKey,
-        ...(baseUrl ? { baseUrl } : {}),
-        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-      }),
-      unavailableMessage,
-    };
-  }
-  return { unavailableMessage };
+export interface VoiceProductConfig {
+  readonly mode: "off" | "openai" | "local" | "system";
+  /** Optional OpenAI-compatible base URL. */
+  readonly baseUrl?: string;
 }

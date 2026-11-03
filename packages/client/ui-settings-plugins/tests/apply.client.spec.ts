@@ -241,9 +241,8 @@ describe('ui-settings-plugins apply', () => {
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
       .toEqual([
         'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
-        'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
+        'session-telemetry', 'sandbox', 'computer-use', 'browser', 'asr', 'tts',
         'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
-        'sunflower-free',
         'a2a-inbound', 'external-agent', 'cron',
         'auto-review', 'memory-embed', 'host', 'process-channels',
       ])
@@ -263,9 +262,8 @@ describe('ui-settings-plugins apply', () => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
         .toEqual([
           'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
-          'session-telemetry', 'sandbox', 'computer-use', 'browser', 'voice',
+          'session-telemetry', 'sandbox', 'computer-use', 'browser', 'asr', 'tts',
           'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
-          'sunflower-free',
           'a2a-inbound', 'external-agent', 'cron',
           'auto-review', 'memory-embed', 'host', 'process-channels',
         ])
@@ -340,7 +338,7 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(21)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(22)
 
     await fiber.dispose()
 

@@ -3,7 +3,15 @@
  * Mic/speaker stay client-side; this package owns Provider contracts + tools.
  */
 
-export type VoiceDelivery = "memory" | "openai" | "local" | "unavailable";
+export type VoiceDelivery =
+  | "memory"
+  | "openai"
+  | "local"
+  | "system"
+  | "unavailable";
+
+/** Which half of voice a Provider serves. */
+export type VoiceDirection = "asr" | "tts";
 
 export type VoiceErrorCode =
   | "VOICE_UNAVAILABLE"

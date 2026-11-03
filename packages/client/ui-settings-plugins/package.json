@@ -47,6 +47,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@xrkseek/cordis": "workspace:^",
+    "@xrkseek/exec-voice": "workspace:^",
     "@xrkseek/xrk-api-remotes": "workspace:^",
     "@xrkseek/client-connection": "workspace:^",
     "@xrkseek/client-locale": "workspace:^",
