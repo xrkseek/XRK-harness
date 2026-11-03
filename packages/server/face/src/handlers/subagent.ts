@@ -10,6 +10,7 @@ import { resolveSessionModelSelection } from "../model-catalog.js";
 import { describeChildOutcome } from "../adapt/subagent-notice.js";
 import { readSessionEvents } from "@xrkseek/core-session";
 import {
+  isInternalFaceRpc,
   maybePrefixDelegatedChildText,
   type SeatChannel,
 } from "../seat-channel.js";
@@ -151,15 +152,6 @@ export const subagentHistory: FaceHandler = async (runtime, rpcId, payload) => {
   });
 };
 
-/**
- * Face tool / orchestrator dispatches mint stable rpcId prefixes; human UI
- * clients send UUIDs. Used to skip parent-mirror duplication when the parent
- * already authored the follow-up via send_message / followup_task.
- */
-function isInternalFaceRpc(rpcId: string): boolean {
-  return /^(tool-|orch-|te-|delete-)/.test(rpcId);
-}
-
 export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   const p = asRecord(payload);
   const parentSessionId = String(p.parentSessionId ?? "").trim();
@@ -256,14 +248,9 @@ export const subagentPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   });
   if (!prompted.ok) return prompted;
   runtime.agentTeamTasks.markResumed(childSessionId);
-  if (mirrorHuman && preview) {
-    // Defer parent mirror until this admit is prompt/promoted (enters a step).
-    // Queued follow-ups must not appear on the manager while still waiting.
-    const admitId = runtime.rpcAdmitMap.get(rpcId);
-    if (admitId) {
-      runtime.armOwnedSubagentUserPromptMirror(childSessionId, preview, admitId);
-    }
-  }
+  // Parent mirror is armed inside `sessionPrompt` itself (see handlers/session.ts):
+  // arming here only covered humans who travel through this RPC, so a phone that
+  // opens the child directly (`session.prompt`) never mirrored anything.
   const messageId = runtime.rpcAdmitMap.get(rpcId) ?? rpcId;
   return { ok: true, value: { messageId } };
 };

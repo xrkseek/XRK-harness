@@ -5,10 +5,9 @@
  */
 
 import type { MessageId } from '@xrkseek/xrk-llm/brand'
-import type { ContentBlock } from '@xrkseek/xrk-llm/types'
 import type { SessionId } from '@xrkseek/xrk-session/types'
 import type { RpcId, RpcRequest, RpcResponse } from './rpc.ts'
-import type { HistoryEntry, SessionProjectionsBlock } from './sessions.ts'
+import type { HistoryEntry, PromptContentPart, SessionProjectionsBlock } from './sessions.ts'
 
 /**
  * How a child's last turn ended, structurally (mirrors Face's
@@ -127,7 +126,13 @@ export interface SubagentsApi {
   prompt(
     request: RpcRequest<
       Extract<SubagentAddress, { mode: 'continuable' }> & {
-        content: ContentBlock[]
+        /**
+         * Browser prompt wire (text + temporary image/file bytes). Face hands
+         * this to `sessionPrompt`, which runs durable AttachmentStore admission
+         * exactly as `session.prompt` does — so continuable children accept the
+         * same attachments a normal session does.
+         */
+        content: PromptContentPart[]
         /** Queue appends after the turn; steer interrupts the running turn. */
         delivery?: 'queue' | 'steer'
         /** Optional browser zone sampled for this exact human prompt. */

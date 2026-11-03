@@ -354,19 +354,36 @@ const CronConfig = Schema.object({
 });
 
 /**
- * Voice Host (Plugins card). Env `XRK_VOICE` remains CI bypass.
- * API key via Credentials `XRK_VOICE_OPENAI_KEY`.
+ * Speech-to-text (Plugins → ASR card). Env `XRK_VOICE` remains CI bypass.
+ * Cloud key via Credentials `XRK_VOICE_OPENAI_KEY` (shared with TTS).
+ *
+ * `enabled` owns one thing: the composer's dictation seat. Leaving it on says
+ * every desktop pointed at this Host may show the mic; `engine` picks what
+ * runs behind it — SenseVoice on this Host, or an OpenAI-compatible
+ * `/audio/transcriptions` endpoint.
  */
-const VoiceConfig = Schema.object({
-  mode: Schema.union(["off", "openai", "local"]).default("off"),
+const AsrConfig = Schema.object({
+  enabled: Schema.boolean().default(false),
+  engine: Schema.union(["local", "openai"]).default("local"),
   baseUrl: Schema.string().default(""),
-  /**
-   * When true, bind `text_to_speech` on every tool surface (including Minimal /
-   * IM). Uses OpenAI TTS when mode=openai + key; otherwise the in-process
-   * memory TTS stub (local). Full voice_transcribe / voice_session still
-   * follow `mode` (`local` = SenseVoice STT when assets + sherpa-onnx-node ready).
-   */
-  speakTools: Schema.boolean().default(false),
+});
+
+/**
+ * Text-to-speech (Plugins → TTS card). Env `XRK_VOICE` remains CI bypass.
+ *
+ * `enabled` binds `text_to_speech` on every tool surface (including Minimal /
+ * IM), which is the only switch the agent sees. `engine: local` renders with
+ * the Host OS voices (SAPI / say / espeak-ng) so the switch works with no key;
+ * `engine: openai` posts to an OpenAI-compatible `/audio/speech` endpoint.
+ */
+const TtsConfig = Schema.object({
+  enabled: Schema.boolean().default(false),
+  engine: Schema.union(["local", "openai"]).default("local"),
+  baseUrl: Schema.string().default(""),
+  /** Voice id: an OS voice name for `local`, a provider voice for `openai`. */
+  voice: Schema.string().default(""),
+  /** OpenAI-compatible TTS model; ignored by the local engine. */
+  model: Schema.string().default(""),
 });
 
 /**
@@ -751,9 +768,15 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       applies: "live",
     },
     {
-      ns: "voice",
-      schema: schemasteryJson(VoiceConfig) as FaceSchemaEnvelope,
-      base: { mode: "off", baseUrl: "" },
+      ns: "asr",
+      schema: schemasteryJson(AsrConfig) as FaceSchemaEnvelope,
+      base: { enabled: false, engine: "local", baseUrl: "" },
+      applies: "live",
+    },
+    {
+      ns: "tts",
+      schema: schemasteryJson(TtsConfig) as FaceSchemaEnvelope,
+      base: { enabled: false, engine: "local", baseUrl: "", voice: "", model: "" },
       applies: "live",
     },
     {

@@ -308,7 +308,9 @@ describe("face dispatch", () => {
       const sel = await dispatchFaceMethod(runtime, "session.selectModel", "s", {
         sessionId,
         provider: "deepseek",
-        model: "deepseek-v4-flash",
+        // No `llm-deepseek.models` in this bare productDir → the catalog is
+        // DEFAULT_DEEPSEEK_MODELS; selectModel now refuses ids outside it.
+        model: "deepseek-flash",
       });
       expect(sel.result.ok).toBe(true);
 

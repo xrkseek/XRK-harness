@@ -454,22 +454,68 @@ export function modelAdvertisesReasoning(
   return reasoning !== undefined && reasoning.efforts.length > 0;
 }
 
+/**
+ * Declared effort ids for a selection, or undefined when the row advertises
+ * none (a gateway with no promise cannot reject a level).
+ */
+export function lookupModelReasoningEfforts(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): readonly string[] | undefined {
+  const reasoning = findCatalogModel(runtime, selection)?.reasoning;
+  if (reasoning === undefined || reasoning.efforts.length === 0) return undefined;
+  return reasoning.efforts.map((effort) => effort.id);
+}
+
+/**
+ * Catalog rows for one provider id.
+ *
+ * Single source for "what models does this provider expose": brand rosters
+ * (deepseek settings/defaults, self-routed plugin brands, pi-ai profiles) and
+ * declared pi-ai providers that never registered a brand. `findCatalogModel`
+ * and {@link lookupProviderModelIds} both go through it — no second traversal.
+ */
+function providerModelRows(
+  runtime: FaceRuntime,
+  provider: string,
+): readonly FaceModelEntry[] {
+  const brand = runtime.registry.listBrands().find((b) => b.id === provider);
+  if (brand) return modelsForBrand(runtime, brand);
+  if (provider === "deepseek") return deepseekModels(runtime);
+  return piAiProviderModels(runtime, provider);
+}
+
 function findCatalogModel(
   runtime: FaceRuntime,
   selection: FaceModelSelection,
 ): FaceModelEntry | undefined {
-  const brand = runtime.registry
-    .listBrands()
-    .find((b) => b.id === selection.provider);
-  if (!brand) {
-    if (selection.provider === "deepseek") {
-      return deepseekModels(runtime).find((m) => m.id === selection.model);
-    }
-    return piAiProviderModels(runtime, selection.provider).find(
-      (m) => m.id === selection.model,
-    );
-  }
-  return modelsForBrand(runtime, brand).find((m) => m.id === selection.model);
+  return providerModelRows(runtime, selection.provider).find(
+    (m) => m.id === selection.model,
+  );
+}
+
+/**
+ * Catalog row for a selection, or undefined when the catalog has none.
+ *
+ * Public door for callers that must distinguish "this model is a typo" from
+ * "this provider has no catalog inventory at all" — the latter is a pure
+ * custom gateway and must not be refused.
+ */
+export function lookupCatalogModel(
+  runtime: FaceRuntime,
+  selection: FaceModelSelection,
+): FaceModelEntry | undefined {
+  return findCatalogModel(runtime, selection);
+}
+
+/** Model ids the catalog knows for a provider (empty = no inventory). */
+export function lookupProviderModelIds(
+  runtime: FaceRuntime,
+  provider: string,
+): readonly string[] {
+  const id = provider.trim();
+  if (!id) return [];
+  return providerModelRows(runtime, id).map((row) => row.id);
 }
 
 /** Shared default from `agent-default-model` settings namespace. */

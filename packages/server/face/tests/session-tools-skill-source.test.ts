@@ -61,6 +61,9 @@ describe("classifySessionToolSurface", () => {
     expect(classifySessionToolSurface("sideline_set")).toBe("agent");
     expect(classifySessionToolSurface("presence_set")).toBe("agent");
     expect(classifySessionToolSurface("workspace_session_prompt")).toBe("agent");
+    // Route repair + catalog live with the delegation tools, not "other".
+    expect(classifySessionToolSurface("set_agent_model")).toBe("agent");
+    expect(classifySessionToolSurface("list_models")).toBe("agent");
     expect(classifySessionToolSurface("workspace_list")).toBe("workspace");
     expect(classifySessionToolSurface("propose_skill")).toBe("system");
     expect(classifySessionToolSurface("present")).toBe("system");

@@ -446,9 +446,9 @@ export interface FaceRuntime {
   ): void;
   /**
    * Arm a parent-inbox mirror for a human follow-up into a continuable child.
-   * Keyed by the child's `admitId` so only that admit's `prompt/promoted`
-   * delivers it (queued text stays off the manager). External workers pass
-   * `admitId: null` to deliver immediately. Tool-/orch- prompts skip this.
+   * Keyed by the child's `admitId` so queued text stays off the manager until
+   * that admit's `prompt/promoted`. External workers pass `admitId: null` to
+   * deliver immediately. Tool-/orch- prompts skip this.
    */
   armOwnedSubagentUserPromptMirror(
     childSessionId: string,
@@ -456,10 +456,14 @@ export interface FaceRuntime {
     admitId: string | null,
   ): void;
   /**
-   * Deliver the mirror armed for `admitId` (from `prompt/promoted`). No-op
-   * when that admit was not a human follow-up.
+   * Deliver the mirror for `prompt/promoted`. Tries the exact admit first; a
+   * double-admitted retry promotes an id we never armed, so it falls back to
+   * this child's oldest pending follow-up instead of losing the notice.
    */
-  flushOwnedSubagentUserPromptMirror(admitId: string): void;
+  flushOwnedSubagentUserPromptMirror(
+    admitId: string,
+    childSessionId: string,
+  ): void;
   /**
    * Drop a pending mirror without notifying the parent (`prompt/withdrawn`).
    */

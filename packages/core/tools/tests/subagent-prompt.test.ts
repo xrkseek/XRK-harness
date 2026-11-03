@@ -51,4 +51,16 @@ describe("subagent routing prompt", () => {
     expect(prompt).toContain("steers a completion notice");
     expect(prompt).toContain("delivery=steer");
   });
+
+  it("tells the parent how to move a child off a dead route", () => {
+    const prompt = subagentRoutingPrompt("proactive");
+    // The route default and the escape hatch must both be discoverable from
+    // the injected prompt — a tool the model never hears about is dead weight.
+    expect(prompt).toContain("defaults to this session's current provider");
+    expect(prompt).toContain("(QUOTA)");
+    expect(prompt).toContain("set_agent_model");
+    expect(prompt).toContain("RATE_LIMIT");
+    expect(prompt).toContain("is temporary — wait and resend on the same route");
+    expect(prompt).toContain("list_models");
+  });
 });

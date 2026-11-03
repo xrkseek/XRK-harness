@@ -20,6 +20,7 @@ import {
   MEMBER_COLORS,
   MEMBER_KITS,
   MEMBER_SHAPES,
+  parseMemberBallSize,
 } from "./agent-roster-store.js";
 import {
   GLASSES_BUILTINS,
@@ -175,6 +176,52 @@ const PRODUCT_YAML_NS = new Set(
   ),
 );
 
+/**
+ * Retired `voice` section (`mode` / `baseUrl` / `speakTools`), split into
+ * `asr` + `tts`.
+ */
+const LEGACY_VOICE_NS = "voice";
+
+/**
+ * Map one legacy `voice` section onto the two new namespaces.
+ *
+ * A section the new cards already saved wins: re-running this on a file that
+ * still carries the old key (an interrupted boot, a hand edit) must not undo
+ * the user's newer choice.
+ * @returns whether anything was written, so the caller can persist the split.
+ */
+function migrateLegacyVoice(
+  runtime: FaceRuntime,
+  legacy: Record<string, unknown>,
+): boolean {
+  const mode = typeof legacy.mode === "string"
+    ? legacy.mode.trim().toLowerCase()
+    : "off";
+  const baseUrl = typeof legacy.baseUrl === "string" ? legacy.baseUrl.trim() : "";
+  const asr = runtime.settingsNamespaces.ensure("asr");
+  const tts = runtime.settingsNamespaces.ensure("tts");
+  let migrated = false;
+  if (Object.keys(asr.user).length === 0) {
+    asr.user = {
+      enabled: mode === "openai" || mode === "local",
+      engine: mode === "openai" ? "openai" : "local",
+      ...(baseUrl === "" ? {} : { baseUrl }),
+    };
+    migrated = true;
+  }
+  if (Object.keys(tts.user).length === 0) {
+    tts.user = {
+      // `speakTools` was the old TTS switch; `mode` only ever governed STT.
+      enabled: legacy.speakTools === true,
+      // A user who had OpenAI selected for voice was speaking through it.
+      engine: mode === "openai" ? "openai" : "local",
+      ...(baseUrl === "" ? {} : { baseUrl }),
+    };
+    migrated = true;
+  }
+  return migrated;
+}
+
 export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
   const doc = loadYamlFile(settingsYamlPath(runtime), "settings");
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
@@ -193,11 +240,30 @@ export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
     slot.applies = spec.applies;
     slot.user = structuredClone(section);
   }
+  // Split-era migration: read the retired section once, then persist so the
+  // split is durable and the old key stops being re-read on every boot.
+  const legacyVoice = doc[LEGACY_VOICE_NS];
+  if (
+    legacyVoice
+    && typeof legacyVoice === "object"
+    && !Array.isArray(legacyVoice)
+    && migrateLegacyVoice(runtime, legacyVoice as Record<string, unknown>)
+  ) {
+    void persistSettingsDocument(runtime, runtime.settingsNamespaces).catch(
+      (err: unknown) => {
+        console.warn(
+          `[face] legacy voice → asr/tts persist failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      },
+    );
+  }
   // Community theme / Cordis Config namespaces (theme-endfield, …) persist as
   // sibling yaml keys. Hydrate any non-product object section so configForms
   // survives restart without embedding Cordis configEditor.
   for (const [key, raw] of Object.entries(doc)) {
-    if (PRODUCT_YAML_NS.has(key) || key === "mcp") continue;
+    if (PRODUCT_YAML_NS.has(key) || key === "mcp" || key === LEGACY_VOICE_NS) continue;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const slot = runtime.settingsNamespaces.ensure(key);
     slot.user = structuredClone(raw as Record<string, unknown>);
@@ -349,6 +415,8 @@ export async function persistSettingsDocument(
     loaded.status === "missing"
       ? {}
       : structuredClone(loaded.doc);
+  // Retired `voice` section — split into `asr` + `tts`, never written back.
+  delete previous[LEGACY_VOICE_NS];
   for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
     if (spec.ns === "mcp") continue;
     const slot = namespaces.ensure(spec.ns);
@@ -366,6 +434,7 @@ export async function persistSettingsDocument(
     "ui",
     "host",
     "process-channels",
+    LEGACY_VOICE_NS,
   ]);
   for (const ns of namespaces.ids()) {
     if (skipCommunityYaml.has(ns)) continue;
@@ -438,6 +507,12 @@ export function validateSettingsNamespace(
       && !MEMBER_COLORS.includes(color as (typeof MEMBER_COLORS)[number])
     ) {
       return `unknown presence color: ${String(color)}`;
+    }
+    if (
+      merged.size !== undefined
+      && parseMemberBallSize(merged.size) === undefined
+    ) {
+      return `invalid presence size: ${String(merged.size)}`;
     }
     const kit = merged.kit;
     if (

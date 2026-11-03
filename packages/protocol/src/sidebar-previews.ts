@@ -50,6 +50,8 @@ export interface SubagentPreviewOutcome {
     | "blocked"
     | "none";
   readonly cause?: "user" | "parent" | "disposed" | "hook" | "legacy";
+  /** Provider error code (`QUOTA`, `RATE_LIMIT`, …) — only for `error`. */
+  readonly code?: string;
   readonly quietMs?: number;
 }
 

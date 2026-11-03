@@ -170,6 +170,96 @@ describe("Face subagent", () => {
     expect([...runtime.admitRpcMap.values()]).toContain("client-echo-steer");
     expect([...runtime.admitRpcMap.values()]).not.toContain("pr-steer");
 
+    // Double-admitted human retry (phone + gateway): the user's text lands as
+    // two admits, and only the *second* one is promoted. The mirror is armed
+    // against the first, so an admitId-keyed map stranded it — the manager saw
+    // nothing while the child clearly read the message.
+    parentAdmits.length = 0;
+    const single = await dispatchFaceMethod(
+      runtime,
+      "subagent.prompt",
+      "pr-retry",
+      {
+        parentSessionId: parentId,
+        childSessionId: childId,
+        mode: "continuable",
+        content: [{ type: "text", text: "只发一次" }],
+      },
+    );
+    expect(single.result.ok).toBe(true);
+    store.append(childId, {
+      type: "prompt/admitted",
+      ts: Date.now(),
+      admitId: "admit_gateway_retry",
+      content: "只发一次",
+    });
+    store.append(childId, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: "admit_gateway_retry",
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(parentAdmits.map((a) => a.delivery)).toEqual(["steer"]);
+    expect(String(parentAdmits[0]?.content)).toContain("只发一次");
+
+    // Multi-device: a phone that opens the child directly sends
+    // `session.prompt` and never touches `subagent.prompt`. The old arm lived
+    // only on the delegation RPC, so that path mirrored nothing even though the
+    // child plainly read the message — the manager saw silence on the desktop.
+    // The arm now lives inside `session.prompt` itself, keyed by the admitId it
+    // just minted (no `rpcAdmitMap` lookup, so no chance of a missing key).
+    parentAdmits.length = 0;
+    const phoneRpc = "5f0d2c1e-9f6a-4b7d-8c3a-2e1b0a9d8c7f";
+    const phone = await dispatchFaceMethod(runtime, "session.prompt", phoneRpc, {
+      sessionId: childId,
+      mode: "steer",
+      content: [{ type: "text", text: "手机直接进子会话" }],
+    });
+    expect(phone.result.ok).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    // Same deferral as the delegation path: nothing lands before a step starts.
+    expect(parentAdmits).toEqual([]);
+    const phoneAdmit = runtime.rpcAdmitMap.get(phoneRpc);
+    expect(phoneAdmit).toBeTruthy();
+    if (!phoneAdmit) return;
+    store.append(childId, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: phoneAdmit,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(parentAdmits.map((a) => a.delivery)).toEqual(["steer"]);
+    expect(String(parentAdmits[0]?.content)).toContain("手机直接进子会话");
+
+    // Parent-channel tools already surface through the tool result; entering
+    // the child with a tool-/orch- rpc must stay silent on the parent seat.
+    parentAdmits.length = 0;
+    const internal = await dispatchFaceMethod(
+      runtime,
+      "session.prompt",
+      "tool-9c1b2a",
+      {
+        sessionId: childId,
+        mode: "steer",
+        content: [{ type: "text", text: "工具自己发的" }],
+      },
+    );
+    expect(internal.result.ok).toBe(true);
+    const internalAdmit = runtime.rpcAdmitMap.get("tool-9c1b2a");
+    expect(internalAdmit).toBeTruthy();
+    if (!internalAdmit) return;
+    store.append(childId, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: internalAdmit,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(parentAdmits).toEqual([]);
+
     const stopped = await dispatchFaceMethod(runtime, "subagent.interrupt", "i", {
       parentSessionId: parentId,
       childSessionId: childId,

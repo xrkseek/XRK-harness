@@ -79,6 +79,9 @@ describe("rootUserAuthorizationBlock", () => {
       "web_fetch",
       "subagent",
       "send_message",
+      // Route repair is a write: a review must not move a child's model.
+      "set_agent_model",
+      "list_models",
     ]) {
       expect(denied).toContain(name);
     }
@@ -91,6 +94,10 @@ describe("rootUserAuthorizationBlock", () => {
     const denied = roleDeniedTools("researcher");
     expect(denied).toContain("apply_patch");
     expect(denied).toContain("bash");
+    // Route repair is a delegation write too: a fact-gatherer must not move a
+    // child's model (it has no children, but the floor must stay honest).
+    expect(denied).toContain("set_agent_model");
+    expect(denied).toContain("list_models");
     // Browser/MCP follow the parent session; role floor does not hard-deny them.
     expect(denied).not.toContain("browser_open");
     expect(denied).not.toContain("mcp__playwright*");

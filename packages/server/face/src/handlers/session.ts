@@ -58,9 +58,11 @@ import {
   type PromptWirePart,
 } from "../durable-prompt.js";
 import {
+  isInternalFaceRpc,
   maybePrefixDelegatedChildContent,
   parseSeatChannel,
 } from "../seat-channel.js";
+import { contentPartsToText } from "../external-agent-runtime.js";
 import { asRecord, type FaceHandler } from "./types.js";
 import { killLiveSessionJobs } from "./job.js";
 import { publishSessionAdded } from "./session-added.js";
@@ -999,6 +1001,27 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
     typeof p.requestId === "string" && p.requestId.length > 0 ? p.requestId : rpcId;
   runtime.rpcAdmitMap.set(rpcId, admitId);
   runtime.admitRpcMap.set(admitId, echoRpc);
+
+  /* Human spoke into a continuable child → mirror onto the parent seat.
+   *
+   * Arm here, not in `subagent.prompt`: a phone that opens the child directly
+   * sends `session.prompt`, and the old arm lived only on the delegation RPC,
+   * so that path silently never mirrored. Deferred until `prompt/promoted` by
+   * `armOwnedSubagentUserPromptMirror`, so queued text stays off the manager
+   * until the child actually enters a step. Tool-/orch- rpcs stay silent — the
+   * parent authored those itself. */
+  const mirrorLink = runtime.subagents.getByChild(sessionId);
+  if (
+    mirrorLink
+    && mirrorLink.mode === "continuable"
+    && !isInternalFaceRpc(rpcId)
+  ) {
+    const preview = contentPartsToText(parts);
+    if (preview) {
+      runtime.armOwnedSubagentUserPromptMirror(sessionId, preview, admitId);
+    }
+  }
+
   agent.admit(admitContent, {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,

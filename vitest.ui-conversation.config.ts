@@ -114,6 +114,13 @@ const config = mergeConfig(
           root,
           "packages/client/schema-form/src/index.ts",
         ),
+        // The composer and the Voice card share one browser capture entry; its
+        // package root is the DOM-free Node entry, so the subpath must be
+        // mapped (Vite aliases are prefix-matched in insertion order).
+        "@xrkseek/exec-voice/capture": path.join(
+          root,
+          "packages/exec/voice/src/browser/wav-capture.ts",
+        ),
         "@xrkseek/client-locale/src/locales/zh.ts": path.join(
           root,
           "packages/client/locale/src/locales/zh.ts",

@@ -28,7 +28,6 @@ import {
 } from "./auto-review-classifier.js";
 import { filterAutoReviewSessionHistory } from "./auto-review-history.js";
 import {
-  isAutoReviewEnabled,
   recordAutoReviewAllow,
   recordAutoReviewDeny,
   recordAutoReviewFallback,
@@ -120,11 +119,14 @@ export function sessionPermissionPresetIsAuto(
 }
 
 function shouldRunAutoReview(options: AutoReviewToolPreOptions): boolean {
+  // Auto-review is now implied by the session permission preset `auto`
+  // (no separate master switch). The engine runs whenever the session is in
+  // Auto mode; classifier URL/token still come from `product()`.
   const preset =
     options.resolvePermissionPreset?.() ??
     foldPermissionKnobs(options.resolveSessionEvents?.() ?? []).preset;
   if (preset !== AUTO_REVIEW_SESSION_PRESET) return false;
-  return options.isEnabled?.() ?? isAutoReviewEnabled(storeOptions(options));
+  return true;
 }
 
 const REASON_ZH: Readonly<Record<string, string>> = {

@@ -28,8 +28,7 @@ import {
 } from "@xrkseek/exec-memory";
 import {
   createSpeakTool,
-  createDefaultVoiceAccess,
-  createMemoryVoiceProvider,
+  createVoiceAccess,
 } from "@xrkseek/exec-voice";
 import { runSkillCurator } from "@xrkseek/workspace";
 import { resolveSecretStore } from "@xrkseek/secrets";
@@ -88,8 +87,6 @@ import {
   resetDesktopLanShareOnBoot,
   loadSidebarPrefs,
   createAutoReviewToolPre,
-  isAutoReviewEnabled,
-  setAutoReviewEnabled,
   setImFaceAdmitHook,
 } from "@xrkseek/server-http";
 import {
@@ -644,7 +641,7 @@ export type AgentFactory = (input: {
    */
   browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
   /**
-   * Face `voice` product (Settings SoT).
+   * Face `asr` product (Settings SoT).
    * `XRK_VOICE` env still bypasses for CI.
    */
   voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
@@ -1858,15 +1855,7 @@ export function createHostManager(): HostManager {
               },
               autoReviewPre: createAutoReviewToolPre({
                 xrkHome: resolveXrkHome(),
-                // Master switch (Settings) AND session preset === auto (DSH).
-                isEnabled: () => {
-                  const ar = faceRuntime.settingsNamespaces.view("auto-review")
-                    .value as Record<string, unknown>;
-                  return (
-                    ar.enabled === true ||
-                    isAutoReviewEnabled({ xrkHome: resolveXrkHome() })
-                  );
-                },
+                // No master switch: Auto permission preset implies review.
                 // Session Auto gate: resolveSessionEvents → folded permission/preset.
                 product: () => {
                   const ns = faceRuntime.settingsNamespaces.view("auto-review")
@@ -1980,24 +1969,29 @@ export function createHostManager(): HostManager {
                   });
                 }
               }
-              // Settings voice.speakTools: ensure text_to_speech on every surface
-              // (including Minimal / IM). OpenAI when mode=openai + key; else
-              // local memory TTS stub so the switch always has a Provider.
-              const voiceNsSpeak = faceBox.runtime.settingsNamespaces.view(
-                "voice",
+              // Settings tts.enabled: bind text_to_speech on every surface
+              // (including Minimal / IM). `tts.engine` picks the Provider —
+              // OS voices (SAPI / say / espeak-ng) or an OpenAI-compatible
+              // endpoint — and an unresolvable one still mounts the tool so it
+              // can fail honestly instead of vanishing.
+              const ttsNs = faceBox.runtime.settingsNamespaces.view(
+                "tts",
               ).value as Record<string, unknown>;
               if (
-                voiceNsSpeak.speakTools === true &&
+                ttsNs.enabled === true &&
                 !agent.tools.get("text_to_speech")
               ) {
-                const voiceMode =
-                  typeof voiceNsSpeak.mode === "string"
-                    ? voiceNsSpeak.mode.trim().toLowerCase()
-                    : "off";
-                const voiceBase =
-                  typeof voiceNsSpeak.baseUrl === "string" &&
-                  voiceNsSpeak.baseUrl.trim()
-                    ? voiceNsSpeak.baseUrl.trim()
+                const ttsBase =
+                  typeof ttsNs.baseUrl === "string" && ttsNs.baseUrl.trim()
+                    ? ttsNs.baseUrl.trim()
+                    : undefined;
+                const ttsVoice =
+                  typeof ttsNs.voice === "string" && ttsNs.voice.trim()
+                    ? ttsNs.voice.trim()
+                    : undefined;
+                const ttsModel =
+                  typeof ttsNs.model === "string" && ttsNs.model.trim()
+                    ? ttsNs.model.trim()
                     : undefined;
                 const voiceKey =
                   faceBox.runtime.credentials.peek("voice.openai")?.trim() ||
@@ -2006,23 +2000,23 @@ export function createHostManager(): HostManager {
                 const voiceEnv: NodeJS.ProcessEnv | undefined = voiceKey
                   ? { ...process.env, XRK_VOICE_OPENAI_KEY: voiceKey }
                   : undefined;
-                const product = {
-                  mode:
-                    voiceMode === "openai"
-                      ? ("openai" as const)
-                      : ("off" as const),
-                  ...(voiceBase ? { baseUrl: voiceBase } : {}),
-                };
-                const access = createDefaultVoiceAccess({
-                  product,
+                const ttsEngine =
+                  typeof ttsNs.engine === "string" && ttsNs.engine.trim()
+                    ? ttsNs.engine.trim().toLowerCase()
+                    : "local";
+                const access = createVoiceAccess({
+                  direction: "tts",
+                  engine: ttsEngine,
+                  ...(ttsBase ? { baseUrl: ttsBase } : {}),
+                  ...(ttsVoice ? { voice: ttsVoice } : {}),
+                  ...(ttsModel ? { model: ttsModel } : {}),
                   ...(voiceEnv ? { env: voiceEnv } : {}),
                 });
-                const service =
-                  access.service ?? createMemoryVoiceProvider();
                 agent.tools.register(
                   createSpeakTool({
-                    service,
-                    product,
+                    direction: "tts",
+                    engine: ttsEngine,
+                    ...(access.service ? { service: access.service } : {}),
                     ...(voiceEnv ? { env: voiceEnv } : {}),
                   }),
                 );
@@ -2898,19 +2892,24 @@ export function createHostManager(): HostManager {
           mode: brModeRaw === "cdp" ? "cdp" : "http",
           ...(brCdpUrl ? { cdpUrl: brCdpUrl } : {}),
         };
-        const voiceNs = faceRuntime.settingsNamespaces.view("voice")
+        const asrNs = faceRuntime.settingsNamespaces.view("asr")
           .value as Record<string, unknown>;
-        const voiceModeRaw =
-          typeof voiceNs.mode === "string"
-            ? voiceNs.mode.trim().toLowerCase()
-            : "off";
-        const voiceBase =
-          typeof voiceNs.baseUrl === "string" && voiceNs.baseUrl.trim()
-            ? voiceNs.baseUrl.trim()
+        const asrEnabled = asrNs.enabled === true;
+        const asrEngineRaw =
+          typeof asrNs.engine === "string"
+            ? asrNs.engine.trim().toLowerCase()
+            : "local";
+        const asrBase =
+          typeof asrNs.baseUrl === "string" && asrNs.baseUrl.trim()
+            ? asrNs.baseUrl.trim()
             : undefined;
         const voiceProduct: import("@xrkseek/exec-voice").VoiceProductConfig = {
-          mode: voiceModeRaw === "openai" ? "openai" : "off",
-          ...(voiceBase ? { baseUrl: voiceBase } : {}),
+          mode: asrEnabled
+            ? asrEngineRaw === "openai"
+              ? "openai"
+              : "local"
+            : "off",
+          ...(asrBase ? { baseUrl: asrBase } : {}),
         };
         const voiceKey =
           faceRuntime.credentials.peek("voice.openai")?.trim() ||
@@ -3193,12 +3192,7 @@ export function createHostManager(): HostManager {
           if (event === "settings/document-updated") {
           const ns = frame.args[0];
           if (ns === "auto-review") {
-            const ar = faceRuntime.settingsNamespaces.view("auto-review")
-              .value as Record<string, unknown>;
-            if (typeof ar.enabled === "boolean") {
-              setAutoReviewEnabled({ xrkHome: resolveXrkHome() }, ar.enabled);
-            }
-            // Classifier URL is live; no agent invalidate required.
+            // No master switch; classifier URL/token are read live via product().
             return;
           }
           if (ns === "cron") {

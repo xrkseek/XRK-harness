@@ -9,11 +9,13 @@ import type {
   DshCompatWireOptions,
 } from "./adapter-types.js";
 import { createCordisAttachmentsBridge } from "./cordis-attachments-bridge.js";
+import { communityCredentialsStorePath } from "./cordis-credentials-bridge.js";
 import { createCommunityCordisHostSession } from "./community-cordis-host-session.js";
 import {
   communityLoopbackEndpointFromForwardSettings,
   communityLoopbackEndpointFromSummaryHttp,
   createCommunityLoopbackLlmBridge,
+  readCommunityJsonViaHttp,
   type CommunityLoopbackEndpoint,
 } from "./community-loopback-llm-bridge.js";
 import { isUsableCommunityLoopbackBaseUrl } from "./community-llm-host-sync.js";
@@ -43,6 +45,92 @@ export function isOurFreeModelFaceProvider(providerId: string): boolean {
   return OFM_FACE_PROVIDER_IDS.has(providerId.trim());
 }
 
+/** One channel-pack account row (only the fields the Face gate needs). */
+type ChannelPackAccountRow = {
+  readonly provider?: unknown;
+  readonly enabled?: unknown;
+  readonly credentialRef?: unknown;
+};
+
+function readJsonObject(file: string): Record<string, unknown> | undefined {
+  if (!existsSync(file)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * channel-pack providers worth Face-syncing: an **enabled** account whose
+ * credential actually resolves on disk.
+ *
+ * v0.7.3 dropped every channel-pack id from Face because each sync costs one
+ * `listModels` per provider and eight empty lanes stalled status polling. Reading
+ * the login state (not the adapter) keeps that budget: an empty lane never joins
+ * the loop, and a provider appears the moment the user logs in.
+ */
+export function ofmChannelPackFaceProviders(options: {
+  readonly xrkHome: string;
+  readonly packageName: string;
+}): Set<string> {
+  const ready = new Set<string>();
+  const state = readJsonObject(
+    path.join(options.xrkHome, "channel-pack", "state.json"),
+  );
+  const rows = Array.isArray(state?.accounts)
+    ? (state.accounts as ChannelPackAccountRow[])
+    : [];
+  if (rows.length === 0) return ready;
+  const store =
+    readJsonObject(
+      communityCredentialsStorePath(options.xrkHome, options.packageName),
+    ) ?? {};
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (row.enabled !== true) continue;
+    const provider =
+      typeof row.provider === "string" ? row.provider.trim() : "";
+    const ref =
+      typeof row.credentialRef === "string" ? row.credentialRef.trim() : "";
+    if (!provider || !ref) continue;
+    const value = store[ref];
+    if (typeof value !== "string" || value.length === 0) continue;
+    ready.add(provider);
+  }
+  return ready;
+}
+
+/**
+ * Face sync gate: free-lane routes always; channel-pack ids only while they have
+ * a resolvable credential. Re-read at most once per second so login / logout
+ * lands without a Host restart, and a poll storm never re-reads the disk.
+ */
+export function ofmFaceSyncGate(options: {
+  readonly xrkHome: string;
+  readonly packageName: string;
+  readonly now?: () => number;
+  readonly ttlMs?: number;
+}): (providerId: string) => boolean {
+  const ttlMs = options.ttlMs ?? 1_000;
+  const now = options.now ?? Date.now;
+  let readAt = Number.NEGATIVE_INFINITY;
+  let channelIds = new Set<string>();
+  return (providerId: string) => {
+    const id = providerId.trim();
+    if (isOurFreeModelFaceProvider(id)) return true;
+    const at = now();
+    if (at - readAt >= ttlMs) {
+      channelIds = ofmChannelPackFaceProviders(options);
+      readAt = at;
+    }
+    return channelIds.has(id);
+  };
+}
+
 export function isOurFreeModelPackage(packageName: string): boolean {
   return isPluginPackageFamily(packageName, OFM_PACKAGE);
 }
@@ -59,6 +147,39 @@ export function ofmProfileName(
 
 export function hasOurFreeModelEntry(pkgRoot: string): boolean {
   return existsSync(path.join(pkgRoot, "index.js"));
+}
+
+/**
+ * Ids the forward listener routes right now.
+ *
+ * `/summary.models` is the plugin's own `publicModelRows()`, i.e. the exact
+ * membership `createForwardCompletion` consults before it runs a model. Face
+ * must publish no more than that: `adapter.listModels` reads membership too, but
+ * the two readings can drift across a catalog rebuild (login, aggregate edit,
+ * probe round), and a picker row forward stopped accepting answers
+ * `openai-compatible HTTP 404: model "…" not found` — the request never leaves
+ * the machine.
+ *
+ * `undefined` means "no usable reading" (forward down, summary empty) so callers
+ * keep the unfiltered list rather than clearing the picker on a bad snapshot.
+ */
+export async function ofmRoutableModelIds(
+  http: Parameters<typeof communityLoopbackEndpointFromSummaryHttp>[0],
+): Promise<ReadonlySet<string> | undefined> {
+  const payload = await readCommunityJsonViaHttp(
+    http,
+    `${OFM_API_PREFIX}/summary`,
+  );
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return undefined;
+  }
+  const models = (payload as { models?: unknown }).models;
+  if (!Array.isArray(models)) return undefined;
+  const ids = new Set<string>();
+  for (const row of models) {
+    if (typeof row === "string" && row.trim()) ids.add(row.trim());
+  }
+  return ids.size > 0 ? ids : undefined;
 }
 
 /**
@@ -186,15 +307,49 @@ export async function tryApplyOurFreeModelHost(
   /** Survives brief settings.json rewrites while forward rebinds (port:0 window). */
   let lastForward: CommunityLoopbackEndpoint = {};
   let hostDisposed = false;
+  /**
+   * Last routable roster from `/summary`, cached across one sync flush burst.
+   * The read is in-process, but a flush walks every published provider.
+   */
+  let routableIdsAt = Number.NEGATIVE_INFINITY;
+  let routableIds: ReadonlySet<string> | undefined;
+  const readRoutableIds = async (): Promise<ReadonlySet<string> | undefined> => {
+    const at = Date.now();
+    if (at - routableIdsAt < 2_000) return routableIds;
+    routableIds = await ofmRoutableModelIds(http);
+    routableIdsAt = at;
+    return routableIds;
+  };
+  const syncProvider = wire.syncCommunityLlmProvider;
   const bridge = createCommunityLoopbackLlmBridge({
-    ...(wire.syncCommunityLlmProvider
-      ? { syncCommunityLlmProvider: wire.syncCommunityLlmProvider }
+    ...(syncProvider
+      ? {
+          syncCommunityLlmProvider: async (args) => {
+            const routable = await readRoutableIds();
+            if (routable === undefined) {
+              await syncProvider(args);
+              return;
+            }
+            // Publish exactly what forward will route: a row it refuses turns
+            // into HTTP 404 the moment the user picks it from the picker.
+            await syncProvider({
+              ...args,
+              models: args.models.filter((model) =>
+                routable.has(model.id.trim()),
+              ),
+            });
+          },
+        }
       : {}),
     displayName: (id) => DISPLAY_NAMES[id] ?? id,
     // No defaultApiKey: wait for OFM forwardKey after syncForward (not xrk-*).
     logPrefix: OFM_PACKAGE,
-    // Channel-pack adapters share this Cordis llm; only free-lane routes → Face.
-    shouldSyncProvider: isOurFreeModelFaceProvider,
+    // Channel-pack adapters share this Cordis llm. Free-lane routes always sync;
+    // a channel-pack id joins only while it has a logged-in credential.
+    shouldSyncProvider: ofmFaceSyncGate({
+      xrkHome: dshHome,
+      packageName,
+    }),
     onBatchError: (error) => logger.warn("adapter sync batch failed", error),
     async resolveEndpoint(): Promise<CommunityLoopbackEndpoint> {
       const fromDisk = forwardEndpointFromHome(dshHome);

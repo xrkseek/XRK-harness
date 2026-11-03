@@ -52,21 +52,7 @@ const autoSession = {
 };
 
 describe("createAutoReviewToolPre", () => {
-  it("no-ops when Settings master switch is off (even on Auto)", async () => {
-    const pre = createAutoReviewToolPre({
-      ...autoSession,
-      isEnabled: () => false,
-      classifier: () => ({
-        verdict: "deny",
-        reason: "should-not-run",
-        confidence: 1,
-      }),
-    });
-    const outcome = await pre(ctx("bash", { command: "rm -rf /" }));
-    expect(outcome).toEqual({ action: "continue", args: { command: "rm -rf /" } });
-  });
-
-  it("no-ops when session preset is not auto (Settings on is not enough)", async () => {
+  it("no-ops when session preset is not auto (Auto permission implies review)", async () => {
     let classified = 0;
     const pre = createAutoReviewToolPre({
       isEnabled: () => true,

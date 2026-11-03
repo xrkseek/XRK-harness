@@ -33,6 +33,18 @@ export function parseSeatChannel(raw: unknown): SeatChannel {
   return raw === "parent" ? "parent" : "human_face";
 }
 
+/**
+ * Internal (seat / tool) rpc ids: `tool-` / `orch-` / `te-` / `delete-`.
+ *
+ * Everything else is a human pressing send through some UI — a client UUID, no
+ * matter which device or which RPC carried it. The parent-inbox mirror keys off
+ * this so a phone entering the child directly and a desktop delegating from the
+ * parent seat both count as "the human spoke".
+ */
+export function isInternalFaceRpc(rpcId: string): boolean {
+  return /^(tool-|orch-|te-|delete-)/.test(rpcId);
+}
+
 /** `[titles.boss…]` / `[titles.manager…]` — model-visible channel marker. */
 export function formatSeatChannelPrefix(label: string): string {
   const name = label.trim() || "?";

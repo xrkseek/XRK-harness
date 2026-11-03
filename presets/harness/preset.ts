@@ -60,9 +60,9 @@ import {
   type ComputerUseService,
 } from "@xrkseek/exec-computer-use";
 import {
-  VOICE_PROMPT_TEXT,
-  createDefaultVoiceAccess,
+  createVoiceAccess,
   createVoiceTools,
+  voicePromptText,
   type VoiceService,
 } from "@xrkseek/exec-voice";
 import {
@@ -399,10 +399,11 @@ export interface HarnessCompositionOptions {
    */
   readonly computerUseTools?: boolean | ComputerUseService;
   /**
-   * Register voice Host tools (`text_to_speech` · `voice_transcribe` · `voice_session`).
+   * Register the ASR Host tools (`voice_transcribe` · `voice_session`).
    * Default: on. `false` skips. Pass a `VoiceService` to inject.
-   * Without `XRK_VOICE=1` (+ API key) / `memory` / inject → tools still
-   * visible, execute is an honest error.
+   * The Host passes `voiceProduct` from Settings `asr.enabled` / `asr.engine`;
+   * switch off (or an engine with no usable credential) means no listen tools
+   * at all. `text_to_speech` is bound separately from `tts.enabled`.
    */
   readonly voiceTools?: boolean | VoiceService;
   /**
@@ -1160,20 +1161,37 @@ export function createHarnessComposition(
     const service =
       typeof options.voiceTools === "object"
         ? options.voiceTools
-        : createDefaultVoiceAccess({
-            ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
-            ...(options.voiceProduct
-              ? { product: options.voiceProduct }
+        : createVoiceAccess({
+            direction: "asr",
+            // Engine mirrors the ASR snapshot. `off` resolves to no service,
+            // so a switched-off ASR leaves no listen tools behind rather than
+            // binding tools that can only refuse.
+            engine: options.voiceProduct === undefined
+              ? "off"
+              : options.voiceProduct.mode === "openai"
+                ? "openai"
+                : options.voiceProduct.mode === "local"
+                  ? "local"
+                  : "off",
+            ...(options.voiceProduct?.baseUrl
+              ? { baseUrl: options.voiceProduct.baseUrl }
               : {}),
+            ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
           }).service;
-    for (const tool of createVoiceTools({
-      ...(service ? { service } : {}),
-      ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
-      ...(options.voiceProduct
-        ? { product: options.voiceProduct }
-        : {}),
-    })) {
-      tools.register(tool);
+    // `listen` only: `text_to_speech` is bound by the Host from `tts.enabled`,
+    // so one switch owns one half of the tool surface.
+    if (service) {
+      for (const tool of createVoiceTools({
+        service,
+        ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
+        direction: "asr",
+        surface: "listen",
+        ...(options.voiceProduct?.mode === "openai"
+          ? { engine: "openai" }
+          : {}),
+      })) {
+        tools.register(tool);
+      }
     }
   }
   const curatedMemory =
@@ -1631,11 +1649,7 @@ export function createHarnessComposition(
       id: "tool:voice",
       order: 118,
       content: () =>
-        availableToolNames().has("text_to_speech") ||
-        availableToolNames().has("voice_transcribe") ||
-        availableToolNames().has("voice_session")
-          ? VOICE_PROMPT_TEXT
-          : "",
+        voicePromptText((name) => availableToolNames().has(name)),
     });
   }
   if (options.imageGenTools !== false) {

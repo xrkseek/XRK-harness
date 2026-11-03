@@ -654,4 +654,73 @@ describe("subagent completion delivery", () => {
     expect(admits[0]).toContain("ended abnormally");
     expect(admits[0]).toContain("half written before crash");
   });
+
+  it("names the child's actual route in the notice (a quota wall must not be anonymous)", async () => {
+    const store = createMemorySessionStore();
+    const admits: string[] = [];
+    const runtime = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: idleFaceDrain,
+      resolveAgent: async (sessionId) =>
+        ({
+          admit: (content) => {
+            admits.push(String(content));
+            return admitPrompt(store, sessionId, content);
+          },
+          pendingAdmits: () => [],
+          continueTurn: async () => ({}) as never,
+          run: async () => ({}) as never,
+          isBusy: () => false,
+          abort() {},
+          setApprovalHandler() {},
+        }) as never,
+    });
+
+    const parent = await dispatchFaceMethod(runtime, "session.create", "p", {});
+    if (!parent.result.ok) throw new Error("parent create failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+    const child = await dispatchFaceMethod(runtime, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "metered",
+    });
+    if (!child.result.ok) throw new Error("child create failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    // The route the child actually runs on. The notice must echo this exact
+    // pair: a parent told only "ended with error (QUOTA)" cannot name the
+    // model it has to move the child off.
+    runtime.sessionModels.set(childId, {
+      provider: "demo-provider",
+      model: "demo-model",
+      reasoningEffort: "max",
+    });
+    store.append(childId, {
+      type: "assistant/message",
+      ts: 1,
+      turnId: "t1",
+      stepId: "s1",
+      content: "partial work",
+      interrupted: true,
+    });
+    store.append(childId, {
+      type: "turn/end",
+      ts: 2,
+      turnId: "t1",
+      reason: {
+        kind: "error",
+        error: { name: "LlmError", code: "QUOTA" },
+      },
+    });
+
+    runtime.onSessionDrainStatus(childId, false);
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => queueMicrotask(resolve));
+    });
+
+    expect(admits).toHaveLength(1);
+    expect(admits[0]).toContain("ended with error (QUOTA)");
+    expect(admits[0]).toContain("Route: demo-provider/demo-model · effort max");
+    expect(admits[0]).toContain("Do not send another prompt down it");
+  });
 });

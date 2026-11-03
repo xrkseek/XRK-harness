@@ -123,6 +123,7 @@ export function sendMessageDescription(): string {
   return (
     "Parent→child (agent_id). Siblings/peers → thread_message. " +
     "steer = next tool-step; queue = wait idle. New task → followup_task. " +
+    "Optional provider / model / reasoning_effort repins the child first (a refused pin sends nothing). " +
     "Confirms delivery; answer arrives as steer notice."
   );
 }
@@ -130,7 +131,28 @@ export function sendMessageDescription(): string {
 export function followupTaskDescription(): string {
   return (
     "New task for a continuable child (agent_id); wakes a steer turn. " +
+    "Optional provider / model / reasoning_effort repins the child first — the rescue move when its route ran out of quota. " +
     "Stay inside child_gap caps. Confirms delivery only — Host steers the result."
+  );
+}
+
+/** Repin an existing child's route (hot switch, next model request). */
+export function setAgentModelDescription(): string {
+  return (
+    "Repin a child's LLM route / thinking effort — own children only. " +
+    "Takes effect on the child's next model request; a live turn is not interrupted. " +
+    "Quota exhausted on its route? Move the child here, then followup_task. " +
+    "provider defaults to the child's current provider; reasoning_effort alone keeps provider/model. " +
+    "Returns the route before → after (or unchanged)."
+  );
+}
+
+/** Compact routable catalog for picking a child's route + effort. */
+export function listModelsDescription(): string {
+  return (
+    "Routable model catalog for picking a child route + effort: " +
+    "one `- provider/model` row with efforts, default effort, live session slots (using/max), " +
+    "and `here` = this session's route. Capped at 80 rows. Read-only."
   );
 }
 

@@ -93,6 +93,45 @@ describe("last-good config (settings.yaml / host-settings)", () => {
     expect(onDisk).not.toContain("harness");
   });
 
+  it("splits a legacy voice section into asr + tts and drops the old key", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "xrk-voice-split-"));
+    const file = path.join(dir, "settings.yaml");
+    await writeFile(
+      file,
+      [
+        "voice:",
+        "  mode: openai",
+        "  baseUrl: https://example.test/v1",
+        "  speakTools: true",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const rt = runtime(dir);
+    hydrateFaceSettingsDocument(rt);
+
+    const asr = rt.settingsNamespaces.ensure("asr").user;
+    expect(asr).toMatchObject({
+      enabled: true,
+      engine: "openai",
+      baseUrl: "https://example.test/v1",
+    });
+    const tts = rt.settingsNamespaces.ensure("tts").user;
+    expect(tts).toMatchObject({
+      enabled: true,
+      engine: "openai",
+      baseUrl: "https://example.test/v1",
+    });
+
+    // The split persists on hydrate; the retired key must leave the document.
+    await vi.waitFor(async () => {
+      const onDisk = await readFile(file, "utf8");
+      expect(onDisk).not.toMatch(/^voice:/m);
+      expect(onDisk).toMatch(/^asr:/m);
+      expect(onDisk).toMatch(/^tts:/m);
+    });
+  });
+
   it("settings.mutate rolls back memory when persist refuses corrupt disk", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-last-good-mutate-"));
     const file = path.join(dir, "settings.yaml");

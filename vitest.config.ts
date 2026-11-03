@@ -51,6 +51,10 @@ export default defineConfig({
       pkg("xrk-typert-protocol", "packages/stubs/xrk-typert-protocol/src/index.ts"),
       pkg("exec-shell", "packages/exec/shell/src/index.ts"),
       pkg("exec-sandbox", "packages/exec/sandbox/src/index.ts"),
+      // Subpath first: Vite aliases are prefix-matched in insertion order, so a
+      // package-root entry would otherwise swallow `/browser` and point at the
+      // DOM-free Node entry.
+      pkg("exec-voice/capture", "packages/exec/voice/src/browser/wav-capture.ts"),
       pkg("exec-voice", "packages/exec/voice/src/index.ts"),
       ["@xrkseek/secrets/redact", path.join(root, "packages/util/secrets/src/redact.ts")],
       pkg("secrets", "packages/util/secrets/src/index.ts"),
@@ -84,6 +88,7 @@ export default defineConfig({
       // stubs lib/ is gitignored — keep Vitest on TypeScript sources.
       // Longer subpaths before package roots (Vite alias is prefix-matched;
       // Object.fromEntries keeps first-key insertion order on overwrite).
+      ["@xrkseek/xrk-session/surface", path.join(root, "packages/stubs/xrk-session/src/surface.ts")],
       ["@xrkseek/xrk-session/types", path.join(root, "packages/stubs/xrk-session/src/types.ts")],
       ["@xrkseek/xrk-session", path.join(root, "packages/stubs/xrk-session/src/index.ts")],
       [

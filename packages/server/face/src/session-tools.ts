@@ -108,6 +108,8 @@ const AGENT = new Set([
   "list_agents",
   "send_message",
   "followup_task",
+  "set_agent_model",
+  "list_models",
   "wait_agent",
   "interrupt_agent",
   "close_agent",

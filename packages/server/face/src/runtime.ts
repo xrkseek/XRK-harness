@@ -57,6 +57,7 @@ import {
   lastTurnEndReason,
   type SubagentStopReason,
 } from "./adapt/subagent-notice.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
 import { boundChildAnswer } from "./adapt/subagent-answer-bound.js";
 import { validateOutputAgainstSchema } from "./agent-team-output.js";
 import { toQueueItems } from "./queue.js";
@@ -775,8 +776,11 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         const answer = preview
           ? boundChildAnswer(link.parentSessionId, childSessionId, preview)
           : "";
+        // Which route the child actually ran on — a parent that only sees
+        // "(QUOTA)" cannot name the model it has to move the child off.
+        const childRoute = resolveSessionModelSelection(runtime, childSessionId);
         const receipt = parent.admit(
-          formatSubagentCompletionNotice(link, owned, answer),
+          formatSubagentCompletionNotice(link, owned, answer, childRoute),
           { delivery: "steer" },
         );
         noticeAdmitIds.add(receipt.admitId);
@@ -854,8 +858,9 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         const answer = preview
           ? boundChildAnswer(parentId, childSessionId, preview)
           : "";
+        const childRoute = resolveSessionModelSelection(runtime, childSessionId);
         const receipt = parent.admit(
-          formatSubagentStopNotice(link, reason, owned, answer),
+          formatSubagentStopNotice(link, reason, owned, answer, childRoute),
           { delivery: "steer" },
         );
         noticeAdmitIds.add(receipt.admitId);
@@ -868,8 +873,14 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   /**
-   * Human follow-ups awaiting parent-inbox mirror, keyed by child admitId.
-   * Armed at `subagent.prompt`; flushed on that admit's `prompt/promoted`.
+   * Human follow-ups awaiting parent-inbox mirror, keyed by their `admitId`
+   * (insertion order matters: the fallback below takes the oldest one).
+   *
+   * Admit-keyed alone lost notices in the field: a phone / gateway retry admits
+   * the same text twice and promotes the id we never armed, so the pending row
+   * stranded. Child-keyed alone dropped a second message the human sent while
+   * the first was still queued. Keep the precise key and fall back to the
+   * child's oldest pending row when a promoted id was never armed.
    */
   const pendingParentUserPromptMirrors = new Map<
     string,
@@ -933,13 +944,32 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   };
 
   const dropOwnedSubagentUserPromptMirror = (admitId: string): void => {
+    // A withdrawn retry must not cancel the sibling admit that will run: only
+    // the exact admit is dropped here.
     pendingParentUserPromptMirrors.delete(admitId);
   };
 
-  const flushOwnedSubagentUserPromptMirror = (admitId: string): void => {
-    const pending = pendingParentUserPromptMirrors.get(admitId);
+  const flushOwnedSubagentUserPromptMirror = (
+    admitId: string,
+    childSessionId: string,
+  ): void => {
+    let key: string | undefined = pendingParentUserPromptMirrors.has(admitId)
+      ? admitId
+      : undefined;
+    if (key === undefined) {
+      // Promoted id was never armed (double-admitted retry). Mirror this
+      // child's oldest pending human follow-up instead of losing it.
+      for (const [candidate, pending] of pendingParentUserPromptMirrors) {
+        if (pending.childSessionId === childSessionId) {
+          key = candidate;
+          break;
+        }
+      }
+    }
+    if (key === undefined) return;
+    const pending = pendingParentUserPromptMirrors.get(key);
     if (pending === undefined) return;
-    pendingParentUserPromptMirrors.delete(admitId);
+    pendingParentUserPromptMirrors.delete(key);
     deliverParentUserPromptMirror(pending.childSessionId, pending.preview);
   };
 
@@ -1359,7 +1389,7 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
         spentWakes.delete(id);
       }
       // Human child follow-up → parent mirror only once this admit enters a step.
-      flushOwnedSubagentUserPromptMirror(frozen.admitId);
+      flushOwnedSubagentUserPromptMirror(frozen.admitId, id);
     }
     if (frozen.type === "prompt/withdrawn") {
       dropOwnedSubagentUserPromptMirror(frozen.admitId);

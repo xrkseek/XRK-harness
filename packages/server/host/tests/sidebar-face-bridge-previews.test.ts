@@ -125,4 +125,41 @@ describe("createSidebarFaceBridgeFromFace previews", () => {
       pending: false,
     });
   });
+
+  it("previews forward the child error code so a quota wall is visible", async () => {
+    const store = createMemorySessionStore();
+    const face = createFaceRuntime({
+      store,
+      workspaceRoot: process.cwd(),
+      drain: drain(),
+      resolveAgent: async () => stubAgent(),
+    });
+    const parent = await dispatchFaceMethod(face, "session.create", "p", {});
+    expect(parent.result.ok).toBe(true);
+    if (!parent.result.ok) return;
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+
+    const child = await dispatchFaceMethod(face, "session.create", "c", {
+      parentSessionId: parentId,
+      label: "quota-worker",
+    });
+    expect(child.result.ok).toBe(true);
+    if (!child.result.ok) return;
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    store.append(childId, {
+      type: "turn/end",
+      ts: 1,
+      turnId: "t1",
+      reason: { kind: "error", error: { code: "QUOTA", status: 429 } },
+    });
+
+    const bridge = createSidebarFaceBridgeFromFace(face);
+    const { previews } = await bridge.listSubagentPreviews!(parentId);
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.outcome).toMatchObject({
+      kind: "error",
+      code: "QUOTA",
+    });
+  });
 });

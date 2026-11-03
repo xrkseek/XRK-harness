@@ -735,6 +735,21 @@ export function formatRosterCatalog(
     .slice(0, 2_400);
 }
 
+/**
+ * Keep an operator's own held prop; a missing / `none` slot falls back to the
+ * catalog default (product logo), so an upgraded profile still shows one.
+ */
+function catalogAppearanceHeld(
+  operator: AgentRosterMember["appearance"] | undefined,
+  seed: AgentRosterMember["appearance"],
+): AgentRosterMember["appearance"] {
+  if (operator === undefined) return seed;
+  const held = operator.kitHeld?.trim() ?? "";
+  return held === "" || held === "none"
+    ? { ...operator, kitHeld: seed.kitHeld ?? CATALOG_DEFAULT_HELD }
+    : operator;
+}
+
 export function mergeGlobalSeedMembers(
   existing: readonly AgentRosterMember[],
   now = Date.now(),
@@ -754,7 +769,7 @@ export function mergeGlobalSeedMembers(
         members.push({
           ...seed,
           appearance: keepAppearance
-            ? (prev.appearance ?? seed.appearance)
+            ? catalogAppearanceHeld(prev.appearance, seed.appearance)
             : seed.appearance,
           ...(keepNickname ? { nickname: prev.nickname } : {}),
           updatedAt: Math.max(prev.updatedAt, seed.updatedAt),
@@ -785,8 +800,15 @@ export function mergeGlobalSeedMembers(
 const CATALOG_AUTHORITY_LINE =
   "Scope task + this playbook are mandatory. Permission still binds. Deliver fully.";
 
+/**
+ * Every built-in seat holds the product logo by default. An operator may still
+ * dress a seat otherwise; this is only what an untouched profile (fresh
+ * install, upgraded seed, restored roster) shows.
+ */
+const CATALOG_DEFAULT_HELD = "brand-xrk";
+
 export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterMember[] {
-  return [
+  const seats: AgentRosterMember[] = [
     {
       id: MANAGER_MEMBER_ID,
       name: "经理",
@@ -809,7 +831,8 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       // Disk formal (zh). Live chrome localizes via catalog-seed-labels.
       name: "向日葵",
       role: "lead",
-      appearance: { shape: "petal", color: "butter", kitHat: "visor" },
+      // `loaf` (squat round) reads better at ball size than a pointed petal.
+      appearance: { shape: "loaf", color: "butter", kitHat: "visor" },
       seed: true,
       updatedAt: now,
       inject: "subagent",
@@ -948,6 +971,10 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
         " You are the tester. Run tests; report command + output. Multi-step → todo_write.",
     },
   ];
+  return seats.map((member) => ({
+    ...member,
+    appearance: { ...member.appearance, kitHeld: CATALOG_DEFAULT_HELD },
+  }));
 }
 
 function parseMember(raw: unknown): AgentRosterMember | undefined {

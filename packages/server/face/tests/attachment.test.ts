@@ -385,4 +385,36 @@ describe("Face session.attachment / image prompt", () => {
     expect(caption).toMatch(/图3 /);
     expect(caption).not.toMatch(/图1 /);
   });
+
+  it("accepts image/file parts through subagent.prompt into a continuable child", async () => {
+    const { runtime, store } = await face({
+      modalities: ["text", "image"],
+      visionRoute: true,
+    });
+    const parent = await dispatchFaceMethod(runtime, "session.create", "sp0", {});
+    if (!parent.result.ok) throw new Error("create parent failed");
+    const parentId = (parent.result.value as { sessionId: string }).sessionId;
+
+    const child = await dispatchFaceMethod(runtime, "session.create", "sp1", {
+      parentSessionId: parentId,
+      label: "worker",
+    });
+    if (!child.result.ok) throw new Error("create child failed");
+    const childId = (child.result.value as { sessionId: string }).sessionId;
+
+    const prompted = await dispatchFaceMethod(runtime, "subagent.prompt", "sp2", {
+      parentSessionId: parentId,
+      childSessionId: childId,
+      mode: "continuable",
+      content: [
+        { type: "text", text: "看图" },
+        { type: "image", mediaType: "image/png", data: PNG_B64, name: "dot.png" },
+      ],
+    });
+    expect(prompted.result.ok).toBe(true);
+
+    const pending = listPendingAdmits(store.get(childId).events, childId);
+    expect(pending).toHaveLength(1);
+    expect(contentHasImage(pending[0]!.content)).toBe(true);
+  });
 });

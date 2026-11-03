@@ -10,9 +10,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   hasOurFreeModelEntry,
+  ofmChannelPackFaceProviders,
+  ofmFaceSyncGate,
   isOurFreeModelFaceProvider,
   isOurFreeModelPackage,
   ofmProfileName,
+  ofmRoutableModelIds,
   tryApplyOurFreeModelHost,
   waitForOfmForwardThenSync,
 } from "../src/dsh-compat/our-free-model-host.js";
@@ -58,6 +61,71 @@ describe("our-free-model-host", () => {
     expect(isOurFreeModelFaceProvider("trae")).toBe(false);
   });
 
+  it("Face-sync gate admits a channel-pack id only while a login credential exists", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "ofm-gate-"));
+    temps.push(home);
+    const packageName = "@ebony-vinyl/dsh-our-free-model";
+    expect([...ofmChannelPackFaceProviders({ xrkHome: home, packageName })]).toEqual(
+      [],
+    );
+    let now = 0;
+    const gate = ofmFaceSyncGate({
+      xrkHome: home,
+      packageName,
+      now: () => now,
+      ttlMs: 1_000,
+    });
+    expect(gate("our-free-model")).toBe(true);
+    expect(gate("qodercn")).toBe(false);
+
+    mkdirSync(path.join(home, "channel-pack"), { recursive: true });
+    writeFileSync(
+      path.join(home, "channel-pack", "state.json"),
+      JSON.stringify({
+        accounts: [
+          {
+            id: "qodercn-1",
+            provider: "qodercn",
+            enabled: true,
+            credentialRef: "QODERCN_ACCOUNT_1",
+          },
+          {
+            id: "trae-1",
+            provider: "trae",
+            enabled: true,
+            credentialRef: "TRAE_ACCOUNT_1",
+          },
+          {
+            id: "zcode-1",
+            provider: "zcode",
+            enabled: false,
+            credentialRef: "ZCODE_ACCOUNT_1",
+          },
+        ],
+      }),
+    );
+    const storeDir = path.join(
+      home,
+      "community-credentials",
+      "@ebony-vinyl_dsh-our-free-model",
+    );
+    mkdirSync(storeDir, { recursive: true });
+    writeFileSync(
+      path.join(storeDir, "store.json"),
+      JSON.stringify({ QODERCN_ACCOUNT_1: '{"access_token":"t"}' }),
+    );
+
+    // TTL still holds the gate at its previous answer until 1s elapses.
+    expect(gate("qodercn")).toBe(false);
+    now = 2_000;
+    expect(gate("qodercn")).toBe(true);
+    expect(gate("trae")).toBe(false);
+    expect(gate("zcode")).toBe(false);
+    expect([
+      ...ofmChannelPackFaceProviders({ xrkHome: home, packageName }),
+    ]).toEqual(["qodercn"]);
+  });
+
   it("waitForOfmForwardThenSync fires onReady when summary has actualPort+key", async () => {
     const ready: string[] = [];
     const http = [
@@ -92,6 +160,38 @@ describe("our-free-model-host", () => {
       },
     });
     expect(ready).toEqual(["http://127.0.0.1:41234/v1|boot-key"]);
+  });
+
+  it("reads forward's routable roster from /summary models", async () => {
+    const http = [
+      {
+        match: (p: string) => p.startsWith("/api/our-free-model"),
+        async handle(_req, res) {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ models: ["qfmodel", " qmodel ", ""] }));
+          return true;
+        },
+      },
+    ] as CordisHttpRow[];
+    expect([...((await ofmRoutableModelIds(http)) ?? [])]).toEqual([
+      "qfmodel",
+      "qmodel",
+    ]);
+  });
+
+  it("treats an empty or missing /summary roster as no reading", async () => {
+    const empty = [
+      {
+        match: (p: string) => p.startsWith("/api/our-free-model"),
+        async handle(_req, res) {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ models: [] }));
+          return true;
+        },
+      },
+    ] as CordisHttpRow[];
+    expect(await ofmRoutableModelIds(empty)).toBeUndefined();
+    expect(await ofmRoutableModelIds([])).toBeUndefined();
   });
 
   it("applies staged Cordis host half and syncs llm provider via forward", async () => {
@@ -187,6 +287,64 @@ describe("our-free-model-host", () => {
         ],
       }),
     );
+  });
+
+  it("publishes only the ids forward will route (drops a stale picker row)", async () => {
+    const pkgRoot = mkdtempSync(path.join(tmpdir(), "ofm-routable-"));
+    const xrkHome = mkdtempSync(path.join(tmpdir(), "ofm-home-routable-"));
+    temps.push(pkgRoot, xrkHome);
+    writeFileSync(
+      path.join(pkgRoot, "index.js"),
+      `export function apply(ctx) {
+  ctx.llm.registerAdapter(["our-free-model"], {
+    async listModels() {
+      return [
+        { id: "muse-spark", name: "Muse Spark", contextWindow: 128000 },
+        { id: "qfmodel", name: "Qwen3.8-Flash", contextWindow: 1000000 },
+      ];
+    },
+    async resolveApiKey() { return "ofm-forward-key"; },
+  });
+  ctx.webServer.register({
+    kind: "prefix",
+    path: "/api/our-free-model",
+    methods: ["GET"],
+    handler: async (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      // forward's own roster: qfmodel fell out of it after a catalog rebuild.
+      res.end(JSON.stringify({ models: ["muse-spark"] }));
+    },
+  });
+}
+`,
+    );
+    mkdirSync(path.join(xrkHome, "our-free-model"), { recursive: true });
+    writeFileSync(
+      path.join(xrkHome, "our-free-model", "settings.json"),
+      JSON.stringify({
+        version: 1,
+        enabled: true,
+        forward: { enabled: true, host: "127.0.0.1", port: 18898 },
+        forwardKey: "ofm-forward-key",
+      }),
+    );
+
+    const syncCommunityLlmProvider = vi.fn(async () => undefined);
+    await tryApplyOurFreeModelHost(pkgRoot, "dsh-our-free-model", {
+      syncCommunityLlmProvider,
+      xrkHome,
+    });
+    await vi.waitFor(() => {
+      expect(syncCommunityLlmProvider).toHaveBeenCalled();
+    });
+    const published = syncCommunityLlmProvider.mock.calls.map(
+      (call) => call[0] as { readonly models: readonly { id: string }[] },
+    );
+    const modelIds = published.flatMap((args) =>
+      args.models.map((model) => model.id),
+    );
+    expect(modelIds).toContain("muse-spark");
+    expect(modelIds).not.toContain("qfmodel");
   });
 
   it("Face-syncs via /summary actualPort when settings keep ephemeral port:0", async () => {

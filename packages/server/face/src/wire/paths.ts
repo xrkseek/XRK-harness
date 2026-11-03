@@ -41,6 +41,12 @@ export const FACE_REMOTE_NAMESPACES = new Set([
   "canvas",
   "threads",
   "team",
+  // Composer dictation + the ASR/TTS cards: `voice/transcribe`, `voice/inspect`,
+  // `voice/prepare*`, `voice/voices`. Without this row the slash form falls
+  // through `methodFromRest` → undefined → HTTP 404, so the cards could never
+  // read the Host's readiness (the dotted form still reached the handler, which
+  // is why `/api/voice.inspect` answered 400 while `/api/voice/inspect` 404'd).
+  "voice",
 ]);
 
 const REMOTE_NS = /^[A-Za-z][A-Za-z0-9_-]*$/;

@@ -5,7 +5,7 @@ import type { MessageId } from '@xrkseek/xrk-llm/brand'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 import {
-  contentBlockSchema, historyEntrySchema, sessionIdSchema, sessionProjectionsBlockSchema,
+  historyEntrySchema, promptContentPartSchema, sessionIdSchema, sessionProjectionsBlockSchema,
 } from './sessions.schema.ts'
 import type { SubagentListEntry } from './subagents.ts'
 
@@ -86,12 +86,19 @@ export const subagentHistoryValueSchema = z.object({
   projections: sessionProjectionsBlockSchema.optional(),
 }) as unknown as z.ZodType<Wire<ResponseValue<'subagent.history'>>>
 
-/** subagent.prompt request payload. */
+/**
+ * subagent.prompt request payload.
+ *
+ * `content` is the same browser prompt wire `session.prompt` takes (text plus
+ * temporary image/file bytes): Face hands it straight to `sessionPrompt`, which
+ * runs the durable AttachmentStore admission. Typing it as durable
+ * `ContentBlock[]` would force clients to pre-admit bytes they cannot reach.
+ */
 export const subagentPromptRequestSchema = z.object({
   parentSessionId: sessionIdSchema,
   childSessionId: sessionIdSchema,
   mode: z.literal('continuable'),
-  content: z.array(contentBlockSchema),
+  content: z.array(promptContentPartSchema),
   delivery: z.union([z.literal('queue'), z.literal('steer')]).optional(),
   clientTimeZone: z.string().optional(),
   requestId: z.string().min(1).optional(),

@@ -36,6 +36,19 @@ export interface CordisCredentialsBridge {
   delete?(ref: unknown): Promise<void>;
 }
 
+/**
+ * On-disk store for one community package's credentials.
+ * Single source of truth: the bridge writes here, and callers that need to know
+ * whether a credential *exists* (Face sync gates) read the same file.
+ */
+export function communityCredentialsStorePath(
+  xrkHome: string,
+  packageName: string,
+): string {
+  const safePkg = packageName.replace(/[^A-Za-z0-9._@+-]+/g, "_");
+  return path.join(xrkHome, "community-credentials", safePkg, "store.json");
+}
+
 function refKey(ref: unknown): string {
   const raw =
     typeof ref === "string"
@@ -76,25 +89,20 @@ export function createCordisCredentialsBridge(
   xrkHome: string,
   packageName: string,
 ): CordisCredentialsBridge {
-  const safePkg = packageName.replace(/[^A-Za-z0-9._@+-]+/g, "_");
-  const file = path.join(
-    xrkHome,
-    "community-credentials",
-    safePkg,
-    "store.json",
-  );
-  let cache: Record<string, string> | undefined;
-
-  const read = (): Record<string, string> => {
-    if (!cache) cache = loadMap(file);
-    return cache;
-  };
+  const file = communityCredentialsStorePath(xrkHome, packageName);
+  /**
+   * No in-memory cache on purpose. One package can be staged twice (initial
+   * apply + a live re-apply after install/enable), so two bridges share this
+   * file; a per-instance cache lets a stale copy write `{}` over a token the
+   * other instance just stored — which looked like "logged in, but zero models".
+   * The file is a few KB and every write rewrites the whole map anyway.
+   */
+  const read = (): Record<string, string> => loadMap(file);
 
   const remove = async (ref: unknown): Promise<void> => {
     const key = refKey(ref);
     const map = { ...read() };
     delete map[key];
-    cache = map;
     saveMap(file, map);
   };
 
@@ -117,7 +125,6 @@ export function createCordisCredentialsBridge(
     async set(ref, value) {
       const key = refKey(ref);
       const map = { ...read(), [key]: String(value) };
-      cache = map;
       saveMap(file, map);
     },
     async unset(ref) {

@@ -108,8 +108,28 @@ export interface ChildOutcome {
   readonly kind: ChildOutcomeKind;
   /** Set only for `kind: "aborted"` — who cut the turn off. */
   readonly cause?: ChildAbortCause;
+  /**
+   * Provider error code (e.g. `QUOTA`, `RATE_LIMIT`) — only for
+   * `kind: "error"`. A parent that cannot see *why* a child died has to read
+   * the whole transcript to learn a quota wall stopped it.
+   */
+  readonly code?: string;
   /** Ms since the child's last event; undefined for a session with no log. */
   readonly quietMs?: number;
+}
+
+/**
+ * Safe code extraction from an opaque `turn/end` error. Only a short string
+ * `code` field is forwarded — never the object itself (it may hold request
+ * bodies, auth headers or circular refs) and never a throw.
+ */
+function errorCodeOf(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object") return undefined;
+  const raw = (error as { code?: unknown }).code;
+  if (typeof raw !== "string") return undefined;
+  const code = raw.trim();
+  if (!code || code.length > 64) return undefined;
+  return code;
 }
 
 /**
@@ -140,6 +160,10 @@ export function describeChildOutcome(
       ...quiet,
     };
   }
+  if (reason.kind === "error") {
+    const code = errorCodeOf(reason.error);
+    return { kind: "error", ...(code !== undefined ? { code } : {}), ...quiet };
+  }
   return { kind: reason.kind, ...quiet };
 }
 
@@ -151,7 +175,7 @@ export function describeChildOutcome(
  * reviewing its own tree reads a kill as a completion.
  */
 export function formatDescribedChildOutcome(outcome: ChildOutcome): string {
-  const { kind, cause, quietMs } = outcome;
+  const { kind, cause, code, quietMs } = outcome;
   const verdict =
     kind === "none"
       ? "turn still open"
@@ -160,7 +184,9 @@ export function formatDescribedChildOutcome(outcome: ChildOutcome): string {
         : kind === "completed"
           ? "finished"
           : kind === "error"
-            ? "ended with error"
+            ? code !== undefined
+              ? `ended with error (${code})`
+              : "ended with error"
             : kind === "interrupted"
               ? "interrupted mid-turn"
               : kind === "max-tokens"
@@ -173,6 +199,27 @@ export function formatDescribedChildOutcome(outcome: ChildOutcome): string {
         ? `${Math.round(quietMs / 1000)}s ago`
         : `${Math.round(quietMs / 60_000)}m ago`;
   return `${verdict} · last event ${quiet}`;
+}
+
+/** Route the child was (last) running on, for the parent notice header. */
+export interface ChildRoute {
+  readonly provider: string;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+}
+
+/**
+ * `Route: <provider>/<model>[ · effort <id>]` — a parent told only "ended with
+ * error (QUOTA)" still needs to know which route to move the child off.
+ */
+export function formatChildRouteLine(
+  provider: string,
+  model: string,
+  reasoningEffort?: string,
+): string {
+  const base = `Route: ${provider}/${model}`;
+  const effort = reasoningEffort?.trim();
+  return effort ? `${base} · effort ${effort}` : base;
 }
 
 export function formatChildOutcome(
@@ -260,6 +307,23 @@ function resumeHint(
     );
   }
   if (outcome.kind === "error" || outcome.kind === "blocked") {
+    if (outcome.kind === "error" && outcome.code === "QUOTA") {
+      return (
+        "Do not send another prompt down it — this route is out of quota, so the " +
+        "next turn would fail the same way. Either (a) set_agent_model to move this " +
+        "child onto another route, or pass `model` / `reasoning_effort` with " +
+        "followup_task / send_message so its next turn runs there, (b) continue from " +
+        "the partial answer above with followup_task, or (c) ask_user so the human " +
+        `decides which route to spend. ${idHint}`
+      );
+    }
+    if (outcome.kind === "error" && outcome.code === "RATE_LIMIT") {
+      return (
+        "Rate limited, not dead: the route still works, so wait and resend the same " +
+        "prompt (send_message / followup_task). Usually no need to change model. " +
+        `${idHint}`
+      );
+    }
     return (
       "Inspect with session_read / list_agents, then send_message to recover " +
       `or interrupt_agent when done. ${idHint}`
@@ -273,6 +337,7 @@ function assembleParentNotice(
   events: readonly SessionEvent[],
   answerBody: string | undefined,
   follow: string,
+  route?: ChildRoute,
 ): string {
   const progress = childProgressLine(events);
   const outcome = formatDescribedChildOutcome(describeChildOutcome(events));
@@ -283,6 +348,11 @@ function assembleParentNotice(
   const lines = [head];
   if (progress) lines.push(progress);
   lines.push(`Outcome: ${outcome}.`);
+  if (route) {
+    lines.push(
+      formatChildRouteLine(route.provider, route.model, route.reasoningEffort),
+    );
+  }
   if (retry) lines.push(retry);
   if (preview) {
     lines.push("", "Partial / last answer:", preview, "");
@@ -322,6 +392,7 @@ export function formatSubagentStopNotice(
   reason: SubagentStopReason,
   events: readonly SessionEvent[],
   answerBody?: string,
+  route?: ChildRoute,
 ): string {
   const why =
     reason === "user"
@@ -336,6 +407,7 @@ export function formatSubagentStopNotice(
     events,
     answerBody,
     resumeHint(outcome, events, reason),
+    route,
   );
 }
 
@@ -350,11 +422,14 @@ export function formatSubagentStopNotice(
  *   {@link boundChildAnswer}). When omitted, the raw last assistant text is
  *   inlined with **no** 2k hard clip — callers that need size control must
  *   pass a bound body so long answers spill instead of being silently cut.
+ * @param route - optional child route; when passed it renders right under the
+ *   `Outcome:` line so a parent can name the model it must move off.
  */
 export function formatSubagentCompletionNotice(
   link: FaceSubagentLink,
   events: readonly SessionEvent[],
   answerBody?: string,
+  route?: ChildRoute,
 ): string {
   const turnReason = lastTurnEndReason(events);
   const abnormal = turnReason ? abnormalHeadDetail(turnReason) : undefined;
@@ -367,5 +442,6 @@ export function formatSubagentCompletionNotice(
     events,
     answerBody,
     resumeHint(outcome, events),
+    route,
   );
 }

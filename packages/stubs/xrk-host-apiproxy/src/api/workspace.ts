@@ -50,6 +50,8 @@ export interface WorkspaceView {
   boundMemberAppearance?: {
     shape: string
     color: string
+    /** Ball size trim (0.8–1.2); absent = 1. */
+    size?: number
     kit?: string
     kitHat?: string
     kitGlasses?: string

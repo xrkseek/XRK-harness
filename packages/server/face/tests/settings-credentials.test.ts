@@ -296,14 +296,23 @@ describe("Face settings U2", () => {
     expect(browser.value.mode).toBe("http");
     expect(browser.value.cdpUrl).toBe("");
     expect(browser.applies).toBe("live");
-    expect(v.namespaces.some((n) => n.ns === "voice")).toBe(true);
-    const voice = v.namespaces.find((n) => n.ns === "voice") as {
+    expect(v.namespaces.some((n) => n.ns === "voice")).toBe(false);
+    const asr = v.namespaces.find((n) => n.ns === "asr") as {
       ns: string;
-      value: { mode: string };
+      value: { enabled: boolean; engine: string };
       applies: string;
     };
-    expect(voice.value.mode).toBe("off");
-    expect(voice.applies).toBe("live");
+    expect(asr.value.enabled).toBe(false);
+    expect(asr.value.engine).toBe("local");
+    expect(asr.applies).toBe("live");
+    const tts = v.namespaces.find((n) => n.ns === "tts") as {
+      ns: string;
+      value: { enabled: boolean; engine: string };
+      applies: string;
+    };
+    expect(tts.value.enabled).toBe(false);
+    expect(tts.value.engine).toBe("local");
+    expect(tts.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "image-gen")).toBe(true);
     const imageGen = v.namespaces.find((n) => n.ns === "image-gen") as {
       ns: string;

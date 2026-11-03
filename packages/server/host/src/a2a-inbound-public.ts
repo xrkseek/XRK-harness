@@ -177,7 +177,16 @@ export function createA2aInboundPublicHandler(options?: {
   readonly resolveProduct?: () => A2aInboundProductSettings | undefined;
 }): (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean> {
   const env = options?.env ?? process.env;
-  const host = (options?.host ?? env.XRK_A2A_PUBLIC_HOST ?? "127.0.0.1").trim();
+  const authRequired = Boolean(
+    env.XRK_A2A_BEARER_TOKEN?.trim() ||
+      env.A2A_BEARER_TOKEN?.trim() ||
+      env.XRK_A2A_PEER_TOKENS?.trim() ||
+      env.A2A_PEER_TOKENS?.trim(),
+  );
+  // Bind safety: no token ⇒ localhost only, even if a host was requested.
+  const host = authRequired
+    ? (options?.host ?? env.XRK_A2A_PUBLIC_HOST ?? "127.0.0.1").trim()
+    : "127.0.0.1";
   const port =
     options?.port ??
     (Number(env.XRK_A2A_PUBLIC_PORT) || Number(env.PORT) || 0);

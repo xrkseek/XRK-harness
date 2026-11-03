@@ -45,8 +45,10 @@ import {
   interruptAgentDescription,
   listAgentsDescription,
   liveRosterCatalog,
+  listModelsDescription,
   sendMessageDescription,
   sessionToolContext,
+  setAgentModelDescription,
   subagentDescription,
   teamGraphDescription,
   waitAgentDescription,
@@ -72,7 +74,11 @@ import {
   type SubagentWorktree,
 } from "./subagent-worktree.js";
 import type { ManagedWorktreeLease } from "./managed-worktree.js";
-import { resolveSessionModelSelection } from "./model-catalog.js";
+import {
+  buildFaceModelCatalog,
+  resolveSessionModelSelection,
+  type FaceModelSelection,
+} from "./model-catalog.js";
 import {
   modelSessionCapProblem,
   resolveModelSessionQuota,
@@ -386,14 +392,62 @@ function taskIdConflict(
     : undefined;
 }
 
+/** One child's route before/after a pin (see {@link pinChildRoute}). */
+export interface PinnedChildRoute {
+  readonly before: FaceModelSelection;
+  readonly after: FaceModelSelection;
+  /** Provider / model / effort actually moved — an idempotent pin is `false`. */
+  readonly changed: boolean;
+}
+
+export type PinChildRouteResult =
+  | ({ readonly ok: true } & PinnedChildRoute)
+  | { readonly ok: false; readonly message: string };
+
+/** `provider/model · effort x` for tool receipts. */
+function routeLabel(selection: FaceModelSelection): string {
+  const route = `${selection.provider}/${selection.model}`;
+  return selection.reasoningEffort
+    ? `${route} · effort ${selection.reasoningEffort}`
+    : route;
+}
+
 /**
- * Optional LLM target for a freshly created child.
- *
- * Precedence: the call's own `provider` / `model` / `reasoning_effort` →
- * the parent's route (copied at `session.create`). `model` alone inherits the
- * parent's current provider; `provider` alone is rejected.
+ * Receipt line for send_message / followup_task / set_agent_model: what the
+ * child is **actually** on after the pin, not what was merely requested.
  */
-async function applySubagentModelOverride(
+export function formatPinnedRouteReceipt(
+  childSessionId: string,
+  pin: PinnedChildRoute,
+): string {
+  const routeMoved =
+    pin.before.provider !== pin.after.provider ||
+    pin.before.model !== pin.after.model;
+  if (routeMoved) {
+    return `route: ${pin.before.provider}/${pin.before.model} → ${routeLabel(pin.after)}`;
+  }
+  if (pin.changed) {
+    // Effort-only switch: the route stays, the thinking level moves.
+    const from = pin.before.reasoningEffort ?? "default";
+    const to = pin.after.reasoningEffort ?? "default";
+    return `route: ${pin.after.provider}/${pin.after.model} (unchanged) · effort ${from} → ${to}`;
+  }
+  return `route: ${childSessionId} already on ${routeLabel(pin.after)} (unchanged)`;
+}
+
+/**
+ * Pin an **existing** child onto `provider/model` + `reasoning_effort`.
+ *
+ * Hot switch: `createSessionRoutingLlm` re-reads `sessionModels` on every
+ * model request, so a running child picks the new route on its next request
+ * (the in-flight one is untouched — never restart a turn to switch).
+ *
+ * Authorization is the lineage link: a session may only repin a child it
+ * spawned. `reasoningEffort` alone keeps the child's current provider/model;
+ * `model` alone keeps the child's current provider. External runtimes own
+ * their model, so any Face-side pin there is refused rather than faked.
+ */
+export async function pinChildRoute(
   runtime: FaceRuntime,
   args: {
     readonly parentSessionId: string;
@@ -402,19 +456,37 @@ async function applySubagentModelOverride(
     readonly model?: string;
     readonly reasoningEffort?: string;
     /**
-     * True when the child is an external subprocess (ACP / app-server /
-     * claude-code). Its LLM route belongs to that CLI, so a Face-side pin is
-     * not merely ineffective — it is a false record. Skips the pin instead.
+     * True at spawn time for an ACP / app-server / claude-code child: the
+     * live registry hook does not exist yet then, so the caller states it.
      */
     readonly skipExternal?: boolean;
   },
-): Promise<{ ok: true } | { ok: false; message: string }> {
+): Promise<PinChildRouteResult> {
+  const childSessionId = args.childSessionId.trim();
+  if (!runtime.store.has(childSessionId)) {
+    return {
+      ok: false,
+      message: `subagent: child session ${childSessionId} not found`,
+    };
+  }
+  if (!runtime.subagents.get(args.parentSessionId, childSessionId)) {
+    return {
+      ok: false,
+      message:
+        `subagent: ${childSessionId} is not your child — ` +
+        "only a session this one spawned can be repinned",
+    };
+  }
   const providerRaw = args.provider?.trim() ?? "";
   const modelRaw = args.model?.trim() ?? "";
   const effortRaw = args.reasoningEffort?.trim() ?? "";
+  const external =
+    args.skipExternal === true ||
+    runtime.externalAgents.has(childSessionId) ||
+    runtime.externalAgents.kind(childSessionId) !== undefined;
   // Refuse loudly rather than silently: an explicit model on an external
   // child would otherwise read as honored when the subprocess ignores it.
-  if (args.skipExternal && (providerRaw || modelRaw || effortRaw)) {
+  if (external && (providerRaw || modelRaw || effortRaw)) {
     return {
       ok: false,
       message:
@@ -423,23 +495,24 @@ async function applySubagentModelOverride(
         "Drop the argument, or use runtime=in-process.",
     };
   }
-  // No per-call pin: leave the child on the parent's selection that
-  // `session.create` already copied into sessionModels.
-  if (!providerRaw && !modelRaw && !effortRaw) return { ok: true };
-  const model = modelRaw || "";
-  const effort = effortRaw || "";
-  if (!model) {
+  const before = resolveSessionModelSelection(runtime, childSessionId);
+  // No pin requested: report the route the child is already on.
+  if (!providerRaw && !modelRaw && !effortRaw) {
+    return { ok: true, before, after: before, changed: false };
+  }
+  const provider = providerRaw || before.provider;
+  const model = modelRaw || before.model;
+  const effort = effortRaw || before.reasoningEffort || "";
+  if (!provider || !model) {
     return {
       ok: false,
       message:
-        "subagent: model is required when overriding provider or reasoning_effort",
+        `subagent: ${childSessionId} has no pinned provider/model yet — ` +
+        "pass both (list_models shows routable pairs)",
     };
   }
-  const provider =
-    providerRaw
-    || resolveSessionModelSelection(runtime, args.parentSessionId).provider;
   const selected = await selectSessionModel(runtime, {
-    sessionId: args.childSessionId,
+    sessionId: childSessionId,
     provider,
     model,
     ...(effort ? { reasoningEffort: effort } : {}),
@@ -450,7 +523,60 @@ async function applySubagentModelOverride(
       message: `subagent model: ${formatToolError(selected.error)}`,
     };
   }
-  return { ok: true };
+  const after = selected.value.selected;
+  const changed =
+    before.provider !== after.provider ||
+    before.model !== after.model ||
+    (before.reasoningEffort ?? "") !== (after.reasoningEffort ?? "");
+  return { ok: true, before, after, changed };
+}
+
+/**
+ * Optional LLM target for a freshly created child (thin spawn wrapper).
+ *
+ * Precedence: the call's own `provider` / `model` / `reasoning_effort` →
+ * the route `session.create` already copied from the parent.
+ */
+async function applySubagentModelOverride(
+  runtime: FaceRuntime,
+  args: {
+    readonly parentSessionId: string;
+    readonly childSessionId: string;
+    readonly provider?: string;
+    readonly model?: string;
+    readonly reasoningEffort?: string;
+    readonly skipExternal?: boolean;
+  },
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const pinned = await pinChildRoute(runtime, args);
+  return pinned.ok ? { ok: true } : { ok: false, message: pinned.message };
+}
+
+/** Spawn receipt line — the child's **actual** route, never the prediction. */
+function childRouteReceipt(
+  runtime: FaceRuntime,
+  childSessionId: string,
+): string {
+  const selection = resolveSessionModelSelection(runtime, childSessionId);
+  return selection.provider && selection.model
+    ? `route: ${routeLabel(selection)}`
+    : "route: unpinned — the child resolves provider/model per request";
+}
+
+/** Only strings reach the pin; anything else stays an "argument omitted". */
+function routeArgsFrom(a: {
+  readonly provider?: unknown;
+  readonly model?: unknown;
+  readonly reasoning_effort?: unknown;
+}): { provider?: string; model?: string; reasoningEffort?: string } {
+  const out: { provider?: string; model?: string; reasoningEffort?: string } =
+    {};
+  if (typeof a.provider === "string") out.provider = a.provider;
+  if (typeof a.model === "string") out.model = a.model;
+  if (typeof a.reasoning_effort === "string") {
+    out.reasoningEffort = a.reasoning_effort;
+  }
+  return out;
 }
 
 function createSubagentTool(
@@ -899,6 +1025,7 @@ function createSubagentTool(
                   (spawnRole && spawnRole !== "default"
                     ? ` · role ${spawnRole}`
                     : ""),
+                `route: external (${runtimeKind}) · child CLI owns the model`,
                 childResumeHint(childId),
               ].join("\n"),
             };
@@ -915,7 +1042,9 @@ function createSubagentTool(
               : {}),
           });
           return {
-            content: `[external:${result.kind}]\n${result.text}`,
+            content:
+              `[external:${result.kind}]\n${result.text}\n` +
+              `route: external (${result.kind}) · child CLI owns the model`,
           };
         } catch (err) {
           const msg =
@@ -1325,6 +1454,7 @@ function createSubagentTool(
             outputSchema
               ? "OUTPUT CONTRACT attached; result will be schema-checked on idle."
               : undefined,
+            childRouteReceipt(options.runtime, childId),
             childResumeHint(childId),
             worktreeLine(true) || undefined,
           ]
@@ -1457,7 +1587,11 @@ function createSubagentTool(
       );
       if (!text) {
         return {
-          content: [`(subagent ${childId} finished with no assistant text)`, extra]
+          content: [
+            `(subagent ${childId} finished with no assistant text)`,
+            childRouteReceipt(options.runtime, childId),
+            extra,
+          ]
             .filter(Boolean)
             .join("\n"),
         };
@@ -1472,6 +1606,7 @@ function createSubagentTool(
         content: [
           boundChildAnswer(options.parentSessionId, childId, text),
           schemaLine,
+          childRouteReceipt(options.runtime, childId),
           extra,
         ]
           .filter(Boolean)
@@ -1582,6 +1717,21 @@ function createSendMessageTool(
           type: "string",
           description: "steer (default) or queue.",
         },
+        provider: {
+          type: "string",
+          description:
+            "Optional route repin before the prompt; defaults to the child's current provider.",
+        },
+        model: {
+          type: "string",
+          description:
+            "Optional model repin before the prompt; needs provider unless the child is pinned.",
+        },
+        reasoning_effort: {
+          type: "string",
+          description:
+            "Optional thinking level for the repinned route (keeps provider/model when alone).",
+        },
       },
       required: ["agent_id", "message"],
     },
@@ -1590,6 +1740,9 @@ function createSendMessageTool(
         agent_id?: string
         message?: string
         delivery?: string
+        provider?: unknown
+        model?: unknown
+        reasoning_effort?: unknown
       }
       const childId = String(a.agent_id ?? "").trim();
       const message = String(a.message ?? "").trim();
@@ -1601,6 +1754,14 @@ function createSendMessageTool(
       }
       const delivery =
         a.delivery === "queue" || a.delivery === "steer" ? a.delivery : "steer";
+      // Repin first: a refused pin must send nothing (the caller believed the
+      // child moved; delivering on the old quota is exactly the waste to avoid).
+      const pin = await pinChildRoute(options.runtime, {
+        parentSessionId: options.parentSessionId,
+        childSessionId: childId,
+        ...routeArgsFrom(a),
+      });
+      if (!pin.ok) return { content: pin.message, isError: true };
       const prompted = await dispatchFaceMethod(
         options.runtime,
         "subagent.prompt",
@@ -1622,7 +1783,12 @@ function createSendMessageTool(
       }
       // Task-board resume is owned by `subagent.prompt` (the SoT for every
       // delivery route); calling it again here double-bumped the revision.
-      return { content: `sent to ${childId} (${delivery})` };
+      return {
+        content: [
+          `sent to ${childId} (${delivery})`,
+          formatPinnedRouteReceipt(childId, pin),
+        ].join("\n"),
+      };
     },
   };
 }
@@ -1882,11 +2048,32 @@ function createFollowupTaskTool(
           type: "string",
           description: "New task text for the child (triggers a turn).",
         },
+        provider: {
+          type: "string",
+          description:
+            "Optional route repin before the turn; defaults to the child's current provider.",
+        },
+        model: {
+          type: "string",
+          description:
+            "Optional model repin before the turn; needs provider unless the child is pinned.",
+        },
+        reasoning_effort: {
+          type: "string",
+          description:
+            "Optional thinking level for the repinned route (keeps provider/model when alone).",
+        },
       },
       required: ["agent_id", "message"],
     },
     async execute(args) {
-      const a = args as { agent_id?: string; message?: string };
+      const a = args as {
+        agent_id?: string;
+        message?: string;
+        provider?: unknown;
+        model?: unknown;
+        reasoning_effort?: unknown;
+      };
       const childId = String(a.agent_id ?? "").trim();
       const message = String(a.message ?? "").trim();
       if (!childId || !message) {
@@ -1895,6 +2082,14 @@ function createFollowupTaskTool(
           isError: true,
         };
       }
+      // Repin first: an out-of-quota child must not be woken on the dead
+      // route — that is the whole "manager rescues the child" flow.
+      const pin = await pinChildRoute(options.runtime, {
+        parentSessionId: options.parentSessionId,
+        childSessionId: childId,
+        ...routeArgsFrom(a),
+      });
+      if (!pin.ok) return { content: pin.message, isError: true };
       const prompted = await dispatchFaceMethod(
         options.runtime,
         "subagent.prompt",
@@ -1914,7 +2109,154 @@ function createFollowupTaskTool(
           isError: true,
         };
       }
-      return { content: `followup_task sent to ${childId} (steer)` };
+      return {
+        content: [
+          `followup_task sent to ${childId} (steer)`,
+          formatPinnedRouteReceipt(childId, pin),
+        ].join("\n"),
+      };
+    },
+  };
+}
+
+/** Total output lines for `list_models` — the catalog can hold hundreds of routes. */
+const LIST_MODELS_MAX_LINES = 80;
+
+/**
+ * Parent repairs a child's route: the escape hatch when the child's model ran
+ * out of quota mid-task. Hot switch — the next model request uses it.
+ */
+function createSetAgentModelTool(
+  options: BindSubagentToolsOptions,
+): ToolDefinition {
+  return {
+    name: "set_agent_model",
+    description:
+      "Repin a child subagent's provider / model / reasoning effort (own children only).",
+    dynamicSchema: () => ({
+      description: setAgentModelDescription(),
+    }),
+    parameters: {
+      type: "object",
+      properties: {
+        agent_id: {
+          type: "string",
+          description: "Child session id from subagent / list_agents.",
+        },
+        provider: {
+          type: "string",
+          description: "Provider id; omit to keep the child's current provider.",
+        },
+        model: {
+          type: "string",
+          description: "Model id; omit to keep the child's current model.",
+        },
+        reasoning_effort: {
+          type: "string",
+          description:
+            "Thinking level id; omit to keep the child's current effort.",
+        },
+      },
+      required: ["agent_id"],
+    },
+    async execute(args) {
+      const a = args as {
+        agent_id?: unknown;
+        provider?: unknown;
+        model?: unknown;
+        reasoning_effort?: unknown;
+      };
+      const childId = String(a.agent_id ?? "").trim();
+      if (!childId) {
+        return { content: "set_agent_model requires agent_id", isError: true };
+      }
+      const route = routeArgsFrom(a);
+      if (!route.provider && !route.model && !route.reasoningEffort) {
+        return {
+          content:
+            "set_agent_model: pass at least one of provider / model / reasoning_effort " +
+            "(list_models shows routable pairs, efforts and free slots)",
+          isError: true,
+        };
+      }
+      const pin = await pinChildRoute(options.runtime, {
+        parentSessionId: options.parentSessionId,
+        childSessionId: childId,
+        ...route,
+      });
+      if (!pin.ok) return { content: pin.message, isError: true };
+      return {
+        content: [
+          formatPinnedRouteReceipt(childId, pin),
+          "applies to the child's next model request — a live turn is not interrupted",
+        ].join("\n"),
+      };
+    },
+  };
+}
+
+/** Compact routable catalog: pick a child route (+ effort) and read slot use. */
+function createListModelsTool(
+  options: BindSubagentToolsOptions,
+): ToolDefinition {
+  return {
+    name: "list_models",
+    description:
+      "List routable models with efforts and live session slots (read-only).",
+    dynamicSchema: () => ({
+      description: listModelsDescription(),
+    }),
+    parameters: { type: "object", properties: {} },
+    isConcurrencySafe: () => true,
+    async execute() {
+      const runtime = options.runtime;
+      const here = resolveSessionModelSelection(
+        runtime,
+        options.parentSessionId,
+      );
+      const { groups } = buildFaceModelCatalog(runtime);
+      const total = groups.reduce((n, group) => n + group.models.length, 0);
+      const header = [
+        `models ${total}`,
+        ...(here.provider && here.model ? [`here ${routeLabel(here)}`] : []),
+      ].join(" · ");
+      if (total === 0) {
+        return {
+          content:
+            `${header}\n` +
+            "(no routable models — add a provider in Settings → Models, then retry)",
+        };
+      }
+      // 1 header line is always shown; a truncated tail line ("… N more")
+      // eats one more, so the whole reply never exceeds the line budget.
+      const rowBudget = LIST_MODELS_MAX_LINES - 1;
+      const truncated = total > rowBudget;
+      const rowCap = truncated ? rowBudget - 1 : rowBudget;
+      const rows: string[] = [];
+      outer: for (const group of groups) {
+        for (const entry of group.models) {
+          if (rows.length >= rowCap) break outer;
+          const bits: string[] = [];
+          const efforts = entry.reasoning?.efforts.map((effort) => effort.id);
+          if (efforts && efforts.length > 0) {
+            bits.push(`efforts: ${efforts.join("|")}`);
+          }
+          const defaultEffort = entry.reasoning?.defaultEffort;
+          if (defaultEffort) bits.push(`default ${defaultEffort}`);
+          const quota = resolveModelSessionQuota(runtime, {
+            provider: group.id,
+            model: entry.id,
+          });
+          bits.push(`slots ${quota.using}/${quota.max}`);
+          if (here.provider === group.id && here.model === entry.id) {
+            bits.push("here");
+          }
+          rows.push(`- ${group.id}/${entry.id}  ${bits.join("  ")}`);
+        }
+      }
+      const lines = [header, ...rows];
+      if (total > rows.length) lines.push(`… ${total - rows.length} more`);
+      return { content: lines.join("\n") };
     },
   };
 }
@@ -2453,7 +2795,9 @@ export function bindSubagentTools(
   for (const tool of [
     createSubagentTool(options),
     createListAgentsTool(options),
+    createListModelsTool(options),
     createSendMessageTool(options),
+    createSetAgentModelTool(options),
     createTeamGraphTool(options),
     createFollowupTaskTool(options),
     createWaitAgentTool(options),

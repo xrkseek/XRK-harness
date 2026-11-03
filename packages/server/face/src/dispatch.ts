@@ -101,6 +101,14 @@ import { worktreeCreate, worktreeMerge, worktreeReconcile } from "./handlers/wor
 import { jobBackground, jobKill } from "./handlers/job.js";
 import { sessionPressBand } from "./handlers/band.js";
 import {
+  voiceInspect,
+  voicePrepare,
+  voicePrepareCancel,
+  voicePrepareStatus,
+  voiceTranscribe,
+  voiceVoices,
+} from "./handlers/voice.js";
+import {
   commandsExecute,
   commandsList,
   messageFeedbackDelete,
@@ -309,6 +317,21 @@ const HANDLERS: Record<string, FaceHandler> = {
   "team.export": teamExport,
   "team/importPack": teamImportPack,
   "team.importPack": teamImportPack,
+  // Composer dictation: browser-captured clip in, plain text out.
+  "voice/transcribe": voiceTranscribe,
+  "voice.transcribe": voiceTranscribe,
+  // Settings card: local engine readiness + the one-press download lifecycle.
+  "voice/inspect": voiceInspect,
+  "voice.inspect": voiceInspect,
+  "voice/prepare": voicePrepare,
+  "voice.prepare": voicePrepare,
+  "voice/prepareStatus": voicePrepareStatus,
+  "voice.prepareStatus": voicePrepareStatus,
+  "voice/prepareCancel": voicePrepareCancel,
+  "voice.prepareCancel": voicePrepareCancel,
+  // TTS card: the Host OS voices the local engine can speak with.
+  "voice/voices": voiceVoices,
+  "voice.voices": voiceVoices,
 };
 
 export function getHandler(method: string): FaceHandler | undefined {

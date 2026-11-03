@@ -9,6 +9,9 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import {
   A2A_PROTOCOL_VERSION,
   ERR_TASK_NOT_CANCELABLE,
@@ -17,6 +20,7 @@ import {
   ROLE_USER,
   STATE_CANCELED,
   STATE_COMPLETED,
+  STATE_INPUT_REQUIRED,
   STATE_REJECTED,
   STATE_WORKING,
   TERMINAL_STATES,
@@ -84,6 +88,46 @@ function readBody(req: IncomingMessage): Promise<string> {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+/** In-memory per-peer sliding-window rate limiter (XRK_A2A_RATE_LIMIT per minute). */
+const rateBuckets = new Map<string, number[]>();
+function rateLimitOk(peer: string, env: NodeJS.ProcessEnv): boolean {
+  const raw = Number(env.XRK_A2A_RATE_LIMIT ?? "");
+  if (!Number.isFinite(raw) || raw <= 0) return true;
+  const now = Date.now();
+  const windowMs = 60_000;
+  const bucket = (rateBuckets.get(peer) ?? []).filter(
+    (t) => now - t < windowMs,
+  );
+  if (bucket.length >= raw) {
+    rateBuckets.set(peer, bucket);
+    return false;
+  }
+  bucket.push(now);
+  rateBuckets.set(peer, bucket);
+  return true;
+}
+
+function trustedPeers(env: NodeJS.ProcessEnv): string[] {
+  const raw = env.XRK_A2A_TRUSTED_PEERS?.trim() || env.A2A_TRUSTED_PEERS?.trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function auditLog(env: NodeJS.ProcessEnv, entry: Record<string, unknown>): void {
+  const pathOverride = env.XRK_A2A_AUDIT_LOG?.trim();
+  const home = env.XRK_HOME?.trim() || process.env.XRK_HOME?.trim() || os.homedir();
+  const target = pathOverride || path.join(home, ".xrk", "a2a_audit.jsonl");
+  try {
+    mkdirSync(path.dirname(target), { recursive: true });
+    appendFileSync(target, JSON.stringify(entry) + "\n", "utf8");
+  } catch {
+    // Audit is best-effort; never fail the request.
+  }
 }
 
 function safeEqualToken(a: string, b: string): boolean {
@@ -256,8 +300,24 @@ async function handleMessageSend(
         ? `A2A inbound accepted from ${peer}: ${text.slice(0, 400)}`
         : `A2A inbound accepted from ${peer} (empty message)`;
   }
+  const inputRequired = reply.startsWith("[INPUT_REQUIRED]");
+  if (inputRequired) {
+    reply = reply.slice("[INPUT_REQUIRED]".length).trim();
+  }
   persistMessage(contextId, ROLE_AGENT, reply, taskId, persistOpts);
-  store.complete(taskId, STATE_COMPLETED, reply);
+  store.complete(
+    taskId,
+    inputRequired ? STATE_INPUT_REQUIRED : STATE_COMPLETED,
+    reply,
+  );
+  auditLog(env, {
+    ts: new Date().toISOString(),
+    peer,
+    contextId,
+    taskId,
+    state: inputRequired ? STATE_INPUT_REQUIRED : STATE_COMPLETED,
+    replyChars: reply.length,
+  });
   return { task: TaskStore.toTask(store.get(taskId)!) };
 }
 
@@ -378,6 +438,23 @@ export function createA2aInboundHandler(
       const auth = authorize(req, env);
       if (!auth.ok) {
         sendJson(res, auth.status, auth.error);
+        return true;
+      }
+      const trusted = trustedPeers(env);
+      if (trusted.length > 0 && !trusted.includes(auth.peer)) {
+        sendJson(res, 403, {
+          jsonrpc: "2.0",
+          error: { code: -32052, message: "untrusted peer" },
+          id: null,
+        });
+        return true;
+      }
+      if (!rateLimitOk(auth.peer, env)) {
+        sendJson(res, 429, {
+          jsonrpc: "2.0",
+          error: { code: -32051, message: "rate limited" },
+          id: null,
+        });
         return true;
       }
       let body: Record<string, unknown>;

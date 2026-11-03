@@ -38,12 +38,14 @@ function toPreviewOutcome(outcome: ChildOutcome): SubagentPreviewOutcome {
     return {
       kind: "completed",
       ...(outcome.cause !== undefined ? { cause: outcome.cause } : {}),
+      ...(outcome.code !== undefined ? { code: outcome.code } : {}),
       ...(outcome.quietMs !== undefined ? { quietMs: outcome.quietMs } : {}),
     };
   }
   return {
     kind: outcome.kind,
     ...(outcome.cause !== undefined ? { cause: outcome.cause } : {}),
+    ...(outcome.code !== undefined ? { code: outcome.code } : {}),
     ...(outcome.quietMs !== undefined ? { quietMs: outcome.quietMs } : {}),
   };
 }
