@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.8',
+    date: '2026-11-04',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '桌面端本机语音修复：安装包随包 sherpa-onnx-node，下完 SenseVoice 模型不再报 Cannot find module（桌面包 win-x64 增大约 23 MB）。',
+        en: 'Desktop local voice fixed: the installer now ships sherpa-onnx-node, so finishing the SenseVoice download no longer hits "Cannot find module" (win-x64 package grows ~23 MB).',
+      },
+      {
+        zh: '模型下载代理不再静默失效：非法代理地址直接报错并给出原因，卡片红字提示；voice.inspect 回传代理诊断。',
+        en: 'Download proxy no longer fails silently: an unusable proxy address errors with a reason instead of going direct, the card shows a red hint, and voice.inspect echoes the diagnosis.',
+      },
+      {
+        zh: '概览装扮热更：保存干员外观后立即生效，不再等 5 秒状态轮询。',
+        en: 'Overview dressing hot-apply: saved agent appearance paints immediately instead of waiting the 5 s status poll.',
+      },
+      {
+        zh: '文档：新增配置字段全表 docs/settings-fields.md（32 个 namespace，脚本从 schema 生成）。',
+        en: 'Docs: new settings field dump docs/settings-fields.md (32 namespaces, generated from the schema by script).',
+      },
+    ],
+  },
+  {
     version: '0.7.7',
     date: '2026-11-03',
     title: {
