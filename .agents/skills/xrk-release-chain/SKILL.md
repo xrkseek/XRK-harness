@@ -27,7 +27,8 @@ description: >-
 3. **`pnpm release`**（GH + npmjs）→ 再 `CI=true pnpm install --frozen-lockfile`
 4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；优先 `C:\xrk-h`）——**禁止与 stage/release 并行**
 5. 桌面包好后 **先上 AGT**（yml **绝对** `…/desktop/bin/win-x64/…`；先 exe+blockmap 再 yml；`HEAD` size 对齐）→ **再**改 `apps/site/releases.json` 并 push
-6. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
+6. **exe 挂 GitHub Release asset**：`gh release upload v<ver> <exe> --clobber`（大文件走后台 job + wait）。站点 `apps/site/src/worker.js` 的下载按钮以 **GitHub Release asset 为首选源**（`releases/download/<tag>/<filename>`，CN 访客走 ghfast 镜像）——只上 AGT 不挂 asset，官网按钮就是 404（v0.7.7 实锤：0.7.2/0.7.4–0.7.6 同样漏挂）。验收：`gh api repos/xrkseek/XRK-harness/releases/tags/v<ver> --jq '.assets[] | .name + " " + (.size|tostring)'` 里 exe 字节数 == 本地 == AGT bin。
+7. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
 
 **禁止并行打包**（0.7.5）：与 stage/release 并行会掏空根 `typescript`，且曾把 `electron` 打进 asar → exe ~330MB。Desktop 里 `electron`/`electron-builder` 只许 **devDependencies**；运行时只留 `electron-updater`。细节见 `xrk-desktop-update-feed`。
 
