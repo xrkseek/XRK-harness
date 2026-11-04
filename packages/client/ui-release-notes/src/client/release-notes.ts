@@ -82,7 +82,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         zh: '修复「TTS 音频播不出来」六层 bug：最终根因是 session.attachment 的 RPC 响应 zod 契约只接受 image 形状，file 行被判 invalid_union；已加 fileAttachmentRefSchema + union。',
-        en: 'Fixed the six-layer "TTS audio won\\'t play" bug: root cause was the session.attachment RPC response zod contract only accepting image shapes, so file rows were invalid_union; added fileAttachmentRefSchema + union.',
+        en: 'Fixed the six-layer "TTS audio won\'t play" bug: root cause was the session.attachment RPC response zod contract only accepting image shapes, so file rows were invalid_union; added fileAttachmentRefSchema + union.',
       },
       {
         zh: 'TTS 行不再被折进「过程」分组（isStandaloneTranscriptTool 加 text_to_speech）；修「过程 · 思考」永久闪动（live 判定加 !settled）。',
