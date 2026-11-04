@@ -18,6 +18,7 @@ import {
   createVoiceAccess,
   inspectSenseVoiceAssets,
   listSystemVoices,
+  parseProxy,
   probeSenseVoiceEngine,
   senseVoiceDataRoot,
   senseVoicePreparer,
@@ -134,9 +135,15 @@ function preparer(): SenseVoicePreparer {
  * Deliberately cheap: disk stats plus one `require` of the optional binding.
  * No model load, no hashing of 238 MB — the card polls this on open.
  */
-export const voiceInspect: FaceHandler = async () => {
+export const voiceInspect: FaceHandler = async (runtime) => {
   const assets = inspectSenseVoiceAssets({ env: process.env });
   const engine = probeSenseVoiceEngine(process.env);
+  const ns = runtime.settingsNamespaces.view("asr").value as Record<string, unknown>;
+  const proxyText = trimmed(ns.downloadProxy);
+  // Echo the parsed verdict, not just the text: a card that shows the address
+  // the user typed while the downloader quietly ignores it is the failure this
+  // field already produced once.
+  const proxyCheck = parseProxy(proxyText);
   return {
     ok: true,
     value: {
@@ -149,6 +156,14 @@ export const voiceInspect: FaceHandler = async () => {
         totalBytes: SENSEVOICE_TOTAL_BYTES,
       },
       engine,
+      proxy: {
+        text: proxyText,
+        valid: proxyCheck.error === undefined,
+        error: proxyCheck.error ?? null,
+        target: proxyCheck.target === undefined
+          ? null
+          : `${proxyCheck.target.host}:${proxyCheck.target.port}`,
+      },
       prepare: preparer().snapshot(),
     },
   };

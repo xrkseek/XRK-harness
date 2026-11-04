@@ -33,31 +33,73 @@ export interface DownloadStream {
   readonly body: AsyncIterable<Uint8Array> | null;
 }
 
-interface ProxyTarget {
+export interface ProxyTarget {
   readonly host: string;
   readonly port: number;
+}
+
+/** Result of reading the operator's proxy setting. */
+export interface ProxyParseResult {
+  /** CONNECT endpoint; present exactly when the text parsed. */
+  readonly target?: ProxyTarget;
+  /**
+   * Why the text cannot be used. Present only for a non-empty setting — an
+   * empty one means 「direct」, which is not an error.
+   */
+  readonly error?: string;
 }
 
 const REDIRECT_LIMIT = 5;
 const CONNECT_TIMEOUT_MS = 8_000;
 
 /**
- * Parse an operator-supplied proxy URL (`http://127.0.0.1:7897`, or the bare
- * `127.0.0.1:7897` form people paste from a Clash panel).
+ * Parse an operator-supplied proxy URL.
+ *
+ * Accepts `http://127.0.0.1:7897`, the bare `127.0.0.1:7897` form people paste
+ * from a Clash panel, and `http:127.0.0.1:7897` — the same address with the
+ * `//` dropped, which is what a hurried paste produces. That last form used to
+ * build `http://http:127.0.0.1:7897`, throw inside `new URL()`, and come back
+ * as `undefined`: the card showed an address while every byte went unproxied,
+ * which reads as 「saved but still stuck」.
+ *
+ * Only `http:` / `https:` are accepted: {@link tunnel} speaks HTTP CONNECT and
+ * nothing else, so a `socks5://` value would open a socket that can never
+ * carry the tunnel.
  * @param value - Setting text; empty means 「no proxy」.
- * @returns The loopback-or-remote CONNECT endpoint, or undefined when unset.
+ * @returns A CONNECT target, or the reason the text is unusable.
  */
-export function parseProxy(value: string | undefined): ProxyTarget | undefined {
-  if (value === undefined) return undefined;
+export function parseProxy(value: string | undefined): ProxyParseResult {
+  if (value === undefined) return {};
   const trimmed = value.trim();
-  if (trimmed === "") return undefined;
+  if (trimmed === "") return {};
+  let url: URL;
   try {
-    const url = new URL(trimmed.includes("://") ? trimmed : `http://${trimmed}`);
-    const port = url.port === "" ? (url.protocol === "https:" ? 443 : 80) : Number(url.port);
-    return { host: url.hostname, port };
+    url = new URL(withProxyScheme(trimmed));
   } catch {
-    return undefined;
+    return { error: `not a URL: ${trimmed}` };
   }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return {
+      error: `only HTTP CONNECT proxies work here (got ${url.protocol.slice(0, -1)}://)`,
+    };
+  }
+  if (url.hostname === "") return { error: `no host in ${trimmed}` };
+  const port = url.port === "" ? (url.protocol === "https:" ? 443 : 80) : Number(url.port);
+  return { target: { host: url.hostname, port } };
+}
+
+/**
+ * Give `new URL` something it accepts.
+ * @param raw - Trimmed setting text.
+ * @returns The text with a scheme and `//`.
+ */
+function withProxyScheme(raw: string): string {
+  const missingSlashes = /^([a-z][a-z0-9+.-]*):(?!\/\/)/i.exec(raw);
+  if (missingSlashes !== null) {
+    return `${missingSlashes[1]}://${raw.slice(missingSlashes[0].length)}`;
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  return `http://${raw}`;
 }
 
 /**
@@ -201,14 +243,28 @@ export async function openAssetStream(
   // Explicit setting first, then the product's own env override. Never a
   // guessed port: a Host must not route a user's traffic through a relay
   // they did not name.
-  const proxy = parseProxy(proxyUrl) ?? parseProxy(process.env.XRK_DOWNLOAD_PROXY);
+  const setting = parseProxy(proxyUrl);
+  if (setting.error !== undefined) {
+    // Fail loud. Dropping an unusable proxy silently is what makes the card
+    // show an address while the transfer runs direct — the bug this file was
+    // rewritten to fix, back for a second round.
+    throw new Error(`download proxy is unusable (${proxyUrl ?? ""}): ${setting.error}`);
+  }
+  const fromEnv = parseProxy(process.env.XRK_DOWNLOAD_PROXY);
+  if (fromEnv.error !== undefined) {
+    throw new Error(
+      `XRK_DOWNLOAD_PROXY is unusable (${process.env.XRK_DOWNLOAD_PROXY ?? ""}): ${fromEnv.error}`,
+    );
+  }
+  const proxy = setting.target ?? fromEnv.target;
   if (proxy === undefined) return openFollow(rawUrl, undefined, signal);
   try {
     return await openFollow(rawUrl, proxy, signal);
   } catch (error) {
     if (signal.aborted) throw error;
     // A proxy that cannot carry this hop must not fail the download when the
-    // direct route might work: fall through and try it.
+    // direct route might work: fall through and try it. Reaching here means
+    // the address parsed — only the tunnel itself failed.
     return openFollow(rawUrl, undefined, signal);
   }
 }

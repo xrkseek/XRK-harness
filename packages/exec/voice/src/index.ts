@@ -87,6 +87,13 @@ export {
   type SenseVoicePreparerOptions,
   type SenseVoicePrepareState,
 } from "./sensevoice-runtime.js";
+export {
+  openAssetStream,
+  parseProxy,
+  type DownloadStream,
+  type ProxyParseResult,
+  type ProxyTarget,
+} from "./download-http.js";
 
 /**
  * Host-side snapshot of the ASR product carried with agent settings.

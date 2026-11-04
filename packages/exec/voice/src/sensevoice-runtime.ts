@@ -26,7 +26,7 @@ import {
   SENSEVOICE_TOTAL_BYTES,
   type SenseVoiceAsset,
 } from "./sensevoice-assets.js";
-import { openAssetStream, type DownloadStream } from "./download-http.js";
+import { openAssetStream, parseProxy, type DownloadStream } from "./download-http.js";
 
 /** Where the preparer is in its lifecycle. */
 export type SenseVoicePreparePhase = "idle" | "preparing" | "ready" | "failed";
@@ -38,6 +38,8 @@ export type SenseVoicePrepareErrorCode =
   | "http"
   | "integrity"
   | "storage"
+  /** The operator's `downloadProxy` text cannot be used as written. */
+  | "proxy"
   | "cancelled"
   | "unknown";
 
@@ -181,6 +183,23 @@ export class SenseVoicePreparer {
       failure: null,
       origin: null,
     };
+    // Check the proxy before touching the network. Letting each origin fail on
+    // its own would burn three header deadlines to say what one string says
+    // now, and the card could not tell a bad address from a dead mirror.
+    const proxySetting = options.proxy ?? process.env.XRK_DOWNLOAD_PROXY;
+    const proxyCheck = parseProxy(proxySetting);
+    if (proxyCheck.error !== undefined) {
+      this.running = false;
+      this.state = {
+        ...this.state,
+        phase: "failed",
+        failure: {
+          code: "proxy",
+          message: `download proxy is unusable (${proxySetting ?? ""}): ${proxyCheck.error}`,
+        },
+      };
+      return this.state;
+    }
     try {
       let done = 0;
       for (const asset of SENSEVOICE_ASSETS) {

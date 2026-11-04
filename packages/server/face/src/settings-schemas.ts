@@ -366,6 +366,14 @@ const AsrConfig = Schema.object({
   enabled: Schema.boolean().default(false),
   engine: Schema.union(["local", "openai"]).default("local"),
   baseUrl: Schema.string().default(""),
+  /**
+   * Optional HTTP(S) proxy for asset downloads, e.g. `http://127.0.0.1:7897`.
+   * Empty means direct. This key must stay declared here: `Schema.object`
+   * strips undeclared keys, so a field the card saves but the schema omits is
+   * silently dropped on write — and the downloader then reads `undefined` and
+   * goes direct while the UI still shows the address the user typed.
+   */
+  downloadProxy: Schema.string().default(""),
 });
 
 /**

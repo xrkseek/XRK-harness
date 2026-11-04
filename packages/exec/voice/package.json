@@ -26,6 +26,9 @@
   "dependencies": {
     "@xrkseek/core-tools": "workspace:*"
   },
+  "optionalDependencies": {
+    "sherpa-onnx-node": "2.0.1"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -154,6 +154,19 @@ export interface VoiceLocalInspect {
     readonly totalBytes: number
   }
   readonly engine: VoiceLocalEngine
+  /**
+   * `asr.downloadProxy` as the Host parsed it. Absent on Hosts that predate
+   * the field; a present-but-invalid value means the downloader will refuse
+   * to run rather than silently go direct.
+   */
+  readonly proxy?: {
+    readonly text: string
+    readonly valid: boolean
+    /** Why the text cannot be used; null when it parses or is empty. */
+    readonly error: string | null
+    /** `host:port` the tunnel uses; null when there is no usable target. */
+    readonly target: string | null
+  }
   readonly prepare: VoicePrepareState
 }
 

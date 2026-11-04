@@ -114,7 +114,8 @@ export type PluginsSettingsLocaleKey =
   | 'voiceLocalTrial' | 'voiceLocalTrialRecording' | 'voiceLocalTrialWorking' | 'voiceLocalTrialEmpty'
   | 'voiceLocalTrialUnsupported'
   | 'voiceLocalFailNetwork' | 'voiceLocalFailTimeout' | 'voiceLocalFailHttp' | 'voiceLocalFailIntegrity'
-  | 'voiceLocalFailStorage' | 'voiceLocalFailCancelled' | 'voiceLocalFailUnknown'
+  | 'voiceLocalFailStorage' | 'voiceLocalFailCancelled' | 'voiceLocalFailUnknown' | 'voiceLocalFailProxy'
+  | 'voiceLocalProxyInvalid'
   | 'voiceDownloadProxy' | 'voiceDownloadProxyHint'
   | 'voiceApiKey' | 'voiceApiKeyHint' | 'voiceApiKeySet' | 'voiceApiKeyUnset'
   | 'voiceBaseUrl' | 'voiceBaseUrlHint'
@@ -511,6 +512,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   voiceLocalTrialUnsupported: 'This device cannot record — a phone on plain http:// gets no microphone API. Open the Host from a desktop, or over https.',
   voiceLocalFailNetwork: 'The connection dropped. Check the network and retry — the mirror is picked automatically.',
   voiceLocalFailTimeout: 'The download timed out. Try again on a steadier connection.',
+  voiceLocalFailProxy: 'The download proxy address cannot be used. Fix it above, then retry — the downloader refuses to run rather than silently going direct.',
+  voiceLocalProxyInvalid: 'This proxy address cannot be used, so the download will not start:',
   voiceLocalFailHttp: 'The mirror returned an error. Retrying uses the next origin.',
   voiceLocalFailIntegrity: 'The file did not match its checksum — a mirror may have served the wrong bytes. Retry.',
   voiceLocalFailStorage: 'Could not write to disk. Check free space and directory permissions.',
@@ -1032,6 +1035,8 @@ export const ja = {
   voiceLocalTrialUnsupported: 'このデバイスでは録音できません — http:// のスマートフォンではマイク API が使われません。デスクトップか https で開いてください。',
   voiceLocalFailNetwork: '接続が切れました。ネットワークを確認して再試行（ミラーは自動で切り替わります）。',
   voiceLocalFailTimeout: 'ダウンロードがタイムアウトしました。安定した回線で再試行してください。',
+  voiceLocalFailProxy: 'ダウンロードプロキシのアドレスが使えません。上で修正してから再試行してください（黙って直接接続に切り替わることはありません）。',
+  voiceLocalProxyInvalid: 'このプロキシアドレスは使えないため、ダウンロードを開始できません:',
   voiceLocalFailHttp: 'ミラーがエラーを返しました。再試行すると次のオリジンを使います。',
   voiceLocalFailIntegrity: 'チェックサム不一致 — ミラーが誤った内容を返した可能性があります。再試行してください。',
   voiceLocalFailStorage: 'ディスクに書き込めません。空き容量と権限を確認してください。',
@@ -1550,6 +1555,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   voiceLocalTrialUnsupported: '这台设备不能录音 —— 手机走 http:// 时浏览器不提供麦克风。请用桌面访问，或改用 https。',
   voiceLocalFailNetwork: '连接中断。检查网络后重试 —— 会自动换镜像。',
   voiceLocalFailTimeout: '下载超时。换个更稳的网络再试。',
+  voiceLocalFailProxy: '下载代理地址不可用。先在上方改正再重试 —— 下载器会直接报错，不会静默改走直连。',
+  voiceLocalProxyInvalid: '这个代理地址不可用，下载不会开始：',
   voiceLocalFailHttp: '下载源返回错误。重试会自动换下一个源。',
   voiceLocalFailIntegrity: '文件校验不通过 —— 镜像可能返回了错误内容。重试即可。',
   voiceLocalFailStorage: '写入磁盘失败。检查剩余空间与目录权限。',

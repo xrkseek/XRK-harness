@@ -41,6 +41,7 @@ const FAILURE_HINT: Record<string, PluginsSettingsLocaleKey> = {
   http: 'voiceLocalFailHttp',
   integrity: 'voiceLocalFailIntegrity',
   storage: 'voiceLocalFailStorage',
+  proxy: 'voiceLocalFailProxy',
   cancelled: 'voiceLocalFailCancelled',
   unknown: 'voiceLocalFailUnknown',
 }
@@ -314,6 +315,16 @@ export function VoiceLocalBlock({
       {inspect.engine.engine
         ? null
         : <p className={css.intro}>{t('voiceLocalEngineMissingInline')}</p>}
+      {/* A proxy the Host cannot parse is worth saying *before* the press: the
+          downloader now refuses instead of quietly going direct, so the user
+          would otherwise watch a 230 MB progress bar fail on its first byte. */}
+      {inspect.proxy !== undefined && !inspect.proxy.valid
+        ? (
+          <p className={css.error}>
+            {t('voiceLocalProxyInvalid')} {inspect.proxy.error ?? inspect.proxy.text}
+          </p>
+        )
+        : null}
       <p className={css.path}>{t('voiceLocalTarget')} {inspect.dataRoot}</p>
       <div className={css.actions}>
         <button
