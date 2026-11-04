@@ -215,3 +215,17 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 - **`unsigned-artifacts/` 靠 `pnpm prune:local` 裁到 ≤5**，别手删唯一留存的历史包。
 - **`ui-release-notes` 单独 `bundle` 会报 `Cannot resolve entry lib/types/index.js`**（0.7.8）：该包 bundle 入口依赖 tsc emit 的 `lib/types` 图；副作用1 掏空 devDeps 后 emit 未建。先 `tsc -b packages/client/ui-release-notes` 再 bundle + `web:assemble`。
 - **发版中途父席续并新改动**：先核旧 tag 尚无发布物引用（GH 未建 / npm 未发），才可用 `git tag -f` + `push -f` 前移并在报告里如实标注破坏性操作；已有任何发布物引用时禁止移 tag，改动顺延下一版。
+- **多 attempt 之间必须重装根依赖**（0.7.9）：`release.mjs` 内部会再跑一遍
+  stage-cli / stage-sdk，而 stage 过程会**掏空根 devDeps**（副作用 1）。所以第二轮
+  attempt 若直接重跑，会在 stage 阶段报 `stage: missing node_modules/typescript`。
+  每次 attempt 前先 `CI=true pnpm install --frozen-lockfile`，别以为是 lockfile 坏了。
+- **`release-notes.ts` 里别写双反斜杠转义**（0.7.9）：单引号字符串中的 `won\\'t`
+  会让 tsdown 解析失败。要写 `won\'t`（单反斜杠）。改完先单独 build 该包再继续。
+- **`gh release upload` 前先改名成公开名**（0.7.9）：直接上传
+  `xrk-harness-<ver>-win-x64-unsigned.exe` 会在 Release 里多出一个 `-unsigned`
+  asset。正确顺序是 `Copy-Item` 到公开名（`xrk-harness-<ver>-win-x64.exe`）再上传；
+  万一已传，`gh release delete-asset <tag> <name> -y` 清理。
+- **tag 在 release 后因追加提交而落后是常态**（0.7.9）：`fix(release-notes)` /
+  `chore(site)` 这类收尾提交必然落在 tag 之后。要让三 sha（HEAD / origin/main / tag）
+  一致，得 `git tag -f` 前移 + `gh release edit <tag> --target main`——但**只有在本轮
+  尚无任何发布物引用旧 tag 时**才允许（见上一条）；正常收尾接受 tag 落后一个文档提交。
