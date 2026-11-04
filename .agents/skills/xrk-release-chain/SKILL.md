@@ -213,3 +213,5 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 - **上 AGT 的改名 / 绝对 URL yml / 先 bin 后 yml**：真源 **`xrk-desktop-update-feed`**。
   相对文件名会解析到 `…/desktop/win-x64/<exe>` → 404（0.7.5 客户端报错形态）。
 - **`unsigned-artifacts/` 靠 `pnpm prune:local` 裁到 ≤5**，别手删唯一留存的历史包。
+- **`ui-release-notes` 单独 `bundle` 会报 `Cannot resolve entry lib/types/index.js`**（0.7.8）：该包 bundle 入口依赖 tsc emit 的 `lib/types` 图；副作用1 掏空 devDeps 后 emit 未建。先 `tsc -b packages/client/ui-release-notes` 再 bundle + `web:assemble`。
+- **发版中途父席续并新改动**：先核旧 tag 尚无发布物引用（GH 未建 / npm 未发），才可用 `git tag -f` + `push -f` 前移并在报告里如实标注破坏性操作；已有任何发布物引用时禁止移 tag，改动顺延下一版。

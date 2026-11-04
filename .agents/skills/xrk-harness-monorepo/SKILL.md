@@ -13,8 +13,8 @@ description: >-
 2. 挂 MCP / 外部工具 → 家目录 skill **`xrk-capability-attach`**（`skill` 加载；种子 `~/.xrk/skills`）
 3. 配模型 / API → 家目录 **`xrk-models-settings`**
 4. 确认 Workspace root inject — 勿搜其它盘符
-5. 写插件 → 家目录 **`xrk-plugin-author`** → `extensions/<plugin-id>/`；斜杠 **`/plugin-scaffold`**
-6. 验证 → 家目录 **`xrk-plugin-verify`**
+5. 写插件 → 家目录 **`xrk-plugin`**（kind → author → verify 三合一）→ `extensions/<plugin-id>/`；斜杠 **`/plugin-scaffold`**
+6. 验证 → 同一份 **`xrk-plugin`** 的 verify 段
 
 ## 写入落点
 

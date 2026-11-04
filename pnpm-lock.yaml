@@ -2741,9 +2741,19 @@ importers:
 
   packages/exec/voice:
     dependencies:
+      '@xrkseek/attachment':
+        specifier: workspace:*
+        version: link:../../attachment
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.3
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.2
     optionalDependencies:
       sherpa-onnx-node:
         specifier: 2.0.1

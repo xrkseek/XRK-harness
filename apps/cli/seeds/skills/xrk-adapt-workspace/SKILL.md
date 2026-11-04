@@ -29,7 +29,7 @@ description: >-
 | 审代码 | **`xrk-code-review`** |
 | 看板 / 画布 | **`xrk-canvas`** |
 | 家目录 / `.xrk` 地图 | **`xrk-product-home`** |
-| 进程插件 | **`xrk-plugin-kind`** → author → verify |
+| 进程插件 | **`xrk-plugin`**（kind → author → verify） |
 
 ## 反模式
 

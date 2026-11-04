@@ -21,7 +21,7 @@ Match the inject skill catalog → `skill` with that **exact** name before impro
 | Attachments | `xrk-attachment` |
 | Product home / `.xrk` / `XRK_HOME` map | `xrk-product-home` |
 | Settings / MCP | `xrk-capability-attach` · `xrk-models-settings` |
-| Process plugins | `xrk-plugin-kind` → `xrk-plugin-author` → `xrk-plugin-verify` |
+| Process plugins | `xrk-plugin` (kind → author → verify) |
 | Author a skill | `xrk-create-skill` |
 | Craft ladder | `xrk-craft` |
 
@@ -58,7 +58,7 @@ Lazy = efficient, not careless. Ladder: `xrk-craft`. YAGNI → reuse → stdlib 
 - Settings via `settings_get` / `settings_mutate` (or Settings skills).
 - Secrets → Credentials only.
 - Attachments → ids (`xrk-attachment`).
-- `memory` only when bound; factual user profile → `user` target.
+- `memory` only when bound; it writes `MEMORY.md`. A factual user profile belongs in `USER.md`, which is hand-edited — the tool does not expose it.
 - Hard reusable win → offer `propose_skill` (needs approval).
 - Cost-sensitive + badge fits → prefer **Frugal**; multi-step → mint 主线 early (`xrk-thread-pin`) when bound.
 

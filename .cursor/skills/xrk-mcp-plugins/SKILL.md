@@ -53,4 +53,4 @@ Harness **没有** PluginBase；远程 MCP 走 **`@xrkseek/mcp`**，本地逻辑
 ## 相关
 
 - **`xrk-plugin-dev`** · **`xrk-extensions`**  
-- 产品选型：种子 **`xrk-plugin-kind`**
+- 产品选型：种子 **`xrk-plugin`**（kind 段）

@@ -60,6 +60,8 @@ pnpm package:desktop
 - `electron` / `electron-builder` **只在** Desktop `devDependencies`；运行时依赖仅 `electron-updater`。
 - 打完后 `app.asar.unpacked` **不得**含完整 `electron/dist`（曾嵌套一整份 Electron → exe ~330MB）。
 - 正常 exe 约 **190–230MB** 量级（对照上一正式版）。
+- **别拿体积差值当进包判据**（0.7.8 实锤）：新增依赖是否进包，只认解包硬证据——`win-unpacked/resources/host/node_modules/<pkg>` 存在 + 关键导出 `require(...)=function`。NSIS LZMA 对 DLL 压缩比高：sherpa-onnx-win-x64 原始 23,161,917 B，exe 净增仅 +5.56MB。
+- electron 二进制下载走 electron-builder 内置 got，**不读命令行代理参数、只认 env**。GitHub 直连本轮不通时（0.7.8：direct=000 / proxy=200 反转），破例允许 `cmd /c "set HTTPS_PROXY=…&& set ELECTRON_GET_USE_PROXY=1&& …"` **单命令级内联**——绝不落 Host 会话环境。
 
 ## 公开更新源布局
 

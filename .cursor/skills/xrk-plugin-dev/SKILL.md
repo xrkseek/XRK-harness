@@ -45,7 +45,7 @@ XRK_PLUGINS_DIR / ~/.xrk/plugins
 
 ## 非适用场景
 
-- 只帮**用户**在工作区写一个插件 → 产品 skill **`xrk-plugin-author`**（不改内核）
+- 只帮**用户**在工作区写一个插件 → 产品 skill **`xrk-plugin`**（author 段；不改内核）
 - MCP 服务器包作者 → **`xrk-mcp-plugins`**
 - 社区 client 安装 → **`xrk-community-plugins`**
 - 改 tool pipeline / policy 守卫 → [docs/tool-pipeline.md](../../../docs/tool-pipeline.md)

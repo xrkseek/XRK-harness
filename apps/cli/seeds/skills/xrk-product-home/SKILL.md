@@ -35,7 +35,7 @@ Paths under product home. Prefer the listed tool; do not archaeology SQLite / ha
 | `settings.yaml` · `host-settings.json` | Face / MCP desired | `settings_*` → `xrk-capability-attach` |
 | `.credentials.yaml` · `mcp-tokens/` | Secrets | Never into chat; Credentials / product APIs |
 | `workspaces.json` · `session-models.json` | Sidebar / model picks | UI / product tools |
-| `plugins/` | Process plugins | `xrkh plugin` · `xrk-plugin-verify` |
+| `plugins/` | Process plugins | `xrkh plugin` · `xrk-plugin` |
 | `cron/` | Cron jobs + runs | Settings → Plugins → Cron |
 | `memories/` | Curated memory | `memory` when bound — not cache |
 | `xiangyang-workspace/` | Xiangyang tree | Orch only; coding seats rarely need it |

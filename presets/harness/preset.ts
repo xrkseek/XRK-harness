@@ -1186,6 +1186,9 @@ export function createHarnessComposition(
         ...(options.voiceEnv ? { env: options.voiceEnv } : {}),
         direction: "asr",
         surface: "listen",
+        // Lets voice_transcribe read an already-uploaded clip by
+        // attachment_id instead of forcing the caller to re-encode base64.
+        ...(options.attachments ? { attachments: options.attachments } : {}),
         ...(options.voiceProduct?.mode === "openai"
           ? { engine: "openai" }
           : {}),
@@ -1574,11 +1577,13 @@ export function createHarnessComposition(
   if (curatedMemory) {
     // Policy is always present (even with empty files) so a new session does not
     // treat leftover MEMORY.md WIP as a task queue — Codex-style isolation.
+    // Ask the store instead of re-deriving the rule: `createScopedCuratedMemoryTools`
+    // switches on the same fact, and two copies of the predicate drift the
+    // moment one side changes.
     const layeredPolicy =
       typeof curatedMemory === "object" &&
-      "layers" in curatedMemory &&
-      Array.isArray((curatedMemory as { layers?: unknown }).layers) &&
-      (curatedMemory as { layers: unknown[] }).layers.length > 1;
+      "isLayered" in curatedMemory &&
+      (curatedMemory as { isLayered?: unknown }).isLayered === true;
     prompts.register({
       id: "curated-memory-policy",
       order: 1,

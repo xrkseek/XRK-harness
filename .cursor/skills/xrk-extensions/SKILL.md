@@ -101,5 +101,5 @@ export function createPlugin() {
 
 ## 相关
 
-- 产品教练：**`xrk-plugin-author`**（种子）  
-- 验证清单：**`xrk-plugin-verify`**（种子）
+- 产品教练：**`xrk-plugin`**（种子；author 段）
+- 验证清单：**`xrk-plugin`**（种子；verify 段）

@@ -15,7 +15,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 |------------|------|
 | **本仓作工作区写插件**（产品 UI） | 产品 **`xrk-harness-monorepo`** → `xrk-plugin-*` |
 | **写 / 审进程插件**（Cursor 改金样/loader） | `xrk-plugin-dev` → `xrk-extensions` |
-| **kind 选型**（tools / prompt / commands / client） | `xrk-extensions` · 产品 `xrk-plugin-kind` |
+| **kind 选型**（tools / prompt / commands / client） | `xrk-extensions` · 产品 `xrk-plugin`（kind 段） |
 | **MCP vs 进程插件** | `xrk-mcp-plugins` · [docs/modules/mcp.md](../../docs/modules/mcp.md) |
 | **社区 client / host.mjs / dsh-compat** | `xrk-community-plugins` · [docs/community-plugins.md](../../docs/community-plugins.md) |
 | **写产品 SKILL.md** | `xrk-workspace-skills`（对标 Cursor create-skill / create-rule） |
@@ -61,7 +61,7 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 |-------|------|--------|
 | **`xrk-harness-monorepo`** | 本仓 overlay | harness 源码仓作工作区、写 extensions 插件、monorepo 总控 |
 | **`xrk-harness-architecture`** | 本仓 overlay | 本仓架构总览 |
-| **`xrk-plugin-author`** · **`xrk-plugin-kind`** · **`xrk-plugin-verify`** | CLI seeds | 写插件 / 选型 / 验证 |
+| **`xrk-plugin`**（三合一：kind → author → verify） | CLI seeds | 写插件 / 选型 / 验证 |
 | **`xrk-create-skill`** · **`xrk-models-settings`** · **`xrk-capability-attach`** | CLI seeds | 写 skill / 配模型 / 挂 MCP |
 | **`xrk-delegate`** · **`xrk-code-review`** · **`xrk-craft`** | CLI seeds | 委派 / 只读审 diff / 工艺阶梯（大活走站立同会话 outline→todo） |
 

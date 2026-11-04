@@ -22,7 +22,7 @@ description: >-
 
 | 用 | 不用 |
 |----|------|
-| 装 / 改 / 删 MCP | 写进程插件（→ **`xrk-plugin-kind`**） |
+| 装 / 改 / 删 MCP | 写进程插件（→ **`xrk-plugin`**） |
 | 改 Host Settings 字段 | 改工作区源码里的业务配置 |
 | 切 light / dark / system | 用文件工具手改 yaml（除非用户明确要求） |
 | 干员 / Team | **`xrk-delegate`** |

@@ -50,4 +50,4 @@ thread_list({ workspace_id? })                           # 看 catalog；可看�
 - 每个子任务建一条主线 —— 一件工作一条。
 - 以为没主线就不能协作 —— 主线只是发现加速器。
 
-**支线**（`sideline_set` / `presence_set` `tips`）是同一会话的状态说明 — playbook: skill `xrk-presence`。Agent Team 不编辑主线；两者是不同面。
+**支线**（`presence_set` 的 `tips`）是同一会话的状态说明 — playbook: skill `xrk-presence`。Agent Team 不编辑主线；两者是不同面。
