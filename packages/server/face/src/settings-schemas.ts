@@ -468,6 +468,14 @@ const CuratedMemoryConfig = Schema.object({
    * Env `XRK_CURATED_MEMORY_PHASE2=1` also enables.
    */
   phase2Llm: Schema.boolean().default(false),
+  /**
+   * Per-zone char cap for MEMORY.md (each of the four zones counts on its own).
+   * Applies to sessions built after the change; existing frozen blocks keep
+   * the cap they were built with.
+   */
+  memoryLimit: Schema.number().step(100).min(200).max(20000).default(2200),
+  /** Per-zone char cap for USER.md (who-the-user-is profile). */
+  userLimit: Schema.number().step(100).min(200).max(20000).default(1375),
 });
 
 /**

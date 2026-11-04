@@ -24,6 +24,8 @@ export const CURATED_MEMORY_PROMPT_TEXT =
   + "The `memory` tool requires `action` (`add|replace|remove|list`) or a non-empty "
   + "`operations` batch — do not call it with an empty action. "
   + "list returns live disk entries for the chosen target. "
+  + "Both files are writable: `target: memory` (default) for agent notes, `target: user` "
+  + "for who-the-user-is facts the user stated about themselves. "
   + "Writes hit disk immediately and do not change this session's frozen block. "
   + "This block and the memory tool exist only while Settings → Plugins → Curated memory is on; "
   + "turning it off drops both on the next agent rebuild (idle sessions now, a busy session after its turn). "
@@ -32,15 +34,14 @@ export const CURATED_MEMORY_PROMPT_TEXT =
 const ACTIONS = ["add", "replace", "remove", "list"] as const;
 
 /**
- * The tool writes notes only. `USER.md` is an injection-layer profile owned by
- * the human (hand-edited): it describes who they are, and a model rewriting it
- * mid-turn silently changes the persona every later session starts from. The
- * store still supports the target for provider surfaces — the tool does not
- * expose it.
+ * Both files are writable, but `USER.md` is the heavier hammer: it changes who
+ * every later session believes the user is. Calls that target it should carry
+ * only facts the user stated about themselves (or asked to be remembered),
+ * never inferred persona.
  */
 function asTarget(raw: unknown): CuratedMemoryTarget | undefined {
   const target = String(raw ?? "memory");
-  if (target === "memory") return target;
+  if (target === "memory" || target === "user") return target;
   return undefined;
 }
 
@@ -84,9 +85,10 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
         },
         target: {
           type: "string",
-          enum: ["memory"],
+          enum: ["memory", "user"],
           description:
-            "memory = MEMORY.md notes. USER.md is the user's hand-owned profile — not writable here.",
+            "memory = MEMORY.md durable agent notes (default). "
+            + "user = USER.md who-the-user-is profile — only facts the user stated about themselves.",
         },
         content: {
           type: "string",
@@ -116,10 +118,8 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           },
         },
       },
-      // `target` is deliberately not required: the only value is `memory`, so
-      // demanding it made every call carry a constant and let a model that
-      // omitted it get rejected by schema validation before `asTarget` could
-      // apply its default.
+      // `target` is deliberately not required: it defaults to `memory`, and
+      // demanding it made the common call carry a constant.
       required: [],
     },
     isConcurrencySafe() {
@@ -132,12 +132,9 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           isError: true,
           content: JSON.stringify({
             success: false,
-            // Naming 'user' here sent models into a retry loop: `asTarget`
-            // refuses it on purpose (USER.md is hand-edited), so the hint must
-            // not advertise it.
             error:
-              `Invalid memory target '${String(args.target)}'. Only 'memory' is writable; `
-              + "USER.md is the user's hand-owned profile.",
+              `Invalid memory target '${String(args.target)}'. `
+              + "Use 'memory' (MEMORY.md) or 'user' (USER.md).",
           }),
         };
       }

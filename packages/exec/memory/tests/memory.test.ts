@@ -215,4 +215,50 @@ describe("memory tool", () => {
     expect(search.isError).toBe(true);
     expect(String(search.content)).toMatch(/add\|replace\|remove\|list/);
   });
+
+  it("exposes USER.md through target=user and rejects unknown targets", async () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({ dir });
+    const [tool] = createCuratedMemoryTools(store);
+    const added = await tool!.execute({
+      action: "add",
+      target: "user",
+      content: "称呼：成总",
+    });
+    expect(added.isError).toBe(false);
+    expect(readFileSync(path.join(dir, "USER.md"), "utf8")).toContain(
+      "称呼：成总",
+    );
+    const listed = await tool!.execute({ action: "list", target: "user" });
+    expect(String(listed.content)).toContain("称呼：成总");
+    const bad = await tool!.execute({
+      action: "add",
+      target: "profile",
+      content: "x",
+    });
+    expect(bad.isError).toBe(true);
+    expect(String(bad.content)).toContain(
+      "'memory' (MEMORY.md) or 'user' (USER.md)",
+    );
+  });
+
+  it("honours configured per-file caps and reports the configured limit", async () => {
+    const dir = tempDir();
+    const store = createCuratedMemoryStore({
+      dir,
+      limits: { memory: 300, user: 250 },
+    });
+    const [tool] = createCuratedMemoryTools(store);
+    const first = await tool!.execute({
+      action: "add",
+      content: "x".repeat(280),
+    });
+    expect(first.isError).toBe(false);
+    const overflow = await tool!.execute({
+      action: "add",
+      content: "y".repeat(280),
+    });
+    expect(overflow.isError).toBe(true);
+    expect(String(overflow.content)).toContain("/300");
+  });
 });

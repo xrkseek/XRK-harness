@@ -10,7 +10,7 @@
 |--|-------------------|-------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
 | `SOUL.md` / `IDENTITY.md` | 家目录 `~/.xrk/SOUL.md` = 产品种子（fingerprint）；用户人格优先写工作区 **`.xrk/SOUL.md` · `IDENTITY.md`** | — |
-| 谁写 | 用户手写 | `MEMORY.md`：`memory` 工具 / 回合后笔记 / Phase1；`USER.md`：**用户手写，工具不暴露**（模型改写会让之后每个会话的人都变） |
+| 谁写 | 用户手写 | `MEMORY.md`：`memory` 工具 / 回合后笔记 / Phase1；`USER.md`：`memory` 工具 `target: "user"`（只收用户自述事实）或用户手写 |
 | 进模型 | durable `agent-instructions` inject | **system** 冻结快照 |
 
 产品 Identity 决策：**保持薄**——家目录种子 `AGENTS.md` + `SOUL.md`（均 fingerprint；全席）；用户自定人设写 **`.xrk/SOUL.md` / `IDENTITY.md`**；用户事实走策展 `memories/USER.md`（见 [skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)）。
@@ -44,7 +44,7 @@
 
 组合创建时（一次会话一份组合）读这两份文件，渲染进系统提示。本会话之后的 `add` / `replace` / `remove` 只改磁盘，不改已经放进系统提示的那段文字。下一份组合重新从磁盘读取。
 
-条目用 `§` 分隔（前后各一个换行）。`MEMORY.md` 上限 2200 字，`USER.md` 上限 1375 字。超限时单次 `add` 失败（错误可带 `prune_candidates`：最久未触碰条目，便于先删或压缩）；一次 `operations` 批次只按最终结果计字数，失败则整批不写。
+条目用 `§` 分隔（前后各一个换行）。`MEMORY.md` 默认上限 2200 字，`USER.md` 默认 1375 字；两个值都能在 **Settings → Plugins → 策展记忆** 改（200–20000，保存后新建的会话才用新值）。超限时单次 `add` 失败（错误可带 `prune_candidates`：最久未触碰条目，便于先删或压缩）；一次 `operations` 批次只按最终结果计字数，失败则整批不写。
 
 文件后端在同目录维护触碰旁路 **`.usage.json`**（条目哈希 → 最近写入时间）；`list` 可附带 `stale_entries`（年龄证据）。Phase1 字数顶满时的软删按触碰年龄而非文件顺序，并追加 **`.trim-log.jsonl`**（尽力而为，失败不阻断巩固）。
 
@@ -52,7 +52,7 @@
 
 | 字段 | 含义 |
 |------|------|
-| `target` | 仅 `memory`。**`USER.md` 是注入层，工具不提供写入入口**——它描述「这个人是谁」，由人手工维护；模型中途改写会让之后每个会话的人格起点静默变化 |
+| `target` | `memory`（默认，`MEMORY.md`）· `user`（`USER.md`：只收用户自述或明确要求记住的画像事实；改写会改变之后每个会话的人格起点，谨慎用） |
 | `action` | `add` · `replace` · `remove` · `list` |
 | `content` | `add` / `replace` 的正文（`new_text` 同义） |
 | `old_text` | `replace` / `remove` 用来定位的唯一子串 |
@@ -149,7 +149,7 @@
 |--|----------------------------|---------------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
 | `SOUL.md` / `IDENTITY.md` | Home `~/.xrk/SOUL.md` = product seed (fingerprint); prefer workspace **`.xrk/SOUL.md` · `IDENTITY.md`** for user persona | — |
-| Who writes | User | `memory` tool / after-turn notes / Phase1 · Phase2 |
+| Who writes | User | `memory` tool (`MEMORY.md`, and `USER.md` via `target: "user"`) / after-turn notes / Phase1 · Phase2 |
 | Into the model | Durable `agent-instructions` inject | **System** frozen snapshot |
 
 Identity product decision: **stay thin** — home seeds `AGENTS.md` + `SOUL.md` (both fingerprint; every audience); user persona in **`.xrk/SOUL.md` / `IDENTITY.md`**; factual “who the user is” stays in curated `memories/USER.md` ([skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)).
@@ -183,7 +183,7 @@ When curated memory is enabled, the system prompt **always** includes a policy s
 
 When a composition is created (one composition per session), both files are read and rendered into the system prompt. Later `add` / `replace` / `remove` calls in that session update the files only. They do not change the block already placed in the system prompt. The next composition reads the files again.
 
-Entries are separated by `§` with a newline on each side. `MEMORY.md` is capped at 2200 characters and `USER.md` at 1375. A single `add` fails when it would pass the cap (the error may include `prune_candidates` — longest-untouched entries to drop or compress first). An `operations` batch checks the character budget on the final result only; a failure writes nothing.
+Entries are separated by `§` with a newline on each side. `MEMORY.md` defaults to 2200 characters and `USER.md` to 1375; both caps are editable in **Settings → Plugins → Curated memory** (200–20000; new sessions pick the new value up). A single `add` fails when it would pass the cap (the error may include `prune_candidates` — longest-untouched entries to drop or compress first). An `operations` batch checks the character budget on the final result only; a failure writes nothing.
 
 The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last write time) beside the curated files; `list` may include `stale_entries`. Phase1 soft-trim ranks by touch age (not file order) and appends **`.trim-log.jsonl`** (best-effort; never fails the consolidate pass).
 
@@ -191,7 +191,7 @@ The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last wr
 
 | Field | Meaning |
 |------|---------|
-| `target` | `memory` only. **`USER.md` is an injection layer with no write entry in the tool** — it describes who the human is and is hand-maintained; a mid-turn model rewrite would silently change the persona every later session starts from |
+| `target` | `memory` (default, `MEMORY.md`) · `user` (`USER.md`: only facts the user stated about themselves; rewriting it changes who every later session believes the user is) |
 | `action` | `add` · `replace` · `remove` · `list` |
 | `content` | Body for `add` / `replace` (`new_text` is an alias) |
 | `old_text` | Unique substring locating the entry for `replace` / `remove` |

@@ -160,6 +160,8 @@ export type PluginsSettingsLocaleKey =
   | 'curatedMemoryEnabledHint' | 'curatedMemoryEnabledOn' | 'curatedMemoryEnabledOff'
   | 'curatedMemoryPhase2' | 'curatedMemoryPhase2Hint'
   | 'curatedMemoryPhase2On' | 'curatedMemoryPhase2Off'
+  | 'curatedMemoryMemoryLimit' | 'curatedMemoryMemoryLimitHint'
+  | 'curatedMemoryUserLimit' | 'curatedMemoryUserLimitHint'
   | 'curatedMemoryLiveHint'
   | 'a2aInboundTitle' | 'a2aInboundDescription' | 'a2aInboundEnabled'
   | 'a2aInboundEnabledHint' | 'a2aInboundEnabledOn' | 'a2aInboundEnabledOff'
@@ -643,6 +645,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   curatedMemoryPhase2Hint: 'Read at session end (after Phase1). Folds notes into the default zone. Needs a live LLM route. Does not itself change the frozen prompt.',
   curatedMemoryPhase2On: 'On',
   curatedMemoryPhase2Off: 'Off',
+  curatedMemoryMemoryLimit: 'MEMORY.md cap',
+  curatedMemoryMemoryLimitHint: 'Characters allowed in each zone\'s MEMORY.md (200–20000). Zones count separately. Applies to sessions built after you save.',
+  curatedMemoryUserLimit: 'USER.md cap',
+  curatedMemoryUserLimitHint: 'Characters allowed in each zone\'s USER.md (200–20000). USER.md is the who-the-user-is profile — only facts the user stated about themselves.',
   curatedMemoryLiveHint: 'Both fields apply without a Host restart. CI bypass only: XRK_CURATED_MEMORY=0 forces off; XRK_CURATED_MEMORY_PHASE2=1 forces Phase2. Backend stays XRK_MEMORY_PROVIDER=file|http|sqlite.',
   a2aInboundTitle: 'A2A inbound',
   a2aInboundDescription:
@@ -1175,6 +1181,10 @@ export const ja = {
   curatedMemoryPhase2Hint: 'セッション終了時に読み取り（Phase1 の後）。メモを既定ゾーンへ折り込みます。稼働中の LLM ルートが必要。固定プロンプト自体は変更しません。',
   curatedMemoryPhase2On: 'オン',
   curatedMemoryPhase2Off: 'オフ',
+  curatedMemoryMemoryLimit: 'MEMORY.md 上限',
+  curatedMemoryMemoryLimitHint: '各ゾーンの MEMORY.md に許す文字数（200〜20000）。ゾーンごとに別カウント。保存後に作られるセッションから適用。',
+  curatedMemoryUserLimit: 'USER.md 上限',
+  curatedMemoryUserLimitHint: '各ゾーンの USER.md に許す文字数（200〜20000）。USER.md は「ユーザーが誰か」のプロフィールで、本人が語った事実のみ。',
   curatedMemoryLiveHint: '両フィールドとも Host 再起動なしで反映されます。CI バイパスのみ: XRK_CURATED_MEMORY=0 で強制オフ、XRK_CURATED_MEMORY_PHASE2=1 で Phase2 強制。バックエンドは XRK_MEMORY_PROVIDER=file|http|sqlite のままです。',
   a2aInboundTitle: 'A2A 受信',
   a2aInboundDescription: '任意の Agent Card と Face セッションへの POST /a2a message/send（フレーム付きピア文）。SSE／tasks CRUD なし。CI：XRK_A2A_INBOUND=1 で強制オン、=0 で強制オフ。',
@@ -1704,6 +1714,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   curatedMemoryPhase2Hint: '会话结束时读取（在 Phase1 之后），把笔记折进缺省区。需要可用 LLM 路由。本身不改冻结段。',
   curatedMemoryPhase2On: '开',
   curatedMemoryPhase2Off: '关',
+  curatedMemoryMemoryLimit: 'MEMORY.md 上限',
+  curatedMemoryMemoryLimitHint: '每个区的 MEMORY.md 允许字符数（200–20000），四区各自计数。保存后新建的会话才用新值。',
+  curatedMemoryUserLimit: 'USER.md 上限',
+  curatedMemoryUserLimitHint: '每个区的 USER.md 允许字符数（200–20000）。USER.md 是「用户是谁」的画像，只收用户自己说过的事实。',
   curatedMemoryLiveHint: '两项都不必重启 Host。CI 旁路：XRK_CURATED_MEMORY=0 强制关；XRK_CURATED_MEMORY_PHASE2=1 强制 Phase2。后端仍是 XRK_MEMORY_PROVIDER=file|http|sqlite。',
   a2aInboundTitle: 'A2A 入站',
   a2aInboundDescription:

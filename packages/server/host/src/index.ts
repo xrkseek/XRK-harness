@@ -125,7 +125,6 @@ import {
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
   createBossStatusFragmentProvider,
-  createTtsAvailabilityFragmentProvider,
   createCollabBoardFragmentProvider,
   createSeatIdentityFragmentProvider,
   createSessionCapabilityFragmentProvider,
@@ -135,6 +134,8 @@ import {
   memberPackSkillsDir,
   sessionSeatMemberId,
   resolveSessionModelSelection,
+  readSeatTitles,
+  readUiLocalePreference,
   credentialsSet,
   settingsMutateFace,
   communityLoopbackBaseUrlCollision,
@@ -677,6 +678,11 @@ export type AgentFactory = (input: {
    */
   curatedMemory?: false | MemoryProvider;
   /**
+   * Word for the agent memory zone in prompt headers (Settings seat titles).
+   * Omitted → the memory package's neutral "member".
+   */
+  curatedMemoryAgentLabel?: string;
+  /**
    * Face `locale` product (Settings SoT) — drives the harness `language` prompt
    * section so reasoning follows the UI language.
    */
@@ -698,7 +704,6 @@ export type AgentFactory = (input: {
     | ReturnType<typeof createSeatIdentityFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
     | ReturnType<typeof createSessionPostureFragmentProvider>
-    | ReturnType<typeof createTtsAvailabilityFragmentProvider>
   >;
   /** Face-backed working_directory tool (Host wires per session). */
   workingDirectoryTools?: import("@xrkseek/core-tools").WorkingDirectoryToolsOptions;
@@ -1272,6 +1277,21 @@ export function createHostManager(): HostManager {
        *   spawns share one workbench. `humanFacingSessionId` walks the parent
        *   chain and stops at forks, exactly the boundary we want.
        */
+      /** Seat-title word for the agent memory zone (Settings ui-presence). */
+      const sessionAgentTitle = (
+        rt: FaceRuntime | undefined,
+      ): string | undefined => {
+        if (!rt) return undefined;
+        return readSeatTitles(
+          rt.settingsNamespaces.view("ui-presence").value as Record<
+            string,
+            unknown
+          >,
+          readUiLocalePreference(
+            rt.settingsNamespaces.view("ui").value as Record<string, unknown>,
+          ),
+        ).agent;
+      };
       const curatedMemoryForSession = (sessionId: string): MemoryProvider => {
         const rt = faceBox.runtime;
         const workspaceId = rt?.workspaces.workspaceIdOf(sessionId);
@@ -1279,11 +1299,27 @@ export function createHostManager(): HostManager {
         // One resolver for "which person wears this seat" — the same function
         // the seat card uses, so memory and identity can never disagree.
         const agentId = rt ? sessionSeatMemberId(rt, sessionId) : undefined;
+        const agentLabel = sessionAgentTitle(rt);
+        const memNs = rt?.settingsNamespaces.view("curated-memory").value as
+          | Record<string, unknown>
+          | undefined;
+        const limits = memNs
+          ? {
+              ...(typeof memNs.memoryLimit === "number"
+                ? { memory: memNs.memoryLimit }
+                : {}),
+              ...(typeof memNs.userLimit === "number"
+                ? { user: memNs.userLimit }
+                : {}),
+            }
+          : undefined;
         const layered = createLayeredCuratedMemoryStore({
           sessionId: treeRoot,
           ...(workspaceId ? { workspaceId } : {}),
           ...(agentId ? { agentId } : {}),
           defaultScope: agentId ? "agent" : "session",
+          ...(agentLabel ? { agentLabel } : {}),
+          ...(limits ? { limits } : {}),
         });
         return Object.assign(layered, {
           providerName: "layered",
@@ -1547,6 +1583,7 @@ export function createHostManager(): HostManager {
                 };
               }
             }
+            const curatedMemoryAgentLabel = sessionAgentTitle(faceBox.runtime);
             const agent = await factory({
               sessionId,
               store,
@@ -1769,6 +1806,9 @@ export function createHostManager(): HostManager {
               ...(pluginSettings.curatedMemory === false
                 ? { curatedMemory: false as const }
                 : { curatedMemory: curatedMemoryForSession(sessionId) }),
+              ...(curatedMemoryAgentLabel
+                ? { curatedMemoryAgentLabel }
+                : {}),
               ...(faceBox.runtime
                 ? {
                     contextFragmentProviders: [
@@ -1778,7 +1818,6 @@ export function createHostManager(): HostManager {
                       createBossStatusFragmentProvider(faceBox.runtime),
                       createSeatIdentityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
-                      createTtsAvailabilityFragmentProvider(faceBox.runtime),
                     ],
                     workingDirectoryTools: {
                       get: () => resolveSessionCwd(faceBox.runtime!, sessionId),

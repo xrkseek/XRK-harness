@@ -19,6 +19,38 @@ import { resolveXrkHome } from "@xrkseek/xrk-home-paths";
 export const ENTRY_DELIMITER = "\n§\n";
 export const MEMORY_CHAR_LIMIT = 2200;
 export const USER_CHAR_LIMIT = 1375;
+/** Plugin-configurable bounds for one zone file (Settings → Curated memory). */
+export const CURATED_MEMORY_LIMIT_MIN = 200;
+export const CURATED_MEMORY_LIMIT_MAX = 20000;
+
+/** Per-file caps; omitted fields keep the shipped defaults. */
+export interface CuratedMemoryLimits {
+  readonly memory?: number;
+  readonly user?: number;
+}
+
+interface ResolvedCuratedMemoryLimits {
+  readonly memory: number;
+  readonly user: number;
+}
+
+function resolveLimit(raw: number | undefined, fallback: number): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
+  return Math.min(
+    CURATED_MEMORY_LIMIT_MAX,
+    Math.max(CURATED_MEMORY_LIMIT_MIN, Math.round(raw)),
+  );
+}
+
+/** Clamp configured caps into the supported range. */
+export function resolveCuratedMemoryLimits(
+  limits?: CuratedMemoryLimits,
+): ResolvedCuratedMemoryLimits {
+  return {
+    memory: resolveLimit(limits?.memory, MEMORY_CHAR_LIMIT),
+    user: resolveLimit(limits?.user, USER_CHAR_LIMIT),
+  };
+}
 /** Sidecar beside MEMORY.md/USER.md: entry hash -> epoch ms of its last tracked write. */
 export const USAGE_SIDECAR_FILE = ".usage.json";
 
@@ -112,14 +144,19 @@ export interface CreateCuratedMemoryStoreOptions {
   /** Override the memories directory (tests). Default `{XRK_HOME}/memories`. */
   readonly dir?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /** Per-file char caps (Settings → Plugins → Curated memory). */
+  readonly limits?: CuratedMemoryLimits;
 }
 
 function fileFor(dir: string, target: CuratedMemoryTarget): string {
   return path.join(dir, target === "user" ? "USER.md" : "MEMORY.md");
 }
 
-function limitFor(target: CuratedMemoryTarget): number {
-  return target === "user" ? USER_CHAR_LIMIT : MEMORY_CHAR_LIMIT;
+function limitFor(
+  target: CuratedMemoryTarget,
+  limits: ResolvedCuratedMemoryLimits,
+): number {
+  return target === "user" ? limits.user : limits.memory;
 }
 
 function parseEntries(raw: string): string[] {
@@ -161,19 +198,27 @@ function readRaw(file: string): { raw: string; ok: boolean } {
   }
 }
 
-function drifted(raw: string, target: CuratedMemoryTarget): boolean {
+function drifted(
+  raw: string,
+  target: CuratedMemoryTarget,
+  limit: number,
+): boolean {
   if (!raw.trim()) return false;
   const parsed = parseEntries(raw);
   const roundTrip = raw.trim() === parsed.join(ENTRY_DELIMITER);
   const maxLen = parsed.reduce((max, entry) => Math.max(max, entry.length), 0);
-  return !(roundTrip && maxLen <= limitFor(target));
+  return !(roundTrip && maxLen <= limit);
 }
 
-function renderBlock(target: CuratedMemoryTarget, entries: readonly string[]): string {
+function renderBlock(
+  target: CuratedMemoryTarget,
+  entries: readonly string[],
+  limit: number,
+): string {
   if (entries.length === 0) return "";
   const content = entries.join(ENTRY_DELIMITER);
   const sep = "═".repeat(46);
-  return `${sep}\n${HEADERS[target]} [${usagePct(content.length, limitFor(target))}]\n${sep}\n${content}`;
+  return `${sep}\n${HEADERS[target]} [${usagePct(content.length, limit)}]\n${sep}\n${content}`;
 }
 
 function writeAtomic(file: string, text: string): void {
@@ -310,31 +355,33 @@ function fail(
   return { success: false, error: message, ...extra };
 }
 
-function failWithEntries(
+function failWithEntriesWithLimit(
   target: CuratedMemoryTarget,
   entries: readonly string[],
   message: string,
+  limit: number,
   pruneCandidates?: readonly string[],
 ): CuratedMemoryWriteResult {
   return fail(message, {
     target,
     current_entries: entries,
-    usage: `${charCount(entries).toLocaleString("en-US")}/${limitFor(target).toLocaleString("en-US")}`,
+    usage: `${charCount(entries).toLocaleString("en-US")}/${limit.toLocaleString("en-US")}`,
     ...(pruneCandidates && pruneCandidates.length > 0 ? { prune_candidates: pruneCandidates } : {}),
   });
 }
 
-function saved(
+function savedWithLimit(
   target: CuratedMemoryTarget,
   message: string,
   entries: readonly string[],
+  limit: number,
 ): CuratedMemoryWriteResult {
   const current = charCount(entries);
   return {
     success: true,
     done: true,
     target,
-    usage: usagePct(current, limitFor(target)),
+    usage: usagePct(current, limit),
     entry_count: entries.length,
     message,
     note: "Write saved to disk. This session's system-prompt snapshot is unchanged — do not repeat the write.",
@@ -368,6 +415,30 @@ export function createCuratedMemoryStore(
   const dir = explicit
     ? path.resolve(explicit)
     : path.join(resolveXrkHome(options.env ?? process.env), "memories");
+  const limits = resolveCuratedMemoryLimits(options.limits);
+  const limitForTarget = (target: CuratedMemoryTarget): number =>
+    limitFor(target, limits);
+  // Local wrappers so every write path reports against the configured cap
+  // without threading a parameter through a dozen call sites.
+  const saved = (
+    target: CuratedMemoryTarget,
+    message: string,
+    entries: readonly string[],
+  ): CuratedMemoryWriteResult =>
+    savedWithLimit(target, message, entries, limitForTarget(target));
+  const failWithEntries = (
+    target: CuratedMemoryTarget,
+    entries: readonly string[],
+    message: string,
+    pruneCandidates?: readonly string[],
+  ): CuratedMemoryWriteResult =>
+    failWithEntriesWithLimit(
+      target,
+      entries,
+      message,
+      limitForTarget(target),
+      pruneCandidates,
+    );
   const usagePath = path.join(dir, USAGE_SIDECAR_FILE);
   const snapshot: Record<CuratedMemoryTarget, string> = {
     memory: "",
@@ -376,7 +447,7 @@ export function createCuratedMemoryStore(
   for (const target of ["memory", "user"] as const) {
     const { raw, ok } = readRaw(fileFor(dir, target));
     const entries = ok ? dedupe(parseEntries(raw)) : [];
-    snapshot[target] = renderBlock(target, entries);
+    snapshot[target] = renderBlock(target, entries, limitForTarget(target));
   }
 
   function rankedEntries(target: CuratedMemoryTarget): MemoryEntryAge[] {
@@ -408,7 +479,7 @@ export function createCuratedMemoryStore(
           `Refusing to write ${path.basename(file)}: the file exists but could not be read. Nothing was changed.`,
         );
       }
-      if (drifted(raw, target)) {
+      if (drifted(raw, target, limitForTarget(target))) {
         const bak = `${file}.bak.${Date.now()}`;
         try {
           writeFileSync(bak, raw, "utf8");
@@ -421,7 +492,7 @@ export function createCuratedMemoryStore(
         );
       }
       const entries = dedupe(parseEntries(raw));
-      const step = apply(entries, limitFor(target));
+      const step = apply(entries, limitForTarget(target));
       if (step.kind === "done") return step.result;
       writeAtomic(file, step.entries.join(ENTRY_DELIMITER));
       if (step.touched && step.touched.length > 0) {
@@ -506,7 +577,11 @@ export function createCuratedMemoryStore(
         // Transient read error → keep this turn's frozen half rather than
         // letting a failed read look like "memory is empty".
         if (!ok) return snapshot[target];
-        return renderBlock(target, dedupe(parseEntries(raw)));
+        return renderBlock(
+          target,
+          dedupe(parseEntries(raw)),
+          limitForTarget(target),
+        );
       });
       return blocks.filter((block) => block.trim()).join("\n\n");
     },

@@ -1,7 +1,7 @@
 /** Curated MEMORY.md / USER.md switches (Face `curated-memory`). */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
-import { SelectField } from './fields.tsx'
+import { SelectField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import { booleanMasterSwitch } from './plugin-master-switch.ts'
 import type { CuratedMemoryCardFace } from './curated-memory-card-controller.ts'
@@ -47,6 +47,32 @@ export function CuratedMemoryCard(props: CuratedMemoryCardProps) {
           { value: 'true', label: t('curatedMemoryPhase2On') },
         ]}
         onChange={(value) => { props.edit('phase2Llm', value) }}
+      />
+      <ValueField
+        id="plugin-config-curated-memory-memory-limit"
+        label={t('curatedMemoryMemoryLimit')}
+        hint={t('curatedMemoryMemoryLimitHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={disabled || !enabled}
+        {...state.memoryLimit}
+        onEdit={(text) => { props.edit('memoryLimit', text) }}
+        onReset={() => { props.resetField('memoryLimit') }}
+      />
+      <ValueField
+        id="plugin-config-curated-memory-user-limit"
+        label={t('curatedMemoryUserLimit')}
+        hint={t('curatedMemoryUserLimitHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        numeric
+        disabled={disabled || !enabled}
+        {...state.userLimit}
+        onEdit={(text) => { props.edit('userLimit', text) }}
+        onReset={() => { props.resetField('userLimit') }}
       />
       <p className={css.note} role="note">{t('curatedMemoryLiveHint')}</p>
     </PluginCard>

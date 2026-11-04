@@ -243,7 +243,6 @@ export {
   readBossStatusFields,
   scheduleBossStatusBroadcast,
 } from "./boss-status-broadcast.js";
-export { createTtsAvailabilityFragmentProvider } from "./tts-availability.js";
 export {
   createSeatIdentityFragmentProvider,
   formatSeatIdentity,
