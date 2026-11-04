@@ -213,13 +213,18 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   // Shimmer tracks work still in flight — independent of fold latch (manual
   // fold or `foldWhen: immediate` can hide the body while a tool still runs).
   //
-  // A settled run is never live. `tools === 0 && reasoning > 0` alone cannot
-  // tell "still thinking" from "thought once, long ago": once the standalone
-  // rows (todo / present / text_to_speech…) leave the group, a Turn that only
-  // reasoned leaves a reasoning-only run behind, and that run used to shimmer
-  // forever even after its Turn closed.
-  const live = !settled
-    && (entry.summary.running || (entry.summary.tools === 0 && entry.summary.reasoning > 0))
+  // A settled run is never live *unless a tool is still running*: `settled` is
+  // the fold latch, and `foldWhen: immediate` latches from birth, so gating
+  // every live path on `!settled` silenced the in-flight tool name in the
+  // Verbose/Immediate modes too (0.7.9 regression — the header read as a bare
+  // 「过程」 while bash was still streaming).
+  //
+  // The reasoning-only case is the one that must die with the Turn: once the
+  // standalone rows (todo / present / text_to_speech…) leave the group, a Turn
+  // that only reasoned leaves a reasoning-only run behind, and that run used to
+  // shimmer forever even after its Turn closed.
+  const live = entry.summary.running
+    || (!settled && entry.summary.tools === 0 && entry.summary.reasoning > 0)
   // Folded + live: keep「过程」as the title and put the in-flight tool in the
   // summary seat (same shape as open) — a title of bare `bash` read as a
   // tool-row expand, not a process fold.

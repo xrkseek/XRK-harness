@@ -297,10 +297,17 @@
 }
 
 /* Inline variant: the live name is followed by the cumulative activity line
-   (`过程 · bash · 2 条命令…`). Both sit at their natural width; leftover space
-   stays at the row end. The base `.processGroupSummaryLive` keeps `flex: 1`
-   for the single-child case, where filling the row is harmless. */
-.processGroupSummaryLiveInline {
+   (`过程 · bash · 2 条命令…`). Both sit at their natural width, side by side —
+   the activity line must hug the live name instead of flying to the row end.
+   Scoped to `[data-process-group]` because the LIVE sweep rule further down
+   also targets `.processGroupSummaryLive` at the same single-class
+   specificity: a bare `.processGroupSummaryLiveInline` here loses the cascade
+   and the summary silently keeps `flex: 1`, pushing the activity line to the
+   row end (shipped that way in 0.7.9 — the fold header read as "过程 · bash"
+   on the left and a distant summary on the right). The base
+   `.processGroupSummaryLive` keeps `flex: 1` for the single-child case, where
+   filling the row is harmless. */
+:global([data-process-group]) .processGroupSummaryLiveInline {
   flex: 0 1 auto;
 }
 
