@@ -230,7 +230,10 @@ export function bindWorkspaceOrchestrateTools(
           isError: true,
         };
       }
-      if (workspaceId === XIANGYANG_WORKSPACE_ID) {
+      // Coding 经理席的求助通道：Settings / 建仓 / 配置问题找向阳，
+      // 所以 coding mode 允许投 ws_default（向日葵 author 席正常接话）。
+      // IM / 奇创席仍按原规则拒。
+      if (workspaceId === XIANGYANG_WORKSPACE_ID && mode !== "coding") {
         return {
           content:
             "workspace_session_prompt: refuse Xiangyang — pick a coding workspace",

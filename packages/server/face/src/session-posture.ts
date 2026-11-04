@@ -29,7 +29,7 @@ const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
     "kind=coding_parent (经理席) · path=open",
     "Same-project peer: workspace_session_prompt(workspace_id) → new/existing session → thread_message (delegation tree optional).",
     "Spawn: subagent(member_id). List: workspace_list.",
-    "Settings / create·delete workspaces → 向阳空间 (open or new session there). This seat stays coding-light.",
+    "settings_* here edits field VALUES only (schema-backed ns). Schema/behavior changes, reserved ns, workspace create/delete → 向阳空间: workspace_session_prompt(ws_default) to a 向日葵 session (coding mode may dispatch there). This seat stays coding-light — do not self-declare as the XRK config owner.",
   ].join("\n"),
 };
 

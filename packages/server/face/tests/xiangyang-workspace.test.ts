@@ -111,6 +111,79 @@ describe("向阳空间 workspace", () => {
     expect(sel.result.ok).toBe(false);
   });
 
+  it("coding mode may dispatch into 向阳 (求助通道); im/qichuang still refuse", async () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xy-dispatch-"));
+    homes.push(home);
+    const stubAgent = (id: string): AgentHandle =>
+      ({
+        tools: createToolRegistry(),
+        admit: () => ({
+          admitId: `a-${id}`,
+          sessionId: id,
+          content: "",
+          delivery: "queue",
+        }),
+        pendingAdmits: () => [],
+        abort: () => {},
+        isBusy: () => false,
+        setApprovalHandler: () => {},
+        continueTurn: async () => ({ text: "", events: [] }),
+        run: async () => ({ text: "", events: [] }),
+      }) as unknown as AgentHandle;
+    const runtime = createFaceRuntime({
+      store: createMemorySessionStore(),
+      drain: drain(),
+      workspaceRoot: xiangyangWorkspacePath(home),
+      productDir: home,
+      resolveAgent: async () => stubAgent("coding-orch"),
+    });
+    expect(runtime.workspaces.get(XIANGYANG_WORKSPACE_ID)).toBeTruthy();
+
+    const codingTools = createToolRegistry();
+    const { bindWorkspaceOrchestrateTools } = await import(
+      "../src/workspace-orchestrate-tools.js"
+    );
+    bindWorkspaceOrchestrateTools(codingTools, {
+      runtime,
+      sessionId: "coding-orch",
+      mode: "coding",
+    });
+    const codingTool = codingTools.get("workspace_session_prompt");
+    expect(codingTool).toBeTruthy();
+    const out = await codingTool!.execute(
+      {
+        workspace_id: XIANGYANG_WORKSPACE_ID,
+        prompt: "配置求助：这个字段改哪个 ns",
+        wait: false,
+      },
+      new AbortController().signal,
+    );
+    const body = JSON.parse(String(out.content)) as {
+      workspaceId?: string;
+      ok?: boolean;
+      sessionId?: string;
+    };
+    expect(out.isError).toBeFalsy();
+    expect(body.ok).toBe(true);
+    expect(body.workspaceId).toBe(XIANGYANG_WORKSPACE_ID);
+    expect(body.sessionId).toBeTruthy();
+
+    const xyTools = createToolRegistry();
+    bindWorkspaceOrchestrateTools(xyTools, {
+      runtime,
+      sessionId: "qichuang-orch",
+      mode: "qichuang",
+    });
+    const refused = await xyTools
+      .get("workspace_session_prompt")!
+      .execute(
+        { workspace_id: XIANGYANG_WORKSPACE_ID, prompt: "hi", wait: false },
+        new AbortController().signal,
+      );
+    expect(refused.isError).toBe(true);
+    expect(String(refused.content)).toMatch(/refuse Xiangyang/);
+  });
+
   it("bindSessionAgent mounts workspace_session_prompt without subagent", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xy-bind-"));
     homes.push(home);
