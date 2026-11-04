@@ -7,6 +7,7 @@ import {
   Button, IconFolderCloseRegular, Modal,
 } from '@xrkseek/client-ui-primitives'
 import {
+  clearTeamRosterLive,
   patchTeamRosterLive,
   type SessionId,
   type WorkspaceId,
@@ -890,6 +891,17 @@ export function TeamRoster({
         return next
       })
       if (selectedId !== saved.id) setSelectedId(saved.id)
+      // Re-stamp the optimistic paint under the id the Host actually returned.
+      // The click-time patch uses `selectedId`; when a save mints or normalises
+      // an id, the Overview keeps reading the old key and falls back to the next
+      // 5 s Status poll — which is exactly 「经理的手持等了一会才变」 while the
+      // Boss seat (client settings, same memory) updates instantly.
+      patchTeamRosterLive(saved.id, {
+        name: saved.name ?? null,
+        ...(saved.nickname !== undefined ? { nickname: saved.nickname } : {}),
+        ...(saved.appearance !== undefined ? { appearance: saved.appearance } : {}),
+      })
+      if (selectedId !== saved.id) clearTeamRosterLive(selectedId)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
