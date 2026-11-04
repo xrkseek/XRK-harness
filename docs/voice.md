@@ -8,20 +8,23 @@ Host 语音缝：`@xrkseek/exec-voice`。麦克风 / 扬声器 / WebRTC **留在
 
 | 工具               | 作用                                                                       |
 | ------------------ | -------------------------------------------------------------------------- |
-| `text_to_speech`   | TTS；返回 base64 音频元数据（服务端不播放）                                |
+| `text_to_speech`   | TTS；落盘为会话附件并返回 `file` block（`attachmentId` + mediaType），客户端渲染播放条 |
 | `voice_transcribe` | 一次性 STT（base64 音频）                                                  |
 | `voice_session`    | `status` / `create` realtime 会话（OpenAI `client_secret` 或 memory stub） |
 
 ## 启用
 
-**产品路径**：Settings → Plugins → **Voice**（Face ns `voice`：`mode` = 关 / openai · 可选 `baseUrl`）。API 密钥经 Credentials `XRK_VOICE_OPENAI_KEY`（不进 settings.yaml）。保存后 Host `invalidateAgents` 热切换。非空 `XRK_VOICE` 为 CI 旁路。
+**产品路径**：Settings → Plugins → **Voice**（两个 Face namespace：`tts` 管朗读，`asr` 管听写）。`tts.engine` = `edge`（默认）· `local` · `openai`；`tts.voice` / `tts.voiceEn` 按语种挑音色，`tts.language` = `auto` / `zh` / `en` 决定朗读语种。`edge` 与 `local` 都不需要密钥；`openai` 的密钥经 Credentials `XRK_VOICE_OPENAI_KEY`（不进 settings.yaml）。保存后 Host `invalidateAgents` 热切换。非空 `XRK_VOICE` 为 CI 旁路。
 
 | `XRK_VOICE` / Settings | 行为 |
 | ----------- | ------------------------------------------------------------------------ |
 | （未设 / 关） | 工具仍登记；execute **诚实失败** |
 | `memory`（仅 env） | 内存 Provider（CI / 演示） |
-| `local` / SenseVoice | 本地 STT：`{XRK_HOME}/voice/sensevoice`（或 `XRK_VOICE_SENSEVOICE_DIR`）放 `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx`；Host 需 `sherpa-onnx-node`。TTS 用内存 stub；live 不可用 |
+| `edge`（默认） | Edge Read Aloud 神经音色：免费、无需 key；Host 需能访问 `speech.platform.bing.com`（WSS），`voice.voices` 返回约 300 个音色 |
+| `local` / SenseVoice | 本地 STT：`{XRK_HOME}/voice/sensevoice`（或 `XRK_VOICE_SENSEVOICE_DIR`）放 `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx`；Host 需 `sherpa-onnx-node`。TTS 用**本机系统语音**（Windows SAPI · macOS `say` · Linux `espeak-ng`）渲染 WAV；live 不可用 |
 | `1` / openai | 需 `OPENAI_API_KEY` 或 Credentials `XRK_VOICE_OPENAI_KEY`；可选 Settings / `XRK_VOICE_BASE_URL` |
+
+**Edge TTS**：走 Edge 浏览器「大声朗读」同一个 WSS 端点，握手带 `Sec-MS-GEC` / `Sec-MS-GEC-Version` 与 Edge 自己的 `Origin` · `User-Agent`（缺头直接 403）。这两个常量随 Edge 升级走，过期时表现为连接被拒而不是音质问题。合成结果是 MP3，`text_to_speech` 把它写成会话附件（`kind: "file"`），客户端按 `session.attachment` 取回 Blob 后由行内播放条播放——**服务端不播放音频**。
 
 **本机资源准备（一键）**：Settings → Plugins → Voice 选 `local` 后，卡片读 `voice.inspect` 报告缺哪些文件，点「下载并准备」由 Host 取三个资产（`hf-mirror.com` 优先、`huggingface.co` 兜底）：边下边算 SHA-256、`.part` 原子落盘、可取消、可重试。资产不入仓（约 230 MB），revision / sha256 / 字节数钉死在 `packages/exec/voice/src/sensevoice-assets.ts`。
 
@@ -51,7 +54,7 @@ Host 语音缝：`@xrkseek/exec-voice`。麦克风 / 扬声器 / WebRTC **留在
 
 **录音设备**：默认输入若命中虚拟设备（Steam Streaming Microphone / NVIDIA Virtual / VB-Audio / 立体声混音等），会改选第一个物理输入。这类设备能正常打开、能"录音"，但整段样本全是 0——录出来的静音和"识别坏了"在 Host 侧完全无法区分。录音结束后若样本全为 0，直接报「没录到声音」，静音不再送进模型。
 
-**语言**：本机 SenseVoice 默认按中文（`zh`）解码。`auto` 自动检测在短促或带噪的普通话上会把语言判错（实测回出韩文单字），只有调用方显式传 `auto` 才走自动检测。
+**语言**：本机 SenseVoice 默认 `auto`（合成器没有语言选择器，且 Host 服务的是混语工作区——钉死 `zh` 会把英日语听错）。自动检测在短促或带噪的普通话上仍可能判错（实测回出韩文单字），知道语种的调用方应显式传 `zh` / `en`。
 
 `broker` 即 Host 侧 `voice_session`：返回 `sdpAnswer` 才能在本传输内完成协商；若只返回临时 `clientSecret`（Provider 直连模式）则抛 `VOICE_LIVE_UNSUPPORTED`，需自行直连。
 
@@ -69,20 +72,23 @@ Host voice seam: `@xrkseek/exec-voice`. Mic / speaker / WebRTC stay **on the cli
 
 | Tool               | Role                                                                         |
 | ------------------ | ---------------------------------------------------------------------------- |
-| `text_to_speech`   | TTS; returns base64 audio meta (server does not play)                        |
+| `text_to_speech`   | TTS; writes a session attachment and returns a `file` block (`attachmentId` + mediaType); the client renders a play bar |
 | `voice_transcribe` | One-shot STT (base64 audio)                                                  |
 | `voice_session`    | `status` / `create` realtime session (OpenAI `client_secret` or memory stub) |
 
 ## Enable
 
-**Product path**: Settings → Plugins → **Voice** (Face ns `voice`: `mode` = off / openai · optional `baseUrl`). API key via Credentials `XRK_VOICE_OPENAI_KEY` (not settings.yaml). After save, Host `invalidateAgents` hot-swaps. Non-empty `XRK_VOICE` is the CI bypass.
+**Product path**: Settings → Plugins → **Voice** (two Face namespaces: `tts` speaks, `asr` listens). `tts.engine` = `edge` (default) · `local` · `openai`; `tts.voice` / `tts.voiceEn` pick the voice per language, `tts.language` = `auto` / `zh` / `en` decides what is spoken. `edge` and `local` need no key; `openai` takes Credentials `XRK_VOICE_OPENAI_KEY` (not settings.yaml). After save, Host `invalidateAgents` hot-swaps. Non-empty `XRK_VOICE` is the CI bypass.
 
 | `XRK_VOICE` / Settings | Behavior |
 | ----------- | ------------------------------------------------------------------------------- |
 | (unset / off) | Tools still register; execute **fails honestly** |
 | `memory` (env only) | In-memory Provider (CI / demos) |
-| `local` / SenseVoice | Local STT: place `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx` under `{XRK_HOME}/voice/sensevoice` (or `XRK_VOICE_SENSEVOICE_DIR`); Host needs `sherpa-onnx-node`. TTS uses memory stub; live unsupported |
+| `edge` (default) | Edge Read Aloud neural voices: free, no key; the Host must reach `speech.platform.bing.com` (WSS); `voice.voices` returns ~300 voices |
+| `local` / SenseVoice | Local STT: place `model.int8.onnx`/`model.onnx` + `tokens.txt` + `silero_vad.onnx` under `{XRK_HOME}/voice/sensevoice` (or `XRK_VOICE_SENSEVOICE_DIR`); Host needs `sherpa-onnx-node`. TTS renders WAV through the **Host OS voices** (Windows SAPI · macOS `say` · Linux `espeak-ng`); live unsupported |
 | `1` / openai | Needs `OPENAI_API_KEY` or Credentials `XRK_VOICE_OPENAI_KEY`; optional Settings / `XRK_VOICE_BASE_URL` |
+
+**Edge TTS**: the same WSS endpoint Edge's own Read Aloud uses. The handshake carries `Sec-MS-GEC` / `Sec-MS-GEC-Version` plus Edge's `Origin` · `User-Agent` (a missing header is an immediate 403). Both constants move with Edge releases, so a stale pair shows up as a refused connection rather than bad audio. Synthesis returns MP3; `text_to_speech` persists it as a session attachment (`kind: "file"`), the client fetches the Blob through `session.attachment`, and the in-row play bar drives it — **the Host never plays audio**.
 
 **Local asset preparation (one press)**: after the Voice card is set to `local`, it reads `voice.inspect`, lists what is missing, and 「Download and prepare」 makes the Host fetch three assets (`hf-mirror.com` first, `huggingface.co` as fallback): SHA-256 computed while streaming, `.part` written atomically, cancellable and retryable. Assets stay out of the repo (~230 MB); revision / sha256 / byte counts are pinned in `packages/exec/voice/src/sensevoice-assets.ts`.
 
@@ -112,7 +118,7 @@ The mic opens **in the browser** only; the Host brokers sessions and runs STT/TT
 
 **Input device**: when the default input is a virtual one (Steam Streaming Microphone, NVIDIA Virtual, VB-Audio, stereo mix…), the capture switches to the first physical input. Those devices open fine and "record" fine, but every sample is 0 — and a silent clip is indistinguishable from a broken recogniser once it reaches the Host. A take whose samples are all zero now fails with 「nothing captured」 instead of being sent to the model.
 
-**Language**: local SenseVoice decodes as Chinese (`zh`) by default. `auto` detection mislabels short or noisy mandarin (observed: a one-character Korean reply), so automatic detection only runs when a caller passes `auto` explicitly.
+**Language**: local SenseVoice defaults to `auto` (the composer has no language picker and the Host serves a mixed-language workspace — pinning `zh` miscorrected English and Japanese). Detection can still mislabel short or noisy mandarin (observed: a one-character Korean reply), so a caller that knows the language should pass `zh` / `en` explicitly.
 
 `broker` is the Host `voice_session` endpoint: it must return an `sdpAnswer` for this transport to finish negotiation; a client-secret-only answer (provider-direct mode) raises `VOICE_LIVE_UNSUPPORTED` — negotiate directly with the provider instead.
 

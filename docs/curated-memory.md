@@ -10,7 +10,7 @@
 |--|-------------------|-------------|
 | `USER.md` | `~/.xrk/USER.md` · `{ws}/.xrk/USER.md` · `~/.agents/…` | `{XRK_HOME}/memories/USER.md` |
 | `SOUL.md` / `IDENTITY.md` | 家目录 `~/.xrk/SOUL.md` = 产品种子（fingerprint）；用户人格优先写工作区 **`.xrk/SOUL.md` · `IDENTITY.md`** | — |
-| 谁写 | 用户手写 | `memory` 工具 / 回合后笔记 / Phase1 |
+| 谁写 | 用户手写 | `MEMORY.md`：`memory` 工具 / 回合后笔记 / Phase1；`USER.md`：**用户手写，工具不暴露**（模型改写会让之后每个会话的人都变） |
 | 进模型 | durable `agent-instructions` inject | **system** 冻结快照 |
 
 产品 Identity 决策：**保持薄**——家目录种子 `AGENTS.md` + `SOUL.md`（均 fingerprint；全席）；用户自定人设写 **`.xrk/SOUL.md` / `IDENTITY.md`**；用户事实走策展 `memories/USER.md`（见 [skills-layers.md](./skills-layers.md) · [workspace-inject.md](./workspace-inject.md)）。
@@ -20,7 +20,21 @@
 | 能力 | 作用域 | 用途 |
 |------|--------|------|
 | `todo_write` → `todo/write` | **本会话** | 站立计划 / 任务清单；新会话为空 |
-| 策展记忆 `MEMORY.md` / `USER.md` | **分区**（统一工具，目录分离） | `global`=`{XRK_HOME}/memories`；另有 `workspaces/{id}` · `sessions/{id}` · `agents/{memberId}`（干员）；工具可选 `scope` |
+| 策展记忆 `MEMORY.md` | **四轴分区**（统一工具，目录分离） | `global` · `workspaces/{id}` · `sessions/{treeRoot}` · `agents/{memberId}` |
+
+**四轴各跟一件事**，Host 按会话实时解析：
+
+| 层 | 跟随 | 谁读得到 | 寿命 |
+|----|------|---------|------|
+| `global` | 整台机器 | 每个 agent / 每个工作区 | 永久 |
+| `workspace` | 房间（`workspaceIdOf`） | 该工作区所有会话 | 房间删了就没 |
+| `agent` | **人**（`sessionSeatMemberId`） | 同一个人，无论坐哪 | 干员删了就没 |
+| `session` | **委派树根**（`humanFacingSessionId`） | 树根 + 它派出的全部子/孙会话 | 树根删了就没 |
+
+两条容易误解的边界：
+
+- **`agent` 跟着人不跟着座位。** 同一个干员在自己 agent-home 里、被 `subagent` 派出去、被 `followup_task` 唤醒，读写的都是 `agents/<同一个 memberId>/`。项目工作区顶层会话解析为经理（`mem_seed_manager`），向阳空间解析为向日葵（`mem_seed_xrkseek`）——两个不同的人，绝不共用一层。无身份的派生子会话不继承父会话的 agent 层。
+- **`session` 是工作台不是单人房。** 一棵委派树共享一个 `sessions/<rootSid>/`；另开的对话是另一棵树，各有一间。
 
 新会话会冻入磁盘上已有的策展记忆，**不会**带上上一会话的 `todo_write` 列表。进行中的任务清单、进度日志或「接着干」手记留在 `todo_write`（本会话内）；`MEMORY.md` 只放跨会话仍然成立的持久事实——把前者写进去会让下一会话误当成未完成队列。
 
@@ -38,7 +52,7 @@
 
 | 字段 | 含义 |
 |------|------|
-| `target` | `memory` 或 `user` |
+| `target` | 仅 `memory`。**`USER.md` 是注入层，工具不提供写入入口**——它描述「这个人是谁」，由人手工维护；模型中途改写会让之后每个会话的人格起点静默变化 |
 | `action` | `add` · `replace` · `remove` · `list` |
 | `content` | `add` / `replace` 的正文（`new_text` 同义） |
 | `old_text` | `replace` / `remove` 用来定位的唯一子串 |
@@ -46,7 +60,15 @@
 
 `list` 返回目标文件当前磁盘条目（便于 replace/remove 前对齐原文），并可含 `stale_entries`。没有搜索；磁盘上无法按 `§` 往返的内容会被拒绝写入，并留下 `.bak` 副本。
 
-关闭：**产品路径** Settings → Plugins → **策展记忆**（Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。`phase2Llm` 开时会话结束在 Phase1 后再用当前会话模型做 Phase2 巩固（亦可用 `XRK_CURATED_MEMORY_PHASE2=1`）。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host 按会话叠分区 store（global + workspace + session + 可选 agent）；`memory` 工具可传 `scope`。缺省写区：有干员 `memberId` 时为 `agent`，否则为 `session`。会话结束 Phase1/2 走**该会话的分层 store**（写入缺省区，不是单独再开一份 home-only `resolveMemoryProvider()`）。
+开启状态：策展记忆**默认开启**（Settings → Plugins → **策展记忆**，Face ns `curated-memory`：`enabled` · `phase2Llm`）。保存后下次 agent 重建卸下 `memory` 工具与系统提示冻结段。非空 `XRK_CURATED_MEMORY` 为 CI 旁路（`0` 强制关，其它强制开）。组合选项 `curatedMemory: false` 仍可用。Host 按会话叠四轴 store；`memory` 工具可传 `scope`。缺省写区：解析到人时为 `agent`，否则为 `session`。会话结束 Phase1/2 走**该会话的分层 store**（写入缺省区，不是单独再开一份 home-only `resolveMemoryProvider()`）。
+
+**`phase2Llm` 默认关闭**，且建议保持关闭。Phase1 是正则抽取（零成本、信噪比高）；Phase2 让会话模型把用户原话归纳成「短事实」。默认关的三个理由：
+
+1. 两者写同一个文件、共用 `noteCoveredByEntries` 的**字符串包含**去重——LLM 换一种说法就绕过，重复条目双双落盘。
+2. 它写**缺省区**，在会话层会写出随树根消失的「事实」。
+3. 没有准入标准：正则只认用户明确说「记住」的话，LLM 会顺手把一次性任务状态总结成长期事实。
+
+确实需要语义归纳时才单独打开（`curated-memory.phase2Llm` 或 `XRK_CURATED_MEMORY_PHASE2=1`）。
 
 ## 分层完整性（诚实）
 
@@ -55,7 +77,7 @@
 | 层 | 状态 | 说明 |
 |----|------|------|
 | 磁盘区 `global` / `workspace` / `session` / `agent` | **能跑** | `{XRK_HOME}/memories` 与子目录；见 `scopes` |
-| Host 按会话叠区 + 缺省 `scope` | **能跑** | 主会话默认 `session`；子代理有 `memberId` 时默认 `agent` |
+| Host 按会话叠四轴 + 缺省 `scope` | **能跑** | `session` 走树根、`agent` 走人（链接或身份绑定）、`workspace` 走房间 |
 | 工具 `scope` + 分区策略段 | **能跑** | 多区时用 `createScopedCuratedMemoryTools`；系统提示用 `SCOPED_CURATED_MEMORY_PROMPT_TEXT` |
 | 组合创建时冻结快照 | **能跑** | 多区正文按区标题拼进 system；本会话内写盘**不**刷新冻结段 |
 | 回合后启发式 / 会话结束 Phase1·2 | **能跑** | 写入分层 store 的缺省区；不刷新本会话冻结段 |
@@ -137,7 +159,21 @@ Identity product decision: **stay thin** — home seeds `AGENTS.md` + `SOUL.md` 
 | Capability | Scope | Use for |
 |------------|-------|---------|
 | `todo_write` → `todo/write` | **This session** | Standing plan / checklist; empty in a new session |
-| Curated `MEMORY.md` / `USER.md` | **Zoned** (one tool, separate dirs) | `global`=`{XRK_HOME}/memories`; also `workspaces/{id}` · `sessions/{id}` · `agents/{memberId}`; tool optional `scope` |
+| Curated `MEMORY.md` | **Four zones** (one tool, separate dirs) | `global` · `workspaces/{id}` · `sessions/{treeRoot}` · `agents/{memberId}` |
+
+**Each zone follows exactly one axis**, resolved live by the Host:
+
+| Zone | Follows | Who reads it | Lifetime |
+|------|---------|--------------|----------|
+| `global` | the machine | every agent / every workspace | forever |
+| `workspace` | the room (`workspaceIdOf`) | every session in that workspace | until the room is deleted |
+| `agent` | **the person** (`sessionSeatMemberId`) | that one member, wherever seated | until the member is deleted |
+| `session` | **the delegation-tree root** (`humanFacingSessionId`) | the root plus every child/grandchild it spawned | until the root session is deleted |
+
+Two boundaries that are easy to get wrong:
+
+- **`agent` follows the person, not the seat.** The same 干员 sitting in its own agent-home, dispatched via `subagent`, or woken by `followup_task` reads and writes `agents/<same memberId>/`. A project-workspace top-level session resolves to the manager (`mem_seed_manager`); Xiangyang resolves to 向日葵 (`mem_seed_xrkseek`) — two different people who never share a zone. A dispatched child with no member does not inherit its parent's agent zone.
+- **`session` is a workbench, not a private room.** One delegation tree shares one `sessions/<rootSid>/`; a separately opened conversation is a different tree with its own.
 
 A new session freezes whatever curated files are already on disk; it does **not** carry the previous session's `todo_write` list. Do not put in-progress task lists, progress logs, or “continue from here” handoffs into `MEMORY.md` — the next session will otherwise treat them as an unfinished queue. Keep unfinished work in `todo_write`.
 
@@ -155,7 +191,7 @@ The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last wr
 
 | Field | Meaning |
 |------|---------|
-| `target` | `memory` or `user` |
+| `target` | `memory` only. **`USER.md` is an injection layer with no write entry in the tool** — it describes who the human is and is hand-maintained; a mid-turn model rewrite would silently change the persona every later session starts from |
 | `action` | `add` · `replace` · `remove` · `list` |
 | `content` | Body for `add` / `replace` (`new_text` is an alias) |
 | `old_text` | Unique substring locating the entry for `replace` / `remove` |
@@ -163,7 +199,15 @@ The file backend keeps a touch sidecar **`.usage.json`** (entry hash → last wr
 
 `list` returns live on-disk entries for the target (use before replace/remove) and may include `stale_entries`. There is no search. Content on disk that would not round-trip through the `§` delimiter is refused, and a `.bak` copy is kept.
 
-Disable via **product path** Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. When `phase2Llm` is on, session end runs Phase2 consolidation after Phase1 with the current session model (also `XRK_CURATED_MEMORY_PHASE2=1`). Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host stacks zoned stores per session (global + workspace + session + optional agent); the `memory` tool accepts `scope`. Default write zone: `agent` when the child has a roster `memberId`, otherwise `session`. Session-end Phase1/2 uses **that session’s layered store** (writes the default zone — not a separate home-only `resolveMemoryProvider()`).
+Default state: curated memory is **on**. Toggle via Settings → Plugins → **Curated memory** (Face ns `curated-memory`: `enabled` · `phase2Llm`). After save, the next agent rebuild drops the `memory` tool and frozen system-prompt block. Non-empty `XRK_CURATED_MEMORY` is the CI bypass (`0` force off, any other force on). Composition option `curatedMemory: false` still works. Host stacks all four zones per session; the `memory` tool accepts `scope`. Default write zone: `agent` when a person resolves, otherwise `session`. Session-end Phase1/2 uses **that session’s layered store** (writes the default zone — not a separate home-only `resolveMemoryProvider()`).
+
+**`phase2Llm` defaults to off and is best left off.** Phase1 is a regex pass (zero cost, high signal). Phase2 asks the session model to summarize user text into “short facts”. Three reasons it stays off:
+
+1. Both write the same file and dedupe via `noteCoveredByEntries` — a **substring** test. One paraphrase by the LLM defeats it and both entries land.
+2. It writes the **default zone**, so on a session root it authors “facts” that vanish with the tree.
+3. No admission standard: the regex only takes text where the user said “remember”, while an LLM happily promotes one-off task state to a lasting fact.
+
+Turn it on only when semantic summarization is genuinely wanted (`curated-memory.phase2Llm` or `XRK_CURATED_MEMORY_PHASE2=1`).
 
 ## Layer completeness (honest)
 
@@ -172,7 +216,7 @@ Disk zones and Host wiring ship; “user said remember → this session immediat
 | Layer | Status | Notes |
 |-------|--------|-------|
 | Disk zones `global` / `workspace` / `session` / `agent` | **Working** | Under `{XRK_HOME}/memories` (+ subdirs); see `scopes` |
-| Host per-session stack + default `scope` | **Working** | Main session defaults to `session`; child with `memberId` defaults to `agent` |
+| Host per-session four-axis stack + default `scope` | **Working** | `session` follows the tree root; `agent` follows the person (link or identity bind); `workspace` follows the room |
 | Tool `scope` + zoned policy text | **Working** | Multi-zone → `createScopedCuratedMemoryTools`; prompt → `SCOPED_CURATED_MEMORY_PROMPT_TEXT` |
 | Freeze at composition create | **Working** | Zone bodies joined under headers; mid-session disk writes do **not** refresh the freeze |
 | After-turn heuristics / session-end Phase1·2 | **Working** | Write the layered store’s default zone; freeze unchanged this session |

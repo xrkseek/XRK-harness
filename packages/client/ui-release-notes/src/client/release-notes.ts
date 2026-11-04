@@ -69,6 +69,44 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.9',
+    date: '2026-11-04',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Voice 产品化：Edge TTS 成为默认引擎（免费、约 300 神经音色、无需 key）；text_to_speech 落盘为会话附件并返回 file block，客户端行内播放条播放。',
+        en: 'Voice productization: Edge TTS becomes the default engine (free, ~300 neural voices, no key); text_to_speech now lands as a session attachment returning a file block, played inline.',
+      },
+      {
+        zh: '修复「TTS 音频播不出来」六层 bug：最终根因是 session.attachment 的 RPC 响应 zod 契约只接受 image 形状，file 行被判 invalid_union；已加 fileAttachmentRefSchema + union。',
+        en: 'Fixed the six-layer "TTS audio won\\'t play" bug: root cause was the session.attachment RPC response zod contract only accepting image shapes, so file rows were invalid_union; added fileAttachmentRefSchema + union.',
+      },
+      {
+        zh: 'TTS 行不再被折进「过程」分组（isStandaloneTranscriptTool 加 text_to_speech）；修「过程 · 思考」永久闪动（live 判定加 !settled）。',
+        en: 'TTS rows no longer fold into the "process" group (isStandaloneTranscriptTool now includes text_to_speech); fixed perpetual "process · thinking" flicker (live now requires !settled).',
+      },
+      {
+        zh: 'tts-row 资源泄漏修复（autoPlayers 卸载清理 + autoPlayed 上限 + audio onError）；切引擎时清空 voice/voiceEn；SAPI 音色不存在改为诚实报错；VOICE_MAX_TTS_TEXT = 8000 共享上限。',
+        en: 'tts-row resource leak fix (autoPlayers cleanup on unmount + autoPlayed cap + audio onError); clear voice/voiceEn on engine switch; missing SAPI voice now reports honestly; shared VOICE_MAX_TTS_TEXT = 8000 cap.',
+      },
+      {
+        zh: '记忆/技能：memory 工具 target 不再必填；USER.md 归属写清（用户手写、工具不暴露）；三合一 xrk-plugin 旧名残留全清（9 个文件）。',
+        en: 'Memory/skills: memory tool target no longer required; USER.md ownership clarified (user writes by hand, tool does not expose it); cleared xrk-plugin old-name residue across 9 files.',
+      },
+      {
+        zh: '底层质量：output-bound 按 text 块真实累加 originalBytes；model-catalog 同 provider 不再重复分组；durable-inject 截断提示抽常量 + 目录条目精确匹配；standing-skill-dirs 收敛为 skillDirs + preferredSkillDirs；layered isLayered 单一判定；Host 默认 TTS 引擎回退值与 schema 对齐（local → edge）。',
+        en: 'Underlying quality: output-bound accumulates originalBytes per text block; model-catalog no duplicate groups per provider; durable-inject truncation hint extracted to constant + exact directory-entry match; standing-skill-dirs converged to skillDirs + preferredSkillDirs; layered single isLayered predicate; Host default TTS engine fallback aligned with schema (local → edge).',
+      },
+      {
+        zh: '文档：docs/voice.md、docs/settings-fields.md、docs/status.md、docs/curated-memory.md 同步更新。',
+        en: 'Docs: docs/voice.md, docs/settings-fields.md, docs/status.md, docs/curated-memory.md synced.',
+      },
+    ],
+  },
+  {
     version: '0.7.8',
     date: '2026-11-04',
     title: {

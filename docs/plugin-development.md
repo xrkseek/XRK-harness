@@ -114,7 +114,7 @@ xrkh restart
 | Skill | 落点 | 用途 |
 |-------|------|------|
 | **`xrk-harness-monorepo`** | 本仓 `.agents/skills` | monorepo 总控 |
-| `xrk-plugin-kind` · `xrk-plugin-author` · `xrk-plugin-verify` | CLI seeds → `~/.xrk/skills`（`skill` 工具） | kind / 写插件 / 验证 |
+| `xrk-plugin` | CLI seeds → `~/.xrk/skills`（`skill` 工具） | 选型 / 写插件 / 验证 |
 
 维护者改内核见 [maintainer.md](./maintainer.md)。分层说明：[skills-layers.md](./skills-layers.md)。
 
@@ -266,7 +266,7 @@ Workspace `.agents/skills/` and `{workspace}/.xrk/skills/` enter `<available_ski
 | Skill | Lives in | Purpose |
 |-------|----------|---------|
 | **`xrk-harness-monorepo`** | This repo `.agents/skills` | Monorepo router |
-| `xrk-plugin-kind` · `xrk-plugin-author` · `xrk-plugin-verify` | CLI seeds → `~/.xrk/skills` (`skill` tool) | Kind / author / verify |
+| `xrk-plugin` | CLI seeds → `~/.xrk/skills` (`skill` tool) | Kind / author / verify |
 
 Maintainer kernel work: [maintainer.md](./maintainer.md). Layering: [skills-layers.md](./skills-layers.md).
 

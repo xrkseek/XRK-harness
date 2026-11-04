@@ -232,15 +232,15 @@
 
 ## `tts`
 
-默认值：`{ enabled: false, engine: "local", baseUrl: "", voice: "", model: "" }`
-
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `false` |  |
-| `engine` | local \| openai | `"local"` |  |
+| `engine` | edge \| local \| openai | `"edge"` |  |
 | `baseUrl` | string | `""` |  |
-| `voice` | string | `""` | Voice id: an OS voice name for `local`, a provider voice for `openai`. |
-| `model` | string | `""` | OpenAI-compatible TTS model; ignored by the local engine. |
+| `voice` | string | `""` | Chinese (or default) voice id: an Edge short name, an OS voice name, or a provider voice id. `text_to_speech` uses this row for `zh` clips. |
+| `voiceEn` | string | `"en-US-AriaNeural"` | English voice id, used for `en` clips and for `auto` calls whose text reads as English. Defaults to an Edge English voice so an out-of-the-box Host never reads English with a Chinese mouth; `local` users point it at an installed English voice instead. |
+| `language` | auto \| zh \| en | `"auto"` | Spoken language for `text_to_speech`: `auto` sniffs the text. |
+| `model` | string | `""` | OpenAI-compatible TTS model; ignored by edge / local. |
 
 ## `image-gen`
 
