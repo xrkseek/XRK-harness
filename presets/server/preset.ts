@@ -86,6 +86,7 @@ export function createServerAgentFactory(
     videoGenProduct,
     videoGenEnv,
     curatedMemory,
+    curatedMemoryAgentLabel,
     locale,
     autoReviewPre,
     contextFragmentProviders,
@@ -173,7 +174,19 @@ export function createServerAgentFactory(
       ...(imageGenEnv ? { imageGenEnv } : {}),
       ...(videoGenProduct ? { videoGenProduct } : {}),
       ...(videoGenEnv ? { videoGenEnv } : {}),
-      ...(curatedMemory === false ? { curatedMemory: false as const } : {}),
+      // Forward the per-session layered store itself. Passing only the `false`
+      // switch made every Host session fall back to `resolveMemoryProvider()`
+      // (home-only, single zone) inside the harness composition, so the four
+      // zones never reached the system prompt: `isLayered` stayed false, the
+      // policy text fell back to "two files", and nothing was labelled by zone.
+      ...(curatedMemory === false
+        ? { curatedMemory: false as const }
+        : curatedMemory
+          ? { curatedMemory }
+          : {}),
+      ...(curatedMemoryAgentLabel
+        ? { curatedMemoryAgentLabel }
+        : {}),
       ...(locale ? { locale } : {}),
       ...(contextFragmentProviders
         ? { contextFragmentProviders }

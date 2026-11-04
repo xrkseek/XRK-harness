@@ -85,10 +85,10 @@ import {
 } from "@xrkseek/exec-video-analyze";
 import {
   CURATED_MEMORY_PROMPT_TEXT,
-  SCOPED_CURATED_MEMORY_PROMPT_TEXT,
   createCuratedMemoryTools,
   createScopedCuratedMemoryTools,
   resolveMemoryProvider,
+  scopedCuratedMemoryPromptText,
   writeReusableNotesAfterTurn,
   runCuratedMemoryConsolidate,
   type CuratedMemoryStore,
@@ -435,6 +435,11 @@ export interface HarnessCompositionOptions {
    * Tool writes update disk only. Not the Mnemon document library.
    */
   readonly curatedMemory?: false | CuratedMemoryStore;
+  /**
+   * Word for the agent memory zone in prompt headers / policy text (Settings
+   * seat titles: 干员 · 水手 · 成员 · …). Omitted → neutral "member".
+   */
+  readonly curatedMemoryAgentLabel?: string;
   /**
    * Register `lsp`. Default: on. `false` skips.
    * Pass an `LspService` to inject in tests. No `XRK_LSP_COMMAND` → tool
@@ -1215,7 +1220,9 @@ export function createHarnessComposition(
           >[0])
         : undefined;
     for (const tool of layered
-      ? createScopedCuratedMemoryTools(layered)
+      ? createScopedCuratedMemoryTools(layered, {
+          agentLabel: options.curatedMemoryAgentLabel,
+        })
       : createCuratedMemoryTools(curatedMemory)) {
       tools.register(tool);
     }
@@ -1589,7 +1596,7 @@ export function createHarnessComposition(
       order: 1,
       content: () =>
         layeredPolicy
-          ? SCOPED_CURATED_MEMORY_PROMPT_TEXT
+          ? scopedCuratedMemoryPromptText(options.curatedMemoryAgentLabel)
           : CURATED_MEMORY_PROMPT_TEXT,
     });
     const frozenMemory = curatedMemory.frozenSystemBlock();

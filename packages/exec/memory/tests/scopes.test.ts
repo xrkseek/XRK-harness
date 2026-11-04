@@ -90,4 +90,33 @@ describe("curated memory scopes", () => {
     expect(frozen).toMatch(/AGENT curated memory/);
     expect(frozen).toContain("agent private note");
   });
+
+  it("labels every zone with the configured seat title", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xrk-mem-label-"));
+    temps.push(home);
+    const env = { XRK_HOME: home };
+    mkdirSync(path.join(home, "memories", "agents", "worker_a"), {
+      recursive: true,
+    });
+    writeFileSync(path.join(home, "memories", "MEMORY.md"), "global note", "utf8");
+    writeFileSync(
+      path.join(home, "memories", "agents", "worker_a", "MEMORY.md"),
+      "agent private note",
+      "utf8",
+    );
+    const layered = createLayeredCuratedMemoryStore({
+      env,
+      sessionId: "sess-1",
+      agentId: "worker_a",
+      defaultScope: "agent",
+      agentLabel: "水手",
+    });
+    const frozen = layered.frozenSystemBlock();
+    expect(frozen).toContain("### GLOBAL curated memory (home-wide)");
+    expect(frozen).toContain(
+      "### AGENT curated memory (this 水手 / roster member)",
+    );
+    expect(frozen).toContain("global note");
+    expect(frozen).toContain("agent private note");
+  });
 });

@@ -6,6 +6,7 @@ import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import {
   createCuratedMemoryStore,
   type CuratedMemoryOperation,
+  type CuratedMemoryLimits,
   type CuratedMemoryStore,
   type CuratedMemoryTarget,
   type CuratedMemoryWriteResult,
@@ -33,14 +34,35 @@ export interface CreateLayeredCuratedMemoryStoreOptions
    * Prefer session when present, else workspace, else global.
    */
   readonly defaultScope?: CuratedMemoryScopeKind;
+  /**
+   * Display word for the agent zone (Settings → seat titles, e.g. 干员 · 水手 ·
+   * 成员). Prompt headers and the zoned policy text use it verbatim; the store
+   * itself never hardcodes one scheme's word.
+   */
+  readonly agentLabel?: string;
+  /**
+   * Per-file char caps. Settings → Plugins → Curated memory owns the values;
+   * omitted fields keep the shipped defaults (2200 / 1375).
+   */
+  readonly limits?: CuratedMemoryLimits;
 }
 
-const SCOPE_HEADERS: Record<CuratedMemoryScopeKind, string> = {
-  global: "GLOBAL curated memory (home-wide)",
-  workspace: "WORKSPACE curated memory",
-  session: "SESSION curated memory (this conversation)",
-  agent: "AGENT curated memory (this 干员 / roster member)",
-};
+/** Zone headers; the agent word comes from Settings seat titles. */
+function scopeHeaders(
+  agentLabel: string,
+): Record<CuratedMemoryScopeKind, string> {
+  return {
+    global: "GLOBAL curated memory (home-wide)",
+    workspace: "WORKSPACE curated memory",
+    session: "SESSION curated memory (this conversation)",
+    agent: `AGENT curated memory (this ${agentLabel} / roster member)`,
+  };
+}
+
+function normalizedAgentLabel(raw: string | undefined): string {
+  const text = raw?.trim();
+  return text || "member";
+}
 
 function pickDefaultScope(
   layers: readonly MemoryScopeLayer[],
@@ -56,6 +78,7 @@ function pickDefaultScope(
 /** Open every zone that has ids; always includes global. */
 export function openCuratedMemoryLayers(
   ids: CuratedMemoryScopeIds,
+  limits?: CuratedMemoryLimits,
 ): MemoryScopeLayer[] {
   const layers: MemoryScopeLayer[] = [];
   for (const scope of CURATED_MEMORY_SCOPE_KINDS) {
@@ -65,6 +88,7 @@ export function openCuratedMemoryLayers(
       store: createCuratedMemoryStore({
         dir: curatedMemoryDirFor(scope, ids),
         ...(ids.env ? { env: ids.env } : {}),
+        ...(limits ? { limits } : {}),
       }),
     });
   }
@@ -84,10 +108,11 @@ export function createLayeredCuratedMemoryStore(
     readonly isLayered: boolean;
     storeFor(scope: CuratedMemoryScopeKind): CuratedMemoryStore | undefined;
   } {
-  const layers = openCuratedMemoryLayers(options);
+  const layers = openCuratedMemoryLayers(options, options.limits);
   const defaultScope = pickDefaultScope(layers, options.defaultScope);
   const byScope = new Map(layers.map((l) => [l.scope, l.store] as const));
   const primary = byScope.get(defaultScope) ?? layers[0]!.store;
+  const headers = scopeHeaders(normalizedAgentLabel(options.agentLabel));
 
   const storeFor = (scope: CuratedMemoryScopeKind) => byScope.get(scope);
 
@@ -110,7 +135,7 @@ export function createLayeredCuratedMemoryStore(
       for (const layer of layers) {
         const body = layer.store.frozenSystemBlock().trim();
         if (!body) continue;
-        parts.push(`### ${SCOPE_HEADERS[layer.scope]}\n${body}`);
+        parts.push(`### ${headers[layer.scope]}\n${body}`);
       }
       return parts.join("\n\n");
     },
@@ -121,7 +146,7 @@ export function createLayeredCuratedMemoryStore(
           layer.store.liveSystemBlock?.() ?? layer.store.frozenSystemBlock()
         ).trim();
         if (!body) continue;
-        parts.push(`### ${SCOPE_HEADERS[layer.scope]}\n${body}`);
+        parts.push(`### ${headers[layer.scope]}\n${body}`);
       }
       return parts.join("\n\n");
     },
@@ -165,12 +190,14 @@ function asScope(
  */
 export function createScopedCuratedMemoryTools(
   layered: ReturnType<typeof createLayeredCuratedMemoryStore>,
+  options: { readonly agentLabel?: string | undefined } = {},
 ): ToolDefinition[] {
   if (layered.layers.length <= 1) {
     return createCuratedMemoryTools(layered);
   }
   const base = createCuratedMemoryTools(layered)[0]!;
   const available = layered.layers.map((l) => l.scope);
+  const agentLabel = normalizedAgentLabel(options.agentLabel);
 
   const tool: ToolDefinition = {
     ...base,
@@ -186,7 +213,7 @@ export function createScopedCuratedMemoryTools(
           type: "string",
           enum: [...available],
           description:
-            "Memory zone: global (home) · workspace · session · agent (干员). " +
+            `Memory zone: global (home) · workspace · session · agent (${agentLabel}). ` +
             `Default ${layered.defaultScope}.`,
         },
       },
@@ -247,11 +274,21 @@ export function createScopedCuratedMemoryTools(
 }
 
 /** Policy text mentioning independent zones (when layered). */
-export const SCOPED_CURATED_MEMORY_PROMPT_TEXT =
-  CURATED_MEMORY_PROMPT_TEXT +
-  " Independent zones share the same tool: scope=global|workspace|session|agent. " +
-  "Use session for this conversation's facts, agent for a 干员's private notes, " +
-  "workspace for project-wide facts, global for home-wide preferences.";
+export function scopedCuratedMemoryPromptText(agentLabel?: string): string {
+  const label = normalizedAgentLabel(agentLabel);
+  return (
+    CURATED_MEMORY_PROMPT_TEXT +
+    " Independent zones share the same tool: scope=global|workspace|session|agent. " +
+    `Use session for this conversation's facts, agent for a ${label}'s private notes, ` +
+    "workspace for project-wide facts, global for home-wide preferences. " +
+    "Per-file char caps come from Settings → Plugins → Curated memory " +
+    "(defaults: MEMORY.md 2200, USER.md 1375); when a cap blocks a write the " +
+    "tool returns `prune_candidates`."
+  );
+}
+
+/** Default zoned policy text (no seat-title override). */
+export const SCOPED_CURATED_MEMORY_PROMPT_TEXT = scopedCuratedMemoryPromptText();
 
 /** Re-export write helpers typing for layered facades. */
 export type {

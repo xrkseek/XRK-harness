@@ -5,6 +5,10 @@ export {
   MEMORY_CHAR_LIMIT,
   USER_CHAR_LIMIT,
   USAGE_SIDECAR_FILE,
+  CURATED_MEMORY_LIMIT_MIN,
+  CURATED_MEMORY_LIMIT_MAX,
+  resolveCuratedMemoryLimits,
+  type CuratedMemoryLimits,
   type CreateCuratedMemoryStoreOptions,
   type CuratedMemoryAction,
   type CuratedMemoryOperation,
@@ -51,6 +55,7 @@ export {
   createLayeredCuratedMemoryStore,
   createScopedCuratedMemoryTools,
   SCOPED_CURATED_MEMORY_PROMPT_TEXT,
+  scopedCuratedMemoryPromptText,
   type MemoryScopeLayer,
   type CreateLayeredCuratedMemoryStoreOptions,
 } from "./layered.js";
