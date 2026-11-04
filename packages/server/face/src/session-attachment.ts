@@ -11,9 +11,55 @@ import {
   listImageRefs,
 } from "@xrkseek/protocol";
 
-/** `attachmentId=sha256:…` lines from older text-only tool envelopes. */
+/**
+ * `attachmentId=sha256:…` tokens from older text-only tool envelopes.
+ *
+ * The tail is a "no more hex" assertion rather than `(?:\s|$)`: older logs
+ * were flattened with no separator between blocks, so a durable id can run
+ * straight into the model-only file handle (`…d989[File '…' was uploaded…`).
+ * Requiring whitespace there dropped the id and made the client's authorized
+ * read fail even though the bytes were on disk.
+ */
 const ATTACHMENT_ID_LINE =
-  /(?:^|\s)attachmentId=(sha256:[a-f0-9]+)(?:\s|$)/gim;
+  /(?:^|\s)attachmentId=(sha256:[a-f0-9]+)(?![a-f0-9])/gim;
+
+/** Container media types for durable file rows, keyed by extension. */
+const FILE_MEDIA_TYPES: ReadonlyMap<string, string> = new Map([
+  ["mp3", "audio/mpeg"],
+  ["wav", "audio/wav"],
+  ["opus", "audio/opus"],
+  ["ogg", "audio/ogg"],
+  ["webm", "audio/webm"],
+  ["m4a", "audio/mp4"],
+  ["aac", "audio/aac"],
+  ["flac", "audio/flac"],
+  ["png", "image/png"],
+  ["jpg", "image/jpeg"],
+  ["jpeg", "image/jpeg"],
+  ["webp", "image/webp"],
+  ["gif", "image/gif"],
+  ["pdf", "application/pdf"],
+  ["zip", "application/zip"],
+  ["json", "application/json"],
+  ["md", "text/markdown"],
+  ["txt", "text/plain"],
+]);
+
+/**
+ * Media type for a stored file row.
+ *
+ * The local store persists file bytes without a media type (`saveFile` only
+ * records id/name/bytes), so a read must recover the type from the filename —
+ * otherwise the client builds an `application/octet-stream` Blob and an
+ * `<audio>` element refuses it even though the MP3 is perfectly good.
+ */
+function fileMediaType(name: string, stored: string | undefined): string {
+  if (stored !== undefined && stored.trim() !== "") return stored;
+  const ext = name.includes(".")
+    ? name.slice(name.lastIndexOf(".") + 1).toLowerCase()
+    : "";
+  return FILE_MEDIA_TYPES.get(ext) ?? "application/octet-stream";
+}
 
 function collectIdsFromContent(
   content: MessageContent,
@@ -112,15 +158,25 @@ export async function readSessionAttachment(input: {
         },
       };
     } catch (imgErr) {
-      if (!(isAttachmentError(imgErr) && imgErr.code === "NOT_FOUND")) {
-        throw imgErr;
-      }
+      // "Not an image" has two spellings: a store that only joins image rows
+      // answers NOT_FOUND, while the local store finds the bytes and fails
+      // decoding with INVALID_IMAGE. Both mean "try the file row" — an audio
+      // clip or a zip is expected here, not an error. Anything else (I/O,
+      // corruption) still propagates.
+      const notAnImage =
+        isAttachmentError(imgErr) &&
+        (imgErr.code === "NOT_FOUND" || imgErr.code === "INVALID_IMAGE");
+      if (!notAnImage) throw imgErr;
     }
     const stored = await input.attachments.readFile(id);
     return {
       ok: true,
       value: {
-        attachment: { kind: "file", ...stored.ref },
+        attachment: {
+          kind: "file",
+          ...stored.ref,
+          mediaType: fileMediaType(stored.ref.name, stored.ref.mediaType),
+        },
         data: Buffer.from(stored.data).toString("base64"),
       },
     };

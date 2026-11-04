@@ -9,6 +9,7 @@ import {
   isHumanUserMessageSource,
   type SessionEvent,
 } from "@xrkseek/protocol";
+import { MEMBER_PACK_BRIEFCASE } from "./agent-member-pack.js";
 
 export type AgentTeamSpawnRole =
   | "default"
@@ -94,7 +95,6 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
       "close_agent",
       "wait_agent",
       "list_agents",
-      "analytics",
     ],
   },
   reviewer: {
@@ -135,7 +135,6 @@ const TEMPLATES: Readonly<Record<AgentTeamSpawnRole, RoleTemplate>> = {
       "close_agent",
       "wait_agent",
       "list_agents",
-      "analytics",
     ],
   },
   lead: {
@@ -220,6 +219,32 @@ export function roleCapsHint(role: AgentTeamSpawnRole | undefined): string {
 }
 
 /**
+ * 公文包 lines for the spawn preamble — same wording as the identity lane
+ * (both call {@link formatMemberPackInventoryLines}). Callers pass the live
+ * inventory lines when they have them, else the paths; this never invents a
+ * second phrasing or trims the pack to "fit a task".
+ */
+function briefcasePreambles(input: SubagentSpawnPreambleInput): readonly string[] {
+  // Live inventory lines win — they are the only source that can tell the
+  // truth about how many skills the pack has.
+  if (input.packInventoryLines && input.packInventoryLines.length > 0) {
+    return input.packInventoryLines;
+  }
+  const packHome = input.packHome?.trim();
+  if (!packHome) return [];
+  // Paths only: say nothing about skills we did not enumerate. Claiming
+  // "(none yet)" here would actively mislead a 干员 that does have skills.
+  const lines = [
+    `${MEMBER_PACK_BRIEFCASE}: not workspace cwd — read/edit here or copy into workspace`,
+    `pack_home: ${packHome}`,
+    `skills_dir: ${path.join(packHome, "skills")}`,
+  ];
+  const packMaterials = input.packMaterials?.trim();
+  if (packMaterials) lines.push(`materials: ${packMaterials}`);
+  return lines;
+}
+
+/**
  * Identity block every in-process child sees before the parent-written task.
  * Covers parent/child session ids, mode, role, workspace cwd, and whether
  * the parent transcript was seeded — so the child does not guess from AGENTS.md.
@@ -238,8 +263,7 @@ export function applySubagentSpawnPreamble(
   const workspaceLine = input.isolatedWorktree
     ? "isolated git worktree (not the parent's checkout). Follow the worktree note in the task."
     : "same as the parent session. File tools and git run here.";
-  const packHome = input.packHome?.trim();
-  const packMaterials = input.packMaterials?.trim();
+  const packLines = briefcasePreambles(input);
   // Identity + delivery only. Live axes (ask, omitted tools, siblings) live in
   // turn-start <session_capability> — do not re-lecture them here.
   const header = [
@@ -264,17 +288,7 @@ export function applySubagentSpawnPreamble(
       : []),
     `- inherit_context: ${inheritLine}`,
     `- workspace: ${input.cwd} · ${workspaceLine}`,
-    ...(input.packInventoryLines && input.packInventoryLines.length > 0
-      ? input.packInventoryLines.map((line) => `- ${line}`)
-      : packHome
-        ? [
-            `- 公文包 (briefcase): ${packHome} · not workspace cwd — read/edit or copy into workspace`,
-            `- skills_dir: ${path.join(packHome, "skills")} · load via skill tool/catalog (no per-skill path dump)`,
-            ...(packMaterials
-              ? [`- materials: ${packMaterials} · 公文包/briefcase workspace/`]
-              : []),
-          ]
-        : []),
+    ...packLines.map((line) => `- ${line}`),
     "Delivery: FINAL assistant message is the only thing the parent sees (not reasoning, not intermediate tool output). Lead with the answer, then evidence. Hard tool/capability failures go in that message. Finish in-scope work; do not bounce ordinary steps, do not end with 'let me know', and do not spawn unless the task says so. Home standing (~/.xrk) is skipped — cwd workspace AGENTS.md (member playbook when present) + <seat_identity> are your seat; do not treat a parent-repo root AGENTS.md as identity theater.",
   ].join("\n");
   const tasked = applySpawnRoleReminder(input.prompt, input.role);

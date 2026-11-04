@@ -35,7 +35,13 @@ export const AGENT_MEMBER_PACK_VERSION = 1;
 /** Required root marker — zip/dir without it is rejected. */
 export const AGENT_MEMBER_PACK_MARKER = ".xrk-agent-pack";
 
-/** Model-facing bilingual name for the advanced pack home (not session cwd). */
+/**
+ * Model-facing bilingual name for the advanced pack home (not session cwd).
+ *
+ * Six roster-profile templates in `agent-roster-tools.ts` inline this phrase;
+ * they are the only reason the export must stay. Deleting it as "unused"
+ * (it is unused *inside* this file) would desync those templates.
+ */
 export const MEMBER_PACK_BRIEFCASE = "公文包 (briefcase)";
 
 /** One-line layout contract (tools, errors, skills). */
@@ -710,8 +716,37 @@ export function listMemberPackInventory(input: {
   };
 }
 
+
+
+/**
+ * One 公文包 (briefcase) location, resolved the same way for both lanes:
+ * - delegated child: `member_id` from the subagent link
+ * - identity session (干员工作区): `member_id` from the session's own agent-home bind
+ */
+export function resolveMemberPackForSession(
+  input: {
+    readonly findHome: (memberId: string) => { readonly rosterWorkspaceId: string } | undefined;
+    readonly isAdvanced: (rosterWorkspaceId: string, memberId: string) => boolean;
+    readonly productHome?: string | undefined;
+  },
+  memberId: string,
+): MemberPackInventory | undefined {
+  const id = memberId.trim();
+  if (!id) return undefined;
+  const home = input.findHome(id);
+  if (!home) return undefined;
+  if (!input.isAdvanced(home.rosterWorkspaceId, id)) return undefined;
+  return listMemberPackInventory({
+    rosterWorkspaceId: home.rosterWorkspaceId,
+    memberId: id,
+    ...(input.productHome ? { productHome: input.productHome } : {}),
+  });
+}
+
 /**
  * Lean capability / preamble lines for a 公文包 (briefcase).
+ * Single wording for both lanes (spawn preamble · turn-start capability) —
+ * callers decide how much to include, never re-word the paths inline.
  * Do not dump every skill absolute path — those trees are in the skill catalog;
  * the child loads them with the skill tool. Full inventory stays on team_* JSON.
  */

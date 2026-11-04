@@ -48,6 +48,15 @@ export {
   voicePromptText,
 } from "./format.js";
 export {
+  createEdgeVoiceProvider,
+  EDGE_DEFAULT_VOICE,
+  filterEdgeVoices,
+  listEdgeVoices,
+  type EdgeTtsOptions,
+  type EdgeVoice,
+  type EdgeVoiceProviderOptions,
+} from "./edge-tts.js";
+export {
   createMemoryVoiceProvider,
   minimalWavBytes,
   type MemoryVoiceOptions,

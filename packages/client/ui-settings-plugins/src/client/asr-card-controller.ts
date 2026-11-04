@@ -102,7 +102,14 @@ export interface AsrCardFace extends CardActions {
   transcribeLocal: (audio: string, mimeType: string) => Promise<string>
 }
 
-const ENGINES: readonly AsrEngine[] = ['local', 'openai']
+/**
+ * Engine ids either voice card may stage. `edge` belongs to TTS only, but the
+ * picker (and its `format`/`parse` gate) is shared — leaving it out silently
+ * rewrote a stored `edge` value to `local` on read AND refused it on save,
+ * which is exactly why the TTS card showed 「本机（系统语音）」 over a
+ * `tts.engine: edge` settings row.
+ */
+const ENGINES: readonly string[] = ['edge', 'local', 'openai']
 const KEY_FIELD = 'apiKey'
 
 /** A `local` / `openai` engine picker — the same two poles on both voice cards. */

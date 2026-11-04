@@ -170,12 +170,14 @@ export interface VoiceLocalInspect {
   readonly prepare: VoicePrepareState
 }
 
-/** One OS voice the local TTS engine can speak with. */
+/** One voice a TTS engine can speak with (OS voice or Edge neural voice). */
 export interface VoiceSystemVoice {
   /** Value a card writes into `tts.voice`. */
   readonly id: string
   /** Human label, usually `Name (locale)`. */
   readonly label: string
+  /** BCP-47 locale (`zh-CN`, `en-US`); lets the card split zh/en rows. */
+  readonly locale?: string
 }
 
 declare module '@xrkseek/xrk-typert-protocol' {
@@ -255,12 +257,13 @@ declare module '@xrkseek/xrk-typert-protocol' {
       prepareStatus: () => Promise<RemoteResult<VoicePrepareState>>
       /** Abort and settle the task as cancelled. */
       prepareCancel: () => Promise<RemoteResult<VoicePrepareState>>
-      /**
-       * OS voices the local TTS engine can speak with. Best-effort: a platform
-       * with no enumerable list answers `[]` and the card falls back to a
-       * free-text voice field.
-       */
-      voices: () => Promise<RemoteResult<{ readonly voices: readonly VoiceSystemVoice[] }>>
+  /**
+   * Voices the selected TTS engine can speak with (`engine: "edge"` returns
+   * the Microsoft neural catalog; omitted / `local` returns OS voices).
+   * Best-effort: a platform or network with no enumerable list answers `[]`
+   * and the card falls back to a free-text voice field.
+   */
+  voices: (input?: { readonly engine?: string }) => Promise<RemoteResult<{ readonly voices: readonly VoiceSystemVoice[] }>>
     }
     pluginInventory: {
       list: () => Promise<RemoteResult<PluginInventorySnapshot>>

@@ -526,7 +526,7 @@ function TurnStatus({ visible, startTime, sessionId, t }: {
  */
 export function ChatView({
   useSession, useSessions, useStore, useProjection, renderSlot, sessionId, openFile, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
-  fileMentions, useToolsDefaultExpanded: _toolsDefaultExpanded, useTranscriptView, t,
+  fileMentions, loadAttachment, useToolsDefaultExpanded: _toolsDefaultExpanded, useTranscriptView, t,
 }: ChatViewSlotProps) {
   // Work-details mode resolves to capability flags; renderers read the flags,
   // never the mode name (same shape DSH uses, one table row per mode).
@@ -1338,6 +1338,7 @@ export function ChatView({
     deleteAt,
     withdrawSteer,
     loadImage,
+    loadAttachment,
     renderMessageImages,
     renderMessageFiles,
     fileMentions,
@@ -1345,7 +1346,7 @@ export function ChatView({
     t,
   }), [
     useSession, selectedCallId, cwd, roundByTurn, openerKeyByTurn, requestOpenFile, inspectCall,
-    forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage,
+    forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer, loadImage, loadAttachment,
     renderMessageImages, renderMessageFiles, fileMentions, renderSlot, t,
   ])
 

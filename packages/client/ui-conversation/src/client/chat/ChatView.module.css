@@ -296,6 +296,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Inline variant: the live name is followed by the cumulative activity line
+   (`过程 · bash · 2 条命令…`). Both sit at their natural width; leftover space
+   stays at the row end. The base `.processGroupSummaryLive` keeps `flex: 1`
+   for the single-child case, where filling the row is harmless. */
+.processGroupSummaryLiveInline {
+  flex: 0 1 auto;
+}
+
 /* Cumulative activity line beside a folded run's in-flight tool. The live
    name owns the sweep and the wider slice; the counts yield first so a long
    history never squeezes「bash」out of the row. */

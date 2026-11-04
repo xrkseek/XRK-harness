@@ -5,7 +5,9 @@
  */
 
 import type { MessageId } from '@xrkseek/xrk-llm/brand'
-import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
+import type {
+  AttachmentIdType, FileAttachmentRef, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
+} from '@xrkseek/xrk-attachment'
 import type { ContentBlock } from '@xrkseek/xrk-llm/types'
 import type { SessionEvent, SessionId } from '@xrkseek/xrk-session/types'
 // The pure-type outlet: api/ is browser-importable, and the package root's
@@ -486,9 +488,9 @@ export interface SessionsApi {
   }>):
   Promise<RpcResponse<{ accepted: true; command?: { kind: 'success'; text?: string } }>>
 
-  /** Reads one durable image after proving that this session's log references its id. */
+  /** Reads one durable image or file after proving that this session's log references its id. */
   attachment(request: RpcRequest<{ sessionId: SessionId; attachmentId: AttachmentIdType }>):
-  Promise<RpcResponse<{ attachment: ImageAttachmentRef; data: string }>>
+  Promise<RpcResponse<{ attachment: ImageAttachmentRef | FileAttachmentRef; data: string }>>
 
   /**
    * Edits, removes, or strictly steers one pending queued occurrence on an ordinary session.

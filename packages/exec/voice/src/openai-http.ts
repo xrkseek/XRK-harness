@@ -84,6 +84,7 @@ export function createOpenAiVoiceProvider(
         mimeType: mime,
         provider: "openai",
         delivery: "openai",
+        voice: req.voice ?? defaultVoice,
         note: `openai-tts bytes=${ab.byteLength}`,
       };
     },

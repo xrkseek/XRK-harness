@@ -31,7 +31,10 @@ import {
   workspaceSessionPromptDescription,
 } from "./session-tool-copy.js";
 import { orchestratorSurface } from "./session-kind.js";
-import { isAgentHomeWorkspace } from "./agent-home-boundary.js";
+import {
+  isAgentHomeSession,
+  isAgentHomeWorkspace,
+} from "./agent-home-boundary.js";
 
 function registerTool(tools: ToolRegistry, tool: ToolDefinition): void {
   if (tools.get(tool.name)) return;
@@ -46,18 +49,29 @@ export interface BindWorkspaceOrchestrateToolsOptions {
   readonly mode: WorkspaceOrchestrateMode;
 }
 
-function listItems(runtime: FaceRuntime) {
+/**
+ * Workspaces this seat can actually dispatch into.
+ *
+ * Project seats reach project workspaces; an agent-home seat reaches 干员
+ * offices. Listing the other lane would advertise a door that refuses — the
+ * seat then spends turns on impossible moves instead of asking a peer.
+ */
+function listItems(runtime: FaceRuntime, sessionId: string) {
+  const fromHome = isAgentHomeSession(runtime, sessionId);
   const listed = runtime.workspaces.list(runtime.store.list());
-  // Orchestrators dispatch into project / coding peers — never 干员 homes.
   return listed.items
-    .filter((row) => row.kind !== "agent-home")
+    .filter((row) => (fromHome ? row.kind === "agent-home" : row.kind !== "agent-home"))
     .map((row) => ({
       workspaceId: row.workspaceId,
       title: row.title,
       path: row.path,
       sessionCount: row.sessionIds.length,
-      im: row.workspaceId === IM_WORKSPACE_ID,
-      xiangyang: row.workspaceId === XIANGYANG_WORKSPACE_ID,
+      ...(fromHome
+        ? { member: row.boundMemberId ?? null }
+        : {
+            im: row.workspaceId === IM_WORKSPACE_ID,
+            xiangyang: row.workspaceId === XIANGYANG_WORKSPACE_ID,
+          }),
     }));
 }
 
@@ -99,7 +113,7 @@ export function bindWorkspaceOrchestrateTools(
       rawInput: {},
     }),
     async execute() {
-      return { content: JSON.stringify({ items: listItems(runtime) }) };
+      return { content: JSON.stringify({ items: listItems(runtime, sessionId) }) };
     },
   });
 
@@ -247,12 +261,31 @@ export function bindWorkspaceOrchestrateTools(
           isError: true,
         };
       }
-      if (isAgentHomeWorkspace(runtime, workspaceId)) {
-        return {
-          content:
-            "workspace_session_prompt: refuse agent-home — open that 干员 pane session, or pick a coding project workspace",
-          isError: true,
-        };
+      /**
+       * Agent-home takes only identity sessions (session.create validates
+       * memberId ↔ that member's home). So this path may prompt an EXISTING
+       * identity session in a peer's office, or mint one as the home's own
+       * member — never a generic `agentPreset: harness` session, and never
+       * from a project/IM/向阳 seat (lane split stays).
+       */
+      const targetIsHome = isAgentHomeWorkspace(runtime, workspaceId);
+      const homeMemberId = targetIsHome
+        ? (runtime.workspaces.get(workspaceId)?.boundMemberId ?? "").trim()
+        : "";
+      if (targetIsHome) {
+        if (!isAgentHomeSession(runtime, sessionId)) {
+          return {
+            content:
+              "workspace_session_prompt: refuse agent-home — project / IM / 向阳 seats do not open 干员-office sessions; open that 干员 pane session, or pick a coding project workspace",
+            isError: true,
+          };
+        }
+        if (!homeMemberId) {
+          return {
+            content: `workspace_session_prompt: agent-home ${workspaceId} has no bound member`,
+            isError: true,
+          };
+        }
       }
       if (!runtime.workspaces.get(workspaceId)) {
         return {
@@ -275,12 +308,22 @@ export function bindWorkspaceOrchestrateTools(
           runtime,
           "session.create",
           `orch-sc-${Date.now().toString(36)}`,
-          {
-            ...(targetId ? { sessionId: targetId } : {}),
-            workspaceId,
-            ...(sessionLabel ? { label: sessionLabel } : {}),
-            agentPreset: "harness",
-          },
+          targetIsHome
+            ? {
+                ...(targetId ? { sessionId: targetId } : {}),
+                workspaceId,
+                ...(sessionLabel ? { label: sessionLabel } : {}),
+                // Identity session: session.create requires the home's own
+                // member. A generic session in an office would be an orphan
+                // nobody seats — refuse rather than mint that shape.
+                memberId: homeMemberId,
+              }
+            : {
+                ...(targetId ? { sessionId: targetId } : {}),
+                workspaceId,
+                ...(sessionLabel ? { label: sessionLabel } : {}),
+                agentPreset: "harness",
+              },
         );
         if (!created.result.ok) {
           return {

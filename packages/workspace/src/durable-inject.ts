@@ -51,9 +51,16 @@ function underRoot(dir: string, root: string): boolean {
 
 /**
  * Pack order before budget clip (progressive catalog — keep head, truncate tail):
- * 0. 公文包 / preferred dirs (干员 · 其子会话)
- * 1. workspace skills + product seed `xrk-*`
- * 2. other global / home installs
+ * 0. 公文包 / preferred dirs (干员 · 其子会话) — the pack travels with the agent
+ * 1. workspace skills — this repository's own conventions
+ * 2. everything else (product seeds, global installs) — alphabetical
+ *
+ * Head placement means "survives truncation", so it must track *provenance*
+ * (whose skill is this), not a name prefix. Seed skills used to win tier 1 via
+ * `xrk-*`, which floated the whole built-in catalog above the user's own
+ * workspace skills and pushed real local ones into the truncated tail. A
+ * product seed is a fallback textbook: it is useful, but it is never more
+ * urgent than the workspace it is being read in.
  *
  * No `skill_search` tool — disclosure is this catalog → `skill` loads body.
  * (`tool_search` is for deferred tools, not skills.)
@@ -70,7 +77,7 @@ export function orderSkillsForCatalogBudget(
   const underWs = (dir: string): boolean => (ws ? underRoot(dir, ws) : false);
   const tier = (s: SkillSummary): number => {
     if (preferred.length > 0 && underPreferred(s.directory)) return 0;
-    if (underWs(s.directory) || s.name.startsWith("xrk-")) return 1;
+    if (underWs(s.directory)) return 1;
     return 2;
   };
   return [...skills].sort((a, b) => {
@@ -81,6 +88,16 @@ export function orderSkillsForCatalogBudget(
 }
 
 /** DSH-shaped model-facing skill catalog (progressive disclosure). */
+/**
+ * Appended when the skill catalog itself had to be clipped. One constant: the
+ * same sentence used to be copied into the `select` and `truncate` branches,
+ * so editing one left the other telling readers a different place to look.
+ */
+const SKILL_CATALOG_CLIPPED_SUFFIX =
+  "\n[skill catalog truncated] Prefer `skill` by exact name. "
+  + "Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` "
+  + "(公文包 / xrk-* / workspace kept first).";
+
 export function formatAvailableSkillsXml(
   skills: readonly SkillSummary[],
 ): string {
@@ -93,7 +110,7 @@ export function formatAvailableSkillsXml(
     "<available_skills>",
     ...lines,
     "</available_skills>",
-    "Progressive skills: catalog = name+blurb; call `skill` with the exact name for the body (no skill_search — tool_search is for deferred tools). Head prefers 公文包 (when present), then workspace + xrk-* seeds; globals may be truncated — then shell-list Product home `skills/*/SKILL.md` / workspace `.agents/skills/`.",
+    "Progressive skills: catalog = name+blurb; call `skill` with the exact name for the body (no skill_search — tool_search is for deferred tools). Head prefers 公文包 (when present), then this workspace's own skills; product seeds and globals may be truncated — then shell-list Product home `skills/*/SKILL.md` / workspace `.agents/skills/`.",
     "</system-reminder>",
   ].join("\n");
 }
@@ -158,7 +175,7 @@ export function buildSkillCatalogPayload(
     const packed = selectSkillsForBudget(listed, budget.left, query);
     const full = formatAvailableSkillsXml(packed.selected);
     const content = clipToBudget("skills", full, budget, {
-      suffix: "\n[skill catalog truncated] Prefer `skill` by exact name. Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` (公文包 / xrk-* / workspace kept first).",
+      suffix: SKILL_CATALOG_CLIPPED_SUFFIX,
     });
     if (!content.trim()) return undefined;
     const included = listedForClippedCatalog(packed.selected, content);
@@ -190,7 +207,7 @@ export function buildSkillCatalogPayload(
       : undefined;
   const full = formatAvailableSkillsXml(listed);
   const content = clipToBudget("skills", full, budget, {
-    suffix: "\n[skill catalog truncated] Prefer `skill` by exact name. Else shell-list Product home `skills/*/SKILL.md` + workspace `.agents/skills/` (公文包 / xrk-* / workspace kept first).",
+    suffix: SKILL_CATALOG_CLIPPED_SUFFIX,
   });
   if (!content.trim()) return undefined;
   const included = listedForClippedCatalog(listed, content);
@@ -219,7 +236,10 @@ function listedForClippedCatalog(
   listed: readonly SkillSummary[],
   content: string,
 ): readonly SkillSummary[] {
-  return listed.filter((s) => content.includes(`\`${s.name}\``));
+  // Match the rendered line, not a bare backticked name: `xrk-plugin` is a
+  // substring of `xrk-plugin-dev`, so the loose check reported entries that
+  // the clipped catalog had actually dropped.
+  return listed.filter((s) => content.includes(`- \`${s.name}\`:`));
 }
 
 export function buildInstructionsPayload(
@@ -344,4 +364,3 @@ export function planWorkspaceInjectAppends(input: {
 
   return out;
 }
-

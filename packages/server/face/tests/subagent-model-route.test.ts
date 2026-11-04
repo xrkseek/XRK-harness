@@ -65,8 +65,6 @@ describe("subagent model route", () => {
     bindSubagentTools(tools, { runtime, parentSessionId: parent });
     const agents = await tools.get("list_agents")!.execute({});
     expect(agents.content).toContain("deepseek/deepseek-flash");
-    const analytics = await tools.get("analytics")!.execute({});
-    expect(analytics.content).toContain("deepseek/deepseek-flash");
   });
 
   it("stress: parent model switch leaves a live child on its spawn pin", () => {

@@ -11,6 +11,7 @@ export type VoiceAccessKind =
   | "memory"
   | "local"
   | "system"
+  | "edge"
   | "openai-ready"
   | "openai-missing-key"
   | "unknown";
@@ -75,7 +76,9 @@ export function describeVoiceAccess(
       summary: "memory (CI/demo Provider)",
     };
   }
-  if (engine === "local") {
+  // Edge is TTS-only; an ASR seat that somehow stages `edge` resolves to the
+  // local engine (see `createVoiceAccess`), so describe it as local.
+  if (engine === "local" || (engine === "edge" && asr)) {
     if (!asr) {
       return {
         kind: "system",
@@ -93,6 +96,17 @@ export function describeVoiceAccess(
         "Error: SenseVoice local STT is enabled but not usable. Place ONNX assets under " +
         "{XRK_HOME}/voice/sensevoice (or XRK_VOICE_SENSEVOICE_DIR) and install sherpa-onnx-node.",
       summary: "local SenseVoice Provider (assets + sherpa-onnx-node required for STT)",
+    };
+  }
+  if (engine === "edge") {
+    return {
+      kind: "edge",
+      ready: true,
+      message:
+        "Error: Edge TTS could not synthesize. It needs network access to " +
+        "speech.platform.bing.com, and Microsoft changes the handshake from time to time. " +
+        "Switch Settings → Plugins → TTS engine to `local` (OS voices) for an offline fallback.",
+      summary: "edge neural TTS (free, no key, needs network)",
     };
   }
   if (engine === "openai") {

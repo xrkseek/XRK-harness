@@ -28,7 +28,7 @@ export function createSkillTools(
     {
       name: "skill",
       description:
-        "Load full skill body by exact catalog name (progressive disclosure: catalog is name+blurb only; no skill_search). Prefer skills listed first (公文包 / workspace / xrk-*).",
+        "Load full skill body by exact catalog name (progressive disclosure: catalog is name+blurb only; no skill_search). Prefer skills listed first (公文包 / workspace).",
       parameters: {
         type: "object",
         properties: {

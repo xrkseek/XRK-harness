@@ -117,19 +117,15 @@ describe("subagent tools", () => {
     expect(tools.get("team_graph")).toBeTruthy();
     expect(tools.get("followup_task")).toBeTruthy();
     expect(tools.get("wait_agent")).toBeTruthy();
-    expect(tools.get("analytics")).toBeTruthy();
     expect(tools.get("interrupt_agent")).toBeTruthy();
     expect(tools.get("close_agent")).toBeTruthy();
     expect(tools.get("ralph")).toBeTruthy();
 
-    const analytics = await tools.get("analytics")!.execute({});
-    expect(analytics.content).toMatch(/lineage_depth: 0/);
-    expect(analytics.content).toMatch(/sessions: 0\//);
-    expect(analytics.content).toContain(child);
-
     const listOut = await tools.get("list_agents")!.execute({});
     expect(listOut.content).toMatch(/quota .+ sessions /);
     expect(listOut.content).toContain(child);
+    // parent_inbox is the one signal the retired `analytics` tool owned.
+    expect(listOut.content).toMatch(/parent_inbox queue=0 steer=0/);
 
     const linked = await tools.get("team_graph")!.execute({
       action: "link",

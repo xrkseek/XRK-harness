@@ -31,19 +31,26 @@ export const CURATED_MEMORY_PROMPT_TEXT =
 
 const ACTIONS = ["add", "replace", "remove", "list"] as const;
 
+/**
+ * The tool writes notes only. `USER.md` is an injection-layer profile owned by
+ * the human (hand-edited): it describes who they are, and a model rewriting it
+ * mid-turn silently changes the persona every later session starts from. The
+ * store still supports the target for provider surfaces — the tool does not
+ * expose it.
+ */
 function asTarget(raw: unknown): CuratedMemoryTarget | undefined {
   const target = String(raw ?? "memory");
-  if (target === "memory" || target === "user") return target;
+  if (target === "memory") return target;
   return undefined;
 }
 
 function asOps(raw: unknown): CuratedMemoryOperation[] | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const op = item && typeof item === "object" ? (item as CuratedMemoryOperation) : {};
-    return op;
-  });
+  // Pass items through untouched: `applyBatch` already rejects an unknown
+  // action with the real one-based index (`Operation N (unknown)`) and applies
+  // nothing, so rewriting a bad item to `{}` here would only hide its source.
+  return raw.map((item) => item as CuratedMemoryOperation);
 }
 
 /**
@@ -77,8 +84,9 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
         },
         target: {
           type: "string",
-          enum: ["memory", "user"],
-          description: "memory = MEMORY.md notes; user = USER.md profile.",
+          enum: ["memory"],
+          description:
+            "memory = MEMORY.md notes. USER.md is the user's hand-owned profile — not writable here.",
         },
         content: {
           type: "string",
@@ -108,7 +116,11 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           },
         },
       },
-      required: ["target"],
+      // `target` is deliberately not required: the only value is `memory`, so
+      // demanding it made every call carry a constant and let a model that
+      // omitted it get rejected by schema validation before `asTarget` could
+      // apply its default.
+      required: [],
     },
     isConcurrencySafe() {
       return false;
@@ -120,7 +132,12 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
           isError: true,
           content: JSON.stringify({
             success: false,
-            error: `Invalid memory target '${String(args.target)}'. Use 'memory' or 'user'.`,
+            // Naming 'user' here sent models into a retry loop: `asTarget`
+            // refuses it on purpose (USER.md is hand-edited), so the hint must
+            // not advertise it.
+            error:
+              `Invalid memory target '${String(args.target)}'. Only 'memory' is writable; `
+              + "USER.md is the user's hand-owned profile.",
           }),
         };
       }
@@ -152,7 +169,7 @@ export function createCuratedMemoryTools(store: CuratedMemoryStore): ToolDefinit
         };
       }
       const ops = asOps(args.operations);
-      if (Array.isArray(args.operations) && args.operations.length > 0 && ops && ops.length > 0) {
+      if (ops && ops.length > 0) {
         const result = await Promise.resolve(store.applyBatch(target, ops));
         return { isError: !result.success, content: JSON.stringify(result) };
       }

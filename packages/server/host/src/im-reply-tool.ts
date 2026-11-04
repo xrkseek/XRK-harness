@@ -86,7 +86,11 @@ export interface CreateImToolDefinitionsOptions {
   readonly xrkHome?: string;
   /** Per-session / per-bind port overrides (win over {@link setImToolPorts}). */
   readonly ports?: Partial<ImToolPorts>;
-  /** Register `im_reply` as alias of `im_send` (default true). */
+  /**
+   * Register `im_reply` as an alias of `im_send` (default false — one outbound
+   * verb on the model surface; opt in only for a caller that still emits the
+   * old name).
+   */
   readonly replyAlias?: boolean;
   /**
    * Mutate or replace the default defs before bind (AGT: rename, wrap execute,
@@ -131,7 +135,7 @@ export function createImToolDefinitions(
 ): ToolDefinition[] {
   const { sessionId, xrkHome } = options;
   const ports = resolveImToolPorts(options.ports);
-  const replyAlias = options.replyAlias !== false;
+  const replyAlias = options.replyAlias === true;
 
   const sendTool: ToolDefinition = {
     name: "im_send",

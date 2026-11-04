@@ -77,11 +77,13 @@ export function openCuratedMemoryLayers(
  */
 export function createLayeredCuratedMemoryStore(
   options: CreateLayeredCuratedMemoryStoreOptions,
-): CuratedMemoryStore & {
-  readonly layers: readonly MemoryScopeLayer[];
-  readonly defaultScope: CuratedMemoryScopeKind;
-  storeFor(scope: CuratedMemoryScopeKind): CuratedMemoryStore | undefined;
-} {
+  ): CuratedMemoryStore & {
+    readonly layers: readonly MemoryScopeLayer[];
+    readonly defaultScope: CuratedMemoryScopeKind;
+    /** True when more than one zone exists; the one "layered" predicate. */
+    readonly isLayered: boolean;
+    storeFor(scope: CuratedMemoryScopeKind): CuratedMemoryStore | undefined;
+  } {
   const layers = openCuratedMemoryLayers(options);
   const defaultScope = pickDefaultScope(layers, options.defaultScope);
   const byScope = new Map(layers.map((l) => [l.scope, l.store] as const));
@@ -92,12 +94,14 @@ export function createLayeredCuratedMemoryStore(
   const facade: CuratedMemoryStore & {
     readonly layers: readonly MemoryScopeLayer[];
     readonly defaultScope: CuratedMemoryScopeKind;
+    readonly isLayered: boolean;
     storeFor(scope: CuratedMemoryScopeKind): CuratedMemoryStore | undefined;
   } = {
-    dir: primary.dir,
-    layers,
-    defaultScope,
-    storeFor,
+      dir: primary.dir,
+      layers,
+      defaultScope,
+      isLayered: layers.length > 1,
+      storeFor,
     frozenPrompt(target) {
       return primary.frozenPrompt(target);
     },
@@ -186,7 +190,8 @@ export function createScopedCuratedMemoryTools(
             `Default ${layered.defaultScope}.`,
         },
       },
-      required: ["target"],
+      // Same as the flat tool: `target` only ever holds `memory`.
+      required: [],
     },
     async execute(args): Promise<ToolResultContent> {
       const a =
@@ -214,7 +219,16 @@ export function createScopedCuratedMemoryTools(
         };
       }
       const [scopedTool] = createCuratedMemoryTools(store);
-      const out = await scopedTool!.execute(args);
+      if (scopedTool === undefined) {
+        return {
+          isError: true,
+          content: JSON.stringify({
+            success: false,
+            error: `memory tool is unavailable for scope '${scope}'.`,
+          }),
+        };
+      }
+      const out = await scopedTool.execute(args);
       if (typeof out.content === "string" && out.content.startsWith("{")) {
         try {
           const json = JSON.parse(out.content) as Record<string, unknown>;

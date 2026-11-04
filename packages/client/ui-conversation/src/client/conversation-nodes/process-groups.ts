@@ -205,6 +205,7 @@ export function isStandaloneTranscriptTool(name: string): boolean {
     || key === 'todo_write'
     || key === 'image_generate'
     || key === 'video_generate'
+    || key === 'text_to_speech'
     || key === 'propose_skill'
 }
 

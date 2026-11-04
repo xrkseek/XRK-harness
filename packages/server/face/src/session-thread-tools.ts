@@ -1,5 +1,5 @@
 /**
- * Model-facing thread_* / sideline_set — workspace 主线 catalog + session 支线.
+ * Model-facing thread_* — workspace 主线 catalog + session 支线 (written via presence_set).
  * 主线 = discovery pin (collab board / thread_list). Messaging does not require it.
  */
 import type { ToolDefinition, ToolRegistry } from "@xrkseek/core-tools";
@@ -31,7 +31,6 @@ import {
   publishSessionThreads,
   sessionIdsOnThread,
 } from "./session-thread-publish.js";
-import { SIDELINE_MAX } from "./session-thread-store.js";
 import { refuseCrossAgentHomeLane } from "./agent-home-boundary.js";
 
 export interface BindSessionThreadToolsOptions {
@@ -104,7 +103,7 @@ export function listWorkspaceThreadCatalog(
   }));
 }
 
-/** Register thread_* / sideline_set (or only `thread_message` when `messageOnly`). */
+/** Register thread_* (or only `thread_message` when `messageOnly`). */
 export function bindSessionThreadTools(
   tools: ToolRegistry,
   options: BindSessionThreadToolsOptions,
@@ -474,41 +473,8 @@ export function bindSessionThreadTools(
     },
   });
 
-  registerTool(tools, {
-    name: "sideline_set",
-    description:
-      "Alias for writing 支线 caption only — prefer `presence_set` (tips + emotion). " +
-      "Same storage as presence tips under the session name. Does not change 主线.",
-    parameters: {
-      type: "object",
-      properties: {
-        text: { type: "string", description: `Current work caption (≤${SIDELINE_MAX} chars).` },
-      },
-      required: ["text"],
-      additionalProperties: false,
-    },
-    isConcurrencySafe: () => true,
-    presentCall: (args) => ({
-      card: "generic",
-      title: "sideline_set",
-      kind: "other",
-      rawInput: args,
-    }),
-    execute: async (args) => {
-      const text = String(readArgs(args).text ?? "");
-      const workspaceId = ws();
-      const clipped = text.trim().slice(0, SIDELINE_MAX);
-      const bind = runtime.sessionThreads.bindOf(workspaceId, sessionId);
-      const next = bind
-        ? runtime.sessionThreads.setSideline(workspaceId, sessionId, clipped)
-        : bind;
-      const sticky = runtime.presence.get(sessionId);
-      runtime.presence.set(sessionId, {
-        emotionId: sticky?.emotionId ?? "30",
-        tips: clipped,
-      });
-      publishSessionThread(runtime, workspaceId, sessionId);
-      return { content: JSON.stringify({ workspaceId, bind: next ?? null, tips: clipped }) };
-    },
-  });
+  // 支线 caption is written by `presence_set` (tips + emotion) — it already
+  // mirrors tips into the same thread store. A second, tips-only entry point
+  // existed as `sideline_set` and only gave the model a coin flip between two
+  // names for one effect.
 }

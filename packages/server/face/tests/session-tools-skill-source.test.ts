@@ -58,7 +58,6 @@ describe("classifySessionToolSurface", () => {
     expect(classifySessionToolSurface("session_read")).toBe("agent");
     expect(classifySessionToolSurface("thread_message")).toBe("agent");
     expect(classifySessionToolSurface("thread_delete")).toBe("agent");
-    expect(classifySessionToolSurface("sideline_set")).toBe("agent");
     expect(classifySessionToolSurface("presence_set")).toBe("agent");
     expect(classifySessionToolSurface("workspace_session_prompt")).toBe("agent");
     // Route repair + catalog live with the delegation tools, not "other".

@@ -589,7 +589,7 @@ export function bindAgentRosterTools(
       "Mint or revise a 干员 (template → skill xrk-delegate). " +
       "Thin: name+playbook (+inject/tools). " +
       `Advanced ${MEMBER_PACK_BRIEFCASE}: kind=advanced + skills/files/env_prep (playbook.md · skills/ · workspace/ · env/SETUP.md) → team_ready → team_export. ` +
-      "Revise any custom member with id= (omit unchanged fields); advanced may also merge skills/files/env_prep into 公文包. " +
+      `Revise any custom member with id= (omit unchanged fields); advanced may also merge skills/files/env_prep into ${MEMBER_PACK_BRIEFCASE}. ` +
       "Install friend zip/json → team_import (not this).",
     parameters: {
       type: "object",
@@ -606,7 +606,7 @@ export function bindAgentRosterTools(
         playbook: {
           type: "string",
           description:
-            "Durable how-to. Prefer: Role; Steps; Constraints; Acceptance; for advanced also list what is in 公文包 (briefcase). " +
+            `Durable how-to. Prefer: Role; Steps; Constraints; Acceptance; for advanced also list what is in ${MEMBER_PACK_BRIEFCASE}. ` +
             "On revise, omit to keep. Max 20000. Template: skill xrk-delegate.",
         },
         role: { type: "string" },
@@ -884,7 +884,7 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_import",
     description:
-      "Install a friend-shared 干员: card= (thin JSON) or pack= (advanced zip/dir/attachment → 公文包/briefcase). " +
+      `Install a friend-shared 干员: card= (thin JSON) or pack= (advanced zip/dir/attachment → ${MEMBER_PACK_BRIEFCASE}). ` +
       "Then follow envPrep with this main session → team_ready. Illegal pack: inspect/fix → re-import. " +
       "After import you may team_save id= to edit playbook or merge skills/files. Mint new → team_save (not this).",
     parameters: {
@@ -1055,7 +1055,7 @@ export function bindAgentRosterTools(
   registerTool(tools, {
     name: "team_export",
     description:
-      "Export a custom 干员 for the user: thin→JSON, advanced→zip (公文包/briefcase: playbook+skills+references+workspace+env). " +
+      `Export a custom 干员 for the user: thin→JSON, advanced→zip (${MEMBER_PACK_BRIEFCASE}: playbook+skills+references+workspace+env). ` +
       "Writes to dir= (default session cwd). Catalog mem_seed_* cannot export — mint a copy first. " +
       "User said 导出/分享这个干员 / export member. UI Export is equivalent.",
     parameters: {

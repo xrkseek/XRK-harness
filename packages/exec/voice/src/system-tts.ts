@@ -26,7 +26,7 @@ import type {
   VoiceTranscribeRequest,
   VoiceTranscribeResult,
 } from "./types.js";
-import { VoiceError } from "./types.js";
+import { VOICE_MAX_TTS_TEXT, VoiceError } from "./types.js";
 
 /** One voice the Host's OS can speak with. */
 export interface SystemVoice {
@@ -34,6 +34,8 @@ export interface SystemVoice {
   readonly id: string
   /** Human label, usually `Name (locale)`. */
   readonly label: string
+  /** BCP-47 locale (`zh-CN`, `en-US`) when the backend can name one. */
+  readonly locale?: string
 }
 
 /** How one system backend is driven. */
@@ -54,8 +56,8 @@ type SystemRunner = (
   env: NodeJS.ProcessEnv,
 ) => Promise<string>;
 
-/** Longest text one clip may carry (argv/env limits are not the constraint, patience is). */
-const MAX_TEXT = 8_000;
+/** Local alias so the engine reads the same limit `text_to_speech` enforces. */
+const MAX_TEXT = VOICE_MAX_TTS_TEXT;
 
 function runCommand(
   file: string,
@@ -89,7 +91,7 @@ const SAPI_SYNTH = [
   "Add-Type -AssemblyName System.Speech",
   "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer",
   "$VOICE = $env:XRK_TTS_VOICE",
-  "if ($VOICE) { try { $s.SelectVoice($VOICE) } catch {} }",
+  "if ($VOICE) { try { $s.SelectVoice($VOICE) } catch { Write-Error ('SAPI voice not installed: ' + $VOICE); exit 1 } }",
   "$s.SetOutputToWaveFile($env:XRK_TTS_OUT)",
   "$s.Speak([IO.File]::ReadAllText($env:XRK_TTS_TEXT, [Text.Encoding]::UTF8))",
   "$s.Dispose()",
@@ -98,9 +100,11 @@ const SAPI_SYNTH = [
 const SAPI_VOICES = [
   "Add-Type -AssemblyName System.Speech",
   "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer",
-  "$rows = $s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object {",
-  "  [PSCustomObject]@{ id = $_.VoiceInfo.Name; label = ($_.VoiceInfo.Name + ' (' + $_.VoiceInfo.Culture.Name + ')') }",
-  "}",
+  // `local` is the offline fallback now, not a listening choice. Windows
+  // installs a handful of concatenative voices that all sound dated; listing
+  // them just asks the reader to pick the least bad one. Report the system
+  // default only — Edge is the real voice surface.
+  "$rows = [PSCustomObject]@{ id = $s.Voice.Name; label = ($s.Voice.Name + ' (' + $s.Voice.Culture.Name + ')') }",
   "$s.Dispose()",
   "$rows | ConvertTo-Json -Compress",
 ].join("; ");
@@ -302,6 +306,7 @@ export function createSystemVoiceProvider(
           mimeType: "audio/wav",
           provider: `system-${backend}`,
           delivery: "system",
+          ...(voice ? { voice } : {}),
           note: `system-tts bytes=${bytes.byteLength} voice=${voice || "default"}`,
         };
       } catch (err) {

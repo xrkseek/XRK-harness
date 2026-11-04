@@ -311,7 +311,7 @@ describe("Face settings U2", () => {
       applies: string;
     };
     expect(tts.value.enabled).toBe(false);
-    expect(tts.value.engine).toBe("local");
+    expect(tts.value.engine).toBe("edge");
     expect(tts.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "image-gen")).toBe(true);
     const imageGen = v.namespaces.find((n) => n.ns === "image-gen") as {

@@ -273,11 +273,12 @@ export function createSenseVoiceLocalProvider(
           "VOICE_UNAVAILABLE",
         );
       }
-      // Chinese-first, not `auto`. SenseVoice's auto-detect answered a short
-      // noisy mandarin take with Korean `그.` — a language guess the user never
-      // asked for and cannot correct from the composer. `auto` stays available
-      // for callers that explicitly pass it.
-      const language = String(req.language ?? "zh").trim() || "zh";
+      // `auto` is the default: the composer's dictation has no language
+      // picker, and the Host serves a mixed-language workspace — pinning `zh`
+      // made English and Japanese clips miscorrect. SenseVoice's detector can
+      // still guess a short noisy Mandarin take as Korean, so a caller that
+      // knows the language should pass it explicitly (`zh` / `en` / …).
+      const language = String(req.language ?? "auto").trim() || "auto";
       if (
         !(LANGS as readonly string[]).includes(language) &&
         language !== "auto"

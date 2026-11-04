@@ -5,7 +5,7 @@
  * clash order stays identical.
  *
  * Candidate roots (existence skipped later). Catalog **display / truncate**
- * order is {@link orderSkillsForCatalogBudget}: 公文包 → workspace+xrk-* → globals.
+ * order is {@link orderSkillsForCatalogBudget}: 公文包 → workspace → seeds/globals.
  * Name-clash: `preferredSkillDirs` / `extraSkillDirs` beat workspace.
  *
  * Scan list:
@@ -100,12 +100,7 @@ export function standingSkillToolSourceOptions(
   return {
     skillDirs: standingCatalogSkillDirCandidates(options),
     workspaceRoot: options.workspaceRoot,
-    ...(options.extraSkillDirs?.length
-      ? {
-          extraSkillDirs: options.extraSkillDirs,
-          preferredSkillDirs: options.extraSkillDirs,
-        }
-      : {}),
+
   };
 }
 

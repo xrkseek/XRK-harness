@@ -367,12 +367,19 @@ export function buildFaceModelCatalog(
       models,
     });
   }
+  // A provider can be both a registry brand and a declared pi-ai provider. The
+  // second loop used to push unconditionally, so the composer showed two
+  // headers with the same id. First source wins: the registry branch above
+  // already carries the richer model rows.
+  const groupedIds = new Set(groups.map((group) => group.id));
   for (const declared of listDeclaredPiAiProviders(runtime)) {
+    if (groupedIds.has(declared.id)) continue;
     if (!declared.baseUrl || declared.models.length === 0) continue;
     // Re-read profile models so reasoning / soft-budget fields survive
     // (DeclaredPiAiProvider.models is a thinner inventory shape).
     const models = asModelRows(piAiProviderProfile(runtime, declared.id)?.models);
     if (models.length === 0) continue;
+    groupedIds.add(declared.id);
     groups.push({
       id: declared.id,
       name: declared.displayName,
@@ -387,16 +394,16 @@ export function buildFaceModelCatalog(
     groups.map((group) => ({ provider: group.id, group })),
     preferred,
   ).map((row) => row.group);
-  // 自带完整路由（零配置即可用）的 provider 置顶；其余保持用户偏好顺序。
-  const selfRoutedIds = new Set(
-    runtime.registry
-      .listBrands()
-      .filter((b) => b.autoCatalog === true)
-      .map((b) => b.id),
-  );
-  const pinned = ordered.filter((group) => selfRoutedIds.has(group.id));
-  const rest = ordered.filter((group) => !selfRoutedIds.has(group.id));
-  return { groups: [...pinned, ...rest], failures: [] };
+  // Order is the user's, full stop.
+  //
+  // Self-routed brands (zero-config lanes like sunflower-free) used to be
+  // force-pinned above this list. That shipped well while a free lane was the
+  // only thing a fresh install could reach, but once those lanes live in
+  // Settings → Models as ordinary rows, pinning them fights the user: their
+  // own configured provider gets pushed below a brand they never chose, every
+  // time, with no control in the UI to undo it. Being zero-config is a
+  // reason to *list* a brand, not a reason to outrank the user's picks.
+  return { groups: ordered, failures: [] };
 }
 
 /** Look up catalog contextWindow for a selection (Face contextPressure denominator). */

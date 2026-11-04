@@ -211,6 +211,38 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('resolves a non-image attachment (TTS clip) through the same cache', async () => {
+    // One read path serves every media type: the Host returns the stored bytes
+    // plus their media type, so the clip's object URL is the same shape as an
+    // image's and shares the per-session revocation.
+    const b = await bench(attachmentId => Promise.resolve({
+      ok: true as const,
+      value: {
+        attachment: {
+          attachmentId, mediaType: 'image/png' as const, bytes: 3, width: 1, height: 1,
+        },
+        data: Uint8Array.of(1, 2, 3),
+      },
+    }))
+    const urls = stubObjectUrls(() => 'blob:tts-1')
+    try {
+      const sessionId = b.runtime.sessions.behavior('s1').sessionId
+      const clip = {
+        attachmentId: AttachmentId('tts-1'), name: 'tts-1.mp3', bytes: 3, mediaType: 'audio/mpeg',
+      }
+      await expect(b.root.resolveAttachment(sessionId, clip)).resolves.toBe('blob:tts-1')
+      expect(b.root.peekImage(sessionId, clip)).toBe('blob:tts-1')
+      // The image loader shares the cache key: one blob per attachment id.
+      await expect(b.root.resolveImage(sessionId, { ...clip } as never)).resolves.toBe('blob:tts-1')
+      expect(urls.created).toHaveBeenCalledTimes(1)
+      b.root.releaseSessionImages(sessionId)
+      expect(b.root.peekImage(sessionId, clip)).toBeUndefined()
+    } finally {
+      urls.restore()
+    }
+    await b.runtime.dispose()
+  })
+
   it('invalidates pending historical image loads when the rendered session is released', async () => {
     const read = Promise.withResolvers<Awaited<ReturnType<SessionFace['readAttachment']>>>()
     const b = await bench(() => read.promise)
@@ -221,7 +253,7 @@ describe('ConversationController', () => {
     const pending = b.root.resolveImage(sessionId, attachment)
     b.root.releaseSessionImages(sessionId)
     read.resolve({ ok: true, value: { attachment, data: Uint8Array.of(1) } })
-    await expect(pending).rejects.toThrow('historical image scope was released')
+    await expect(pending).rejects.toThrow('historical attachment scope was released')
     await b.runtime.dispose()
   })
 

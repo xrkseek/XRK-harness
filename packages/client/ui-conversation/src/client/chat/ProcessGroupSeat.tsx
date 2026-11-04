@@ -210,10 +210,16 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
     writeScroll,
     onSettled: onFoldSettled,
   })
-  // Shimmer tracks tools still in flight — independent of fold latch (manual
+  // Shimmer tracks work still in flight — independent of fold latch (manual
   // fold or `foldWhen: immediate` can hide the body while a tool still runs).
-  const live = entry.summary.running
-    || (entry.summary.tools === 0 && entry.summary.reasoning > 0)
+  //
+  // A settled run is never live. `tools === 0 && reasoning > 0` alone cannot
+  // tell "still thinking" from "thought once, long ago": once the standalone
+  // rows (todo / present / text_to_speech…) leave the group, a Turn that only
+  // reasoned leaves a reasoning-only run behind, and that run used to shimmer
+  // forever even after its Turn closed.
+  const live = !settled
+    && (entry.summary.running || (entry.summary.tools === 0 && entry.summary.reasoning > 0))
   // Folded + live: keep「过程」as the title and put the in-flight tool in the
   // summary seat (same shape as open) — a title of bare `bash` read as a
   // tool-row expand, not a process fold.
@@ -280,7 +286,12 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
           <>
             <span className={css.processGroupSep} aria-hidden />
             <span
-              className={showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary}
+              className={[
+                showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary,
+                // 后面还跟着累计活动行时，按内容宽度排；`flex: 1` 会把
+                // 「过程 · bash」和「2 条命令…」之间撑出一大段空白。
+                liveActivity === undefined ? '' : css.processGroupSummaryLiveInline,
+              ].filter(Boolean).join(' ')}
               data-process-summary=""
             >
               {openSummary}

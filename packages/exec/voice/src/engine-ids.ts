@@ -11,6 +11,7 @@
 const ENV_ENGINE_ALIASES: Readonly<Record<string, string>> = {
   "1": "openai",
   openai: "openai",
+  edge: "edge",
   local: "local",
   sensevoice: "local",
   // TTS spells its local engine `system`; the registry's table lookup falls

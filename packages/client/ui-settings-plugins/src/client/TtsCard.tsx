@@ -19,22 +19,29 @@ export type TtsCardProps =
 export function TtsCard(props: TtsCardProps) {
   const { t } = props
   // Same rule as the ASR card: the voice namespace may land after apply, so the
-  // OS voice catalog is re-read whenever the card opens.
+  // catalog is re-read whenever the card opens or the engine changes (Edge
+  // answers a different catalog than the OS backends).
   const { refreshVoices } = props
-  useEffect(() => { refreshVoices() }, [refreshVoices])
   const state = props.useTtsCard(snapshot => snapshot)
   const disabled = !state.writable
   const enabled = state.enabled.text === 'true'
-  const engine = state.engine.text || 'local'
+  const engine = state.engine.text || 'edge'
+  useEffect(() => { refreshVoices(engine) }, [refreshVoices, engine])
   const catalog = state.voices.voices
+  // Edge names a locale per voice, so the card can offer one row per language.
+  // OS backends leave `locale` unset; everything then lands in the zh row,
+  // which is the historical single-list behavior.
+  const zhCatalog = catalog.filter(voice => voice.locale?.startsWith('zh') ?? true)
+  const enCatalog = catalog.filter(voice => voice.locale?.startsWith('en') ?? false)
   // Keep a stored voice selectable even when the Host no longer lists it: a
   // silent fallback to "default" would rewrite the user's pick on save.
   const storedVoice = state.voice.text
-  const voiceOptions = [
+  const storedVoiceEn = state.voiceEn.text
+  const voiceOptions = (rows: readonly { id: string; label: string }[], stored: string) => [
     { value: '', label: t('ttsVoiceDefault') },
-    ...catalog.map(voice => ({ value: voice.id, label: voice.label })),
-    ...(storedVoice !== '' && !catalog.some(voice => voice.id === storedVoice)
-      ? [{ value: storedVoice, label: storedVoice }]
+    ...rows.map(voice => ({ value: voice.id, label: voice.label })),
+    ...(stored !== '' && !rows.some(voice => voice.id === stored)
+      ? [{ value: stored, label: stored }]
       : []),
   ]
   return (
@@ -54,12 +61,66 @@ export function TtsCard(props: TtsCardProps) {
         disabled={disabled}
         value={engine}
         options={[
+          { value: 'edge', label: t('ttsEngineEdge') },
           { value: 'local', label: t('ttsEngineLocal') },
           { value: 'openai', label: t('ttsEngineCloud') },
         ]}
-        onChange={(value) => { props.edit('engine', value) }}
+        onChange={(value) => {
+          props.edit('engine', value)
+          // A voice id is engine-scoped: an Edge shortName (`zh-CN-XiaoxiaoNeural`)
+          // means nothing to SAPI, and an OS voice name means nothing to an
+          // OpenAI gateway. Carrying it across engines stored a pick the user
+          // never made — the old silent SAPI fallback then spoke a different
+          // voice than the card showed. Clearing both lets the new engine use
+          // its own default; the user picks again if they care.
+          props.edit('voice', '')
+          props.edit('voiceEn', '')
+        }}
       />
-      {engine === 'local'
+      <SelectField
+        id="plugin-config-tts-language"
+        label={t('ttsLanguage')}
+        hint={t('ttsLanguageHint')}
+        disabled={disabled}
+        value={state.language.text || 'auto'}
+        options={[
+          { value: 'auto', label: t('ttsLanguageAuto') },
+          { value: 'zh', label: t('ttsLanguageZh') },
+          { value: 'en', label: t('ttsLanguageEn') },
+        ]}
+        onChange={(value) => { props.edit('language', value) }}
+      />
+      {engine === 'edge'
+        ? (
+          <>
+            <SelectField
+              id="plugin-config-tts-voice-zh"
+              label={t('ttsVoiceZh')}
+              hint={t('ttsEdgeVoiceHint')}
+              disabled={disabled}
+              value={storedVoice}
+              options={voiceOptions(zhCatalog, storedVoice)}
+              onChange={(value) => { props.edit('voice', value) }}
+            />
+            <SelectField
+              id="plugin-config-tts-voice-en"
+              label={t('ttsVoiceEn')}
+              hint={t('ttsEdgeVoiceHint')}
+              disabled={disabled}
+              value={storedVoiceEn}
+              options={voiceOptions(enCatalog, storedVoiceEn)}
+              onChange={(value) => { props.edit('voiceEn', value) }}
+            />
+            {catalog.length === 0
+              ? (
+                <p className={css.note} role="note">
+                  {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesEmpty')}
+                </p>
+              )
+              : null}
+          </>
+        )
+        : engine === 'local'
         ? (
           <>
             {catalog.length > 0
@@ -70,7 +131,7 @@ export function TtsCard(props: TtsCardProps) {
                   hint={t('ttsLocalVoiceHint')}
                   disabled={disabled}
                   value={storedVoice}
-                  options={voiceOptions}
+                  options={voiceOptions(catalog, storedVoice)}
                   onChange={(value) => { props.edit('voice', value) }}
                 />
               )
@@ -94,7 +155,7 @@ export function TtsCard(props: TtsCardProps) {
                   <button
                     type="button"
                     className={css.oauthLink}
-                    onClick={props.refreshVoices}
+                    onClick={() => { props.refreshVoices() }}
                   >
                     {t('ttsVoicesRetry')}
                   </button>

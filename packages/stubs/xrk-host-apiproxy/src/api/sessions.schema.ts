@@ -16,7 +16,9 @@ import type {
   SessionToolEntry, SessionToolsValue,
 } from './sessions.ts'
 import type { ToolEventView } from './events.ts'
-import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type {
+  AttachmentIdType, FileAttachmentRef, ImageAttachmentLimits, ImageAttachmentRef,
+} from '@xrkseek/xrk-attachment'
 import type { WorkspaceId } from './workspace.ts'
 import {
   SESSION_SEARCH_RESULT_LIMIT,
@@ -434,6 +436,19 @@ export const imageAttachmentRefSchema = z.object({
   sourcePath: z.string().min(1).optional(),
 }) as unknown as z.ZodType<ImageAttachmentRef>
 
+/**
+ * Durable non-image file reference from the same lookup (a TTS clip's MP3, an
+ * uploaded document). No intrinsic width/height: the store persists bytes plus
+ * a name, and the read path recovers the media type from the extension.
+ */
+export const fileAttachmentRefSchema = z.object({
+  attachmentId: attachmentIdSchema,
+  name: z.string().min(1),
+  bytes: z.number().int().positive(),
+  mediaType: z.string().min(1).optional(),
+  sourcePath: z.string().min(1).optional(),
+}) as unknown as z.ZodType<FileAttachmentRef>
+
 /** session.attachment request payload. */
 export const sessionAttachmentRequestSchema = z.object({
   sessionId: sessionIdSchema,
@@ -442,7 +457,10 @@ export const sessionAttachmentRequestSchema = z.object({
 
 /** session.attachment response value. */
 export const sessionAttachmentValueSchema = z.object({
-  attachment: imageAttachmentRefSchema,
+  // Image first: it is the narrow branch (intrinsic size + image-only media
+  // type), so a stored clip falls through to the file branch instead of
+  // failing the union with invalid width/height.
+  attachment: z.union([imageAttachmentRefSchema, fileAttachmentRefSchema]),
   data: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.attachment'>>>
 

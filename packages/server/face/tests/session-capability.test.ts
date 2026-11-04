@@ -148,6 +148,59 @@ describe("session_capability", () => {
     expect(out).toMatch(/member_id: mem_hw/);
   });
 
+  it("identity session on an agent-home still sees its 公文包 paths", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "xrk-cap-home-"));
+    const runtime = createFaceRuntime({
+      store: createMemorySessionStore(),
+      workspaceRoot: root,
+      productDir: root,
+      drain: drain(),
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    runtime.agentRoster.upsert(GLOBAL_ROSTER_ID, {
+      id: "mem_eng",
+      name: "英一",
+      playbook: "Own 英语一.",
+      role: "worker",
+      kind: "advanced",
+      ready: true,
+    });
+    const packHome = path.join(root, "agent-rosters", "packs", "global", "mem_eng");
+    mkdirSync(path.join(packHome, "workspace"), { recursive: true });
+    const home = path.join(root, "agent-homes", "mem_eng");
+    mkdirSync(home, { recursive: true });
+    const { workspace } = runtime.workspaces.ensureAgentHome({
+      absPath: home,
+      memberId: "mem_eng",
+      title: "英一",
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {
+      workspaceId: workspace.workspaceId,
+    });
+    expect(created.result.ok).toBe(true);
+    if (!created.result.ok) return;
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+    runtime.sessionIdentities.bind({
+      sessionId,
+      memberId: "mem_eng",
+      workspaceId: workspace.workspaceId,
+    });
+
+    const text = formatSessionCapability(runtime, sessionId);
+    // Identity sessions are not delegated children, yet the pack must be named.
+    expect(text).not.toContain("kind: delegated_child");
+    expect(text).toContain("公文包 (briefcase)");
+    expect(text).toContain(packHome);
+    expect(text).toContain("member_id: mem_eng");
+    // Same pack lines as a dispatched child — one 干员, one briefcase. Only the
+    // delegation channel (FINAL→parent) stays out of the resident seat.
+    expect(text).toContain(`skills_dir: ${path.join(packHome, "skills")}`);
+    expect(text).toContain("materials:");
+    expect(text).not.toContain("FINAL→parent");
+  });
+
   it("formats kind=delegated for a tool-delegated child", async () => {
     const store = createMemorySessionStore();
     const root = await mkdtemp(path.join(tmpdir(), "xrk-cap-child-"));

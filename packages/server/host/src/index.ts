@@ -125,6 +125,7 @@ import {
   migrateAutoSessionsToFullAccess,
   approvePendingAutoReview,
   createBossStatusFragmentProvider,
+  createTtsAvailabilityFragmentProvider,
   createCollabBoardFragmentProvider,
   createSeatIdentityFragmentProvider,
   createSessionCapabilityFragmentProvider,
@@ -132,6 +133,7 @@ import {
   createInstructionAuthorityFragmentProvider,
   canvasWorkspaceIdForSession,
   memberPackSkillsDir,
+  sessionSeatMemberId,
   resolveSessionModelSelection,
   credentialsSet,
   settingsMutateFace,
@@ -696,6 +698,7 @@ export type AgentFactory = (input: {
     | ReturnType<typeof createSeatIdentityFragmentProvider>
     | ReturnType<typeof createSessionCapabilityFragmentProvider>
     | ReturnType<typeof createSessionPostureFragmentProvider>
+    | ReturnType<typeof createTtsAvailabilityFragmentProvider>
   >;
   /** Face-backed working_directory tool (Host wires per session). */
   workingDirectoryTools?: import("@xrkseek/core-tools").WorkingDirectoryToolsOptions;
@@ -1257,17 +1260,27 @@ export function createHostManager(): HostManager {
         runtime?: FaceRuntime;
       } = {};
 
-      /** Per-session layered zones (global + workspace + session + optional agent). */
+      /**
+       * Per-session layered zones: global · workspace · agent · session.
+       *
+       * Each zone follows one axis, and each axis is resolved from live facts —
+       * never from the seat's current shape alone:
+       * - workspace → the room the session lives in (`workspaceIdOf`).
+       * - agent → the *person*, whether it is wearing a dispatched child link
+       *   (subagent) or sitting in its own office (agent-home identity).
+       * - session → the delegation TREE root, so a parent and every child it
+       *   spawns share one workbench. `humanFacingSessionId` walks the parent
+       *   chain and stops at forks, exactly the boundary we want.
+       */
       const curatedMemoryForSession = (sessionId: string): MemoryProvider => {
         const rt = faceBox.runtime;
         const workspaceId = rt?.workspaces.workspaceIdOf(sessionId);
-        const link = rt?.subagents.getByChild(sessionId);
-        const agentId =
-          typeof link?.memberId === "string" && link.memberId.trim()
-            ? link.memberId.trim()
-            : undefined;
+        const treeRoot = rt?.subagents.humanFacingSessionId(sessionId) ?? sessionId;
+        // One resolver for "which person wears this seat" — the same function
+        // the seat card uses, so memory and identity can never disagree.
+        const agentId = rt ? sessionSeatMemberId(rt, sessionId) : undefined;
         const layered = createLayeredCuratedMemoryStore({
-          sessionId,
+          sessionId: treeRoot,
           ...(workspaceId ? { workspaceId } : {}),
           ...(agentId ? { agentId } : {}),
           defaultScope: agentId ? "agent" : "session",
@@ -1765,6 +1778,7 @@ export function createHostManager(): HostManager {
                       createBossStatusFragmentProvider(faceBox.runtime),
                       createSeatIdentityFragmentProvider(faceBox.runtime),
                       createCollabBoardFragmentProvider(faceBox.runtime),
+                      createTtsAvailabilityFragmentProvider(faceBox.runtime),
                     ],
                     workingDirectoryTools: {
                       get: () => resolveSessionCwd(faceBox.runtime!, sessionId),
@@ -1979,7 +1993,12 @@ export function createHostManager(): HostManager {
               ).value as Record<string, unknown>;
               if (
                 ttsNs.enabled === true &&
-                !agent.tools.get("text_to_speech")
+                !agent.tools.get("text_to_speech") &&
+                // Only seats with a listener: 老板's own sessions (project or
+                // 干员 agent-home, both top-level). Delegated children and
+                // background turns stay silent — nobody hears them, and every
+                // clip costs a synthesis round trip.
+                parentSessionId === undefined
               ) {
                 const ttsBase =
                   typeof ttsNs.baseUrl === "string" && ttsNs.baseUrl.trim()
@@ -1988,6 +2007,20 @@ export function createHostManager(): HostManager {
                 const ttsVoice =
                   typeof ttsNs.voice === "string" && ttsNs.voice.trim()
                     ? ttsNs.voice.trim()
+                    : undefined;
+                const ttsVoiceEn =
+                  typeof ttsNs.voiceEn === "string" && ttsNs.voiceEn.trim()
+                    ? ttsNs.voiceEn.trim()
+                    : undefined;
+                const ttsLanguageRaw =
+                  typeof ttsNs.language === "string"
+                    ? ttsNs.language.trim().toLowerCase()
+                    : "";
+                const ttsLanguage =
+                  ttsLanguageRaw === "zh" ||
+                  ttsLanguageRaw === "en" ||
+                  ttsLanguageRaw === "auto"
+                    ? ttsLanguageRaw
                     : undefined;
                 const ttsModel =
                   typeof ttsNs.model === "string" && ttsNs.model.trim()
@@ -2003,7 +2036,11 @@ export function createHostManager(): HostManager {
                 const ttsEngine =
                   typeof ttsNs.engine === "string" && ttsNs.engine.trim()
                     ? ttsNs.engine.trim().toLowerCase()
-                    : "local";
+                    // Matches the schema default (`engine: "edge"`). A different
+                    // fallback here only fires on a half-written settings row,
+                    // and then silently built a `local` voice service while the
+                    // card said Edge.
+                    : "edge";
                 const access = createVoiceAccess({
                   direction: "tts",
                   engine: ttsEngine,
@@ -2018,6 +2055,22 @@ export function createHostManager(): HostManager {
                     engine: ttsEngine,
                     ...(access.service ? { service: access.service } : {}),
                     ...(voiceEnv ? { env: voiceEnv } : {}),
+                    // One row per language: `auto` sniffs each clip, so a
+                    // Chinese reply and an English drill both read natively.
+                    ...(ttsVoice !== undefined || ttsVoiceEn !== undefined
+                      ? {
+                          voices: {
+                            ...(ttsVoice !== undefined ? { zh: ttsVoice } : {}),
+                            ...(ttsVoiceEn !== undefined ? { en: ttsVoiceEn } : {}),
+                          },
+                        }
+                      : {}),
+                    ...(ttsLanguage !== undefined
+                      ? { language: ttsLanguage }
+                      : {}),
+                    // Persist synthesized audio so the client gets a playable
+                    // file block instead of a truncated base64 preview.
+                    attachments,
                   }),
                 );
               }

@@ -41,7 +41,8 @@ describe("bindImTools", () => {
     const tools = createToolRegistry();
     bindImTools(tools, { sessionId: "im-sess", xrkHome: home });
     expect(tools.get("im_send")).toBeTruthy();
-    expect(tools.get("im_reply")).toBeTruthy();
+    // One outbound verb by default; the alias is opt-in.
+    expect(tools.get("im_reply")).toBeUndefined();
     expect(tools.get("im_binding")).toBeTruthy();
 
     const sent = await tools.get("im_send")!.execute({
@@ -148,7 +149,7 @@ describe("bindImTools", () => {
     const defs = createImToolDefinitions({
       sessionId: "im-agt",
       xrkHome: home,
-      replyAlias: false,
+      replyAlias: true,
       mapTools: (tools) =>
         tools.map((t) =>
           t.name === "im_send"
@@ -164,7 +165,7 @@ describe("bindImTools", () => {
         },
       ],
     });
-    expect(defs.some((t) => t.name === "im_reply")).toBe(false);
+    expect(defs.some((t) => t.name === "im_reply")).toBe(true);
     expect(defs.find((t) => t.name === "im_send")?.description).toContain(
       "[agt]",
     );

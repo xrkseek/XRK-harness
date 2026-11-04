@@ -18,7 +18,9 @@ import {
   withSeatChannelEchoPrefix,
 } from '@xrkseek/client-runtime/client'
 import type { SubmitImageAttachment, SubmitOutcome } from '@xrkseek/client-ui-input-trigger/client'
-import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
+import type {
+  AttachmentId, FileAttachmentRef, ImageAttachmentRef, ImageMediaType,
+} from '@xrkseek/xrk-attachment'
 import type {
   ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment,
   DraftFileUpload, DraftFileUploads,
@@ -80,12 +82,27 @@ export interface IConversation {
    */
   resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string>
   /**
-   * Synchronously read a historical image URL that has already resolved.
+   * Resolve and cache one session-authorized historical attachment URL for any
+   * media type (images, audio clips, documents). Same authority and cache as
+   * {@link resolveImage}; the object URL's blob type is the stored media type.
    * @param sessionId - owning session authorization scope.
-   * @param attachment - durable image reference.
+   * @param attachment - durable attachment reference.
+   * @returns browser URL valid until its rendered session is released.
+   */
+  resolveAttachment(
+    sessionId: SessionId,
+    attachment: ImageAttachmentRef | FileAttachmentRef,
+  ): Promise<string>
+  /**
+   * Synchronously read a historical attachment URL that has already resolved.
+   * @param sessionId - owning session authorization scope.
+   * @param attachment - durable image or file reference.
    * @returns the cached browser URL, or `undefined` while it is still loading.
    */
-  peekImage(sessionId: SessionId, attachment: ImageAttachmentRef): string | undefined
+  peekImage(
+    sessionId: SessionId,
+    attachment: ImageAttachmentRef | FileAttachmentRef,
+  ): string | undefined
 }
 
 /**
@@ -114,7 +131,12 @@ function browserDraftFile(file: File): ComposerFileAttachment {
   }
 }
 
-interface ImageUrlEntry {
+/**
+ * One cached historical attachment URL. Images and files share the cache: the
+ * read path (`session.readAttachment`) is media-agnostic and the blob carries
+ * the stored `mediaType`, so a TTS clip needs no second loader.
+ */
+interface AttachmentUrlEntry {
   readonly sessionId: SessionId
   readonly generation: number
   readonly pending: Promise<string>
@@ -146,38 +168,40 @@ export class ConversationController extends Service implements IConversation {
   readonly fileUploads = createSnapshotStore<DraftFileUploads>({})
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
   private readonly fileEncodeControllers = new Map<DraftAttachmentId, AbortController>()
-  private readonly imageUrls = new Map<string, ImageUrlEntry>()
-  private readonly imageGenerations = new Map<SessionId, number>()
-  private readonly createdImageUrls = new Set<string>()
+  private readonly attachmentUrls = new Map<string, AttachmentUrlEntry>()
+  private readonly attachmentGenerations = new Map<SessionId, number>()
+  /** Every object URL this service created (historical loads + draft previews). */
+  private readonly createdObjectUrls = new Set<string>()
   private disposed = false
 
   /**
-   * Soft-cap historical object URLs. A long transcript with many images can
-   * otherwise pin tens of MB of decoded blobs after the user scrolls away —
+   * Soft-cap historical object URLs. A long transcript with many images (and
+   * now audio clips) can otherwise pin tens of MB of blob bytes after the user
+   * scrolls away —
    * keep the focused session, revoke the oldest foreign entries first.
    */
-  private trimImageUrlCache(keepSessionId: SessionId): void {
+  private trimAttachmentUrlCache(keepSessionId: SessionId): void {
     const MAX_ENTRIES = 96
-    if (this.imageUrls.size <= MAX_ENTRIES) return
-    const revoke = (key: string, entry: ImageUrlEntry): void => {
-      this.imageUrls.delete(key)
+    if (this.attachmentUrls.size <= MAX_ENTRIES) return
+    const revoke = (key: string, entry: AttachmentUrlEntry): void => {
+      this.attachmentUrls.delete(key)
       void entry.pending.then((url) => {
-        if (!this.createdImageUrls.delete(url)) return
+        if (!this.createdObjectUrls.delete(url)) return
         revokePreview(url)
       }, () => {
         // Failed loads own no object URL.
       })
     }
     // Prefer foreign sessions first so the focused transcript keeps its thumbs.
-    for (const [key, entry] of this.imageUrls) {
-      if (this.imageUrls.size <= MAX_ENTRIES - 16) return
+    for (const [key, entry] of this.attachmentUrls) {
+      if (this.attachmentUrls.size <= MAX_ENTRIES - 16) return
       if (entry.sessionId === keepSessionId) continue
       revoke(key, entry)
     }
     // Same-session overflow (many read_image / generate thumbs): drop oldest
     // Map insertion order — never reuse another attachment's blob URL.
-    for (const [key, entry] of this.imageUrls) {
-      if (this.imageUrls.size <= MAX_ENTRIES - 16) return
+    for (const [key, entry] of this.attachmentUrls) {
+      if (this.attachmentUrls.size <= MAX_ENTRIES - 16) return
       revoke(key, entry)
     }
   }
@@ -197,12 +221,12 @@ export class ConversationController extends Service implements IConversation {
       this.disposed = true
       for (const controller of this.fileEncodeControllers.values()) controller.abort()
       this.fileEncodeControllers.clear()
-      for (const url of this.createdImageUrls) revokePreview(url)
-      this.createdImageUrls.clear()
+      for (const url of this.createdObjectUrls) revokePreview(url)
+      this.createdObjectUrls.clear()
       this.draftAttachments.clear()
       this.fileUploads.set({})
-      this.imageUrls.clear()
-      this.imageGenerations.clear()
+      this.attachmentUrls.clear()
+      this.attachmentGenerations.clear()
     }, 'conversation attachment URL cache')
   }
 
@@ -280,7 +304,7 @@ export class ConversationController extends Service implements IConversation {
     const pendingAttachments = attachments.map((attachment) => {
       if (attachment.kind === 'image') {
         const previewUrl = URL.createObjectURL(attachment.file)
-        this.createdImageUrls.add(previewUrl)
+        this.createdObjectUrls.add(previewUrl)
         echoPreviewUrls.push(previewUrl)
         return {
           type: 'image' as const,
@@ -304,7 +328,7 @@ export class ConversationController extends Service implements IConversation {
     })
     const releaseEchoPreviews = (): void => {
       for (const url of echoPreviewUrls) {
-        if (!this.createdImageUrls.delete(url)) continue
+        if (!this.createdObjectUrls.delete(url)) continue
         revokePreview(url)
       }
       echoPreviewUrls.length = 0
@@ -357,7 +381,7 @@ export class ConversationController extends Service implements IConversation {
       if (isAcceptedImageMediaType(file.type)) {
         const attachment = browserDraftImage(file)
         this.draftAttachments.set(attachment.id, attachment)
-        this.createdImageUrls.add(attachment.previewUrl)
+        this.createdObjectUrls.add(attachment.previewUrl)
         return attachment
       }
       const attachment = browserDraftFile(file)
@@ -422,7 +446,7 @@ export class ConversationController extends Service implements IConversation {
     this.fileEncodeControllers.delete(id)
     controller?.abort()
     if (attachment.kind === 'image') {
-      this.createdImageUrls.delete(attachment.previewUrl)
+      this.createdObjectUrls.delete(attachment.previewUrl)
       revokePreview(attachment.previewUrl)
       return
     }
@@ -446,42 +470,66 @@ export class ConversationController extends Service implements IConversation {
    * @returns browser URL valid until its rendered session is released.
    */
   resolveImage(sessionId: SessionId, attachment: ImageAttachmentRef): Promise<string> {
-    if (this.disposed) return Promise.reject(new Error('conversation.resolveImage: service is disposed'))
+    return this.resolveAttachment(sessionId, attachment)
+  }
+
+  /**
+   * Resolve and cache one session-authorized historical attachment URL.
+   *
+   * The Host read endpoint returns the stored bytes plus the stored media type,
+   * so this one path serves images and audio alike; only the blob type differs.
+   * @param sessionId - owning session authorization scope.
+   * @param attachment - durable attachment reference.
+   * @returns browser URL valid until its rendered session is released.
+   */
+  resolveAttachment(
+    sessionId: SessionId,
+    attachment: ImageAttachmentRef | FileAttachmentRef,
+  ): Promise<string> {
+    if (this.disposed) return Promise.reject(new Error('conversation.resolveAttachment: service is disposed'))
     const key = `${sessionId}:${attachment.attachmentId}`
-    const cached = this.imageUrls.get(key)
+    const cached = this.attachmentUrls.get(key)
     if (cached !== undefined) return cached.pending
-    const generation = this.imageGenerations.get(sessionId) ?? 0
+    const generation = this.attachmentGenerations.get(sessionId) ?? 0
     const session = this.requireSessions().binding(sessionId)?.session
     if (session === undefined) {
-      return Promise.reject(new Error(`conversation.resolveImage: unknown session "${sessionId}"`))
+      return Promise.reject(new Error(`conversation.resolveAttachment: unknown session "${sessionId}"`))
     }
     const pending = session.readAttachment(attachment.attachmentId)
       .then((result) => {
         if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-        if (this.disposed) throw new Error('conversation.resolveImage: service was disposed before loading completed')
-        if ((this.imageGenerations.get(sessionId) ?? 0) !== generation) {
-          throw new Error('historical image scope was released before loading completed')
+        if (this.disposed) throw new Error('conversation.resolveAttachment: service was disposed before loading completed')
+        if ((this.attachmentGenerations.get(sessionId) ?? 0) !== generation) {
+          throw new Error('historical attachment scope was released before loading completed')
         }
+        // `FileAttachmentRef.mediaType` is optional (a legacy file row may
+        // carry none). Both branches below need a concrete type:
+        // `data:undefined;base64,…` never decodes, and a typeless Blob makes
+        // <audio> refuse the clip.
+        const mediaType = result.value.attachment.mediaType ?? 'application/octet-stream'
         const url = typeof URL.createObjectURL !== 'function'
-          ? `data:${result.value.attachment.mediaType};base64,${bytesToBase64(result.value.data)}`
+          ? `data:${mediaType};base64,${bytesToBase64(result.value.data)}`
           : URL.createObjectURL(new Blob(
             [Uint8Array.from(result.value.data).buffer],
-            { type: result.value.attachment.mediaType },
+            { type: mediaType },
           ))
-        if (url.startsWith('blob:')) this.createdImageUrls.add(url)
+        if (url.startsWith('blob:')) this.createdObjectUrls.add(url)
         // Publish the settled URL for the synchronous peek: an expanding tool
         // card asks again the moment it mounts, and a cache hit must not flash
         // the loading placeholder.
-        const entry = this.imageUrls.get(key)
+        const entry = this.attachmentUrls.get(key)
         if (entry !== undefined && entry.pending === pending) entry.url = url
         return url
       })
       .catch((error: unknown) => {
-        if (this.imageUrls.get(key)?.generation === generation) this.imageUrls.delete(key)
+        // Diagnostic: a failed clip must name its own cause in the browser
+        // console (unknown session / RPC code / scope release).
+        console.error('[xrk] resolveAttachment failed', attachment.attachmentId, error)
+        if (this.attachmentUrls.get(key)?.generation === generation) this.attachmentUrls.delete(key)
         throw error
       })
-    this.imageUrls.set(key, { sessionId, generation, pending })
-    this.trimImageUrlCache(sessionId)
+    this.attachmentUrls.set(key, { sessionId, generation, pending })
+    this.trimAttachmentUrlCache(sessionId)
     return pending
   }
 
@@ -491,9 +539,12 @@ export class ConversationController extends Service implements IConversation {
    * @param attachment - durable image reference.
    * @returns the cached browser URL, or `undefined` while it is still loading.
    */
-  peekImage(sessionId: SessionId, attachment: ImageAttachmentRef): string | undefined {
+  peekImage(
+    sessionId: SessionId,
+    attachment: ImageAttachmentRef | FileAttachmentRef,
+  ): string | undefined {
     if (this.disposed) return undefined
-    return this.imageUrls.get(`${sessionId}:${attachment.attachmentId}`)?.url
+    return this.attachmentUrls.get(`${sessionId}:${attachment.attachmentId}`)?.url
   }
 
   /**
@@ -501,12 +552,12 @@ export class ConversationController extends Service implements IConversation {
    * @param sessionId - rendered session scope.
    */
   releaseSessionImages(sessionId: SessionId): void {
-    this.imageGenerations.set(sessionId, (this.imageGenerations.get(sessionId) ?? 0) + 1)
-    for (const [key, entry] of this.imageUrls) {
+    this.attachmentGenerations.set(sessionId, (this.attachmentGenerations.get(sessionId) ?? 0) + 1)
+    for (const [key, entry] of this.attachmentUrls) {
       if (entry.sessionId !== sessionId) continue
-      this.imageUrls.delete(key)
+      this.attachmentUrls.delete(key)
       void entry.pending.then((url) => {
-        if (!this.createdImageUrls.delete(url)) return
+        if (!this.createdObjectUrls.delete(url)) return
         revokePreview(url)
       }, () => {
         // A failed or invalidated load owns no object URL.

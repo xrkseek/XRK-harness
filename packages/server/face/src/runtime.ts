@@ -1134,6 +1134,18 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
               sessionId,
               messageOnly: true,
             });
+            // A dispatched 干员 keeps its 公文包 and may still open a session
+            // in an agent-home (same collab lane) and leave a peer a first
+            // word — the tool that survives when nested `subagent` does not.
+            // Project workspaces stay out of reach (lane split, enforced in
+            // workspace_session_prompt itself).
+            if (childLink.memberId?.trim()) {
+              bindWorkspaceOrchestrateTools(agent.tools, {
+                runtime,
+                sessionId,
+                mode: "coding",
+              });
+            }
           }
           if (delegatedChild) {
             // Children: list roster; if spawned as a 干员, may revise own playbook (team_self).

@@ -26,8 +26,9 @@ import { roleCapsHint, roleDeniedTools } from "./agent-team-roles.js";
 import { DELEGATED_INHERIT_DENY } from "./agent-roster-store.js";
 import {
   formatMemberPackInventoryLines,
-  listMemberPackInventory,
+  resolveMemberPackForSession,
 } from "./agent-member-pack.js";
+
 import { subagentDepth } from "./subagent-tools.js";
 
 /** Affirmative permission copy for the model (path gate only). */
@@ -89,24 +90,48 @@ function toolSurfaceSummary(badge: string): string {
 }
 
 /**
- * Live 公文包 (briefcase) inventory for an advanced member child (pack ≠ cwd).
+ * 公文包 (briefcase) lines for whoever is wearing this member — identical in
+ * both lanes. A 干员 is the same employee whether it sits in its own office
+ * (the boss is its speaker) or was dispatched (someone else is): same pack,
+ * same materials, same skills. What differs is the tool surface and who
+ * answers `ask`, and both of those are derived elsewhere from live facts
+ * (role floor / child link) — never by trimming the briefcase.
  */
-function advancedBriefcaseCapabilityLines(
-  runtime: FaceRuntime,
-  memberId: string,
-): string[] {
-  const home = runtime.agentRoster.findHome(memberId);
-  if (!home) return [];
-  const member = runtime.agentRoster.get(home.rosterWorkspaceId, memberId);
-  if (member?.kind !== "advanced") return [];
-  const productHome = runtime.agentRoster.home;
-  const inv = listMemberPackInventory({
-    rosterWorkspaceId: home.rosterWorkspaceId,
+function briefcaseLines(runtime: FaceRuntime, memberId: string): string[] {
+  const inv = resolveMemberPackForSession(
+    {
+      findHome: (id) => runtime.agentRoster.findHome(id),
+      isAdvanced: (rosterWorkspaceId, id) =>
+        runtime.agentRoster.get(rosterWorkspaceId, id)?.kind === "advanced",
+      productHome: runtime.agentRoster.home,
+    },
     memberId,
-    ...(productHome ? { productHome } : {}),
-  });
-  if (!inv) return [];
-  return formatMemberPackInventoryLines(inv);
+  );
+  return inv ? formatMemberPackInventoryLines(inv) : [];
+}
+
+
+
+/**
+ * Who answers this seat's questions, and whose words it is acting on.
+ *
+ * Both lanes are the same employee; what differs is the seat's speaker. The
+ * answer channel follows the speaker — never hardcode ask_user / ask_parent
+ * per lane, or the two drift (a dispatched 干员 that never learns its ask goes
+ * to its dispatcher instead of the boss).
+ */
+function seatSpeakerLines(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string[] {
+  const link = runtime.subagents.getByChild(sessionId);
+  if (link && link.mode !== "fork") {
+    return [`ask: ask_parent → ${link.parentSessionId} (your dispatcher; it is not the boss)`];
+  }
+  if (runtime.sessionIdentities.get(sessionId)) {
+    return ["ask: ask_user → the boss directly (you are seated in your own office)"];
+  }
+  return [];
 }
 
 /** Short capability for tool-delegated children (not UI forks). */
@@ -120,7 +145,7 @@ function formatDelegatedCapability(
   const cwd = resolveSessionCwd(runtime, sessionId);
   const humanFace = runtime.subagents.humanFacingSessionId(sessionId);
   const briefcase = link.memberId
-    ? advancedBriefcaseCapabilityLines(runtime, link.memberId)
+    ? briefcaseLines(runtime, link.memberId)
     : [];
   const depth = subagentDepth(runtime, sessionId);
   const nestBrief =
@@ -144,6 +169,7 @@ function formatDelegatedCapability(
         ? " no nested subagent (role floor)."
         : " nested subagent ok when parallel helps."),
     `omitted: ${omittedChildTools(link.role)}`,
+    ...seatSpeakerLines(runtime, sessionId),
     ...childGapLines(runtime, sessionId),
   ];
   return lines.join("\n");
@@ -191,6 +217,14 @@ export function formatSessionCapability(
   const expanded = runtime.toolDisclosure.count(sessionId);
 
   const cwd = resolveSessionCwd(runtime, sessionId);
+  // Identity sessions (干员 agent-home) wear the same member as a dispatched
+  // child, so they get the same briefcase lines: cwd is the bare agent-home,
+  // and without a pointer the member hunts the filesystem for materials it
+  // already owns.
+  const identity = runtime.sessionIdentities.get(sessionId);
+  const briefcase = identity?.memberId
+    ? briefcaseLines(runtime, identity.memberId)
+    : [];
   const shellConfine = shouldConfineSandbox(sandbox) ? "on" : "off";
   const lines = [
     `badge: ${badge}`,
@@ -200,6 +234,9 @@ export function formatSessionCapability(
     `tool_surface: ${toolSurfaceSummary(badge)}`,
     `surface_brief: ${surfaceBrief(badge)}`,
     `cwd: ${cwd}`,
+    ...briefcase,
+    ...(identity?.memberId ? [`member_id: ${identity.memberId}`] : []),
+    ...seatSpeakerLines(runtime, sessionId),
     `path_allowlist: ${allowN} objects (session+settings)`,
     `tools: direct=${counts.direct} deferred=${counts.deferred} expanded=${expanded}`,
   ];

@@ -377,7 +377,7 @@ export class Session implements SessionFace {
    */
   async readAttachment(
     attachmentId: AttachmentIdType,
-  ): Promise<RpcResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>> {
+  ): Promise<RpcResult<{ attachment: ImageAttachmentRef | FileAttachmentRef; data: Uint8Array }>> {
     try {
       const result = (await this.api.sessions.attachment({
         sessionId: this.sessionId,

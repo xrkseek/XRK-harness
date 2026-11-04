@@ -14,7 +14,7 @@ description: >-
 | Concept | Tool | Role |
 |---------|------|------|
 | 主线 | \`thread_upsert\` / \`thread_list\` / \`thread_delete\` | Discovery pin on collab board |
-| 支线 | \`presence_set\` tips / \`sideline_set\` | One-line "now" in sidebar |
+| 支线 | \`presence_set\` tips | One-line "now" in sidebar |
 | Mail | \`thread_message\` | Any parent↔parent (pin **not** required) |
 | Dispatch | \`workspace_session_prompt\` | Open/continue coding peer; returns \`session_id\` |
 

@@ -82,6 +82,11 @@ export interface ToolCallOwnerProps {
    */
   loadImage?: ((attachment: ImageAttachmentRef) => Promise<string>) | undefined
   /**
+   * Session-authorized attachment loader for non-image media (a TTS clip's
+   * bytes). Optional so non-media toolviews and tests need not supply it.
+   */
+  loadAttachment?: ((attachment: FileAttachmentRef) => Promise<string>) | undefined
+  /**
    * Tree-authorized `tool.call.images` / `tool.call.files` dispatcher.
    * Sole child declaration lives on `conversation.chat.node`; keyed toolviews
    * must use this (their own `renderSlot` cannot re-own those holes).

@@ -4,7 +4,7 @@
  */
 
 import type { MessageContent } from "@xrkseek/protocol";
-import { contentHasImage, flattenText } from "@xrkseek/protocol";
+import { contentHasFile, contentHasImage, flattenText } from "@xrkseek/protocol";
 
 export const DEFAULT_TOOL_OUTPUT_MAX_LINES = 2_000;
 /**
@@ -126,20 +126,33 @@ function boundedPreview(
 
 /**
  * Bound model-visible tool text. Pure aside from optional `persist`.
- * Image-bearing ContentBlock[] results are left intact (DSH: don't truncate vision).
+ * Image- and file-bearing ContentBlock[] results are left intact: flattening
+ * them would destroy the durable reference the client needs (a `file` block is
+ * a deliverable, not prose). Model routes re-project blocks to handle text
+ * later (`projectFilesToText`), so nothing leaks raw bytes into a request.
  */
 export async function boundToolOutput(
   content: MessageContent,
   options: BoundToolOutputOptions = {},
 ): Promise<BoundToolOutputResult> {
   if (typeof content !== "string") {
-    if (contentHasImage(content)) {
+    if (contentHasImage(content) || contentHasFile(content)) {
+      // The durable blocks pass through untouched, but the text beside them is
+      // still content. Reporting 0 bytes made every image / file result read as
+      // "produced nothing" to callers that key on `originalBytes`.
+      let textBytes = 0
+      let textLines = 0
+      for (const block of content) {
+        if (block.type !== 'text') continue
+        textBytes += Buffer.byteLength(block.text, 'utf8')
+        textLines += lineCount(block.text)
+      }
       return {
         content,
         truncated: false,
         outputPaths: [],
-        originalBytes: 0,
-        originalLines: 0,
+        originalBytes: textBytes,
+        originalLines: textLines,
       };
     }
     content = flattenText(content);

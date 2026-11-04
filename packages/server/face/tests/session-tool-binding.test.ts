@@ -19,7 +19,6 @@ const FACE_SESSION_TOOLS = [
   "get_goal",
   "update_goal",
   "presence_set",
-  "sideline_set",
   "team_list",
   "team_save",
   "team_import",

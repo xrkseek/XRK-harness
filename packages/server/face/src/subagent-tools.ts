@@ -126,7 +126,7 @@ const POLL_MS = SESSION_DRAIN_POLL_MS;
 export { SUBAGENT_ROUTING_PROMPT_TEXT };
 
 /**
- * Status / `analytics` quota — per provider/model live session cap.
+ * Status quota — per provider/model live session cap.
  * `depth` is lineage info only (no longer a hard ceiling).
  * `active`/`maxActive`/`slotsFree` map to that route's session usage.
  */
@@ -166,7 +166,7 @@ export function predictChildModelSelection(
 }
 
 /**
- * Resolve live quota for Status / `analytics` (per-model session cap).
+ * Resolve live quota for Status (per-model session cap).
  */
 export function resolveSubagentQuota(
   runtime: FaceRuntime,
@@ -1659,11 +1659,25 @@ function createListAgentsTool(
         options.runtime,
         options.parentSessionId,
       );
+      // Parent's own pending admits (steer/queue). This was the only signal
+      // The old analytics tool carried this and nothing else that this tool
+      // lacked; quota, per-child state, route and inbox are already above.
+      const parentPending = listPendingAdmits(
+        readSessionEvents(options.runtime.store, options.parentSessionId),
+        options.parentSessionId,
+      );
+      let parentQueued = 0;
+      let parentSteer = 0;
+      for (const admit of parentPending) {
+        if (admit.delivery === "steer") parentSteer += 1;
+        else parentQueued += 1;
+      }
       const header =
         `quota ${quota.provider}/${quota.model} sessions ${quota.active}/${quota.maxActive}` +
         ` · slots_free ${quota.slotsFree}` +
         ` · delegated ${quota.delegated}` +
-        (quota.depth > 0 ? ` · lineage_depth ${quota.depth}` : "");
+        (quota.depth > 0 ? ` · lineage_depth ${quota.depth}` : "") +
+        ` · parent_inbox queue=${parentQueued} steer=${parentSteer}`;
       if (!entries.length) {
         return { content: `${header}\n(no subagents)` };
       }
@@ -2433,81 +2447,6 @@ function createWaitAgentTool(
   };
 }
 
-function createAnalyticsTool(
-  options: BindSubagentToolsOptions,
-): ToolDefinition {
-  return {
-    name: "analytics",
-    description:
-      "Local subagent quota and queue snapshot for this session (not cloud telemetry). " +
-      "Shows depth/active caps, free slots, and each child's running state, model route, " +
-      "plus inbox queue/steer counts.",
-    parameters: { type: "object", properties: {} },
-    isConcurrencySafe: () => true,
-    async execute() {
-      const quota = resolveSubagentQuota(
-        options.runtime,
-        options.parentSessionId,
-      );
-      const parentPending = listPendingAdmits(
-        readSessionEvents(options.runtime.store, options.parentSessionId),
-        options.parentSessionId,
-      );
-      let parentQueued = 0;
-      let parentSteer = 0;
-      for (const admit of parentPending) {
-        if (admit.delivery === "steer") parentSteer += 1;
-        else parentQueued += 1;
-      }
-      const lines = [
-        `purpose: local-debug`,
-        `model: ${quota.provider}/${quota.model}`,
-        `sessions: ${quota.active}/${quota.maxActive}`,
-        `slots_free: ${quota.slotsFree}`,
-        `delegated: ${quota.delegated}`,
-        `lineage_depth: ${quota.depth}`,
-        `parent_inbox: queue=${parentQueued} steer=${parentSteer}`,
-        "children:",
-      ];
-      const children = options.runtime.subagents.listDelegated(
-        options.parentSessionId,
-      );
-      if (!children.length) {
-        lines.push("  (none)");
-      } else {
-        for (const link of children) {
-          const activity = isChildSessionActive(
-            options.runtime,
-            link.childSessionId,
-          )
-            ? "running"
-            : "idle";
-          const inbox = childInboxCounts(
-            options.runtime,
-            link.childSessionId,
-          );
-          const externalKind = options.runtime.externalAgents.kind(
-            link.childSessionId,
-          );
-          const route = externalKind
-            ? `external:${externalKind}`
-            : (() => {
-                const m = resolveSessionModelSelection(
-                  options.runtime,
-                  link.childSessionId,
-                );
-                return `${m.provider}/${m.model}`;
-              })();
-          lines.push(
-            `  ${link.childSessionId}\t${link.label ?? "subagent"}\t${link.mode}\t${activity}\t${route}\tq=${inbox.queued}\tsteer=${inbox.steering}`,
-          );
-        }
-      }
-      return { content: lines.join("\n") };
-    },
-  };
-}
-
 async function interruptChildAgent(
   options: BindSubagentToolsOptions,
   childId: string,
@@ -2801,7 +2740,6 @@ export function bindSubagentTools(
     createTeamGraphTool(options),
     createFollowupTaskTool(options),
     createWaitAgentTool(options),
-    createAnalyticsTool(options),
     createInterruptAgentTool(options),
     createCloseAgentTool(options),
   ]) {

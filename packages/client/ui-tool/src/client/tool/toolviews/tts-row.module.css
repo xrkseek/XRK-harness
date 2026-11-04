@@ -1,0 +1,119 @@
+/* text_to_speech row: a one-line summary and, once expanded, the clip's
+   playback bar. Heights follow the tool-row rhythm (24px controls) so the bar
+   sits under the summary instead of turning the row into its own card. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The media element is the only invisible part: the bar is its UI, and it has
+   to stay mounted while the row is collapsed (auto-play + duration peek). */
+.audio {
+  display: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 4px 4px;
+}
+
+/* Player surface: one rounded strip on the raised layer, matching the IN/OUT
+   card radius so a transcript with mixed cards still reads as one rhythm. */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.playButton,
+.action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.playButton:hover,
+.action:hover {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.action {
+  border-radius: 6px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.action:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.time {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  /* Digits must not jitter the strip while the clip plays. */
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seek {
+  flex: 1 1 auto;
+  min-width: 48px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.seek:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.seek:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+.playButton:focus-visible,
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Honest failures ("no attachment store", "audio could not be read") share one
+   muted line: nothing to play is information, not an error state. */
+.notice {
+  margin: 2px 0 4px 4px;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin-left: 4px;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.meta {
+  margin-left: 4px;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-caption);
+  overflow-wrap: anywhere;
+}

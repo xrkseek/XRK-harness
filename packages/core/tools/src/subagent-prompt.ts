@@ -22,7 +22,7 @@ export function delegationModeLine(mode: DelegationRoutingMode): string {
   return [
     "Delegation: proactive.",
     "- Spawning is an approved strategy; spawn when it genuinely helps (parallel independent work, research without burning this context).",
-    "- Depth, active-child, and budget caps still apply — `analytics` before fanning out.",
+    "- Depth, active-child, and budget caps still apply — call `list_agents` before fanning out; it prints the live quota.",
   ].join("\n");
 }
 
@@ -51,7 +51,7 @@ export function subagentRoutingPrompt(
     "- Match the live catalog by name and brief when this session has subagent tools. If a member fits, `subagent` with that `member_id` this turn. Do not Skill-load a standing skill that covers the same job. Frugal has no subagent tools — Skill-load here. Tiny asks with no catalog match stay with you. `presence_set` may run in parallel.",
     "- Sibling parent sessions talk with `thread_message` (session_id from the collab board). Do not `thread_switch` to send mail. That is not a subagent.",
     "- `team_graph` reads/edits the collaboration graph (delegates + peer): view · neighbors · link/unlink · role · announce to peers. Same-parent siblings are auto peer-linked on spawn.",
-    "- `analytics` shows depth/active quota and per-child inbox backlog before spawning more work.",
+    "- `list_agents` shows depth/active quota, per-child state and inbox backlog before spawning more work.",
     "- Default `runtime` is in-process (Face child). Set `runtime` to `acp` / `app-server` / `claude-code` for an external subprocess (needs local binary / Settings). `acp` / `app-server` support `run_in_background` + the same followup/wait/interrupt tools; `claude-code` stays one-shot print.",
     "- Use `ralph` only when the human explicitly asks for a Ralph / fresh-agent loop toward one immutable objective (each round is a new child; handoff is structured JSON). Prefer `subagent` for ordinary delegation.",
     "- Prefer a few independent children over deep nesting; respect depth and active-child caps. Prefer doing small work yourself **only when no catalog member fits** — **Frugal** has no subagent tools; **Shallow** allows depth 1 only.",

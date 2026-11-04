@@ -442,7 +442,7 @@ export function formatSkillCatalog(
   return [
     "## Skills",
     ...lines,
-    "Progressive skills: catalog = name+blurb; `skill` loads the body (no skill_search). Head: 公文包 → workspace + xrk-* → globals.",
+    "Progressive skills: catalog = name+blurb; `skill` loads the body (no skill_search). Head: 公文包 → workspace → product seeds / globals.",
   ].join("\n");
 }
 
@@ -470,4 +470,4 @@ export function renderSkillContent(skill: SkillDefinition): string {
 }
 
 export const SKILL_TOOL_GUIDANCE =
-  "Load full skill instructions by exact catalog name (progressive disclosure: catalog lists name+blurb only; there is no skill_search — tool_search is for deferred tools). Prefer 公文包 / workspace / xrk-* skills listed first. Frugal: do the work here after loading.";
+  "Load full skill instructions by exact catalog name (progressive disclosure: catalog lists name+blurb only; there is no skill_search — tool_search is for deferred tools). Prefer 公文包 / workspace skills listed first. Frugal: do the work here after loading.";

@@ -27,6 +27,7 @@ const TOOL_NAME_KEYS: Record<string, string> = {
   read_image: 'tool.name.readImage',
   image_generate: 'tool.name.imageGenerate',
   video_generate: 'tool.name.videoGenerate',
+  text_to_speech: 'tool.name.textToSpeech',
   present: 'tool.name.present',
   propose_skill: 'tool.name.proposeSkill',
   cordis_package_inspect: 'tool.name.cordisInspect',

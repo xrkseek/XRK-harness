@@ -8,10 +8,18 @@ export type VoiceDelivery =
   | "openai"
   | "local"
   | "system"
+  | "edge"
   | "unavailable";
 
 /** Which half of voice a Provider serves. */
 export type VoiceDirection = "asr" | "tts";
+
+/**
+ * Longest text one clip may carry, shared by every TTS engine so switching
+ * `tts.engine` never changes what the tool accepts. Argv / env limits are not
+ * the constraint here — patience and the attachment byte cap are.
+ */
+export const VOICE_MAX_TTS_TEXT = 8_000;
 
 export type VoiceErrorCode =
   | "VOICE_UNAVAILABLE"
@@ -44,6 +52,11 @@ export interface VoiceSynthesizeResult {
   readonly mimeType: string;
   readonly provider: string;
   readonly delivery: VoiceDelivery;
+  /**
+   * Voice actually used. Providers fill this with their default when the
+   * caller named none, so a tool envelope can report what the reader heard.
+   */
+  readonly voice?: string;
   /** Short diagnostic for tool text (not raw audio). */
   readonly note?: string;
 }

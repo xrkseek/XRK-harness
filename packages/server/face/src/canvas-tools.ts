@@ -179,7 +179,8 @@ export function bindCanvasTools(
   registerTool(tools, {
     name: "canvas_patch",
     description:
-      "Patch an existing workspace Canvas title and/or sections (full sections replace when provided).",
+      "Patch an existing workspace Canvas title and/or sections (full sections replace when provided). " +
+      "To change only the title, pass title alone; to create or rewrite the whole document, use canvas_upsert.",
     parameters: {
       type: "object",
       properties: {

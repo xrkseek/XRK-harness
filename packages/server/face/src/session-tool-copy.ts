@@ -116,7 +116,11 @@ export function listAgentsDescription(kind: SessionKind): string {
     kind === "delegated_child"
       ? "Only children you spawned (teammates → squad board)."
       : "Your direct children (peers → thread_message).";
-  return `${scope} Rows: id, label, mode, running, model, inbox, outcome. Caps: child_gap on capability.`;
+  return (
+    `${scope} Header: provider/model, sessions used/max, slots_free, delegated, ` +
+    `lineage_depth, parent_inbox (this session's own queue/steer). ` +
+    `Rows: id, label, mode, running, model, inbox, outcome. Caps: child_gap on capability.`
+  );
 }
 
 export function sendMessageDescription(): string {
@@ -168,6 +172,7 @@ export function interruptAgentDescription(): string {
   return (
     "Stop a running child (agent_id). Parent gets a progress notice; later idle completion is suppressed. " +
     "takeover=true pauses the task board for human ownership. " +
+    "The child session is not deleted — followup_task can resume it. " +
     "To stop and read the last answer in one call, prefer close_agent."
   );
 }
@@ -175,7 +180,8 @@ export function interruptAgentDescription(): string {
 export function closeAgentDescription(): string {
   return (
     "Stop a child and return a snapshot (running/idle + last assistant text). " +
-    "Same interrupt path as interrupt_agent; use when you need the salvaged answer now. " +
+    "Same interrupt path as interrupt_agent (the child is not deleted — followup_task can resume it); " +
+    "use when you need the salvaged answer now. " +
     "takeover=true pauses the task board. Codex morph: close_agent."
   );
 }

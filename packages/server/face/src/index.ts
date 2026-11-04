@@ -185,6 +185,15 @@ export {
   type MemberToolPolicy,
 } from "./agent-roster-store.js";
 export {
+  isAgentHomeSession,
+  isAgentHomeWorkspace,
+  refuseCrossAgentHomeLane,
+  refuseCrossAgentHomeWorkspace,
+  sessionCollabLane,
+  sessionSeatMemberId,
+  type SessionCollabLane,
+} from "./agent-home-boundary.js";
+export {
   catalogSeedDisplayLabel,
   catalogSeedFormalName,
   isCatalogSeedLabelId,
@@ -234,6 +243,7 @@ export {
   readBossStatusFields,
   scheduleBossStatusBroadcast,
 } from "./boss-status-broadcast.js";
+export { createTtsAvailabilityFragmentProvider } from "./tts-availability.js";
 export {
   createSeatIdentityFragmentProvider,
   formatSeatIdentity,

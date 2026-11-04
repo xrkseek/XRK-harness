@@ -135,7 +135,6 @@ const UI = new Set([
   "todo_write",
   "presence",
   "canvas",
-  "analytics",
 ]);
 
 /** Product Host tools that are neither MCP nor a coding surface bucket. */
@@ -166,7 +165,6 @@ function classifySurface(
     name.endsWith("_agent") ||
     name.startsWith("session_") ||
     name.startsWith("thread_") ||
-    name.startsWith("sideline_") ||
     name.startsWith("presence_") ||
     name === "workspace_session_prompt"
   ) {

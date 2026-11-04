@@ -6,6 +6,14 @@
  */
 
 import type { FaceRuntime } from "./context.js";
+import {
+  MANAGER_MEMBER_ID,
+  SUNFLOWER_MEMBER_ID,
+} from "./agent-roster-store.js";
+import {
+  IM_WORKSPACE_ID,
+} from "./im-workspace.js";
+import { XIANGYANG_WORKSPACE_ID } from "./xiangyang-workspace.js";
 
 /** Collab / dispatch lane for a session. */
 export type SessionCollabLane = "project" | "agent-home";
@@ -52,6 +60,41 @@ export function isAgentHomeSession(
   sessionId: string,
 ): boolean {
   return sessionCollabLane(runtime, sessionId) === "agent-home";
+}
+
+/**
+ * Which roster member is wearing this seat — the subject of the `agent`
+ * memory zone. One resolver for every caller, because the same 干员 appears in
+ * three shapes and must resolve to one identity:
+ *
+ * - dispatched child → the link's `memberId`
+ * - 干员 office (agent-home identity session) → the identity binding
+ * - project 经理 seat → {@link MANAGER_MEMBER_ID} (the office lead who runs
+ *   this workspace; 向日葵 is a different person and never inherits it)
+ *
+ * Undefined for seats that are nobody in particular (tool children spawned
+ * without a member, forks, plain project sessions).
+ */
+export function sessionSeatMemberId(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string | undefined {
+  const link = runtime.subagents.getByChild(sessionId);
+  if (link && link.mode !== "fork") {
+    const linked = typeof link.memberId === "string" ? link.memberId.trim() : "";
+    if (linked) return linked;
+  }
+  const identity = runtime.sessionIdentities.get(sessionId)?.memberId?.trim();
+  if (identity) return identity;
+  // Office lead: a top-level project-parent seat (not a delegated child, not
+  // 向阳 — that workspace is 向日葵's, and the manager must not absorb it).
+  if (link && link.mode !== "fork") return undefined;
+  const workspaceId = runtime.workspaces.workspaceIdOf(sessionId);
+  if (!workspaceId) return undefined;
+  if (workspaceId === XIANGYANG_WORKSPACE_ID) return SUNFLOWER_MEMBER_ID;
+  // IM is a channel surface, not an office: nobody's agent zone.
+  if (workspaceId === IM_WORKSPACE_ID) return undefined;
+  return MANAGER_MEMBER_ID;
 }
 
 /**

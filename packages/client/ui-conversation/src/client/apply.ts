@@ -4,7 +4,7 @@ import { resolveSlotLabel, type BoundActions } from '@xrkseek/client-ui-slots'
 import {
   createSnapshotStore, resolveWorkspacePath, type ISessions, type SessionId,
 } from '@xrkseek/client-runtime/client'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
 // goes through the service, never a value import (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
@@ -653,6 +653,10 @@ export function apply(ctx: Context): void {
           (attachment: ImageAttachmentRef) => conversation.resolveImage(sessionId, attachment),
           { peek: (attachment: ImageAttachmentRef) => conversation.peekImage(sessionId, attachment) },
         ),
+        // Same read path, non-image media: a TTS clip or a stored document
+        // resolves to an object URL whose blob type is the stored media type.
+        loadAttachment: (attachment: FileAttachmentRef) =>
+          conversation.resolveAttachment(sessionId, attachment),
         // Unregistered 'trajectory' id is safe: the tab ring falls back to
         // the first view, and the untouched inspect target stays inert.
         inspectCall: (callId) => {

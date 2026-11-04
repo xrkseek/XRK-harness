@@ -544,6 +544,16 @@ export interface ChatNodeOwnerProps {
   steer?: boolean | undefined
   /** Session-authorized durable image loader (tool image cards + message galleries). */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  /**
+   * Session-authorized durable attachment loader for non-image media (TTS
+   * clips, documents). Same authority and cache as `loadImage`; the returned
+   * object URL carries the stored media type, so an `<audio>` element can play
+   * it directly.
+   *
+   * Optional so non-media chat nodes and older test doubles stay valid; the
+   * shipped composition always supplies it.
+   */
+  loadAttachment?: ((attachment: FileAttachmentRef) => Promise<string>) | undefined
   /** Render a historical image group through the attachment slot. */
   renderMessageImages: RenderMessageImages
   /** Render a historical file-card group through the attachment slot. */
@@ -973,6 +983,8 @@ export interface ChatViewInjected {
   loadThrough: (seq: number) => Promise<void>
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
+  /** Resolve a session-authorized historical attachment (audio, files) as a URL. */
+  loadAttachment?: ((attachment: FileAttachmentRef) => Promise<string>) | undefined
   /** Hand a call off to the trajectory view: write the one-shot inspect target and switch tabs. */
   inspectCall: (callId: CallId) => void
   /**

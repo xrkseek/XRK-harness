@@ -5,6 +5,7 @@
  * Face handler and the cards all resolve through this table instead of each
  * growing its own `if (engine === …)` ladder.
  */
+import { createEdgeVoiceProvider, EDGE_DEFAULT_VOICE } from "./edge-tts.js";
 import { createMemoryVoiceProvider } from "./memory.js";
 import { createOpenAiVoiceProvider } from "./openai-http.js";
 import { createSenseVoiceLocalProvider } from "./sensevoice-local.js";
@@ -86,6 +87,23 @@ const ASR_ENGINES: readonly VoiceEngineSpec[] = [
 ];
 
 const TTS_ENGINES: readonly VoiceEngineSpec[] = [
+  // First row is the default: a fresh install with `enabled: true` speaks
+  // through Edge (free neural voices, no key). `local` stays registered as the
+  // offline fallback for hosts with no network.
+  {
+    id: "edge",
+    direction: "tts",
+    needsKey: false,
+    create: (ctx) => {
+      const voice = ctx.voice?.trim();
+      return createEdgeVoiceProvider({
+        ...(voice === undefined || voice === "" || voice === EDGE_DEFAULT_VOICE
+          ? {}
+          : { defaultVoice: voice }),
+        ...(ctx.fetchImpl ? { fetchImpl: ctx.fetchImpl } : {}),
+      });
+    },
+  },
   {
     id: "local",
     direction: "tts",
@@ -110,7 +128,7 @@ const TTS_ENGINES: readonly VoiceEngineSpec[] = [
 /**
  * Every engine registered for one direction.
  * @param direction - ASR or TTS.
- * @returns the specs, local first.
+ * @returns the specs in default order (TTS: edge → local → openai → memory).
  */
 export function listVoiceEngines(
   direction: VoiceDirection,

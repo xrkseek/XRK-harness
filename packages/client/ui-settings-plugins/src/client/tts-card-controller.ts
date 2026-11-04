@@ -16,8 +16,12 @@ import {
 /** Face namespace — must match `FACE_PRODUCT_SETTINGS_NAMESPACES`. */
 export const TTS_NS = 'tts'
 
-/** TTS engines the card may stage. `local` renders with the Host OS voices. */
-export type TtsEngine = 'local' | 'openai'
+/**
+ * TTS engines the card may stage. `edge` streams Microsoft neural voices over
+ * WebSocket (free, no key), `local` renders with Host OS voices, `openai`
+ * posts to an OpenAI-compatible `/audio/speech`.
+ */
+export type TtsEngine = 'edge' | 'local' | 'openai'
 
 /** Host-served TTS section. */
 export interface TtsSettings {
@@ -26,8 +30,12 @@ export interface TtsSettings {
   readonly engine?: TtsEngine | string
   /** Optional OpenAI-compatible base URL (`/audio/speech`). */
   readonly baseUrl?: string
-  /** OS voice name for `local`, provider voice id for `openai`. */
+  /** Chinese/default row: OS voice name, Edge short name, or provider id. */
   readonly voice?: string
+  /** English row; used for `en` clips and for `auto` calls that sniff as English. */
+  readonly voiceEn?: string
+  /** Spoken language: `auto` sniffs the text, `zh` / `en` pin a row. */
+  readonly language?: 'auto' | 'zh' | 'en' | string
   /** OpenAI-compatible model; ignored by the local engine. */
   readonly model?: string
 }
@@ -51,6 +59,8 @@ export interface TtsCardState extends CardShell {
   readonly engine: CardFieldState
   readonly baseUrl: CardFieldState
   readonly voice: CardFieldState
+  readonly voiceEn: CardFieldState
+  readonly language: CardFieldState
   readonly model: CardFieldState
   readonly apiKey: CardFieldState
   readonly apiKeyConfigured: boolean
@@ -70,8 +80,8 @@ export interface TtsCardFace extends CardActions {
   hooks: {
     ttsCard: SnapshotStore<TtsCardState>
   }
-  /** Re-read the OS voice catalog (card open or a failed probe retry). */
-  refreshVoices: () => void
+  /** Re-read the engine's voice catalog (card open, engine switch, retry). */
+  refreshVoices: (engine?: string) => void
 }
 
 const KEY_FIELD = 'apiKey'
@@ -113,6 +123,8 @@ export class TtsCardController {
         voiceEngineField(),
         textField('baseUrl'),
         textField('voice'),
+        textField('voiceEn'),
+        textField('language'),
         textField('model'),
       ],
       [{ field: KEY_FIELD, write: (text) => this.writeKey(text) }],
@@ -123,7 +135,7 @@ export class TtsCardController {
   }
 
   private projection(): TtsCardState {
-    const engine = this.form.field('engine').text.trim() || 'local'
+    const engine = this.form.field('engine').text.trim() || 'edge'
     const enabled = this.form.field('enabled').text === 'true'
     return {
       ...this.form.shell(),
@@ -131,6 +143,8 @@ export class TtsCardController {
       engine: this.form.field('engine'),
       baseUrl: this.form.field('baseUrl'),
       voice: this.form.field('voice'),
+      voiceEn: this.form.field('voiceEn'),
+      language: this.form.field('language'),
       model: this.form.field('model'),
       apiKey: this.form.field(KEY_FIELD),
       apiKeyConfigured: this.key.configured,
@@ -169,12 +183,13 @@ export class TtsCardController {
     void this.readCredential()
   }
 
-  /** Re-read the OS voice catalog; a failed probe leaves an empty list. */
-  refreshVoices(): void {
+  /** Re-read the engine's voice catalog; a failed probe leaves an empty list. */
+  refreshVoices(engine?: string): void {
     if (this.disposed) return
     const remote = this.remote
     if (remote === undefined) return
-    void remote.voices().then(
+    const selected = (engine ?? this.form.field('engine').text.trim()) || 'edge'
+    void remote.voices({ engine: selected }).then(
       (result) => {
         if (this.disposed) return
         this.setVoices({
@@ -199,7 +214,7 @@ export class TtsCardController {
     return {
       hooks: { ttsCard: this.store },
       ...this.form.actions(),
-      refreshVoices: () => { this.refreshVoices() },
+      refreshVoices: (engine?: string) => { this.refreshVoices(engine) },
     }
   }
 

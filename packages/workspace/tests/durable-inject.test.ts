@@ -150,7 +150,7 @@ describe("durable workspace inject", () => {
     expect(payload!.source.entries.length).toBeLessThan(skills.length);
   });
 
-  it("keeps workspace + xrk-* ahead of globals; 公文包 ahead of workspace when preferred", () => {
+  it("keeps 公文包 first, then this workspace's skills; product seeds sort with globals", () => {
     const ws = path.join(tmpdir(), "xrk-cat-prio-ws");
     const pack = path.join(tmpdir(), "xrk-cat-prio-pack");
     const skills = [
@@ -207,12 +207,11 @@ describe("durable workspace inject", () => {
     const names = payload!.source.entries.map((e) => e.name);
     expect(names[0]).toBe("pack-skill");
     expect(names.indexOf("ws-overlay")).toBeLessThan(names.indexOf("aaa-home"));
-    expect(names.indexOf("xrk-delegate")).toBeLessThan(
-      Math.min(
-        names.includes("aaa-home") ? names.indexOf("aaa-home") : Infinity,
-        names.includes("zzz-noise") ? names.indexOf("zzz-noise") : Infinity,
-      ),
-    );
+    // A product seed is not more urgent than the workspace it is read in.
+    // Head placement survives truncation, so it must track provenance — the
+    // workspace's own skills — not a name prefix. Seeds sort with globals.
+    expect(names.indexOf("ws-overlay")).toBeLessThan(names.indexOf("xrk-delegate"));
+    expect(names.indexOf("xrk-delegate")).toBeGreaterThan(names.indexOf("aaa-home") - 1);
   });
 
   it("memoizes inject across turns when injector is reused", async () => {

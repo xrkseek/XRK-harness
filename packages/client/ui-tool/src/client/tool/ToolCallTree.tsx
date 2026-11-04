@@ -14,7 +14,7 @@ function callName(node: ToolCallBlock): string {
 
 /** One atomic call dispatched through the Tool-owned keyed slot. */
 const ToolCall = memo(function ToolCall({
-  renderSlot, callId, toolName, block, openFile, loadImage, selected, cwd, home, inspectCall, t, children,
+  renderSlot, callId, toolName, block, openFile, loadImage, loadAttachment, selected, cwd, home, inspectCall, t, children,
 }: Pick<ToolTreeProps, 'renderSlot' | 'openFile' | 'cwd' | 'inspectCall' | 't'> & {
   callId: string
   toolName: string
@@ -22,6 +22,7 @@ const ToolCall = memo(function ToolCall({
   selected: boolean
   home?: string | undefined
   loadImage?: ToolCallOwnerProps['loadImage']
+  loadAttachment?: ToolCallOwnerProps['loadAttachment']
   children?: ReactNode
 }) {
   const owner: ToolCallOwnerProps = useMemo(() => ({
@@ -32,10 +33,11 @@ const ToolCall = memo(function ToolCall({
     cwd,
     home,
     ...(loadImage === undefined ? {} : { loadImage }),
+    ...(loadAttachment === undefined ? {} : { loadAttachment }),
     // Keyed image/video rows need the tree's media holes (sole owner on chat.node).
     mediaRenderSlot: renderSlot,
     inspect: () => { inspectCall(callId) },
-  }), [callId, toolName, block, openFile, cwd, home, loadImage, renderSlot, inspectCall])
+  }), [callId, toolName, block, openFile, cwd, home, loadImage, loadAttachment, renderSlot, inspectCall])
   // DSH: final AutoReviewDeniedError always uses GenericToolCard — skip keyed
   // toolviews (bash/read/…) so the localized denial identity is not replaced.
   const autoReviewDenied = useMemo(
@@ -62,11 +64,12 @@ const ToolCall = memo(function ToolCall({
 })
 
 const ToolCallBranch = memo(function ToolCallBranch({
-  renderSlot, block, selectedCallId, cwd, home, openFile, loadImage, inspectCall, t,
+  renderSlot, block, selectedCallId, cwd, home, openFile, loadImage, loadAttachment, inspectCall, t,
 }: Pick<ToolTreeProps, 'renderSlot' | 'selectedCallId' | 'cwd' | 'openFile' | 'inspectCall' | 't'> & {
   block: ToolCallBlock
   home?: string | undefined
   loadImage?: ToolCallOwnerProps['loadImage']
+  loadAttachment?: ToolCallOwnerProps['loadAttachment']
 }) {
   return (
     <ToolCall
@@ -76,6 +79,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
       block={block}
       openFile={openFile}
       loadImage={loadImage}
+      loadAttachment={loadAttachment}
       selected={block.callId === selectedCallId}
       cwd={cwd}
       home={home}
@@ -94,6 +98,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
               home={home}
               openFile={openFile}
               loadImage={loadImage}
+              loadAttachment={loadAttachment}
               inspectCall={inspectCall}
               t={t}
             />
@@ -111,7 +116,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
  * @returns the Tool call tree.
  */
 export function ToolCallTree({
-  renderSlot, node, selectedCallId, cwd, openFile, loadImage, inspectCall, useHostDescription, useToolsDefaultExpanded, t,
+  renderSlot, node, selectedCallId, cwd, openFile, loadImage, loadAttachment, inspectCall, useHostDescription, useToolsDefaultExpanded, t,
 }: ToolTreeProps) {
   const home = useHostDescription(info => info?.home)
   const toolsDefaultExpanded = useToolsDefaultExpanded
@@ -128,6 +133,7 @@ export function ToolCallTree({
         home={home}
         openFile={openFile}
         loadImage={loadImage}
+        loadAttachment={loadAttachment}
         inspectCall={inspectCall}
         t={t}
       />

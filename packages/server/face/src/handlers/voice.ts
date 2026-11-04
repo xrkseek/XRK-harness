@@ -17,6 +17,7 @@ import {
   SENSEVOICE_TOTAL_BYTES,
   createVoiceAccess,
   inspectSenseVoiceAssets,
+  listEdgeVoices,
   listSystemVoices,
   parseProxy,
   probeSenseVoiceEngine,
@@ -210,7 +211,33 @@ export const voicePrepareCancel: FaceHandler = async () => ({
  * the card falls back to a free-text voice field. Failing the whole RPC would
  * hide the engine switch over a cosmetic list.
  */
-export const voiceVoices: FaceHandler = async () => ({
-  ok: true,
-  value: { voices: await listSystemVoices() },
-});
+export const voiceVoices: FaceHandler = async (_runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const flat = asRecord(payload);
+  const engine = trimmed(args.engine ?? flat.engine).toLowerCase();
+  if (engine === "edge") {
+    // The Edge catalog is the whole point of the engine: ~300 neural voices
+    // across every locale. Best-effort like the OS list — a Host offline
+    // answers [] and the card falls back to the stored free-text voice.
+    try {
+      const voices = await listEdgeVoices();
+      return {
+        ok: true,
+        value: {
+          voices: voices.map((voice) => {
+            const stem = voice.shortName.split("-").pop() ?? voice.shortName;
+            const name = stem.replace(/Neural$/i, "");
+            return {
+              id: voice.shortName,
+              label: `${name} · ${voice.locale} · ${voice.gender}`,
+              locale: voice.locale,
+            };
+          }),
+        },
+      };
+    } catch {
+      return { ok: true, value: { voices: [] } };
+    }
+  }
+  return { ok: true, value: { voices: await listSystemVoices() } };
+};

@@ -54,6 +54,13 @@ export interface ToolRowProps {
   summarySuffix?: string | null | undefined
   /** Expanded-body input text; null = no input section. */
   body: string | null
+  /**
+   * Custom expanded body. Use when the row's substance is not one of the
+   * built-in block materials (e.g. the TTS playback bar): it replaces the
+   * IN/OUT card and card chain, and its presence alone makes the row
+   * expandable. The collapsed row stays the usual one-line summary.
+   */
+  bodyContent?: ReactNode | null | undefined
   /** Flattened result text for the expanded Output section; null/absent = no output section. */
   output?: string | null | undefined
   errorSummary?: string | null | undefined
@@ -152,6 +159,7 @@ export function ToolRow({
   summary,
   summarySuffix,
   body,
+  bodyContent,
   output,
   errorSummary,
   terminal,
@@ -180,9 +188,10 @@ export function ToolRow({
   const filesBody = files ?? null
   const searchBody = search ?? null
   const webBody = web ?? null
+  const customBody = bodyContent ?? null
   const outputText = output ?? null
   const card = terminalBody ?? diffBody ?? readBody ?? imageBody ?? filesBody ?? searchBody ?? webBody
-  const expandable = body !== null || outputText !== null || card !== null
+  const expandable = body !== null || customBody !== null || outputText !== null || card !== null
   // Deliverable rows stay open; Settings default / manual toggle still apply
   // to explore tools.
   const open = expandable && (forceExpanded || expanded)
@@ -278,7 +287,9 @@ export function ToolRow({
         ) : false}
       >
         <div className={css.bodyWrap}>
-          {terminalBody !== null
+          {customBody !== null
+            ? customBody
+            : terminalBody !== null
             ? (
               <TerminalBlock
                 {...terminalBody.card}

@@ -380,17 +380,34 @@ const AsrConfig = Schema.object({
  * Text-to-speech (Plugins → TTS card). Env `XRK_VOICE` remains CI bypass.
  *
  * `enabled` binds `text_to_speech` on every tool surface (including Minimal /
- * IM), which is the only switch the agent sees. `engine: local` renders with
- * the Host OS voices (SAPI / say / espeak-ng) so the switch works with no key;
- * `engine: openai` posts to an OpenAI-compatible `/audio/speech` endpoint.
+ * IM), which is the only switch the agent sees. `engine: edge` speaks through
+ * Microsoft's Read Aloud neural voices (free, no key, needs network);
+ * `engine: local` renders with the Host OS voices (SAPI / say / espeak-ng) as
+ * the offline fallback; `engine: openai` posts to an OpenAI-compatible
+ * `/audio/speech` endpoint.
  */
 const TtsConfig = Schema.object({
   enabled: Schema.boolean().default(false),
-  engine: Schema.union(["local", "openai"]).default("local"),
+  // `edge` is the default: free Microsoft neural voices over WebSocket, no
+  // key and no model download. `local` (OS SAPI / say / espeak-ng) stays as
+  // the offline fallback; `openai` remains for a paid endpoint.
+  engine: Schema.union(["edge", "local", "openai"]).default("edge"),
   baseUrl: Schema.string().default(""),
-  /** Voice id: an OS voice name for `local`, a provider voice for `openai`. */
+  /**
+   * Chinese (or default) voice id: an Edge short name, an OS voice name, or a
+   * provider voice id. `text_to_speech` uses this row for `zh` clips.
+   */
   voice: Schema.string().default(""),
-  /** OpenAI-compatible TTS model; ignored by the local engine. */
+  /**
+   * English voice id, used for `en` clips and for `auto` calls whose text
+   * reads as English. Defaults to an Edge English voice so an out-of-the-box
+   * Host never reads English with a Chinese mouth; `local` users point it at
+   * an installed English voice instead.
+   */
+  voiceEn: Schema.string().default("en-US-AriaNeural"),
+  /** Spoken language for `text_to_speech`: `auto` sniffs the text. */
+  language: Schema.union(["auto", "zh", "en"]).default("auto"),
+  /** OpenAI-compatible TTS model; ignored by edge / local. */
   model: Schema.string().default(""),
 });
 
@@ -784,7 +801,15 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "tts",
       schema: schemasteryJson(TtsConfig) as FaceSchemaEnvelope,
-      base: { enabled: false, engine: "local", baseUrl: "", voice: "", model: "" },
+      base: {
+        enabled: false,
+        engine: "edge",
+        baseUrl: "",
+        voice: "",
+        voiceEn: "en-US-AriaNeural",
+        language: "auto",
+        model: "",
+      },
       applies: "live",
     },
     {

@@ -8,7 +8,7 @@
  */
 
 export const VOICE_TTS_PROMPT_TEXT = [
-  "- `text_to_speech` speaks text via the Host TTS Provider (returns audio meta; does not play on the server).",
+  "- `text_to_speech` speaks text via the Host TTS Provider and writes the clip into the session as a playable `file` attachment; it returns the `attachmentId` and the client renders a play bar (the Host itself never plays audio).",
 ].join("\n");
 
 export const VOICE_ASR_PROMPT_TEXT = [

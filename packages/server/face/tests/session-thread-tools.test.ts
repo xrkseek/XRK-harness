@@ -37,10 +37,6 @@ describe("thread_* tools", () => {
     const toolsB = createToolRegistry();
     bindSessionThreadTools(toolsB, { runtime, sessionId: b! });
 
-    const noLine = await toolsA.get("sideline_set")!.execute({ text: "正在改" });
-    expect(noLine.isError).toBeFalsy();
-    expect(runtime.presence.get(a!)?.tips).toBe("正在改");
-
     const empty = await toolsB.get("thread_list")!.execute({});
     expect(empty.isError).toBeFalsy();
     const emptyBody = JSON.parse(String(empty.content)) as {
@@ -56,6 +52,14 @@ describe("thread_* tools", () => {
     });
     expect(upsert.isError).toBeFalsy();
     const upsertBody = JSON.parse(String(upsert.content)) as { thread: { id: string } };
+
+    // 支线由 `presence_set` 写入同一 store；这里直接写（主线已绑），验证
+    // thread_list 会把 sideline 带出来。
+    runtime.sessionThreads.setSideline(
+      runtime.workspaces.defaultId(),
+      a!,
+      "正在改",
+    );
 
     const listed = await toolsB.get("thread_list")!.execute({});
     expect(listed.isError).toBeFalsy();
