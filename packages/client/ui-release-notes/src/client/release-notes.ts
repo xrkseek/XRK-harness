@@ -69,6 +69,48 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.10',
+    date: '2026-11-05',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '四区策展记忆真正注入 system prompt，按 ### GLOBAL / WORKSPACE / SESSION / AGENT curated memory 标注；curatedMemory 原样透传，不再只在 === false 时下传；四区注入改用 store 的 isLayered。',
+        en: 'Four-zone curated memory is now actually injected into the system prompt, labeled ### GLOBAL / WORKSPACE / SESSION / AGENT curated memory; curatedMemory forwarded verbatim instead of only when === false; four-zone injection now uses the store isLayered predicate.',
+      },
+      {
+        zh: 'Agent 区称呼跟随设置：新增可选 agentLabel，zone 头/工具描述/zoned policy 不再写死「干员」，由 Settings ui-presence 层级叫法决定；Host 从 Face 读 readSeatTitles(...).agent（含自定义 titleAgent）。',
+        en: 'Agent-zone label follows settings: new optional agentLabel; zone header/tool description/zoned policy no longer hardcode "干员", driven by Settings ui-presence hierarchy labels; Host reads readSeatTitles(...).agent (including custom titleAgent) from Face.',
+      },
+      {
+        zh: 'USER.md 可写：memory 工具 target 支持 memory | user；描述与 CURATED_MEMORY_PROMPT_TEXT 更新（USER.md 只收用户自述事实）。',
+        en: 'USER.md writable: memory tool target now supports memory | user; description and CURATED_MEMORY_PROMPT_TEXT updated (USER.md only collects user-stated facts).',
+      },
+      {
+        zh: '记忆上限可配：新增 CuratedMemoryLimits / resolveCuratedMemoryLimits；createCuratedMemoryStore({ limits })；usage/render 按配置 cap 计算（不再硬编码 2200/1375）。Settings curated-memory ns 新增 memoryLimit/userLimit（step 100, min 200, max 20000, 默认 2200/1375）；插件卡加两个数字字段（三语文案）。',
+        en: 'Configurable memory caps: new CuratedMemoryLimits / resolveCuratedMemoryLimits; createCuratedMemoryStore({ limits }); usage/render computed against configured cap (no more hardcoded 2200/1375). Settings curated-memory ns adds memoryLimit/userLimit (step 100, min 200, max 20000, default 2200/1375); plugin card adds two numeric fields (trilingual).',
+      },
+      {
+        zh: '过程折叠头布局修复：.processGroupSummaryLiveInline 被同 specificity 的 .processGroupSummaryLive 覆盖 → 改成 :global([data-process-group]) .processGroupSummaryLiveInline (0,2,0)，活动行贴着工具名左对齐。',
+        en: 'Process-header layout fix: .processGroupSummaryLiveInline was overridden by same-specificity .processGroupSummaryLive → now :global([data-process-group]) .processGroupSummaryLiveInline (0,2,0), activity row flush left.',
+      },
+      {
+        zh: 'live 判定回归修复：live = !settled && (...) 让 foldWhen: immediate 恒 settled → 实时工具名消失。改成 running || (!settled && reasoning-only)，33 个 process-group 测试全绿。',
+        en: 'Live-gating regression fix: live = !settled && (...) made foldWhen: immediate always settled → live tool name dropped. Now running || (!settled && reasoning-only); 33 process-group tests green.',
+      },
+      {
+        zh: 'TTS 不再注入引导文案：删除 tts-availability.ts 及导出/注册，工具仍由 tts.enabled 绑定；避免 prompt 膨胀。',
+        en: 'TTS no longer injects guidance text: deleted tts-availability.ts and its exports/registration; tool still bound by tts.enabled; avoids prompt bloat.',
+      },
+      {
+        zh: '新增 scopedCuratedMemoryPromptText()；policy 文案说明 cap 来自设置。',
+        en: 'Added scopedCuratedMemoryPromptText(); policy text notes caps come from settings.',
+      },
+    ],
+  },
+  {
     version: '0.7.9',
     date: '2026-11-04',
     title: {

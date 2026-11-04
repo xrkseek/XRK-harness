@@ -4,12 +4,12 @@
 
 版本约定：`MAJOR.MINOR.PATCH` 里 **MINOR（第二位）奇偶**——**奇数正式**（如 `0.3.x` · `0.5.x`）、**偶数预览**（如 `0.2.x` · `0.4.x`）。**不是** PATCH（第三位）。
 
-**本版**：`0.7.x` 正式线补丁 **v0.7.9**（接管 npm `@latest`）。上一补丁 [v0.7.8](./v0.7.8.md)；首发 [v0.7.0](./v0.7.0.md)；并入过程号 [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md)。上一预览线收官 [v0.6.23](./v0.6.23.md)；收口号 [v0.6.0](./v0.6.0.md) 与过程号留档。上一正式线 **v0.5.31** 退为更早档。`0.4.x` 预览线已于 **v0.4.12** 收口。
+**本版**：`0.7.x` 正式线补丁 **v0.7.10**（接管 npm `@latest`）。上一补丁 [v0.7.9](./v0.7.9.md)；首发 [v0.7.0](./v0.7.0.md)；并入过程号 [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md)。上一预览线收官 [v0.6.23](./v0.6.23.md)；收口号 [v0.6.0](./v0.6.0.md) 与过程号留档。上一正式线 **v0.5.31** 退为更早档。`0.4.x` 预览线已于 **v0.4.12** 收口。
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.7.9](./v0.7.9.md)                   | `0.7.x` 补丁：**Voice 产品化：Edge 默认 TTS · text_to_speech 落盘附件 · 记忆/技能清理 · 底层质量** |
-| **上一补丁**        | [v0.7.8](./v0.7.8.md)                   | `0.7.x` 补丁：**桌面端本机语音随包 sherpa-onnx-node · 下载代理不再静默失效 · 概览装扮热更 · 向阳求助通道 · 折叠过程头累计行 · 配置字段全表** |
+| **当前（@latest）** | [v0.7.10](./v0.7.10.md)                 | `0.7.x` 补丁：**四区策展记忆真正注入 system prompt · 过程折叠头布局/live 回归修复 · USER.md 可写/记忆上限可配 · TTS 引导注入移除** |
+| **上一补丁**        | [v0.7.9](./v0.7.9.md)                   | `0.7.x` 补丁：**Voice 产品化：Edge 默认 TTS · text_to_speech 落盘附件 · 记忆/技能清理 · 底层质量** |
 | **上一补丁（前）**  | [v0.7.7](./v0.7.7.md)                   | `0.7.x` 补丁：**语音 ASR/TTS 产品化 · 子代理路由固定 · 启动卡住检测 · 图片降采样** |
 | **上一补丁（再前）** | [v0.7.4](./v0.7.4.md)                  | `0.7.x` 补丁：**OFM 路由展开 · 向日葵模糊目录 / 思考档** |
 | **正式线首发**      | [v0.7.0](./v0.7.0.md)                   | `0.7.x` 正式线首发：**上下文工程 · 大会话 · 席位/向日葵 · DeepSeek 搜索 · 社区 OFM/Host** |
@@ -28,7 +28,7 @@
 | **过程号（文稿）**  | [rc.1](./v0.4.0-rc.1.md)…[rc.4](./v0.4.0-rc.4.md) | 已并入；npm 已撤                                           |
 | **上一轮预览（文稿）** | [v0.2.7](./v0.2.7.md)                | npm 已撤；GitHub 对照留档                                            |
 
-对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.6](./v0.7.6.md) → [v0.7.7](./v0.7.7.md) → [v0.7.8](./v0.7.8.md) → 现 **v0.7.9**（`@latest`）；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
+对照：预览终态 [v0.4.12](./v0.4.12.md) → [v0.5.0](./v0.5.0.md) → … → [v0.5.31](./v0.5.31.md) → [v0.6.0](./v0.6.0.md) → … → [v0.6.23](./v0.6.23.md) → [v0.7.0](./v0.7.0.md) → … → [v0.7.6](./v0.7.6.md) → [v0.7.7](./v0.7.7.md) → [v0.7.8](./v0.7.8.md) → [v0.7.9](./v0.7.9.md) → 现 **v0.7.10**（`@latest`）；回退钉 **0.3.11**。仓库 `docs/releases/v*` 仍可查阅。
 
 安装与发包见 [publishing.md](../publishing.md)。
 
@@ -36,8 +36,8 @@
 
 | 用途           | 命令                                                            |
 | -------------- | --------------------------------------------------------------- |
-| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.7.9，发包后）后 `xrkh web` |
-| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.7.9` 后 `xrkh web`              |
+| 当前（推荐）   | `npm i -g @xrkseek/harness-cli@latest`（= v0.7.10，发包后）后 `xrkh web` |
+| 精确锁版本     | `npm i -g @xrkseek/harness-cli@0.7.10` 后 `xrkh web`              |
 | 上一预览收官   | `npm i -g @xrkseek/harness-cli@0.6.23` 后 `xrkh web`             |
 | 过程号（@rc）  | `npm i -g @xrkseek/harness-cli@rc`（= v0.7.0-rc.3，若仍挂 rc）后 `xrkh web` |
 | 本线收口号（0.6） | `npm i -g @xrkseek/harness-cli@0.6.0` 后 `xrkh web`           |
@@ -54,12 +54,12 @@
 
 Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **odd = formal** (e.g. `0.3.x` · `0.5.x`), **even = preview** (e.g. `0.2.x` · `0.4.x`). **Not** the PATCH digit.
 
-**Current**: **v0.7.8** patch on the `0.7.x` formal line (owns npm `@latest`). Prior patch [v0.7.7](./v0.7.7.md). Line open [v0.7.0](./v0.7.0.md). Process numbers [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) are folded in. The previous preview line closed at [v0.6.23](./v0.6.23.md); closing number [v0.6.0](./v0.6.0.md) and its process numbers stay archived. Prior formal line **v0.5.31** is older. The `0.4.x` preview line closed at **v0.4.12**.
+**Current**: **v0.7.10** patch on the `0.7.x` formal line (owns npm `@latest`). Prior patch [v0.7.9](./v0.7.9.md). Line open [v0.7.0](./v0.7.0.md). Process numbers [v0.7.0-rc.3](./v0.7.0-rc.3.md) · [rc.2](./v0.7.0-rc.2.md) · [rc.1](./v0.7.0-rc.1.md) are folded in. The previous preview line closed at [v0.6.23](./v0.6.23.md); closing number [v0.6.0](./v0.6.0.md) and its process numbers stay archived. Prior formal line **v0.5.31** is older. The `0.4.x` preview line closed at **v0.4.12**.
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.7.8](./v0.7.8.md) | `0.7.x` patch: **desktop ships sherpa-onnx-node for local voice · download proxy fails loud · overview dressing hot-apply · Xiangyang help-dispatch · folded process-header counts · settings field dump** |
-| **Previous patch** | [v0.7.7](./v0.7.7.md) | `0.7.x` patch: **voice ASR/TTS productization · subagent route pin · boot-stall detection · image downscaling** |
+| **Current (@latest)** | [v0.7.10](./v0.7.10.md) | `0.7.x` patch: **four-zone curated memory actually injected · process-header layout/live regression fix · USER.md writable/configurable caps · TTS guidance injection removed** |
+| **Previous patch** | [v0.7.9](./v0.7.9.md) | `0.7.x` patch: **Voice productization: Edge default TTS · text_to_speech file attachment · memory/skill cleanup · underlying quality** |
 | **Patch before that** | [v0.7.4](./v0.7.4.md) | `0.7.x` patch: **OFM router expand · Sunflower fuzzy catalog / thinking** |
 | **Patch before that (2)** | [v0.7.2](./v0.7.2.md) | `0.7.x` patch: **CLI ships Sunflower · shared loopback Cordis bridge · TurnStatus visible** |
 | **Formal line open** | [v0.7.0](./v0.7.0.md) | `0.7.x` formal open: **context engineering · large-session · seat/sunflower · DeepSeek search · community OFM/Host** |
@@ -83,7 +83,7 @@ Install and publish: [publishing.md](../publishing.md).
 
 | Use | Command |
 | --- | ------- |
-| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest` (= v0.7.8 after publish) then `xrkh web` |
+| Current (recommended) | `npm i -g @xrkseek/harness-cli@latest (= v0.7.10 after publish)) then `xrkh web` |
 | Exact pin | `npm i -g @xrkseek/harness-cli@0.7.8` then `xrkh web` |
 | Prior preview close | `npm i -g @xrkseek/harness-cli@0.6.23` then `xrkh web` |
 | Process number (@rc) | `npm i -g @xrkseek/harness-cli@rc` (= v0.7.0-rc.3 if still on rc) then `xrkh web` |
