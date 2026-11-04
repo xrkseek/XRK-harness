@@ -231,6 +231,22 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   const titleClassName = folded && !showLiveChrome
     ? css.processGroupFoldedTitle
     : undefined
+  /**
+   * What has already run, kept beside the in-flight tool on a folded live run.
+   *
+   * The fold used to trade the activity line away the moment the next burst
+   * started:「8 条命令，1 处编辑，思考 9 次」became「过程 · bash」, so the reader
+   * lost the scale of the work while it was still growing. The counts already
+   * include the in-flight call, so this reads as history-then-now.
+   *
+   * Suppressed while the run holds a single step —「bash · 1 条命令」is noise,
+   * not information.
+   */
+  const liveActivity =
+    folded && showLiveChrome
+      && entry.summary.tools + entry.summary.reasoning > 1
+      ? foldedTitle(entry.summary, t)
+      : undefined
 
   const processActivity = dshProcessActivity(live, entry.summary)
   const dropFoldedMembers = folded && foldedRowsLeaveDom()
@@ -269,6 +285,17 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
             >
               {openSummary}
             </span>
+            {liveActivity === undefined ? null : (
+              <>
+                <span className={css.processGroupSep} aria-hidden />
+                <span
+                  className={css.processGroupSummary}
+                  data-process-activity-line=""
+                >
+                  {liveActivity}
+                </span>
+              </>
+            )}
           </>
         )}
       />

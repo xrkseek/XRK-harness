@@ -296,6 +296,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Cumulative activity line beside a folded run's in-flight tool. The live
+   name owns the sweep and the wider slice; the counts yield first so a long
+   history never squeezes「bash」out of the row. */
+:global([data-process-activity-line]) {
+  flex: 0 1 auto;
+  opacity: 0.85;
+}
+
 /* Folded activity line (Cursor-style): the title *is* the summary, muted.
    Beat DisclosureRow `.title { flex: none }` so long lines ellipsis. */
 :global([data-process-group]) .processGroupFoldedTitle {

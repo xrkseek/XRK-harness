@@ -581,6 +581,66 @@ describe('ProcessGroupSeat', () => {
     expect(summary(view.container)).toBeNull()
   })
 
+  it('keeps the activity line beside the live tool on a folded multi-step run', async () => {
+    // The fold must not trade away the scale of the work while it grows:
+    // 「过程 · bash · 8 条命令，1 处编辑，思考 9 次」— not bare「过程 · bash」.
+    const view = renderSeat(group(false, { running: false }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(false, {
+          running: true,
+          runningTool: 'bash',
+          toolNames: ['bash', 'Read'],
+          toolCallNames: ['bash', 'Read', 'bash', 'bash'],
+          tools: 4,
+          reasoning: 1,
+        })}
+        nodeSeat={seat}
+        t={t}
+        foldWhen="process"
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    expect(summary(view.container)?.textContent).toBe('bash')
+    const line = view.container.querySelector('[data-process-activity-line]')
+    expect(line?.textContent).toContain('chat.process.summary.commands')
+    expect(line?.textContent).toContain('chat.process.summary.explored')
+    expect(line?.textContent).toContain('chat.process.summary.thoughts')
+    // The fold stays shut while the counts keep updating.
+    expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+  })
+
+  it('omits the activity line while a folded live run holds one step', async () => {
+    // 「bash · 1 条命令」is noise — nothing preceded the in-flight call.
+    const view = renderSeat(group(false, { running: false }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    view.rerender(
+      <ProcessGroupSeat
+        entry={group(false, {
+          running: true,
+          runningTool: 'bash',
+          toolNames: ['bash'],
+          toolCallNames: ['bash'],
+          tools: 1,
+          reasoning: 0,
+        })}
+        nodeSeat={seat}
+        t={t}
+        foldWhen="process"
+        detailTitles
+        liveProcessDetail
+      />,
+    )
+    expect(summary(view.container)?.textContent).toBe('bash')
+    expect(view.container.querySelector('[data-process-activity-line]')).toBeNull()
+  })
+
   it('keeps step counts on an open quiet-mode header', () => {
     // Quiet modes drop the taxonomy while the run is still open; once folded
     // the title becomes the activity line (same for every mode).
