@@ -8,7 +8,7 @@
 
 | 档                  | 版本                                    | 说明                                                                 |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **当前（@latest）** | [v0.7.8](./v0.7.8.md)                   | `0.7.x` 补丁：**桌面端本机语音随包 sherpa-onnx-node · 下载代理不再静默失效 · 概览装扮热更 · 配置字段全表** |
+| **当前（@latest）** | [v0.7.8](./v0.7.8.md)                   | `0.7.x` 补丁：**桌面端本机语音随包 sherpa-onnx-node · 下载代理不再静默失效 · 概览装扮热更 · 向阳求助通道 · 折叠过程头累计行 · 配置字段全表** |
 | **上一补丁**        | [v0.7.7](./v0.7.7.md)                   | `0.7.x` 补丁：**语音 ASR/TTS 产品化 · 子代理路由固定 · 启动卡住检测 · 图片降采样** |
 | **上一补丁（前）**  | [v0.7.4](./v0.7.4.md)                   | `0.7.x` 补丁：**OFM 路由展开 · 向日葵模糊目录 / 思考档** |
 | **上一补丁（再前）** | [v0.7.2](./v0.7.2.md)                  | `0.7.x` 补丁：**CLI 随包向日葵 · loopback Cordis 统一桥 · TurnStatus 可见** |
@@ -58,7 +58,7 @@ Version rule: in `MAJOR.MINOR.PATCH`, **MINOR (second component) parity** — **
 
 | Slot | Version | Notes |
 | ---- | ------- | ----- |
-| **Current (@latest)** | [v0.7.8](./v0.7.8.md) | `0.7.x` patch: **desktop ships sherpa-onnx-node for local voice · download proxy fails loud · overview dressing hot-apply · settings field dump** |
+| **Current (@latest)** | [v0.7.8](./v0.7.8.md) | `0.7.x` patch: **desktop ships sherpa-onnx-node for local voice · download proxy fails loud · overview dressing hot-apply · Xiangyang help-dispatch · folded process-header counts · settings field dump** |
 | **Previous patch** | [v0.7.7](./v0.7.7.md) | `0.7.x` patch: **voice ASR/TTS productization · subagent route pin · boot-stall detection · image downscaling** |
 | **Patch before that** | [v0.7.4](./v0.7.4.md) | `0.7.x` patch: **OFM router expand · Sunflower fuzzy catalog / thinking** |
 | **Patch before that (2)** | [v0.7.2](./v0.7.2.md) | `0.7.x` patch: **CLI ships Sunflower · shared loopback Cordis bridge · TurnStatus visible** |

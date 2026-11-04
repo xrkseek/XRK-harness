@@ -89,6 +89,14 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Overview dressing hot-apply: saved agent appearance paints immediately instead of waiting the 5 s status poll.',
       },
       {
+        zh: '向阳空间求助通道打通：coding 经理席现可 workspace_session_prompt(ws_default) 向向日葵席投递配置求助；此前该路径被硬闸 refuse，经理席误以为本地能解决一切设置问题。',
+        en: 'Xiangyang help-dispatch opened: a coding 经理 seat can now deliver a settings question to a 向日葵 session via workspace_session_prompt(ws_default); the path used to hard-refuse, so coding seats assumed every settings problem was local.',
+      },
+      {
+        zh: '折叠过程头不再丢进度感：折叠且流式时，标题旁同时保留实时工具名与累计活动行（N 条命令 / N 处编辑 / 思考 N 次）；只有一步时不显示计数，避免噪音。',
+        en: 'Folded process headers keep their sense of scale: while folded and streaming, the live tool name and the cumulative activity line (N commands / N edits / N thoughts) now show side by side; single-step runs still hide the counts.',
+      },
+      {
         zh: '文档：新增配置字段全表 docs/settings-fields.md（32 个 namespace，脚本从 schema 生成）。',
         en: 'Docs: new settings field dump docs/settings-fields.md (32 namespaces, generated from the schema by script).',
       },
