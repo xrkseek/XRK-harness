@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.12',
+    date: '2026-11-07',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'computer_use：新增 find（按 role/name/text 语义定位，返回新索引）、clipboard_set/clipboard_get；坐标点击必须显式 headed=true（会移动真实光标），headless AX 不抢焦点。',
+        en: 'computer_use: add find (semantic locate by role/name/text returning fresh indices), clipboard_set/clipboard_get; coordinate clicks require explicit headed=true (moves the real cursor), headless AX never steals focus.',
+      },
+      {
+        zh: 'browser_*：新增 browser_find（语义定位 + 动作）、browser_frame（iframe 切换）；browser_get 支持 selector；tab label 做 ASCII slug。',
+        en: 'browser_*: add browser_find (semantic locate + action), browser_frame (iframe switch); browser_get supports selector; tab labels become ASCII slugs.',
+      },
+      {
+        zh: 'modality 路由：新增 routeAllowsImage 感知实时模型路由；text-only 时 vision/som/browser_vision 软降级（图进 gallery、不进 LLM wire）；<session_capability> 新增 model: 与 modality: 两行。',
+        en: 'Modality routing: add routeAllowsImage-aware live model routing; text-only soft-degrades vision/som/browser_vision (images go to gallery, not the LLM wire); <session_capability> gains model: and modality: lines.',
+      },
+      {
+        zh: '文案精简：删掉 9 处重复的 soft-degrade 说明、3 处重复的「别并行同一 Chrome」；统一 @eN；把 Covered:/CJK:/Refs @eN/w/≠ 这类病句改成完整句子。顺手清掉 2 个 eslint error（no-control-regex/unbound-method）和 1 个大小写敏感的脆弱断言。',
+        en: 'Copy cleanup: remove 9 duplicate soft-degrade notes and 3 duplicate "don’t run the same Chrome in parallel" notes; unify @eN; rewrite Covered:/CJK:/Refs @eN/w/≠ fragments as full sentences. Also clear 2 eslint errors (no-control-regex/unbound-method) and 1 case-sensitive brittle assertion.',
+      },
+    ],
+  },
+  {
     version: '0.7.11',
     date: '2026-11-06',
     title: {
