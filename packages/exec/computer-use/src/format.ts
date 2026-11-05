@@ -195,6 +195,7 @@ export function formatComputerUseGuidance(
     ladder,
     "A coordinate click needs headed=true.",
     "If a window yields almost no AX nodes, report it instead of guessing.",
+    "Do not move the cursor through bash or OS scripts; headed=true is the only door to the real mouse.",
   ].join("\n");
 }
 /** Full-surface default (dual-path modality copy). */
