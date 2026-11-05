@@ -15,7 +15,6 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type {
-  BrowserActRequest,
   BrowserActResult,
   BrowserCookiesRequest,
   BrowserSession,
@@ -258,7 +257,7 @@ export function resolveSystemBrowserExecutable(
 
 /** Chromium from `agent-browser install` only (may require network/proxy once). */
 export function resolveBundledChromeCache(
-  env: NodeJS.ProcessEnv = process.env,
+  _env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
   const root = path.join(homedir(), ".agent-browser", "browsers");
@@ -375,7 +374,7 @@ async function runAgentBrowser(
   const bin = options.bin ?? resolveAgentBrowserBin(env);
   const timeout = options.timeoutMs ?? 120_000;
   let stdout: string;
-  let stderr = "";
+  let stderr: string;
   try {
     const result = options.run
       ? await options.run(args, env)
@@ -739,7 +738,9 @@ export function createAgentBrowserSession(
       requireOpen();
       const normalizedRef = normalizeRef(request.ref ?? "");
 
-      let note = "";
+      // Every branch below assigns before the single `afterNav(note)` read, so
+      // an initializer here would only be dead state (no-useless-assignment).
+      let note: string;
       if (request.action === "back") {
         await runAgentBrowser([...globalFlags(true), "back"], launchOpts, true);
         note = "navigated back";

@@ -24,11 +24,14 @@ export function createProxiedFetch(proxyUrl: string): typeof fetch {
   const dispatcher = new ProxyAgent(
     `http://${parsed.target.host}:${parsed.target.port}`,
   );
-  return ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
-    undiciFetch(input as Parameters<typeof undiciFetch>[0], {
-      ...(init as object),
-      dispatcher,
-    })) as typeof fetch;
+  // Typed with undici's own RequestInfo/RequestInit: the DOM `Request` is a
+  // different nominal type from undici's, so widening to `fetch`'s parameters
+  // here makes every call site fail. The cast back to `typeof fetch` keeps the
+  // contract callers see.
+  return ((
+    input: Parameters<typeof undiciFetch>[0],
+    init?: Parameters<typeof undiciFetch>[1],
+  ) => undiciFetch(input, { ...init, dispatcher })) as typeof fetch;
 }
 
 /**

@@ -16,10 +16,7 @@ import { buildCaptureResult } from "./format.js";
 import { resolveAgentDesktopBin } from "./resolve-cli.js";
 import {
   ComputerUseError,
-  type ComputerUseActRequest,
   type ComputerUseActResult,
-  type ComputerUseCaptureRequest,
-  type ComputerUseCaptureResult,
   type ComputerUseElement,
   type ComputerUseService,
   type ComputerUseWindow,
@@ -68,27 +65,26 @@ function flattenTree(
   const role = typeof row.role === "string" ? row.role : "unknown";
   const name = typeof row.name === "string" ? row.name : "";
   if (ref) {
-    const bounds = asRecord(row.bounds);
-    const hasBounds =
-      typeof bounds?.x === "number" &&
-      typeof bounds?.y === "number" &&
-      typeof bounds?.width === "number" &&
-      typeof bounds?.height === "number";
+    const rawBounds = asRecord(row.bounds);
+    const bounds =
+      rawBounds !== undefined &&
+      typeof rawBounds.x === "number" &&
+      typeof rawBounds.y === "number" &&
+      typeof rawBounds.width === "number" &&
+      typeof rawBounds.height === "number"
+        ? {
+            x: rawBounds.x,
+            y: rawBounds.y,
+            width: rawBounds.width,
+            height: rawBounds.height,
+          }
+        : undefined;
     elements.push({
       index: elements.length + 1,
       role,
       name,
       elementToken: ref,
-      ...(hasBounds
-        ? {
-            bounds: {
-              x: bounds!.x as number,
-              y: bounds!.y as number,
-              width: bounds!.width as number,
-              height: bounds!.height as number,
-            },
-          }
-        : {}),
+      ...(bounds ? { bounds } : {}),
     });
   }
   const children = row.children;
@@ -352,7 +348,7 @@ export function createAgentDesktopProvider(
         }
         default:
           throw new ComputerUseError(
-            `unsupported action ${String((request as ComputerUseActRequest).action)}`,
+            `unsupported action ${String(request.action)}`,
             "COMPUTER_USE_BAD_ARGS",
           );
       }

@@ -277,7 +277,9 @@ describe("Face settings U2", () => {
       value: { mode: string };
       applies: string;
     };
-    expect(computerUse.value.mode).toBe("off");
+    // Desktop ships agent-desktop and defaults it on (ready out of the box);
+    // a headless Host turns it off from the Plugins card.
+    expect(computerUse.value.mode).toBe("agent-desktop");
     expect(computerUse.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "cron")).toBe(true);
     const cron = v.namespaces.find((n) => n.ns === "cron") as {
@@ -295,7 +297,8 @@ describe("Face settings U2", () => {
     };
     expect(browser.value.mode).toBe("agent-browser");
     expect(browser.value.cdpUrl).toBe("");
-    expect(browser.value.headed).toBe(false);
+    // Headed is on by default: watching the page is the usable Desktop path.
+    expect(browser.value.headed).toBe(true);
     expect(browser.value.executablePath).toBe("");
     expect(browser.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "voice")).toBe(false);
