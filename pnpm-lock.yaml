@@ -172,6 +172,12 @@ importers:
       '@xrkseek/server-host':
         specifier: workspace:*
         version: link:../../packages/server/host
+      agent-browser:
+        specifier: 0.41.2
+        version: 0.41.2
+      agent-desktop:
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -2624,6 +2630,10 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+    optionalDependencies:
+      agent-desktop:
+        specifier: 1.2.0
+        version: 1.2.0
 
   packages/exec/environment:
     dependencies:
@@ -2747,6 +2757,9 @@ importers:
       '@xrkseek/core-tools':
         specifier: workspace:*
         version: link:../../core/tools
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
       ws:
         specifier: ^8.18.0
         version: 8.21.3
@@ -2767,6 +2780,10 @@ importers:
       undici:
         specifier: ^7.29.1
         version: 7.29.1
+    optionalDependencies:
+      agent-browser:
+        specifier: 0.41.2
+        version: 0.41.2
 
   packages/im-gateway-contract: {}
 
@@ -6271,6 +6288,18 @@ packages:
   agent-base@9.0.0:
     resolution: {integrity: sha512-TQf59BsZnytt8GdJKLPfUZ54g/iaUL2OWDSFCCvMOhsHduDQxO8xC4PNeyIkVcA5KwL2phPSv0douC0fgWzmnA==}
     engines: {node: '>= 20'}
+
+  agent-browser@0.41.2:
+    resolution: {integrity: sha512-/agCKB5rw1EEK8SKWo4zid7a5kOwlclqALC0P3c69buJvKdhrl/dJkKdfLqGGaiNIbWzRdqqT0PxZVkwVEf2fg==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
+    hasBin: true
+
+  agent-desktop@1.2.0:
+    resolution: {integrity: sha512-sp8hHs8JfnuZe8ZQwiKZrqSOlu26SSeZXkjDog4KsU31L09G3uZJa8pITGN2vORif9uuh0iOSJHD146CEyTqag==}
+    engines: {node: '>=18'}
+    cpu: [arm64, x64]
+    os: [darwin, win32, linux]
+    hasBin: true
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
@@ -10645,6 +10674,10 @@ snapshots:
   agent-base@7.1.4: {}
 
   agent-base@9.0.0: {}
+
+  agent-browser@0.41.2: {}
+
+  agent-desktop@1.2.0: {}
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:

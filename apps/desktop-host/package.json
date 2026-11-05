@@ -33,7 +33,9 @@
     "@xrkseek/harness-desktop": "workspace:*",
     "@xrkseek/preset-server": "workspace:*",
     "@xrkseek/server-config": "workspace:*",
-    "@xrkseek/server-host": "workspace:*"
+    "@xrkseek/server-host": "workspace:*",
+    "agent-browser": "0.41.2",
+    "agent-desktop": "1.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

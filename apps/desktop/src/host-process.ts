@@ -117,7 +117,30 @@ async function exitsWithin(
   }
 }
 
-function childEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+/**
+ * Prepend a directory onto the process env PATH (not the string helper in
+ * `cli-command.ts`). Vendored `npm` next to Host Node must win over PATH.
+ */
+export function prependDirToEnvPath(
+  env: NodeJS.ProcessEnv,
+  entry: string,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  const pathKey =
+    platform === "win32"
+      ? (Object.keys(env).find((name) => name.toLowerCase() === "path") ??
+        "Path")
+      : "PATH";
+  const current = env[pathKey] ?? "";
+  const parts = current.split(path.delimiter).filter((part) => part.length > 0);
+  if (parts.includes(entry)) return env;
+  return { ...env, [pathKey]: [entry, ...parts].join(path.delimiter) };
+}
+
+function childEnv(
+  nodeExecutable: string,
+  extra?: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(
       ([name]) =>
@@ -130,8 +153,13 @@ function childEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
         !/^(?:npm|pnpm|corepack)_/iu.test(name),
     ),
   );
-  if (extra === undefined) return base;
-  return { ...base, ...extra };
+  const merged = extra === undefined ? base : { ...base, ...extra };
+  // Bundled Node 26 ships npm beside node.exe — plugin mutate must see it
+  // even when the user machine has no system Node on PATH.
+  return prependDirToEnvPath(
+    merged,
+    path.dirname(path.resolve(nodeExecutable)),
+  );
 }
 
 function defaultHostEntry(projectDir: string): string {
@@ -253,7 +281,7 @@ export class DesktopHostProcess {
       ],
       {
         cwd: this.projectDir,
-        env: childEnv(this.childEnvironment),
+        env: childEnv(this.node, this.childEnvironment),
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         windowsHide: true,
       },

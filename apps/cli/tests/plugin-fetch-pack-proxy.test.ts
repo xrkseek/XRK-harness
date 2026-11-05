@@ -16,7 +16,10 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-import { fetchPackage } from "../src/plugin/fetch-pack.js";
+import {
+  fetchPackage,
+  resolveNpmPackInvocation,
+} from "../src/plugin/fetch-pack.js";
 
 const temps: string[] = [];
 
@@ -31,13 +34,41 @@ afterEach(() => {
   delete process.env.https_proxy;
 });
 
+describe("resolveNpmPackInvocation", () => {
+  it("prefers npm-cli.js beside execPath", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "xrk-npm-beside-"));
+    temps.push(root);
+    const nodeBin = path.join(root, "node.exe");
+    const cli = path.join(root, "node_modules", "npm", "bin", "npm-cli.js");
+    mkdirSync(path.dirname(cli), { recursive: true });
+    writeFileSync(nodeBin, "");
+    writeFileSync(cli, "");
+    const inv = resolveNpmPackInvocation(nodeBin, "win32");
+    expect(inv.file).toBe(nodeBin);
+    expect(inv.argsPrefix).toEqual([cli]);
+    expect(inv.windowsShell).toBe(false);
+  });
+});
+
 describe("fetchPackage --proxy", () => {
   it("passes --proxy and --https-proxy to npm pack only", () => {
     const stageParent = mkdtempSync(path.join(tmpdir(), "xrk-proxy-pack-"));
     temps.push(stageParent);
 
+    const isNpmPackSpawn = (cmd: unknown, args: unknown): boolean => {
+      const argv = Array.isArray(args) ? (args as string[]) : [];
+      if (!argv.includes("pack")) return false;
+      if (typeof cmd !== "string") return false;
+      return (
+        cmd === "npm" ||
+        cmd === "npm.cmd" ||
+        cmd.includes("npm") ||
+        argv.some((a) => a.includes("npm-cli.js"))
+      );
+    };
+
     vi.mocked(spawnSync).mockImplementation((cmd, args) => {
-      if (cmd === "npm" || (typeof cmd === "string" && cmd.includes("npm"))) {
+      if (isNpmPackSpawn(cmd, args)) {
         // Mimic npm pack writing a tarball into --pack-destination.
         const destIdx = (args as string[]).indexOf("--pack-destination");
         const dest = destIdx >= 0 ? (args as string[])[destIdx + 1]! : stageParent;
@@ -74,10 +105,9 @@ describe("fetchPackage --proxy", () => {
       }),
     ).toThrow(); // extract fails on empty tgz — argv is what we assert
 
-    const npmCall = vi.mocked(spawnSync).mock.calls.find((c) => {
-      const cmd = c[0];
-      return cmd === "npm" || (typeof cmd === "string" && cmd.includes("npm"));
-    });
+    const npmCall = vi.mocked(spawnSync).mock.calls.find((c) =>
+      isNpmPackSpawn(c[0], c[1]),
+    );
     expect(npmCall).toBeDefined();
     const argv = npmCall![1] as string[];
     expect(argv).toContain("--proxy");

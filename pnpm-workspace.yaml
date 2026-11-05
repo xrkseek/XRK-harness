@@ -24,6 +24,9 @@ allowBuilds:
   "@google/genai": false
   "@xrkseek/exec-pty": true
   "@xrkseek/exec-pty@file:packages/exec/pty": true
+  # Download platform CLI binaries into Desktop Host node_modules.
+  agent-browser: true
+  agent-desktop: true
   electron: true
   electron-winstaller: true
   esbuild: true
@@ -31,3 +34,5 @@ allowBuilds:
   node-pty: true
   protobufjs: false
   sharp: true
+minimumReleaseAgeExclude:
+  - agent-desktop@1.2.0

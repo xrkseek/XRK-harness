@@ -49,7 +49,9 @@ import {
   createWebTools,
   createBrowserTools,
   createBrowserVaultTools,
+  browserProductConfigKey,
   createBrowserSession,
+  sanitizeAgentBrowserSessionName,
   type BrowserVaultAccess,
   type WebAccess,
 } from "@xrkseek/exec-web";
@@ -57,6 +59,7 @@ import {
   formatComputerUseGuidance,
   createComputerUseTools,
   createDefaultComputerUseAccess,
+  isComputerUseEnabled,
   type ComputerUseService,
 } from "@xrkseek/exec-computer-use";
 import {
@@ -1102,12 +1105,15 @@ export function createHarnessComposition(
     const makeBrowser = () =>
       createBrowserSession({
         fetch: access.fetch,
+        sessionName: sanitizeAgentBrowserSessionName(sessionId),
         ...(options.browserProduct
           ? { product: options.browserProduct }
           : {}),
       });
     const browser = options.browserRuntime
-      ? options.browserRuntime.getOrCreate(sessionId, makeBrowser)
+      ? options.browserRuntime.getOrCreate(sessionId, makeBrowser, {
+          configKey: browserProductConfigKey(options.browserProduct),
+        })
       : makeBrowser();
     for (const tool of createBrowserTools(
       browser,
@@ -1130,36 +1136,54 @@ export function createHarnessComposition(
       }
     }
   }
+  // Off → do not register `computer_use` (hot unload on Settings save).
+  // Injected service or product/env on → mount; rebuild adds/drops the tool.
   if (options.computerUseTools !== false) {
-    const service =
+    const injected =
       typeof options.computerUseTools === "object"
         ? options.computerUseTools
-        : createDefaultComputerUseAccess({
-            ...(options.computerUseEnv
-              ? { env: options.computerUseEnv }
-              : {}),
-            ...(options.computerUseProduct
-              ? { product: options.computerUseProduct }
-              : {}),
-          }).service;
-    for (const tool of createComputerUseTools({
-      ...(service ? { service } : {}),
-      ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
-      ...(options.computerUseProduct
-        ? { product: options.computerUseProduct }
-        : {}),
-      ...(options.attachments
-        ? {
-            saveScreenshot: (png) =>
-              options.attachments!.saveImage({
-                data: png,
-                mediaType: "image/png",
-                name: "computer-use-snapshot.png",
-              }),
-          }
-        : {}),
-    })) {
-      tools.register(tool);
+        : undefined;
+    const access = injected
+      ? undefined
+      : createDefaultComputerUseAccess({
+          ...(options.computerUseEnv
+            ? { env: options.computerUseEnv }
+            : {}),
+          ...(options.computerUseProduct
+            ? { product: options.computerUseProduct }
+            : {}),
+        });
+    const service = injected ?? access?.service;
+    const mount =
+      injected !== undefined ||
+      isComputerUseEnabled({
+        ...(options.computerUseEnv
+          ? { env: options.computerUseEnv }
+          : {}),
+        ...(options.computerUseProduct
+          ? { product: options.computerUseProduct }
+          : {}),
+      });
+    if (mount && service) {
+      for (const tool of createComputerUseTools({
+        service,
+        ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
+        ...(options.computerUseProduct
+          ? { product: options.computerUseProduct }
+          : {}),
+        ...(options.attachments
+          ? {
+              saveScreenshot: (png) =>
+                options.attachments!.saveImage({
+                  data: png,
+                  mediaType: "image/png",
+                  name: "computer-use-snapshot.png",
+                }),
+            }
+          : {}),
+      })) {
+        tools.register(tool);
+      }
     }
   }
   if (options.voiceTools !== false) {
@@ -1630,7 +1654,18 @@ export function createHarnessComposition(
       content: () => formatBrowserGuidance(availableToolNames()),
     });
   }
-  if (options.computerUseTools !== false) {
+  if (
+    options.computerUseTools !== false &&
+    (typeof options.computerUseTools === "object" ||
+      isComputerUseEnabled({
+        ...(options.computerUseEnv
+          ? { env: options.computerUseEnv }
+          : {}),
+        ...(options.computerUseProduct
+          ? { product: options.computerUseProduct }
+          : {}),
+      }))
+  ) {
     prompts.register({
       id: "tool:computer_use",
       order: 116,
@@ -1797,7 +1832,18 @@ export function createHarnessComposition(
             "tool:browser",
           ]
         : []),
-      ...(options.computerUseTools !== false ? ["tool:computer_use"] : []),
+      ...(options.computerUseTools !== false &&
+      (typeof options.computerUseTools === "object" ||
+        isComputerUseEnabled({
+          ...(options.computerUseEnv
+            ? { env: options.computerUseEnv }
+            : {}),
+          ...(options.computerUseProduct
+            ? { product: options.computerUseProduct }
+            : {}),
+        }))
+        ? ["tool:computer_use"]
+        : []),
       ...(options.voiceTools !== false ? ["tool:voice"] : []),
       ...(options.imageGenTools !== false ? ["tool:image_gen"] : []),
       ...(options.videoGenTools !== false ? ["tool:video_gen"] : []),

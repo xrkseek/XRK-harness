@@ -13,7 +13,7 @@
 | 决策 | 含义 | 直接结果 |
 |------|------|----------|
 | **发布身份** | 壳 · Desktop Host · Web dist · 插件依赖图 · 内置 Node/pnpm（及日后 seed）同一 Desktop 发布号 | 禁止「仅壳 / 仅 runtime」分轨；CLI npm 线（`@xrkseek/harness-cli`）**不是** Desktop 身份的一部分 |
-| **运行时** | 打包后用捆绑上游 Node + 钉死 pnpm；开发投影可用调用方 Node（须文档标明） | 系统 pnpm / 用户 npm 配置不进产品执行路径 |
+| **运行时** | 打包后用捆绑上游 Node **≥26 LTS**（含 vendored `npm`）+ 钉死 pnpm；开发投影可用调用方 Node（须文档标明） | 系统 pnpm / 用户 npm 配置不进产品执行路径；Settings 装插件不依赖本机已装 Node |
 | **通信** | Host 仅 listen **`127.0.0.1`**；产品页 `xrk-app://` + Host Fetch 桥；IPC 仅生命周期 | 无 Face 分帧管道；禁止绑 `0.0.0.0` |
 | **状态归属** | 共享 `~/.xrk` 产品数据；隔离 desktop profile · lock · `node_modules` · 桌面 pnpm store | CLI **不得**启动/改写 `profiles/desktop`；单实例锁为主 owner |
 | **激活** | staging → 健康检查 → 日记激活 → rollback / recover | `DesktopProfileTransactionManager`；≠ 离线 seed 已可装 |
@@ -115,7 +115,7 @@ The shell wraps the assembled XRK Web UI. The private Host (`@xrkseek/harness-de
 | Decision | Meaning | Direct result |
 |----------|---------|---------------|
 | **Release identity** | Shell · Desktop Host · Web dist · plugin graph · bundled Node/pnpm (and seed later) share one Desktop release number | No “shell-only / runtime-only” split tracks; the public CLI line (`@xrkseek/harness-cli`) is **not** part of Desktop identity |
-| **Runtime** | Packaged builds use bundled upstream Node + pinned pnpm; development projection may use caller Node (must be documented) | System pnpm / user npm config stay off the product execution path |
+| **Runtime** | Packaged builds use bundled upstream Node **≥26 LTS** (with vendored `npm`) + pinned pnpm; development projection may use caller Node (must be documented) | System pnpm / user npm config stay off the product path; Settings plugin install does not require a system Node |
 | **Transport** | Host listen **`127.0.0.1` only**; product page `xrk-app://` + Host Fetch bridge; IPC lifecycle-only | No Face framed pipes; never bind `0.0.0.0` |
 | **State ownership** | Share `~/.xrk` product data; isolate desktop profile · lock · `node_modules` · desktop pnpm store | CLI **must not** start/mutate `profiles/desktop`; single-instance lock is the primary owner |
 | **Activation** | staging → health check → journaled activate → rollback / recover | `DesktopProfileTransactionManager`; ≠ offline seed installable |

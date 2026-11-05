@@ -92,6 +92,17 @@ describe("prepareDesktopRuntime (injected)", () => {
           const binDir = path.join(destDir, folder);
           mkdirSync(binDir, { recursive: true });
           writeFileSync(path.join(binDir, "node.exe"), fakeNodeBytes);
+          // Official win zip layout: npm next to node.exe
+          const npmCli = path.join(
+            binDir,
+            "node_modules",
+            "npm",
+            "bin",
+            "npm-cli.js",
+          );
+          mkdirSync(path.dirname(npmCli), { recursive: true });
+          writeFileSync(npmCli, "#!/usr/bin/env node\n");
+          writeFileSync(path.join(binDir, "npm.cmd"), "@ECHO OFF\n");
         },
         resolvePnpmPackage: () => {
           const pnpmDir = path.join(appRoot, "fake-pnpm");
@@ -125,6 +136,12 @@ describe("prepareDesktopRuntime (injected)", () => {
         JSON.parse(readFileSync(path.join(runtime, "versions.json"), "utf8")),
       ).toEqual(versions);
       expect(existsSync(path.join(runtime, "node", "node.exe"))).toBe(true);
+      expect(
+        existsSync(
+          path.join(runtime, "node", "node_modules", "npm", "bin", "npm-cli.js"),
+        ),
+      ).toBe(true);
+      expect(existsSync(path.join(runtime, "node", "npm.cmd"))).toBe(true);
       expect(existsSync(path.join(runtime, "pnpm", "package.json"))).toBe(true);
       expect(parseNodeSha256Line(`${sha}  ${archiveName}\n`, archiveName)).toBe(
         sha,

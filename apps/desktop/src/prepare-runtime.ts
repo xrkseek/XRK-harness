@@ -1,6 +1,8 @@
 /**
- * Prepare bundled upstream Node.js + pinned pnpm for Desktop packaging (ADR-0008).
- * Downloads official Node archives (SHA-256 verified) and copies the pinned pnpm package.
+ * Prepare bundled upstream Node.js (+ vendored npm) + pinned pnpm for Desktop
+ * packaging (ADR-0008). Downloads official Node archives (SHA-256 verified),
+ * copies `node` plus `node_modules/npm` so Settings `plugin add` can `npm pack`
+ * without a system Node on PATH, and copies the pinned pnpm package.
  */
 
 import { createHash } from "node:crypto";
@@ -275,6 +277,30 @@ async function prepareNode(options: {
   );
   if (options.target.platform !== "win32") {
     await chmod(destination, 0o755);
+  }
+
+  // Vendor npm next to Host Node so `xrkh plugin add` / Face mutate can pack
+  // without a system Node. Layout matches Windows zip (flat) for both targets.
+  const extractRoot = path.join(extraction, folder);
+  const npmSource =
+    options.target.platform === "win32"
+      ? path.join(extractRoot, "node_modules", "npm")
+      : path.join(extractRoot, "lib", "node_modules", "npm");
+  if (!existsSync(npmSource)) {
+    throw new Error(
+      `xrk desktop runtime: npm missing in Node archive at ${npmSource}`,
+    );
+  }
+  const npmDest = path.join(destinationRoot, "node_modules", "npm");
+  mkdirSync(path.dirname(npmDest), { recursive: true });
+  cpSync(npmSource, npmDest, { recursive: true });
+  if (options.target.platform === "win32") {
+    for (const name of ["npm.cmd", "npx.cmd", "npm", "npx"] as const) {
+      const shim = path.join(extractRoot, name);
+      if (existsSync(shim)) {
+        cpSync(shim, path.join(destinationRoot, name));
+      }
+    }
   }
 
   if (

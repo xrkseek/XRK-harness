@@ -28,7 +28,11 @@ import {
 import { remapInjectList } from "./remap-inject.js";
 import { reconcileClientStaging } from "./staging-reconcile.js";
 
-export { anchorPathSpec, fetchPackage } from "./fetch-pack.js";
+export {
+  anchorPathSpec,
+  fetchPackage,
+  resolveNpmPackInvocation,
+} from "./fetch-pack.js";
 export { classifyPackage } from "./classify.js";
 export { remapInjectId, remapInjectList } from "./remap-inject.js";
 export {

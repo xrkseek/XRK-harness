@@ -1,6 +1,9 @@
 /**
  * Fetch a package with `npm pack` and unpack it to a temp directory.
  * Relative path / file: / link: specs are anchored to `cwd` (DSH posture).
+ *
+ * Prefer `npm-cli.js` next to `process.execPath` (Desktop bundled Node 26 +
+ * vendored npm) so Settings plugin install works with no system Node on PATH.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -18,6 +21,51 @@ export interface UnpackedPackage {
   readonly root: string;
   readonly pkg: Record<string, unknown>;
   readonly cleanup: () => void;
+}
+
+/** How to invoke `npm pack` without assuming a system Node install. */
+export interface NpmPackInvocation {
+  readonly file: string;
+  readonly argsPrefix: readonly string[];
+  /** Windows `.cmd` shims need `shell: true`. */
+  readonly windowsShell: boolean;
+}
+
+/**
+ * Resolve npm for plugin pack: execPath-adjacent npm-cli.js → sibling npm(.cmd)
+ * → PATH `npm`. Desktop runtime vendors npm next to Host Node (ADR-0008).
+ */
+export function resolveNpmPackInvocation(
+  execPath: string = process.execPath,
+  platform: NodeJS.Platform = process.platform,
+): NpmPackInvocation {
+  const dir = path.dirname(execPath);
+  const cliCandidates = [
+    path.join(dir, "node_modules", "npm", "bin", "npm-cli.js"),
+    // Official unix layout when node lives in `…/bin/node`.
+    path.join(dir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  for (const cli of cliCandidates) {
+    if (existsSync(cli)) {
+      return { file: execPath, argsPrefix: [cli], windowsShell: false };
+    }
+  }
+  if (platform === "win32") {
+    const cmd = path.join(dir, "npm.cmd");
+    if (existsSync(cmd)) {
+      return { file: cmd, argsPrefix: [], windowsShell: true };
+    }
+  } else {
+    const bin = path.join(dir, "npm");
+    if (existsSync(bin)) {
+      return { file: bin, argsPrefix: [], windowsShell: false };
+    }
+  }
+  return {
+    file: platform === "win32" ? "npm.cmd" : "npm",
+    argsPrefix: [],
+    windowsShell: platform === "win32",
+  };
 }
 
 /**
@@ -104,20 +152,17 @@ export function fetchPackage(
       // npm ignores OS/system proxy; only these flags apply to this pack.
       npmArgs.push("--proxy", proxy, "--https-proxy", proxy);
     }
-    const result = spawnSync(
-      "npm",
-      npmArgs,
-      {
-        cwd,
-        encoding: "utf8",
-        shell: process.platform === "win32",
-      },
-    );
+    const npm = resolveNpmPackInvocation();
+    const result = spawnSync(npm.file, [...npm.argsPrefix, ...npmArgs], {
+      cwd,
+      encoding: "utf8",
+      shell: npm.windowsShell,
+    });
     if (result.error) {
       const code = (result.error as NodeJS.ErrnoException).code;
       if (code === "ENOENT") {
         throw new Error(
-          "npm not found on PATH — install Node.js (includes npm) to manage plugins",
+          "npm not found beside Host Node or on PATH — Desktop needs a runtime with vendored npm; CLI needs Node.js ≥26 (includes npm)",
         );
       }
       throw result.error;
