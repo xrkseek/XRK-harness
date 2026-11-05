@@ -305,6 +305,20 @@ rmSync(path.join(STAGE, "node_modules", ".pnpm"), { recursive: true, force: true
 syncContextDistIntoStage(STAGE);
 bundleSharpPlatforms(STAGE);
 
+// Desktop-only helper CLIs (`agent-browser` 115.8 MB + `agent-desktop` 29.3 MB
+// at 0.7.11). `exec/web` + `exec/computer-use` declare them as
+// optionalDependencies and `pnpm deploy --prod` installs those, which blew the
+// CLI tarball from 139 MB to 218 MB and made npm reject the PUT with E413
+// (Payload Too Large). The Desktop installer ships its own copy under
+// resources/host and the CLI resolves them from a user install path, so they
+// must not ride along in this package.
+for (const desktopOnly of ["agent-browser", "agent-desktop"]) {
+  rmSync(path.join(STAGE, "node_modules", desktopOnly), {
+    recursive: true,
+    force: true,
+  });
+}
+
 for (const rel of [
   "node_modules/@xrkseek/xrk-file-reference/dist/grammar.js",
   "node_modules/@xrkseek/xrk-file-reference-local/dist/search.js",

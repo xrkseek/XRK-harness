@@ -229,3 +229,27 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   `chore(site)` 这类收尾提交必然落在 tag 之后。要让三 sha（HEAD / origin/main / tag）
   一致，得 `git tag -f` 前移 + `gh release edit <tag> --target main`——但**只有在本轮
   尚无任何发布物引用旧 tag 时**才允许（见上一条）；正常收尾接受 tag 落后一个文档提交。
+- **E413 的真凶常是 `pnpm deploy --prod` 装进了 optionalDependencies**（0.7.11）：
+  `exec/web` / `exec/computer-use` 把 `agent-browser`(115.8 MB) / `agent-desktop`(29.3 MB)
+  声明成 optional，deploy 照装，CLI tarball 从 139 MB 涨到 **218 MB**，npm 直接
+  `E413 Payload Too Large`（PUT 就被拒，连 202 都拿不到）。判据：`pnpm release` 日志里
+  `package size:` 明显大于上一版就该警觉；`npm notice` 的 `unpacked size` 与上一版对比
+  能立刻看出增量。修法已内置 `stage-cli-release.mjs`（stage 后删除这两个目录，并同步摘掉
+  staged `package.json` 的 dependencies/bundleDependencies）。**只删目录不改 package.json
+  会 pack 失败**。
+- **`gh release upload` 的 exe 这一步最容易漏**（0.7.11 又漏了一次）：只上 AGT 的话
+  `/desktop/bin/...` 是 200，官网下载按钮却 404——站点 `worker.js` 首选
+  `releases/download/<tag>/<filename>`（CN 访客走 `ghfast.top`）。验收必须看
+  `gh api repos/.../releases/tags/v<ver> --jq '.assets[] | .name + " " + (.size|tostring)'`
+  里**同时有 exe + 两个 tgz**，且 exe 字节 == 本地 == AGT `Content-Length`。
+- **`pnpm package:desktop` 前必须先装回根 devDeps**（0.7.11 连踩两次）：它内部会跑
+  `pnpm install --production`（`CI` 未设则 `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`），
+  把 490 个 devDeps 全删；紧接着报 `electron-builder is not installed` 或
+  `'tsc' is not recognized`。顺序固定为
+  `CI=true pnpm install --frozen-lockfile` → `XRK_DESKTOP_PACKAGE=1 pnpm package:desktop`，
+  且必须在 `C:\xrk-h` junction 下跑。
+- **publish 返回 `+ pkg@ver` 但 registry 二十分钟无变化时，用「同一字节的 tgz 重发」诊断**
+  （0.7.11）：先确认 `npm whoami` 正常、packument 的 `modified` 停在上一版、镜像也查不到、
+  debug log 里**没有任何 `http fetch PUT`**；然后对**同一个文件**再 publish 一次——
+  回 `E409 Cannot publish over previously staged version` 就证明第一次已进服务端暂存队列，
+  只是大包处理慢，**继续等、绝不重打**；若又回 `+ pkg@ver` 才是真没发出去。
