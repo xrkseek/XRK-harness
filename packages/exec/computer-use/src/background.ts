@@ -134,5 +134,13 @@ export function composeBackgroundWithCapture(
       capture.capture(request, signal),
     listWindows: (signal?: AbortSignal) => capture.listWindows(signal),
     act: (request, signal) => act.act(request, signal),
+    ...(typeof capture.find === "function"
+      ? {
+          find: (
+            request: Parameters<NonNullable<ComputerUseService["find"]>>[0],
+            signal?: AbortSignal,
+          ) => capture.find!(request, signal),
+        }
+      : {}),
   };
 }

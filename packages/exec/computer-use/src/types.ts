@@ -21,7 +21,10 @@ export type ComputerUseAction =
   | "type"
   | "key"
   | "scroll"
-  | "list_windows";
+  | "list_windows"
+  | "clipboard_set"
+  | "clipboard_get"
+  | "find";
 
 export const COMPUTER_USE_ACTIONS: readonly ComputerUseAction[] = [
   "capture",
@@ -30,7 +33,22 @@ export const COMPUTER_USE_ACTIONS: readonly ComputerUseAction[] = [
   "key",
   "scroll",
   "list_windows",
+  "clipboard_set",
+  "clipboard_get",
+  "find",
 ];
+
+/** Search AX tree by role/name/text (agent-desktop `find`, or filtered last capture). */
+export interface ComputerUseFindRequest {
+  readonly role?: string;
+  readonly name?: string;
+  /** Match name/value/description text (substring unless exact). */
+  readonly text?: string;
+  readonly app?: string;
+  readonly exact?: boolean;
+  readonly first?: boolean;
+  readonly limit?: number;
+}
 
 export interface ComputerUseElement {
   /** 1-based SOM / AX index for click/type. */
@@ -74,15 +92,22 @@ export interface ComputerUseCaptureResult {
 }
 
 export interface ComputerUseActRequest {
-  readonly action: Exclude<ComputerUseAction, "capture" | "list_windows">;
+  readonly action: Exclude<
+    ComputerUseAction,
+    "capture" | "list_windows" | "find"
+  >;
   readonly element?: number;
   readonly text?: string;
   readonly keys?: string;
   readonly direction?: "up" | "down" | "left" | "right";
   readonly amount?: number;
   readonly coordinate?: readonly [number, number];
+  /**
+   * Allow physical pointer / `--headed` paths (moves the real mouse / steals focus).
+   * Default false — agent-desktop and UIA stay on AX / Invoke / clipboard.
+   */
+  readonly headed?: boolean;
 }
-
 export interface ComputerUseActResult {
   readonly ok: boolean;
   readonly action: string;
@@ -127,4 +152,9 @@ export interface ComputerUseService {
     signal?: AbortSignal,
   ): Promise<ComputerUseActResult>;
   listWindows(signal?: AbortSignal): Promise<readonly ComputerUseWindow[]>;
+  /** Optional: search AX by role/name/text and refresh act targets. */
+  find?(
+    request: ComputerUseFindRequest,
+    signal?: AbortSignal,
+  ): Promise<ComputerUseCaptureResult>;
 }

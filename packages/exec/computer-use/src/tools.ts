@@ -55,6 +55,11 @@ export interface CreateComputerUseToolsOptions {
   readonly saveScreenshot?: (
     png: Uint8Array,
   ) => Promise<ComputerUseScreenshotRef>;
+  /**
+   * Live route image intake (same gate as `read_image`). When false, vision/som
+   * still attach a gallery image but the text envelope notes pixels are off-wire.
+   */
+  readonly routeAllowsImage?: () => boolean;
 }
 
 function fail(err: unknown): ToolResultContent {
@@ -116,13 +121,18 @@ export function createComputerUseTools(
     direction?: string;
     amount?: number;
     coordinate?: unknown;
+    headed?: boolean;
+    role?: string;
+    name?: string;
+    exact?: boolean;
+    first?: boolean;
+    limit?: number;
   }> = {
     name: "computer_use",
     description:
-      "Native desktop GUI (not browser_*). Default backend is agent-desktop (Settings can switch UIA / Background). " +
-      "Loop: list_windows → capture → click/type/key/scroll by element index → capture to verify. " +
-      "capture mode=ax|vision|som (vision/som add an inline screenshot; attachmentId is not a path). " +
-      "A new capture invalidates earlier indices.",
+      "Native desktop GUI (not browser pages). AX capture is headless. " +
+      "capture and find return fresh element indices; any newer capture or find invalidates them. " +
+      "Real mouse input (coordinate clicks) needs headed=true.",
     parameters: {
       type: "object",
       properties: {
@@ -130,25 +140,46 @@ export function createComputerUseTools(
           type: "string",
           enum: [...COMPUTER_USE_ACTIONS],
           description:
-            "capture | click | type | key | scroll | list_windows",
+            "capture | find | click | type | key | scroll | list_windows | clipboard_set | clipboard_get. find reads role/name/text/exact/first/limit.",
         },
         mode: {
           type: "string",
           enum: ["ax", "som", "vision"],
           description:
-            "capture mode; ax=tree only (default); vision=PNG+AX; som=PNG with index labels+AX.",
+            "ax returns the tree only (default); vision and som add a PNG (som labels it with element indices).",
         },
         app: {
           type: "string",
-          description: "Optional app/window name filter for capture.",
+          description: "Optional app/window name filter for capture/find.",
         },
         element: {
           type: "number",
-          description: "1-based element index from the last capture.",
+          description: "1-based element index from the last capture/find.",
         },
         text: {
           type: "string",
-          description: "Text for action=type.",
+          description:
+            "Text for action=type or clipboard_set; for find, match name/value/description.",
+        },
+        role: {
+          type: "string",
+          description: "Accessibility role to match (button, textfield, …).",
+        },
+        name: {
+          type: "string",
+          description: "Accessible name or label to match.",
+        },
+        exact: {
+          type: "boolean",
+          description: "Exact match on name/text (default substring).",
+        },
+        first: {
+          type: "boolean",
+          description: "Return only the first match.",
+        },
+        limit: {
+          type: "number",
+          description: "Max matches to return.",
         },
         keys: {
           type: "string",
@@ -169,7 +200,12 @@ export function createComputerUseTools(
           minItems: 2,
           maxItems: 2,
           description:
-            "Optional screen pixel [x, y] for action=click when element is omitted (vision/som).",
+            "Screen pixel [x, y] for a click without an element index. Needs headed=true (moves the real mouse).",
+        },
+        headed: {
+          type: "boolean",
+          description:
+            "Allow real mouse input (--headed). Steals the cursor; set true only when the user accepts that.",
         },
       },
       required: ["action"],
@@ -187,6 +223,10 @@ export function createComputerUseTools(
       try {
         const action = parseAction(args?.action);
         if (action === "capture") {
+          const multimodal =
+            options.routeAllowsImage === undefined
+              ? undefined
+              : options.routeAllowsImage();
           const snap = await options.service.capture(
             {
               ...(args?.mode !== undefined
@@ -218,13 +258,18 @@ export function createComputerUseTools(
               mode: snap.mode,
               attachmentId: ref.attachmentId,
               elementCount: snap.elements.length,
+              ...(multimodal !== undefined ? { multimodal } : {}),
             });
             return {
               content: [
                 { type: "text" as const, text },
                 { type: "image" as const, attachment: ref },
               ],
-              meta: { mode: snap.mode, attachmentId: ref.attachmentId },
+              meta: {
+                mode: snap.mode,
+                attachmentId: ref.attachmentId,
+                ...(multimodal === false ? { textOnlyRoute: true } : {}),
+              },
             };
           }
           return {
@@ -232,13 +277,53 @@ export function createComputerUseTools(
               snapshotText: snap.text,
               mode: snap.mode,
               elementCount: snap.elements.length,
+              ...(multimodal !== undefined ? { multimodal } : {}),
             }),
-            meta: { mode: snap.mode },
+            meta: {
+              mode: snap.mode,
+              ...(multimodal === false ? { textOnlyRoute: true } : {}),
+            },
           };
         }
         if (action === "list_windows") {
           const windows = await options.service.listWindows(signal);
           return { content: formatWindowsList(windows) };
+        }
+        if (action === "find") {
+          const findFn = options.service.find?.bind(options.service);
+          if (findFn === undefined) {
+            throw new ComputerUseError(
+              "find is not supported by this computer_use Provider",
+              "COMPUTER_USE_UNAVAILABLE",
+            );
+          }
+          const multimodal =
+            options.routeAllowsImage === undefined
+              ? undefined
+              : options.routeAllowsImage();
+          const snap = await findFn(
+            {
+              ...(args?.role !== undefined ? { role: String(args.role) } : {}),
+              ...(args?.name !== undefined ? { name: String(args.name) } : {}),
+              ...(args?.text !== undefined ? { text: String(args.text) } : {}),
+              ...(args?.app !== undefined ? { app: String(args.app) } : {}),
+              ...(args?.exact === true ? { exact: true } : {}),
+              ...(args?.first === true ? { first: true } : {}),
+              ...(args?.limit !== undefined
+                ? { limit: Number(args.limit) }
+                : {}),
+            },
+            signal,
+          );
+          return {
+            content: formatCaptureEnvelope({
+              snapshotText: snap.text,
+              mode: snap.mode,
+              elementCount: snap.elements.length,
+              ...(multimodal !== undefined ? { multimodal } : {}),
+            }),
+            meta: { mode: snap.mode, action: "find" },
+          };
         }
         const coordinate = parseCoordinate(args?.coordinate);
         const result = await options.service.act(
@@ -262,6 +347,7 @@ export function createComputerUseTools(
               ? { amount: Number(args.amount) }
               : {}),
             ...(coordinate !== undefined ? { coordinate } : {}),
+            ...(args?.headed === true ? { headed: true } : {}),
           },
           signal,
         );
@@ -272,9 +358,12 @@ export function createComputerUseTools(
     },
     isConcurrencySafe: (args) => {
       const action = String(args?.action ?? "");
-      return action === "capture" || action === "list_windows";
+      return (
+        action === "capture" ||
+        action === "list_windows" ||
+        action === "find"
+      );
     },
   };
-
   return [tool];
 }

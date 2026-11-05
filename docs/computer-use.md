@@ -12,24 +12,33 @@ Harness 在 Settings **开启**时登记模型工具 `computer_use`；`mode=off`
 
 | 层 | 内容 |
 |----|------|
-| Definition | `ComputerUseService`（`capture` · `act` · `listWindows`） |
+| Definition | `ComputerUseService`（`capture` · `act` · `listWindows` · 可选 `find`） |
 | Provider | `agent-desktop` · `memory` · Windows `uia`（`XRK_COMPUTER_USE=1`）· `background`（`XRK_COMPUTER_USE=background`，助手未安装则 `unavailable`）；或 Host 注入。同一注册表同时只占一个名字 |
-| Consumer | `createComputerUseTools` → `computer_use`（Codex 环：list_windows → capture → click/type/key/scroll → 再 capture；`mode=vision|som` 经 `saveScreenshot` 内联图；可选 `coordinate=[x,y]` 像素点）。不登记到 `browser_*` |
+| Consumer | `createComputerUseTools` → `computer_use`（环：list_windows → capture|find → click/type/key/scroll/clipboard_* → 再 capture；`mode=vision|som` 经 `saveScreenshot` 内联图）。不登记到 `browser_*` |
 
 ## 启用
 
 | 方式 | 效果 |
 |------|------|
-| Settings `mode=agent-desktop` 或 `XRK_COMPUTER_USE=agent-desktop` | 调用 [agent-desktop](https://github.com/vercel-labs/agent-desktop) CLI（**1.x**，AX + **快照限定 ref** `@<snapshot_id>:eN`；Windows/macOS/Linux）；缺二进制时失败并提示 / `XRK_AGENT_DESKTOP`。Windows 权限见 `agent-desktop status` / `permissions` |
-| `XRK_COMPUTER_USE=1`（Windows） | UI Automation Provider（`delivery=uia`） |
+| Settings `mode=agent-desktop` 或 `XRK_COMPUTER_USE=agent-desktop` | 调用 [agent-desktop](https://github.com/vercel-labs/agent-desktop) CLI（**1.x**，AX + **快照限定 ref** `@<snapshot_id>:eN`；Windows/macOS/Linux）。**默认 headless**：按元素操作不移动物理指针、不抢焦点。缺二进制时失败并提示 / `XRK_AGENT_DESKTOP`。Windows 权限见 `agent-desktop status` / `permissions` |
+| `XRK_COMPUTER_USE=1`（Windows） | UI Automation Provider（`delivery=uia`）；优先 Invoke/ValuePattern；物理鼠标需 `headed=true` |
 | `XRK_COMPUTER_USE=memory` | 内存假树（CI / 演示） |
 | `XRK_COMPUTER_USE=background` | 后台输入。`XRK_COMPUTER_USE_BACKGROUND` 指向已安装助手才真正发送；否则每次调用 `unavailable`。不改 UIA，也不走 `browser_*` |
 | `computerUseTools: service` | 注入自定义 Provider |
 | Settings `mode=off` 或 `computerUseTools: false` | **不登记**工具（热卸载） |
 
-Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern 或滚轮回退（`scroll`）。`mode=background` 把 `act` 交给 `XRK_COMPUTER_USE_BACKGROUND` 助手；`capture` 仍用 UIA。
+### 输入契约（产品）
 
-`capture` 的 `mode`：`ax`（默认，仅无障碍树）· `vision`（窗口 PNG + AX）· `som`（PNG 上叠加 1-based 元素序号 + AX）。真截图由 UIA Provider 用 `CopyFromScreen` 产出；Harness 经 `AttachmentStore.saveImage` 与 `browser_vision` 同缝把图交给多模态模型。无附件仓时若已有 PNG，工具诚实失败。
+- **元素点击 / set-value / press**：headless（CLI 默认）。
+- **能力阶梯**（场景无关）：AX 元素操作 → `find`（role/name/text）→ clipboard →（**多模态**）vision/som → `headed=true` 坐标（须用户同意）→ 空洞/不可用则如实说明或 Background，禁止 bash/`SetCursorPos`。**文本模型**跳过像素路径（vision/som 软降级：画廊留图、LLM 不吃像素），见回合 `<session_capability>` 的 `modality=`。
+- **坐标点击 / 物理鼠标**：必须显式 `headed=true`（会移动真实光标）；否则工具拒绝。
+- **CJK 文本**：`type` 走 clipboard-set + 粘贴；亦可 `clipboard_set` / `clipboard_get`。
+- **空洞 AX 树**（≤2 可用节点，自定义绘制 / 弱无障碍 UI）：capture/find note 诚实说明；不要抢鼠标。
+- 不要与同一 Chrome 并行使用 `computer_use` 与 `browser_*`。
+
+Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern；物理回退需 `headed=true`。`mode=background` 把 `act` 交给 `XRK_COMPUTER_USE_BACKGROUND` 助手；`capture` 仍用 UIA。
+
+`capture` 的 `mode`：`ax`（默认，仅无障碍树）· `vision`（窗口 PNG + AX）· `som`（PNG 上叠加 1-based 元素序号 + AX）。真截图由 Provider 产出；Harness 经 `AttachmentStore.saveImage` 与 `browser_vision` 同缝把图交给多模态模型。无附件仓时若已有 PNG，工具诚实失败。
 
 ## 与 browser_* 分工
 
@@ -38,7 +47,7 @@ Windows UIA 走 Invoke / ValuePattern / SendKeys（`key`）/ ScrollPattern 或�
 | HTTP 页面读写 / 点链填表 / 页面截图 | `browser_open` · `browser_snapshot` · `browser_act` · `browser_vision` |
 | 本机原生 GUI（无障碍树 + 键鼠） | `computer_use` |
 
-系统提示：`COMPUTER_USE_PROMPT_TEXT` 与 `formatBrowserGuidance` 互相指明边界——网页走 `browser_*`，原生桌面应用才用 `computer_use`。
+系统提示：`COMPUTER_USE_PROMPT_TEXT` 与 `formatBrowserGuidance` 互相指明边界——网页走 `browser_*`，原生桌面应用才用 `computer_use`；二者不要并行驱动同一浏览器窗口。
 
 ---
 
@@ -56,24 +65,33 @@ Harness registers the model tool `computer_use` when Settings has it **on**; `mo
 
 | Layer | Content |
 |-------|---------|
-| Definition | `ComputerUseService` (`capture` · `act` · `listWindows`) |
+| Definition | `ComputerUseService` (`capture` · `act` · `listWindows` · optional `find`) |
 | Provider | `agent-desktop` · `memory` · Windows `uia` (`XRK_COMPUTER_USE=1`) · `background` (`XRK_COMPUTER_USE=background`; missing helper returns `unavailable`); or Host inject. The registry holds one name at a time |
-| Consumer | `createComputerUseTools` → `computer_use` (Codex loop: list_windows → capture → click/type/key/scroll → capture again; `mode=vision|som` stores via `saveScreenshot`; optional `coordinate=[x,y]` pixel click). Not registered on `browser_*` |
+| Consumer | `createComputerUseTools` → `computer_use` (loop: list_windows → capture|find → click/type/key/scroll/clipboard_* → capture again; `mode=vision|som` via `saveScreenshot`). Not registered on `browser_*` |
 
 ## Enable
 
 | How | Effect |
 |-----|--------|
-| Settings `mode=agent-desktop` or `XRK_COMPUTER_USE=agent-desktop` | Shells [agent-desktop](https://github.com/vercel-labs/agent-desktop) (**1.x**, AX + **snapshot-qualified refs** `@<snapshot_id>:eN`; Win/macOS/Linux); missing binary fails with install / `XRK_AGENT_DESKTOP`. Check `agent-desktop status` / `permissions` on Windows |
-| `XRK_COMPUTER_USE=1` (Windows) | UI Automation Provider (`delivery=uia`) |
+| Settings `mode=agent-desktop` or `XRK_COMPUTER_USE=agent-desktop` | Shells [agent-desktop](https://github.com/vercel-labs/agent-desktop) (**1.x**, AX + **snapshot-qualified refs** `@<snapshot_id>:eN`; Win/macOS/Linux). **Headless by default** (no pointer move, no focus steal). Missing binary fails with install / `XRK_AGENT_DESKTOP`. Check `agent-desktop status` / `permissions` on Windows |
+| `XRK_COMPUTER_USE=1` (Windows) | UI Automation Provider (`delivery=uia`); Invoke/ValuePattern first; physical mouse needs `headed=true` |
 | `XRK_COMPUTER_USE=memory` | In-memory fake tree (CI / demos) |
 | `XRK_COMPUTER_USE=background` | Background input. Sends only when `XRK_COMPUTER_USE_BACKGROUND` points at an installed helper; otherwise every call is `unavailable`. Does not replace UIA and does not use `browser_*` |
 | `computerUseTools: service` | Inject a custom Provider |
 | Settings `mode=off` or `computerUseTools: false` | **Do not register** the tool (hot unload) |
 
-Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern or mouse-wheel fallback (`scroll`). `mode=background` sends `act` to the `XRK_COMPUTER_USE_BACKGROUND` helper; `capture` stays on UIA.
+### Input contract
 
-`capture` `mode`: `ax` (default, accessibility tree only) · `vision` (window PNG + AX) · `som` (PNG with 1-based index labels + AX). Real screenshots come from the UIA Provider via `CopyFromScreen`; Harness stores them through `AttachmentStore.saveImage` on the same seam as `browser_vision` so a multimodal model can see the desktop. If a PNG is present but no attachment store is wired, the tool fails honestly.
+- Element click / set-value / press: headless (CLI default).
+- Escalation (scenario-agnostic): AX element → `find` (role/name/text) → clipboard → (**multimodal**) vision/som → `headed=true` coordinate (user consent) → hollow/unavailable: report or Background; never bash/`SetCursorPos`. **Text-only** routes skip pixels (vision/som soft-degrade: gallery keeps PNG, LLM does not see them); see turn-start `<session_capability>` `modality=`.
+- Coordinate / physical mouse: requires explicit `headed=true` (moves the real cursor); otherwise refused.
+- CJK text: `type` uses clipboard-set + paste; or `clipboard_set` / `clipboard_get`.
+- Hollow AX trees (≤2 usable nodes, custom-drawn / weak a11y): capture/find notes say so; do not steal the mouse.
+- Do not drive the same Chrome with `computer_use` and `browser_*` in parallel.
+
+Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern; physical fallback needs `headed=true`. `mode=background` sends `act` to the helper; `capture` stays on UIA.
+
+`capture` `mode`: `ax` (default) · `vision` · `som`. Screenshots go through `AttachmentStore.saveImage` like `browser_vision`. Missing attachment store with PNG fails honestly.
 
 ## vs browser_*
 
@@ -82,4 +100,4 @@ Windows UIA uses Invoke / ValuePattern / SendKeys (`key`) / ScrollPattern or mou
 | HTTP page read / link / form / page screenshot | `browser_open` · `browser_snapshot` · `browser_act` · `browser_vision` |
 | Native host GUI (accessibility tree + input) | `computer_use` |
 
-System prompts: `COMPUTER_USE_PROMPT_TEXT` and `formatBrowserGuidance` cross-reference the boundary — web pages use `browser_*`; native desktop apps use `computer_use`.
+System prompts: `COMPUTER_USE_PROMPT_TEXT` and `formatBrowserGuidance` cross-reference the boundary — web pages use `browser_*`; native desktop apps use `computer_use`; do not parallel both on the same browser window.

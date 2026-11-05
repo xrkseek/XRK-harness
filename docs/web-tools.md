@@ -53,7 +53,7 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 | `browser_snapshot` | 当前页元素列表（`full=true` 附正文） |
 | `browser_act` | `click` / `type`（需 `@eN`）；**`scroll`**（up/down）· **`press`**（Enter/Tab…）· **`back`**（Hermes 对齐；HTTP 快照下 scroll/press 回 `WEB_BROWSER_NO_GRAPHICS`，HTTP 会话也维护 history 供 back） |
 | `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图。**不是**视频理解（视频文件用 `video_analyze`） |
-| `browser_eval` · `browser_wait` · `browser_get` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | agent-browser 图形会话额外工具（超 Playwright MCP 子集；HTTP 会话不登记） |
+| `browser_eval` · `browser_wait` · `browser_get` · `browser_find` · `browser_frame` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | agent-browser 图形会话额外工具（超 Playwright MCP 子集；HTTP 会话不登记）。弱/文本模型主环优先 open/snapshot/act/wait；阶梯：@ref → find → covered → frame → wait → eval →（**多模态**）vision；文本路由上 `browser_vision` 软降级。`browser_get` 的 text/html 可带 `selector`（缺省 `body`）；tabs `label` 非 ASCII 会 slug；covered/daemon EOF 有提示与短重试 |
 | `browser_vault_list` | 列出不透明凭证句柄（label / origin；**永不返回密钥**） |
 | `browser_vault_fill` | 用句柄向当前页 `@eN` 字段填密（服务端 type；结果仅 success/handle/origin） |
 
@@ -121,7 +121,7 @@ When web tools are enabled, harness registers `browser_open` / `browser_snapshot
 | `browser_snapshot` | Current-page element list (`full=true` adds page text) |
 | `browser_act` | `click` / `type` (need `@eN`); **`scroll`** (up/down) · **`press`** (Enter/Tab…) · **`back`** (Hermes-aligned; HTTP snapshot returns `WEB_BROWSER_NO_GRAPHICS` for scroll/press and keeps a history stack for back) |
 | `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot. **Not** video understanding (use `video_analyze` for video files) |
-| `browser_eval` · `browser_wait` · `browser_get` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | Extra tools on graphical agent-browser sessions (beyond the Playwright MCP subset; not registered for HTTP snapshot) |
+| `browser_eval` · `browser_wait` · `browser_get` · `browser_find` · `browser_frame` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | Extra tools on graphical agent-browser sessions (beyond the Playwright MCP subset; not registered for HTTP snapshot). Prefer open/snapshot/act/wait for weaker / text-only models; escalate @ref → find → covered → frame → wait → eval → (**multimodal**) vision; text-only soft-degrades `browser_vision`. `browser_get` text/html take optional `selector` (default `body`); tab `label` non-ASCII is slugified; covered/daemon EOF get hints and a short retry |
 | `browser_vault_list` | List opaque credential handles (label / origin; **never returns secrets**) |
 | `browser_vault_fill` | Fill a snapshot `@eN` field from a handle (server-side type; result is success/handle/origin only) |
 

@@ -29,10 +29,12 @@
 
 | Fragment | 谁有 | 作用 |
 |----------|------|------|
-| `<session_capability>` | 父会话：permission × tool_surface；干员：`kind=delegated_child` 短块 | 自己是谁（事实真源） |
+| `<session_capability>` | 父会话：permission × tool_surface × **model/modality**；干员：`kind=delegated_child` 短块（同样带 model/modality） | 自己是谁（事实真源） |
 | `<session_posture>` | IM / 奇创 | 派活动词卡（不复述 capability） |
 | `<external_collab_board>` | 父会话：名册 + 主线 / 未钉 peers；干员：小队板 | 看见谁（ids） |
 | spawn preamble | 干员（首轮任务文本） | 身份 + FINAL 交付 |
+
+每回合注入 `model:` / `modality:`（两行）。文本路由：像素不上线、勿瞎编；多模态才走 vision。工具与 guidance 同契约。
 
 协作工具的模型面描述走 `dynamicSchema`，文案集中在 `session-tool-copy.ts`：按 `kind` 重写 `thread_message`（干员可附 live sibling ids）/ `team_list` / `workspace_*` / `subagent` / `list_agents` / `send_message` / `followup_task` / `team_graph` / `interrupt_agent` / `close_agent` / `wait_agent` / `session_inspect`。静态 `description` 只保留短契约。同父干员在 attach 时自动 `peer` 互连（`label=sibling`，不覆盖手改标签）。分场景走查见 [session-identity-scenarios](./session-identity-scenarios.md)。
 
@@ -91,10 +93,12 @@ Session **badge** (tool_surface) and workspace are orthogonal. Face also derives
 
 | Fragment | Who | Role |
 |----------|-----|------|
-| `<session_capability>` | Parents: permission × tool_surface; children: short `kind=delegated_child` | Who am I (source of truth) |
+| `<session_capability>` | Parents: permission × tool_surface × **model/modality**; children: short `kind=delegated_child` (same model/modality) | Who am I (source of truth) |
 | `<session_posture>` | IM / Qichuang | Dispatch verb card (no capability re-lecture) |
 | `<external_collab_board>` | Parents: roster + 主线 / unbound peers; children: teammate board | Who is here (ids) |
 | Spawn preamble | Children (first task text) | Identity + FINAL delivery |
+
+Each turn injects `model:` / `modality:` (two lines). Text-only: pixels off wire — do not invent; multimodal may escalate to vision. Tools and guidance share that contract.
 
 Collab tool descriptions use `dynamicSchema` with copy centralized in `session-tool-copy.ts`, rewritten from the live `kind` (`thread_message` may attach live sibling ids for 干员; also `team_list` / `workspace_*` / `subagent` / `list_agents` / `send_message` / `followup_task` / `team_graph` / `interrupt_agent` / `close_agent` / `wait_agent` / `session_inspect`). The static `description` stays a short contract. Same-parent siblings are auto peer-linked on attach (`label=sibling`; custom labels are preserved). Scenario walkthrough: [session-identity-scenarios](./session-identity-scenarios.md).
 

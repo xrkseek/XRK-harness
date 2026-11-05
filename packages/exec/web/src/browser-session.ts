@@ -70,6 +70,32 @@ export interface BrowserTabsRequest {
   readonly label?: string;
 }
 
+/** Semantic find (agent-browser `find`). */
+export interface BrowserFindRequest {
+  readonly locator:
+    | "role"
+    | "text"
+    | "label"
+    | "placeholder"
+    | "alt"
+    | "title"
+    | "testid"
+    | "first"
+    | "last"
+    | "nth";
+  /** Locator value (role name, visible text, CSS for first/last/nth, …). */
+  readonly value: string;
+  /** For locator=nth: 0-based index before the selector value. */
+  readonly nth?: number;
+  /** Accessible name filter when locator=role. */
+  readonly name?: string;
+  readonly exact?: boolean;
+  /** Action after locate (default click). Use `text` to read without clicking. */
+  readonly action?: "click" | "fill" | "check" | "hover" | "text";
+  /** Fill text when action=fill. */
+  readonly text?: string;
+}
+
 export interface BrowserSession {
   open(url: string, signal?: AbortSignal): Promise<BrowserSnapshotResult>;
   snapshot(opts?: {
@@ -97,11 +123,22 @@ export interface BrowserSession {
   ): Promise<string>;
   /** Tab list / new / switch / close. */
   tabs?(request: BrowserTabsRequest, signal?: AbortSignal): Promise<string>;
-  /** Read text / html / url / title from the active page. */
+  /** Read text / html / url / title from the active page (optional CSS/@ref selector). */
   getInfo?(
     what: "text" | "html" | "url" | "title",
     signal?: AbortSignal,
+    selector?: string,
   ): Promise<string>;
+  /** Find by semantic locator and optionally act (agent-browser find). */
+  find?(
+    request: BrowserFindRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserActResult>;
+  /** Switch into an iframe or back to main (agent-browser frame). */
+  frame?(
+    target: string,
+    signal?: AbortSignal,
+  ): Promise<BrowserSnapshotResult>;
   hover?(ref: string, signal?: AbortSignal): Promise<BrowserActResult>;
   selectOption?(
     ref: string,
@@ -111,7 +148,6 @@ export interface BrowserSession {
   forward?(signal?: AbortSignal): Promise<BrowserActResult>;
   reload?(signal?: AbortSignal): Promise<BrowserActResult>;
 }
-
 interface PageState {
   url: string;
   title: string;

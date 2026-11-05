@@ -1115,19 +1115,21 @@ export function createHarnessComposition(
           configKey: browserProductConfigKey(options.browserProduct),
         })
       : makeBrowser();
-    for (const tool of createBrowserTools(
-      browser,
-      options.attachments
+    for (const tool of createBrowserTools(browser, {
+      ...(options.attachments
         ? {
-            saveScreenshot: (png) =>
+            saveScreenshot: (png: Uint8Array) =>
               options.attachments!.saveImage({
                 data: png,
                 mediaType: "image/png",
                 name: "browser-snapshot.png",
               }),
           }
-        : {},
-    )) {
+        : {}),
+      ...(options.routeAllowsImage
+        ? { routeAllowsImage: options.routeAllowsImage }
+        : {}),
+    })) {
       tools.register(tool);
     }
     if (options.browserVault) {
@@ -1180,6 +1182,9 @@ export function createHarnessComposition(
                   name: "computer-use-snapshot.png",
                 }),
             }
+          : {}),
+        ...(options.routeAllowsImage
+          ? { routeAllowsImage: options.routeAllowsImage }
           : {}),
       })) {
         tools.register(tool);
@@ -1651,7 +1656,12 @@ export function createHarnessComposition(
     prompts.register({
       id: "tool:browser",
       order: 115,
-      content: () => formatBrowserGuidance(availableToolNames()),
+      content: () =>
+        formatBrowserGuidance(availableToolNames(), {
+          ...(options.routeAllowsImage
+            ? { multimodal: options.routeAllowsImage() }
+            : {}),
+        }),
     });
   }
   if (
@@ -1669,7 +1679,12 @@ export function createHarnessComposition(
     prompts.register({
       id: "tool:computer_use",
       order: 116,
-      content: () => formatComputerUseGuidance(availableToolNames()),
+      content: () =>
+        formatComputerUseGuidance(availableToolNames(), {
+          ...(options.routeAllowsImage
+            ? { multimodal: options.routeAllowsImage() }
+            : {}),
+        }),
     });
   }
   prompts.register({

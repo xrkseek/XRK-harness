@@ -57,6 +57,9 @@ describe("session_capability", () => {
     expect(text).toMatch(/tool_surface: harness \(/);
     expect(text).toMatch(/surface_brief: kind=coding_parent/);
     expect(text).toMatch(/full tools \+ subagents/);
+    expect(text).toMatch(/^model:/m);
+    expect(text).toMatch(/^modality: (multimodal|text-only)/m);
+    expect(text).not.toMatch(/modality_brief:/);
     expect(text).toMatch(/path_allowlist: \d+ objects/);
 
     const provider = createSessionCapabilityFragmentProvider(runtime);

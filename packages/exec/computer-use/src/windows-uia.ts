@@ -14,9 +14,36 @@ import {
   type ComputerUseActResult,
   type ComputerUseCaptureRequest,
   type ComputerUseElement,
+  type ComputerUseFindRequest,
   type ComputerUseService,
   type ComputerUseWindow,
 } from "./types.js";
+
+function matchesFindFilter(
+  el: ComputerUseElement,
+  request: ComputerUseFindRequest,
+): boolean {
+  const role = request.role?.trim().toLowerCase() ?? "";
+  const name = request.name?.trim() ?? "";
+  const text = request.text?.trim() ?? "";
+  if (role && el.role.toLowerCase() !== role) return false;
+  const hay = `${el.name} ${el.role}`;
+  if (name) {
+    if (request.exact === true) {
+      if (el.name.toLowerCase() !== name.toLowerCase()) return false;
+    } else if (!el.name.toLowerCase().includes(name.toLowerCase())) {
+      return false;
+    }
+  }
+  if (text) {
+    if (request.exact === true) {
+      if (hay.toLowerCase() !== text.toLowerCase()) return false;
+    } else if (!hay.toLowerCase().includes(text.toLowerCase())) {
+      return false;
+    }
+  }
+  return Boolean(role || name || text);
+}
 
 export type PowerShellRunner = (
   script: string,
@@ -390,12 +417,16 @@ if ($includeScreenshot) {
 `.trim();
 }
 
-/** Re-resolve an element by runtime id; Invoke → Select → focus + mouse click. */
-function clickScript(runtimeId: string): string {
+/**
+ * Re-resolve by runtime id; Invoke → Select.
+ * Physical mouse (`SetCursorPos`) only when `$allowPhysical` is true (headed).
+ */
+function clickScript(runtimeId: string, allowPhysical: boolean): string {
   const idLit = psStr(runtimeId);
+  const allow = allowPhysical ? "$true" : "$false";
   return `${PS_PRELUDE}
 $ids = @((${idLit}) -split ',' | ForEach-Object { [int]$_ })
-$el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+$el = [System.Windows.Automation.AutomationElement]::FromRuntimeId($ids)
 if (-not $el) { throw 'element not found (window changed? capture again)' }
 $inv = $null
 if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$inv)) {
@@ -408,6 +439,10 @@ if ($el.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::P
   $sel.Select()
   'clicked-select'
   return
+}
+$allowPhysical = ${allow}
+if (-not $allowPhysical) {
+  throw 'element is not invokable via UIA (no Invoke/Select). Pass headed=true to allow a physical mouse click that moves the real cursor, or use agent-desktop AX refs.'
 }
 $box = $el.Current.BoundingRectangle
 if ($null -eq (XrkSafeInt $box.X) -or $null -eq (XrkSafeInt $box.Y)) {
@@ -475,7 +510,7 @@ Add-Type -AssemblyName System.Windows.Forms
 $text = ${textLit}
 $escaped = ${keysLit}
 $ids = @((${idLit}) -split ',' | ForEach-Object { [int]$_ })
-$el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+$el = [System.Windows.Automation.AutomationElement]::FromRuntimeId($ids)
 if (-not $el) { throw 'element not found (window changed? capture again)' }
 $val = $null
 if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$val)) {
@@ -518,7 +553,7 @@ function keyScript(keysSendWait: string, runtimeId?: string): string {
   const focusBlock = runtimeId
     ? `
 $ids = @((${psStr(runtimeId)}) -split ',' | ForEach-Object { [int]$_ })
-$el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+$el = [System.Windows.Automation.AutomationElement]::FromRuntimeId($ids)
 if (-not $el) { throw 'element not found (window changed? capture again)' }
 try { $el.SetFocus() } catch {}
 Start-Sleep -Milliseconds 40
@@ -547,7 +582,7 @@ $runtimeId = ${idLit}
 $el = $null
 if ($runtimeId -ne '') {
   $ids = @(($runtimeId) -split ',' | ForEach-Object { [int]$_ })
-  $el = [System.Windows.Automation.AutomationElement]::AutomationElementFromRuntimeId($ids)
+  $el = [System.Windows.Automation.AutomationElement]::FromRuntimeId($ids)
   if (-not $el) { throw 'element not found (window changed? capture again)' }
 }
 if ($el) {
@@ -677,6 +712,9 @@ export function createWindowsUiAutomationProvider(
     ((script, signal) =>
       defaultRunPowerShell(script, signal, options.timeoutMs));
   let tokens = new Map<number, string>();
+  let lastElements: ComputerUseElement[] = [];
+  let lastApp = "";
+  let lastWindowTitle = "";
 
   async function runCapture(
     request: ComputerUseCaptureRequest | undefined,
@@ -778,11 +816,18 @@ export function createWindowsUiAutomationProvider(
         notes.push(
           payload.exhausted === false
             ? "visit budget ran out before any matching node — raise maxElements (the window is large, not empty)"
-            : "this window exposed no usable UIA elements (custom-drawn or accessibility-disabled apps expose none) — fall back to action=key, or browser_* when the target is a web page",
+            : "this window exposed no usable UIA elements (custom-drawn or accessibility-disabled apps expose none) — do not bash/SetCursorPos; use a different app with AX, browser_* for web, or Background helper",
+        );
+      } else if (elements.length <= 2) {
+        notes.push(
+          "AX tree looks hollow (≤2 nodes — custom-drawn / accessibility-light UIs) — no reliable headless element path; do not steal the mouse via bash; prefer apps with a real accessibility tree or Background mode",
         );
       } else if (payload.exhausted === false) {
         notes.push(`tree truncated at ${elements.length} of more nodes; raise maxElements for more`);
       }
+      lastElements = elements;
+      lastApp = payload.app ?? "";
+      lastWindowTitle = payload.windowTitle ?? "";
       return buildCaptureResult({
         mode,
         app: payload.app ?? "",
@@ -792,6 +837,62 @@ export function createWindowsUiAutomationProvider(
         ...(screenshotPng && screenshotPng.byteLength > 0
           ? { screenshotPng }
           : {}),
+      });
+    },
+    async find(request: ComputerUseFindRequest, signal?: AbortSignal) {
+      const role = request.role?.trim() ?? "";
+      const name = request.name?.trim() ?? "";
+      const text = request.text?.trim() ?? "";
+      if (!role && !name && !text) {
+        throw new ComputerUseError(
+          "find needs role, name, and/or text",
+          "COMPUTER_USE_BAD_ARGS",
+        );
+      }
+      if (lastElements.length === 0 || request.app?.trim()) {
+        await this.capture(
+          {
+            mode: "ax",
+            ...(request.app?.trim() ? { app: request.app.trim() } : {}),
+          },
+          signal,
+        );
+      }
+      let matched = lastElements.filter((el) =>
+        matchesFindFilter(el, request),
+      );
+      if (request.first === true) matched = matched.slice(0, 1);
+      const max =
+        typeof request.limit === "number" &&
+        Number.isFinite(request.limit) &&
+        request.limit > 0
+          ? Math.floor(request.limit)
+          : 80;
+      const nextTokens = new Map<number, string>();
+      const elements = matched.slice(0, max).map((el, i) => {
+        const index = i + 1;
+        const runtimeId =
+          tokens.get(el.index) ??
+          (el.elementToken?.startsWith("uia-")
+            ? el.elementToken.slice(4)
+            : undefined);
+        if (runtimeId) nextTokens.set(index, runtimeId);
+        return {
+          index,
+          role: el.role,
+          name: el.name,
+          ...(el.bounds ? { bounds: el.bounds } : {}),
+          ...(runtimeId ? { elementToken: `uia-${runtimeId}` } : {}),
+        };
+      });
+      tokens = nextTokens;
+      lastElements = elements;
+      return buildCaptureResult({
+        mode: "ax",
+        app: lastApp,
+        windowTitle: lastWindowTitle,
+        elements,
+        note: "delivery=uia find (filtered last capture; indices replaced)",
       });
     },
     async act(
@@ -869,11 +970,48 @@ export function createWindowsUiAutomationProvider(
           delivery: "uia",
         };
       }
+      if (request.action === "clipboard_set") {
+        const text = request.text ?? "";
+        const out = await run(
+          `${PS_PRELUDE}
+Add-Type -AssemblyName System.Windows.Forms
+Set-Clipboard -Value ${psStr(text)}
+'clipboard-set'
+`.trim(),
+          signal,
+        );
+        return {
+          ok: true,
+          action: "clipboard_set",
+          message: out || "clipboard-set",
+          delivery: "uia",
+        };
+      }
+      if (request.action === "clipboard_get") {
+        const out = await run(
+          `${PS_PRELUDE}
+try { Get-Clipboard -Raw } catch { Get-Clipboard }
+`.trim(),
+          signal,
+        );
+        return {
+          ok: true,
+          action: "clipboard_get",
+          message: out,
+          delivery: "uia",
+        };
+      }
       if (
         request.action === "click" &&
         request.coordinate !== undefined &&
         request.element === undefined
       ) {
+        if (request.headed !== true) {
+          throw new ComputerUseError(
+            "coordinate click moves the real mouse. Pass headed=true only when the user accepts that, or click by element index (AX / Invoke).",
+            "COMPUTER_USE_BAD_ARGS",
+          );
+        }
         const [x, y] = request.coordinate;
         const out = await run(clickCoordinateScript(x, y), signal);
         return {
@@ -885,7 +1023,7 @@ export function createWindowsUiAutomationProvider(
       }
       if (request.element === undefined) {
         throw new ComputerUseError(
-          "element index is required (or pass coordinate=[x,y] for pixel click)",
+          "element index is required (or pass coordinate=[x,y] with headed=true for pixel click)",
           "COMPUTER_USE_BAD_ARGS",
         );
       }
@@ -897,7 +1035,10 @@ export function createWindowsUiAutomationProvider(
         );
       }
       if (request.action === "click") {
-        const out = await run(clickScript(runtimeId), signal);
+        const out = await run(
+          clickScript(runtimeId, request.headed === true),
+          signal,
+        );
         return {
           ok: true,
           action: "click",

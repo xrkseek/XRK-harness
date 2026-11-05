@@ -290,27 +290,59 @@ export function formatWebFetchGuidance(available: ToolNameSet): string {
  * browser_*-only guidance (orthogonal — no web_* / computer_use routing).
  * Cross-tool priority lives in {@link formatWebFamilyGuidance}.
  */
-export function formatBrowserGuidance(available: ToolNameSet): string {
+export interface BrowserModalityOptions {
+  /**
+   * `true` = multimodal (pixels on the wire).
+   * `false` = text-only (browser_vision soft-degrades).
+   * omit = dual-path copy.
+   */
+  readonly multimodal?: boolean;
+}
+
+export function formatBrowserGuidance(
+  available: ToolNameSet,
+  options?: BrowserModalityOptions,
+): string {
   const names = asSet(available);
   if (!names.has("browser_open")) return "";
+  const modality = options?.multimodal;
+  const ladder =
+    modality === false
+      ? "Ladder (text-only): @eN → browser_find → Escape the overlay → browser_frame → browser_wait → browser_eval. browser_vision soft-degrades here."
+      : modality === true
+        ? "Ladder (multimodal): @eN → browser_find → Escape the overlay → browser_frame → browser_wait → browser_eval → browser_vision."
+        : "Ladder: @eN → browser_find → Escape the overlay → browser_frame → browser_wait → browser_eval → browser_vision (soft-degrade on text-only routes).";
+  const core = [
+    "Loop: browser_open → snapshot → act → wait → snapshot.",
+    "Refs are @eN from the latest snapshot; a DOM or frame change invalidates them.",
+    ladder,
+    "If an act reports the element is covered, snapshot and click the covering element or press Escape — do not retry the same ref.",
+  ];
   const extras: string[] = [];
-  if (names.has("browser_eval")) extras.push("browser_eval");
-  if (names.has("browser_wait")) extras.push("browser_wait");
-  if (names.has("browser_cookies")) extras.push("browser_cookies");
-  if (names.has("browser_tabs")) extras.push("browser_tabs");
-  if (names.has("browser_get")) extras.push("browser_get");
-  if (names.has("browser_hover")) extras.push("browser_hover");
-  if (names.has("browser_select")) extras.push("browser_select");
-  if (names.has("browser_forward")) extras.push("browser_forward");
-  if (names.has("browser_reload")) extras.push("browser_reload");
+  if (names.has("browser_wait")) extras.push("wait");
+  if (names.has("browser_get")) extras.push("get (text/html need selector; default body)");
+  if (names.has("browser_find")) extras.push("find");
+  if (names.has("browser_frame")) extras.push("frame");
+  if (names.has("browser_tabs")) extras.push("tabs");
+  if (names.has("browser_eval")) extras.push("eval (last resort)");
+  if (names.has("browser_cookies")) extras.push("cookies");
+  if (names.has("browser_hover")) extras.push("hover");
+  if (names.has("browser_select")) extras.push("select");
+  if (names.has("browser_forward")) extras.push("forward");
+  if (names.has("browser_reload")) extras.push("reload");
+  if (names.has("browser_vision")) {
+    extras.push(
+      modality === false
+        ? "vision (soft-degrade)"
+        : modality === true
+          ? "vision"
+          : "vision (soft-degrade if text-only)",
+    );
+  }
   return (
-    "browser_open / browser_snapshot / browser_act: interactive page sessions " +
-    "(element refs like @e1; browser_act also supports scroll/press/back). " +
-    "browser_vision: screenshot for the vision model. " +
-    (extras.length > 0
-      ? `Graphical extras: ${extras.join(" · ")}. `
-      : "") +
-    "Default product session is agent-browser (Auto: system Chrome → product Chromium cache → Edge); Settings → Plugins → Browser picks binary / profile / restore / proxy / autoConnect, or HTTP snapshot / CDP (XRK_BROWSER_CDP_URL CI bypass)."
+    `${core.join(" ")} ` +
+    (extras.length > 0 ? `Extras: ${extras.join(" · ")}. ` : "") +
+    "Backend: agent-browser (Auto: Chrome → bundled Chromium → Edge)."
   );
 }
 
@@ -335,7 +367,7 @@ export function formatWebFamilyGuidance(available: ToolNameSet): string {
   ];
   if (hasBrowser && hasComputer) {
     lines.push(
-      "Pages → browser_*; native desktop apps outside the page session → computer_use.",
+      "Pages → browser_*; native desktop apps outside the page session → computer_use. Never drive the same Chrome with both in parallel.",
     );
   }
   return lines.join(" ");

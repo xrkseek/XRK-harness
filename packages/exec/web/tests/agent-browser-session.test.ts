@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   createAgentBrowserSession,
   resolveAgentBrowserExecutable,
+  sanitizeAgentBrowserTabLabel,
 } from "../src/agent-browser-session.js";
 import { createBrowserSession } from "../src/browser-cdp.js";
 
@@ -245,12 +246,61 @@ describe("createAgentBrowserSession", () => {
         "browser_tabs",
         "browser_cookies",
         "browser_get",
+        "browser_find",
+        "browser_frame",
         "browser_hover",
         "browser_select",
         "browser_forward",
         "browser_reload",
       ]),
     );
+  });
+
+  it("find and frame shell out to agent-browser", async () => {
+    const calls: string[][] = [];
+    const session = createAgentBrowserSession({
+      sessionName: "find-frame",
+      async run(args) {
+        calls.push([...args]);
+        if (args.includes("open")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/", title: "Example" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("snapshot")) {
+          return { stdout: '- button "Go" [ref=e1]', stderr: "" };
+        }
+        return {
+          stdout: JSON.stringify({ success: true, data: {} }),
+          stderr: "",
+        };
+      },
+    });
+    await session.open("https://example.test/");
+    const found = await session.find!({
+      locator: "role",
+      value: "button",
+      name: "Submit",
+      action: "click",
+    });
+    expect(found.note).toMatch(/find role/);
+    const findCall = calls.find((c) => c.includes("find"));
+    expect(findCall).toBeDefined();
+    expect(findCall).toContain("role");
+    expect(findCall).toContain("button");
+    expect(findCall).toContain("click");
+    expect(findCall).toContain("--name");
+    expect(findCall).toContain("Submit");
+
+    const framed = await session.frame!("iframe#embed");
+    expect(framed.text).toMatch(/switched frame/);
+    const frameCall = calls.find((c) => c.includes("frame"));
+    expect(frameCall).toBeDefined();
+    expect(frameCall).toContain("iframe#embed");
   });
 });
 
@@ -283,6 +333,100 @@ describe("resolveAgentBrowserExecutable auto", () => {
         "win32",
       ),
     ).toBe(forced);
+  });
+});
+
+describe("sanitizeAgentBrowserTabLabel", () => {
+  it("slugifies non-ASCII labels to ASCII-safe ids", () => {
+    expect(sanitizeAgentBrowserTabLabel("查进度")).toMatch(/^[A-Za-z]/);
+    expect(sanitizeAgentBrowserTabLabel("查进度")).toMatch(/^[A-Za-z][A-Za-z0-9_-]*$/);
+    expect(sanitizeAgentBrowserTabLabel("progress")).toBe("progress");
+  });
+});
+
+describe("createAgentBrowserSession getInfo / EOF", () => {
+  it("defaults text/html get to body selector", async () => {
+    const calls: string[][] = [];
+    const session = createAgentBrowserSession({
+      sessionName: "get-body",
+      async run(args) {
+        calls.push([...args]);
+        if (args.includes("open")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/", title: "T" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("wait") || args.includes("get")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { html: "<body>hi</body>", text: "hi" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("snapshot")) {
+          return {
+            stdout: JSON.stringify({ success: true, data: { snapshot: "- link [ref=e1]" } }),
+            stderr: "",
+          };
+        }
+        return { stdout: JSON.stringify({ success: true, data: {} }), stderr: "" };
+      },
+    });
+    await session.open("https://example.test/");
+    await session.getInfo?.("html");
+    const getCall = calls.find((c) => c.includes("get") && c.includes("html"));
+    expect(getCall).toBeTruthy();
+    expect(getCall!.includes("body")).toBe(true);
+  });
+
+  it("retries once on daemon EOF then succeeds", async () => {
+    let n = 0;
+    const session = createAgentBrowserSession({
+      sessionName: "eof-retry",
+      async run(args) {
+        if (args.includes("open") || args.includes("wait") || args.includes("get")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/", title: "T" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("snapshot")) {
+          return {
+            stdout: JSON.stringify({ success: true, data: { snapshot: "- button [ref=e1]" } }),
+            stderr: "",
+          };
+        }
+        if (args.includes("click")) {
+          n += 1;
+          if (n === 1) {
+            throw Object.assign(new Error("fail"), {
+              stdout: JSON.stringify({
+                success: false,
+                error: {
+                  message:
+                    "Invalid response: EOF while parsing a value at line 1 column 0 (the command reached the daemon but no response came back)",
+                },
+              }),
+              stderr: "",
+            });
+          }
+          return { stdout: JSON.stringify({ success: true, data: {} }), stderr: "" };
+        }
+        return { stdout: JSON.stringify({ success: true, data: {} }), stderr: "" };
+      },
+    });
+    await session.open("https://example.test/");
+    await session.act({ action: "click", ref: "e1" });
+    expect(n).toBe(2);
   });
 });
 

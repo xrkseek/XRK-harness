@@ -257,6 +257,51 @@ describe("open → act → vision loop", () => {
           b.attachment?.attachmentId === "sha256:loop-shot",
       ),
     ).toBe(true);
+    expect(String(blocks.find((b) => b.type === "text")?.text ?? "")).toContain(
+      "what is on screen",
+    );
+  });
+
+  it("browser_vision soft-degrades on text-only routes", async () => {
+    const scripted = scriptedCdp();
+    const session = createCdpBrowserSession({
+      rawUrl: "http://127.0.0.1:9222",
+      resolve: async () => "ws://127.0.0.1:9222/devtools/browser/abc",
+      connect: async () => scripted.caller,
+    });
+    await session.open("https://example.test/");
+    const tools = createBrowserTools(session, {
+      routeAllowsImage: () => false,
+      saveScreenshot: async (png) => ({
+        attachmentId: "sha256:text-only-shot",
+        mediaType: "image/png",
+        bytes: png.byteLength,
+        width: 1,
+        height: 1,
+      }),
+    });
+    const vision = tools.find((t) => t.name === "browser_vision")!;
+    const seen = await vision.execute({ question: "logo" });
+    expect(seen.isError).toBeFalsy();
+    expect((seen.meta as { textOnlyRoute?: boolean } | undefined)?.textOnlyRoute).toBe(
+      true,
+    );
+    const blocks = seen.content as {
+      type: string;
+      text?: string;
+      attachment?: { attachmentId: string };
+    }[];
+    const text = blocks.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toMatch(/text-only/i);
+    expect(text).toMatch(/pixels off wire/i);
+    expect(text).toContain("attachmentId=sha256:text-only-shot");
+    expect(
+      blocks.some(
+        (b) =>
+          b.type === "image" &&
+          b.attachment?.attachmentId === "sha256:text-only-shot",
+      ),
+    ).toBe(true);
     expect(
       blocks.some((b) => b.type === "text" && String(b.text).includes("@e")),
     ).toBe(true);

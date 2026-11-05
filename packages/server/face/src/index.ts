@@ -229,6 +229,7 @@ export {
 export {
   createSessionCapabilityFragmentProvider,
   formatSessionCapability,
+  formatSessionModelRouteLines,
 } from "./session-capability.js";
 export {
   createSessionPostureFragmentProvider,

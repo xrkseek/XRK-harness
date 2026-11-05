@@ -67,7 +67,7 @@ HTTP/WS (attach-http)
 | `session-search.ts` | `session.search` | query 1..500 · 禁 NUL · 最多 20 · 最近活动优先 · 含 admit/safety/command/todo/feedback |
 | `session-query-tools.ts` | 模型面 `session_inspect` / `session_search` / `session_read` / `session_trace` | inspect 跨工作区元数据；search/read/trace 同 cwd · 复用 searchSessions · 字节预算快照 · 子代理谱系；与 `@session` prepare 分路 |
 | `collab-board.ts` | turn-start 协作板 | 父：名册+主线；干员：同父小队+自身任务；契约见 [session-identity](../session-identity.md) |
-| `session-capability.ts` | turn-start `<session_capability>` | 父：permission×tool_surface；干员：`kind=delegated` 短块 |
+| `session-capability.ts` | turn-start `<session_capability>` | 父：permission×tool_surface×model/modality；干员：`kind=delegated` 短块（同带 model/modality） |
 | `session-posture.ts` | turn-start `<session_posture>` | IM / 奇创编排角色（orchestrator） |
 | `session-kind.ts` | 派生工程身份 | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
 | `session-tool-copy.ts` | 协作工具 `dynamicSchema` 文案 | 按 kind · 名册 · sibling ids · followup/team_graph/interrupt/close/wait；见 [session-identity](../session-identity.md) |
@@ -243,7 +243,7 @@ HTTP/WS (attach-http)
 | `session-search.ts` | `session.search` | query 1..500 · no NUL · max 20 · recent activity first · admits admit/safety/command/todo/feedback |
 | `session-query-tools.ts` | Model tools `session_inspect` / `session_search` / `session_read` / `session_trace` | inspect = cross-workspace metadata; search/read/trace = same cwd · reuses searchSessions · byte-budget snapshot · subagent lineage; separate from `@session` prepare |
 | `collab-board.ts` | Turn-start collab board | Parent: roster+主线; child: same-parent squad+own task; see [session-identity](../session-identity.md) |
-| `session-capability.ts` | Turn-start `<session_capability>` | Parent: permission×tool_surface; child: short `kind=delegated` block |
+| `session-capability.ts` | Turn-start `<session_capability>` | Parent: permission×tool_surface×model/modality; child: short `kind=delegated` block (same model/modality lines) |
 | `session-posture.ts` | Turn-start `<session_posture>` | IM / Qichuang orchestrator role |
 | `session-kind.ts` | Derived engineering identity | `orchestrator` / `coding_parent` / `delegated_child` / `fork_clone` |
 | `session-tool-copy.ts` | Collab-tool `dynamicSchema` copy | By kind · roster · sibling ids · followup/team_graph/interrupt/close/wait; see [session-identity](../session-identity.md) |

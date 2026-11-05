@@ -5,9 +5,36 @@ import {
   type ComputerUseActResult,
   type ComputerUseCaptureRequest,
   type ComputerUseElement,
+  type ComputerUseFindRequest,
   type ComputerUseService,
   type ComputerUseWindow,
 } from "./types.js";
+
+function matchesFind(
+  el: ComputerUseElement,
+  request: ComputerUseFindRequest,
+): boolean {
+  const role = request.role?.trim().toLowerCase() ?? "";
+  const name = request.name?.trim() ?? "";
+  const text = request.text?.trim() ?? "";
+  if (role && el.role.toLowerCase() !== role) return false;
+  const hay = `${el.name} ${el.role}`;
+  if (name) {
+    if (request.exact === true) {
+      if (el.name.toLowerCase() !== name.toLowerCase()) return false;
+    } else if (!el.name.toLowerCase().includes(name.toLowerCase())) {
+      return false;
+    }
+  }
+  if (text) {
+    if (request.exact === true) {
+      if (hay.toLowerCase() !== text.toLowerCase()) return false;
+    } else if (!hay.toLowerCase().includes(text.toLowerCase())) {
+      return false;
+    }
+  }
+  return Boolean(role || name || text);
+}
 
 export interface MemoryComputerUseOptions {
   readonly app?: string;
@@ -85,8 +112,30 @@ export function createMemoryComputerUseProvider(
       });
     },
     async act(request: ComputerUseActRequest): Promise<ComputerUseActResult> {
+      if (request.action === "clipboard_set") {
+        return {
+          ok: true,
+          action: "clipboard_set",
+          message: "clipboard-set",
+          delivery: "memory",
+        };
+      }
+      if (request.action === "clipboard_get") {
+        return {
+          ok: true,
+          action: "clipboard_get",
+          message: "",
+          delivery: "memory",
+        };
+      }
       if (request.action === "click") {
         if (request.coordinate !== undefined && request.element === undefined) {
+          if (request.headed !== true) {
+            throw new ComputerUseError(
+              "coordinate click moves the real mouse. Pass headed=true only when the user accepts that.",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
           const [x, y] = request.coordinate;
           return {
             ok: true,
@@ -144,6 +193,39 @@ export function createMemoryComputerUseProvider(
     },
     async listWindows() {
       return windows;
+    },
+    async find(request: ComputerUseFindRequest) {
+      const role = request.role?.trim() ?? "";
+      const name = request.name?.trim() ?? "";
+      const text = request.text?.trim() ?? "";
+      if (!role && !name && !text) {
+        throw new ComputerUseError(
+          "find needs role, name, and/or text",
+          "COMPUTER_USE_BAD_ARGS",
+        );
+      }
+      lastCaptureGen += 1;
+      let matched = elements.filter((el) => matchesFind(el, request));
+      if (request.first === true) matched = matched.slice(0, 1);
+      const max =
+        typeof request.limit === "number" &&
+        Number.isFinite(request.limit) &&
+        request.limit > 0
+          ? Math.floor(request.limit)
+          : 80;
+      const slice = matched.slice(0, max).map((e, i) => ({
+        ...e,
+        index: i + 1,
+        elementToken: `mem-find-${lastCaptureGen}-${i + 1}`,
+      }));
+      elements = slice;
+      return buildCaptureResult({
+        mode: "ax",
+        app,
+        windowTitle,
+        elements: slice,
+        note: "delivery=memory find (indices replaced)",
+      });
     },
   };
 }

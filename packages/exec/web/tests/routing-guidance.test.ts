@@ -51,13 +51,44 @@ describe("formatWebFetchGuidance", () => {
 });
 
 describe("formatBrowserGuidance", () => {
-  it("mentions snapshot/act without web_* or computer_use routing", () => {
+  it("mentions loop/ladder without web_* or computer_use routing", () => {
     const text = formatBrowserGuidance(["browser_open", "browser_act"]);
     expect(text).toContain("browser_open");
-    expect(text).toContain("browser_act");
+    expect(text).toContain("Loop:");
+    expect(text).toContain("Ladder:");
+    expect(text).toContain("browser_find");
+    expect(text).toContain("covered");
     expect(text).not.toContain("web_fetch");
     expect(text).not.toContain("web_search");
     expect(text).not.toContain("computer_use");
+  });
+
+  it("lists find/frame when those tools are available", () => {
+    const text = formatBrowserGuidance([
+      "browser_open",
+      "browser_find",
+      "browser_frame",
+    ]);
+    expect(text).toContain("browser_find");
+    expect(text).toContain("browser_frame");
+  });
+
+  it("forks escalation for text-only vs multimodal routes", () => {
+    const textOnly = formatBrowserGuidance(
+      ["browser_open", "browser_vision"],
+      { multimodal: false },
+    );
+    expect(textOnly).toContain("text-only");
+    expect(textOnly).toMatch(/soft-degrade/i);
+    expect(textOnly).not.toContain("computer_use");
+
+    const multi = formatBrowserGuidance(
+      ["browser_open", "browser_vision"],
+      { multimodal: true },
+    );
+    expect(multi).toContain("multimodal");
+    expect(multi).toContain("browser_vision");
+    expect(multi).not.toMatch(/soft-degrade/);
   });
 
   it("returns empty when browser tools are unavailable", () => {

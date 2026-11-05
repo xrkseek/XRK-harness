@@ -30,6 +30,33 @@ import {
 } from "./agent-member-pack.js";
 
 import { subagentDepth } from "./subagent-tools.js";
+import { liveRouteAllowsImageInput } from "./llm-resolve.js";
+import { resolveSessionModelSelection } from "./model-catalog.js";
+
+/** Live provider/model and image modality for this session, one line each. */
+export function formatSessionModelRouteLines(
+  runtime: FaceRuntime,
+  sessionId: string,
+): string[] {
+  const selection = resolveSessionModelSelection(runtime, sessionId);
+  const provider = selection.provider.trim();
+  const model = selection.model.trim();
+  const route =
+    provider && model
+      ? `${provider}/${model}`
+      : provider
+        ? `${provider}/(unset)`
+        : model
+          ? `(unset)/${model}`
+          : "(unset)";
+  const multimodal = liveRouteAllowsImageInput(runtime, sessionId);
+  return [
+    `model: ${route}`,
+    multimodal
+      ? "modality: multimodal (images reach you)"
+      : "modality: text-only (no images; switch model for vision)",
+  ];
+}
 
 /** Affirmative permission copy for the model (path gate only). */
 function permissionBrief(permission: string): string {
@@ -160,6 +187,7 @@ function formatDelegatedCapability(
     `depth: ${depth}`,
     `role: ${role}`,
     `caps: ${roleCapsHint(link.role)}`,
+    ...formatSessionModelRouteLines(runtime, sessionId),
     `cwd: ${cwd}`,
     ...briefcase,
     ...(link.memberId ? [`member_id: ${link.memberId}`] : []),
@@ -233,6 +261,7 @@ export function formatSessionCapability(
     `permission_brief: ${permissionBrief(permission)}`,
     `tool_surface: ${toolSurfaceSummary(badge)}`,
     `surface_brief: ${surfaceBrief(badge)}`,
+    ...formatSessionModelRouteLines(runtime, sessionId),
     `cwd: ${cwd}`,
     ...briefcase,
     ...(identity?.memberId ? [`member_id: ${identity.memberId}`] : []),

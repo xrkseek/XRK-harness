@@ -7,7 +7,8 @@
  * - click/type/scroll refs must be qualified (`@s…:eN`), never bare `@eN`
  * - `list-windows` returns `data` as an array
  * - `screenshot` without a path returns `{ data: { data: <base64>, format, … } }`
- * - coordinate click / mouse-wheel require `--headed`
+ * - Actions are **headless by default** (no pointer move, no focus steal).
+ * - coordinate / mouse-click require `--headed` and explicit `headed=true` from the tool.
  */
 
 import { execFile } from "node:child_process";
@@ -39,7 +40,11 @@ interface AgentDesktopEnvelope {
   readonly ok?: boolean;
   readonly command?: string;
   readonly data?: unknown;
-  readonly error?: { readonly code?: string; readonly message?: string };
+  readonly error?: {
+    readonly code?: string;
+    readonly message?: string;
+    readonly disposition?: { readonly retry?: string } | string;
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -105,7 +110,6 @@ function mapPressCombo(raw: string): string {
   if (lower === "tab") return "tab";
   if (lower === "backspace") return "backspace";
   if (lower === "delete" || lower === "del") return "delete";
-  // Ctrl+C / Control+C → ctrl+c
   return key
     .replace(/\bControl\b/gi, "ctrl")
     .replace(/\bCtrl\b/gi, "ctrl")
@@ -115,6 +119,49 @@ function mapPressCombo(raw: string): string {
     .replace(/\bShift\b/gi, "shift")
     .replace(/\s*\+\s*/g, "+")
     .toLowerCase();
+}
+
+/** True when the text has any character outside ASCII — clipboard paste is the reliable route. */
+function needsClipboardType(text: string): boolean {
+  for (const ch of text) {
+    if (ch.codePointAt(0)! > 0x7f) return true;
+  }
+  return false;
+}
+
+function headedDeniedMessage(): string {
+  return (
+    "coordinate / physical mouse-click moves the real cursor (--headed). " +
+    "Pass headed=true only when the user accepts that. Prefer click by AX element index " +
+    "(headless: no pointer move, no focus steal)."
+  );
+}
+
+function formatCliError(envelope: AgentDesktopEnvelope): {
+  message: string;
+  code: "COMPUTER_USE_STALE_ELEMENT" | "COMPUTER_USE_BACKEND";
+} {
+  const err = envelope.error;
+  const code = String(err?.code ?? "");
+  const base = err?.message ?? "agent-desktop reported ok=false";
+  const disposition =
+    typeof err?.disposition === "string"
+      ? err.disposition
+      : err?.disposition && typeof err.disposition === "object"
+        ? String(err.disposition.retry ?? "")
+        : "";
+  const hint =
+    /STALE_REF|AMBIGUOUS_TARGET/i.test(code)
+      ? " Capture again and use a fresh element index."
+      : disposition
+        ? ` disposition.retry=${disposition}.`
+        : "";
+  return {
+    message: `${base}${hint}`,
+    code: /STALE_REF/i.test(code)
+      ? "COMPUTER_USE_STALE_ELEMENT"
+      : "COMPUTER_USE_BACKEND",
+  };
 }
 
 /**
@@ -153,10 +200,8 @@ export async function runAgentDesktop(
     try {
       const parsed = JSON.parse(body) as AgentDesktopEnvelope;
       if (parsed.ok === false) {
-        throw new ComputerUseError(
-          parsed.error?.message ?? body.slice(0, 500),
-          "COMPUTER_USE_BACKEND",
-        );
+        const formatted = formatCliError(parsed);
+        throw new ComputerUseError(formatted.message, formatted.code);
       }
     } catch (inner) {
       if (inner instanceof ComputerUseError) throw inner;
@@ -176,10 +221,8 @@ export async function runAgentDesktop(
     );
   }
   if (envelope.ok === false) {
-    throw new ComputerUseError(
-      envelope.error?.message ?? "agent-desktop reported ok=false",
-      "COMPUTER_USE_BACKEND",
-    );
+    const formatted = formatCliError(envelope);
+    throw new ComputerUseError(formatted.message, formatted.code);
   }
   return envelope;
 }
@@ -197,6 +240,32 @@ function decodeScreenshotPng(envelope: AgentDesktopEnvelope): Uint8Array | undef
           : undefined;
   if (!b64) return undefined;
   return Uint8Array.from(Buffer.from(b64, "base64"));
+}
+
+async function clipboardSet(
+  text: string,
+  options: AgentDesktopProviderOptions,
+): Promise<void> {
+  // Prefer argv for short text; CLI also accepts --stdin for secrets.
+  await runAgentDesktop(["clipboard-set", text], options);
+}
+
+async function typeViaClipboard(
+  ref: string,
+  text: string,
+  lastApp: string,
+  options: AgentDesktopProviderOptions,
+): Promise<string> {
+  await clipboardSet(text, options);
+  try {
+    await runAgentDesktop(["focus", ref], options);
+  } catch {
+    // focus may be unavailable on some roles; paste still targets last focused.
+  }
+  const pasteArgs = ["press", "ctrl+v"];
+  if (lastApp) pasteArgs.push("--app", lastApp);
+  await runAgentDesktop(pasteArgs, options);
+  return "typed-clipboard-paste";
 }
 
 /**
@@ -262,10 +331,21 @@ export function createAgentDesktopProvider(
           // AX-only still succeeds; vision note below.
         }
       }
-      const notes: string[] = [];
+      const notes: string[] = [
+        "delivery=agent-desktop (AX headless by default; no pointer move unless headed=true)",
+      ];
       if (lastSnapshotId) notes.push(`snapshot_id=${lastSnapshotId}`);
       if (mode !== "ax" && !screenshotPng) {
         notes.push("agent-desktop screenshot unavailable; AX tree only");
+      }
+      if (elements.length === 0) {
+        notes.push(
+          "no AX refs — do not steal the mouse via bash/SetCursorPos; try another app, browser_* for web, or Background helper",
+        );
+      } else if (elements.length <= 2) {
+        notes.push(
+          "AX tree looks hollow (≤2 nodes — custom-drawn / accessibility-light UIs) — no reliable headless element path; do not steal the mouse via bash",
+        );
       }
       return buildCaptureResult({
         mode,
@@ -273,7 +353,92 @@ export function createAgentDesktopProvider(
         windowTitle,
         elements,
         ...(screenshotPng ? { screenshotPng } : {}),
-        ...(notes.length > 0 ? { note: notes.join("; ") } : {}),
+        note: notes.join("; "),
+      });
+    },
+    async find(request, signal) {
+      if (signal?.aborted) {
+        throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
+      }
+      const role = request.role?.trim() ?? "";
+      const name = request.name?.trim() ?? "";
+      const text = request.text?.trim() ?? "";
+      if (!role && !name && !text) {
+        throw new ComputerUseError(
+          "find needs role, name, and/or text",
+          "COMPUTER_USE_BAD_ARGS",
+        );
+      }
+      const args: string[] = ["find"];
+      const app = request.app?.trim() || lastApp;
+      if (app) args.push("--app", app);
+      if (role) args.push("--role", role);
+      if (name) args.push("--name", name);
+      if (text) args.push("--text", text);
+      if (request.exact === true) args.push("--exact");
+      if (request.first === true) {
+        args.push("--first");
+      } else if (
+        typeof request.limit === "number" &&
+        Number.isFinite(request.limit) &&
+        request.limit >= 0
+      ) {
+        args.push("--limit", String(Math.floor(request.limit)));
+      }
+      const envelope = await runAgentDesktop(args, options);
+      const data = asRecord(envelope.data) ?? {};
+      const matches = Array.isArray(data.matches) ? data.matches : [];
+      const max =
+        typeof request.limit === "number" &&
+        Number.isFinite(request.limit) &&
+        request.limit > 0
+          ? Math.floor(request.limit)
+          : 80;
+      const elements: ComputerUseElement[] = [];
+      for (const row of matches) {
+        if (elements.length >= max) break;
+        const rec = asRecord(row);
+        if (!rec) continue;
+        const ref =
+          typeof rec.ref_id === "string"
+            ? rec.ref_id
+            : typeof rec.ref === "string"
+              ? rec.ref
+              : undefined;
+        if (!ref) continue;
+        elements.push({
+          index: elements.length + 1,
+          role: typeof rec.role === "string" ? rec.role : "unknown",
+          name: typeof rec.name === "string" ? rec.name : "",
+          elementToken: ref,
+        });
+      }
+      lastElements = elements;
+      lastSnapshotId =
+        typeof data.snapshot_id === "string" ? data.snapshot_id : lastSnapshotId;
+      if (elements[0]?.elementToken) {
+        lastScrollRef = elements[0].elementToken;
+      }
+      if (app) lastApp = app;
+      const total =
+        typeof data.total_matches === "number" ? data.total_matches : undefined;
+      const notes: string[] = [
+        "delivery=agent-desktop find (matches replace last capture indices)",
+      ];
+      if (lastSnapshotId) notes.push(`snapshot_id=${lastSnapshotId}`);
+      if (total !== undefined) notes.push(`total_matches=${total}`);
+      if (data.truncated === true) notes.push("truncated=true");
+      if (elements.length === 0) {
+        notes.push(
+          "no matches — broaden filters, capture the window, or escalate (vision → headed with consent → refuse/Background)",
+        );
+      }
+      return buildCaptureResult({
+        mode: "ax",
+        app: lastApp || app || "desktop",
+        windowTitle: lastApp || "find",
+        elements,
+        note: notes.join("; "),
       });
     },
     async act(request, signal) {
@@ -286,23 +451,58 @@ export function createAgentDesktopProvider(
       };
       const el = pick(request.element);
       const ref = el?.elementToken;
+      const headed = request.headed === true;
+
+      if (request.action === "clipboard_set") {
+        await clipboardSet(request.text ?? "", options);
+        return {
+          ok: true,
+          action: "clipboard_set",
+          message: "clipboard-set",
+          delivery: "agent-desktop",
+        };
+      }
+      if (request.action === "clipboard_get") {
+        const envelope = await runAgentDesktop(["clipboard-get"], options);
+        const data = asRecord(envelope.data);
+        const text =
+          typeof data?.text === "string"
+            ? data.text
+            : typeof envelope.data === "string"
+              ? envelope.data
+              : JSON.stringify(envelope.data ?? "");
+        return {
+          ok: true,
+          action: "clipboard_get",
+          message: text,
+          delivery: "agent-desktop",
+        };
+      }
+
       let args: string[];
+      let message = `agent-desktop ${request.action} ok`;
       switch (request.action) {
         case "click": {
           if (request.coordinate) {
+            if (!headed) {
+              throw new ComputerUseError(
+                headedDeniedMessage(),
+                "COMPUTER_USE_BAD_ARGS",
+              );
+            }
             const [x, y] = request.coordinate;
-            // Physical pixel click — agent-desktop requires --headed.
             args = [
               "mouse-click",
               "--headed",
               "--xy",
               `${Math.round(x)},${Math.round(y)}`,
             ];
+            message = `clicked-coordinate:${Math.round(x)},${Math.round(y)} (headed)`;
           } else if (ref) {
             args = ["click", ref];
           } else {
             throw new ComputerUseError(
-              "click needs element index from last capture (or coordinate)",
+              "click needs element index from last capture (or coordinate with headed=true)",
               "COMPUTER_USE_BAD_ARGS",
             );
           }
@@ -316,7 +516,15 @@ export function createAgentDesktopProvider(
             );
           }
           const text = request.text ?? "";
-          // Prefer set-value for reliability on AX text targets; fall back to type.
+          if (needsClipboardType(text)) {
+            message = await typeViaClipboard(ref, text, lastApp, options);
+            return {
+              ok: true,
+              action: "type",
+              message,
+              delivery: "agent-desktop",
+            };
+          }
           args = ["set-value", ref, text];
           break;
         }
@@ -355,13 +563,22 @@ export function createAgentDesktopProvider(
       try {
         await runAgentDesktop(args, options);
       } catch (err) {
-        // set-value may be denied on some roles — retry with type.
         if (
           request.action === "type" &&
           ref &&
           err instanceof ComputerUseError
         ) {
-          await runAgentDesktop(["type", ref, request.text ?? ""], options);
+          try {
+            await runAgentDesktop(["type", ref, request.text ?? ""], options);
+            message = "typed-fallback";
+          } catch {
+            message = await typeViaClipboard(
+              ref,
+              request.text ?? "",
+              lastApp,
+              options,
+            );
+          }
         } else {
           throw err;
         }
@@ -369,7 +586,7 @@ export function createAgentDesktopProvider(
       const result: ComputerUseActResult = {
         ok: true,
         action: request.action,
-        message: `agent-desktop ${request.action} ok`,
+        message,
         delivery: "agent-desktop",
       };
       return result;
@@ -379,7 +596,6 @@ export function createAgentDesktopProvider(
         throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
       }
       const envelope = await runAgentDesktop(["list-windows"], options);
-      // v1.x: data is WindowInfo[]
       const rows = Array.isArray(envelope.data)
         ? envelope.data
         : Array.isArray(asRecord(envelope.data)?.windows)

@@ -146,6 +146,47 @@ describe("createComputerUseTools", () => {
     expect(result.isError).toBe(true);
     expect(String(result.content)).toMatch(/attachment store/i);
   });
+
+  it("mode=vision soft-degrades on text-only routes", async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    const svc = createMemoryComputerUseProvider({ screenshotPng: png });
+    const [tool] = createComputerUseTools({
+      service: svc,
+      routeAllowsImage: () => false,
+      saveScreenshot: async (bytes) => ({
+        attachmentId: "sha256:cu-text-only",
+        mediaType: "image/png",
+        bytes: bytes.byteLength,
+        width: 1,
+        height: 1,
+      }),
+    });
+    const result = await tool!.execute({ action: "capture", mode: "vision" });
+    expect(result.isError).toBeFalsy();
+    expect((result.meta as { textOnlyRoute?: boolean } | undefined)?.textOnlyRoute).toBe(
+      true,
+    );
+    const blocks = result.content as {
+      type: string;
+      text?: string;
+      attachment?: { attachmentId: string };
+    }[];
+    const text = blocks.find((b) => b.type === "text")?.text ?? "";
+    expect(text).toMatch(/text-only/i);
+    expect(text).toMatch(/pixels off wire/i);
+    expect(text).not.toContain("screenshot inline");
+    expect(
+      blocks.some(
+        (b) =>
+          b.type === "image" && b.attachment?.attachmentId === "sha256:cu-text-only",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("computer-use provider registry", () => {
@@ -616,16 +657,21 @@ describe("escapeSendKeys", () => {
 
 describe("COMPUTER_USE_PROMPT_TEXT", () => {
   it("stays orthogonal (page-vs-desktop routing lives in web family)", () => {
-    expect(COMPUTER_USE_PROMPT_TEXT).toContain("native");
+    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/native/i);
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("list_windows");
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("coordinate");
     expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/click|type|key|scroll/);
     expect(COMPUTER_USE_PROMPT_TEXT).toContain("invalidates");
-    expect(COMPUTER_USE_PROMPT_TEXT).toContain("background");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("headless");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("headed=true");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("Ladder:");
+    expect(COMPUTER_USE_PROMPT_TEXT).toContain("find");
+    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/multimodal/i);
+    expect(COMPUTER_USE_PROMPT_TEXT).toMatch(/soft-degrade/i);
     expect(COMPUTER_USE_PROMPT_TEXT).not.toContain("browser_open");
   });
 
-  it("never names browser_* in computer_use guidance", async () => {
+  it("does not name discrete browser_* tool ids in computer_use guidance", async () => {
     const { formatComputerUseGuidance } = await import("../src/format.js");
     const text = formatComputerUseGuidance([
       "computer_use",
@@ -633,7 +679,51 @@ describe("COMPUTER_USE_PROMPT_TEXT", () => {
       "browser_act",
     ]);
     expect(text).toContain("list_windows");
+    expect(text).toContain("Ladder:");
+    expect(text).toContain("find");
     expect(text).not.toContain("browser_open");
+  });
+
+  it("forks escalation for text-only vs multimodal routes", async () => {
+    const { formatComputerUseGuidance } = await import("../src/format.js");
+    const textOnly = formatComputerUseGuidance(["computer_use"], {
+      multimodal: false,
+    });
+    expect(textOnly).toContain("text-only");
+    expect(textOnly).toMatch(/soft-degrade/i);
+    expect(textOnly).not.toContain("browser_open");
+
+    const multi = formatComputerUseGuidance(["computer_use"], {
+      multimodal: true,
+    });
+    expect(multi).toContain("multimodal");
+    expect(multi).toContain("vision/som");
+  });
+
+  it("memory find filters and reindexes for act", async () => {
+    const { createMemoryComputerUseProvider } = await import("../src/memory.js");
+    const { createComputerUseTools } = await import("../src/tools.js");
+    const service = createMemoryComputerUseProvider({
+      elements: [
+        { index: 1, role: "button", name: "OK" },
+        { index: 2, role: "textbox", name: "Search" },
+        { index: 3, role: "button", name: "Cancel" },
+      ],
+    });
+    const tools = createComputerUseTools({ service });
+    const tool = tools[0]!;
+    const found = await tool.execute(
+      { action: "find", role: "button", name: "OK" },
+      undefined,
+    );
+    expect(String(found.content)).toContain("[1]");
+    expect(String(found.content)).toContain("OK");
+    expect(String(found.content)).not.toContain("Search");
+    const clicked = await tool.execute(
+      { action: "click", element: 1 },
+      undefined,
+    );
+    expect(String(clicked.content)).toMatch(/clicked/i);
   });
 });
 
@@ -674,12 +764,24 @@ describe("formatCaptureEnvelope / formatActResult", () => {
 });
 
 describe("coordinate click", () => {
-  it("clicks screen pixels without element index", async () => {
+  it("rejects coordinate click without headed=true", async () => {
     const svc = createMemoryComputerUseProvider();
     const [tool] = createComputerUseTools({ service: svc });
     const result = await tool!.execute({
       action: "click",
       coordinate: [120, 80],
+    });
+    expect(result.isError).toBe(true);
+    expect(String(result.content)).toMatch(/headed=true|real mouse/i);
+  });
+
+  it("clicks screen pixels when headed=true", async () => {
+    const svc = createMemoryComputerUseProvider();
+    const [tool] = createComputerUseTools({ service: svc });
+    const result = await tool!.execute({
+      action: "click",
+      coordinate: [120, 80],
+      headed: true,
     });
     expect(result.isError).toBeFalsy();
     expect(String(result.content)).toContain("coordinate (120,80)");

@@ -17,6 +17,11 @@ export interface BrowserToolsOptions {
   readonly saveScreenshot?: (
     png: Uint8Array,
   ) => Promise<BrowserScreenshotRef>;
+  /**
+   * Live route image intake. When false, `browser_vision` soft-degrades
+   * (gallery keeps PNG; text notes pixels are off-wire).
+   */
+  readonly routeAllowsImage?: () => boolean;
 }
 
 /** Stable machine-readable failure classes for browser_* tool results. */
@@ -200,7 +205,19 @@ export function createBrowserTools(
           content: `${result.note}\n\n${result.text}`,
         };
       } catch (err) {
-        return fail(err);
+        const out = fail(err);
+        if (
+          typeof out.content === "string" &&
+          /covered by/i.test(out.content) &&
+          !/click the covering/i.test(out.content)
+        ) {
+          return {
+            ...out,
+            content:
+              `${out.content}\n\nHint: snapshot, click the covering element (or Escape to dismiss), then snapshot again. Do not retry the same covered @ref.`,
+          };
+        }
+        return out;
       }
     },
     isConcurrencySafe: () => false,
@@ -209,9 +226,8 @@ export function createBrowserTools(
   const visionTool: ToolDefinition<{ question?: string }> = {
     name: "browser_vision",
     description:
-      "Capture a screenshot of the current graphical browser page for vision. " +
-      "Returns the @eN snapshot text plus an image. " +
-      "Fails without a graphical browser (HTTP snapshot); does not substitute the accessibility tree.",
+      "Screenshot the graphical page and return it with the @eN snapshot text. " +
+      "Needs a graphical browser; it does not replace the accessibility tree.",
     parameters: {
       type: "object",
       properties: {
@@ -247,11 +263,25 @@ export function createBrowserTools(
         }
         const question = String(args?.question ?? "").trim();
         const lead = question ? `question: ${question}\n` : "";
+        const textOnlyRoute =
+          options.routeAllowsImage !== undefined && !options.routeAllowsImage();
+        const body = textOnlyRoute
+          ? [
+              lead.trimEnd(),
+              text.trimEnd(),
+              `attachmentId=${ref.attachmentId}`,
+              "note=text-only route: the screenshot did not reach you (pixels off wire)",
+              "use=prefer snapshot/find/act; do not guess at pixels; switch model then re-call browser_vision",
+            ]
+              .filter((line) => line.length > 0)
+              .join("\n")
+          : `${lead}${text}`.trim();
         return {
           content: [
-            { type: "text" as const, text: `${lead}${text}`.trim() },
+            { type: "text" as const, text: body },
             { type: "image" as const, attachment: ref },
           ],
+          ...(textOnlyRoute ? { meta: { textOnlyRoute: true } } : {}),
         };
       } catch (err) {
         return fail(err);
@@ -259,7 +289,6 @@ export function createBrowserTools(
     },
     isConcurrencySafe: () => false,
   };
-
   const tools: ToolDefinition[] = [
     openTool,
     snapshotTool,
@@ -409,7 +438,7 @@ export function createBrowserTools(
     }> = {
       name: "browser_tabs",
       description:
-        "List, open, switch, or close tabs in the graphical browser session (tab ids like t2 or labels).",
+        "List, open, switch, or close tabs (ids like t2). A label given to action=new is slugified to ASCII [A-Za-z][A-Za-z0-9_-]*.",
       parameters: {
         type: "object",
         properties: {
@@ -423,7 +452,10 @@ export function createBrowserTools(
             description: "Tab id (t2) or label for switch/close.",
           },
           url: { type: "string", description: "URL when action=new." },
-          label: { type: "string", description: "Optional label when action=new." },
+          label: {
+            type: "string",
+            description: "Optional label when action=new.",
+          },
         },
       },
       async execute(args, signal) {
@@ -460,10 +492,10 @@ export function createBrowserTools(
 
   if (typeof session.getInfo === "function") {
     const getFn = session.getInfo.bind(session);
-    const getTool: ToolDefinition<{ what?: string }> = {
+    const getTool: ToolDefinition<{ what?: string; selector?: string }> = {
       name: "browser_get",
       description:
-        "Read text, html, url, or title from the active page (agent-browser get).",
+        "Read text, html, url, or title from the active page.",
       parameters: {
         type: "object",
         properties: {
@@ -471,6 +503,11 @@ export function createBrowserTools(
             type: "string",
             enum: ["text", "html", "url", "title"],
             description: "Which field to read (default text).",
+          },
+          selector: {
+            type: "string",
+            description:
+              "CSS or @ref selector for text/html (default body). Ignored for url/title.",
           },
         },
       },
@@ -480,8 +517,16 @@ export function createBrowserTools(
           whatRaw === "html" || whatRaw === "url" || whatRaw === "title"
             ? whatRaw
             : "text";
+        const selector =
+          args?.selector !== undefined ? String(args.selector).trim() : "";
         try {
-          return { content: await getFn(what, signal) };
+          return {
+            content: await getFn(
+              what,
+              signal,
+              selector || undefined,
+            ),
+          };
         } catch (err) {
           return fail(err);
         }
@@ -489,6 +534,149 @@ export function createBrowserTools(
       isConcurrencySafe: () => true,
     };
     tools.push(getTool);
+  }
+
+  if (typeof session.find === "function") {
+    const findFn = session.find.bind(session);
+    const findTool: ToolDefinition<{
+      locator?: string;
+      value?: string;
+      name?: string;
+      action?: string;
+      text?: string;
+      exact?: boolean;
+      nth?: number;
+    }> = {
+      name: "browser_find",
+      description:
+        "Locate an element by semantics and act on it in one step. Prefer it when @eN refs are missing or stale. Default action=click; action=text reads the text instead.",
+      parameters: {
+        type: "object",
+        properties: {
+          locator: {
+            type: "string",
+            enum: [
+              "role",
+              "text",
+              "label",
+              "placeholder",
+              "alt",
+              "title",
+              "testid",
+              "first",
+              "last",
+              "nth",
+            ],
+            description: "Semantic locator kind (default role).",
+          },
+          value: {
+            type: "string",
+            description:
+              "Locator value (ARIA role, visible text, CSS for first/last/nth, …).",
+          },
+          name: {
+            type: "string",
+            description: "Accessible name filter when locator=role.",
+          },
+          action: {
+            type: "string",
+            enum: ["click", "fill", "check", "hover", "text"],
+            description: "Action after locate (default click).",
+          },
+          text: {
+            type: "string",
+            description: "Fill text when action=fill.",
+          },
+          exact: {
+            type: "boolean",
+            description: "Exact match for text/name.",
+          },
+          nth: {
+            type: "number",
+            description: "0-based index when locator=nth.",
+          },
+        },
+        required: ["value"],
+      },
+      async execute(args, signal) {
+        const value = String(args?.value ?? "").trim();
+        if (!value) return failArgs("value is required");
+        const locatorRaw = String(args?.locator ?? "role").trim().toLowerCase();
+        const locator =
+          locatorRaw === "text" ||
+          locatorRaw === "label" ||
+          locatorRaw === "placeholder" ||
+          locatorRaw === "alt" ||
+          locatorRaw === "title" ||
+          locatorRaw === "testid" ||
+          locatorRaw === "first" ||
+          locatorRaw === "last" ||
+          locatorRaw === "nth"
+            ? locatorRaw
+            : "role";
+        const actionRaw = String(args?.action ?? "click").trim().toLowerCase();
+        const action =
+          actionRaw === "fill" ||
+          actionRaw === "check" ||
+          actionRaw === "hover" ||
+          actionRaw === "text"
+            ? actionRaw
+            : "click";
+        try {
+          const result = await findFn(
+            {
+              locator,
+              value,
+              action,
+              ...(args?.name !== undefined
+                ? { name: String(args.name) }
+                : {}),
+              ...(args?.text !== undefined
+                ? { text: String(args.text) }
+                : {}),
+              ...(args?.exact === true ? { exact: true } : {}),
+              ...(args?.nth !== undefined ? { nth: Number(args.nth) } : {}),
+            },
+            signal,
+          );
+          return { content: `${result.note}\n\n${result.text}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(findTool);
+  }
+
+  if (typeof session.frame === "function") {
+    const frameFn = session.frame.bind(session);
+    const frameTool: ToolDefinition<{ target?: string }> = {
+      name: "browser_frame",
+      description:
+        "Switch into an iframe by CSS selector, or back to the main document. Snapshot again afterwards — refs from the previous frame do not carry over.",
+      parameters: {
+        type: "object",
+        properties: {
+          target: {
+            type: "string",
+            description:
+              'CSS selector for iframe, or "main" to leave the iframe (default main).',
+          },
+        },
+      },
+      async execute(args, signal) {
+        const target = String(args?.target ?? "main").trim() || "main";
+        try {
+          const snap = await frameFn(target, signal);
+          return { content: snap.text };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(frameTool);
   }
 
   if (typeof session.hover === "function") {

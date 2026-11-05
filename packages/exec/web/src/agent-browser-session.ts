@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 import type {
   BrowserActResult,
   BrowserCookiesRequest,
+  BrowserFindRequest,
   BrowserSession,
   BrowserSnapshotResult,
   BrowserTabsRequest,
@@ -115,6 +116,25 @@ function errorMessage(parsed: AgentBrowserJson, fallback: string): string {
   return fallback;
 }
 
+function enrichActError(message: string): string {
+  const covered = message.match(
+    /covered by\s+<([^>]+)>/i,
+  );
+  if (covered) {
+    return (
+      `${message.slice(0, 600)} — click the covering element (or dismiss it), then snapshot again and retry. ` +
+      `Do not loop the same covered ref. Prefer browser_act on the covering control; browser_eval is advanced.`
+    );
+  }
+  if (/EOF while parsing|no response came back/i.test(message)) {
+    return (
+      `${message.slice(0, 500)} — daemon may have already run the command; snapshot to verify before retrying. ` +
+      `Do not parallel computer_use against the same Chrome.`
+    );
+  }
+  return message.slice(0, 800);
+}
+
 function mapLaunchError(message: string): WebError {
   if (/Chrome not found|Auto-launch failed|executable-path|agent-browser install/i.test(message)) {
     return new WebError(
@@ -130,7 +150,28 @@ function mapLaunchError(message: string): WebError {
       "WEB_BROWSER_CDP",
     );
   }
-  return new WebError(message.slice(0, 800), "WEB_BROWSER_CDP");
+  return new WebError(enrichActError(message), "WEB_BROWSER_CDP");
+}
+
+function isDaemonEof(message: string): boolean {
+  return /EOF while parsing|no response came back|Invalid response:\s*EOF/i.test(
+    message,
+  );
+}
+
+/** agent-browser --label: letters/digits/_/- only; must start with a letter. */
+export function sanitizeAgentBrowserTabLabel(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  let slug = trimmed
+    .normalize("NFKD")
+    .replace(/[^\w-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^-+|-+$/g, "")
+    .replace(/^_+|_+$/g, "");
+  if (!slug) slug = "tab";
+  if (!/^[A-Za-z]/.test(slug)) slug = `t_${slug}`;
+  return slug.slice(0, 48);
 }
 
 /** True when Chromium died before publishing a DevTools endpoint. */
@@ -350,7 +391,7 @@ export function resolveBundledChromeExecutable(
   return resolveAgentBrowserExecutable(env, "auto");
 }
 
-async function runAgentBrowser(
+async function runAgentBrowserOnce(
   args: readonly string[],
   options: AgentBrowserSessionOptions,
   preferJson: boolean,
@@ -429,6 +470,28 @@ async function runAgentBrowser(
     }
   }
   return { success: true, data: { text: trimmed } };
+}
+
+/** Short retry on daemon EOF (command may already have run — callers should re-snapshot). */
+async function runAgentBrowser(
+  args: readonly string[],
+  options: AgentBrowserSessionOptions,
+  preferJson: boolean,
+): Promise<AgentBrowserJson> {
+  const attempts = 2;
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await runAgentBrowserOnce(args, options, preferJson);
+    } catch (err) {
+      lastErr = err;
+      const message = err instanceof Error ? err.message : String(err);
+      if (!isDaemonEof(message) || i === attempts - 1) throw err;
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new WebError(String(lastErr), "WEB_BROWSER_CDP");
 }
 
 function stringField(
@@ -894,7 +957,8 @@ export function createAgentBrowserSession(
       if (request.action === "new") {
         const args = [...globalFlags(true), "tab", "new"];
         if (request.label?.trim()) {
-          args.push("--label", request.label.trim());
+          const label = sanitizeAgentBrowserTabLabel(request.label);
+          if (label) args.push("--label", label);
         }
         if (request.url?.trim()) args.push(request.url.trim());
         await runAgentBrowser(args, launchOpts, true);
@@ -921,7 +985,7 @@ export function createAgentBrowserSession(
       await refreshMeta();
       return target ? `closed ${target}` : "closed current tab";
     },
-    async getInfo(what, signal) {
+    async getInfo(what, signal, selector) {
       if (signal?.aborted) {
         throw new WebError("aborted", "WEB_BROWSER_CDP");
       }
@@ -929,11 +993,15 @@ export function createAgentBrowserSession(
       const key = what === "text" || what === "html" || what === "url" || what === "title"
         ? what
         : "text";
-      const parsed = await runAgentBrowser(
-        [...globalFlags(true), "get", key],
-        launchOpts,
-        true,
-      );
+      const args = [...globalFlags(true), "get", key];
+      const sel = selector?.trim();
+      if (sel) {
+        args.push(sel);
+      } else if (key === "html" || key === "text") {
+        // agent-browser get html|text requires a selector; default to body.
+        args.push("body");
+      }
+      const parsed = await runAgentBrowser(args, launchOpts, true);
       const data = asRecord(parsed.data);
       const direct = stringField(data, [key, "value", "text", "html", "url", "title", "href"]);
       if (direct) return direct;
@@ -993,6 +1061,62 @@ export function createAgentBrowserSession(
       requireOpen();
       await runAgentBrowser([...globalFlags(true), "reload"], launchOpts, true);
       return afterNav("reloaded");
+    },
+    async find(request: BrowserFindRequest, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const locator = request.locator;
+      const value = request.value.trim();
+      if (!value) {
+        throw new WebError("find needs value", "WEB_BROWSER_INVALID_ARGS");
+      }
+      const action = request.action ?? "click";
+      const args = [...globalFlags(true), "find", locator];
+      if (locator === "nth") {
+        const nth =
+          typeof request.nth === "number" && Number.isFinite(request.nth)
+            ? Math.max(0, Math.floor(request.nth))
+            : 0;
+        args.push(String(nth), value);
+      } else {
+        args.push(value);
+      }
+      args.push(action);
+      if (action === "fill") {
+        args.push(request.text ?? "");
+      }
+      if (request.name?.trim()) {
+        args.push("--name", request.name.trim());
+      }
+      if (request.exact === true) {
+        args.push("--exact");
+      }
+      await runAgentBrowser(args, launchOpts, true);
+      const nameBit = request.name?.trim()
+        ? ` name=${JSON.stringify(request.name.trim())}`
+        : "";
+      return afterNav(
+        `find ${locator}=${JSON.stringify(value)}${nameBit} → ${action}`,
+      );
+    },
+    async frame(target, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const sel = target.trim() || "main";
+      await runAgentBrowser(
+        [...globalFlags(true), "frame", sel],
+        launchOpts,
+        true,
+      );
+      const snap = await takeSnapshot(false);
+      return {
+        ...snap,
+        text: `switched frame → ${sel}\n\n${snap.text}`,
+      };
     },
     dispose() {
       void runAgentBrowser(

@@ -22,6 +22,7 @@ export {
   type ComputerUseDelivery,
   type ComputerUseElement,
   type ComputerUseErrorCode,
+  type ComputerUseFindRequest,
   type ComputerUseProviderName,
   type ComputerUseService,
   type ComputerUseWindow,
@@ -36,6 +37,7 @@ export {
   formatCaptureEnvelope,
   formatComputerUseGuidance,
   formatWindowsList,
+  type ComputerUseModalityOptions,
 } from "./format.js";
 export { mapKeysToSendKeys, escapeSendKeys } from "./keys.js";
 export {
