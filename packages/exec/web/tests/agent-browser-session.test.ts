@@ -97,6 +97,11 @@ describe("createAgentBrowserSession", () => {
     const session = createAgentBrowserSession({
       sessionName: "heal-headed",
       headed: true,
+      // This case targets self-heal 2 (headed → headless). Pin --no-sandbox so
+      // self-heal 1 is already satisfied: on Linux CI the resolver does not add
+      // it by default, so self-heal 1 would take an extra *headed* retry and the
+      // assertion below would still see `--headed`.
+      chromeArgs: "--no-sandbox",
       // Face/Settings path stamps this; heal must clear it or CLI stays headed.
       env: { ...process.env, AGENT_BROWSER_HEADED: "1" },
       async run(args, env) {
