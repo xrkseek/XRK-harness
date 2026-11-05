@@ -10,7 +10,7 @@
 | 入口 | 字段 |
 |------|------|
 | Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave / DeepSeek 密钥（经 Credentials 落盘） |
-| Settings → Plugins → **Browser** | `mode`（`http` 快照 / `cdp`）· `cdpUrl`（Chrome DevTools 地址） |
+| Settings → Plugins → **Browser** | `mode`（默认 **`agent-browser`** / `http` / `cdp`）· `headed`（默认开）· `restore`（默认开）· `profile` · `proxy` · `autoConnect` · `statePath` · `executablePath` · `cdpUrl`；CLI：`XRK_AGENT_BROWSER` · `AGENT_BROWSER_*`（见下） |
 | Settings → Credentials | 同槽也可改 Tavily / Brave / DeepSeek Search |
 
 Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 `createDefaultWebAccess({ search })`；Browser 合成 `browserProduct` 传入 `createBrowserSession({ product })`。均在 agent 重建后生效。非空 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` 为 CI 旁路。DeepSeek Search 与对话共用 Bearer；Host 在缺 `web.deepseek` 时复用 `llm.deepseek` / `DEEPSEEK_API_KEY`。
@@ -43,7 +43,7 @@ Host 把 Web search 合成结构化 `webSearch`（`SearchAccessConfig`）传入 
 
 URL 仅 `http`/`https`，拒凭据。字面量 loopback / RFC1918 / link-local 直接拒绝。**不**做 DNS 再绑定；解析到内网 IP 的公网名拦不住。
 
-## 浏览器操作（HTTP 会话）
+## 浏览器操作
 
 Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `browser_act`：
 
@@ -51,12 +51,13 @@ Harness 在启用 web 工具时登记 `browser_open` / `browser_snapshot` / `bro
 |------|------|
 | `browser_open` | 打开 URL，返回带 `@eN` 的元素快照 |
 | `browser_snapshot` | 当前页元素列表（`full=true` 附正文） |
-| `browser_act` | `click` / `type`（需 `@eN`）；**`scroll`**（up/down）· **`press`**（Enter/Tab…）· **`back`**（Hermes 对齐；scroll/press 需 CDP，HTTP 回 `WEB_BROWSER_NO_GRAPHICS`；HTTP 会话也维护 history 供 back） |
+| `browser_act` | `click` / `type`（需 `@eN`）；**`scroll`**（up/down）· **`press`**（Enter/Tab…）· **`back`**（Hermes 对齐；HTTP 快照下 scroll/press 回 `WEB_BROWSER_NO_GRAPHICS`，HTTP 会话也维护 history 供 back） |
 | `browser_vision` | 截当前图形页给 vision（文本 `@eN` 旁加图片）。HTTP 快照没有浏览器时失败，不用元素列表冒充截图。**不是**视频理解（视频文件用 `video_analyze`） |
+| `browser_eval` · `browser_wait` · `browser_get` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | agent-browser 图形会话额外工具（超 Playwright MCP 子集；HTTP 会话不登记） |
 | `browser_vault_list` | 列出不透明凭证句柄（label / origin；**永不返回密钥**） |
 | `browser_vault_fill` | 用句柄向当前页 `@eN` 字段填密（服务端 type；结果仅 success/handle/origin） |
 
-实现默认是 **HTTP 快照会话**（复用 `WebFetch` + URL 策略），`@eN` 不变。Settings → Plugins → **Browser** 选 CDP 并填 `cdpUrl`（或设 `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`）时，同一套 `browser_open` / `browser_snapshot` / `browser_act` 改走 Chrome DevTools：浏览器级 websocket 会 `Target.createTarget` + `attachToTarget`，元素来自无障碍树，点击/输入走 `DOM.resolveNode`，`scroll`/`press`/`back` 分别走 `window.scrollBy` · `Input.dispatchKeyEvent` · `history.back()`。`browser_vision` 再调 `Page.captureScreenshot`，经附件库把 PNG 放进模型请求；没接附件库时失败，不把无障碍树当截图。未设地址时不连 CDP。这不是桌面 computer-use。SPA 在纯 HTTP 会话下仍受限；一锤子读页继续用 `web_fetch`。
+产品默认会话是 **agent-browser**（[vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser)，Apache-2.0，Rust CLI，维护活跃；仍为 **0.x**，旗标/输出偶有破坏性变更，本仓钉 `package.json` 版本）。Desktop Host 同梱 CLI（`XRK_AGENT_BROWSER` 可覆盖）。**Chromium 不随 npm 包自动下齐**：首次在本机跑 `agent-browser install`（写入 `~/.agent-browser/browsers`），或设 Settings `executablePath` / `AGENT_BROWSER_EXECUTABLE_PATH`。默认 **`headed=true`**（可见窗口）· **`restore=true`**（按会话记住 Cookie）；可选 `profile` / `proxy` / `autoConnect` / `statePath` 复用系统登录态。CLI 自身配置见 [agent-browser.dev/configuration](https://agent-browser.dev/configuration)。无 CLI 时可改 Settings → HTTP 快照。可选 **CDP**（`cdpUrl` / `XRK_BROWSER_CDP_URL`）。这不是桌面 computer-use。
 
 Host（harness/server）经 `createBrowserRuntimeRegistry` 按 **会话 id** 共享同一 `BrowserSession`：Agent invalidate / Settings 热重建后仍保留已打开页面与 CDP 连接；会话 finalize 或 Host stop 时 `drop`/`dispose`。工具失败经 `tool/result.error.code` 归类（如 `WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`）。`browser_vault_*` 由 Host 把 Face `listCredentialSlots` / `credentials.peek` 注入 `createBrowserVaultTools`（Hermes opaque-handle 子集；有 origin 时校验页面 origin）。
 
@@ -77,7 +78,7 @@ Host（harness/server）经 `createBrowserRuntimeRegistry` 按 **会话 id** 共
 | Entry | Fields |
 |------|------|
 | Settings → Plugins → **Web search** | `provider` · `region` · Tavily / Brave / DeepSeek secrets (persisted via Credentials) |
-| Settings → Plugins → **Browser** | `mode` (`http` snapshot / `cdp`) · `cdpUrl` (Chrome DevTools URL) |
+| Settings → Plugins → **Browser** | `mode` (default **`agent-browser`** / `http` snapshot / `cdp`) · `cdpUrl` (CDP only); override CLI with `XRK_AGENT_BROWSER` |
 | Settings → Credentials | Same slots may edit Tavily / Brave / DeepSeek Search |
 
 The Host synthesizes Web search into `webSearch` (`SearchAccessConfig`) for `createDefaultWebAccess({ search })`, and Browser into `browserProduct` for `createBrowserSession({ product })`. Both take effect after agent rebuild. Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is the CI bypass. DeepSeek Search shares the chat Bearer; when `web.deepseek` is unset the Host reuses `llm.deepseek` / `DEEPSEEK_API_KEY`.
@@ -110,7 +111,7 @@ Always available (**no key required**). `GET`, follow **same-origin** redirects 
 
 URLs must be `http`/`https` without credentials. Literal loopback / RFC1918 / link-local are rejected. There is **no** DNS rebinding check; public names that resolve to private IPs are not blocked.
 
-## Browser ops (HTTP session)
+## Browser ops
 
 When web tools are enabled, harness registers `browser_open` / `browser_snapshot` / `browser_act`:
 
@@ -118,14 +119,15 @@ When web tools are enabled, harness registers `browser_open` / `browser_snapshot
 |------|------|
 | `browser_open` | Open a URL; return element snapshot with `@eN` refs |
 | `browser_snapshot` | Current-page element list (`full=true` adds page text) |
-| `browser_act` | `click` / `type` (need `@eN`); **`scroll`** (up/down) · **`press`** (Enter/Tab…) · **`back`** (Hermes-aligned; scroll/press need CDP — HTTP returns `WEB_BROWSER_NO_GRAPHICS`; HTTP sessions keep a history stack for back) |
+| `browser_act` | `click` / `type` (need `@eN`); **`scroll`** (up/down) · **`press`** (Enter/Tab…) · **`back`** (Hermes-aligned; HTTP snapshot returns `WEB_BROWSER_NO_GRAPHICS` for scroll/press and keeps a history stack for back) |
 | `browser_vision` | Screenshot the graphical page for vision (image beside `@eN` text). The HTTP snapshot has no browser and fails; the element list is not a screenshot. **Not** video understanding (use `video_analyze` for video files) |
+| `browser_eval` · `browser_wait` · `browser_get` · `browser_tabs` · `browser_cookies` · `browser_hover` · `browser_select` · `browser_forward` · `browser_reload` | Extra tools on graphical agent-browser sessions (beyond the Playwright MCP subset; not registered for HTTP snapshot) |
 | `browser_vault_list` | List opaque credential handles (label / origin; **never returns secrets**) |
 | `browser_vault_fill` | Fill a snapshot `@eN` field from a handle (server-side type; result is success/handle/origin only) |
 
-The default is an **HTTP snapshot session** (reuses `WebFetch` + URL policy); `@eN` refs stay. When Settings → Plugins → **Browser** selects CDP with a `cdpUrl` (or `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is set), the same `browser_open` / `browser_snapshot` / `browser_act` tools use Chrome DevTools: a browser websocket calls `Target.createTarget` + `attachToTarget`, elements come from the accessibility tree, click/type go through `DOM.resolveNode`, and `scroll`/`press`/`back` use `window.scrollBy` · `Input.dispatchKeyEvent` · `history.back()`. `browser_vision` then calls `Page.captureScreenshot` and stores the PNG so the model request can inline it. With no attachment store the call fails; the accessibility tree is not treated as a screenshot. With no URL, CDP is not contacted. This is not desktop computer-use. SPA pages stay limited on the plain HTTP session; use `web_fetch` for one-shot reads.
+The product default session is **agent-browser** ([vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser), Apache-2.0, Rust CLI, actively maintained; still **0.x**, so flag/output churn is possible — this repo pins the npm version). Desktop Host ships the CLI (`XRK_AGENT_BROWSER` overrides). **Chromium is not fully auto-bundled with the npm package**: run `agent-browser install` once (writes `~/.agent-browser/browsers`), or set Settings `executablePath` / `AGENT_BROWSER_EXECUTABLE_PATH`. Defaults: **`headed=true`**, **`restore=true`**; optional `profile` / `proxy` / `autoConnect` / `statePath` for login reuse. Mode / headed / restore / autoConnect apply live from the card. Changing browser Settings recreates live sessions (config fingerprint) so new flags take effect. Upstream config: [agent-browser.dev/configuration](https://agent-browser.dev/configuration). Switch Settings to HTTP snapshot if the CLI is unavailable. Optional **CDP** (`cdpUrl` / `XRK_BROWSER_CDP_URL`). Not desktop computer-use.
 
-The Host (harness/server) shares one `BrowserSession` per conversation session via `createBrowserRuntimeRegistry`, so open pages and CDP callers survive agent invalidate / Settings rebuilds; session finalize or Host stop calls `drop`/`dispose`. Tool failures carry `tool/result.error.code` (`WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`). `browser_vault_*` is wired by Host injecting Face `listCredentialSlots` / `credentials.peek` into `createBrowserVaultTools` (Hermes opaque-handle subset; origin must match when bound).
+The Host (harness/server) shares one `BrowserSession` per conversation session via `createBrowserRuntimeRegistry`, so open pages and CDP callers survive agent invalidate when the product fingerprint is unchanged; browser Settings changes or session finalize / Host stop call `drop`/`dispose`. Tool failures carry `tool/result.error.code` (`WEB_BROWSER_NO_PAGE` · `WEB_BROWSER_NO_GRAPHICS` · `WEB_BROWSER_NO_ATTACHMENTS` · `WEB_BROWSER_BAD_REF` · `WEB_BROWSER_CDP`). `browser_vault_*` is wired by Host injecting Face `listCredentialSlots` / `credentials.peek` into `createBrowserVaultTools` (Hermes opaque-handle subset; origin must match when bound).
 
 ## Card replay
 

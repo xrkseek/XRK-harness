@@ -12,8 +12,8 @@
 | 接一个 OpenAI 兼容网关 | `llm-pi-ai` | `providers.<id>.baseURL` · `credentialRef` · `models` |
 | 换默认模型 / 思考档 | `agent-default-model` | `provider` · `model` · `reasoningEffort` |
 | 语音听写 / 朗读 | `asr` · `tts` | `enabled` · `engine` · `baseUrl` · `downloadProxy` · `voice` |
-| 浏览器自动化 | `browser` | `mode`（http / cdp）· `cdpUrl` |
-| 桌面 GUI | `computer-use` | `mode`（off / uia / background） |
+| 浏览器自动化 | `browser` | `mode`（agent-browser / http / cdp）· `cdpUrl` |
+| 桌面 GUI | `computer-use` | `mode`（off / agent-desktop / uia / background） |
 | 沙箱 / 权限 | `sandbox` · `permission` | `backend` · `defaultPreset` · `extraWritableRoots` |
 | 外部 MCP | `mcp` | `servers[]` · `allowConnect` |
 | 定时任务 | `cron` | `enabled` |
@@ -200,16 +200,16 @@
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | off \| uia \| background | `"off"` |  |
+| `mode` | unknown | — |  |
 
 ## `browser`
 
-默认值：`{ mode: "http", cdpUrl: "" }`
-
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | http \| cdp | `"http"` |  |
+| `mode` | agent-browser \| http \| cdp | — |  |
 | `cdpUrl` | string | `""` |  |
+| `headed` | boolean | `false` | Show Chromium window when mode is agent-browser (maps to AGENT_BROWSER_HEADED). |
+| `executablePath` | string | `""` | Optional Chrome/Chromium path for agent-browser. Empty → auto (~/.agent-browser/browsers from `agent-browser install`, or system). |
 
 ## `cron`
 
@@ -274,12 +274,12 @@
 
 ## `curated-memory`
 
-默认值：`{ enabled: true, phase2Llm: false }`
-
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` |  |
 | `phase2Llm` | boolean | `false` | Session-end Phase2 LLM extract into MEMORY.md (needs a resolvable session LLM). Env `XRK_CURATED_MEMORY_PHASE2=1` also enables. |
+| `memoryLimit` | number | `2200` | Per-zone char cap for MEMORY.md (each of the four zones counts on its own). Applies to sessions built after the change; existing frozen blocks keep the cap they were built with. |
+| `userLimit` | number | `1375` | Per-zone char cap for USER.md (who-the-user-is profile). Step is 25 (not 100): the shipped default 1375 must remain schema-valid — a step-100 default would make schemastery reject the section and the Plugins card would stay `available: false` forever. |
 
 ## `a2a-inbound`
 

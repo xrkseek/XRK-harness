@@ -69,6 +69,36 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.11',
+    date: '2026-11-06',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Computer-use / 浏览器代理：agent-desktop 与 agent-browser-session 解析 CLI，fetch-pack 代理支持；桌面 Host 进程与 runtime 准备流程加固。',
+        en: 'Computer-use / browser proxy: agent-desktop and agent-browser-session CLI resolution, fetch-pack proxy support; desktop host process and runtime preparation hardened.',
+      },
+      {
+        zh: 'Seat titles 与 settings credentials：seat-titles 模块化，凭据存储加固，status snapshot cache。',
+        en: 'Seat titles and settings credentials: seat-titles modularized, credential store hardened, status snapshot cache.',
+      },
+      {
+        zh: 'Voice / TTS：代理 fetch 与 WebSocket agent，TTS 卡片与控制器重构。',
+        en: 'Voice / TTS: proxy fetch and WebSocket agent, TTS card and controller refactor.',
+      },
+      {
+        zh: 'UI：seat-caption、PreviewTabs、Menu、WorkspacePicker、ConversationRoot 等交互与布局改进。',
+        en: 'UI: seat-caption, PreviewTabs, Menu, WorkspacePicker, ConversationRoot interaction and layout improvements.',
+      },
+      {
+        zh: '文档：settings-fields、status、configuration、computer-use、web-tools 同步更新。',
+        en: 'Docs: settings-fields, status, configuration, computer-use, web-tools synced.',
+      },
+    ],
+  },
+  {
     version: '0.7.10',
     date: '2026-11-05',
     title: {

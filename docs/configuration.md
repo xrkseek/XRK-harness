@@ -190,7 +190,9 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | 可选 env；产品路径用 Credentials |
 | `XRK_PARALLEL_FREE_MCP_URL` | 可选 Parallel 免费 MCP URL（默认 `https://search.parallel.ai/mcp`） |
 | `XRK_WEB_SEARCH_PROVIDER` | 可选钉死提供方；产品路径用 Settings → Plugins → Web search |
-| `XRK_BROWSER_CDP_URL` | CI 旁路 Settings：Chrome DevTools 地址（`http://host:9222` 或 `ws://…/devtools/browser/…`）— 产品路径用 Settings → Plugins → Browser；未设且 Settings 为 HTTP 时 `browser_*` 走 HTTP 快照 |
+| `XRK_BROWSER_CDP_URL` | CI 旁路 Settings：Chrome DevTools 地址（`http://host:9222` 或 `ws://…/devtools/browser/…`）— 产品路径用 Settings → Plugins → Browser；默认 `agent-browser`；HTTP 快照为可选 |
+| `XRK_AGENT_BROWSER` | 覆盖 `agent-browser` 可执行文件路径（Desktop 默认用 Host `node_modules`） |
+| `XRK_AGENT_DESKTOP` | 覆盖 `agent-desktop` 可执行文件路径（Desktop 默认用 Host `node_modules`） |
 | `XRK_WEB_SEARCH_REGION` | 可选 DuckDuckGo `kl`；产品路径用 Web search → region |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio 语言服务器 |
 | `XRK_SANDBOX_BACKEND` | CI 旁路 Settings：`workspace`（默认）· `docker` · `bwrap` · `windows` — 产品路径用 Settings → Plugins → Sandbox；见 [sandbox.md](./sandbox.md) |
@@ -203,7 +205,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_WEB_FETCH_ALLOWLIST` | 可选 `web_fetch` 出站主机 allowlist（逗号分隔；空=开放仍拦私网）；审计环见 [web-tools](./web-tools.md) |
 | `XRK_SANDBOX_WINDOWS_MODE` | `workspace-write`（默认）· `read-only` · `danger-full-access` |
 | `XRK_SANDBOX_WINDOWS_NETWORK` | `none`（默认）或 `bridge` / `on` |
-| `XRK_COMPUTER_USE` | CI 旁路 Settings：`1`/`uia`（Windows UIA）· `memory` · `background` — 产品路径用 Settings → Plugins → Computer use；见 [computer-use.md](./computer-use.md) |
+| `XRK_COMPUTER_USE` | CI 旁路 Settings：`agent-desktop` · `1`/`uia`（Windows UIA）· `memory` · `background` · `off` — 产品路径用 Settings → Plugins → Computer use；`off` 不登记工具；见 [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background 助手路径（也可用 Credentials 槽；`mode=background` 时需要） |
 | `XRK_CURATED_MEMORY` | CI 旁路 Settings：`0` 强制关 · 非空其它强制开 — 产品路径用 Settings → Plugins → 策展记忆；见 [curated-memory.md](./curated-memory.md) |
 | `XRK_CURATED_MEMORY_PHASE2` | CI 旁路：`1` / `true` 强制开 Phase2 LLM 巩固（产品路径用 Settings `curated-memory.phase2Llm`） |
@@ -269,9 +271,9 @@ Settings → Plugins 里会动到运行时的命名空间：
 | `workspace-inject` | `injectMaxChars` | 下次 agent 重建后作用于 rules/skills 注入预算（默认 **32_000**） |
 | `session-telemetry` | `mode` · `endpoint` | **重启 Host** 后挂 sink（关 / memory / OTLP）；`XRK_TELEMETRY` 可 CI 旁路 |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **下次 agent 重建**后热切换 confine Provider；helper / bins 仍仅 env；`XRK_SANDBOX_BACKEND` 可 CI 旁路 |
-| `computer-use` | `mode`（关 / uia / background） | **下次 agent 重建**后热切换 Provider；助手路径走 Credentials `XRK_COMPUTER_USE_BACKGROUND`；`XRK_COMPUTER_USE` 可 CI 旁路 |
+| `computer-use` | `mode`（默认 **agent-desktop** / 关 / uia / background） | **下次 agent 重建**后热切换；关 = 卸载工具；卡片头开关即时保存；助手路径走 Credentials `XRK_COMPUTER_USE_BACKGROUND`；`XRK_COMPUTER_USE` 可 CI 旁路 |
 | `cron` | `enabled` | **热启停** Host ticker 并重建 agent（挂/卸 `cronjob`）；`XRK_CRON` 可 CI 旁路 |
-| `browser` | `mode`（http / cdp）· `cdpUrl` | **下次 agent 重建**后热切换 HTTP 快照或 CDP；`XRK_BROWSER_CDP_URL` 可 CI 旁路 |
+| `browser` | `mode`（**agent-browser** / http / cdp）· `headed`（默认开）· `restore`（默认开）· `profile` · `proxy` · `autoConnect` · `statePath` · `executablePath` · `cdpUrl` | **下次 agent 重建**后热切换；`XRK_BROWSER_CDP_URL` 可 CI 强制 CDP；`XRK_AGENT_BROWSER` 覆盖 CLI |
 | `voice` | `mode`（关 / openai）· `baseUrl` | **下次 agent 重建**后热切换；密钥走 Credentials `XRK_VOICE_OPENAI_KEY`；`XRK_VOICE` 可 CI 旁路 |
 | `image-gen` | `mode`（关 / openai / fal / xai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials（`XRK_IMAGE_GEN_OPENAI_KEY` / `XRK_IMAGE_GEN_FAL_KEY` / `XRK_IMAGE_GEN_XAI_KEY`）；`XRK_IMAGE_GEN` 可 CI 旁路 |
 | `video-gen` | `mode`（关 / openai / fal / xai）· `baseUrl` · `model` | **下次 agent 重建**后热切换；密钥走 Credentials（`XRK_VIDEO_GEN_OPENAI_KEY` / `XRK_VIDEO_GEN_FAL_KEY` / `XRK_VIDEO_GEN_XAI_KEY`）；`XRK_VIDEO_GEN` 可 CI 旁路 |
@@ -514,7 +516,9 @@ Behavior notes:
 | `XRK_TAVILY_API_KEY` / `XRK_BRAVE_SEARCH_API_KEY` | Optional env; product path uses Credentials |
 | `XRK_PARALLEL_FREE_MCP_URL` | Optional Parallel free MCP URL (default `https://search.parallel.ai/mcp`) |
 | `XRK_WEB_SEARCH_PROVIDER` | Optional pinned provider; product path: Settings → Plugins → Web search |
-| `XRK_BROWSER_CDP_URL` | CI bypass over Settings: Chrome DevTools URL (`http://host:9222` or `ws://…/devtools/browser/…`) — product path: Settings → Plugins → Browser; unset + Settings HTTP keeps `browser_*` on the HTTP snapshot |
+| `XRK_BROWSER_CDP_URL` | CI bypass over Settings: Chrome DevTools URL (`http://host:9222` or `ws://…/devtools/browser/…`) — product path: Settings → Plugins → Browser; default is `agent-browser`; HTTP snapshot is optional |
+| `XRK_AGENT_BROWSER` | Override `agent-browser` binary path (Desktop defaults to Host `node_modules`) |
+| `XRK_AGENT_DESKTOP` | Override `agent-desktop` binary path (Desktop defaults to Host `node_modules`) |
 | `XRK_WEB_SEARCH_REGION` | Optional DuckDuckGo `kl`; product path: Web search → region |
 | `XRK_LSP_COMMAND` / `XRK_LSP_ARGS` | `lsp` stdio language server |
 | `XRK_SANDBOX_BACKEND` | CI bypass over Settings: `workspace` (default) · `docker` · `bwrap` · `windows` — product path: Settings → Plugins → Sandbox; see [sandbox.md](./sandbox.md) |
@@ -527,7 +531,7 @@ Behavior notes:
 | `XRK_WEB_FETCH_ALLOWLIST` | Optional `web_fetch` outbound host allowlist (comma-separated; empty = open, private still blocked); audit ring — see [web-tools](./web-tools.md) |
 | `XRK_SANDBOX_WINDOWS_MODE` | `workspace-write` (default) · `read-only` · `danger-full-access` |
 | `XRK_SANDBOX_WINDOWS_NETWORK` | `none` (default) or `bridge` / `on` |
-| `XRK_COMPUTER_USE` | CI bypass over Settings: `1`/`uia` (Windows UIA) · `memory` · `background` — product path: Settings → Plugins → Computer use; see [computer-use.md](./computer-use.md) |
+| `XRK_COMPUTER_USE` | CI bypass over Settings: `agent-desktop` · `1`/`uia` (Windows UIA) · `memory` · `background` · `off` — product path: Settings → Plugins → Computer use; `off` does not register the tool; see [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background helper path (also via Credentials; required when `mode=background`) |
 | `XRK_CURATED_MEMORY` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Curated memory; see [curated-memory.md](./curated-memory.md) |
 | `XRK_CURATED_MEMORY_PHASE2` | CI bypass: `1` / `true` force Phase2 LLM consolidation (product path: Settings `curated-memory.phase2Llm`) |
@@ -593,9 +597,9 @@ Settings → Plugins mutates these runtime namespaces:
 | `workspace-inject` | `injectMaxChars` | Rules/skills inject budget after the next agent rebuild (default **32_000**) |
 | `session-telemetry` | `mode` · `endpoint` | **Host restart** mounts the sink (off / memory / OTLP); `XRK_TELEMETRY` may CI-bypass |
 | `sandbox` | `backend` · `dockerImage` · `dockerNetwork` · `windowsMode` | **Live** on next agent rebuild (confine Provider); helper / bins stay env-only; `XRK_SANDBOX_BACKEND` may CI-bypass |
-| `computer-use` | `mode` (off / uia / background) | **Live** on next agent rebuild; helper path via Credentials `XRK_COMPUTER_USE_BACKGROUND`; `XRK_COMPUTER_USE` may CI-bypass |
+| `computer-use` | `mode` (default **agent-desktop** / off / uia / background) | **Live** on next agent rebuild; off unregisters the tool; header switch saves immediately; helper path via Credentials `XRK_COMPUTER_USE_BACKGROUND`; `XRK_COMPUTER_USE` may CI-bypass |
 | `cron` | `enabled` | **Live** Host ticker start/stop + agent rebuild (mount/unmount `cronjob`); `XRK_CRON` may CI-bypass |
-| `browser` | `mode` (http / cdp) · `cdpUrl` | **Live** on next agent rebuild (HTTP snapshot or CDP); `XRK_BROWSER_CDP_URL` may CI-bypass |
+| `browser` | `mode` (**agent-browser** / http / cdp) · `headed` (default on) · `restore` (default on) · `profile` · `proxy` · `autoConnect` · `statePath` · `executablePath` · `cdpUrl` | **Live** on next agent rebuild; `XRK_BROWSER_CDP_URL` may force CDP; `XRK_AGENT_BROWSER` overrides the CLI |
 | `voice` | `mode` (off / openai) · `baseUrl` | **Live** on next agent rebuild; key via Credentials `XRK_VOICE_OPENAI_KEY`; `XRK_VOICE` may CI-bypass |
 | `image-gen` | `mode` (off / openai / fal / xai) · `baseUrl` · `model` | **Live** on next agent rebuild; keys via Credentials (`XRK_IMAGE_GEN_OPENAI_KEY` / `XRK_IMAGE_GEN_FAL_KEY` / `XRK_IMAGE_GEN_XAI_KEY`); `XRK_IMAGE_GEN` may CI-bypass |
 | `video-gen` | `mode` (off / openai / fal / xai) · `baseUrl` · `model` | **Live** on next agent rebuild; keys via Credentials (`XRK_VIDEO_GEN_OPENAI_KEY` / `XRK_VIDEO_GEN_FAL_KEY` / `XRK_VIDEO_GEN_XAI_KEY`); `XRK_VIDEO_GEN` may CI-bypass |
