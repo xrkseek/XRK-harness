@@ -1,18 +1,19 @@
-/** Xiangyang skill body: Settings / MCP / models / credentials. */
+/** Xiangyang skill body: Settings / MCP / models / credentials / browser. */
 export const ID = "xrk-home-config";
 
 export const BODY = `---
 name: xrk-home-config
 description: >-
-  Configure Host settings, MCP, models, theme, permissions, agent-loop via
-  settings tools and Credentials (same path as Settings UI). Use when the user
-  asks to install MCP, add models, fix API keys, change Settings, or
-  「改权限」「子代理并发」. Not for 干员/Team roster (→ xrk-delegate).
+  Configure Host settings, MCP, models, theme, permissions, browser, computer
+  use via settings tools and Credentials (same path as Settings UI). Use when
+  the user asks to install MCP, add models, fix API keys, change Settings,
+  「改权限」「装浏览器」「开桌面操控」「子代理并发」. Not for 干员/Team roster
+  (→ xrk-delegate).
 ---
 
 # 家目录配置
 
-Truth: \`~/.xrk\`. **Same write path as Settings UI** — AI configures what humans click. Do not hand-edit yaml unless asked.
+Truth: \`~/.xrk\`. **Same write path as Settings UI** — you configure what humans click. Do not hand-edit yaml unless asked.
 
 | Tool | Use |
 |------|-----|
@@ -25,10 +26,32 @@ Secrets → **Credentials** only. Never into chat / skill / plugin / MCP args pl
 
 | Here | Elsewhere |
 |------|-----------|
-| MCP · models · theme · Permissions · Agent loop · Web/Voice cards | Deep MCP edge cases → global \`xrk-capability-attach\` |
+| MCP · models · theme · Permissions · Agent loop · Browser · Computer use · Web/Voice | Deep MCP edge cases → global \`xrk-capability-attach\` |
 | | Model picker quirks → global \`xrk-models-settings\` |
-| | **干员 / Team / 高级 pack** → \`team_*\` + \`xrk-delegate\` (not a settings ns) |
+| | **干员 / Team / 高级 pack** → \`team_*\` + \`xrk-delegate\` |
 | | Process plugin authoring → \`xrk-plugin-dev-care\` |
+
+## Browser（网页）
+
+让助手打开网页、点元素、截图。默认用本机已装的 Chrome，一般不用下载。
+
+1. \`settings_get\` → \`browser\`
+2. 推荐：\`mode=agent-browser\`，\`browserBinary=auto\`（Chrome → 已缓存 Chromium → Edge）
+3. 找不到浏览器时：在本机跑一次 \`agent-browser install\`（可走系统代理），或把 \`executablePath\` 指到 chrome.exe / msedge.exe
+4. 显示窗口：\`headed=true\`（默认）；后台跑：\`headed=false\`
+5. 高级：CDP 模式填调试地址（如 \`http://127.0.0.1:9222\`）；记住 Cookie 只覆盖自动化会话
+
+用户问「能不能上网 / 打开网页 / 装个浏览器」→ 先查 \`browser\` 卡，再按需 install，不要叫用户去改 yaml。
+
+## Computer use（桌面）
+
+让助手查看并操作本机桌面应用（窗口、点击、输入）。
+
+1. \`settings_get\` → \`computer-use\`
+2. 推荐：\`mode=agent-desktop\`（开）；关：\`mode=off\`
+3. Windows 备选：\`uia\` / \`background\`（Background 的助手路径写在 Credentials）
+
+与浏览器卡并列：网页走 browser，桌面应用走 computer-use。用户说「帮我点桌面上的…」→ 开 computer-use，不要只开浏览器。
 
 ## MCP
 
@@ -53,12 +76,14 @@ UI paste: Settings → Plugins → MCP (\`{ "mcpServers": { … } }\` ok).
 - Permissions: Settings → Permissions — name impact first, then mutate.
 - Agent loop (depth / live children / model session cap): Settings → Plugins → Agent loop · \`ns=agent-loop\`.
 - Web / Voice / media: Plugins cards; keys → Credentials.
+- 表情球 / 层级叫法：Settings → Plugins → 表情球（\`ui-presence\`）；改称呼后概况应只显示当前称呼，不要叠旧词。
 
 ## Checklist
 
 - [ ] \`settings_get\` the ns
 - [ ] mutate only needed fields
 - [ ] keys in Credentials
+- [ ] browser: Auto works or install once; computer-use on if desktop clicks needed
 - [ ] verify: MCP names / model chip / theme / Team still via \`team_list\` if relevant
 
 ## Anti
@@ -68,4 +93,5 @@ UI paste: Settings → Plugins → MCP (\`{ "mcpServers": { … } }\` ok).
 - Restart loops for MCP.
 - Patch workspace app config instead of Host Settings.
 - Use \`settings_mutate\` to "create 干员" — that is Team / \`team_import\`.
+- Tell users browser and desktop control are "defensively separated" — just configure the card they need.
 `;

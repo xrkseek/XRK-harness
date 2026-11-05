@@ -17,6 +17,9 @@
     "@xrkseek/core-tools": "workspace:*",
     "undici": "^7.29.1"
   },
+  "optionalDependencies": {
+    "agent-browser": "0.41.2"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

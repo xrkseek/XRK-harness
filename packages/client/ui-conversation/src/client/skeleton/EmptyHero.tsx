@@ -53,6 +53,10 @@ export function WorkspaceChip({ buttonRef, label, menuOpen = false, onClick, t }
       aria-label={t('hero.chooseWorkspace')}
       aria-haspopup="menu"
       aria-expanded={menuOpen}
+      // Same race as InputBar's workspace card: Menu listens on document
+      // pointerdown. Stop here so outside-close cannot beat the toggle click
+      // even when an older Menu build ignores outsideIgnoreRef.
+      onPointerDown={(e) => { e.stopPropagation() }}
       onClick={onClick}
     >
       {label === undefined

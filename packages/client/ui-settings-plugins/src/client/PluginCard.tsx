@@ -117,7 +117,11 @@ export function PluginCard(props: PluginCardProps) {
               aria-label={master.label ?? title}
               disabled={switchDisabled}
               onCheckedChange={(next) => {
+                // Header switch is visible while the card is collapsed; Save is
+                // not. Staging alone would leave the Host off until the user
+                // expands and hits Save — apply the master field immediately.
                 master.onChange(next)
+                props.onSave?.()
                 if (next) setOpen(true)
               }}
             />

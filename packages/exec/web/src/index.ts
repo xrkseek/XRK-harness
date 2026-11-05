@@ -114,11 +114,15 @@ export {
   type BrowserActRequest,
   type BrowserActResult,
   type BrowserActAction,
+  type BrowserCookiesRequest,
   type BrowserSession,
   type BrowserSnapshotResult,
+  type BrowserTabsRequest,
+  type BrowserWaitRequest,
 } from "./browser-session.js";
 export {
   browserCdpUrlFromEnv,
+  browserProductConfigKey,
   connectCdpWebSocket,
   createBrowserSession,
   createCdpBrowserSession,
@@ -128,6 +132,14 @@ export {
   type BrowserProductMode,
   type CdpCaller,
 } from "./browser-cdp.js";
+export type { BrowserRuntimeGetOptions } from "./browser-runtime-registry.js";
+export {
+  createAgentBrowserSession,
+  resolveBundledChromeExecutable,
+  sanitizeAgentBrowserSessionName,
+  type AgentBrowserSessionOptions,
+} from "./agent-browser-session.js";
+export { resolveAgentBrowserBin } from "./resolve-agent-browser.js";
 export {
   BROWSER_ERROR,
   createBrowserTools,

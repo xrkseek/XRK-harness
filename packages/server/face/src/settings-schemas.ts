@@ -331,18 +331,85 @@ const SandboxConfig = Schema.object({
 /**
  * Desktop computer-use (Plugins card). Env `XRK_COMPUTER_USE` remains CI bypass.
  * Background helper path uses Credentials `XRK_COMPUTER_USE_BACKGROUND`.
+ * `agent-desktop` shells Vercel Labs agent-desktop (bundled in Desktop Host).
+ * `off` unregisters the tool on the next agent rebuild (hot unload).
  */
 const ComputerUseConfig = Schema.object({
-  mode: Schema.union(["off", "uia", "background"]).default("off"),
+  // Desktop ships agent-desktop; default on so computer_use is ready out of
+  // the box. Turn off from the Plugins card (header switch applies live) when
+  // a headless Host should not expose desktop control. Env `XRK_COMPUTER_USE`
+  // remains the CI bypass.
+  mode: Schema.union([
+    "off",
+    "agent-desktop",
+    "uia",
+    "background",
+  ]).default("agent-desktop"),
 });
 
 /**
- * Page-level browser_* (Plugins card): HTTP snapshot or Chrome DevTools.
- * Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` remains CI bypass.
+ * Page-level browser_* (Plugins card): HTTP snapshot, Chrome DevTools, or
+ * Vercel Labs `agent-browser` CLI (bundled in Desktop Host).
+ * Non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` remains CI bypass for CDP.
  */
 const BrowserConfig = Schema.object({
-  mode: Schema.union(["http", "cdp"]).default("http"),
+  mode: Schema.union(["agent-browser", "http", "cdp"]).default(
+    "agent-browser",
+  ),
   cdpUrl: Schema.string().default(""),
+  /**
+   * Show Chromium window when mode is agent-browser (AGENT_BROWSER_HEADED).
+   * Default on: watching the page is the usable Desktop path; CI / headless
+   * Hosts flip this off (or use HTTP snapshot mode).
+   */
+  headed: Schema.boolean().default(true),
+  /**
+   * Which browser to launch when `executablePath` is empty.
+   * `auto` (default): system Edge/Chrome first — no download / proxy.
+   * `edge` / `chrome`: prefer that family. `bundled`: only `agent-browser install` cache.
+   */
+  browserBinary: Schema.union(["auto", "edge", "chrome", "bundled"]).default(
+    "auto",
+  ),
+  /**
+   * Optional absolute path to a Chromium browser (overrides `browserBinary`).
+   * Empty → resolve from `browserBinary` (system Edge/Chrome, or install cache).
+   */
+  executablePath: Schema.string().default(""),
+  /**
+   * Extra Chromium launch flags for agent-browser (`--args` / `AGENT_BROWSER_ARGS`).
+   * Comma or newline separated. Empty → Host applies a platform default
+   * (Windows: `--no-sandbox` so elevated Hosts do not die on DevToolsActivePort).
+   */
+  chromeArgs: Schema.string().default(""),
+  /**
+   * Chrome profile name (`Default`, `Profile 1`) or a custom profile directory.
+   * Reuses that profile's cookies / login when agent-browser launches Chromium
+   * (`--profile` / `AGENT_BROWSER_PROFILE`). Empty = fresh profile per session.
+   * Close Chrome first when pointing at a live system profile.
+   */
+  profile: Schema.string().default(""),
+  /**
+   * HTTP(S) proxy for agent-browser launches, e.g. `http://127.0.0.1:7897`.
+   * Empty = direct (`--proxy` / `AGENT_BROWSER_PROXY`).
+   */
+  proxy: Schema.string().default(""),
+  /**
+   * Auto-save / restore cookies + localStorage keyed by the Host session
+   * (`--restore`). Keeps login across agent rebuilds without a system profile.
+   */
+  restore: Schema.boolean().default(true),
+  /**
+   * Attach to an already-running Chrome (with remote debugging) to reuse its
+   * live tabs and auth (`--auto-connect`). Off by default — surprising when
+   * Chrome is not listening.
+   */
+  autoConnect: Schema.boolean().default(false),
+  /**
+   * Load a saved auth state JSON before first navigation (`--state` /
+   * `AGENT_BROWSER_STATE`). Empty = none. Pair with `agent-browser state save`.
+   */
+  statePath: Schema.string().default(""),
 });
 
 /**
@@ -386,6 +453,35 @@ const AsrConfig = Schema.object({
  * the offline fallback; `engine: openai` posts to an OpenAI-compatible
  * `/audio/speech` endpoint.
  */
+/** Edge Chinese default — keep Settings + engine fallback on the same short name. */
+export const TTS_DEFAULT_VOICE_ZH = "zh-CN-XiaoxiaoNeural";
+/** Edge English default (Settings `voiceEn`). */
+export const TTS_DEFAULT_VOICE_EN = "en-US-AriaNeural";
+
+/**
+ * Fill blank Edge voice rows so an older settings.yaml with `voice: ""` still
+ * paints 晓晓 / Aria in Settings instead of「引擎默认」. Never clears a pick.
+ */
+export function normalizeTtsViewValue(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  const engine =
+    typeof value.engine === "string" && value.engine.trim() !== ""
+      ? value.engine.trim()
+      : "edge";
+  if (engine !== "edge") return value;
+  const voice =
+    typeof value.voice === "string" ? value.voice.trim() : "";
+  const voiceEn =
+    typeof value.voiceEn === "string" ? value.voiceEn.trim() : "";
+  if (voice !== "" && voiceEn !== "") return value;
+  return {
+    ...value,
+    ...(voice === "" ? { voice: TTS_DEFAULT_VOICE_ZH } : {}),
+    ...(voiceEn === "" ? { voiceEn: TTS_DEFAULT_VOICE_EN } : {}),
+  };
+}
+
 const TtsConfig = Schema.object({
   enabled: Schema.boolean().default(false),
   // `edge` is the default: free Microsoft neural voices over WebSocket, no
@@ -396,19 +492,27 @@ const TtsConfig = Schema.object({
   /**
    * Chinese (or default) voice id: an Edge short name, an OS voice name, or a
    * provider voice id. `text_to_speech` uses this row for `zh` clips.
+   * Defaults to Edge 晓晓 so Settings never lands on a blank「引擎默认」while
+   * English already ships Aria — `local` / `openai` users re-pick.
    */
-  voice: Schema.string().default(""),
+  voice: Schema.string().default(TTS_DEFAULT_VOICE_ZH),
   /**
    * English voice id, used for `en` clips and for `auto` calls whose text
    * reads as English. Defaults to an Edge English voice so an out-of-the-box
    * Host never reads English with a Chinese mouth; `local` users point it at
    * an installed English voice instead.
    */
-  voiceEn: Schema.string().default("en-US-AriaNeural"),
+  voiceEn: Schema.string().default(TTS_DEFAULT_VOICE_EN),
   /** Spoken language for `text_to_speech`: `auto` sniffs the text. */
   language: Schema.union(["auto", "zh", "en"]).default("auto"),
   /** OpenAI-compatible TTS model; ignored by edge / local. */
   model: Schema.string().default(""),
+  /**
+   * Optional HTTP(S) CONNECT proxy for Edge WebSocket / OpenAI `/audio/speech`
+   * (e.g. `http://127.0.0.1:7897`). Empty = direct. Same honesty rule as ASR
+   * `downloadProxy`: must stay declared so Schema.object does not strip it.
+   */
+  proxy: Schema.string().default(""),
 });
 
 /**
@@ -474,8 +578,13 @@ const CuratedMemoryConfig = Schema.object({
    * the cap they were built with.
    */
   memoryLimit: Schema.number().step(100).min(200).max(20000).default(2200),
-  /** Per-zone char cap for USER.md (who-the-user-is profile). */
-  userLimit: Schema.number().step(100).min(200).max(20000).default(1375),
+  /**
+   * Per-zone char cap for USER.md (who-the-user-is profile).
+   * Step is 25 (not 100): the shipped default 1375 must remain schema-valid —
+   * a step-100 default would make schemastery reject the section and the
+   * Plugins card would stay `available: false` forever.
+   */
+  userLimit: Schema.number().step(25).min(200).max(20000).default(1375),
 });
 
 /**
@@ -782,14 +891,26 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "computer-use",
       schema: schemasteryJson(ComputerUseConfig) as FaceSchemaEnvelope,
-      base: { mode: "off" },
+      base: { mode: "agent-desktop" },
       // Provider rebuilds with tools on agent invalidate.
       applies: "live",
     },
     {
       ns: "browser",
       schema: schemasteryJson(BrowserConfig) as FaceSchemaEnvelope,
-      base: { mode: "http", cdpUrl: "" },
+      base: {
+        mode: "agent-browser",
+        cdpUrl: "",
+        headed: true,
+        browserBinary: "auto",
+        executablePath: "",
+        chromeArgs: "",
+        profile: "",
+        proxy: "",
+        restore: true,
+        autoConnect: false,
+        statePath: "",
+      },
       // createBrowserSession rebuilds on agent invalidate.
       applies: "live",
     },
@@ -813,10 +934,11 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         enabled: false,
         engine: "edge",
         baseUrl: "",
-        voice: "",
-        voiceEn: "en-US-AriaNeural",
+        voice: TTS_DEFAULT_VOICE_ZH,
+        voiceEn: TTS_DEFAULT_VOICE_EN,
         language: "auto",
         model: "",
+        proxy: "",
       },
       applies: "live",
     },
@@ -841,7 +963,14 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "curated-memory",
       schema: schemasteryJson(CuratedMemoryConfig) as FaceSchemaEnvelope,
-      base: { enabled: true, phase2Llm: false },
+      // Keep base in sync with Schema defaults — incomplete base + step-invalid
+      // defaults made the client schema-decode fail and hid the Plugins card.
+      base: {
+        enabled: true,
+        phase2Llm: false,
+        memoryLimit: 2200,
+        userLimit: 1375,
+      },
       // enabled: next idle agent rebuild adds/drops the tool + frozen block.
       // phase2Llm: read at session end; saving this ns still invalidates idle agents.
       applies: "live",

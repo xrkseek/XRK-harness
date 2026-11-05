@@ -240,11 +240,11 @@ describe('ui-settings-plugins apply', () => {
 
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
       .toEqual([
-        'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
-        'session-telemetry', 'sandbox', 'computer-use', 'browser', 'asr', 'tts',
+        'mcp', 'web-search', 'browser', 'computer-use', 'bash', 'sandbox',
+        'agent-loop', 'workspace-inject', 'asr', 'tts',
         'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
-        'a2a-inbound', 'external-agent', 'cron',
-        'auto-review', 'memory-embed', 'host', 'process-channels',
+        'session-telemetry', 'a2a-inbound', 'external-agent', 'cron',
+        'auto-review', 'memory-embed', 'process-channels', 'host',
       ])
   })
 

@@ -467,36 +467,39 @@ export function apply(ctx: ClientContext): void {
   // tab — auto-review / memory-embed / host / process-channels sit in this list.
   const pluginCard = <C,>(
     key: string,
+    order: number,
     face: () => object,
     component: C,
   ): void => {
     ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
       name: 'settings.plugin.item',
       key,
+      order,
       locale: NS,
       inject: face,
     }, component as never))
   }
-  pluginCard(MCP_NS, () => mcp.inject(), McpCard)
-  pluginCard(WEB_SEARCH_NS, () => webSearch.inject(), WebSearchCard)
-  pluginCard(SHELL_NS, () => bash.inject(), BashCard)
-  pluginCard(AGENT_LOOP_NS, () => agentLoop.inject(), AgentLoopCard)
-  pluginCard(WORKSPACE_INJECT_NS, () => workspaceInject.inject(), WorkspaceInjectCard)
-  pluginCard(SESSION_TELEMETRY_NS, () => telemetry.inject(), TelemetryCard)
-  pluginCard(SANDBOX_NS, () => sandbox.inject(), SandboxCard)
-  pluginCard(COMPUTER_USE_NS, () => computerUse.inject(), ComputerUseCard)
-  pluginCard(BROWSER_NS, () => browser.inject(), BrowserCard)
-  pluginCard(ASR_NS, () => asr.inject(), AsrCard)
-  pluginCard(TTS_NS, () => tts.inject(), TtsCard)
-  pluginCard(IMAGE_GEN_NS, () => imageGen.inject(), ImageGenCard)
-  pluginCard(VIDEO_GEN_NS, () => videoGen.inject(), VideoGenCard)
-  pluginCard(VIDEO_ANALYZE_NS, () => videoAnalyze.inject(), VideoAnalyzeCard)
-  pluginCard(CURATED_MEMORY_NS, () => curatedMemory.inject(), CuratedMemoryCard)
-  pluginCard(A2A_INBOUND_NS, () => a2aInbound.inject(), A2aInboundCard)
-  pluginCard(EXTERNAL_AGENT_NS, () => externalAgent.inject(), ExternalAgentCard)
-  pluginCard(CRON_NS, () => cron.inject(), CronCard)
-  pluginCard(AUTO_REVIEW_NS, () => autoReview.inject(), AutoReviewCard)
-  pluginCard(MEMORY_EMBED_NS, () => memoryEmbed.inject(), MemoryEmbedCard)
-  pluginCard(HOST_NS, () => hostInfo.inject(), HostInfoCard)
-  pluginCard(PROCESS_CHANNELS_NS, () => processChannels.inject(), ProcessChannelsCard)
+  // Stable Plugins order (ui-presence registers at 10 from ui-plan).
+  pluginCard(MCP_NS, 20, () => mcp.inject(), McpCard)
+  pluginCard(WEB_SEARCH_NS, 30, () => webSearch.inject(), WebSearchCard)
+  pluginCard(BROWSER_NS, 40, () => browser.inject(), BrowserCard)
+  pluginCard(COMPUTER_USE_NS, 50, () => computerUse.inject(), ComputerUseCard)
+  pluginCard(SHELL_NS, 60, () => bash.inject(), BashCard)
+  pluginCard(SANDBOX_NS, 70, () => sandbox.inject(), SandboxCard)
+  pluginCard(AGENT_LOOP_NS, 80, () => agentLoop.inject(), AgentLoopCard)
+  pluginCard(WORKSPACE_INJECT_NS, 90, () => workspaceInject.inject(), WorkspaceInjectCard)
+  pluginCard(ASR_NS, 100, () => asr.inject(), AsrCard)
+  pluginCard(TTS_NS, 110, () => tts.inject(), TtsCard)
+  pluginCard(IMAGE_GEN_NS, 120, () => imageGen.inject(), ImageGenCard)
+  pluginCard(VIDEO_GEN_NS, 130, () => videoGen.inject(), VideoGenCard)
+  pluginCard(VIDEO_ANALYZE_NS, 140, () => videoAnalyze.inject(), VideoAnalyzeCard)
+  pluginCard(CURATED_MEMORY_NS, 150, () => curatedMemory.inject(), CuratedMemoryCard)
+  pluginCard(SESSION_TELEMETRY_NS, 160, () => telemetry.inject(), TelemetryCard)
+  pluginCard(A2A_INBOUND_NS, 170, () => a2aInbound.inject(), A2aInboundCard)
+  pluginCard(EXTERNAL_AGENT_NS, 180, () => externalAgent.inject(), ExternalAgentCard)
+  pluginCard(CRON_NS, 190, () => cron.inject(), CronCard)
+  pluginCard(AUTO_REVIEW_NS, 200, () => autoReview.inject(), AutoReviewCard)
+  pluginCard(MEMORY_EMBED_NS, 210, () => memoryEmbed.inject(), MemoryEmbedCard)
+  pluginCard(PROCESS_CHANNELS_NS, 220, () => processChannels.inject(), ProcessChannelsCard)
+  pluginCard(HOST_NS, 230, () => hostInfo.inject(), HostInfoCard)
 }

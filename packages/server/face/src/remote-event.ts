@@ -14,6 +14,8 @@ export const FACE_HOST_REMOTE_EVENTS = [
   "llm/adapters-updated",
   "plugin-inventory/install-log",
   "settings/document-updated",
+  // ui-presence titleScheme / title* — Host remounts Agents for agentLabel.
+  "settings/seat-titles-updated",
 ] as const;
 
 export type FaceHostRemoteEvent = (typeof FACE_HOST_REMOTE_EVENTS)[number];

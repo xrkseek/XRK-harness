@@ -111,6 +111,11 @@ export function statusSnapshotRevision(
     typeof presenceUser.statusLine === "string" ? presenceUser.statusLine : "",
     typeof presenceUser.moodAt === "number" ? String(presenceUser.moodAt) : "0",
     typeof presenceUser.bossNickname === "string" ? presenceUser.bossNickname : "",
+    // Three-tier seat titles — Overview / session.status must hot-switch.
+    typeof presenceUser.titleScheme === "string" ? presenceUser.titleScheme : "",
+    typeof presenceUser.titleBoss === "string" ? presenceUser.titleBoss : "",
+    typeof presenceUser.titleManager === "string" ? presenceUser.titleManager : "",
+    typeof presenceUser.titleAgent === "string" ? presenceUser.titleAgent : "",
     typeof presenceUser.shape === "string" ? presenceUser.shape : "",
     typeof presenceUser.color === "string" ? presenceUser.color : "",
     typeof presenceUser.kit === "string" ? presenceUser.kit : "",

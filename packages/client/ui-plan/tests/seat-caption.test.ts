@@ -4,6 +4,7 @@ import {
   delegateSeatCaption,
   memberDisplayLabel,
   parentDelegateSeatCaption,
+  retitleSeatLabel,
   withLiveNickname,
 } from '../src/client/seat-caption.ts'
 
@@ -26,6 +27,15 @@ describe('delegateSeatCaption', () => {
   it('keeps an already composed Face label', () => {
     expect(delegateSeatCaption('经理', '经理 · 老王')).toBe('经理 · 老王')
     expect(delegateSeatCaption('经理', '经理（老王）')).toBe('经理（老王）')
+  })
+
+  it('retitles a stale seat word instead of stacking', () => {
+    expect(
+      retitleSeatLabel('经理', '主管（徐航）', ['老板', '经理', '主管', '干员']),
+    ).toBe('经理（徐航）')
+    expect(
+      delegateSeatCaption('经理', '主管 · 向日葵（xrkseek）', ['经理', '主管']),
+    ).toBe('经理 · 向日葵（xrkseek）')
   })
 })
 
@@ -78,7 +88,7 @@ describe('parentDelegateSeatCaption', () => {
 })
 
 describe('childDelegateSeatCaption', () => {
-  const titles = { manager: '经理', agent: '干员' }
+  const titles = { boss: '老板', manager: '经理', agent: '干员' }
 
   it('shows 干员 · formal（nick）', () => {
     expect(childDelegateSeatCaption(titles, 'agent', '创业作业（成经吴）')).toBe(
@@ -95,6 +105,24 @@ describe('childDelegateSeatCaption', () => {
     )
   })
 
+  it('does not stack when Settings title renamed but Face still has old word', () => {
+    // corp「主管」→ office「经理」: Face may still send 主管（徐航）
+    expect(
+      childDelegateSeatCaption(
+        { boss: '老板', manager: '经理', agent: '干员' },
+        'manager',
+        '主管（徐航）',
+      ),
+    ).toBe('经理（徐航）')
+    expect(
+      childDelegateSeatCaption(
+        { boss: '老板', manager: '经理', agent: '干员' },
+        'manager',
+        '经理（徐航）',
+      ),
+    ).toBe('经理（徐航）')
+  })
+
   it('paints sunflower as 经理席对位', () => {
     expect(childDelegateSeatCaption(titles, 'sunflower', '向日葵（xrkseek）')).toBe(
       '经理 · 向日葵（xrkseek）',
@@ -102,6 +130,25 @@ describe('childDelegateSeatCaption', () => {
     expect(childDelegateSeatCaption(titles, 'manager', '向日葵（xrkseek）')).toBe(
       '经理 · 向日葵（xrkseek）',
     )
+    // Missing Face label → manager title only (no hardcoded 向日葵).
+    expect(childDelegateSeatCaption(titles, 'sunflower', undefined)).toBe('经理')
+  })
+
+  it('hot-switches Overview caption when scheme words change', () => {
+    expect(
+      childDelegateSeatCaption(
+        { boss: '会长', manager: '干部', agent: '成员' },
+        'manager',
+        '主管（徐航）',
+      ),
+    ).toBe('干部（徐航）')
+    expect(
+      childDelegateSeatCaption(
+        { boss: '会长', manager: '干部', agent: '成员' },
+        'agent',
+        '干员 · 创业作业（成经吴）',
+      ),
+    ).toBe('成员 · 创业作业（成经吴）')
   })
 
   it('defaults missing childSeat to 干员 (identity, not 经理)', () => {

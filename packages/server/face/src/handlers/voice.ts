@@ -211,7 +211,7 @@ export const voicePrepareCancel: FaceHandler = async () => ({
  * the card falls back to a free-text voice field. Failing the whole RPC would
  * hide the engine switch over a cosmetic list.
  */
-export const voiceVoices: FaceHandler = async (_runtime, _rpcId, payload) => {
+export const voiceVoices: FaceHandler = async (runtime, _rpcId, payload) => {
   const args = remoteArgs(payload);
   const flat = asRecord(payload);
   const engine = trimmed(args.engine ?? flat.engine).toLowerCase();
@@ -219,8 +219,15 @@ export const voiceVoices: FaceHandler = async (_runtime, _rpcId, payload) => {
     // The Edge catalog is the whole point of the engine: ~300 neural voices
     // across every locale. Best-effort like the OS list — a Host offline
     // answers [] and the card falls back to the stored free-text voice.
+    // Honour Settings → TTS → proxy so a phone-hotspot / filtered LAN Host
+    // can load the catalog after the operator points at Clash / mihomo.
+    const ttsNs = runtime.settingsNamespaces.view("tts").value as Record<
+      string,
+      unknown
+    >;
+    const proxy = trimmed(ttsNs.proxy);
     try {
-      const voices = await listEdgeVoices();
+      const voices = await listEdgeVoices(proxy ? { proxy } : {});
       return {
         ok: true,
         value: {

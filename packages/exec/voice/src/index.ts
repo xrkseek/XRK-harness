@@ -57,6 +57,10 @@ export {
   type EdgeVoiceProviderOptions,
 } from "./edge-tts.js";
 export {
+  createProxiedFetch,
+  resolveVoiceFetch,
+} from "./proxy-fetch.js";
+export {
   createMemoryVoiceProvider,
   minimalWavBytes,
   type MemoryVoiceOptions,

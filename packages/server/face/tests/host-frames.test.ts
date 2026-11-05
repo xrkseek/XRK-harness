@@ -311,6 +311,44 @@ describe("host/remote-event", () => {
     expect(host).toEqual([]);
   });
 
+  it("ui-presence title change publishes seat-titles-updated; mood alone does not", async () => {
+    const rt = await runtime();
+    await dispatchFaceMethod(rt, "settings.describe", "d-title", {});
+    const host = collectHost(rt);
+
+    const mood = await dispatchFaceMethod(rt, "settings.mutate", "m-mood", {
+      ns: "ui-presence",
+      ops: [{ op: "set", path: ["moodId"], value: "10" }],
+    });
+    expect(mood.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "settings/document-updated",
+        args: ["ui-presence", 1],
+      },
+    ]);
+
+    host.length = 0;
+    const titles = await dispatchFaceMethod(rt, "settings.mutate", "m-titles", {
+      ns: "ui-presence",
+      ops: [{ op: "set", path: ["titleScheme"], value: "guild" }],
+    });
+    expect(titles.result.ok).toBe(true);
+    expect(host).toEqual([
+      {
+        type: "host/remote-event",
+        event: "settings/document-updated",
+        args: ["ui-presence", 2],
+      },
+      {
+        type: "host/remote-event",
+        event: "settings/seat-titles-updated",
+        args: [],
+      },
+    ]);
+  });
+
   it("forwards agent-preset/selected on select", async () => {
     const rt = await runtime();
     // Attach to the launch coding workspace — 向阳空间 locks 奇创.

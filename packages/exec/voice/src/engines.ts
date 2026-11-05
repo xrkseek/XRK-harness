@@ -8,6 +8,7 @@
 import { createEdgeVoiceProvider, EDGE_DEFAULT_VOICE } from "./edge-tts.js";
 import { createMemoryVoiceProvider } from "./memory.js";
 import { createOpenAiVoiceProvider } from "./openai-http.js";
+import { resolveVoiceFetch } from "./proxy-fetch.js";
 import { createSenseVoiceLocalProvider } from "./sensevoice-local.js";
 import { createSystemVoiceProvider } from "./system-tts.js";
 import { resolveEngineId } from "./engine-ids.js";
@@ -25,6 +26,8 @@ export interface VoiceEngineContext {
   readonly voice?: string;
   /** Cloud-only TTS model id. */
   readonly model?: string;
+  /** HTTP CONNECT proxy for Edge / OpenAI network paths. */
+  readonly proxy?: string;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -58,12 +61,16 @@ function openAiEngine(direction: VoiceDirection): VoiceEngineSpec {
         ctx.baseUrl?.trim() || String(ctx.env.XRK_VOICE_BASE_URL ?? "").trim();
       const voice = ctx.voice?.trim();
       const model = ctx.model?.trim();
+      const fetchImpl = resolveVoiceFetch({
+        ...(ctx.proxy ? { proxy: ctx.proxy } : {}),
+        ...(ctx.fetchImpl ? { fetchImpl: ctx.fetchImpl } : {}),
+      });
       return createOpenAiVoiceProvider({
         apiKey,
         ...(baseUrl === "" ? {} : { baseUrl }),
         ...(voice === undefined || voice === "" ? {} : { defaultVoice: voice }),
         ...(model === undefined || model === "" ? {} : { ttsModel: model }),
-        ...(ctx.fetchImpl ? { fetchImpl: ctx.fetchImpl } : {}),
+        fetchImpl,
       });
     },
   };
@@ -96,11 +103,13 @@ const TTS_ENGINES: readonly VoiceEngineSpec[] = [
     needsKey: false,
     create: (ctx) => {
       const voice = ctx.voice?.trim();
+      const proxy = ctx.proxy?.trim();
       return createEdgeVoiceProvider({
         ...(voice === undefined || voice === "" || voice === EDGE_DEFAULT_VOICE
           ? {}
           : { defaultVoice: voice }),
         ...(ctx.fetchImpl ? { fetchImpl: ctx.fetchImpl } : {}),
+        ...(proxy ? { proxy } : {}),
       });
     },
   },
@@ -144,6 +153,8 @@ export interface VoiceAccessRequest {
   readonly baseUrl?: string;
   readonly voice?: string;
   readonly model?: string;
+  /** HTTP CONNECT proxy for Edge / OpenAI. */
+  readonly proxy?: string;
   readonly env?: NodeJS.ProcessEnv;
   /** Injected Provider (tests / composition) wins over any engine. */
   readonly service?: VoiceService;
@@ -192,6 +203,7 @@ export function createVoiceAccess(request: VoiceAccessRequest): VoiceAccess {
       ...(request.baseUrl ? { baseUrl: request.baseUrl } : {}),
       ...(request.voice ? { voice: request.voice } : {}),
       ...(request.model ? { model: request.model } : {}),
+      ...(request.proxy ? { proxy: request.proxy } : {}),
       ...(request.fetchImpl ? { fetchImpl: request.fetchImpl } : {}),
   });
   return {

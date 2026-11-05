@@ -1241,6 +1241,55 @@ describe('WorkspaceBrowser', () => {
     expect(listTeam).toHaveBeenCalledWith(sid('alpha-s'))
   })
 
+  it('team roster shows only the current workspace 干员 and toggles the picker closed', async () => {
+    const listTeam = vi.fn(async () => [
+      {
+        id: 'mem_here',
+        name: '本区干员',
+        playbook: 'here',
+        role: 'worker',
+        scope: 'workspace' as const,
+        workspaceId: wid('alpha'),
+        updatedAt: 1,
+      },
+      {
+        id: 'mem_elsewhere',
+        name: '他区干员',
+        playbook: 'there',
+        role: 'worker',
+        scope: 'workspace' as const,
+        workspaceId: wid('beta'),
+        updatedAt: 1,
+      },
+    ])
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([
+        workspace('alpha', ['alpha-s'], 'Alpha'),
+        workspace('beta', ['beta-s'], 'Beta'),
+      ])),
+      startSession: vi.fn(),
+      listTeam,
+      upsertTeamMember: vi.fn(async () => ({ id: 'mem_here' })),
+    })
+    fireEvent.click(screen.getByRole('button', { name: '干员团队' }))
+    await waitFor(() => {
+      expect(screen.getByText('本区干员')).toBeTruthy()
+    })
+    expect(screen.queryByText('他区干员')).toBeNull()
+    expect(screen.queryByText('当前')).toBeNull()
+    const pick = screen.getByRole('button', { name: '选择工作区' })
+    fireEvent.click(pick)
+    await waitFor(() => {
+      expect(screen.getByRole('menuitem', { name: /Beta/ })).toBeTruthy()
+    })
+    fireEvent.pointerDown(pick)
+    fireEvent.click(pick)
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: /Beta/ })).toBeNull()
+    })
+  })
+
   it('opens a global draft from the global 新建 ball', async () => {
     const listTeam = vi.fn(async () => [{
       id: 'mem_seed_worker',

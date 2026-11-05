@@ -1,4 +1,4 @@
-/** Desktop computer-use card (Face `computer-use`: off / UIA / background + helper). */
+/** Desktop computer-use card (Face `computer-use`: off / agent-desktop / UIA / background). */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@xrkseek/client-ui-slots'
 import { SecretField, SelectField } from './fields.tsx'
@@ -16,12 +16,14 @@ export type ComputerUseCardProps =
   & InjectFace<ComputerUseCardFace>
 
 function modeBadgeKey(mode: string): PluginsSettingsLocaleKey {
+  if (mode === 'agent-desktop') return 'computerUseModeAgentDesktop'
   if (mode === 'uia') return 'computerUseModeUia'
   if (mode === 'background') return 'computerUseModeBackground'
   return 'computerUseModeOff'
 }
 
 function modeDetailKey(mode: string): PluginsSettingsLocaleKey {
+  if (mode === 'agent-desktop') return 'computerUseDetailAgentDesktop'
   if (mode === 'uia') return 'computerUseDetailUia'
   if (mode === 'background') return 'computerUseDetailBackground'
   return 'computerUseDetailOff'
@@ -36,7 +38,7 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
   const { t } = props
   const state = props.useComputerUseCard(snapshot => snapshot)
   const disabled = !state.writable
-  const mode = state.mode.text || 'off'
+  const mode = state.mode.text || 'agent-desktop'
   const showHelper = mode === 'background'
   return (
     <PluginCard
@@ -45,7 +47,7 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
       descriptionKey="computerUseDescription"
       state={state}
       badge={mode === 'off' ? undefined : t(modeBadgeKey(mode))}
-      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'uia')}
+      masterSwitch={modeMasterSwitch(mode, (value) => { props.edit('mode', value) }, 'agent-desktop')}
       onSave={props.save}
       onDiscard={props.discard}
     >
@@ -57,10 +59,15 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
         value={mode}
         options={[
           { value: 'off', label: t('computerUseModeOff') },
+          { value: 'agent-desktop', label: t('computerUseModeAgentDesktop') },
           { value: 'uia', label: t('computerUseModeUia') },
           { value: 'background', label: t('computerUseModeBackground') },
         ]}
-        onChange={(value) => { props.edit('mode', value) }}
+        onChange={(value) => {
+          // Mode is the product switch — apply live like the header toggle.
+          props.edit('mode', value)
+          props.save()
+        }}
       />
       {showHelper
         ? (

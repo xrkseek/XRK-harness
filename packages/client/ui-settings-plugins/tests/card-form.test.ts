@@ -30,6 +30,13 @@ describe("booleanField draft codec", () => {
     expect(spec.format(undefined)).toBe("false");
   });
 
+  it("honours schema defaultWhenMissing for absent rows", () => {
+    const headed = booleanField("headed", true);
+    expect(headed.format(undefined)).toBe("true");
+    expect(headed.format(false)).toBe("false");
+    expect(headed.format(true)).toBe("true");
+  });
+
   it("parses both poles as explicit sets (never a silent clear)", () => {
     expect(spec.parse("true")).toEqual({ kind: "set", value: true });
     expect(spec.parse("false")).toEqual({ kind: "set", value: false });

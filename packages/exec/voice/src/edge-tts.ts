@@ -19,7 +19,10 @@
  * what makes a future protocol change cheap to follow.
  */
 import { randomUUID } from "node:crypto";
+import type http from "node:http";
 import WebSocket from "ws";
+import { resolveVoiceFetch } from "./proxy-fetch.js";
+import { createWsProxyAgent } from "./proxy-ws-agent.js";
 import {
   VoiceError,
   type VoiceLiveCreateRequest,
@@ -72,6 +75,11 @@ export interface EdgeTtsOptions {
   readonly fetchImpl?: typeof fetch;
   /** WebSocket implementation override (tests). */
   readonly webSocketImpl?: typeof WebSocket;
+  /**
+   * HTTP CONNECT proxy for catalog fetch + synthesis WebSocket
+   * (e.g. `http://127.0.0.1:7897`). Empty / omitted = direct.
+   */
+  readonly proxy?: string;
   /** Connection budget; synthesis inherits a larger one. */
   readonly connectTimeoutMs?: number;
   readonly synthesisTimeoutMs?: number;
@@ -230,6 +238,8 @@ interface EdgeSynthesisInput {
   readonly connectTimeoutMs: number;
   readonly synthesisTimeoutMs: number;
   readonly webSocketImpl: typeof WebSocket;
+  /** Optional CONNECT agent for `wss` through an operator proxy. */
+  readonly agent?: http.Agent;
 }
 
 /**
@@ -271,6 +281,7 @@ function synthesizeOverSocket(input: EdgeSynthesisInput): Promise<Uint8Array> {
 
     const socket = new input.webSocketImpl(urlFor(connectionId, input.gec), {
       headers: EDGE_HANDSHAKE_HEADERS,
+      ...(input.agent ? { agent: input.agent } : {}),
     });
 
     clocks.connect = setTimeout(() => {
@@ -411,9 +422,12 @@ async function currentGec(now: number = Date.now()): Promise<string> {
  * day on the Host, but this function stays a plain fetch so callers decide.
  */
 export async function listEdgeVoices(
-  options: Pick<EdgeTtsOptions, "fetchImpl"> = {},
+  options: Pick<EdgeTtsOptions, "fetchImpl" | "proxy"> = {},
 ): Promise<readonly EdgeVoice[]> {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = resolveVoiceFetch({
+    ...(options.proxy ? { proxy: options.proxy } : {}),
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
   const res = await fetchImpl(VOICES_URL);
   if (!res.ok) {
     throw new VoiceError(
@@ -458,6 +472,7 @@ export function createEdgeVoiceProvider(
   const defaultVoice = options.defaultVoice?.trim() || EDGE_DEFAULT_VOICE;
   const connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
   const synthesisTimeoutMs = options.synthesisTimeoutMs ?? 30_000;
+  const proxy = options.proxy?.trim() || "";
 
   return {
     async synthesize(req: VoiceSynthesizeRequest): Promise<VoiceSynthesizeResult> {
@@ -469,6 +484,7 @@ export function createEdgeVoiceProvider(
       // instead of returning WAV bytes under a WAV mime.
       const voice = req.voice?.trim() || defaultVoice;
       const gec = await currentGec(options.now?.() ?? Date.now());
+      const agent = proxy ? createWsProxyAgent(proxy) : undefined;
       const bytes = await synthesizeOverSocket({
         text,
         voice,
@@ -477,6 +493,7 @@ export function createEdgeVoiceProvider(
         connectTimeoutMs,
         synthesisTimeoutMs,
         webSocketImpl,
+        ...(agent ? { agent } : {}),
       });
       if (bytes.length === 0) {
         throw new VoiceError(

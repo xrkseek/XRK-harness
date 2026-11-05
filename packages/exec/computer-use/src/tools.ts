@@ -31,16 +31,19 @@ export function computerUseUnavailableMessage(
 ): string {
   const envFlag = String(env.XRK_COMPUTER_USE ?? "").trim();
   const productOn =
-    product?.mode === "uia" || product?.mode === "background";
-  if (process.platform === "win32" && envFlag === "" && !productOn) {
+    product?.mode === "uia" ||
+    product?.mode === "background" ||
+    product?.mode === "agent-desktop";
+  if (envFlag === "" && !productOn) {
     return (
-      "Error: computer_use is off. Enable Settings → Plugins → Computer use " +
-      "(or XRK_COMPUTER_USE=1) for Windows UIA."
+      "Error: computer_use is off (tool not mounted). Enable Settings → Plugins → Computer use " +
+      "(agent-desktop / UIA / Background) or set XRK_COMPUTER_USE."
     );
   }
   return (
     "Error: no computer_use Provider. Enable Settings → Plugins → Computer use " +
-    "or inject a ComputerUseService (Windows: XRK_COMPUTER_USE=1)."
+    "(agent-desktop recommended) or inject a ComputerUseService " +
+    "(Windows UIA: XRK_COMPUTER_USE=1)."
   );
 }
 
@@ -116,9 +119,10 @@ export function createComputerUseTools(
   }> = {
     name: "computer_use",
     description:
-      "Native desktop GUI (not browser_*). Loop: list_windows → capture → click/type/key/scroll by element index → capture to verify. " +
+      "Native desktop GUI (not browser_*). Default backend is agent-desktop (Settings can switch UIA / Background). " +
+      "Loop: list_windows → capture → click/type/key/scroll by element index → capture to verify. " +
       "capture mode=ax|vision|som (vision/som add an inline screenshot; attachmentId is not a path). " +
-      "A new capture invalidates earlier indices. Background delivery: helper act + UIA capture on Windows.",
+      "A new capture invalidates earlier indices.",
     parameters: {
       type: "object",
       properties: {

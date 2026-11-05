@@ -38,6 +38,8 @@ export interface TtsSettings {
   readonly language?: 'auto' | 'zh' | 'en' | string
   /** OpenAI-compatible model; ignored by the local engine. */
   readonly model?: string
+  /** HTTP CONNECT proxy for Edge catalog / synthesis and OpenAI speech. */
+  readonly proxy?: string
 }
 
 interface CredentialState {
@@ -62,6 +64,7 @@ export interface TtsCardState extends CardShell {
   readonly voiceEn: CardFieldState
   readonly language: CardFieldState
   readonly model: CardFieldState
+  readonly proxy: CardFieldState
   readonly apiKey: CardFieldState
   readonly apiKeyConfigured: boolean
   readonly apiKeyWritable: boolean
@@ -82,6 +85,11 @@ export interface TtsCardFace extends CardActions {
   }
   /** Re-read the engine's voice catalog (card open, engine switch, retry). */
   refreshVoices: (engine?: string) => void
+  /**
+   * Persist staged edits (esp. proxy) then re-fetch the Edge / OS catalog —
+   * used after the operator points at a local proxy on a filtered network.
+   */
+  saveAndRefreshVoices: () => void
 }
 
 const KEY_FIELD = 'apiKey'
@@ -126,6 +134,7 @@ export class TtsCardController {
         textField('voiceEn'),
         textField('language'),
         textField('model'),
+        textField('proxy'),
       ],
       [{ field: KEY_FIELD, write: (text) => this.writeKey(text) }],
     )
@@ -146,6 +155,7 @@ export class TtsCardController {
       voiceEn: this.form.field('voiceEn'),
       language: this.form.field('language'),
       model: this.form.field('model'),
+      proxy: this.form.field('proxy'),
       apiKey: this.form.field(KEY_FIELD),
       apiKeyConfigured: this.key.configured,
       apiKeyWritable: this.key.writable,
@@ -183,26 +193,55 @@ export class TtsCardController {
     void this.readCredential()
   }
 
-  /** Re-read the engine's voice catalog; a failed probe leaves an empty list. */
+  /**
+   * Re-read the engine's voice catalog. A failed / empty probe only clears the
+   * dropdown rows — never the staged `voice` / `voiceEn` Settings fields.
+   */
   refreshVoices(engine?: string): void {
     if (this.disposed) return
     const remote = this.remote
     if (remote === undefined) return
     const selected = (engine ?? this.form.field('engine').text.trim()) || 'edge'
+    this.setVoices({
+      readable: true,
+      loading: true,
+      // Keep the last good list while loading so a flaky retry does not flash
+      // the selects empty and look like the pick was wiped.
+      voices: this.voices.voices,
+    })
     void remote.voices({ engine: selected }).then(
       (result) => {
         if (this.disposed) return
+        const next = result.ok ? (result.value?.voices ?? []) : []
         this.setVoices({
           readable: true,
           loading: false,
-          voices: result.ok ? (result.value?.voices ?? []) : [],
+          // Empty / failed catalog: keep prior rows so a stored pick still
+          // resolves in the Select; Settings fields themselves are untouched.
+          voices: next.length > 0 ? next : this.voices.voices,
         })
       },
       () => {
         if (this.disposed) return
-        this.setVoices({ readable: true, loading: false, voices: [] })
+        this.setVoices({
+          readable: true,
+          loading: false,
+          voices: this.voices.voices,
+        })
       },
     )
+  }
+
+  /**
+   * Write staged Settings (proxy especially) then re-fetch voices so a Host
+   * that just gained a tunnel can load the Edge catalog without a restart.
+   */
+  saveAndRefreshVoices(): void {
+    if (this.disposed) return
+    void this.form.save().then(() => {
+      if (this.disposed) return
+      this.refreshVoices()
+    })
   }
 
   /** Stop any work this controller owns (none today; symmetry with ASR). */
@@ -215,6 +254,7 @@ export class TtsCardController {
       hooks: { ttsCard: this.store },
       ...this.form.actions(),
       refreshVoices: (engine?: string) => { this.refreshVoices(engine) },
+      saveAndRefreshVoices: () => { this.saveAndRefreshVoices() },
     }
   }
 

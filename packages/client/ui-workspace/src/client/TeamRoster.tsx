@@ -605,42 +605,18 @@ export function TeamRoster({
     row => row.scope !== 'workspace' && !seatIds.has(row.id),
   )
   const workspaceMembers = members.filter(row => row.scope === 'workspace')
-  const workspaceTitleById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const row of workspaces) {
-      if (row.kind === 'agent-home') continue
-      map.set(row.workspaceId, row.title)
-    }
-    return map
-  }, [workspaces])
-  /** Group workspace-scoped 干员 by owning project; current canvas first. */
-  const workspaceGroups = useMemo(() => {
-    const byId = new Map<string, AgentTeamMemberRow[]>()
-    for (const member of workspaceMembers) {
-      const wid = member.workspaceId
-        ?? (member.scope === 'workspace' ? currentWorkspace?.workspaceId : undefined)
-      if (!wid) continue
-      const bucket = byId.get(wid)
-      if (bucket) bucket.push(member)
-      else byId.set(wid, [member])
-    }
+  /**
+   * Only the active session's workspace-scoped 干员. Other projects stay out of
+   * the roster until the user picks that workspace (then this list swaps).
+   */
+  const currentWorkspaceMembers = useMemo(() => {
     const currentId = currentWorkspace?.workspaceId
-    if (currentId && !byId.has(currentId)) byId.set(currentId, [])
-    const ids = [...byId.keys()]
-    ids.sort((a, b) => {
-      if (a === currentId) return -1
-      if (b === currentId) return 1
-      const ta = workspaceTitleById.get(a) ?? a
-      const tb = workspaceTitleById.get(b) ?? b
-      return ta.localeCompare(tb, 'zh')
+    if (!currentId) return []
+    return workspaceMembers.filter((member) => {
+      const wid = member.workspaceId ?? currentId
+      return wid === currentId
     })
-    return ids.map((id) => ({
-      workspaceId: id,
-      title: workspaceTitleById.get(id) ?? id,
-      current: id === currentId,
-      members: byId.get(id) ?? [],
-    }))
-  }, [workspaceMembers, currentWorkspace?.workspaceId, workspaceTitleById])
+  }, [workspaceMembers, currentWorkspace?.workspaceId])
   const catalogSeed = selected?.catalog === true
     && selected.scope === 'global'
   const managerSelected = selected?.id === 'mem_seed_manager'
@@ -1137,66 +1113,44 @@ export function TeamRoster({
                   }}
                   onClose={() => { setWsPickOpen(false) }}
                 />
-                {workspaceGroups.length === 0 ? (
+                {currentWorkspace === undefined ? (
                   <p className={css.empty}>{t('team.workspaceEmpty')}</p>
-                ) : null}
-                {workspaceGroups.map((group) => (
-                  <div key={group.workspaceId} className={css.workspaceGroup}>
-                    <p className={css.workspaceGroupHead}>
-                      <IconFolderCloseRegular size={14} />
-                      <span className={css.workspaceGroupTitle}>{group.title}</span>
-                      {group.current
-                        ? <span className={css.workspaceGroupBadge}>{t('team.workspaceCurrent')}</span>
-                        : null}
-                    </p>
-                    {group.members.length === 0 && !group.current ? (
-                      <p className={css.empty}>{t('team.workspaceOtherEmpty')}</p>
-                    ) : null}
-                    <div className={presenceOn ? css.ballField : css.ballFieldList}>
-                      {group.members.map((member) => (
-                        <MemberBall
-                          key={`${group.workspaceId}:${member.id}`}
-                          member={member}
-                          displayName={catalogMemberName(member.id, member.name, t, seatTitles)}
-                          displayBrief={catalogMemberBrief(member.id, member.brief, t, seatTitles)}
-                          stickers={stickers}
-                          selected={selectedId === member.id}
-                          disabled={busy}
-                          seedLabel={t('team.seed')}
-                          advancedLabel={t('team.advanced')}
-                          notReadyLabel={t('team.notReady')}
-                          roleLabel={t(`team.role.${member.role ?? 'default'}` as WorkspaceKey)}
-                          presenceOn={presenceOn}
-                          onSelect={() => {
-                            if (
-                              member.workspaceId
-                              && currentWorkspace?.workspaceId
-                              && member.workspaceId !== currentWorkspace.workspaceId
-                            ) {
-                              startSession(member.workspaceId as WorkspaceId)
-                            }
-                            setSelectedId(member.id)
-                            loadMember(member)
-                          }}
-                        />
-                      ))}
-                      {group.current ? (
-                        <NewMemberBall
-                          selected={selectedId === 'new-workspace'}
-                          disabled={busy}
-                          caption={t('team.memberNew')}
-                          label={t('team.memberNewWorkspace')}
-                          presenceOn={presenceOn}
-                          onSelect={() => {
-                            setSelectedId('new-workspace')
-                            loadMember(undefined)
-                            setScope('workspace')
-                          }}
-                        />
-                      ) : null}
-                    </div>
+                ) : (
+                  <div className={presenceOn ? css.ballField : css.ballFieldList}>
+                    {currentWorkspaceMembers.map((member) => (
+                      <MemberBall
+                        key={`${currentWorkspace.workspaceId}:${member.id}`}
+                        member={member}
+                        displayName={catalogMemberName(member.id, member.name, t, seatTitles)}
+                        displayBrief={catalogMemberBrief(member.id, member.brief, t, seatTitles)}
+                        stickers={stickers}
+                        selected={selectedId === member.id}
+                        disabled={busy}
+                        seedLabel={t('team.seed')}
+                        advancedLabel={t('team.advanced')}
+                        notReadyLabel={t('team.notReady')}
+                        roleLabel={t(`team.role.${member.role ?? 'default'}` as WorkspaceKey)}
+                        presenceOn={presenceOn}
+                        onSelect={() => {
+                          setSelectedId(member.id)
+                          loadMember(member)
+                        }}
+                      />
+                    ))}
+                    <NewMemberBall
+                      selected={selectedId === 'new-workspace'}
+                      disabled={busy}
+                      caption={t('team.memberNew')}
+                      label={t('team.memberNewWorkspace')}
+                      presenceOn={presenceOn}
+                      onSelect={() => {
+                        setSelectedId('new-workspace')
+                        loadMember(undefined)
+                        setScope('workspace')
+                      }}
+                    />
                   </div>
-                ))}
+                )}
               </section>
             </aside>
 

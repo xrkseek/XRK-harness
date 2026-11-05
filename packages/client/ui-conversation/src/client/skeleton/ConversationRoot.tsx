@@ -438,7 +438,7 @@ export function ConversationRoot({
         disabled: true,
         placeholder: t('placeholder.workspace'),
         workspacePickerOpen: pickerOpen,
-        onRequestWorkspace: () => { setPickerOpen(true) },
+        onRequestWorkspace: () => { setPickerOpen((open) => !open) },
       }
       : blocked
         // `blocked`, not `disabled`: the bar refuses input either way, but a

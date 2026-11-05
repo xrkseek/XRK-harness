@@ -33,17 +33,30 @@ export function TtsCard(props: TtsCardProps) {
   // which is the historical single-list behavior.
   const zhCatalog = catalog.filter(voice => voice.locale?.startsWith('zh') ?? true)
   const enCatalog = catalog.filter(voice => voice.locale?.startsWith('en') ?? false)
-  // Keep a stored voice selectable even when the Host no longer lists it: a
-  // silent fallback to "default" would rewrite the user's pick on save.
+  // Keep a stored voice selectable even when the catalog is empty / failed /
+  // the Host no longer lists it — never rewrite the user's pick to "".
   const storedVoice = state.voice.text
   const storedVoiceEn = state.voiceEn.text
-  const voiceOptions = (rows: readonly { id: string; label: string }[], stored: string) => [
-    { value: '', label: t('ttsVoiceDefault') },
-    ...rows.map(voice => ({ value: voice.id, label: voice.label })),
-    ...(stored !== '' && !rows.some(voice => voice.id === stored)
+  const voiceOptions = (rows: readonly { id: string; label: string }[], stored: string) => {
+    const preserved = stored !== '' && !rows.some(voice => voice.id === stored)
       ? [{ value: stored, label: stored }]
-      : []),
-  ]
+      : []
+    return [
+      { value: '', label: t('ttsVoiceDefault') },
+      ...rows.map(voice => ({ value: voice.id, label: voice.label })),
+      ...preserved,
+    ]
+  }
+  const refreshControl = (
+    <button
+      type="button"
+      className={css.oauthLink}
+      disabled={disabled || state.voices.loading || state.saving}
+      onClick={() => { props.saveAndRefreshVoices() }}
+    >
+      {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesRetry')}
+    </button>
+  )
   return (
     <PluginCard
       t={t}
@@ -93,6 +106,18 @@ export function TtsCard(props: TtsCardProps) {
       {engine === 'edge'
         ? (
           <>
+            <ValueField
+              id="plugin-config-tts-proxy"
+              label={t('ttsProxy')}
+              hint={t('ttsProxyHint')}
+              overriddenLabel={t('overridden')}
+              resetLabel={t('reset')}
+              invalidLabel={t('invalidNumber')}
+              disabled={disabled}
+              {...state.proxy}
+              onEdit={(text) => { props.edit('proxy', text) }}
+              onReset={() => { props.resetField('proxy') }}
+            />
             <SelectField
               id="plugin-config-tts-voice-zh"
               label={t('ttsVoiceZh')}
@@ -114,16 +139,23 @@ export function TtsCard(props: TtsCardProps) {
             {catalog.length === 0
               ? (
                 <p className={css.note} role="note">
-                  {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesEmpty')}
+                  {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesEmptyEdge')}
+                  {' '}
+                  {refreshControl}
                 </p>
               )
-              : null}
+              : (
+                <p className={css.note} role="note">{refreshControl}</p>
+              )}
           </>
         )
         : engine === 'local'
         ? (
           <>
-            {catalog.length > 0
+            {/* Always keep SelectField when a voice is already stored — an empty
+                catalog (probe failed) must not demote the pick to a free-text
+                blank that looks like「引擎默认」and risks clearing on save. */}
+            {catalog.length > 0 || storedVoice !== ''
               ? (
                 <SelectField
                   id="plugin-config-tts-voice-local"
@@ -136,31 +168,35 @@ export function TtsCard(props: TtsCardProps) {
                 />
               )
               : (
-                <>
-                  <ValueField
-                    id="plugin-config-tts-voice-local"
-                    label={t('ttsVoice')}
-                    hint={t('ttsLocalVoiceHint')}
-                    overriddenLabel={t('overridden')}
-                    resetLabel={t('reset')}
-                    invalidLabel={t('invalidNumber')}
-                    disabled={disabled}
-                    {...state.voice}
-                    onEdit={(text) => { props.edit('voice', text) }}
-                    onReset={() => { props.resetField('voice') }}
-                  />
-                  <p className={css.note} role="note">
-                    {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesEmpty')}
-                  </p>
+                <ValueField
+                  id="plugin-config-tts-voice-local"
+                  label={t('ttsVoice')}
+                  hint={t('ttsLocalVoiceHint')}
+                  overriddenLabel={t('overridden')}
+                  resetLabel={t('reset')}
+                  invalidLabel={t('invalidNumber')}
+                  disabled={disabled}
+                  {...state.voice}
+                  onEdit={(text) => { props.edit('voice', text) }}
+                  onReset={() => { props.resetField('voice') }}
+                />
+              )}
+            {catalog.length === 0
+              ? (
+                <p className={css.note} role="note">
+                  {state.voices.loading ? t('ttsVoicesLoading') : t('ttsVoicesEmpty')}
+                  {' '}
                   <button
                     type="button"
                     className={css.oauthLink}
+                    disabled={disabled || state.voices.loading}
                     onClick={() => { props.refreshVoices() }}
                   >
                     {t('ttsVoicesRetry')}
                   </button>
-                </>
-              )}
+                </p>
+              )
+              : null}
           </>
         )
         : (
@@ -213,6 +249,18 @@ export function TtsCard(props: TtsCardProps) {
               {...state.model}
               onEdit={(text) => { props.edit('model', text) }}
               onReset={() => { props.resetField('model') }}
+            />
+            <ValueField
+              id="plugin-config-tts-proxy-cloud"
+              label={t('ttsProxy')}
+              hint={t('ttsProxyHint')}
+              overriddenLabel={t('overridden')}
+              resetLabel={t('reset')}
+              invalidLabel={t('invalidNumber')}
+              disabled={disabled}
+              {...state.proxy}
+              onEdit={(text) => { props.edit('proxy', text) }}
+              onReset={() => { props.resetField('proxy') }}
             />
           </>
         )}

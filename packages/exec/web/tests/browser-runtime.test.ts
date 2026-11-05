@@ -109,6 +109,39 @@ describe("createBrowserRuntimeRegistry", () => {
     expect(registry.size()).toBe(0);
   });
 
+  it("recreates when configKey changes (Settings headed/profile/proxy)", async () => {
+    const registry = createBrowserRuntimeRegistry();
+    let disposed = 0;
+    const make = (label: string) => {
+      const inner = createHttpBrowserSession({
+        fetch: htmlFetch({
+          "https://example.com/": `<html><title>${label}</title></html>`,
+        }),
+      });
+      return {
+        ...inner,
+        dispose() {
+          disposed += 1;
+          inner.dispose?.();
+        },
+      };
+    };
+    const first = registry.getOrCreate("s1", () => make("a"), {
+      configKey: "headed=true",
+    });
+    const same = registry.getOrCreate("s1", () => make("skip"), {
+      configKey: "headed=true",
+    });
+    expect(same).toBe(first);
+    expect(disposed).toBe(0);
+    const next = registry.getOrCreate("s1", () => make("b"), {
+      configKey: "headed=false",
+    });
+    expect(next).not.toBe(first);
+    expect(disposed).toBe(1);
+    registry.dispose();
+  });
+
   it("CDP dispose closes the websocket caller", async () => {
     const registry = createBrowserRuntimeRegistry();
     const scripted = scriptedCdp();

@@ -44,16 +44,25 @@ export function numberField(field: string): CardFieldSpec {
 }
 
 /**
- * An on/off field. A missing value renders as the off state. Both poles stage
- * an explicit set: turning a switch off must write `false`, never silently
- * clear back to the composition layer.
+ * An on/off field. Both poles stage an explicit set: turning a switch off must
+ * write `false`, never silently clear back to the composition layer.
  * @param field - field name inside the namespace section.
+ * @param defaultWhenMissing - how an absent section value renders (schema
+ *   default). Without this, `headed: true` schema defaults looked Off until
+ *   the Host had written an explicit row.
  * @returns the field's conversion spec.
  */
-export function booleanField(field: string): CardFieldSpec {
+export function booleanField(
+  field: string,
+  defaultWhenMissing = false,
+): CardFieldSpec {
   return {
     field,
-    format: value => value === true ? 'true' : 'false',
+    format: (value) => {
+      if (value === true) return 'true'
+      if (value === false) return 'false'
+      return defaultWhenMissing ? 'true' : 'false'
+    },
     parse: (text) => {
       if (text === 'true') return { kind: 'set', value: true }
       if (text === 'false') return { kind: 'set', value: false }

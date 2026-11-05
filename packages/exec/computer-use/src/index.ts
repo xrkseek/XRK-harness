@@ -1,3 +1,4 @@
+import { createAgentDesktopProvider } from "./agent-desktop.js";
 import {
   backgroundInputInstalled,
   composeBackgroundWithCapture,
@@ -65,13 +66,46 @@ export {
   type ComputerUseScreenshotRef,
   type CreateComputerUseToolsOptions,
 } from "./tools.js";
+export {
+  createAgentDesktopProvider,
+  runAgentDesktop,
+  type AgentDesktopProviderOptions,
+} from "./agent-desktop.js";
+export { resolveAgentDesktopBin } from "./resolve-cli.js";
 
 /** Face `computer-use` product modes (Settings SoT). */
-export type ComputerUseProductMode = "off" | "uia" | "background";
+export type ComputerUseProductMode =
+  | "off"
+  | "uia"
+  | "background"
+  | "agent-desktop";
 
 /** Face `computer-use` product shape. */
 export interface ComputerUseProductConfig {
   readonly mode: ComputerUseProductMode;
+}
+
+/**
+ * Whether Settings / env should mount the `computer_use` tool.
+ * `off` (and empty env) → do not register; save + rebuild hot-adds it.
+ */
+export function isComputerUseEnabled(
+  options: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly product?: ComputerUseProductConfig;
+  } = {},
+): boolean {
+  const env = options.env ?? process.env;
+  const envRaw = String(env.XRK_COMPUTER_USE ?? "").trim().toLowerCase();
+  if (envRaw !== "") {
+    return envRaw !== "0" && envRaw !== "off" && envRaw !== "false";
+  }
+  // Face schema default is agent-desktop; missing product (tests / minimal
+  // Hosts) stays off so we never invent desktop control without Settings.
+  const mode = options.product?.mode ?? "off";
+  return (
+    mode === "uia" || mode === "background" || mode === "agent-desktop"
+  );
 }
 
 export interface DefaultComputerUseAccessOptions {
@@ -95,7 +129,9 @@ function modeFromEnvFlag(flag: string): ComputerUseProductMode | "memory" {
   const raw = flag.trim().toLowerCase();
   if (raw === "memory") return "memory";
   if (raw === "background") return "background";
+  if (raw === "agent-desktop" || raw === "desktop") return "agent-desktop";
   if (raw === "1" || raw === "uia") return "uia";
+  if (raw === "0" || raw === "off" || raw === "false") return "off";
   return "off";
 }
 
@@ -104,7 +140,7 @@ function modeFromEnvFlag(flag: string): ComputerUseProductMode | "memory" {
  * - Injected `service` wins (name `memory` unless the service id is uia/background).
  * - Non-empty `XRK_COMPUTER_USE` is CI bypass over Face `product`.
  * - Product / env: `off` · `uia` (`1`) · `background` · `memory` (env-only).
- * - Else no service; tools stay registered and fail honestly.
+ * - Else no service — harness must **not** register `computer_use` (hot unload).
  */
 export function createDefaultComputerUseAccess(
   options: DefaultComputerUseAccessOptions = {},
@@ -115,7 +151,12 @@ export function createDefaultComputerUseAccess(
   if (options.service) {
     const id = options.service.providerId;
     const name: ComputerUseProviderName =
-      id === "uia" || id === "background" || id === "memory" ? id : "memory";
+      id === "uia" ||
+      id === "background" ||
+      id === "memory" ||
+      id === "agent-desktop"
+        ? id
+        : "memory";
     registry.register(name);
     return { service: options.service, providerName: name, unavailableMessage };
   }
@@ -131,6 +172,14 @@ export function createDefaultComputerUseAccess(
     return {
       service: createMemoryComputerUseProvider(),
       providerName: "memory",
+      unavailableMessage,
+    };
+  }
+  if (resolved === "agent-desktop") {
+    registry.register("agent-desktop");
+    return {
+      service: createAgentDesktopProvider({ env }),
+      providerName: "agent-desktop",
       unavailableMessage,
     };
   }

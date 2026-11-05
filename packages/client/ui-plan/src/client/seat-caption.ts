@@ -1,4 +1,42 @@
 /**
+ * When the user renames seat titles in Settings, Face / live patches may still
+ * carry the previous title word (`主管（徐航）` while role is now `经理`).
+ * Strip any known title prefix so Overview never paints `经理 · 主管（徐航）`.
+ */
+export function retitleSeatLabel(
+  role: string,
+  label: string | undefined,
+  knownTitles: readonly string[] = [],
+): string {
+  const n = label?.trim()
+  if (!n || n === 'untitled') return role
+  if (n === role) return role
+  if (n.startsWith(role)) {
+    const rest = n.slice(role.length).trim()
+    if (!rest || rest.startsWith('（') || rest.startsWith('(') || rest.startsWith('·') || rest.startsWith('・') || rest.startsWith('•')) {
+      return n
+    }
+  }
+  const titles = [...knownTitles, role]
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  for (const title of titles) {
+    if (title === role || !n.startsWith(title)) continue
+    const rest = n.slice(title.length).trim()
+    if (!rest) return role
+    if (rest.startsWith('（') || rest.startsWith('(')) return `${role}${rest}`
+    if (rest.startsWith('·') || rest.startsWith('・') || rest.startsWith('•')) {
+      const body = rest.replace(/^[·・•]\s*/u, '').trim()
+      return body ? `${role} · ${body}` : role
+    }
+  }
+  return `${role} · ${n}`
+}
+
+import { allBuiltInSeatTitles } from '../presence-settings.ts'
+
+/**
  * Seat chrome caption: role + member display.
  *
  * - Face already sent `经理（老王）` (formal equals seat word) → keep as-is.
@@ -6,17 +44,12 @@
  * - Boss Settings nick only → `老板（成总）` (see parentDelegateSeatCaption).
  * Empty / echo name → role only. Titles are Settings-custom (never hardcode).
  */
-export function delegateSeatCaption(role: string, name: string | undefined): string {
-  const n = name?.trim()
-  if (!n || n === 'untitled' || n === role) return role
-  // Skip when Face already composed `经理（老王）` / `经理 · …`.
-  if (n.startsWith(role)) {
-    const rest = n.slice(role.length).trim()
-    if (!rest || rest.startsWith('（') || rest.startsWith('(') || rest.startsWith('·')) {
-      return n
-    }
-  }
-  return `${role} · ${n}`
+export function delegateSeatCaption(
+  role: string,
+  name: string | undefined,
+  knownTitles: readonly string[] = [],
+): string {
+  return retitleSeatLabel(role, name, knownTitles)
 }
 
 /**
@@ -77,18 +110,30 @@ export function parentDelegateSeatCaption(
  * mislabeled manager while status catches up.
  */
 export function childDelegateSeatCaption(
-  seatTitles: { readonly manager: string; readonly agent: string },
+  seatTitles: {
+    readonly manager: string
+    readonly agent: string
+    readonly boss?: string
+  },
   childSeat: DelegateChildSeat | undefined,
   childLabel: string | undefined,
 ): string {
+  const known = [
+    seatTitles.boss,
+    seatTitles.manager,
+    seatTitles.agent,
+    ...allBuiltInSeatTitles(),
+  ].filter((t): t is string => typeof t === 'string' && t.trim() !== '')
   if (childSeat === 'sunflower') {
+    // Face already sends locale formal（nick）; never hardcode 向日葵 here.
     return delegateSeatCaption(
       seatTitles.manager,
-      childLabel?.trim() || '向日葵',
+      childLabel?.trim() || undefined,
+      known,
     )
   }
   const role = childSeat === 'manager' ? seatTitles.manager : seatTitles.agent
-  return delegateSeatCaption(role, childLabel)
+  return delegateSeatCaption(role, childLabel, known)
 }
 
 /**
@@ -102,13 +147,16 @@ export function withLiveNickname(
   faceLabel: string | undefined,
   liveNickname: string | null | undefined,
   liveFormal?: string | null,
+  knownTitles: readonly string[] = [],
 ): string {
   if (liveNickname !== undefined) {
     const formal = liveFormal?.trim() || role
     const composed = memberDisplayLabel(formal, liveNickname)
-    return delegateSeatCaption(role, composed)
+    return delegateSeatCaption(role, composed, knownTitles)
   }
   const fromFace = faceLabel?.trim()
-  if (fromFace && fromFace !== 'untitled') return fromFace
+  if (fromFace && fromFace !== 'untitled') {
+    return retitleSeatLabel(role, fromFace, knownTitles)
+  }
   return role
 }

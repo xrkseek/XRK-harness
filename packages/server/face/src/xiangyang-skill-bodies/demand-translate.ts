@@ -22,6 +22,7 @@ No harness repo required: plugin template + verify live in \`xrk-plugin-dev-care
 | Add capability / API / 「让 AI 会…」 | MCP first; else process plugin | \`xrk-home-config\` or \`xrk-plugin-dev-care\` |
 | Write plugin / slash / tools | Coding workspace plugin | \`xrk-plugin-dev-care\` + \`workspace_session_prompt\` |
 | Models / keys / theme / MCP / Permissions / Agent loop | Settings + Credentials | \`xrk-home-config\` (deep: global \`xrk-capability-attach\` / \`xrk-models-settings\`) |
+| 打开网页 / 装浏览器 / CDP / 桌面点击操控 | Browser + Computer use cards | \`xrk-home-config\`（\`agent-browser install\` 仅当 Auto 找不到浏览器） |
 | 干员 / 总结经验建干员 / 高级 pack / 分享 | \`team_save\`（高级 +skills/files）· \`team_export\` · \`team_import\` 只装文件 | \`xrk-delegate\` |
 | 写 skill / 教 agent / 自我升级 | Skill folders (not 干员) | \`xrk-create-skill\` (global); noisy catalog → \`xrk-skill-merge\` |
 | Disk full / .xrk litter | \`~/.xrk\` + project \`.xrk\` | \`xrk-xrk-cleanup\` |

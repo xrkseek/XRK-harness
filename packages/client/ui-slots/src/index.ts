@@ -873,9 +873,9 @@ export class SlotCore {
     const next = [...rec.entries, entry]
     // Stable sorts: priority ascending for every kind, ties keep registration
     // sequence — a cell's winner is its first occurrence, chain tries lower
-    // priority first. List refines equal priorities by explicit `order` so the
-    // raw ledger keeps its display sequence for priority-less compositions.
-    next.sort(spec.kind === 'list'
+    // priority first. List and keyed refine equal priorities by explicit
+    // `order` so Plugins cards (and similar) stay fixed across boot races.
+    next.sort(spec.kind === 'list' || spec.kind === 'keyed'
       ? (a, b) => ((a.options.priority ?? 0) - (b.options.priority ?? 0)) || ((a.options.order ?? 0) - (b.options.order ?? 0))
       : (a, b) => (a.options.priority ?? 0) - (b.options.priority ?? 0))
     rec.entries = next

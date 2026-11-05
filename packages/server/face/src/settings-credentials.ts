@@ -48,6 +48,7 @@ import {
 } from "./last-good-config.js";
 import {
   FACE_PRODUCT_SETTINGS_NAMESPACES,
+  normalizeTtsViewValue,
   schemaEnvelopeOf,
 } from "./settings-schemas.js";
 import { buildFaceChannelDiscover, resolveImGatewayWired } from "./process-channels.js";
@@ -900,13 +901,12 @@ export class FaceSettingsNamespaces {
     if (base !== undefined) slot.base = base;
     if (schema !== undefined) slot.schema = schema;
     if (applies !== undefined) slot.applies = applies;
+    const merged = mergeLayers(slot.base, slot.user);
     return {
       ns,
       schema: slot.schema,
-      value: mergeLayers(
-        slot.base,
-        slot.user,
-      ),
+      // Edge blank voice rows → 晓晓 / Aria for Settings paint; never wipe picks.
+      value: ns === "tts" ? normalizeTtsViewValue(merged) : merged,
       base: { ...slot.base },
       user: { ...slot.user },
       applies: slot.applies,
@@ -1495,11 +1495,28 @@ export async function settingsMutateFace(
     result.view.revision,
   ]);
   if (ns === "ui-presence") {
+    const nextPresence = result.view.value as Record<string, unknown>;
     scheduleBossStatusBroadcast(
       runtime,
       readBossStatusFields(snapshotUser),
-      readBossStatusFields(result.view.value as Record<string, unknown>),
+      readBossStatusFields(nextPresence),
     );
+    // Title scheme / custom words → remount Agents so agentLabel + memory zone
+    // chrome hot-switch. Mood / kit stay on boss-status broadcast only.
+    // Path ops only — do not fingerprint merged view (base defaults look like
+    // a title write when the user layer was still empty).
+    const titlePathTouched = ops.some((op) => {
+      const key = op.path[0];
+      return (
+        key === "titleScheme"
+        || key === "titleBoss"
+        || key === "titleManager"
+        || key === "titleAgent"
+      );
+    });
+    if (titlePathTouched) {
+      publishRemoteEvent(runtime.bus, "settings/seat-titles-updated", []);
+    }
   }
   if (ns === "permission") {
     await applyLivePermissionDefaultPreset(

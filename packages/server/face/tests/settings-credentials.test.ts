@@ -293,8 +293,10 @@ describe("Face settings U2", () => {
       value: { mode: string; cdpUrl: string };
       applies: string;
     };
-    expect(browser.value.mode).toBe("http");
+    expect(browser.value.mode).toBe("agent-browser");
     expect(browser.value.cdpUrl).toBe("");
+    expect(browser.value.headed).toBe(false);
+    expect(browser.value.executablePath).toBe("");
     expect(browser.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "voice")).toBe(false);
     const asr = v.namespaces.find((n) => n.ns === "asr") as {
@@ -340,10 +342,19 @@ describe("Face settings U2", () => {
     expect(v.namespaces.some((n) => n.ns === "curated-memory")).toBe(true);
     const curatedMemory = v.namespaces.find((n) => n.ns === "curated-memory") as {
       ns: string;
-      value: { enabled: boolean };
+      value: {
+        enabled: boolean;
+        phase2Llm: boolean;
+        memoryLimit: number;
+        userLimit: number;
+      };
       applies: string;
     };
     expect(curatedMemory.value.enabled).toBe(true);
+    expect(curatedMemory.value.phase2Llm).toBe(false);
+    expect(curatedMemory.value.memoryLimit).toBe(2200);
+    // 1375 must stay schema-valid (step 25); step 100 hid the Plugins card.
+    expect(curatedMemory.value.userLimit).toBe(1375);
     expect(curatedMemory.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "a2a-inbound")).toBe(true);
     const a2aInbound = v.namespaces.find((n) => n.ns === "a2a-inbound") as {

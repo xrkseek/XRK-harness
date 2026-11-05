@@ -8,6 +8,7 @@ import {
   createWindowsUiAutomationProvider,
   escapeSendKeys,
   formatAxSnapshot,
+  isComputerUseEnabled,
   mapKeysToSendKeys,
 } from "../src/index.js";
 
@@ -247,6 +248,32 @@ describe("createDefaultComputerUseAccess", () => {
       product: { mode: "off" },
     });
     expect(access.service).toBeUndefined();
+  });
+
+  it("product agent-desktop mounts agent-desktop provider", () => {
+    const access = createDefaultComputerUseAccess({
+      env: {},
+      product: { mode: "agent-desktop" },
+    });
+    expect(access.providerName).toBe("agent-desktop");
+    expect(access.service?.providerId).toBe("agent-desktop");
+  });
+});
+
+describe("isComputerUseEnabled", () => {
+  it("is false when product off and env unset", () => {
+    expect(isComputerUseEnabled({ env: {}, product: { mode: "off" } })).toBe(
+      false,
+    );
+  });
+
+  it("is true for agent-desktop product", () => {
+    expect(
+      isComputerUseEnabled({
+        env: {},
+        product: { mode: "agent-desktop" },
+      }),
+    ).toBe(true);
   });
 });
 

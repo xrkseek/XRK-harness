@@ -3,9 +3,17 @@
  * Separate from page-level browser_* (HTTP snapshot/act).
  */
 
-export type ComputerUseDelivery = "background" | "uia" | "memory";
+export type ComputerUseDelivery =
+  | "background"
+  | "uia"
+  | "memory"
+  | "agent-desktop";
 
-export type ComputerUseProviderName = "memory" | "uia" | "background";
+export type ComputerUseProviderName =
+  | "memory"
+  | "uia"
+  | "background"
+  | "agent-desktop";
 
 export type ComputerUseAction =
   | "capture"

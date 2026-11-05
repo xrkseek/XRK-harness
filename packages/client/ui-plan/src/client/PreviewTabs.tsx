@@ -40,6 +40,7 @@ import {
   parentDelegateSeatCaption,
   withLiveNickname,
 } from './seat-caption.ts'
+import { allBuiltInSeatTitles } from '../presence-settings.ts'
 import { useOverviewOpen } from './overview-open.ts'
 import { PRESENCE_RAIL_HANDOFF_MS } from './presence-handoff.ts'
 import {
@@ -1923,6 +1924,12 @@ export function PreviewTabs({
   const liveChild = childMemberId ? readTeamRosterLive(childMemberId) : undefined
   const liveParent = parentMemberId ? readTeamRosterLive(parentMemberId) : undefined
   // Office: Settings boss title + nick. Child: Face parentLabel, with live nick overlay.
+  const knownSeatTitles = [
+    seatTitles.boss,
+    seatTitles.manager,
+    seatTitles.agent,
+    ...allBuiltInSeatTitles(),
+  ]
   const bossSeatLabel = officeBossSeat
     ? parentDelegateSeatCaption(seatTitles.boss, {
         officeBossSeat: true,
@@ -1935,6 +1942,8 @@ export function PreviewTabs({
         : seatTitles.agent,
       status?.delegate?.parentLabel ?? seatTitles.manager,
       liveParent?.nickname,
+      undefined,
+      knownSeatTitles,
     )
   // Identity agent-home / tool children → 干员; project home → 经理; 向阳 → name.
   const childSeat = status?.delegate?.childSeat

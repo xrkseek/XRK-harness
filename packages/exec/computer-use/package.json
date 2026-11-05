@@ -16,6 +16,9 @@
   "dependencies": {
     "@xrkseek/core-tools": "workspace:*"
   },
+  "optionalDependencies": {
+    "agent-desktop": "1.2.0"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

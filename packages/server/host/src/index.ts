@@ -644,6 +644,11 @@ export type AgentFactory = (input: {
    */
   browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
   /**
+   * Opaque browser vault (Hermes browser_vault_*). Host wires Face credentials;
+   * secrets never appear in tool results. Always registered when set.
+   */
+  browserVault?: import("@xrkseek/exec-web").BrowserVaultAccess;
+  /**
    * Face `asr` product (Settings SoT).
    * `XRK_VOICE` env still bypasses for CI.
    */
@@ -1282,13 +1287,22 @@ export function createHostManager(): HostManager {
         rt: FaceRuntime | undefined,
       ): string | undefined => {
         if (!rt) return undefined;
+        // Prefer `locale.preference`; older Desktop builds only wrote `ui.locale`.
+        const localeNs = rt.settingsNamespaces.view("locale")
+          .value as Record<string, unknown>;
+        const uiNs = rt.settingsNamespaces.view("ui")
+          .value as Record<string, unknown>;
+        const localeRaw =
+          localeNs.preference ?? uiNs.locale;
         return readSeatTitles(
           rt.settingsNamespaces.view("ui-presence").value as Record<
             string,
             unknown
           >,
           readUiLocalePreference(
-            rt.settingsNamespaces.view("ui").value as Record<string, unknown>,
+            typeof localeRaw === "string"
+              ? { preference: localeRaw }
+              : localeNs,
           ),
         ).agent;
       };
@@ -1691,24 +1705,23 @@ export function createHostManager(): HostManager {
                 : envWorld
                   ? { fs: envWorld.fs }
                   : {}),
-              ...(faceBox.runtime
-                ? {
-                    browserVault: {
-                      list() {
-                        return listCredentialSlots(faceBox.runtime!)
-                          .filter((s) => s.configured)
-                          .map((s) => ({
-                            handle: s.id,
-                            label: s.label,
-                            kind: "credential",
-                          }));
-                      },
-                      peek(handle: string) {
-                        return faceBox.runtime?.credentials.peek(handle);
-                      },
-                    },
-                  }
-                : {}),
+              // Always register vault tools; peek/list no-op until Face is ready.
+              browserVault: {
+                list() {
+                  const rt = faceBox.runtime;
+                  if (!rt) return [];
+                  return listCredentialSlots(rt)
+                    .filter((s) => s.configured)
+                    .map((s) => ({
+                      handle: s.id,
+                      label: s.label,
+                      kind: "credential" as const,
+                    }));
+                },
+                peek(handle: string) {
+                  return faceBox.runtime?.credentials.peek(handle);
+                },
+              },
               ...(llmResolverBox.resolve
                 ? { resolveLlm: llmResolverBox.resolve }
                 : {}),
@@ -2065,6 +2078,10 @@ export function createHostManager(): HostManager {
                   typeof ttsNs.model === "string" && ttsNs.model.trim()
                     ? ttsNs.model.trim()
                     : undefined;
+                const ttsProxy =
+                  typeof ttsNs.proxy === "string" && ttsNs.proxy.trim()
+                    ? ttsNs.proxy.trim()
+                    : undefined;
                 const voiceKey =
                   faceBox.runtime.credentials.peek("voice.openai")?.trim() ||
                   process.env.XRK_VOICE_OPENAI_KEY?.trim() ||
@@ -2086,6 +2103,7 @@ export function createHostManager(): HostManager {
                   ...(ttsBase ? { baseUrl: ttsBase } : {}),
                   ...(ttsVoice ? { voice: ttsVoice } : {}),
                   ...(ttsModel ? { model: ttsModel } : {}),
+                  ...(ttsProxy ? { proxy: ttsProxy } : {}),
                   ...(voiceEnv ? { env: voiceEnv } : {}),
                 });
                 agent.tools.register(
@@ -2952,13 +2970,17 @@ export function createHostManager(): HostManager {
         const cuModeRaw =
           typeof computerUseNs.mode === "string"
             ? computerUseNs.mode.trim().toLowerCase()
-            : "off";
+            : "agent-desktop";
         const computerUseProduct: import("@xrkseek/exec-computer-use").ComputerUseProductConfig =
           {
             mode:
-              cuModeRaw === "uia" || cuModeRaw === "background"
-                ? cuModeRaw
-                : "off",
+              cuModeRaw === "off"
+                ? "off"
+                : cuModeRaw === "uia" ||
+                    cuModeRaw === "background" ||
+                    cuModeRaw === "agent-desktop"
+                  ? cuModeRaw
+                  : "agent-desktop",
           };
         const backgroundHelper =
           faceRuntime.credentials.peek("computer.background")?.trim() ||
@@ -2975,14 +2997,61 @@ export function createHostManager(): HostManager {
         const brModeRaw =
           typeof browserNs.mode === "string"
             ? browserNs.mode.trim().toLowerCase()
-            : "http";
+            : "agent-browser";
         const brCdpUrl =
           typeof browserNs.cdpUrl === "string" && browserNs.cdpUrl.trim()
             ? browserNs.cdpUrl.trim()
             : undefined;
+        const brExecutable =
+          typeof browserNs.executablePath === "string" &&
+          browserNs.executablePath.trim()
+            ? browserNs.executablePath.trim()
+            : undefined;
+        const brBinaryRaw =
+          typeof browserNs.browserBinary === "string"
+            ? browserNs.browserBinary.trim().toLowerCase()
+            : "auto";
+        const brBrowserBinary =
+          brBinaryRaw === "edge" ||
+          brBinaryRaw === "chrome" ||
+          brBinaryRaw === "bundled"
+            ? brBinaryRaw
+            : "auto";
+        const brProfile =
+          typeof browserNs.profile === "string" && browserNs.profile.trim()
+            ? browserNs.profile.trim()
+            : undefined;
+        const brProxy =
+          typeof browserNs.proxy === "string" && browserNs.proxy.trim()
+            ? browserNs.proxy.trim()
+            : undefined;
+        const brStatePath =
+          typeof browserNs.statePath === "string" && browserNs.statePath.trim()
+            ? browserNs.statePath.trim()
+            : undefined;
+        const brChromeArgs =
+          typeof browserNs.chromeArgs === "string" && browserNs.chromeArgs.trim()
+            ? browserNs.chromeArgs.trim()
+            : undefined;
         const browserProduct: import("@xrkseek/exec-web").BrowserProductConfig = {
-          mode: brModeRaw === "cdp" ? "cdp" : "http",
+          mode:
+            brModeRaw === "cdp"
+              ? "cdp"
+              : brModeRaw === "http"
+                ? "http"
+                : "agent-browser",
           ...(brCdpUrl ? { cdpUrl: brCdpUrl } : {}),
+          // Schema default is headed=true; only force headless when the card says false.
+          ...(browserNs.headed === false ? { headed: false } : { headed: true }),
+          browserBinary: brBrowserBinary,
+          ...(brExecutable ? { executablePath: brExecutable } : {}),
+          ...(brChromeArgs ? { chromeArgs: brChromeArgs } : {}),
+          ...(brProfile ? { profile: brProfile } : {}),
+          ...(brProxy ? { proxy: brProxy } : {}),
+          // Schema default is true; only force false when the card says so.
+          restore: browserNs.restore !== false,
+          ...(browserNs.autoConnect === true ? { autoConnect: true } : {}),
+          ...(brStatePath ? { statePath: brStatePath } : {}),
         };
         const asrNs = faceRuntime.settingsNamespaces.view("asr")
           .value as Record<string, unknown>;
@@ -3276,7 +3345,10 @@ export function createHostManager(): HostManager {
         const event = frame.event;
         if (
           event === "llm/adapters-updated" ||
-          event === "credentials/updated"
+          event === "credentials/updated" ||
+          // Face fires this only when ui-presence titleScheme / title* change
+          // (mood / kit stay on document-updated + boss-status broadcast).
+          event === "settings/seat-titles-updated"
         ) {
           void invalidateAgents();
           return;
@@ -3299,6 +3371,15 @@ export function createHostManager(): HostManager {
           // llm-deepseek / llm-pi-ai: Face publishes `llm/adapters-updated` only
           // when adapter-affecting fields change (not providerOrder). Catalog
           // order refreshes via document-updated alone — do not remount Agents.
+          if (ns === "browser") {
+            // Product flags (headed / profile / proxy / restore) bind at
+            // agent-browser launch. Drop every live session so the next tool
+            // call rebuilds with the new fingerprint — invalidate alone would
+            // reuse the old CLI daemon via the registry.
+            sharedBrowser?.dispose();
+            void invalidateAgents();
+            return;
+          }
           if (
             ns === "agent-default-model" ||
             ns === "agent-loop" ||
@@ -3306,8 +3387,9 @@ export function createHostManager(): HostManager {
             ns === "web-search" ||
             ns === "sandbox" ||
             ns === "computer-use" ||
-            ns === "browser" ||
             ns === "voice" ||
+            ns === "tts" ||
+            ns === "asr" ||
             ns === "image-gen" ||
             ns === "video-gen" ||
             ns === "video-analyze" ||

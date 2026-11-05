@@ -86,6 +86,9 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * the trigger (render-prop anchors, effect-positioned proxies — measuring the
  * wrapper there races the host's layout effects). Called on open and on every
  * scroll/resize; return null to skip placement for that frame.
+ * @param props.outsideIgnoreRef - host-owned trigger (or wrapper) that must
+ * not count as an outside click. Portal menus with `anchor={null}` need this
+ * so a second click on the toggle can close instead of close-then-reopen.
  * @param props.footer - rows pinned below the scrolling items area, separated
  * by a hairline; they stay visible while the items above scroll.
  * @param props.header - optional sticky content above the scrolling items
@@ -94,7 +97,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * (default viewport-fit). Use a shorter cap so tall lists don't cover the UI.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, listRef: listRefProp, footer, header, listMaxHeight, className }: {
+export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, outsideIgnoreRef, listRef: listRefProp, footer, header, listMaxHeight, className }: {
   open: boolean
   anchor: ReactNode
   items: readonly MenuEntry[]
@@ -113,6 +116,7 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
   compact?: boolean
   listRef?: RefObject<HTMLDivElement>
   getAnchorRect?: () => DOMRect | null
+  outsideIgnoreRef?: RefObject<HTMLElement | null>
   className?: string
 }) {
   const rootRef = useRef<HTMLSpanElement>(null)
@@ -212,6 +216,9 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       // The portaled list is outside the anchor subtree; check both.
       if (rootRef.current?.contains(e.target) === true) return
       if (listRef.current?.contains(e.target) === true) return
+      // Host-owned toggle (WorkspacePickFlow / hero chip): leave the click to
+      // the owner's `setOpen(v => !v)` instead of close-then-reopen.
+      if (outsideIgnoreRef?.current?.contains(e.target) === true) return
       onCloseRef.current()
     }
     const onKeyDown = (e: KeyboardEvent) => {

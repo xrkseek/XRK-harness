@@ -81,4 +81,35 @@ describe("status snapshot revision cache", () => {
       kitHeld: "tea",
     });
   });
+
+  it("busts cache when seat titleScheme / title* change", async () => {
+    const runtime = bareRuntime();
+    const coding = runtime.workspaces.create(`${runtime.workspaceRoot}/code-titles`);
+    const created = await dispatchFaceMethod(runtime, "session.create", "c-titles", {
+      workspaceId: coding.workspace.workspaceId,
+    });
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    Object.assign(runtime.settingsNamespaces.ensure("locale").user, {
+      preference: "zh",
+    });
+    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
+      titleScheme: "office",
+      titleBoss: "",
+      titleManager: "",
+      titleAgent: "",
+    });
+    const before = buildSessionStatusSnapshot(runtime, sessionId);
+    const revBefore = statusSnapshotRevision(runtime, sessionId);
+    expect(before.delegate?.childLabel ?? "").toMatch(/经理/);
+
+    Object.assign(runtime.settingsNamespaces.ensure("ui-presence").user, {
+      titleScheme: "guild",
+    });
+    const revAfter = statusSnapshotRevision(runtime, sessionId);
+    expect(revAfter).not.toBe(revBefore);
+    const after = buildSessionStatusSnapshot(runtime, sessionId);
+    expect(after.delegate?.childLabel ?? "").toMatch(/干部/);
+  });
 });

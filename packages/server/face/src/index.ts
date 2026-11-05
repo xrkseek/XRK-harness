@@ -262,11 +262,13 @@ export {
 export {
   DEFAULT_SEAT_TITLE_SCHEME,
   SEAT_TITLE_SCHEMES,
+  allBuiltInSeatTitles,
   isSeatTitleSchemeId,
   parseSeatTitleLocale,
   parseSeatTitleScheme,
   readSeatTitles,
   readUiLocalePreference,
+  seatTitlesFingerprint,
   seatTitlesForScheme,
   type SeatTitleLocale,
   type SeatTitleSchemeId,

@@ -276,6 +276,7 @@ export function WorkspacePickFlow({
         side={side}
         portal
         getAnchorRect={getAnchorRect}
+        outsideIgnoreRef={anchorRef}
       />
       {open && !addIsTheOnlyEntry && !menuIsEmpty && listed.length === 0 && workspaceSnapshot.phase === 'pending' && (
         <div className={css.menuStatus} role="status">{t('picker.loading')}</div>

@@ -126,9 +126,11 @@ export function apply(ctx: ClientContext): void {
     }
   }
   // Presence ball is a first-class Plugins-home module (hot toggle), not General.
+  // order=10 keeps it near the top regardless of ui-plan vs ui-settings-plugins boot race.
   ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
     name: 'settings.plugin.item',
     key: PRESENCE_SETTINGS_NAMESPACE,
+    order: 10,
     store: presencePrefsStore,
     locale: NS,
     inject: presencePrefsInjected,

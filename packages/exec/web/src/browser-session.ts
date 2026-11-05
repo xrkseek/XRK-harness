@@ -41,6 +41,35 @@ export interface BrowserActResult {
   readonly text: string;
 }
 
+/** Wait targets for graphical backends (agent-browser `wait`). */
+export interface BrowserWaitRequest {
+  /** CSS / @ref selector. */
+  readonly selector?: string;
+  /** Fixed delay in milliseconds. */
+  readonly ms?: number;
+  /** Load milestone: `load` · `domcontentloaded` · `networkidle`. */
+  readonly load?: string;
+}
+
+/** Cookie ops for graphical backends. */
+export interface BrowserCookiesRequest {
+  readonly action: "get" | "set" | "clear";
+  readonly name?: string;
+  readonly value?: string;
+  readonly url?: string;
+  readonly domain?: string;
+  readonly path?: string;
+}
+
+/** Tab ops for graphical backends. */
+export interface BrowserTabsRequest {
+  readonly action: "list" | "new" | "switch" | "close";
+  /** Tab id (`t2`) or label for switch/close; URL for new. */
+  readonly target?: string;
+  readonly url?: string;
+  readonly label?: string;
+}
+
 export interface BrowserSession {
   open(url: string, signal?: AbortSignal): Promise<BrowserSnapshotResult>;
   snapshot(opts?: {
@@ -57,6 +86,30 @@ export interface BrowserSession {
   ): Promise<BrowserActResult>;
   /** Optional teardown (CDP WS / clear page). Registry calls this on drop. */
   dispose?(): void;
+  /** Run page JavaScript (agent-browser `eval`). */
+  eval?(expression: string, signal?: AbortSignal): Promise<string>;
+  /** Wait for selector / ms / load state. */
+  waitFor?(request: BrowserWaitRequest, signal?: AbortSignal): Promise<void>;
+  /** Cookie get / set / clear. */
+  cookies?(
+    request: BrowserCookiesRequest,
+    signal?: AbortSignal,
+  ): Promise<string>;
+  /** Tab list / new / switch / close. */
+  tabs?(request: BrowserTabsRequest, signal?: AbortSignal): Promise<string>;
+  /** Read text / html / url / title from the active page. */
+  getInfo?(
+    what: "text" | "html" | "url" | "title",
+    signal?: AbortSignal,
+  ): Promise<string>;
+  hover?(ref: string, signal?: AbortSignal): Promise<BrowserActResult>;
+  selectOption?(
+    ref: string,
+    values: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<BrowserActResult>;
+  forward?(signal?: AbortSignal): Promise<BrowserActResult>;
+  reload?(signal?: AbortSignal): Promise<BrowserActResult>;
 }
 
 interface PageState {

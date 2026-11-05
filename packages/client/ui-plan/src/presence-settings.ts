@@ -222,6 +222,20 @@ export function seatTitlesForScheme(
   return PRESENCE_SCHEME_TITLES[scheme][locale]
 }
 
+/** Every built-in scheme title (zh/en/ja) — used to strip stale Overview captions. */
+export function allBuiltInSeatTitles(): readonly string[] {
+  const out = new Set<string>()
+  for (const id of PRESENCE_TITLE_SCHEMES) {
+    for (const locale of ['zh', 'en', 'ja'] as const) {
+      const row = PRESENCE_SCHEME_TITLES[id][locale]
+      out.add(row.boss)
+      out.add(row.manager)
+      out.add(row.agent)
+    }
+  }
+  return [...out]
+}
+
 export function parseSeatTitle(raw: unknown): string {
   if (typeof raw !== 'string') return ''
   return raw.trim().slice(0, PRESENCE_SEAT_TITLE_MAX)

@@ -293,11 +293,24 @@ export function formatWebFetchGuidance(available: ToolNameSet): string {
 export function formatBrowserGuidance(available: ToolNameSet): string {
   const names = asSet(available);
   if (!names.has("browser_open")) return "";
+  const extras: string[] = [];
+  if (names.has("browser_eval")) extras.push("browser_eval");
+  if (names.has("browser_wait")) extras.push("browser_wait");
+  if (names.has("browser_cookies")) extras.push("browser_cookies");
+  if (names.has("browser_tabs")) extras.push("browser_tabs");
+  if (names.has("browser_get")) extras.push("browser_get");
+  if (names.has("browser_hover")) extras.push("browser_hover");
+  if (names.has("browser_select")) extras.push("browser_select");
+  if (names.has("browser_forward")) extras.push("browser_forward");
+  if (names.has("browser_reload")) extras.push("browser_reload");
   return (
     "browser_open / browser_snapshot / browser_act: interactive page sessions " +
-    "(element refs like @e1; browser_act also supports scroll/press/back — scroll/press need CDP). " +
+    "(element refs like @e1; browser_act also supports scroll/press/back). " +
     "browser_vision: screenshot for the vision model. " +
-    "Default session is an HTTP snapshot; Settings → Plugins → Browser (or XRK_BROWSER_CDP_URL) selects Chrome DevTools."
+    (extras.length > 0
+      ? `Graphical extras: ${extras.join(" · ")}. `
+      : "") +
+    "Default product session is agent-browser (Auto: system Chrome → product Chromium cache → Edge); Settings → Plugins → Browser picks binary / profile / restore / proxy / autoConnect, or HTTP snapshot / CDP (XRK_BROWSER_CDP_URL CI bypass)."
   );
 }
 

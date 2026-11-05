@@ -1,7 +1,12 @@
 /**
  * Optional Chrome DevTools (CDP) backend for browser_*.
- * HTTP snapshot stays the default. @eN refs are unchanged.
+ * Product default is agent-browser; HTTP snapshot and CDP remain selectable.
+ * @eN refs are unchanged across backends.
  */
+import {
+  createAgentBrowserSession,
+  type BrowserBinaryPreference,
+} from "./agent-browser-session.js";
 import {
   formatBrowserSnapshot,
   type BrowserElement,
@@ -414,7 +419,12 @@ export function createCdpBrowserSession(options: {
   };
 }
 
-/** HTTP snapshot unless XRK_BROWSER_CDP_URL / BROWSER_CDP_URL is set. */
+/**
+ * Pick browser_* backend.
+ * Precedence: non-empty CDP env → CDP; Face `cdp` → CDP; Face `http` → HTTP
+ * snapshot; Face `agent-browser` (or omitted product defaulting there) → CLI;
+ * no product + no CDP env → HTTP (tests / minimal).
+ */
 export function createBrowserSession(options: {
   readonly fetch: WebFetch;
   readonly env?: NodeJS.ProcessEnv;
@@ -423,6 +433,11 @@ export function createBrowserSession(options: {
    * (non-empty `XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL` is CI bypass).
    */
   readonly product?: BrowserProductConfig;
+  /**
+   * Host conversation session id → agent-browser `--session` / `--restore` key
+   * (letters, digits, hyphens, underscores only).
+   */
+  readonly sessionName?: string;
   readonly resolve?: (raw: string) => Promise<string>;
   readonly connect?: (wsUrl: string) => Promise<CdpCaller>;
 }): BrowserSession {
@@ -430,30 +445,141 @@ export function createBrowserSession(options: {
     env: options.env ?? process.env,
     ...(options.product ? { product: options.product } : {}),
   });
-  if (!raw) {
+  if (raw) {
+    return createCdpBrowserSession({
+      rawUrl: raw,
+      ...(options.resolve ? { resolve: options.resolve } : {}),
+      ...(options.connect ? { connect: options.connect } : {}),
+    });
+  }
+  const mode = options.product?.mode;
+  if (mode === "http" || mode === undefined) {
     return createHttpBrowserSession({ fetch: options.fetch });
   }
-  return createCdpBrowserSession({
-    rawUrl: raw,
-    ...(options.resolve ? { resolve: options.resolve } : {}),
-    ...(options.connect ? { connect: options.connect } : {}),
+  // agent-browser (Face default) and any future graphical CLI mode
+  const baseEnv = options.env ?? process.env;
+  const env: NodeJS.ProcessEnv = { ...baseEnv };
+  // Schema default headed=true. Explicit false must clear a parent env that
+  // already set AGENT_BROWSER_HEADED, or headless Settings would be ignored.
+  const headed = options.product?.headed !== false;
+  if (headed) {
+    env.AGENT_BROWSER_HEADED = "1";
+  } else {
+    delete env.AGENT_BROWSER_HEADED;
+  }
+  const exe = options.product?.executablePath?.trim();
+  if (exe) {
+    env.AGENT_BROWSER_EXECUTABLE_PATH = exe;
+  } else {
+    delete env.AGENT_BROWSER_EXECUTABLE_PATH;
+  }
+  const profile = options.product?.profile?.trim();
+  if (profile) {
+    env.AGENT_BROWSER_PROFILE = profile;
+  } else {
+    delete env.AGENT_BROWSER_PROFILE;
+  }
+  const proxy = options.product?.proxy?.trim();
+  if (proxy) {
+    env.AGENT_BROWSER_PROXY = proxy;
+  } else {
+    delete env.AGENT_BROWSER_PROXY;
+  }
+  const statePath = options.product?.statePath?.trim();
+  if (statePath) {
+    env.AGENT_BROWSER_STATE = statePath;
+  } else {
+    delete env.AGENT_BROWSER_STATE;
+  }
+  if (options.product?.autoConnect === true) {
+    env.AGENT_BROWSER_AUTO_CONNECT = "1";
+  } else {
+    delete env.AGENT_BROWSER_AUTO_CONNECT;
+  }
+  const restore = options.product?.restore !== false;
+  const chromeArgs = options.product?.chromeArgs?.trim();
+  if (chromeArgs) {
+    env.AGENT_BROWSER_ARGS = chromeArgs;
+  } else {
+    // Let resolveAgentBrowserChromeArgs apply the Windows default when unset.
+    delete env.AGENT_BROWSER_ARGS;
+  }
+  const browserBinary = options.product?.browserBinary ?? "auto";
+  return createAgentBrowserSession({
+    env,
+    ...(options.sessionName ? { sessionName: options.sessionName } : {}),
+    headed,
+    restore,
+    browserBinary,
+    ...(profile ? { profile } : {}),
+    ...(proxy ? { proxy } : {}),
+    ...(statePath ? { statePath } : {}),
+    ...(options.product?.autoConnect === true ? { autoConnect: true } : {}),
+    ...(chromeArgs ? { chromeArgs } : {}),
+  });
+}
+
+/**
+ * Stable fingerprint for {@link BrowserRuntimeRegistry} so a Settings change
+ * to headed / profile / proxy / restore recreates the CLI session.
+ */
+export function browserProductConfigKey(
+  product: BrowserProductConfig | undefined,
+): string {
+  if (!product) return "";
+  return JSON.stringify({
+    mode: product.mode,
+    cdpUrl: product.cdpUrl?.trim() ?? "",
+    headed: product.headed !== false,
+    executablePath: product.executablePath?.trim() ?? "",
+    profile: product.profile?.trim() ?? "",
+    proxy: product.proxy?.trim() ?? "",
+    restore: product.restore !== false,
+    autoConnect: product.autoConnect === true,
+    statePath: product.statePath?.trim() ?? "",
+    chromeArgs: product.chromeArgs?.trim() ?? "",
+    browserBinary: product.browserBinary ?? "auto",
   });
 }
 
 /** Face `browser` product modes (Settings SoT). */
-export type BrowserProductMode = "http" | "cdp";
+export type BrowserProductMode = "agent-browser" | "http" | "cdp";
 
 /** Face `browser` product shape. */
 export interface BrowserProductConfig {
   readonly mode: BrowserProductMode;
   /** Chrome DevTools URL when `mode` is `cdp` (http://host:9222 or ws://…). */
   readonly cdpUrl?: string;
+  /** Show Chromium when using agent-browser. */
+  readonly headed?: boolean;
+  /** Chrome/Chromium binary for agent-browser. */
+  readonly executablePath?: string;
+  /** Chrome profile name or directory (reuse login cookies). */
+  readonly profile?: string;
+  /** HTTP(S) proxy for Chromium launches. */
+  readonly proxy?: string;
+  /** Persist cookies/localStorage via `--restore` (default true). */
+  readonly restore?: boolean;
+  /** Attach to a running Chrome with remote debugging. */
+  readonly autoConnect?: boolean;
+  /** Load auth state JSON (`agent-browser state save` output). */
+  readonly statePath?: string;
+  /**
+   * Extra Chromium launch flags (`--args` / `AGENT_BROWSER_ARGS`).
+   * Empty → platform default (Windows: `--no-sandbox`).
+   */
+  readonly chromeArgs?: string;
+  /**
+   * Binary preference when `executablePath` is empty.
+   * Default `auto` = system Edge/Chrome first (no download).
+   */
+  readonly browserBinary?: BrowserBinaryPreference;
 }
 
 /**
  * Resolve the CDP endpoint for `browser_*`.
  * Precedence: non-empty env (`XRK_BROWSER_CDP_URL` / `BROWSER_CDP_URL`) → force CDP;
- * else Face product `cdp` + `cdpUrl`; else empty (HTTP snapshot).
+ * else Face product `cdp` + `cdpUrl`; else empty (HTTP / agent-browser).
  */
 export function resolveBrowserCdpUrl(options: {
   readonly env?: NodeJS.ProcessEnv;

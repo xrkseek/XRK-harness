@@ -104,3 +104,33 @@ export function readUiLocalePreference(
 ): SeatTitleLocale {
   return parseSeatTitleLocale(localeUser?.preference);
 }
+
+/**
+ * Fingerprint of the three-tier title fields — Host remounts Agents when this
+ * changes so `agentLabel` / zone chrome pick up the new words without a restart.
+ * Mood / kit / color are intentionally excluded (those broadcast live).
+ */
+export function seatTitlesFingerprint(
+  presenceUser: Record<string, unknown> | undefined,
+): string {
+  return [
+    String(presenceUser?.titleScheme ?? ""),
+    String(presenceUser?.titleBoss ?? ""),
+    String(presenceUser?.titleManager ?? ""),
+    String(presenceUser?.titleAgent ?? ""),
+  ].join("\0");
+}
+
+/** Every built-in scheme title (zh/en/ja) — strip stale captions after a hot switch. */
+export function allBuiltInSeatTitles(): readonly string[] {
+  const out = new Set<string>();
+  for (const id of SEAT_TITLE_SCHEMES) {
+    for (const locale of ["zh", "en", "ja"] as const) {
+      const row = SCHEME_TITLES[id][locale];
+      out.add(row.boss);
+      out.add(row.manager);
+      out.add(row.agent);
+    }
+  }
+  return [...out];
+}

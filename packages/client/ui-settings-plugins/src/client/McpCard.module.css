@@ -295,11 +295,30 @@
 }
 
 .oauthLink {
+  /* Text-button reset — bare <button> otherwise paints a fat gray slab. */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-brand-primary);
   text-decoration: underline;
   text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.oauthLink:disabled {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: none;
 }
 
 .oauthActions {

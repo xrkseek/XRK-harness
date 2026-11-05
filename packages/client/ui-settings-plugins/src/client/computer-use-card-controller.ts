@@ -17,8 +17,8 @@ export const COMPUTER_USE_NS = 'computer-use'
 /** Credential ref for the background helper path. */
 export const COMPUTER_USE_BACKGROUND_REF = 'XRK_COMPUTER_USE_BACKGROUND'
 
-/** Modes the card may stage. */
-export type ComputerUseMode = 'off' | 'uia' | 'background'
+/** Modes the card may stage (Face schema default is agent-desktop). */
+export type ComputerUseMode = 'off' | 'agent-desktop' | 'uia' | 'background'
 
 /** Host-served computer-use section. */
 export interface ComputerUseSettings {
@@ -46,15 +46,22 @@ export interface ComputerUseCardFace extends CardActions {
   }
 }
 
-const MODES: readonly ComputerUseMode[] = ['off', 'uia', 'background']
+const MODES: readonly ComputerUseMode[] = [
+  'off',
+  'agent-desktop',
+  'uia',
+  'background',
+]
 const HELPER_FIELD = 'backgroundHelper'
 
 function modeField(): CardFieldSpec {
   return {
     field: 'mode',
-    format: (value) => (typeof value === 'string' && value ? value : 'off'),
+    // Match Face schema default so a missing row does not look like Off.
+    format: (value) =>
+      (typeof value === 'string' && value ? value : 'agent-desktop'),
     parse: (text): FieldWrite | undefined => {
-      const trimmed = text.trim() || 'off'
+      const trimmed = text.trim() || 'agent-desktop'
       if (!(MODES as readonly string[]).includes(trimmed)) return undefined
       return { kind: 'set', value: trimmed }
     },
