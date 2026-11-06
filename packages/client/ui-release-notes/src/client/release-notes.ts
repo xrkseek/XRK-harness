@@ -89,8 +89,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         en: 'Modality routing: add routeAllowsImage-aware live model routing; text-only soft-degrades vision/som/browser_vision (images go to gallery, not the LLM wire); <session_capability> gains model: and modality: lines.',
       },
       {
-        zh: '文案精简：删掉 9 处重复的 soft-degrade 说明、3 处重复的「别并行同一 Chrome」；统一 @eN；把 Covered:/CJK:/Refs @eN/w/≠ 这类病句改成完整句子。顺手清掉 2 个 eslint error（no-control-regex/unbound-method）和 1 个大小写敏感的脆弱断言。',
-        en: 'Copy cleanup: remove 9 duplicate soft-degrade notes and 3 duplicate "don’t run the same Chrome in parallel" notes; unify @eN; rewrite Covered:/CJK:/Refs @eN/w/≠ fragments as full sentences. Also clear 2 eslint errors (no-control-regex/unbound-method) and 1 case-sensitive brittle assertion.',
+        zh: '提示词文案做了精简：去掉重复说明、统一 @eN 记法、修正若干不完整句子；同时清理了内部 lint 问题，行为不变。',
+        en: 'Prompt copy is tighter: duplicate notes removed, @eN unified, fragments rewritten as sentences; internal lint issues cleared. No behaviour change.',
       },
     ],
   },
