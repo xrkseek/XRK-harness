@@ -214,6 +214,9 @@ importers:
       '@xrkseek/client-web-react':
         specifier: workspace:^
         version: link:../../packages/client/web-react
+      '@xrkseek/cordis':
+        specifier: workspace:^
+        version: link:../../packages/cordis
       '@xrkseek/cordis-plugin-group':
         specifier: workspace:^
         version: link:../../packages/cordis-group
