@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import {
   COMPUTER_USE_ACTIONS,
   COMPUTER_USE_READ_ACTIONS,
+  computerUseActionsForDelivery,
 } from "./actions.js";
 import {
   COMPUTER_USE_PROMPT_TEXT,
@@ -47,7 +48,7 @@ export function computerUseUnavailableMessage(
   return (
     "Error: no computer_use Provider. Enable Settings → Plugins → Computer use " +
     "(agent-desktop recommended) or inject a ComputerUseService " +
-    "(Windows UIA: XRK_COMPUTER_USE=1)."
+    "(CI: XRK_COMPUTER_USE=agent-desktop|uia|memory)."
   );
 }
 
@@ -73,15 +74,50 @@ function fail(err: unknown): ToolResultContent {
   return { content: message, isError: true };
 }
 
-function parseAction(raw: unknown): ComputerUseAction {
+function parseAction(
+  raw: unknown,
+  allowed: readonly ComputerUseAction[],
+): ComputerUseAction {
   const action = String(raw ?? "").trim() as ComputerUseAction;
-  if (!(COMPUTER_USE_ACTIONS as readonly string[]).includes(action)) {
+  if (!(allowed as readonly string[]).includes(action)) {
+    const known = (COMPUTER_USE_ACTIONS as readonly string[]).includes(action);
     throw new ComputerUseError(
-      `action must be one of ${COMPUTER_USE_ACTIONS.join(", ")}`,
+      known
+        ? `action=${action} is not available on this computer_use Provider (allowed: ${allowed.join(", ")})`
+        : `action must be one of ${allowed.join(", ")}`,
       "COMPUTER_USE_BAD_ARGS",
     );
   }
   return action;
+}
+
+function toolDescriptionForDelivery(delivery: string | undefined): string {
+  if (delivery === "uia") {
+    return (
+      "Drive the native desktop GUI via Windows UI Automation (delivery=uia). " +
+      "Supported actions only: capture/find/list_windows/list_displays/status/focus_window/" +
+      "click/type/key/scroll/clipboard_*. " +
+      "Hollow AX apps (e.g. WeChat): focus_window → capture mode=vision → headed=true coordinate click. " +
+      "For launch/get/overlay/… use Settings → Computer use → agent-desktop (product default)."
+    );
+  }
+  if (delivery === "memory") {
+    return (
+      "In-memory computer_use fake (CI/demo). Limited actions: capture/find/list_windows/click/type/key/scroll."
+    );
+  }
+  if (delivery === "background") {
+    return (
+      "Desktop input via Background helper (act) + UIA capture on Windows. " +
+      "Action surface matches UIA; helper must be installed (XRK_COMPUTER_USE_BACKGROUND)."
+    );
+  }
+  return (
+    "Drive the native desktop GUI through agent-desktop (not browser pages, not PowerShell). " +
+    "Session + cursor overlay show where actions land. " +
+    "capture/find return element indices; a newer capture or find invalidates older ones. " +
+    "Prefer accessibility element indices; headed=true moves the real mouse — ask the user first."
+  );
 }
 
 function parseCoordinate(raw: unknown): readonly [number, number] | undefined {
@@ -104,8 +140,9 @@ function parseCoordinate(raw: unknown): readonly [number, number] | undefined {
 }
 
 /**
- * Model-facing `computer_use` tool — full agent-desktop CLI surface via actions.
- * Prefer agent-desktop over Windows UIA/ps1; no bash/`SetCursorPos` workarounds.
+ * Model-facing `computer_use` tool.
+ * Action enum is scoped to the live Provider delivery — UIA must not advertise
+ * the full agent-desktop vocabulary (models then report "empty shells").
  */
 export function createComputerUseTools(
   options: CreateComputerUseToolsOptions = {},
@@ -114,6 +151,8 @@ export function createComputerUseTools(
     options.env ?? process.env,
     options.product,
   );
+  const delivery = options.service?.delivery;
+  const allowedActions = computerUseActionsForDelivery(delivery);
 
   const tool: ToolDefinition<{
     action?: string;
@@ -138,18 +177,17 @@ export function createComputerUseTools(
     label?: string;
   }> = {
     name: "computer_use",
-    description:
-      "Drive the native desktop GUI through agent-desktop (not browser pages, not PowerShell). " +
-      "Session + cursor overlay show where actions land. " +
-      "capture/find return element indices; a newer capture or find invalidates older ones. " +
-      "Prefer accessibility element indices; headed=true moves the real mouse — ask the user first.",
+    description: toolDescriptionForDelivery(delivery),
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: [...COMPUTER_USE_ACTIONS],
-          description: "Which agent-desktop action to run.",
+          enum: [...allowedActions],
+          description:
+            delivery === "agent-desktop" || delivery === undefined
+              ? "Which agent-desktop action to run."
+              : `Which action to run (delivery=${delivery ?? "unknown"}; subset of agent-desktop).`,
         },
         mode: {
           type: "string",
@@ -160,7 +198,9 @@ export function createComputerUseTools(
         app: {
           type: "string",
           description:
-            "App or window filter for capture, find, launch, close_app, focus_window, and related actions.",
+            delivery === "uia" || delivery === "background" || delivery === "memory"
+              ? "App or window filter for capture, find, and focus_window."
+              : "App or window filter for capture, find, launch, close_app, focus_window, and related actions.",
         },
         element: {
           type: "number",
@@ -169,7 +209,9 @@ export function createComputerUseTools(
         text: {
           type: "string",
           description:
-            "Text for type/set_value/select/clipboard_set/find/wait/overlay.",
+            delivery === "uia" || delivery === "background" || delivery === "memory"
+              ? "Text for type/clipboard_set/find (and focus_window title)."
+              : "Text for type/set_value/select/clipboard_set/find/wait/overlay.",
         },
         role: {
           type: "string",
@@ -228,12 +270,16 @@ export function createComputerUseTools(
         property: {
           type: "string",
           description:
-            "For get/is: text|value|title|bounds|role|states / visible|enabled|checked|…",
+            delivery === "agent-desktop" || delivery === undefined
+              ? "For get/is: text|value|title|bounds|role|states / visible|enabled|checked|…"
+              : "Unused on this Provider (get/is are agent-desktop-only).",
         },
         predicate: {
           type: "string",
           description:
-            "wait --predicate; open_system_surface id; launch --activate when set to activate.",
+            delivery === "agent-desktop" || delivery === undefined
+              ? "wait --predicate; open_system_surface id; launch --activate when set to activate."
+              : "Unused on this Provider.",
         },
         timeoutMs: {
           type: "number",
@@ -242,7 +288,9 @@ export function createComputerUseTools(
         label: {
           type: "string",
           description:
-            "cursor-overlay intent text (action=overlay or any act to refresh label). Use off to disable.",
+            delivery === "agent-desktop" || delivery === undefined
+              ? "cursor-overlay intent text (action=overlay or any act to refresh label). Use off to disable."
+              : "Unused on this Provider (overlay is agent-desktop-only).",
         },
       },
       required: ["action"],
@@ -258,7 +306,7 @@ export function createComputerUseTools(
         return { content: missing, isError: true };
       }
       try {
-        const action = parseAction(args?.action);
+        const action = parseAction(args?.action, allowedActions);
         if (action === "capture") {
           const multimodal =
             options.routeAllowsImage === undefined

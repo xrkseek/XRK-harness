@@ -10,6 +10,7 @@ import {
   formatAxSnapshot,
   isComputerUseEnabled,
   mapKeysToSendKeys,
+  type ComputerUseService,
 } from "../src/index.js";
 
 describe("formatAxSnapshot", () => {
@@ -252,6 +253,50 @@ describe("background input provider", () => {
     expect(acted.delivery).toBe("background");
     expect(sent).toEqual(["click"]);
   });
+
+  it("routes focus_window / clipboard to capture Provider on background compose", async () => {
+    const { composeBackgroundWithCapture, createBackgroundInputProvider } =
+      await import("../src/background.js");
+    const helperActs: string[] = [];
+    const captureActs: string[] = [];
+    const act = createBackgroundInputProvider({
+      installed: true,
+      send: async (request) => {
+        helperActs.push(request.action);
+      },
+    });
+    const capture: ComputerUseService = {
+      providerId: "uia",
+      delivery: "uia",
+      async capture() {
+        return {
+          mode: "ax",
+          app: "Demo",
+          windowTitle: "Demo",
+          elements: [],
+          text: "ok",
+        };
+      },
+      async listWindows() {
+        return [];
+      },
+      async act(request) {
+        captureActs.push(request.action);
+        return {
+          ok: true,
+          action: request.action,
+          message: "uia",
+          delivery: "uia",
+        };
+      },
+    };
+    const svc = composeBackgroundWithCapture(act, capture);
+    await svc.act({ action: "focus_window", app: "WeChat" });
+    await svc.act({ action: "clipboard_set", text: "hi" });
+    await svc.act({ action: "click", element: 1 });
+    expect(captureActs).toEqual(["focus_window", "clipboard_set"]);
+    expect(helperActs).toEqual(["click"]);
+  });
 });
 
 describe("createDefaultComputerUseAccess", () => {
@@ -283,6 +328,23 @@ describe("createDefaultComputerUseAccess", () => {
     expect(access.service?.providerId).toBe("memory");
   });
 
+  it("bare XRK_COMPUTER_USE=1 prefers Settings product over forced UIA", () => {
+    const access = createDefaultComputerUseAccess({
+      env: { XRK_COMPUTER_USE: "1" },
+      product: { mode: "agent-desktop" },
+    });
+    expect(access.providerName).toBe("agent-desktop");
+    expect(access.service?.delivery).toBe("agent-desktop");
+  });
+
+  it("explicit XRK_COMPUTER_USE=uia still forces UIA over product", () => {
+    const access = createDefaultComputerUseAccess({
+      env: { XRK_COMPUTER_USE: "uia" },
+      product: { mode: "agent-desktop" },
+    });
+    expect(access.providerName).toBe("uia");
+  });
+
   it("product off leaves no service", () => {
     const access = createDefaultComputerUseAccess({
       env: {},
@@ -298,6 +360,22 @@ describe("createDefaultComputerUseAccess", () => {
     });
     expect(access.providerName).toBe("agent-desktop");
     expect(access.service?.providerId).toBe("agent-desktop");
+  });
+
+  it("UIA tool schema does not advertise agent-desktop-only actions", () => {
+    const access = createDefaultComputerUseAccess({
+      env: {},
+      product: { mode: "uia" },
+    });
+    const [tool] = createComputerUseTools({ service: access.service });
+    const actionEnum = (tool!.parameters as { properties: { action: { enum: string[] } } })
+      .properties.action.enum;
+    expect(actionEnum).toContain("focus_window");
+    expect(actionEnum).toContain("click");
+    expect(actionEnum).not.toContain("launch");
+    expect(actionEnum).not.toContain("overlay");
+    expect(actionEnum).not.toContain("list_apps");
+    expect(String(tool!.description)).toMatch(/delivery=uia/);
   });
 });
 
@@ -360,6 +438,62 @@ describe("createWindowsUiAutomationProvider", () => {
     expect(acted.delivery).toBe("uia");
     expect(scripts[0]).toContain("SendWait");
     expect(scripts[0]).toContain("^s");
+  });
+
+  it("focus_window / status / list_displays do not require element", async () => {
+    const scripts: string[] = [];
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell(script) {
+        scripts.push(script);
+        if (script.includes("AllScreens")) {
+          return JSON.stringify({
+            displays: [
+              {
+                index: 0,
+                primary: true,
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                device: "\\\\.\\DISPLAY1",
+              },
+            ],
+          });
+        }
+        return "focused:Weixin|微信";
+      },
+    });
+    const focused = await svc.act({ action: "focus_window", app: "Weixin" });
+    expect(focused.ok).toBe(true);
+    expect(focused.message).toContain("Weixin");
+    expect(scripts.some((s) => s.includes("SetForegroundWindow"))).toBe(true);
+
+    // element= is ignored for window-level focus (session regression: was unsupported)
+    const focusedWithEl = await svc.act({
+      action: "focus_window",
+      app: "Weixin",
+      element: 1,
+    });
+    expect(focusedWithEl.ok).toBe(true);
+
+    const status = await svc.act({ action: "status" });
+    expect(status.ok).toBe(true);
+    expect(status.message).toContain("windows-uia");
+
+    const displays = await svc.act({ action: "list_displays" });
+    expect(displays.ok).toBe(true);
+    expect(displays.message).toContain("1920");
+  });
+
+  it("rejects focus_window without app or title", async () => {
+    const svc = createWindowsUiAutomationProvider({
+      async runPowerShell() {
+        return "";
+      },
+    });
+    await expect(svc.act({ action: "focus_window" })).rejects.toThrow(
+      /app=|title/,
+    );
   });
 
   it("scrolls with ScrollPattern script and optional element", async () => {
@@ -698,6 +832,18 @@ describe("COMPUTER_USE_PROMPT_TEXT", () => {
     });
     expect(multi).toContain("multimodal");
     expect(multi).toContain("vision/som");
+  });
+
+  it("UIA guidance scopes ladder away from agent-desktop-only verbs", async () => {
+    const { formatComputerUseGuidance } = await import("../src/format.js");
+    const text = formatComputerUseGuidance(["computer_use"], {
+      delivery: "uia",
+    });
+    expect(text).toContain("delivery=uia");
+    expect(text).toContain("Usual loop: list_windows → focus_window →");
+    expect(text).not.toContain("focus_window or launch");
+    expect(text).toMatch(/do not call launch/i);
+    expect(text).toMatch(/Settings → Computer use → agent-desktop/);
   });
 
   it("memory find filters and reindexes for act", async () => {

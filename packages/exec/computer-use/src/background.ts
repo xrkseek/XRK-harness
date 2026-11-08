@@ -3,10 +3,12 @@
  * When the helper binary is not installed, every call returns unavailable.
  *
  * Product `mode=background` composes this with UIA for capture/listWindows
- * (see {@link composeBackgroundWithCapture}); this module owns act only.
+ * (see {@link composeBackgroundWithCapture}). Pointer/keyboard acts stay here;
+ * window focus / clipboard / status / list_displays route to UIA.
  */
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { COMPUTER_USE_BACKGROUND_UIA_ACTS } from "./actions.js";
 import { ComputerUseError } from "./types.js";
 import type {
   ComputerUseActRequest,
@@ -118,9 +120,10 @@ export function createBackgroundInputProvider(
 }
 
 /**
- * DSH-aligned background delivery: act via helper, capture/listWindows via a
- * desktop Provider (Windows UIA). Without a capture backend, capture keeps
- * failing honestly as in {@link createBackgroundInputProvider}.
+ * DSH-aligned background delivery: pointer/keyboard via helper; capture /
+ * listWindows / find / window-clipboard inventory via UIA (or other capture).
+ * Without a capture backend, capture keeps failing honestly as in
+ * {@link createBackgroundInputProvider}.
  */
 export function composeBackgroundWithCapture(
   act: ComputerUseService,
@@ -133,7 +136,12 @@ export function composeBackgroundWithCapture(
     capture: (request?: ComputerUseCaptureRequest, signal?: AbortSignal) =>
       capture.capture(request, signal),
     listWindows: (signal?: AbortSignal) => capture.listWindows(signal),
-    act: (request, signal) => act.act(request, signal),
+    act: (request, signal) => {
+      if (COMPUTER_USE_BACKGROUND_UIA_ACTS.has(request.action)) {
+        return capture.act(request, signal);
+      }
+      return act.act(request, signal);
+    },
     ...(typeof capture.find === "function"
       ? {
           find: (

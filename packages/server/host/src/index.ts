@@ -1461,6 +1461,9 @@ export function createHostManager(): HostManager {
           sandbox?: import("@xrkseek/exec-sandbox").SandboxProductConfig;
           computerUseProduct?: import("@xrkseek/exec-computer-use").ComputerUseProductConfig;
           computerUseEnv?: NodeJS.ProcessEnv;
+          gitAttribution?: {
+            readonly enabled?: boolean;
+          };
           browserProduct?: import("@xrkseek/exec-web").BrowserProductConfig;
           voiceProduct?: import("@xrkseek/exec-voice").VoiceProductConfig;
           voiceEnv?: NodeJS.ProcessEnv;
@@ -1788,6 +1791,9 @@ export function createHostManager(): HostManager {
                 : {}),
               ...(pluginSettings.computerUseEnv
                 ? { computerUseEnv: pluginSettings.computerUseEnv }
+                : {}),
+              ...(pluginSettings.gitAttribution
+                ? { gitAttribution: pluginSettings.gitAttribution }
                 : {}),
               ...(pluginSettings.browserProduct
                 ? { browserProduct: pluginSettings.browserProduct }
@@ -2989,6 +2995,11 @@ export function createHostManager(): HostManager {
                   ? cuModeRaw
                   : "agent-desktop",
           };
+        const gitAttrNs = faceRuntime.settingsNamespaces.view("git-attribution")
+          .value as Record<string, unknown>;
+        const gitAttribution = {
+          enabled: gitAttrNs.enabled !== false,
+        };
         const backgroundHelper =
           faceRuntime.credentials.peek("computer.background")?.trim() ||
           process.env.XRK_COMPUTER_USE_BACKGROUND?.trim() ||
@@ -3328,6 +3339,7 @@ export function createHostManager(): HostManager {
           sandbox,
           computerUseProduct,
           ...(computerUseEnv ? { computerUseEnv } : {}),
+          gitAttribution,
           browserProduct,
           voiceProduct,
           ...(voiceEnv ? { voiceEnv } : {}),
@@ -3394,6 +3406,7 @@ export function createHostManager(): HostManager {
             ns === "web-search" ||
             ns === "sandbox" ||
             ns === "computer-use" ||
+            ns === "git-attribution" ||
             ns === "voice" ||
             ns === "tts" ||
             ns === "asr" ||

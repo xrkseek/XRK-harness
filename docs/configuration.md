@@ -13,6 +13,7 @@
 | 模型 | **设置 → 模型** |
 | API 密钥 | **设置 → 凭据**（日常使用经设置页配置；无需先 export env） |
 | 默认权限档 | **设置 → 权限**；会话 Access 芯片 / `/permission` |
+| SSH 远程 · Git 共同作者 · 命令行 xrkh | **设置 → 通用**（`ssh-remote` 改完重启；`git-attribution` 热生效；xrkh PATH 默认关） |
 | MCP · 网页搜索 · 终端 · Agent 循环 · 工作区注入 | **设置 → 插件 → 插件配置** |
 | 打开 yaml | 设置页「打开配置文件」→ `{XRK_HOME}/settings.yaml`（常用 `~/.xrk/settings.yaml`） |
 
@@ -120,6 +121,10 @@ Path jail：`exec-fs` `resolveWithinRoot`（[security-checklist.md](./security-c
 
 Host 启用 SSH 时会先跑 `true` 预检（失败则拒绝启动）；`xrkh doctor` 有 `ssh-remote` 行。云任务 / Codex Noise `exec-server` **未做**（见 [status](./status.md)）。
 
+### Git 共同作者（General）
+
+Face ns `git-attribution`：Settings → 通用 → **Git 共同作者**（默认开）。开 = 系统提示要求 agent 在提交说明末尾追加固定 `Co-authored-by: xrkseek <…>`；关 = 不注入该段。**不**改 `git config` / commit Author（仍是用户本机身份）。开关热生效（下次 agent 重建 / 下一 turn）。
+
 ### 可插拔 ExecEnvironment（HTTP sidecar）
 
 与 SSH 互斥：配置了 SSH 时 Host **优先 SSH**，忽略 `XRK_EXEC_ENVIRONMENT=http|memory`。
@@ -205,7 +210,7 @@ Preset 选型：[profiles.md](./profiles.md)。
 | `XRK_WEB_FETCH_ALLOWLIST` | 可选 `web_fetch` 出站主机 allowlist（逗号分隔；空=开放仍拦私网）；审计环见 [web-tools](./web-tools.md) |
 | `XRK_SANDBOX_WINDOWS_MODE` | `workspace-write`（默认）· `read-only` · `danger-full-access` |
 | `XRK_SANDBOX_WINDOWS_NETWORK` | `none`（默认）或 `bridge` / `on` |
-| `XRK_COMPUTER_USE` | CI 旁路 Settings：`agent-desktop` · `1`/`uia`（Windows UIA）· `memory` · `background` · `off` — 产品路径用 Settings → Plugins → Computer use；`off` 不登记工具；见 [computer-use.md](./computer-use.md) |
+| `XRK_COMPUTER_USE` | CI 旁路 Settings：`agent-desktop` · `uia` · `memory` · `background` · `off`；裸 `1`/`true`/`on` 仅软开启（有 Settings 模式则跟 Settings）。**产品路径用 Settings → Plugins → Computer use**，不要写进用户环境变量；见 [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background 助手路径（也可用 Credentials 槽；`mode=background` 时需要） |
 | `XRK_CURATED_MEMORY` | CI 旁路 Settings：`0` 强制关 · 非空其它强制开 — 产品路径用 Settings → Plugins → 策展记忆；见 [curated-memory.md](./curated-memory.md) |
 | `XRK_CURATED_MEMORY_PHASE2` | CI 旁路：`1` / `true` 强制开 Phase2 LLM 巩固（产品路径用 Settings `curated-memory.phase2Llm`） |
@@ -339,6 +344,7 @@ After `xrkh web`:
 | Model | **Settings → Models** |
 | API keys | **Settings → Credentials** (do not `export` env for routine use) |
 | Default permission preset | **Settings → Permissions**; session Access chip / `/permission` |
+| SSH remote · Git co-author · command-line xrkh | **Settings → General** (`ssh-remote` needs Host restart; `git-attribution` is live; xrkh PATH off by default) |
 | MCP · web search · browser · voice · image-gen · video-gen · video-analyze · curated-memory · external-agent · shell · agent loop · workspace inject · sandbox · computer use · cron · session telemetry · auto-review · memory-embed (Advanced) | **Settings → Plugins** |
 | Open yaml | Settings “Open configuration file” → `{XRK_HOME}/settings.yaml` (usually `~/.xrk/settings.yaml`) |
 
@@ -446,6 +452,10 @@ Local Host, remote cwd: file / bash / `run_code` ride OpenSSH; no model-facing `
 
 When SSH is enabled, Host probes with remote `true` before serving (fail-closed); `xrkh doctor` reports an `ssh-remote` row. Cloud tasks / Codex Noise `exec-server` are **not done** (see [status](./status.md)).
 
+### Git co-author (General)
+
+Face ns `git-attribution`: Settings → General → **Git co-author** (default on). On = system prompt asks the agent to append a fixed `Co-authored-by: xrkseek <…>` trailer; off = no such section. Does **not** change `git config` or commit Author (stays the user's local identity). Live on next agent rebuild / turn.
+
 ### Pluggable ExecEnvironment (HTTP sidecar)
 
 Mutually exclusive with SSH: when SSH is configured, Host **prefers SSH** and ignores `XRK_EXEC_ENVIRONMENT=http|memory`.
@@ -531,7 +541,7 @@ Behavior notes:
 | `XRK_WEB_FETCH_ALLOWLIST` | Optional `web_fetch` outbound host allowlist (comma-separated; empty = open, private still blocked); audit ring — see [web-tools](./web-tools.md) |
 | `XRK_SANDBOX_WINDOWS_MODE` | `workspace-write` (default) · `read-only` · `danger-full-access` |
 | `XRK_SANDBOX_WINDOWS_NETWORK` | `none` (default) or `bridge` / `on` |
-| `XRK_COMPUTER_USE` | CI bypass over Settings: `agent-desktop` · `1`/`uia` (Windows UIA) · `memory` · `background` · `off` — product path: Settings → Plugins → Computer use; `off` does not register the tool; see [computer-use.md](./computer-use.md) |
+| `XRK_COMPUTER_USE` | CI bypass over Settings: `agent-desktop` · `uia` · `memory` · `background` · `off`; bare `1`/`true`/`on` soft-enables (follows Settings when set). **Product path: Settings → Plugins → Computer use** — do not put this in the user environment; see [computer-use.md](./computer-use.md) |
 | `XRK_COMPUTER_USE_BACKGROUND` | Background helper path (also via Credentials; required when `mode=background`) |
 | `XRK_CURATED_MEMORY` | CI bypass over Settings: `0` force off · any other non-empty force on — product path: Settings → Plugins → Curated memory; see [curated-memory.md](./curated-memory.md) |
 | `XRK_CURATED_MEMORY_PHASE2` | CI bypass: `1` / `true` force Phase2 LLM consolidation (product path: Settings `curated-memory.phase2Llm`) |

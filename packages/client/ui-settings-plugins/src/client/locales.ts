@@ -190,6 +190,7 @@ export type PluginsSettingsLocaleKey =
   | 'sshRemotePort' | 'sshRemotePortHint'
   | 'sshRemoteKeyPath' | 'sshRemoteKeyPathHint'
   | 'sshRemoteRestartHint'
+  | 'gitAttributionTitle' | 'gitAttributionDescription'
   | 'autoReviewTitle' | 'autoReviewDescription'
   | 'autoReviewEnabled' | 'autoReviewEnabledHint'
   | 'autoReviewEnabledOn' | 'autoReviewEnabledOff'
@@ -738,6 +739,9 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteKeyPath: 'Identity file',
   sshRemoteKeyPathHint: 'Optional local path to an OpenSSH private key (not the key material).',
   sshRemoteRestartHint: 'Requires a Host restart to take effect (SSH world is built at spawn).',
+  gitAttributionTitle: 'Git co-author',
+  gitAttributionDescription:
+    'On (default): agent commits append Co-authored-by: xrkseek. Off: no trailer guidance. Never changes git config or Author.',
   autoReviewTitle: 'Auto-review classifier',
   autoReviewDescription:
     'Tool pre-review on the pipeline (not a chat context-fragment). Session permission Auto = no sandbox + per-call review. Classifier tiers: heuristic (default) · http (URL below / XRK_AUTO_REVIEW_CLASSIFIER_URL) · session-llm (Host current model when URL empty). Each call → allow / deny / ask→approval.',
@@ -1319,6 +1323,9 @@ export const ja = {
   sshRemoteKeyPath: 'Identity ファイル',
   sshRemoteKeyPathHint: 'OpenSSH 秘密鍵への任意ローカルパス（鍵本体ではない）。',
   sshRemoteRestartHint: '反映には Host の再起動が必要です（SSH 環境は起動時に構築されます）。',
+  gitAttributionTitle: 'Git 共著者',
+  gitAttributionDescription:
+    'オン（既定）: エージェントのコミットに Co-authored-by: xrkseek。オフ: 何もしない。git config / Author は変更しません。',
   autoReviewTitle: '自動レビュー分類器',
   autoReviewDescription: 'パイプライン上のツール事前レビュー（チャットのコンテキスト断片ではありません）。セッション権限 Auto = サンドボックスなし＋呼び出しごとレビュー。分類器の段階: heuristic（デフォルト）· http（下の URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· session-llm（URL が空のとき Host の現在モデル）。各呼び出し → allow / deny / ask→承認。',
   autoReviewEnabled: '自動レビューを有効化',
@@ -1901,6 +1908,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   sshRemoteKeyPath: '私钥路径',
   sshRemoteKeyPathHint: '可选本机私钥文件路径（不是密钥内容）。',
   sshRemoteRestartHint: '需重启 Host 后生效（SSH 世界在进程启动时构建）。',
+  gitAttributionTitle: 'Git 共同作者',
+  gitAttributionDescription:
+    '开（默认）：Agent 写的 commit 挂 Co-authored-by: xrkseek。关：当没这回事。不改 git config / Author。',
   autoReviewTitle: '自动审查（Auto-review）',
   autoReviewDescription:
     '工具管线预审（不是聊天 context-fragment）。会话权限 Auto = 无沙箱 + 每次调用评审。分类器三档：启发式（默认）· http（下方 URL / XRK_AUTO_REVIEW_CLASSIFIER_URL）· 会话 LLM（URL 空且 Host 有当前模型）。每次调用 → 放行 / 拒绝 / 询问→审批。',

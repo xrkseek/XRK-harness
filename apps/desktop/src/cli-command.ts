@@ -33,14 +33,18 @@ export function cliCommandPrefPath(xrkHome: string): string {
   return path.join(xrkHome, CLI_COMMAND_PREF_FILE);
 }
 
-/** Missing or unreadable pref means link (product default). */
+/**
+ * Missing / unreadable pref → **off** (opt-in).
+ * Only an explicit `{ "link": true }` enables user-PATH injection.
+ * Bundled browser / agent-desktop CLIs do not use this path — Host resolves them.
+ */
 export function readCliCommandEnabled(raw: string | undefined): boolean {
-  if (raw === undefined || raw.trim() === "") return true;
+  if (raw === undefined || raw.trim() === "") return false;
   try {
     const doc = JSON.parse(raw) as { link?: unknown };
-    return doc.link !== false;
+    return doc.link === true;
   } catch {
-    return true;
+    return false;
   }
 }
 

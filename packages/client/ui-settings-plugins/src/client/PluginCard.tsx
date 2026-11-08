@@ -42,8 +42,13 @@ export interface PluginCardProps {
   onDiscard?: () => void
   /** The plugin's controls. */
   children: ReactNode
-  /** Show the section as information: the footer has nothing to write. */
+  /** Informational card: no Save/Discard footer (HostInfo / ProcessChannels). Still expands. */
   readOnly?: boolean
+  /**
+   * Header switch only — no expand body (Git co-author). Switch stays enabled
+   * when the document is writable; distinct from {@link readOnly}.
+   */
+  switchOnly?: boolean
   /**
    * Optional status chip on the collapsed header (e.g. current mode).
    * Distinct from the unsaved pill — a live fact, not a draft warning.
@@ -72,9 +77,13 @@ export function PluginCard(props: PluginCardProps) {
   if (!state.available) return null
   const title = props.t(props.titleKey)
   const blocked = !state.dirty || state.invalid || state.saving
-  const readOnly = props.readOnly === true || !state.writable
+  const switchOnly = props.switchOnly === true
+  const infoOnly = props.readOnly === true
+  const documentLocked = !state.writable
   const master = props.masterSwitch
-  const switchDisabled = readOnly || master?.disabled === true || state.saving
+  // Info-only cards keep a working disclose; switch-only keeps a working switch.
+  const switchDisabled =
+    documentLocked || master?.disabled === true || state.saving
 
   const head = (
     <>
@@ -87,14 +96,20 @@ export function PluginCard(props: PluginCardProps) {
           {props.badge !== undefined && props.badge.length > 0
             ? <span className={css.badge}>{props.badge}</span>
             : null}
-          {readOnly && props.readOnly === true
+          {documentLocked && !switchOnly
             ? <span className={css.badgeMuted}>{props.t('readOnly')}</span>
             : null}
         </span>
         <span className={css.description}>{props.t(props.descriptionKey)}</span>
       </span>
       {state.dirty ? <span className={css.pending}>{props.t('unsaved')}</span> : null}
-      <IconChevronDownOutlineRegular className={clsx(css.chevron, open && css.chevronOpen)} />
+      {switchOnly
+        ? null
+        : (
+          <IconChevronDownOutlineRegular
+            className={clsx(css.chevron, open && css.chevronOpen)}
+          />
+        )}
     </>
   )
 
@@ -106,9 +121,16 @@ export function PluginCard(props: PluginCardProps) {
             <button
               type="button"
               className={css.headerMain}
-              aria-expanded={open}
-              aria-label={`${props.t(open ? 'collapse' : 'expand')}: ${title}`}
-              onClick={() => { setOpen(!open) }}
+              aria-expanded={switchOnly ? undefined : open}
+              aria-label={
+                switchOnly
+                  ? title
+                  : `${props.t(open ? 'collapse' : 'expand')}: ${title}`
+              }
+              onClick={() => {
+                if (!switchOnly) setOpen(!open)
+              }}
+              disabled={switchOnly}
             >
               {head}
             </button>
@@ -122,7 +144,7 @@ export function PluginCard(props: PluginCardProps) {
                 // expands and hits Save — apply the master field immediately.
                 master.onChange(next)
                 props.onSave?.()
-                if (next) setOpen(true)
+                if (next && !switchOnly && !infoOnly) setOpen(true)
               }}
             />
           </div>
@@ -138,14 +160,14 @@ export function PluginCard(props: PluginCardProps) {
             {head}
           </button>
         )}
-      {open
+      {open && !switchOnly
         ? (
           <div className={css.body}>
-            {!state.writable && props.readOnly !== true
+            {documentLocked && !infoOnly
               ? <p className={css.readOnly} role="status">{props.t('readOnly')}</p>
               : null}
             <div className={css.fields}>{props.children}</div>
-            {props.readOnly === true
+            {infoOnly || documentLocked
               ? null
               : (
                 <div className={css.footer}>

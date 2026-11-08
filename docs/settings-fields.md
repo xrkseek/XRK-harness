@@ -3,7 +3,7 @@
 > 本文由 `node scripts/dump-settings-fields.mjs` 从 `packages/server/face/src/settings-schemas.ts` 生成，不要手改。
 > 增删字段先改 schema，再重跑脚本；文档与 `settings_get` / `settings_mutate` / Settings 卡片读的是同一份定义。
 
-共 32 个 namespace。`applies=live` 保存即生效；`restart` 需重启 Host。
+共 34 个 namespace。`applies=live` 保存即生效；`restart` 需重启 Host。
 
 ## 快速地图
 
@@ -196,7 +196,7 @@
 
 ## `computer-use`
 
-默认值：`{ mode: "off" }`
+默认值：`{ mode: "agent-desktop" }`
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
@@ -208,8 +208,15 @@
 | --- | --- | --- | --- |
 | `mode` | agent-browser \| http \| cdp | — |  |
 | `cdpUrl` | string | `""` |  |
-| `headed` | boolean | `false` | Show Chromium window when mode is agent-browser (maps to AGENT_BROWSER_HEADED). |
-| `executablePath` | string | `""` | Optional Chrome/Chromium path for agent-browser. Empty → auto (~/.agent-browser/browsers from `agent-browser install`, or system). |
+| `headed` | boolean | `true` | Show Chromium window when mode is agent-browser (AGENT_BROWSER_HEADED). Default on: watching the page is the usable Desktop path; CI / headless Hosts flip this off (or use HTTP snapshot mode). |
+| `browserBinary` | auto \| edge \| chrome \| bundled | — | Which browser to launch when `executablePath` is empty. `auto` (default): system Edge/Chrome first — no download / proxy. `edge` / `chrome`: prefer that family. `bundled`: only `agent-browser install` cache. |
+| `executablePath` | string | `""` | Optional absolute path to a Chromium browser (overrides `browserBinary`). Empty → resolve from `browserBinary` (system Edge/Chrome, or install cache). |
+| `chromeArgs` | string | `""` | Extra Chromium launch flags for agent-browser (`--args` / `AGENT_BROWSER_ARGS`). Comma or newline separated. Empty → Host applies a platform default (Windows: `--no-sandbox` so elevated Hosts do not die on DevToolsActivePort). |
+| `profile` | string | `""` | Chrome profile name (`Default`, `Profile 1`) or a custom profile directory. Reuses that profile's cookies / login when agent-browser launches Chromium (`--profile` / `AGENT_BROWSER_PROFILE`). Empty = fresh profile per session. Close Chrome first when pointing at a live system profile. |
+| `proxy` | string | `""` | HTTP(S) proxy for agent-browser launches, e.g. `http://127.0.0.1:7897`. Empty = direct (`--proxy` / `AGENT_BROWSER_PROXY`). |
+| `restore` | boolean | `true` | Auto-save / restore cookies + localStorage keyed by the Host session (`--restore`). Keeps login across agent rebuilds without a system profile. |
+| `autoConnect` | boolean | `false` | Attach to an already-running Chrome (with remote debugging) to reuse its live tabs and auth (`--auto-connect`). Off by default — surprising when Chrome is not listening. |
+| `statePath` | string | `""` | Load a saved auth state JSON before first navigation (`--state` / `AGENT_BROWSER_STATE`). Empty = none. Pair with `agent-browser state save`. |
 
 ## `cron`
 
@@ -237,10 +244,11 @@
 | `enabled` | boolean | `false` |  |
 | `engine` | edge \| local \| openai | `"edge"` |  |
 | `baseUrl` | string | `""` |  |
-| `voice` | string | `""` | Chinese (or default) voice id: an Edge short name, an OS voice name, or a provider voice id. `text_to_speech` uses this row for `zh` clips. |
-| `voiceEn` | string | `"en-US-AriaNeural"` | English voice id, used for `en` clips and for `auto` calls whose text reads as English. Defaults to an Edge English voice so an out-of-the-box Host never reads English with a Chinese mouth; `local` users point it at an installed English voice instead. |
+| `voice` | string | `TTS_DEFAULT_VOICE_ZH` | Chinese (or default) voice id: an Edge short name, an OS voice name, or a provider voice id. `text_to_speech` uses this row for `zh` clips. Defaults to Edge 晓晓 so Settings never lands on a blank「引擎默认」while English already ships Aria — `local` / `openai` users re-pick. |
+| `voiceEn` | string | `TTS_DEFAULT_VOICE_EN` | English voice id, used for `en` clips and for `auto` calls whose text reads as English. Defaults to an Edge English voice so an out-of-the-box Host never reads English with a Chinese mouth; `local` users point it at an installed English voice instead. |
 | `language` | auto \| zh \| en | `"auto"` | Spoken language for `text_to_speech`: `auto` sniffs the text. |
 | `model` | string | `""` | OpenAI-compatible TTS model; ignored by edge / local. |
+| `proxy` | string | `""` | Optional HTTP(S) CONNECT proxy for Edge WebSocket / OpenAI `/audio/speech` (e.g. `http://127.0.0.1:7897`). Empty = direct. Same honesty rule as ASR `downloadProxy`: must stay declared so Schema.object does not strip it. |
 
 ## `image-gen`
 
@@ -347,6 +355,22 @@
 | --- | --- | --- | --- |
 | `busyEnter` | queue \| steer | — |  |
 | `toolsDefaultExpanded` | boolean | `false` |  |
+
+## `desktop`
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `preventIdleSleep` | boolean | `false` | Keep the machine awake while a session is running (default off). Desktop only — CLI / headless Hosts ignore this. |
+| `notifyOnComplete` | boolean | `true` | Fire an OS notification when a background session finishes (Codex `notify` / TUI completion notice). Default on. |
+| `notifyFocusPolicy` | unfocused \| always | `"unfocused"` | When to show the completion notification. `unfocused` (default) skips while this window has focus; `always` always fires. |
+
+## `git-attribution`
+
+默认值：`{ enabled: true }`
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `true` |  |
 
 ## `mcp`
 

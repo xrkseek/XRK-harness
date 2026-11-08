@@ -1,7 +1,7 @@
 /**
  * Windows UI Automation Provider — AX snapshot + Invoke/ValuePattern input.
- * Delivery is "uia" (not cua-driver background SPI). Opt-in via XRK_COMPUTER_USE=1
- * or Settings → Plugins → Computer use (mode=uia).
+ * Delivery is "uia" (not cua-driver background SPI). Opt-in via Settings →
+ * Plugins → Computer use (mode=uia), or CI `XRK_COMPUTER_USE=uia`.
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -497,6 +497,85 @@ Start-Sleep -Milliseconds 30
 }
 
 /**
+ * Bring a top-level window forward by process name and/or title substring.
+ * Custom-drawn apps (WeChat) expose almost no AX children — focus still works.
+ */
+export function focusWindowScript(options: {
+  readonly app?: string;
+  readonly title?: string;
+}): string {
+  const appLit = psStr(options.app?.trim() ?? "");
+  const titleLit = psStr(options.title?.trim() ?? "");
+  return `${PS_PRELUDE}
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class XrkFocusWin {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  public const int SW_RESTORE = 9;
+}
+"@
+$appFilter = ${appLit}
+$titleFilter = ${titleLit}
+if ([string]::IsNullOrWhiteSpace($appFilter) -and [string]::IsNullOrWhiteSpace($titleFilter)) {
+  throw 'focus_window needs app=… and/or text=… (window title)'
+}
+$wins = XrkTopWindows
+$match = $null
+$candidates = New-Object System.Collections.Generic.List[string]
+foreach ($w in $wins) {
+  $n = ''
+  try { $n = $w.Current.Name } catch {}
+  $proc = XrkProcName $w.Current.ProcessId
+  if (-not [string]::IsNullOrWhiteSpace($n) -or -not [string]::IsNullOrWhiteSpace($proc)) {
+    $candidates.Add(("$proc|$n").Trim('|'))
+  }
+  $appOk = [string]::IsNullOrWhiteSpace($appFilter) -or (XrkMatch $proc $appFilter) -or (XrkMatch $n $appFilter)
+  $titleOk = [string]::IsNullOrWhiteSpace($titleFilter) -or (XrkMatch $n $titleFilter)
+  if ($appOk -and $titleOk) { $match = $w; break }
+}
+if (-not $match) {
+  $hint = ($candidates | Select-Object -First 8) -join '; '
+  throw ("no window matches app=$appFilter title=$titleFilter" + $(if ($hint) { " — open: $hint" } else { '' }))
+}
+$hwnd = [IntPtr]$match.Current.NativeWindowHandle
+if ($hwnd -eq [IntPtr]::Zero) { throw 'matched window has no HWND' }
+if ([XrkFocusWin]::IsIconic($hwnd)) { [void][XrkFocusWin]::ShowWindow($hwnd, [XrkFocusWin]::SW_RESTORE) }
+[void][XrkFocusWin]::SetForegroundWindow($hwnd)
+try { $match.SetFocus() } catch {}
+$outTitle = ''
+try { $outTitle = $match.Current.Name } catch {}
+$outApp = XrkProcName $match.Current.ProcessId
+"focused:$outApp|$outTitle"
+`.trim();
+}
+
+/** Monitor list for Models that call list_displays on the UIA path. */
+function listDisplaysScript(): string {
+  return `${PS_PRELUDE}
+Add-Type -AssemblyName System.Windows.Forms
+$list = New-Object System.Collections.Generic.List[object]
+$i = 0
+foreach ($s in [System.Windows.Forms.Screen]::AllScreens) {
+  $b = $s.Bounds
+  $list.Add([pscustomobject]@{
+    index = $i
+    primary = [bool]$s.Primary
+    x = $b.X
+    y = $b.Y
+    width = $b.Width
+    height = $b.Height
+    device = $s.DeviceName
+  })
+  $i++
+}
+@{ displays = $list } | ConvertTo-Json -Depth 5 -Compress
+`.trim();
+}
+
+/**
  * ValuePattern first, then clipboard paste (CJK-safe), then escaped SendKeys.
  * Raw SendKeys mangles `+^%~()` and drops non-ASCII, so the caller passes both
  * the literal text and a SendKeys-escaped copy.
@@ -702,7 +781,7 @@ function payloadList<T>(value: unknown): T[] {
 }
 
 /**
- * Windows UI Automation Provider. Requires a desktop session; opt-in with XRK_COMPUTER_USE=1.
+ * Windows UI Automation Provider. Requires a desktop session; opt-in via Settings mode=uia.
  */
 export function createWindowsUiAutomationProvider(
   options: WindowsUiAutomationOptions = {},
@@ -820,7 +899,9 @@ export function createWindowsUiAutomationProvider(
         );
       } else if (elements.length <= 2) {
         notes.push(
-          "AX tree looks hollow (≤2 nodes — custom-drawn / accessibility-light UIs) — no reliable headless element path; do not steal the mouse via bash; prefer apps with a real accessibility tree or Background mode",
+          "AX tree looks hollow (≤2 nodes — custom-drawn / accessibility-light UIs) — no reliable headless element path; " +
+            "do not steal the mouse via bash; use focus_window → capture mode=vision → headed=true click/coordinate " +
+            "(or Settings → Computer use → agent-desktop)",
         );
       } else if (payload.exhausted === false) {
         notes.push(`tree truncated at ${elements.length} of more nodes; raise maxElements for more`);
@@ -1001,6 +1082,55 @@ try { Get-Clipboard -Raw } catch { Get-Clipboard }
           delivery: "uia",
         };
       }
+      if (request.action === "focus_window") {
+        const appName = request.app?.trim() || lastApp;
+        const title = request.text?.trim();
+        if (!appName && !title) {
+          throw new ComputerUseError(
+            "focus_window needs app=… and/or text=… (window title)",
+            "COMPUTER_USE_BAD_ARGS",
+          );
+        }
+        const out = await run(
+          focusWindowScript({
+            ...(appName ? { app: appName } : {}),
+            ...(title ? { title } : {}),
+          }),
+          signal,
+        );
+        if (appName) lastApp = appName;
+        return {
+          ok: true,
+          action: "focus_window",
+          message: out || `focused:${appName || title || ""}`,
+          delivery: "uia",
+        };
+      }
+      if (request.action === "status") {
+        return {
+          ok: true,
+          action: "status",
+          message: JSON.stringify({
+            provider: "windows-uia",
+            delivery: "uia",
+            lastApp,
+            lastWindowTitle,
+            elementCount: lastElements.length,
+          }),
+          delivery: "uia",
+        };
+      }
+      if (request.action === "list_displays") {
+        const raw = await run(listDisplaysScript(), signal);
+        const parsed = parseJson<{ displays?: unknown }>(raw, "displays");
+        const displays = payloadList(parsed.displays);
+        return {
+          ok: true,
+          action: "list_displays",
+          message: JSON.stringify(displays),
+          delivery: "uia",
+        };
+      }
       if (
         request.action === "click" &&
         request.coordinate !== undefined &&
@@ -1023,7 +1153,8 @@ try { Get-Clipboard -Raw } catch { Get-Clipboard }
       }
       if (request.element === undefined) {
         throw new ComputerUseError(
-          "element index is required (or pass coordinate=[x,y] with headed=true for pixel click)",
+          `action=${request.action} needs element index (or coordinate=[x,y] with headed=true). ` +
+            "Window-level actions without an element: focus_window, status, list_displays, key, scroll, clipboard_*.",
           "COMPUTER_USE_BAD_ARGS",
         );
       }
@@ -1055,7 +1186,10 @@ try { Get-Clipboard -Raw } catch { Get-Clipboard }
           delivery: "uia",
         };
       }
-      throw new ComputerUseError("unsupported action", "COMPUTER_USE_BAD_ARGS");
+      throw new ComputerUseError(
+        `unsupported action=${request.action} on UIA element path (supported with element: click, type; without: focus_window, status, list_displays, key, scroll, clipboard_*)`,
+        "COMPUTER_USE_BAD_ARGS",
+      );
     },
     async listWindows(signal?: AbortSignal) {
       const raw = await run(listWindowsScript(), signal);

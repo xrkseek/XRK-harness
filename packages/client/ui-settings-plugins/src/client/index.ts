@@ -44,6 +44,7 @@ import { MemoryEmbedCard } from './MemoryEmbedCard.tsx'
 import { ProcessChannelsCard } from './ProcessChannelsCard.tsx'
 import { SandboxCard } from './SandboxCard.tsx'
 import { SshRemoteCard } from './SshRemoteCard.tsx'
+import { GitAttributionCard } from './GitAttributionCard.tsx'
 import { TelemetryCard } from './TelemetryCard.tsx'
 import { VideoGenCard } from './VideoGenCard.tsx'
 import { VideoAnalyzeCard } from './VideoAnalyzeCard.tsx'
@@ -82,6 +83,10 @@ import {
 import { SANDBOX_NS, SandboxCardController } from './sandbox-card-controller.ts'
 import { SESSION_TELEMETRY_NS, TelemetryCardController } from './telemetry-card-controller.ts'
 import { SSH_REMOTE_NS, SshRemoteCardController } from './ssh-remote-card-controller.ts'
+import {
+  GIT_ATTRIBUTION_NS,
+  GitAttributionCardController,
+} from './git-attribution-card-controller.ts'
 import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { VIDEO_GEN_NS, VideoGenCardController, VIDEO_GEN_OPENAI_REF, VIDEO_GEN_FAL_REF, VIDEO_GEN_XAI_REF } from './video-gen-card-controller.ts'
 import { VIDEO_ANALYZE_NS, VideoAnalyzeCardController, VIDEO_ANALYZE_OPENAI_REF } from './video-analyze-card-controller.ts'
@@ -125,6 +130,10 @@ export type { InfoRow } from './info-card-model.ts'
 export type { SandboxCardFace, SandboxCardState } from './sandbox-card-controller.ts'
 export type { TelemetryCardFace, TelemetryCardState } from './telemetry-card-controller.ts'
 export type { SshRemoteCardFace, SshRemoteCardState } from './ssh-remote-card-controller.ts'
+export type {
+  GitAttributionCardFace,
+  GitAttributionCardState,
+} from './git-attribution-card-controller.ts'
 export type { AutoReviewCardFace, AutoReviewCardState } from './auto-review-card-controller.ts'
 export type { MemoryEmbedCardFace, MemoryEmbedCardState } from './memory-embed-card-controller.ts'
 export type { McpCardFace, McpCardState, McpServerDraft, McpConnectedEntry } from './mcp-card-controller.ts'
@@ -187,6 +196,9 @@ export function apply(ctx: ClientContext): void {
   )
   const sshRemote = new SshRemoteCardController(
     ctx.settingsScope.bind({ namespace: SSH_REMOTE_NS }),
+  )
+  const gitAttribution = new GitAttributionCardController(
+    ctx.settingsScope.bind({ namespace: GIT_ATTRIBUTION_NS }),
   )
   const sandbox = new SandboxCardController(
     ctx.settingsScope.bind({ namespace: SANDBOX_NS }),
@@ -467,6 +479,15 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => sshRemote.inject(),
   }, SshRemoteCard))
+
+  // Codex-style git Co-authored-by (live prompt guidance).
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'git-attribution',
+    order: 34,
+    locale: NS,
+    inject: () => gitAttribution.inject(),
+  }, GitAttributionCard))
 
   // Desktop power / notify on General (not the Plugins compact entry).
   // Hidden when `xrkDesktop.preventIdleSleep` is missing (browser).

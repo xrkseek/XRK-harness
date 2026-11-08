@@ -6,6 +6,7 @@ import {
 } from "./background.js";
 import { createMemoryComputerUseProvider } from "./memory.js";
 import { createComputerUseProviderRegistry } from "./registry.js";
+import { pinAgentDesktopEnv } from "./resolve-cli.js";
 import { createWindowsUiAutomationProvider } from "./windows-uia.js";
 import type { ComputerUseProviderName, ComputerUseService } from "./types.js";
 import { computerUseUnavailableMessage } from "./tools.js";
@@ -58,6 +59,7 @@ export {
 export {
   createWindowsUiAutomationProvider,
   captureScript,
+  focusWindowScript,
   DEFAULT_POWERSHELL_TIMEOUT_MS,
   type CaptureScriptOptions,
   type PowerShellRunner,
@@ -74,7 +76,17 @@ export {
   runAgentDesktop,
   type AgentDesktopProviderOptions,
 } from "./agent-desktop.js";
-export { resolveAgentDesktopBin } from "./resolve-cli.js";
+export {
+  resolveAgentDesktopBin,
+  pinAgentDesktopEnv,
+  ensureAgentDesktopOnPath,
+} from "./resolve-cli.js";
+export {
+  COMPUTER_USE_UIA_ACTIONS,
+  COMPUTER_USE_MEMORY_ACTIONS,
+  COMPUTER_USE_BACKGROUND_UIA_ACTS,
+  computerUseActionsForDelivery,
+} from "./actions.js";
 export {
   buildOverlayDisableArgs,
   buildOverlayEnableArgs,
@@ -138,12 +150,17 @@ export interface DefaultComputerUseAccess {
   readonly unavailableMessage: string;
 }
 
-function modeFromEnvFlag(flag: string): ComputerUseProductMode | "memory" {
+type EnvResolvedMode = ComputerUseProductMode | "memory" | "enable";
+
+function modeFromEnvFlag(flag: string): EnvResolvedMode {
   const raw = flag.trim().toLowerCase();
   if (raw === "memory") return "memory";
   if (raw === "background") return "background";
   if (raw === "agent-desktop" || raw === "desktop") return "agent-desktop";
-  if (raw === "1" || raw === "uia") return "uia";
+  // Bare enable flags are legacy "turn computer_use on" — not a hard UIA pin.
+  // Explicit `uia` still forces Windows UIA (CI / intentional).
+  if (raw === "1" || raw === "true" || raw === "on") return "enable";
+  if (raw === "uia") return "uia";
   if (raw === "0" || raw === "off" || raw === "false") return "off";
   return "off";
 }
@@ -151,9 +168,11 @@ function modeFromEnvFlag(flag: string): ComputerUseProductMode | "memory" {
 /**
  * Resolve a desktop computer-use Provider.
  * - Injected `service` wins (name `memory` unless the service id is uia/background).
- * - Non-empty `XRK_COMPUTER_USE` is CI bypass over Face `product`.
- * - Product / env: `off` · `uia` (`1`) · `background` · `memory` (env-only).
- * - Else no service — harness must **not** register `computer_use` (hot unload).
+ * - Explicit env backend (`agent-desktop` · `uia` · `memory` · `background` · `off`)
+ *   bypasses Face product (CI).
+ * - Bare `XRK_COMPUTER_USE=1|true|on` only *enables*: prefer Settings product
+ *   mode when set (stops User env=1 from silently overriding agent-desktop).
+ * - Else product / off — harness must **not** register `computer_use` (hot unload).
  */
 export function createDefaultComputerUseAccess(
   options: DefaultComputerUseAccessOptions = {},
@@ -175,10 +194,25 @@ export function createDefaultComputerUseAccess(
   }
 
   const envRaw = String(env.XRK_COMPUTER_USE ?? "").trim();
-  const envBypass = envRaw !== "";
-  const resolved = envBypass
-    ? modeFromEnvFlag(envRaw)
-    : (options.product?.mode ?? "off");
+  const productMode = options.product?.mode ?? "off";
+  let resolved: ComputerUseProductMode | "memory" | "off";
+  if (envRaw !== "") {
+    const fromEnv = modeFromEnvFlag(envRaw);
+    if (fromEnv === "enable") {
+      resolved =
+        productMode === "agent-desktop" ||
+        productMode === "uia" ||
+        productMode === "background"
+          ? productMode
+          : process.platform === "win32"
+            ? "uia"
+            : "off";
+    } else {
+      resolved = fromEnv;
+    }
+  } else {
+    resolved = productMode;
+  }
 
   if (resolved === "memory") {
     registry.register("memory");
@@ -190,6 +224,9 @@ export function createDefaultComputerUseAccess(
   }
   if (resolved === "agent-desktop") {
     registry.register("agent-desktop");
+    // Resolve absolute binary into XRK_AGENT_DESKTOP — do not mutate PATH.
+    // Host shells already see node/npm; product xrkh PATH is Settings → General.
+    pinAgentDesktopEnv(env);
     return {
       service: createAgentDesktopProvider({ env }),
       providerName: "agent-desktop",

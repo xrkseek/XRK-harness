@@ -1,6 +1,10 @@
 /**
  * Resolve a CLI binary for computer-use backends (agent-desktop).
  * Precedence: env override → native binary under host/cwd node_modules → PATH name.
+ *
+ * Does **not** mutate PATH. Host shells already see system CLIs (node / npm);
+ * product `xrkh` on the user PATH is Settings → General (Desktop). The
+ * computer_use Provider spawns via the absolute path (or `XRK_AGENT_DESKTOP`).
  */
 
 import { accessSync, constants as fsConstants } from "node:fs";
@@ -14,6 +18,24 @@ function isPresent(candidate: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Windows `execFile` cannot spawn extensionless npm shims (need cmd.exe).
+ * Prefer native `.exe`, then `.cmd`; skip bare shim names on win32.
+ */
+function isSpawnableCandidate(candidate: string): boolean {
+  if (!isPresent(candidate)) return false;
+  if (process.platform !== "win32") return true;
+  const base = path.basename(candidate).toLowerCase();
+  if (base.endsWith(".exe") || base.endsWith(".cmd") || base.endsWith(".bat")) {
+    return true;
+  }
+  // Extensionless file under node_modules/.bin is a node shim — not spawnable.
+  if (base === "agent-desktop" || !path.extname(base)) {
+    return false;
+  }
+  return true;
 }
 
 /** Platform-native binary filenames shipped by the npm postinstall. */
@@ -50,9 +72,17 @@ function pushPackageBins(
     out.push(path.join(binDir, name));
   }
   out.push(
-    path.join(binDir, binName),
     path.join(binDir, `${binName}.exe`),
+    path.join(binDir, binName),
     path.join(binDir, `${binName}.js`),
+  );
+}
+
+function pushShimBins(out: string[], mods: string, binName: string): void {
+  out.push(
+    path.join(mods, ".bin", `${binName}.cmd`),
+    path.join(mods, ".bin", `${binName}.exe`),
+    path.join(mods, ".bin", binName),
   );
 }
 
@@ -77,23 +107,15 @@ function binCandidates(packageName: string, binName: string): string[] {
   const resources = typeof resourcesPath === "string" ? resourcesPath : "";
   if (resources) {
     const hostMods = path.join(resources, "host", "node_modules");
-    out.push(
-      path.join(hostMods, ".bin", binName),
-      path.join(hostMods, ".bin", `${binName}.cmd`),
-    );
+    // Native package bins BEFORE .bin shims (Windows cannot execFile shims).
     pushPackageBins(out, path.join(hostMods, packageName), binName);
+    pushShimBins(out, hostMods, binName);
   }
   // Desktop Host / monorepo cwd deploy (incl. apps/desktop-host under repo root)
   for (const root of searchRoots()) {
     const mods = path.join(root, "node_modules");
-    // Prefer native package bins over .bin shims (Windows cannot spawn
-    // extensionless npm shims without a shell).
     pushPackageBins(out, path.join(mods, packageName), binName);
-    out.push(
-      path.join(mods, ".bin", `${binName}.cmd`),
-      path.join(mods, ".bin", `${binName}.exe`),
-      path.join(mods, ".bin", binName),
-    );
+    pushShimBins(out, mods, binName);
   }
   for (const pkgJsonPath of [
     path.join(process.cwd(), "package.json"),
@@ -130,7 +152,32 @@ export function resolveAgentDesktopBin(
   const override = String(env[envKey] ?? "").trim();
   if (override) return override;
   for (const candidate of binCandidates("agent-desktop", "agent-desktop")) {
-    if (isPresent(candidate)) return candidate;
+    if (isSpawnableCandidate(candidate)) return candidate;
   }
   return "agent-desktop";
+}
+
+/**
+ * Pin `XRK_AGENT_DESKTOP` to the resolved absolute binary for this env object.
+ * Does not mutate PATH (Host terminals already see node/npm; product `xrkh`
+ * PATH is Settings → General on Desktop).
+ */
+export function pinAgentDesktopEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const bin = resolveAgentDesktopBin(env);
+  if (bin === "agent-desktop" || !path.isAbsolute(bin)) return bin;
+  if (!env.XRK_AGENT_DESKTOP?.trim()) {
+    env.XRK_AGENT_DESKTOP = bin;
+  }
+  return bin;
+}
+
+/**
+ * @deprecated Use {@link pinAgentDesktopEnv}. Kept as an alias — no PATH inject.
+ */
+export function ensureAgentDesktopOnPath(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return pinAgentDesktopEnv(env);
 }

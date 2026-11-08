@@ -198,7 +198,7 @@ describe('ui-settings-plugins apply', () => {
     }
   })
 
-  it('registers SSH remote on General settings.general.item', async () => {
+  it('registers SSH remote + git attribution on General settings.general.item', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)
     slots.register({
@@ -213,6 +213,8 @@ describe('ui-settings-plugins apply', () => {
     await vi.waitFor(() => {
       expect(slots.entries('settings.general.item').map(e => e.options.id)).toEqual([
         'ssh-remote',
+        'git-attribution',
+        'desktop-power',
       ])
     })
   })
@@ -261,11 +263,11 @@ describe('ui-settings-plugins apply', () => {
     await vi.waitFor(() => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
         .toEqual([
-          'mcp', 'web-search', 'bash', 'agent-loop', 'workspace-inject',
-          'session-telemetry', 'sandbox', 'computer-use', 'browser', 'asr', 'tts',
+          'mcp', 'web-search', 'browser', 'computer-use', 'bash', 'sandbox',
+          'agent-loop', 'workspace-inject', 'asr', 'tts',
           'image-gen', 'video-gen', 'video-analyze', 'curated-memory',
-          'a2a-inbound', 'external-agent', 'cron',
-          'auto-review', 'memory-embed', 'host', 'process-channels',
+          'session-telemetry', 'a2a-inbound', 'external-agent', 'cron',
+          'auto-review', 'memory-embed', 'process-channels', 'host',
         ])
     })
   })

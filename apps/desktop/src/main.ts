@@ -455,7 +455,8 @@ function persistPosixCliPath(binDir: string, enabled: boolean): void {
 
 /**
  * Rewrite `{XRK_HOME}/bin/xrkh` to this install and put that directory first
- * on the user PATH. Missing pref means linked. Failures stay off the UI boot path.
+ * on the user PATH when enabled. Missing pref means **off** (opt-in via
+ * Settings → General). Failures stay off the UI boot path.
  */
 function syncDesktopCliCommand(enabled?: boolean): { linked: boolean; binDir: string } {
   const xrkHome = resolveDesktopHarnessHome({

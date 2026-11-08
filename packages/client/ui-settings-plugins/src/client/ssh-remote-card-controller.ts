@@ -7,7 +7,9 @@ import {
   textField,
   type CardActions,
   type CardFieldState,
+  type CardFieldSpec,
   type CardShell,
+  type FieldWrite,
 } from './card-form.ts'
 
 /** Face namespace — must match `FACE_PRODUCT_SETTINGS_NAMESPACES`. */
@@ -38,6 +40,27 @@ export interface SshRemoteCardFace extends CardActions {
   }
 }
 
+/**
+ * Workspace must be absolute POSIX (`/…`) when either host or workspace is set.
+ * Empty+empty stays local (valid). Windows drive letters are rejected early.
+ */
+function workspaceField(): CardFieldSpec {
+  const base = textField('workspace')
+  return {
+    field: 'workspace',
+    format: base.format,
+    parse: (text): FieldWrite | undefined => {
+      const write = base.parse(text)
+      if (write === undefined) return undefined
+      if (write.kind === 'clear') return write
+      const workspace = String(write.value ?? '').trim()
+      if (workspace === '') return { kind: 'clear' }
+      if (!workspace.startsWith('/')) return undefined
+      return { kind: 'set', value: workspace }
+    },
+  }
+}
+
 /** Bridges the `ssh-remote` scope onto the General card. */
 export class SshRemoteCardController {
   private readonly form: CardForm<SshRemoteSettings>
@@ -47,7 +70,7 @@ export class SshRemoteCardController {
   constructor(scope: SettingsScope<SshRemoteSettings>) {
     this.form = new CardForm(scope, [
       textField('host'),
-      textField('workspace'),
+      workspaceField(),
       textField('user'),
       numberField('port'),
       textField('keyPath'),
@@ -56,13 +79,24 @@ export class SshRemoteCardController {
   }
 
   private projection(): SshRemoteCardState {
+    const shell = this.form.shell()
+    const host = this.form.field('host')
+    const workspace = this.form.field('workspace')
+    // Pairing: host without workspace (or the reverse) must not save.
+    const hostText = host.text.trim()
+    const wsText = workspace.text.trim()
+    const pairBroken =
+      (hostText !== '' && wsText === '') || (hostText === '' && wsText !== '')
     return {
-      ...this.form.shell(),
-      host: this.form.field('host'),
-      workspace: this.form.field('workspace'),
+      ...shell,
+      host,
+      workspace: pairBroken
+        ? { ...workspace, invalid: true }
+        : workspace,
       user: this.form.field('user'),
       port: this.form.field('port'),
       keyPath: this.form.field('keyPath'),
+      invalid: shell.invalid || pairBroken,
     }
   }
 

@@ -20,7 +20,7 @@ const tools = createFsTools(stubFs); // Swap Provider; tool schema stays unchang
 
 Web：`@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`；Provider 匿名 HTTP + Tavily/Brave（有密钥）或 **parallel-free → duckduckgo**；DeepSeek Search **仅钉选**；Consumer `createWebTools` + `createBrowserTools`。规格：[web-tools.md](./web-tools.md)。
 
-桌面 computer-use：`@xrkseek/exec-computer-use` — Definition `ComputerUseService`；Provider memory / Windows UIA（`XRK_COMPUTER_USE=1`）；Consumer `createComputerUseTools`。与 `browser_*` 分开。规格：[computer-use.md](./computer-use.md)。
+桌面 computer-use：`@xrkseek/exec-computer-use` — Definition `ComputerUseService`；Provider `agent-desktop` / memory / Windows UIA（Settings `mode` 或 CI `XRK_COMPUTER_USE`）；Consumer `createComputerUseTools`（action enum 按 delivery 收窄）。与 `browser_*` 分开。规格：[computer-use.md](./computer-use.md)。
 
 策展记忆：`@xrkseek/exec-memory` — Definition `CuratedMemoryStore`（别名缝 `MemoryProvider`）；默认 `file`，可选 `http` / `sqlite` 样板；Consumer `createCuratedMemoryTools` → `memory`。系统提示带策略段与会话开始冻结快照。回合后启发式写入；会话结束 Phase1 巩固 + 可选 Phase2 LLM（`phase2Llm`）。与 Mnemon / memory-embed 分开。规格：[curated-memory.md](./curated-memory.md)。
 
@@ -97,7 +97,7 @@ Built-in search: `fs.glob` / `fs.grep` → tool names `glob` / `grep`. Default b
 
 Web: `@xrkseek/exec-web` — Definition `WebSearch`/`WebFetch`; Provider anonymous HTTP + Tavily/Brave (when keyed) or **parallel-free → duckduckgo**; DeepSeek Search **pin-only**; Consumer `createWebTools` + `createBrowserTools` + optional `createBrowserVaultTools` (opaque Face credential handles). Spec: [web-tools.md](./web-tools.md).
 
-Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseService`; Provider memory / Windows UIA (`XRK_COMPUTER_USE=1`); Consumer `createComputerUseTools`. Capture text includes `mode:` + `elementToken=` (SOM honesty without screenshot overlay yet). Separate from `browser_*`. Spec: [computer-use.md](./computer-use.md).
+Desktop computer-use: `@xrkseek/exec-computer-use` — Definition `ComputerUseService`; Provider `agent-desktop` / memory / Windows UIA (Settings `mode` or CI `XRK_COMPUTER_USE`); Consumer `createComputerUseTools` (action enum scoped by delivery). Capture text includes `mode:` + `elementToken=`. Separate from `browser_*`. Spec: [computer-use.md](./computer-use.md).
 
 Curated memory: `@xrkseek/exec-memory` — Definition `CuratedMemoryStore` (seam alias `MemoryProvider`); default `file`, optional `http` / `sqlite` samples; Consumer `createCuratedMemoryTools` → `memory`. System prompt carries policy + session-start freeze. After-turn heuristics; session-end Phase1 + optional Phase2 LLM (`phase2Llm`). Separate from Mnemon / memory-embed. Spec: [curated-memory.md](./curated-memory.md).
 

@@ -427,6 +427,14 @@ describe("Face settings U2", () => {
       keyPath: "",
     });
     expect(sshRemote.applies).toBe("restart");
+    expect(v.namespaces.some((n) => n.ns === "git-attribution")).toBe(true);
+    const gitAttribution = v.namespaces.find((n) => n.ns === "git-attribution") as {
+      ns: string;
+      value: { enabled: boolean };
+      applies: string;
+    };
+    expect(gitAttribution.value.enabled).toBe(true);
+    expect(gitAttribution.applies).toBe("live");
 
     const permission = v.namespaces.find((n) => n.ns === "permission") as {
       ns: string;

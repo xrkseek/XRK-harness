@@ -13,15 +13,15 @@ Harness 在 Settings **开启**时登记模型工具 `computer_use`；`mode=off`
 | 层 | 内容 |
 |----|------|
 | Definition | `ComputerUseService`（`capture` · `act` · `listWindows` · 可选 `find`） |
-| Provider | `agent-desktop` · `memory` · Windows `uia`（`XRK_COMPUTER_USE=1`）· `background`（`XRK_COMPUTER_USE=background`，助手未安装则 `unavailable`）；或 Host 注入。同一注册表同时只占一个名字 |
-| Consumer | `createComputerUseTools` → `computer_use`（完整 agent-desktop 面：observe / act / windows / wait / overlay；环：list_windows → focus_window\|launch → capture\|find → click/type/key/scroll/clipboard_* → 再 capture；`mode=vision|som` 经 `saveScreenshot` 内联图）。不登记到 `browser_*` |
+| Provider | `agent-desktop` · `memory` · Windows `uia`（Settings `mode=uia` 或 CI `XRK_COMPUTER_USE=uia`）· `background`（`XRK_COMPUTER_USE=background`，助手未安装则 `unavailable`）；或 Host 注入。同一注册表同时只占一个名字 |
+| Consumer | `createComputerUseTools` → `computer_use`。**工具 `action` enum 与系统 guidance 均按 Provider delivery 收窄**：`agent-desktop` 为全量面；`uia` / `background` / `memory` 只挂各自能跑的动作（避免模型把 UIA 上的 launch/overlay 失败写成「空壳」）。环：list_windows → focus_window\|launch → capture\|find → click/type/key/scroll/clipboard_* → 再 capture；`mode=vision|som` 经 `saveScreenshot` 内联图。不登记到 `browser_*` |
 
 ## 启用
 
 | 方式 | 效果 |
 |------|------|
 | Settings `mode=agent-desktop` 或 `XRK_COMPUTER_USE=agent-desktop` | 调用 [agent-desktop](https://github.com/vercel-labs/agent-desktop) CLI（**1.x**，AX + **快照限定 ref** `@<snapshot_id>:eN`；Windows/macOS/Linux）。Host 默认开 **CLI session + cursor-overlay**。动作面含 observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay；`get`/`is` 走 `--property`，窗口缩放走 `--width/--height`，拖拽走 `--from/--to`。**默认 headless**。缺二进制时失败并提示 / `XRK_AGENT_DESKTOP` |
-| `XRK_COMPUTER_USE=1`（Windows） | UI Automation Provider（`delivery=uia`）；优先 Invoke/ValuePattern；物理鼠标需 `headed=true` |
+| `XRK_COMPUTER_USE=1`（Windows） | **软开启**：若 Settings 已选 `agent-desktop`/`uia`/`background` 则跟 Settings；仅当 Settings 未开时才落默认 UIA。硬钉 UIA 请写 `XRK_COMPUTER_USE=uia` |
 | `XRK_COMPUTER_USE=memory` | 内存假树（CI / 演示） |
 | `XRK_COMPUTER_USE=background` | 后台输入。`XRK_COMPUTER_USE_BACKGROUND` 指向已安装助手才真正发送；否则每次调用 `unavailable`。不改 UIA，也不走 `browser_*` |
 | `computerUseTools: service` | 注入自定义 Provider |
@@ -66,15 +66,15 @@ Harness registers the model tool `computer_use` when Settings has it **on**; `mo
 | Layer | Content |
 |-------|---------|
 | Definition | `ComputerUseService` (`capture` · `act` · `listWindows` · optional `find`) |
-| Provider | `agent-desktop` · `memory` · Windows `uia` (`XRK_COMPUTER_USE=1`) · `background` (`XRK_COMPUTER_USE=background`; missing helper returns `unavailable`); or Host inject. The registry holds one name at a time |
-| Consumer | `createComputerUseTools` → `computer_use` (full agent-desktop surface: observe / act / windows / wait / overlay; loop: list_windows → focus_window\|launch → capture\|find → click/type/key/scroll/clipboard_* → capture again; `mode=vision|som` via `saveScreenshot`). Not registered on `browser_*` |
+| Provider | `agent-desktop` · `memory` · Windows `uia` (Settings `mode=uia` or CI `XRK_COMPUTER_USE=uia`) · `background` (`XRK_COMPUTER_USE=background`; missing helper returns `unavailable`); or Host inject. The registry holds one name at a time |
+| Consumer | `createComputerUseTools` → `computer_use`. **Action enum and system guidance are scoped by Provider delivery**: full surface for `agent-desktop`; narrower for `uia` / `background` / `memory` (so models do not treat UIA refusals as "empty shells"). Loop: list_windows → focus_window\|launch → capture\|find → click/type/key/scroll/clipboard_* → capture again; `mode=vision|som` via `saveScreenshot`. Not registered on `browser_*` |
 
 ## Enable
 
 | How | Effect |
 |-----|--------|
 | Settings `mode=agent-desktop` or `XRK_COMPUTER_USE=agent-desktop` | Shells [agent-desktop](https://github.com/vercel-labs/agent-desktop) (**1.x**, AX + **snapshot-qualified refs** `@<snapshot_id>:eN`; Win/macOS/Linux). Host defaults to a durable **CLI session + cursor-overlay**. Surface covers observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay; `get`/`is` use `--property`, resize uses `--width/--height`, drag uses `--from/--to`. **Headless by default**. Missing binary fails with install / `XRK_AGENT_DESKTOP` |
-| `XRK_COMPUTER_USE=1` (Windows) | UI Automation Provider (`delivery=uia`); Invoke/ValuePattern first; physical mouse needs `headed=true` |
+| `XRK_COMPUTER_USE=1` (Windows) | Soft enable: follows Settings when `agent-desktop`/`uia`/`background` is set; otherwise defaults to UIA. Pin UIA with `XRK_COMPUTER_USE=uia` |
 | `XRK_COMPUTER_USE=memory` | In-memory fake tree (CI / demos) |
 | `XRK_COMPUTER_USE=background` | Background input. Sends only when `XRK_COMPUTER_USE_BACKGROUND` points at an installed helper; otherwise every call is `unavailable`. Does not replace UIA and does not use `browser_*` |
 | `computerUseTools: service` | Inject a custom Provider |

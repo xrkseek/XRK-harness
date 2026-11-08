@@ -59,13 +59,16 @@ Rules: \`id\`/\`kind\` match \`createPlugin()\`. Stable \`name\`; \`description\
 - \`prompt\` → \`promptSections\` (not fake tools).
 - \`commands\` → Face slash list. Same name as a user recipe → recipe wins; pick another name.
 
-## Install
+## Install / remove
 
 \`\`\`bash
 xrkh plugin add <abs-or-rel-path>
+xrkh plugin remove <name>
 xrkh restart
 xrkh plugin list
 \`\`\`
+
+\`xrkh\` on PATH is Settings → General → **命令行 xrkh** (Desktop; user can turn off). 向阳空间删除用户插件走这条 CLI（或 Settings inventory），不要手删目录凑合。
 
 No hot reload — restart Host (or Desktop Host) after edits. Or \`XRK_PLUGINS_DIR=<parent>\`. Default list: \`~/.xrk/plugins\` (\`XRK_HOME\` / \`XRK_PLUGINS_DIR\` override).
 

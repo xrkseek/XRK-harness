@@ -5,7 +5,7 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["preset.ts", "mods.ts"],
+  "include": ["preset.ts", "mods.ts", "git-attribution.ts"],
   "references": [
     {
       "path": "../../packages/attachment"

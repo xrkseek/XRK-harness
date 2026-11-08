@@ -17,9 +17,12 @@ afterEach(() => {
 });
 
 describe("cli command link", () => {
-  it("defaults to linked when the pref is missing", () => {
-    expect(readCliCommandEnabled(undefined)).toBe(true);
+  it("defaults to off when the pref is missing (opt-in)", () => {
+    expect(readCliCommandEnabled(undefined)).toBe(false);
+    expect(readCliCommandEnabled("")).toBe(false);
     expect(readCliCommandEnabled('{"link":false}')).toBe(false);
+    expect(readCliCommandEnabled('{"link":true}')).toBe(true);
+    expect(readCliCommandEnabled("{not-json")).toBe(false);
   });
 
   it("prepends the shim dir once and rewrites xrkh to the bundled binary", () => {

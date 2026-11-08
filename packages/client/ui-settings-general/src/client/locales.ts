@@ -10,7 +10,7 @@ export const zh = {
   'general.nav': '通用设置',
   'general.title': '通用设置',
   'general.intro':
-    '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json。「远程」配置 SSH 远端工作区（改完需重启 Host）。模型与密钥在「模型」页；MCP、终端、联网搜索、Agent 循环、沙箱在「插件」页。对话里也可用 /theme · /model · /permission。',
+    '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json。「远程」配 SSH（改完重启 Host）。「Git 共同作者」一个开关：开则挂 Co-authored-by: xrkseek。「命令行 xrkh」默认关。模型与密钥在「模型」；MCP / Shell 等在「插件」。对话可用 /theme · /model · /permission。',
   'sidebarPush.opens.title': '侧栏 agent 打开推送',
   'sidebarPush.opens.description':
     '开启后模型可用 sidebar_open，经 /sidebar/ws/agent-opens 推到侧栏（prefs.agentOpenTools）。',
@@ -44,7 +44,7 @@ export const zh = {
   'release.failed': '检查或安装更新失败',
   'cliCommand.title': '命令行 xrkh',
   'cliCommand.description':
-    '把本应用自带的 xrkh 放到用户 PATH 最前（~/.xrk/bin）。每次启动会改写这个命令，使终端、ACP 和子代理用到当前安装版本，而不是更早的 npm 全局包。关掉后只撤掉本应用写的命令。',
+    '默认关闭。打开后把本应用自带的 xrkh 放到用户 PATH 最前（~/.xrk/bin），并热更新；每次启动会改写 shim，使外部终端 / ACP 用到当前安装版。关掉只撤掉本应用写的条目。向阳空间删插件可用 xrkh plugin remove。内置 browser / agent-desktop 不依赖此项。',
   'cliCommand.saveFailed': '未能更新命令行 xrkh',
   'desktopShare.title': '临时分享',
   'desktopShare.description':
@@ -75,7 +75,7 @@ export const en = {
   'general.nav': 'General',
   'general.title': 'General',
   'general.intro':
-    'Session defaults and appearance. Sidebar agent-push switches write ~/.xrk/sidebar/prefs.json. Remote configures an SSH remote workspace (Host restart required). Models and credentials live under Models; MCP, Shell, web search, agent loop, and sandbox under Plugins. In chat you can also use /theme · /model · /permission.',
+    'Session defaults and appearance. Sidebar agent-push → ~/.xrk/sidebar/prefs.json. Remote = SSH (Host restart). Git co-author is one switch (on → Co-authored-by: xrkseek). Command-line xrkh is off by default. Models under Models; MCP / Shell under Plugins. Chat: /theme · /model · /permission.',
   'sidebarPush.opens.title': 'Sidebar agent open push',
   'sidebarPush.opens.description':
     'When on, the model may call sidebar_open and push via /sidebar/ws/agent-opens (prefs.agentOpenTools).',
@@ -109,7 +109,7 @@ export const en = {
   'release.failed': 'Could not check or install the update',
   'cliCommand.title': 'Command-line xrkh',
   'cliCommand.description':
-    'Put this app’s xrkh first on your user PATH (~/.xrk/bin). Each launch rewrites that command so terminals, ACP, and subagents use the current install instead of an older npm-global copy. Turning this off removes only the command this app wrote.',
+    'Off by default. When on, puts this app’s xrkh first on your user PATH (~/.xrk/bin) and applies live; each launch rewrites the shim so external terminals / ACP use the current install. Turning off removes only what this app wrote. Use xrkh plugin remove from Xiangyang to uninstall plugins. Bundled browser / agent-desktop do not need this.',
   'cliCommand.saveFailed': 'Could not update command-line xrkh',
   'desktopShare.title': 'Temporary share',
   'desktopShare.description':
@@ -167,7 +167,8 @@ export const ja = {
   'release.progress': '{percent}%',
   'release.failed': '更新の確認またはインストールができませんでした',
   'cliCommand.title': 'コマンドライン xrkh',
-  'cliCommand.description': 'このアプリの xrkh をユーザー PATH（~/.xrk/bin）の先頭に置きます。起動のたびにそのコマンドを書き換えるため、ターミナル、ACP、サブエージェントは古い npm グローバル版ではなく現在のインストールを使います。オフにすると、このアプリが書いたコマンドだけが削除されます。',
+  'cliCommand.description':
+    '既定はオフ。オンにするとこのアプリの xrkh をユーザー PATH（~/.xrk/bin）の先頭に置き、即時反映します。起動のたびに shim を書き換え、外部ターミナル / ACP が現在のインストールを使います。オフにするとこのアプリが書いた項目だけ削除。プラグイン削除は xrkh plugin remove。同梱 browser / agent-desktop はこの設定に依存しません。',
   'cliCommand.saveFailed': 'コマンドライン xrkh を更新できませんでした',
   'desktopShare.title': '一時共有',
   'desktopShare.description':

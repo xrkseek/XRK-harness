@@ -72,7 +72,7 @@
 | `lsp` 失败 | 无 `XRK_LSP_COMMAND` |
 | `terminal_open` 失败 | 无可用 `node-pty` native |
 | 要交互式浏览器（`browser_*`） | `browser_open` / `browser_snapshot` / `browser_act`（HTTP 会话）；SPA/JS 渲染仍受限 |
-| 要桌面 GUI 操控（`computer_use`） | 设 `XRK_COMPUTER_USE=1`（Windows UIA）或 `memory`；见 [computer-use](./computer-use.md) |
+| 要桌面 GUI 操控（`computer_use`） | Settings → Plugins → Computer use（默认 `agent-desktop`）；CI 才用 `XRK_COMPUTER_USE=agent-desktop\|uia\|memory`；见 [computer-use](./computer-use.md) |
 
 下列在**未配置**时仍可能出现在工具表，execute 回明文错误（见上表）。
 
@@ -192,7 +192,7 @@ See: [modules/mcp.md](./modules/mcp.md) · [policy.md](./policy.md).
 | `lsp` fails | Missing `XRK_LSP_COMMAND` |
 | `terminal_open` fails | No usable `node-pty` native |
 | Need interactive browser (`browser_*`) | `browser_open` / `browser_snapshot` / `browser_act` (HTTP session); SPA/JS-rendered pages still limited |
-| Need desktop GUI control (`computer_use`) | Set `XRK_COMPUTER_USE=1` (Windows UIA) or `memory`; see [computer-use](./computer-use.md) |
+| Need desktop GUI control (`computer_use`) | Settings → Plugins → Computer use (default `agent-desktop`); CI only: `XRK_COMPUTER_USE=agent-desktop\|uia\|memory`; see [computer-use](./computer-use.md) |
 
 The tools below may still appear in the tool table when **unconfigured**; execute returns a plain-text error (see table above).
 

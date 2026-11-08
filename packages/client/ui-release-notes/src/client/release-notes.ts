@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.14',
+    date: '2026-11-08',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '设置 → 通用：新增「Git 共同作者」开关（默认开）— 提交说明追加 Co-authored-by: xrkseek；不改 git config / Author。',
+        en: 'Settings → General: Git co-author switch (default on) — commit messages append Co-authored-by: xrkseek; never changes git config / Author.',
+      },
+      {
+        zh: 'computer_use：动作按 Provider 收窄；裸 XRK_COMPUTER_USE=1 只软开启（跟 Settings，不钉死 UIA）。',
+        en: 'computer_use: actions scoped by Provider; bare XRK_COMPUTER_USE=1 soft-enables (follows Settings, no silent UIA pin).',
+      },
+      {
+        zh: 'Desktop「命令行 xrkh」默认关；agent-desktop 由 Host 解析，不注入 PATH。',
+        en: 'Desktop command-line xrkh is off by default; Host resolves agent-desktop without PATH injection.',
+      },
+      {
+        zh: '社区 Host：@earendil-works/pi-ai 升到 1.5.0。',
+        en: 'Community Host: @earendil-works/pi-ai moves to 1.5.0.',
+      },
+    ],
+  },
+  {
     version: '0.7.13',
     date: '2026-11-08',
     title: {

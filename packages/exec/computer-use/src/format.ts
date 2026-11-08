@@ -55,6 +55,8 @@ export function formatAxSnapshot(options: {
 
 /** Live model route modality for tool envelopes / guidance. */
 export interface ComputerUseModalityOptions {
+  /** Live Provider delivery — scopes ladder copy away from agent-desktop-only verbs. */
+  readonly delivery?: string;
   /**
    * `true` = multimodal (pixels on the wire).
    * `false` = text-only (screenshots soft-degrade).
@@ -113,7 +115,7 @@ export function formatWindowsList(windows: readonly ComputerUseWindow[]): string
   if (windows.length === 0) {
     return [
       "windows: (none)",
-      "use=Launch the target app, then capture.",
+      "use=Open or focus the target app, then capture (launch only if that action is on this Provider).",
     ].join("\n");
   }
   const lines = ["windows:"];
@@ -183,12 +185,31 @@ export function formatComputerUseGuidance(
   const names = asSet(available);
   if (!names.has("computer_use")) return "";
   const modality = options?.multimodal;
+  const delivery = options?.delivery?.trim() || "agent-desktop";
   const ladder =
     modality === false
       ? "Ladder (text-only): try accessibility actions, then find, then clipboard; headed=true only with user consent (it moves the real cursor). vision/som soft-degrade on this route."
       : modality === true
         ? "Ladder (multimodal): accessibility → find → clipboard → vision/som → headed=true only with user consent (it moves the real cursor)."
         : "Ladder: accessibility → find → clipboard → vision/som when the route is multimodal → headed=true only with user consent (it moves the real cursor). On text-only routes, vision/som soft-degrade.";
+  if (delivery === "uia" || delivery === "background") {
+    return [
+      `Native desktop GUI via ${delivery === "uia" ? "Windows UI Automation" : "Background helper + UIA capture"} (delivery=${delivery}). ` +
+        "Tool action enum is already narrowed — do not call launch/get/overlay/list_apps; they are not on this Provider.",
+      "Usual loop: list_windows → focus_window → capture or find → click/type/key/scroll by element index → capture again. Indices go stale after UI changes.",
+      "Prefer focus_window over shell scripts. For CJK text, clipboard_set then key=ctrl+v (or type on an AX ref).",
+      ladder,
+      "A coordinate click needs headed=true.",
+      "Hollow AX (custom-drawn apps): focus_window → capture mode=vision|som → headed=true coordinate click → clipboard. Do not invent PowerShell or user32 helpers.",
+      "Need the full agent-desktop surface → Settings → Computer use → agent-desktop.",
+    ].join("\n");
+  }
+  if (delivery === "memory") {
+    return [
+      "In-memory computer_use fake (delivery=memory). Limited actions: capture/find/list_windows/click/type/key/scroll.",
+      ladder,
+    ].join("\n");
+  }
   return [
     "Native desktop GUI through agent-desktop. Accessibility capture is headless by default — it does not move the mouse unless headed=true.",
     "Usual loop: list_windows → focus_window or launch → capture or find → click/type/key/scroll by element index → capture again. A newer capture or find invalidates older indices.",
@@ -196,7 +217,7 @@ export function formatComputerUseGuidance(
     ladder,
     "A coordinate click needs headed=true.",
     "If a window returns almost no accessibility nodes (custom-drawn apps), focus it, capture with mode=vision or som, click by coordinate, then paste via clipboard. Do not invent PowerShell or user32 helpers.",
-    "Commands not exposed on this tool can be run as `agent-desktop …` in bash.",
+    "Prefer the computer_use tool over bare `agent-desktop` in bash — the tool resolves the binary (like Host already seeing node/npm); do not expect PATH injection.",
   ].join("\n");
 }
 

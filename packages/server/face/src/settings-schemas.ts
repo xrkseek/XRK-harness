@@ -319,6 +319,15 @@ const DesktopConfig = Schema.object({
   notifyFocusPolicy: Schema.union(["unfocused", "always"]).default("unfocused"),
 });
 
+/**
+ * Codex-style git attribution (General). When on, guidance asks the agent to
+ * append a fixed `Co-authored-by: xrkseek <…>` trailer. Does **not** change
+ * git config or commit Author (stays the human's local identity). Default on.
+ */
+const GitAttributionConfig = Schema.object({
+  enabled: Schema.boolean().default(true),
+});
+
 const WebSearchConfig = Schema.object({
   provider: Schema.union([
     "auto",
@@ -1064,6 +1073,13 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
         notifyFocusPolicy: "unfocused",
       },
       // Desktop main peeks settings.yaml + renderer IPC; live toggle.
+      applies: "live",
+    },
+    {
+      ns: "git-attribution",
+      schema: schemasteryJson(GitAttributionConfig) as FaceSchemaEnvelope,
+      base: { enabled: true },
+      // Prompt guidance re-reads on agent rebuild / next turn.
       applies: "live",
     },
     {

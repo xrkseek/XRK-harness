@@ -62,6 +62,7 @@ import {
   isComputerUseEnabled,
   type ComputerUseService,
 } from "@xrkseek/exec-computer-use";
+import { formatGitAttributionGuidance } from "./git-attribution.js";
 import {
   createVoiceAccess,
   createVoiceTools,
@@ -288,6 +289,11 @@ export interface HarnessCompositionOptions {
    */
   readonly computerUseEnv?: NodeJS.ProcessEnv;
   /**
+   * Face `git-attribution` (Settings → General). Default on: Co-authored-by
+   * trailer for agent-authored commits / PRs. User can turn off.
+   */
+  readonly gitAttribution?: import("./git-attribution.js").GitAttributionProduct;
+  /**
    * Face `browser` product (Settings SoT). Ignored when `XRK_BROWSER_CDP_URL`
    * / `BROWSER_CDP_URL` is set (CI bypass).
    */
@@ -397,7 +403,7 @@ export interface HarnessCompositionOptions {
   /**
    * Register `computer_use` (desktop AX tree + input). Default: on.
    * `false` skips. Pass a `ComputerUseService` to inject. Without
-   * `XRK_COMPUTER_USE=1` (Windows UIA) / `memory` / inject → tool still
+   * Settings / `XRK_COMPUTER_USE=uia|agent-desktop|memory` / inject → tool still
    * visible, execute is an honest error. Separate from browser_*.
    */
   readonly computerUseTools?: boolean | ComputerUseService;
@@ -1140,6 +1146,8 @@ export function createHarnessComposition(
   }
   // Off → do not register `computer_use` (hot unload on Settings save).
   // Injected service or product/env on → mount; rebuild adds/drops the tool.
+  // Hoist delivery so system guidance matches the live Provider action enum.
+  let computerUseDelivery: string | undefined;
   if (options.computerUseTools !== false) {
     const injected =
       typeof options.computerUseTools === "object"
@@ -1156,6 +1164,7 @@ export function createHarnessComposition(
             : {}),
         });
     const service = injected ?? access?.service;
+    computerUseDelivery = service?.delivery;
     const mount =
       injected !== undefined ||
       isComputerUseEnabled({
@@ -1681,6 +1690,9 @@ export function createHarnessComposition(
       order: 116,
       content: () =>
         formatComputerUseGuidance(availableToolNames(), {
+          ...(computerUseDelivery
+            ? { delivery: computerUseDelivery }
+            : {}),
           ...(options.routeAllowsImage
             ? { multimodal: options.routeAllowsImage() }
             : {}),
@@ -1827,11 +1839,21 @@ export function createHarnessComposition(
     order: 108,
     content: () => SESSION_QUERY_ROUTING_PROMPT_TEXT,
   });
+  // One General switch: on → Co-authored-by xrkseek; off → no section at all.
+  const gitAttributionOn = options.gitAttribution?.enabled !== false;
+  if (gitAttributionOn) {
+    prompts.register({
+      id: "git:attribution",
+      order: 50,
+      content: () => formatGitAttributionGuidance(options.gitAttribution),
+    });
+  }
   wireCompositionPrompts(prompts, {
     ...(options.plugins ? { plugins: options.plugins } : {}),
     reservedIds: [
       "base",
       ...(curatedMemory ? ["curated-memory-policy", "curated-memory"] : []),
+      ...(gitAttributionOn ? ["git:attribution"] : []),
       "tool:skill",
       "tool:fs-routing",
       "tool:shell-routing",
