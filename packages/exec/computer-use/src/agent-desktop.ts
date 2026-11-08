@@ -163,8 +163,13 @@ function formatCliError(envelope: AgentDesktopEnvelope): {
       : err?.disposition && typeof err.disposition === "object"
         ? String(err.disposition.retry ?? "")
         : "";
-  const hint =
-    /STALE_REF|AMBIGUOUS_TARGET/i.test(code)
+  const ownership =
+    /foreign principal|lock directory owner|token owner|token user/i.test(
+      base,
+    );
+  const hint = ownership
+    ? " State root must be owned by this user — Host pins AGENT_DESKTOP_HOME to {XRK_HOME}/agent-desktop; delete a polluted ~/.agent-desktop if you set the env yourself."
+    : /STALE_REF|AMBIGUOUS_TARGET/i.test(code)
       ? " Capture again and use a fresh element index."
       : disposition
         ? ` disposition.retry=${disposition}.`

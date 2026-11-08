@@ -79,6 +79,7 @@ export {
 export {
   resolveAgentDesktopBin,
   pinAgentDesktopEnv,
+  resolveAgentDesktopHome,
   ensureAgentDesktopOnPath,
 } from "./resolve-cli.js";
 export {

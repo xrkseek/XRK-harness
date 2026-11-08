@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   captureScript,
@@ -10,6 +13,7 @@ import {
   formatAxSnapshot,
   isComputerUseEnabled,
   mapKeysToSendKeys,
+  pinAgentDesktopEnv,
   type ComputerUseService,
 } from "../src/index.js";
 
@@ -360,6 +364,31 @@ describe("createDefaultComputerUseAccess", () => {
     });
     expect(access.providerName).toBe("agent-desktop");
     expect(access.service?.providerId).toBe("agent-desktop");
+  });
+
+  it("pins AGENT_DESKTOP_HOME under XRK_HOME (avoids polluted ~/.agent-desktop)", () => {
+    const env: NodeJS.ProcessEnv = {
+      XRK_HOME: path.join(os.tmpdir(), `xrk-ad-home-${process.pid}`),
+    };
+    const access = createDefaultComputerUseAccess({
+      env,
+      product: { mode: "agent-desktop" },
+    });
+    expect(access.providerName).toBe("agent-desktop");
+    expect(env.AGENT_DESKTOP_HOME).toBe(
+      path.join(env.XRK_HOME!, "agent-desktop"),
+    );
+    expect(existsSync(env.AGENT_DESKTOP_HOME!)).toBe(true);
+  });
+
+  it("keeps an explicit AGENT_DESKTOP_HOME override", () => {
+    const home = path.join(os.tmpdir(), `xrk-ad-override-${process.pid}`);
+    const env: NodeJS.ProcessEnv = {
+      XRK_HOME: path.join(os.tmpdir(), "xrk-unused-home"),
+      AGENT_DESKTOP_HOME: home,
+    };
+    pinAgentDesktopEnv(env);
+    expect(path.resolve(env.AGENT_DESKTOP_HOME!)).toBe(path.resolve(home));
   });
 
   it("UIA tool schema does not advertise agent-desktop-only actions", () => {

@@ -7,8 +7,9 @@
  * computer_use Provider spawns via the absolute path (or `XRK_AGENT_DESKTOP`).
  */
 
-import { accessSync, constants as fsConstants } from "node:fs";
+import { accessSync, constants as fsConstants, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 
 function isPresent(candidate: string): boolean {
@@ -158,7 +159,25 @@ export function resolveAgentDesktopBin(
 }
 
 /**
- * Pin `XRK_AGENT_DESKTOP` to the resolved absolute binary for this env object.
+ * agent-desktop state root (`sessions/`, locks). Default `~/.agent-desktop`
+ * fails closed when owned by Administrators/SYSTEM (elevated run pollution).
+ * Prefer `{XRK_HOME}/agent-desktop` so Host and CLI share a user-owned root.
+ */
+export function resolveAgentDesktopHome(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const override = String(env.AGENT_DESKTOP_HOME ?? "").trim();
+  if (override) return path.resolve(override);
+  const xrkHome =
+    String(env.XRK_HOME ?? "").trim() ||
+    String(env.XRK_DSH_HOME ?? "").trim() ||
+    path.join(os.homedir(), ".xrk");
+  return path.join(path.resolve(xrkHome), "agent-desktop");
+}
+
+/**
+ * Pin `XRK_AGENT_DESKTOP` (absolute binary) and `AGENT_DESKTOP_HOME`
+ * (`{XRK_HOME}/agent-desktop`) on this env object.
  * Does not mutate PATH (Host terminals already see node/npm; product `xrkh`
  * PATH is Settings → General on Desktop).
  */
@@ -166,9 +185,19 @@ export function pinAgentDesktopEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const bin = resolveAgentDesktopBin(env);
-  if (bin === "agent-desktop" || !path.isAbsolute(bin)) return bin;
-  if (!env.XRK_AGENT_DESKTOP?.trim()) {
-    env.XRK_AGENT_DESKTOP = bin;
+  if (bin !== "agent-desktop" && path.isAbsolute(bin)) {
+    if (!env.XRK_AGENT_DESKTOP?.trim()) {
+      env.XRK_AGENT_DESKTOP = bin;
+    }
+  }
+  if (!String(env.AGENT_DESKTOP_HOME ?? "").trim()) {
+    const home = resolveAgentDesktopHome(env);
+    try {
+      mkdirSync(home, { recursive: true });
+    } catch {
+      // CLI still receives the path; ownership errors surface at spawn.
+    }
+    env.AGENT_DESKTOP_HOME = home;
   }
   return bin;
 }

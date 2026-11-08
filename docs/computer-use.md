@@ -20,7 +20,7 @@ Harness 在 Settings **开启**时登记模型工具 `computer_use`；`mode=off`
 
 | 方式 | 效果 |
 |------|------|
-| Settings `mode=agent-desktop` 或 `XRK_COMPUTER_USE=agent-desktop` | 调用 [agent-desktop](https://github.com/vercel-labs/agent-desktop) CLI（**1.x**，AX + **快照限定 ref** `@<snapshot_id>:eN`；Windows/macOS/Linux）。Host 默认开 **CLI session + cursor-overlay**。动作面含 observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay；`get`/`is` 走 `--property`，窗口缩放走 `--width/--height`，拖拽走 `--from/--to`。**默认 headless**。缺二进制时失败并提示 / `XRK_AGENT_DESKTOP` |
+| Settings `mode=agent-desktop` 或 `XRK_COMPUTER_USE=agent-desktop` | 调用 [agent-desktop](https://github.com/vercel-labs/agent-desktop) CLI（**1.x**，AX + **快照限定 ref** `@<snapshot_id>:eN`；Windows/macOS/Linux）。Host 默认开 **CLI session + cursor-overlay**；状态根钉 `{XRK_HOME}/agent-desktop`（`AGENT_DESKTOP_HOME`，避开被 Administrators/SYSTEM 污染的 `~/.agent-desktop`）。动作面含 observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay；`get`/`is` 走 `--property`，窗口缩放走 `--width/--height`，拖拽走 `--from/--to`。**默认 headless**。缺二进制时失败并提示 / `XRK_AGENT_DESKTOP` |
 | `XRK_COMPUTER_USE=1`（Windows） | **软开启**：若 Settings 已选 `agent-desktop`/`uia`/`background` 则跟 Settings；仅当 Settings 未开时才落默认 UIA。硬钉 UIA 请写 `XRK_COMPUTER_USE=uia` |
 | `XRK_COMPUTER_USE=memory` | 内存假树（CI / 演示） |
 | `XRK_COMPUTER_USE=background` | 后台输入。`XRK_COMPUTER_USE_BACKGROUND` 指向已安装助手才真正发送；否则每次调用 `unavailable`。不改 UIA，也不走 `browser_*` |
@@ -73,7 +73,7 @@ Harness registers the model tool `computer_use` when Settings has it **on**; `mo
 
 | How | Effect |
 |-----|--------|
-| Settings `mode=agent-desktop` or `XRK_COMPUTER_USE=agent-desktop` | Shells [agent-desktop](https://github.com/vercel-labs/agent-desktop) (**1.x**, AX + **snapshot-qualified refs** `@<snapshot_id>:eN`; Win/macOS/Linux). Host defaults to a durable **CLI session + cursor-overlay**. Surface covers observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay; `get`/`is` use `--property`, resize uses `--width/--height`, drag uses `--from/--to`. **Headless by default**. Missing binary fails with install / `XRK_AGENT_DESKTOP` |
+| Settings `mode=agent-desktop` or `XRK_COMPUTER_USE=agent-desktop` | Shells [agent-desktop](https://github.com/vercel-labs/agent-desktop) (**1.x**, AX + **snapshot-qualified refs** `@<snapshot_id>:eN`; Win/macOS/Linux). Host defaults to a durable **CLI session + cursor-overlay**; state root is `{XRK_HOME}/agent-desktop` (`AGENT_DESKTOP_HOME`, avoids a polluted `~/.agent-desktop` owned by Administrators/SYSTEM). Surface covers observe / act / windows / notifications / mouse_move|wheel / wait(--event) / overlay; `get`/`is` use `--property`, resize uses `--width/--height`, drag uses `--from/--to`. **Headless by default**. Missing binary fails with install / `XRK_AGENT_DESKTOP` |
 | `XRK_COMPUTER_USE=1` (Windows) | Soft enable: follows Settings when `agent-desktop`/`uia`/`background` is set; otherwise defaults to UIA. Pin UIA with `XRK_COMPUTER_USE=uia` |
 | `XRK_COMPUTER_USE=memory` | In-memory fake tree (CI / demos) |
 | `XRK_COMPUTER_USE=background` | Background input. Sends only when `XRK_COMPUTER_USE_BACKGROUND` points at an installed helper; otherwise every call is `unavailable`. Does not replace UIA and does not use `browser_*` |
