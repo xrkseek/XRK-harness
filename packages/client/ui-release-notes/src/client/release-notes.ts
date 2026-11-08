@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.15',
+    date: '2026-11-08',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'computer_use：坐标点击直接用 capture 截图上的像素（coordinateSpace=window，默认），封装层自动加上窗口原点与客户区偏移，不必自己算 DPI。',
+        en: 'computer_use: coordinate clicks now take pixels from the capture screenshot (coordinateSpace=window, the default); the provider adds the window origin and client inset, so no DPI math is needed.',
+      },
+      {
+        zh: 'computer_use：headed 坐标点击后自动把真光标放回原处（preserveCursor，默认开），不再抢走你的鼠标。',
+        en: 'computer_use: after a headed coordinate click the real cursor is put back where it was (preserveCursor, default on), so your mouse is not hijacked.',
+      },
+      {
+        zh: 'computer_use：focus_window 支持中文/含空格的窗口名（走 --title，失败回退 --app）；自绘窗口的操作提示改为键盘优先。',
+        en: 'computer_use: focus_window now handles Chinese / spaced window names (routes through --title, falls back to --app); custom-drawn windows get keyboard-first guidance.',
+      },
+      {
+        zh: 'agent-desktop：状态根迁到用户可写目录（Windows 为 %LOCALAPPDATA%/xrk-harness-agent-desktop），并自动处理提权残留的租约污染。',
+        en: 'agent-desktop: state root moves to a user-writable directory (Windows: %LOCALAPPDATA%/xrk-harness-agent-desktop), with self-healing for elevated leftover leases.',
+      },
+    ],
+  },
+  {
     version: '0.7.14',
     date: '2026-11-08',
     title: {
