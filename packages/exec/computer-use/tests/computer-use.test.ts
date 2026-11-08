@@ -346,7 +346,13 @@ describe("createDefaultComputerUseAccess", () => {
       env: { XRK_COMPUTER_USE: "uia" },
       product: { mode: "agent-desktop" },
     });
-    expect(access.providerName).toBe("uia");
+    // UIA Provider is Windows-only; Linux CI must not invent a desktop backend.
+    if (process.platform === "win32") {
+      expect(access.providerName).toBe("uia");
+    } else {
+      expect(access.providerName).toBeUndefined();
+      expect(access.service).toBeUndefined();
+    }
   });
 
   it("product off leaves no service", () => {
@@ -391,21 +397,38 @@ describe("createDefaultComputerUseAccess", () => {
     expect(path.resolve(env.AGENT_DESKTOP_HOME!)).toBe(path.resolve(home));
   });
 
-  it("UIA tool schema does not advertise agent-desktop-only actions", () => {
-    const access = createDefaultComputerUseAccess({
-      env: {},
-      product: { mode: "uia" },
-    });
-    const [tool] = createComputerUseTools({ service: access.service });
-    const actionEnum = (tool!.parameters as { properties: { action: { enum: string[] } } })
-      .properties.action.enum;
-    expect(actionEnum).toContain("focus_window");
-    expect(actionEnum).toContain("click");
-    expect(actionEnum).not.toContain("launch");
-    expect(actionEnum).not.toContain("overlay");
-    expect(actionEnum).not.toContain("list_apps");
-    expect(String(tool!.description)).toMatch(/delivery=uia/);
-  });
+  it.skipIf(process.platform !== "win32")(
+    "UIA tool schema does not advertise agent-desktop-only actions",
+    () => {
+      const access = createDefaultComputerUseAccess({
+        env: {},
+        product: { mode: "uia" },
+      });
+      expect(access.providerName).toBe("uia");
+      const [tool] = createComputerUseTools({ service: access.service });
+      const actionEnum = (
+        tool!.parameters as { properties: { action: { enum: string[] } } }
+      ).properties.action.enum;
+      expect(actionEnum).toContain("focus_window");
+      expect(actionEnum).toContain("click");
+      expect(actionEnum).not.toContain("launch");
+      expect(actionEnum).not.toContain("overlay");
+      expect(actionEnum).not.toContain("list_apps");
+      expect(String(tool!.description)).toMatch(/delivery=uia/);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "product uia stays unavailable off Windows",
+    () => {
+      const access = createDefaultComputerUseAccess({
+        env: {},
+        product: { mode: "uia" },
+      });
+      expect(access.providerName).toBeUndefined();
+      expect(access.service).toBeUndefined();
+    },
+  );
 });
 
 describe("isComputerUseEnabled", () => {
