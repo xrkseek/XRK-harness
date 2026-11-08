@@ -19,19 +19,38 @@ export interface BrowserSnapshotResult {
   readonly text: string;
 }
 
-/** Hermes-aligned browser_act actions (scroll/press/back deepen the CDP path). */
-export type BrowserActAction = "click" | "type" | "scroll" | "press" | "back";
+/**
+ * browser_act actions mapped onto agent-browser CLI.
+ * HTTP sessions only honour click/type/back; the rest need a graphical backend.
+ */
+export type BrowserActAction =
+  | "click"
+  | "dblclick"
+  | "type"
+  | "fill"
+  | "scroll"
+  | "scrollintoview"
+  | "press"
+  | "check"
+  | "uncheck"
+  | "focus"
+  | "drag"
+  | "back";
 
 export interface BrowserActRequest {
   readonly action: BrowserActAction;
-  /** Required for click/type. Ignored for scroll/press/back. */
+  /** Required for element acts. Ignored for scroll/press/back. */
   readonly ref?: string;
-  /** Text for type; optional key fallback for press. */
+  /** Destination ref when action=drag. */
+  readonly ref2?: string;
+  /** Text for type/fill; optional key fallback for press. */
   readonly text?: string;
-  /** Scroll direction (Hermes browser_scroll). */
-  readonly direction?: "up" | "down";
+  /** Scroll direction. */
+  readonly direction?: "up" | "down" | "left" | "right";
   /** Key name for press (e.g. Enter, Tab). */
   readonly key?: string;
+  /** Optional scroll distance in px (agent-browser scroll). */
+  readonly amount?: number;
 }
 
 export interface BrowserActResult {
@@ -123,11 +142,19 @@ export interface BrowserSession {
   ): Promise<string>;
   /** Tab list / new / switch / close. */
   tabs?(request: BrowserTabsRequest, signal?: AbortSignal): Promise<string>;
-  /** Read text / html / url / title from the active page (optional CSS/@ref selector). */
+  /** Read page/element info (agent-browser get). */
   getInfo?(
-    what: "text" | "html" | "url" | "title",
+    what: "text" | "html" | "url" | "title" | "value" | "box" | "count" | "styles" | "attr",
     signal?: AbortSignal,
     selector?: string,
+    /** Attribute name when what=attr. */
+    attrName?: string,
+  ): Promise<string>;
+  /** Check element state (agent-browser is). */
+  is?(
+    what: "visible" | "enabled" | "checked",
+    ref: string,
+    signal?: AbortSignal,
   ): Promise<string>;
   /** Find by semantic locator and optionally act (agent-browser find). */
   find?(
@@ -147,6 +174,43 @@ export interface BrowserSession {
   ): Promise<BrowserActResult>;
   forward?(signal?: AbortSignal): Promise<BrowserActResult>;
   reload?(signal?: AbortSignal): Promise<BrowserActResult>;
+  /** Upload files onto a file input @ref (agent-browser upload). */
+  upload?(
+    ref: string,
+    files: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<BrowserActResult>;
+  /** Click an element that triggers a download and save to path. */
+  download?(
+    ref: string,
+    destPath: string,
+    signal?: AbortSignal,
+  ): Promise<BrowserActResult>;
+  /** Type with real keystrokes (no selector); agent-browser `keyboard type`. */
+  keyboardType?(
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<BrowserActResult>;
+  /** Save the page as PDF. */
+  pdf?(destPath: string, signal?: AbortSignal): Promise<string>;
+  /** Read page console logs. */
+  consoleLogs?(clear?: boolean, signal?: AbortSignal): Promise<string>;
+  /** Read page errors. */
+  pageErrors?(clear?: boolean, signal?: AbortSignal): Promise<string>;
+  /** Browser clipboard read/write/copy/paste. */
+  clipboard?(
+    op: "read" | "write" | "copy" | "paste",
+    text?: string,
+    signal?: AbortSignal,
+  ): Promise<string>;
+  /** localStorage / sessionStorage get/set/clear. */
+  storage?(
+    kind: "local" | "session",
+    action: "get" | "set" | "clear",
+    key?: string,
+    value?: string,
+    signal?: AbortSignal,
+  ): Promise<string>;
 }
 interface PageState {
   url: string;
@@ -247,9 +311,20 @@ export function createHttpBrowserSession(options: {
       );
     },
     async act(request, signal) {
-      if (request.action === "scroll" || request.action === "press") {
+      const graphicalOnly = new Set([
+        "scroll",
+        "press",
+        "dblclick",
+        "fill",
+        "check",
+        "uncheck",
+        "focus",
+        "scrollintoview",
+        "drag",
+      ]);
+      if (graphicalOnly.has(request.action)) {
         throw new WebError(
-          `action=${request.action} needs a graphical browser (CDP). Set XRK_BROWSER_CDP_URL or Settings → Plugins → Browser.`,
+          `action=${request.action} needs agent-browser (graphical). Enable Settings → Plugins → Browser.`,
           "WEB_BROWSER_NO_GRAPHICS",
         );
       }

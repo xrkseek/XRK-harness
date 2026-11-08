@@ -14,6 +14,7 @@ import {
 } from "@xrkseek/core-tools";
 import {
   ContextOverflowError,
+  EmptyResponseError,
   LlmError,
   type LlmAdapter,
   type LlmChatRequest,
@@ -1237,5 +1238,102 @@ describe("runTurn compaction / overflow", () => {
       .events.filter((e) => e.type === "tool/result");
     expect(toolResults).toHaveLength(1);
     expect(String(toolResults[0]!.result.content).length).toBe(big.length);
+  });
+
+  it("forces compaction after five EMPTY_RESPONSE even when strategy is off", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    for (let i = 0; i < 5; i++) {
+      store.append(session.id, {
+        type: "user/message",
+        ts: i * 2,
+        turnId: `old${i}`,
+        content: `msg-${i}-` + "x".repeat(50),
+      });
+      store.append(session.id, {
+        type: "assistant/message",
+        ts: i * 2 + 1,
+        turnId: `old${i}`,
+        stepId: `s${i}`,
+        content: `ans-${i}`,
+      });
+    }
+
+    let mainCalls = 0;
+    let summarizerCalls = 0;
+    const result = await runTurn({
+      sessionId: session.id,
+      userText: "continue",
+      store,
+      llm: {
+        id: "empty-force-compact",
+        async chat(req: LlmChatRequest) {
+          const text = req.messages.map((m) => m.content).join("\n");
+          const isSummarizer =
+            req.messages.length === 1 &&
+            req.messages[0]?.role === "user" &&
+            text.includes("Create a new anchored summary");
+          if (isSummarizer) {
+            summarizerCalls += 1;
+            return {
+              content: "## Objective\n- empty-recovered\n## Next\n1. go",
+            };
+          }
+          mainCalls += 1;
+          if (mainCalls <= 5) throw new EmptyResponseError();
+          return { content: "ok-after-empty-compact" };
+        },
+      },
+      tools: createToolRegistry(),
+      // Soft-budget off must not block the EMPTY≥5 force path.
+      compaction: { keepTokens: 40, strategy: "off" },
+      llmRetry: {
+        initialDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        maxRetries: 10,
+      },
+    });
+
+    expect(result.assistantText).toBe("ok-after-empty-compact");
+    expect(summarizerCalls).toBeGreaterThan(0);
+    expect(
+      store
+        .get(session.id)
+        .events.some(
+          (e) => e.type === "context/compaction" && e.reason === "auto",
+        ),
+    ).toBe(true);
+  });
+
+  it("runCompaction returns compacted:false on EmptyResponseError (no throw)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create();
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: "hello there",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "hi",
+    });
+    await expect(
+      runCompaction({
+        store,
+        sessionId: session.id,
+        llm: {
+          async chat() {
+            throw new EmptyResponseError();
+          },
+        },
+        reason: "manual",
+        keepTokens: 1,
+      }),
+    ).resolves.toEqual({ compacted: false });
   });
 });

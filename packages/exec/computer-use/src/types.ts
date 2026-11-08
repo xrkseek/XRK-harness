@@ -3,6 +3,16 @@
  * Separate from page-level browser_* (HTTP snapshot/act).
  */
 
+import type { ComputerUseAction } from "./actions.js";
+
+export type {
+  ComputerUseAction,
+} from "./actions.js";
+export {
+  COMPUTER_USE_ACTIONS,
+  COMPUTER_USE_READ_ACTIONS,
+} from "./actions.js";
+
 export type ComputerUseDelivery =
   | "background"
   | "uia"
@@ -14,29 +24,6 @@ export type ComputerUseProviderName =
   | "uia"
   | "background"
   | "agent-desktop";
-
-export type ComputerUseAction =
-  | "capture"
-  | "click"
-  | "type"
-  | "key"
-  | "scroll"
-  | "list_windows"
-  | "clipboard_set"
-  | "clipboard_get"
-  | "find";
-
-export const COMPUTER_USE_ACTIONS: readonly ComputerUseAction[] = [
-  "capture",
-  "click",
-  "type",
-  "key",
-  "scroll",
-  "list_windows",
-  "clipboard_set",
-  "clipboard_get",
-  "find",
-];
 
 /** Search AX tree by role/name/text (agent-desktop `find`, or filtered last capture). */
 export interface ComputerUseFindRequest {
@@ -92,22 +79,36 @@ export interface ComputerUseCaptureResult {
 }
 
 export interface ComputerUseActRequest {
-  readonly action: Exclude<
-    ComputerUseAction,
-    "capture" | "list_windows" | "find"
-  >;
+  /** Any action except capture/find (those use capture()/find()). */
+  readonly action: Exclude<ComputerUseAction, "capture" | "find">;
   readonly element?: number;
   readonly text?: string;
   readonly keys?: string;
   readonly direction?: "up" | "down" | "left" | "right";
   readonly amount?: number;
   readonly coordinate?: readonly [number, number];
+  /** Second point for drag (screen pixels) or resize/move size/pos. */
+  readonly coordinate2?: readonly [number, number];
   /**
    * Allow physical pointer / `--headed` paths (moves the real mouse / steals focus).
    * Default false — agent-desktop and UIA stay on AX / Invoke / clipboard.
    */
   readonly headed?: boolean;
+  /** App / window filter (launch, close_app, focus_window, wait, …). */
+  readonly app?: string;
+  /** Property name for get/is (text, value, title, bounds, role, states / visible, …). */
+  readonly property?: string;
+  /** Wait predicate or system surface id. */
+  readonly predicate?: string;
+  /** Wait timeout ms. */
+  readonly timeoutMs?: number;
+  /**
+   * Overlay control: for action=overlay, text is the label (empty/`off` disables).
+   * Also used as optional intent label updates before other acts when set.
+   */
+  readonly label?: string;
 }
+
 export interface ComputerUseActResult {
   readonly ok: boolean;
   readonly action: string;
@@ -157,4 +158,6 @@ export interface ComputerUseService {
     request: ComputerUseFindRequest,
     signal?: AbortSignal,
   ): Promise<ComputerUseCaptureResult>;
+  /** Release CLI session / overlay (Host invalidate). */
+  close?(): Promise<void>;
 }

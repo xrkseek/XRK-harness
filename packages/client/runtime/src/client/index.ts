@@ -132,6 +132,13 @@ export { PendingWait } from './sessions/pending.ts'
 export type {
   PendingInteraction, PendingInteractionStatus, PendingKind, PendingPayloads,
 } from './sessions/pending.ts'
+export { setOsNotifyPolicy, getOsNotifyPolicy } from './sessions/os-notify-policy.ts'
+export type { OsNotifyPolicy } from './sessions/os-notify-policy.ts'
+export type { NotifyFocusPolicy } from './sessions/os-notify.ts'
+export {
+  syncDesktopPreventIdleSleepTurnRunning,
+  resetDesktopPreventIdleSleepTurnRunningForTests,
+} from './sessions/desktop-power.ts'
 // Projection value store (push model; see the session-projection subsystem
 // page, docs/subsystems/session-projection.md): host-computed
 // whole values per key; domains ship projection support with zero client code.

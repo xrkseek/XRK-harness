@@ -73,6 +73,7 @@ import {
   isAgentCancelCause,
 } from "./cancel-finalize.js";
 import {
+  EMPTY_RESPONSE_FORCE_COMPACT_AFTER,
   invokeLlmWithRetry,
   resolveRetryPolicy,
 } from "./llm-retry.js";
@@ -1254,6 +1255,51 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         index: chunk.index,
       });
     };
+    // EMPTY_RESPONSE ≥5 → force one compaction regardless of soft-budget /
+    // strategy off / compaction:false. Same runCompaction path as overflow.
+    const forceCompactAfterEmpty = async (): Promise<boolean> => {
+      try {
+        const did = await runCompaction({
+          store: input.store,
+          sessionId: input.sessionId,
+          llm: input.llm,
+          reason: "auto",
+          keepTokens:
+            compaction?.keepTokens ?? DEFAULT_COMPACTION_KEEP_TOKENS,
+          turnId,
+          stepId,
+          retry: llmRetryPolicy,
+          ...(input.signal ? { signal: input.signal } : {}),
+          now,
+        });
+        if (!did.compacted) return false;
+        seriesBaselineSystem = undefined;
+        req = await buildReq();
+        assertReadyForLlm(readSessionEvents(input.store, input.sessionId));
+        maybeAppendRequestHeader({
+          store: input.store,
+          sessionId: input.sessionId,
+          turnId,
+          llm: input.llm,
+          now,
+          reason: "change",
+          ...(req.system?.trim() ? { system: req.system } : {}),
+          ...(req.tools.length ? { tools: req.tools } : {}),
+        });
+        return true;
+      } catch (compactErr) {
+        if (input.signal?.aborted) throw compactErr;
+        return false;
+      }
+    };
+    const emptyForceCompactOpts =
+      llmRetryPolicy === false
+        ? {}
+        : {
+            emptyResponseForceCompactAfter: EMPTY_RESPONSE_FORCE_COMPACT_AFTER,
+            onEmptyResponseForceCompact: forceCompactAfterEmpty,
+          };
+
     try {
       response = await invokeLlmWithRetry({
         invoke: (onBuffered) =>
@@ -1267,6 +1313,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
         ...(input.signal ? { signal: input.signal } : {}),
         policy: llmRetryPolicy,
         provider: input.llm.id,
+        ...emptyForceCompactOpts,
       });
     } catch (err) {
       if (
@@ -1313,6 +1360,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
             ...(input.signal ? { signal: input.signal } : {}),
             policy: llmRetryPolicy,
             ...(input.llm.id ? { provider: input.llm.id } : {}),
+            ...emptyForceCompactOpts,
           });
         };
 
@@ -1719,6 +1767,7 @@ export {
   type RunCompactionInput,
   type RunCompactionResult,
 } from "./compaction.js";
+export { EMPTY_RESPONSE_FORCE_COMPACT_AFTER } from "./llm-retry.js";
 export {
   maybeAppendRequestHeader,
   forgetRequestHeaderCache,

@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.13',
+    date: '2026-11-08',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: 'Desktop（设置 → 通用）：可选「回合在跑时阻止系统休眠」（息屏后仍可继续；默认关）；会话结束系统通知，支持仅未聚焦 / 总是。',
+        en: 'Desktop (Settings → General): optional prevent-idle-sleep while work runs (screen may blank; default off); OS notify on session complete with unfocused / always timing.',
+      },
+      {
+        zh: 'Overview：调整老板球大小不再带动经理球。',
+        en: 'Overview: boss ball size no longer scales the manager ball.',
+      },
+      {
+        zh: '归档：安静归档不再误闪「强制归档」确认窗。',
+        en: 'Archive: quiet archive no longer flashes the force-archive confirm dialog.',
+      },
+      {
+        zh: '压缩摘要空回复走软失败；Host 重启后清理不会再被认领的排队回声。',
+        en: 'Empty compact summarizer soft-fails; Host restart retires local queue echoes it will never claim.',
+      },
+    ],
+  },
+  {
     version: '0.7.12',
     date: '2026-11-07',
     title: {

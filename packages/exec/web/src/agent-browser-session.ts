@@ -800,50 +800,144 @@ export function createAgentBrowserSession(
       }
       requireOpen();
       const normalizedRef = normalizeRef(request.ref ?? "");
+      const needRef = (action: string): string => {
+        if (!normalizedRef) {
+          throw new WebError(`${action} requires ref`, "WEB_BROWSER_BAD_REF");
+        }
+        return normalizedRef;
+      };
 
-      // Every branch below assigns before the single `afterNav(note)` read, so
-      // an initializer here would only be dead state (no-useless-assignment).
       let note: string;
-      if (request.action === "back") {
-        await runAgentBrowser([...globalFlags(true), "back"], launchOpts, true);
-        note = "navigated back";
-      } else if (request.action === "scroll") {
-        const dir = request.direction === "up" ? "up" : "down";
-        await runAgentBrowser(
-          [...globalFlags(true), "scroll", dir],
-          launchOpts,
-          true,
-        );
-        note = `scrolled ${dir}`;
-      } else if (request.action === "press") {
-        const key = (request.key ?? request.text ?? "Enter").trim() || "Enter";
-        await runAgentBrowser(
-          [...globalFlags(true), "press", key],
-          launchOpts,
-          true,
-        );
-        note = `pressed ${key}`;
-      } else if (request.action === "type") {
-        if (!normalizedRef) {
-          throw new WebError("type requires ref", "WEB_BROWSER_BAD_REF");
+      switch (request.action) {
+        case "back": {
+          await runAgentBrowser(
+            [...globalFlags(true), "back"],
+            launchOpts,
+            true,
+          );
+          note = "navigated back";
+          break;
         }
-        const text = request.text ?? "";
-        await runAgentBrowser(
-          [...globalFlags(true), "fill", normalizedRef, "--", text],
-          launchOpts,
-          true,
-        );
-        note = `typed into ${normalizedRef}`;
-      } else {
-        if (!normalizedRef) {
-          throw new WebError("click requires ref", "WEB_BROWSER_BAD_REF");
+        case "scroll": {
+          const dir =
+            request.direction === "up" ||
+            request.direction === "left" ||
+            request.direction === "right"
+              ? request.direction
+              : "down";
+          const args = [...globalFlags(true), "scroll", dir];
+          if (
+            typeof request.amount === "number" &&
+            Number.isFinite(request.amount)
+          ) {
+            args.push(String(Math.max(1, Math.floor(request.amount))));
+          }
+          await runAgentBrowser(args, launchOpts, true);
+          note = `scrolled ${dir}`;
+          break;
         }
-        await runAgentBrowser(
-          [...globalFlags(true), "click", normalizedRef],
-          launchOpts,
-          true,
-        );
-        note = `clicked ${normalizedRef}`;
+        case "press": {
+          const key =
+            (request.key ?? request.text ?? "Enter").trim() || "Enter";
+          await runAgentBrowser(
+            [...globalFlags(true), "press", key],
+            launchOpts,
+            true,
+          );
+          note = `pressed ${key}`;
+          break;
+        }
+        case "type": {
+          const ref = needRef("type");
+          const text = request.text ?? "";
+          // Prefer fill (clear+set) for form fields; mirrors agent-browser skills.
+          await runAgentBrowser(
+            [...globalFlags(true), "fill", ref, "--", text],
+            launchOpts,
+            true,
+          );
+          note = `typed into ${ref}`;
+          break;
+        }
+        case "fill": {
+          const ref = needRef("fill");
+          await runAgentBrowser(
+            [...globalFlags(true), "fill", ref, "--", request.text ?? ""],
+            launchOpts,
+            true,
+          );
+          note = `filled ${ref}`;
+          break;
+        }
+        case "dblclick": {
+          const ref = needRef("dblclick");
+          await runAgentBrowser(
+            [...globalFlags(true), "dblclick", ref],
+            launchOpts,
+            true,
+          );
+          note = `double-clicked ${ref}`;
+          break;
+        }
+        case "check":
+        case "uncheck": {
+          const ref = needRef(request.action);
+          await runAgentBrowser(
+            [...globalFlags(true), request.action, ref],
+            launchOpts,
+            true,
+          );
+          note = `${request.action}ed ${ref}`;
+          break;
+        }
+        case "focus": {
+          const ref = needRef("focus");
+          await runAgentBrowser(
+            [...globalFlags(true), "focus", ref],
+            launchOpts,
+            true,
+          );
+          note = `focused ${ref}`;
+          break;
+        }
+        case "scrollintoview": {
+          const ref = needRef("scrollintoview");
+          await runAgentBrowser(
+            [...globalFlags(true), "scrollintoview", ref],
+            launchOpts,
+            true,
+          );
+          note = `scrolled into view ${ref}`;
+          break;
+        }
+        case "drag": {
+          const src = needRef("drag");
+          const dst = normalizeRef(request.ref2 ?? "");
+          if (!dst) {
+            throw new WebError(
+              "drag requires ref2 (destination)",
+              "WEB_BROWSER_BAD_REF",
+            );
+          }
+          await runAgentBrowser(
+            [...globalFlags(true), "drag", src, dst],
+            launchOpts,
+            true,
+          );
+          note = `dragged ${src} → ${dst}`;
+          break;
+        }
+        case "click":
+        default: {
+          const ref = needRef("click");
+          await runAgentBrowser(
+            [...globalFlags(true), "click", ref],
+            launchOpts,
+            true,
+          );
+          note = `clicked ${ref}`;
+          break;
+        }
       }
 
       return afterNav(note);
@@ -985,30 +1079,85 @@ export function createAgentBrowserSession(
       await refreshMeta();
       return target ? `closed ${target}` : "closed current tab";
     },
-    async getInfo(what, signal, selector) {
+    async getInfo(what, signal, selector, attrName) {
       if (signal?.aborted) {
         throw new WebError("aborted", "WEB_BROWSER_CDP");
       }
       requireOpen();
-      const key = what === "text" || what === "html" || what === "url" || what === "title"
-        ? what
-        : "text";
+      const allowed = new Set([
+        "text",
+        "html",
+        "url",
+        "title",
+        "value",
+        "box",
+        "count",
+        "styles",
+        "attr",
+      ]);
+      const key = allowed.has(what) ? what : "text";
       const args = [...globalFlags(true), "get", key];
+      if (key === "attr") {
+        const name = (attrName ?? "").trim();
+        if (!name) {
+          throw new WebError("get attr needs attrName", "WEB_BROWSER_CDP");
+        }
+        args.push(name);
+      }
       const sel = selector?.trim();
       if (sel) {
         args.push(sel);
-      } else if (key === "html" || key === "text") {
-        // agent-browser get html|text requires a selector; default to body.
+      } else if (
+        key === "html" ||
+        key === "text" ||
+        key === "value" ||
+        key === "box" ||
+        key === "count" ||
+        key === "styles" ||
+        key === "attr"
+      ) {
         args.push("body");
       }
       const parsed = await runAgentBrowser(args, launchOpts, true);
       const data = asRecord(parsed.data);
-      const direct = stringField(data, [key, "value", "text", "html", "url", "title", "href"]);
+      const direct = stringField(data, [
+        key,
+        "value",
+        "text",
+        "html",
+        "url",
+        "title",
+        "href",
+        "attr",
+        "styles",
+      ]);
       if (direct) return direct;
       try {
         return JSON.stringify(data ?? parsed);
       } catch {
         return "";
+      }
+    },
+    async is(what, ref, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const prop =
+        what === "enabled" || what === "checked" ? what : "visible";
+      const normalizedRef = normalizeRef(ref);
+      if (!normalizedRef) {
+        throw new WebError("is requires ref", "WEB_BROWSER_BAD_REF");
+      }
+      const parsed = await runAgentBrowser(
+        [...globalFlags(true), "is", prop, normalizedRef],
+        launchOpts,
+        true,
+      );
+      try {
+        return JSON.stringify(parsed.data ?? parsed);
+      } catch {
+        return String(parsed.data ?? "");
       }
     },
     async hover(ref, signal) {
@@ -1117,6 +1266,151 @@ export function createAgentBrowserSession(
         ...snap,
         text: `switched frame → ${sel}\n\n${snap.text}`,
       };
+    },
+    async upload(ref, files, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const normalizedRef = normalizeRef(ref);
+      if (!normalizedRef) {
+        throw new WebError("upload requires ref", "WEB_BROWSER_BAD_REF");
+      }
+      const paths = files.map((f) => f.trim()).filter(Boolean);
+      if (paths.length === 0) {
+        throw new WebError("upload needs at least one file path", "WEB_BROWSER_CDP");
+      }
+      await runAgentBrowser(
+        [...globalFlags(true), "upload", normalizedRef, ...paths],
+        launchOpts,
+        true,
+      );
+      return afterNav(`uploaded ${paths.length} file(s) → ${normalizedRef}`);
+    },
+    async download(ref, destPath, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const normalizedRef = normalizeRef(ref);
+      if (!normalizedRef) {
+        throw new WebError("download requires ref", "WEB_BROWSER_BAD_REF");
+      }
+      const dest = destPath.trim();
+      if (!dest) {
+        throw new WebError("download needs destPath", "WEB_BROWSER_CDP");
+      }
+      await runAgentBrowser(
+        [...globalFlags(true), "download", normalizedRef, dest],
+        launchOpts,
+        true,
+      );
+      return afterNav(`downloaded via ${normalizedRef} → ${dest}`);
+    },
+    async keyboardType(text, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      await runAgentBrowser(
+        [...globalFlags(true), "keyboard", "type", "--", text],
+        launchOpts,
+        true,
+      );
+      return afterNav(`keyboard typed ${text.length} chars`);
+    },
+    async pdf(destPath, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const dest = destPath.trim();
+      if (!dest) {
+        throw new WebError("pdf needs destPath", "WEB_BROWSER_CDP");
+      }
+      await runAgentBrowser(
+        [...globalFlags(true), "pdf", dest],
+        launchOpts,
+        true,
+      );
+      return `pdf saved → ${dest}`;
+    },
+    async consoleLogs(clear, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const args = [...globalFlags(true), "console"];
+      if (clear === true) args.push("--clear");
+      const parsed = await runAgentBrowser(args, launchOpts, true);
+      try {
+        return JSON.stringify(parsed.data ?? parsed, null, 2);
+      } catch {
+        return String(parsed.data ?? "");
+      }
+    },
+    async pageErrors(clear, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const args = [...globalFlags(true), "errors"];
+      if (clear === true) args.push("--clear");
+      const parsed = await runAgentBrowser(args, launchOpts, true);
+      try {
+        return JSON.stringify(parsed.data ?? parsed, null, 2);
+      } catch {
+        return String(parsed.data ?? "");
+      }
+    },
+    async clipboard(op, text, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const args = [...globalFlags(true), "clipboard", op];
+      // CLI: write <text>; copy/paste take no text; read returns JSON.
+      if (op === "write") {
+        args.push("--", text ?? "");
+      }
+      const parsed = await runAgentBrowser(args, launchOpts, true);
+      if (op === "read") {
+        const data = asRecord(parsed.data);
+        const direct = stringField(data, ["text", "value", "clipboard"]);
+        if (direct) return direct;
+        try {
+          return JSON.stringify(data ?? parsed);
+        } catch {
+          return String(parsed.data ?? "");
+        }
+      }
+      return `clipboard ${op} ok`;
+    },
+    async storage(kind, action, key, value, signal) {
+      if (signal?.aborted) {
+        throw new WebError("aborted", "WEB_BROWSER_CDP");
+      }
+      requireOpen();
+      const args = [...globalFlags(true), "storage", kind];
+      if (action === "clear") {
+        args.push("clear");
+      } else if (action === "set") {
+        const k = (key ?? "").trim();
+        if (!k) {
+          throw new WebError("storage set needs key", "WEB_BROWSER_CDP");
+        }
+        args.push("set", k, value ?? "");
+      } else {
+        const k = (key ?? "").trim();
+        if (k) args.push("get", k);
+        else args.push("get");
+      }
+      const parsed = await runAgentBrowser(args, launchOpts, true);
+      try {
+        return JSON.stringify(parsed.data ?? parsed, null, 2);
+      } catch {
+        return String(parsed.data ?? "");
+      }
     },
     dispose() {
       void runAgentBrowser(

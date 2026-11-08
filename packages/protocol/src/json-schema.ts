@@ -320,6 +320,7 @@ export const sessionEventJsonSchema = {
         admitId: { type: "string" },
         content: messageContentSchema,
         delivery: { enum: ["steer", "queue"] },
+        rpcId: { type: "string" },
       }),
       additionalProperties: false,
     },

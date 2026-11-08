@@ -51,6 +51,7 @@ import {
   type SessionBallPersona,
 } from './presence-emotion.ts'
 import type { PresenceSettingsRuntime } from './presence-settings-runtime.ts'
+import { resolvePresenceStageSize } from './presence-stage-size.ts'
 import css from './PresenceBall.module.css'
 
 export {
@@ -640,8 +641,12 @@ export const PresenceBall = memo(function PresenceBall({
   const persona = sessionBallPersona(sessionId ?? 'default')
   const look = usePresenceLook()
   /* Ball trim lives on the stage as a CSS var: the box stays put, only the
-   * engine mount scales. Compact (18px sidebar) glyphs and member balls keep 1×. */
-  const stageSize = compact ? 1 : (memberLook?.size ?? look.size)
+   * engine mount scales. See resolvePresenceStageSize (member ≠ boss size). */
+  const stageSize = resolvePresenceStageSize({
+    compact: Boolean(compact),
+    memberLook,
+    bossSize: look.size,
+  })
   const dark = useChromeDark()
   // When `memberLook` is set (including pending fallback), never blend in
   // Settings 老板装扮 — invalid fields fall back to defaults, not ui-presence.

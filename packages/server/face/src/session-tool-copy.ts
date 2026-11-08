@@ -1,6 +1,9 @@
 /**
  * Dynamic catalog copy for collab tools — keyed by {@link SessionKind}.
  * Static ToolDefinition.description stays short; materializeTools merges these.
+ *
+ * Copy standard: human sentences; keep live facts (ids, caps, morphs); no
+ * telegram pipes. Cross-tool routing said once, not restated on every sibling.
  */
 import type { FaceRuntime } from "./context.js";
 import { formatRosterCatalog } from "./agent-roster-store.js";
@@ -44,8 +47,8 @@ export function threadMessageDescription(input: {
  */
 export function packShareFlowHint(): string {
   return (
-    "Mint/revise: team_save (playbook craft → skill xrk-delegate). " +
-    "Export: team_export · install file: team_import · catalog mem_seed_*: no export."
+    "Mint or revise with team_save (playbook craft — skill xrk-delegate). " +
+    "Export with team_export; install a file with team_import; catalog mem_seed_* entries cannot be exported."
   );
 }
 
@@ -127,7 +130,7 @@ export function sendMessageDescription(): string {
   return (
     "Parent→child (agent_id). Siblings/peers → thread_message. " +
     "steer = next tool-step; queue = wait idle. New task → followup_task. " +
-    "Optional provider / model / reasoning_effort repins the child first (a refused pin sends nothing). " +
+    "Optional provider/model/reasoning_effort repins first (refused pin sends nothing). " +
     "Confirms delivery; answer arrives as steer notice."
   );
 }
@@ -135,7 +138,7 @@ export function sendMessageDescription(): string {
 export function followupTaskDescription(): string {
   return (
     "New task for a continuable child (agent_id); wakes a steer turn. " +
-    "Optional provider / model / reasoning_effort repins the child first — the rescue move when its route ran out of quota. " +
+    "Optional provider/model/reasoning_effort repins first (quota rescue). " +
     "Stay inside child_gap caps. Confirms delivery only — Host steers the result."
   );
 }
@@ -143,11 +146,11 @@ export function followupTaskDescription(): string {
 /** Repin an existing child's route (hot switch, next model request). */
 export function setAgentModelDescription(): string {
   return (
-    "Repin a child's LLM route / thinking effort — own children only. " +
-    "Takes effect on the child's next model request; a live turn is not interrupted. " +
-    "Quota exhausted on its route? Move the child here, then followup_task. " +
-    "provider defaults to the child's current provider; reasoning_effort alone keeps provider/model. " +
-    "Returns the route before → after (or unchanged)."
+    "Change a child agent's model route or thinking effort (only children you spawned). " +
+    "Ask the user first unless you are rescuing a route that already exhausted its quota. " +
+    "Takes effect on the child's next model request. " +
+    "provider defaults to the child's current route; reasoning_effort alone keeps provider/model. " +
+    "Returns before → after."
   );
 }
 

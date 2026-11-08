@@ -48,6 +48,8 @@ export function admittingAgentResolve(
     ({
       admit: (content, opts) => admitPrompt(store, sessionId, content, opts),
       pendingAdmits: () => [],
+      danglingPromotedAdmits: () => [],
+      hasInboxWork: () => false,
       continueTurn: async () => ({}) as never,
       run: async () => ({}) as never,
       isBusy: () => false,

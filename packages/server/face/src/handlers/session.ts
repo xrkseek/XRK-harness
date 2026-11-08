@@ -1025,10 +1025,11 @@ export const sessionPrompt: FaceHandler = async (runtime, rpcId, payload) => {
   agent.admit(admitContent, {
     delivery: mode === "steer" ? "steer" : "queue",
     admitId,
+    rpcId: echoRpc,
   });
-  // Echo rpcId is stamped on promote (admitRpcMap → pendingUserRpc FIFO), not
-  // here: a prompt-time write raced with in-flight injects and stole the prior
-  // admit's pending slot (stuck local echo / blue waiting chrome).
+  // Echo rpcId is durable on prompt/admitted and mirrored in admitRpcMap.
+  // Promote stamps user/message from admitRpcMap → pendingUserRpc FIFO — do
+  // not write pendingUserRpc here (raced with in-flight injects).
   runtime.publishQueue(sessionId);
   runtime.drain.wake(sessionId);
 

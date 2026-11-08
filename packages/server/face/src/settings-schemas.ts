@@ -292,6 +292,33 @@ const AgentLoopConfig = Schema.object({
   maxConcurrentModelSessions: Schema.number().step(1).min(1).max(64).default(5),
 });
 
+/**
+ * Desktop shell lifecycle (Codex `prevent_idle_sleep` + turn-complete notify).
+ * Electron main acquires a system sleep inhibitor while any session turn runs.
+ * The display may still blank; only idle *system* sleep is blocked.
+ *
+ * Codex does **not** auto-close agents after a fixed idle window; its 5-minute
+ * figure is `background_terminal_max_timeout` (poll cap for background PTY).
+ * Continuable children stay open until the parent calls `close_agent`.
+ */
+const DesktopConfig = Schema.object({
+  /**
+   * Keep the machine awake while a session is running (default off).
+   * Desktop only — CLI / headless Hosts ignore this.
+   */
+  preventIdleSleep: Schema.boolean().default(false),
+  /**
+   * Fire an OS notification when a background session finishes
+   * (Codex `notify` / TUI completion notice). Default on.
+   */
+  notifyOnComplete: Schema.boolean().default(true),
+  /**
+   * When to show the completion notification.
+   * `unfocused` (default) skips while this window has focus; `always` always fires.
+   */
+  notifyFocusPolicy: Schema.union(["unfocused", "always"]).default("unfocused"),
+});
+
 const WebSearchConfig = Schema.object({
   provider: Schema.union([
     "auto",
@@ -1026,6 +1053,17 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
       ns: "ui-conversation",
       schema: schemasteryJson(UiConversationConfig) as FaceSchemaEnvelope,
       base: { busyEnter: "queue", toolsDefaultExpanded: false },
+      applies: "live",
+    },
+    {
+      ns: "desktop",
+      schema: schemasteryJson(DesktopConfig) as FaceSchemaEnvelope,
+      base: {
+        preventIdleSleep: false,
+        notifyOnComplete: true,
+        notifyFocusPolicy: "unfocused",
+      },
+      // Desktop main peeks settings.yaml + renderer IPC; live toggle.
       applies: "live",
     },
     {

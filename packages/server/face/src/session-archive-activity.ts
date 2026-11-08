@@ -26,7 +26,14 @@ export function collectArchiveActivity(
 ): readonly ArchiveActivityItem[] {
   const items: ArchiveActivityItem[] = [];
 
-  if (runtime.drain.isActive(sessionId)) {
+  // Match session-list `turnActive`: Stop / cancel may publish running:false
+  // while the drain latch is still joining. Treating latch-alone as "busy"
+  // opened the force-archive modal on every quiet archive, then it vanished
+  // once the latch dropped — a flash dialog with no real work left.
+  if (
+    runtime.drain.isActive(sessionId) &&
+    !runtime.isTurnUiIdle(sessionId)
+  ) {
     items.push({
       kind: "turn",
       id: sessionId,
@@ -49,7 +56,12 @@ export function collectArchiveActivity(
   }
 
   for (const link of runtime.subagents.list(sessionId)) {
-    if (!runtime.drain.isActive(link.childSessionId)) continue;
+    if (
+      !runtime.drain.isActive(link.childSessionId) ||
+      runtime.isTurnUiIdle(link.childSessionId)
+    ) {
+      continue;
+    }
     items.push({
       kind: "subagent",
       id: link.childSessionId,

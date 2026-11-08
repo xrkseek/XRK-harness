@@ -728,6 +728,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
           type,
         );
       }
+      const rpcId = optString(value, "rpcId");
       return {
         type,
         ts,
@@ -736,6 +737,7 @@ export function parseSessionEvent(value: unknown): SessionEvent {
         ...(delivery === "steer" ? { delivery: "steer" as const } : {}),
         // persist queue explicitly if client sent it
         ...(delivery === "queue" ? { delivery: "queue" as const } : {}),
+        ...(rpcId !== undefined ? { rpcId } : {}),
       };
     }
     case "prompt/promoted":

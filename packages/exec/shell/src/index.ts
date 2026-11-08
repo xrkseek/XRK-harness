@@ -1062,18 +1062,16 @@ export function createBashTools(
       : DEFAULT_FOREGROUND_YIELD_MS,
   );
   const dialect =
-    process.platform === "win32"
-      ? "PowerShell (pwsh)."
-      : "bash.";
+    process.platform === "win32" ? "PowerShell (pwsh)" : "bash";
   return [
     {
       name: "bash",
       description:
-        `Run a shell command via ${dialect} in the session workspace. ` +
-        `Foreground waits up to ${Math.round(yieldMs / 1000)}s (yield); if the command is still running the call returns a job id and the process keeps running — ` +
-        "use job_output(wait:true) to keep waiting, job_kill to stop. " +
-        "Set background=true to return the job id immediately. " +
-        "timeout_ms sets a hard kill deadline for this call.",
+        `Run a shell command with ${dialect} in the session workspace. ` +
+        `Foreground waits up to ${Math.round(yieldMs / 1000)}s; if the command is still running, the call returns a job id and the process keeps going — ` +
+        "use job_output(wait:true) to keep waiting, or job_kill to stop it. " +
+        "Set background=true to get the job id immediately. " +
+        "timeout_ms is a hard kill deadline for this call.",
       parameters: {
         type: "object",
         properties: {

@@ -587,7 +587,7 @@ function createSubagentTool(
     "Delegate a self-contained task to a subagent (separate session). " +
     "Default: continuable (run_in_background true) — follow up with followup_task / send_message / close_agent. " +
     "Set run_in_background false only when the user asked for a one-shot wait (10 min salvage on expiry). " +
-    "Pin provider/model on this call when the child should not inherit the parent route. " +
+    "Omit provider/model/reasoning_effort to inherit this session; ask the user before a non-default route. " +
     "Child identity is the Face spawn preamble — do not send it to AGENTS.md. " +
     "Prefer member_id from team_list (applies that member's tools+inject+playbook ≠ parent). " +
     "Mint after real work: team_save name+playbook (kind=advanced +skills/files when packing) → team_ready if advanced → team_export. " +
@@ -681,17 +681,17 @@ function createSubagentTool(
         provider: {
           type: "string",
           description:
-            "Optional LLM provider route for the child (e.g. deepseek). Pair with model; when omitted, inherits the parent session's provider.",
+            "Optional LLM provider for the child; omit to inherit this session.",
         },
         model: {
           type: "string",
           description:
-            "Optional model id for the child. When set, pins this child's session.selectModel route (does not change other sessions).",
+            "Optional model id for the child; omit to inherit this session.",
         },
         reasoning_effort: {
           type: "string",
           description:
-            "Optional reasoning effort for the child when the selected model advertises efforts.",
+            "Optional reasoning effort when the selected model advertises efforts; omit to inherit.",
         },
         runtime: {
           type: "string",

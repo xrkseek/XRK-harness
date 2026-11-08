@@ -479,6 +479,10 @@ export {
   type QueuePlacement,
 } from "./queue.js";
 export {
+  legacyAdmitRpcId,
+  rebuildAdmitRpcMaps,
+} from "./admit-rpc-rebuild.js";
+export {
   assertUnderRoot,
   listProductTree,
   resolveProductDir,

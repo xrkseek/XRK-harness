@@ -2,7 +2,11 @@
  * OS notification exit for session completion reminders.
  * Triggered from Manager's running true→false edge; focus policy defaults to
  * unfocused-only so an active chat does not spam the desktop.
+ * Product Settings (`desktop.notifyOnComplete` / `notifyFocusPolicy`) gate via
+ * {@link getOsNotifyPolicy}.
  */
+
+import { getOsNotifyPolicy } from './os-notify-policy.ts'
 
 export type NotifyFocusPolicy = 'unfocused' | 'always'
 
@@ -13,6 +17,8 @@ export type OsNotifyInput = {
   /** Injected for tests; defaults to `document.hasFocus` when present. */
   readonly isFocused?: () => boolean
   readonly notify?: (title: string, body: string) => void
+  /** When set, skips the product Settings master switch. */
+  readonly force?: boolean
 }
 
 export function shouldOsNotify(input: {
@@ -28,7 +34,9 @@ export function shouldOsNotify(input: {
  * Notification API is missing or permission is denied.
  */
 export function notifySessionCompleted(input: OsNotifyInput): void {
-  const focusPolicy = input.focusPolicy ?? 'unfocused'
+  const product = getOsNotifyPolicy()
+  if (!input.force && !product.enabled) return
+  const focusPolicy = input.focusPolicy ?? product.focusPolicy
   const isFocused =
     input.isFocused
     ?? (() => typeof document !== 'undefined' && document.hasFocus())

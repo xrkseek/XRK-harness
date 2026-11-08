@@ -333,6 +333,61 @@ describe('beginSubmission', () => {
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
     expect(session.getSnapshot().queue).toHaveLength(1)
   })
+
+  it('post-restart empty queue baseline retires accepted orphans', async () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '僵尸', attachments: [], onRetire,
+    })
+    await session.prompt(
+      [{ type: 'text', text: '僵尸' }],
+      'queue',
+      undefined,
+      handle.requestId,
+    )
+    // Prior mux generation had seen this rpc on Host.
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '僵尸',
+    }]))
+    // New Host generation: subscribed clears generation memory, empty
+    // baseline means restarted Host will never claim this echo.
+    session.handleMuxEnvelope(RpcId('sub'), {
+      type: 'session/subscribed',
+      sessionId: SID,
+      lastSeq: 1,
+    })
+    session.handleMuxEnvelope(RpcId('q-empty'), queueFrame(SID, []))
+    expect(session.getSnapshot().pendingSubmissions).toEqual([])
+    expect(onRetire).toHaveBeenCalledWith({ reason: 'failed' })
+  })
+
+  it('FIFO claim empty queue keeps echo until durable (no orphan race)', async () => {
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({
+      mode: 'queue', text: '认领中', attachments: [], onRetire,
+    })
+    await session.prompt(
+      [{ type: 'text', text: '认领中' }],
+      'queue',
+      undefined,
+      handle.requestId,
+    )
+    session.handleMuxEnvelope(RpcId('q1'), queueFrame(SID, [{
+      id: 'qi-1',
+      rpcId: handle.requestId,
+      body: '认领中',
+    }]))
+    session.handleMuxEnvelope(RpcId('q2'), queueFrame(SID, []))
+    expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('transcript')
+    expect(onRetire).not.toHaveBeenCalled()
+  })
   it('turn/end keeps running when Host queue still has work', async () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())

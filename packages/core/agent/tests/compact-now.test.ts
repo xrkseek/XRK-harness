@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createAgent } from "../src/index.js";
 import { createMemorySessionStore } from "@xrkseek/core-session";
 import { createToolRegistry } from "@xrkseek/core-tools";
-import type { LlmAdapter } from "@xrkseek/llm";
+import { EmptyResponseError, type LlmAdapter } from "@xrkseek/llm";
 
 function summaryLlm(): LlmAdapter {
   return {
@@ -68,6 +68,42 @@ describe("createAgent compactNow", () => {
       expect(out.shadowedTokens).toBe(last.shadowedTokenCount);
     }
     expect(out.summarySeq).toBe(events.length);
+  });
+
+  it("maps summarizer EMPTY_RESPONSE to reason summary (no throw)", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("c-empty-resp");
+    store.append(session.id, {
+      type: "user/message",
+      ts: 1,
+      turnId: "t0",
+      content: "hello there",
+    });
+    store.append(session.id, {
+      type: "assistant/message",
+      ts: 2,
+      turnId: "t0",
+      stepId: "s0",
+      content: "hi",
+    });
+    const agent = createAgent({
+      sessionId: session.id,
+      store,
+      llm: {
+        async chat() {
+          throw new EmptyResponseError();
+        },
+      },
+      tools: createToolRegistry(),
+      compaction: { keepTokens: 1 },
+    });
+    await expect(agent.compactNow!()).resolves.toEqual({
+      compacted: false,
+      reason: "summary",
+    });
+    expect(
+      store.get(session.id).events.some((e) => e.type === "context/compaction"),
+    ).toBe(false);
   });
 
   it("returns busy while a turn is in flight", async () => {

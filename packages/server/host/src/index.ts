@@ -2175,8 +2175,9 @@ export function createHostManager(): HostManager {
             const agent = await resolveAgent(sessionId);
             // Delivery queue rule (docs/session-delivery.md §3):
             // one continueTurn ⇒ one promote; runTurn owns tool continuation
-            // without promoting further inbox items. Loop until inbox empty.
-            while (agent.pendingAdmits().length > 0) {
+            // without promoting further inbox items. Loop until inbox empty
+            // (pending admits OR dangling promote-without-user/message).
+            while (agent.hasInboxWork()) {
               if (signal.aborted) {
                 throw hostAbortError(signal.reason);
               }
@@ -2185,6 +2186,7 @@ export function createHostManager(): HostManager {
               // LLM; do not await serially before continueTurn (that pinned
               // Queue/Steer chrome on large monorepos).
               const pendingBefore = agent.pendingAdmits().length;
+              const danglingBefore = agent.danglingPromotedAdmits().length;
               const snapP = snapshot();
               try {
                 const result = await agent.continueTurn({
@@ -2201,7 +2203,12 @@ export function createHostManager(): HostManager {
                 // One failed turn must not strand later inbox admits (mute-after
                 // truncation). If the inbox did not shrink, stop to avoid a
                 // tight fail loop; abort still exits above.
-                if (agent.pendingAdmits().length >= pendingBefore) break;
+                if (
+                  agent.pendingAdmits().length >= pendingBefore
+                  && agent.danglingPromotedAdmits().length >= danglingBefore
+                ) {
+                  break;
+                }
               }
             }
           } finally {

@@ -57,6 +57,21 @@ export interface RegisterDesktopIpcOptions {
   rebringHost?: () => void;
   getCliCommand?: () => { linked: boolean; binDir: string };
   setCliCommand?: (linked: boolean) => { linked: boolean; binDir: string };
+  getPreventIdleSleep?: () => {
+    enabled: boolean;
+    turnRunning: boolean;
+    blocking: boolean;
+  };
+  setPreventIdleSleepEnabled?: (enabled: boolean) => {
+    enabled: boolean;
+    turnRunning: boolean;
+    blocking: boolean;
+  };
+  setPreventIdleSleepTurnRunning?: (running: boolean) => {
+    enabled: boolean;
+    turnRunning: boolean;
+    blocking: boolean;
+  };
 }
 
 const idleUpdate: DesktopUpdateState = { phase: "idle" };
@@ -144,4 +159,34 @@ export function registerDesktopIpcHandlers(
   ipcMain.handle(DESKTOP_IPC.cliCommandSet, (_event, linked) => {
     return options.setCliCommand?.(linked === true) ?? { linked: false, binDir: "" };
   });
+  ipcMain.handle(DESKTOP_IPC.preventIdleSleepGet, () => {
+    return (
+      options.getPreventIdleSleep?.() ?? {
+        enabled: false,
+        turnRunning: false,
+        blocking: false,
+      }
+    );
+  });
+  ipcMain.handle(DESKTOP_IPC.preventIdleSleepSetEnabled, (_event, enabled) => {
+    return (
+      options.setPreventIdleSleepEnabled?.(enabled === true) ?? {
+        enabled: false,
+        turnRunning: false,
+        blocking: false,
+      }
+    );
+  });
+  ipcMain.handle(
+    DESKTOP_IPC.preventIdleSleepSetTurnRunning,
+    (_event, running) => {
+      return (
+        options.setPreventIdleSleepTurnRunning?.(running === true) ?? {
+          enabled: false,
+          turnRunning: false,
+          blocking: false,
+        }
+      );
+    },
+  );
 }

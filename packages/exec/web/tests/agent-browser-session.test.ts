@@ -428,6 +428,92 @@ describe("createAgentBrowserSession getInfo / EOF", () => {
     await session.act({ action: "click", ref: "e1" });
     expect(n).toBe(2);
   });
+
+  it("maps expanded CLI acts (dblclick/fill/check/is/upload/keyboard)", async () => {
+    const calls: string[][] = [];
+    const session = createAgentBrowserSession({
+      sessionName: "expanded",
+      async run(args) {
+        calls.push([...args]);
+        if (args.includes("snapshot")) {
+          return {
+            stdout: '- checkbox "Agree" [ref=e2]\n- textbox "Name" [ref=e3]',
+            stderr: "",
+          };
+        }
+        if (args.includes("get") && args.includes("url")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("get") && args.includes("title")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { title: "Form" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("open")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/", title: "Form" },
+            }),
+            stderr: "",
+          };
+        }
+        return {
+          stdout: JSON.stringify({ success: true, data: { value: true } }),
+          stderr: "",
+        };
+      },
+    });
+    await session.open("https://example.test/");
+    await session.act({ action: "dblclick", ref: "@e2" });
+    await session.act({ action: "fill", ref: "e3", text: "xrkh" });
+    await session.act({ action: "check", ref: "e2" });
+    await session.act({ action: "scrollintoview", ref: "e2" });
+    const isOut = await session.is!("checked", "e2");
+    expect(isOut).toMatch(/true|\{/);
+    await session.upload!("e3", ["C:\\tmp\\a.png"]);
+    await session.keyboardType!("hello");
+    await session.act({ action: "drag", ref: "e2", ref2: "e3" });
+    await session.pdf!("C:\\tmp\\out.pdf");
+    await session.consoleLogs!();
+    await session.clipboard!("write", "hi");
+    await session.storage!("local", "set", "k", "v");
+    expect(calls.some((c) => c.includes("dblclick") && c.includes("@e2"))).toBe(
+      true,
+    );
+    expect(calls.some((c) => c.includes("fill") && c.includes("xrkh"))).toBe(
+      true,
+    );
+    expect(calls.some((c) => c.includes("check"))).toBe(true);
+    expect(calls.some((c) => c.includes("scrollintoview"))).toBe(true);
+    expect(calls.some((c) => c.includes("is") && c.includes("checked"))).toBe(
+      true,
+    );
+    expect(calls.some((c) => c.includes("upload"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("keyboard") && c.includes("type")),
+    ).toBe(true);
+    expect(
+      calls.some(
+        (c) => c.includes("drag") && c.includes("@e2") && c.includes("@e3"),
+      ),
+    ).toBe(true);
+    expect(calls.some((c) => c.includes("pdf"))).toBe(true);
+    expect(calls.some((c) => c.includes("console"))).toBe(true);
+    expect(calls.some((c) => c.includes("clipboard"))).toBe(true);
+    expect(calls.some((c) => c.includes("storage"))).toBe(true);
+    session.dispose?.();
+  });
 });
 
 describe("createBrowserSession agent-browser product", () => {

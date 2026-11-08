@@ -1,6 +1,11 @@
 import { readSessionEvents } from "./seq.js";
 import type { SessionEvent, PromptDelivery, MessageContent } from "@xrkseek/protocol";
-import { flattenText, isPromptDelivery, mergeMessageContents } from "@xrkseek/protocol";
+import {
+  flattenText,
+  isHumanUserMessageSource,
+  isPromptDelivery,
+  mergeMessageContents,
+} from "@xrkseek/protocol";
 import type { SessionRecord, SessionStore } from "./index.js";
 
 /**
@@ -23,6 +28,8 @@ export interface AdmitReceipt {
   readonly content: MessageContent;
   /** Effective delivery; omitted event field and `"queue"` both surface as `"queue"`. */
   readonly delivery: PromptDelivery;
+  /** Client submission echo id when stamped on `prompt/admitted`. */
+  readonly rpcId?: string;
 }
 
 export interface AdmitPromptOptions {
@@ -30,6 +37,8 @@ export interface AdmitPromptOptions {
   readonly now?: () => number;
   /** Default `"queue"`. Persisted on the event only when `"steer"` (keep logs lean). */
   readonly delivery?: PromptDelivery;
+  /** Client echo id; survives Host restart via the session log. */
+  readonly rpcId?: string;
 }
 
 function newAdmitId(): string {
@@ -78,14 +87,25 @@ export function admitPrompt(
   const admitId = options?.admitId ?? newAdmitId();
   const now = options?.now ?? Date.now;
   const delivery = effectiveDelivery(options?.delivery);
+  const rpcId =
+    typeof options?.rpcId === "string" && options.rpcId.trim().length > 0
+      ? options.rpcId.trim()
+      : undefined;
   store.append(sessionId, {
     type: "prompt/admitted",
     ts: now(),
     admitId,
     content,
     ...(delivery === "steer" ? { delivery: "steer" as const } : {}),
+    ...(rpcId !== undefined ? { rpcId } : {}),
   });
-  return { admitId, sessionId, content, delivery };
+  return {
+    admitId,
+    sessionId,
+    content,
+    delivery,
+    ...(rpcId !== undefined ? { rpcId } : {}),
+  };
 }
 
 /** Pending admits in FIFO order (admitted without later promoted/withdrawn). */
@@ -110,6 +130,9 @@ export function listPendingAdmits(
       sessionId,
       content: ev.content,
       delivery: effectiveDelivery(ev.delivery),
+      ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
+        ? { rpcId: ev.rpcId }
+        : {}),
     });
   }
   return out;
@@ -128,6 +151,79 @@ export function listSessionsWithPendingAdmits(
       listPendingAdmits(readSessionEvents(store, sessionId), sessionId).length >
       0
     ) {
+      out.push(sessionId);
+    }
+  }
+  return out;
+}
+
+/**
+ * `prompt/promoted` rows after the latest human `user/message` — crash window
+ * between promote and the Face-stamped user row (`beforeUserMessage` await).
+ * Content is still on the matching `prompt/admitted`; not model-visible yet.
+ */
+export function listDanglingPromotedAdmits(
+  events: readonly SessionEvent[],
+  sessionId = "",
+): readonly AdmitReceipt[] {
+  let lastHuman = -1;
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (
+      ev !== undefined
+      && ev.type === "user/message"
+      && isHumanUserMessageSource(ev.source)
+    ) {
+      lastHuman = i;
+    }
+  }
+  const promotedIds: string[] = [];
+  const seen = new Set<string>();
+  for (let i = lastHuman + 1; i < events.length; i++) {
+    const ev = events[i];
+    if (ev?.type !== "prompt/promoted") continue;
+    if (seen.has(ev.admitId)) continue;
+    seen.add(ev.admitId);
+    promotedIds.push(ev.admitId);
+  }
+  if (promotedIds.length === 0) return [];
+
+  const byAdmit = new Map<string, AdmitReceipt>();
+  for (const ev of events) {
+    if (ev.type !== "prompt/admitted") continue;
+    byAdmit.set(ev.admitId, {
+      admitId: ev.admitId,
+      sessionId,
+      content: ev.content,
+      delivery: effectiveDelivery(ev.delivery),
+      ...(typeof ev.rpcId === "string" && ev.rpcId.length > 0
+        ? { rpcId: ev.rpcId }
+        : {}),
+    });
+  }
+  const out: AdmitReceipt[] = [];
+  for (const id of promotedIds) {
+    const row = byAdmit.get(id);
+    if (row !== undefined) out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Sessions that need Inbox recover after Host restart: pending admits and/or
+ * dangling promotes (promoted, user/message not yet written).
+ */
+export function listSessionsNeedingInboxRecover(
+  store: SessionStore,
+): readonly string[] {
+  const out: string[] = [];
+  for (const sessionId of store.list()) {
+    const events = readSessionEvents(store, sessionId);
+    if (listPendingAdmits(events, sessionId).length > 0) {
+      out.push(sessionId);
+      continue;
+    }
+    if (listDanglingPromotedAdmits(events, sessionId).length > 0) {
       out.push(sessionId);
     }
   }
@@ -257,4 +353,84 @@ export function promotePendingSteers(
   const pending = listPendingAdmits(readSessionEvents(store, sessionId), sessionId);
   if (!pending.some((p) => p.delivery === "steer")) return undefined;
   return promoteAdmitsForTurn(store, sessionId, options);
+}
+
+/**
+ * Turn input recovered from dangling promotes (same merge rules as
+ * {@link promoteAdmitsForTurn}). Caller must not promote again.
+ */
+export function danglingPromotesForTurn(
+  events: readonly SessionEvent[],
+  sessionId = "",
+): PromoteForTurnResult | undefined {
+  const receipts = listDanglingPromotedAdmits(events, sessionId);
+  if (receipts.length === 0) return undefined;
+  const hasSteer = receipts.some((p) => p.delivery === "steer");
+  if (!hasSteer) {
+    const one = receipts[0];
+    if (one === undefined) return undefined;
+    return {
+      content: one.content,
+      text: flattenText(one.content),
+      delivery: "queue",
+      receipts: [one],
+      steerBatch: false,
+    };
+  }
+  const steers = receipts.filter((p) => p.delivery === "steer");
+  const content = mergeMessageContents(steers.map((r) => r.content));
+  return {
+    content,
+    text: flattenText(content),
+    delivery: "steer",
+    receipts: steers,
+    steerBatch: true,
+  };
+}
+
+/**
+ * Resolve the next turn's user content from the inbox SoT.
+ *
+ * Order matters for Host-restart crash windows:
+ * 1. **Dangling queue** (`prompt/promoted`, no human `user/message`) — finish
+ *    that one queue turn; do not also promote newer pending rows.
+ * 2. **Dangling steers** — merge with any still-pending steers (mid-batch
+ *    crash); leave queues pending.
+ * 3. Else {@link promoteAdmitsForTurn} (unchanged hot path).
+ */
+export function resolveAdmitsForTurn(
+  store: SessionStore,
+  sessionId: string,
+  options?: { readonly now?: () => number },
+): PromoteForTurnResult {
+  const events = readSessionEvents(store, sessionId);
+  const dangling = danglingPromotesForTurn(events, sessionId);
+  if (dangling !== undefined && !dangling.steerBatch) {
+    return dangling;
+  }
+  if (dangling !== undefined && dangling.steerBatch) {
+    const more = promotePendingSteers(store, sessionId, options);
+    if (more === undefined) return dangling;
+    const receipts = [...dangling.receipts, ...more.receipts];
+    const content = mergeMessageContents(receipts.map((r) => r.content));
+    return {
+      content,
+      text: flattenText(content),
+      delivery: "steer",
+      receipts,
+      steerBatch: true,
+    };
+  }
+  return promoteAdmitsForTurn(store, sessionId, options);
+}
+
+/** Pending admits or dangling promotes — drain must not exit while either remains. */
+export function sessionHasInboxWork(
+  events: readonly SessionEvent[],
+  sessionId = "",
+): boolean {
+  return (
+    listPendingAdmits(events, sessionId).length > 0
+    || listDanglingPromotedAdmits(events, sessionId).length > 0
+  );
 }

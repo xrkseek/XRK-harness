@@ -440,6 +440,18 @@ describe("parseSessionEvent", () => {
     ).toThrow(/delivery/);
   });
 
+  it("parses prompt/admitted rpcId", () => {
+    expect(
+      parseSessionEvent({
+        type: "prompt/admitted",
+        ts: 1,
+        admitId: "a",
+        content: "x",
+        rpcId: "client-echo-1",
+      }),
+    ).toMatchObject({ rpcId: "client-echo-1" });
+  });
+
   it("parses safety/notice and rejects bad kind", () => {
     const ok = assertSessionEvent({
       type: "safety/notice",

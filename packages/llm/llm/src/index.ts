@@ -4,6 +4,7 @@ import type {
   ToolCall,
   TokenUsage,
 } from "@xrkseek/protocol";
+import { scrubChannelLeakText, scrubChannelLeakValue } from "./channel-leak.js";
 import { classifyCaughtLlmError, isLlmError } from "./failure.js";
 
 export interface LlmChatRequest {
@@ -170,7 +171,8 @@ export function toolCallArgsIncomplete(args: unknown): boolean {
 
 /**
  * Post-provider gate (DSH translate + BlockAssembler): keep/drop, refuse
- * unknown finishes / empty stops / truncated tool JSON outside max-tokens.
+ * unknown finishes / empty stops / truncated tool JSON outside max-tokens,
+ * and scrub Harmony channel-leak markers before the loop persists tool args.
  *
  * Mysterious truncation: when the stream ends with incomplete tool JSON and
  * no `length` finish (undefined / `stop`), coerce to `max-tokens` so keep/drop
@@ -224,7 +226,40 @@ export function finalizeLlmChatResponse(
   ) {
     throw new EmptyResponseError();
   }
-  return dropped;
+  // Scrub after the empty gate so a leak-only reply still counts as empty.
+  return scrubChannelLeakInResponse(dropped);
+}
+
+function scrubChannelLeakInResponse(
+  response: LlmChatResponse,
+): LlmChatResponse {
+  const content = scrubChannelLeakText(response.content);
+  const reasoning =
+    response.reasoning !== undefined
+      ? scrubChannelLeakText(response.reasoning)
+      : undefined;
+  const toolCalls = response.toolCalls?.map((call) => ({
+    ...call,
+    arguments: scrubChannelLeakValue(call.arguments),
+  }));
+  const contentChanged = content !== response.content;
+  const reasoningChanged =
+    reasoning !== undefined && reasoning !== response.reasoning;
+  const toolsChanged =
+    toolCalls !== undefined &&
+    response.toolCalls !== undefined &&
+    toolCalls.some(
+      (call, i) => call.arguments !== response.toolCalls![i]!.arguments,
+    );
+  if (!contentChanged && !reasoningChanged && !toolsChanged) {
+    return response;
+  }
+  return {
+    ...response,
+    content,
+    ...(reasoning !== undefined ? { reasoning } : {}),
+    ...(toolCalls !== undefined ? { toolCalls } : {}),
+  };
 }
 
 /**
@@ -398,6 +433,12 @@ export {
   type ResolvedRetryPolicy,
   type RetryPolicyMode,
 } from "./retry-policy.js";
+
+export {
+  containsChannelLeak,
+  scrubChannelLeakText,
+  scrubChannelLeakValue,
+} from "./channel-leak.js";
 
 export {
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,

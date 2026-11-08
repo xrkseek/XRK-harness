@@ -41,6 +41,12 @@ const DESKTOP_IPC = {
   hostPhaseGet: "xrk-desktop:host-phase-get",
   hostPhase: "xrk-desktop:host-phase",
   hostRebring: "xrk-desktop:host-rebring",
+  cliCommandGet: "xrk-desktop:cli-command-get",
+  cliCommandSet: "xrk-desktop:cli-command-set",
+  preventIdleSleepGet: "xrk-desktop:prevent-idle-sleep-get",
+  preventIdleSleepSetEnabled: "xrk-desktop:prevent-idle-sleep-set-enabled",
+  preventIdleSleepSetTurnRunning:
+    "xrk-desktop:prevent-idle-sleep-set-turn-running",
 };
 const DESKTOP_BRIDGE_PROTOCOL_VERSION = 1;
 
@@ -100,6 +106,17 @@ const api = {
         return undefined;
       }
     },
+  },
+  cliCommand: {
+    get: () => ipcRenderer.invoke(DESKTOP_IPC.cliCommandGet),
+    set: (linked) => ipcRenderer.invoke(DESKTOP_IPC.cliCommandSet, linked),
+  },
+  preventIdleSleep: {
+    get: () => ipcRenderer.invoke(DESKTOP_IPC.preventIdleSleepGet),
+    setEnabled: (enabled) =>
+      ipcRenderer.invoke(DESKTOP_IPC.preventIdleSleepSetEnabled, enabled),
+    setTurnRunning: (running) =>
+      ipcRenderer.invoke(DESKTOP_IPC.preventIdleSleepSetTurnRunning, running),
   },
 };
 

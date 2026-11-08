@@ -117,10 +117,10 @@ export function createSettingsMutateTool(
   return {
     name: SETTINGS_MUTATE,
     description:
-      "Change Host Settings (global ~/.xrk — same as Settings UI). " +
-      "Ops shape: [{ op:\"set\"|\"unset\", path:[...], value? }] under ns. " +
-      "Secrets go through Credentials, not API keys in mcp.servers env. " +
-      "Most namespaces apply live; MCP waits for remount/connect.",
+      "Change Host Settings (global ~/.xrk — same as the Settings UI). " +
+      "Pass ops under ns: each op is set or unset with a path array and optional value. " +
+      "Put secrets in Credentials, not as API keys in mcp.servers env. " +
+      "Most namespaces apply live; MCP waits for remount/connect to finish.",
     parameters: {
       type: "object",
       properties: {

@@ -77,7 +77,7 @@ async function buildFace(opts: {
           );
         });
       }
-      while (agent.pendingAdmits().length > 0) {
+      while (agent.hasInboxWork()) {
         if (signal.aborted) {
           throw new DOMException("aborted", "AbortError");
         }

@@ -114,12 +114,16 @@ export class Session implements SessionFace {
   private readonly submissionSettlements = new Map<SessionRequestId, {
     readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
     retiring: boolean
+    /** True while `prompt()` awaits Host admit — orphan cleanup must not retire these. */
+    awaitingHost: boolean
+    /** True after Host accepted the prompt RPC (queue/durable should follow). */
+    accepted: boolean
   }>()
   /**
-   * RpcIds once observed in a Host `session/queue` snapshot. Used to retire
-   * local queued echoes when Host later drops the row (user remove or claim)
-   * without re-showing a pre-admit dock row. Survives `session/subscribed` mirror reset
-   * so a post-reset baseline that omits the row still settles the echo.
+   * RpcIds once observed in a Host `session/queue` snapshot for this mux
+   * generation. Used to hand off local queued echoes when Host drops the row
+   * (FIFO claim) without retiring them. Cleared on `session/subscribed` so a
+   * post-restart baseline can orphan echoes Host will never claim again.
    */
   private readonly hostQueuedRpcIds = new Set<string>()
   /** Session-owned business Context engine over the contiguous raw window. */
@@ -268,7 +272,12 @@ export class Session implements SessionFace {
       text: input.text,
       attachments: input.attachments,
     }]
-    this.submissionSettlements.set(requestId, { onRetire: input.onRetire, retiring: false })
+    this.submissionSettlements.set(requestId, {
+      onRetire: input.onRetire,
+      retiring: false,
+      awaitingHost: true,
+      accepted: false,
+    })
     this.promptAttempted = true
     // Soft sync notify: paint the pending echo on this keydown without forcing
     // deferred stream Markdown/tool materialization (that was making Ctrl+Enter
@@ -351,6 +360,13 @@ export class Session implements SessionFace {
       this.promptError = { op: 'send', error: result.error }
       this.notifier.markDirty()
       return result
+    }
+    if (requestId !== undefined) {
+      const settlement = this.submissionSettlements.get(requestId)
+      if (settlement !== undefined) {
+        settlement.awaitingHost = false
+        settlement.accepted = true
+      }
     }
     // Blank flips on ACCEPTANCE, not attempt: an accepted prompt starts the
     // conversation's first turn on the host (the host criterion — a logged
@@ -779,6 +795,7 @@ export class Session implements SessionFace {
         this.queueMirror.replace(frame.items)
         this.observeSubmissionQueue()
         this.handoffDroppedQueueSubmissions()
+        this.retireOrphanSubmissions()
         this.notifier.markDirty()
         return
       }
@@ -788,6 +805,9 @@ export class Session implements SessionFace {
         // snapshot AFTER the subscribed frame on the same stream, so the
         // stale mirror clears here — race-free against onConnected/resync
         // timing (clearing there could wipe a baseline that already landed).
+        // Drop prior-generation Host queue ids so orphan cleanup after the
+        // new baseline can retire echoes the restarted Host no longer owns.
+        this.hostQueuedRpcIds.clear()
         if (this.queueMirror.reset()) this.notifier.markDirty()
         return
       }
@@ -1231,7 +1251,8 @@ export class Session implements SessionFace {
    * `user/message` retires it. Do **not** retire here: that left a claim→
    * durable hole (dock empty + ChatView ignores queued). Explicit user
    * delete retires via {@link updateQueue}. Pre-admit echoes (never seen
-   * on Host) and `session/subscribed` mirror clears are untouched.
+   * on Host this mux generation) are untouched; `session/subscribed` clears
+   * {@link hostQueuedRpcIds} so a later empty baseline can orphan them.
    */
   private handoffDroppedQueueSubmissions(): void {
     if (this.pendingSubmissions.length === 0 || this.hostQueuedRpcIds.size === 0) return
@@ -1258,6 +1279,46 @@ export class Session implements SessionFace {
     return this.pendingSubmissions.some(echo => (
       echo.placement === 'queued' || echo.placement === 'steering'
     ))
+  }
+
+  /**
+   * After a Host `session/queue` baseline: drop local echoes that Host will
+   * never claim — accepted prompt, not awaiting Host, rpcId absent from the
+   * live queue, from this mux-generation `hostQueuedRpcIds` (FIFO claim→
+   * transcript handoff still pending durable), and from durable
+   * `user/message` stamps. Typical after Host restart while Desktop kept
+   * pre-restart echoes.
+   */
+  private retireOrphanSubmissions(): void {
+    if (this.pendingSubmissions.length === 0) return
+    const hostRpcs = new Set<string>()
+    for (const row of this.queueMirror.snapshot()) {
+      if (row.rpcId !== undefined) hostRpcs.add(row.rpcId)
+    }
+    const durableRpcs = new Set<string>()
+    for (const event of this.events) {
+      if (event.type !== 'user/message') continue
+      for (const id of echoRpcIdsFromUserMessage({
+        source: (event as { readonly source?: unknown }).source as {
+          readonly kind?: unknown
+          readonly rpcId?: unknown
+        } | undefined,
+        rpcId: (event as { readonly rpcId?: unknown }).rpcId,
+        rpcIds: (event as { readonly rpcIds?: unknown }).rpcIds,
+      })) {
+        durableRpcs.add(id)
+      }
+    }
+    for (const echo of [...this.pendingSubmissions]) {
+      const settlement = this.submissionSettlements.get(echo.requestId)
+      if (settlement === undefined || settlement.retiring) continue
+      if (settlement.awaitingHost || !settlement.accepted) continue
+      if (hostRpcs.has(echo.requestId) || durableRpcs.has(echo.requestId)) continue
+      // Still in this mux generation's Host-queue memory: FIFO claim handed
+      // the echo to transcript; wait for durable `user/message` retirement.
+      if (this.hostQueuedRpcIds.has(echo.requestId)) continue
+      this.retireFailedSubmission(echo.requestId)
+    }
   }
 
   /**

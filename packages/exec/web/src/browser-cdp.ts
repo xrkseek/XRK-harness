@@ -373,7 +373,7 @@ export function createCdpBrowserSession(options: {
       if (!objectId) {
         throw new WebError(`CDP could not resolve @${ref}`, "WEB_BROWSER_CDP");
       }
-      if (request.action === "type") {
+      if (request.action === "type" || request.action === "fill") {
         if (node.role !== "textbox" && node.role !== "searchbox" && node.role !== "combobox") {
           throw new WebError(`@${ref} is not a textbox`, "WEB_BROWSER_BAD_REF");
         }
@@ -390,7 +390,19 @@ export function createCdpBrowserSession(options: {
           sessionId,
         );
         await capture(cdp);
-        return { ...paint(false), note: `typed into @${ref}` };
+        return {
+          ...paint(false),
+          note:
+            request.action === "fill"
+              ? `filled @${ref}`
+              : `typed into @${ref}`,
+        };
+      }
+      if (request.action !== "click") {
+        throw new WebError(
+          `action=${request.action} needs agent-browser (CDP path only supports click/type/fill/scroll/press/back)`,
+          "WEB_BROWSER_NO_GRAPHICS",
+        );
       }
       await cdp.call(
         "Runtime.callFunctionOn",

@@ -92,5 +92,31 @@ export function createXrkDesktopBridgeApi(
           binDir: string;
         }>,
     },
+    preventIdleSleep: {
+      get: () =>
+        ipc.invoke(DESKTOP_IPC.preventIdleSleepGet) as Promise<{
+          enabled: boolean;
+          turnRunning: boolean;
+          blocking: boolean;
+        }>,
+      setEnabled: (enabled: boolean) =>
+        ipc.invoke(
+          DESKTOP_IPC.preventIdleSleepSetEnabled,
+          enabled,
+        ) as Promise<{
+          enabled: boolean;
+          turnRunning: boolean;
+          blocking: boolean;
+        }>,
+      setTurnRunning: (running: boolean) =>
+        ipc.invoke(
+          DESKTOP_IPC.preventIdleSleepSetTurnRunning,
+          running,
+        ) as Promise<{
+          enabled: boolean;
+          turnRunning: boolean;
+          blocking: boolean;
+        }>,
+    },
   };
 }

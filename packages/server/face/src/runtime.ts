@@ -2,14 +2,17 @@ import path from "node:path";
 import type { AttachmentStore } from "@xrkseek/attachment";
 import {
   forkSession,
+  listDanglingPromotedAdmits,
   listPendingAdmits,
-  listSessionsWithPendingAdmits,
+  listSessionsNeedingInboxRecover,
   newSession,
   readSessionEvents,
+  repairOpenTurnEvents,
   sessionEventCount,
   type PersistentSessionStore,
   type SessionStore,
 } from "@xrkseek/core-session";
+import { echoRpcForAdmit, rebuildAdmitRpcMaps } from "./admit-rpc-rebuild.js";
 import type { AgentHandle } from "@xrkseek/core-agent";
 import { EXIT_PLAN_MODE, type ToolRegistry } from "@xrkseek/core-tools";
 import {
@@ -1275,14 +1278,32 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     let next: SessionEvent = event;
 
     if (next.type === "prompt/promoted") {
-      const rpc = admitRpcMap.get(next.admitId);
-      if (rpc) {
-        const steer = admittedWasSteer(store, id, next.admitId);
-        const echo: FacePendingUserEcho = { rpc, steer };
-        const queue = pendingUserRpc.get(id);
-        if (queue === undefined) pendingUserRpc.set(id, [echo]);
-        else queue.push(echo);
+      // Prefer live map; fall back to durable admitted.rpcId / legacy so a
+      // wiped RAM map (or promote before map write) still stamps user/message.
+      // Capture under a const so nested callbacks keep the promoted narrow
+      // (outer `next` is `let SessionEvent` and loses the discriminant).
+      const promoted = next;
+      let rpc = admitRpcMap.get(promoted.admitId);
+      if (rpc === undefined) {
+        const admitted = readEvents(id).find(
+          (ev) =>
+            ev.type === "prompt/admitted" && ev.admitId === promoted.admitId,
+        );
+        rpc = echoRpcForAdmit({
+          admitId: promoted.admitId,
+          ...(admitted?.type === "prompt/admitted"
+            && typeof admitted.rpcId === "string"
+            ? { rpcId: admitted.rpcId }
+            : {}),
+        });
+        admitRpcMap.set(promoted.admitId, rpc);
+        rpcAdmitMap.set(rpc, promoted.admitId);
       }
+      const steer = admittedWasSteer(store, id, promoted.admitId);
+      const echo: FacePendingUserEcho = { rpc, steer };
+      const queue = pendingUserRpc.get(id);
+      if (queue === undefined) pendingUserRpc.set(id, [echo]);
+      else queue.push(echo);
     }
 
     if (
@@ -1689,15 +1710,40 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
   runtimeBox.current = runtime;
   goals.bind(runtime);
   // Durable Inbox SoT is the session log (`prompt/admitted`). After Host
-  // restart, republish queue baselines and wake drains so pending queue/steer
-  // resume. Skip sessions whose goal bind() just disarmed — user must resume
-  // (same fence as goals rehydrate; do not auto-continue).
-  for (const sessionId of listSessionsWithPendingAdmits(store)) {
+  // restart, rebuild echo rpc maps, close crash-open turns, republish queue
+  // baselines, refill pendingUserRpc for dangling promotes, and wake drains
+  // so pending queue/steer (and promote-without-user/message) resume. Skip
+  // sessions whose goal bind() just disarmed — user must resume (same fence
+  // as goals rehydrate; do not auto-continue).
+  for (const sessionId of listSessionsNeedingInboxRecover(store)) {
+    try {
+      const repairs = repairOpenTurnEvents(
+        readSessionEvents(store, sessionId),
+      );
+      for (const ev of repairs) {
+        store.append(sessionId, ev);
+      }
+    } catch {
+      /* best-effort per session — still republish / wake */
+    }
+    const events = readSessionEvents(store, sessionId);
+    const pending = listPendingAdmits(events, sessionId);
+    const dangling = listDanglingPromotedAdmits(events, sessionId);
+    rebuildAdmitRpcMaps(pending, { admitRpcMap, rpcAdmitMap });
+    rebuildAdmitRpcMaps(dangling, { admitRpcMap, rpcAdmitMap });
+    if (dangling.length > 0) {
+      const echoes: FacePendingUserEcho[] = dangling.map((row) => ({
+        rpc: echoRpcForAdmit(row),
+        steer: row.delivery === "steer",
+      }));
+      pendingUserRpc.set(sessionId, echoes);
+    }
     runtime.publishQueue(sessionId);
     const goal = goals.get(sessionId);
     if (goal && goal.phase === "active" && goal.activation === "disarmed") {
       continue;
     }
+    if (pending.length === 0 && dangling.length === 0) continue;
     options.drain.wake(sessionId);
   }
   hydrateFaceSettingsDocument(runtime);

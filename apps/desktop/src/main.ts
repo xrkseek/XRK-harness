@@ -18,10 +18,18 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  powerSaveBlocker,
   protocol,
   shell,
 } from "electron";
 import { registerDesktopIpcHandlers } from "./desktop-ipc.js";
+import {
+  preventIdleSleepPrefPath,
+  readPreventIdleSleepEnabled,
+  resolvePreventIdleSleepEnabled,
+  writePreventIdleSleepEnabled,
+} from "./prevent-idle-sleep.js";
+import { DesktopSleepInhibitor } from "./sleep-inhibitor.js";
 import {
   getDesktopHostPhase,
   getLastHostFailure,
@@ -203,6 +211,18 @@ let desktopHostBringUp: DesktopHostBringUpHandle | undefined;
 let desktopQuitting = false;
 let updateCoordinator: DesktopUpdateCoordinator | undefined;
 let updateSchedule: DesktopUpdateSchedule | undefined;
+/** Codex-style idle-sleep inhibitor (display may still blank). */
+let sleepInhibitor: DesktopSleepInhibitor | undefined;
+
+function ensureSleepInhibitor(): DesktopSleepInhibitor {
+  if (sleepInhibitor === undefined) {
+    sleepInhibitor = new DesktopSleepInhibitor(powerSaveBlocker);
+    sleepInhibitor.setEnabled(
+      resolvePreventIdleSleepEnabled(desktopHarnessHome()),
+    );
+  }
+  return sleepInhibitor;
+}
 
 async function startDesktopHostCarrier(
   webRoot: string,
@@ -364,6 +384,8 @@ const ownsDesktopInstance = startDesktopMain(app, {
 
 app.on("will-quit", () => {
   desktopQuitting = true;
+  sleepInhibitor?.dispose();
+  sleepInhibitor = undefined;
   const host = desktopHost;
   desktopHostFetchApp = undefined;
   desktopHost = undefined;
@@ -530,7 +552,46 @@ function registerDesktopShellIpc(): void {
     },
     getCliCommand: () => syncDesktopCliCommand(),
     setCliCommand: (linked) => syncDesktopCliCommand(linked),
+    // Arm from settings.yaml / JSON before the first renderer turn IPC.
+    getPreventIdleSleep: () => ensureSleepInhibitor().snapshot(),
+    setPreventIdleSleepEnabled: (enabled) => {
+      const inhibitor = ensureSleepInhibitor();
+      // Keep the JSON mirror aligned with Face even when the in-memory
+      // inhibitor already matches (yaml peek can arm before the file exists).
+      const home = desktopHarnessHome();
+      const pref = preventIdleSleepPrefPath(home);
+      let diskMatches: boolean;
+      try {
+        if (existsSync(pref)) {
+          diskMatches =
+            readPreventIdleSleepEnabled(readFileSync(pref, "utf8")) ===
+            enabled;
+        } else {
+          // Default-off: no file is the durable form of `false`.
+          diskMatches = enabled === false;
+        }
+      } catch {
+        diskMatches = false;
+      }
+      if (!diskMatches) {
+        try {
+          mkdirSync(home, { recursive: true });
+          writeFileSync(pref, writePreventIdleSleepEnabled(enabled));
+        } catch (error) {
+          console.error(
+            "[desktop] prevent-idle-sleep pref write failed",
+            error,
+          );
+        }
+      }
+      return inhibitor.setEnabled(enabled);
+    },
+    setPreventIdleSleepTurnRunning: (running) =>
+      ensureSleepInhibitor().setTurnRunning(running),
   });
+  // Peek settings.yaml / JSON now so a turn that starts before the Settings
+  // card mounts still sees the durable preventIdleSleep preference.
+  ensureSleepInhibitor();
 
   installDesktopApplicationMenu({
     menu: Menu,

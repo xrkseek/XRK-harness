@@ -1,15 +1,19 @@
 import type { ToolDefinition, ToolResultContent } from "@xrkseek/core-tools";
 import {
+  COMPUTER_USE_ACTIONS,
+  COMPUTER_USE_READ_ACTIONS,
+} from "./actions.js";
+import {
   COMPUTER_USE_PROMPT_TEXT,
   formatActResult,
   formatCaptureEnvelope,
   formatWindowsList,
 } from "./format.js";
 import {
-  COMPUTER_USE_ACTIONS,
   ComputerUseError,
   isComputerUseError,
   type ComputerUseAction,
+  type ComputerUseActRequest,
   type ComputerUseService,
 } from "./types.js";
 
@@ -100,8 +104,8 @@ function parseCoordinate(raw: unknown): readonly [number, number] | undefined {
 }
 
 /**
- * Model-facing `computer_use` tool (Codex-style capture → act → re-capture loop).
- * Separate from browser_open / browser_snapshot / browser_act.
+ * Model-facing `computer_use` tool — full agent-desktop CLI surface via actions.
+ * Prefer agent-desktop over Windows UIA/ps1; no bash/`SetCursorPos` workarounds.
  */
 export function createComputerUseTools(
   options: CreateComputerUseToolsOptions = {},
@@ -121,36 +125,42 @@ export function createComputerUseTools(
     direction?: string;
     amount?: number;
     coordinate?: unknown;
+    coordinate2?: unknown;
     headed?: boolean;
     role?: string;
     name?: string;
     exact?: boolean;
     first?: boolean;
     limit?: number;
+    property?: string;
+    predicate?: string;
+    timeoutMs?: number;
+    label?: string;
   }> = {
     name: "computer_use",
     description:
-      "Native desktop GUI (not browser pages). AX capture is headless. " +
-      "capture and find return fresh element indices; any newer capture or find invalidates them. " +
-      "Real mouse input (coordinate clicks) needs headed=true.",
+      "Drive the native desktop GUI through agent-desktop (not browser pages, not PowerShell). " +
+      "Session + cursor overlay show where actions land. " +
+      "capture/find return element indices; a newer capture or find invalidates older ones. " +
+      "Prefer accessibility element indices; headed=true moves the real mouse — ask the user first.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
           enum: [...COMPUTER_USE_ACTIONS],
-          description:
-            "capture | find | click | type | key | scroll | list_windows | clipboard_set | clipboard_get. find reads role/name/text/exact/first/limit.",
+          description: "Which agent-desktop action to run.",
         },
         mode: {
           type: "string",
           enum: ["ax", "som", "vision"],
           description:
-            "ax returns the tree only (default); vision and som add a PNG (som labels it with element indices).",
+            "ax returns the accessibility tree only (default). vision and som also return a PNG; som labels it with element indices.",
         },
         app: {
           type: "string",
-          description: "Optional app/window name filter for capture/find.",
+          description:
+            "App or window filter for capture, find, launch, close_app, focus_window, and related actions.",
         },
         element: {
           type: "number",
@@ -159,7 +169,7 @@ export function createComputerUseTools(
         text: {
           type: "string",
           description:
-            "Text for action=type or clipboard_set; for find, match name/value/description.",
+            "Text for type/set_value/select/clipboard_set/find/wait/overlay.",
         },
         role: {
           type: "string",
@@ -192,7 +202,8 @@ export function createComputerUseTools(
         },
         amount: {
           type: "number",
-          description: "Scroll wheel ticks (default 3).",
+          description:
+            "Scroll ticks; wait ms when action=wait without selector; drag target element index.",
         },
         coordinate: {
           type: "array",
@@ -200,12 +211,38 @@ export function createComputerUseTools(
           minItems: 2,
           maxItems: 2,
           description:
-            "Screen pixel [x, y] for a click without an element index. Needs headed=true (moves the real mouse).",
+            "Screen pixel [x, y] for click/drag/resize/move. Click needs headed=true.",
+        },
+        coordinate2: {
+          type: "array",
+          items: { type: "number" },
+          minItems: 2,
+          maxItems: 2,
+          description: "Second [x, y] for drag destination.",
         },
         headed: {
           type: "boolean",
           description:
-            "Allow real mouse input (--headed). Steals the cursor; set true only when the user accepts that.",
+            "Allow real mouse (--headed). Steals the cursor; set true only with user consent.",
+        },
+        property: {
+          type: "string",
+          description:
+            "For get/is: text|value|title|bounds|role|states / visible|enabled|checked|…",
+        },
+        predicate: {
+          type: "string",
+          description:
+            "wait --predicate; open_system_surface id; launch --activate when set to activate.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Wait timeout in milliseconds.",
+        },
+        label: {
+          type: "string",
+          description:
+            "cursor-overlay intent text (action=overlay or any act to refresh label). Use off to disable.",
         },
       },
       required: ["action"],
@@ -232,9 +269,7 @@ export function createComputerUseTools(
               ...(args?.mode !== undefined
                 ? { mode: String(args.mode) as "ax" | "som" | "vision" }
                 : {}),
-              ...(args?.app !== undefined
-                ? { app: String(args.app) }
-                : {}),
+              ...(args?.app !== undefined ? { app: String(args.app) } : {}),
             },
             signal,
           );
@@ -326,44 +361,59 @@ export function createComputerUseTools(
           };
         }
         const coordinate = parseCoordinate(args?.coordinate);
-        const result = await options.service.act(
-          {
-            action,
-            ...(args?.element !== undefined
-              ? { element: Number(args.element) }
-              : {}),
-            ...(args?.text !== undefined ? { text: String(args.text) } : {}),
-            ...(args?.keys !== undefined ? { keys: String(args.keys) } : {}),
-            ...(args?.direction !== undefined
-              ? {
-                  direction: String(args.direction) as
-                    | "up"
-                    | "down"
-                    | "left"
-                    | "right",
-                }
-              : {}),
-            ...(args?.amount !== undefined
-              ? { amount: Number(args.amount) }
-              : {}),
-            ...(coordinate !== undefined ? { coordinate } : {}),
-            ...(args?.headed === true ? { headed: true } : {}),
-          },
-          signal,
-        );
+        const coordinate2 = parseCoordinate(args?.coordinate2);
+        const actRequest: ComputerUseActRequest = {
+          action,
+          ...(args?.element !== undefined
+            ? { element: Number(args.element) }
+            : {}),
+          ...(args?.text !== undefined ? { text: String(args.text) } : {}),
+          ...(args?.keys !== undefined ? { keys: String(args.keys) } : {}),
+          ...(args?.direction !== undefined
+            ? {
+                direction: String(args.direction) as
+                  | "up"
+                  | "down"
+                  | "left"
+                  | "right",
+              }
+            : {}),
+          ...(args?.amount !== undefined
+            ? { amount: Number(args.amount) }
+            : {}),
+          ...(coordinate !== undefined ? { coordinate } : {}),
+          ...(coordinate2 !== undefined ? { coordinate2 } : {}),
+          ...(args?.headed === true ? { headed: true } : {}),
+          ...(args?.app !== undefined ? { app: String(args.app) } : {}),
+          ...(args?.property !== undefined
+            ? { property: String(args.property) }
+            : {}),
+          ...(args?.predicate !== undefined
+            ? { predicate: String(args.predicate) }
+            : {}),
+          ...(args?.timeoutMs !== undefined
+            ? { timeoutMs: Number(args.timeoutMs) }
+            : {}),
+          ...(args?.label !== undefined ? { label: String(args.label) } : {}),
+        };
+        const result = await options.service.act(actRequest, signal);
+        if (result.capture?.screenshotPng && options.saveScreenshot) {
+          const ref = await options.saveScreenshot(result.capture.screenshotPng);
+          return {
+            content: [
+              { type: "text" as const, text: formatActResult(result) },
+              { type: "image" as const, attachment: ref },
+            ],
+            meta: { action: result.action, attachmentId: ref.attachmentId },
+          };
+        }
         return { content: formatActResult(result) };
       } catch (err) {
         return fail(err);
       }
     },
-    isConcurrencySafe: (args) => {
-      const action = String(args?.action ?? "");
-      return (
-        action === "capture" ||
-        action === "list_windows" ||
-        action === "find"
-      );
-    },
+    isConcurrencySafe: (args) =>
+      COMPUTER_USE_READ_ACTIONS.has(String(args?.action ?? "")),
   };
   return [tool];
 }

@@ -5,8 +5,10 @@ import {
   createSessionSafety,
   createTurnLatch,
   hardLoopNotice,
+  listDanglingPromotedAdmits,
   listPendingAdmits,
-  promoteAdmitsForTurn,
+  resolveAdmitsForTurn,
+  sessionHasInboxWork,
   softLoopNotice,
   SessionBusyError,
   SessionSafetyLimitError,
@@ -172,10 +174,21 @@ export interface AgentHandle {
    */
   admit(
     content: MessageContent,
-    options?: { readonly delivery?: PromptDelivery; readonly admitId?: string },
+    options?: {
+      readonly delivery?: PromptDelivery;
+      readonly admitId?: string;
+      readonly rpcId?: string;
+    },
   ): AdmitReceipt;
   /** Pending admits not yet promoted. */
   pendingAdmits(): readonly AdmitReceipt[];
+  /**
+   * `prompt/promoted` without a following human `user/message` (crash window).
+   * Drain must treat these as inbox work even when {@link pendingAdmits} is empty.
+   */
+  danglingPromotedAdmits(): readonly AdmitReceipt[];
+  /** Pending admits or dangling promotes — Host drain loop predicate. */
+  hasInboxWork(): boolean;
   /** Cancel the in-flight turn (DSH). Default cause `{ kind: "user" }`. */
   abort(cause?: AgentCancelCause): void;
   isBusy(): boolean;
@@ -442,7 +455,8 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
       let admitIds: string[] | undefined;
       let steerBatch: boolean | undefined;
       if (userText === undefined) {
-        const promoted = promoteAdmitsForTurn(
+        // resolveAdmitsForTurn: dangling promote crash window + normal promote.
+        const promoted = resolveAdmitsForTurn(
           options.store,
           options.sessionId,
         );
@@ -657,6 +671,18 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
     },
     pendingAdmits() {
       return listPendingAdmits(
+        readSessionEvents(options.store, options.sessionId),
+        options.sessionId,
+      );
+    },
+    danglingPromotedAdmits() {
+      return listDanglingPromotedAdmits(
+        readSessionEvents(options.store, options.sessionId),
+        options.sessionId,
+      );
+    },
+    hasInboxWork() {
+      return sessionHasInboxWork(
         readSessionEvents(options.store, options.sessionId),
         options.sessionId,
       );

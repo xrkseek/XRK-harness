@@ -2,6 +2,8 @@
  * ComputerUseService backed by Vercel Labs `agent-desktop` CLI v1.x
  * (AX tree with snapshot-qualified refs `@<snapshot_id>:eN`; JSON envelopes).
  *
+ * Full CLI surface (session + cursor-overlay + observe/act/windows/wait).
+ *
  * Contract notes (1.2.x):
  * - stdout is always JSON (`ok` / `data` / `error`); do **not** pass `--json`
  * - click/type/scroll refs must be qualified (`@s…:eN`), never bare `@eN`
@@ -9,12 +11,24 @@
  * - `screenshot` without a path returns `{ data: { data: <base64>, format, … } }`
  * - Actions are **headless by default** (no pointer move, no focus steal).
  * - coordinate / mouse-click require `--headed` and explicit `headed=true` from the tool.
+ * - `session start --cursor` + `--session` on every call enables the presentation overlay.
  */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isAgentDesktopWaitEvent } from "./actions.js";
 import { buildCaptureResult } from "./format.js";
 import { resolveAgentDesktopBin } from "./resolve-cli.js";
+import {
+  buildOverlayDisableArgs,
+  buildOverlayEnableArgs,
+  buildSessionEndArgs,
+  buildSessionStartArgs,
+  parseSessionId,
+  withSessionFlags,
+  type SessionScopeOptions,
+  type SessionScopeState,
+} from "./session-scope.js";
 import {
   ComputerUseError,
   type ComputerUseActResult,
@@ -25,7 +39,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-export interface AgentDesktopProviderOptions {
+export interface AgentDesktopProviderOptions extends SessionScopeOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Override binary path (tests / packaged Host). */
   readonly bin?: string;
@@ -36,7 +50,7 @@ export interface AgentDesktopProviderOptions {
   ) => Promise<{ stdout: string; stderr: string }>;
 }
 
-interface AgentDesktopEnvelope {
+export interface AgentDesktopEnvelope {
   readonly ok?: boolean;
   readonly command?: string;
   readonly data?: unknown;
@@ -121,7 +135,6 @@ function mapPressCombo(raw: string): string {
     .toLowerCase();
 }
 
-/** True when the text has any character outside ASCII — clipboard paste is the reliable route. */
 function needsClipboardType(text: string): boolean {
   for (const ch of text) {
     if (ch.codePointAt(0)! > 0x7f) return true;
@@ -164,8 +177,25 @@ function formatCliError(envelope: AgentDesktopEnvelope): {
   };
 }
 
+function parseEnvelope(stdout: string): AgentDesktopEnvelope {
+  let envelope: AgentDesktopEnvelope;
+  try {
+    envelope = JSON.parse(stdout) as AgentDesktopEnvelope;
+  } catch {
+    throw new ComputerUseError(
+      `agent-desktop returned non-JSON: ${stdout.slice(0, 200)}`,
+      "COMPUTER_USE_BACKEND",
+    );
+  }
+  if (envelope.ok === false) {
+    const formatted = formatCliError(envelope);
+    throw new ComputerUseError(formatted.message, formatted.code);
+  }
+  return envelope;
+}
+
 /**
- * Spawn agent-desktop and parse its JSON envelope.
+ * Spawn agent-desktop and parse its JSON envelope (no session scoping).
  */
 export async function runAgentDesktop(
   args: readonly string[],
@@ -211,20 +241,7 @@ export async function runAgentDesktop(
       "COMPUTER_USE_BACKEND",
     );
   }
-  let envelope: AgentDesktopEnvelope;
-  try {
-    envelope = JSON.parse(stdout) as AgentDesktopEnvelope;
-  } catch {
-    throw new ComputerUseError(
-      `agent-desktop returned non-JSON: ${stdout.slice(0, 200)}`,
-      "COMPUTER_USE_BACKEND",
-    );
-  }
-  if (envelope.ok === false) {
-    const formatted = formatCliError(envelope);
-    throw new ComputerUseError(formatted.message, formatted.code);
-  }
-  return envelope;
+  return parseEnvelope(stdout);
 }
 
 function decodeScreenshotPng(envelope: AgentDesktopEnvelope): Uint8Array | undefined {
@@ -242,34 +259,29 @@ function decodeScreenshotPng(envelope: AgentDesktopEnvelope): Uint8Array | undef
   return Uint8Array.from(Buffer.from(b64, "base64"));
 }
 
-async function clipboardSet(
-  text: string,
-  options: AgentDesktopProviderOptions,
-): Promise<void> {
-  // Prefer argv for short text; CLI also accepts --stdin for secrets.
-  await runAgentDesktop(["clipboard-set", text], options);
+function xyPair(pair: readonly [number, number]): string {
+  return `${Math.round(pair[0])},${Math.round(pair[1])}`;
 }
 
-async function typeViaClipboard(
-  ref: string,
-  text: string,
-  lastApp: string,
-  options: AgentDesktopProviderOptions,
-): Promise<string> {
-  await clipboardSet(text, options);
-  try {
-    await runAgentDesktop(["focus", ref], options);
-  } catch {
-    // focus may be unavailable on some roles; paste still targets last focused.
+function requireRef(
+  ref: string | undefined,
+  action: string,
+): asserts ref is string {
+  if (!ref) {
+    throw new ComputerUseError(
+      `${action} needs element index from last capture/find`,
+      "COMPUTER_USE_BAD_ARGS",
+    );
   }
-  const pasteArgs = ["press", "ctrl+v"];
-  if (lastApp) pasteArgs.push("--app", lastApp);
-  await runAgentDesktop(pasteArgs, options);
-  return "typed-clipboard-paste";
+}
+
+function headedArgs(headed: boolean, args: string[]): string[] {
+  return headed ? ["--headed", ...args] : args;
 }
 
 /**
  * Create a ComputerUseService that shells out to `agent-desktop`.
+ * Defaults: durable CLI session + presentation cursor overlay.
  */
 export function createAgentDesktopProvider(
   options: AgentDesktopProviderOptions = {},
@@ -277,12 +289,118 @@ export function createAgentDesktopProvider(
   let lastElements: ComputerUseElement[] = [];
   let lastApp = "";
   let lastSnapshotId = "";
-  /** Prefer first interactive ref as a scroll target when act has no element. */
   let lastScrollRef = "";
+  const scope: SessionScopeState = {
+    sessionId: undefined,
+    overlayEnabled: false,
+  };
+  const enableSession = options.enableSession !== false;
+  let sessionPromise: Promise<void> | undefined;
+
+  const runScoped = async (
+    args: readonly string[],
+    flags?: { readonly skipSession?: boolean },
+  ): Promise<AgentDesktopEnvelope> => {
+    if (enableSession && !flags?.skipSession) {
+      await ensureSession();
+    }
+    const finalArgs = flags?.skipSession
+      ? [...args]
+      : withSessionFlags(args, scope, options);
+    return runAgentDesktop(finalArgs, options);
+  };
+
+  async function ensureSession(): Promise<void> {
+    if (!enableSession) return;
+    if (scope.sessionId) return;
+    if (!sessionPromise) {
+      sessionPromise = (async () => {
+        const started = await runAgentDesktop(
+          buildSessionStartArgs(options),
+          options,
+        );
+        const id = parseSessionId(started);
+        if (!id) {
+          throw new ComputerUseError(
+            "agent-desktop session start returned no session_id",
+            "COMPUTER_USE_BACKEND",
+          );
+        }
+        scope.sessionId = id;
+        scope.overlayEnabled = options.cursorOverlay !== false;
+        const label = options.overlayLabel?.trim();
+        if (scope.overlayEnabled && label) {
+          await runAgentDesktop(
+            withSessionFlags(buildOverlayEnableArgs(label), scope, options),
+            options,
+          );
+        }
+      })().catch((err) => {
+        sessionPromise = undefined;
+        throw err;
+      });
+    }
+    await sessionPromise;
+  }
+
+  async function clipboardSet(text: string): Promise<void> {
+    await runScoped(["clipboard-set", text]);
+  }
+
+  async function typeViaClipboard(
+    ref: string,
+    text: string,
+  ): Promise<string> {
+    await clipboardSet(text);
+    try {
+      await runScoped(["focus", ref]);
+    } catch {
+      // focus may be unavailable on some roles; paste still targets last focused.
+    }
+    const pasteArgs = ["press", "ctrl+v"];
+    if (lastApp) pasteArgs.push("--app", lastApp);
+    await runScoped(pasteArgs);
+    return "typed-clipboard-paste";
+  }
+
+  function pickElement(index?: number): ComputerUseElement | undefined {
+    if (index === undefined) return undefined;
+    return lastElements.find((el) => el.index === index);
+  }
+
+  async function okAct(
+    action: string,
+    message: string,
+  ): Promise<ComputerUseActResult> {
+    return {
+      ok: true,
+      action,
+      message,
+      delivery: "agent-desktop",
+    };
+  }
 
   return {
     providerId: "agent-desktop",
     delivery: "agent-desktop",
+    async close() {
+      if (!scope.sessionId) return;
+      try {
+        if (scope.overlayEnabled) {
+          await runScoped(buildOverlayDisableArgs());
+        }
+      } catch {
+        /* best-effort */
+      }
+      try {
+        await runScoped(buildSessionEndArgs());
+      } catch {
+        /* best-effort */
+      }
+      scope.sessionId = undefined;
+      scope.overlayEnabled = false;
+      sessionPromise = undefined;
+    },
     async capture(request = {}, signal) {
       if (signal?.aborted) {
         throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
@@ -298,105 +416,85 @@ export function createAgentDesktopProvider(
       ];
       const app = request.app?.trim();
       if (app) args.push("--app", app);
-      const envelope = await runAgentDesktop(args, options);
+      const envelope = await runScoped(args);
       const data = asRecord(envelope.data) ?? {};
       const elements: ComputerUseElement[] = [];
       flattenTree(data.tree ?? data, elements, max);
       lastElements = elements;
       lastSnapshotId =
-        typeof data.snapshot_id === "string" ? data.snapshot_id : "";
-      lastScrollRef = elements[0]?.elementToken ?? "";
-      lastApp =
-        typeof data.app === "string" && data.app.trim()
-          ? data.app.trim()
-          : app || "desktop";
-      const windowTitle =
-        typeof data.title === "string"
-          ? data.title
-          : typeof asRecord(data.tree)?.name === "string"
-            ? String(asRecord(data.tree)!.name)
-            : lastApp;
-      const mode =
-        request.mode === "vision" || request.mode === "som"
-          ? request.mode
-          : "ax";
+        typeof data.snapshot_id === "string" ? data.snapshot_id : lastSnapshotId;
+      if (elements[0]?.elementToken) lastScrollRef = elements[0].elementToken;
+      if (app) lastApp = app;
+      else if (typeof data.app === "string") lastApp = data.app;
+
       let screenshotPng: Uint8Array | undefined;
+      const mode = request.mode ?? "ax";
       if (mode === "vision" || mode === "som") {
+        const shotArgs = ["screenshot"];
+        if (app) shotArgs.push("--app", app);
         try {
-          const shotArgs = ["screenshot"];
-          if (app) shotArgs.push("--app", app);
-          const shot = await runAgentDesktop(shotArgs, options);
+          const shot = await runScoped(shotArgs);
           screenshotPng = decodeScreenshotPng(shot);
         } catch {
-          // AX-only still succeeds; vision note below.
+          /* AX-only soft fallback */
         }
       }
+
       const notes: string[] = [
         "delivery=agent-desktop (AX headless by default; no pointer move unless headed=true)",
       ];
+      if (scope.sessionId) notes.push(`session=${scope.sessionId}`);
+      if (scope.overlayEnabled) notes.push("cursor-overlay=on");
       if (lastSnapshotId) notes.push(`snapshot_id=${lastSnapshotId}`);
-      if (mode !== "ax" && !screenshotPng) {
-        notes.push("agent-desktop screenshot unavailable; AX tree only");
-      }
-      if (elements.length === 0) {
+      if (elements.length <= 2) {
         notes.push(
-          "no AX refs — do not steal the mouse via bash/SetCursorPos; try another app, browser_* for web, or Background helper",
-        );
-      } else if (elements.length <= 2) {
-        notes.push(
-          "AX tree looks hollow (≤2 nodes — custom-drawn / accessibility-light UIs) — no reliable headless element path; do not steal the mouse via bash",
+          "hollow AX tree (≤2 nodes — custom-drawn / accessibility-light UI): " +
+            "do not guess with bash/user32; use focus_window → capture mode=vision|som → headed=true click; " +
+            "CJK via clipboard_set + key=ctrl+v",
         );
       }
+
       return buildCaptureResult({
-        mode,
-        app: lastApp,
-        windowTitle,
+        mode: mode === "som" ? "som" : mode === "vision" ? "vision" : "ax",
+        app: lastApp || app || "desktop",
+        windowTitle:
+          typeof data.window_title === "string"
+            ? data.window_title
+            : lastApp || "desktop",
         elements,
-        ...(screenshotPng ? { screenshotPng } : {}),
         note: notes.join("; "),
+        ...(screenshotPng ? { screenshotPng } : {}),
       });
     },
     async find(request, signal) {
       if (signal?.aborted) {
         throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
       }
-      const role = request.role?.trim() ?? "";
-      const name = request.name?.trim() ?? "";
-      const text = request.text?.trim() ?? "";
-      if (!role && !name && !text) {
-        throw new ComputerUseError(
-          "find needs role, name, and/or text",
-          "COMPUTER_USE_BAD_ARGS",
-        );
-      }
-      const args: string[] = ["find"];
-      const app = request.app?.trim() || lastApp;
+      const args = ["find"];
+      const app = request.app?.trim();
+      const role = request.role?.trim();
+      const name = request.name?.trim();
+      const text = request.text?.trim();
       if (app) args.push("--app", app);
       if (role) args.push("--role", role);
       if (name) args.push("--name", name);
       if (text) args.push("--text", text);
       if (request.exact === true) args.push("--exact");
-      if (request.first === true) {
-        args.push("--first");
-      } else if (
-        typeof request.limit === "number" &&
-        Number.isFinite(request.limit) &&
-        request.limit >= 0
-      ) {
+      if (request.first === true) args.push("--first");
+      if (typeof request.limit === "number" && Number.isFinite(request.limit)) {
         args.push("--limit", String(Math.floor(request.limit)));
       }
-      const envelope = await runAgentDesktop(args, options);
+      const envelope = await runScoped(args);
       const data = asRecord(envelope.data) ?? {};
-      const matches = Array.isArray(data.matches) ? data.matches : [];
-      const max =
-        typeof request.limit === "number" &&
-        Number.isFinite(request.limit) &&
-        request.limit > 0
-          ? Math.floor(request.limit)
-          : 80;
+      const matches = Array.isArray(data.matches)
+        ? data.matches
+        : Array.isArray(data.elements)
+          ? data.elements
+          : Array.isArray(envelope.data)
+            ? envelope.data
+            : [];
       const elements: ComputerUseElement[] = [];
       for (const row of matches) {
-        if (elements.length >= max) break;
         const rec = asRecord(row);
         if (!rec) continue;
         const ref =
@@ -416,18 +514,12 @@ export function createAgentDesktopProvider(
       lastElements = elements;
       lastSnapshotId =
         typeof data.snapshot_id === "string" ? data.snapshot_id : lastSnapshotId;
-      if (elements[0]?.elementToken) {
-        lastScrollRef = elements[0].elementToken;
-      }
+      if (elements[0]?.elementToken) lastScrollRef = elements[0].elementToken;
       if (app) lastApp = app;
-      const total =
-        typeof data.total_matches === "number" ? data.total_matches : undefined;
       const notes: string[] = [
         "delivery=agent-desktop find (matches replace last capture indices)",
       ];
       if (lastSnapshotId) notes.push(`snapshot_id=${lastSnapshotId}`);
-      if (total !== undefined) notes.push(`total_matches=${total}`);
-      if (data.truncated === true) notes.push("truncated=true");
       if (elements.length === 0) {
         notes.push(
           "no matches — broaden filters, capture the window, or escalate (vision → headed with consent → refuse/Background)",
@@ -445,43 +537,289 @@ export function createAgentDesktopProvider(
       if (signal?.aborted) {
         throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
       }
-      const pick = (index?: number): ComputerUseElement | undefined => {
-        if (index === undefined) return undefined;
-        return lastElements.find((el) => el.index === index);
-      };
-      const el = pick(request.element);
+      const el = pickElement(request.element);
       const ref = el?.elementToken;
       const headed = request.headed === true;
+      const app = request.app?.trim() || lastApp;
 
-      if (request.action === "clipboard_set") {
-        await clipboardSet(request.text ?? "", options);
-        return {
-          ok: true,
-          action: "clipboard_set",
-          message: "clipboard-set",
-          delivery: "agent-desktop",
-        };
-      }
-      if (request.action === "clipboard_get") {
-        const envelope = await runAgentDesktop(["clipboard-get"], options);
-        const data = asRecord(envelope.data);
-        const text =
-          typeof data?.text === "string"
-            ? data.text
-            : typeof envelope.data === "string"
-              ? envelope.data
-              : JSON.stringify(envelope.data ?? "");
-        return {
-          ok: true,
-          action: "clipboard_get",
-          message: text,
-          delivery: "agent-desktop",
-        };
+      if (request.label?.trim() && request.action !== "overlay") {
+        await runScoped(buildOverlayEnableArgs(request.label.trim()));
+        scope.overlayEnabled = true;
       }
 
-      let args: string[];
-      let message = `agent-desktop ${request.action} ok`;
       switch (request.action) {
+        case "list_windows": {
+          const windows = await this.listWindows(signal);
+          return okAct(
+            "list_windows",
+            windows
+              .map((w) => `${w.title}${w.app ? ` (${w.app})` : ""}`)
+              .join("\n") || "(none)",
+          );
+        }
+        case "list_apps": {
+          const envelope = await runScoped(["list-apps"]);
+          return okAct("list_apps", JSON.stringify(envelope.data ?? []));
+        }
+        case "list_displays": {
+          const envelope = await runScoped(["list-displays"]);
+          return okAct("list_displays", JSON.stringify(envelope.data ?? []));
+        }
+        case "list_surfaces": {
+          const args = ["list-surfaces"];
+          if (app) args.push("--app", app);
+          const envelope = await runScoped(args);
+          return okAct("list_surfaces", JSON.stringify(envelope.data ?? []));
+        }
+        case "list_notifications": {
+          const args = ["list-notifications"];
+          if (app) args.push("--app", app);
+          if (request.text?.trim()) args.push("--text", request.text.trim());
+          if (
+            typeof request.amount === "number" &&
+            Number.isFinite(request.amount)
+          ) {
+            args.push("--limit", String(Math.floor(request.amount)));
+          }
+          const envelope = await runScoped(args);
+          return okAct(
+            "list_notifications",
+            JSON.stringify(envelope.data ?? []),
+          );
+        }
+        case "status": {
+          const envelope = await runScoped(["status"], { skipSession: true });
+          return okAct("status", JSON.stringify(envelope.data ?? {}));
+        }
+        case "permissions": {
+          const envelope = await runScoped(["permissions"], {
+            skipSession: true,
+          });
+          return okAct("permissions", JSON.stringify(envelope.data ?? {}));
+        }
+        case "screenshot": {
+          const args = ["screenshot"];
+          if (app) args.push("--app", app);
+          const envelope = await runScoped(args);
+          const png = decodeScreenshotPng(envelope);
+          return {
+            ok: true,
+            action: "screenshot",
+            message: png
+              ? `screenshot-png-bytes=${png.byteLength}`
+              : JSON.stringify(envelope.data ?? {}),
+            delivery: "agent-desktop",
+            ...(png
+              ? {
+                  capture: buildCaptureResult({
+                    mode: "vision",
+                    app: app || "desktop",
+                    windowTitle: app || "desktop",
+                    elements: lastElements,
+                    screenshotPng: png,
+                    note: "action=screenshot",
+                  }),
+                }
+              : {}),
+          };
+        }
+        case "get": {
+          requireRef(ref, "get");
+          const prop = request.property?.trim() || "text";
+          const envelope = await runScoped([
+            "get",
+            ref,
+            "--property",
+            prop,
+          ]);
+          return okAct("get", JSON.stringify(envelope.data ?? {}));
+        }
+        case "is": {
+          requireRef(ref, "is");
+          const prop = request.property?.trim() || "visible";
+          const envelope = await runScoped([
+            "is",
+            ref,
+            "--property",
+            prop,
+          ]);
+          return okAct("is", JSON.stringify(envelope.data ?? {}));
+        }
+        case "clipboard_set": {
+          await clipboardSet(request.text ?? "");
+          return okAct("clipboard_set", "clipboard-set");
+        }
+        case "clipboard_get": {
+          const envelope = await runScoped(["clipboard-get"]);
+          const data = asRecord(envelope.data);
+          const text =
+            typeof data?.text === "string"
+              ? data.text
+              : typeof envelope.data === "string"
+                ? envelope.data
+                : JSON.stringify(envelope.data ?? "");
+          return okAct("clipboard_get", text);
+        }
+        case "clipboard_clear": {
+          await runScoped(["clipboard-clear"]);
+          return okAct("clipboard_clear", "clipboard-clear");
+        }
+        case "overlay": {
+          const label = (request.label ?? request.text ?? "").trim();
+          if (!label || /^off|disable|false|0$/i.test(label)) {
+            await runScoped(buildOverlayDisableArgs());
+            scope.overlayEnabled = false;
+            return okAct("overlay", "cursor-overlay disabled");
+          }
+          await runScoped(buildOverlayEnableArgs(label));
+          scope.overlayEnabled = true;
+          return okAct("overlay", `cursor-overlay label=${label}`);
+        }
+        case "wait": {
+          const timeout =
+            typeof request.timeoutMs === "number" &&
+            Number.isFinite(request.timeoutMs)
+              ? Math.floor(request.timeoutMs)
+              : 5000;
+          const args = ["wait", "--timeout", String(timeout)];
+          const pred = request.predicate?.trim() ?? "";
+          if (isAgentDesktopWaitEvent(pred)) {
+            args.push("--event", pred.toLowerCase());
+            if (app) args.push("--app", app);
+            if (request.text?.trim()) args.push("--window", request.text.trim());
+          } else if (ref) {
+            args.push("--element", ref);
+            if (pred) args.push("--predicate", pred);
+            if (app) args.push("--app", app);
+          } else if (request.text?.trim()) {
+            args.push("--text", request.text.trim());
+            if (app) args.push("--app", app);
+          } else if (
+            typeof request.amount === "number" &&
+            Number.isFinite(request.amount)
+          ) {
+            // CLI takes positional milliseconds, not --time.
+            args.splice(1, 0, String(Math.max(0, Math.floor(request.amount))));
+          } else {
+            args.splice(1, 0, String(timeout));
+          }
+          await runScoped(args);
+          return okAct("wait", "wait ok");
+        }
+        case "launch": {
+          const target = request.app?.trim() || request.text?.trim();
+          if (!target) {
+            throw new ComputerUseError(
+              "launch needs app=… (application name or path)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const args = ["launch", target];
+          if (request.predicate === "activate") args.push("--activate");
+          await runScoped(args);
+          lastApp = target;
+          return okAct("launch", `launched:${target}`);
+        }
+        case "close_app": {
+          const target = request.app?.trim() || request.text?.trim() || lastApp;
+          if (!target) {
+            throw new ComputerUseError(
+              "close_app needs app=…",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const args = ["close-app", target];
+          if (
+            request.predicate === "force" ||
+            request.property === "force"
+          ) {
+            args.push("--force");
+          }
+          await runScoped(args);
+          return okAct("close_app", `closed:${target}`);
+        }
+        case "focus_window": {
+          const appName = request.app?.trim() || lastApp;
+          const title = request.text?.trim();
+          if (!appName && !title) {
+            throw new ComputerUseError(
+              "focus_window needs app=… and/or text=… (window title)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const args = ["focus-window"];
+          if (appName) args.push("--app", appName);
+          if (title) args.push("--title", title);
+          await runScoped(args);
+          if (appName) lastApp = appName;
+          return okAct(
+            "focus_window",
+            `focused:${appName || title || ""}`,
+          );
+        }
+        case "resize_window": {
+          const target = request.app?.trim() || lastApp;
+          if (!target || !request.coordinate) {
+            throw new ComputerUseError(
+              "resize_window needs app=… and coordinate=[width,height]",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped([
+            "resize-window",
+            "--app",
+            target,
+            "--width",
+            String(Math.round(request.coordinate[0])),
+            "--height",
+            String(Math.round(request.coordinate[1])),
+          ]);
+          return okAct("resize_window", "resize-window ok");
+        }
+        case "move_window": {
+          const target = request.app?.trim() || lastApp;
+          if (!target || !request.coordinate) {
+            throw new ComputerUseError(
+              "move_window needs app=… and coordinate=[x,y]",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped([
+            "move-window",
+            "--app",
+            target,
+            "--x",
+            String(Math.round(request.coordinate[0])),
+            "--y",
+            String(Math.round(request.coordinate[1])),
+          ]);
+          return okAct("move_window", "move-window ok");
+        }
+        case "minimize":
+        case "maximize":
+        case "restore": {
+          const target = request.app?.trim() || lastApp;
+          if (!target) {
+            throw new ComputerUseError(
+              `${request.action} needs app=…`,
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped([request.action, "--app", target]);
+          return okAct(request.action, `${request.action} ok`);
+        }
+        case "open_system_surface": {
+          const surface =
+            request.predicate?.trim() ||
+            request.text?.trim() ||
+            "start-menu";
+          await runScoped([
+            "open-system-surface",
+            "--surface",
+            surface,
+          ]);
+          return okAct("open_system_surface", `opened:${surface}`);
+        }
         case "click": {
           if (request.coordinate) {
             if (!headed) {
@@ -490,43 +828,323 @@ export function createAgentDesktopProvider(
                 "COMPUTER_USE_BAD_ARGS",
               );
             }
-            const [x, y] = request.coordinate;
-            args = [
-              "mouse-click",
-              "--headed",
-              "--xy",
-              `${Math.round(x)},${Math.round(y)}`,
-            ];
-            message = `clicked-coordinate:${Math.round(x)},${Math.round(y)} (headed)`;
-          } else if (ref) {
-            args = ["click", ref];
-          } else {
+            await runScoped(
+              headedArgs(true, [
+                "mouse-click",
+                "--xy",
+                xyPair(request.coordinate),
+              ]),
+            );
+            return okAct(
+              "click",
+              `clicked-coordinate:${xyPair(request.coordinate)} (headed)`,
+            );
+          }
+          requireRef(ref, "click");
+          await runScoped(headedArgs(headed, ["click", ref]));
+          return okAct("click", `clicked:${ref}`);
+        }
+        case "double_click": {
+          requireRef(ref, "double_click");
+          if (!headed) {
             throw new ComputerUseError(
-              "click needs element index from last capture (or coordinate with headed=true)",
+              "double_click requires headed=true (physical double-click)",
               "COMPUTER_USE_BAD_ARGS",
             );
           }
-          break;
+          await runScoped(headedArgs(true, ["double-click", ref]));
+          return okAct("double_click", `double-clicked:${ref}`);
+        }
+        case "triple_click": {
+          requireRef(ref, "triple_click");
+          if (!headed) {
+            throw new ComputerUseError(
+              "triple_click requires headed=true",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped(headedArgs(true, ["triple-click", ref]));
+          return okAct("triple_click", `triple-clicked:${ref}`);
+        }
+        case "right_click": {
+          requireRef(ref, "right_click");
+          await runScoped(headedArgs(headed, ["right-click", ref]));
+          return okAct("right_click", `right-clicked:${ref}`);
+        }
+        case "hover": {
+          if (!headed) {
+            throw new ComputerUseError(
+              "hover requires headed=true (moves the real cursor)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          if (request.coordinate) {
+            await runScoped(
+              headedArgs(true, [
+                "hover",
+                "--xy",
+                xyPair(request.coordinate),
+              ]),
+            );
+            return okAct(
+              "hover",
+              `hovered-coordinate:${xyPair(request.coordinate)}`,
+            );
+          }
+          requireRef(ref, "hover");
+          await runScoped(headedArgs(true, ["hover", ref]));
+          return okAct("hover", `hovered:${ref}`);
+        }
+        case "mouse_move": {
+          if (!headed) {
+            throw new ComputerUseError(
+              "mouse_move requires headed=true",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          if (!request.coordinate) {
+            throw new ComputerUseError(
+              "mouse_move needs coordinate=[x,y]",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped(
+            headedArgs(true, [
+              "mouse-move",
+              "--xy",
+              xyPair(request.coordinate),
+            ]),
+          );
+          return okAct(
+            "mouse_move",
+            `moved:${xyPair(request.coordinate)}`,
+          );
+        }
+        case "mouse_wheel": {
+          if (!headed) {
+            throw new ComputerUseError(
+              "mouse_wheel requires headed=true",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          if (!request.coordinate) {
+            throw new ComputerUseError(
+              "mouse_wheel needs coordinate=[x,y] (wheel position)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const dy =
+            typeof request.amount === "number" && Number.isFinite(request.amount)
+              ? Math.trunc(request.amount)
+              : request.direction === "up"
+                ? 3
+                : -3;
+          await runScoped(
+            headedArgs(true, [
+              "mouse-wheel",
+              "--x",
+              String(Math.round(request.coordinate[0])),
+              "--y",
+              String(Math.round(request.coordinate[1])),
+              "--dy",
+              String(dy),
+            ]),
+          );
+          return okAct("mouse_wheel", `wheel dy=${dy}`);
+        }
+        case "drag": {
+          if (!headed) {
+            throw new ComputerUseError(
+              "drag requires headed=true",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const fromRef = ref;
+          const toRef = pickElement(
+            typeof request.amount === "number"
+              ? Math.floor(request.amount)
+              : undefined,
+          )?.elementToken;
+          if (fromRef && toRef) {
+            await runScoped(
+              headedArgs(true, [
+                "drag",
+                "--from",
+                fromRef,
+                "--to",
+                toRef,
+              ]),
+            );
+            return okAct("drag", `dragged:${fromRef}->${toRef}`);
+          }
+          if (request.coordinate && request.coordinate2) {
+            await runScoped(
+              headedArgs(true, [
+                "drag",
+                "--from-xy",
+                xyPair(request.coordinate),
+                "--to-xy",
+                xyPair(request.coordinate2),
+              ]),
+            );
+            return okAct(
+              "drag",
+              `dragged:${xyPair(request.coordinate)}->${xyPair(request.coordinate2)}`,
+            );
+          }
+          throw new ComputerUseError(
+            "drag needs element→amount(element index) or coordinate+coordinate2",
+            "COMPUTER_USE_BAD_ARGS",
+          );
+        }
+        case "dismiss_notification": {
+          const index =
+            typeof request.element === "number" &&
+            Number.isFinite(request.element)
+              ? Math.floor(request.element)
+              : 0;
+          if (index < 1) {
+            throw new ComputerUseError(
+              "dismiss_notification needs element=1-based index from list_notifications",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const args = ["dismiss-notification", String(index)];
+          if (app) args.push("--expected-app", app);
+          if (request.text?.trim()) {
+            args.push("--expected-title", request.text.trim());
+          }
+          if (!app && !request.text?.trim()) {
+            throw new ComputerUseError(
+              "dismiss_notification needs app=… or text=… (expected identity)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped(args);
+          return okAct("dismiss_notification", `dismissed:#${index}`);
+        }
+        case "dismiss_all_notifications": {
+          const args = ["dismiss-all-notifications"];
+          if (app) args.push("--app", app);
+          await runScoped(args);
+          return okAct("dismiss_all_notifications", "dismissed-all");
+        }
+        case "notification_action": {
+          const index =
+            typeof request.element === "number" &&
+            Number.isFinite(request.element)
+              ? Math.floor(request.element)
+              : 0;
+          const actionName = request.text?.trim() || request.property?.trim();
+          if (index < 1 || !actionName) {
+            throw new ComputerUseError(
+              "notification_action needs element=index and text=action name",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          const args = [
+            "notification-action",
+            String(index),
+            actionName,
+          ];
+          if (app) args.push("--expected-app", app);
+          if (request.label?.trim()) {
+            args.push("--expected-title", request.label.trim());
+          }
+          if (!app && !request.label?.trim()) {
+            throw new ComputerUseError(
+              "notification_action needs app=… or label=… (expected identity)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
+          }
+          await runScoped(args);
+          return okAct(
+            "notification_action",
+            `notification:#${index} → ${actionName}`,
+          );
         }
         case "type": {
-          if (!ref) {
+          requireRef(ref, "type");
+          const text = request.text ?? "";
+          if (needsClipboardType(text)) {
+            return okAct("type", await typeViaClipboard(ref, text));
+          }
+          try {
+            await runScoped(["set-value", ref, text]);
+            return okAct("type", "set-value");
+          } catch (err) {
+            if (!(err instanceof ComputerUseError)) throw err;
+            try {
+              await runScoped(["type", ref, text]);
+              return okAct("type", "typed");
+            } catch {
+              return okAct("type", await typeViaClipboard(ref, text));
+            }
+          }
+        }
+        case "set_value": {
+          requireRef(ref, "set_value");
+          await runScoped(["set-value", ref, request.text ?? ""]);
+          return okAct("set_value", "set-value");
+        }
+        case "clear": {
+          requireRef(ref, "clear");
+          await runScoped(["clear", ref]);
+          return okAct("clear", "cleared");
+        }
+        case "focus": {
+          requireRef(ref, "focus");
+          await runScoped(["focus", ref]);
+          return okAct("focus", `focused:${ref}`);
+        }
+        case "select": {
+          requireRef(ref, "select");
+          const value = request.text?.trim();
+          if (!value) {
             throw new ComputerUseError(
-              "type needs element index from last capture",
+              "select needs text=… (option label/value)",
               "COMPUTER_USE_BAD_ARGS",
             );
           }
-          const text = request.text ?? "";
-          if (needsClipboardType(text)) {
-            message = await typeViaClipboard(ref, text, lastApp, options);
-            return {
-              ok: true,
-              action: "type",
-              message,
-              delivery: "agent-desktop",
-            };
+          await runScoped(["select", ref, value]);
+          return okAct("select", `selected:${value}`);
+        }
+        case "toggle":
+        case "check":
+        case "uncheck":
+        case "expand":
+        case "collapse": {
+          requireRef(ref, request.action);
+          await runScoped([request.action, ref]);
+          return okAct(request.action, `${request.action}:${ref}`);
+        }
+        case "scroll": {
+          const direction = request.direction ?? "down";
+          const amount =
+            typeof request.amount === "number" && Number.isFinite(request.amount)
+              ? String(Math.max(1, Math.floor(request.amount)))
+              : "3";
+          const target = ref || lastScrollRef;
+          if (!target) {
+            throw new ComputerUseError(
+              "scroll needs a capture first (no scrollable ref yet)",
+              "COMPUTER_USE_BAD_ARGS",
+            );
           }
-          args = ["set-value", ref, text];
-          break;
+          await runScoped([
+            "scroll",
+            target,
+            "--direction",
+            direction,
+            "--amount",
+            amount,
+          ]);
+          return okAct("scroll", `scrolled:${direction}`);
+        }
+        case "scroll_to": {
+          requireRef(ref, "scroll_to");
+          await runScoped(["scroll-to", ref]);
+          return okAct("scroll_to", `scrolled-to:${ref}`);
         }
         case "key": {
           const keys = request.keys?.trim() || request.text?.trim();
@@ -537,22 +1155,10 @@ export function createAgentDesktopProvider(
             );
           }
           const combo = mapPressCombo(keys);
-          args = ["press", combo];
-          if (lastApp) args.push("--app", lastApp);
-          break;
-        }
-        case "scroll": {
-          const direction = request.direction ?? "down";
-          const target = ref || lastScrollRef;
-          if (target) {
-            args = ["scroll", target, "--direction", direction, "--amount", "3"];
-          } else {
-            throw new ComputerUseError(
-              "scroll needs a capture first (no scrollable ref yet)",
-              "COMPUTER_USE_BAD_ARGS",
-            );
-          }
-          break;
+          const args = ["press", combo];
+          if (app) args.push("--app", app);
+          await runScoped(headedArgs(headed, args));
+          return okAct("key", `pressed:${combo}`);
         }
         default:
           throw new ComputerUseError(
@@ -560,42 +1166,12 @@ export function createAgentDesktopProvider(
             "COMPUTER_USE_BAD_ARGS",
           );
       }
-      try {
-        await runAgentDesktop(args, options);
-      } catch (err) {
-        if (
-          request.action === "type" &&
-          ref &&
-          err instanceof ComputerUseError
-        ) {
-          try {
-            await runAgentDesktop(["type", ref, request.text ?? ""], options);
-            message = "typed-fallback";
-          } catch {
-            message = await typeViaClipboard(
-              ref,
-              request.text ?? "",
-              lastApp,
-              options,
-            );
-          }
-        } else {
-          throw err;
-        }
-      }
-      const result: ComputerUseActResult = {
-        ok: true,
-        action: request.action,
-        message,
-        delivery: "agent-desktop",
-      };
-      return result;
     },
     async listWindows(signal) {
       if (signal?.aborted) {
         throw new ComputerUseError("aborted", "COMPUTER_USE_BACKEND");
       }
-      const envelope = await runAgentDesktop(["list-windows"], options);
+      const envelope = await runScoped(["list-windows"]);
       const rows = Array.isArray(envelope.data)
         ? envelope.data
         : Array.isArray(asRecord(envelope.data)?.windows)

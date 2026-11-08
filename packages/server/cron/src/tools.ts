@@ -117,9 +117,9 @@ export function createCronTools(
   const tool: ToolDefinition<Record<string, unknown>> = {
     name: "cronjob",
     description:
-      "Manage Host scheduled tasks: create|list|pause|resume|run|remove|runs. " +
-      "create needs schedule_kind (every|at|cron) and run_kind (agent|script). " +
-      "Agent jobs inherit the current session model unless provider/model are set. " +
+      "Manage Host scheduled tasks (create, list, pause, resume, run, remove, or inspect runs). " +
+      "Creating a job needs schedule_kind (every / at / cron) and run_kind (agent / script). " +
+      "Agent jobs inherit the current session model unless you pass provider/model. " +
       "Results can POST to a webhook or append to a file.",
     parameters: {
       type: "object",

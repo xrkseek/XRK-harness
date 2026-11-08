@@ -33,6 +33,7 @@ import { ToolsCatalogTab } from './ToolsCatalogTab.tsx'
 import { SkillsCatalogTab } from './SkillsCatalogTab.tsx'
 import { ComputerUseCard } from './ComputerUseCard.tsx'
 import { CronCard } from './CronCard.tsx'
+import { DesktopCard } from './DesktopCard.tsx'
 import { CuratedMemoryCard } from './CuratedMemoryCard.tsx'
 import { A2aInboundCard } from './A2aInboundCard.tsx'
 import { ExternalAgentCard } from './ExternalAgentCard.tsx'
@@ -62,6 +63,7 @@ import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { BROWSER_NS, BrowserCardController } from './browser-card-controller.ts'
 import { COMPUTER_USE_NS, ComputerUseCardController, COMPUTER_USE_BACKGROUND_REF } from './computer-use-card-controller.ts'
 import { CRON_NS, CronCardController } from './cron-card-controller.ts'
+import { DESKTOP_NS, DesktopCardController } from './desktop-card-controller.ts'
 import { CURATED_MEMORY_NS, CuratedMemoryCardController } from './curated-memory-card-controller.ts'
 import { A2A_INBOUND_NS, A2aInboundCardController } from './a2a-inbound-card-controller.ts'
 import { EXTERNAL_AGENT_NS, ExternalAgentCardController } from './external-agent-card-controller.ts'
@@ -195,6 +197,9 @@ export function apply(ctx: ClientContext): void {
   )
   const cron = new CronCardController(
     ctx.settingsScope.bind({ namespace: CRON_NS }),
+  )
+  const desktop = new DesktopCardController(
+    ctx.settingsScope.bind({ namespace: DESKTOP_NS }),
   )
   const curatedMemory = new CuratedMemoryCardController(
     ctx.settingsScope.bind({ namespace: CURATED_MEMORY_NS }),
@@ -462,6 +467,16 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => sshRemote.inject(),
   }, SshRemoteCard))
+
+  // Desktop power / notify on General (not the Plugins compact entry).
+  // Hidden when `xrkDesktop.preventIdleSleep` is missing (browser).
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'desktop-power',
+    order: 37,
+    locale: NS,
+    inject: () => desktop.inject(),
+  }, DesktopCard))
 
   // One inject per Host plugin card (true pluginization). No separate Advanced
   // tab — auto-review / memory-embed / host / process-channels sit in this list.

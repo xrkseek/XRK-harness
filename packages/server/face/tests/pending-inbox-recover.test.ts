@@ -7,8 +7,11 @@ import {
   createMemorySessionStore,
   listPendingAdmits,
   newSession,
+  promoteNextAdmit,
 } from "@xrkseek/core-session";
+import { legacyAdmitRpcId } from "../src/admit-rpc-rebuild.js";
 import { dispatchFaceMethod } from "../src/dispatch.js";
+import { toQueueItems } from "../src/queue.js";
 import { createBareFaceRuntime } from "./helpers/bare-runtime.js";
 
 describe("pending Inbox recover after Face restart", () => {
@@ -117,5 +120,102 @@ describe("pending Inbox recover after Face restart", () => {
       .events.filter((e) => e.type === "prompt/admitted").length;
     expect(after).toBe(before);
     expect(after).toBe(1);
+  });
+
+  it("rebuilds admitRpcMap from durable rpcId and legacy admits", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const withRpc = admitPrompt(store, session.id, "echoed", {
+      delivery: "steer",
+      rpcId: "client-echo-keep",
+    });
+    const legacy = admitPrompt(store, session.id, "old-no-rpc");
+
+    const runtime = createBareFaceRuntime({ store });
+    expect(runtime.admitRpcMap.get(withRpc.admitId)).toBe("client-echo-keep");
+    expect(runtime.admitRpcMap.get(legacy.admitId)).toBe(
+      legacyAdmitRpcId(legacy.admitId),
+    );
+    const items = toQueueItems(
+      listPendingAdmits(store.get(session.id).events, session.id),
+      runtime.admitRpcMap,
+    );
+    expect(items.map((row) => row.message.source.rpcId)).toEqual([
+      "client-echo-keep",
+      legacyAdmitRpcId(legacy.admitId),
+    ]);
+  });
+
+  it("promote after restart stamps user/message.rpcId from rebuilt map", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const receipt = admitPrompt(store, session.id, "resume-me", {
+      delivery: "steer",
+      rpcId: "client-echo-resume",
+    });
+
+    const runtime = createBareFaceRuntime({ store });
+    expect(runtime.admitRpcMap.get(receipt.admitId)).toBe("client-echo-resume");
+
+    // Face patches store.append — promote + human user/message must stamp rpcId.
+    promoteNextAdmit(store, session.id);
+    store.append(session.id, {
+      type: "user/message",
+      ts: Date.now(),
+      turnId: "turn_boot",
+      content: "resume-me",
+      source: { kind: "user" },
+    });
+    const user = [...store.get(session.id).events]
+      .reverse()
+      .find((e) => e.type === "user/message");
+    expect(user).toMatchObject({
+      type: "user/message",
+      rpcId: "client-echo-resume",
+    });
+  });
+
+  it("wakes dangling promote-without-user/message and refills pendingUserRpc", () => {
+    const store = createMemorySessionStore();
+    const session = newSession(store);
+    const receipt = admitPrompt(store, session.id, "mid-crash", {
+      delivery: "steer",
+      rpcId: "echo-dangle",
+    });
+    promoteNextAdmit(store, session.id);
+    expect(
+      listPendingAdmits(store.get(session.id).events, session.id),
+    ).toHaveLength(0);
+
+    const wakes: string[] = [];
+    const runtime = createBareFaceRuntime({
+      store,
+      drain: {
+        wake(sessionId) {
+          wakes.push(sessionId);
+        },
+        async cancel() {},
+        isActive() {
+          return false;
+        },
+      },
+    });
+    expect(wakes).toContain(session.id);
+    expect(runtime.admitRpcMap.get(receipt.admitId)).toBe("echo-dangle");
+    expect(runtime.pendingUserRpc.get(session.id)).toEqual([
+      { rpc: "echo-dangle", steer: true },
+    ]);
+
+    store.append(session.id, {
+      type: "user/message",
+      ts: Date.now(),
+      turnId: "turn_recover",
+      content: "mid-crash",
+      source: { kind: "user" },
+    });
+    const user = [...store.get(session.id).events]
+      .reverse()
+      .find((e) => e.type === "user/message");
+    expect(user).toMatchObject({ rpcId: "echo-dangle" });
   });
 });

@@ -229,7 +229,7 @@ describe("continueTurn + admit", () => {
 
     const hub = createSessionDrainHub({
       createDrain: () => async ({ signal }) => {
-        while (agent.pendingAdmits().length > 0) {
+        while (agent.hasInboxWork()) {
           if (signal.aborted) {
             throw new DOMException("aborted", "AbortError");
           }
@@ -244,6 +244,68 @@ describe("continueTurn + admit", () => {
       .filter((m) => m.role === "user")
       .map((m) => m.content);
     expect(users).toEqual(["qa", "qb"]);
+  });
+
+  it("continueTurn recovers dangling promote when pending is empty", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("s-dangle");
+    const agent = createAgent({
+      sessionId: session.id,
+      store,
+      llm,
+      tools: createToolRegistry(),
+    });
+    const receipt = agent.admit("promoted-only", { rpcId: "echo-1" });
+    // Crash window: promoted, no human user/message yet.
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: receipt.admitId,
+    });
+    expect(agent.pendingAdmits()).toHaveLength(0);
+    expect(agent.hasInboxWork()).toBe(true);
+
+    const result = await agent.continueTurn();
+    expect(result.admitId).toBe(receipt.admitId);
+    expect(agent.hasInboxWork()).toBe(false);
+    expect(deriveMessages(store.get(session.id).events)).toEqual([
+      { role: "user", content: "promoted-only" },
+      { role: "assistant", content: "ack" },
+    ]);
+  });
+
+  it("drain hasInboxWork runs dangling-only wake", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("s-dangle-drain");
+    const agent = createAgent({
+      sessionId: session.id,
+      store,
+      llm,
+      tools: createToolRegistry(),
+    });
+    const receipt = agent.admit("wake-me");
+    store.append(session.id, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: receipt.admitId,
+    });
+    expect(agent.pendingAdmits()).toHaveLength(0);
+
+    const hub = createSessionDrainHub({
+      createDrain: () => async ({ signal }) => {
+        while (agent.hasInboxWork()) {
+          if (signal.aborted) {
+            throw new DOMException("aborted", "AbortError");
+          }
+          await agent.continueTurn({ signal });
+        }
+      },
+    });
+    await hub.run(session.id);
+    expect(agent.hasInboxWork()).toBe(false);
+    expect(
+      deriveMessages(store.get(session.id).events).map((m) => m.content),
+    ).toEqual(["wake-me", "ack"]);
   });
 
   it("coalesces pending steers into one turn (single step quota)", async () => {

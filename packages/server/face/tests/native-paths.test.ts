@@ -51,7 +51,7 @@ describe("native DeepSeek paths over HTTP/WS", () => {
       createDrain: (sessionId) => async ({ signal }) => {
         const agent = agents.get(sessionId);
         if (!agent) return;
-        while (agent.pendingAdmits().length > 0) {
+        while (agent.hasInboxWork()) {
           if (signal.aborted) throw new DOMException("aborted", "AbortError");
           await agent.continueTurn({ signal });
         }

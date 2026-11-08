@@ -32,6 +32,11 @@ export const DESKTOP_IPC = {
   hostRebring: "xrk-desktop:host-rebring",
   cliCommandGet: "xrk-desktop:cli-command-get",
   cliCommandSet: "xrk-desktop:cli-command-set",
+  /** Codex-style prevent idle system sleep while a turn runs. */
+  preventIdleSleepGet: "xrk-desktop:prevent-idle-sleep-get",
+  preventIdleSleepSetEnabled: "xrk-desktop:prevent-idle-sleep-set-enabled",
+  preventIdleSleepSetTurnRunning:
+    "xrk-desktop:prevent-idle-sleep-set-turn-running",
 } as const;
 
 /** Renderer bridge marker (≠ Host framed-pipe protocol version). */
@@ -100,5 +105,26 @@ export interface XrkDesktopApi {
   readonly cliCommand?: {
     get(): Promise<{ linked: boolean; binDir: string }>;
     set(linked: boolean): Promise<{ linked: boolean; binDir: string }>;
+  };
+  /**
+   * Keep the machine awake while any session turn is running.
+   * Missing on older bridges / browser.
+   */
+  readonly preventIdleSleep?: {
+    get(): Promise<{
+      enabled: boolean;
+      turnRunning: boolean;
+      blocking: boolean;
+    }>;
+    setEnabled(enabled: boolean): Promise<{
+      enabled: boolean;
+      turnRunning: boolean;
+      blocking: boolean;
+    }>;
+    setTurnRunning(running: boolean): Promise<{
+      enabled: boolean;
+      turnRunning: boolean;
+      blocking: boolean;
+    }>;
   };
 }

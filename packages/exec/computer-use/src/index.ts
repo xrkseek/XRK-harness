@@ -14,6 +14,7 @@ export {
   ComputerUseError,
   isComputerUseError,
   COMPUTER_USE_ACTIONS,
+  COMPUTER_USE_READ_ACTIONS,
   type ComputerUseAction,
   type ComputerUseActRequest,
   type ComputerUseActResult,
@@ -74,6 +75,16 @@ export {
   type AgentDesktopProviderOptions,
 } from "./agent-desktop.js";
 export { resolveAgentDesktopBin } from "./resolve-cli.js";
+export {
+  buildOverlayDisableArgs,
+  buildOverlayEnableArgs,
+  buildSessionEndArgs,
+  buildSessionStartArgs,
+  parseSessionId,
+  withSessionFlags,
+  type SessionScopeOptions,
+  type SessionScopeState,
+} from "./session-scope.js";
 
 /** Face `computer-use` product modes (Settings SoT). */
 export type ComputerUseProductMode =

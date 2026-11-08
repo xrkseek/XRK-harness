@@ -12,6 +12,7 @@ import {
   DEFAULT_RETRY_POLICY,
   failureFromUnknown,
   isContextOverflowError,
+  isEmptyResponseError,
   isRetryableFailure,
   type LlmChatResponse,
   type ResolvedRetryPolicy,
@@ -19,6 +20,12 @@ import {
 import type { SessionStore } from "@xrkseek/core-session";
 import type { TokenUsage } from "@xrkseek/protocol";
 import { isAbortError } from "./cancel-finalize.js";
+
+/**
+ * After this many consecutive EMPTY_RESPONSE failures in one step, the loop
+ * may force a context compaction once — independent of soft-budget settings.
+ */
+export const EMPTY_RESPONSE_FORCE_COMPACT_AFTER = 5;
 
 export type ChunkSink = (chunk: {
   kind: "text" | "reasoning" | "usage" | "tool-call";
@@ -57,12 +64,25 @@ export async function invokeLlmWithRetry(input: {
   readonly policy: ResolvedRetryPolicy | false;
   readonly provider?: string;
   readonly random?: () => number;
+  /**
+   * Consecutive EMPTY_RESPONSE failures before {@link onEmptyResponseForceCompact}.
+   * Omit to disable the mid-retry compact hook.
+   */
+  readonly emptyResponseForceCompactAfter?: number;
+  /**
+   * Rebuild the outbound request (typically via `runCompaction` + `buildReq`).
+   * Return true when the next attempt should use the rebuilt context.
+   * Invoked at most once per step chain.
+   */
+  readonly onEmptyResponseForceCompact?: () => Promise<boolean>;
 }): Promise<LlmChatResponse> {
   const policy = input.policy;
   let attempt = 0;
   // One retryId per step chain so the shell paints 1/N → 2/N instead of
   // starting a new disclosure on every hang.
   let retryId: string | undefined;
+  let emptyStreak = 0;
+  let emptyCompacted = false;
   for (;;) {
     if (input.signal?.aborted) {
       throw new DOMException("aborted", "AbortError");
@@ -86,10 +106,32 @@ export async function invokeLlmWithRetry(input: {
       if (policy === false) throw err;
       const failure = failureFromUnknown(err);
       if (!isRetryableFailure(failure, policy)) throw err;
+      const isEmpty =
+        isEmptyResponseError(err) || failure.code === "EMPTY_RESPONSE";
+      if (isEmpty) emptyStreak += 1;
+      else emptyStreak = 0;
       attempt += 1;
       if (policy.mode === "normal" && attempt > policy.maxRetries) {
         throw err;
       }
+
+      const threshold = input.emptyResponseForceCompactAfter;
+      if (
+        isEmpty &&
+        !emptyCompacted &&
+        threshold !== undefined &&
+        threshold > 0 &&
+        emptyStreak >= threshold &&
+        input.onEmptyResponseForceCompact
+      ) {
+        emptyCompacted = true;
+        const rebuilt = await input.onEmptyResponseForceCompact();
+        if (rebuilt) {
+          // Fresh window — allow another EMPTY streak before giving up.
+          emptyStreak = 0;
+        }
+      }
+
       const delayMs = computeRetryDelayMs(
         policy,
         attempt,
@@ -136,5 +178,3 @@ export async function invokeLlmWithRetry(input: {
     }
   }
 }
-
-

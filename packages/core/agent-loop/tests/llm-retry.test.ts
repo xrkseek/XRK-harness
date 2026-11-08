@@ -320,4 +320,78 @@ describe("invokeLlmWithRetry", () => {
   it("resolveRetryPolicy(false) disables", () => {
     expect(resolveRetryPolicy(false)).toBe(false);
   });
+
+  it("forces compact once after EMPTY_RESPONSE streak hits threshold", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("empty-force");
+    let calls = 0;
+    let compactCalls = 0;
+
+    const response = await invokeLlmWithRetry({
+      invoke: async () => {
+        calls += 1;
+        // 5 empty → compact → 6th succeeds
+        if (calls <= 5) throw new EmptyResponseError();
+        return { content: "ok-after-compact" };
+      },
+      flushChunk: () => {},
+      store,
+      sessionId: session.id,
+      turnId: "t",
+      stepId: "s",
+      now: () => 1,
+      policy: resolveRetryPolicy({
+        initialDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        maxRetries: 10,
+      }),
+      random: () => 0,
+      emptyResponseForceCompactAfter: 5,
+      onEmptyResponseForceCompact: async () => {
+        compactCalls += 1;
+        return true;
+      },
+    });
+
+    expect(response.content).toBe("ok-after-compact");
+    expect(calls).toBe(6);
+    expect(compactCalls).toBe(1);
+  });
+
+  it("does not force-compact before the EMPTY streak threshold", async () => {
+    const store = createMemorySessionStore();
+    const session = store.create("empty-under");
+    let compactCalls = 0;
+    let calls = 0;
+
+    await invokeLlmWithRetry({
+      invoke: async () => {
+        calls += 1;
+        if (calls <= 4) throw new EmptyResponseError();
+        return { content: "ok" };
+      },
+      flushChunk: () => {},
+      store,
+      sessionId: session.id,
+      turnId: "t",
+      stepId: "s",
+      now: () => 1,
+      policy: resolveRetryPolicy({
+        initialDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        maxRetries: 10,
+      }),
+      random: () => 0,
+      emptyResponseForceCompactAfter: 5,
+      onEmptyResponseForceCompact: async () => {
+        compactCalls += 1;
+        return true;
+      },
+    });
+
+    expect(calls).toBe(5);
+    expect(compactCalls).toBe(0);
+  });
 });

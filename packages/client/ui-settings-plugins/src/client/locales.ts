@@ -33,6 +33,11 @@ export type PluginsSettingsLocaleKey =
   | 'skillsFilterSession' | 'skillsUserOnly'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
+  | 'desktopTitle' | 'desktopDescription' | 'desktopPreventIdleHint'
+  | 'desktopNotifyOnComplete' | 'desktopNotifyOnCompleteHint'
+  | 'desktopNotifyOn' | 'desktopNotifyOff'
+  | 'desktopNotifyFocus' | 'desktopNotifyFocusHint'
+  | 'desktopNotifyFocusUnfocused' | 'desktopNotifyFocusAlways'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'bashForegroundYieldMs' | 'bashForegroundYieldMsHint'
@@ -485,6 +490,17 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   cronEnabledOff: 'Off',
   cronLiveHint: 'Applies live: Host starts or stops the ticker and rebuilds agents (no restart).',
   cronScheduleNote: 'Job catalog stays with the cronjob tool and ~/.xrk/cron/jobs.json; run history is cronjob action=runs → ~/.xrk/cron/executions.jsonl (≤1000). This card is the master switch only.',
+  desktopTitle: 'Desktop power',
+  desktopDescription: 'Keep the machine awake while a turn runs after the display blanks, and notify when a background session finishes.',
+  desktopPreventIdleHint: 'Master switch = prevent idle system sleep while any session is running (Codex prevent_idle_sleep). The screen may still blank; only system sleep is blocked. Desktop only; toggle applies immediately.',
+  desktopNotifyOnComplete: 'Notify when a session finishes',
+  desktopNotifyOnCompleteHint: 'OS notification when a background session goes idle (Codex notify).',
+  desktopNotifyOn: 'On',
+  desktopNotifyOff: 'Off',
+  desktopNotifyFocus: 'When to notify',
+  desktopNotifyFocusHint: 'Unfocused skips while this window has focus; Always always fires.',
+  desktopNotifyFocusUnfocused: 'Only when unfocused',
+  desktopNotifyFocusAlways: 'Always',
   browserTitle: 'Browser',
   browserDescription: 'Let the agent open pages, read the layout, click elements, and take screenshots.',
   browserMode: 'How to browse',
@@ -1057,6 +1073,17 @@ export const ja = {
   cronEnabledOff: 'オフ',
   cronLiveHint: '即時反映: Host がティッカーを開始／停止し、エージェントを再構築します（再起動不要）。',
   cronScheduleNote: 'ジョブ一覧は cronjob ツールと ~/.xrk/cron/jobs.json；実行履歴は cronjob action=runs → ~/.xrk/cron/executions.jsonl（≤1000）。このカードはマスタースイッチのみです。',
+  desktopTitle: 'デスクトップ電源',
+  desktopDescription: '画面が消灯してもターン実行中はスリープさせず、バックグラウンドセッション完了時に通知します。',
+  desktopPreventIdleHint: 'マスタースイッチ＝いずれかのセッション実行中はシステムスリープを抑止（Codex prevent_idle_sleep）。画面は消灯することがあります。Desktop のみ；スイッチで即反映。',
+  desktopNotifyOnComplete: 'セッション完了通知',
+  desktopNotifyOnCompleteHint: 'バックグラウンドセッションがアイドルになったとき OS 通知（Codex notify）。',
+  desktopNotifyOn: 'オン',
+  desktopNotifyOff: 'オフ',
+  desktopNotifyFocus: '通知するタイミング',
+  desktopNotifyFocusHint: 'Unfocused はこのウィンドウがフォーカス中は通知しません。Always は常に通知します。',
+  desktopNotifyFocusUnfocused: '非フォーカス時のみ',
+  desktopNotifyFocusAlways: '常に',
   browserTitle: 'ブラウザ',
   browserDescription: 'エージェントにページを開き、レイアウトを読み、クリックし、スクリーンショットを撮らせます。',
   browserMode: '閲覧の仕方',
@@ -1626,6 +1653,17 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   cronEnabledOff: '关',
   cronLiveHint: '保存后立即生效：Host 启停 ticker 并重建 agent（无需重启）。',
   cronScheduleNote: '任务目录由 cronjob 工具与 ~/.xrk/cron/jobs.json 管理；跑史见 cronjob action=runs → ~/.xrk/cron/executions.jsonl（≤1000）。本卡仅总开关。',
+  desktopTitle: '桌面电源',
+  desktopDescription: '息屏后仍在跑回合时阻止系统休眠，并在后台会话结束时发系统通知。',
+  desktopPreventIdleHint: '总开关＝任一会话在跑时阻止系统休眠（Codex prevent_idle_sleep）。屏幕仍可能黑屏，只挡休眠。仅 Desktop；拨动开关立即生效（设置 → 通用）。',
+  desktopNotifyOnComplete: '会话结束通知',
+  desktopNotifyOnCompleteHint: '后台会话变为空闲时发系统通知（Codex notify）。',
+  desktopNotifyOn: '开',
+  desktopNotifyOff: '关',
+  desktopNotifyFocus: '何时通知',
+  desktopNotifyFocusHint: '未聚焦：本窗口有焦点时不打扰；总是：一律通知。',
+  desktopNotifyFocusUnfocused: '仅未聚焦时',
+  desktopNotifyFocusAlways: '总是',
   browserTitle: '浏览器',
   browserDescription: '让助手打开网页、读取页面结构、点击元素并截图。',
   browserMode: '浏览方式',

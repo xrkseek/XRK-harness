@@ -29,7 +29,7 @@ import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from 
 import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
 import {
   collectUserShapedSeqs, durableSteerPending, groupPendingByChrome,
-  earliestAgentWorkId, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn, isTurnInFlight,
+  earliestAgentWorkId, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn,
   latestTurnNumber, rowSteerIdentity, runningTurnStartTime,
   turnsAreSettled,
 } from './pending-input-chrome.ts'
@@ -792,17 +792,19 @@ export function ChatView({
     : (railItems[railItems.length - 1]?.round ?? railItems.length) + 1
   const pendingGroups = useMemo(
     () => groupPendingByChrome(pendingInputs, (input) => {
-      // 排队 never paints here. Host FIFO-claim promotes a flushed 排队
-      // echo to `transcript` — while this turn is still in flight that
-      // follow-up is 插队, not a next-turn send above waiting.
-      if (input.kind === 'echo' && input.submission.placement !== 'steering') {
-        return steerPendingChrome && isTurnInFlight(agentLive, turnOpen, turnsSettled)
-          ? 'steer'
-          : 'send'
+      // Only real steers paint as 插队: Host steering rows, or local echoes
+      // already placed `steering` (matched to Host). Do NOT promote ordinary
+      // queue/transcript echoes to 插队 just because drain.wake made the
+      // agent look live — that left a copy-only fake-steer after Host restart.
+      if (input.kind === 'steer') {
+        return steerPendingChrome ? 'steer' : 'send'
       }
-      return steerPendingChrome ? 'steer' : 'send'
+      if (input.submission.placement === 'steering') {
+        return steerPendingChrome ? 'steer' : 'send'
+      }
+      return 'send'
     }),
-    [pendingInputs, steerPendingChrome, agentLive, turnOpen, turnsSettled],
+    [pendingInputs, steerPendingChrome],
   )
   // First-turn injects land before the human user/message. When the window
   // still has no context rows, keep a same-height header under the echo so

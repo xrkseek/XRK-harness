@@ -325,6 +325,12 @@ export interface PromptAdmittedEvent extends SessionEventBase {
    * `"steer"` = interrupt-at-turn-boundary (promote preferred over queue).
    */
   readonly delivery?: PromptDelivery;
+  /**
+   * Client submission echo id (`beginSubmission` / `session.prompt` requestId).
+   * Durable so Host restart can rebuild Face `admitRpcMap` and stamp
+   * `user/message.rpcId` on promote (docs/session-delivery.md).
+   */
+  readonly rpcId?: string;
 }
 
 /** Marks an admit as consumed into a turn (still not a chat message by itself). */

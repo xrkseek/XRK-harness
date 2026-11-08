@@ -11,11 +11,18 @@ import {
   type SessionStore,
   readSessionEvents,
 } from "@xrkseek/core-session";
-import type { LlmAdapter, ResolvedRetryPolicy } from "@xrkseek/llm";
+import {
+  isEmptyResponseError,
+  isIncompleteToolCallError,
+  isProviderFinishError,
+  type LlmAdapter,
+  type ResolvedRetryPolicy,
+} from "@xrkseek/llm";
 import type {
   CompactionReason,
   ContextCompactionEvent,
 } from "@xrkseek/protocol";
+import { isAbortError } from "./cancel-finalize.js";
 import { invokeLlmWithRetry, resolveRetryPolicy } from "./llm-retry.js";
 
 export interface RunCompactionInput {
@@ -61,27 +68,45 @@ export async function runCompaction(
   // Soft-budget / overflow summarizer used to call llm.chat bare — OFM/free
   // lanes often 502 on tool-less summarizer prompts, and the turn failed with
   // SERVER and zero llm/retry chrome. Reuse the step retry policy when wired.
+  //
+  // Empty / degenerate summarizer finishes must not bubble as EMPTY_RESPONSE
+  // (manual `/compact` used to paint a red "empty model response"). Treat them
+  // as a failed compact so Face can show the soft "could not produce a summary"
+  // path instead.
   const retryPolicy =
     input.retry === undefined ? false : resolveRetryPolicy(input.retry);
-  const response =
-    retryPolicy !== false &&
-    input.turnId !== undefined &&
-    input.stepId !== undefined
-      ? await invokeLlmWithRetry({
-          invoke: async () => invokeChat(),
-          flushChunk: () => {
-            /* summarizer is non-streaming */
-          },
-          store: input.store,
-          sessionId: input.sessionId,
-          turnId: input.turnId,
-          stepId: input.stepId,
-          now,
-          ...(input.signal ? { signal: input.signal } : {}),
-          policy: retryPolicy,
-          ...(input.llm.id ? { provider: input.llm.id } : {}),
-        })
-      : await invokeChat();
+  let response;
+  try {
+    response =
+      retryPolicy !== false &&
+      input.turnId !== undefined &&
+      input.stepId !== undefined
+        ? await invokeLlmWithRetry({
+            invoke: async () => invokeChat(),
+            flushChunk: () => {
+              /* summarizer is non-streaming */
+            },
+            store: input.store,
+            sessionId: input.sessionId,
+            turnId: input.turnId,
+            stepId: input.stepId,
+            now,
+            ...(input.signal ? { signal: input.signal } : {}),
+            policy: retryPolicy,
+            ...(input.llm.id ? { provider: input.llm.id } : {}),
+          })
+        : await invokeChat();
+  } catch (err) {
+    if (isAbortError(err, input.signal)) throw err;
+    if (
+      isEmptyResponseError(err) ||
+      isIncompleteToolCallError(err) ||
+      isProviderFinishError(err)
+    ) {
+      return { compacted: false };
+    }
+    throw err;
+  }
 
   const summary = response.content.trim();
   if (!summary) return { compacted: false };

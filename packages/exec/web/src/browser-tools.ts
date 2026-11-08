@@ -64,8 +64,8 @@ function failArgs(message: string): ToolResultContent {
 
 /**
  * Interactive browser_* tools over a {@link BrowserSession} (snapshot / act).
- * Prefer web_fetch / web_search for one-shot reads; use these when the model
- * must click or type against a live page session.
+ * One-shot URL reads belong on web_fetch / web_search — that routing lives in
+ * web family guidance, not in these tool descriptions.
  */
 export function createBrowserTools(
   session: BrowserSession,
@@ -74,8 +74,8 @@ export function createBrowserTools(
   const openTool: ToolDefinition<{ url: string }> = {
     name: "browser_open",
     description:
-      "Open an HTTP(S) URL in the interactive browser session and return a compact element snapshot with @eN / [ref=eN] refs. " +
-      "Default backend is agent-browser: Auto uses system Chrome, then product Chromium cache, then Edge. Prefer web_fetch for one-shot reads.",
+      "Open an HTTP(S) URL in the interactive browser session and return a compact element snapshot with @eN refs. " +
+      "Backend is agent-browser: system Chrome first, then the product Chromium cache, then Edge.",
     parameters: {
       type: "object",
       properties: {
@@ -101,8 +101,8 @@ export function createBrowserTools(
   const snapshotTool: ToolDefinition<{ full?: boolean }> = {
     name: "browser_snapshot",
     description:
-      "Snapshot the current browser page as an interactive element list with @eN refs for browser_act. " +
-      "full=true includes page text.",
+      "Snapshot the current page as an interactive element list with @eN refs for browser_act. " +
+      "Pass full=true to include page text under the list.",
     parameters: {
       type: "object",
       properties: {
@@ -125,61 +125,97 @@ export function createBrowserTools(
     isConcurrencySafe: () => true,
   };
 
+  const ACT_ACTIONS = [
+    "click",
+    "dblclick",
+    "type",
+    "fill",
+    "scroll",
+    "scrollintoview",
+    "press",
+    "check",
+    "uncheck",
+    "focus",
+    "drag",
+    "back",
+  ] as const;
   const actTool: ToolDefinition<{
     ref?: string;
+    ref2?: string;
     action: string;
     text?: string;
     direction?: string;
     key?: string;
+    amount?: number;
   }> = {
     name: "browser_act",
     description:
-      "Act on the browser session. click/type need a snapshot ref (@eN). " +
-      "scroll/press need CDP; back also works on the HTTP history stack.",
+      "Click, type, scroll, and other actions on the open page. " +
+      "Element actions need a @eN ref from the latest snapshot (see the action enum).",
     parameters: {
       type: "object",
       properties: {
         ref: {
           type: "string",
-          description: "Element ref from the snapshot (e1 or @e1). Required for click/type.",
+          description:
+            "Element ref from the snapshot (e1 or @e1). Required except scroll/press/back.",
+        },
+        ref2: {
+          type: "string",
+          description: "Destination ref when action=drag.",
         },
         action: {
           type: "string",
-          description: "click, type, scroll, press, or back.",
-          enum: ["click", "type", "scroll", "press", "back"],
+          description: "agent-browser action.",
+          enum: [...ACT_ACTIONS],
         },
         text: {
           type: "string",
-          description: "Text to type when action=type (also accepted as key for press).",
+          description: "Text for type/fill; optional key fallback for press.",
         },
         direction: {
           type: "string",
           description: "Scroll direction when action=scroll.",
-          enum: ["up", "down"],
+          enum: ["up", "down", "left", "right"],
         },
         key: {
           type: "string",
           description: "Key name when action=press (e.g. Enter, Tab, Escape).",
+        },
+        amount: {
+          type: "number",
+          description: "Optional scroll distance in px.",
         },
       },
       required: ["action"],
     },
     async execute(args, signal) {
       const action = String(args?.action ?? "").trim().toLowerCase();
-      const allowed = new Set(["click", "type", "scroll", "press", "back"]);
+      const allowed = new Set<string>(ACT_ACTIONS);
       if (!allowed.has(action)) {
-        return failArgs("action must be click, type, scroll, press, or back");
+        return failArgs(`action must be one of ${ACT_ACTIONS.join(", ")}`);
       }
-      if (action === "click" || action === "type") {
-        const ref = String(args?.ref ?? "").trim();
-        if (!ref) {
-          return failArgs("ref is required for click/type");
-        }
+      const needsRef = new Set([
+        "click",
+        "dblclick",
+        "type",
+        "fill",
+        "check",
+        "uncheck",
+        "focus",
+        "scrollintoview",
+        "drag",
+      ]);
+      if (needsRef.has(action) && !String(args?.ref ?? "").trim()) {
+        return failArgs(`ref is required for ${action}`);
+      }
+      if (action === "drag" && !String(args?.ref2 ?? "").trim()) {
+        return failArgs("ref2 is required for drag");
       }
       if (action === "scroll") {
         const direction = String(args?.direction ?? "down").trim().toLowerCase();
-        if (direction !== "up" && direction !== "down") {
-          return failArgs("direction must be up or down");
+        if (!["up", "down", "left", "right"].includes(direction)) {
+          return failArgs("direction must be up, down, left, or right");
         }
       }
       if (action === "press") {
@@ -191,13 +227,23 @@ export function createBrowserTools(
       try {
         const result = await session.act(
           {
-            action: action as "click" | "type" | "scroll" | "press" | "back",
+            action: action as (typeof ACT_ACTIONS)[number],
             ...(args?.ref !== undefined ? { ref: String(args.ref) } : {}),
+            ...(args?.ref2 !== undefined ? { ref2: String(args.ref2) } : {}),
             ...(args?.text !== undefined ? { text: String(args.text) } : {}),
             ...(args?.direction !== undefined
-              ? { direction: String(args.direction).toLowerCase() as "up" | "down" }
+              ? {
+                  direction: String(args.direction).toLowerCase() as
+                    | "up"
+                    | "down"
+                    | "left"
+                    | "right",
+                }
               : {}),
             ...(args?.key !== undefined ? { key: String(args.key) } : {}),
+            ...(typeof args?.amount === "number"
+              ? { amount: args.amount }
+              : {}),
           },
           signal,
         );
@@ -226,8 +272,8 @@ export function createBrowserTools(
   const visionTool: ToolDefinition<{ question?: string }> = {
     name: "browser_vision",
     description:
-      "Screenshot the graphical page and return it with the @eN snapshot text. " +
-      "Needs a graphical browser; it does not replace the accessibility tree.",
+      "Take a screenshot of the graphical page and return it with the @eN snapshot text. " +
+      "Needs a graphical browser. Prefer the accessibility snapshot for ordinary clicking; use this when you need to see pixels.",
     parameters: {
       type: "object",
       properties: {
@@ -304,7 +350,7 @@ export function createBrowserTools(
     const evalTool: ToolDefinition<{ expression: string }> = {
       name: "browser_eval",
       description:
-        "Run JavaScript in the active page (agent-browser eval). Prefer snapshot/act for normal UI; use for DOM reads the accessibility tree misses.",
+        "Run JavaScript in the active page. Prefer snapshot and act for normal UI work; use this for DOM reads the accessibility tree misses.",
       parameters: {
         type: "object",
         properties: {
@@ -338,7 +384,7 @@ export function createBrowserTools(
     }> = {
       name: "browser_wait",
       description:
-        "Wait for a selector, a load milestone (load / domcontentloaded / networkidle), or a fixed delay in ms.",
+        "Wait for a selector, a load milestone, or a fixed delay in milliseconds.",
       parameters: {
         type: "object",
         properties: {
@@ -384,7 +430,7 @@ export function createBrowserTools(
     }> = {
       name: "browser_cookies",
       description:
-        "Get, set, or clear cookies in the agent-browser session. Prefer Settings profile / restore / statePath for system login reuse; use this for per-origin tweaks.",
+        "Get, set, or clear cookies in the browser session. Prefer the Settings profile / restore / statePath for logged-in profiles; use this for per-origin tweaks.",
       parameters: {
         type: "object",
         properties: {
@@ -438,7 +484,7 @@ export function createBrowserTools(
     }> = {
       name: "browser_tabs",
       description:
-        "List, open, switch, or close tabs (ids like t2). A label given to action=new is slugified to ASCII [A-Za-z][A-Za-z0-9_-]*.",
+        "List, open, switch, or close tabs (ids look like t2). Labels on action=new are slugified to ASCII.",
       parameters: {
         type: "object",
         properties: {
@@ -492,39 +538,82 @@ export function createBrowserTools(
 
   if (typeof session.getInfo === "function") {
     const getFn = session.getInfo.bind(session);
-    const getTool: ToolDefinition<{ what?: string; selector?: string }> = {
+    const getTool: ToolDefinition<{
+      what?: string;
+      selector?: string;
+      attrName?: string;
+    }> = {
       name: "browser_get",
       description:
-        "Read text, html, url, or title from the active page.",
+        "Read a page or element field (text, HTML, URL, title, value, box, count, styles, or an attribute).",
       parameters: {
         type: "object",
         properties: {
           what: {
             type: "string",
-            enum: ["text", "html", "url", "title"],
+            enum: [
+              "text",
+              "html",
+              "url",
+              "title",
+              "value",
+              "box",
+              "count",
+              "styles",
+              "attr",
+            ],
             description: "Which field to read (default text).",
           },
           selector: {
             type: "string",
             description:
-              "CSS or @ref selector for text/html (default body). Ignored for url/title.",
+              "CSS or @ref selector (default body for element fields). Ignored for url/title.",
+          },
+          attrName: {
+            type: "string",
+            description: "Attribute name when what=attr.",
           },
         },
       },
       async execute(args, signal) {
         const whatRaw = String(args?.what ?? "text").trim().toLowerCase();
-        const what =
-          whatRaw === "html" || whatRaw === "url" || whatRaw === "title"
-            ? whatRaw
-            : "text";
+        const allowed = new Set([
+          "text",
+          "html",
+          "url",
+          "title",
+          "value",
+          "box",
+          "count",
+          "styles",
+          "attr",
+        ]);
+        const what = allowed.has(whatRaw)
+          ? (whatRaw as
+              | "text"
+              | "html"
+              | "url"
+              | "title"
+              | "value"
+              | "box"
+              | "count"
+              | "styles"
+              | "attr")
+          : "text";
         const selector =
           args?.selector !== undefined ? String(args.selector).trim() : "";
+        const attrName =
+          args?.attrName !== undefined ? String(args.attrName).trim() : "";
+        if (what === "attr" && !attrName) {
+          return failArgs("attrName is required when what=attr");
+        }
         try {
           return {
             content: await getFn(
               what,
               signal,
               selector || undefined,
+              attrName || undefined,
             ),
           };
         } catch (err) {
@@ -534,6 +623,41 @@ export function createBrowserTools(
       isConcurrencySafe: () => true,
     };
     tools.push(getTool);
+  }
+
+  if (typeof session.is === "function") {
+    const isFn = session.is.bind(session);
+    const isTool: ToolDefinition<{ what?: string; ref: string }> = {
+      name: "browser_is",
+      description:
+        "Check whether an element is visible, enabled, or checked.",
+      parameters: {
+        type: "object",
+        properties: {
+          what: {
+            type: "string",
+            enum: ["visible", "enabled", "checked"],
+            description: "State to check (default visible).",
+          },
+          ref: { type: "string", description: "Element ref (e1 or @e1)." },
+        },
+        required: ["ref"],
+      },
+      async execute(args, signal) {
+        const ref = String(args?.ref ?? "").trim();
+        if (!ref) return failArgs("ref is required");
+        const whatRaw = String(args?.what ?? "visible").trim().toLowerCase();
+        const what =
+          whatRaw === "enabled" || whatRaw === "checked" ? whatRaw : "visible";
+        try {
+          return { content: await isFn(what, ref, signal) };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => true,
+    };
+    tools.push(isTool);
   }
 
   if (typeof session.find === "function") {
@@ -783,5 +907,289 @@ export function createBrowserTools(
     tools.push(reloadTool);
   }
 
+  if (typeof session.upload === "function") {
+    const uploadFn = session.upload.bind(session);
+    const uploadTool: ToolDefinition<{ ref: string; files: string[] }> = {
+      name: "browser_upload",
+      description:
+        "Upload local file path(s) onto a file-input @ref.",
+      parameters: {
+        type: "object",
+        properties: {
+          ref: { type: "string", description: "File input ref (e1 or @e1)." },
+          files: {
+            type: "array",
+            items: { type: "string" },
+            description: "Absolute local file paths to upload.",
+          },
+        },
+        required: ["ref", "files"],
+      },
+      async execute(args, signal) {
+        const ref = String(args?.ref ?? "").trim();
+        if (!ref) return failArgs("ref is required");
+        const files = Array.isArray(args?.files)
+          ? args.files.map((f) => String(f))
+          : [];
+        if (files.length === 0) return failArgs("files must be a non-empty array");
+        try {
+          const result = await uploadFn(ref, files, signal);
+          return { content: `${result.note}\n\n${result.text}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(uploadTool);
+  }
+
+  if (typeof session.download === "function") {
+    const downloadFn = session.download.bind(session);
+    const downloadTool: ToolDefinition<{ ref: string; destPath: string }> = {
+      name: "browser_download",
+      description:
+        "Click a download trigger @ref and save the file to destPath.",
+      parameters: {
+        type: "object",
+        properties: {
+          ref: { type: "string", description: "Element ref (e1 or @e1)." },
+          destPath: {
+            type: "string",
+            description: "Absolute path where the download should be saved.",
+          },
+        },
+        required: ["ref", "destPath"],
+      },
+      async execute(args, signal) {
+        const ref = String(args?.ref ?? "").trim();
+        const destPath = String(args?.destPath ?? "").trim();
+        if (!ref) return failArgs("ref is required");
+        if (!destPath) return failArgs("destPath is required");
+        try {
+          const result = await downloadFn(ref, destPath, signal);
+          return { content: `${result.note}\n\n${result.text}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(downloadTool);
+  }
+
+  if (typeof session.keyboardType === "function") {
+    const kbFn = session.keyboardType.bind(session);
+    const kbTool: ToolDefinition<{ text: string }> = {
+      name: "browser_keyboard",
+      description:
+        "Type with real keystrokes into the focused element. Prefer browser_act type/fill with a ref when you have one.",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "Text to type." },
+        },
+        required: ["text"],
+      },
+      async execute(args, signal) {
+        const text = String(args?.text ?? "");
+        try {
+          const result = await kbFn(text, signal);
+          return { content: `${result.note}\n\n${result.text}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(kbTool);
+  }
+
+  if (typeof session.pdf === "function") {
+    const pdfFn = session.pdf.bind(session);
+    const pdfTool: ToolDefinition<{ destPath: string }> = {
+      name: "browser_pdf",
+      description: "Save the active page as a PDF.",
+      parameters: {
+        type: "object",
+        properties: {
+          destPath: {
+            type: "string",
+            description: "Absolute path for the PDF file.",
+          },
+        },
+        required: ["destPath"],
+      },
+      async execute(args, signal) {
+        const destPath = String(args?.destPath ?? "").trim();
+        if (!destPath) return failArgs("destPath is required");
+        try {
+          return { content: await pdfFn(destPath, signal) };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(pdfTool);
+  }
+
+  if (typeof session.consoleLogs === "function") {
+    const consoleFn = session.consoleLogs.bind(session);
+    const consoleTool: ToolDefinition<{ clear?: boolean }> = {
+      name: "browser_console",
+      description: "Read page console logs.",
+      parameters: {
+        type: "object",
+        properties: {
+          clear: {
+            type: "boolean",
+            description: "Clear the console buffer after reading.",
+          },
+        },
+      },
+      async execute(args, signal) {
+        try {
+          return {
+            content: await consoleFn(args?.clear === true, signal),
+          };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => true,
+    };
+    tools.push(consoleTool);
+  }
+
+  if (typeof session.pageErrors === "function") {
+    const errFn = session.pageErrors.bind(session);
+    const errTool: ToolDefinition<{ clear?: boolean }> = {
+      name: "browser_errors",
+      description: "Read page JavaScript errors.",
+      parameters: {
+        type: "object",
+        properties: {
+          clear: {
+            type: "boolean",
+            description: "Clear the error buffer after reading.",
+          },
+        },
+      },
+      async execute(args, signal) {
+        try {
+          return { content: await errFn(args?.clear === true, signal) };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => true,
+    };
+    tools.push(errTool);
+  }
+
+  if (typeof session.clipboard === "function") {
+    const clipFn = session.clipboard.bind(session);
+    const clipTool: ToolDefinition<{ op?: string; text?: string }> = {
+      name: "browser_clipboard",
+      description:
+        "Read, write, copy, or paste the browser clipboard. Prefer browser_act fill for form fields.",
+      parameters: {
+        type: "object",
+        properties: {
+          op: {
+            type: "string",
+            enum: ["read", "write", "copy", "paste"],
+            description: "Clipboard operation (default read).",
+          },
+          text: {
+            type: "string",
+            description: "Text for write/copy.",
+          },
+        },
+      },
+      async execute(args, signal) {
+        const opRaw = String(args?.op ?? "read").trim().toLowerCase();
+        const op =
+          opRaw === "write" || opRaw === "copy" || opRaw === "paste"
+            ? opRaw
+            : "read";
+        try {
+          return {
+            content: await clipFn(
+              op,
+              args?.text !== undefined ? String(args.text) : undefined,
+              signal,
+            ),
+          };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: () => false,
+    };
+    tools.push(clipTool);
+  }
+
+  if (typeof session.storage === "function") {
+    const storageFn = session.storage.bind(session);
+    const storageTool: ToolDefinition<{
+      kind?: string;
+      action?: string;
+      key?: string;
+      value?: string;
+    }> = {
+      name: "browser_storage",
+      description:
+        "Read or write localStorage / sessionStorage on the active page.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["local", "session"],
+            description: "Storage kind (default local).",
+          },
+          action: {
+            type: "string",
+            enum: ["get", "set", "clear"],
+            description: "get (default), set, or clear.",
+          },
+          key: { type: "string", description: "Storage key (get/set)." },
+          value: { type: "string", description: "Value when action=set." },
+        },
+      },
+      async execute(args, signal) {
+        const kind =
+          String(args?.kind ?? "local").trim().toLowerCase() === "session"
+            ? "session"
+            : "local";
+        const actionRaw = String(args?.action ?? "get").trim().toLowerCase();
+        const action =
+          actionRaw === "set" || actionRaw === "clear" ? actionRaw : "get";
+        try {
+          return {
+            content: await storageFn(
+              kind,
+              action,
+              args?.key !== undefined ? String(args.key) : undefined,
+              args?.value !== undefined ? String(args.value) : undefined,
+              signal,
+            ),
+          };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      isConcurrencySafe: (callArgs) => actionIsRead(callArgs?.action),
+    };
+    tools.push(storageTool);
+  }
+
   return tools;
+}
+
+function actionIsRead(action: unknown): boolean {
+  const raw = String(action ?? "get").trim().toLowerCase();
+  return raw !== "set" && raw !== "clear";
 }

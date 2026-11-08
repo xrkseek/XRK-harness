@@ -42,6 +42,7 @@ import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot } from './manager.ts'
 import type { PendingInteractionStatus } from './pending.ts'
+import { syncDesktopPreventIdleSleepTurnRunning } from './desktop-power.ts'
 import { SessionProvideChannel } from './provide.ts'
 import type { Session } from './session.ts'
 
@@ -809,7 +810,9 @@ export class SessionRuntime implements ISessions {
     } = this.manager.getListSnapshot()
     const ids: SessionId[] = []
     const byId: Record<SessionId, SessionSummary> = {}
+    let anyRunning = false
     for (const entry of items) {
+      if (entry.running) anyRunning = true
       ids.push(entry.sessionId)
       byId[entry.sessionId] = {
         id: entry.sessionId,
@@ -884,6 +887,31 @@ export class SessionRuntime implements ISessions {
         ...(currentAddress === undefined ? {} : { subagentAddress: currentAddress }),
       })
     }
+    if (!anyRunning) {
+      for (const catalog of Object.values(subagentsByParent)) {
+        for (const entry of catalog.entries) {
+          if (entry.kind === 'child' && entry.activity === 'running') {
+            anyRunning = true
+            break
+          }
+        }
+        if (anyRunning) break
+      }
+    }
+    // Background jobs outlive the turn latch; keep the sleep inhibitor armed
+    // so screen-off does not suspend a still-running shell / PTY job.
+    if (!anyRunning) {
+      for (const jobs of Object.values(jobsBySession)) {
+        for (const job of jobs) {
+          if (job.status === 'running' || job.status === 'stopping') {
+            anyRunning = true
+            break
+          }
+        }
+        if (anyRunning) break
+      }
+    }
+    syncDesktopPreventIdleSleepTurnRunning(anyRunning)
     this.list.set({
       ids, byId, current, phase, subagentsByParent, jobsBySession, bandBySession, currentAddress,
     })

@@ -50,7 +50,9 @@ export function toQueueItems(
   admitToRpc: ReadonlyMap<string, string>,
 ): FaceQueueItem[] {
   return pending.map((a) => {
-    const rpcId = admitToRpc.get(a.admitId);
+    const rpcId =
+      admitToRpc.get(a.admitId) ??
+      (typeof a.rpcId === "string" && a.rpcId.length > 0 ? a.rpcId : undefined);
     return {
       id: a.admitId,
       placement: a.delivery === "steer" ? "steering" : "queued",

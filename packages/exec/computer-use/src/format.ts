@@ -172,8 +172,9 @@ export function buildCaptureResult(options: {
 }
 
 /**
- * System prompt for `computer_use` only (orthogonal).
- * Page-vs-desktop routing lives in web `formatWebFamilyGuidance` when both exist.
+ * System prompt for `computer_use` only (how to use the tool well).
+ * Action names live on the tool schema; page-vs-desktop routing lives in web
+ * `formatWebFamilyGuidance` when both tools are present.
  */
 export function formatComputerUseGuidance(
   available: ToolNameSet,
@@ -184,20 +185,21 @@ export function formatComputerUseGuidance(
   const modality = options?.multimodal;
   const ladder =
     modality === false
-      ? "Ladder (text-only): AX → find → clipboard → headed=true (real mouse; steals the cursor, ask first). vision/som soft-degrade here."
+      ? "Ladder (text-only): try accessibility actions, then find, then clipboard; headed=true only with user consent (it moves the real cursor). vision/som soft-degrade on this route."
       : modality === true
-        ? "Ladder (multimodal): AX → find → clipboard → vision/som → headed=true (real mouse; steals the cursor, ask first)."
-        : "Ladder: AX → find → clipboard → vision/som (multimodal) → headed=true (real mouse; steals the cursor, ask first). vision/som soft-degrade on text-only routes.";
+        ? "Ladder (multimodal): accessibility → find → clipboard → vision/som → headed=true only with user consent (it moves the real cursor)."
+        : "Ladder: accessibility → find → clipboard → vision/som when the route is multimodal → headed=true only with user consent (it moves the real cursor). On text-only routes, vision/som soft-degrade.";
   return [
-    "Native desktop GUI (agent-desktop; AX capture is headless):",
-    "Loop: list_windows → capture|find → click/type/key/scroll by index → capture again.",
-    "find matches role/name/text and returns fresh indices; any newer capture or find invalidates them.",
+    "Native desktop GUI through agent-desktop. Accessibility capture is headless by default — it does not move the mouse unless headed=true.",
+    "Usual loop: list_windows → focus_window or launch → capture or find → click/type/key/scroll by element index → capture again. A newer capture or find invalidates older indices.",
+    "Prefer focus_window / launch / restore over shell scripts. For CJK or awkward text, clipboard_set then key=ctrl+v (or type on an AX ref).",
     ladder,
     "A coordinate click needs headed=true.",
-    "If a window yields almost no AX nodes, report it instead of guessing.",
-    "Do not move the cursor through bash or OS scripts; headed=true is the only door to the real mouse.",
+    "If a window returns almost no accessibility nodes (custom-drawn apps), focus it, capture with mode=vision or som, click by coordinate, then paste via clipboard. Do not invent PowerShell or user32 helpers.",
+    "Commands not exposed on this tool can be run as `agent-desktop …` in bash.",
   ].join("\n");
 }
+
 /** Full-surface default (dual-path modality copy). */
 export const COMPUTER_USE_PROMPT_TEXT = formatComputerUseGuidance([
   "computer_use",

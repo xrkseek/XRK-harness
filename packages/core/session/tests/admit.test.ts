@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   admitPrompt,
   createMemorySessionStore,
+  danglingPromotesForTurn,
   deriveMessages,
+  listDanglingPromotedAdmits,
   listPendingAdmits,
+  listSessionsNeedingInboxRecover,
   listSessionsWithPendingAdmits,
   newSession,
   promoteNextAdmit,
   promoteAdmitsForTurn,
   promotePendingSteers,
+  resolveAdmitsForTurn,
+  sessionHasInboxWork,
   withdrawAdmit,
   NoPendingAdmitError,
 } from "../src/index.js";
@@ -75,6 +80,27 @@ describe("newSession / admit", () => {
     expect(second.delivery).toBe("queue");
   });
 
+  it("persists and lists optional rpcId on pending admits", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const receipt = admitPrompt(store, s.id, "echo-me", {
+      delivery: "steer",
+      rpcId: "client-echo-9",
+    });
+    expect(receipt.rpcId).toBe("client-echo-9");
+    const pending = listPendingAdmits(store.get(s.id).events, s.id);
+    expect(pending).toEqual([
+      expect.objectContaining({
+        admitId: receipt.admitId,
+        content: "echo-me",
+        delivery: "steer",
+        rpcId: "client-echo-9",
+      }),
+    ]);
+    const ev = store.get(s.id).events.find((e) => e.type === "prompt/admitted");
+    expect(ev).toMatchObject({ rpcId: "client-echo-9" });
+  });
+
   it("promoteAdmitsForTurn coalesces all pending steers; leaves queues", () => {
     const store = createMemorySessionStore();
     const s = newSession(store);
@@ -133,5 +159,97 @@ describe("newSession / admit", () => {
     withdrawAdmit(store, closed.id, done.admitId);
     expect(listSessionsWithPendingAdmits(store)).toEqual(["has-pending"]);
     expect(listPendingAdmits(store.get(empty.id).events)).toHaveLength(0);
+  });
+
+  it("listDanglingPromotedAdmits recovers promote-without-user/message", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const receipt = admitPrompt(store, s.id, "crash-window", {
+      delivery: "steer",
+      rpcId: "echo-crash",
+    });
+    promoteNextAdmit(store, s.id);
+    expect(listPendingAdmits(store.get(s.id).events, s.id)).toHaveLength(0);
+    const dangling = listDanglingPromotedAdmits(store.get(s.id).events, s.id);
+    expect(dangling).toEqual([
+      expect.objectContaining({
+        admitId: receipt.admitId,
+        content: "crash-window",
+        delivery: "steer",
+        rpcId: "echo-crash",
+      }),
+    ]);
+    expect(danglingPromotesForTurn(store.get(s.id).events, s.id)).toMatchObject({
+      text: "crash-window",
+      delivery: "steer",
+      steerBatch: true,
+    });
+    expect(listSessionsNeedingInboxRecover(store)).toContain(s.id);
+
+    store.append(s.id, {
+      type: "user/message",
+      ts: Date.now(),
+      turnId: "t1",
+      content: "crash-window",
+      source: { kind: "user" },
+      rpcId: "echo-crash",
+    });
+    expect(listDanglingPromotedAdmits(store.get(s.id).events, s.id)).toHaveLength(0);
+    expect(listSessionsNeedingInboxRecover(store)).not.toContain(s.id);
+  });
+
+  it("resolveAdmitsForTurn: dangling queue wins over newer pending", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const first = admitPrompt(store, s.id, "already-promoted");
+    promoteNextAdmit(store, s.id);
+    admitPrompt(store, s.id, "still-pending");
+    const resolved = resolveAdmitsForTurn(store, s.id);
+    expect(resolved).toMatchObject({
+      text: "already-promoted",
+      delivery: "queue",
+      steerBatch: false,
+      receipts: [expect.objectContaining({ admitId: first.admitId })],
+    });
+    expect(listPendingAdmits(store.get(s.id).events, s.id).map((p) => p.content)).toEqual([
+      "still-pending",
+    ]);
+    expect(sessionHasInboxWork(store.get(s.id).events, s.id)).toBe(true);
+  });
+
+  it("resolveAdmitsForTurn: dangling steers merge with remaining pending steers", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    const a = admitPrompt(store, s.id, "steer-a", { delivery: "steer" });
+    admitPrompt(store, s.id, "steer-b", { delivery: "steer" });
+    admitPrompt(store, s.id, "queue-wait");
+    // Mid-batch crash: only the first steer was promoted.
+    store.append(s.id, {
+      type: "prompt/promoted",
+      ts: Date.now(),
+      admitId: a.admitId,
+    });
+    const resolved = resolveAdmitsForTurn(store, s.id);
+    expect(resolved.steerBatch).toBe(true);
+    expect(resolved.text).toBe("steer-a\n\nsteer-b");
+    expect(
+      listPendingAdmits(store.get(s.id).events, s.id).map((p) => p.content),
+    ).toEqual(["queue-wait"]);
+  });
+
+  it("resolveAdmitsForTurn: hot path unchanged when nothing dangling", () => {
+    const store = createMemorySessionStore();
+    const s = newSession(store);
+    admitPrompt(store, s.id, "q1");
+    admitPrompt(store, s.id, "steer-x", { delivery: "steer" });
+    const resolved = resolveAdmitsForTurn(store, s.id);
+    expect(resolved).toMatchObject({
+      text: "steer-x",
+      delivery: "steer",
+      steerBatch: true,
+    });
+    expect(listPendingAdmits(store.get(s.id).events, s.id).map((p) => p.content)).toEqual([
+      "q1",
+    ]);
   });
 });
