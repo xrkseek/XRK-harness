@@ -1148,6 +1148,8 @@ export function createHarnessComposition(
   // Injected service or product/env on → mount; rebuild adds/drops the tool.
   // Hoist delivery so system guidance matches the live Provider action enum.
   let computerUseDelivery: string | undefined;
+  /** Live Provider — closed on composition dispose so cursor-overlay cannot linger. */
+  let computerUseService: ComputerUseService | undefined;
   if (options.computerUseTools !== false) {
     const injected =
       typeof options.computerUseTools === "object"
@@ -1176,6 +1178,7 @@ export function createHarnessComposition(
           : {}),
       });
     if (mount && service) {
+      computerUseService = service;
       for (const tool of createComputerUseTools({
         service,
         ...(options.computerUseEnv ? { env: options.computerUseEnv } : {}),
@@ -2203,6 +2206,14 @@ export function createHarnessComposition(
       // `session.end` first: a plugin's hook still reads `$.state` here, and the
       // runtime must unload before the seams it used are torn down.
       await mods.dispose();
+      // Drop agent-desktop CLI session + cursor overlay (orphan white window).
+      if (computerUseService?.close) {
+        try {
+          await computerUseService.close();
+        } catch {
+          /* best-effort — dispose must continue */
+        }
+      }
       // Session-end Phase1 via leased pipeline (shares claim with Host finalize).
       if (curatedMemory) {
         try {

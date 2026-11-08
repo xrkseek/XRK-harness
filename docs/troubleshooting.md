@@ -73,6 +73,7 @@
 | `terminal_open` 失败 | 无可用 `node-pty` native |
 | 要交互式浏览器（`browser_*`） | `browser_open` / `browser_snapshot` / `browser_act`（HTTP 会话）；SPA/JS 渲染仍受限 |
 | 要桌面 GUI 操控（`computer_use`） | Settings → Plugins → Computer use（默认 `agent-desktop`）；CI 才用 `XRK_COMPUTER_USE=agent-desktop\|uia\|memory`；见 [computer-use](./computer-use.md) |
+| `computer_use` 报 private file / ownership / focus 失败 | 不要以管理员身份跑 Cursor 或 Harness。关掉提权实例后删 `C:\ProgramData\agent-desktop`；状态根在 `%LOCALAPPDATA%\xrk-harness-agent-desktop`（可用 `AGENT_DESKTOP_HOME` 覆盖）。归档会话残留的纯白光标层：Host `dispose` 会 `close()` 清 overlay；仍在则结束相关 `agent-desktop` 进程 |
 
 下列在**未配置**时仍可能出现在工具表，execute 回明文错误（见上表）。
 
@@ -193,6 +194,7 @@ See: [modules/mcp.md](./modules/mcp.md) · [policy.md](./policy.md).
 | `terminal_open` fails | No usable `node-pty` native |
 | Need interactive browser (`browser_*`) | `browser_open` / `browser_snapshot` / `browser_act` (HTTP session); SPA/JS-rendered pages still limited |
 | Need desktop GUI control (`computer_use`) | Settings → Plugins → Computer use (default `agent-desktop`); CI only: `XRK_COMPUTER_USE=agent-desktop\|uia\|memory`; see [computer-use](./computer-use.md) |
+| `computer_use` private-file / ownership / focus failures | Do not run Cursor or Harness elevated. Quit the elevated instance, delete `C:\ProgramData\agent-desktop`, and use the state root under `%LOCALAPPDATA%\xrk-harness-agent-desktop` (or set `AGENT_DESKTOP_HOME`). Orphan white cursor-overlay after archive: Host `dispose` calls `close()`; if it remains, end leftover `agent-desktop` processes |
 
 The tools below may still appear in the tool table when **unconfigured**; execute returns a plain-text error (see table above).
 

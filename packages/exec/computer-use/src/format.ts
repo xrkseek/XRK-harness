@@ -6,6 +6,8 @@ import type {
   ComputerUseActResult,
   ComputerUseCaptureResult,
   ComputerUseElement,
+  ComputerUseFrame,
+  ComputerUseScreenshotGeometry,
   ComputerUseWindow,
 } from "./types.js";
 
@@ -26,11 +28,29 @@ export function formatAxSnapshot(options: {
   readonly maxChars?: number;
   /** Capture mode advertised to the model (ax · som · vision). */
   readonly mode?: ComputerUseCaptureResult["mode"];
+  /** Window frame in logical screen pixels. */
+  readonly frame?: ComputerUseFrame;
+  /** Screenshot geometry + client inset. */
+  readonly screenshot?: ComputerUseScreenshotGeometry;
 }): string {
   const lines: string[] = [
     `app: ${options.app || "(unknown)"}`,
     `window: ${options.windowTitle || "(untitled)"}`,
     ...(options.mode ? [`mode: ${options.mode}`] : []),
+    ...(options.frame
+      ? [
+          `frame: origin=${options.frame.x},${options.frame.y} ` +
+            `size=${options.frame.width}x${options.frame.height} (logical screen px)`,
+        ]
+      : []),
+    ...(options.screenshot
+      ? [
+          `screenshot: ${options.screenshot.width}x${options.screenshot.height} ` +
+            `inset=${options.screenshot.offsetX},${options.screenshot.offsetY} ` +
+            `scale=${options.screenshot.scaleFactor}`,
+          "coords: click coordinateSpace=window with screenshot pixels — the provider adds frame+inset",
+        ]
+      : []),
     "elements:",
   ];
   for (const el of options.elements) {
@@ -106,7 +126,9 @@ export function formatCaptureEnvelope(options: {
     );
   }
   lines.push(
-    `next=click|type|key|scroll element 1..${Math.max(options.elementCount, 0)}, then capture again`,
+    options.elementCount > 0
+      ? `next=click|type|key|scroll element 1..${options.elementCount}, then capture again`
+      : "next=no element indices here — use the keyboard (press/clipboard_set) or a headed coordinate click, then capture again",
   );
   return lines.join("\n");
 }
@@ -152,6 +174,8 @@ export function buildCaptureResult(options: {
   readonly windowTitle: string;
   readonly elements: readonly ComputerUseElement[];
   readonly note?: string;
+  readonly frame?: ComputerUseFrame;
+  readonly screenshot?: ComputerUseScreenshotGeometry;
   readonly screenshotPng?: Uint8Array;
 }): ComputerUseCaptureResult {
   return {
@@ -164,9 +188,17 @@ export function buildCaptureResult(options: {
       windowTitle: options.windowTitle,
       elements: options.elements,
       mode: options.mode,
+      ...(options.frame !== undefined ? { frame: options.frame } : {}),
+      ...(options.screenshot !== undefined
+        ? { screenshot: options.screenshot }
+        : {}),
       ...(options.note !== undefined ? { note: options.note } : {}),
     }),
     ...(options.note !== undefined ? { note: options.note } : {}),
+    ...(options.frame !== undefined ? { frame: options.frame } : {}),
+    ...(options.screenshot !== undefined
+      ? { screenshot: options.screenshot }
+      : {}),
     ...(options.screenshotPng !== undefined
       ? { screenshotPng: options.screenshotPng }
       : {}),
@@ -200,7 +232,7 @@ export function formatComputerUseGuidance(
       "Prefer focus_window over shell scripts. For CJK text, clipboard_set then key=ctrl+v (or type on an AX ref).",
       ladder,
       "A coordinate click needs headed=true.",
-      "Hollow AX (custom-drawn apps): focus_window → capture mode=vision|som → headed=true coordinate click → clipboard. Do not invent PowerShell or user32 helpers.",
+      "Hollow AX (custom-drawn apps): keyboard first — focus_window → press keys → clipboard_set + key=ctrl+v → key=return. A headed coordinate click is the last resort, not the first move.",
       "Need the full agent-desktop surface → Settings → Computer use → agent-desktop.",
     ].join("\n");
   }
@@ -211,12 +243,13 @@ export function formatComputerUseGuidance(
     ].join("\n");
   }
   return [
-    "Native desktop GUI through agent-desktop. Accessibility capture is headless by default — it does not move the mouse unless headed=true.",
+    "Native desktop GUI through agent-desktop. Ref actions are headless: they do not move the cursor, steal focus, or touch the clipboard.",
     "Usual loop: list_windows → focus_window or launch → capture or find → click/type/key/scroll by element index → capture again. A newer capture or find invalidates older indices.",
     "Prefer focus_window / launch / restore over shell scripts. For CJK or awkward text, clipboard_set then key=ctrl+v (or type on an AX ref).",
     ladder,
-    "A coordinate click needs headed=true.",
-    "If a window returns almost no accessibility nodes (custom-drawn apps), focus it, capture with mode=vision or som, click by coordinate, then paste via clipboard. Do not invent PowerShell or user32 helpers.",
+    "Keyboard first: press and clipboard_set move no pointer; only coordinate clicks do, and they need headed=true.",
+    "A coordinate click takes screenshot pixels (coordinateSpace=window, the default) and the provider adds the window frame origin — never add it yourself and never do DPI math. preserveCursor=true (default) puts the user's pointer back after the click.",
+    "If a window returns almost no accessibility nodes (custom-drawn apps), stay on the keyboard: focus_window → press to reach the row or field → clipboard_set + key=ctrl+v → key=return. Use a headed coordinate click only when the keyboard genuinely cannot reach the target. Do not invent PowerShell or user32 helpers.",
     "Prefer the computer_use tool over bare `agent-desktop` in bash — the tool resolves the binary (like Host already seeing node/npm); do not expect PATH injection.",
   ].join("\n");
 }

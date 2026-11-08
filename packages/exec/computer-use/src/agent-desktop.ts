@@ -33,6 +33,8 @@ import {
   ComputerUseError,
   type ComputerUseActResult,
   type ComputerUseElement,
+  type ComputerUseFrame,
+  type ComputerUseScreenshotGeometry,
   type ComputerUseService,
   type ComputerUseWindow,
 } from "./types.js";
@@ -168,7 +170,7 @@ function formatCliError(envelope: AgentDesktopEnvelope): {
       base,
     );
   const hint = ownership
-    ? " State root must be owned by this user — Host pins AGENT_DESKTOP_HOME to {XRK_HOME}/agent-desktop; delete a polluted ~/.agent-desktop if you set the env yourself."
+    ? " State root / interaction lease must be owned by this user — Host pins AGENT_DESKTOP_HOME under %LOCALAPPDATA%/xrk-harness-agent-desktop. Do not run Cursor or Harness elevated; if still failing, delete C:\\ProgramData\\agent-desktop then retry."
     : /STALE_REF|AMBIGUOUS_TARGET/i.test(code)
       ? " Capture again and use a fresh element index."
       : disposition
@@ -249,7 +251,14 @@ export async function runAgentDesktop(
   return parseEnvelope(stdout);
 }
 
-function decodeScreenshotPng(envelope: AgentDesktopEnvelope): Uint8Array | undefined {
+interface DecodedScreenshot {
+  readonly png: Uint8Array;
+  readonly width?: number;
+  readonly height?: number;
+  readonly scaleFactor?: number;
+}
+
+function decodeScreenshot(envelope: AgentDesktopEnvelope): DecodedScreenshot | undefined {
   const data = asRecord(envelope.data);
   if (!data) return undefined;
   const b64 =
@@ -261,7 +270,40 @@ function decodeScreenshotPng(envelope: AgentDesktopEnvelope): Uint8Array | undef
           ? data.base64
           : undefined;
   if (!b64) return undefined;
-  return Uint8Array.from(Buffer.from(b64, "base64"));
+  const width = typeof data.width === "number" ? data.width : undefined;
+  const height = typeof data.height === "number" ? data.height : undefined;
+  const scaleFactor =
+    typeof data.scale_factor === "number"
+      ? data.scale_factor
+      : typeof data.scaleFactor === "number"
+        ? data.scaleFactor
+        : undefined;
+  return {
+    png: Uint8Array.from(Buffer.from(b64, "base64")),
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+    ...(scaleFactor !== undefined ? { scaleFactor } : {}),
+  };
+}
+
+/** Read a `{x,y,width,height}` group, or undefined when any field is missing. */
+function readFrame(value: unknown): ComputerUseFrame | undefined {
+  const raw = asRecord(value);
+  if (!raw) return undefined;
+  if (
+    typeof raw.x !== "number" ||
+    typeof raw.y !== "number" ||
+    typeof raw.width !== "number" ||
+    typeof raw.height !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    x: raw.x,
+    y: raw.y,
+    width: raw.width,
+    height: raw.height,
+  };
 }
 
 function xyPair(pair: readonly [number, number]): string {
@@ -295,6 +337,10 @@ export function createAgentDesktopProvider(
   let lastApp = "";
   let lastSnapshotId = "";
   let lastScrollRef = "";
+  /** Window frame from the last capture (logical screen px, agent-desktop DIP). */
+  let lastFrame: ComputerUseFrame | undefined;
+  /** Screenshot geometry + client inset from the last mode=vision|som capture. */
+  let lastScreenshot: ComputerUseScreenshotGeometry | undefined;
   const scope: SessionScopeState = {
     sessionId: undefined,
     overlayEnabled: false,
@@ -368,6 +414,123 @@ export function createAgentDesktopProvider(
     return "typed-clipboard-paste";
   }
 
+  /**
+   * Make sure a window frame is cached for coordinate conversion. A cold
+   * provider (no capture yet) or a moved window would otherwise make every
+   * coordinate click fail, so fetch the frame once and remember it.
+   */
+  async function ensureFrame(app?: string): Promise<ComputerUseFrame | undefined> {
+    if (lastFrame) return lastFrame;
+    const snapshotArgs = [
+      "snapshot",
+      "-i",
+      "--compact",
+      "--include-bounds",
+      "--timeout-ms",
+      "8000",
+    ];
+    const target = app?.trim();
+    if (target) snapshotArgs.push("--app", target);
+    try {
+      const envelope = await runScoped(snapshotArgs);
+      const data = asRecord(envelope.data) ?? {};
+      const root = asRecord(data.tree) ?? data;
+      const frame = readFrame(root.bounds);
+      if (frame) lastFrame = frame;
+      if (target) lastApp = target;
+    } catch {
+      /* resolveCoordinate reports the missing frame */
+    }
+    return lastFrame;
+  }
+
+  /**
+   * Resolve a model-supplied coordinate into agent-desktop's logical screen
+   * space (DIP). `window` means "pixels measured on the last capture
+   * screenshot"; the provider adds the frame origin and the client inset so the
+   * model never does DPI arithmetic.
+   */
+  async function resolveCoordinate(
+    coordinate: readonly [number, number],
+    space: "window" | "screen" | undefined,
+    app?: string,
+  ): Promise<readonly [number, number]> {
+    if (space === "screen") {
+      return [Math.round(coordinate[0]), Math.round(coordinate[1])];
+    }
+    const frame = await ensureFrame(app);
+    if (!frame) {
+      throw new ComputerUseError(
+        "coordinateSpace=window could not resolve a window frame (no capture, " +
+          "and the app did not answer a snapshot). Pass app=…, capture first, " +
+          "or use coordinateSpace=screen with absolute desktop pixels.",
+        "COMPUTER_USE_BAD_ARGS",
+      );
+    }
+    const offsetX = lastScreenshot?.offsetX ?? 0;
+    const offsetY = lastScreenshot?.offsetY ?? 0;
+    return [
+      Math.round(frame.x + offsetX + coordinate[0]),
+      Math.round(frame.y + offsetY + coordinate[1]),
+    ];
+  }
+
+  /**
+   * Read the user's pointer so a headed coordinate click can hand it back.
+   * PowerShell reads and writes the same DPI-virtualized space, so a
+   * save/restore round-trip lands the pointer exactly where it started.
+   */
+  async function readCursorPosition(): Promise<
+    readonly [number, number] | undefined
+  > {
+    if (process.platform !== "win32") return undefined;
+    // Injected runners are tests/fixtures — never touch the real desktop.
+    if (options.run) return undefined;
+    try {
+      const { stdout } = await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Add-Type -AssemblyName System.Windows.Forms; " +
+            "$p=[System.Windows.Forms.Cursor]::Position; \"$($p.X),$($p.Y)\"",
+        ],
+        { timeout: 5000, windowsHide: true },
+      );
+      const match = /(-?\d+)\s*,\s*(-?\d+)/.exec(String(stdout));
+      if (!match) return undefined;
+      return [Number(match[1]), Number(match[2])];
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function restoreCursorPosition(
+    position: readonly [number, number],
+  ): Promise<boolean> {
+    if (process.platform !== "win32") return false;
+    if (options.run) return false;
+    try {
+      await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Add-Type -AssemblyName System.Windows.Forms; " +
+            "Add-Type -AssemblyName System.Drawing; " +
+            `[System.Windows.Forms.Cursor]::Position = ` +
+            `New-Object System.Drawing.Point(${Math.round(position[0])},${Math.round(position[1])})`,
+        ],
+        { timeout: 5000, windowsHide: true },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function pickElement(index?: number): ComputerUseElement | undefined {
     if (index === undefined) return undefined;
     return lastElements.find((el) => el.index === index);
@@ -432,18 +595,45 @@ export function createAgentDesktopProvider(
       if (app) lastApp = app;
       else if (typeof data.app === "string") lastApp = data.app;
 
+      // Window frame (logical screen px) — the snapshot root node carries it.
+      const treeRoot = asRecord(data.tree) ?? data;
+      const frame = readFrame(treeRoot.bounds) ?? readFrame(data.bounds);
+      if (frame) lastFrame = frame;
+
       let screenshotPng: Uint8Array | undefined;
+      let shotGeometry: ComputerUseScreenshotGeometry | undefined;
       const mode = request.mode ?? "ax";
       if (mode === "vision" || mode === "som") {
         const shotArgs = ["screenshot"];
         if (app) shotArgs.push("--app", app);
         try {
           const shot = await runScoped(shotArgs);
-          screenshotPng = decodeScreenshotPng(shot);
+          const decoded = decodeScreenshot(shot);
+          if (decoded) {
+            screenshotPng = decoded.png;
+            if (decoded.width && decoded.height) {
+              // The PNG is the client area; centre it horizontally inside the
+              // frame and hang it from the top edge vertically.
+              const offsetX = frame
+                ? Math.max(0, Math.round((frame.width - decoded.width) / 2))
+                : 0;
+              const offsetY = frame
+                ? Math.max(0, Math.round(frame.height - decoded.height))
+                : 0;
+              shotGeometry = {
+                width: decoded.width,
+                height: decoded.height,
+                scaleFactor: decoded.scaleFactor ?? 1,
+                offsetX,
+                offsetY,
+              };
+            }
+          }
         } catch {
           /* AX-only soft fallback */
         }
       }
+      lastScreenshot = shotGeometry;
 
       const notes: string[] = [
         "delivery=agent-desktop (AX headless by default; no pointer move unless headed=true)",
@@ -451,11 +641,30 @@ export function createAgentDesktopProvider(
       if (scope.sessionId) notes.push(`session=${scope.sessionId}`);
       if (scope.overlayEnabled) notes.push("cursor-overlay=on");
       if (lastSnapshotId) notes.push(`snapshot_id=${lastSnapshotId}`);
+      if (mode === "som") {
+        notes.push(
+          "mode=som is a vision alias on agent-desktop (no element labels are drawn) — read indices from the AX tree, not from pixels",
+        );
+      }
+      if (frame) {
+        notes.push(
+          `frame=${frame.x},${frame.y} ${frame.width}x${frame.height} (logical screen px)`,
+        );
+      }
+      if (shotGeometry) {
+        notes.push(
+          `coords: screenshot ${shotGeometry.width}x${shotGeometry.height}, ` +
+            `client inset ${shotGeometry.offsetX},${shotGeometry.offsetY}; ` +
+            "pass screenshot pixels with coordinateSpace=window (default) and the provider adds the frame origin",
+        );
+      }
       if (elements.length <= 2) {
         notes.push(
           "hollow AX tree (≤2 nodes — custom-drawn / accessibility-light UI): " +
-            "do not guess with bash/user32; use focus_window → capture mode=vision|som → headed=true click; " +
-            "CJK via clipboard_set + key=ctrl+v",
+            "keyboard first — clipboard_set + key=ctrl+v then key=return moves no pointer; " +
+            "focus_window then press keys to reach rows/fields; " +
+            "only when keyboard cannot reach a target use headed=true click with screenshot pixels " +
+            "(coordinateSpace=window converts them; preserveCursor=true puts the real pointer back)",
         );
       }
 
@@ -468,6 +677,8 @@ export function createAgentDesktopProvider(
             : lastApp || "desktop",
         elements,
         note: notes.join("; "),
+        ...(frame ? { frame } : {}),
+        ...(shotGeometry ? { screenshot: shotGeometry } : {}),
         ...(screenshotPng ? { screenshotPng } : {}),
       });
     },
@@ -606,7 +817,7 @@ export function createAgentDesktopProvider(
           const args = ["screenshot"];
           if (app) args.push("--app", app);
           const envelope = await runScoped(args);
-          const png = decodeScreenshotPng(envelope);
+          const png = decodeScreenshot(envelope)?.png;
           return {
             ok: true,
             action: "screenshot",
@@ -752,14 +963,61 @@ export function createAgentDesktopProvider(
               "COMPUTER_USE_BAD_ARGS",
             );
           }
-          const args = ["focus-window"];
-          if (appName) args.push("--app", appName);
-          if (title) args.push("--title", title);
-          await runScoped(args);
+          // `--app` matches a process identity ("Weixin.exe"); a CJK or spaced
+          // label is a window title and must go through `--title`. Try the
+          // likely reading first, then fall back — a single wrong guess used to
+          // fail the focus and poison every later headed action.
+          const looksLikeTitle = appName
+            ? /[^\x20-\x7E]/.test(appName) || /\s/.test(appName)
+            : false;
+          const attempts: string[][] = [];
+          if (title) {
+            if (appName && !looksLikeTitle) {
+              attempts.push([
+                "focus-window",
+                "--app",
+                appName,
+                "--title",
+                title,
+              ]);
+            }
+            attempts.push(["focus-window", "--title", title]);
+            if (appName) attempts.push(["focus-window", "--app", appName]);
+          } else if (appName) {
+            if (looksLikeTitle) {
+              attempts.push(["focus-window", "--title", appName]);
+              attempts.push(["focus-window", "--app", appName]);
+            } else {
+              attempts.push(["focus-window", "--app", appName]);
+              attempts.push(["focus-window", "--title", appName]);
+            }
+          } else {
+            attempts.push(["focus-window"]);
+          }
+          let focusError: unknown;
+          let used: string[] | undefined;
+          for (const args of attempts) {
+            try {
+              await runScoped(args);
+              used = args;
+              break;
+            } catch (err) {
+              focusError = err;
+            }
+          }
+          if (!used) throw focusError;
           if (appName) lastApp = appName;
+          const titleAt = used.indexOf("--title");
+          const appAt = used.indexOf("--app");
+          const resolved =
+            titleAt >= 0
+              ? `title:${used[titleAt + 1] ?? ""}`
+              : appAt >= 0
+                ? `app:${used[appAt + 1] ?? ""}`
+                : "window";
           return okAct(
             "focus_window",
-            `focused:${appName || title || ""}`,
+            `focused:${resolved}`,
           );
         }
         case "resize_window": {
@@ -833,16 +1091,29 @@ export function createAgentDesktopProvider(
                 "COMPUTER_USE_BAD_ARGS",
               );
             }
-            await runScoped(
-              headedArgs(true, [
-                "mouse-click",
-                "--xy",
-                xyPair(request.coordinate),
-              ]),
+            const point = await resolveCoordinate(
+              request.coordinate,
+              request.coordinateSpace,
+              app,
             );
+            const preserve = request.preserveCursor !== false;
+            const saved = preserve ? await readCursorPosition() : undefined;
+            let restored = false;
+            try {
+              await runScoped(
+                headedArgs(true, ["mouse-click", "--xy", xyPair(point)]),
+              );
+            } finally {
+              if (saved) restored = await restoreCursorPosition(saved);
+            }
             return okAct(
               "click",
-              `clicked-coordinate:${xyPair(request.coordinate)} (headed)`,
+              `clicked-coordinate:${xyPair(point)} (headed` +
+                (request.coordinateSpace === "screen"
+                  ? ", screen-space"
+                  : ", from-screenshot→screen") +
+                (restored ? ", cursor-restored" : "") +
+                ")",
             );
           }
           requireRef(ref, "click");
@@ -884,16 +1155,17 @@ export function createAgentDesktopProvider(
             );
           }
           if (request.coordinate) {
+            const point = await resolveCoordinate(
+              request.coordinate,
+              request.coordinateSpace,
+              app,
+            );
             await runScoped(
-              headedArgs(true, [
-                "hover",
-                "--xy",
-                xyPair(request.coordinate),
-              ]),
+              headedArgs(true, ["hover", "--xy", xyPair(point)]),
             );
             return okAct(
               "hover",
-              `hovered-coordinate:${xyPair(request.coordinate)}`,
+              `hovered-coordinate:${xyPair(point)}`,
             );
           }
           requireRef(ref, "hover");
@@ -913,16 +1185,17 @@ export function createAgentDesktopProvider(
               "COMPUTER_USE_BAD_ARGS",
             );
           }
+          const point = await resolveCoordinate(
+            request.coordinate,
+            request.coordinateSpace,
+            app,
+          );
           await runScoped(
-            headedArgs(true, [
-              "mouse-move",
-              "--xy",
-              xyPair(request.coordinate),
-            ]),
+            headedArgs(true, ["mouse-move", "--xy", xyPair(point)]),
           );
           return okAct(
             "mouse_move",
-            `moved:${xyPair(request.coordinate)}`,
+            `moved:${xyPair(point)}`,
           );
         }
         case "mouse_wheel": {
@@ -944,13 +1217,18 @@ export function createAgentDesktopProvider(
               : request.direction === "up"
                 ? 3
                 : -3;
+          const point = await resolveCoordinate(
+            request.coordinate,
+            request.coordinateSpace,
+            app,
+          );
           await runScoped(
             headedArgs(true, [
               "mouse-wheel",
               "--x",
-              String(Math.round(request.coordinate[0])),
+              String(point[0]),
               "--y",
-              String(Math.round(request.coordinate[1])),
+              String(point[1]),
               "--dy",
               String(dy),
             ]),
@@ -983,13 +1261,23 @@ export function createAgentDesktopProvider(
             return okAct("drag", `dragged:${fromRef}->${toRef}`);
           }
           if (request.coordinate && request.coordinate2) {
+            const from = await resolveCoordinate(
+              request.coordinate,
+              request.coordinateSpace,
+              app,
+            );
+            const to = await resolveCoordinate(
+              request.coordinate2,
+              request.coordinateSpace,
+              app,
+            );
             await runScoped(
               headedArgs(true, [
                 "drag",
                 "--from-xy",
-                xyPair(request.coordinate),
+                xyPair(from),
                 "--to-xy",
-                xyPair(request.coordinate2),
+                xyPair(to),
               ]),
             );
             return okAct(

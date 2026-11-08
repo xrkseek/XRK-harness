@@ -58,6 +58,34 @@ export interface ComputerUseWindow {
   readonly app?: string;
 }
 
+/** Window frame in logical screen pixels (agent-desktop DIP space). */
+export interface ComputerUseFrame {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Screenshot geometry for a mode=vision|som capture.
+ *
+ * Screenshot pixels are **client-area logical pixels**, not screen pixels.
+ * `offsetX` / `offsetY` are the frame-relative inset of the screenshot's
+ * top-left corner, so:
+ *
+ *   screen[axis] = frame[axis] + offset[axis] + screenshotPixel[axis]
+ */
+export interface ComputerUseScreenshotGeometry {
+  readonly width: number;
+  readonly height: number;
+  /** Device pixel ratio reported by the CLI (1 = no HiDPI scaling). */
+  readonly scaleFactor: number;
+  /** Horizontal inset of the screenshot inside the window frame. */
+  readonly offsetX: number;
+  /** Vertical inset of the screenshot inside the window frame. */
+  readonly offsetY: number;
+}
+
 export interface ComputerUseCaptureRequest {
   readonly mode?: "ax" | "som" | "vision";
   readonly app?: string;
@@ -71,6 +99,10 @@ export interface ComputerUseCaptureResult {
   readonly elements: readonly ComputerUseElement[];
   readonly text: string;
   readonly note?: string;
+  /** Window frame at capture time (logical screen pixels). */
+  readonly frame?: ComputerUseFrame;
+  /** Screenshot geometry + frame inset (mode=vision|som only). */
+  readonly screenshot?: ComputerUseScreenshotGeometry;
   /**
    * Optional PNG bytes for mode=vision|som (Windows UIA CopyFromScreen).
    * Tool layer stores via AttachmentStore so the model can see the desktop.
@@ -89,6 +121,22 @@ export interface ComputerUseActRequest {
   readonly coordinate?: readonly [number, number];
   /** Second point for drag (screen pixels) or resize/move size/pos. */
   readonly coordinate2?: readonly [number, number];
+  /**
+   * Space for `coordinate` on click / hover / move / drag.
+   *
+   * - `"window"` (default): pixels read off the last capture screenshot
+   *   (client area). The provider adds the window frame origin and the
+   *   client-area inset — no manual arithmetic, no DPI math.
+   * - `"screen"`: absolute logical desktop pixels (equals agent-desktop's
+   *   own `--xy` space).
+   */
+  readonly coordinateSpace?: "window" | "screen";
+  /**
+   * Put the real cursor back where it was right after a headed coordinate
+   * click (default true). This is what keeps a pointer-driven agent from
+   * hijacking the user's mouse: the click happens, the pointer returns.
+   */
+  readonly preserveCursor?: boolean;
   /**
    * Allow physical pointer / `--headed` paths (moves the real mouse / steals focus).
    * Default false — agent-desktop and UIA stay on AX / Invoke / clipboard.

@@ -25,7 +25,9 @@ export {
   type ComputerUseElement,
   type ComputerUseErrorCode,
   type ComputerUseFindRequest,
+  type ComputerUseFrame,
   type ComputerUseProviderName,
+  type ComputerUseScreenshotGeometry,
   type ComputerUseService,
   type ComputerUseWindow,
 } from "./types.js";
@@ -80,6 +82,10 @@ export {
   resolveAgentDesktopBin,
   pinAgentDesktopEnv,
   resolveAgentDesktopHome,
+  clearWindowsAgentDesktopLease,
+  ensureWritableAgentDesktopHome,
+  isElevatedOwnedWindowsPath,
+  isWindowsProcessElevated,
   ensureAgentDesktopOnPath,
 } from "./resolve-cli.js";
 export {

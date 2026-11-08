@@ -165,6 +165,8 @@ export function createComputerUseTools(
     amount?: number;
     coordinate?: unknown;
     coordinate2?: unknown;
+    coordinateSpace?: string;
+    preserveCursor?: boolean;
     headed?: boolean;
     role?: string;
     name?: string;
@@ -193,7 +195,7 @@ export function createComputerUseTools(
           type: "string",
           enum: ["ax", "som", "vision"],
           description:
-            "ax returns the accessibility tree only (default). vision and som also return a PNG; som labels it with element indices.",
+            "ax returns the accessibility tree only (default). vision and som also return a PNG; on agent-desktop som is a vision alias (no index labels are drawn — read indices from the AX tree).",
         },
         app: {
           type: "string",
@@ -253,7 +255,7 @@ export function createComputerUseTools(
           minItems: 2,
           maxItems: 2,
           description:
-            "Screen pixel [x, y] for click/drag/resize/move. Click needs headed=true.",
+            "[x, y] for click/hover/mouse_move/mouse_wheel/drag. Default is screenshot pixels (coordinateSpace=window) — do not add the window origin yourself. Click needs headed=true.",
         },
         coordinate2: {
           type: "array",
@@ -261,6 +263,17 @@ export function createComputerUseTools(
           minItems: 2,
           maxItems: 2,
           description: "Second [x, y] for drag destination.",
+        },
+        coordinateSpace: {
+          type: "string",
+          enum: ["window", "screen"],
+          description:
+            "Space for coordinate: window (default) = pixels measured on the last capture screenshot; the provider adds the window frame + client inset. screen = absolute logical desktop pixels.",
+        },
+        preserveCursor: {
+          type: "boolean",
+          description:
+            "After a headed coordinate click, put the user's pointer back where it was (default true). Set false only when the pointer must stay at the click point (e.g. consecutive drags).",
         },
         headed: {
           type: "boolean",
@@ -431,6 +444,13 @@ export function createComputerUseTools(
             : {}),
           ...(coordinate !== undefined ? { coordinate } : {}),
           ...(coordinate2 !== undefined ? { coordinate2 } : {}),
+          ...(args?.coordinateSpace === "screen" ||
+          args?.coordinateSpace === "window"
+            ? { coordinateSpace: args.coordinateSpace }
+            : {}),
+          ...(args?.preserveCursor === false
+            ? { preserveCursor: false }
+            : {}),
           ...(args?.headed === true ? { headed: true } : {}),
           ...(args?.app !== undefined ? { app: String(args.app) } : {}),
           ...(args?.property !== undefined

@@ -13,7 +13,9 @@ import {
   formatAxSnapshot,
   isComputerUseEnabled,
   mapKeysToSendKeys,
+  ensureWritableAgentDesktopHome,
   pinAgentDesktopEnv,
+  resolveAgentDesktopHome,
   type ComputerUseService,
 } from "../src/index.js";
 
@@ -372,9 +374,11 @@ describe("createDefaultComputerUseAccess", () => {
     expect(access.service?.providerId).toBe("agent-desktop");
   });
 
-  it("pins AGENT_DESKTOP_HOME under XRK_HOME (avoids polluted ~/.agent-desktop)", () => {
+  it("pins AGENT_DESKTOP_HOME under LOCALAPPDATA (avoids elevated ~/.xrk)", () => {
+    const local = path.join(os.tmpdir(), `xrk-local-${process.pid}`);
     const env: NodeJS.ProcessEnv = {
-      XRK_HOME: path.join(os.tmpdir(), `xrk-ad-home-${process.pid}`),
+      LOCALAPPDATA: local,
+      XRK_HOME: path.join(os.tmpdir(), `xrk-unused-${process.pid}`),
     };
     const access = createDefaultComputerUseAccess({
       env,
@@ -382,7 +386,7 @@ describe("createDefaultComputerUseAccess", () => {
     });
     expect(access.providerName).toBe("agent-desktop");
     expect(env.AGENT_DESKTOP_HOME).toBe(
-      path.join(env.XRK_HOME!, "agent-desktop"),
+      path.join(local, "xrk-harness-agent-desktop"),
     );
     expect(existsSync(env.AGENT_DESKTOP_HOME!)).toBe(true);
   });
@@ -395,6 +399,36 @@ describe("createDefaultComputerUseAccess", () => {
     };
     pinAgentDesktopEnv(env);
     expect(path.resolve(env.AGENT_DESKTOP_HOME!)).toBe(path.resolve(home));
+  });
+
+  it("ensureWritableAgentDesktopHome keeps preferred for elevated or clean owner", () => {
+    const preferred = path.join(
+      os.tmpdir(),
+      `xrk-ad-pref-${process.pid}-${Date.now()}`,
+    );
+    const got = ensureWritableAgentDesktopHome(preferred);
+    // Elevated Host: Admin-owned is correct → keep preferred.
+    // Medium + user-owned: keep preferred. Relocate only medium + Admin pollution.
+    expect(got === preferred || got.startsWith(`${preferred}-`)).toBe(true);
+    expect(existsSync(got)).toBe(true);
+  });
+
+  it("resolveAgentDesktopHome prefers LOCALAPPDATA / XDG over XRK_HOME", () => {
+    if (process.platform === "win32") {
+      expect(
+        resolveAgentDesktopHome({
+          LOCALAPPDATA: "D:\\LocalData",
+          XRK_HOME: "D:\\.xrk",
+        }),
+      ).toBe(path.join("D:\\LocalData", "xrk-harness-agent-desktop"));
+    } else {
+      expect(
+        resolveAgentDesktopHome({
+          XDG_DATA_HOME: "/var/data",
+          XRK_HOME: "/home/u/.xrk",
+        }),
+      ).toBe("/var/data/xrk-harness-agent-desktop");
+    }
   });
 
   it.skipIf(process.platform !== "win32")(

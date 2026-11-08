@@ -325,6 +325,73 @@ describe("agent-desktop headed + clipboard", () => {
     expect(focusCall).toContain("Weixin");
   });
 
+  it("close disables cursor-overlay then ends the CLI session", async () => {
+    const calls: string[][] = [];
+    const svc = createAgentDesktopProvider({
+      enableSession: true,
+      cursorOverlay: true,
+      async run(args) {
+        calls.push([...args]);
+        if (args[0] === "session" && args[1] === "start") {
+          return {
+            stdout: JSON.stringify({
+              ok: true,
+              data: { session_id: "sess-close-1" },
+            }),
+            stderr: "",
+          };
+        }
+        if (args.includes("list-windows") || args[0] === "list-windows") {
+          return {
+            stdout: JSON.stringify({ ok: true, data: [] }),
+            stderr: "",
+          };
+        }
+        if (args.includes("cursor-overlay") || args[0] === "cursor-overlay") {
+          return {
+            stdout: JSON.stringify({ ok: true, data: {} }),
+            stderr: "",
+          };
+        }
+        if (args.includes("session") && args.includes("end")) {
+          return {
+            stdout: JSON.stringify({
+              ok: true,
+              data: { session_id: "sess-close-1" },
+            }),
+            stderr: "",
+          };
+        }
+        throw new Error(`unexpected ${args.join(" ")}`);
+      },
+    });
+    await svc.listWindows();
+    calls.length = 0;
+    await svc.close!();
+    expect(
+      calls.some(
+        (c) =>
+          c.includes("cursor-overlay") &&
+          c.includes("disable") &&
+          c.includes("--session") &&
+          c.includes("sess-close-1"),
+      ),
+    ).toBe(true);
+    expect(
+      calls.some(
+        (c) =>
+          c.includes("session") &&
+          c.includes("end") &&
+          c.includes("--session") &&
+          c.includes("sess-close-1"),
+      ),
+    ).toBe(true);
+    // Idempotent — no second teardown without a new session.
+    calls.length = 0;
+    await svc.close!();
+    expect(calls).toEqual([]);
+  });
+
   it("maps launch / wait / overlay onto CLI argv", async () => {
     const calls: string[][] = [];
     const svc = createAgentDesktopProvider({
@@ -457,6 +524,8 @@ describe("agent-desktop headed + clipboard", () => {
     await svc.act({
       action: "mouse_wheel",
       coordinate: [100, 200],
+      // Absolute pixels: this fixture has no capture, so name the space.
+      coordinateSpace: "screen",
       amount: -5,
       headed: true,
     });

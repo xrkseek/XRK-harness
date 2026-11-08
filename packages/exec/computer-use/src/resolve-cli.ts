@@ -7,10 +7,17 @@
  * computer_use Provider spawns via the absolute path (or `XRK_AGENT_DESKTOP`).
  */
 
-import { accessSync, constants as fsConstants, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  accessSync,
+  constants as fsConstants,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 
 function isPresent(candidate: string): boolean {
   try {
@@ -159,31 +166,132 @@ export function resolveAgentDesktopBin(
 }
 
 /**
- * agent-desktop state root (`sessions/`, locks). Default `~/.agent-desktop`
- * fails closed when owned by Administrators/SYSTEM (elevated run pollution).
- * Prefer `{XRK_HOME}/agent-desktop` so Host and CLI share a user-owned root.
+ * Default state root for agent-desktop (all platforms).
+ *
+ * - Windows: `%LOCALAPPDATA%/xrk-harness-agent-desktop`
+ * - macOS / Linux: `$XDG_DATA_HOME/xrk-harness-agent-desktop` or
+ *   `~/.local/share/xrk-harness-agent-desktop`
+ *
+ * Avoid nesting under `{XRK_HOME}` — elevated Windows runs often leave
+ * `~/.xrk` owned by Administrators, which fails agent-desktop's private-file
+ * parent check for a normal (medium IL) Host. Explicit `AGENT_DESKTOP_HOME`
+ * still wins.
  */
 export function resolveAgentDesktopHome(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const override = String(env.AGENT_DESKTOP_HOME ?? "").trim();
   if (override) return path.resolve(override);
-  const xrkHome =
-    String(env.XRK_HOME ?? "").trim() ||
-    String(env.XRK_DSH_HOME ?? "").trim() ||
-    path.join(os.homedir(), ".xrk");
-  return path.join(path.resolve(xrkHome), "agent-desktop");
+  if (process.platform === "win32") {
+    const localAppData =
+      String(env.LOCALAPPDATA ?? "").trim() ||
+      path.join(os.homedir(), "AppData", "Local");
+    return path.join(path.resolve(localAppData), "xrk-harness-agent-desktop");
+  }
+  const xdg =
+    String(env.XDG_DATA_HOME ?? "").trim() ||
+    path.join(os.homedir(), ".local", "share");
+  return path.join(path.resolve(xdg), "xrk-harness-agent-desktop");
+}
+
+/**
+ * Best-effort wipe of the Windows interaction lease under ProgramData.
+ * Elevated Cursor leaves the lease owned by Administrators; a medium-IL
+ * Harness then fails focus/act. Non-elevated processes often cannot delete
+ * it — surface via CLI; this clears when allowed.
+ */
+export function clearWindowsAgentDesktopLease(): void {
+  if (process.platform !== "win32") return;
+  const root = path.join(
+    process.env.ProgramData?.trim() || "C:\\ProgramData",
+    "agent-desktop",
+  );
+  try {
+    rmSync(root, { recursive: true, force: true });
+  } catch {
+    // Access denied when elevated pollution remains — surface via CLI.
+  }
+}
+
+/** Windows High integrity (Run as administrator / elevated Cursor helper). */
+export function isWindowsProcessElevated(): boolean {
+  if (process.platform !== "win32") return false;
+  try {
+    const out = execFileSync("whoami.exe", ["/groups"], {
+      encoding: "utf8",
+      timeout: 5_000,
+      windowsHide: true,
+    });
+    return /High Mandatory Level/i.test(out);
+  } catch {
+    return false;
+  }
+}
+
+/** True when Windows ACL owner is Administrators / SYSTEM (elevated pollution). */
+export function isElevatedOwnedWindowsPath(target: string): boolean {
+  if (process.platform !== "win32") return false;
+  try {
+    // `dir /q` prints owner on the `.` row — no PowerShell Security module needed.
+    const out = execFileSync("cmd.exe", ["/c", "dir", "/q", target], {
+      encoding: "utf8",
+      timeout: 5_000,
+      windowsHide: true,
+    });
+    const row = out
+      .split(/\r?\n/)
+      .find((line) => /<DIR>\s+\S+.*\.\s*$/.test(line));
+    const m = row?.match(/<DIR>\s+(\S+)\s+\.\s*$/);
+    const owner = m?.[1] ?? "";
+    return /(\\Administrators|\\SYSTEM)$/i.test(owner);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure `preferred` is usable as AGENT_DESKTOP_HOME.
+ *
+ * - Non-Windows: mkdir and return preferred.
+ * - Elevated Windows Host: Administrators ownership is expected — keep preferred.
+ * - Medium-IL Windows Host + Administrators-owned preferred (pollution from an
+ *   elevated tool): relocate to a fresh sibling created by this process.
+ */
+export function ensureWritableAgentDesktopHome(preferred: string): string {
+  try {
+    mkdirSync(preferred, { recursive: true });
+  } catch {
+    // fall through — may relocate on win32
+  }
+  if (process.platform !== "win32") return preferred;
+  // Elevated process: Admin-owned state root matches the token — do not relocate
+  // (relocating while elevated would just create another Admin-owned folder).
+  if (isWindowsProcessElevated()) return preferred;
+  if (!isElevatedOwnedWindowsPath(preferred)) return preferred;
+  try {
+    rmSync(preferred, { recursive: true, force: true });
+  } catch {
+    /* may lack delete rights */
+  }
+  const relocated = `${preferred}-${randomBytes(4).toString("hex")}`;
+  try {
+    mkdirSync(relocated, { recursive: true });
+  } catch {
+    /* CLI still gets the path */
+  }
+  return relocated;
 }
 
 /**
  * Pin `XRK_AGENT_DESKTOP` (absolute binary) and `AGENT_DESKTOP_HOME`
- * (`{XRK_HOME}/agent-desktop`) on this env object.
+ * on this env object. Also best-effort clears a polluted ProgramData lease.
  * Does not mutate PATH (Host terminals already see node/npm; product `xrkh`
  * PATH is Settings → General on Desktop).
  */
 export function pinAgentDesktopEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
+  clearWindowsAgentDesktopLease();
   const bin = resolveAgentDesktopBin(env);
   if (bin !== "agent-desktop" && path.isAbsolute(bin)) {
     if (!env.XRK_AGENT_DESKTOP?.trim()) {
@@ -191,13 +299,8 @@ export function pinAgentDesktopEnv(
     }
   }
   if (!String(env.AGENT_DESKTOP_HOME ?? "").trim()) {
-    const home = resolveAgentDesktopHome(env);
-    try {
-      mkdirSync(home, { recursive: true });
-    } catch {
-      // CLI still receives the path; ownership errors surface at spawn.
-    }
-    env.AGENT_DESKTOP_HOME = home;
+    const preferred = resolveAgentDesktopHome(env);
+    env.AGENT_DESKTOP_HOME = ensureWritableAgentDesktopHome(preferred);
   }
   return bin;
 }
