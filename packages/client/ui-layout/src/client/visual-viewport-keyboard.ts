@@ -5,14 +5,21 @@
  * the inset stays ~0 and flex/sticky layout already lifts. Overlay keyboards
  * (many Android/iOS builds) leave layout height alone — then
  * `--xrk-keyboard-inset` lifts sticky composers and docks the empty hero.
+ *
+ * Flutter thin shell owns a fourth path (MediaQuery.viewInsets → CSS). Do NOT
+ * combine Activity `adjustResize` / Scaffold resize / `resizes-content` with
+ * that CSS inset — each shrinks or lifts the same band and the composer jumps
+ * mid-screen. Shell stamps {@link SHELL_KEYBOARD_ATTR}; this binder no-ops.
  */
 
 export const KEYBOARD_INSET_CSS = '--xrk-keyboard-inset' as const
-/** DSH-shaped alias of {@link KEYBOARD_INSET_CSS} for community CSS. */
-export const KEYBOARD_INSET_CSS_DSH = '--dsh-keyboard-inset' as const
 export const KEYBOARD_OPEN_ATTR = 'data-xrk-keyboard' as const
-/** DSH-shaped alias of {@link KEYBOARD_OPEN_ATTR}. */
-export const KEYBOARD_OPEN_ATTR_DSH = 'data-dsh-keyboard' as const
+/**
+ * Set by the Flutter thin shell when it owns `--xrk-keyboard-inset` via
+ * MediaQuery.viewInsets. visualViewport must not overwrite that stamp — the
+ * two sources fighting is what makes the composer jump mid-screen.
+ */
+export const SHELL_KEYBOARD_ATTR = 'data-xrk-shell-keyboard' as const
 
 /** Minimum inset (px) before we stamp "keyboard open" for CSS selectors. */
 export const KEYBOARD_OPEN_THRESHOLD_PX = 48
@@ -32,19 +39,18 @@ export function computeKeyboardInsetPx(
 }
 
 function publishKeyboardInset(root: HTMLElement = document.documentElement): number {
+  // Flutter LocalHostShell already publishes inset + open attrs.
+  if (root.hasAttribute(SHELL_KEYBOARD_ATTR)) return 0
   const vv = window.visualViewport
   const inset = vv === null || vv === undefined
     ? 0
     : computeKeyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop)
   const px = `${inset}px`
   root.style.setProperty(KEYBOARD_INSET_CSS, px)
-  root.style.setProperty(KEYBOARD_INSET_CSS_DSH, px)
   if (inset >= KEYBOARD_OPEN_THRESHOLD_PX) {
     root.setAttribute(KEYBOARD_OPEN_ATTR, '')
-    root.setAttribute(KEYBOARD_OPEN_ATTR_DSH, '')
   } else {
     root.removeAttribute(KEYBOARD_OPEN_ATTR)
-    root.removeAttribute(KEYBOARD_OPEN_ATTR_DSH)
   }
   return inset
 }
@@ -96,8 +102,6 @@ export function bindVisualViewportKeyboard(
     document.removeEventListener('focusin', scheduleAfterKeyboardAnim)
     document.removeEventListener('focusout', scheduleAfterKeyboardAnim)
     root.style.removeProperty(KEYBOARD_INSET_CSS)
-    root.style.removeProperty(KEYBOARD_INSET_CSS_DSH)
     root.removeAttribute(KEYBOARD_OPEN_ATTR)
-    root.removeAttribute(KEYBOARD_OPEN_ATTR_DSH)
   }
 }
