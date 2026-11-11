@@ -72,6 +72,10 @@
 .rowLongPress {
   background: var(--dsw-alias-interactive-bg-hover);
   cursor: grabbing;
+  /* Visual hold chrome only. Coarse rows use pan-y idle / none when armed
+     via useLongPressReorder.touchAction (scroll must keep working). */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .rowCard.dropBefore,

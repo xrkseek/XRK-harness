@@ -21,9 +21,9 @@
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek（兼容面）
+      - text: DeepSeek
       - img "API 密钥缺失"
-      - button "编辑 DeepSeek（兼容面） (deepseek-official)": 编辑
+      - button "编辑 DeepSeek (deepseek-official)": 编辑
     - listitem:
       - text: Ollama（OpenAI 兼容端口）
       - button "编辑 Ollama（OpenAI 兼容端口） (ollama)": 编辑

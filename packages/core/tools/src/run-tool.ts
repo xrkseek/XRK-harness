@@ -19,6 +19,10 @@ export interface RunToolInput {
    * transport.
    */
   readonly parentCallId?: string;
+  /** Host session id → {@link ToolExecuteExtras.sessionId}. */
+  readonly sessionId?: string;
+  /** Host turn / run id → {@link ToolExecuteExtras.runId}. */
+  readonly runId?: string;
 }
 
 function isRunToolInput(
@@ -67,6 +71,8 @@ export async function runToolDetailed(
       ...(input.maxRetries !== undefined
         ? { maxRetries: input.maxRetries }
         : {}),
+      ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
+      ...(input.runId !== undefined ? { runId: input.runId } : {}),
     });
   }
 
@@ -77,6 +83,8 @@ export async function runToolDetailed(
     ...(input.parentCallId !== undefined
       ? { parentCallId: input.parentCallId }
       : {}),
+    ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
+    ...(input.runId !== undefined ? { runId: input.runId } : {}),
   });
 }
 

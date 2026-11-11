@@ -90,14 +90,18 @@
 }
 
 @media (max-width: 767px) {
+  /* Keep one horizontal strip; wrap was only needed for the removed
+     per-message feedback note block. */
   .actions {
     height: 40px;
+    flex-wrap: nowrap;
     gap: 6px;
   }
 
   .action {
     width: 40px;
     height: 40px;
+    flex: 0 0 auto;
     touch-action: manipulation;
   }
 }

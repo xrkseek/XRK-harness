@@ -5,13 +5,13 @@
  * except workspace Rename/Delete and session Rename/Fork/Pin/Archive; the session
  * and workspace hover cards are suppressed while a menu is open.
  */
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useState, type RefObject } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutlineRegular, IconBranchOutlineRegular, IconEditOutlineRegular,
   IconEllipsisOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconPinOutlineRegular,
   IconPlusOutlineRegular, IconTrashOutlineRegular, IconTriangleRightFillRegular, Menu, StateDot,
-  abbreviateHomePath,
+  abbreviateHomePath, dropHalfFromClientY, hitTestReorderTarget, useLongPressReorder,
 } from '@xrkseek/client-ui-primitives'
 import type { MenuItem, StateDotState } from '@xrkseek/client-ui-primitives'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
@@ -92,9 +92,13 @@ export interface RowDragProps {
   active: boolean
   /** Current marker on this row: insert line above, below, or none. */
   marker: 'before' | 'after' | null
-  /** Report the hovered half while a compatible drag passes over this row. */
-  hover: (half: 'before' | 'after') => void
-  drop: (half: 'before' | 'after') => void
+  /**
+   * Report the hovered half while a compatible drag passes over a row.
+   * `overId` is the hit-tested target (needed for pointer-capture long-press
+   * where move events stay on the source).
+   */
+  hover: (overId: string, half: 'before' | 'after') => void
+  drop: (overId: string, half: 'before' | 'after') => void
   end: () => void
 }
 
@@ -106,15 +110,9 @@ interface WorkspaceRowDragProps {
   end: () => void
 }
 
-/** Hold duration before a pointer gesture starts workspace reorder. */
-const WORKSPACE_LONG_PRESS_MS = 420
-/** Pointer movement that cancels a pending long-press (px). */
-const WORKSPACE_LONG_PRESS_MOVE_PX = 10
-
 /** Pointer-position half of a row (insert line above or below). */
 function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' | 'after' {
-  const rect = e.currentTarget.getBoundingClientRect()
-  return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+  return dropHalfFromClientY(e.clientY, e.currentTarget.getBoundingClientRect())
 }
 
 /** Props of one Workspace header row. */
@@ -211,17 +209,16 @@ export const ProjectRowItem = memo(function ProjectRowItem(
       : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
-  const [longPressArmed, setLongPressArmed] = useState(false)
-  const suppressClick = useRef(false)
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressOrigin = useRef<{ x: number; y: number } | null>(null)
-  const clearLongPress = (): void => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-    longPressOrigin.current = null
-  }
+  const reorder = useLongPressReorder(drag !== undefined, {
+    onStart: () => { drag?.start() },
+    onMove: (clientX, clientY) => {
+      if (drag === undefined) return
+      const hit = hitTestReorderTarget(clientX, clientY, 'workspace-id')
+      if (hit === null) return
+      drag.hover(hit.id, hit.half)
+    },
+    onEnd: () => { drag?.end() },
+  })
   const isImWorkspace = row.workspaceId === 'ws_im'
   const isXiangyangWorkspace = row.workspaceId === 'ws_default'
   // 向阳空间: product home — no rename/delete. IM: deletable (recreated on connect).
@@ -240,90 +237,42 @@ export const ProjectRowItem = memo(function ProjectRowItem(
   ], [isXiangyangWorkspace, row.pinned, t])
   const ownRow = (
     <div
+      ref={reorder.rowRef as RefObject<HTMLDivElement | null>}
       className={clsx(
         css.projectRow,
         menuOpen && css.menuOpen,
         row.pinned && css.projectPinned,
-        longPressArmed && css.projectLongPress,
+        reorder.armed && css.projectLongPress,
       )}
+      style={reorder.touchAction === undefined ? undefined : { touchAction: reorder.touchAction }}
       role="treeitem"
       aria-expanded={row.expanded}
       onClick={(e) => {
-        if (suppressClick.current || longPressArmed) {
-          suppressClick.current = false
+        if (reorder.consumeClickSuppression()) {
           e.preventDefault()
           return
         }
         onToggle()
       }}
-      draggable={drag !== undefined}
-      onDragStart={drag === undefined
+      draggable={reorder.draggable}
+      onDragStart={reorder.onHtml5DragStart === undefined
         ? undefined
         : (e) => {
-          clearLongPress()
-          suppressClick.current = true
           try {
             e.dataTransfer.effectAllowed = 'move'
             e.dataTransfer.setData('text/plain', row.key)
           } catch {
             // jsdom DataTransferPolyfill: effectAllowed may be read-only.
           }
-          drag.start()
+          reorder.onHtml5DragStart?.()
         }}
-      onDragEnd={drag === undefined
-        ? undefined
-        : () => {
-          setLongPressArmed(false)
-          drag.end()
-        }}
-      onPointerDown={drag === undefined
-        ? undefined
-        : (e) => {
-          if (e.button !== 0) return
-          if ((e.target as HTMLElement).closest('button')) return
-          clearLongPress()
-          longPressOrigin.current = { x: e.clientX, y: e.clientY }
-          longPressTimer.current = setTimeout(() => {
-            longPressTimer.current = null
-            suppressClick.current = true
-            setLongPressArmed(true)
-            drag.start()
-          }, WORKSPACE_LONG_PRESS_MS)
-        }}
-      onPointerMove={drag === undefined
-        ? undefined
-        : (e) => {
-          const origin = longPressOrigin.current
-          if (origin !== null && longPressTimer.current !== null) {
-            if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > WORKSPACE_LONG_PRESS_MOVE_PX) {
-              clearLongPress()
-            }
-            return
-          }
-          if (!longPressArmed) return
-          const el = document.elementFromPoint(e.clientX, e.clientY)
-          const section = el?.closest('[data-workspace-id]') as HTMLElement | null
-          const overId = section?.dataset.workspaceId
-          if (overId === undefined || section === null) return
-          const rect = section.getBoundingClientRect()
-          const half = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-          drag.hover(overId, half)
-        }}
-      onPointerUp={() => {
-        const wasArmed = longPressArmed
-        clearLongPress()
-        if (wasArmed) {
-          setLongPressArmed(false)
-          drag?.end()
-        }
-      }}
-      onPointerCancel={() => {
-        clearLongPress()
-        if (longPressArmed) {
-          setLongPressArmed(false)
-          drag?.end()
-        }
-      }}
+      onDragEnd={reorder.onHtml5DragEnd}
+      onPointerDown={reorder.onPointerDown}
+      onPointerMove={reorder.onPointerMove}
+      onPointerUp={reorder.onPointerUp}
+      onPointerCancel={reorder.onPointerCancel}
+      onLostPointerCapture={reorder.onLostPointerCapture}
+      onContextMenu={reorder.onContextMenu}
     >
       <span className={clsx(css.slot, css.folder, active && css.folderActive, companionLook && css.companionSlot)}>
         {companionLook
@@ -683,6 +632,16 @@ export const SessionNodeItem = memo(function SessionNodeItem(
   const primaryStatus = statuses[0]
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
+  const reorder = useLongPressReorder(drag !== undefined, {
+    onStart: () => { drag?.start() },
+    onMove: (clientX, clientY) => {
+      if (drag === undefined) return
+      const hit = hitTestReorderTarget(clientX, clientY, 'session-id')
+      if (hit === null) return
+      drag.hover(hit.id, hit.half)
+    },
+    onEnd: () => { drag?.end() },
+  })
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog. Pin leads the section; archive drops any pin.
@@ -701,17 +660,24 @@ export const SessionNodeItem = memo(function SessionNodeItem(
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
+      ref={reorder.rowRef as RefObject<HTMLDivElement | null>}
       className={clsx(
         css.sessionRow, selected && css.selected, menuOpen && css.menuOpen,
+        reorder.armed && css.sessionLongPress,
         row.sideline && css.hasSideline,
         flat && !showStatus && css.flatSessionRowWithoutStatus,
         drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
       )}
+      style={reorder.touchAction === undefined ? undefined : { touchAction: reorder.touchAction }}
       role="treeitem"
       aria-selected={selected}
-      onClick={() => { onOpen(node.id) }}
-      draggable={drag !== undefined}
-      onDragStart={drag === undefined
+      data-session-id={node.id}
+      onClick={() => {
+        if (reorder.consumeClickSuppression()) return
+        onOpen(node.id)
+      }}
+      draggable={reorder.draggable}
+      onDragStart={reorder.onHtml5DragStart === undefined
         ? undefined
         : (e) => {
           try {
@@ -720,24 +686,30 @@ export const SessionNodeItem = memo(function SessionNodeItem(
           } catch {
             // jsdom DataTransferPolyfill: effectAllowed may be read-only.
           }
-          drag.start()
+          reorder.onHtml5DragStart?.()
         }}
-      onDragEnd={drag?.end}
+      onDragEnd={reorder.onHtml5DragEnd}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
           if (!drag.active) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'move'
-          drag.hover(rowHalf(e))
+          drag.hover(node.id, rowHalf(e))
         }}
       onDrop={drag === undefined
         ? undefined
         : (e) => {
           if (!drag.active) return
           e.preventDefault()
-          drag.drop(rowHalf(e))
+          drag.drop(node.id, rowHalf(e))
         }}
+      onPointerDown={reorder.onPointerDown}
+      onPointerMove={reorder.onPointerMove}
+      onPointerUp={reorder.onPointerUp}
+      onPointerCancel={reorder.onPointerCancel}
+      onLostPointerCapture={reorder.onLostPointerCapture}
+      onContextMenu={reorder.onContextMenu}
     >
       {/* Pending interaction and own or descendant activity outrank the
           finished-but-unviewed reminder, which returns after activity stops

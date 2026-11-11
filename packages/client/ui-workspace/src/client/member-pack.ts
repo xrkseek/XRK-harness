@@ -392,7 +392,7 @@ export function downloadExportedMember(payload: {
   if (payload.format === 'zip' && payload.base64) {
     const bytes = base64ToBytes(payload.base64)
     triggerDownload(
-      new Blob([bytes], { type: 'application/zip' }),
+      new Blob([new Uint8Array(bytes)], { type: 'application/zip' }),
       payload.fileName,
     )
     return

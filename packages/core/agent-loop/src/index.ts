@@ -305,6 +305,15 @@ export interface RunTurnInput {
    * Omit → `process.cwd()`. Face/Host pass the session project root.
    */
   readonly cwd?: string;
+  /**
+   * After every durable `turn/end` (success / cancel / error). Soft-fail.
+   * Mobile phone task isolation uses this as exact host run-end (no Go Host).
+   */
+  readonly onTurnEnd?: (ctx: {
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly completion: "completed" | "other" | "unknown";
+  }) => void | Promise<void>;
 }
 
 export interface RunTurnResult {
@@ -313,6 +322,23 @@ export interface RunTurnResult {
   readonly steps: number;
   readonly toolOk: number;
   readonly toolFailed: number;
+}
+
+async function notifyTurnEnd(
+  input: RunTurnInput,
+  turnId: string,
+  completion: "completed" | "other" | "unknown",
+): Promise<void> {
+  if (!input.onTurnEnd) return;
+  try {
+    await input.onTurnEnd({
+      sessionId: input.sessionId,
+      turnId,
+      completion,
+    });
+  } catch {
+    // Soft: phone / webhook listeners must not fail the turn.
+  }
 }
 
 function id(prefix: string): string {
@@ -1601,6 +1627,8 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
       registry: input.tools,
       materialization: table!,
       mode: input.toolSettle ?? "parallel",
+      sessionId: input.sessionId,
+      runId: turnId,
       ...(input.signal ? { signal: input.signal } : {}),
       ...(input.pipeline ? { pipeline: input.pipeline } : {}),
       ...(input.maxParallelToolCalls !== undefined
@@ -1667,6 +1695,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
     turnId,
     reason: turnEndReason,
   });
+  await notifyTurnEnd(input, turnId, "completed");
 
   return { turnId, assistantText, steps, toolOk, toolFailed };
   } catch (err) {
@@ -1685,6 +1714,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           isAgentCancelCause(err) ? err : input.signal?.reason,
         ),
       });
+      await notifyTurnEnd(input, turnId, "other");
     } else if (
       isEmptyResponseError(err) ||
       isProviderFinishError(err) ||
@@ -1725,6 +1755,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           },
         },
       });
+      await notifyTurnEnd(input, turnId, "other");
     } else {
       // Unexpected throw after turn/start: close as turn/end *error*, never
       // aborted/legacy. Legacy painted 「已停止」 and hid the real failure
@@ -1750,6 +1781,7 @@ async function runTurnBody(input: RunTurnInput): Promise<RunTurnResult> {
           },
         },
       });
+      await notifyTurnEnd(input, turnId, "unknown");
     }
     throw err;
   }

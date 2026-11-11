@@ -216,7 +216,9 @@ export function apply(ctx: ClientContext): void {
       const result = await ctx.remote.team.importPack({
         sessionId,
         scope: input.scope,
-        zipBase64: input.zipBase64,
+        ...(input.zipPath
+          ? { zipPath: input.zipPath }
+          : { zipBase64: input.zipBase64 }),
       })
       if (!result.ok) throw new Error(result.error.message)
       const member = result.value.member

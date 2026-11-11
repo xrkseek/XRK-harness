@@ -387,4 +387,14 @@ describe("ensureUserSkillSeeds", () => {
       ).toContain("v2");
     });
   });
+
+  it("ships phone-only xrk-phone under seeds/mobile (not universal skills)", () => {
+    const seeds = path.resolve(import.meta.dirname, "../seeds");
+    expect(
+      existsSync(path.join(seeds, "mobile", "skills", "xrk-phone", "SKILL.md")),
+    ).toBe(true);
+    expect(
+      existsSync(path.join(seeds, "skills", "xrk-phone", "SKILL.md")),
+    ).toBe(false);
+  });
 });

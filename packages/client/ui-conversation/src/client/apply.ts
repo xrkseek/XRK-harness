@@ -2,7 +2,7 @@
 import type { Context } from '@xrkseek/cordis'
 import { resolveSlotLabel, type BoundActions } from '@xrkseek/client-ui-slots'
 import {
-  createSnapshotStore, resolveWorkspacePath, type ISessions, type SessionId,
+  createSnapshotStore, downloadWorkspaceFile, resolveWorkspacePath, type ISessions, type SessionId,
 } from '@xrkseek/client-runtime/client'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@xrkseek/xrk-attachment'
 // Type-only: the ctx.settingsScope Context merge. Cross-plugin collaboration
@@ -626,8 +626,8 @@ export function apply(ctx: Context): void {
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
           const resolved = resolveWorkspacePath(cwd, path)
-          // Privileged loopback/LAN + Host canOpenPath → OS open; otherwise
-          // in-app workbench only (SSH / Termux-headless claim / WAN Web).
+          // Cascade (DSH-shaped): workbench → OS open on privileged surfaces →
+          // Host `/sidebar/file?download=1`. Never widen OS open to WAN/remote.
           const allowNativeOpen = ctx.connection.isLoopback
             && ctx.connection.hostDescription.getSnapshot()?.canOpenPath === true
           return routeChatOpenFile(
@@ -642,7 +642,15 @@ export function apply(ctx: Context): void {
               face.openTab({ type: 'editor', path: p })
               return true
             },
-            { allowNativeOpen },
+            {
+              allowNativeOpen,
+              downloadFile: (p) => {
+                downloadWorkspaceFile(p, {
+                  sessionId: String(sessionId),
+                  ...(cwd ? { cwd } : {}),
+                })
+              },
+            },
           )
         },
         loadOlder: () => { void scoped.loadOlder() },

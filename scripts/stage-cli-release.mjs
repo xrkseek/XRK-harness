@@ -284,6 +284,13 @@ if (!existsSync(path.join(STAGE, "seeds", "skills", "xrk-capability-attach", "SK
   console.error("stage: seeds/skills/xrk-capability-attach missing");
   process.exit(1);
 }
+// Phone-only sources ship under seeds/mobile/ (Desktop establish ignores them;
+// mobile runtime build-runtime.sh merges into seeds/skills/). Missing → guest
+// has no xrk-phone skill.
+if (!existsSync(path.join(STAGE, "seeds", "mobile", "skills", "xrk-phone", "SKILL.md"))) {
+  console.error("stage: seeds/mobile/skills/xrk-phone/SKILL.md missing");
+  process.exit(1);
+}
 
 // 内置 LLM 车道：只拷插件（不随包 Bun；用户自装）。CLI 从安装位向上找
 // `extensions/<id>`；桌面 afterPack 同理拷到 resources/host/extensions。

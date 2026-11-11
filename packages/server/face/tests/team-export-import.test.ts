@@ -131,4 +131,38 @@ describe("team.export / team.importPack", () => {
     });
     expect(bad.result.ok).toBe(false);
   });
+
+  it("importPack accepts zipPath for large packs without base64", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const zip = buildAgentMemberPackZip({
+      name: "Path Scout",
+      playbook: "From zipPath.",
+      role: "researcher",
+    });
+    const zipPath = path.join(os.tmpdir(), `xrk-pack-${Date.now()}.zip`);
+    fs.writeFileSync(zipPath, zip);
+    try {
+      const imported = await dispatchFaceMethod(runtime, "team.importPack", "ip", {
+        sessionId,
+        zipPath,
+      });
+      expect(imported.result.ok).toBe(true);
+      const value = imported.result.value as { member: { name: string; kind: string } };
+      expect(value.member.name).toBe("Path Scout");
+      expect(value.member.kind).toBe("advanced");
+    } finally {
+      fs.unlinkSync(zipPath);
+    }
+  });
 });

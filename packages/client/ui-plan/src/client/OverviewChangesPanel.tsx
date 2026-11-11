@@ -178,7 +178,7 @@ export function OverviewChangesPanel({
     index: number,
     signal: AbortSignal,
   ) => Promise<WorkspaceFileDiff | null>
-  openFile: (path: string) => void
+  openFile: (path: string) => void | Promise<void>
   t: PlanTranslate
 }) {
   const focus = useSyncExternalStore(
@@ -197,6 +197,7 @@ export function OverviewChangesPanel({
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const [diff, setDiff] = useState<WorkspaceFileDiff | null | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [openError, setOpenError] = useState<string | undefined>(undefined)
   const loadFileDiffRef = useRef(loadFileDiff)
   loadFileDiffRef.current = loadFileDiff
 
@@ -386,10 +387,21 @@ export function OverviewChangesPanel({
             <button
               type="button"
               className={css.openFile}
-              onClick={() => { openFile(activeFile.path) }}
+              onClick={() => {
+                setOpenError(undefined)
+                void Promise.resolve(openFile(activeFile.path)).catch((err: unknown) => {
+                  const message = err instanceof Error && err.message.trim() !== ''
+                    ? err.message
+                    : t('preview.changes.openUnavailable')
+                  setOpenError(message)
+                })
+              }}
             >
               {t('preview.changes.previewFile', { name: activeFile.display })}
             </button>
+            {openError !== undefined && (
+              <span className={css.status} data-error="true" role="alert">{openError}</span>
+            )}
           </div>
         )}
     </div>

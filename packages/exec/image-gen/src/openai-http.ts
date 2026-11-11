@@ -129,7 +129,10 @@ export function createOpenAiImageGenProvider(
         form.set("response_format", "b64_json");
         for (let i = 0; i < refs.length; i += 1) {
           const src = refs[i]!;
-          const blob = new Blob([src.bytes], { type: src.mimeType });
+          // Node 26 DOM lib: BlobPart wants Uint8Array<ArrayBuffer>, not ArrayBufferLike.
+          const blob = new Blob([new Uint8Array(src.bytes)], {
+            type: src.mimeType,
+          });
           form.append(
             "image",
             blob,

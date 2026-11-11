@@ -36,6 +36,10 @@ description: >-
 | 发包链副作用 + 终态判据（push 先于 release、devDeps 掏空、E409/E403、shasum） | `.agents/skills/xrk-release-chain/SKILL.md` |
 | Desktop 打包 · upload-stage · **yml 绝对 bin URL** · AGT 上传核对 | `.agents/skills/xrk-desktop-update-feed/SKILL.md` |
 | 本机产物落点 · ≤5 版 · subst 仅 X: · 测试隔离 home | rule/skill `xrk-local-artifacts` · `docs/publishing.md` · `pnpm prune:local` |
+| **三生态总控**（CLI · Desktop · Mobile；前台打包；隔离 home；禁试错） | `.agents/skills/xrk-dev-surfaces` · rule `xrk-dev-surfaces` |
+| **手机 APK · 真机**（ASCII `C:\xrk-mobile`、**arm64 + runtime/out 门禁**、**ENGINE_TGZ**、**禁 MuMu**、禁 subst、壳≠xrkh） | `.agents/skills/xrk-mobile-apk` · rule `xrk-mobile-apk` · `pack-local-engine.ps1` · `build-install-mumu.ps1`（默认只出包）· 总控 `xrk-dev-surfaces` 面 C |
+| **手机独属技能 / phone_***（源 `seeds/mobile/`；runtime **硬门禁** merge；不改 establish） | `apps/cli/seeds/mobile/README.md` · `xrk-inject-layer`「Mobile-only」· mobile `docs/HANDOFF.md` · `build-runtime.sh` `merge_mobile_skill_seeds` · stage/pack 缺 `xrk-phone` 即失败 |
+| **Settings 添加供应商表**（硬编码，对照 pi-ai 手工同步，非运行时引用） | `packages/llm/registry/src/brands-openai-chat.ts` · `docs/llm-provider-presets.md` |
 | GitHub API / npm 网络探测（直连 vs Clash 7897、**先探再选**、大上传判流量） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
 | PowerShell / Windows 环境坑（管道毁文件、vitest filter、BOM、GBK） | `.agents/skills/xrk-ps-shell-pitfalls/SKILL.md` |
 | **参考仓差距取证**（codex / DSH 有什么我们没有、哪些是假差距、清单会不会过期） | `.agents/skills/xrk-reference-gap-audit/SKILL.md`（本轮结论在其 `reference/`） |

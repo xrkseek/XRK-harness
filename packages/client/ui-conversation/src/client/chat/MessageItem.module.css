@@ -84,6 +84,7 @@
   line-height: 16px;
   letter-spacing: 0.02em;
   contain: layout style;
+  animation: pendingBadgeIn 160ms ease-out;
 }
 
 .pendingSteerBadge::before {
@@ -95,6 +96,17 @@
   animation: pendingSteerPulse 1.2s ease-in-out infinite;
 }
 
+@keyframes pendingBadgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes pendingSteerPulse {
   0%,
   100% { opacity: 0.35; }
@@ -103,10 +115,14 @@
 
 /* Inset rings: `.flowItem { content-visibility: auto }` paint-contains
    children, so a positive outline-offset is clipped on the block axis
-   (sides survive; top/bottom look "pushed away"). Same pattern as QueueDock. */
-.userRow[data-pending-steering] .bubble {
+   (sides survive; top/bottom look "pushed away"). Same pattern as QueueDock.
+   「发送中」 shares the dashed ring so pause-parked echoes do not read as
+   finished bubbles between badge updates. */
+.userRow[data-pending-steering] .bubble,
+.userRow[data-pending-send] .bubble {
   outline: 1.5px dashed color-mix(in srgb, var(--dsw-alias-label-secondary) 50%, transparent);
   outline-offset: -2px;
+  transition: outline-color 160ms ease;
 }
 
 .userRow[data-editing] .bubble {
@@ -389,6 +405,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pendingSteerBadge,
+  .pendingSteerBadge::before {
+    animation: none;
+  }
+
+  .userRow[data-pending-steering] .bubble,
+  .userRow[data-pending-send] .bubble {
+    transition: none;
+  }
+
   .retryRow[data-active] .retryText {
     background: none;
     color: inherit;

@@ -80,6 +80,25 @@ describe("向阳空间 workspace", () => {
     expect(ren.result.ok).toBe(false);
   });
 
+  it("skips Linux guest /root as coding workspace (mobile first boot)", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "xy-guest-home-"));
+    homes.push(home);
+    const runtime = createFaceRuntime({
+      store: createMemorySessionStore(),
+      drain: drain(),
+      workspaceRoot: "/root",
+      productDir: home,
+      resolveAgent: async () => {
+        throw new Error("unused");
+      },
+    });
+    const items = runtime.workspaces.list(runtime.store.list()).items;
+    expect(items.map((w) => w.workspaceId)).toEqual([XIANGYANG_WORKSPACE_ID]);
+    expect(
+      items.some((w) => path.resolve(w.path) === path.resolve("/root")),
+    ).toBe(false);
+  });
+
   it("pins 奇创 on session.create and rejects preset switch", async () => {
     const home = mkdtempSync(path.join(tmpdir(), "xy-pin-"));
     homes.push(home);

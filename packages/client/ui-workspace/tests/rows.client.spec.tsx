@@ -64,12 +64,12 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={idle} currentId={undefined} now={0} onOpen={vi.fn()}
       onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} onPinToggle={vi.fn()} flat t={t} />)
-    const title = screen.getByText('Flat Session')
-    expect(title.previousElementSibling).toBeNull()
+    const idleRow = screen.getByRole('treeitem')
+    expect(idleRow.querySelector('[data-state]')).toBeNull()
 
     view.rerender(<SessionNodeItem node={{ ...idle, running: true }} currentId={undefined} now={0}
       onOpen={vi.fn()} onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} onPinToggle={vi.fn()} flat t={t} />)
-    expect(screen.getByText('Flat Session').previousElementSibling?.querySelector('[data-state="ongoing"]')).toBeTruthy()
+    expect(screen.getByRole('treeitem').querySelector('[data-state="ongoing"]')).toBeTruthy()
   })
 
   it('renders a selected content-search row and opens only its session', () => {
@@ -500,12 +500,14 @@ describe('workspace browser rows', () => {
     )
     stubRect(screen.getByRole('treeitem'))
     // Top half hovers/drops 'before'; bottom half 'after' (row mid = 117).
+    // Pointer-capture path needs overId; HTML5 dragover passes this row's id.
     fireDrag(screen.getByRole('treeitem'), 'dragOver', 105)
-    expect(active.hover).toHaveBeenCalledWith('before')
+    expect(active.hover).toHaveBeenCalledWith('s1', 'before')
     fireDrag(screen.getByRole('treeitem'), 'dragOver', 130)
-    expect(active.hover).toHaveBeenCalledWith('after')
+    expect(active.hover).toHaveBeenCalledWith('s1', 'after')
     fireDrag(screen.getByRole('treeitem'), 'drop', 130)
-    expect(active.drop).toHaveBeenCalledWith('after')
+    expect(active.drop).toHaveBeenCalledWith('s1', 'after')
+    expect(screen.getByRole('treeitem').getAttribute('data-session-id')).toBe('s1')
 
     const after = dragProps({ active: true, marker: 'after' })
     rerender(

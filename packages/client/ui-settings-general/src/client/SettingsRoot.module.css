@@ -378,8 +378,10 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: max(12px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 10px
-      max(12px, env(safe-area-inset-left, 0px));
+    /* Android WebView often reports env(safe-area)=0; Flutter stamps --ds-safe-*. */
+    padding: max(12px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px))
+      max(8px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px)) 10px
+      max(12px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
     border-bottom: 1px solid var(--dsw-alias-border-l2);
     box-sizing: border-box;
   }
@@ -402,6 +404,8 @@
     scrollbar-width: none;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 8px;
+    /* Room to scroll the last tab fully on-screen (was clipped mid-label). */
+    padding-inline-end: 16px;
   }
 
   .navList::-webkit-scrollbar {
@@ -417,6 +421,10 @@
 
   .navLabel {
     flex: none;
+    /* Phone tabs size to content; clear desktop ellipsis so labels are not
+       mid-word truncated inside a content-sized box. */
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .content {
@@ -427,20 +435,38 @@
     height: auto;
     min-height: 40px;
     align-items: center;
-    padding: 6px max(12px, env(safe-area-inset-right, 0px)) 4px
-      max(12px, env(safe-area-inset-left, 0px));
+    padding: 6px max(12px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px)) 4px
+      max(12px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
+  }
+
+  /* Home-only sections (插件 / …) have no .nav — title + X live in .header and
+     must clear the status bar the same way .nav does: env(safe-area) plus
+     Flutter --ds-safe-* (Android WebView often reports env=0). Do NOT floor a
+     large constant here — on ordinary Web that paints a dead blank band. */
+  .homePanel .header {
+    padding-top: max(12px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px));
+    padding-left: max(12px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
+    padding-bottom: 8px;
+    min-height: calc(44px + max(12px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px)));
+    box-sizing: border-box;
   }
 
   .close {
-    width: 40px;
-    height: 40px;
+    position: relative;
+    z-index: 2;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     touch-action: manipulation;
   }
 
   .options {
-    padding: 0 max(16px, env(safe-area-inset-right, 0px))
-      max(24px, env(safe-area-inset-bottom, 0px))
-      max(16px, env(safe-area-inset-left, 0px));
+    padding: 0 max(16px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px))
+      max(24px, env(safe-area-inset-bottom, 0px), var(--ds-safe-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
   }
 
   .trigger {

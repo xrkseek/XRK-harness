@@ -365,6 +365,7 @@ function UserStyleBubble({
     <div
       className={css.userRow}
       data-pending-steering={steer || undefined}
+      data-pending-send={!steer && echo ? true : undefined}
       data-submission-echo={echo || undefined}
       data-editing={editing || undefined}
       aria-current={editing ? 'true' : undefined}
@@ -375,6 +376,13 @@ function UserStyleBubble({
         {steer ? (
           <span className={css.pendingSteerBadge} role="status">
             {t('message.pendingSteer')}
+          </span>
+        ) : echo ? (
+          // Claim→durable transcript echoes (and any mute reserveActions
+          // send) must still say 「发送中」— gray edit/delete alone looked
+          // like a finished bubble until the user refreshed.
+          <span className={css.pendingSteerBadge} role="status">
+            {t('message.pendingSend')}
           </span>
         ) : null}
         {attachments.length > 0 && (
@@ -531,16 +539,22 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   node, steer = false, editAt, deleteAt, withdrawSteer, renderMessageImages, renderMessageFiles, useSession, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
-  const pendingAdmitId = useSession((s) => {
+  // Host may still list this rpc after the durable user/message lands (pause /
+  // refresh before FIFO claim finishes). Match any placement so the bubble
+  // keeps 「插队中」/「发送中」 instead of a copy-only finished look.
+  const hostQueueRow = useSession((s) => {
     const rpcId = data.source !== null && typeof data.source === 'object' && 'rpcId' in data.source
       ? data.source.rpcId
       : undefined
     const messageId = 'messageId' in data ? data.messageId : undefined
-    return s.queue.find(row => row.placement === 'steering' && (
+    return s.queue.find(row => (
       (typeof rpcId === 'string' && row.rpcId === rpcId)
       || (typeof messageId === 'string' && (row.messageId === messageId || row.id === messageId))
-    ))?.id
+    ))
   })
+  const pendingAdmitId = hostQueueRow?.placement === 'steering' ? hostQueueRow.id : undefined
+  const pendingSend = hostQueueRow !== undefined && hostQueueRow.placement !== 'steering'
+  const liveSteer = steer || pendingAdmitId !== undefined
   const text = useMemo(() => visibleUserTexts(data.content).join(''), [data.content])
   const canEdit = text.trim() !== ''
   const editStaging = useSyncExternalStore(subscribeEditStaging, getEditStaging, getEditStaging)
@@ -555,7 +569,8 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       renderMessageImages={renderMessageImages}
       renderMessageFiles={renderMessageFiles}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      steer={steer}
+      steer={liveSteer}
+      echo={pendingSend}
       editing={editing}
       t={t}
       actions={copyText => (
@@ -565,14 +580,15 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           clock="start"
           className={css.actions}
           t={t}
-          // Two different questions, deliberately kept apart: `steer` is
-          // ChatView's flow-tail verdict (still mid-turn → no edit/delete),
-          // `pendingAdmitId` is whether a withdrawable queue row still exists.
-          // Host drops that row on admit while the verdict keeps the row in the
-          // trailing cluster, so a single condition cannot answer both.
-          onEdit={steer || pendingAdmitId !== undefined || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
-          onDelete={steer || pendingAdmitId !== undefined || editing ? undefined : () => { deleteAt(data.seq) }}
+          // Two different questions, deliberately kept apart: `steer` /
+          // `liveSteer` is ChatView's flow-tail verdict (still mid-turn → no
+          // edit/delete), `pendingAdmitId` is whether a withdrawable steering
+          // row still exists. Host may also keep a queued row after pause —
+          // `pendingSend` gates actions the same way without offering withdraw.
+          onEdit={liveSteer || pendingSend || !canEdit || editing ? undefined : () => { editAt(data.seq, text) }}
+          onDelete={liveSteer || pendingSend || editing ? undefined : () => { deleteAt(data.seq) }}
           onWithdraw={pendingAdmitId === undefined ? undefined : () => { withdrawSteer(pendingAdmitId) }}
+          reserveEditDelete={pendingSend}
         />
       )}
     />

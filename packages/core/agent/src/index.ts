@@ -345,6 +345,11 @@ export interface CreateAgentOptions {
     readonly toolOk: number;
     readonly toolFailed: number;
   }) => void | Promise<void>;
+  /**
+   * After every durable `turn/end` (success / cancel / error). Soft-fail.
+   * Forwarded to `runTurn.onTurnEnd` (mobile phone run-end isolation).
+   */
+  readonly onTurnEnd?: Parameters<typeof runTurn>[0]["onTurnEnd"];
 }
 
 function mergeSignals(
@@ -536,6 +541,7 @@ export function createAgent(options: CreateAgentOptions): AgentHandle {
             ...(options.afterToolResults
               ? { afterToolResults: options.afterToolResults }
               : {}),
+            ...(options.onTurnEnd ? { onTurnEnd: options.onTurnEnd } : {}),
             ...(options.prepareUserContent
               ? { prepareUserContent: options.prepareUserContent }
               : {}),

@@ -1,4 +1,4 @@
-import type { ToolCall } from "@xrkseek/protocol";
+import { combineAbortSignals, type ToolCall } from "@xrkseek/protocol";
 import {
   errorToolResult,
   freezeToolResult,
@@ -47,7 +47,7 @@ function mergeSignals(
   }
   if (parts.length === 0) return undefined;
   if (parts.length === 1) return parts[0];
-  return AbortSignal.any(parts);
+  return combineAbortSignals(parts);
 }
 
 async function runPre(
@@ -175,6 +175,8 @@ async function executeBody(
     ctx.metrics.calls += 1;
     const out = await tool.execute(ctx.args, signal, {
       callId: ctx.call.id,
+      ...(ctx.sessionId !== undefined ? { sessionId: ctx.sessionId } : {}),
+      ...(ctx.runId !== undefined ? { runId: ctx.runId } : {}),
       emitToolEvent: (type, payload) => emitToolEvent(ctx, type, payload),
       concludeTurn: () => {
         ctx.concludeRequested = true;
@@ -301,6 +303,10 @@ export function createToolPipeline(
         ...(runOptions.parentCallId !== undefined
           ? { parentCallId: runOptions.parentCallId }
           : {}),
+        ...(runOptions.sessionId !== undefined
+          ? { sessionId: runOptions.sessionId }
+          : {}),
+        ...(runOptions.runId !== undefined ? { runId: runOptions.runId } : {}),
         ...(tool
           ? {
               definition: {
@@ -415,6 +421,8 @@ export async function runToolPipeline(
     timeoutMs?: number;
     maxRetries?: number;
     parentCallId?: string;
+    sessionId?: string;
+    runId?: string;
   } = {},
 ): Promise<RunToolOutcome> {
   const pipe = pipeline ?? createToolPipeline();

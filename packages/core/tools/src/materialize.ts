@@ -32,6 +32,8 @@ export interface ToolMaterialization {
     readonly pipeline?: ToolPipeline;
     readonly timeoutMs?: number;
     readonly maxRetries?: number;
+    readonly sessionId?: string;
+    readonly runId?: string;
   }): Promise<RunToolOutcome>;
 }
 
@@ -159,6 +161,10 @@ export function materializeTools(
           ...(input.maxRetries !== undefined
             ? { maxRetries: input.maxRetries }
             : {}),
+          ...(input.sessionId !== undefined
+            ? { sessionId: input.sessionId }
+            : {}),
+          ...(input.runId !== undefined ? { runId: input.runId } : {}),
         },
       );
     },

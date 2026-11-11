@@ -1,6 +1,8 @@
 /** Browser download state shared by the Session Header button and `/export`. */
 
-import { createSnapshotStore, type SessionId, type SnapshotStore } from '@xrkseek/client-runtime/client'
+import {
+  createSnapshotStore, triggerBrowserOrShellDownload, type SessionId, type SnapshotStore,
+} from '@xrkseek/client-runtime/client'
 
 /** Download phases presented by the shared modal. */
 export type SessionLogDownloadStatus = 'downloading' | 'success' | 'error'
@@ -33,14 +35,13 @@ export function sessionLogZipFilename(sessionId: SessionId): string {
 
 /**
  * Hand a Host download URL to the browser download manager.
+ * Shared with workspace-file open fallback (`triggerBrowserOrShellDownload`):
+ * phone thin shell → XrkShell; Desktop / ordinary browsers → `<a download>`.
  * @param url - same-origin Host download URL.
  * @param filename - browser download filename.
  */
 export function downloadUrl(url: string, filename: string): void {
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
+  triggerBrowserOrShellDownload(url, filename)
 }
 
 /** Resolve the browser's Host base with the connection carrier's null-origin fallback. */

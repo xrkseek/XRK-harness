@@ -21,12 +21,14 @@ import type {
 } from '@xrkseek/client-runtime/client'
 import {
   formatAttachmentSummary,
+  isNativeOpenUnavailableError,
   normalizeAttachmentId,
+  triggerBrowserOrShellDownload,
 } from '@xrkseek/client-runtime/client'
-import type { ImageAttachmentRef } from '@xrkseek/xrk-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef, ImageMediaType } from '@xrkseek/xrk-attachment'
 import { Button, IconChevronDownOutlineRegular, Modal } from '@xrkseek/client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageFiles, RenderMessageImages } from '../contract/slots.ts'
-import { PendingSteeringBubble, PendingSubmissionBubble, previewAttachmentsOf } from './MessageItem.tsx'
+import { PendingSteeringBubble, previewAttachmentsOf } from './MessageItem.tsx'
 import {
   collectUserShapedSeqs, durableSteerPending, groupPendingByChrome,
   earliestAgentWorkId, hasLiveAgentWork, hasOpenTurn, isHistoricClosedTurn,
@@ -261,9 +263,56 @@ function documentOrderAnchor(list: HTMLElement, scrollport: HTMLElement): Paging
 }
 
 /** Host/OS refusal text for the file-open dialog; empty throws keep a locale fallback. */
-function openFailureMessage(error: unknown, fallback: string): string {
+function openFailureMessage(
+  error: unknown,
+  path: string,
+  t: ChatViewSlotProps['t'],
+): string {
+  if (isNativeOpenUnavailableError(error)) {
+    return t(isFolderOpenPath(path) ? 'fileOpen.remoteFolderUnavailable' : 'fileOpen.remoteUnavailable')
+  }
   const message = error instanceof Error ? error.message : String(error)
-  return message === '' ? fallback : message
+  return message === ''
+    ? t(isFolderOpenPath(path) ? 'fileOpen.folderUnknown' : 'fileOpen.unknown')
+    : message
+}
+
+const IMAGE_MEDIA_TYPES = new Set<string>([
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+])
+
+function isImageMediaType(value: string): value is ImageMediaType {
+  return IMAGE_MEDIA_TYPES.has(value)
+}
+
+/** Read MIME from a blob:/data: object URL produced by resolveAttachment. */
+async function probeObjectUrlMediaType(url: string): Promise<string> {
+  if (url.startsWith('data:')) {
+    const semi = url.indexOf(';')
+    const comma = url.indexOf(',')
+    const end = semi > 5 ? semi : (comma > 5 ? comma : -1)
+    if (end > 5) return url.slice(5, end).trim().toLowerCase() || 'application/octet-stream'
+    return 'application/octet-stream'
+  }
+  try {
+    const res = await fetch(url)
+    const type = (res.headers.get('content-type') ?? (await res.blob()).type).split(';')[0]?.trim().toLowerCase()
+    return type && type.length > 0 ? type : 'application/octet-stream'
+  } catch {
+    return 'application/octet-stream'
+  }
+}
+
+function filenameForAttachment(label: string, mediaType: string): string {
+  const leaf = label.replace(/[\\/:*?"<>|]+/g, '_').trim()
+  if (leaf.includes('.') && !leaf.startsWith('sha256:')) return leaf
+  const ext = mediaType === 'text/markdown' || mediaType === 'text/x-markdown' ? 'md'
+    : mediaType === 'application/pdf' ? 'pdf'
+      : mediaType === 'text/plain' ? 'txt'
+        : mediaType.startsWith('image/') ? (mediaType.split('/')[1] ?? 'bin')
+          : 'bin'
+  const base = leaf.startsWith('sha256:') ? leaf.slice(0, 20).replace(/[^\w.-]+/g, '_') : (leaf || 'attachment')
+  return `${base}.${ext}`
 }
 
 /**
@@ -575,7 +624,11 @@ export function ChatView({
     && timeline.turns.get(historyHead.turn)?.start !== undefined
     && outlineEarliestTurn(turnOutline) === historyHead.turn
   const selectedCallId = useStore(s => s.selection?.callId)
-  const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
+  const [fileOpenError, setFileOpenError] = useState<{
+    path: string
+    message: string
+    retryable: boolean
+  } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   /** Host attachment id open → lightbox (not better-sidebar). */
   const [attachmentPreview, setAttachmentPreview] = useState<ImageAttachmentRef | null>(null)
@@ -588,16 +641,54 @@ export function ChatView({
   const requestOpenFile = useCallback((path: string) => {
     const attachmentId = normalizeAttachmentId(path)
     if (attachmentId !== undefined) {
+      // Host attachments share one store: resolveImage === resolveAttachment.
+      // Always probing as image/png opened MD/docs in a broken lightbox.
+      const id = ++fileOpenRequest.current
       setFileOpenError(null)
-      setFileOpenBusy(false)
-      setAttachmentPreview({
-        attachmentId: attachmentId as ImageAttachmentRef['attachmentId'],
+      setFileOpenBusy(true)
+      const label = formatAttachmentSummary(attachmentId)
+      const fileRef = {
+        attachmentId: attachmentId as FileAttachmentRef['attachmentId'],
+        name: label,
+        bytes: 1,
+      } satisfies FileAttachmentRef
+      const load = loadAttachment ?? ((attachment: FileAttachmentRef) => loadImage({
+        attachmentId: attachment.attachmentId as ImageAttachmentRef['attachmentId'],
         mediaType: 'image/png',
         bytes: 1,
         width: 1,
         height: 1,
-        name: formatAttachmentSummary(attachmentId),
-      })
+        name: attachment.name,
+      }))
+      void load(fileRef).then(
+        async (url) => {
+          if (id !== fileOpenRequest.current) return
+          const mediaType = await probeObjectUrlMediaType(url)
+          if (isImageMediaType(mediaType)) {
+            setAttachmentPreview({
+              attachmentId: attachmentId as ImageAttachmentRef['attachmentId'],
+              mediaType,
+              bytes: 1,
+              width: 1,
+              height: 1,
+              name: label,
+            })
+            setFileOpenBusy(false)
+            return
+          }
+          triggerBrowserOrShellDownload(url, filenameForAttachment(label, mediaType))
+          setFileOpenBusy(false)
+        },
+        (error: unknown) => {
+          if (id !== fileOpenRequest.current) return
+          setFileOpenError({
+            path,
+            message: openFailureMessage(error, path, t),
+            retryable: true,
+          })
+          setFileOpenBusy(false)
+        },
+      )
       return
     }
     const id = ++fileOpenRequest.current
@@ -612,15 +703,13 @@ export function ChatView({
         if (id !== fileOpenRequest.current) return
         setFileOpenError({
           path,
-          message: openFailureMessage(
-            error,
-            t(isFolderOpenPath(path) ? 'fileOpen.folderUnknown' : 'fileOpen.unknown'),
-          ),
+          message: openFailureMessage(error, path, t),
+          retryable: !isNativeOpenUnavailableError(error),
         })
         setFileOpenBusy(false)
       },
     )
-  }, [openFile, t])
+  }, [loadAttachment, loadImage, openFile, t])
 
   const closeAttachmentPreview = useCallback(() => {
     setAttachmentPreview(null)
@@ -790,21 +879,25 @@ export function ChatView({
   const nextSendRound = railItems.length === 0
     ? 1
     : (railItems[railItems.length - 1]?.round ?? railItems.length) + 1
+  // Live-turn latch without Host `running`: pause clears running but the
+  // opener/agent work is still this flight — keep real steers as 「插队中」.
+  // Yielded / closed turns have neither opener nor agent work → idle send.
+  const liveTurnChrome = hasUserOpener || hasAgentWork
   const pendingGroups = useMemo(
     () => groupPendingByChrome(pendingInputs, (input) => {
-      // Only real steers paint as 插队: Host steering rows, or local echoes
-      // already placed `steering` (matched to Host). Do NOT promote ordinary
-      // queue/transcript echoes to 插队 just because drain.wake made the
-      // agent look live — that left a copy-only fake-steer after Host restart.
-      if (input.kind === 'steer') {
-        return steerPendingChrome ? 'steer' : 'send'
+      if (input.kind === 'steer' || input.submission.placement === 'steering') {
+        return liveTurnChrome ? 'steer' : 'send'
       }
-      if (input.submission.placement === 'steering') {
-        return steerPendingChrome ? 'steer' : 'send'
+      // Live-turn transcript follow-ups (FIFO claim, or pause with running
+      // cleared) park BELOW waiting so a later send does not flip them from
+      // the send column into the steer cluster (vanish → waiting-only flash).
+      // Idle first-send has no live turn → stays send above waiting.
+      if (liveTurnChrome && input.submission.placement === 'transcript') {
+        return 'steer'
       }
       return 'send'
     }),
-    [pendingInputs, steerPendingChrome],
+    [pendingInputs, liveTurnChrome],
   )
   // First-turn injects land before the human user/message. When the window
   // still has no context rows, keep a same-height header under the echo so
@@ -1172,18 +1265,22 @@ export function ChatView({
     return () => { observer.disconnect() }
   }, [chatScroll])
 
-  // Overlay soft keyboard: sticky seat lifts by --xrk-keyboard-inset and the
-  // transcript gains matching pad. While the reader is on the floor, re-pin
-  // every visualViewport frame so the tip rides up with the keys (Via / Edge
-  // packaged WebViews) instead of sitting under the composer.
+  // Browser overlay keyboard: pin floor when VV inset grows and we were at
+  // bottom. Flutter shell owns layout via `#root` bottom + ResizeObserver
+  // above — do not also chase CSS inset / MutationObserver (jank + double lift).
   useEffect(() => {
-    const vv = window.visualViewport
-    if (vv === null || vv === undefined) return
-    let prevInset = keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop)
+    const root = document.documentElement
+    if (root.hasAttribute('data-xrk-shell-keyboard')) return
+    const readInset = (): number => {
+      const vv = window.visualViewport
+      return vv ? keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop) : 0
+    }
+    let prevInset = readInset()
     let raf = 0
     const sync = (): void => {
       raf = 0
-      const inset = keyboardInsetPx(window.innerHeight, vv.height, vv.offsetTop)
+      if (root.hasAttribute('data-xrk-shell-keyboard')) return
+      const inset = readInset()
       const delta = inset - prevInset
       prevInset = inset
       if (delta === 0) return
@@ -1206,14 +1303,17 @@ export function ChatView({
       if (raf !== 0) return
       raf = window.requestAnimationFrame(sync)
     }
-    vv.addEventListener('resize', schedule)
-    vv.addEventListener('scroll', schedule)
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', schedule)
+    vv?.addEventListener('scroll', schedule)
     window.addEventListener('resize', schedule)
+    window.addEventListener('xrk-keyboard-inset', schedule)
     return () => {
       if (raf !== 0) window.cancelAnimationFrame(raf)
-      vv.removeEventListener('resize', schedule)
-      vv.removeEventListener('scroll', schedule)
+      vv?.removeEventListener('resize', schedule)
+      vv?.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
+      window.removeEventListener('xrk-keyboard-inset', schedule)
     }
   }, [chatScroll])
 
@@ -1483,22 +1583,29 @@ export function ChatView({
     )
   }
 
-  /** Mid-turn 插队 only — ordinary sends stay in `columnRows` under a stable rpc key. */
+  /** Mid-turn park (below waiting). Echoes keep `rpc:` seats so chrome / badge
+   * flips do not remount the bubble into a waiting-only hole. */
   const renderSteerGroup = (group: (typeof pendingGroups)[number]) => {
     if (group.items.length === 1) {
       return group.items.map((input) => {
         const itemId = pendingWithdrawId(input)
         const onWithdraw = itemId === undefined ? undefined : () => { withdrawSteer(itemId) }
         if (input.kind === 'echo') {
+          const rpc = input.submission.requestId
+          // Real steers + live FIFO claim → 「插队中」; pause-parked transcript
+          // follow-ups stay 「发送中」 without jumping columns on the next send.
+          const steerBadge = input.submission.placement === 'steering'
+            || (input.submission.placement === 'transcript' && steerPendingChrome)
           return (
-            <PendingSubmissionBubble
-              key={input.submission.requestId}
+            <UserSendFlow
+              key={`rpc:${rpc}`}
+              flowKey={`rpc:${rpc}`}
               submission={input.submission}
-              steer
-              onWithdraw={onWithdraw}
-              renderMessageImages={renderMessageImages}
-              renderMessageFiles={renderMessageFiles}
-              t={t}
+              round={nextSendRound}
+              roundLabel={steerBadge || liveTurnChrome ? 'steer' : 'turn'}
+              steer={steerBadge}
+              {...(onWithdraw === undefined ? {} : { onWithdraw })}
+              {...nodeSeat}
             />
           )
         }
@@ -1534,6 +1641,7 @@ export function ChatView({
       <PendingSteeringBubble
         key={key}
         content={content}
+        steer
         {...(previewAttachments === undefined ? {} : { previewAttachments })}
         renderMessageImages={renderMessageImages}
         renderMessageFiles={renderMessageFiles}
@@ -1600,6 +1708,7 @@ export function ChatView({
           path={fileOpenError.path}
           message={fileOpenError.message}
           busy={fileOpenBusy}
+          retryable={fileOpenError.retryable}
           onClose={closeFileOpenError}
           onRetry={() => { requestOpenFile(fileOpenError.path) }}
           t={t}
@@ -1630,13 +1739,14 @@ export function ChatView({
   )
 }
 
-/** In-page Host open-path refusal: the wire reason plus a retry of the same path. */
+/** In-page Host open-path refusal: wire reason; retry only when OS open may work. */
 function FileOpenErrorDialog({
-  path, message, busy, onClose, onRetry, t,
+  path, message, busy, retryable, onClose, onRetry, t,
 }: {
   path: string
   message: string
   busy: boolean
+  retryable: boolean
   onClose: () => void
   onRetry: () => void
   t: ChatViewSlotProps['t']
@@ -1647,11 +1757,15 @@ function FileOpenErrorDialog({
       onClose={onClose}
       closeLabel={t('close')}
       title={t(isFolderOpenPath(path) ? 'fileOpen.folderTitle' : 'fileOpen.title')}
-      description={message}
+      description={`${message}\n\n${path}`}
       footer={(
         <>
-          <Button variant="outline" className={css.modalAction} onClick={onClose}>{t('cancel')}</Button>
-          <Button variant="primary" className={css.modalAction} disabled={busy} onClick={onRetry}>{t('retry')}</Button>
+          <Button variant="outline" className={css.modalAction} onClick={onClose}>
+            {retryable ? t('cancel') : t('close')}
+          </Button>
+          {retryable
+            ? <Button variant="primary" className={css.modalAction} disabled={busy} onClick={onRetry}>{t('retry')}</Button>
+            : null}
         </>
       )}
     />

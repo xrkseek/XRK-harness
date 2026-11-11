@@ -11,6 +11,25 @@ import type {
 import type { SnapshotStore } from '@xrkseek/client-runtime/client'
 import { createSnapshotStore } from '@xrkseek/client-runtime/client'
 
+/**
+ * Zod dumps for empty `current.provider` / `current.model` used to surface as
+ * raw JSON. Map that (and similar wire noise) to a stable marker the UI
+ * localizes as「去设置 → 模型」.
+ */
+export const NO_MODEL_CONFIGURED_MARKER = 'no-model-configured' as const
+
+function humanizeModelsError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (
+    /\[\s*"current"\s*,\s*"(provider|model)"\s*\]/.test(message)
+    || (message.includes('too_small') && message.includes('current'))
+    || (message.includes('Invalid input') && message.includes('"provider"') && message.includes('"model"'))
+  ) {
+    return NO_MODEL_CONFIGURED_MARKER
+  }
+  return message
+}
+
 /** Directory snapshot both entries render from. */
 export interface ModelDirectoryState {
   /** Model selection the host reports for the next assembled step; null before the first load. */
@@ -43,6 +62,9 @@ export class ModelDirectory {
   /** Latest operation wins; an older response never overwrites a newer one. */
   private generation = 0
   private disposed = false
+  /** Coalesce overlapping loads so a fan-out cannot leave the spinner stuck. */
+  private inflight: Promise<SessionModels> | undefined
+  private trailing = false
 
   /**
    * @param sessions - the session wire face (captured from the plugin's root connection).
@@ -63,6 +85,24 @@ export class ModelDirectory {
    * @returns the fresh directory value.
    */
   async load(): Promise<SessionModels> {
+    if (this.inflight !== undefined) {
+      this.trailing = true
+      return this.inflight
+    }
+    const run = this.loadOnce()
+    this.inflight = run
+    try {
+      return await run
+    } finally {
+      this.inflight = undefined
+      if (this.trailing && !this.disposed) {
+        this.trailing = false
+        void this.load().catch(() => undefined)
+      }
+    }
+  }
+
+  private async loadOnce(): Promise<SessionModels> {
     // Read is allowed on a locked child seat: the chip needs the pinned route.
     // Switching stays refused in select().
     const generation = ++this.generation
@@ -71,25 +111,37 @@ export class ModelDirectory {
       if (s.groups.length === 0) s.status = 'loading'
       s.error = null
     })
-    const { result } = await this.sessions.models({ sessionId: this.sessionId })
+    let result: { ok: true; value: SessionModels } | { ok: false; error: { code: string; message: string } }
+    try {
+      ;({ result } = await this.sessions.models({ sessionId: this.sessionId }))
+    } catch (error) {
+      if (this.disposed || generation !== this.generation) throw error
+      const message = humanizeModelsError(error)
+      this.store.update((s) => { s.status = 'error'; s.error = message })
+      throw error
+    }
     if (this.disposed || generation !== this.generation) {
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
       return result.value
     }
     if (!result.ok) {
-      this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
+      const message = humanizeModelsError(`${result.error.code}: ${result.error.message}`)
+      this.store.update((s) => { s.status = 'error'; s.error = message })
       throw new Error(`session.models failed: ${result.error.code}: ${result.error.message}`)
     }
     const { current, routable, groups, failures } = result.value
+    // Belt: older Hosts may still send ""/""; treat as unset.
+    const normalized =
+      current && current.provider.trim() && current.model.trim() ? current : null
     this.store.update((s) => {
-      s.current = current
-      s.routable = routable
+      s.current = normalized
+      s.routable = normalized ? routable : false
       s.groups = groups
       s.failures = failures
       s.status = 'ready'
       s.error = null
     })
-    return result.value
+    return { ...result.value, current: normalized, routable: normalized ? routable : false }
   }
 
   /**

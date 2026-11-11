@@ -1587,12 +1587,14 @@
   margin: 0;
 }
 
-/* Phone Status sheet: larger close + safe-area so chrome clears the notch. */
+/* Phone Status sheet: larger close. Safe-area top is owned by AppFrame
+ * `.detailsCol` — do NOT pad `.header` again or the sheet grows a dead band
+ * under the tools strip (looks like blank above 概况). */
 @media (max-width: 767px) {
   .header {
-    padding-top: max(8px, env(safe-area-inset-top, 0px));
-    padding-right: max(10px, env(safe-area-inset-right, 0px));
-    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-top: 8px;
+    padding-right: max(10px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
     gap: 8px;
   }
 
@@ -1621,24 +1623,65 @@
     touch-action: manipulation;
   }
 
+  .tools {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
   .body {
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px), var(--ds-safe-bottom, 0px));
     overscroll-behavior-y: contain;
   }
 
   .presenceRail {
-    padding-left: max(8px, env(safe-area-inset-left, 0px));
-    padding-right: max(8px, env(safe-area-inset-right, 0px));
+    padding: 6px max(8px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px)) 8px
+      max(8px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px));
   }
 
-  /* Phone always shows the stage ball — drop the desktop collapsed min-heights. */
-  .presenceRail[data-delegate]:not([data-collapsed]) {
+  /* Phone always shows the stage ball — drop the desktop collapsed min-heights
+   * (258px / 212px runways left a dead white band above the presence title). */
+  .presenceRail[data-delegate]:not([data-collapsed]),
+  .presenceRail:not([data-collapsed]) {
     min-height: 0;
   }
 
   .delegatePair:not([data-collapsed]) {
     min-height: 0;
   }
+
+  .delegateArrow {
+    margin-top: 12px;
+  }
+}
+
+/* Packaged WebView may report layout width > 767 while AppFrame is phone —
+ * mirror the density rules off the layout stamp, not only the media query. */
+:global(html[data-xrk-layout-phone]) .presenceRail[data-delegate]:not([data-collapsed]),
+:global(html[data-xrk-layout-phone]) .presenceRail:not([data-collapsed]) {
+  min-height: 0;
+}
+
+:global(html[data-xrk-layout-phone]) .delegatePair:not([data-collapsed]) {
+  min-height: 0;
+}
+
+:global(html[data-xrk-layout-phone]) .delegateArrow {
+  margin-top: 12px;
+}
+
+:global(html[data-xrk-layout-phone]) .header {
+  padding-top: 8px;
+}
+
+:global(html[data-xrk-layout-phone]) .presenceRail {
+  padding-top: 6px;
+  padding-bottom: 8px;
+}
+
+/* Phone sheet: do not keep a visibility:hidden runway in flow (desktop
+ * width-0 column still needs the height; full-bleed phone sheet does not). */
+:global(html[data-xrk-layout-phone]) .presenceRail[aria-hidden='true'] {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

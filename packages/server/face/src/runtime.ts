@@ -1780,17 +1780,20 @@ export function createFaceRuntime(options: CreateFaceRuntimeOptions): FaceRuntim
     // Keep CLI / Desktop `--workspace` as an extra coding workspace when it
     // is not the reserved 向阳空间 path. Packaged desktop used to pass
     // `resources/host` as cwd — never auto-create that install directory.
+    // Linux guest (mobile proot) starts with cwd=/root and no --workspace;
+    // that home must not become a second coding workspace on first boot.
     const launchRoot = path.resolve(options.workspaceRoot);
     const xyResolved = path.resolve(xyPath);
-    const packagedHostCwd = isPackagedHostInstallDir(launchRoot);
-    if (launchRoot !== xyResolved && !packagedHostCwd) {
+    const skipLaunchWorkspace =
+      isPackagedHostInstallDir(launchRoot) || isLinuxGuestHomeLaunchRoot(launchRoot);
+    if (launchRoot !== xyResolved && !skipLaunchWorkspace) {
       workspaces.create(launchRoot);
     }
     if (ensured.created || ensured.workspace.title !== XIANGYANG_WORKSPACE_TITLE) {
       void persistWorkspaceDoc(runtime, workspaces).catch(() => {
         /* fail closed: in-memory default still usable */
       });
-    } else if (launchRoot !== xyResolved && !packagedHostCwd) {
+    } else if (launchRoot !== xyResolved && !skipLaunchWorkspace) {
       void persistWorkspaceDoc(runtime, workspaces).catch(() => {
         /* best-effort */
       });
@@ -1813,4 +1816,14 @@ function isPackagedHostInstallDir(absPath: string): boolean {
     path.basename(abs) === "host" &&
     path.basename(path.dirname(abs)) === "resources"
   );
+}
+
+/**
+ * Mobile proot guest home. `xrkh serve` defaults `--workspace` to cwd (`/root`);
+ * first install must keep only 向阳空间 — same class of skip as packaged host.
+ * Compare via path.resolve so Windows unit tests hitting `/root` still match.
+ */
+function isLinuxGuestHomeLaunchRoot(absPath: string): boolean {
+  const abs = path.resolve(absPath);
+  return abs === path.resolve("/root") || abs === path.resolve("/root/workspace");
 }

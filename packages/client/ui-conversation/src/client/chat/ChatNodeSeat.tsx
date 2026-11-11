@@ -124,7 +124,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
  * when the log write replaces the echo.
  */
 export const UserSendFlow = memo(function UserSendFlow({
-  flowKey, nodeKey, submission, round, roundLabel = 'turn', onWithdraw,
+  flowKey, nodeKey, submission, round, roundLabel = 'turn', onWithdraw, steer = false,
   selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
   loadImage, renderMessageImages, renderMessageFiles, fileMentions, useSession, renderSlot, t,
 }: Omit<ChatNodeSeatProps, 'nodeKey' | 'roundByTurn' | 'openerKeyByTurn'> & {
@@ -135,6 +135,11 @@ export const UserSendFlow = memo(function UserSendFlow({
   /** Echo defaults to opener wording; durable mid-turn handoff passes `steer`. */
   readonly roundLabel?: RoundLabelKind
   readonly onWithdraw?: () => void
+  /**
+   * Live follow-up latch: FIFO-claimed transcript echoes keep 「插队中」 while
+   * the turn is still open. Absent → ordinary send / 「发送中」 on the echo.
+   */
+  readonly steer?: boolean
 }) {
   const node = useSession(snapshot => (
     nodeKey === undefined ? undefined : snapshot.chat.nodes.get(nodeKey)
@@ -145,10 +150,13 @@ export const UserSendFlow = memo(function UserSendFlow({
     ? null
     : {
       selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
+      // Keep 「插队中」 across echo→durable handoff (same rpc: seat). Dropping
+      // it here left a copy-only durable bubble after pause/refresh.
+      steer,
       loadImage, renderMessageImages, renderMessageFiles, fileMentions,
     }, [
     routed, selectedCallId, cwd, openFile, inspectCall, forkAt, restoreAt, editAt, regenerateAt, deleteAt, withdrawSteer,
-    loadImage, renderMessageImages, renderMessageFiles, fileMentions,
+    steer, loadImage, renderMessageImages, renderMessageFiles, fileMentions,
   ])
   if (!visible) return null
   const routedOwner = routed === undefined || owner === null
@@ -180,6 +188,7 @@ export const UserSendFlow = memo(function UserSendFlow({
         <PendingSubmissionBubble
           submission={submission}
           reserveActions
+          steer={steer}
           {...(onWithdraw === undefined ? {} : { onWithdraw })}
           renderMessageImages={renderMessageImages}
           renderMessageFiles={renderMessageFiles}

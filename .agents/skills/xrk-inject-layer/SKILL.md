@@ -39,6 +39,21 @@ Precedence is **low → high in output order**. **Three surfaces stay separate:*
 | Tool runtime | badge · seat bind list | what text is injected |
 | Permission / policy | Host hard-block on tool calls | inject content |
 
+### Mobile-only skills / tools (do **not** fork establish)
+
+Phone App is a **shell** around guest `xrkh`. Prefer **build-time merge**, not Host env gates:
+
+| Layer | Where | Who |
+|---|---|---|
+| **Universal seeds** | `apps/cli/seeds/skills/` → establish | Desktop · CLI · Mobile |
+| **Phone-only seed sources** | `apps/cli/seeds/mobile/skills/` (e.g. `xrk-phone`) | Shipped in npm under `seeds/mobile/` but **not** established on Desktop/CLI |
+| **Mobile runtime build** | `build-runtime.sh` copies `seeds/mobile/skills/*` → `seeds/skills/` inside guest harness-cli | Phone guest establish (same fingerprint path — **no establish fork**) |
+| **App-shell HOWTO** | Flutter `assets/skills/xrk-guide` (+ `xrk-ui` …) managed install | Phone guest only |
+| **phone_* tools** | PhoneGuest → guest `{XRK_HOME}/plugins/xrk-mobile` | Phone guest |
+| **Prompt** | `xrk-mobile-prompt` while phone control on | Phone guest |
+
+**Hard rule:** do **not** put phone playbooks into universal `seeds/skills/` or standing `AGENTS.md` catalog. Do **not** add `XRK_MOBILE_*` branches to establish. Merge at mobile runtime build; three surfaces stay stable.
+
 ### 2. Subagents / 干员家
 
 Host sets `audience = "subagent" | "minimal"` for children and 干员家 — that **only skips manager ledger `XRK.md`**. Standing + home convention + workspace convention + skill trees still inject.

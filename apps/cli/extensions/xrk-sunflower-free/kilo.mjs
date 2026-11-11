@@ -88,20 +88,32 @@ export function kiloCatalogEntry(row) {
 
 /**
  * Fetch free-pool catalog. Empty / unreachable → [].
- * @param {{ fetchImpl?: typeof fetch; timeoutMs?: number; baseUrl?: string }} [options]
+ * Honors `XRK_SUNFLOWER_KILO_PROXY` (or [options.proxyUrl]) via undici ProxyAgent.
+ * @param {{ fetchImpl?: typeof fetch; timeoutMs?: number; baseUrl?: string; proxyUrl?: string }} [options]
  */
 export async function fetchKiloFreeCatalog(options = {}) {
   const doFetch = options.fetchImpl ?? fetch;
   const base = (options.baseUrl ?? KILO_BASE).replace(/\/+$/, "");
   const timeoutMs = options.timeoutMs ?? 15000;
+  const proxy = (options.proxyUrl ?? process.env.XRK_SUNFLOWER_KILO_PROXY)?.trim();
+  /** @type {Record<string, unknown>} */
+  const init = {
+    headers: {
+      accept: "application/json",
+      "user-agent": "xrk-sunflower-free",
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  };
+  if (proxy && !options.fetchImpl) {
+    try {
+      const { ProxyAgent } = await import("undici");
+      init.dispatcher = new ProxyAgent(proxy);
+    } catch {
+      /* no undici — fall through to direct */
+    }
+  }
   try {
-    const res = await doFetch(`${base}/models`, {
-      headers: {
-        accept: "application/json",
-        "user-agent": "xrk-sunflower-free",
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    const res = await doFetch(`${base}/models`, init);
     if (!res.ok) return [];
     const payload = await res.json();
     const data = Array.isArray(payload?.data) ? payload.data : [];

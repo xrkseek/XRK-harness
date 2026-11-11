@@ -1,16 +1,7 @@
-/** `feedback` namespace dictionaries. */
+/** `feedback` namespace dictionaries (session dialog + toast). */
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'action.like': '好的回答',
-  'action.likeActive': '取消标记',
-  'action.dislike': '有问题的回答',
-  'action.dislikeActive': '取消标记',
-  'note.open': '补充说明',
-  'note.placeholder': '这条回答哪里好，或哪里有问题？（可选）',
-  'note.save': '保存',
-  'note.cancel': '取消',
-  'note.aria': '反馈说明',
   'dialog.title': '提交反馈',
   'dialog.categories': '反馈分类',
   'dialog.detail': '反馈详情',
@@ -27,7 +18,6 @@ export const zh = {
   'submitting': '提交中…',
   'close': '关闭',
   'error.conflict': '这条反馈已在别处改动，已显示最新状态',
-  'error.load': '反馈状态加载失败',
   'error.generic': '反馈保存失败',
   'error.noteTooLarge': '描述太长，请缩短后再提交',
 } satisfies Record<string, string>
@@ -37,22 +27,13 @@ export type MessageFeedbackKey = keyof typeof zh
 
 declare module '@xrkseek/client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Per-message controls, session dialog, and acknowledgement toast. */
+    /** Session feedback dialog and acknowledgement toast. */
     feedback: MessageFeedbackKey
   }
 }
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'action.like': 'Good response',
-  'action.likeActive': 'Remove rating',
-  'action.dislike': 'Bad response',
-  'action.dislikeActive': 'Remove rating',
-  'note.open': 'Add a note',
-  'note.placeholder': 'What was good, or what went wrong? (optional)',
-  'note.save': 'Save',
-  'note.cancel': 'Cancel',
-  'note.aria': 'Feedback note',
   'dialog.title': 'Submit feedback',
   'dialog.categories': 'Feedback category',
   'dialog.detail': 'Feedback details',
@@ -69,22 +50,12 @@ export const en = {
   'submitting': 'Submitting…',
   'close': 'Close',
   'error.conflict': 'This feedback changed elsewhere; the latest state is shown',
-  'error.load': 'Could not load feedback',
   'error.generic': 'Could not save feedback',
   'error.noteTooLarge': 'The description is too long; shorten it and submit again',
 } satisfies Record<MessageFeedbackKey, string>
 
 /** Japanese dictionary, checked complete against the zh key set. */
 export const ja = {
-  'action.like': '良い応答',
-  'action.likeActive': '評価を削除',
-  'action.dislike': '良くない回答',
-  'action.dislikeActive': '評価を削除',
-  'note.open': 'メモを追加',
-  'note.placeholder': '良かった点や問題点は？（任意）',
-  'note.save': '保存',
-  'note.cancel': 'キャンセル',
-  'note.aria': 'フィードバックメモ',
   'dialog.title': 'フィードバックを送信',
   'dialog.categories': 'フィードバックのカテゴリ',
   'dialog.detail': 'フィードバックの詳細',
@@ -101,9 +72,6 @@ export const ja = {
   submitting: '送信中…',
   close: '閉じる',
   'error.conflict': 'このフィードバックは別の場所で変更されました。最新の状態を表示しています',
-  'error.load': 'フィードバックを読み込めませんでした',
   'error.generic': 'フィードバックを保存できませんでした',
   'error.noteTooLarge': '説明が長すぎます。短くしてから再送信してください',
 } as const satisfies Record<MessageFeedbackKey, string>
-
-

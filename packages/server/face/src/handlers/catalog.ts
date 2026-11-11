@@ -14,7 +14,6 @@ import { buildFaceModelCatalog, routeServed } from "../model-catalog.js";
 import {
   listDeclaredPiAiProviders,
   orderProvidersByPreference,
-  providerHasUsableCredential,
   readOutboundProxyPreference,
   readProviderApiKey,
   readProviderOrder,
@@ -178,20 +177,17 @@ export const agentPresetReadOnly: FaceHandler = async (_runtime, _rpcId, payload
 export const llmProviders: FaceHandler = async (runtime) => {
   const providers = runtime.registry.listBrands().map((b) => {
     if (b.id === "deepseek") {
-      // Keyless DeepSeek is not a shipped row — keep it in the add picker
-      // (`settingsPath` sentinel ⇒ configured:false) until a credential exists.
-      const hasKey = providerHasUsableCredential(runtime, b.id);
       return {
         provider: "deepseek-official",
-        displayName: b.displayName,
+        displayName: "DeepSeek",
         settingsNs: "llm-deepseek",
-        settingsPath: hasKey ? ([] as string[]) : (["__pending"] as string[]),
+        settingsPath: [] as string[],
         active: routeServed(runtime, b.id),
         declared: false,
       };
     }
     // Built-in free lane: egress lives on Face `sunflower-free` (not llm-pi-ai).
-    if (b.id === "sunflower-free") {
+    if (b.id === "sunflower-free" || b.id === "sunflower-kilo") {
       return {
         provider: b.id,
         displayName: b.displayName,
@@ -227,6 +223,20 @@ export const llmProviders: FaceHandler = async (runtime) => {
       active: routeServed(runtime, declared.id),
       declared: true,
       ...(error !== undefined ? { error } : {}),
+    });
+  }
+  if (
+    !providers.some(
+      (p) => p.provider === "sunflower-free" || p.provider === "sunflower-kilo",
+    )
+  ) {
+    providers.push({
+      provider: "sunflower-free",
+      displayName: "向日葵免费",
+      settingsNs: "sunflower-free",
+      settingsPath: [] as string[],
+      active: false,
+      declared: false,
     });
   }
   return {

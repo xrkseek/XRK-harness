@@ -250,6 +250,15 @@
 .projectLongPress {
   background: var(--dsw-alias-interactive-bg-hover);
   user-select: none;
+  /* Visual hold chrome only. Coarse rows use pan-y idle / none when armed
+     (useLongPressReorder.touchAction) so the list still scrolls. */
+  -webkit-touch-callout: none;
+}
+
+.sessionLongPress {
+  background: var(--dsw-alias-interactive-bg-hover);
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .projectRow.projectPinned:not(:hover):not(.menuOpen) .pinBadge {
@@ -324,13 +333,15 @@
 .sessionRow:focus-within .rowActions,
 .projectRow.menuOpen .rowActions,
 .sessionRow.menuOpen .rowActions,
-.projectRow.projectLongPress .rowActions {
+.projectRow.projectLongPress .rowActions,
+.sessionRow.sessionLongPress .rowActions {
   display: inline-flex;
 }
 
 .sessionRow:hover .time,
 .sessionRow:focus-within .time,
-.sessionRow.menuOpen .time {
+.sessionRow.menuOpen .time,
+.sessionRow.sessionLongPress .time {
   display: none;
 }
 

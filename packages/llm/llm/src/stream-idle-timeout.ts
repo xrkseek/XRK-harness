@@ -15,6 +15,7 @@
  * - `codex-rs/model-provider-info/src/lib.rs:505-509` — per-provider `stream_idle_timeout_ms` override
  * - `codex-rs/codex-api/src/sse/responses.rs:532-568` — `biased` select: a closed consumer wins over the timeout arm
  */
+import { combineAbortSignals } from "@xrkseek/protocol";
 import { LlmError } from "./failure.js";
 
 /**
@@ -174,7 +175,7 @@ export function withExtraAbortSignal<T extends { readonly signal?: AbortSignal }
   return {
     ...request,
     signal: request.signal
-      ? AbortSignal.any([request.signal, extra])
+      ? combineAbortSignals([request.signal, extra])
       : extra,
   };
 }

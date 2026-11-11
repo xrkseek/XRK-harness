@@ -1,6 +1,6 @@
 {
   "name": "@xrkseek/client-ui-message-feedback",
-  "description": "Per-message feedback controls contributed to the assistant-message action strip, backed by the messageFeedback Host Remote",
+  "description": "Session feedback dialog (/feedback) backed by messageFeedback Host remotes; no per-message Like/Dislike strip",
   "version": "0.1.0-rc.8",
   "repository": {
     "type": "git",

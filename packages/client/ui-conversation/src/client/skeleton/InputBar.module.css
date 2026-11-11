@@ -464,11 +464,11 @@
   }
 
   /* Soft keyboard replaces the home-indicator — drop safe-area bottom so the
-     sticky seat + --xrk-keyboard-inset do not float a dead gap above the keys
-     (Via / Edge packaged WebViews). Must win over the rules above. */
+     sticky seat / shortened #root do not float a dead gap above the keys
+     (Via / Edge / Flutter shell). Must win over the rules above. */
   :global(html[data-xrk-keyboard]) .root,
   :global(html[data-xrk-keyboard]) .root:has([data-composer-stats]) {
-    padding-bottom: 4px;
+    padding-bottom: 0;
   }
 
   .card {

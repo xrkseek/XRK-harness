@@ -702,6 +702,34 @@ export function TeamRoster({
     }
   }
 
+  // Mobile shell: oversized zip/json picks are staged into guest inbox and
+  // announced here — same Face `team.importPack` as the file-picker path.
+  useEffect(() => {
+    if (!open || sessionId === undefined || importTeamPack === undefined) return
+    const onStaged = (ev: Event): void => {
+      const detail = (ev as CustomEvent<{
+        packs?: ReadonlyArray<{ zipPath?: string }>
+      }>).detail
+      const packs = detail?.packs ?? []
+      const paths = packs
+        .map(p => (typeof p.zipPath === 'string' ? p.zipPath.trim() : ''))
+        .filter(Boolean)
+      if (paths.length === 0) return
+      const packScope = scope
+      void run(async () => {
+        let lastId = ''
+        for (const zipPath of paths) {
+          const saved = await importTeamPack(sessionId, { scope: packScope, zipPath })
+          lastId = saved.id
+        }
+        if (lastId) setSelectedId(lastId)
+        setExportHint(t('team.importPackOk'))
+      })
+    }
+    window.addEventListener('xrk-staged-pack', onStaged)
+    return () => window.removeEventListener('xrk-staged-pack', onStaged)
+  }, [open, sessionId, importTeamPack, scope, t])
+
   const importMemberFromFile = (file: File) => {
     if (sessionId === undefined) return
     void file.arrayBuffer().then((buf) => {

@@ -202,8 +202,12 @@ export interface ModelCatalogFailure {
 
 /** Detached model-directory snapshot for one session. */
 export interface SessionModels {
-  /** Model selection for the session's next assembled step. */
-  current: ModelSelection
+  /**
+   * Model selection for the session's next assembled step.
+   * `null` when the Host has no routable route yet (no providers / models
+   * configured) — the composer shows an empty seat instead of a Zod dump.
+   */
+  current: ModelSelection | null
   /**
    * Whether an adapter currently serves `current.provider`, and therefore
    * whether this session can start a turn at all. Deliberately NOT derivable
@@ -211,6 +215,7 @@ export interface SessionModels {
    * it stopped advertising is absent from the groups yet perfectly usable,
    * while a route whose adapter is gone can serve nothing. A surface that
    * blocks input must read this rather than the groups.
+   * When `current` is null this is false.
    */
   routable: boolean
   /** Successfully loaded provider groups. */

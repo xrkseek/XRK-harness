@@ -225,7 +225,9 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   /** Store-method or Face-readable zip → advanced member (ready=false). */
   importTeamPack?: (sessionId: SessionId, input: {
     readonly scope: 'global' | 'workspace'
-    readonly zipBase64: string
+    /** Prefer [zipPath] for large packs (Host-local); else [zipBase64]. */
+    readonly zipBase64?: string
+    readonly zipPath?: string
   }) => Promise<{ readonly id: string }>
 }
 

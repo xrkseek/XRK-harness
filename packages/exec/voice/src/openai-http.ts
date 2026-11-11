@@ -96,7 +96,8 @@ export function createOpenAiVoiceProvider(
         throw new VoiceError("transcribe audio is empty", "VOICE_BAD_ARGS");
       }
       const form = new FormData();
-      const blob = new Blob([req.bytes], {
+      // Node 26 DOM lib: BlobPart wants Uint8Array<ArrayBuffer>, not ArrayBufferLike.
+      const blob = new Blob([new Uint8Array(req.bytes)], {
         type: req.mimeType ?? "audio/wav",
       });
       form.append("file", blob, req.filename ?? "audio.wav");

@@ -92,6 +92,10 @@ export interface ToolPipelineContext {
    * stamps reviewer mode `ptc-inner` for nested tools.
    */
   readonly parentCallId?: string;
+  /** Host session id for {@link ToolExecuteExtras.sessionId}. */
+  readonly sessionId?: string;
+  /** Host turn / run id for {@link ToolExecuteExtras.runId}. */
+  readonly runId?: string;
   /**
    * Pending tool schema when the registry resolved the call (auto-review /
    * presentation). Omitted for unknown tools.
@@ -231,6 +235,8 @@ export interface ToolPipeline {
       maxRetries?: number;
       /** Nested Code Mode / PTC dispatch parent (outer `run_code` call id). */
       parentCallId?: string;
+      sessionId?: string;
+      runId?: string;
     },
   ): Promise<RunToolOutcome>;
 }

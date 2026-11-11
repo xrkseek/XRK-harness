@@ -43,6 +43,27 @@ export function declareRuntimeSurface(command: string): void {
   if (process.env.XRK_SURFACE === undefined) process.env.XRK_SURFACE = surface;
 }
 
+const HOST_RUNTIME_COMMANDS = new Set([
+  "run",
+  "serve",
+  "acp",
+  "restart",
+  "tui",
+]);
+
+/** Host commands need Node ≥26 LTS (`AbortSignal.any`, `engines.node`). */
+export function assertHostNodeRuntime(
+  version = process.versions.node,
+  abortAny = typeof AbortSignal.any === "function",
+): void {
+  const major = Number(version.split(".")[0] ?? 0);
+  if (major < 26 || !abortAny) {
+    throw new Error(
+      `xrkh requires Node.js >= 26 LTS (current: v${version})`,
+    );
+  }
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   let args;
   try {
@@ -71,6 +92,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   declareRuntimeSurface(args.command);
 
   try {
+    if (HOST_RUNTIME_COMMANDS.has(args.command)) {
+      assertHostNodeRuntime();
+    }
     // Command modules are loaded lazily: bare `--version` / `--help` /
     // parse errors are answered before any command module (and its
     // `@xrkseek/server-*` dependency tree) is compiled. Commands that do

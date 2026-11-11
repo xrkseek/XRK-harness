@@ -702,8 +702,8 @@ function SessionTree({
                   start: () => { startSessionDrag(group.key, node.id) },
                   active: sameGroupDrag,
                   marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
-                  hover: (half: 'before' | 'after') => { hoverSessionDrag(node.id, half) },
-                  drop: (half: 'before' | 'after') => { dropSessionDrag(node.id, half) },
+                  hover: hoverSessionDrag,
+                  drop: dropSessionDrag,
                   end: endSessionDrag,
                 }
                 return (

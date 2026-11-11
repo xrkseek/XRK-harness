@@ -43,6 +43,10 @@ export interface SettleToolBatchInput {
   readonly materialization: ToolMaterialization;
   readonly pipeline?: ToolPipeline;
   readonly signal?: AbortSignal;
+  /** Host session id forwarded into tool execute extras. */
+  readonly sessionId?: string;
+  /** Host turn / run id forwarded into tool execute extras. */
+  readonly runId?: string;
   /** Default `parallel` (concurrency-classified). Use `serial` to force exclusive. */
   readonly mode?: ToolSettleMode;
   /**
@@ -131,6 +135,8 @@ async function settleOne(
     ...(input.signal ? { signal: input.signal } : {}),
     ...(input.pipeline ? { pipeline: input.pipeline } : {}),
     ...(input.maxRetries !== undefined ? { maxRetries: input.maxRetries } : {}),
+    ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
+    ...(input.runId !== undefined ? { runId: input.runId } : {}),
   });
 }
 

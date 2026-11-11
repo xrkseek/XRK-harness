@@ -978,6 +978,24 @@ describe('ModelsSection', () => {
     expect(set).toHaveBeenLastCalledWith({ ref: 'ANTHROPIC_API_KEY', value: 'sk-ant' })
   })
 
+  it('treats a Face __pending DeepSeek path as the section root', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.providers = vi.fn(() => Promise.resolve(ok({
+      providers: [
+        { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
+        { provider: 'deepseek-pending', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: ['__pending'], active: false },
+        { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
+        { provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'], active: false },
+      ],
+    })))
+    await mountFace(scripted)
+    fireEvent.click(screen.getByText(en.add))
+    const pick = await screen.findByLabelText<HTMLSelectElement>(en.provider)
+    fireEvent.change(pick, { target: { value: 'deepseek-pending' } })
+    expect(screen.queryByText(/unresolvable settings path/)).toBeNull()
+    expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
+  })
+
   it('switches the add card target and degrades unknown or broken targets loudly', async () => {
     await mountSection()
     fireEvent.click(screen.getByText(en.add))

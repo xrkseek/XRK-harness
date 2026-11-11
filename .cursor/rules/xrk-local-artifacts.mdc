@@ -16,10 +16,13 @@ xrk-inject: false
 | Desktop **当前**未签名包 | `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`（覆盖写） |
 | Desktop 版本快照 / upload stage | 同级 `unsigned-artifacts-<ver>/` · `upload-stage-<ver>/` |
 | npm stage / tarball | `.release/harness` · `.release/harness-cli` · `.release/xrkseek-harness(-cli)-<ver>.tgz` |
+| 手机本地 engine tgz（AGT `ENGINE_TGZ`） | `.release/mobile-engine/xrkseek-harness-cli-<ver>.tgz`（`pack-local-engine.ps1`；可未提交） |
 | 手测 exe | `.release/desktop/<ver>/` |
 | Desktop 开发 home | `apps/desktop/.desktop-build/development/home` |
 | CLI / Host 手工 smoke home | `%USERPROFILE%\.xrk-smoke`（`XRK_HOME`） |
 | vitest Host home | `mkdtemp` / `withIsolatedXrkHome`（测后删除） |
+| 手机 APK ASCII 构建树 | `C:\xrk-mobile\`（实拷贝；**禁止**在「主仓库」中文路径上 `flutter build`） |
+| 手机手测 APK | `C:\xrk-mobile\out\xrk-harness-*-arm64-release.apk`（真机；**禁 MuMu**）· skill `xrk-mobile-apk` · 总控 `xrk-dev-surfaces` |
 
 ## 硬禁止
 
@@ -28,6 +31,7 @@ xrk-inject: false
 - vitest 或验收写入正在使用的 **`~/.xrk`**
 - 在 **`C:\` 根**或用户家目录堆 `xrk-h-upload-*` / `.xrk-sandbox-*` 等临时目录（上传 stage 只进 `.desktop-build` / `.release`）
 - 为打包新建 **Y:/Z:** 等临时盘符并残留。NSIS 非 ASCII 路径时：**优先**复用已有 ASCII 结 `C:\xrk-h`（指向本仓）；否则临时 `subst X:` → 仓库根，结束（含失败）必须 `subst X: /d`
+- **手机 Flutter APK**：禁止 `subst` / junction 指回中文仓；只用 `C:\xrk-mobile` 实拷贝（skill `xrk-mobile-apk`）。Desktop 的 X: / `C:\xrk-h` **不要**拿来打手机包
 - 版本快照超过 **5** 个还不跑 `pnpm prune:local`
 
 ## 裁剪命令

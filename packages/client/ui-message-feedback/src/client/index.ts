@@ -1,13 +1,14 @@
 /**
- * Feedback surface plugin, browser half: Like/Dislike on assistant actions,
- * session feedback dialog in conversation.input.overlay, and bare `/feedback`
- * decoration that opens the dialog. Typed `/feedback <text>` stays on the Host.
+ * Feedback surface plugin, browser half: session feedback dialog in
+ * conversation.input.overlay, and bare `/feedback` decoration that opens the
+ * dialog. Per-message Like/Dislike chrome was removed (low use; cluttered the
+ * IconActions row). Typed `/feedback <text>` stays on the Host.
  */
 
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
 // Type-only: pulls the generated Remote API and ctx.remote merge through the Client assembly boundary.
 import type {} from '@xrkseek/xrk-api-remotes/client'
-// Type-only: pulls the ui-conversation SlotMap merge (the assistant-actions and overlay entries).
+// Type-only: pulls the ui-conversation SlotMap merge (overlay entry).
 import type {} from '@xrkseek/client-ui-conversation/client'
 // Type-only: pulls the command UI's Context merge (ctx.commandUi).
 import type {} from '@xrkseek/client-ui-commands/client'
@@ -15,8 +16,7 @@ import type {} from '@xrkseek/client-ui-commands/client'
 import type {} from '@xrkseek/client-locale/client'
 import type { CommandUiContract } from '@xrkseek/client-ui-commands/client'
 import { FeedbackDialog } from './FeedbackDialog.tsx'
-import { MessageFeedbackActions } from './MessageFeedbackActions.tsx'
-import type { FeedbackDialogInjected, MessageFeedbackInjected } from './slots.ts'
+import type { FeedbackDialogInjected } from './slots.ts'
 import { FeedbackSurface } from './surface.ts'
 import { en, ja, zh } from './locales.ts'
 
@@ -24,7 +24,7 @@ export type {
   MessageFeedbackActionResult, MessageFeedbackStatus, MessageFeedbackView, MessageFeedbackRemote,
 } from './controller.ts'
 export type { FeedbackDialogState, FeedbackDialogTarget, FeedbackSubmit, FeedbackCategory, FeedbackRecord } from './dialog.ts'
-export type { FeedbackDialogInjected, FeedbackDialogProps, MessageFeedbackActionProps, MessageFeedbackInjected } from './slots.ts'
+export type { FeedbackDialogInjected, FeedbackDialogProps } from './slots.ts'
 export type { MessageFeedbackKey } from './locales.ts'
 
 /** Dictionary namespace owned by this plugin. */
@@ -34,7 +34,7 @@ const NS = 'feedback'
 export const inject = ['slots', 'remote', 'remote.messageFeedback', 'locale']
 
 /**
- * Client plugin body: per-message controls, session dialog, `/feedback` decoration.
+ * Client plugin body: session dialog + `/feedback` decoration.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-message-feedback: dictionaries')
@@ -57,27 +57,6 @@ export function apply(ctx: ClientContext): void {
     for (const { feedback } of surfaces.values()) {
       if (feedback.getSnapshot().status !== 'cold') void feedback.resync()
     }
-  })
-
-  ctx.slots.inject('conversation.chat.assistant-actions', () => {
-    const dispose = ctx.slots.register({
-      name: 'conversation.chat.assistant-actions',
-      id: 'feedback',
-      order: 10,
-      locale: NS,
-      inject: (sessionId): MessageFeedbackInjected => {
-        const { feedback } = surfaceFor(sessionId)
-        return {
-          hooks: { feedback },
-          ensure: () => feedback.ensure(),
-          rate: (messageId, rating, note) => feedback.rate(messageId, rating, note),
-          toggle: (messageId, rating) => feedback.toggle(messageId, rating),
-          clearNote: messageId => feedback.clearNote(messageId),
-          clear: messageId => feedback.clear(messageId),
-        }
-      },
-    }, MessageFeedbackActions)
-    return () => { dispose() }
   })
 
   ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({

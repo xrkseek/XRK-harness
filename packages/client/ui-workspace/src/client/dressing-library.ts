@@ -340,7 +340,8 @@ const PALETTES: Record<CompanionColor, { light: { body: string; eyes: string }; 
   silver: { light: { body: '#D9DEE4', eyes: '#1A1A1A' }, dark: { body: '#9AA4AE', eyes: '#1A1A1A' } },
   copper: { light: { body: '#D89A70', eyes: '#1A1A1A' }, dark: { body: '#A4663C', eyes: '#F0EEE8' } },
   midnight: { light: { body: '#4E5A80', eyes: '#F0EEE8' }, dark: { body: '#333D5C', eyes: '#F0EEE8' } },
-  frost: { light: { body: '#E4F0F4', eyes: '#1A1A1A' }, dark: { body: '#ADC6CC', eyes: '#1A1A1A' } },
+  // 「霜白」: near-black body so petal/companion reads as ink, not pale grey.
+  frost: { light: { body: '#141414', eyes: '#F0EEE8' }, dark: { body: '#0A0A0A', eyes: '#F0EEE8' } },
   ember: { light: { body: '#E08A5E', eyes: '#1A1A1A' }, dark: { body: '#A85A34', eyes: '#F0EEE8' } },
   twilight: { light: { body: '#9A8AC2', eyes: '#1A1A1A' }, dark: { body: '#6A5C92', eyes: '#F0EEE8' } },
 }

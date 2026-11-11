@@ -30,6 +30,30 @@ export function openSettingsSection(id: string): void {
   opener?.(trimmed)
 }
 
+declare global {
+  interface Window {
+    /** Thin-shell / WebView bridge: open Settings (default `general`). */
+    __xrkOpenSettings?: (sectionId?: string) => void
+  }
+}
+
+/** Install `window.__xrkOpenSettings` for the Flutter shell FAB / deep links. */
+export function installSettingsWindowBridge(): () => void {
+  const prev = window.__xrkOpenSettings
+  window.__xrkOpenSettings = (sectionId) => {
+    const id = typeof sectionId === 'string' && sectionId.trim() !== ''
+      ? sectionId.trim()
+      : 'general'
+    openSettingsSection(id)
+  }
+  return () => {
+    if (window.__xrkOpenSettings !== undefined) {
+      if (prev !== undefined) window.__xrkOpenSettings = prev
+      else delete window.__xrkOpenSettings
+    }
+  }
+}
+
 declare module '@xrkseek/cordis' {
   interface Context {
     settingsNav: SettingsNavBinder

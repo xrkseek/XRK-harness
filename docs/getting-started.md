@@ -8,7 +8,7 @@
 
 | 项 | 要求 |
 |----|------|
-| Node.js | **≥ 26**（`node -v`；让系统 Node 优先于 IDE 自带 Node 进入 PATH） |
+| Node.js | **≥ 26 LTS**（`node -v`；让系统 Node 优先于 IDE 自带 Node 进入 PATH） |
 | pnpm | **仅路径 B**：`npm install -g pnpm@11.22.0`（与根 `packageManager` 同版） |
 
 用法：**CLI**（`xrkh run`）或 **Web**（`xrkh web` / `serve`）。全局安装后主命令为 **`xrkh`**；完整 bin 名 **`xrk-harness`** 等价。
@@ -184,7 +184,7 @@ Capability boundaries: [status.md](./status.md). Day-to-day knobs live in **Web 
 
 | Item | Requirement |
 |------|-------------|
-| Node.js | **≥ 26** (`node -v`; do not let an IDE-bundled Node preempt PATH) |
+| Node.js | **≥ 26 LTS** (`node -v`; do not let an IDE-bundled Node preempt PATH) |
 | pnpm | **Path B only**: `npm install -g pnpm@11.22.0` (match root `packageManager`) |
 
 Usage: **CLI** (`xrkh run`) or **Web** (`xrkh web` / `serve`). After a global install the primary command is **`xrkh`**; the full bin name **`xrk-harness`** is equivalent.

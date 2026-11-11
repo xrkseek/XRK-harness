@@ -85,6 +85,17 @@ export interface ProviderEditorProps {
   onClose: (changed: boolean) => void
 }
 
+/**
+ * Face used to send `["__pending"]` for a keyless DeepSeek row so the add
+ * picker could list it without a stored profile. That segment is not in the
+ * schema, so the card rendered "unresolvable settings path". Treat it as the
+ * section root — the same address a configured DeepSeek card uses.
+ */
+function editorPath(path: readonly string[]): readonly string[] {
+  if (path.length === 1 && path[0] === '__pending') return []
+  return path
+}
+
 /** A user-section subtree as a plain draft object (absent → empty). */
 function draftAt(namespace: SettingsNamespaceView, path: readonly string[]): Record<string, unknown> {
   const subtree = getPath(namespace.user, path)
@@ -144,7 +155,8 @@ function refFor(namespace: SettingsNamespaceView, path: readonly string[], provi
  * @returns the editor card.
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
-  const { namespace, settingsPath, api, t } = props
+  const { namespace, api, t } = props
+  const settingsPath = editorPath(props.settingsPath)
   const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(namespace, settingsPath))
   const [keyDraft, setKeyDraft] = useState('')
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)

@@ -248,7 +248,10 @@ export function createOpenAiVideoGenProvider(
       form.append("size", req.size ?? defaultSize);
       if (stills[0]) {
         const src = stills[0];
-        const blob = new Blob([src.bytes], { type: src.mimeType });
+        // Node 26 DOM lib: BlobPart wants Uint8Array<ArrayBuffer>, not ArrayBufferLike.
+        const blob = new Blob([new Uint8Array(src.bytes)], {
+          type: src.mimeType,
+        });
         form.append(
           "input_reference",
           blob,

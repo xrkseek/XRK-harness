@@ -1,0 +1,21 @@
+---
+description: 三生态（CLI·Desktop·Mobile）固定流程入口；前台打包；隔离 home；禁试错
+alwaysApply: false
+xrk-inject: false
+---
+
+# 三生态固定流程
+
+操作真源：`.agents/skills/xrk-dev-surfaces`。
+
+## 何时读
+
+发版、打 Desktop、打手机 APK、本机 Host/Web smoke、Agent 又要猜 ABI/路径时。
+
+## 硬规则
+
+1. **先读** skill `xrk-dev-surfaces` 选面，再跳叶技能；禁止对话里逐步试 Flutter / subst / publish。
+2. 长打包 / 发版 / APK：**前台可见**终端；禁止静默后台假装完成。
+3. 手测隔离：`XRK_HOME=.xrk-smoke` · Desktop `development/home` · 手机 `C:\xrk-mobile`；**禁**污染日用 `~/.xrk`。
+4. 手机产品路径：**arm64** + 完整 `runtime/out/arm64-v8a`；缺 rootfs 禁止打 APK。**禁止 MuMu / 模拟器手测**（无 arm proot）。
+5. `release` / `package:desktop` / 手机 `build-apk` **禁止并行**（`xrk-release-flow`）。

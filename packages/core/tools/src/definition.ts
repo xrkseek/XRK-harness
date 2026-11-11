@@ -10,6 +10,16 @@ import type {
 export interface ToolExecuteExtras {
   /** Stable call id for this execution (outer identity for nested Code Mode). */
   readonly callId: string;
+  /**
+   * Host session id when settle runs inside an agent turn.
+   * Process plugins (e.g. mobile phone_*) may forward this for task isolation —
+   * never trust model-supplied tool args for the same fields.
+   */
+  readonly sessionId?: string;
+  /**
+   * Host turn / run id paired with {@link sessionId} (agent-loop `turnId`).
+   */
+  readonly runId?: string;
   emitToolEvent(type: string, payload: unknown): void;
   /**
    * Mark a successful final result as terminal for the current agent turn

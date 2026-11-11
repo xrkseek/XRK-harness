@@ -221,8 +221,10 @@
   inset: 0;
   z-index: 28;
   width: auto;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Prefer Flutter-injected --ds-safe-* (thin shell); env() alone is often 0
+     in Android WebView, or doubles when Overview header also pads safe-area. */
+  padding-top: max(env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--ds-safe-bottom, 0px));
   box-sizing: border-box;
   border-left: none;
   background: var(--dsw-alias-bg-base);
@@ -302,11 +304,10 @@
    toggle is hard to find beside long titles / tab overflow). */
 .phoneChrome {
   position: absolute;
-  /* Match ConversationRoot phone .header pad-top (max 8 / safe-area) so
-     menu|ball|概况 share one band with the title row — Via / Edge cover
-     insets used to push chrome alone and land on the tabs. */
-  top: max(8px, env(safe-area-inset-top, 0px));
-  left: max(6px, env(safe-area-inset-left, 0px));
+  /* Match ConversationRoot phone .header pad-top — prefer Flutter --ds-safe-*
+     when env(safe-area) is 0 in Android WebView. */
+  top: max(8px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
+  left: max(6px, env(safe-area-inset-left, 0px), var(--ds-safe-left, 0px));
   z-index: 24;
   display: inline-flex;
   align-items: center;

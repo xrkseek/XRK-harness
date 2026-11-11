@@ -2,7 +2,8 @@
  * Face remotes `threads/*` and `team/*`: workspace 主线, plus Agent Team as the
  * child's tools / inject / playbook roster.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { readSessionEvents } from "@xrkseek/core-session";
 import {
   effectiveApprovalPolicy,
@@ -723,18 +724,34 @@ export const teamImportPack: FaceHandler = async (runtime, _rpcId, payload) => {
       error: { code: "invalid-payload", message: 'scope must be "workspace" or "global"' },
     };
   }
+  const zipPathRaw = String(args.zipPath ?? "").trim();
   const b64 = String(args.zipBase64 ?? args.base64 ?? "").trim();
-  if (!b64) {
+  let buf: Buffer;
+  if (zipPathRaw) {
+    // Absolute or cwd-relative path on the Host (mobile inbox / open-with Lane P).
+    // Prefer over zipBase64 so large packs never cross the Face RPC as base64.
+    const resolved = path.isAbsolute(zipPathRaw)
+      ? path.resolve(zipPathRaw)
+      : path.resolve(process.cwd(), zipPathRaw);
+    try {
+      buf = readFileSync(resolved);
+    } catch {
+      return {
+        ok: false,
+        error: { code: "invalid-payload", message: `zipPath unreadable: ${resolved}` },
+      };
+    }
+  } else if (b64) {
+    try {
+      buf = Buffer.from(b64, "base64");
+    } catch {
+      return { ok: false, error: { code: "invalid-payload", message: "zipBase64 invalid" } };
+    }
+  } else {
     return {
       ok: false,
-      error: { code: "invalid-payload", message: "zipBase64 required" },
+      error: { code: "invalid-payload", message: "zipBase64 or zipPath required" },
     };
-  }
-  let buf: Buffer;
-  try {
-    buf = Buffer.from(b64, "base64");
-  } catch {
-    return { ok: false, error: { code: "invalid-payload", message: "zipBase64 invalid" } };
   }
   if (buf.length < 4) {
     return { ok: false, error: { code: "invalid-payload", message: "zip too small" } };

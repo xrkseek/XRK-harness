@@ -25,9 +25,9 @@
       - button "编辑 Acme Gateway (acme-gateway)": 编辑
       - button "删除 Acme Gateway (acme-gateway)": 删除
     - listitem:
-      - text: DeepSeek（兼容面）
+      - text: DeepSeek
       - img "API 密钥缺失"
-      - button "编辑 DeepSeek（兼容面） (deepseek-official)": 编辑
+      - button "编辑 DeepSeek (deepseek-official)": 编辑
     - listitem:
       - text: Groq
       - img "API 密钥已配置"

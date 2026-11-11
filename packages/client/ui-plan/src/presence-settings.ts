@@ -560,8 +560,9 @@ export const PRESENCE_COLOR_PALETTES: Record<PresenceColor, PresenceColorModes> 
     dark: { body: '#333D5C', eyes: '#F0EEE8' },
   },
   frost: {
-    light: { body: '#E4F0F4', eyes: '#1A1A1A' },
-    dark: { body: '#ADC6CC', eyes: '#1A1A1A' },
+    // 「霜白」preset: solid near-black body (petal / ball read as ink, not grey-white).
+    light: { body: '#141414', eyes: '#F0EEE8' },
+    dark: { body: '#0A0A0A', eyes: '#F0EEE8' },
   },
   ember: {
     light: { body: '#E08A5E', eyes: '#1A1A1A' },

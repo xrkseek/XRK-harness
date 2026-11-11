@@ -8,7 +8,7 @@
 
 | 症状 | 处理 |
 |------|------|
-| `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26**；让系统 Node 优先（IDE 自带 Node 会让 `where node` 指错）（Windows：`where node`） |
+| `engines` / `Unsupported environment`，Node 过旧 | 换系统 Node **≥26 LTS**；让系统 Node 优先（IDE 自带 Node 会让 `where node` 指错）（Windows：`where node`） |
 | 本机没有 pnpm / 版本不对 | `npm install -g pnpm@11.22.0`（与根 `packageManager` 对齐）；用 pnpm，不经 Corepack |
 | 误装 yarn / 用 npm 装本仓依赖 | 删掉误装的 `node_modules`，改用上面同版 pnpm 再 `pnpm install` |
 | `ERR_PNPM_IGNORED_BUILDS`（esbuild / node-pty 等） | 根 `pnpm-workspace.yaml` → `allowBuilds` 已放行；缺项就补 `true` 后重装 |
@@ -129,7 +129,7 @@ Diagnose by symptom. If it still fails, check whether [status.md](./status.md) m
 
 | Symptom | Remedy |
 |------|------|
-| `engines` / `Unsupported environment`, Node too old | Use system Node **≥26**; do not let an IDE-bundled Node preempt PATH (Windows: `where node`) |
+| `engines` / `Unsupported environment`, Node too old | Use system Node **≥26 LTS**; do not let an IDE-bundled Node preempt PATH (Windows: `where node`) |
 | Missing or wrong pnpm | `npm install -g pnpm@11.22.0` (align with root `packageManager`); **do not use Corepack** |
 | Installed with yarn or npm by mistake | Remove the mistaken `node_modules`, then `pnpm install` with the pinned pnpm |
 | `ERR_PNPM_IGNORED_BUILDS` (esbuild / node-pty, etc.) | Root `pnpm-workspace.yaml` → `allowBuilds` already allows these; add missing `true` entries and reinstall |

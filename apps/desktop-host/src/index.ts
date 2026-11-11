@@ -177,7 +177,7 @@ async function main(): Promise<void> {
       }
       if (process.connected) {
         try {
-          process.disconnect();
+          process.disconnect?.();
         } catch {
           // channel already gone
         }

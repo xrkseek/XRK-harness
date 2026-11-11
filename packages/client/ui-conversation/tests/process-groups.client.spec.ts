@@ -50,9 +50,13 @@ const tool = (key: string, options: Parameters<typeof stub>[2] = {}) => stub(key
 function namedTool(
   key: string,
   name: string,
-  options: Parameters<typeof stub>[2] = {},
+  options: Parameters<typeof stub>[2] & {
+    readonly interrupted?: boolean
+    readonly isError?: boolean
+  } = {},
 ): ChatNode {
   const node = tool(key, options)
+  const isError = options.interrupted === true || options.isError === true
   ;(node as { data: unknown }).data = {
     root: {
       kind: 'tool-result',
@@ -62,7 +66,12 @@ function namedTool(
       call: { name, argsRaw: '{}' },
       callTime: null,
       content: [],
-      isError: false,
+      isError,
+      error: options.interrupted === true
+        ? { name: 'AbortError', code: 'interrupted' }
+        : options.isError === true
+          ? { name: 'Error', code: 'failed' }
+          : undefined,
       callView: null,
       resultView: null,
       subCalls: [],
@@ -92,6 +101,8 @@ describe('flowEntries', () => {
       toolCallNames: ['tool', 'tool', 'tool'],
       runningTool: undefined,
       running: false,
+      stopped: 0,
+      failed: 0,
     })
     expect(group.members.map(member => member.key)).toEqual(['t1', 't2', 't3'])
     expect(group.closed).toBe(true)
@@ -124,6 +135,8 @@ describe('flowEntries', () => {
       toolCallNames: ['tool'],
       runningTool: undefined,
       running: false,
+      stopped: 0,
+      failed: 0,
     })
     expect(group.turn).toBe(2)
     expect(entries[1]).toEqual({ kind: 'node', key: 'a1' })
@@ -202,6 +215,20 @@ describe('flowEntries', () => {
     expect(group.summary.toolCallNames).toEqual(['bash', 'bash', 'Read'])
     expect(group.summary.running).toBe(true)
     expect(group.summary.runningTool).toBe('bash')
+  })
+
+  it('counts interrupted tools as stopped and other errors as failed', () => {
+    const entries = entriesOf([
+      namedTool('s1', 'bash', { interrupted: true }),
+      namedTool('f1', 'Read', { isError: true }),
+      namedTool('ok', 'grep'),
+    ])
+    const group = entries[0]
+    expect(group?.kind).toBe('group')
+    if (group?.kind !== 'group') throw new Error('expected group')
+    expect(group.summary.stopped).toBe(1)
+    expect(group.summary.failed).toBe(1)
+    expect(group.summary.running).toBe(false)
   })
 })
 

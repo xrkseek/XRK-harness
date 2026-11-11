@@ -66,6 +66,9 @@ const PROVIDER_ALIASES: Readonly<Record<string, readonly string[]>> = {
   together: ["togetherai"],
   gemini: ["google", "google-vertex"],
   "openai-responses": ["openai"],
+  vercel: ["vercel-ai-gateway"],
+  zai: ["zhipuai", "zai-coding-cn"],
+  "kimi-coding": ["moonshotai", "moonshotai-cn"],
 };
 
 function hostOf(url: string | undefined): string | undefined {

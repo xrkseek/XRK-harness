@@ -35,8 +35,8 @@ import {
 } from "./build-paths.js";
 import { scrubDesktopSigningEnvironment } from "./windows-sign.js";
 
-/** Bundled Host Node (must satisfy workspace engines.node >=26). */
-export const DESKTOP_BUNDLED_NODE_VERSION = "26.8.1" as const;
+/** Bundled Host Node — Node 26 LTS (must satisfy workspace engines.node >=26). */
+export const DESKTOP_BUNDLED_NODE_VERSION = "26.12.1" as const;
 
 /** Pinned pnpm (matches root packageManager). */
 export const DESKTOP_BUNDLED_PNPM_VERSION = "11.22.0" as const;

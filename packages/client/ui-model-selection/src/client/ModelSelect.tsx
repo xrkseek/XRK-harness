@@ -23,10 +23,27 @@ import {
 } from '@xrkseek/client-ui-primitives'
 import type { PropsLocale } from '@xrkseek/client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
+import { NO_MODEL_CONFIGURED_MARKER } from './directory.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
 type Pane = 'root' | 'model' | 'effort'
+
+/** Prefer the Settings→Models CTA over raw Zod / Host dumps. */
+function formatModelsError(
+  message: string | null,
+  t: PropsLocale<'model'>['t'],
+): string | null {
+  if (message === null) return null
+  if (message === NO_MODEL_CONFIGURED_MARKER) return t('error.noModelConfigured')
+  if (
+    /\[\s*"current"\s*,\s*"(provider|model)"\s*\]/.test(message)
+    || (message.includes('too_small') && message.includes('current'))
+  ) {
+    return t('error.noModelConfigured')
+  }
+  return t('error.action', { message })
+}
 
 /** Case-insensitive substring match over model id, name, and provider group. */
 function matchesModelQuery(
@@ -281,6 +298,24 @@ export function ModelSelect(
   }
 
   const show = (): void => {
+    // Phone: blur the composer first and clear overlay-keyboard CSS so the
+    // sticky seat drops with the IME before the menu mounts. Without this,
+    // tapping「模型」dismisses the keyboard while --xrk-keyboard-inset stays
+    // high for a frame (or longer) and the page reads as "pulled up".
+    const coarse = typeof matchMedia === 'function'
+      && matchMedia('(pointer: coarse)').matches
+    if (coarse && typeof document !== 'undefined') {
+      const active = document.activeElement
+      if (active instanceof HTMLElement && active !== triggerRef.current) {
+        active.blur()
+      }
+      const root = document.documentElement
+      if (!root.hasAttribute('data-xrk-shell-keyboard')) {
+        root.style.setProperty('--xrk-keyboard-inset', '0px')
+        root.removeAttribute('data-xrk-keyboard')
+        window.dispatchEvent(new CustomEvent('xrk-keyboard-inset', { detail: { inset: 0 } }))
+      }
+    }
     triggerRef.current?.focus()
     setPane('root')
     setSearch('')
@@ -386,10 +421,10 @@ export function ModelSelect(
       if (rootRef.current !== null) close(true)
       return
     }
-    const message = directory.getSnapshot().error
-    if (message !== null) {
+    const formatted = formatModelsError(directory.getSnapshot().error, t)
+    if (formatted !== null) {
       toastSeq.current += 1
-      setToast({ seq: toastSeq.current, text: t('error.action', { message }) })
+      setToast({ seq: toastSeq.current, text: formatted })
     }
   }
 
@@ -511,14 +546,16 @@ export function ModelSelect(
               )}
               {state.error !== null && lastActionRef.current === 'load' && (
                 <div className={css.error}>
-                  <span>{t('error.action', { message: state.error })}</span>
-                  <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
+                  <span>{formatModelsError(state.error, t)}</span>
+                  {state.error !== NO_MODEL_CONFIGURED_MARKER && (
+                    <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
+                  )}
                 </div>
               )}
               {state.failures.map(failure => (
                 <div className={css.warning} key={failure.id}>
                   <span>{t('warning.groupLoad', { name: failure.name, message: failure.message })}</span>
-                  <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
+                  <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
                 </div>
               ))}
               {modelCount > 5 && (
@@ -610,8 +647,10 @@ export function ModelSelect(
             <>
               {state.error !== null && lastActionRef.current === 'load' && (
                 <div className={css.error}>
-                  <span>{t('error.action', { message: state.error })}</span>
-                  <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
+                  <span>{formatModelsError(state.error, t)}</span>
+                  {state.error !== NO_MODEL_CONFIGURED_MARKER && (
+                    <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
+                  )}
                 </div>
               )}
               {effortChoices.length === 0

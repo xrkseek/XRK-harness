@@ -19,7 +19,9 @@
 import type {} from '@xrkseek/xrk-api-remotes/client'
 import type { ConnectionHandle } from '@xrkseek/client-connection/client'
 import type { ClientContext, SessionId } from '@xrkseek/client-runtime/client'
-import { resolveWorkspacePath, routeWorkspaceOpenFile } from '@xrkseek/client-runtime/client'
+import {
+  downloadWorkspaceFile, resolveWorkspacePath, routeWorkspaceOpenFile,
+} from '@xrkseek/client-runtime/client'
 import type { BoundActions } from '@xrkseek/client-ui-slots'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.plan seat).
 import type {} from '@xrkseek/client-ui-conversation/client'
@@ -220,8 +222,7 @@ export function apply(ctx: ClientContext): void {
       openChangedFile: async (path: string) => {
         const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
         const resolved = resolveWorkspacePath(cwd, path)
-        // Same contract as chat openFile: wake xrkh-better-sidebar when present;
-        // OS open only on privileged surface + Host canOpenPath.
+        // Same cascade as chat openFile: workbench → OS open → download.
         const allowNativeOpen = connection.isLoopback
           && connection.hostDescription.getSnapshot()?.canOpenPath === true
         await routeWorkspaceOpenFile(
@@ -241,7 +242,15 @@ export function apply(ctx: ClientContext): void {
             face.openTab({ type: 'editor', path: p })
             return true
           },
-          { allowNativeOpen },
+          {
+            allowNativeOpen,
+            downloadFile: (p) => {
+              downloadWorkspaceFile(p, {
+                sessionId: String(sessionId),
+                ...(cwd ? { cwd } : {}),
+              })
+            },
+          },
         )
       },
       listCanvases: async (signal: AbortSignal) => {

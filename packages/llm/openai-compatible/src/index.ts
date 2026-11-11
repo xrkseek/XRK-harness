@@ -31,6 +31,7 @@ import type {
 } from "@xrkseek/protocol";
 import {
   asContentBlocks,
+  combineAbortSignals,
   contentHasImage,
   flattenText,
   requestImageHandleText,
@@ -461,7 +462,7 @@ function requestSignal(
       ? AbortSignal.timeout(timeoutMs)
       : undefined;
   if (request.signal && timeoutSignal) {
-    return AbortSignal.any([request.signal, timeoutSignal]);
+    return combineAbortSignals([request.signal, timeoutSignal]);
   }
   return request.signal ?? timeoutSignal;
 }

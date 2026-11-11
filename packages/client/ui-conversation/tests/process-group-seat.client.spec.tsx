@@ -62,6 +62,8 @@ function group(closed: boolean, overrides: Partial<Extract<FlowEntry, { kind: 'g
       toolCallNames: ['bash', 'Read'],
       runningTool: undefined,
       running: false,
+      stopped: 0,
+      failed: 0,
       ...overrides,
     },
     members: [{ key: 'a1' }, { key: 'a2' }, { key: 'a3' }],
@@ -564,6 +566,26 @@ describe('ProcessGroupSeat', () => {
     await vi.waitFor(() => {
       expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
     })
+  })
+
+  it('keeps「已停止」on the folded header so abort is visible without opening', async () => {
+    const view = renderSeat(group(true, { stopped: 1, failed: 0 }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(view.container.querySelector('[data-process-group]')?.hasAttribute('data-process-stopped'))
+      .toBe(true)
+    expect(view.container.querySelector('[data-process-outcome]')?.textContent).toBe('row.stopped')
+  })
+
+  it('keeps「失败」on the folded header when a tool errored', async () => {
+    const view = renderSeat(group(true, { stopped: 0, failed: 1 }))
+    await vi.waitFor(() => {
+      expect(body(view.container)?.hasAttribute('data-folded')).toBe(true)
+    })
+    expect(view.container.querySelector('[data-process-group]')?.hasAttribute('data-process-failed'))
+      .toBe(true)
+    expect(view.container.querySelector('[data-process-outcome]')?.textContent).toBe('row.failed')
   })
 
   it('uses a Cursor-style activity line as the folded title', async () => {

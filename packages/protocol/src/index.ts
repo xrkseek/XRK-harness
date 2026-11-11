@@ -161,6 +161,7 @@ export {
   type PlanProjection,
   type PlanUnitState,
 } from "./plan-mode.js";
+export { combineAbortSignals } from "./abort.js";
 export type { ToolCall, ToolResult } from "./tools.js";
 export {
   TOOL_ABORTED,

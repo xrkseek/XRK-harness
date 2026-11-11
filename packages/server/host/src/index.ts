@@ -3731,6 +3731,13 @@ export function createHostManager(): HostManager {
             summary: JSON.stringify(args.subject),
           });
         },
+        // Mobile `xrk-mobile-host` remounts prompt/tools after Settings flips
+        // without restarting the guest engine.
+        syncManagedProcessPlugins: async (options?: {
+          readonly reloadIds?: readonly string[];
+        }) => {
+          await faceRuntime.syncManagedProcessPlugins?.(options);
+        },
       };
       hostWireRef.ctx = hostWireCtx;
 

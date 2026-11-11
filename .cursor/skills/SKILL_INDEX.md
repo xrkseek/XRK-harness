@@ -28,6 +28,8 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **Desktop / Web 事件载波**（host SSE · MCP/子代理实时） | `xrk-desktop-events` · rule `xrk-desktop-events` · [host-face](../../docs/host-face.md) |
 | **Desktop 测包 / 自动更新源 / 发新版上 AGT** | 本仓 `.agents/skills/xrk-desktop-update-feed` · 发包链 `xrk-release-chain` |
 | **本机产物落点 · ≤5 版备份 · 测试隔离 home** | rule **`xrk-local-artifacts`** · skill **`xrk-local-artifacts`** · [publishing](../../docs/publishing.md) · [testing](../../docs/testing.md) |
+| **三生态总控**（CLI · Desktop · Mobile 打包/隔离验收；前台命令） | `.agents/skills/xrk-dev-surfaces` · rule `xrk-dev-surfaces` |
+| **手机 APK / 真机**（ASCII 拷贝、arm64+runtime 门禁、**ENGINE_TGZ**、**禁 MuMu**、壳≠机内 xrkh） | `.agents/skills/xrk-mobile-apk` · rule `xrk-mobile-apk` · `pack-local-engine.ps1` · 总控 `xrk-dev-surfaces` |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
 | **发版流水线**（预备 → tgz → release → **再**桌面 → AGT → site → 清理；**禁止并行打包**） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` · `xrk-desktop-update-feed` |

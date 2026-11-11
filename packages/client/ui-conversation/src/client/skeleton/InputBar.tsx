@@ -363,12 +363,16 @@ export const InputBar = memo(function InputBar({
   // never enters the rail — no more submit-time failure rolling the rail
   // back. Oversized generic files (> maxFileBytes) become `@path` chips via
   // Desktop `pathForFile` instead of base64 upload; without a host path the
-  // batch is refused. The host still enforces byte limits at submit for
-  // callers that bypass this composer. Subagent sessions share the same
-  // attachment intake as the parent — Face prompt already accepts image/file
-  // parts on child sessions.
+  // batch is refused. On the mobile thin shell, Flutter stages oversized
+  // paperclip picks into the guest inbox before the WebView sees them — this
+  // toast is only a fallback if that path is bypassed.
   const intakeImages = useCallback((files: readonly File[]): void => {
     if (addImages === undefined || files.length === 0) return
+    const mobileShell = typeof document !== 'undefined' && (
+      document.documentElement.hasAttribute('data-xrk-shell-keyboard')
+      || document.documentElement.hasAttribute('data-xrk-layout-phone')
+    )
+    const largeKey = mobileShell ? 'file.largeNeedsWorkspace' : 'file.largeNeedsDesktop'
     const rejected = ((): string | null => {
       const imageTypes = imageLimits?.mediaTypes as readonly string[] | undefined
       const imageFiles = imageTypes === undefined
@@ -405,11 +409,11 @@ export const InputBar = memo(function InputBar({
         const within = otherFiles.filter(file => file.size <= fileLimits.maxFileBytes)
         if (oversized.length > 0) {
           if (keyboard === undefined) {
-            return t('file.largeNeedsDesktop', { size: imageSizeText(fileLimits.maxFileBytes) })
+            return t(largeKey, { size: imageSizeText(fileLimits.maxFileBytes) })
           }
           const { resolved, unresolved } = resolveDroppedPaths(oversized, 'file')
           if (unresolved.length > 0) {
-            return t('file.largeNeedsDesktop', { size: imageSizeText(fileLimits.maxFileBytes) })
+            return t(largeKey, { size: imageSizeText(fileLimits.maxFileBytes) })
           }
           for (const entry of resolved) {
             const insert = pathReferenceInsert(entry.path, 'file')
@@ -441,7 +445,7 @@ export const InputBar = memo(function InputBar({
       }
       if (oversizedPathInserts.length > 0) {
         if (keyboard === undefined) {
-          return t('file.largeNeedsDesktop', {
+          return t(largeKey, {
             size: imageSizeText(fileLimits?.maxFileBytes ?? 0),
           })
         }
@@ -461,8 +465,13 @@ export const InputBar = memo(function InputBar({
   const intakeDirectories = useCallback((directories: readonly File[]): void => {
     if (directories.length === 0) return
     if (locked || machineBusy) return
+    const mobileShell = typeof document !== 'undefined' && (
+      document.documentElement.hasAttribute('data-xrk-shell-keyboard')
+      || document.documentElement.hasAttribute('data-xrk-layout-phone')
+    )
+    const folderKey = mobileShell ? 'file.folderNeedsWorkspace' : 'file.folderNeedsDesktop'
     if (keyboard === undefined) {
-      showToast(t('file.folderNeedsDesktop'))
+      showToast(t(folderKey))
       return
     }
     const { resolved, unresolved } = resolveDroppedDirectories(directories)
@@ -475,7 +484,7 @@ export const InputBar = memo(function InputBar({
       }
     }
     if (unresolved.length > 0) {
-      showToast(t('file.folderNeedsDesktop'))
+      showToast(t(folderKey))
     }
   }, [keyboard, locked, machineBusy, showToast, t])
 

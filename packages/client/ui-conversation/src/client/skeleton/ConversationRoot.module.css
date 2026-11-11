@@ -406,16 +406,22 @@
      Do NOT flex-end-pack: that put a free band above the transcript. Do NOT
      add a DSH turn-spacer for process-settle folds — that pad has no next
      message to reclaim it and parked a blank under the dock. */
+  /* Subtract --xrk-keyboard-inset: sticky composer lifts by that band, so a
+     min-height that still fills the full layout viewport leaves an empty
+     gap between the last bubble and the input (phone overlay IME). */
   min-height: calc(
     var(--dsh-conversation-viewport-height, 100%)
     - var(--dsh-composer-height, 152px)
+    - var(--xrk-keyboard-inset, 0px)
   );
 }
 
 .root[data-phase='active'] .composerSeat {
   position: sticky;
-  /* Overlay soft keyboards: visualViewport publishes --xrk-keyboard-inset.
-     With interactive-widget=resizes-content the inset stays ~0. */
+  /* ONE lift only. --xrk-keyboard-inset is either:
+       • ~0 when the layout already shrank (resizes-content), or
+       • Flutter shell viewInsets when Activity is adjustNothing + overlays.
+     Never stack Activity adjustResize + this bottom offset. */
   bottom: var(--xrk-keyboard-inset, 0px);
   /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
      paints under a sticking code header while scrolling. */
@@ -563,13 +569,10 @@
 
   .header {
     /* Left inset is owned by phoneChrome (titleRow pad). Top must match
-       AppFrame .phoneChrome (`top: max(8px, safe-area)`) — Via / Edge
-       packaged WebViews have no browser chrome, so viewport-fit=cover
-       makes safe-area-inset-top non-zero; without this pad the floating
-       menu|ball|概况 sit on the tabs row. Mobile Safari/Chrome tabs often
-       keep inset 0 (layout already below the URL bar) so this is a no-op. */
-    padding: max(8px, env(safe-area-inset-top, 0px))
-      max(10px, env(safe-area-inset-right, 0px)) 0 0;
+       AppFrame .phoneChrome — prefer Flutter --ds-safe-* when env() is 0
+       (Android WebView). */
+    padding: max(8px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px))
+      max(10px, env(safe-area-inset-right, 0px), var(--ds-safe-right, 0px)) 0 0;
   }
 
   /* Phone AppFrame owns the Status entry — hide the faint header twin. */
@@ -585,14 +588,14 @@
   /* Blank hero hides the session header; clear the floating menu so the
      fish/title stack is not covered on first paint. */
   .root[data-phase='hero'] .scrollBody {
-    padding-top: max(48px, calc(env(safe-area-inset-top, 0px) + 40px));
+    padding-top: max(48px, calc(max(env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px)) + 40px));
   }
 
   /* Keyboard open on empty hero: dock the brand + composer above the keys
      instead of staying vertically centered under the overlay. */
   :global(html[data-xrk-keyboard]) .root[data-phase='hero'] .scrollBody {
     justify-content: flex-end;
-    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-top: max(12px, env(safe-area-inset-top, 0px), var(--ds-safe-top, 0px));
     padding-bottom: max(8px, var(--xrk-keyboard-inset, 0px));
   }
 

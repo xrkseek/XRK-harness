@@ -1252,9 +1252,12 @@ export const sessionDelete: FaceHandler = async (runtime, _rpcId, payload) => {
 
 export const sessionModels: FaceHandler = async (runtime, _rpcId, payload) => {
   const sessionId = String(asRecord(payload).sessionId ?? "");
-  const current = resolveSessionModelSelection(runtime, sessionId);
+  const resolved = resolveSessionModelSelection(runtime, sessionId);
+  // Wire contract: unset route is `null`, not empty strings (client Zod min(1)).
+  const current =
+    resolved.provider.trim() && resolved.model.trim() ? resolved : null;
   const { groups, failures } = buildFaceModelCatalog(runtime);
-  const routable = routeServed(runtime, current.provider);
+  const routable = current ? routeServed(runtime, current.provider) : false;
   return {
     ok: true,
     value: {

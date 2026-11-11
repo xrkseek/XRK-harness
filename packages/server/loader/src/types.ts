@@ -51,6 +51,14 @@ export interface HostWireContext {
     readonly reason: string;
     readonly sessionId?: string;
   }) => Promise<boolean | undefined>;
+  /**
+   * Live remount managed process plugins from disk (soft-disable / reloadIds).
+   * Mobile host plugins use this after writing prompt/tools under `$XRK_HOME/plugins`
+   * so phone settings take effect without `xrkh` restart.
+   */
+  readonly syncManagedProcessPlugins?: (options?: {
+    readonly reloadIds?: readonly string[];
+  }) => Promise<void>;
 }
 
 export type HostPublicHandlerFn = (

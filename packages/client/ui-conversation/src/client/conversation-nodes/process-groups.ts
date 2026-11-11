@@ -34,6 +34,10 @@ export interface ProcessGroupSummary {
   readonly runningTool: string | undefined
   /** Whether any tool root in the group has not settled. */
   readonly running: boolean
+  /** Settled roots stopped by user/abort (`error.code === 'interrupted'`). */
+  readonly stopped: number
+  /** Settled roots that failed for any other reason (`isError`). */
+  readonly failed: number
 }
 
 /** One row rendered inside a group body. */
@@ -108,6 +112,8 @@ export function flowEntries(
     }
     let tools = 0
     let reasoning = 0
+    let stopped = 0
+    let failed = 0
     const toolNames: string[] = []
     const toolCallNames: string[] = []
     const seen = new Set<string>()
@@ -127,6 +133,10 @@ export function flowEntries(
         if (toolRunning(member.node)) {
           running = true
           if (runningTool === undefined) runningTool = name
+        } else if (toolStopped(member.node)) {
+          stopped += 1
+        } else if (toolFailed(member.node)) {
+          failed += 1
         }
       } else {
         reasoning += 1
@@ -144,7 +154,9 @@ export function flowEntries(
       key: `process:${first.key}`,
       turn: pendingTurn,
       closed,
-      summary: { tools, reasoning, toolNames, toolCallNames, runningTool, running },
+      summary: {
+        tools, reasoning, toolNames, toolCallNames, runningTool, running, stopped, failed,
+      },
       members: pending.map(member => ({ key: member.key })),
     })
     pending = []
@@ -237,6 +249,22 @@ function toolRunning(node: ChatNode): boolean {
   const root = (node.data as ToolChatData | undefined)?.root
   if (root === undefined) return false
   return !isSettledTool(root)
+}
+
+/** User Stop / abort closed this tool (`error.code === 'interrupted'`). */
+function toolStopped(node: ChatNode): boolean {
+  if (node.kind !== 'tool-call') return false
+  const root = (node.data as ToolChatData | undefined)?.root
+  if (root === undefined || !isSettledTool(root)) return false
+  return root.error?.code === 'interrupted'
+}
+
+/** Settled tool that failed for a reason other than interrupt. */
+function toolFailed(node: ChatNode): boolean {
+  if (node.kind !== 'tool-call') return false
+  const root = (node.data as ToolChatData | undefined)?.root
+  if (root === undefined || !isSettledTool(root)) return false
+  return root.isError === true && root.error?.code !== 'interrupted'
 }
 
 function nameOfRoot(root: ToolCallBlock): string | undefined {

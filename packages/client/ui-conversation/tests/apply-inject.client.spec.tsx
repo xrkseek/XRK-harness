@@ -279,15 +279,25 @@ describe('conversation slot inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('openFile rejects when the Host cannot open the path', async () => {
+  it('openFile downloads when the Host cannot open the path', async () => {
     const b = await bench()
     b.runtime.workspaces.stub('openPath', () => Promise.reject(new Error('xdg-open is not available')))
+    const click = vi.fn()
+    const realCreate = Document.prototype.createElement.bind(document)
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        return { href: '', download: '', rel: '', click, remove: vi.fn() } as never
+      }
+      return realCreate(tag)
+    })
     const { injected } = b.chatViewApi(ROOT)
-    await expect(injected.openFile('src/a.ts')).rejects.toThrow('xdg-open is not available')
+    await expect(injected.openFile('src/a.ts')).resolves.toBeUndefined()
+    expect(click).toHaveBeenCalled()
+    createElement.mockRestore()
     await b.runtime.dispose()
   })
 
-  it('openFile skips Host openPath on a non-privileged Web surface', async () => {
+  it('openFile downloads on a non-privileged Web surface without workbench', async () => {
     const b = await bench()
     b.runtime.provide('connection', {
       api: { settings: {} },
@@ -297,9 +307,19 @@ describe('conversation slot inject API', () => {
         subscribe: () => () => {},
       },
     })
+    const click = vi.fn()
+    const realCreate = Document.prototype.createElement.bind(document)
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        return { href: '', download: '', rel: '', click, remove: vi.fn() } as never
+      }
+      return realCreate(tag)
+    })
     const { injected } = b.chatViewApi(ROOT)
     await injected.openFile('src/a.ts')
     expect(b.runtime.workspaces.calls.filter(c => c.method === 'openPath')).toHaveLength(0)
+    expect(click).toHaveBeenCalled()
+    createElement.mockRestore()
     await b.runtime.dispose()
   })
 

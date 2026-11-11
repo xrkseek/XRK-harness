@@ -131,6 +131,33 @@ describe('beginSubmission', () => {
     }])
   })
 
+  it('keeps a follow-up transcript echo in chat when Host still lists it (no dock jump)', async () => {
+    // Pause left running=false so beginSubmission used transcript; Host still
+    // lists the inbox row. Promoting into the dock made the chat bubble vanish
+    // into a waiting-line flash on the next send — keep transcript + let
+    // ChatView paint 「发送中」 while QueueDock skips the Host row as inChat.
+    const { api } = bareApi()
+    const session = new Session(SID, api, remotes())
+    await session.open()
+    session.handleMuxEnvelope(RpcId('ev'), {
+      type: 'session/event',
+      sessionId: SID,
+      event: ev.user(1, 'opener'),
+    })
+    const handle = session.beginSubmission({ mode: 'queue', text: '跟进', attachments: [] })
+    expect(session.getSnapshot().pendingSubmissions[0]?.placement).toBe('transcript')
+    session.handleMuxEnvelope(RpcId('q0'), queueFrame(SID, [{
+      id: 'qi-0',
+      rpcId: handle.requestId,
+      body: '跟进',
+    }]))
+    expect(session.getSnapshot().pendingSubmissions).toMatchObject([{
+      requestId: handle.requestId,
+      placement: 'transcript',
+      text: '跟进',
+    }])
+  })
+
   it('keeps a busy submit in the dock when Host never queues it', () => {
     const { api } = bareApi()
     const session = new Session(SID, api, remotes())

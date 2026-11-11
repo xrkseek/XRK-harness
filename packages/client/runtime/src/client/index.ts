@@ -54,6 +54,17 @@ export {
 } from './workspaces/service.ts'
 export { formatAttachmentSummary, isAttachmentAddress, normalizeAttachmentId, resolveWorkspacePath } from './workspaces/path.ts'
 export {
+  basenameForDownload,
+  bytesToBase64,
+  downloadWorkspaceFile,
+  isObjectDownloadUrl,
+  looksLikeDirectoryPath,
+  triggerBrowserOrShellDownload,
+  workspaceFileDownloadUrl,
+} from './workspaces/file-download.ts'
+export {
+  isNativeOpenUnavailableError,
+  NativeOpenUnavailableError,
   routeWorkspaceOpenFile,
   type RouteWorkspaceOpenFileOptions,
 } from './workspaces/open-file-route.ts'

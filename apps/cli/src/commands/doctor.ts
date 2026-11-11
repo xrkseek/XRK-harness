@@ -86,10 +86,13 @@ export async function runDoctor(workspace: string): Promise<DoctorResult> {
 
   const nodeMajor = Number(process.versions.node.split(".")[0] ?? 0);
   const execPath = process.execPath;
+  const hasAbortAny = typeof AbortSignal.any === "function";
   checks.push({
     name: "node",
-    ok: nodeMajor >= 26,
-    detail: `v${process.versions.node} (need >=26) ${execPath}`,
+    ok: nodeMajor >= 26 && hasAbortAny,
+    detail: hasAbortAny
+      ? `v${process.versions.node} LTS surface (need >=26) ${execPath}`
+      : `v${process.versions.node} missing AbortSignal.any (need >=26 LTS) ${execPath}`,
   });
 
   const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";

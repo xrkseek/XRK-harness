@@ -15,7 +15,7 @@
 import type { ClientContext } from '@xrkseek/client-runtime/client'
 import { ConfigFormsService } from './config-forms.ts'
 import { SettingsScopeBinder } from './settings-scope.ts'
-import { SettingsNavBinder } from './settings-nav.ts'
+import { installSettingsWindowBridge, SettingsNavBinder } from './settings-nav.ts'
 
 export type {
   SettingsGeneralItemOwnerProps, SettingsHeaderOwnerProps, SettingsOnboardingOwnerProps,
@@ -29,7 +29,8 @@ export {
   type ConfigFormsServiceApi,
 } from './config-forms.ts'
 export {
-  openSettingsSection, bindSettingsOpenSection, SettingsNavBinder,
+  openSettingsSection, bindSettingsOpenSection, installSettingsWindowBridge,
+  SettingsNavBinder,
 } from './settings-nav.ts'
 
 /**
@@ -50,4 +51,6 @@ export function apply(ctx: ClientContext): void {
   new SettingsScopeBinder(ctx)
   new ConfigFormsService(ctx)
   new SettingsNavBinder(ctx)
+  // Flutter thin-shell FAB / deep links call window.__xrkOpenSettings.
+  ctx.effect(() => installSettingsWindowBridge(), 'ui-settings: window bridge')
 }

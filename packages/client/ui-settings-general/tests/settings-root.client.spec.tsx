@@ -458,6 +458,41 @@ describe('SettingsPanel navigation', () => {
     expect(screen.getByText('Plugins')).toBeTruthy()
   })
 
+  it('keeps the Plugins home close control tappable under a narrow phone viewport', () => {
+    const { openSection } = mount({
+      onboardingActive: false,
+      rows: [
+        { id: 'general', order: 0, label: 'General' },
+        { id: 'plugins', order: 15, label: 'Plugins' },
+      ],
+    })
+    // jsdom has no real layout engine; stamp the phone media query + safe-area
+    // tokens the thin shell injects so the homeMode header CSS path is active.
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width: 767px'),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+    // Same path as Settings .nav: rely on --ds-safe-top (Flutter), not a 48px floor.
+    document.documentElement.style.setProperty('--ds-safe-top', '24px')
+    openSection('plugins')
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className).toMatch(/homePanel/)
+    const close = screen.getByRole('button', { name: 'Close' })
+    expect(close).toBeTruthy()
+    fireEvent.click(close)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('switches the rendered section on nav click', () => {
     mount()
     openPanel()

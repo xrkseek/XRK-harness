@@ -353,7 +353,8 @@ export const sessionModelsRequestSchema = z.object({
 
 /** session.models response value. */
 export const sessionModelsValueSchema = z.object({
-  current: modelSelectionSchema,
+  // null = Host has no route yet (Settings → Models empty); never "" strings.
+  current: modelSelectionSchema.nullable(),
   routable: z.boolean(),
   groups: z.array(modelProviderGroupSchema),
   failures: z.array(modelCatalogFailureSchema),

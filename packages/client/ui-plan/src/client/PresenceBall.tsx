@@ -412,7 +412,7 @@ const SCRIPT_BASE = '/presence/emotion-ball'
 /** Worker host first; SVG stack loads via EmotionBall.loadLegacySvg when needed. */
 const SCRIPT_ORDER = ['presence-worker-host.js'] as const
 /** Bump when worker / canvas render path changes so cached scripts reload. */
-const PRESENCE_BALL_REV = '43'
+const PRESENCE_BALL_REV = '44'
 
 /** User click pulse — playful set, then hand back to auto. */
 const CLICK_IDS = ['10', '13', '03', '33', '14', '11', '19', '07'] as const

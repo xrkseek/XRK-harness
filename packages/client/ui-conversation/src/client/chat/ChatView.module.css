@@ -296,6 +296,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Folded「已停止」/「失败」— warm so abort is visible without opening the run. */
+:global([data-process-group]) .processGroupOutcome,
+:global([data-process-group] [data-process-outcome]) {
+  flex: 0 1 auto;
+  color: var(--dsw-alias-warning, var(--dsw-alias-label-secondary));
+  font-weight: 500;
+}
+
 /* Inline variant: the live name is followed by the cumulative activity line
    (`过程 · bash · 2 条命令…`). Both sit at their natural width, side by side —
    the activity line must hug the live name instead of flying to the row end.

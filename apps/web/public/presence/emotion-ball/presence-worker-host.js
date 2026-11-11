@@ -9,7 +9,7 @@
   'use strict';
 
   var EB = (globalThis.EmotionBall = globalThis.EmotionBall || {});
-  var REV = '43';
+  var REV = '44';
   var SCRIPT_BASE = '/presence/emotion-ball/';
   var IDLE_MS = 15000;
   var worker = null;
@@ -19,6 +19,25 @@
   var idleTimer = 0;
   /** After a render-thread crash, later balls use the SVG engine. */
   var workerDead = false;
+
+  /**
+   * Phone Flutter WebView / Android System WebView often expose OffscreenCanvas
+   * + Worker APIs, but the worker rAF loop stalls after the first paint — the
+   * ball looks like a static sticker while React tips still update. Prefer SVG
+   * on those carriers (main-thread rAF is reliable).
+   */
+  function preferSvgCarrier() {
+    try {
+      var shell = globalThis.XrkShell;
+      if (shell && typeof shell.postMessage === 'function') return true;
+    } catch (_e) { /* ignore */ }
+    try {
+      var ua = typeof navigator !== 'undefined' ? String(navigator.userAgent || '') : '';
+      // Android WebView UA contains `; wv)` — not ordinary Chrome tabs.
+      if (/; wv\)/i.test(ua)) return true;
+    } catch (_e2) { /* ignore */ }
+    return false;
+  }
 
   function isImageBitmap(v) {
     return typeof ImageBitmap !== 'undefined' && v instanceof ImageBitmap;
@@ -85,6 +104,7 @@
 
   function canOffscreen() {
     if (workerDead) return false;
+    if (preferSvgCarrier()) return false;
     return typeof OffscreenCanvas !== 'undefined'
       && typeof HTMLCanvasElement !== 'undefined'
       && typeof HTMLCanvasElement.prototype.transferControlToOffscreen === 'function'
@@ -111,6 +131,10 @@
   function dropProxy(proxy) {
     if (!proxy) return;
     proxies.delete(proxy.id);
+    if (proxy._readyTimer) {
+      clearTimeout(proxy._readyTimer);
+      proxy._readyTimer = 0;
+    }
     if (proxy._ro) {
       try { proxy._ro.disconnect(); } catch (_e) { /* ignore */ }
       proxy._ro = null;
@@ -196,7 +220,15 @@
     /** Buffer calls until the worker engine emits `ready` (after sticker decode). */
     this._ready = false;
     this._queue = [];
+    this._readyTimer = 0;
     var self = this;
+    // If the worker never answers, fall back to SVG — otherwise bounce/setEmotion
+    // sit in `_queue` forever while Overview tips still change (sticker look).
+    this._readyTimer = setTimeout(function () {
+      self._readyTimer = 0;
+      if (self._ready || !proxies.has(self.id)) return;
+      failWorker(new Error('EmotionBall worker ready timeout'));
+    }, 2500);
     if (typeof ResizeObserver !== 'undefined' && mount) {
       this._ro = new ResizeObserver(function () {
         self._postResize();
@@ -208,6 +240,10 @@
   WorkerProxy.prototype._emit = function (evt, payload) {
     if (evt === 'ready' && !this._ready) {
       this._ready = true;
+      if (this._readyTimer) {
+        clearTimeout(this._readyTimer);
+        this._readyTimer = 0;
+      }
       var queued = this._queue;
       this._queue = [];
       for (var i = 0; i < queued.length; i++) {
@@ -338,6 +374,10 @@
     return this;
   };
   WorkerProxy.prototype.destroy = function () {
+    if (this._readyTimer) {
+      clearTimeout(this._readyTimer);
+      this._readyTimer = 0;
+    }
     dropProxy(this);
     this._post({ type: 'destroy', id: this.id });
     this._events = {};

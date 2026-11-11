@@ -2113,6 +2113,29 @@ export function createHarnessComposition(
             memoryToolWrote,
           });
         },
+        // Mobile guest only: exact phone run-end (XRK_MOBILE_* from Android MobileApi).
+        // Mirrors DSH phone-run-end without a Go Host — Desktop/CLI env unset → no-op.
+        ...(process.env.XRK_MOBILE_API && process.env.XRK_MOBILE_TOKEN
+          ? {
+              onTurnEnd: ({ sessionId: sid, turnId: tid, completion }) => {
+                const api = process.env.XRK_MOBILE_API;
+                const token = process.env.XRK_MOBILE_TOKEN;
+                if (!api || !token) return;
+                void fetch(`${api}/v1/phone-settings/run-end`, {
+                  method: "POST",
+                  headers: {
+                    authorization: `Bearer ${token}`,
+                    "content-type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    sessionId: sid,
+                    runId: tid,
+                    completion,
+                  }),
+                }).catch(() => {});
+              },
+            }
+          : {}),
         prepareUserContent: async ({ content, text, signal }) => {
           const prepared = prepareFaceSessionReferences({
             targetSessionId: sessionId,

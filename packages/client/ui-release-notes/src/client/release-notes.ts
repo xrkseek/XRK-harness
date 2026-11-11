@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.16',
+    date: '2026-11-10',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '侧栏会话 / 设置→模型：手机触屏默认可滚动；长按约 0.4 秒后再拖拽重排（滑动会取消长按，不再一按下就锁死滚动）。',
+        en: 'Sidebar sessions / Settings → Models: lists stay scrollable on phones; hold ~0.4s then drag to reorder (a slide cancels the hold — press no longer locks scrolling).',
+      },
+      {
+        zh: '工作区打开 / 导出的文件：手机壳走原生下载通道，不再因 blob: 地址下载失败。',
+        en: 'Workspace open / exported files: the mobile shell uses the native download channel so blob: URLs no longer fail to save.',
+      },
+      {
+        zh: '首次启动只登记向阳空间：Linux guest（cwd=/root）不再把 `/root` 当成编码工作区。',
+        en: 'First boot keeps only Xiangyang: Linux guest (cwd=/root) no longer registers `/root` as a coding workspace.',
+      },
+      {
+        zh: '手机 `xrkh serve` 可钉向阳路径，避免默认 cwd 再挂出一个 root 工作区。',
+        en: 'Mobile `xrkh serve` can pin the Xiangyang workspace path so default cwd cannot mint a root project workspace.',
+      },
+    ],
+  },
+  {
     version: '0.7.15',
     date: '2026-11-08',
     title: {

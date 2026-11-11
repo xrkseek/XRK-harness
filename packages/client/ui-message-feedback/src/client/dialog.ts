@@ -1,7 +1,7 @@
 /**
  * Headless state of one Session's feedback dialog and acknowledgement toast.
- * One form serves the Session target (bare `/feedback`) and optional message
- * targets (Dislike). Overlay and message controls share one controller.
+ * One form serves the Session target (bare `/feedback`) and optional
+   * message targets. Overlay uses this controller.
  */
 
 import { createSnapshotStore, type SnapshotStore } from '@xrkseek/client-runtime/client'

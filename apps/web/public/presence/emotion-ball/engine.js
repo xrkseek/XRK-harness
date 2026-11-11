@@ -323,18 +323,61 @@
 
   /* ---------------- 全局共享 rAF 时钟（多实例单循环） ---------------- */
 
+  /**
+   * Worker Offscreen path: some Android WebViews expose rAF but never fire the
+   * next frame after the first paint. Prefer rAF, fall back to setTimeout, and
+   * switch permanently if rAF stalls while engines are still registered.
+   */
   var ticker = {
     set: new Set(),
     raf: 0,
+    watch: 0,
+    useTimeout: typeof requestAnimationFrame !== 'function',
+    lastTickAt: 0,
+    schedule: function () {
+      var self = this;
+      if (this.useTimeout) {
+        this.raf = setTimeout(function () {
+          self.loop(typeof performance !== 'undefined' ? performance.now() : Date.now());
+        }, 16);
+        return;
+      }
+      this.raf = requestAnimationFrame(ticker.loop);
+      if (this.watch) clearTimeout(this.watch);
+      this.watch = setTimeout(function () {
+        self.watch = 0;
+        if (!self.set.size || self.useTimeout) return;
+        var gap = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - self.lastTickAt;
+        if (gap < 120) return;
+        self.useTimeout = true;
+        if (self.raf && typeof cancelAnimationFrame === 'function') {
+          try { cancelAnimationFrame(self.raf); } catch (_e) { /* ignore */ }
+        }
+        self.raf = 0;
+        self.schedule();
+      }, 140);
+    },
     add: function (e) {
       this.set.add(e);
-      if (!this.raf) this.raf = requestAnimationFrame(ticker.loop);
+      if (!this.raf) this.schedule();
     },
-    remove: function (e) { this.set.delete(e); },
+    remove: function (e) {
+      this.set.delete(e);
+      if (this.set.size) return;
+      if (this.watch) {
+        clearTimeout(this.watch);
+        this.watch = 0;
+      }
+    },
     loop: function (now) {
       ticker.raf = 0;
+      ticker.lastTickAt = now;
       ticker.set.forEach(function (e) { e._tick(now); });
-      if (ticker.set.size) ticker.raf = requestAnimationFrame(ticker.loop);
+      if (ticker.set.size) ticker.schedule();
+      else if (ticker.watch) {
+        clearTimeout(ticker.watch);
+        ticker.watch = 0;
+      }
     }
   };
 

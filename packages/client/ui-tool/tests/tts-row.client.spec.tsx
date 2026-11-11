@@ -81,11 +81,6 @@ const rowProps = (
   // cast supplies the owner slice plus the locale seat, as sibling suites do.
 } as unknown as RowProps)
 
-/** The whole summary row is the expand toggle (ToolRow's unified interaction). */
-const toggleRow = (view: { container: HTMLElement }) => {
-  fireEvent.click(view.container.querySelector('[data-expandable]')!)
-}
-
 let play: MockInstance<() => Promise<void>>
 let pause: MockInstance<() => void>
 
@@ -162,19 +157,18 @@ describe('tts-card-model', () => {
 })
 
 describe('tts row', () => {
-  it('collapses to "voice · duration" and expands to the playback bar', async () => {
+  it('keeps the playback bar visible (forceExpanded) with voice summary', async () => {
     const view = render(<TtsRow {...rowProps(settledClip())} />)
-    // Collapsed summary names the voice, never the base64 / attachment id.
+    // Summary names the voice, never the base64 / attachment id.
     expect(view.container.textContent).toContain('晓晓')
     expect(view.container.textContent).not.toContain('sha256:')
-    expect(view.container.querySelector('[data-tts-player]')).toBeNull()
 
     // Loaded clip: the audio element gets the session-authorized URL.
     await waitFor(() => {
       expect(view.container.querySelector('audio')?.getAttribute('src')).toBe('blob:tts-1')
     })
 
-    toggleRow(view)
+    // Spoken clips stay expanded — no disclosure gate before play.
     expect(view.container.querySelector('[data-tts-player]')).not.toBeNull()
     expect(view.getByLabelText('播放')).toBeTruthy()
     expect(view.getByLabelText('下载音频')).toBeTruthy()
@@ -185,14 +179,12 @@ describe('tts row', () => {
   it('degrades to an honest line when the Host stored no audio', () => {
     const view = render(<TtsRow {...rowProps(settled([{ type: 'text', text: TRUNCATED }]))} />)
     expect(view.container.textContent).toContain('音频未落地')
-    toggleRow(view)
     expect(view.getByText('音频未落地：Host 没有附件存储，聊天里无法播放')).toBeTruthy()
     expect(view.container.querySelector('[data-tts-player]')).toBeNull()
   })
 
   it('says so when a settled call produced no audio at all', () => {
     const view = render(<TtsRow {...rowProps(settled([{ type: 'text', text: 'provider=edge' }]))} />)
-    toggleRow(view)
     expect(view.getByText('没有可播放的音频')).toBeTruthy()
   })
 
@@ -220,6 +212,18 @@ describe('tts row', () => {
     const view = render(<TtsRow {...rowProps(settledClip('sha256:def456'), load)} />)
     await waitFor(() => { expect(load).toHaveBeenCalledTimes(1) })
     expect(play).not.toHaveBeenCalled()
+  })
+
+  it('shows the autoplay-blocked hint when play() rejects', async () => {
+    play.mockRejectedValueOnce(new DOMException('NotAllowedError'))
+    const view = render(<TtsRow {...rowProps(settledClip('sha256:blocked1'))} />)
+    await waitFor(() => {
+      expect(view.container.querySelector('audio')?.getAttribute('src')).toBe('blob:tts-1')
+    })
+    fireEvent.click(view.getByLabelText('播放'))
+    await waitFor(() => {
+      expect(view.getByText('浏览器拦截了自动播放，点播放即可')).toBeTruthy()
+    })
   })
 
   it('stops the previous clip when a newer one arrives in the same session', async () => {

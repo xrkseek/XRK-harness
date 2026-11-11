@@ -59,6 +59,19 @@ describe('ModelDirectory soft-refresh + optimistic select', () => {
     })
   })
 
+  it('settles to error when session.models throws so the menu is not stuck loading', async () => {
+    const directory = new ModelDirectory({
+      models: () => Promise.reject(new Error('socket closed')),
+      selectModel: () => okSelect(catalog.current),
+    }, sid, () => true)
+    await expect(directory.load()).rejects.toThrow(/socket closed/)
+    expect(directory.store.getSnapshot()).toMatchObject({
+      status: 'error',
+      error: 'socket closed',
+      groups: [],
+    })
+  })
+
   it('flips to loading only when nothing is paintable yet', async () => {
     let release!: (value: Awaited<ReturnType<typeof okModels>>) => void
     const sessions = {

@@ -32,6 +32,36 @@ describe('routeChatOpenFile', () => {
     expect(openWorkspace).not.toHaveBeenCalled()
   })
 
+  it('downloads on remote/WAN when community wake fails', async () => {
+    const openWorkspace = vi.fn(async () => {})
+    const download = vi.fn()
+    await routeChatOpenFile(
+      '/w/deck.pptx',
+      openWorkspace,
+      () => false,
+      { allowNativeOpen: false, downloadFile: download },
+    )
+    expect(openWorkspace).not.toHaveBeenCalled()
+    expect(download).toHaveBeenCalledWith('/w/deck.pptx')
+  })
+
+  it('rejects when remote/WAN has neither workbench nor download', async () => {
+    const openWorkspace = vi.fn(async () => {})
+    await expect(routeChatOpenFile(
+      '/w/deck.pptx',
+      openWorkspace,
+      () => false,
+      { allowNativeOpen: false },
+    )).rejects.toMatchObject({ code: 'native-open-unavailable', path: '/w/deck.pptx' })
+    expect(openWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('still OS-opens on privileged loopback when allowNativeOpen is omitted', async () => {
+    const openWorkspace = vi.fn(async () => {})
+    await routeChatOpenFile('/w/deck.pptx', openWorkspace, () => false)
+    expect(openWorkspace).toHaveBeenCalledWith('/w/deck.pptx')
+  })
+
   it('soft-fails OS open after a successful community wake', async () => {
     const openWorkspace = vi.fn(async () => {
       throw new Error('xdg-open is not available')
@@ -45,7 +75,18 @@ describe('routeChatOpenFile', () => {
     expect(openWorkspace).toHaveBeenCalledTimes(1)
   })
 
-  it('rethrows OS open errors when community did not wake', async () => {
+  it('downloads when privileged OS open fails and no workbench woke', async () => {
+    const openWorkspace = vi.fn(async () => {
+      throw new Error('xdg-open is not available')
+    })
+    const download = vi.fn()
+    await routeChatOpenFile('/w/deck.pptx', openWorkspace, () => false, {
+      downloadFile: download,
+    })
+    expect(download).toHaveBeenCalledWith('/w/deck.pptx')
+  })
+
+  it('rethrows OS open errors when neither workbench nor download is available', async () => {
     const openWorkspace = vi.fn(async () => {
       throw new Error('xdg-open is not available')
     })

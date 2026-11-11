@@ -1,15 +1,20 @@
 /**
  * Long-press reorder chrome for one Models provider row (same gesture as
  * Workspace sidebar folders: hold ~420ms, then drag; insert line by row half).
+ *
+ * Touch / Android WebView cannot rely on HTML5 DnD — after the hold we
+ * `setPointerCapture` and hit-test with `elementFromPoint` so the finger can
+ * leave the source row without losing move/up events. Desktop mouse keeps
+ * HTML5 DnD only (see `useLongPressReorder`).
  */
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode, type RefObject } from 'react'
+import {
+  dropHalfFromClientY,
+  hitTestReorderTarget,
+  useLongPressReorder,
+} from '@xrkseek/client-ui-primitives'
 import styles from './ModelsSection.module.css'
-
-/** Hold duration before a pointer gesture starts provider reorder. */
-const PROVIDER_LONG_PRESS_MS = 420
-/** Pointer movement that cancels a pending long-press (px). */
-const PROVIDER_LONG_PRESS_MOVE_PX = 10
 
 export type ProviderDropHalf = 'before' | 'after'
 
@@ -41,57 +46,53 @@ export function ProviderReorderRow({
   drag,
   children,
 }: ProviderReorderRowProps): ReactNode {
-  const [longPressArmed, setLongPressArmed] = useState(false)
-  const suppressClick = useRef(false)
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressOrigin = useRef<{ x: number; y: number } | null>(null)
-  const clearLongPress = (): void => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-    longPressOrigin.current = null
-  }
+  const callbacks = useMemo(() => ({
+    onStart: () => { drag?.start() },
+    onMove: (clientX: number, clientY: number) => {
+      if (drag === undefined) return
+      const hit = hitTestReorderTarget(clientX, clientY, 'provider-id')
+      if (hit === null) return
+      drag.hover(hit.id, hit.half)
+    },
+    onEnd: () => { drag?.end() },
+  }), [drag])
+
+  const gesture = useLongPressReorder(drag !== undefined, callbacks)
 
   const className = [
     styles['rowCard'],
-    longPressArmed || dragging ? styles['rowLongPress'] : '',
+    gesture.armed || dragging ? styles['rowLongPress'] : '',
     dropHalf === 'before' ? styles['dropBefore'] : '',
     dropHalf === 'after' ? styles['dropAfter'] : '',
   ].filter(Boolean).join(' ')
 
   return (
     <li
+      ref={gesture.rowRef as RefObject<HTMLLIElement | null>}
       className={className}
+      style={gesture.touchAction === undefined ? undefined : { touchAction: gesture.touchAction }}
       data-provider-id={providerId}
-      draggable={drag !== undefined}
-      onDragStart={drag === undefined
+      draggable={gesture.draggable}
+      onDragStart={gesture.onHtml5DragStart === undefined
         ? undefined
         : (e) => {
-          clearLongPress()
-          suppressClick.current = true
           try {
             e.dataTransfer.effectAllowed = 'move'
             e.dataTransfer.setData('text/plain', providerId)
           } catch {
             // jsdom DataTransferPolyfill: effectAllowed may be read-only.
           }
-          drag.start()
+          gesture.onHtml5DragStart?.()
         }}
-      onDragEnd={drag === undefined
-        ? undefined
-        : () => {
-          setLongPressArmed(false)
-          drag.end()
-        }}
+      onDragEnd={gesture.onHtml5DragEnd}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
           e.preventDefault()
-          const rect = e.currentTarget.getBoundingClientRect()
-          const half: ProviderDropHalf =
-            e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-          drag.hover(providerId, half)
+          drag.hover(
+            providerId,
+            dropHalfFromClientY(e.clientY, e.currentTarget.getBoundingClientRect()),
+          )
         }}
       onDrop={drag === undefined
         ? undefined
@@ -99,58 +100,14 @@ export function ProviderReorderRow({
           e.preventDefault()
           drag.end()
         }}
-      onPointerDown={drag === undefined
-        ? undefined
-        : (e) => {
-          if (e.button !== 0) return
-          if ((e.target as HTMLElement).closest('button')) return
-          clearLongPress()
-          longPressOrigin.current = { x: e.clientX, y: e.clientY }
-          longPressTimer.current = setTimeout(() => {
-            longPressTimer.current = null
-            suppressClick.current = true
-            setLongPressArmed(true)
-            drag.start()
-          }, PROVIDER_LONG_PRESS_MS)
-        }}
-      onPointerMove={drag === undefined
-        ? undefined
-        : (e) => {
-          const origin = longPressOrigin.current
-          if (origin !== null && longPressTimer.current !== null) {
-            if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > PROVIDER_LONG_PRESS_MOVE_PX) {
-              clearLongPress()
-            }
-            return
-          }
-          if (!longPressArmed) return
-          const el = document.elementFromPoint(e.clientX, e.clientY)
-          const section = el?.closest('[data-provider-id]') as HTMLElement | null
-          const overId = section?.dataset.providerId
-          if (overId === undefined || section === null) return
-          const rect = section.getBoundingClientRect()
-          const half: ProviderDropHalf =
-            e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-          drag.hover(overId, half)
-        }}
-      onPointerUp={() => {
-        const wasArmed = longPressArmed
-        clearLongPress()
-        if (wasArmed) {
-          setLongPressArmed(false)
-          drag?.end()
-        }
-      }}
-      onPointerCancel={() => {
-        clearLongPress()
-        if (longPressArmed) {
-          setLongPressArmed(false)
-          drag?.end()
-        }
-      }}
+      onPointerDown={gesture.onPointerDown}
+      onPointerMove={gesture.onPointerMove}
+      onPointerUp={gesture.onPointerUp}
+      onPointerCancel={gesture.onPointerCancel}
+      onLostPointerCapture={gesture.onLostPointerCapture}
+      onContextMenu={gesture.onContextMenu}
       onClickCapture={(e) => {
-        if (suppressClick.current || longPressArmed) {
-          suppressClick.current = false
+        if (gesture.consumeClickSuppression()) {
           e.preventDefault()
           e.stopPropagation()
         }

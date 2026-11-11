@@ -1,0 +1,40 @@
+---
+description: 手机 APK 打包红线（ASCII 拷贝、arm64+runtime 门禁、ENGINE_TGZ、禁 MuMu、禁 subst、壳≠xrkh）
+alwaysApply: false
+xrk-inject: false
+---
+
+# 手机 APK（真机）
+
+教科书不写本条。操作真源：`.agents/skills/xrk-mobile-apk` · 总控 `.agents/skills/xrk-dev-surfaces` 面 C。
+
+## 何时读
+
+打手机包、真机 `adb install`、用户说「手机上看看 / 打 APP」、或要在 `XRK-harness-mobile` 上跑 Flutter。
+
+## 硬规则
+
+1. **先跑本 skill 脚本**，禁止在对话里逐步试 `flutter build` / `subst` / junction：  
+   - 打 APK：`pwsh -File .agents/skills/xrk-mobile-apk/scripts/build-install-mumu.ps1`（**默认 -SkipInstall**）  
+   - 本仓 Host 进 guest（可未提交）：`…/scripts/pack-local-engine.ps1` → AGT `ENGINE_TGZ=` → 拉回 `runtime/out` → 再打 APK
+2. **禁止**在含中文的 `…\主仓库\XRK-harness-mobile` 上直接 AOT 打包。
+3. **禁止**用 `subst X:` / junction 指回中文仓编 Flutter。
+4. **必须**实拷贝到 **`C:\xrk-mobile`** 再 `tooling/build-apk.sh`。
+5. **产品路径固定 arm64**；缺 `runtime/out/arm64-v8a` 完整 rootfs（≥80 MB）**禁止出包**。
+6. **禁止 MuMu / 模拟器手测**（跑不了 arm proot 虚拟终端）。产品验收只认**真机 arm64**。
+7. **壳 ≠ 机内 xrkh**：只重打壳不能宣称对话 UI / Host / 模型供应商表已修；未发版本仓改动须 **ENGINE_TGZ**。
+8. Desktop 的 `C:\xrk-h` / `subst X:` **不要**拿来打手机包。
+9. 长构建 **前台可见**（`xrk-dev-surfaces`）。
+10. **不必**为手机手测先 `git commit` / `npm publish`；本地 tgz + AGT 即可。
+11. **手机独属技能**：源在 `apps/cli/seeds/mobile/skills/`；**禁止**写入通用 `seeds/skills/` 或全席 `AGENTS.md`。手机 runtime `build-runtime.sh` 构建时 merge 进 guest 的 `seeds/skills/`（同一套 fingerprint establish，不改底层）。App HOWTO 仍用 Flutter `assets/skills/`。见 `xrk-inject-layer`「Mobile-only」。
+
+## 落点
+
+| 用途 | 路径 |
+|------|------|
+| ASCII 构建树 | `C:\xrk-mobile\` |
+| runtime | 手机仓 `runtime/out/arm64-v8a/` |
+| 本地 engine tgz | 本仓 `.release/mobile-engine/xrkseek-harness-cli-<ver>.tgz` |
+| 手测 APK | `C:\xrk-mobile\out\xrk-harness-*-arm64-release.apk` |
+
+禁止 APK 散落用户桌面根目录（同 `xrk-local-artifacts`）。

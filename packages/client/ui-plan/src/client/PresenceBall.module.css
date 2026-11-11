@@ -38,8 +38,10 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
   overflow: hidden;
   cursor: pointer;
-  /* Keep chat stream layout/paint from invalidating the ball stage. */
-  contain: layout paint style;
+  /* Keep chat stream layout from invalidating the ball stage.
+   * Do not use `contain: paint` — Android WebView + OffscreenCanvas can freeze
+   * compositing of the transferred canvas (ball looks like a static sticker). */
+  contain: layout style;
   /* Gaze listens on window; button still receives click for local pulse. */
   appearance: none;
   -webkit-appearance: none;
@@ -414,7 +416,9 @@
 }
 
 /* Phone: keep a readable ball without the desktop 270px runway (that height
-   forces people to collapse → flat chip that no longer reads as a 球). */
+   forces people to collapse → flat chip that no longer reads as a 球).
+   Also match `html[data-xrk-layout-phone]` — packaged WebViews can report a
+   wide layout viewport while AppFrame is already in phone mode. */
 @media (max-width: 767px) {
   .root:not([data-compact]) .stage {
     width: min(100%, 148px);
@@ -468,4 +472,16 @@
     font-size: 9px;
     line-height: 1.2;
   }
+}
+
+:global(html[data-xrk-layout-phone]) .root:not([data-compact]) .stage {
+  width: min(100%, 148px);
+  min-height: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: 16px;
+}
+
+:global(html[data-xrk-layout-phone]) .root[data-pair]:not([data-compact]) .stage {
+  width: min(100%, 112px);
+  min-height: 0;
 }

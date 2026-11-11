@@ -175,6 +175,20 @@ function foldedTitle(summary: ProcessGroupSummary, t: ChatViewSlotProps['t']): s
   )
 }
 
+/**
+ * Outcome still visible when the run is folded — otherwise「已停止」/
+ * 「失败」live only inside the body and disappear with the members.
+ * Prefer stopped over failed when both exist (Stop aborted mid-error).
+ */
+function foldedOutcome(
+  summary: ProcessGroupSummary,
+  t: ChatViewSlotProps['t'],
+): string | undefined {
+  if (summary.stopped > 0) return t('row.stopped')
+  if (summary.failed > 0) return t('row.failed')
+  return undefined
+}
+
 /** First few unique tool names, with a `+N` tail when the list is longer. */
 function formatToolNames(names: readonly string[]): string | undefined {
   if (names.length === 0) return undefined
@@ -233,11 +247,15 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   const showLiveChrome = live && (folded || liveProcessDetail)
   const liveLabel = entry.summary.runningTool
     ?? (entry.summary.running ? t('row.running') : t('think.title'))
+  const outcome = foldedOutcome(entry.summary, t)
   const headerTitle = folded && !showLiveChrome
     ? foldedTitle(entry.summary, t)
     : t('chat.process.title')
+  // Folded + settled: prefer「已停止/失败」beside the activity line so a
+  // collapsed run still surfaces abort/error (Host screenshot: 已停止 hidden
+  // inside the fold body). Folded + live: keep the in-flight tool name.
   const openSummary = folded
-    ? (showLiveChrome ? liveLabel : undefined)
+    ? (showLiveChrome ? liveLabel : outcome)
     : openDetail(entry.summary, detailTitles, liveProcessDetail, t)
   const titleClassName = folded && !showLiveChrome
     ? css.processGroupFoldedTitle
@@ -258,7 +276,6 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
       && entry.summary.tools + entry.summary.reasoning > 1
       ? foldedTitle(entry.summary, t)
       : undefined
-
   const processActivity = dshProcessActivity(live, entry.summary)
   const dropFoldedMembers = folded && foldedRowsLeaveDom()
 
@@ -275,6 +292,8 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
       data-chat-turn={entry.turn}
       data-folded={folded || undefined}
       data-process-running={live || undefined}
+      data-process-stopped={entry.summary.stopped > 0 || undefined}
+      data-process-failed={entry.summary.failed > 0 || undefined}
       // DSH ChatGroupSeat header activity kind (community icon / CSS keys).
       data-process-activity={processActivity}
     >
@@ -287,20 +306,28 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
         keepContentWhenOpen
         onToggle={toggle}
         titleClassName={titleClassName}
-        collapsedContent={openSummary === undefined ? undefined : (
+        collapsedContent={openSummary === undefined && liveActivity === undefined
+          ? undefined
+          : (
           <>
-            <span className={css.processGroupSep} aria-hidden />
-            <span
-              className={[
-                showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary,
-                // 后面还跟着累计活动行时，按内容宽度排；`flex: 1` 会把
-                // 「过程 · bash」和「2 条命令…」之间撑出一大段空白。
-                liveActivity === undefined ? '' : css.processGroupSummaryLiveInline,
-              ].filter(Boolean).join(' ')}
-              data-process-summary=""
-            >
-              {openSummary}
-            </span>
+            {openSummary === undefined ? null : (
+              <>
+                <span className={css.processGroupSep} aria-hidden />
+                <span
+                  className={[
+                    showLiveChrome ? css.processGroupSummaryLive : css.processGroupSummary,
+                    // 后面还跟着累计活动行时，按内容宽度排；`flex: 1` 会把
+                    // 「过程 · bash」和「2 条命令…」之间撑出一大段空白。
+                    liveActivity === undefined ? '' : css.processGroupSummaryLiveInline,
+                    !showLiveChrome && outcome !== undefined ? css.processGroupOutcome : '',
+                  ].filter(Boolean).join(' ')}
+                  data-process-summary=""
+                  data-process-outcome={outcome !== undefined && !showLiveChrome ? '' : undefined}
+                >
+                  {openSummary}
+                </span>
+              </>
+            )}
             {liveActivity === undefined ? null : (
               <>
                 <span className={css.processGroupSep} aria-hidden />
@@ -366,4 +393,6 @@ export const ProcessGroupSeat = memo(function ProcessGroupSeat({
   && previous.entry.summary.toolNames.every((name, index) => name === next.entry.summary.toolNames[index])
   && previous.entry.summary.toolCallNames.length === next.entry.summary.toolCallNames.length
   && previous.entry.summary.toolCallNames.every((name, index) => name === next.entry.summary.toolCallNames[index])
+  && previous.entry.summary.stopped === next.entry.summary.stopped
+  && previous.entry.summary.failed === next.entry.summary.failed
 ))

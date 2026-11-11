@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { declareRuntimeSurface } from "../src/index.js";
+import { assertHostNodeRuntime, declareRuntimeSurface } from "../src/index.js";
 
 describe("cli runtime surface declaration", () => {
   const prev = process.env.XRK_SURFACE;
@@ -29,6 +29,12 @@ describe("cli runtime surface declaration", () => {
     process.env.XRK_SURFACE = "desktop";
     declareRuntimeSurface("serve");
     expect(process.env.XRK_SURFACE).toBe("desktop");
+  });
+
+  it("refuses Host boot below Node 26 LTS or without AbortSignal.any", () => {
+    expect(() => assertHostNodeRuntime("22.19.0", true)).toThrow(/>= 26 LTS/);
+    expect(() => assertHostNodeRuntime("26.12.1", false)).toThrow(/>= 26 LTS/);
+    expect(() => assertHostNodeRuntime("26.12.1", true)).not.toThrow();
   });
 
   it("leaves attach-only / non-Host commands unset", () => {

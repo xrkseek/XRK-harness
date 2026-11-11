@@ -4,6 +4,23 @@
 
 export { StateDot } from './StateDot.tsx'
 export type { StateDotState } from './StateDot.tsx'
+export {
+  LONG_PRESS_CANCEL_MOVE_COARSE_PX,
+  LONG_PRESS_CANCEL_MOVE_FINE_PX,
+  LONG_PRESS_REORDER_MS,
+  capturePointer,
+  dropHalfFromClientY,
+  hitTestReorderTarget,
+  longPressCancelMovePx,
+  nearestVerticalScrollParent,
+  prefersHtml5Reorder,
+  releasePointer,
+  useLongPressReorder,
+} from './long-press-reorder.ts'
+export type {
+  LongPressReorderBind,
+  LongPressReorderCallbacks,
+} from './long-press-reorder.ts'
 export { subagentActivityDot } from './subagent-activity-dot.ts'
 export type { SubagentOutcomeKind } from './subagent-activity-dot.ts'
 export { DisclosureRow } from './DisclosureRow.tsx'

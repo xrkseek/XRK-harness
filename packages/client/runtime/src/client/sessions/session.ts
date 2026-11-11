@@ -1232,7 +1232,10 @@ export class Session implements SessionFace {
       // Never demote a transcript echo into the dock. Host may briefly queue an
       // idle admit before FIFO claim; QueueDock already skips host rows whose
       // rpcId is already inChat (local transcript). Demoting caused the
-      // empty-session "flash in queue then jump to chat" on first send.
+      // empty-session "flash in queue then jump to chat" on first send — and
+      // after pause, promoting a follow-up out of the chat column into the
+      // dock made the bubble vanish into a waiting-line flash.
+      // ChatView paints 「发送中」/「插队中」 on the in-chat echo instead.
       if (echo.placement === 'transcript') return echo
       // Host `context` rows are not a client echo surface — treat as queued.
       const placement: PendingSubmission['placement'] =

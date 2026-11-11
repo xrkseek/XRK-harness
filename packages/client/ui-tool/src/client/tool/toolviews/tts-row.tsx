@@ -97,13 +97,15 @@ function BarAction({
  * already started reports the live position instead of zero.
  */
 function TtsPlayer({
-  audioRef, url, filename, duration, onDuration, t,
+  audioRef, url, filename, duration, onDuration, onPlayBlocked, t,
 }: {
   audioRef: RefObject<HTMLAudioElement | null>
   url: string
   filename: string
   duration: number | null
   onDuration: (seconds: number) => void
+  /** Manual or gesture play() rejected — surface the autoplay hint. */
+  onPlayBlocked?: () => void
   t: TtsRowProps['t']
 }) {
   const [playing, setPlaying] = useState(false)
@@ -152,9 +154,11 @@ function TtsPlayer({
     if (element.paused) {
       try {
         const attempt = element.play()
-        if (attempt !== undefined) void attempt.catch(() => { /* user can retry */ })
+        if (attempt !== undefined) {
+          void attempt.catch(() => { onPlayBlocked?.() })
+        }
       } catch {
-        /* jsdom / blocked media: the bar stays paused */
+        onPlayBlocked?.()
       }
       return
     }
@@ -331,6 +335,7 @@ export function TtsRow({
           filename={filename}
           duration={duration}
           onDuration={onDuration}
+          onPlayBlocked={() => { setBlocked(true) }}
           t={t}
         />
         {blocked && <div className={css.hint}>{t('tts.autoplayBlocked')}</div>}
