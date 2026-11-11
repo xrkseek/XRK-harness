@@ -12,6 +12,14 @@
       "download": "/api/harness/desktop/bin/win-x64/xrk-harness-0.7.17-win-x64.exe"
     },
     {
+      "target": "android-arm64",
+      "available": true,
+      "version": "0.7.17",
+      "filename": "xrk-harness-0.7.17-arm64.apk",
+      "githubRepo": "xrkseek/XRK-harness-mobile",
+      "download": ""
+    },
+    {
       "target": "mac-arm64",
       "available": false,
       "feed": "/api/harness/desktop/mac-arm64/nightly.yml",

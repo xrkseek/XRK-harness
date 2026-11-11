@@ -8,8 +8,11 @@ const env = {
 };
 
 const GH_EXE =
-  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.0-rc.1/xrk-harness-0.7.0-rc.1-win-x64.exe";
+  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.17/xrk-harness-0.7.17-win-x64.exe";
+const GH_APK =
+  "https://github.com/xrkseek/XRK-harness-mobile/releases/download/v0.7.17/xrk-harness-0.7.17-arm64.apk";
 const PROXY_EXE = `https://ghfast.top/${GH_EXE}`;
+const PROXY_APK = `https://ghfast.top/${GH_APK}`;
 
 test("non-China default is English with native GitHub download", async () => {
   const req = new Request("https://example.test/");
@@ -21,6 +24,7 @@ test("non-China default is English with native GitHub download", async () => {
   assert.match(html, /data-locale-hint="en"/);
   assert.match(html, /Researcher/);
   assert.match(html, new RegExp(`href="${GH_EXE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(html, new RegExp(`href="${GH_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   // Proxy URL is present for client TZ override, but secondary stays hidden.
   assert.match(html, /ghfast\.top/);
   assert.match(html, /data-dl-secondary[^>]* hidden/);
@@ -36,10 +40,14 @@ test("China timezone is Chinese with mirror primary and GitHub second", async ()
   assert.match(html, /data-locale-hint="zh"/);
   assert.match(html, /调研员/);
   assert.match(html, new RegExp(`href="${PROXY_EXE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(html, new RegExp(`href="${PROXY_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   assert.match(html, /镜像加速/);
   assert.match(html, /GitHub 直连/);
   assert.doesNotMatch(html, /data-dl-secondary[^>]* hidden/);
-  assert.match(html, /xrk-harness-0\.7\.0-rc\.1-win-x64\.exe/);
+  assert.match(html, /xrk-harness-0\.7\.17-win-x64\.exe/);
+  assert.match(html, /xrk-harness-0\.7\.17-arm64\.apk/);
+  assert.match(html, /手机/);
+  assert.match(html, /Android arm64/);
 });
 
 test("explicit lang=en overrides China edge locale copy", async () => {
@@ -53,15 +61,21 @@ test("explicit lang=en overrides China edge locale copy", async () => {
   assert.match(html, /ghfast\.top/);
 });
 
-test("english query and mac stay unavailable", async () => {
+test("english query lists desktop and phone groups; mac stays unavailable", async () => {
   const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
   const html = await res.text();
   assert.match(html, /Researcher/);
   assert.doesNotMatch(html, />调研员</);
+  assert.match(html, />Desktop</);
+  assert.match(html, />Phone</);
+  assert.match(html, /Download Windows/);
+  assert.match(html, /Download Android/);
+  assert.match(html, /Android arm64/);
   assert.match(html, /macOS Apple Silicon/);
   assert.match(html, /Host cold start/);
   assert.match(html, /No desktop installer yet/);
   assert.doesNotMatch(html, /download\/mac-/);
+  assert.match(html, /XRK-harness-mobile/);
 });
 
 test("mac stays listed even if the live catalog marks it available", async () => {
@@ -85,6 +99,33 @@ test("mac stays listed even if the live catalog marks it available", async () =>
     assert.match(html, /macOS Apple Silicon/);
     assert.match(html, /No desktop installer yet/);
     assert.doesNotMatch(html, /download\/mac-/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("live AGT cannot invent or override Android APK marketing row", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        products: [
+          {
+            target: "android-arm64",
+            available: false,
+            version: "9.9.9",
+            filename: "spoof.apk",
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+  try {
+    const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
+    const html = await res.text();
+    assert.match(html, new RegExp(`href="${GH_APK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+    assert.doesNotMatch(html, /spoof\.apk/);
+    assert.doesNotMatch(html, /9\.9\.9/);
   } finally {
     globalThis.fetch = original;
   }

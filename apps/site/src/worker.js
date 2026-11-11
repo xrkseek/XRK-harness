@@ -1,13 +1,15 @@
 /**
  * Cloudflare Worker product page.
- * Desktop installers are GitHub Release assets. Visitors in China-ish timezones
- * (or CF country CN/HK/MO/TW) get a gh-proxy mirror link; others get GitHub direct.
+ * Desktop + Android installers are GitHub Release assets (desktop: XRK-harness;
+ * Android: XRK-harness-mobile). Visitors in China-ish timezones (or CF country
+ * CN/HK/MO/TW) get a gh-proxy mirror link; others get GitHub direct.
  * HARNESS_ORIGIN remains for optional live catalog / legacy /api/harness/* proxy.
  */
 import fallbackCatalog from "../releases.json" with { type: "json" };
 
 const DEFAULT_ORIGIN = "http://103.236.89.174:6969";
 const GITHUB = "https://github.com/xrkseek/XRK-harness";
+const MOBILE_GITHUB = "https://github.com/xrkseek/XRK-harness-mobile";
 const NPM = "https://www.npmjs.com/package/@xrkseek/harness-cli";
 const DOCS = `${GITHUB}/blob/main/docs/getting-started.md`;
 /** Prefix that accepts a full https://github.com/... URL after it. */
@@ -35,11 +37,16 @@ const SEEDS = [
   { id: "mem_seed_tester", name: "测员", nameEn: "Tester", brief: "跑相关测试，报告失败与最小复现。", briefEn: "Run tests. Report failures and repro.", shape: "pill", color: "sage" },
 ];
 
-const TARGET_KEY = { "win-x64": "win", "mac-arm64": "macArm", "mac-x64": "macIntel" };
+const TARGET_KEY = {
+  "win-x64": "win",
+  "android-arm64": "android",
+  "mac-arm64": "macArm",
+  "mac-x64": "macIntel",
+};
 
 const LABELS = {
   zh: {
-    lead: "会话是真源。干员可委派。设置里改模型与 MCP。桌面目前只提供 Windows x64。",
+    lead: "会话是真源。干员可委派。设置里改模型与 MCP。桌面 Windows x64；手机 Android arm64。",
     tagline: "向阳而生，驭光而行",
     skip: "跳到干员",
     play: "工作台",
@@ -92,13 +99,17 @@ const LABELS = {
     dark: "深色",
     system: "系统",
     get: "下载 Windows",
+    getAndroid: "下载 Android",
     github: "GitHub",
     docs: "文档",
     npm: "npm",
     download: "下载",
     downloadGithub: "GitHub 直连",
     downloadProxy: "镜像加速",
+    desktopGroup: "桌面",
+    mobileGroup: "手机",
     win: "Windows x64",
+    android: "Android arm64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
     macOff: "目前不提供桌面安装包，用 xrkh web。",
@@ -110,7 +121,7 @@ const LABELS = {
     lang: "EN",
   },
   en: {
-    lead: "Sessions are the source of truth. Operators take delegated work. Models and MCP live in Settings. Desktop ships for Windows x64 only.",
+    lead: "Sessions are the source of truth. Operators take delegated work. Models and MCP live in Settings. Desktop: Windows x64. Phone: Android arm64.",
     tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to operators",
     play: "Workbench",
@@ -163,13 +174,17 @@ const LABELS = {
     dark: "Dark",
     system: "System",
     get: "Download Windows",
+    getAndroid: "Download Android",
     github: "GitHub",
     docs: "Docs",
     npm: "npm",
     download: "Download",
     downloadGithub: "GitHub",
     downloadProxy: "Mirror",
+    desktopGroup: "Desktop",
+    mobileGroup: "Phone",
     win: "Windows x64",
+    android: "Android arm64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
     macOff: "No desktop installer yet. Use xrkh web.",
@@ -236,6 +251,20 @@ function isMacTarget(target) {
   return String(target || "").startsWith("mac-");
 }
 
+function isAndroidTarget(target) {
+  return String(target || "").startsWith("android-");
+}
+
+function githubRepoBase(row) {
+  const explicit = String(row?.githubRepo || "").trim();
+  if (explicit) {
+    return explicit.startsWith("https://")
+      ? explicit.replace(/\/+$/, "")
+      : `https://github.com/${explicit.replace(/^\/+|\/+$/g, "")}`;
+  }
+  return isAndroidTarget(row?.target) ? MOBILE_GITHUB : GITHUB;
+}
+
 function githubProxyPrefix(env) {
   const raw = String(env.GITHUB_PROXY_PREFIX || DEFAULT_GITHUB_PROXY).trim();
   if (!raw) return DEFAULT_GITHUB_PROXY;
@@ -252,7 +281,53 @@ function githubAssetUrl(row) {
   const filename = String(row.filename || "").trim();
   if (!version || !filename) return "";
   const tag = version.startsWith("v") ? version : `v${version}`;
-  return `${GITHUB}/releases/download/${tag}/${filename}`;
+  return `${githubRepoBase(row)}/releases/download/${tag}/${filename}`;
+}
+
+function ctaButton(row, env, label, preferProxy) {
+  const github = githubAssetUrl(row);
+  if (!github) {
+    return `<span class="btn" aria-disabled="true">${escapeHtml(label)}</span>`;
+  }
+  const mirror = proxiedGithubUrl(github, env);
+  const href = preferProxy ? mirror : github;
+  return `<a class="btn" data-dl-cta data-dl-github="${escapeHtml(github)}" data-dl-proxy="${escapeHtml(mirror)}" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+}
+
+function productRow(row, env, t, preferProxy) {
+  const mac = isMacTarget(row.target);
+  const label = t[TARGET_KEY[row.target] || ""] || row.target;
+  const meta = mac
+    ? t.macOff
+    : row.available
+      ? [row.version, row.filename].filter(Boolean).join(" · ")
+      : t.wait;
+  const btn = mac
+    ? `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`
+    : downloadButtons(row, env, t, preferProxy);
+  const state = mac || !row.available ? " off" : "";
+  return `<article class="row${state}"><div><h3>${escapeHtml(label)}</h3><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
+}
+
+function downloadSection(products, env, t, preferProxy) {
+  const desktop = products.filter((row) => !isAndroidTarget(row.target));
+  const mobile = products.filter((row) => isAndroidTarget(row.target));
+  const blocks = [];
+  if (desktop.length) {
+    blocks.push(
+      `<div class="dl-group"><h3>${escapeHtml(t.desktopGroup)}</h3><div class="dl">${desktop
+        .map((row) => productRow(row, env, t, preferProxy))
+        .join("")}</div></div>`,
+    );
+  }
+  if (mobile.length) {
+    blocks.push(
+      `<div class="dl-group"><h3>${escapeHtml(t.mobileGroup)}</h3><div class="dl">${mobile
+        .map((row) => productRow(row, env, t, preferProxy))
+        .join("")}</div></div>`,
+    );
+  }
+  return blocks.join("");
 }
 
 function proxiedGithubUrl(assetUrl, env) {
@@ -297,11 +372,23 @@ function renderPage(catalog, env, zh, request) {
   const preferProxy = preferGithubProxy(request);
   const live = Array.isArray(catalog.products) ? catalog.products : [];
   // Marketing download URLs come from releases.json (GitHub). Live AGT catalog
-  // may refresh version/filename/available for the auto-update feed path only.
+  // may refresh version/filename/available for the desktop auto-update feed only.
+  // Android APKs ship from XRK-harness-mobile Releases — never from AGT.
   const products = (fallbackCatalog.products || []).map((base) => {
     const hit = live.find((row) => row.target === base.target) || {};
     if (isMacTarget(base.target)) {
       return { ...base, ...hit, target: base.target, available: false };
+    }
+    if (isAndroidTarget(base.target)) {
+      return {
+        ...base,
+        target: base.target,
+        githubRepo: base.githubRepo,
+        download: base.download,
+        version: base.version,
+        filename: base.filename,
+        available: Boolean(base.available),
+      };
     }
     return {
       ...base,
@@ -315,12 +402,7 @@ function renderPage(catalog, env, zh, request) {
   });
   const cli = catalog.cli || fallbackCatalog.cli || "npm i -g @xrkseek/harness-cli";
   const win = products.find((row) => row.target === "win-x64");
-  const winGithub = githubAssetUrl(win);
-  const winHref = winGithub
-    ? preferProxy
-      ? proxiedGithubUrl(winGithub, env)
-      : winGithub
-    : "";
+  const android = products.find((row) => row.target === "android-arm64");
   const first = SEEDS[0];
   const firstName = zh ? first.name : first.nameEn;
   const firstBrief = zh ? first.brief : first.briefEn;
@@ -332,15 +414,7 @@ function renderPage(catalog, env, zh, request) {
       <strong>${escapeHtml(title)}</strong>
     </button>`;
   }).join("");
-  const rows = products.map((row) => {
-    const mac = isMacTarget(row.target);
-    const label = t[TARGET_KEY[row.target] || ""] || row.target;
-    const meta = mac ? t.macOff : row.available ? [row.version, row.filename].filter(Boolean).join(" · ") : t.wait;
-    const btn = mac
-      ? `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`
-      : downloadButtons(row, env, t, preferProxy);
-    return `<article class="row"><div><h2>${escapeHtml(label)}</h2><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
-  }).join("");
+  const downloadBlocks = downloadSection(products, env, t, preferProxy);
   const orbit = SEEDS.map((m) =>
     `<button type="button" class="orbit-ball" data-play-ball aria-label="${escapeHtml(t.clickPlay)}">${ballMount(m)}</button>`).join("");
   const scenes = (zh ? FLOW.zh : FLOW.en).map(([title, body], i) =>
@@ -350,9 +424,7 @@ function renderPage(catalog, env, zh, request) {
     </article>`).join("");
   const dots = (zh ? FLOW.zh : FLOW.en).map((_, i) =>
     `<button type="button" class="dot${i === 0 ? " on" : ""}" data-scene-dot="${i}" aria-label="${i + 1}"></button>`).join("");
-  const cta = winGithub
-    ? `<a class="btn" data-dl-cta data-dl-github="${escapeHtml(winGithub)}" data-dl-proxy="${escapeHtml(proxiedGithubUrl(winGithub, env))}" href="${escapeHtml(winHref)}">${escapeHtml(t.get)}</a>`
-    : `<span class="btn" aria-disabled="true">${escapeHtml(t.get)}</span>`;
+  const cta = `${ctaButton(win, env, t.get, preferProxy)}${ctaButton(android, env, t.getAndroid, preferProxy)}`;
   return `<!doctype html>
 <html lang="${zh ? "zh-CN" : "en"}" data-locale-hint="${preferProxy ? "zh" : "en"}">
 <head>
@@ -568,7 +640,7 @@ function renderPage(catalog, env, zh, request) {
     </section>
     <section class="download" id="download">
       <h2>${escapeHtml(t.download)}</h2>
-      <div class="dl">${rows}</div>
+      ${downloadBlocks}
       <p class="cli">
         <span>${escapeHtml(t.cli)}</span>
         <code id="cli-text">${escapeHtml(cli)}</code>
@@ -579,6 +651,7 @@ function renderPage(catalog, env, zh, request) {
     <footer class="foot">
       <span>${escapeHtml(t.mit)}</span>
       <a href="${GITHUB}">${escapeHtml(t.github)}</a>
+      <a href="${MOBILE_GITHUB}">${escapeHtml(zh ? "手机仓" : "Mobile")}</a>
       <a href="${NPM}">@xrkseek/harness-cli</a>
       <a href="${DOCS}">${escapeHtml(t.docs)}</a>
     </footer>
