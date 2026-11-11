@@ -374,10 +374,13 @@ describe("createDefaultComputerUseAccess", () => {
     expect(access.service?.providerId).toBe("agent-desktop");
   });
 
-  it("pins AGENT_DESKTOP_HOME under LOCALAPPDATA (avoids elevated ~/.xrk)", () => {
+  it("pins AGENT_DESKTOP_HOME under LOCALAPPDATA / XDG (avoids elevated ~/.xrk)", () => {
     const local = path.join(os.tmpdir(), `xrk-local-${process.pid}`);
     const env: NodeJS.ProcessEnv = {
-      LOCALAPPDATA: local,
+      // Windows → LOCALAPPDATA; macOS/Linux → XDG_DATA_HOME (LOCALAPPDATA ignored).
+      ...(process.platform === "win32"
+        ? { LOCALAPPDATA: local }
+        : { XDG_DATA_HOME: local }),
       XRK_HOME: path.join(os.tmpdir(), `xrk-unused-${process.pid}`),
     };
     const access = createDefaultComputerUseAccess({
