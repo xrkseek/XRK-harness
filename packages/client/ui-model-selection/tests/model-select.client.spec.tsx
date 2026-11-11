@@ -388,6 +388,38 @@ describe('ModelSelect reasoning effort', () => {
     expect(load).toHaveBeenCalled()
   })
 
+  it('portals the menu and clamps left when the trigger sits near the right edge', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 })
+    const directory = createSnapshotStore(state())
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    const trigger = screen.getByRole('button', { name: /选择模型/ })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 250, y: 500, top: 500, right: 330, bottom: 528, left: 250,
+      width: 80, height: 28, toJSON() { return this },
+    })
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('menu')
+    expect(menu.parentElement).toBe(document.body)
+    // Prefer right-align to the trigger (330 − fallback 280 = 50); still ≥ 16px.
+    expect(menu.style.left).toBe('50px')
+    // Preferred left = right(280) − width(min(280,300−32)=268) = 12 → clamp to 16.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 300 })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 210, y: 500, top: 500, right: 280, bottom: 528, left: 210,
+      width: 70, height: 28, toJSON() { return this },
+    })
+    fireEvent(window, new Event('resize'))
+    expect(menu.style.left).toBe('16px')
+  })
+
   it('locked chip paints adapter effort names, not raw ids', () => {
     const load = vi.fn()
     render(<ModelSelect

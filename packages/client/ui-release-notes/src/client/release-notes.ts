@@ -69,6 +69,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.17',
+    date: '2026-11-11',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '对话区模型菜单改为视口 portal：窄屏 / 刘海机上右对齐触发钮后钳入安全边距，活动会话不再裁掉菜单。',
+        en: 'Chat model menu uses a viewport portal: right-align to the trigger then clamp into safe margins so active sessions no longer crop it on narrow / notched phones.',
+      },
+      {
+        zh: '手机 App：覆盖更新在 runtime 变更时抬回 `/root`；同 runtime 壳升级只软愈合、不重解整包。',
+        en: 'Mobile App: overlay upgrades carry `/root` when the runtime fingerprint changes; shell-only bumps soft-heal without re-extracting rootfs.',
+      },
+    ],
+  },
+  {
     version: '0.7.16',
     date: '2026-11-10',
     title: {

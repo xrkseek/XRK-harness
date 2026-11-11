@@ -85,16 +85,19 @@
   transform: rotate(180deg);
 }
 
+/* Portaled to document.body (fixed + JS clamp). Absolute under the trailing
+   model chip was cropped by active-phase overflow-x: clip on narrow / notched
+   phones — left edge of long model names vanished. */
 .menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 20;
+  position: fixed;
+  z-index: var(--ds-z-surface);
   display: flex;
   flex-direction: column;
-  /* Match Menu / PopupSelect card budget — 240px crushed long model names. */
-  width: min(280px, calc(100vw - 32px));
-  max-height: min(360px, calc(100vh - 96px));
+  /* Match Menu / PopupSelect card budget — 240px crushed long model names.
+     Subtract --ds-safe-h so landscape / inset phones keep the same side pad
+     the JS clamp uses against the layout viewport. */
+  width: min(280px, calc(100vw - 32px - var(--ds-safe-h)));
+  max-height: min(360px, calc(100vh - 96px - var(--ds-safe-v)));
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives
@@ -115,7 +118,7 @@
 
 @supports (height: 100dvh) {
   .menu {
-    max-height: min(360px, calc(100dvh - 96px));
+    max-height: min(360px, calc(100dvh - 96px - var(--ds-safe-v)));
   }
 }
 
