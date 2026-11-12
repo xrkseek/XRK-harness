@@ -56,7 +56,12 @@ export interface RegisterDesktopIpcOptions {
   /** Manual Host rebring after restart budget exhaustion. */
   rebringHost?: () => void;
   getCliCommand?: () => { linked: boolean; binDir: string };
-  setCliCommand?: (linked: boolean) => { linked: boolean; binDir: string };
+  /** May be async — Windows User PATH updates run PowerShell off the UI tick. */
+  setCliCommand?: (
+    linked: boolean,
+  ) =>
+    | { linked: boolean; binDir: string }
+    | Promise<{ linked: boolean; binDir: string }>;
   getPreventIdleSleep?: () => {
     enabled: boolean;
     turnRunning: boolean;

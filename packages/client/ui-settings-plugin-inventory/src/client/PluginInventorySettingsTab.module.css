@@ -203,16 +203,22 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Collapsed → chevron right; open → chevron down (productIcon drops data-* attrs). */
 .guideChevron {
   flex: none;
+  display: block;
   opacity: 0.6;
+  transform: rotate(-90deg);
+  transform-origin: center;
   transition: transform 120ms ease;
 }
 
 .guideChevronOpen {
   flex: none;
+  display: block;
   opacity: 0.85;
-  transform: rotate(180deg);
+  transform: rotate(0deg);
+  transform-origin: center;
   transition: transform 120ms ease;
 }
 
@@ -528,11 +534,15 @@
 
 .scopeChevron {
   flex: none;
+  display: block;
+  transform: rotate(-90deg);
+  transform-origin: center;
   transition: transform 120ms ease;
 }
 
-.scopeChevron[data-open='true'] {
-  transform: rotate(180deg);
+/* data-open on the Icon is dropped by productIcon — drive from the toggle. */
+.scopeToggle[aria-expanded='true'] .scopeChevron {
+  transform: rotate(0deg);
 }
 
 .scopeTitle {
@@ -661,15 +671,23 @@
   background: transparent;
 }
 
-/* One plugin per row — same separated cards as 插件配置 / PluginCard. */
+/* Desktop: two cards per row for denser inventory; headings / open cards span. */
 .cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
   width: 100%;
+}
+
+.cards > .groupHeading {
+  grid-column: 1 / -1;
+}
+
+.cards > .card[data-open='true'] {
+  grid-column: 1 / -1;
 }
 
 .card {
@@ -833,8 +851,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border: 0.5px solid var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
   border-radius: var(--dsw-radius-lg, 10px);
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, var(--dsw-alias-bg-layer-3));
@@ -860,13 +878,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   /* Full width only when this is the sole card child (preset / builtin).
    * Managed cards nest under .cardHead — see width:auto override there. */
   width: 100%;
-  min-height: 56px;
+  min-height: 48px;
   border: 0;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -993,11 +1011,14 @@
 
 .chevron {
   flex: none;
+  display: block;
   color: var(--dsw-alias-label-tertiary);
+  transform: rotate(-90deg);
+  transform-origin: center;
 }
 
 .card[data-open='true'] .chevron {
-  transform: rotate(180deg);
+  transform: rotate(0deg);
 }
 
 .cardDetails {
@@ -1103,23 +1124,69 @@
   }
 }
 
-/* Phone / narrow Settings: stack install + recommend so the Install tap target
-   stays full-width (one-hand reach; matches better-sidebar mobile drawer). */
+@media (prefers-reduced-motion: reduce) {
+  .guideChevron,
+  .guideChevronOpen,
+  .scopeChevron,
+  .chevron {
+    transition: none;
+  }
+}
+
+/* Phone / narrow Settings: denser recommend (name | Install); stack only the
+   primary install form so the submit target stays full-width. */
 @media (max-width: 767px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
   .installRow,
-  .registryRow,
-  .recommendRow {
+  .registryRow {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .recommendButton,
+  .recommendRow {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .recommendCopy {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .recommendCopy span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .recommendButton {
+    flex: none;
+    width: auto;
+    min-width: 4.5rem;
+    min-height: 36px;
+    max-height: none;
+    height: auto;
+    padding: 6px 12px;
+  }
+
   .installRow button {
     width: 100%;
     min-height: 44px;
     max-height: none;
     height: auto;
     padding: 10px 14px;
+  }
+
+  .proxyInput {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
   }
 }
 

@@ -383,10 +383,20 @@
 }
 
 /* Community bottom workbench is portaled, not a descendant of AppFrame.
-   Pin it to the live conversation column via Host LayoutInsets + plugin center stamps. */
+   Pin it to the live conversation column via Host LayoutInsets + plugin
+   center stamps. Right fallback MUST include the floating workbench width
+   (margin-right on #root): details inset alone leaves the strip under the
+   side panel and can read as a blank bottom band until a width drag
+   remeasures --xrkh-center-*. */
 :global([data-dsh-bottom-panel]) {
   left: var(--xrkh-center-left, var(--xrk-layout-inset-sidebar, 0px));
-  right: var(--xrkh-center-right, var(--xrk-layout-inset-details, 0px));
+  right: var(
+    --xrkh-center-right,
+    calc(
+      var(--xrk-layout-inset-details, 0px)
+      + var(--xrkh-workbench-width, var(--dsh-sidebar-width, 0px))
+    )
+  );
   width: auto;
 }
 

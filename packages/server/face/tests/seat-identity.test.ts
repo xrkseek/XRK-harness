@@ -43,9 +43,14 @@ describe("seat-identity", () => {
       bossNickname: "阿凯",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 经理（阿经） (project)");
+    expect(text).toContain(
+      "you: 经理（阿经） (project · mid-tier lead of this workspace)",
+    );
     expect(text).toContain("speaker: 老板（阿凯）");
-    expect(text).toContain("report: 老板");
+    expect(text).toContain("report: 老板（阿凯） only");
+    expect(text).toContain(
+      "peer: 向日葵 on 向阳空间 is a peer lead — not your boss",
+    );
     expect(text).toContain("titles: 老板 / 经理 / 干员");
   });
 
@@ -68,7 +73,9 @@ describe("seat-identity", () => {
       preference: "en",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: Lead (project)");
+    expect(text).toContain(
+      "you: Lead (project · mid-tier lead of this workspace)",
+    );
     expect(text).toContain("speaker: CEO（阿凯）");
     expect(text).toContain("titles: CEO / Lead / Specialist");
   });
@@ -94,7 +101,9 @@ describe("seat-identity", () => {
       titleAgent: "干员",
     });
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 经理 (project)");
+    expect(text).toContain(
+      "you: 经理 (project · mid-tier lead of this workspace)",
+    );
     expect(text).toContain("speaker: 老板");
     expect(text).toContain("titles: 老板 / 经理 / 干员");
   });
@@ -111,7 +120,13 @@ describe("seat-identity", () => {
     if (!created.ok) return;
     const sessionId = String((created.value as { sessionId: string }).sessionId);
     const text = formatSeatIdentity(runtime, sessionId);
-    expect(text).toContain("you: 向日葵（xrkseek） (xiangyang)");
+    expect(text).toContain(
+      "you: 向日葵（xrkseek） (xiangyang · mid-tier lead of 向阳空间)",
+    );
+    expect(text).toContain("report: 老板 only (not 经理)");
+    expect(text).toContain(
+      "peer: project 经理 seat is a peer lead — not your boss",
+    );
     expect(text).toContain("nickname: locked");
     expect(runtime.agentRoster.get("global", SUNFLOWER_MEMBER_ID)?.name).toBe(
       "向日葵",

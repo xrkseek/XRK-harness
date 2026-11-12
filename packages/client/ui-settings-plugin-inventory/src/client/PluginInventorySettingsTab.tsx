@@ -188,6 +188,16 @@ type ViewState =
 const INVENTORY_CACHE_KEY = 'xrk.plugin-inventory.v1'
 let inventoryMemory: PluginInventorySnapshot | undefined
 
+/** Clear the in-memory / session inventory cache between client tests. */
+export function resetPluginInventoryCacheForTests(): void {
+  inventoryMemory = undefined
+  try {
+    sessionStorage.removeItem(INVENTORY_CACHE_KEY)
+  } catch {
+    /* jsdom / private mode */
+  }
+}
+
 function readInventoryCache(): PluginInventorySnapshot | undefined {
   if (inventoryMemory !== undefined) return inventoryMemory
   try {
@@ -548,12 +558,69 @@ export function PluginInventorySettingsTab({
     )
 
   const pendingRecommended = RECOMMENDED_PLUGINS.filter((item) => !isRecommendedInstalled(item.spec))
+  /** First-run density: keep live install log + refresh near the proxy when the sidebar package is still missing. */
+  const sidebarMissing = !isRecommendedInstalled('xrkh-better-sidebar')
 
   const filters: { readonly id: CatalogFilter; readonly label: string }[] = [
     { id: 'all', label: t('filterAll') },
     { id: 'custom', label: t('filterCustom') },
     { id: 'disabled', label: t('filterDisabled') },
   ]
+
+  const installFeedback = (
+    <>
+      {installError !== null
+        ? (
+          <div className={css.installError} role="alert">
+            <p>{installError}</p>
+            <p className={css.installErrorHint}>{t('installErrorHint')}</p>
+          </div>
+        )
+        : null}
+      {installSuccess || clientRefreshHint
+        ? (
+          <div className={css.installSuccessRow} role="status" data-client-refresh-hint>
+            <p className={css.installSuccess}>
+              {installSuccess ? t('installSuccessHint') : t('clientRefreshHint')}
+            </p>
+            <button type="button" className={css.refreshPage} onClick={refreshClientHalf}>
+              {t('refreshPage')}
+            </button>
+          </div>
+        )
+        : null}
+      {installLog !== null || installBusy
+        ? (
+          <div className={css.installLog} data-install-log>
+            <TerminalBlock
+              command={
+                installLog?.command
+                ?? formatPluginAddCommand({
+                  spec: activeSpec || installSpec.trim(),
+                  ...(resolveInstallRegistry(registryChoice, registryCustom) !== undefined
+                    ? { registry: resolveInstallRegistry(registryChoice, registryCustom) }
+                    : {}),
+                  ...(installProxy.trim().length > 0
+                    ? { proxy: installProxy.trim() }
+                    : {}),
+                })
+              }
+              output={installLog?.output ?? ''}
+              exitCode={installBusy ? undefined : installLog?.exitCode}
+              running={installBusy}
+              labels={{
+                running: t('installLogRunning'),
+                copy: t('installLogCopy'),
+                copied: t('installLogCopied'),
+                collapse: t('installLogCollapse'),
+                expand: (hidden) => t('installLogExpand', { count: String(hidden) }),
+              }}
+            />
+          </div>
+        )
+        : null}
+    </>
+  )
 
   return (
     <div ref={rootRef} className={css.section} aria-busy={state.status === 'loading' || refreshing}>
@@ -661,6 +728,7 @@ export function PluginInventorySettingsTab({
           </div>
           <p className={css.installHint}>{t('installProxyHint')}</p>
           <p className={css.installHint}>{t('installHint')}</p>
+          {sidebarMissing ? installFeedback : null}
           {pendingRecommended.map((item) => (
             <div
               key={item.spec}
@@ -724,56 +792,7 @@ export function PluginInventorySettingsTab({
               </div>
             )
             : null}
-          {installError !== null
-            ? (
-              <div className={css.installError} role="alert">
-                <p>{installError}</p>
-                <p className={css.installErrorHint}>{t('installErrorHint')}</p>
-              </div>
-            )
-            : null}
-          {installSuccess || clientRefreshHint
-            ? (
-              <div className={css.installSuccessRow} role="status" data-client-refresh-hint>
-                <p className={css.installSuccess}>
-                  {installSuccess ? t('installSuccessHint') : t('clientRefreshHint')}
-                </p>
-                <button type="button" className={css.refreshPage} onClick={refreshClientHalf}>
-                  {t('refreshPage')}
-                </button>
-              </div>
-            )
-            : null}
-          {installLog !== null || installBusy
-            ? (
-              <div className={css.installLog} data-install-log>
-                <TerminalBlock
-                  command={
-                    installLog?.command
-                    ?? formatPluginAddCommand({
-                      spec: activeSpec || installSpec.trim(),
-                      ...(resolveInstallRegistry(registryChoice, registryCustom) !== undefined
-                        ? { registry: resolveInstallRegistry(registryChoice, registryCustom) }
-                        : {}),
-                      ...(installProxy.trim().length > 0
-                        ? { proxy: installProxy.trim() }
-                        : {}),
-                    })
-                  }
-                  output={installLog?.output ?? ''}
-                  exitCode={installBusy ? undefined : installLog?.exitCode}
-                  running={installBusy}
-                  labels={{
-                    running: t('installLogRunning'),
-                    copy: t('installLogCopy'),
-                    copied: t('installLogCopied'),
-                    collapse: t('installLogCollapse'),
-                    expand: (hidden) => t('installLogExpand', { count: String(hidden) }),
-                  }}
-                />
-              </div>
-            )
-            : null}
+          {!sidebarMissing ? installFeedback : null}
           <label className={css.search}>
             <IconSearchOutlineRegular aria-hidden="true" />
             <span className={css.visuallyHidden}>{t('search')}</span>
@@ -824,117 +843,6 @@ export function PluginInventorySettingsTab({
           })()}
           {actionError !== null ? <p className={css.actionError} role="alert">{actionError}</p> : null}
 
-          {selectedPreset !== undefined ? (
-            <section className={css.scopeGroup} data-plugin-scope="preset" data-preset-id={selectedPreset.id}>
-              <div className={css.scopeTitleRow}>
-                <button
-                  type="button"
-                  className={css.scopeToggle}
-                  aria-expanded={presetOpen}
-                  aria-controls={`${catalogId}-preset`}
-                  onClick={() => { setPresetOpen(value => !value) }}
-                >
-                  <IconChevronDownOutlineRegular className={css.scopeChevron} data-open={presetOpen || undefined} aria-hidden="true" />
-                  <span className={css.scopeTitle}>{t('presetTitle')}</span>
-                </button>
-                <Menu
-                  open={switcherOpen}
-                  onClose={() => { setSwitcherOpen(false) }}
-                  items={presets.map(preset => ({
-                    id: preset.id,
-                    label: presetLabel(preset, t),
-                  }))}
-                  selectedId={selectedPreset.id}
-                  onSelect={(id) => {
-                    setSwitcherOpen(false)
-                    setChosenPreset(id)
-                  }}
-                  align="end"
-                  portal
-                  anchor={(
-                    <button
-                      type="button"
-                      className={css.presetSwitcher}
-                      aria-haspopup="menu"
-                      aria-expanded={switcherOpen}
-                      aria-label={t('switcherLabel')}
-                      onClick={() => { setSwitcherOpen(value => !value) }}
-                    >
-                      <span>{presetLabel(selectedPreset, t)}</span>
-                      <IconChevronDownOutlineRegular aria-hidden="true" />
-                    </button>
-                  )}
-                />
-              </div>
-              <p className={css.scopeSub}>
-                {t('presetSubtitle')}
-                <span data-preset-plugin-count={selectedPresetRows.length}>
-                  {` · ${String(selectedPresetRows.length)} ${t('countUnit')}`}
-                </span>
-              </p>
-              {presetOpen ? (
-                <div id={`${catalogId}-preset`} className={css.scopeBody}>
-                  {selectedPreset.broken !== undefined
-                    ? <p className={css.brokenNote} role="alert">{selectedPreset.broken}</p>
-                    : null}
-                  {selectedPresetRows.length > 0 ? (
-                    <ul className={css.cards} data-preset-rows>
-                      {selectedPresetRows.map((row) => {
-                        const title = compositionTitle(row.moduleName)
-                        const configuration = presetEnabledLabel(row.enabled, t)
-                        return (
-                          <li
-                            className={css.card}
-                            key={`${selectedPreset.id}:${row.moduleName}`}
-                            data-composition={row.moduleName}
-                            data-enabled={String(row.enabled)}
-                          >
-                            <div className={css.cardContent} data-static="true">
-                              <span className={css.artwork} data-kind="composition" aria-hidden="true">
-                                <IconEnhanceOutlineRegular size={16} />
-                              </span>
-                              <span className={css.cardTitleBlock}>
-                                <span className={css.cardTitleRow}>
-                                  <strong className={css.cardTitle}>{title}</strong>
-                                  {row.condition !== undefined
-                                    ? <span className={css.versionTag}>{row.condition}</span>
-                                    : null}
-                                </span>
-                              </span>
-                              <span className={css.cardTrailing}>
-                                <StateDot
-                                  state={row.enabled === false ? 'error' : row.enabled === 'conditional' ? 'warning' : 'done'}
-                                />
-                                <span className={css.configTag} data-enabled={row.enabled === false ? 'false' : 'true'}>
-                                  {configuration}
-                                </span>
-                              </span>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : null}
-                  {normalizedQuery.length > 0 && otherPresetMatches.length > 0 ? (
-                    <p className={css.hint}>
-                      {t('matchesInOtherPresets', { count: String(otherPresetMatches.length) })}
-                      {otherPresetMatches.map(preset => (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          className={css.jumpLink}
-                          onClick={() => { setChosenPreset(preset.id) }}
-                        >
-                          {preset.name ?? preset.id}
-                        </button>
-                      ))}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
           <section className={css.scopeGroup} data-plugin-scope="global">
             <div className={css.scopeTitleRow}>
               <button
@@ -944,7 +852,7 @@ export function PluginInventorySettingsTab({
                 aria-controls={`${catalogId}-global`}
                 onClick={() => { setGlobalOpen(value => !value) }}
               >
-                <IconChevronDownOutlineRegular className={css.scopeChevron} data-open={globalOpen || undefined} aria-hidden="true" />
+                <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
                 <span className={css.scopeTitle}>{t('globalTitle')}</span>
               </button>
               <span className={css.scopeCount} data-plugin-count={filteredEntries.length}>
@@ -1285,6 +1193,118 @@ export function PluginInventorySettingsTab({
               </div>
             ) : null}
           </section>
+
+          {selectedPreset !== undefined ? (
+            <section className={css.scopeGroup} data-plugin-scope="preset" data-preset-id={selectedPreset.id}>
+              <div className={css.scopeTitleRow}>
+                <button
+                  type="button"
+                  className={css.scopeToggle}
+                  aria-expanded={presetOpen}
+                  aria-controls={`${catalogId}-preset`}
+                  onClick={() => { setPresetOpen(value => !value) }}
+                >
+                  <IconChevronDownOutlineRegular className={css.scopeChevron} aria-hidden="true" />
+                  <span className={css.scopeTitle}>{t('presetTitle')}</span>
+                </button>
+                <Menu
+                  open={switcherOpen}
+                  onClose={() => { setSwitcherOpen(false) }}
+                  items={presets.map(preset => ({
+                    id: preset.id,
+                    label: presetLabel(preset, t),
+                  }))}
+                  selectedId={selectedPreset.id}
+                  onSelect={(id) => {
+                    setSwitcherOpen(false)
+                    setChosenPreset(id)
+                  }}
+                  align="end"
+                  portal
+                  anchor={(
+                    <button
+                      type="button"
+                      className={css.presetSwitcher}
+                      aria-haspopup="menu"
+                      aria-expanded={switcherOpen}
+                      aria-label={t('switcherLabel')}
+                      onClick={() => { setSwitcherOpen(value => !value) }}
+                    >
+                      <span>{presetLabel(selectedPreset, t)}</span>
+                      <IconChevronDownOutlineRegular aria-hidden="true" />
+                    </button>
+                  )}
+                />
+              </div>
+              <p className={css.scopeSub}>
+                {t('presetSubtitle')}
+                <span data-preset-plugin-count={selectedPresetRows.length}>
+                  {` · ${String(selectedPresetRows.length)} ${t('countUnit')}`}
+                </span>
+              </p>
+              {presetOpen ? (
+                <div id={`${catalogId}-preset`} className={css.scopeBody}>
+                  {selectedPreset.broken !== undefined
+                    ? <p className={css.brokenNote} role="alert">{selectedPreset.broken}</p>
+                    : null}
+                  {selectedPresetRows.length > 0 ? (
+                    <ul className={css.cards} data-preset-rows>
+                      {selectedPresetRows.map((row) => {
+                        const title = compositionTitle(row.moduleName)
+                        const configuration = presetEnabledLabel(row.enabled, t)
+                        return (
+                          <li
+                            className={css.card}
+                            key={`${selectedPreset.id}:${row.moduleName}`}
+                            data-composition={row.moduleName}
+                            data-enabled={String(row.enabled)}
+                          >
+                            <div className={css.cardContent} data-static="true">
+                              <span className={css.artwork} data-kind="composition" aria-hidden="true">
+                                <IconEnhanceOutlineRegular size={16} />
+                              </span>
+                              <span className={css.cardTitleBlock}>
+                                <span className={css.cardTitleRow}>
+                                  <strong className={css.cardTitle}>{title}</strong>
+                                  {row.condition !== undefined
+                                    ? <span className={css.versionTag}>{row.condition}</span>
+                                    : null}
+                                </span>
+                              </span>
+                              <span className={css.cardTrailing}>
+                                <StateDot
+                                  state={row.enabled === false ? 'error' : row.enabled === 'conditional' ? 'warning' : 'done'}
+                                />
+                                <span className={css.configTag} data-enabled={row.enabled === false ? 'false' : 'true'}>
+                                  {configuration}
+                                </span>
+                              </span>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : null}
+                  {normalizedQuery.length > 0 && otherPresetMatches.length > 0 ? (
+                    <p className={css.hint}>
+                      {t('matchesInOtherPresets', { count: String(otherPresetMatches.length) })}
+                      {otherPresetMatches.map(preset => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className={css.jumpLink}
+                          onClick={() => { setChosenPreset(preset.id) }}
+                        >
+                          {preset.name ?? preset.id}
+                        </button>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
         </div>
       ) : null}
       <Modal

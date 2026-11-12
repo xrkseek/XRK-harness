@@ -279,7 +279,7 @@ describe("Face settings U2", () => {
     };
     // Desktop ships agent-desktop and defaults it on (ready out of the box);
     // a headless Host turns it off from the Plugins card.
-    expect(computerUse.value.mode).toBe("agent-desktop");
+    expect(computerUse.value.mode).toBe("off");
     expect(computerUse.applies).toBe("live");
     expect(v.namespaces.some((n) => n.ns === "cron")).toBe(true);
     const cron = v.namespaces.find((n) => n.ns === "cron") as {

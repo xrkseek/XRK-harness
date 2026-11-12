@@ -136,12 +136,33 @@ const UI_THEMES = new Set<UiTheme>(["system", "light", "dark"]);
 const MAX_LOCALE = 32;
 const MAX_SECRET = 8192;
 
-/** Client locale plugin ships `zh` | `en` | `ja`. */
+/** Resolve OS / env language for `preference: system` and fresh defaults. */
+export function detectHostLocale(): "zh" | "en" | "ja" {
+  const candidates = [
+    process.env.XRK_LOCALE,
+    process.env.LANG,
+    process.env.LC_ALL,
+    process.env.LC_MESSAGES,
+    Intl.DateTimeFormat().resolvedOptions().locale,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const lower = raw.trim().toLowerCase().replace(/_/g, "-");
+    if (lower.startsWith("zh")) return "zh";
+    if (lower.startsWith("ja")) return "ja";
+    if (lower.startsWith("en")) return "en";
+  }
+  return "zh";
+}
+
+/** Client locale plugin ships `zh` | `en` | `ja` | `system`. */
 function faceLocalePreference(locale: string): "zh" | "en" | "ja" {
   const lower = locale.trim().toLowerCase();
+  if (lower === "system" || lower === "") return detectHostLocale();
   if (lower.startsWith("zh")) return "zh";
   if (lower.startsWith("ja")) return "ja";
-  return "en";
+  if (lower.startsWith("en")) return "en";
+  return detectHostLocale();
 }
 
 const LOCALE_SCHEMA = FACE_LOCALE_SCHEMA;
@@ -175,7 +196,7 @@ function applyFaceUiPref(
 }
 
 export function defaultUiSettings(): FaceUiSettings {
-  return { theme: "system", locale: "en" };
+  return { theme: "system", locale: detectHostLocale() };
 }
 
 export class FaceCredentialVault {

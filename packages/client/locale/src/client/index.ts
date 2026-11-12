@@ -19,7 +19,12 @@ import type { ClientContext, SettingsScope } from '@xrkseek/client-runtime/clien
 // (client bundle purity gate).
 import type {} from '@xrkseek/client-ui-settings/client'
 import {
-  LOCALE_PREFERENCE_FIELD, LOCALE_SETTINGS_NAMESPACE, type LocaleId, type LocaleSettings,
+  LOCALE_IDS,
+  LOCALE_PREFERENCE_FIELD,
+  LOCALE_SETTINGS_NAMESPACE,
+  type LocaleId,
+  type LocalePreferenceId,
+  type LocaleSettings,
 } from '../locale-settings.ts'
 import { en, ja, zh, type CommonKey } from '../locales/index.ts'
 import {
@@ -32,7 +37,7 @@ import { createLanguageRowStore } from './settings-store.ts'
 export type { LanguageRowComponentProps, LanguageRowInjected } from './LanguageRow.tsx'
 export type { LanguageOptionRow, LanguageRowState } from './settings-store.ts'
 export type { CommonKey } from '../locales/index.ts'
-export type { LocaleId, LocaleSettings } from '../locale-settings.ts'
+export type { LocaleId, LocalePreferenceId, LocaleSettings } from '../locale-settings.ts'
 
 // The translate currency lives in ui-slots (the render machinery synthesizes
 // the seat); re-exported here so dictionary owners import one package.
@@ -53,17 +58,22 @@ export type LocaleDict = Record<string, string>
 
 /** One selectable locale: id plus its self-described display name. */
 export interface LocaleDefinition {
-  /** Locale id (persisted; the setLocale argument). */
-  id: LocaleId
-  /** Display name in its own language (中文 / English / 日本語). */
+  /** Preference id (persisted; the setLocale argument). */
+  id: LocalePreferenceId
+  /** Display name (跟随系统 / 中文 / English / 日本語). */
   label: string
 }
 
 /** Immutable locale state published on every change. */
 export interface LocaleSnapshot {
-  /** Active locale id. */
+  /** Active locale id used for dictionary lookup (`system` resolves here). */
   active: LocaleId
-  /** Selectable locales in display order. */
+  /**
+   * Durable preference (`system` | zh | en | ja). Menu selection tracks this;
+   * dictionary lookup always uses {@link active}.
+   */
+  preference: LocalePreferenceId
+  /** Selectable locales in display order (includes Follow system). */
   locales: readonly LocaleDefinition[]
   /** Monotonic change counter (registry or active changes). */
   revision: number
@@ -103,12 +113,28 @@ export const COMMON_NS = 'common'
 /** Namespace owning this feature's settings-row copy. */
 export const SETTINGS_NS = 'settings.locale'
 
-/** The three shipped locales. */
+/** Preference menu: follow system first, then concrete languages. */
 const LOCALES: readonly LocaleDefinition[] = Object.freeze([
+  { id: 'system', label: '跟随系统' },
   { id: 'zh', label: '中文' },
   { id: 'en', label: 'English' },
   { id: 'ja', label: '日本語' },
 ])
+
+function isLocaleId(id: string): id is LocaleId {
+  return (LOCALE_IDS as readonly string[]).includes(id)
+}
+
+function resolvePreference(raw: string | undefined, provisional: LocaleId): {
+  preference: LocalePreferenceId
+  active: LocaleId
+} {
+  if (raw === undefined || raw === 'system') {
+    return { preference: 'system', active: provisional }
+  }
+  if (isLocaleId(raw)) return { preference: raw, active: raw }
+  return { preference: 'system', active: provisional }
+}
 
 /**
  * Dictionary registry plus locale preference. Lookup chain per key: the
@@ -140,7 +166,12 @@ export class LocaleRuntime {
     this.ctx = ctx
     this.host = host
     this.provisional = resolveInitialLocale()
-    this.snapshot = Object.freeze({ active: this.provisional, locales: LOCALES, revision: 0 })
+    this.snapshot = Object.freeze({
+      active: this.provisional,
+      preference: 'system',
+      locales: LOCALES,
+      revision: 0,
+    })
     if (host !== undefined) {
       ctx.effect(() => host.subscribe(() => { this.adopt(host) }), 'locale: settings scope adoption')
       this.adopt(host)
@@ -190,27 +221,41 @@ export class LocaleRuntime {
 
   /**
    * Switch the active locale — the only user preference write entry.
-   * @param id - a registered locale id; unknown ids throw.
+   * @param id - a registered preference id (`system` | zh | en | ja); unknown ids throw.
    */
   setLocale(id: string): void {
     const match = this.snapshot.locales.find(l => l.id === id)
     if (match === undefined) throw new Error(`locale "${id}" is not registered`)
-    if (this.snapshot.active === match.id) return
-    this.publish(match.id, true)
-    void this.host?.set(LOCALE_PREFERENCE_FIELD, match.id)
+    const next = resolvePreference(
+      match.id === 'system' ? 'system' : match.id,
+      this.provisional,
+    )
+    if (
+      this.snapshot.active === next.active
+      && this.snapshot.preference === next.preference
+    ) {
+      return
+    }
+    this.publish(next.active, next.preference, true)
+    void this.host?.set(LOCALE_PREFERENCE_FIELD, next.preference)
   }
 
   /**
    * Adopt the scope's accepted durable selection without writing it back; an
-   * absent selection returns to the browser-derived locale.
+   * absent / `system` selection returns to the browser-derived locale.
    * @param host - the constructor-narrowed scope driving this adoption.
    */
   private adopt(host: SettingsScope<LocaleSettings>): void {
     const section = host.getSnapshot().value
     if (section === undefined) return
-    const target = section.preference ?? this.provisional
-    if (this.snapshot.active === target) return
-    this.publish(target, true)
+    const next = resolvePreference(section.preference, this.provisional)
+    if (
+      this.snapshot.active === next.active
+      && this.snapshot.preference === next.preference
+    ) {
+      return
+    }
+    this.publish(next.active, next.preference, true)
   }
 
   /**
@@ -327,13 +372,25 @@ export class LocaleRuntime {
    * registration-heavy boot cannot storm event listeners (which may
    * re-register slots in response).
    */
-  private publish(active: LocaleId, localeChanged: boolean): void {
+  private publish(
+    active: LocaleId,
+    preferenceOrChanged: LocalePreferenceId | boolean,
+    localeChanged = false,
+  ): void {
+    // Overload: register() calls publish(active, false).
+    const preference = typeof preferenceOrChanged === 'boolean'
+      ? this.snapshot.preference
+      : preferenceOrChanged
+    const changed = typeof preferenceOrChanged === 'boolean'
+      ? preferenceOrChanged
+      : localeChanged
     this.snapshot = Object.freeze({
       active,
+      preference,
       locales: this.snapshot.locales,
       revision: this.snapshot.revision + 1,
     })
-    if (localeChanged) this.ctx.emit('locale/change', this.snapshot)
+    if (changed) this.ctx.emit('locale/change', this.snapshot)
     for (const fn of [...this.listeners]) {
       try {
         fn()
@@ -371,8 +428,7 @@ function detectBrowserLocale(): LocaleId | undefined {
    * throw at boot. */
   for (const tag of [...(navigator.languages ?? []), navigator.language]) {
     const primary = tag.toLowerCase().split('-')[0]
-    const match = LOCALES.find(locale => locale.id === primary)
-    if (match) return match.id
+    if (isLocaleId(primary)) return primary
   }
   return undefined
 }
@@ -399,8 +455,9 @@ export function apply(ctx: ClientContext): void {
   const store = createLanguageRowStore()
   let bound: BoundActions<typeof store> | undefined
   const sync = (snapshot: LocaleSnapshot): void => {
+    // Menu highlight tracks durable preference (`system`), not resolved active.
     bound?.sync(
-      snapshot.active,
+      snapshot.preference,
       snapshot.locales.map(l => ({ id: l.id, label: l.label })),
       snapshot.revision,
     )

@@ -18,7 +18,8 @@ const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
     "Do not implement in ws_im.",
   ].join("\n"),
   qichuang: [
-    "kind=orchestrator (向日葵 / 奇创) · path=open · shell_confine=off.",
+    "kind=orchestrator (向日葵 / 奇创 · 向阳经理席) · path=open · shell_confine=off.",
+    "You are 向阳空间's mid-tier lead; report only to the human 老板. Project titles.manager is a peer, not your boss.",
     "Admin seat: settings_* · workspace_create/list · team_* · care skills (xrk-home-config · xrk-demand-translate · …).",
     "Vague → skill xrk-demand-translate.",
     "Dispatch: workspace_session_prompt → keep session_id → thread_message; optional thread_upsert + presence_set.",
@@ -26,7 +27,8 @@ const POSTURE_BY_BADGE: Readonly<Record<string, string>> = {
   ].join("\n"),
   // Coding 经理席 — thin guide; admin on 向阳; peer work via new session in a coding ws.
   harness: [
-    "kind=coding_parent (经理席) · path=open",
+    "kind=coding_parent (项目经理席) · path=open",
+    "You are this project's mid-tier lead; report only to the human 老板. 向日葵 on 向阳 is a peer lead.",
     "Same-project peer: workspace_session_prompt(workspace_id) → new/existing session → thread_message (delegation tree optional).",
     "Spawn: subagent(member_id). List: workspace_list.",
     "settings_* here edits field VALUES only (schema-backed ns). Schema/behavior changes, reserved ns, workspace create/delete → 向阳空间: workspace_session_prompt(ws_default) to a 向日葵 session (coding mode may dispatch there). This seat stays coding-light — do not self-declare as the XRK config owner.",

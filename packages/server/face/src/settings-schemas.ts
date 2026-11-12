@@ -371,16 +371,14 @@ const SandboxConfig = Schema.object({
  * `off` unregisters the tool on the next agent rebuild (hot unload).
  */
 const ComputerUseConfig = Schema.object({
-  // Desktop ships agent-desktop; default on so computer_use is ready out of
-  // the box. Turn off from the Plugins card (header switch applies live) when
-  // a headless Host should not expose desktop control. Env `XRK_COMPUTER_USE`
-  // remains the CI bypass.
+  // Default off — desktop control is opt-in from the Plugins card (header
+  // switch applies live). Env `XRK_COMPUTER_USE` remains the CI bypass.
   mode: Schema.union([
     "off",
     "agent-desktop",
     "uia",
     "background",
-  ]).default("agent-desktop"),
+  ]).default("off"),
 });
 
 /**
@@ -793,7 +791,8 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "locale",
       schema: FACE_LOCALE_SCHEMA,
-      base: { preference: "en" },
+      // `system` → follow OS / browser; never force English on fresh installs.
+      base: { preference: "system" },
       applies: "live",
     },
     {
@@ -927,7 +926,7 @@ export const FACE_PRODUCT_SETTINGS_NAMESPACES: readonly FaceSettingsNamespaceSpe
     {
       ns: "computer-use",
       schema: schemasteryJson(ComputerUseConfig) as FaceSchemaEnvelope,
-      base: { mode: "agent-desktop" },
+      base: { mode: "off" },
       // Provider rebuilds with tools on agent invalidate.
       applies: "live",
     },

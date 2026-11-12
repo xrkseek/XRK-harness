@@ -246,12 +246,24 @@ describe('LocaleRuntime', () => {
     expect(svc.getLocale().active).toBe('zh')
   })
 
-  it('exposes the three shipped locales with self-described labels', () => {
+  it('exposes follow-system plus the three shipped locales with self-described labels', () => {
     const { svc } = make()
     expect(svc.getLocale().locales).toEqual([
+      { id: 'system', label: '跟随系统' },
       { id: 'zh', label: '中文' },
       { id: 'en', label: 'English' },
       { id: 'ja', label: '日本語' },
     ])
+  })
+
+  it('system preference keeps browser-derived active for dictionaries', () => {
+    stubLanguages('zh-CN')
+    const host = stubSettingsScope<LocaleSettings>()
+    const { svc } = make(host)
+    svc.setLocale('en')
+    expect(svc.getLocale()).toMatchObject({ active: 'en', preference: 'en' })
+    svc.setLocale('system')
+    expect(svc.getLocale()).toMatchObject({ active: 'zh', preference: 'system' })
+    expect(host.set).toHaveBeenCalledWith('preference', 'system')
   })
 })

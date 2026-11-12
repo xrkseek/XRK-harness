@@ -1413,11 +1413,17 @@ export function createAgentBrowserSession(
       }
     },
     dispose() {
-      void runAgentBrowser(
-        [...globalFlags(true), "close"],
-        launchOpts,
-        true,
-      ).catch(() => undefined);
+      // Agent materialization eagerly registers a BrowserSession even when the
+      // model never opened a page. `agent-browser close` still boots Chromium
+      // (headed) → white Chrome flash + taskbar bounce on archive/delete.
+      // Only tear down a session that actually launched.
+      if (opened) {
+        void runAgentBrowser(
+          [...globalFlags(true), "close"],
+          launchOpts,
+          true,
+        ).catch(() => undefined);
+      }
       opened = false;
       url = "";
       title = "";

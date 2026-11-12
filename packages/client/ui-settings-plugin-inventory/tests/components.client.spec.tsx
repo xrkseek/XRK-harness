@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
+import {
+  PluginInventorySettingsTab,
+  resetPluginInventoryCacheForTests,
+} from '../src/client/PluginInventorySettingsTab.tsx'
 import type {
   PluginInventorySettingsTabInjected,
   PluginInventorySettingsTabProps,
@@ -12,9 +15,11 @@ import { resetPluginInstallUiSessionForTests } from '../src/client/plugin-instal
 afterEach(() => {
   cleanup()
   resetPluginInstallUiSessionForTests()
+  resetPluginInventoryCacheForTests()
   try {
     globalThis.localStorage?.removeItem('xrk.pluginInstall.registry')
     globalThis.localStorage?.removeItem('xrk.pluginInstall.registryCustom')
+    globalThis.localStorage?.removeItem('xrk.pluginInstall.proxy')
   } catch {
     /* jsdom / private mode */
   }
@@ -142,6 +147,12 @@ describe('PluginInventorySettingsTab', () => {
     expect(view.container.querySelector('[data-plugin-scope="global"]')).toBeTruthy()
     expect(screen.getByText(en.presetTitle)).toBeTruthy()
     expect(screen.getByText(en.globalTitle)).toBeTruthy()
+    // Custom / global inventory sits above session composition for scan density.
+    const globalEl = view.container.querySelector('[data-plugin-scope="global"]')!
+    const presetEl = view.container.querySelector('[data-plugin-scope="preset"]')!
+    expect(
+      Boolean(globalEl.compareDocumentPosition(presetEl) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
     expect(view.container.querySelector('[data-plugin-count]')?.textContent).toBe('9')
     // 6 composition rows (default minimal) + 2 group headings + 9 global cards
     expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(15)
@@ -194,7 +205,10 @@ describe('PluginInventorySettingsTab', () => {
     expect(dialog.textContent).toContain(en.removeTitle.replace('{name}', 'better-sidebar'))
     expect(dialog.textContent).toContain(en.removeDescription)
     fireEvent.click(screen.getByRole('button', { name: en.cancel }))
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // Modal keeps the dialog mounted through its closing phase.
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
     expect(remove).not.toHaveBeenCalled()
 
     await openManagedMenu()
@@ -315,6 +329,74 @@ describe('PluginInventorySettingsTab', () => {
     }
   })
 
+  it('keeps live install log under the proxy when the sidebar package is still missing', async () => {
+    const deferred = Promise.withResolvers<{
+      command: string
+      output: string
+      exitCode: number
+    }>()
+    const install = vi.fn(async () => deferred.promise)
+    const snap = {
+      ...SNAPSHOT,
+      entries: SNAPSHOT.entries.filter((entry) => entry.entryId !== 'xrkh-better-sidebar'),
+    }
+    const { container } = render(
+      <PluginInventorySettingsTab {...props(async () => snap, { install })} />,
+    )
+    await screen.findByText(en.globalTitle)
+    expect(container.querySelector('[data-plugin-recommend="xrkh-better-sidebar"]')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText(en.installPlaceholder), {
+      target: { value: 'dsh-whale-girl' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.install }))
+    await waitFor(() => {
+      expect(container.querySelector('[data-install-log]')).toBeTruthy()
+    })
+
+    const proxyLabel = screen.getByText(en.installProxyLabel)
+    const log = container.querySelector('[data-install-log]')!
+    const recommend = container.querySelector('[data-plugin-recommend="xrkh-better-sidebar"]')!
+    expect(
+      Boolean(proxyLabel.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
+    expect(
+      Boolean(log.compareDocumentPosition(recommend) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
+
+    deferred.resolve({
+      command: 'xrkh plugin add dsh-whale-girl',
+      output: 'ok\n',
+      exitCode: 0,
+    })
+    await waitFor(() => {
+      expect(container.querySelector('[data-client-refresh-hint]')).toBeTruthy()
+    })
+    const refreshHint = container.querySelector('[data-client-refresh-hint]')!
+    expect(
+      Boolean(proxyLabel.compareDocumentPosition(refreshHint) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
+    expect(
+      Boolean(refreshHint.compareDocumentPosition(recommend) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true)
+  })
+
+  it('rotates scope disclosure from aria-expanded on the toggle (not dropped Icon data-open)', async () => {
+    render(<PluginInventorySettingsTab {...props(async () => SNAPSHOT)} />)
+    await screen.findByText(en.globalTitle)
+    const globalToggle = screen.getByRole('button', { name: en.globalTitle })
+    expect(globalToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(globalToggle)
+    expect(globalToggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(globalToggle)
+    expect(globalToggle.getAttribute('aria-expanded')).toBe('true')
+
+    const presetToggle = screen.getByRole('button', { name: en.presetTitle })
+    expect(presetToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(presetToggle)
+    expect(presetToggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('fills install examples from the guide and surfaces install errors under the form', async () => {
     const install = vi.fn(async () => { throw new Error('npm pack failed') })
     const { container } = render(
@@ -337,6 +419,7 @@ describe('PluginInventorySettingsTab', () => {
         en.installGuidePackageExample,
         'https://registry.npmmirror.com/',
         expect.stringMatching(/^install-/),
+        undefined,
       )
     })
     const alert = await screen.findByRole('alert')

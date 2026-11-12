@@ -98,11 +98,30 @@ export function readSeatTitles(
   };
 }
 
-/** Preference from Settings `locale` namespace (`zh` | `en` | `ja`). */
+/** Preference from Settings `locale` namespace (`zh` | `en` | `ja` | `system`). */
 export function readUiLocalePreference(
   localeUser: Record<string, unknown> | undefined,
 ): SeatTitleLocale {
-  return parseSeatTitleLocale(localeUser?.preference);
+  const raw = localeUser?.preference;
+  if (raw === "system" || raw === undefined || raw === "") {
+    // Match Face `detectHostLocale` without importing settings-credentials
+    // (seat-titles stays leaf-ish for inject paths).
+    const candidates = [
+      process.env.XRK_LOCALE,
+      process.env.LANG,
+      process.env.LC_ALL,
+      Intl.DateTimeFormat().resolvedOptions().locale,
+    ];
+    for (const tag of candidates) {
+      if (typeof tag !== "string" || !tag.trim()) continue;
+      const lower = tag.trim().toLowerCase().replace(/_/g, "-");
+      if (lower.startsWith("zh")) return "zh";
+      if (lower.startsWith("ja")) return "ja";
+      if (lower.startsWith("en")) return "en";
+    }
+    return "zh";
+  }
+  return parseSeatTitleLocale(raw);
 }
 
 /**

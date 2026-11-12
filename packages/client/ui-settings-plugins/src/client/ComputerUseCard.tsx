@@ -38,7 +38,7 @@ export function ComputerUseCard(props: ComputerUseCardProps) {
   const { t } = props
   const state = props.useComputerUseCard(snapshot => snapshot)
   const disabled = !state.writable
-  const mode = state.mode.text || 'agent-desktop'
+  const mode = state.mode.text || 'off'
   const showHelper = mode === 'background'
   return (
     <PluginCard

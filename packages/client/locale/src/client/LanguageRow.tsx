@@ -28,10 +28,14 @@ export type LanguageRowComponentProps =
  * @returns the row element tree.
  */
 export function LanguageRow({ t, setLocale, useStore }: LanguageRowComponentProps) {
-  const active = useStore(s => s.active)
+  const preference = useStore(s => s.active)
   const options = useStore(s => s.options)
   const [open, setOpen] = useState(false)
-  const activeLabel = options.find(o => o.id === active)?.label ?? active
+  const systemLabel = t('language.system')
+  const menuOptions = options.map(o => (
+    o.id === 'system' ? { ...o, label: systemLabel } : o
+  ))
+  const activeLabel = menuOptions.find(o => o.id === preference)?.label ?? preference
 
   return (
     <div className={css.row}>
@@ -41,8 +45,8 @@ export function LanguageRow({ t, setLocale, useStore }: LanguageRowComponentProp
       <Menu
         open={open}
         onClose={() => { setOpen(false) }}
-        items={options.map(o => ({ id: o.id, label: o.label }))}
-        selectedId={active}
+        items={menuOptions.map(o => ({ id: o.id, label: o.label }))}
+        selectedId={preference}
         onSelect={(id) => {
           setLocale(id)
           setOpen(false)

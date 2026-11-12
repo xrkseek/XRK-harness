@@ -239,19 +239,23 @@ export function formatSeatIdentity(
       titles,
       locale,
     ).label;
+    // Peer managers: 向日葵 owns 向阳; titles.manager is the *project* seat label —
+    // never this seat's boss. Only titles.boss is above you.
     return [
-      `you: ${you} (xiangyang)`,
+      `you: ${you} (xiangyang · mid-tier lead of 向阳空间)`,
       `speaker: ${boss}`,
-      `report: ${titles.boss}`,
+      `report: ${boss} only (not ${titles.manager})`,
+      `peer: project ${titles.manager} seat is a peer lead — not your boss`,
       "nickname: locked",
       titlesLine,
     ].join("\n");
   }
 
   return [
-    `you: ${managerSeat(runtime, titles, locale)} (project)`,
+    `you: ${managerSeat(runtime, titles, locale)} (project · mid-tier lead of this workspace)`,
     `speaker: ${boss}`,
-    `report: ${titles.boss}`,
+    `report: ${boss} only`,
+    `peer: 向日葵 on 向阳空间 is a peer lead — not your boss`,
     titlesLine,
   ].join("\n");
 }

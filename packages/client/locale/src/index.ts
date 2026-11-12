@@ -5,8 +5,8 @@ import { settingsNamespace } from '@xrkseek/xrk-settings'
 import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from './locale-settings.ts'
 
 export {
-  LOCALE_IDS, LOCALE_PREFERENCE_FIELD, LOCALE_SETTINGS_NAMESPACE,
-  type LocaleId, type LocaleSettings,
+  LOCALE_IDS, LOCALE_PREFERENCE_IDS, LOCALE_PREFERENCE_FIELD, LOCALE_SETTINGS_NAMESPACE,
+  type LocaleId, type LocalePreferenceId, type LocaleSettings,
 } from './locale-settings.ts'
 
 /**

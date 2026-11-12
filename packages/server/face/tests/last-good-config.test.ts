@@ -135,24 +135,25 @@ describe("last-good config (settings.yaml / host-settings)", () => {
   it("settings.mutate rolls back memory when persist refuses corrupt disk", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-last-good-mutate-"));
     const file = path.join(dir, "settings.yaml");
-    await writeFile(file, "locale:\n  preference: en\n", "utf8");
+    // Explicit zh (not the old forced-en default) so locale migration leaves it.
+    await writeFile(file, "locale:\n  preference: zh\n", "utf8");
     const rt = runtime(dir);
     hydrateFaceSettingsDocument(rt);
 
     await writeFile(file, "!!!not-yaml\n", "utf8");
     const before = rt.settingsNamespaces.ensure("locale").user.preference;
-    expect(before).toBe("en");
+    expect(before).toBe("zh");
 
     const mut = await dispatchFaceMethod(rt, "settings.mutate", "m1", {
       ns: "locale",
-      ops: [{ op: "set", path: ["preference"], value: "zh" }],
+      ops: [{ op: "set", path: ["preference"], value: "en" }],
     });
     expect(mut.result.ok).toBe(false);
     if (!mut.result.ok) {
       expect(mut.result.error.code).toBe("settings-rejected");
       expect(mut.result.error.message).toMatch(/unparsable|refusing to overwrite/i);
     }
-    expect(rt.settingsNamespaces.ensure("locale").user.preference).toBe("en");
+    expect(rt.settingsNamespaces.ensure("locale").user.preference).toBe("zh");
     expect(await readFile(file, "utf8")).toContain("!!!not-yaml");
   });
 

@@ -69,6 +69,32 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.18',
+    date: '2026-11-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '设置 → 语言：支持「跟随系统」；旧默认英文偏好迁成跟随系统，界面与席位标题跟本机语言走。',
+        en: 'Settings → Language: “Follow system”; old forced English preference migrates so UI and seat titles track the machine locale.',
+      },
+      {
+        zh: '计算机使用默认关闭；向日葵「添加干员工作区」真正开家，测员等不再添加后卡住。',
+        en: 'Computer-use defaults to off; Sunflower “Add agent workspace” truly mints a home so roster adds no longer hang.',
+      },
+      {
+        zh: '插件清单双列布局；Desktop 通知不再挂到 Chrome，「命令行 xrkh」读写 PATH 不再冻窗。',
+        en: 'Plugin inventory is two-column; Desktop toasts no longer attach to Chrome, and “CLI xrkh” PATH get/set no longer freezes the window.',
+      },
+      {
+        zh: '手机 App：开启「安装未知应用」返回后自动继续安装，不必大退；Host 启动失败时设置球仍在，可进引擎状态。',
+        en: 'Mobile App: install continues after “install unknown apps”; on Host start failure the settings ball stays for engine status.',
+      },
+    ],
+  },
+  {
     version: '0.7.17',
     date: '2026-11-11',
     title: {

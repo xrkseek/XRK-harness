@@ -7,6 +7,64 @@ import {
 } from "./helpers/bare-runtime.js";
 
 describe("team.upsert mintHome", () => {
+  it("mints agent-home for catalog 干员 (测员) when mintHome is true", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const upserted = await dispatchFaceMethod(runtime, "team.upsert", "u-tester", {
+      sessionId,
+      id: "mem_seed_tester",
+      name: "测员",
+      playbook: "Run tests.",
+      role: "worker",
+      scope: "global",
+      mintHome: true,
+    });
+    expect(upserted.result.ok).toBe(true);
+    const value = upserted.result.value as {
+      member: { id: string };
+      homeWorkspaceId?: string;
+    };
+    expect(value.member.id).toBe("mem_seed_tester");
+    expect(value.homeWorkspaceId).toBeTruthy();
+    const home = runtime.workspaces.get(value.homeWorkspaceId!);
+    expect(home?.kind).toBe("agent-home");
+    expect(home?.boundMemberId).toBe("mem_seed_tester");
+  });
+
+  it("does not mint catalog 干员 home without mintHome", async () => {
+    const store = createMemorySessionStore();
+    const runtime = createBareFaceRuntime({
+      store,
+      resolveAgent: admittingAgentResolve(store),
+    });
+    const created = await dispatchFaceMethod(runtime, "session.create", "c2", {});
+    if (!created.result.ok) throw new Error("create");
+    const sessionId = (created.result.value as { sessionId: string }).sessionId;
+
+    const upserted = await dispatchFaceMethod(runtime, "team.upsert", "u-tester-nick", {
+      sessionId,
+      id: "mem_seed_tester",
+      name: "测员",
+      playbook: "Run tests.",
+      role: "worker",
+      scope: "global",
+      nickname: "小测",
+    });
+    expect(upserted.result.ok).toBe(true);
+    const value = upserted.result.value as { homeWorkspaceId?: string };
+    expect(value.homeWorkspaceId).toBeUndefined();
+    expect(
+      runtime.workspaces.findAgentHomeByMember("mem_seed_tester"),
+    ).toBeUndefined();
+  });
+
   it("does not mint 干员工作区 on ordinary roster create / nick edit", async () => {
     const store = createMemorySessionStore();
     const runtime = createBareFaceRuntime({

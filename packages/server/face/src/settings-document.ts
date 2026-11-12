@@ -190,6 +190,17 @@ const LEGACY_VOICE_NS = "voice";
  * the user's newer choice.
  * @returns whether anything was written, so the caller can persist the split.
  */
+/**
+ * Old product base forced `locale.preference: en`. Snap that forced default to
+ * `system` so UI / seat titles follow the machine (explicit zh/en/ja stay).
+ */
+function migrateLocaleSystemDefault(runtime: FaceRuntime): boolean {
+  const slot = runtime.settingsNamespaces.ensure("locale");
+  if (slot.user.preference !== "en") return false;
+  slot.user = { ...slot.user, preference: "system" };
+  return true;
+}
+
 function migrateLegacyVoice(
   runtime: FaceRuntime,
   legacy: Record<string, unknown>,
@@ -268,6 +279,17 @@ export function hydrateFaceSettingsDocument(runtime: FaceRuntime): void {
     const slot = runtime.settingsNamespaces.ensure(key);
     slot.user = structuredClone(raw as Record<string, unknown>);
     slot.applies = "live";
+  }
+  if (migrateLocaleSystemDefault(runtime)) {
+    void persistSettingsDocument(runtime, runtime.settingsNamespaces).catch(
+      (err: unknown) => {
+        console.warn(
+          `[face] locale en → system persist failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      },
+    );
   }
   applyUiFromSettings(runtime);
   loadCredentialsFile(runtime);

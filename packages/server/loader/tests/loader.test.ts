@@ -250,12 +250,14 @@ describe("plugin discover", () => {
   });
 
   it("example-tools contributes example_ping", async () => {
-    const extRoot = path.resolve(
+    // Load only this plugin root — scanning all of extensions/ also imports
+    // xrk-sunflower-free, which can block on live probe egress past 5s.
+    const pluginRoot = path.resolve(
       import.meta.dirname,
-      "../../../../extensions",
+      "../../../../extensions/example-tools",
     );
     const loader = createPluginLoader();
-    await loader.loadAll(extRoot);
+    await loader.loadAll(pluginRoot);
     const ex = loader.list().find((p) => p.id === "example-tools");
     expect(ex?.tools?.some((t) => t.name === "example_ping")).toBe(true);
     const out = await ex!.tools!.find((t) => t.name === "example_ping")!.execute(

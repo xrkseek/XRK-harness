@@ -48,7 +48,8 @@ describe("session_posture", () => {
       if (!coding.result.ok) return;
       const codingId = (coding.result.value as { sessionId: string }).sessionId;
       const codingText = formatSessionPosture(runtime, codingId);
-      expect(codingText).toMatch(/kind=coding_parent \(经理席\)/);
+      expect(codingText).toMatch(/kind=coding_parent \(项目经理席\)/);
+      expect(codingText).toMatch(/peer lead/);
       expect(codingText).toMatch(/workspace_session_prompt/);
       expect(codingText).toMatch(/向阳/);
 
@@ -60,6 +61,8 @@ describe("session_posture", () => {
       const xyId = (xy.result.value as { sessionId: string }).sessionId;
       const xyText = formatSessionPosture(runtime, xyId);
       expect(xyText).toMatch(/向日葵|奇创|Xiangyang|Qichuang/);
+      expect(xyText).toMatch(/向阳经理席/);
+      expect(xyText).toMatch(/peer/);
       expect(xyText).toMatch(/path=open/);
       expect(xyText).toMatch(/shell_confine=off/);
       expect(xyText).toMatch(/workspace_session_prompt/);

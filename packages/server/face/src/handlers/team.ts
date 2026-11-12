@@ -285,8 +285,9 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
       },
     };
   }
-  // Catalog: patch costume (经理) / nickname (all but 向日葵). Never mint home.
-  // Seed playbook stays frozen.
+  // Catalog: patch costume (经理) / nickname (all but 向日葵). Seed playbook
+  // stays frozen. Costume / nick edits must not mint 干员工作区 — only explicit
+  // 「添加干员工作区」(mintHome) or import/capture does.
   if (rawId && isCatalogSeedMemberId(rawId)) {
     let listed = runtime.agentRoster
       .listVisible(canvasId)
@@ -326,10 +327,18 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
             };
       }
     }
-    // Catalog costume / nick edits must not mint 干员工作区 — only explicit
-    // 「添加干员工作区」(mintHome) or import/capture does.
+    const mintHome = args.mintHome === true;
+    // 经理 / 向日葵 stay office seats — mint is for catalog 干员 like 测员.
+    const canMintHome =
+      mintHome
+      && rawId !== MANAGER_MEMBER_ID
+      && rawId !== SUNFLOWER_MEMBER_ID;
     const existingHome = runtime.workspaces.findAgentHomeByMember(rawId);
-    if (existingHome && wantAppearance) {
+    let homeWorkspaceId = existingHome?.workspaceId;
+    if (canMintHome) {
+      const minted = await mintAgentHomeForMember(runtime, listed, canvasId);
+      homeWorkspaceId = minted.workspaceId;
+    } else if (existingHome && wantAppearance) {
       publishWorkspaceChanged(runtime, existingHome);
     }
     const presenceUser = runtime.settingsNamespaces.view("ui-presence")
@@ -349,7 +358,7 @@ export const teamUpsert: FaceHandler = async (runtime, _rpcId, payload) => {
           locale,
           seatTitles,
         ),
-        ...(existingHome ? { homeWorkspaceId: existingHome.workspaceId } : {}),
+        ...(homeWorkspaceId ? { homeWorkspaceId } : {}),
       },
     };
   }

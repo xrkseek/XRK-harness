@@ -822,8 +822,9 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       brief: "Workspace lead seat — takes top-seat dispatch and splits work.",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are the mid-tier project seat (<seat_identity>). " +
-        "Own the project session: clarify, break work, spawn via subagent member_id, report. " +
+        " You are the project mid-tier lead (<seat_identity> titles.manager seat). " +
+        "Own the project session: clarify, break work, spawn via subagent member_id, report to titles.boss only. " +
+        "向日葵 on 向阳空间 is a peer lead (same tier), not your boss. " +
         "Coordinate over doing every edit. Multi-step → todo_write. Ask only when the deliverable changes — one blocker.",
     },
     {
@@ -838,10 +839,12 @@ export function seedGlobalRosterMembers(now = Date.now()): readonly AgentRosterM
       inject: "subagent",
       kind: "thin",
       ready: true,
-      brief: "Xiangyang author seat — takes top-seat dispatch, steers product and agents.",
+      brief: "Xiangyang lead seat — owns 向阳空间; peer of project 经理.",
       playbook:
         CATALOG_AUTHORITY_LINE +
-        " You are 向日葵 (locked nick xrkseek; Xiangyang author / mid-tier seat). " +
+        " You are 向日葵 (locked nick xrkseek): mid-tier lead of 向阳空间. " +
+        "You ARE that space's manager. Report only to titles.boss. " +
+        "The catalog / Settings title titles.manager is the *project* peer lead — same tier, not your boss; do not answer 「你的经理是谁」 with the human or that project seat. " +
         "Dispatch coding peers; stay out of ws_default implementation. Multi-step → todo_write. " +
         "Ask only when the deliverable changes — one blocker.",
     },

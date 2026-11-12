@@ -533,3 +533,57 @@ describe("createBrowserSession agent-browser product", () => {
     );
   });
 });
+
+describe("createAgentBrowserSession dispose", () => {
+  it("skips agent-browser close when no page was opened", () => {
+    const calls: string[][] = [];
+    const session = createAgentBrowserSession({
+      sessionName: "never-opened",
+      async run(args) {
+        calls.push([...args]);
+        return {
+          stdout: JSON.stringify({ success: true, data: {} }),
+          stderr: "",
+        };
+      },
+    });
+    session.dispose?.();
+    expect(calls.some((c) => c.includes("close"))).toBe(false);
+  });
+
+  it("closes only after a successful open", async () => {
+    const calls: string[][] = [];
+    const session = createAgentBrowserSession({
+      sessionName: "opened-once",
+      async run(args) {
+        calls.push([...args]);
+        const joined = args.join(" ");
+        if (joined.includes("open")) {
+          return {
+            stdout: JSON.stringify({
+              success: true,
+              data: { url: "https://example.test/", title: "Example" },
+            }),
+            stderr: "",
+          };
+        }
+        if (joined.includes("snapshot")) {
+          return { stdout: '- link "Ok" [ref=e1]', stderr: "" };
+        }
+        if (joined.includes("close")) {
+          return {
+            stdout: JSON.stringify({ success: true, data: {} }),
+            stderr: "",
+          };
+        }
+        return {
+          stdout: JSON.stringify({ success: true, data: {} }),
+          stderr: "",
+        };
+      },
+    });
+    await session.open("https://example.test/");
+    session.dispose?.();
+    expect(calls.some((c) => c.includes("close"))).toBe(true);
+  });
+});

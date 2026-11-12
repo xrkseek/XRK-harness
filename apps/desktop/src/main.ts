@@ -8,8 +8,9 @@
  */
 
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   app,
@@ -22,6 +23,7 @@ import {
   protocol,
   shell,
 } from "electron";
+import { DESKTOP_BUILDER_CONFIG } from "./package-targets.js";
 import { registerDesktopIpcHandlers } from "./desktop-ipc.js";
 import {
   preventIdleSleepPrefPath,
@@ -133,6 +135,13 @@ protocol.registerSchemesAsPrivileged([
     privileges: { ...DESKTOP_PROTOCOL_PRIVILEGES.privileges },
   },
 ]);
+
+// Windows toasts / taskbar grouping need the same AUMID as electron-builder
+// `appId`. Without it, HTML5 Notification and brief Chromium helpers can show
+// up under Google Chrome and bounce that icon on the taskbar.
+if (process.platform === "win32") {
+  app.setAppUserModelId(DESKTOP_BUILDER_CONFIG.appId);
+}
 
 /** Resolve splash floor from durable Settings (Host not up yet). */
 function resolveBootColorScheme(): DesktopColorScheme {
@@ -397,13 +406,15 @@ app.on("will-quit", () => {
   }
 });
 
+const execFileAsync = promisify(execFile);
+
 /**
- * User PATH via the Environment API.
- * `reg query` wraps long values at the console width; writing that fragment
- * back replaces the whole user Path.
+ * User PATH via the Environment API (async).
+ * Avoid spawnSync here — Settings →「命令行 xrkh」get/set used to freeze the
+ * whole Electron UI while PowerShell started.
  */
-function queryWindowsUserPath(): string {
-  const out = spawnSync(
+async function queryWindowsUserPath(): Promise<string> {
+  const { stdout } = await execFileAsync(
     "powershell.exe",
     [
       "-NoProfile",
@@ -413,14 +424,11 @@ function queryWindowsUserPath(): string {
     ],
     { encoding: "utf8", windowsHide: true },
   );
-  if (out.status !== 0) {
-    throw new Error("xrk desktop: could not read the user PATH");
-  }
-  return (out.stdout ?? "").replace(/\r?\n$/, "");
+  return String(stdout ?? "").replace(/\r?\n$/, "");
 }
 
-function writeWindowsUserPath(next: string): void {
-  const result = spawnSync(
+async function writeWindowsUserPath(next: string): Promise<void> {
+  await execFileAsync(
     "powershell.exe",
     [
       "-NoProfile",
@@ -433,9 +441,6 @@ function writeWindowsUserPath(next: string): void {
       env: { ...process.env, XRK_USER_PATH: next },
     },
   );
-  if (result.status !== 0) {
-    throw new Error("xrk desktop: could not update the user PATH");
-  }
 }
 
 function persistPosixCliPath(binDir: string, enabled: boolean): void {
@@ -453,12 +458,31 @@ function persistPosixCliPath(binDir: string, enabled: boolean): void {
   }
 }
 
+/** Pref-only snapshot for the Settings switch — never touches User PATH. */
+function readDesktopCliCommandState(): { linked: boolean; binDir: string } {
+  const xrkHome = resolveDesktopHarnessHome({
+    isPackaged: app.isPackaged,
+    desktopAppRoot: DESKTOP_APP_ROOT,
+  });
+  const binDir = cliCommandBinDir(xrkHome);
+  const pref = cliCommandPrefPath(xrkHome);
+  let raw: string | undefined;
+  try {
+    raw = readFileSync(pref, "utf8");
+  } catch {
+    raw = undefined;
+  }
+  return { linked: readCliCommandEnabled(raw), binDir };
+}
+
 /**
  * Rewrite `{XRK_HOME}/bin/xrkh` to this install and put that directory first
  * on the user PATH when enabled. Missing pref means **off** (opt-in via
  * Settings → General). Failures stay off the UI boot path.
  */
-function syncDesktopCliCommand(enabled?: boolean): { linked: boolean; binDir: string } {
+async function syncDesktopCliCommand(
+  enabled?: boolean,
+): Promise<{ linked: boolean; binDir: string }> {
   const xrkHome = resolveDesktopHarnessHome({
     isPackaged: app.isPackaged,
     desktopAppRoot: DESKTOP_APP_ROOT,
@@ -491,34 +515,36 @@ function syncDesktopCliCommand(enabled?: boolean): { linked: boolean; binDir: st
     console.error(error);
     if (linked) return { linked: false, binDir };
   }
+  let userPath = process.env.PATH ?? "";
+  if (process.platform === "win32") {
+    userPath = await queryWindowsUserPath();
+  }
   const result = applyCliCommandLink({
     xrkHome,
     nodePath,
     cliBinPath,
     platform: process.platform,
     enabled: linked,
-    readUserPath: process.platform === "win32"
-      ? queryWindowsUserPath
-      : () => process.env.PATH ?? "",
-    writeUserPath: process.platform === "win32"
-      ? writeWindowsUserPath
-      : () => {},
+    readUserPath: () => userPath,
+    writeUserPath: (next) => {
+      userPath = next;
+    },
   });
-  if (process.platform !== "win32") {
+  if (process.platform === "win32") {
+    await writeWindowsUserPath(userPath);
+  } else {
     persistPosixCliPath(result.binDir, result.linked);
   }
   return { linked: result.linked, binDir: result.binDir };
 }
 
 function registerDesktopShellIpc(): void {
-  // PATH / registry sync uses spawnSync — defer so Host bring-up and first
-  // paint are not blocked by Windows User PATH queries (DSH listen-first).
+  // PATH sync is async PowerShell — defer so Host bring-up and first paint
+  // are not queued behind User PATH work (DSH listen-first).
   setImmediate(() => {
-    try {
-      syncDesktopCliCommand();
-    } catch (error) {
+    void syncDesktopCliCommand().catch((error) => {
       console.error(error);
-    }
+    });
   });
   registerDesktopIpcHandlers(ipcMain, {
     getLocale: () => desktopShellLocaleTag(),
@@ -551,7 +577,8 @@ function registerDesktopShellIpc(): void {
     rebringHost: () => {
       desktopHostBringUp?.rebring();
     },
-    getCliCommand: () => syncDesktopCliCommand(),
+    // Pref read only — never spawn PowerShell on Settings paint.
+    getCliCommand: () => readDesktopCliCommandState(),
     setCliCommand: (linked) => syncDesktopCliCommand(linked),
     // Arm from settings.yaml / JSON before the first renderer turn IPC.
     getPreventIdleSleep: () => ensureSleepInhibitor().snapshot(),
