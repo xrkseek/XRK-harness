@@ -4,8 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { runDoctor } from "../src/commands/doctor.js";
 
+/** Doctor walks many probes; under full-suite load the default 5s flakes. */
+const DOCTOR_MS = 20_000;
+
 describe("cli doctor", () => {
-  it("passes node + workspace in this repo", async () => {
+  it("passes node + workspace in this repo", { timeout: DOCTOR_MS }, async () => {
     const result = await runDoctor(process.cwd());
     const names = Object.fromEntries(result.checks.map((c) => [c.name, c]));
     expect(names.node?.ok).toBe(true);
@@ -31,14 +34,14 @@ describe("cli doctor", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("fails when workspace is missing", async () => {
+  it("fails when workspace is missing", { timeout: DOCTOR_MS }, async () => {
     const missing = path.join(os.tmpdir(), "xrk-no-such-ws-" + Date.now());
     const result = await runDoctor(missing);
     expect(result.ok).toBe(false);
     expect(result.checks.find((c) => c.name === "workspace")?.ok).toBe(false);
   });
 
-  it("accepts a plain directory as workspace", async () => {
+  it("accepts a plain directory as workspace", { timeout: DOCTOR_MS }, async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "xrk-doc-"));
     try {
       const result = await runDoctor(dir);

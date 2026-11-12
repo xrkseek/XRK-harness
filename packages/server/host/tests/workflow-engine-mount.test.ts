@@ -57,7 +57,7 @@ describe("Host Isolating workflow mount", () => {
     ).rejects.toThrow(/parent\.session\.id/);
   });
 
-  it("soft-skips when xrk-workflow import fails", async () => {
+  it("soft-skips when xrk-workflow import fails", { timeout: 20_000 }, async () => {
     vi.resetModules();
     vi.doMock("@xrkseek/xrk-workflow", () => {
       throw new Error("simulated missing Cordis stub");

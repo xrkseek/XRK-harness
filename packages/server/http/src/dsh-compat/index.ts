@@ -196,6 +196,9 @@ export {
   waitForOfmForwardThenSync,
 } from "./our-free-model-host.js";
 export {
+  isSafePluginPackageName,
+  assertSafePluginPackageName,
+  resolveContainedPluginPath,
   unscopedPackageName,
   isSamePluginPackage,
   isPluginPackageFamily,

@@ -16,10 +16,14 @@ import {
   setSoftDisabledAt,
   writeDisabledPluginIdsAt,
 } from "@xrkseek/server-loader";
+import { isSafePluginPackageName } from "@xrkseek/server-http";
 import { resolveCordisFiberState, hasStagedCordisClient } from "./cordis-bridge.js";
 import type { FaceRuntime } from "./context.js";
 import { reconcileClientBootAt } from "./plugin-boot.js";
 import { resolveHarnessHome } from "./settings-document.js";
+
+/** Re-export install-name hygiene (single source: server-http plugin-package-id). */
+export { isSafePluginPackageName };
 
 export {
   DISABLED_PLUGINS_FILE,
@@ -129,6 +133,79 @@ function pluginsDirOf(
 }
 
 /**
+ * Phone guest engine rows (`PhoneGuest` writes `source: "phone-guest"`).
+ * Not user-managed — Settings must not offer toggle / remove / update.
+ */
+export function isPhoneGuestEnginePlugin(
+  source: string | undefined,
+  entryId?: string,
+): boolean {
+  const s = source?.trim().toLowerCase();
+  if (s === "phone-guest") return true;
+  const id = entryId?.trim() ?? "";
+  return id === "xrk-mobile" || id.startsWith("xrk-mobile-");
+}
+
+/** Install-origin class for update checks / menu filtering. */
+export type ManagedPluginSourceClass =
+  | "engine"
+  | "local"
+  | "registry"
+  | "vcs";
+
+/**
+ * Classify a managed inventory `source` for Settings update UX.
+ * - engine: phone-guest / xrk-mobile*
+ * - local: empty, file:/link:, absolute/relative path
+ * - vcs: github: / git+ / http(s):
+ * - registry: bare package or name@version pin
+ */
+export function classifyManagedPluginSource(
+  source: string | undefined,
+  entryId?: string,
+): ManagedPluginSourceClass {
+  if (isPhoneGuestEnginePlugin(source, entryId)) return "engine";
+  const s = source?.trim();
+  if (!s) return "local";
+  if (/^(file:|link:)/i.test(s)) return "local";
+  if (path.isAbsolute(s) || s.startsWith(".")) return "local";
+  if (
+    !s.startsWith("@") &&
+    !s.includes("@") &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(s) &&
+    /[/\\]/.test(s)
+  ) {
+    return "local";
+  }
+  if (/^(github:|git\+|https?:)/i.test(s)) return "vcs";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return "vcs";
+  return "registry";
+}
+
+/**
+ * Registry package name for `npm view` (strips `@version` pin).
+ * Returns undefined when the source is not a registry install.
+ */
+export function registryPackageNameFromSource(
+  source: string | undefined,
+  entryId?: string,
+): string | undefined {
+  if (classifyManagedPluginSource(source, entryId) !== "registry") {
+    return undefined;
+  }
+  const s = source?.trim();
+  let name: string | undefined;
+  if (!s) {
+    name = entryId?.trim() || undefined;
+  } else {
+    const pinned = /^((?:@[^/\s]+\/)?[^@\s]+)@([^@\s]+)$/.exec(s);
+    name = pinned?.[1] ?? s;
+  }
+  if (!name || !isSafePluginPackageName(name)) return undefined;
+  return name;
+}
+
+/**
  * Reinstall/update spec for Settings 「更新」.
  * - Local / file / link / relative paths are cwd-sensitive → `name@latest`.
  * - Registry pins (`name@1.2.3`) must bump → `name@latest` (reinstalling the
@@ -207,17 +284,23 @@ export function resolveManagedPluginDir(
   entryId: string,
   moduleName?: string,
 ): string | undefined {
-  const root = pluginsDirOf(runtime);
-  const names = [entryId, moduleName ?? ""].map((n) => n.trim()).filter(Boolean);
+  const root = path.resolve(pluginsDirOf(runtime));
+  const names = [entryId, moduleName ?? ""]
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0 && isSafePluginPackageName(n));
   for (const name of names) {
     // Client halves stage under web/plugins/<name>; process plugins may sit at
     // the inventory root. Prefer the staged client layout (what Settings opens).
+    const parts = name.startsWith("@") ? name.split("/") : [name];
     const candidates = [
-      path.join(root, "web", "plugins", ...name.split("/")),
-      path.join(root, ...name.split("/")),
-      path.join(root, name),
+      path.resolve(root, "web", "plugins", ...parts),
+      path.resolve(root, ...parts),
+      path.resolve(root, name),
     ];
     for (const candidate of candidates) {
+      if (candidate !== root && !candidate.startsWith(root + path.sep)) {
+        continue;
+      }
       if (existsSync(candidate)) return candidate;
     }
   }
@@ -238,8 +321,11 @@ function isManagedProcessPlugin(
   plugin: FaceProcessPlugin,
   userNames: ReadonlySet<string>,
   runtime: Pick<FaceRuntime, "hostPublic">,
+  packages: ReadonlyMap<string, FaceManagedPluginMeta>,
 ): boolean {
   if (plugin.id.startsWith("mcp:")) return false;
+  const meta = packages.get(plugin.id);
+  if (isPhoneGuestEnginePlugin(meta?.source, plugin.id)) return false;
   // Product optionals (Settings toggle) stay managed even when Host-gated and
   // not listed in CLI inventory — otherwise soft-disable cannot clear a live half.
   if (OPTIONAL_OFF_BY_DEFAULT_PLUGIN_IDS.includes(plugin.id)) return true;
@@ -293,7 +379,7 @@ export function listFacePluginInventory(
     const fiber = cordis
       ? resolveCordisFiberState(runtime, plugin.id)
       : { enabled: true, fiberPhase: "active" as const };
-    const managed = isManagedProcessPlugin(plugin, userNames, runtime);
+    const managed = isManagedProcessPlugin(plugin, userNames, runtime, packages);
     const softDisabled = managed && softDisabledOf(plugin.id);
     const meta = metaOf(plugin.id);
     const kind =
@@ -318,12 +404,13 @@ export function listFacePluginInventory(
     );
   }
   for (const web of runtime.webPlugins ?? []) {
-    const managed =
-      userNames.has(web.id) || userNames.has(web.moduleName ?? "");
-    const softDisabled =
-      managed && softDisabledOf(web.id, web.moduleName ?? "");
     const meta =
       packages.get(web.id) ?? packages.get(web.moduleName ?? "") ?? {};
+    const managed =
+      !isPhoneGuestEnginePlugin(meta.source, web.id) &&
+      (userNames.has(web.id) || userNames.has(web.moduleName ?? ""));
+    const softDisabled =
+      managed && softDisabledOf(web.id, web.moduleName ?? "");
     push(
       {
         entryId: web.id,
@@ -342,13 +429,14 @@ export function listFacePluginInventory(
   // were soft-disabled (or installed after this Host start) are not in webPlugins.
   for (const [name, meta] of packages) {
     if (seen.has(name)) continue;
-    const softDisabled = softDisabledOf(name);
+    const engine = isPhoneGuestEnginePlugin(meta.source, name);
+    const softDisabled = !engine && softDisabledOf(name);
     push({
       entryId: name,
       moduleName: name,
       enabled: !softDisabled,
       fiberPhase: null,
-      managed: true,
+      managed: !engine,
       ...(meta.version ? { version: meta.version } : {}),
       kind: meta.kind ?? "client",
       ...(meta.source ? { source: meta.source } : {}),

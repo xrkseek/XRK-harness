@@ -46,14 +46,6 @@ export {
   clearDesktopChromeDomAliases,
   clearDshThemeSourceAttr,
 } from './dsh-style-aliases.ts'
-export {
-  DESKTOP_CHROME_HEIGHT_PX,
-  DSH_FRAME_CSS,
-  DSH_WINDOWS_TITLEBAR_ATTR,
-  XRK_DESKTOP_CHROME_CSS,
-  applyDesktopChromeDomAliases,
-  clearDesktopChromeDomAliases,
-} from './dsh-style-aliases.ts'
 
 declare module '@xrkseek/cordis' {
   interface Context {

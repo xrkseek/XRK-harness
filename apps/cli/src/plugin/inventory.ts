@@ -13,6 +13,10 @@ import {
 } from "@xrkseek/server-loader";
 import { reconcileClientBootAt } from "@xrkseek/server-face";
 import type { PluginKind } from "./classify.js";
+import {
+  assertSafePluginPackageName,
+  resolveContainedPluginPath,
+} from "./package-id.js";
 
 export const INVENTORY_FILE = ".xrk-plugins.json";
 /** @deprecated Prefer loader `DISABLED_PLUGINS_FILE`. */
@@ -149,19 +153,22 @@ export function removeInventoryEntry(
 
 /** Absolute install dir for a process plugin package name. */
 export function processInstallDir(pluginsDir: string, name: string): string {
-  if (name.startsWith("@")) {
-    const [scope, pkg] = name.split("/");
+  const safe = assertSafePluginPackageName(name);
+  if (safe.startsWith("@")) {
+    const [scope, pkg] = safe.split("/");
     if (!scope || !pkg) {
       throw new Error(`invalid scoped package name: ${name}`);
     }
-    return path.join(pluginsDir, scope, pkg);
+    return resolveContainedPluginPath(pluginsDir, scope, pkg);
   }
-  return path.join(pluginsDir, name);
+  return resolveContainedPluginPath(pluginsDir, safe);
 }
 
 /** Absolute dir for staged client.js. */
 export function clientInstallDir(pluginsDir: string, name: string): string {
-  return path.join(pluginsDir, "web", "plugins", ...name.split("/"));
+  const safe = assertSafePluginPackageName(name);
+  const parts = safe.startsWith("@") ? safe.split("/") : [safe];
+  return resolveContainedPluginPath(pluginsDir, "web", "plugins", ...parts);
 }
 
 /**

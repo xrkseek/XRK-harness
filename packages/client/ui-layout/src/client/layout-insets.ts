@@ -21,6 +21,12 @@ export interface LayoutInsets {
    * mode (phone sheets do not reserve a desktop strip).
    */
   readonly details: number
+  /**
+   * True while Overview / Status is open — including phone full-screen sheet
+   * where {@link details} stays 0 (no desktop strip). Floating workbenches
+   * hide their expand FAB so it does not collide with the sheet close control.
+   */
+  readonly detailsOpen: boolean
   /** Left `sidebar` rail (compact or open width as rendered). */
   readonly sidebar: number
   /**
@@ -35,6 +41,7 @@ export interface LayoutInsets {
 /** Empty / pre-mount insets. */
 export const EMPTY_LAYOUT_INSETS: LayoutInsets = Object.freeze({
   details: 0,
+  detailsOpen: false,
   sidebar: 0,
   bottom: 0,
   phone: false,
@@ -56,6 +63,8 @@ export const LAYOUT_INSET_CSS = Object.freeze({
  */
 export const LAYOUT_INSET_ATTR = Object.freeze({
   details: 'data-xrk-layout-details',
+  /** Overview / Status sheet open (desktop strip or phone overlay). */
+  detailsOpen: 'data-xrk-layout-details-open',
   phone: 'data-xrk-layout-phone',
   /** Settled Session can open Overview / Status (AppFrame stamps; blank clears). */
   status: 'data-xrk-layout-status',
@@ -75,6 +84,8 @@ export function applyLayoutInsetsDom(insets: LayoutInsets): void {
   root.style.setProperty(LAYOUT_INSET_CSS.bottom, `${Math.max(0, insets.bottom)}px`)
   if (insets.details > 0) root.setAttribute(LAYOUT_INSET_ATTR.details, '')
   else root.removeAttribute(LAYOUT_INSET_ATTR.details)
+  if (insets.detailsOpen) root.setAttribute(LAYOUT_INSET_ATTR.detailsOpen, '')
+  else root.removeAttribute(LAYOUT_INSET_ATTR.detailsOpen)
   if (insets.phone) root.setAttribute(LAYOUT_INSET_ATTR.phone, '')
   else root.removeAttribute(LAYOUT_INSET_ATTR.phone)
 }
@@ -86,6 +97,7 @@ export function clearLayoutInsetsDom(): void {
   root.style.removeProperty(LAYOUT_INSET_CSS.sidebar)
   root.style.removeProperty(LAYOUT_INSET_CSS.bottom)
   root.removeAttribute(LAYOUT_INSET_ATTR.details)
+  root.removeAttribute(LAYOUT_INSET_ATTR.detailsOpen)
   root.removeAttribute(LAYOUT_INSET_ATTR.phone)
   root.removeAttribute(LAYOUT_INSET_ATTR.status)
 }
@@ -93,6 +105,7 @@ export function clearLayoutInsetsDom(): void {
 /** True when two inset snapshots are equal for publish short-circuit. */
 export function layoutInsetsEqual(a: LayoutInsets, b: LayoutInsets): boolean {
   return a.details === b.details
+    && a.detailsOpen === b.detailsOpen
     && a.sidebar === b.sidebar
     && a.bottom === b.bottom
     && a.phone === b.phone

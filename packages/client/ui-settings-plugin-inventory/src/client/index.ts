@@ -150,6 +150,17 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.open(entryId as PluginEntryId)
     if (!result.ok) throwRemote('pluginInventory.open', result)
   }
+  const checkUpdates: PluginInventorySettingsTabInjected['checkUpdates'] = async (
+    entryIds,
+    force,
+  ) => {
+    const result = await ctx.remote.pluginInventory.checkUpdates(
+      entryIds as PluginEntryId[] | undefined,
+      force,
+    )
+    if (!result.ok) throwRemote('pluginInventory.checkUpdates', result)
+    return result.value
+  }
   const injected = (): PluginInventorySettingsTabInjected => ({
     list,
     setEnabled,
@@ -159,6 +170,7 @@ export function apply(ctx: ClientContext): void {
     install,
     subscribeInstallLog,
     open,
+    checkUpdates,
   })
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({

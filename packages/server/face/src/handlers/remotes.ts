@@ -4,6 +4,10 @@ import {
 } from "../slash.js";
 import { listFaceAgentPresetGroups } from "../plugin-agent-presets.js";
 import {
+  ensurePluginUpdateProbe,
+  getPluginUpdateProbeCache,
+} from "../plugin-check-updates.js";
+import {
   listFacePluginInventory,
   resolveManagedPluginDir,
   resolveManagedPluginUpdateSpec,
@@ -29,6 +33,16 @@ function reloadIdsForEntry(entry: {
   const ids = [entry.entryId];
   if (entry.moduleName?.trim()) ids.push(entry.moduleName.trim());
   return ids;
+}
+
+/** Face install `--registry` / `--proxy` must be plain http(s) URLs. */
+function isHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /** Apply Cordis / host.mjs halves once per unique package name (best-effort). */
@@ -167,6 +181,37 @@ export const pluginInventoryList: FaceHandler = async (runtime) => ({
     agentPresets: listFaceAgentPresetGroups(runtime),
   },
 });
+
+/**
+ * Probe registry-sourced managed plugins for newer npm versions.
+ * Returns Host cache when warm; `force: true` re-runs. Local / engine / vcs
+ * rows never hit the network (`updateAvailable: false`, optional `checkFailed`).
+ */
+export const pluginInventoryCheckUpdates: FaceHandler = async (runtime, _rpcId, payload) => {
+  const args = remoteArgs(payload);
+  const force = args.force === true;
+  const rawIds = args.entryIds;
+  const entryIds = Array.isArray(rawIds)
+    ? rawIds.map((id) => String(id ?? "").trim()).filter(Boolean)
+    : undefined;
+
+  // Fast path: UI poll while Host warm probe is still running.
+  if (!force) {
+    const cached = getPluginUpdateProbeCache(runtime);
+    if (cached.status === "ready" && !entryIds?.length) {
+      return { ok: true, value: cached };
+    }
+    if (cached.status === "checking" && !entryIds?.length) {
+      return { ok: true, value: cached };
+    }
+  }
+
+  const snapshot = await ensurePluginUpdateProbe(runtime, {
+    force,
+    ...(entryIds?.length ? { entryIds } : {}),
+  });
+  return { ok: true, value: snapshot };
+};
 
 /** Soft-disable / re-enable a managed (user) plugin in the inventory UI. */
 export const pluginInventorySetEnabled: FaceHandler = async (runtime, _rpcId, payload) => {
@@ -387,6 +432,18 @@ export const pluginInventoryInstall: FaceHandler = async (runtime, rpcId, payloa
   const requestId = String(args.requestId ?? rpcId).trim() || rpcId;
   if (!spec) {
     return { ok: false, error: { code: "invalid-payload", message: "spec required" } };
+  }
+  if (registry && !isHttpUrl(registry)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "registry must be an http(s) URL" },
+    };
+  }
+  if (proxy && !isHttpUrl(proxy)) {
+    return {
+      ok: false,
+      error: { code: "invalid-payload", message: "proxy must be an http(s) URL" },
+    };
   }
   if (!runtime.updateUserPlugin) {
     const hintParts = ["xrkh plugin add"];

@@ -577,4 +577,64 @@ describe("managed plugin inventory paths", () => {
       needsRestart: true,
     });
   });
+
+  it("marks phone-guest engine packages as non-managed", () => {
+    const productDir = mkdtempSync(path.join(tmpdir(), "xrk-phone-guest-"));
+    temps.push(productDir);
+    const plugins = path.join(productDir, "plugins");
+    mkdirSync(plugins, { recursive: true });
+    writeFileSync(
+      path.join(plugins, ".xrk-plugins.json"),
+      JSON.stringify({
+        rev: 1,
+        packages: {
+          "xrk-mobile": {
+            name: "xrk-mobile",
+            version: "1",
+            kind: "tools",
+            source: "phone-guest",
+            installedAt: new Date().toISOString(),
+          },
+          "xrk-mobile-prompt": {
+            name: "xrk-mobile-prompt",
+            version: "1",
+            kind: "prompt",
+            source: "phone-guest",
+            installedAt: new Date().toISOString(),
+          },
+          "xrkh-better-sidebar": {
+            name: "xrkh-better-sidebar",
+            version: "0.18.2",
+            kind: "client",
+            source: "xrkh-better-sidebar@0.18.2",
+            installedAt: new Date().toISOString(),
+            clientInject: [],
+          },
+        },
+      }),
+    );
+    const listed = listFacePluginInventory(
+      runtimeAt(productDir, {
+        plugins: [
+          { id: "xrk-mobile", kind: "tools" },
+          { id: "xrk-mobile-prompt", kind: "prompt" },
+        ],
+        webPlugins: [{ id: "xrkh-better-sidebar" }],
+        hostPublic: { pluginsDir: plugins },
+      }),
+    );
+    expect(listed.find((e) => e.entryId === "xrk-mobile")).toMatchObject({
+      managed: false,
+      source: "phone-guest",
+      kind: "tools",
+    });
+    expect(listed.find((e) => e.entryId === "xrk-mobile-prompt")).toMatchObject({
+      managed: false,
+      source: "phone-guest",
+    });
+    expect(listed.find((e) => e.entryId === "xrkh-better-sidebar")).toMatchObject({
+      managed: true,
+      source: "xrkh-better-sidebar@0.18.2",
+    });
+  });
 });

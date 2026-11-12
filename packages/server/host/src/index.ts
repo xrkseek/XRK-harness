@@ -141,6 +141,7 @@ import {
   communityLoopbackBaseUrlCollision,
   existingPiAiProvider,
   mergeCommunityProviderModels,
+  schedulePluginUpdateProbeWarm,
   type FaceApprovalBroker,
   type FaceQuestionBroker,
   type FaceRuntime,
@@ -3955,6 +3956,8 @@ export function createHostManager(): HostManager {
         rebuildPolicyEngine();
         await prewarmDshCompatAdapters(hostWireCtx);
         syncCordisHostApplied();
+        // Background npm view for Settings update badges — never blocks listen.
+        schedulePluginUpdateProbeWarm(faceRuntime);
       };
       if (deferManagedPlugins) {
         void loadManagedPlugins()

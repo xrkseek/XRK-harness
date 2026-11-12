@@ -3,7 +3,7 @@
  * Product client: `xrkh-better-sidebar` (kind: client). Not a dsh-compat path.
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { mkdir, opendir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, opendir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http-json.js";
@@ -129,19 +129,54 @@ function policyFail(denied: PolicyWireError): unknown {
   return fail(denied.code, denied.message, denied.details);
 }
 
-function resolveCwd(
+/** True when `target` is `root` or a path under it (after resolve). */
+function isPathInside(root: string, target: string): boolean {
+  const r = path.resolve(root);
+  const t = path.resolve(target);
+  return t === r || t.startsWith(r + path.sep);
+}
+
+/** Drive root / filesystem root (`C:\`, `/`) — never accept as cwd override. */
+function isFsRoot(p: string): boolean {
+  const r = path.resolve(p);
+  return path.dirname(r) === r;
+}
+
+/**
+ * Session workspace root (Face map or Host default). Client `cwd` overrides
+ * must stay related to this fence — a bare `path.resolve(override)` would
+ * let `fs.write` / `fs.delete` retarget any directory on the machine.
+ */
+function resolveSessionBaseCwd(
   options: SidebarHostOptions,
   sessionId: string | undefined,
-  override?: string,
 ): string {
-  if (typeof override === "string" && override.trim()) {
-    return path.resolve(override.trim());
-  }
   if (sessionId && options.resolveSessionCwd) {
     const mapped = options.resolveSessionCwd(sessionId);
     if (mapped) return path.resolve(mapped);
   }
   return path.resolve(options.defaultCwd ?? process.cwd());
+}
+
+/**
+ * Resolve the effective workspace root for one sidebar RPC.
+ * Override rules (local Host, same trust as the agent, still fenced):
+ * - under the session cwd (subdir browse) → accept
+ * - ancestor of the session cwd that is not a filesystem root (repo root
+ *   from a nested worktree) → accept
+ * - otherwise → ignore override and keep the session base
+ */
+function resolveCwd(
+  options: SidebarHostOptions,
+  sessionId: string | undefined,
+  override?: string,
+): string {
+  const base = resolveSessionBaseCwd(options, sessionId);
+  if (typeof override !== "string" || !override.trim()) return base;
+  const next = path.resolve(override.trim());
+  if (isPathInside(base, next)) return next;
+  if (!isFsRoot(next) && isPathInside(next, base)) return next;
+  return base;
 }
 
 function safeJoin(root: string, rel: string): string | undefined {
@@ -156,15 +191,41 @@ function safeJoin(root: string, rel: string): string | undefined {
   return target;
 }
 
-/** Prefer `worktree` / `repoRoot` from better-sidebar git payloads. */
+/**
+ * Resolve a caller path inside the session workspace.
+ * Absolute paths still must stay under `cwd` — a bare `path.resolve` would
+ * otherwise let `fs.write` / `fs.mkdir` / `fs.delete` escape the fence.
+ */
+function resolveWorkspacePath(
+  cwd: string,
+  raw: string,
+): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const abs = path.isAbsolute(trimmed)
+    ? path.resolve(trimmed)
+    : path.resolve(cwd, trimmed);
+  const root = path.resolve(cwd);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return undefined;
+  return abs;
+}
+
+/**
+ * Prefer `worktree` / `repoRoot` from better-sidebar git payloads.
+ * `repoRoot` must stay under (or be an ancestor of) the session cwd fence —
+ * same rule as {@link resolveCwd} — so git RPCs cannot retarget arbitrary paths.
+ */
 function resolveSidebarGitCwd(
   sessionCwd: string,
   payload: Record<string, unknown>,
 ): string {
-  const repoRoot =
-    typeof payload.repoRoot === "string" && payload.repoRoot.trim()
-      ? path.resolve(payload.repoRoot.trim())
-      : sessionCwd;
+  let repoRoot = sessionCwd;
+  if (typeof payload.repoRoot === "string" && payload.repoRoot.trim()) {
+    const next = path.resolve(payload.repoRoot.trim());
+    if (isPathInside(sessionCwd, next) || (!isFsRoot(next) && isPathInside(next, sessionCwd))) {
+      repoRoot = next;
+    }
+  }
   const worktree =
     typeof payload.worktree === "string" ? payload.worktree.trim() : "";
   if (!worktree) return repoRoot;
@@ -272,7 +333,7 @@ async function dispatchMethod(
         typeof payload.path === "string" && payload.path.trim()
           ? payload.path.trim()
           : cwd;
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel) ?? (rel === cwd ? path.resolve(cwd) : undefined);
       if (!abs) return fail("path", "path escapes workspace");
       return ok(await listTree(abs));
     }
@@ -282,7 +343,7 @@ async function dispatchMethod(
         typeof payload.path === "string" && payload.path.trim()
           ? payload.path.trim()
           : cwd;
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel) ?? (rel === cwd ? path.resolve(cwd) : undefined);
       if (!abs) return fail("path", "path escapes workspace");
       const limit =
         typeof payload.limit === "number" && payload.limit > 0
@@ -292,7 +353,7 @@ async function dispatchMethod(
     }
     case "fs.read": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel);
       if (!abs || !existsSync(abs)) return fail("not-found", "file missing");
       // better-sidebar TextEditor expects `{ kind: "text"|"binary", content?, head?, truncated }`.
       // Returning only `{ content }` leaves `kind !== "text"` → empty editor pane.
@@ -314,30 +375,37 @@ async function dispatchMethod(
     }
     case "fs.write": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel);
       if (!abs) return fail("path", "path escapes workspace");
       const content =
         typeof payload.content === "string" ? payload.content : "";
+      await mkdir(path.dirname(abs), { recursive: true });
       await writeFile(abs, content, "utf8");
       return ok({ written: true });
     }
     case "fs.mkdir": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel);
       if (!abs) return fail("path", "path escapes workspace");
       await mkdir(abs, { recursive: payload.recursive !== false });
       return ok({ created: true, path: abs });
     }
     case "fs.delete": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel);
       if (!abs || !existsSync(abs)) return fail("not-found", "path missing");
-      await unlink(abs);
+      // Never delete the workspace root itself (explorer "delete" on cwd).
+      if (path.resolve(abs) === path.resolve(cwd)) {
+        return fail("bad-request", "refusing to delete workspace root");
+      }
+      // Files and directories: explorers expect recursive folder delete after
+      // the client confirm dialog. `unlink` alone throws EISDIR on folders.
+      await rm(abs, { recursive: true, force: true });
       return ok({ deleted: true });
     }
     case "fs.stat": {
       const rel = typeof payload.path === "string" ? payload.path : "";
-      const abs = path.isAbsolute(rel) ? path.resolve(rel) : safeJoin(cwd, rel);
+      const abs = resolveWorkspacePath(cwd, rel);
       if (!abs || !existsSync(abs)) return fail("not-found", "path missing");
       const st = statSync(abs);
       return ok({
@@ -347,6 +415,80 @@ async function dispatchMethod(
         size: st.size,
         mtimeMs: st.mtimeMs,
       });
+    }
+    case "fs.watch.sync": {
+      // Mobile / proot often cannot hold native directory watchers. Report
+      // every requested level as `unwatched` so the client stays on its
+      // degraded listing cadence (and still refreshes after mkdir/delete).
+      const dirsRaw = payload.dirs;
+      const dirs = Array.isArray(dirsRaw)
+        ? dirsRaw
+            .filter((row): row is string => typeof row === "string" && row.trim() !== "")
+            .slice(0, 64)
+        : [];
+      const since =
+        typeof payload.since === "number" && Number.isFinite(payload.since)
+          ? Math.max(0, Math.floor(payload.since))
+          : 0;
+      const unwatched: string[] = [];
+      for (const dir of dirs) {
+        const abs = resolveWorkspacePath(cwd, dir);
+        if (!abs) continue;
+        unwatched.push(dir);
+      }
+      return ok({
+        changed: [],
+        seq: since + 1,
+        missed: false,
+        unwatched,
+      });
+    }
+    case "fs.tree.batch": {
+      const pathsRaw = payload.paths;
+      const paths = Array.isArray(pathsRaw)
+        ? pathsRaw
+            .filter((row): row is string => typeof row === "string" && row.trim() !== "")
+            .slice(0, 64)
+        : [];
+      const statPathsRaw = payload.statPaths;
+      const statPaths = Array.isArray(statPathsRaw)
+        ? statPathsRaw
+            .filter((row): row is string => typeof row === "string" && row.trim() !== "")
+            .slice(0, 32)
+        : [];
+      const listings = await Promise.all(
+        paths.map(async (raw) => {
+          const abs = resolveWorkspacePath(cwd, raw);
+          if (!abs) {
+            return { path: raw, error: "path escapes workspace" };
+          }
+          try {
+            const listing = await listTree(abs);
+            return {
+              path: raw,
+              entries: listing.entries,
+              truncated: false,
+            };
+          } catch (err) {
+            return {
+              path: raw,
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }),
+      );
+      const stats: Array<{ path: string; mtimeMs: number; size: number }> = [];
+      for (const raw of statPaths) {
+        const abs = resolveWorkspacePath(cwd, raw);
+        if (!abs || !existsSync(abs)) continue;
+        try {
+          const info = await stat(abs);
+          stats.push({ path: raw, mtimeMs: info.mtimeMs, size: info.size });
+        } catch {
+          /* skip vanished paths */
+        }
+      }
+      return ok({ listings, stats });
     }
     case "ping":
       return ok({ pong: true, adapter: "xrk-dsh-compat" });
@@ -376,10 +518,8 @@ async function dispatchMethod(
         displayName: "system",
       });
     case "git.worktrees": {
-      const repoRoot =
-        typeof payload.repoRoot === "string" && payload.repoRoot.trim()
-          ? path.resolve(payload.repoRoot.trim())
-          : cwd;
+      // Same fence as resolveSidebarGitCwd — do not accept arbitrary repoRoot.
+      const repoRoot = resolveSidebarGitCwd(cwd, payload);
       // Client expects a bare GitWorktree[].
       return ok(gitWorktrees(repoRoot));
     }

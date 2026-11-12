@@ -76,6 +76,7 @@ export class LayoutController implements ILayout {
    */
   publishInsets(next: {
     readonly details: number
+    readonly detailsOpen: boolean
     readonly sidebar: number
     readonly phone: boolean
     readonly bottom?: number
@@ -83,6 +84,7 @@ export class LayoutController implements ILayout {
     const prev = this.#insets.getSnapshot()
     const merged: LayoutInsets = {
       details: next.details,
+      detailsOpen: next.detailsOpen,
       sidebar: next.sidebar,
       phone: next.phone,
       bottom: next.bottom ?? prev.bottom,
@@ -97,6 +99,7 @@ export class LayoutController implements ILayout {
     const prev = this.#insets.getSnapshot()
     this.publishInsets({
       details: prev.details,
+      detailsOpen: prev.detailsOpen,
       sidebar: prev.sidebar,
       phone: prev.phone,
       bottom: Math.max(0, Math.round(height)),

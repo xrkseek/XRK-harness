@@ -3,6 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { assertSafePluginPackageName } from "./package-id.js";
 
 export type PluginKind = "client" | "process" | "both";
 
@@ -108,10 +109,11 @@ function resolveClientJs(
  * @throws when the package is not an installable XRK plugin.
  */
 export function classifyPackage(root: string, pkg: Record<string, unknown>): ClassifiedPackage {
-  const name = typeof pkg.name === "string" ? pkg.name.trim() : "";
-  if (!name) {
+  const rawName = typeof pkg.name === "string" ? pkg.name.trim() : "";
+  if (!rawName) {
     throw new Error("package.json missing string name");
   }
+  const name = assertSafePluginPackageName(rawName);
   const version =
     typeof pkg.version === "string" && pkg.version.trim()
       ? pkg.version.trim()

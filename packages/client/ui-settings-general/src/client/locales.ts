@@ -13,10 +13,10 @@ export const zh = {
     '会话默认与外观。侧栏 agent 推送开关写 ~/.xrk/sidebar/prefs.json。「远程」配 SSH（改完重启 Host）。「Git 共同作者」一个开关：开则挂 Co-authored-by: xrkseek。「命令行 xrkh」默认关。模型与密钥在「模型」；MCP / Shell 等在「插件」。对话可用 /theme · /model · /permission。',
   'sidebarPush.opens.title': '侧栏 agent 打开推送',
   'sidebarPush.opens.description':
-    '开启后模型可用 sidebar_open，经 /sidebar/ws/agent-opens 推到侧栏（prefs.agentOpenTools）。',
+    '需已启用 better-sidebar。开启后模型可用 sidebar_open，经 /sidebar/ws/agent-opens 推到侧栏（prefs.agentOpenTools）。',
   'sidebarPush.terminals.title': '侧栏 agent 终端推送',
   'sidebarPush.terminals.description':
-    '开启后模型可用 terminal_*，经 /sidebar/ws/agent-terminals 推到侧栏（prefs.agentTerminalTools）。',
+    '需已启用 better-sidebar。开启后模型可用 terminal_*，经 /sidebar/ws/agent-terminals 推到侧栏（prefs.agentTerminalTools）。',
   'sidebarPush.saveFailed': '未能写入侧栏 prefs.json',
   'connection.error': '连接异常',
   'connection.retry': '立即重连',
@@ -78,10 +78,10 @@ export const en = {
     'Session defaults and appearance. Sidebar agent-push → ~/.xrk/sidebar/prefs.json. Remote = SSH (Host restart). Git co-author is one switch (on → Co-authored-by: xrkseek). Command-line xrkh is off by default. Models under Models; MCP / Shell under Plugins. Chat: /theme · /model · /permission.',
   'sidebarPush.opens.title': 'Sidebar agent open push',
   'sidebarPush.opens.description':
-    'When on, the model may call sidebar_open and push via /sidebar/ws/agent-opens (prefs.agentOpenTools).',
+    'Requires better-sidebar enabled. When on, the model may call sidebar_open and push via /sidebar/ws/agent-opens (prefs.agentOpenTools).',
   'sidebarPush.terminals.title': 'Sidebar agent terminal push',
   'sidebarPush.terminals.description':
-    'When on, the model may call terminal_* and push via /sidebar/ws/agent-terminals (prefs.agentTerminalTools).',
+    'Requires better-sidebar enabled. When on, the model may call terminal_* and push via /sidebar/ws/agent-terminals (prefs.agentTerminalTools).',
   'sidebarPush.saveFailed': 'Could not write sidebar prefs.json',
   'connection.error': 'Disconnected',
   'connection.retry': 'Reconnect now',
@@ -138,9 +138,9 @@ export const ja = {
   'general.title': '一般',
   'general.intro': 'セッションの既定値と外観。サイドバーのエージェントプッシュ切替は ~/.xrk/sidebar/prefs.json に書き込みます。リモートは SSH リモートワークスペースを設定します（Host の再起動が必要）。モデルと認証情報は「モデル」、MCP・Shell・ウェブ検索・エージェントループ・サンドボックスは「プラグイン」にあります。チャットでは /theme · /model · /permission も使えます。',
   'sidebarPush.opens.title': 'サイドバー：エージェント起動のプッシュ',
-  'sidebarPush.opens.description': 'オンのとき、モデルは sidebar_open を呼び、/sidebar/ws/agent-opens 経由でプッシュできます（prefs.agentOpenTools）。',
+  'sidebarPush.opens.description': 'better-sidebar を有効にする必要があります。オンのとき、モデルは sidebar_open を呼び、/sidebar/ws/agent-opens 経由でプッシュできます（prefs.agentOpenTools）。',
   'sidebarPush.terminals.title': 'サイドバー：エージェント終了のプッシュ',
-  'sidebarPush.terminals.description': 'オンのとき、モデルは terminal_* を呼び、/sidebar/ws/agent-terminals 経由でプッシュできます（prefs.agentTerminalTools）。',
+  'sidebarPush.terminals.description': 'better-sidebar を有効にする必要があります。オンのとき、モデルは terminal_* を呼び、/sidebar/ws/agent-terminals 経由でプッシュできます（prefs.agentTerminalTools）。',
   'sidebarPush.saveFailed': 'サイドバーの prefs.json を書き込めませんでした',
   'connection.error': '切断済み',
   'connection.retry': '今すぐ再接続',

@@ -56,6 +56,9 @@ function props(
     ...(overrides.subscribeInstallLog !== undefined
       ? { subscribeInstallLog: overrides.subscribeInstallLog }
       : {}),
+    ...(overrides.checkUpdates !== undefined
+      ? { checkUpdates: overrides.checkUpdates }
+      : {}),
   } as PluginInventorySettingsTabProps
 }
 
@@ -502,5 +505,125 @@ describe('PluginInventorySettingsTab', () => {
     expect(third.container.querySelector('[data-client-refresh-hint]')).toBeTruthy()
     expect(third.container.querySelector('[data-install-log]')).toBeTruthy()
     expect(third.container.textContent).toContain('fetching')
+  })
+
+  it('collapses phone-guest engine rows into one read-only runtime card', async () => {
+    const snap = {
+      ...SNAPSHOT,
+      entries: [
+        ...SNAPSHOT.entries,
+        {
+          entryId: 'xrk-mobile',
+          moduleName: 'xrk-mobile',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: false,
+          version: '1',
+          kind: 'tools',
+          source: 'phone-guest',
+        },
+        {
+          entryId: 'xrk-mobile-prompt',
+          moduleName: 'xrk-mobile-prompt',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: false,
+          version: '1',
+          kind: 'prompt',
+          source: 'phone-guest',
+        },
+      ],
+    } as unknown as Snapshot
+    render(<PluginInventorySettingsTab {...props(async () => snap)} />)
+    await screen.findByText(en.phoneRuntimeTitle)
+    expect(screen.queryByRole('button', { name: /xrk-mobile,/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.phoneRuntimeTitle }))
+    expect(screen.getByText(en.phoneRuntimeHint)).toBeTruthy()
+    expect(screen.getByText('xrk-mobile')).toBeTruthy()
+    expect(screen.getByText('xrk-mobile-prompt')).toBeTruthy()
+  })
+
+  it('shows local / update / failed badges and check-updates menu action', async () => {
+    const snap = {
+      entries: [
+        {
+          entryId: 'xrkh-better-sidebar',
+          moduleName: 'xrkh-better-sidebar',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '0.18.2',
+          kind: 'client',
+          source: 'xrkh-better-sidebar@0.18.2',
+        },
+        {
+          entryId: 'local-tools',
+          moduleName: 'local-tools',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '1.0.0',
+          kind: 'process',
+          source: 'file:./extensions/local-tools',
+        },
+        {
+          entryId: 'broken-pkg',
+          moduleName: 'broken-pkg',
+          enabled: true,
+          fiberPhase: 'active',
+          managed: true,
+          version: '1.0.0',
+          kind: 'client',
+          source: 'broken-pkg@1.0.0',
+        },
+      ],
+      agentPresets: SNAPSHOT.agentPresets,
+    } as unknown as Snapshot
+    const checkUpdates = vi.fn(async () => ({
+      status: 'ready' as const,
+      updates: [
+        {
+          entryId: 'xrkh-better-sidebar',
+          installed: '0.18.2',
+          latest: '0.19.0',
+          updateAvailable: true,
+          sourceClass: 'registry' as const,
+        },
+        {
+          entryId: 'local-tools',
+          installed: '1.0.0',
+          updateAvailable: false,
+          sourceClass: 'local' as const,
+        },
+        {
+          entryId: 'broken-pkg',
+          installed: '1.0.0',
+          updateAvailable: false,
+          checkFailed: true,
+          sourceClass: 'registry' as const,
+        },
+      ],
+    }))
+    render(<PluginInventorySettingsTab {...props(async () => snap, { checkUpdates })} />)
+    await waitFor(() => {
+      expect(checkUpdates).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.getByText(en.updateAvailableTag.replace('{version}', '0.19.0'))).toBeTruthy()
+    })
+    expect(screen.getByText(en.localTag)).toBeTruthy()
+    expect(screen.getByText(en.updateCheckFailedTag)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', {
+      name: en.moreActions.replace('{name}', 'better-sidebar'),
+    }))
+    expect(screen.getByRole('menuitem', { name: en.checkUpdates })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: en.update })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', {
+      name: en.moreActions.replace('{name}', 'local-tools'),
+    }))
+    expect(screen.getByRole('menuitem', { name: en.checkUpdates })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: en.update })).toBeNull()
   })
 })

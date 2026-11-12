@@ -55,6 +55,7 @@ const FACE_REMOTES: FaceRemoteSpec = {
   },
   pluginInventory: {
     list: [],
+    checkUpdates: ['entryIds', 'force'],
     setEnabled: ['entryId', 'enabled'],
     remove: ['entryId'],
     update: ['entryId', 'requestId'],

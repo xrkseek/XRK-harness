@@ -116,6 +116,24 @@ describe("fetchPackage --proxy", () => {
     expect(argv).toContain("--registry");
     expect(process.env.HTTP_PROXY).toBeUndefined();
     expect(process.env.HTTPS_PROXY).toBeUndefined();
+    // Never shell:true — Windows .cmd goes through ComSpec /d /s /c.
+    for (const call of vi.mocked(spawnSync).mock.calls) {
+      const opts = call[2] as { shell?: boolean } | undefined;
+      expect(opts?.shell ?? false).toBe(false);
+    }
+  });
+
+  it("rejects non-http proxy / registry URLs", () => {
+    expect(() =>
+      fetchPackage("some-pkg@1.0.0", process.cwd(), {
+        proxy: "file:///etc/passwd",
+      }),
+    ).toThrow(/invalid --proxy/);
+    expect(() =>
+      fetchPackage("some-pkg@1.0.0", process.cwd(), {
+        registry: "ftp://evil.example/",
+      }),
+    ).toThrow(/invalid --registry/);
   });
 
   it("skips npm entirely for a local package.json path", () => {

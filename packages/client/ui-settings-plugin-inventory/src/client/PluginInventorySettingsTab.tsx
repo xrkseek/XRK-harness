@@ -29,6 +29,12 @@ import {
   subscribePluginInstallUi,
   type PluginInstallLog,
 } from './plugin-install-ui-session.ts'
+import {
+  canOfferPluginUpdate,
+  classifyPluginSource,
+  isPhoneGuestEngineEntry,
+  type PluginSourceClass,
+} from './plugin-source.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
 export type { PluginInstallLog } from './plugin-install-ui-session.ts'
@@ -53,6 +59,24 @@ const RECOMMENDED_PLUGINS: readonly {
   { spec: 'xrkh-better-sidebar', hintKey: 'installRecommendedHint' },
   { spec: 'xrkh-better-sidebar-plugin-office', hintKey: 'installRecommendedOfficeHint' },
 ]
+
+/** One row from `pluginInventory.checkUpdates`. */
+export type PluginUpdateProbeRow = {
+  readonly entryId: PluginEntryId | string
+  readonly installed?: string
+  readonly latest?: string
+  readonly updateAvailable: boolean
+  readonly checkFailed?: boolean
+  readonly sourceClass: 'engine' | 'local' | 'registry' | 'vcs'
+}
+
+/** Host probe snapshot for Settings badges. */
+export type PluginUpdateProbeSnapshot = {
+  readonly status: 'idle' | 'checking' | 'ready' | 'error'
+  readonly updates: readonly PluginUpdateProbeRow[]
+  readonly checkedAt?: number
+  readonly error?: string
+}
 
 /** Registration-side Remote face used by the section. */
 export interface PluginInventorySettingsTabInjected {
@@ -88,6 +112,14 @@ export interface PluginInventorySettingsTabInjected {
     requestId: string,
     onText: (text: string) => void,
   ) => () => void
+  /**
+   * Host update probe (warm cache after listen). `force` re-runs npm view.
+   * Absent in unit tests that stub inventory only.
+   */
+  checkUpdates?: (
+    entryIds?: readonly PluginEntryId[],
+    force?: boolean,
+  ) => Promise<PluginUpdateProbeSnapshot>
 }
 
 function readStoredRegistry(): {
@@ -307,6 +339,8 @@ function presetEnabledLabel(
   return t(enabled ? 'enabledTag' : 'disabledTag')
 }
 
+const PHONE_RUNTIME_CARD_ID = '__xrk-phone-runtime__' as PluginEntryId
+
 /** Render the Host plugin inventory (managed plugins pin first on the server). */
 export function PluginInventorySettingsTab({
   list,
@@ -317,6 +351,7 @@ export function PluginInventorySettingsTab({
   open: openFolder,
   install,
   subscribeInstallLog,
+  checkUpdates,
   t,
 }: PluginInventorySettingsTabProps): ReactNode {
   const catalogId = useId()
@@ -340,6 +375,8 @@ export function PluginInventorySettingsTab({
   const [menuEntryId, setMenuEntryId] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ seq: number; text: string } | null>(null)
+  const [updateProbe, setUpdateProbe] = useState<PluginUpdateProbeSnapshot | null>(null)
+  const [updateCheckBusy, setUpdateCheckBusy] = useState(false)
   const [installSpec, setInstallSpec] = useState('')
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const installUi = useSyncExternalStore(
@@ -402,6 +439,42 @@ export function PluginInventorySettingsTab({
     return () => { current = false }
   }, [list, request])
 
+  // Pull Host warm probe (or start one). Poll while status is checking so
+  // opening Settings mid-probe shows a spinner, then badges when ready.
+  useEffect(() => {
+    if (!checkUpdates || state.status !== 'ready') return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const pull = async (force: boolean): Promise<void> => {
+      try {
+        const snap = await checkUpdates(undefined, force)
+        if (cancelled) return
+        setUpdateProbe(snap)
+        if (snap.status === 'checking' || snap.status === 'idle') {
+          timer = setTimeout(() => { void pull(false) }, 900)
+        }
+      } catch {
+        if (cancelled) return
+        setUpdateProbe({ status: 'error', updates: [] })
+      }
+    }
+    void pull(false)
+    return () => {
+      cancelled = true
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }, [checkUpdates, state])
+
+  const updateById = useMemo(() => {
+    const map = new Map<string, PluginUpdateProbeRow>()
+    for (const row of updateProbe?.updates ?? []) map.set(String(row.entryId), row)
+    return map
+  }, [updateProbe])
+
+  const probeChecking = updateProbe?.status === 'checking'
+    || updateProbe?.status === 'idle'
+    || (updateProbe === null && checkUpdates !== undefined)
+
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const presets = state.status === 'ready' ? (state.snapshot.agentPresets ?? []) : []
   const selectedPreset = presets.find(preset => preset.id === chosenPreset) ?? fallbackPreset(presets)
@@ -426,7 +499,14 @@ export function PluginInventorySettingsTab({
   )
 
   useEffect(() => {
-    if (expanded !== null && !filteredEntries.some(entry => entry.entryId === expanded)) {
+    if (expanded === null) return
+    if (expanded === PHONE_RUNTIME_CARD_ID) {
+      if (!filteredEntries.some((entry) => isPhoneGuestEngineEntry(entry))) {
+        setExpanded(null)
+      }
+      return
+    }
+    if (!filteredEntries.some((entry) => entry.entryId === expanded)) {
       setExpanded(null)
     }
   }, [expanded, filteredEntries])
@@ -446,6 +526,30 @@ export function PluginInventorySettingsTab({
   const showToast = (text: string): void => {
     toastSeq.current += 1
     setToast({ seq: toastSeq.current, text })
+  }
+
+  const runCheckUpdates = async (
+    entryId?: PluginInventoryEntry['entryId'],
+  ): Promise<void> => {
+    if (!checkUpdates || updateCheckBusy) return
+    setUpdateCheckBusy(true)
+    setActionError(null)
+    try {
+      const snap = await checkUpdates(
+        entryId !== undefined ? [entryId] : undefined,
+        true,
+      )
+      setUpdateProbe(snap)
+      if (snap.status === 'error') {
+        setActionError(snap.error?.trim() || t('checkUpdatesFailed'))
+      } else {
+        showToast(t('checkUpdatesDone'))
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : t('checkUpdatesFailed'))
+    } finally {
+      setUpdateCheckBusy(false)
+    }
   }
 
   // Toast + inventory refresh on busy→ok while this mount is alive (including
@@ -902,50 +1006,117 @@ export function PluginInventorySettingsTab({
             // git-worktrees already has the optional-bundle Switch row above.
             const listEntries = filteredEntries.filter((entry) => entry.entryId !== 'git-worktrees')
             if (listEntries.length === 0) return null
-            const managedRows = listEntries.filter((entry) => entry.managed === true)
-            const builtinRows = listEntries.filter((entry) => entry.managed !== true)
-            const showGroups = filter === 'all' && managedRows.length > 0 && builtinRows.length > 0
-            const sections: { readonly label: string | null; readonly rows: typeof listEntries }[] = showGroups
+            const engineRows = listEntries.filter((entry) => isPhoneGuestEngineEntry(entry))
+            const managedRows = listEntries.filter(
+              (entry) => entry.managed === true && !isPhoneGuestEngineEntry(entry),
+            )
+            const builtinRows = listEntries.filter(
+              (entry) => entry.managed !== true && !isPhoneGuestEngineEntry(entry),
+            )
+            const showGroups = filter === 'all'
+              && managedRows.length > 0
+              && (builtinRows.length > 0 || engineRows.length > 0)
+
+            type RenderRow =
+              | { readonly kind: 'entry'; readonly entry: PluginInventoryEntry }
+              | { readonly kind: 'phone-runtime'; readonly parts: typeof engineRows }
+
+            const toRows = (entries: typeof listEntries): RenderRow[] =>
+              entries.map((entry) => ({ kind: 'entry' as const, entry }))
+
+            const sections: {
+              readonly label: string | null
+              readonly rows: RenderRow[]
+            }[] = showGroups
               ? [
-                { label: t('groupInstalled'), rows: managedRows },
-                { label: t('groupBuiltin'), rows: builtinRows },
+                { label: t('groupInstalled'), rows: toRows(managedRows) },
+                {
+                  label: t('groupBuiltin'),
+                  rows: [
+                    ...(engineRows.length > 0
+                      ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
+                      : []),
+                    ...toRows(builtinRows),
+                  ],
+                },
               ]
-              : [{ label: null, rows: listEntries }]
-            return (
-            <ul className={css.cards}>
-              {sections.flatMap((section) => [
-                  ...(section.label !== null
-                    ? [(
-                      <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
-                        {section.label}
-                      </li>
-                    )]
+              : [{
+                label: null,
+                rows: [
+                  ...toRows(managedRows),
+                  ...(engineRows.length > 0
+                    ? [{ kind: 'phone-runtime' as const, parts: engineRows }]
                     : []),
-                  ...section.rows.map((entry) => {
+                  ...toRows(builtinRows),
+                ],
+              }]
+
+            const renderEntryCard = (entry: PluginInventoryEntry) => {
                 const status = phaseLabel(entry.fiberPhase, t)
                 const title = moduleShortName(entry.moduleName)
                 const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
                 const managed = entry.managed === true
                 const needsRestart = entry.needsRestart === true
+                const sourceClass: PluginSourceClass = classifyPluginSource(entry)
+                const probe = updateById.get(entry.entryId)
                 const open = expanded === entry.entryId
                 const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
                 const busy = busyId === entry.entryId
                 const art = kindArtwork(entry.kind)
                 const ArtworkIcon = art.Icon
+                const showLocal = sourceClass === 'local'
+                const showUpdateAvail = probe?.updateAvailable === true && Boolean(probe.latest)
+                const showCheckFailed = probe?.checkFailed === true
+                const showChecking = managed
+                  && sourceClass === 'registry'
+                  && !showUpdateAvail
+                  && !showCheckFailed
+                  && (probeChecking || updateCheckBusy)
+                const offerUpdate = managed && canOfferPluginUpdate(sourceClass)
                 const ariaBits = [
                   title,
                   managed ? t('managedTag') : null,
+                  showLocal ? t('localTag') : null,
+                  showUpdateAvail && probe.latest
+                    ? t('updateAvailableTag', { version: probe.latest })
+                    : null,
                   configuration,
                   needsRestart ? t('needsRestartTag') : null,
                   entry.version ?? null,
                 ].filter(Boolean).join(', ')
+                const menuItems = [
+                  { id: 'edit', label: t('edit'), disabled: busy || installBusy },
+                  { id: 'reload', label: t('reload'), disabled: busy || installBusy },
+                  ...(checkUpdates
+                    ? [{
+                      id: 'check-updates',
+                      label: updateCheckBusy ? t('checkUpdatesBusy') : t('checkUpdates'),
+                      disabled: busy || installBusy || updateCheckBusy,
+                    }]
+                    : []),
+                  ...(offerUpdate
+                    ? [{ id: 'update', label: t('update'), disabled: busy || installBusy }]
+                    : []),
+                  { type: 'separator' as const, id: 'remove-sep' },
+                  { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
+                ]
                 return (
                   <li
                     className={css.card}
                     key={entry.entryId}
                     data-plugin-entry={entry.entryId}
                     data-managed={managed ? 'true' : undefined}
+                    data-source-class={sourceClass}
                     data-needs-restart={needsRestart ? 'true' : undefined}
+                    data-update={
+                      showUpdateAvail
+                        ? 'available'
+                        : showCheckFailed
+                          ? 'failed'
+                          : showChecking
+                            ? 'checking'
+                            : undefined
+                    }
                     data-open={open ? 'true' : undefined}
                     data-busy={busy ? 'true' : undefined}
                     aria-busy={busy || undefined}
@@ -979,10 +1150,31 @@ export function PluginInventorySettingsTab({
                               <span className={css.versionTag} title={t('version')}>{entry.version}</span>
                             ) : null}
                           </span>
-                          {managed || needsRestart ? (
+                          {managed || needsRestart || showLocal || showUpdateAvail || showCheckFailed || showChecking ? (
                             <span className={css.cardMetaRow}>
+                              {/* Probe badges first — scannable on phone before origin tags. */}
+                              {showUpdateAvail && probe.latest ? (
+                                <span
+                                  className={css.updateAvailableTag}
+                                  title={t('updateAvailableHint', { version: probe.latest })}
+                                >
+                                  {t('updateAvailableTag', { version: probe.latest })}
+                                </span>
+                              ) : null}
+                              {showCheckFailed ? (
+                                <span className={css.updateCheckFailedTag}>{t('updateCheckFailedTag')}</span>
+                              ) : null}
+                              {showChecking ? (
+                                <span className={css.updateCheckingTag} role="status">
+                                  <StateDot state="ongoing" size={10} />
+                                  {t('updateCheckingTag')}
+                                </span>
+                              ) : null}
                               {managed ? (
                                 <span className={css.managedTag}>{t('managedTag')}</span>
+                              ) : null}
+                              {showLocal ? (
+                                <span className={css.localTag}>{t('localTag')}</span>
                               ) : null}
                               {needsRestart ? (
                                 <span className={css.restartTag}>{t('needsRestartTag')}</span>
@@ -1070,13 +1262,7 @@ export function PluginInventorySettingsTab({
                                 <IconEllipsisOutlineRegular size={14} />
                               </button>
                             )}
-                            items={[
-                              { id: 'edit', label: t('edit'), disabled: busy || installBusy },
-                              { id: 'reload', label: t('reload'), disabled: busy || installBusy },
-                              { id: 'update', label: t('update'), disabled: busy || installBusy },
-                              { type: 'separator', id: 'remove-sep' },
-                              { id: 'remove', label: t('remove'), danger: true, disabled: busy || installBusy },
-                            ]}
+                            items={menuItems}
                             onSelect={(id) => {
                               setMenuEntryId(null)
                               const name = title
@@ -1084,45 +1270,49 @@ export function PluginInventorySettingsTab({
                                 void runManaged(entry.entryId, () => openFolder(entry.entryId), { refresh: false })
                                 return
                               }
-                            if (id === 'reload') {
-                              void runManaged(
-                                entry.entryId,
-                                () => reload(entry.entryId),
-                                { notice: t('toastReloaded', { name }), clientRefresh: true },
-                              )
-                              return
-                            }
-                            if (id === 'update') {
-                              void (async () => {
-                                if (installBusy || busyId !== null) return
-                                setMenuEntryId(null)
-                                setBusyId(entry.entryId)
-                                setActionError(null)
-                                try {
-                                  await runPluginCliMutateUi({
-                                    kind: 'update',
-                                    spec: title,
-                                    command: `xrkh plugin add ${entry.entryId}@latest`,
-                                    run: async (requestId) => {
-                                      const log = await update(entry.entryId, requestId)
-                                      if (log === undefined) {
-                                        throw new Error(t('actionFailed'))
-                                      }
-                                      return log
-                                    },
-                                    ...(subscribeInstallLog !== undefined
-                                      ? { subscribeInstallLog }
-                                      : {}),
-                                    fallbackError: t('actionFailed'),
-                                  })
-                                } catch (error) {
-                                  setActionError(error instanceof Error ? error.message : t('actionFailed'))
-                                } finally {
-                                  setBusyId(null)
-                                }
-                              })()
-                              return
-                            }
+                              if (id === 'reload') {
+                                void runManaged(
+                                  entry.entryId,
+                                  () => reload(entry.entryId),
+                                  { notice: t('toastReloaded', { name }), clientRefresh: true },
+                                )
+                                return
+                              }
+                              if (id === 'check-updates') {
+                                void runCheckUpdates(entry.entryId)
+                                return
+                              }
+                              if (id === 'update') {
+                                void (async () => {
+                                  if (installBusy || busyId !== null) return
+                                  setMenuEntryId(null)
+                                  setBusyId(entry.entryId)
+                                  setActionError(null)
+                                  try {
+                                    await runPluginCliMutateUi({
+                                      kind: 'update',
+                                      spec: title,
+                                      command: `xrkh plugin add ${entry.entryId}@latest`,
+                                      run: async (requestId) => {
+                                        const log = await update(entry.entryId, requestId)
+                                        if (log === undefined) {
+                                          throw new Error(t('actionFailed'))
+                                        }
+                                        return log
+                                      },
+                                      ...(subscribeInstallLog !== undefined
+                                        ? { subscribeInstallLog }
+                                        : {}),
+                                      fallbackError: t('actionFailed'),
+                                    })
+                                  } catch (error) {
+                                    setActionError(error instanceof Error ? error.message : t('actionFailed'))
+                                  } finally {
+                                    setBusyId(null)
+                                  }
+                                })()
+                                return
+                              }
                               if (id === 'remove') setRemoveTarget(entry)
                             }}
                           />
@@ -1155,6 +1345,12 @@ export function PluginInventorySettingsTab({
                               <dd className={css.sourceValue}>{entry.source}</dd>
                             </div>
                           ) : null}
+                          {showUpdateAvail && probe.latest ? (
+                            <div>
+                              <dt>{t('update')}</dt>
+                              <dd>{t('updateAvailableHint', { version: probe.latest })}</dd>
+                            </div>
+                          ) : null}
                           {entry.enabled ? (
                             <div>
                               <dt>{t('cordis')}</dt>
@@ -1185,7 +1381,93 @@ export function PluginInventorySettingsTab({
                     ) : null}
                   </li>
                 )
-                  }),
+            }
+
+            const renderPhoneRuntime = (parts: typeof engineRows) => {
+              const open = expanded === PHONE_RUNTIME_CARD_ID
+              const detailId = `${catalogId}-details-phone-runtime`
+              const anyOn = parts.some((p) => p.enabled)
+              return (
+                <li
+                  className={css.card}
+                  key={PHONE_RUNTIME_CARD_ID}
+                  data-plugin-entry="phone-runtime"
+                  data-source-class="engine"
+                  data-open={open ? 'true' : undefined}
+                  data-kind="runtime"
+                >
+                  <div className={css.cardHead}>
+                    <button
+                      className={css.cardContent}
+                      type="button"
+                      aria-expanded={open}
+                      aria-controls={detailId}
+                      aria-label={t('phoneRuntimeTitle')}
+                      onClick={() => {
+                        setRemoveTarget(null)
+                        setMenuEntryId(null)
+                        setExpanded((current) => (
+                          current === PHONE_RUNTIME_CARD_ID ? null : PHONE_RUNTIME_CARD_ID
+                        ))
+                      }}
+                    >
+                      <span className={css.artwork} data-kind="both" aria-hidden>
+                        <IconEnhanceOutlineRegular size={18} />
+                      </span>
+                      <span className={css.cardTitleBlock}>
+                        <span className={css.cardTitleRow}>
+                          <strong className={css.cardTitle}>{t('phoneRuntimeTitle')}</strong>
+                          <span className={css.versionTag}>
+                            {t('phoneRuntimeParts', { count: String(parts.length) })}
+                          </span>
+                        </span>
+                        <span className={css.cardMetaRow}>
+                          <span className={css.localTag}>phone-guest</span>
+                        </span>
+                      </span>
+                      <span className={css.cardTrailing}>
+                        <span
+                          className={css.configTag}
+                          data-enabled={anyOn ? 'true' : 'false'}
+                        >
+                          {t(anyOn ? 'enabledTag' : 'disabledTag')}
+                        </span>
+                        <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
+                      </span>
+                    </button>
+                  </div>
+                  {open ? (
+                    <div className={css.cardDetails} id={detailId}>
+                      <p className={css.builtinHint}>{t('phoneRuntimeHint')}</p>
+                      <ul className={css.phoneRuntimeParts}>
+                        {parts.map((part) => (
+                          <li key={part.entryId} className={css.phoneRuntimePart}>
+                            <code>{part.entryId}</code>
+                            <span>{part.kind ?? '—'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </li>
+              )
+            }
+
+            return (
+            <ul className={css.cards}>
+              {sections.flatMap((section) => [
+                  ...(section.label !== null
+                    ? [(
+                      <li key={`section:${section.label}`} className={css.groupHeading} role="presentation">
+                        {section.label}
+                      </li>
+                    )]
+                    : []),
+                  ...section.rows.map((row) => (
+                    row.kind === 'phone-runtime'
+                      ? renderPhoneRuntime(row.parts)
+                      : renderEntryCard(row.entry)
+                  )),
                 ])}
             </ul>
             )

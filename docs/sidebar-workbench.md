@@ -7,14 +7,16 @@
 | 轨道 | 用途 | 落点 |
 |------|------|------|
 | 流内 `details` | 会话 **Status**（子代理 · jobs · timeline · cost · 通道；与 `/status` 同源）· **改动审阅** · **Canvas**（工作区看板）· 任务 / 上下文 | `@xrkseek/client-ui-plan`（`ctx.changesReview` 由 ui-deliverables 提供；Canvas 经 Face `canvas.list`/`get`） |
-| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.18.22） |
+| 浮动工作台 | 文件树 · 预览 · 终端 · 浏览器 · git | Host **`/sidebar/*`** + 社区 **`xrkh-better-sidebar`**（建议 ≥ 0.20.9） |
 
 浮动文件/终端工作台由社区插件提供，不在首方壳内置。推荐在 **设置 → 插件** 从目录安装 `xrkh-better-sidebar`（卡片可见，点安装即可）。
 
 ## 契约
 
 - Host 拥有 `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS（见 [community-plugins](./community-plugins.md) · [http-api](./http-api.md)）。
-- 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` · `--xrk-layout-inset-sidebar` · `--xrk-layout-inset-bottom`），浮动层用 CSS 变量让位 Status 栏与底栏。概况拖宽只更新 insets，**不清空**已发布的变量。底栏应对齐 `--xrkh-center-left` / `--xrkh-center-right`（或 insets）；社区插件把 `--xrkh-workbench-height` 写到 `documentElement` 时，壳镜像到 `--xrk-layout-inset-bottom`，对话列让出高度。
+- 壳发布 `LayoutInsets`（`--xrk-layout-inset-details` · `--xrk-layout-inset-sidebar` · `--xrk-layout-inset-bottom` · `ctx.layout.insets`），浮动层用 CSS 变量让位 Status 栏与底栏。概况拖宽只更新 insets，**不清空**已发布的变量。底栏应对齐 `--xrkh-center-left` / `--xrkh-center-right`（或 insets）；社区插件把 `--xrkh-workbench-height` 写到 `documentElement` 时，壳镜像到 `--xrk-layout-inset-bottom`，对话列让出高度。
+- 手机全屏概况：`details` 像素为 0（不占桌面条），但壳仍发布 `detailsOpen` / `data-xrk-layout-details-open`。浮动工作台应在手机壳下隐藏展开 FAB、收起抽屉（必要时隐藏整个 `data-dsh-panel-host`），避免与概况关闭键抢同一角或挡住点按。
+- `/sidebar/api` 的 `cwd` / `repoRoot` 覆盖只能落在会话工作区之下，或作为非盘符根的祖先（嵌套 worktree → 仓库根）；越界覆盖被忽略，仍用会话 cwd 作围栏。
 - 概况栏开合与宽度按**会话**记住（`localStorage`），刷新后仍在；与 `xrkh-better-sidebar` 工作台状态互不影响。
 - 聊天 / Overview「改动」开文件：有 `ctx.betterSidebar` 时先 `openTab({ type: 'editor', path })`，再 Host `openPath`；未装社区侧栏时只走系统打开。
 - `type: 'editor'` 必须落在**侧栏分栏**（`splits`），不得因 `activePane` 在底栏而撑开底部面板；Host 默认 `bottomPanelAutoTerminal: false`（见 `sidebar-prefs-store`）。空底栏分栏打开会得到空白条——由社区工作台填 tab，不是壳崩溃。
@@ -38,14 +40,16 @@ The product shell splits the right side into two tracks:
 | Track | Role | Owner |
 |-------|------|--------|
 | In-flow `details` | Session **Status** (subagents · jobs · timeline · cost · channels; same as `/status`) · **Changes review** · **Canvas** (workspace boards) · todos / context | `@xrkseek/client-ui-plan` (`ctx.changesReview` from ui-deliverables; Canvas via Face `canvas.list`/`get`) |
-| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.18.22) |
+| Floating workbench | File tree · preview · terminal · browser · git | Host **`/sidebar/*`** + community **`xrkh-better-sidebar`** (prefer ≥ 0.20.9) |
 
 Floating file/terminal chrome is a community plugin, not first-party. Install **`xrkh-better-sidebar`** from **Settings → Plugins** (catalog card; click Install).
 
 ## Contract
 
 - Host owns `/sidebar/api/*` · `/sidebar/file` · PTY / agent-opens WS (see [community-plugins](./community-plugins.md) · [http-api](./http-api.md)).
-- The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, `--xrk-layout-inset-sidebar`, `--xrk-layout-inset-bottom`); floating chrome offsets with those CSS variables. Dragging Overview width updates insets **without** clearing them. The bottom strip should follow `--xrkh-center-left` / `--xrkh-center-right` (or the insets). When a community plugin stamps `--xrkh-workbench-height` on `documentElement`, the shell mirrors it to `--xrk-layout-inset-bottom` so the conversation column yields.
+- The shell publishes `LayoutInsets` (`--xrk-layout-inset-details`, `--xrk-layout-inset-sidebar`, `--xrk-layout-inset-bottom`, `ctx.layout.insets`); floating chrome offsets with those CSS variables. Dragging Overview width updates insets **without** clearing them. The bottom strip should follow `--xrkh-center-left` / `--xrkh-center-right` (or the insets). When a community plugin stamps `--xrkh-workbench-height` on `documentElement`, the shell mirrors it to `--xrk-layout-inset-bottom` so the conversation column yields.
+- Phone full-screen Overview keeps `details` at 0px (no desktop strip) but still publishes `detailsOpen` / `data-xrk-layout-details-open`. Floating workbenches should hide their expand FAB and collapse the drawer on the phone shell (and may hide the whole `data-dsh-panel-host`) so they do not collide with or sit above the Overview close control.
+- `/sidebar/api` `cwd` / `repoRoot` overrides must stay under the session workspace, or be a non-filesystem-root ancestor (nested worktree → repo root); out-of-fence overrides are ignored and the session cwd remains the fence.
 - Overview open bit and width are **per Session** (localStorage) and survive reload; independent of `xrkh-better-sidebar` workbench state.
 - Chat / Overview Changes open-file: when `ctx.betterSidebar` is present, call `openTab({ type: 'editor', path })` then Host `openPath`; without the community sidebar, open via the OS only.
 - `type: 'editor'` must land on the **side** split tree (`splits`), never expand the bottom panel because `activePane` is a bottom leaf; Host default `bottomPanelAutoTerminal: false` (see `sidebar-prefs-store`). Opening an empty bottom split yields a blank strip — the community workbench fills tabs; that is not a Host crash.

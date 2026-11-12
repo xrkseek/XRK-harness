@@ -69,6 +69,28 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.19',
+    date: '2026-11-12',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '手机打开概况时，侧栏工作台展开钮与 panel 会收起/隐藏，不再和概况关闭键抢角。',
+        en: 'Opening Overview on phone hides/collapses the sidebar workbench expand control so it no longer fights the sheet close button.',
+      },
+      {
+        zh: '壳补上概况「打开」位（LayoutInsets.detailsOpen）；插件清单多端密度与安装路径校验更稳。',
+        en: 'Shell publishes LayoutInsets.detailsOpen; plugin inventory density and install-path checks are stabler on multi-end.',
+      },
+      {
+        zh: '侧栏 cwd / 插件包名路径围栏加固；建议侧栏 xrkh-better-sidebar@0.20.9。',
+        en: 'Sidebar cwd and plugin package-name path fences harden; prefer xrkh-better-sidebar@0.20.9.',
+      },
+    ],
+  },
+  {
     version: '0.7.18',
     date: '2026-11-12',
     title: {

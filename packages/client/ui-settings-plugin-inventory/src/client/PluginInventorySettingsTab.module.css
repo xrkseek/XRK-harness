@@ -905,6 +905,7 @@
 
 .cardTitle {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   font-size: 14px;
   line-height: 20px;
@@ -918,42 +919,145 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
   gap: 2px;
+  overflow: hidden;
 }
 
 .cardTitleRow {
   display: flex;
   min-width: 0;
+  max-width: 100%;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
+  overflow: hidden;
 }
 
 .cardMetaRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  max-width: 100%;
+  /* Cap badge stack so dense phones do not push the trailing switch. */
+  max-height: 40px;
+  overflow: hidden;
 }
 
 .versionTag {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 5.5rem;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 16px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .restartTag {
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
-  min-height: 20px;
+  min-width: 0;
+  max-width: 5rem;
+  min-height: 18px;
   border-radius: 5px;
-  padding: 1px 6px;
+  padding: 0 5px;
+  overflow: hidden;
   background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #c9892e) 14%, transparent);
   color: var(--dsw-alias-state-warning-primary, #c9892e);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.localTag,
+.updateAvailableTag,
+.updateCheckFailedTag,
+.updateCheckingTag {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 18px;
+  border-radius: 5px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.localTag {
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.updateAvailableTag {
+  max-width: 6.5rem;
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #2f9b63) 14%, transparent);
+  color: var(--dsw-alias-state-success-primary, #2f9b63);
+  font-variant-numeric: tabular-nums;
+}
+
+.updateCheckFailedTag {
+  max-width: 5.5rem;
+  background: color-mix(in srgb, var(--dsw-alias-state-danger-primary, #c44) 12%, transparent);
+  color: var(--dsw-alias-state-danger-primary, #c44);
+}
+
+.updateCheckingTag {
+  gap: 4px;
+  max-width: 5.5rem;
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 10%, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.phoneRuntimeParts {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.phoneRuntimePart {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.phoneRuntimePart code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneRuntimePart span {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1064,15 +1168,20 @@
 
 .managedTag {
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
-  min-height: 20px;
+  min-width: 0;
+  max-width: 4.5rem;
+  min-height: 18px;
   border-radius: 5px;
-  padding: 1px 6px;
+  padding: 0 5px;
+  overflow: hidden;
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
   color: var(--dsw-alias-state-business-primary);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 16px;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .card[data-managed='true'] .artwork {
@@ -1133,29 +1242,103 @@
   }
 }
 
-/* Phone / narrow Settings: denser recommend (name | Install); stack only the
-   primary install form so the submit target stays full-width. */
+/* Phone / narrow Settings: keep install + recommend as name | action row;
+   stack only secondary registry / proxy rows. */
 @media (max-width: 767px) {
   .cards {
     grid-template-columns: 1fr;
   }
 
-  .installRow,
+  .filterRow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .filterRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filterChip {
+    flex: none;
+  }
+
+  .cardContent {
+    min-height: 44px;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .artwork {
+    width: 28px;
+    height: 28px;
+  }
+
+  .cardTitle {
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .versionTag {
+    max-width: 4.25rem;
+  }
+
+  .cardMetaRow {
+    gap: 3px;
+    max-height: 22px;
+  }
+
+  /* Origin tag is redundant when a probe badge already marks the card. */
+  .card[data-update] .managedTag {
+    display: none;
+  }
+
+  .updateAvailableTag {
+    max-width: 5.5rem;
+    font-weight: 600;
+  }
+
+  .updateCheckFailedTag,
+  .updateCheckingTag {
+    max-width: 4.75rem;
+  }
+
+  .details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px 0;
+  }
+
+  .details dt {
+    margin-top: 6px;
+  }
+
+  .details dt:first-child {
+    margin-top: 0;
+  }
+
   .registryRow {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .installRow,
   .recommendRow {
     flex-direction: row;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+  }
+
+  .recommendRow {
     padding: 8px 10px;
   }
 
   .recommendCopy {
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
   }
 
   .recommendCopy span {
@@ -1165,22 +1348,26 @@
     overflow: hidden;
   }
 
-  .recommendButton {
+  .installRow input {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .recommendButton,
+  .installRow button {
     flex: none;
     width: auto;
-    min-width: 4.5rem;
+    min-width: 4.25rem;
+    max-width: 5.5rem;
     min-height: 36px;
     max-height: none;
     height: auto;
-    padding: 6px 12px;
-  }
-
-  .installRow button {
-    width: 100%;
-    min-height: 44px;
-    max-height: none;
-    height: auto;
-    padding: 10px 14px;
+    padding: 6px 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .proxyInput {
@@ -1188,5 +1375,49 @@
     width: 100%;
     flex: 1 1 auto;
   }
+
+  .cardTrailing {
+    gap: 4px;
+  }
+
+  .switchSlot,
+  .moreSlot {
+    flex: none;
+  }
+
+  .moreTrigger {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Very narrow phone: drop local tag too when probe is showing. */
+@media (max-width: 390px) {
+  .card[data-update] .localTag,
+  .card[data-update] .restartTag {
+    display: none;
+  }
+
+  .cardTitle {
+    font-size: 12.5px;
+  }
+}
+
+/* Packaged WebView may report width >767 while AppFrame stamps phone —
+   mirror the density rules off the layout stamp. */
+:global(html[data-xrk-layout-phone]) .cards {
+  grid-template-columns: 1fr;
+}
+
+:global(html[data-xrk-layout-phone]) .filterRow {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+:global(html[data-xrk-layout-phone]) .cardContent {
+  min-height: 44px;
+  padding: 8px 10px;
 }
 

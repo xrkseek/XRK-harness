@@ -89,6 +89,12 @@ export {
   type AutoReviewAccessKind,
   type AutoReviewToolPreOptions,
   type AutoReviewStatsSnapshot,
+  isSafePluginPackageName,
+  assertSafePluginPackageName,
+  resolveContainedPluginPath,
+  unscopedPackageName,
+  isSamePluginPackage,
+  isPluginPackageFamily,
 } from "./dsh-compat/index.js";
 export {
   createSidebarPublicHandler,

@@ -831,8 +831,14 @@ describe("subagent tools", () => {
       );
       expect(runtime.sessionAgentPresets.get(childId!)).toBe("harness");
     } finally {
-      rmSync(codingRoot, { recursive: true, force: true });
-      rmSync(productDir, { recursive: true, force: true });
+      // Windows can leave a handle briefly open under full-suite load.
+      for (const dir of [codingRoot, productDir]) {
+        try {
+          rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        } catch {
+          /* best-effort temp cleanup */
+        }
+      }
     }
   });
 

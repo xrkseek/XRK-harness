@@ -27,8 +27,43 @@ export interface UnpackedPackage {
 export interface NpmPackInvocation {
   readonly file: string;
   readonly argsPrefix: readonly string[];
-  /** Windows `.cmd` shims need `shell: true`. */
+  /**
+   * Windows `.cmd` shim — spawn via `ComSpec /d /s /c` (never `shell: true`).
+   */
   readonly windowsShell: boolean;
+}
+
+/**
+ * Quote one argv token for `cmd.exe /s /c` (peer of server-http plugin-mutate).
+ */
+function quoteWindowsCmdArg(arg: string): string {
+  if (arg.length === 0) return '""';
+  if (!/[\s"&<>|^!()%]/.test(arg)) return arg;
+  return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
+}
+
+/** Shell-free spawn plan for npm pack (Desktop npm-cli.js or PATH npm). */
+function planNpmPackSpawn(
+  npm: NpmPackInvocation,
+  npmArgs: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): {
+  readonly file: string;
+  readonly args: readonly string[];
+  readonly windowsVerbatimArguments?: boolean;
+} {
+  if (!npm.windowsShell) {
+    return { file: npm.file, args: [...npm.argsPrefix, ...npmArgs] };
+  }
+  const comspec = env.ComSpec?.trim() || "cmd.exe";
+  const line = [npm.file, ...npm.argsPrefix, ...npmArgs]
+    .map(quoteWindowsCmdArg)
+    .join(" ");
+  return {
+    file: comspec,
+    args: ["/d", "/s", "/c", line],
+    windowsVerbatimArguments: true,
+  };
 }
 
 /**
@@ -83,6 +118,16 @@ export function anchorPathSpec(argument: string, cwd: string): string {
 function readPkgJson(dir: string): Record<string, unknown> {
   const text = readFileSync(path.join(dir, "package.json"), "utf8");
   return JSON.parse(text) as Record<string, unknown>;
+}
+
+/** Only http(s) URLs for `--registry` / `--proxy` (blocks shell metachar tricks). */
+function isHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function extractTarball(tgz: string, extractDir: string): void {
@@ -146,17 +191,30 @@ export function fetchPackage(
   try {
     const npmArgs = ["pack", anchored, "--pack-destination", stage];
     const registry = options.registry?.trim();
-    if (registry) npmArgs.push("--registry", registry);
+    if (registry) {
+      if (!isHttpUrl(registry)) {
+        throw new Error(`invalid --registry URL: ${JSON.stringify(registry)}`);
+      }
+      npmArgs.push("--registry", registry);
+    }
     const proxy = options.proxy?.trim();
     if (proxy) {
+      if (!isHttpUrl(proxy)) {
+        throw new Error(`invalid --proxy URL: ${JSON.stringify(proxy)}`);
+      }
       // npm ignores OS/system proxy; only these flags apply to this pack.
       npmArgs.push("--proxy", proxy, "--https-proxy", proxy);
     }
     const npm = resolveNpmPackInvocation();
-    const result = spawnSync(npm.file, [...npm.argsPrefix, ...npmArgs], {
+    const plan = planNpmPackSpawn(npm, npmArgs);
+    const result = spawnSync(plan.file, [...plan.args], {
       cwd,
       encoding: "utf8",
-      shell: npm.windowsShell,
+      shell: false,
+      windowsHide: true,
+      ...(plan.windowsVerbatimArguments
+        ? { windowsVerbatimArguments: true }
+        : {}),
     });
     if (result.error) {
       const code = (result.error as NodeJS.ErrnoException).code;
