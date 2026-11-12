@@ -210,7 +210,9 @@ describe("last-good config (settings.yaml / host-settings)", () => {
   it("persists and hydrates community theme namespaces alongside product ones", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "xrk-theme-ns-"));
     const file = path.join(dir, "settings.yaml");
-    await writeFile(file, "locale:\n  preference: en\n", "utf8");
+    // Prefer `zh` (not `en`) so hydrate does not fire the en→system migrate
+    // persist in the background while this mutate writes the same file.
+    await writeFile(file, "locale:\n  preference: zh\n", "utf8");
     const rt = runtime(dir);
     hydrateFaceSettingsDocument(rt);
 

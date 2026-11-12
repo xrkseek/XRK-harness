@@ -64,7 +64,10 @@ describe("boss-status-broadcast", () => {
       store: { has: () => true },
       subagents: { getByChild: () => undefined },
       settingsNamespaces: {
-        view: () => ({ value: { moodId: "21", statusLine: "别吵" } }),
+        view: (ns: string) =>
+          ns === "locale"
+            ? { value: { preference: "zh" } }
+            : { value: { moodId: "21", statusLine: "别吵" } },
       },
     } as never;
     const frags = createBossStatusFragmentProvider(runtime).produce({
@@ -84,9 +87,10 @@ describe("boss-status-broadcast", () => {
     const watchSession = vi.fn();
     const runtime = {
       settingsNamespaces: {
-        view: () => ({
-          value: { moodId: "15", statusLine: "摸鱼中" },
-        }),
+        view: (ns: string) =>
+          ns === "locale"
+            ? { value: { preference: "zh" } }
+            : { value: { moodId: "15", statusLine: "摸鱼中" } },
       },
       store: {
         list: () => ["s-office", "s-home", "s-child", "s-idle"],

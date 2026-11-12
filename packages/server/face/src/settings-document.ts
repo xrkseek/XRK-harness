@@ -80,11 +80,42 @@ const lastGoodCredentialsYamlByFile = new Map<
   string,
   Record<string, unknown>
 >();
+/**
+ * Serialize settings.yaml / credentials.yaml writers per absolute path.
+ * Hydrate can fire-and-forget a migrate persist while Settings.mutate writes
+ * the same file — overlapping read/write would otherwise leave a truncated
+ * document that classify as "root must be a mapping object".
+ */
+const yamlPersistChainByFile = new Map<string, Promise<unknown>>();
+
+async function withYamlPersistLock<T>(
+  file: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const key = path.resolve(file);
+  const prev = yamlPersistChainByFile.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = prev.then(() => gate, () => gate);
+  yamlPersistChainByFile.set(key, tail);
+  await prev.catch(() => {});
+  try {
+    return await run();
+  } finally {
+    release();
+    if (yamlPersistChainByFile.get(key) === tail) {
+      yamlPersistChainByFile.delete(key);
+    }
+  }
+}
 
 /** Test helper — clear last-good caches between isolated productDir cases. */
 export function resetLastGoodConfigCaches(): void {
   lastGoodSettingsYamlByFile.clear();
   lastGoodCredentialsYamlByFile.clear();
+  yamlPersistChainByFile.clear();
 }
 
 function loadYamlDocument(
@@ -388,31 +419,33 @@ function credentialRefForSlot(
 
 export async function persistCredentialsFile(runtime: FaceRuntime): Promise<void> {
   const file = credentialsYamlPath(runtime);
-  const key = path.resolve(file);
-  await mkdir(path.dirname(file), { recursive: true });
-  const loaded = loadYamlDocument(file, lastGoodCredentialsYamlByFile.get(key));
-  if (loaded.status === "invalid") {
-    throw new ConfigParseError(
-      file,
-      refuseOverwriteDetail(loaded.error),
-    );
-  }
-  if (loaded.status === "ok") {
-    lastGoodCredentialsYamlByFile.set(key, structuredClone(loaded.doc));
-  }
-  const previous =
-    loaded.status === "missing"
-      ? {}
-      : structuredClone(loaded.doc);
-  const next = { ...previous };
-  for (const slot of runtime.credentials.listPersistedSlots()) {
-    const ref = credentialRefForSlot(runtime, slot.slotId);
-    if (!ref) continue;
-    if (slot.value === null) delete next[ref];
-    else next[ref] = slot.value;
-  }
-  await writeFile(file, yaml.dump(next, { lineWidth: 120 }), "utf8");
-  lastGoodCredentialsYamlByFile.set(key, structuredClone(next));
+  return withYamlPersistLock(file, async () => {
+    const key = path.resolve(file);
+    await mkdir(path.dirname(file), { recursive: true });
+    const loaded = loadYamlDocument(file, lastGoodCredentialsYamlByFile.get(key));
+    if (loaded.status === "invalid") {
+      throw new ConfigParseError(
+        file,
+        refuseOverwriteDetail(loaded.error),
+      );
+    }
+    if (loaded.status === "ok") {
+      lastGoodCredentialsYamlByFile.set(key, structuredClone(loaded.doc));
+    }
+    const previous =
+      loaded.status === "missing"
+        ? {}
+        : structuredClone(loaded.doc);
+    const next = { ...previous };
+    for (const slot of runtime.credentials.listPersistedSlots()) {
+      const ref = credentialRefForSlot(runtime, slot.slotId);
+      if (!ref) continue;
+      if (slot.value === null) delete next[ref];
+      else next[ref] = slot.value;
+    }
+    await writeFile(file, yaml.dump(next, { lineWidth: 120 }), "utf8");
+    lastGoodCredentialsYamlByFile.set(key, structuredClone(next));
+  });
 }
 
 export async function persistSettingsDocument(
@@ -420,55 +453,57 @@ export async function persistSettingsDocument(
   namespaces: FaceSettingsNamespaces,
 ): Promise<void> {
   const file = settingsYamlPath(runtime);
-  const key = path.resolve(file);
-  await mkdir(path.dirname(file), { recursive: true });
-  const loaded = loadYamlDocument(file, lastGoodSettingsYamlByFile.get(key));
-  if (loaded.status === "invalid") {
-    // DSH: unparsable on-disk document fails the write loud — do not wipe.
-    throw new ConfigParseError(
-      file,
-      refuseOverwriteDetail(loaded.error),
-    );
-  }
-  if (loaded.status === "ok") {
-    lastGoodSettingsYamlByFile.set(key, structuredClone(loaded.doc));
-  }
-  const previous =
-    loaded.status === "missing"
-      ? {}
-      : structuredClone(loaded.doc);
-  // Retired `voice` section — split into `asr` + `tts`, never written back.
-  delete previous[LEGACY_VOICE_NS];
-  for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
-    if (spec.ns === "mcp") continue;
-    const slot = namespaces.ensure(spec.ns);
-    if (Object.keys(slot.user).length === 0) {
-      delete previous[spec.ns];
-    } else {
-      previous[spec.ns] = structuredClone(slot.user);
+  return withYamlPersistLock(file, async () => {
+    const key = path.resolve(file);
+    await mkdir(path.dirname(file), { recursive: true });
+    const loaded = loadYamlDocument(file, lastGoodSettingsYamlByFile.get(key));
+    if (loaded.status === "invalid") {
+      // DSH: unparsable on-disk document fails the write loud — do not wipe.
+      throw new ConfigParseError(
+        file,
+        refuseOverwriteDetail(loaded.error),
+      );
     }
-  }
-  // Persist community dynamic namespaces (theme Config / plugin prefs) that
-  // Face `ensure`d via settings.mutate — same durable path as DSH settings.yaml.
-  const skipCommunityYaml = new Set([
-    ...PRODUCT_YAML_NS,
-    "mcp",
-    "ui",
-    "host",
-    "process-channels",
-    LEGACY_VOICE_NS,
-  ]);
-  for (const ns of namespaces.ids()) {
-    if (skipCommunityYaml.has(ns)) continue;
-    const slot = namespaces.ensure(ns);
-    if (Object.keys(slot.user).length === 0) {
-      delete previous[ns];
-    } else {
-      previous[ns] = structuredClone(slot.user);
+    if (loaded.status === "ok") {
+      lastGoodSettingsYamlByFile.set(key, structuredClone(loaded.doc));
     }
-  }
-  await writeFile(file, yaml.dump(previous, { lineWidth: 120 }), "utf8");
-  lastGoodSettingsYamlByFile.set(key, structuredClone(previous));
+    const previous =
+      loaded.status === "missing"
+        ? {}
+        : structuredClone(loaded.doc);
+    // Retired `voice` section — split into `asr` + `tts`, never written back.
+    delete previous[LEGACY_VOICE_NS];
+    for (const spec of FACE_PRODUCT_SETTINGS_NAMESPACES) {
+      if (spec.ns === "mcp") continue;
+      const slot = namespaces.ensure(spec.ns);
+      if (Object.keys(slot.user).length === 0) {
+        delete previous[spec.ns];
+      } else {
+        previous[spec.ns] = structuredClone(slot.user);
+      }
+    }
+    // Persist community dynamic namespaces (theme Config / plugin prefs) that
+    // Face `ensure`d via settings.mutate — same durable path as DSH settings.yaml.
+    const skipCommunityYaml = new Set([
+      ...PRODUCT_YAML_NS,
+      "mcp",
+      "ui",
+      "host",
+      "process-channels",
+      LEGACY_VOICE_NS,
+    ]);
+    for (const ns of namespaces.ids()) {
+      if (skipCommunityYaml.has(ns)) continue;
+      const slot = namespaces.ensure(ns);
+      if (Object.keys(slot.user).length === 0) {
+        delete previous[ns];
+      } else {
+        previous[ns] = structuredClone(slot.user);
+      }
+    }
+    await writeFile(file, yaml.dump(previous, { lineWidth: 120 }), "utf8");
+    lastGoodSettingsYamlByFile.set(key, structuredClone(previous));
+  });
 }
 
 export async function ensureSettingsDocument(runtime: FaceRuntime): Promise<string> {
