@@ -8,9 +8,9 @@ const env = {
 };
 
 const GH_EXE =
-  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.17/xrk-harness-0.7.17-win-x64.exe";
+  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.18/xrk-harness-0.7.18-win-x64.exe";
 const GH_APK =
-  "https://github.com/xrkseek/XRK-harness-mobile/releases/download/v0.7.17/xrk-harness-0.7.17-arm64.apk";
+  "https://github.com/xrkseek/XRK-harness-mobile/releases/download/v0.7.18/xrk-harness-0.7.18-arm64.apk";
 const PROXY_EXE = `https://ghfast.top/${GH_EXE}`;
 const PROXY_APK = `https://ghfast.top/${GH_APK}`;
 
