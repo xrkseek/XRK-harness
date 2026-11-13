@@ -35,9 +35,15 @@ import { resolveSqliteJournalMode } from "./sqlite-journal.js";
 
 export {
   acquireSessionsDirLock,
+  isSessionsLockHolderAlive,
+  isSessionsLockHolderLiveHost,
+  looksLikeSessionsLockHost,
   SessionsDirInUseError,
+  SESSIONS_LOCK_HOLDER_KIND,
+  SESSIONS_LOCK_RECLAIM_ENV,
   SESSIONS_WRITE_LOCK_FILENAME,
   type SessionsDirLock,
+  type SessionsDirLockProbes,
 } from "./store-lock.js";
 export {
   isLikelyRemoteSessionsPath,

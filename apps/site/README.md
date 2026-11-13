@@ -8,7 +8,7 @@ Cloudflare **Worker**（不是 Pages 静态站）：`GET /` 渲染产品壳。
 |--------|------|
 | Windows x64 | GitHub Release **`xrkseek/XRK-harness`** |
 | Android arm64 | GitHub Release **`xrkseek/XRK-harness-mobile`**（`releases.json` 的 `android-arm64` + `githubRepo`） |
-| macOS | 暂不提供（页上诚实标不可用） |
+| macOS | 页上合并为一条 `xrkh web` 提示（无安装包按钮） |
 
 **中国时区**（或 CF 国家 CN·HK·MO·TW）默认中文页 + 镜像加速（GitHub 直连为第二按钮）；**其它时区**默认英文页 + 原生 GitHub。壳内 **electron-updater** 仍读 AGT（`HARNESS_ORIGIN`）；手机应用内更新读 mobile 仓 `update.json`，不经本 Worker。
 
@@ -28,7 +28,7 @@ Cloudflare **Worker** (not Pages).
 |-----------|--------|
 | Windows x64 | GitHub Release **`xrkseek/XRK-harness`** |
 | Android arm64 | GitHub Release **`xrkseek/XRK-harness-mobile`** (`android-arm64` + `githubRepo` in `releases.json`) |
-| macOS | Not shipping yet (page marks unavailable) |
+| macOS | One tip row pointing at `xrkh web` (no installer button) |
 
 **China-ish TZ / CF CN·HK·MO·TW**: Chinese page + mirror primary (GitHub secondary). **Everyone else**: English page + native GitHub. Desktop **electron-updater** still uses AGT (`HARNESS_ORIGIN`). The phone App reads `update.json` from the mobile repo — not this Worker.
 

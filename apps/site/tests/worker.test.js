@@ -71,10 +71,13 @@ test("english query lists desktop and phone groups; mac stays unavailable", asyn
   assert.match(html, /Download Windows/);
   assert.match(html, /Download Android/);
   assert.match(html, /Android arm64/);
-  assert.match(html, /macOS Apple Silicon/);
+  assert.match(html, />macOS</);
   assert.match(html, /Host cold start/);
-  assert.match(html, /No desktop installer yet/);
+  assert.match(html, /Open with xrkh web on the command line/);
+  assert.match(html, /dl-panel/);
+  assert.match(html, /class="chip"/);
   assert.doesNotMatch(html, /download\/mac-/);
+  assert.doesNotMatch(html, /macOS Apple Silicon/);
   assert.match(html, /XRK-harness-mobile/);
 });
 
@@ -96,8 +99,8 @@ test("mac stays listed even if the live catalog marks it available", async () =>
   try {
     const res = await worker.fetch(new Request("https://example.test/?lang=en"), env);
     const html = await res.text();
-    assert.match(html, /macOS Apple Silicon/);
-    assert.match(html, /No desktop installer yet/);
+    assert.match(html, />macOS</);
+    assert.match(html, /Open with xrkh web on the command line/);
     assert.doesNotMatch(html, /download\/mac-/);
   } finally {
     globalThis.fetch = original;

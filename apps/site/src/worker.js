@@ -46,7 +46,7 @@ const TARGET_KEY = {
 
 const LABELS = {
   zh: {
-    lead: "会话是真源。干员可委派。设置里改模型与 MCP。桌面 Windows x64；手机 Android arm64。",
+    lead: "本地优先的 AI 编程工作台。对话留在会话里，干员能接手任务，模型和 MCP 在设置里接好就能用。",
     tagline: "向阳而生，驭光而行",
     skip: "跳到干员",
     play: "工作台",
@@ -112,16 +112,18 @@ const LABELS = {
     android: "Android arm64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
-    macOff: "目前不提供桌面安装包，用 xrkh web。",
-    wait: "安装包尚未上传",
+    mac: "macOS",
+    macOff: "用命令行打开：xrkh web",
+    wait: "准备中",
     cli: "命令行",
+    cliWeb: "装好后本地打开工作台",
     copy: "复制",
     copied: "已复制",
     mit: "MIT",
     lang: "EN",
   },
   en: {
-    lead: "Sessions are the source of truth. Operators take delegated work. Models and MCP live in Settings. Desktop: Windows x64. Phone: Android arm64.",
+    lead: "A local-first AI coding workbench. Sessions keep the thread, operators take work you hand off, and models plus MCP live in Settings.",
     tagline: "Grow toward the sun. Steer the light.",
     skip: "Skip to operators",
     play: "Workbench",
@@ -187,9 +189,11 @@ const LABELS = {
     android: "Android arm64",
     macArm: "macOS Apple Silicon",
     macIntel: "macOS Intel",
-    macOff: "No desktop installer yet. Use xrkh web.",
-    wait: "Installer not uploaded yet",
+    mac: "macOS",
+    macOff: "Open with xrkh web on the command line.",
+    wait: "Preparing",
     cli: "CLI",
+    cliWeb: "Then open the workbench locally",
     copy: "Copy",
     copied: "Copied",
     mit: "MIT",
@@ -294,30 +298,59 @@ function ctaButton(row, env, label, preferProxy) {
   return `<a class="btn" data-dl-cta data-dl-github="${escapeHtml(github)}" data-dl-proxy="${escapeHtml(mirror)}" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
 }
 
+function versionChip(version) {
+  const v = String(version || "").trim();
+  if (!v) return "";
+  return `<span class="chip">${escapeHtml(v)}</span>`;
+}
+
 function productRow(row, env, t, preferProxy) {
-  const mac = isMacTarget(row.target);
   const label = t[TARGET_KEY[row.target] || ""] || row.target;
-  const meta = mac
-    ? t.macOff
-    : row.available
-      ? [row.version, row.filename].filter(Boolean).join(" · ")
-      : t.wait;
-  const btn = mac
-    ? `<span class="btn" aria-disabled="true">${escapeHtml(t.download)}</span>`
-    : downloadButtons(row, env, t, preferProxy);
-  const state = mac || !row.available ? " off" : "";
-  return `<article class="row${state}"><div><h3>${escapeHtml(label)}</h3><p>${escapeHtml(meta)}</p></div>${btn}</article>`;
+  if (!row.available) {
+    return `<article class="dl-row tip">
+      <div class="dl-copy">
+        <h3>${escapeHtml(label)}</h3>
+        <p>${escapeHtml(t.wait)}</p>
+      </div>
+    </article>`;
+  }
+  const file = String(row.filename || "").trim();
+  const meta = [versionChip(row.version), file ? `<span class="dl-file">${escapeHtml(file)}</span>` : ""]
+    .filter(Boolean)
+    .join('<span class="dl-sep" aria-hidden="true">·</span>');
+  return `<article class="dl-row">
+    <div class="dl-copy">
+      <h3>${escapeHtml(label)}</h3>
+      <p class="dl-meta">${meta}</p>
+    </div>
+    ${downloadButtons(row, env, t, preferProxy)}
+  </article>`;
+}
+
+function macTipRow(t) {
+  return `<article class="dl-row tip">
+    <div class="dl-copy">
+      <h3>${escapeHtml(t.mac)}</h3>
+      <p>${escapeHtml(t.macOff)}</p>
+    </div>
+    <code class="dl-cmd">xrkh web</code>
+  </article>`;
 }
 
 function downloadSection(products, env, t, preferProxy) {
-  const desktop = products.filter((row) => !isAndroidTarget(row.target));
+  const installableDesktop = products.filter(
+    (row) => !isAndroidTarget(row.target) && !isMacTarget(row.target),
+  );
+  const hasMac = products.some((row) => isMacTarget(row.target));
   const mobile = products.filter((row) => isAndroidTarget(row.target));
   const blocks = [];
-  if (desktop.length) {
+  if (installableDesktop.length || hasMac) {
+    const rows = [
+      ...installableDesktop.map((row) => productRow(row, env, t, preferProxy)),
+      ...(hasMac ? [macTipRow(t)] : []),
+    ].join("");
     blocks.push(
-      `<div class="dl-group"><h3>${escapeHtml(t.desktopGroup)}</h3><div class="dl">${desktop
-        .map((row) => productRow(row, env, t, preferProxy))
-        .join("")}</div></div>`,
+      `<div class="dl-group"><h3>${escapeHtml(t.desktopGroup)}</h3><div class="dl">${rows}</div></div>`,
     );
   }
   if (mobile.length) {
@@ -327,7 +360,7 @@ function downloadSection(products, env, t, preferProxy) {
         .join("")}</div></div>`,
     );
   }
-  return blocks.join("");
+  return `<div class="dl-panel">${blocks.join("")}</div>`;
 }
 
 function proxiedGithubUrl(assetUrl, env) {
@@ -641,12 +674,17 @@ function renderPage(catalog, env, zh, request) {
     <section class="download" id="download">
       <h2>${escapeHtml(t.download)}</h2>
       ${downloadBlocks}
-      <p class="cli">
-        <span>${escapeHtml(t.cli)}</span>
-        <code id="cli-text">${escapeHtml(cli)}</code>
-        <button type="button" class="copy" id="copy-cli" data-copy="${escapeHtml(t.copy)}" data-copied="${escapeHtml(t.copied)}">${escapeHtml(t.copy)}</button>
-      </p>
-      <p class="cli"><code>xrkh web</code></p>
+      <div class="cli-panel">
+        <h3>${escapeHtml(t.cli)}</h3>
+        <div class="cli-line">
+          <code id="cli-text">${escapeHtml(cli)}</code>
+          <button type="button" class="copy" id="copy-cli" data-copy="${escapeHtml(t.copy)}" data-copied="${escapeHtml(t.copied)}">${escapeHtml(t.copy)}</button>
+        </div>
+        <div class="cli-line">
+          <code>xrkh web</code>
+          <span class="cli-note">${escapeHtml(t.cliWeb)}</span>
+        </div>
+      </div>
     </section>
     <footer class="foot">
       <span>${escapeHtml(t.mit)}</span>

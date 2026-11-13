@@ -69,6 +69,24 @@ export const RELEASE_NOTES_PINNED: ReleaseNotesPinned | null = {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.7.20',
+    date: '2026-11-13',
+    title: {
+      zh: '版本变更公告',
+      en: 'What’s new',
+    },
+    changes: [
+      {
+        zh: '会话写锁可识别假活进程（cmdline / Windows 映像名）；手机单写者可短等回收残留锁。',
+        en: 'Session write locks recognize false-alive holders (cmdline / Windows image name); phone single-writer can reclaim a leftover lock after a short wait.',
+      },
+      {
+        zh: '官网下载区与产品壳样式对齐：版本 pill、macOS 提示 xrkh web、CLI 分步；首页摘要改成产品介绍。',
+        en: 'Site download block matches the product shell (version pills, macOS xrkh web tip, CLI steps); homepage description is product copy.',
+      },
+    ],
+  },
+  {
     version: '0.7.19',
     date: '2026-11-12',
     title: {
