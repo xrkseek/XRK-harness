@@ -1,18 +1,25 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
+import catalog from "../releases.json" with { type: "json" };
 
 const env = {
   HARNESS_ORIGIN: "http://127.0.0.1:9",
   ASSETS: { fetch: () => Promise.resolve(new Response("missing", { status: 404 })) },
 };
 
-const GH_EXE =
-  "https://github.com/xrkseek/XRK-harness/releases/download/v0.7.19/xrk-harness-0.7.19-win-x64.exe";
-const GH_APK =
-  "https://github.com/xrkseek/XRK-harness-mobile/releases/download/v0.7.19/xrk-harness-0.7.19-arm64.apk";
+const win = catalog.products.find((row) => row.target === "win-x64");
+const android = catalog.products.find((row) => row.target === "android-arm64");
+const GH_EXE = `https://github.com/xrkseek/XRK-harness/releases/download/v${win.version}/${win.filename}`;
+const GH_APK = `https://github.com/xrkseek/XRK-harness-mobile/releases/download/v${android.version}/${android.filename}`;
 const PROXY_EXE = `https://ghfast.top/${GH_EXE}`;
 const PROXY_APK = `https://ghfast.top/${GH_APK}`;
+const WIN_FILE_RE = new RegExp(
+  String(win.filename).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+);
+const APK_FILE_RE = new RegExp(
+  String(android.filename).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+);
 
 test("non-China default is English with native GitHub download", async () => {
   const req = new Request("https://example.test/");
@@ -44,8 +51,8 @@ test("China timezone is Chinese with mirror primary and GitHub second", async ()
   assert.match(html, /镜像加速/);
   assert.match(html, /GitHub 直连/);
   assert.doesNotMatch(html, /data-dl-secondary[^>]* hidden/);
-  assert.match(html, /xrk-harness-0\.7\.19-win-x64\.exe/);
-  assert.match(html, /xrk-harness-0\.7\.19-arm64\.apk/);
+  assert.match(html, WIN_FILE_RE);
+  assert.match(html, APK_FILE_RE);
   assert.match(html, /手机/);
   assert.match(html, /Android arm64/);
 });
