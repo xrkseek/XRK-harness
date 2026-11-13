@@ -41,7 +41,7 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **先** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`**（GitHub + npmjs）→ 再装回根 `devDeps`
 4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；**禁止**与 stage/release 并行）
-5. 桌面包完成后 **先上 AGT 更新源**（yml 的 `url`/`path` 须为指向 `…/desktop/bin/win-x64/…` 的**绝对 URL**；先传 exe+blockmap、再传 yml），**再**改 `apps/site/releases.json`（`win-x64`；若同发手机再改 `android-arm64` 的 `version`/`filename`，指向 `XRK-harness-mobile` Release）并 push · 部署 Worker
+5. 桌面包完成后 **先上 AGT 更新源**（yml 的 `url`/`path` 须为指向 `…/desktop/bin/win-x64/…` 的**绝对 URL**；先传 exe+blockmap、再传 yml），**再**改 `apps/site/releases.json`（`win-x64`；若同发手机再改 `android-arm64` 的 `version`/`filename`，指向 `XRK-harness-mobile` Release）并 **push main**（下载页 Worker 跟随本仓 GitHub，连仓自动部署）
 6. `pnpm prune:local -- --junk`（可选 `pnpm clean:test-temp`）
 
 笔记红线：rule `xrk-release-flow` · skill `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`。
@@ -158,7 +158,7 @@ export NPM_CONFIG_OTP=123456   # PowerShell: $env:NPM_CONFIG_OTP="123456"
 2. **First** `pnpm release:stage` · `pnpm release:stage:sdk` → `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`** (GitHub + npmjs) → restore root `devDeps`
 4. **Then** `pnpm package:desktop` (`XRK_DESKTOP_PACKAGE=1`; **never** parallel with stage/release)
-5. After the desktop build: **upload AGT feed first** (`url`/`path` in yml must be **absolute** URLs under `…/desktop/bin/win-x64/…`; exe+blockmap before yml), **then** update `apps/site/releases.json` (`win-x64`; also bump `android-arm64` `version`/`filename` when shipping the phone APK from `XRK-harness-mobile`) and push · deploy the Worker
+5. After the desktop build: **upload AGT feed first** (`url`/`path` in yml must be **absolute** URLs under `…/desktop/bin/win-x64/…`; exe+blockmap before yml), **then** update `apps/site/releases.json` (`win-x64`; also bump `android-arm64` `version`/`filename` when shipping the phone APK from `XRK-harness-mobile`) and **push main** (the download-page Worker tracks this GitHub repo and deploys from the connected build)
 6. `pnpm prune:local -- --junk` (optional `pnpm clean:test-temp`)
 
 Agent notes: rule `xrk-release-flow` · skills `xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-local-artifacts` · `xrk-github-npm-net`.

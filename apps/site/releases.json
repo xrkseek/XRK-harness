@@ -14,8 +14,8 @@
     {
       "target": "android-arm64",
       "available": true,
-      "version": "0.7.19",
-      "filename": "xrk-harness-0.7.19-arm64.apk",
+      "version": "0.7.20",
+      "filename": "xrk-harness-0.7.20-arm64.apk",
       "githubRepo": "xrkseek/XRK-harness-mobile",
       "download": ""
     },

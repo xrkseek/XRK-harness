@@ -129,6 +129,25 @@ description: >-
 - **做法**：照用户指定的号落盘，同时在 `docs/adr/README.md` 索引里**显式登记** `— | *0010 空缺（未曾存在，编号保留）*`，并把这条差异如实告知用户。
 - **以后怎么做**：编号冲突 / 缺口**不自己改数、不假装没看见**。用户给的落点是契约，索引必须反映现实。
 
+### P-7 · 发版卡在 npm validate，安装包开打太晚（2026-11-13 · v0.7.20）
+
+- **症状**：CLI `FETCH_ERROR` / `npm view` 长时间 404；Agent 反复轮询、重发尝试，Desktop/APK 迟迟不动；主人打断「别着急 validate，早点发 apk 和桌面」。
+- **根因**：把 registry 消化当成 Desktop/APK 的硬前置。实际上 GH Release + 本地 `.release/*.tgz` 已齐时，桌面只吃本机产物，手机用 `ENGINE_TGZ`，**都不等** `harness-cli` packument 转绿。CLI 大包 validate 可拖很久，空等是纯浪费。
+- **证据**：本轮最终 `npm view @xrkseek/harness-cli` = 0.7.20（自绿）；Desktop/APK 是在主人催促后才开打。
+- **以后怎么做**：`pnpm release` + 装回 `devDeps` 后**立刻** `package:desktop`，APK 可并行；registry 用终态判据长窗观察（见 `xrk-release-chain`），禁止短间隔试错循环。细则真源：`xrk-release-flow` · `xrk-release-chain` · `xrk-dev-surfaces`。
+
+### P-8 · 别把手搓 `wrangler deploy` 当成发版步骤（2026-11-13 · v0.7.20）
+
+- **症状**：Agent 改完 `releases.json` 并 push 后，仍追 `CLOUDFLARE_API_TOKEN` / 手跑 `wrangler deploy`，反复问主人。
+- **根因**：误判「Worker 编译期 import ⇒ 必须本地 deploy」。**事实：官网 Worker 跟随本仓 GitHub，push main 即由 CF 连仓部署。**
+- **以后怎么做**：`releases.json` → commit + push 即收工；**禁止**发版链里手 wrangler、禁止为缺 token 卡死。若线上滞后，查 CF 连仓构建状态，不是本地 login。
+
+### P-9 · 本机 APK ≠ 安卓发行版（2026-11-13 · v0.7.20）
+
+- **症状**：Desktop/AGT/npm 都是 N，Agent 也说「APK 打好了」，但官网安卓仍 N-1、应用内更新无新包；主人指出「没发安卓发行版」。
+- **根因**：只做到 `C:\xrk-mobile\out\*.apk`；漏了手机仓 bump、`release_assets.py`、`gh release create` @ `xrkseek/XRK-harness-mobile`，以及主仓 `releases.json` 的 `android-arm64` 行。
+- **以后怎么做**：同号发版清单里 **Desktop 与 Android 同批终态**；安卓终态看 GH mobile Release 三件套 + `releases.json` 安卓行。真源：`xrk-mobile-apk`「发行版」· `xrk-release-flow` 步骤 6–7。
+
 ---
 
 # XRK-Harness Knowledge Map (where to read)
@@ -165,4 +184,7 @@ This file is an **index**, not the body. Project knowledge does **not** go into 
 - **P-3 PowerShell eats `git grep` flags and alternation** (`unable to resolve revision`, truncated pattern) — already documented at `xrk-ps-shell-pitfalls:71`, re-hit this round. Use the `grep`/`glob` tools; one pattern only if you must use `git grep`.
 - **P-4 A gate warning isn't necessarily yours.** `verify-client-ui-i18n (desktop): 2 … use locale-owned copy` fires on a docs-only change; check still exit 0 (567 files / 3 495 tests, kernel 99.04%). Report "pre-existing" vs "introduced" separately.
 - **P-5 A reference clone can silently never update.** `remote.origin.fetch` had been narrowed to a **single tag refspec**, so `fetch` reported "Already up to date" forever while `ls-remote` showed the remote ahead. Check `git config --get-all remote.origin.fetch` first; add `+refs/heads/*:refs/remotes/origin/*` if missing.
+- **P-7 Don't stall Desktop/APK on npm validate** (v0.7.20). CLI `FETCH_ERROR` / long `npm view` 404 is registry lag; after GH + local tgz + restored `devDeps`, start `package:desktop` / `ENGINE_TGZ` APK immediately. Details: `xrk-release-chain` · `xrk-release-flow`.
+- **P-8 Do not hand-run `wrangler deploy` on release** (v0.7.20). Site Worker **follows this GitHub repo**; `releases.json` + push main is enough. Never block on `CLOUDFLARE_API_TOKEN`.
+- **P-9 Local APK ≠ Android release** (v0.7.20). Must ship `xrkseek/XRK-harness-mobile` GH Release (`apk`+`SHA256SUMS`+`update.json`) and bump `releases.json` `android-arm64`. See `xrk-mobile-apk`「发行版」.
 - **P-6 Don't quietly renumber an ADR.** Asked for `docs/adr/0011-…` while the directory stops at **0009** (0010 absent from all history/branches/stash). Kept the requested number, registered `0010 vacant` in the index, and said so out loud.

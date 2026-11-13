@@ -121,6 +121,23 @@ pwsh -File "C:\Users\xrkseek\Desktop\主仓库\XRK-harness\.agents\skills\xrk-mo
 7. 壳 ≠ guest；Desktop 的 `C:\xrk-h` **不要**拿来打手机包。
 8. 长构建 **前台可见**（skill `xrk-dev-surfaces`）。
 9. **宣称 Host/对话 UI 已修** → 必须证明 `runtime/out` 用了本次 `ENGINE_TGZ`（或已发版 npm 版），不能只重打壳。
+10. **发版时与 Desktop 可并行**（0.7.20）：`ENGINE_TGZ` 用本地 `.release` tgz，**不必**等 `npm view harness-cli` 转绿；禁止与 `release:stage` / `pnpm release` 并行。
+
+## 发行版（与主仓同号发版时必做 · 0.7.20 漏过）
+
+> **本机 `out/*.apk` 不是发行版。** 官网 / 应用内更新只认 `xrkseek/XRK-harness-mobile` 的 GitHub Release。
+
+真源：手机仓 [`docs/release.md`](../../../../XRK-harness-mobile/docs/release.md)。
+
+| 步骤 | 做什么 |
+|------|--------|
+| 1. bump | 手机仓 `app/pubspec.yaml` → `version: N+1`（壳与 `@xrkseek/harness-cli` **同号**） |
+| 2. 打 APK | 本 skill 一键脚本（签名用 `app/android/key.properties`） |
+| 3. 资产 | 在手机仓：`python tooling/release_assets.py --notes notes-N.md`（构建在 `C:\xrk-mobile` 时传 `arm64=C:\xrk-mobile\app\build\app\outputs\flutter-apk\app-arm64-release.apk`）→ `dist/` |
+| 4. 上 GH | `gh release create vN dist/* --repo xrkseek/XRK-harness-mobile --title "XRK Harness N" --notes-file notes-N.md` |
+| 5. 主仓站点 | 改 `apps/site/releases.json` 的 **`android-arm64`** `version`/`filename`（`xrk-harness-N-arm64.apk`）并 **push main** |
+
+验收：`gh release view vN --repo xrkseek/XRK-harness-mobile --json assets` 含 apk · SHA256SUMS · update.json；主仓 `releases.json` 安卓行 = N。
 
 ## 落点
 
@@ -129,7 +146,8 @@ pwsh -File "C:\Users\xrkseek\Desktop\主仓库\XRK-harness\.agents\skills\xrk-mo
 | ASCII 构建树 | `C:\xrk-mobile\` |
 | runtime（Gradle 真源） | 手机仓 `runtime/out/arm64-v8a/` |
 | 本地 engine tgz | 本仓 `.release/mobile-engine/xrkseek-harness-cli-<ver>.tgz` |
-| 手测 APK | `C:\xrk-mobile\out\xrk-harness-*-arm64-release.apk` |
+| 手测 / 中间 APK | `C:\xrk-mobile\out\xrk-harness-*-arm64-release.apk`（**≠ 发行版**） |
+| 发行资产 | 手机仓 `dist/xrk-harness-<ver>-arm64.apk` + `SHA256SUMS` + `update.json` |
 | 包名 | `com.xrkseek.harness` |
 
 ## 今日踩坑
@@ -141,6 +159,8 @@ pwsh -File "C:\Users\xrkseek\Desktop\主仓库\XRK-harness\.agents\skills\xrk-mo
 | 中文路径 AOT 255 | Unicode `app.dill` | 只在 `C:\xrk-mobile` 实拷贝上 build |
 | subst / junction | Kotlin 跨根 / 仍解析 Unicode | 禁用 |
 | 「本仓改了 Host 但手机还是旧的」 | runtime 仍 `npm install @xrkseek/harness-cli@已发版` | 走 **ENGINE_TGZ**；不必先 commit/publish |
+| 本机 APK 有了但官网/应用内仍旧 | 没上 `XRK-harness-mobile` GH Release / 没改 `releases.json` 安卓行 | 走「发行版」五步；`out/*.apk` ≠ 发行 |
+| `release_assets.py` 卡很久无输出 | 默认 `--delta-from 3` 拉旧 APK 做补丁 | 急发可 `--delta-from 0`；Windows 需 PATH 含 `aapt2` |
 
 ## 相关
 

@@ -97,9 +97,11 @@ pnpm start:desktop   # 以本仓脚本为准
 1. bump · 发行说明 · `pnpm check` · **commit + push main**
 2. `pnpm release:stage` (+ sdk) → `CI=true pnpm install --frozen-lockfile`
 3. `pnpm release` → 再 `CI=true pnpm install --frozen-lockfile`
-4. **然后** `XRK_DESKTOP_PACKAGE=1` … `pnpm package:desktop`（优先 `C:\xrk-h`）
-5. 先上 AGT（yml **绝对** URL）→ 再改 `apps/site/releases.json`
-6. `pnpm prune:local -- --junk`
+4. **立刻**打安装包（**不要**等 CLI npm validate）：Desktop @ `C:\xrk-h`；APK 可**并行**（面 C / `ENGINE_TGZ`）——二者都**禁止**与步骤 2/3 并行
+5. AGT 上传（`_upload-desktop-agt.py`）+ `gh release upload` exe
+6. **安卓发行版**（同号必做）：手机仓 bump → 重打 APK → `release_assets.py` → `gh release create` @ `XRK-harness-mobile`（本机 out APK **不算**发行）
+7. 改 `apps/site/releases.json`（**win-x64 + android-arm64**）→ **push main**（Worker 跟 GitHub，勿手 wrangler）
+8. `pnpm prune:local -- --junk`
 
 网络选路：`xrk-github-npm-net`（先探再选；禁全局 `HTTPS_PROXY`）。
 

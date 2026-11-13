@@ -147,13 +147,24 @@ releaseDate: '…'
 
 ## 发新版（桌面段）
 
-1. 打包 + 体积判据通过  
-2. Stage 改名 + **绝对 URL yml**  
-3. 上 AGT（exe+blockmap → yml）+ 核对清单  
-4. **然后**改 `apps/site/releases.json` 并 push  
-5. 手测副本 → `.release/desktop/<ver>/`；**再复制一份** `xrk-harness-<ver>-win-x64.exe` 到用户桌面（方便转发朋友）  
-6. `pnpm prune:local`  
-7. **禁止**把测更新用的 N-1 包 upload 到源  
+1. **GH Release / 本地 tgz 已在且根 `devDeps` 已装回 → 立刻打包**（不要等 CLI `npm view` 转绿；见 `xrk-release-chain` 0.7.20）  
+2. 打包 + 体积判据通过（`C:\xrk-h`）  
+3. Stage 改名到 `upload-stage-<ver>/` + **绝对 URL yml**（公开名去 `unsigned`）  
+4. 上 AGT：`XRK_DESKTOP_UPLOAD_STAGE=<该目录> python scripts/_upload-desktop-agt.py`（exe+blockmap → yml）+ 核对清单  
+   - `pnpm upload:desktop -- win-x64` **仅本机 mirror**，不能代替本步  
+5. **同时** `gh release upload v<ver> <公开名.exe> --clobber`（Worker 首选 GH asset）  
+6. **然后**改 `apps/site/releases.json` → commit + **push main**（Worker **跟 GitHub**，CF 连仓自动部署；**禁止**手跑 wrangler / 追 CF token）  
+7. 手测副本 → `.release/desktop/<ver>/`；**再复制一份** `xrk-harness-<ver>-win-x64.exe` 到用户桌面（方便转发朋友）  
+8. `pnpm prune:local`  
+9. **禁止**把测更新用的 N-1 包 upload 到源  
+
+### 今日踩坑（0.7.20）
+
+| 症状 | 根因 | 以后 |
+|------|------|------|
+| 卡在 CLI `FETCH_ERROR` / `npm view` 404 不打桌面 | 把 registry validate 当成 Desktop 前置 | GH+本地 tgz 齐 → **先** `package:desktop` |
+| `upload:desktop -- --target win-x64` 炸 | 只有位置参数 `win-x64` | `pnpm upload:desktop -- win-x64`；真 AGT 用 `_upload-desktop-agt.py` |
+| 以为官网要手 deploy Worker | 误判「import releases.json ⇒ 本地 wrangler」 | **push main 即够**；Worker 跟 GitHub |
 
 ## 测自动更新（N-1 → N）
 

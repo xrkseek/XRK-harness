@@ -25,10 +25,17 @@ description: >-
 1. bump + 发行说明 + `pnpm check` → **commit → `git push origin main`**
 2. **先打 tgz**：`pnpm release:stage` · `pnpm release:stage:sdk` → 立刻 `CI=true pnpm install --frozen-lockfile`
 3. **`pnpm release`**（GH + npmjs）→ 再 `CI=true pnpm install --frozen-lockfile`
-4. **再** `pnpm package:desktop`（`XRK_DESKTOP_PACKAGE=1`；优先 `C:\xrk-h`）——**禁止与 stage/release 并行**
-5. 桌面包好后 **先上 AGT**（yml **绝对** `…/desktop/bin/win-x64/…`；先 exe+blockmap 再 yml；`HEAD` size 对齐）→ **再**改 `apps/site/releases.json` 并 push
-6. **exe 挂 GitHub Release asset**：`gh release upload v<ver> <exe> --clobber`（大文件走后台 job + wait）。站点 `apps/site/src/worker.js` 的下载按钮以 **GitHub Release asset 为首选源**（`releases/download/<tag>/<filename>`，CN 访客走 ghfast 镜像）——只上 AGT 不挂 asset，官网按钮就是 404（v0.7.7 实锤：0.7.2/0.7.4–0.7.6 同样漏挂）。验收：`gh api repos/xrkseek/XRK-harness/releases/tags/v<ver> --jq '.assets[] | .name + " " + (.size|tostring)'` 里 exe 字节数 == 本地 == AGT bin。
-7. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
+4. **立刻打安装包**（`XRK_DESKTOP_PACKAGE=1` `pnpm package:desktop` @ `C:\xrk-h`；APK 走 `ENGINE_TGZ` + `xrk-mobile-apk`，可与 Desktop **并行**）——**禁止与 stage/release 并行**。  
+   **0.7.20 血泪**：CLI `publish` 报 `FETCH_ERROR` / `npm view` 长时间 404 时，Agent 空转等 validate **浪费整段墙钟**；GH Release + 本地 `.release/*.tgz` 已在时，Desktop/APK **必须先开打**。registry 自绿与安装包无关。
+5. 桌面包好后 **先上 AGT**（真源脚本 `scripts/_upload-desktop-agt.py` + `upload-stage-<ver>`；yml **绝对** `…/desktop/bin/win-x64/…`；先 exe+blockmap 再 yml；`HEAD` size 对齐）——`pnpm upload:desktop -- win-x64` **只写本机 mirror**，不等于上 AGT。  
+   **同时** `gh release upload v<ver> <公开名.exe> --clobber`。站点 `apps/site/src/worker.js` 下载按钮首选 **GitHub Release asset**（CN 走 ghfast）——只上 AGT 不挂 asset → 官网 404（v0.7.7 / 0.7.11 实锤）。
+6. **安卓发行版**（同号发版时与 Desktop **同批必做**；0.7.20 曾漏）：  
+   - 手机仓 bump `app/pubspec.yaml` → 重打 APK（`xrk-mobile-apk`）→ `python tooling/release_assets.py --notes notes-<ver>.md` →  
+     `gh release create v<ver> dist/* --repo xrkseek/XRK-harness-mobile`  
+   - 资产必须有：`xrk-harness-<ver>-arm64.apk` · `SHA256SUMS` · `update.json`  
+   - **本机 `C:\xrk-mobile\out\*.apk` 只是中间产物，不是发行版**
+7. **再**改 `apps/site/releases.json`（**`win-x64` + `android-arm64`** 的 version/filename）→ commit + **`git push origin main`**。官网 Worker **跟随本仓 GitHub**；**禁止**手跑 `wrangler deploy`。
+8. `pnpm prune:local -- --junk`（及 `clean:test-temp`）
 
 **禁止并行打包**（0.7.5）：与 stage/release 并行会掏空根 `typescript`，且曾把 `electron` 打进 asar → exe ~330MB。Desktop 里 `electron`/`electron-builder` 只许 **devDependencies**；运行时只留 `electron-updater`。细节见 `xrk-desktop-update-feed`。
 
@@ -253,3 +260,21 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
   debug log 里**没有任何 `http fetch PUT`**；然后对**同一个文件**再 publish 一次——
   回 `E409 Cannot publish over previously staged version` 就证明第一次已进服务端暂存队列，
   只是大包处理慢，**继续等、绝不重打**；若又回 `+ pkg@ver` 才是真没发出去。
+- **CLI `FETCH_ERROR` ≠ 停住整条发版**（0.7.20）：大 CLI tarball PUT 后确认回拉常超时；
+  表面 exit 1 / `npm view` 404，但 GH 上已有 `xrkseek-harness-cli-<ver>.tgz`、本地
+  `.release/` 齐。**正确处置**：装回根 `devDeps` → **马上** `package:desktop` +（并行）
+  `ENGINE_TGZ` 打 APK；CLI registry 用长窗观察或同字节重发诊断（上条），**禁止**在会话里
+  反复 Start-Process / 短间隔轮询浪费主人时间。终态：`npm view @xrkseek/harness-cli version`
+  最终会追上（本轮后验证已是 0.7.20）。
+- **`pnpm upload:desktop -- win-x64` 不是 AGT 上传**（0.7.20）：它只写
+  `.desktop-build/upload-mirror/`。真上传：stage 改名（去 `unsigned`）+ 绝对 URL yml →
+  `XRK_DESKTOP_UPLOAD_STAGE=… python scripts/_upload-desktop-agt.py`。参数是**位置参数**
+  `win-x64`，不是 `--target`（会 `ERR_PARSE_ARGS_UNKNOWN_OPTION`）。
+- **官网 Worker 跟随 GitHub，push 即部署**（0.7.20 纠正）：改 `apps/site/releases.json`
+  后 **commit + push main 即收工**。CF 连本仓自动构建 Worker；**不要**手跑
+  `wrangler deploy`，也**不要**因非交互缺 `CLOUDFLARE_API_TOKEN` 当成漏发。
+  （曾误记「编译期 import ⇒ 必须本地 deploy」——错；连仓部署会重新打包 `releases.json`。）
+- **安卓「打完 APK」≠「发了发行版」**（0.7.20 实锤）：本机 `C:\xrk-mobile\out\*.apk`
+  只是中间产物。官网 / 应用内更新认的是 `xrkseek/XRK-harness-mobile` 的 GitHub Release
+  （`xrk-harness-N-arm64.apk` + `SHA256SUMS` + `update.json`）以及主仓 `releases.json`
+  的 `android-arm64` 行。缺任一项 = **没发安卓**。流程见 `xrk-mobile-apk`「发行版」。
