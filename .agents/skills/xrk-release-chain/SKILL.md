@@ -141,7 +141,8 @@ CLI tarball 约 120 MB，`npm publish` 的 PUT 远超默认时间预算。用 `b
 - **PowerShell 把 git 的 stderr 进度行当错误**：`git push` 成功时输出
   `4b9c445..03281ea7 main -> main` 走的是 stderr，`$LASTEXITCODE` 可能也是 1。
   判成功要看**结果行**，不要看 exit code / 红色报错。
-- **GitHub / npm 选路**：真源 skill **`xrk-github-npm-net`**——每次动手前直连与 `127.0.0.1:7897` **各探一次**，哪条通走哪条；失败立刻换另一条。
+- **GitHub / npm 选路**：真源 skill **`xrk-github-npm-net`**——每次动手前直连与 `127.0.0.1:7897` **各探一次**，哪条通走哪条；失败立刻换另一条。  
+  **打包 / stage / Desktop / APK runtime：只用 `https://registry.npmjs.org`，禁止淘宝/npmmirror**；官方不通 → 单命令 Clash，不换镜像。
   **绝不设** `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`。单命令可用
   `curl.exe -x …`、`npm_config_https_proxy=…`（或 `npm … --https-proxy …`）、`git -c http.proxy=…`。
   探活用 `curl.exe`（Node `https.get` 不认代理参数会假阴性）。

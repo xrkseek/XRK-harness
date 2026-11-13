@@ -3,6 +3,8 @@ name: xrk-github-npm-net
 description: >-
   GitHub/npm 网络探测：api.github.com 与 registry.npmjs.org 直连 vs 代理（Clash 7897）
   哪条通会变——动手前各探一次，失败立刻换另一条；禁止设全局 HTTPS_PROXY。
+  **打包 / 发版 / stage / Desktop / APK runtime 禁止淘宝源（npmmirror）**，只用官方
+  registry.npmjs.org，不通则配 Clash 7897 单命令代理。
   npm 大上传面板看不到属正常，用网卡计数器判真实流量。gh/npm 超时、EOF、10060 时使用。
 ---
 
@@ -15,6 +17,36 @@ description: >-
 - `gh` / `curl` GitHub API 报 `EOF`、`10060`（connect timeout）、`error checking for existing release`
 - `npm publish` / `pnpm` 上传或装包超时
 - 判断「面板里看不到上传进度」是不是真在传
+- **打包 / stage / Desktop / 手机 runtime** 要选 npm registry 时
+
+## 硬禁：打包不用淘宝源
+
+| 场景 | registry | 网络 |
+|------|----------|------|
+| **发版 / stage / `pnpm release` / Desktop / APK guest runtime** | **只用** `https://registry.npmjs.org` | 不通 → **Clash** `http://127.0.0.1:7897`（单命令 `--https-proxy` / `npm_config_https_proxy`） |
+| 日用随便装包 | 可另议 | — |
+
+**禁止**在打包链里切到：
+
+- `https://registry.npmmirror.com`
+- `https://registry.npm.taobao.org`（旧）
+- 任何「淘宝镜像 / cnpm / 国内加速源」当默认 registry
+
+淘宝源装出来的 tarball / lock 指纹与官方不一致，大包校验与 publish 易踩坑。官方慢或断 → **开 Clash 配官方源**，不要换镜像。
+
+动手前自检（可选）：
+
+```powershell
+npm config get registry   # 须是 https://registry.npmjs.org/ ；若是 npmmirror/taobao → 立刻改回
+# 本会话临时改回（不写用户全局）：
+npm config set registry https://registry.npmjs.org --location=project   # 或该命令前缀环境
+```
+
+单命令走 Clash 示例（**仍用官方 registry**）：
+
+```text
+npm_config_registry=https://registry.npmjs.org npm_config_https_proxy=http://127.0.0.1:7897 npm_config_proxy=http://127.0.0.1:7897 pnpm …
+```
 
 ## Procedure
 
@@ -59,6 +91,7 @@ Get-NetAdapterStatistics
 
 ## Pitfalls
 
+- **打包链切淘宝源「图快」**（主人 2026-11-13 钉死）：禁止。官方 registry + Clash；镜像与 publish/校验打架。
 - 每次调 GitHub API 前探一次，两个方向都试（直连 / 单命令 `-x http://127.0.0.1:7897`）——连通性会反转，凭记忆固定某一条会踩空。
 - **直连 200 / 「已连通」不等于能用**：2026-10 `registry.npmjs.org` 直连出现过 `ERR_TLS_CERT_ALTNAME_INVALID` / `ECONNRESET`。大包（npm ~120MB、AGT ~332MB）别赌直连。
 - `gh api` 的 EOF 和 `error checking for existing release: ... EOF` 都是网络层报错，不是仓库/权限问题。

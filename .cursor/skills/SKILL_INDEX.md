@@ -30,9 +30,12 @@ Coding Agent / 克隆本仓改**内核**：根 [`AGENTS.md`](../../AGENTS.md) ·
 | **本机产物落点 · ≤5 版备份 · 测试隔离 home** | rule **`xrk-local-artifacts`** · skill **`xrk-local-artifacts`** · [publishing](../../docs/publishing.md) · [testing](../../docs/testing.md) |
 | **三生态总控**（CLI · Desktop · Mobile 打包/隔离验收；前台命令） | `.agents/skills/xrk-dev-surfaces` · rule `xrk-dev-surfaces` |
 | **手机 APK / 真机**（ASCII 拷贝、arm64+runtime 门禁、**ENGINE_TGZ**、**禁 MuMu**、壳≠机内 xrkh） | `.agents/skills/xrk-mobile-apk` · rule `xrk-mobile-apk` · `pack-local-engine.ps1` · 总控 `xrk-dev-surfaces` |
+| **安卓发行版**（同号必做：`release_assets.py` → `gh release` @ mobile · **本机 out APK ≠ 发行**） | `xrk-mobile-apk`「发行版」· `xrk-release-flow` 步骤 6–7 · mobile `docs/release.md` |
 | 写 / 改文档 | `xrk-docs-audience` |
 | 发行说明 | `xrk-release-notes` |
-| **发版流水线**（预备 → tgz → release → **再**桌面 → AGT → site → 清理；**禁止并行打包**） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` · `xrk-desktop-update-feed` |
+| **发版流水线**（预备 → tgz → release → **再**桌面+APK → AGT → **安卓 GH** → site push → 清理；**禁止并行 stage**） | rule **`xrk-release-flow`** · `.agents/skills/xrk-release-chain` · `xrk-desktop-update-feed` · `xrk-mobile-apk` |
+| **npm 打包选源**（官方 registry + Clash；**禁淘宝/npmmirror**） | `.agents/skills/xrk-github-npm-net` |
+| 项目知识总索引（发版/网络/手机/踩坑） | `.agents/skills/xrk-harness-knowledge-map` |
 | Node ≥26 / 门禁 | rule `xrk-node26` |
 | 文档身份 / 双语 | rule `xrk-product-identity` |
 

@@ -10,7 +10,7 @@ xrk-inject: false
 副作用与终态：`.agents/skills/xrk-release-chain`。  
 桌面打包 / AGT 上传：`.agents/skills/xrk-desktop-update-feed`。  
 本机落点：rule/skill `xrk-local-artifacts`。  
-GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`。
+GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`（**打包只用官方 `registry.npmjs.org` + Clash；禁止淘宝/npmmirror**）。
 
 ## 顺序（不得颠倒 · 不得并行打包）
 
@@ -41,4 +41,5 @@ GitHub / npm 选路：`.agents/skills/xrk-github-npm-net`。
 - yml 里写**相对**文件名（会解析到 `/desktop/win-x64/` → 404；必须绝对路径进 `/desktop/bin/win-x64/`）
 - `electron` / `electron-builder` 进 Desktop `dependencies` / `optionalDependencies`（只许 `devDependencies`；运行时用 `electron-updater`）
 - 因 CDN 延迟对同一版本重跑 `npm publish`
+- **打包 / stage / Desktop / APK runtime 使用淘宝源或 `registry.npmmirror.com`**（须官方 registry；不通配 Clash `127.0.0.1:7897`）
 - 把 exe / upload-stage 堆到 `C:\` 根或用户桌面

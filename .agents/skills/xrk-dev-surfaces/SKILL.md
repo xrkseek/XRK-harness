@@ -103,7 +103,7 @@ pnpm start:desktop   # 以本仓脚本为准
 7. 改 `apps/site/releases.json`（**win-x64 + android-arm64**）→ **push main**（Worker 跟 GitHub，勿手 wrangler）
 8. `pnpm prune:local -- --junk`
 
-网络选路：`xrk-github-npm-net`（先探再选；禁全局 `HTTPS_PROXY`）。
+网络选路：`xrk-github-npm-net`（先探再选；禁全局 `HTTPS_PROXY`；**打包禁淘宝/npmmirror，官方 registry + Clash**）。
 
 ---
 

@@ -10,9 +10,9 @@ description: >-
 
 - **Status:** Accepted
 - **Date:** 2026-10-22
-- **Updated:** 2026-10-22
+- **Updated:** 2026-11-13
 - **Tags:** knowledge-management, memory-hygiene, docs-index, repo-conventions
-- **Related:** [`.agents/AGENTS.md`](../../AGENTS.md)（办事流程总表）· [`.agents/context/subagents.md`](../../context/subagents.md)（委派 / 角色工具面 / spill）· [`docs/adr/0011-tool-output-spill.md`](../../../docs/adr/0011-tool-output-spill.md)（子代理答案封顶）· [`docs/tool-output-bound.md`](../../../docs/tool-output-bound.md) · [`docs/adr/0001-typescript-only-host.md`](../../../docs/adr/0001-typescript-only-host.md)
+- **Related:** [`.agents/AGENTS.md`](../../AGENTS.md)（产品工作区增量）· [`.cursor/skills/SKILL_INDEX.md`](../../../.cursor/skills/SKILL_INDEX.md)（Coding 任务表）· [`.agents/context/subagents.md`](../../context/subagents.md) · [`docs/adr/0011-tool-output-spill.md`](../../../docs/adr/0011-tool-output-spill.md) · [`docs/tool-output-bound.md`](../../../docs/tool-output-bound.md)
 
 > 本篇有两个角色，别混：
 > 1. **索引** —— 主题知识（发版 / 网络 / 沙箱 / 投影层……）的正文**不在这里**，在下面的表格指向的文件里。不要抄进来。
@@ -32,20 +32,21 @@ description: >-
 
 | 主题 | 读 |
 |---|---|
-| 发版**顺序**（tgz → release → 桌面 → AGT → site；**禁止并行打包**） | rule `xrk-release-flow` · `docs/publishing.md`「流水线顺序」 |
-| 发包链副作用 + 终态判据（push 先于 release、devDeps 掏空、E409/E403、shasum） | `.agents/skills/xrk-release-chain/SKILL.md` |
+| 发版**顺序**（tgz → release → 桌面+APK → AGT → **安卓 GH** → site push；**禁止并行 stage**） | rule `xrk-release-flow` · `docs/publishing.md`「流水线顺序」 |
+| 发包链副作用 + 终态判据（push 先于 release、devDeps 掏空、E409/E403、shasum；**本机 APK ≠ 安卓发行**） | `.agents/skills/xrk-release-chain/SKILL.md` |
 | Desktop 打包 · upload-stage · **yml 绝对 bin URL** · AGT 上传核对 | `.agents/skills/xrk-desktop-update-feed/SKILL.md` |
+| **安卓发行版**（pubspec 同号 · `release_assets.py` · `gh release` @ mobile · `releases.json` 安卓行） | `.agents/skills/xrk-mobile-apk`「发行版」· mobile `docs/release.md` |
 | 本机产物落点 · ≤5 版 · subst 仅 X: · 测试隔离 home | rule/skill `xrk-local-artifacts` · `docs/publishing.md` · `pnpm prune:local` |
 | **三生态总控**（CLI · Desktop · Mobile；前台打包；隔离 home；禁试错） | `.agents/skills/xrk-dev-surfaces` · rule `xrk-dev-surfaces` |
 | **手机 APK · 真机**（ASCII `C:\xrk-mobile`、**arm64 + runtime/out 门禁**、**ENGINE_TGZ**、**禁 MuMu**、禁 subst、壳≠xrkh） | `.agents/skills/xrk-mobile-apk` · rule `xrk-mobile-apk` · `pack-local-engine.ps1` · `build-install-mumu.ps1`（默认只出包）· 总控 `xrk-dev-surfaces` 面 C |
 | **手机独属技能 / phone_***（源 `seeds/mobile/`；runtime **硬门禁** merge；不改 establish） | `apps/cli/seeds/mobile/README.md` · `xrk-inject-layer`「Mobile-only」· mobile `docs/HANDOFF.md` · `build-runtime.sh` `merge_mobile_skill_seeds` · stage/pack 缺 `xrk-phone` 即失败 |
 | **Settings 添加供应商表**（硬编码，对照 pi-ai 手工同步，非运行时引用） | `packages/llm/registry/src/brands-openai-chat.ts` · `docs/llm-provider-presets.md` |
-| GitHub API / npm 网络探测（直连 vs Clash 7897、**先探再选**、大上传判流量） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
+| GitHub API / npm 网络探测（直连 vs Clash 7897、**先探再选**、大上传判流量；**打包禁淘宝源**） | `.agents/skills/xrk-github-npm-net/SKILL.md` |
 | PowerShell / Windows 环境坑（管道毁文件、vitest filter、BOM、GBK） | `.agents/skills/xrk-ps-shell-pitfalls/SKILL.md` |
 | **参考仓差距取证**（codex / DSH 有什么我们没有、哪些是假差距、清单会不会过期） | `.agents/skills/xrk-reference-gap-audit/SKILL.md`（本轮结论在其 `reference/`） |
 | 仓结构与插件开发 | `.agents/skills/xrk-harness-architecture/` · `xrk-harness-monorepo/` |
 | **设置导航落点**（通用 ≠ 插件 compact） | 用户店：设置→**通用**；桌面电源 / xrkh / 分享 / SSH 都在 General。侧栏「插件」按钮才是 plugins section（齿轮导航不展示） |
-| 办事流程总表 | `.agents/AGENTS.md`「办事流程」段 |
+| 产品工作区办事流程 | `.agents/AGENTS.md`「办事流程」· Coding 总表 `.cursor/skills/SKILL_INDEX.md` |
 | 手机 APP 前：事件链 / OFM Cordis 热加载审计（闸门表） | `.agents/context/mobile-ofm-audit.md` |
 | Face 投影层（init 不可共享常量、编号对齐 wire map、stateVersion） | `.agents/context/face-projections.md` |
 | 向日葵免费（Bun 按平台 vendor；无 Bun 则跳过 OpenCode、Kilo 直连） | `.agents/context/sunflower-free-lane.md` |

@@ -122,6 +122,7 @@ pwsh -File "C:\Users\xrkseek\Desktop\主仓库\XRK-harness\.agents\skills\xrk-mo
 8. 长构建 **前台可见**（skill `xrk-dev-surfaces`）。
 9. **宣称 Host/对话 UI 已修** → 必须证明 `runtime/out` 用了本次 `ENGINE_TGZ`（或已发版 npm 版），不能只重打壳。
 10. **发版时与 Desktop 可并行**（0.7.20）：`ENGINE_TGZ` 用本地 `.release` tgz，**不必**等 `npm view harness-cli` 转绿；禁止与 `release:stage` / `pnpm release` 并行。
+11. **AGT / 本机装引擎只用官方 npm registry**（`registry.npmjs.org`）；不通配 Clash，**禁止**淘宝/npmmirror（见 `xrk-github-npm-net`）。
 
 ## 发行版（与主仓同号发版时必做 · 0.7.20 漏过）
 
